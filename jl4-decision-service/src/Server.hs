@@ -45,6 +45,10 @@ module Server (
   OutputCase (..),
   BatchResponse (..),
   OutputSummary (..),
+  QueryAtom (..),
+  QueryOutcome (..),
+  QueryImpact (..),
+  QueryPlanResponse (..),
 
   -- * utilities
   toDecl,
@@ -55,6 +59,9 @@ import Base
 import Backend.Api as Api
 import qualified Backend.Jl4 as Jl4
 import Backend.GraphVizRender (isGraphVizAvailable, renderPNG, renderSVG)
+import qualified Backend.BooleanDecisionQuery as BDQ
+import qualified LSP.L4.Viz.Ladder as LadderViz
+import qualified LSP.L4.Viz.VizExpr as VizExpr
 
 import qualified Chronos
 import Control.Applicative
@@ -100,6 +107,7 @@ import Data.Function
 import qualified Optics
 import L4.Lexer
 import qualified LSP.L4.Rules as Rules
+import qualified Language.LSP.Protocol.Types as LSP
 
 
 -- ----------------------------------------------------------------------------
@@ -117,8 +125,15 @@ data ValidatedFunction = ValidatedFunction
   { fnImpl :: !Function
   , fnEvaluator :: !(Map EvalBackend RunFunction)
   , fnCompiled :: !(Maybe Jl4.CompiledModule)
+  , fnSources :: !(Map EvalBackend Text)
+  , fnDecisionQueryCache :: !(Maybe CachedDecisionQuery)
   }
-  deriving stock (Generic)
+
+data CachedDecisionQuery = CachedDecisionQuery
+  { ladderInfo :: !VizExpr.RenderAsLadderInfo
+  , varLabelByUnique :: !(Map Int Text)
+  , compiled :: !(BDQ.CompiledDecisionQuery Int)
+  }
 
 type AppM = ReaderT AppEnv Handler
 type Api = NamedRoutes FunctionApi'
@@ -212,11 +227,51 @@ data SingleFunctionApi' mode = SingleFunctionApi
           :> QueryParam "graphviz" Bool
           :> ReqBody '[JSON] BatchRequest
           :> Post '[JSON] BatchResponse
+  , queryPlan ::
+      mode
+        :- "query-plan"
+          :> Summary "Suggest which boolean inputs to elicit next"
+          :> Description "Returns remaining relevant boolean atoms (not necessarily original inputs) plus a heuristic ranking and per-atom impact analysis."
+          :> ReqBody '[JSON] FnArguments
+          :> OperationId "queryPlan"
+          :> Post '[JSON] QueryPlanResponse
   -- ^ Run a function with a "batch" of parameters.
   -- This API aims to be consistent with
   -- https://docs.oracle.com/en/cloud/saas/b2c-service/opawx/using-batch-assess-rest-api.html
   }
   deriving stock (Generic)
+
+data QueryAtom = QueryAtom
+  { unique :: !Int
+  , label :: !Text
+  }
+  deriving stock (Show, Read, Ord, Eq, Generic)
+  deriving anyclass (FromJSON, ToJSON)
+
+data QueryOutcome = QueryOutcome
+  { determined :: !(Maybe Bool)
+  , support :: ![QueryAtom]
+  }
+  deriving stock (Show, Read, Ord, Eq, Generic)
+  deriving anyclass (FromJSON, ToJSON)
+
+data QueryImpact = QueryImpact
+  { ifTrue :: !QueryOutcome
+  , ifFalse :: !QueryOutcome
+  }
+  deriving stock (Show, Read, Ord, Eq, Generic)
+  deriving anyclass (FromJSON, ToJSON)
+
+data QueryPlanResponse = QueryPlanResponse
+  { determined :: !(Maybe Bool)
+  , stillNeeded :: ![QueryAtom]
+  , ranked :: ![QueryAtom]
+  , impact :: !(Map Int QueryImpact)
+  , note :: !Text
+  , ladder :: !(Maybe VizExpr.RenderAsLadderInfo)
+  }
+  deriving stock (Show, Generic)
+  deriving anyclass (FromJSON, ToJSON)
 
 data SimpleFunction = SimpleFunction
   { simpleName :: Text
@@ -349,9 +404,142 @@ handler =
                     evalFunctionTraceSvgHandler name mTraceHeader mTraceParam
                 , batchFunction = \mTraceHeader mTraceParam mGraphViz ->
                     batchFunctionHandler name mTraceHeader mTraceParam mGraphViz
+                , queryPlan =
+                    queryPlanHandler name
                 }
           }
     }
+
+queryPlanHandler :: String -> FnArguments -> AppM QueryPlanResponse
+queryPlanHandler name' args = do
+  let name = Text.pack name'
+  functionsTVar <- asks (.functionDatabase)
+  functions <- liftIO $ readTVarIO functionsTVar
+  fn <- case Map.lookup name functions of
+    Nothing -> throwError err404
+    Just f -> pure f
+
+  fnWithCache <- case fn.fnDecisionQueryCache of
+    Just _ -> pure fn
+    Nothing -> do
+      cached <- buildDecisionQueryCache name fn
+      liftIO $ atomically $ modifyTVar' functionsTVar $ Map.adjust (\f0 -> f0 {fnDecisionQueryCache = Just cached}) name
+      pure fn {fnDecisionQueryCache = Just cached}
+
+  cached <- case fnWithCache.fnDecisionQueryCache of
+    Nothing -> throwError err500
+    Just c -> pure c
+
+  let labelToUnique =
+        Map.fromList [(lbl, u) | (u, lbl) <- Map.toList cached.varLabelByUnique]
+      knownBindings =
+        Map.fromList
+          [ (u, b)
+          | (k, mv) <- Map.toList args.fnArguments
+          , Just (FnLitBool b) <- [mv]
+          , Just u <- [Map.lookup k labelToUnique]
+          ]
+
+      res = BDQ.queryDecision cached.compiled knownBindings
+      atomOf u = QueryAtom u (Map.findWithDefault (Text.pack (show u)) u cached.varLabelByUnique)
+      atomsOfSet s = map atomOf (Set.toList s)
+
+      outcomeToJson o =
+        QueryOutcome
+          { determined = o.determined
+          , support = atomsOfSet o.support
+          }
+
+      impactJson =
+        Map.fromList
+          [ ( u
+            , QueryImpact
+                { ifTrue = outcomeToJson imp.ifTrue
+                , ifFalse = outcomeToJson imp.ifFalse
+                }
+            )
+          | (u, imp) <- Map.toList res.impact
+          ]
+
+      noteTxt =
+        "StillNeeded/ranked are boolean atoms from ladder visualization; these may be derived predicates rather than original user inputs. Bindings are matched by atom label."
+
+  pure
+    QueryPlanResponse
+      { determined = res.determined
+      , stillNeeded = atomsOfSet res.support
+      , ranked = map atomOf res.ranked
+      , impact = impactJson
+      , note = noteTxt
+      , ladder = Just cached.ladderInfo
+      }
+
+buildDecisionQueryCache :: Text -> ValidatedFunction -> AppM CachedDecisionQuery
+buildDecisionQueryCache funName fn = do
+  source <- case Map.lookup JL4 fn.fnSources of
+    Nothing -> throwError err400 {errBody = "No JL4 source available for query-plan"}
+    Just s -> pure s
+
+  let fileName = Text.unpack funName <> ".l4"
+  (errs, mTcRes) <- liftIO $ Jl4.typecheckModule fileName source Map.empty
+  tcRes <- case mTcRes of
+    Nothing -> throwError err500 {errBody = encodeTextLBS (Text.intercalate "; " errs)}
+    Just r -> pure r
+
+  decide <- runExceptT (Jl4.getFunctionDefinition (NormalName funName) tcRes.module') >>= \case
+    Left e -> throwError err500 {errBody = encodeTextLBS (Text.pack (show e))}
+    Right d -> pure d
+
+  verDocId <- mkVerDocId fileName
+  let vizCfg = LadderViz.mkVizConfig verDocId tcRes.module' tcRes.substitution True
+  (ladderInfo, _vizState) <- case LadderViz.doVisualize decide vizCfg of
+    Left e -> throwError err500 {errBody = encodeTextLBS (LadderViz.prettyPrintVizError e)}
+    Right x -> pure x
+
+  let (boolExpr, labels, order) = vizExprToBoolExpr ladderInfo.funDecl.body
+      compiled = BDQ.compileDecisionQuery order boolExpr
+
+  pure
+    CachedDecisionQuery
+      { ladderInfo
+      , varLabelByUnique = labels
+      , compiled
+      }
+
+mkVerDocId :: FilePath -> AppM LSP.VersionedTextDocumentIdentifier
+mkVerDocId fileName = do
+  pure
+    LSP.VersionedTextDocumentIdentifier
+      { _uri = LSP.filePathToUri fileName
+      , _version = 1
+      }
+
+vizExprToBoolExpr ::
+  VizExpr.IRExpr ->
+  (BDQ.BoolExpr Int, Map Int Text, [Int])
+vizExprToBoolExpr expr =
+  let (e, labels, order0) = go expr
+   in (e, labels, List.nub order0)
+ where
+  go :: VizExpr.IRExpr -> (BDQ.BoolExpr Int, Map Int Text, [Int])
+  go = \case
+    VizExpr.TrueE _ _ -> (BDQ.BTrue, Map.empty, [])
+    VizExpr.FalseE _ _ -> (BDQ.BFalse, Map.empty, [])
+    VizExpr.UBoolVar _ nm _ _ ->
+      let u = nm.unique
+       in (BDQ.BVar u, Map.singleton u nm.label, [u])
+    VizExpr.App _ nm _args ->
+      let u = nm.unique
+       in (BDQ.BVar u, Map.singleton u nm.label, [u])
+    VizExpr.Not _ x ->
+      let (ex, m, o) = go x
+       in (BDQ.BNot ex, m, o)
+    VizExpr.And _ xs ->
+      let (es, ms, os) = unzip3 (map go xs)
+       in (BDQ.BAnd es, Map.unions ms, concat os)
+    VizExpr.Or _ xs ->
+      let (es, ms, os) = unzip3 (map go xs)
+       in (BDQ.BOr es, Map.unions ms, concat os)
 
 evalFunctionHandler :: String -> Maybe Text -> Maybe Api.TraceLevel -> Maybe Bool -> FnArguments -> AppM SimpleResponse
 evalFunctionHandler name' mTraceHeader mTraceParam mGraphViz args = do
@@ -640,6 +828,8 @@ validateFunction fn = do
       { fnImpl = fnWithDeclaration.declaration
       , fnEvaluator = evaluators
       , fnCompiled = mCompiled
+      , fnSources = fnWithDeclaration.implementation
+      , fnDecisionQueryCache = Nothing
       }
  where
   validateImplementation :: FunctionImplementation -> EvalBackend -> Text -> AppM (RunFunction, Maybe Jl4.CompiledModule)
@@ -836,6 +1026,8 @@ withUUIDFunction uuidAndFun k err = case UUID.fromText muuid of
           { fnImpl = fnImpl { parameters = parametersOfDecide decide }
           , fnEvaluator = Map.singleton JL4 runFn
           , fnCompiled = mCompiled
+          , fnSources = Map.singleton JL4 prog
+          , fnDecisionQueryCache = Nothing
           }
   where
    (muuid, funNameFromUUID) = T.drop 1 <$> T.breakOn ":" uuidAndFun

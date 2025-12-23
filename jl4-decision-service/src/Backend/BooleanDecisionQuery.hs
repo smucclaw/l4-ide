@@ -8,6 +8,7 @@ module Backend.BooleanDecisionQuery (
   VarImpact (..),
   CompiledDecisionQuery (..),
   compileDecisionQuery,
+  queryDecision,
 ) where
 
 import Data.List (sortOn)
@@ -190,73 +191,22 @@ data DecisionQueryResult v = DecisionQueryResult
 
 data CompiledDecisionQuery v = CompiledDecisionQuery
   { varOrder :: [v]
-  , query :: Map v Bool -> DecisionQueryResult v
+  , vToIdx :: Map v Int
+  , idxToV :: Map Int v
+  , root :: NodeId
+  , bdd :: Bdd
   }
 
 compileDecisionQuery :: (Ord v) => [v] -> BoolExpr v -> CompiledDecisionQuery v
 compileDecisionQuery order expr =
   let vToIdx = Map.fromList (zip order [0 ..])
-      idxToV = Map.fromList (zip [0 ..] order)
       (root, bdd0) = compile vToIdx expr emptyBdd
    in CompiledDecisionQuery
         { varOrder = order
-        , query = \bindings ->
-            let idxBindings =
-                  Map.fromList
-                    [ (idx, b)
-                    | (v, b) <- Map.toList bindings
-                    , Just idx <- [Map.lookup v vToIdx]
-                    ]
-                (restrictedRoot, bdd1) = restrictMany idxBindings root bdd0
-                supportIdx = support restrictedRoot bdd1
-                supportVs =
-                  Set.fromList
-                    [ v
-                    | idx <- Set.toList supportIdx
-                    , Just v <- [Map.lookup idx idxToV]
-                    ]
-                outcomeOf rid bdd =
-                  QueryOutcome
-                    { determined = determinedFromRoot rid
-                    , support =
-                        Set.fromList
-                          [ v
-                          | idx <- Set.toList (support rid bdd)
-                          , Just v <- [Map.lookup idx idxToV]
-                          ]
-                    }
-                impactMap =
-                  Map.fromList
-                    [ ( v
-                      , case Map.lookup v vToIdx of
-                          Nothing -> error "Internal error: var not found in order"
-                          Just idx ->
-                            let (ridT, bddT) = restrictVar idx True restrictedRoot bdd1
-                                (ridF, bddF) = restrictVar idx False restrictedRoot bdd1
-                             in VarImpact
-                                  { ifTrue = outcomeOf ridT bddT
-                                  , ifFalse = outcomeOf ridF bddF
-                                  }
-                      )
-                    | v <- Set.toList supportVs
-                    ]
-                determinableCount v =
-                  case Map.lookup v impactMap of
-                    Nothing -> 0 :: Int
-                    Just vi ->
-                      fromEnum (vi.ifTrue.determined /= Nothing)
-                        + fromEnum (vi.ifFalse.determined /= Nothing)
-                level v = Map.findWithDefault 1000000 v vToIdx
-                rankedVars =
-                  sortOn
-                    (\v -> (-determinableCount v, level v))
-                    (Set.toList supportVs)
-             in DecisionQueryResult
-                  { determined = determinedFromRoot restrictedRoot
-                  , support = supportVs
-                  , ranked = rankedVars
-                  , impact = impactMap
-                  }
+        , vToIdx
+        , idxToV = Map.fromList (zip [0 ..] order)
+        , root
+        , bdd = bdd0
         }
  where
   compile :: (Ord v) => Map v Int -> BoolExpr v -> Bdd -> (NodeId, Bdd)
@@ -289,3 +239,62 @@ compileDecisionQuery order expr =
           )
           (0, bdd)
           es
+
+queryDecision :: (Ord v) => CompiledDecisionQuery v -> Map v Bool -> DecisionQueryResult v
+queryDecision compiled bindings =
+  let idxBindings =
+        Map.fromList
+          [ (idx, b)
+          | (v, b) <- Map.toList bindings
+          , Just idx <- [Map.lookup v compiled.vToIdx]
+          ]
+      (restrictedRoot, bdd1) = restrictMany idxBindings compiled.root compiled.bdd
+      supportIdx = support restrictedRoot bdd1
+      supportVs =
+        Set.fromList
+          [ v
+          | idx <- Set.toList supportIdx
+          , Just v <- [Map.lookup idx compiled.idxToV]
+          ]
+      outcomeOf rid bdd =
+        QueryOutcome
+          { determined = determinedFromRoot rid
+          , support =
+              Set.fromList
+                [ v
+                | idx <- Set.toList (support rid bdd)
+                , Just v <- [Map.lookup idx compiled.idxToV]
+                ]
+          }
+      impactMap =
+        Map.fromList
+          [ ( v
+            , case Map.lookup v compiled.vToIdx of
+                Nothing -> error "Internal error: var not found in order"
+                Just idx ->
+                  let (ridT, bddT) = restrictVar idx True restrictedRoot bdd1
+                      (ridF, bddF) = restrictVar idx False restrictedRoot bdd1
+                   in VarImpact
+                        { ifTrue = outcomeOf ridT bddT
+                        , ifFalse = outcomeOf ridF bddF
+                        }
+            )
+          | v <- Set.toList supportVs
+          ]
+      determinableCount v =
+        case Map.lookup v impactMap of
+          Nothing -> 0 :: Int
+          Just vi ->
+            fromEnum (vi.ifTrue.determined /= Nothing)
+              + fromEnum (vi.ifFalse.determined /= Nothing)
+      level v = Map.findWithDefault 1000000 v compiled.vToIdx
+      rankedVars =
+        sortOn
+          (\v -> (-determinableCount v, level v))
+          (Set.toList supportVs)
+   in DecisionQueryResult
+        { determined = determinedFromRoot restrictedRoot
+        , support = supportVs
+        , ranked = rankedVars
+        , impact = impactMap
+        }

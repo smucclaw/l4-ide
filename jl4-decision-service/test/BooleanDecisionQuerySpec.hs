@@ -11,7 +11,7 @@ spec = do
     it "supports absorption: x ∨ (x ∧ y) has support {x}" do
       let expr = BOr [BVar ("x" :: String), BAnd [BVar "x", BVar "y"]]
           c = compileDecisionQuery ["x", "y"] expr
-          r = c.query Map.empty
+          r = queryDecision c Map.empty
       r.determined `shouldBe` Nothing
       r.support `shouldBe` Set.fromList ["x"]
       r.ranked `shouldBe` ["x"]
@@ -19,8 +19,8 @@ spec = do
     it "restriction makes support shrink: (x ∨ y) with x=true is determined" do
       let expr = BOr [BVar ("x" :: String), BVar "y"]
           c = compileDecisionQuery ["x", "y"] expr
-          rTrue = c.query (Map.fromList [("x", True)])
-          rFalse = c.query (Map.fromList [("x", False)])
+          rTrue = queryDecision c (Map.fromList [("x", True)])
+          rFalse = queryDecision c (Map.fromList [("x", False)])
       rTrue.determined `shouldBe` Just True
       rTrue.support `shouldBe` Set.empty
       rFalse.determined `shouldBe` Nothing

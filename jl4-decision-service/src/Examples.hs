@@ -232,6 +232,8 @@ createValidatedFunction filepath _filename content fnDecl moduleContext = do
     { fnImpl = fnDecl
     , fnEvaluator = Map.fromList [(JL4, runFn)]
     , fnCompiled = mCompiled
+    , fnSources = Map.fromList [(JL4, content)]
+    , fnDecisionQueryCache = Nothing
     }
 
 -- ----------------------------------------------------------------------------
@@ -286,6 +288,8 @@ personQualifiesFunction = do
       { fnImpl = fnDecl
       , fnEvaluator = Map.fromList [(JL4, runFn)]
       , fnCompiled = mCompiled
+      , fnSources = Map.fromList [(JL4, computeQualifiesJL4NoInput)]
+      , fnDecisionQueryCache = Nothing
       }
 
 -- | Metadata about the function that the user might want to know.
@@ -331,6 +335,8 @@ rodentsAndVerminFunction = do
       { fnImpl = fnDecl
       , fnEvaluator = Map.fromList [(JL4, runFn)]
       , fnCompiled = mCompiled
+      , fnSources = Map.fromList [(JL4, rodentsAndVerminJL4)]
+      , fnDecisionQueryCache = Nothing
       }
 
 computeQualifiesJL4NoInput :: Text
@@ -416,6 +422,8 @@ constantFunction = do
       { fnImpl = fnDecl
       , fnEvaluator = Map.fromList [(JL4, runFn)]
       , fnCompiled = mCompiled
+      , fnSources = Map.fromList [(JL4, constantJL4)]
+      , fnDecisionQueryCache = Nothing
       }
 
 constantJL4 :: Text

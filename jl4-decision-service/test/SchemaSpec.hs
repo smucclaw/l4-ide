@@ -170,3 +170,22 @@ instance Arbitrary OutputSummary where
       <*> arbitrary
       <*> arbitrary
       <*> arbitrary
+
+instance Arbitrary QueryAtom where
+  arbitrary = QueryAtom <$> arbitrary <*> arbitrary
+
+instance Arbitrary QueryOutcome where
+  arbitrary = QueryOutcome <$> arbitrary <*> arbitrary
+
+instance Arbitrary QueryImpact where
+  arbitrary = QueryImpact <$> arbitrary <*> arbitrary
+
+instance Arbitrary QueryPlanResponse where
+  arbitrary =
+    QueryPlanResponse
+      <$> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> pure Nothing
