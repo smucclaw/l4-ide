@@ -24,6 +24,7 @@ import GHC.TypeLits
 import Servant
 import Servant.OpenApi
 import Server
+import qualified LSP.L4.Viz.VizExpr as VizExpr
 
 type ServerName = Text
 
@@ -121,6 +122,19 @@ instance ToSchema ReasonNode
 -- This is correct, since we don't overwrite the
 -- 'ToJSON' instance yet.
 instance ToSchema FnArguments
+
+instance ToSchema QueryAtom
+instance ToSchema QueryOutcome
+instance ToSchema QueryImpact
+instance ToSchema QueryPlanResponse
+
+instance ToSchema VizExpr.RenderAsLadderInfo where
+  declareNamedSchema _ =
+    pure $
+      NamedSchema (Just "RenderAsLadderInfo") $
+        mempty
+          & type_ ?~ OpenApiObject
+          & additionalProperties ?~ AdditionalPropertiesAllowed True
 
 instance ToSchema PngImage where
   declareNamedSchema _ =
