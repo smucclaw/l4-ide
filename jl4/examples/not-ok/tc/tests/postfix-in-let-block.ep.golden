@@ -1,0 +1,32 @@
+§ `Postfix Operator in LET Block - Not Supported`
+
+-- This file demonstrates that postfix mixfix operators CANNOT be defined in LET blocks.
+-- They MUST be defined in WHERE clauses to be registered in the mixfix operator registry.
+
+IMPORT prelude
+
+-- This should error: postfix mixfix operators cannot be defined in LET blocks
+GIVEN radius IS A NUMBER
+GIVETH A NUMBER
+circleAreaBroken radius MEANS
+  LET pi BE 3
+      r `squared` MEANS r * r  -- ERROR: mixfix operators not supported in LET
+  IN radius `squared` TIMES pi
+
+-- The correct way is to use WHERE instead of LET for mixfix operator definitions:
+-- GIVEN radius IS A NUMBER
+-- GIVETH A NUMBER
+-- circleAreaCorrect radius MEANS
+--   LET pi BE 3
+--   IN radius `squared` TIMES pi
+--   WHERE
+--     GIVEN r IS A NUMBER
+--     r `squared` MEANS r * r
+
+-- Or use a regular function in LET (without mixfix syntax):
+-- GIVEN radius IS A NUMBER
+-- GIVETH A NUMBER
+-- circleAreaWithFunction radius MEANS
+--   LET pi BE 3
+--       squared r IS r * r
+--   IN squared radius TIMES pi

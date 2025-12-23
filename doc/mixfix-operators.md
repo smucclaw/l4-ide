@@ -252,6 +252,45 @@ mummy `copulated with` daddy `to make` baby MEANS ...
 
 The surface parser still prefers prefix application, so `x squared` initially arrives as `App x [squared]`. Before running the general mixfix matcher, the type checker (`jl4-core/src/L4/TypeCheck.hs`, `reinterpretPostfixAppIfNeeded`) detects this shape whenever `squared` (or any registered postfix keyword) expects a single operand. It then rewrites the AST to `App squared [x]`, preserving annotations so IDE tooling highlights the operator rather than the operand as the callee. This guarantees that bare variables, LET-bound names, and other expressions can participate in postfix mixfix calls without extra syntax.
 
+### Operator Definitions: WHERE vs LET
+
+**Critical constraint**: Postfix and other mixfix operators **must be defined in WHERE clauses** and **cannot be defined inside LET blocks**.
+
+```l4
+-- ✓ CORRECT: Postfix operator defined in WHERE
+GIVEN radius IS A NUMBER
+GIVETH A NUMBER
+circleArea radius MEANS
+  LET pi BE 3
+  IN radius `squared` TIMES pi
+  WHERE
+    GIVEN r IS A NUMBER
+    r `squared` MEANS r * r
+
+-- ✗ INCORRECT: Postfix operator in LET block (will fail typecheck)
+-- GIVEN radius IS A NUMBER
+-- GIVETH A NUMBER
+-- circleAreaBroken radius MEANS
+--   LET pi BE 3
+--       r `squared` MEANS r * r  -- ERROR: not registered in mixfix registry
+--   IN radius `squared` TIMES pi
+```
+
+**Why this matters**: The mixfix operator registry is built during the scanning phase from WHERE clause definitions. The type checker's `reinterpretPostfixAppIfNeeded` function looks up operators in this registry to perform the postfix reinterpretation. LET blocks define local bindings but do not register mixfix operators.
+
+**Alternative**: If you need to define a helper inside a function body, use regular function syntax in LET blocks (without mixfix notation):
+
+```l4
+GIVEN radius IS A NUMBER
+GIVETH A NUMBER
+circleAreaWithHelper radius MEANS
+  LET pi BE 3
+      squared r IS r * r  -- Regular function (not mixfix)
+  IN squared radius TIMES pi
+```
+
+See `jl4/examples/not-ok/tc/postfix-in-let-block.l4` for a test demonstrating this constraint.
+
 Perhaps the internal representations will be some combination of the following, for lookup and matching purposes:
 
 - `"copulated with"` -- first function name index
