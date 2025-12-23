@@ -180,10 +180,19 @@ instance Arbitrary QueryOutcome where
 instance Arbitrary QueryImpact where
   arbitrary = QueryImpact <$> arbitrary <*> arbitrary
 
+instance Arbitrary QueryInput where
+  arbitrary =
+    QueryInput
+      <$> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+
 instance Arbitrary QueryPlanResponse where
   arbitrary =
     QueryPlanResponse
       <$> arbitrary
+      <*> arbitrary
       <*> arbitrary
       <*> arbitrary
       <*> arbitrary
