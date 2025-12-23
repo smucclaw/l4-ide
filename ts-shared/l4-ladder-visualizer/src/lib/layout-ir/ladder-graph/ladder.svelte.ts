@@ -11,6 +11,10 @@ import {
 } from '../../eval/type.js'
 import { Assignment } from '../../eval/assignment.js'
 import { Evaluator, type EvalResult } from '$lib/eval/eval.js'
+import {
+  PartialEvalAnalyzer,
+  type PartialEvalAnalysis,
+} from '$lib/eval/partial-eval.js'
 import type { LirId, LirNode, LirNodeInfo } from '@repo/layout-ir'
 import { LirContext, DefaultLirNode } from '@repo/layout-ir'
 import type { Ord } from '@repo/type-utils'
@@ -210,6 +214,7 @@ abstract class BaseLadderGraphLirNode
   #dag: DirectedAcyclicGraph<LirId>
 
   #originalExpr: IRExpr
+  #evalExpr: ReturnType<typeof veExprToEvExpr>
   #vizExprToLirDag: Map<IRId, DirectedAcyclicGraph<LirId>>
 
   /** Keeps track of what values the user has assigned to the various var ladder nodes */
@@ -217,9 +222,17 @@ abstract class BaseLadderGraphLirNode
   #evalResult: EvalResult = {
     result: new UnknownVal(),
     intermediate: new Map(),
+    consultedUniques: new Set(),
+    shortCircuitedRoots: new Set(),
   }
   // It's easier to work with the *non*-viable subgraph
   #nonViableSubgraph: DirectedAcyclicGraph<LirId> = empty()
+  #irrelevantSubgraph: DirectedAcyclicGraph<LirId> = empty()
+  #shortCircuitedSubgraph: DirectedAcyclicGraph<LirId> = empty()
+
+  #uniqueToLabel: Map<Unique, string> = new Map()
+  #partialEvalAnalyzer: PartialEvalAnalyzer
+  #partialEvalAnalysis: PartialEvalAnalysis | null = null
 
   protected constructor(
     nodeInfo: LirNodeInfo,
@@ -231,6 +244,7 @@ abstract class BaseLadderGraphLirNode
     super(nodeInfo)
     this.#dag = dag
     this.#originalExpr = originalExpr
+    this.#evalExpr = veExprToEvExpr(originalExpr)
     this.#vizExprToLirDag = vizExprToLirGraph
     this.#ladderEnv = ladderEnv
     // console.log(
@@ -243,6 +257,13 @@ abstract class BaseLadderGraphLirNode
     const children = this.getChildren(nodeInfo.context)
     const varNodes = children.filter(isUBoolVarLirNode)
 
+    this.#uniqueToLabel = new Map(
+      varNodes.map((n) => [
+        n.getUnique(nodeInfo.context),
+        n.getLabel(nodeInfo.context),
+      ])
+    )
+
     // Make the initial args / assignment
     const initialAssignmentAssocList: Array<[Unique, UBoolVal]> = varNodes.map(
       (varN) => [
@@ -251,6 +272,7 @@ abstract class BaseLadderGraphLirNode
       ]
     )
     this.#bindings = Assignment.fromEntries(initialAssignmentAssocList)
+    this.#partialEvalAnalyzer = new PartialEvalAnalyzer(this.#originalExpr)
   }
 
   getVizExprToLirGraph() {
@@ -340,8 +362,24 @@ abstract class BaseLadderGraphLirNode
     return this.#nonViableSubgraph.hasVertex(node.getId())
   }
 
+  nodeIsInIrrelevantSubgraph(_context: LirContext, node: LadderLirNode) {
+    return this.#irrelevantSubgraph.hasVertex(node.getId())
+  }
+
+  nodeIsInShortCircuitedSubgraph(_context: LirContext, node: LadderLirNode) {
+    return this.#shortCircuitedSubgraph.hasVertex(node.getId())
+  }
+
   edgeIsInNonViableSubgraph(_context: LirContext, edge: LadderLirEdge) {
     return this.#nonViableSubgraph.hasEdge(edge.getU(), edge.getV())
+  }
+
+  edgeIsInIrrelevantSubgraph(_context: LirContext, edge: LadderLirEdge) {
+    return this.#irrelevantSubgraph.hasEdge(edge.getU(), edge.getV())
+  }
+
+  edgeIsInShortCircuitedSubgraph(_context: LirContext, edge: LadderLirEdge) {
+    return this.#shortCircuitedSubgraph.hasEdge(edge.getU(), edge.getV())
   }
 
   /** Helper: Compute the subgraph that is no longer viable in light of user's choices */
@@ -355,8 +393,16 @@ abstract class BaseLadderGraphLirNode
     const nonviableSubgraph = nonViableIRIds
       .map((irId) => this.#vizExprToLirDag.get(irId))
       .filter((dag) => !!dag)
-      .reduceRight((acc, curr) => acc.overlay(curr), empty())
+      .reduceRight((acc, curr) => acc.overlay(curr), empty<LirId>())
     return nonviableSubgraph
+  }
+
+  private computeOverlaySubgraphFromIrIds(irIds: Iterable<IRId>) {
+    const dags = Array.from(irIds)
+      .map((irId) => this.#vizExprToLirDag.get(irId))
+      .filter((dag) => !!dag)
+    if (dags.length === 0) return empty<LirId>()
+    return dags.reduceRight((acc, curr) => acc.overlay(curr), empty<LirId>())
   }
 
   /*****************************
@@ -367,11 +413,23 @@ abstract class BaseLadderGraphLirNode
     const result = await Evaluator.eval(
       this.#ladderEnv.getL4Connection(),
       this.#ladderEnv.getVersionedTextDocIdentifier(),
-      veExprToEvExpr(this.#originalExpr),
+      this.#evalExpr,
       this.#bindings
     )
     this.setEvalResult(context, result)
     this.#nonViableSubgraph = this.computeNonViableSubgraph(context, result)
+
+    this.#partialEvalAnalysis = this.#partialEvalAnalyzer.analyze(
+      this.#bindings,
+      result
+    )
+
+    this.#irrelevantSubgraph = this.computeOverlaySubgraphFromIrIds(
+      this.#partialEvalAnalysis.irrelevantRootIds
+    )
+    this.#shortCircuitedSubgraph = this.computeOverlaySubgraphFromIrIds(
+      this.#partialEvalAnalysis.shortCircuitedRoots
+    )
   }
 
   getValueOfUnique(_context: LirContext, unique: Unique): UBoolVal {
@@ -408,6 +466,14 @@ abstract class BaseLadderGraphLirNode
 
   getResult(_context: LirContext) {
     return this.#evalResult.result
+  }
+
+  getPartialEvalAnalysis(_context: LirContext): PartialEvalAnalysis | null {
+    return this.#partialEvalAnalysis
+  }
+
+  getLabelForUnique(_context: LirContext, unique: Unique): string {
+    return this.#uniqueToLabel.get(unique) ?? `${unique}`
   }
 
   private setEvalResult(_context: LirContext, result: EvalResult) {
