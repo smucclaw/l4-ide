@@ -20,8 +20,8 @@ services:
       sh -c "cd /build/jl4-decision-service && cabal run jl4-decision-service-exe -- \
         --port 8001 \
         --serverName http://localhost:8001 \
-        --sourcePaths /build/jl4/examples \
-        --sourcePaths /build/doc/tutorial-code \
+        --sourcePaths /build/jl4/experiments/britishcitizen5.l4 \
+        --sourcePaths /build/jl4/experiments/parking.l4 \
         --crudServerName jl4-websessions \
         --crudServerPort 8002"
     volumes:

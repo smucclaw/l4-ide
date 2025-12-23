@@ -47,6 +47,7 @@ COPY --from=builder /opt/jl4-decision-service/jl4-decision-service-exe /usr/loca
 
 # Copy example L4 files
 COPY jl4/examples /app/examples
+COPY jl4/experiments /app/experiments
 COPY doc/tutorial-code /app/tutorial-code
 
 EXPOSE 8001
@@ -54,7 +55,7 @@ EXPOSE 8001
 CMD ["jl4-decision-service-exe", \
      "--port", "8001", \
      "--serverName", "http://localhost:8001", \
-     "--sourcePaths", "/app/examples", \
-     "--sourcePaths", "/app/tutorial-code", \
+     "--sourcePaths", "/app/experiments/britishcitizen5.l4", \
+     "--sourcePaths", "/app/experiments/parking.l4", \
      "--crudServerName", "jl4-websessions", \
      "--crudServerPort", "8002"]

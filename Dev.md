@@ -123,5 +123,5 @@ The general overview is as follows:
   `cd ts-apps/jl4-web; npm ci; npm run dev`
 - check out `--help` for `jl4-websessions` and `jl4-lsp`
 - to run the decision service locally:
-  `cabal run jl4-decision-service-exe -- --port 8081 --serverName http://localhost:8081/ --sourcePaths doc/tutorial-code/`
+  `cabal run jl4-decision-service-exe -- --port 8081 --serverName http://localhost:8081/ --sourcePaths jl4/experiments/britishcitizen5.l4 --sourcePaths jl4/experiments/parking.l4`
   The default is set to connect to the webessions service on port 5007
