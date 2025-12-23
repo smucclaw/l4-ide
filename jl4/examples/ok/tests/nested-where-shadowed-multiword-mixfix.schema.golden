@@ -1,0 +1,21 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "amount": {
+            "$ref": "#/$defs/NUMBER"
+        },
+        "capA": {
+            "$ref": "#/$defs/NUMBER"
+        },
+        "capB": {
+            "$ref": "#/$defs/NUMBER"
+        }
+    },
+    "required": [
+        "amount",
+        "capA",
+        "capB"
+    ],
+    "title": "benefit",
+    "type": "object"
+}
