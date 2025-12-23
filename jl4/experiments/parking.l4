@@ -27,6 +27,7 @@ GIVEN
   @desc Current phase of the moon. Possible values are: new moon, waxing crescent, first quarter, waxing gibbous, full moon, waning gibbous, third quarter, waning crescent
   phase_of_moon     IS A STRING
 GIVETH A NUMBER
+@export default Calculate the cost of parking
 DECIDE parking_cost IS
    IF is_public_holiday
    THEN 0

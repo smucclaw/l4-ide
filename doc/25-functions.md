@@ -102,6 +102,8 @@ We can relegate it to a coda at the end of the function definition:
 
 This is a common pattern.
 
+`WHERE` is an _expression_ form: it can be attached to any expression, not just to a top-level function definition. This means you can place a `WHERE` block close to where a helper is used (even inside `LET ... IN ...`), and you can nest `WHERE` blocks to create smaller scopes and shadow earlier helper definitions.
+
 ## Conditional Expressions
 
 Conditionals are written using the `IF`, `THEN`, and `ELSE` keywords.
