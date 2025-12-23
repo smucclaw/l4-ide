@@ -14,6 +14,7 @@ module LSP.L4.Viz.Ladder (
 
   -- * Viz State helpers
   lookupAppExprMaker,
+  getAtomDeps,
   getVizConfig,
 
   -- * Other helpers
@@ -21,9 +22,10 @@ module LSP.L4.Viz.Ladder (
   ) where
 
 import Base
-import qualified Base.Text as Text
 import Data.IntMap.Lazy (IntMap)
 import qualified Data.IntMap.Lazy as Map
+import Data.IntSet (IntSet)
+import qualified Data.IntSet as IntSet
 import Optics.State.Operators ((<%=), (%=))
 import Optics
 import Control.Monad.Extra (unlessM)
@@ -81,15 +83,17 @@ data VizState = MkVizState
   , appExprMakers  :: IntMap (V.EvalAppRequestParams -> Expr Resolved)
   -- ^ Map from Unique of V.ID to eval-app-directive maker
   , defsForInlining :: IntMap (Expr Resolved)
+  , atomDeps       :: IntMap IntSet
   }
   deriving stock (Generic)
 
 instance Show VizState where
-  show MkVizState{cfg, maxId, appExprMakers, defsForInlining} =
+  show MkVizState{cfg, maxId, appExprMakers, defsForInlining, atomDeps} =
     "MkVizState { cfg = " <> show cfg <>
     ", maxId = " <> show maxId <>
     ", (keys of) appExprMakers =   " <> show (Map.keys appExprMakers) <>
-    ", defsForInlining =  " <> show defsForInlining <> " }"
+    ", defsForInlining =  " <> show defsForInlining <>
+    ", (keys of) atomDeps = " <> show (Map.keys atomDeps) <> " }"
 
 mkInitialVizState :: VizConfig -> VizState
 mkInitialVizState cfg =
@@ -98,6 +102,7 @@ mkInitialVizState cfg =
     , maxId = MkID 0
     , appExprMakers = Map.empty
     , defsForInlining = Map.empty
+    , atomDeps = Map.empty
     }
 
 ------------------------------------------------------
@@ -149,6 +154,10 @@ getLocalDecls = do
 withLocalDecls :: [LocalDecl Resolved] -> Viz a -> Viz a
 withLocalDecls newLocalDecls = local (\env -> env { localDecls = newLocalDecls <> env.localDecls })
 
+recordAtomDeps :: V.Unique -> IntSet -> Viz ()
+recordAtomDeps uniq deps =
+  #atomDeps %= Map.insertWith (<>) uniq deps
+
 collectDefsForInlining :: Viz (IntMap (Expr Resolved))
 collectDefsForInlining = do
   cfg <- getVizCfg
@@ -179,6 +188,9 @@ I.e., I'm trying to hide the implementational details of VizState
 
 lookupAppExprMaker :: VizState -> V.ID -> Maybe (V.EvalAppRequestParams -> Expr Resolved)
 lookupAppExprMaker vs vid = Map.lookup vid.id vs.appExprMakers
+
+getAtomDeps :: VizState -> IntMap IntSet
+getAtomDeps vs = vs.atomDeps
 
 getVizConfig :: VizState -> VizConfig
 getVizConfig vs = vs.cfg
@@ -295,19 +307,22 @@ translateExpr False = go
             -- TODO: Check how exactly a function of no args, as opposed to a var, would be represented?
             -- There was some discussion of this at a meeting, but can't remember exactly what was said
 
-        App appAnno fnResolved args -> do
+        App appAnno _fnResolved args -> do
           fnOfAppIsFnFromBooleansToBoolean <- and <$> traverse hasBooleanType (appAnno : map getAnno args)
           -- for now, only translating App of boolean functions to V.App
           if fnOfAppIsFnFromBooleansToBoolean
             then do
               vid <- getFresh
               prepEvalAppMaker vid e
-              V.App vid (mkVizNameWith nameToText fnResolved) <$> traverse go args
+              let uniq = vid.id
+                  vname = V.MkName uniq (prettyLayout e)
+              recordAtomDeps uniq (freeRefUniques e)
+              V.App vid vname <$> traverse go args
             else
-              leaf "" $ Text.unwords $ (nameToText . getOriginal $ fnResolved) : (prettyLayout <$> args)
+              leafFromExpr e
 
         _ -> do
-          leaf "" (prettyLayout e)
+          leafFromExpr e
 
 scanAnd :: Expr Resolved -> [Expr Resolved]
 scanAnd (And _ e1 e2) =
@@ -335,16 +350,21 @@ varLeaf vid vname resolved = do
     Ref _ uniq _ -> hasDefForInlining uniq
     _            -> pure False
   -- TODO: Prob need to do this `canInline` thing for things that aren't App of no args too?
+  recordAtomDeps vname.unique (IntSet.singleton vname.unique)
   pure $ V.UBoolVar vid vname defaultUBoolVarValue canInline
 
-leaf :: Text -> Text -> Viz IRExpr
-leaf subject complement = do
+leafFromExpr :: Expr Resolved -> Viz IRExpr
+leafFromExpr expr = do
   vid <- getFresh
   tempUniqueTODO <- getFresh
-  -- tempUniqueTODO: I'd like to defer properly handling the V.Name for `leaf` and the kinds of cases it's used for.
-  -- I'll return to this when we explicitly/properly handle more cases in translateExpr
-  -- TODO: Need to refactor this soon
-  pure $ V.UBoolVar vid (V.MkName tempUniqueTODO.id $ subject <> " " <> complement) defaultUBoolVarValue defaultUBoolVarCanInline
+  let uniq = tempUniqueTODO.id
+  recordAtomDeps uniq (freeRefUniques expr)
+  pure $
+    V.UBoolVar
+      vid
+      (V.MkName uniq (prettyLayout expr))
+      defaultUBoolVarValue
+      defaultUBoolVarCanInline
 
 ------------------------------------------------------
 -- Name helpers
@@ -359,6 +379,16 @@ mkPrettyVizName = mkVizNameWith prettyLayout
 mkVizNameWith :: (Name -> Text) -> Resolved -> V.Name
 mkVizNameWith printer (getUniqueName -> (MkUnique {unique}, name)) =
   V.MkName unique (printer name)
+
+------------------------------------------------------
+-- Crude dependency tracking
+------------------------------------------------------
+
+freeRefUniques :: Expr Resolved -> IntSet
+freeRefUniques =
+  foldMapOf (Optics.gplate @(Expr Resolved)) $ \case
+    App _ (Ref _ uniq _) [] -> IntSet.singleton uniq.unique
+    _ -> IntSet.empty
 
 ------------------------------------------------------
 -- Helpers for checking if an Expr has Boolean type

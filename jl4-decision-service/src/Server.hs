@@ -48,6 +48,7 @@ module Server (
   QueryAtom (..),
   QueryOutcome (..),
   QueryImpact (..),
+  QueryInput (..),
   QueryPlanResponse (..),
 
   -- * utilities
@@ -81,6 +82,7 @@ import Data.Int
 import qualified Data.Map.Strict as Map
 import qualified Data.List as List
 import qualified Data.Maybe as Maybe
+import Data.Ord (Down (..))
 import Data.Scientific (Scientific)
 import qualified Data.Set as Set
 import qualified Data.Text as Text
@@ -88,6 +90,7 @@ import qualified Data.Text.Encoding as Text
 import qualified Data.Tuple.Extra as Tuple
 import qualified GHC.Clock as Clock
 import GHC.TypeLits
+import Text.Read (readMaybe)
 import qualified Network.HTTP.Types.URI as URI
 import Servant
 import System.Timeout (timeout)
@@ -108,6 +111,10 @@ import qualified Optics
 import L4.Lexer
 import qualified LSP.L4.Rules as Rules
 import qualified Language.LSP.Protocol.Types as LSP
+import Data.IntMap.Lazy (IntMap)
+import qualified Data.IntMap.Lazy as IntMap
+import Data.IntSet (IntSet)
+import qualified Data.IntSet as IntSet
 
 
 -- ----------------------------------------------------------------------------
@@ -132,6 +139,7 @@ data ValidatedFunction = ValidatedFunction
 data CachedDecisionQuery = CachedDecisionQuery
   { ladderInfo :: !VizExpr.RenderAsLadderInfo
   , varLabelByUnique :: !(Map Int Text)
+  , varDepsByUnique :: !(IntMap IntSet)
   , compiled :: !(BDQ.CompiledDecisionQuery Int)
   }
 
@@ -231,7 +239,7 @@ data SingleFunctionApi' mode = SingleFunctionApi
       mode
         :- "query-plan"
           :> Summary "Suggest which boolean inputs to elicit next"
-          :> Description "Returns remaining relevant boolean atoms (not necessarily original inputs) plus a heuristic ranking and per-atom impact analysis."
+          :> Description "Returns remaining relevant boolean atoms (not necessarily original inputs), per-atom impact analysis, and a heuristic ranking of function parameters inferred from atom dependencies."
           :> ReqBody '[JSON] FnArguments
           :> OperationId "queryPlan"
           :> Post '[JSON] QueryPlanResponse
@@ -266,11 +274,21 @@ data QueryPlanResponse = QueryPlanResponse
   { determined :: !(Maybe Bool)
   , stillNeeded :: ![QueryAtom]
   , ranked :: ![QueryAtom]
+  , inputs :: ![QueryInput]
   , impact :: !(Map Int QueryImpact)
   , note :: !Text
   , ladder :: !(Maybe VizExpr.RenderAsLadderInfo)
   }
   deriving stock (Show, Generic)
+  deriving anyclass (FromJSON, ToJSON)
+
+data QueryInput = QueryInput
+  { inputUnique :: !Int
+  , inputLabel :: !Text
+  , score :: !Double
+  , atoms :: ![QueryAtom]
+  }
+  deriving stock (Show, Read, Ord, Eq, Generic)
   deriving anyclass (FromJSON, ToJSON)
 
 data SimpleFunction = SimpleFunction
@@ -432,12 +450,14 @@ queryPlanHandler name' args = do
 
   let labelToUnique =
         Map.fromList [(lbl, u) | (u, lbl) <- Map.toList cached.varLabelByUnique]
+      parseUniqueKey t = readMaybe (Text.unpack t) :: Maybe Int
       knownBindings =
         Map.fromList
           [ (u, b)
           | (k, mv) <- Map.toList args.fnArguments
           , Just (FnLitBool b) <- [mv]
-          , Just u <- [Map.lookup k labelToUnique]
+          , Just u <- [Map.lookup k labelToUnique <|> parseUniqueKey k]
+          , Map.member u cached.varLabelByUnique
           ]
 
       res = BDQ.queryDecision cached.compiled knownBindings
@@ -461,14 +481,69 @@ queryPlanHandler name' args = do
           | (u, imp) <- Map.toList res.impact
           ]
 
+      paramsByUnique :: Map Int Text
+      paramsByUnique =
+        Map.fromList [(p.unique, p.label) | p <- cached.ladderInfo.funDecl.params]
+
+      impactScoreFor :: Int -> Double
+      impactScoreFor u =
+        case Map.lookup u res.impact of
+          Nothing -> 0
+          Just imp ->
+            let bump o = if Maybe.isJust o.determined then (1 :: Int) else 0
+             in (fromIntegral (bump imp.ifTrue + bump imp.ifFalse) :: Double)
+
+      atomParamDeps :: Int -> [Int]
+      atomParamDeps atomUniq =
+        case IntMap.lookup atomUniq cached.varDepsByUnique of
+          Nothing -> []
+          Just deps ->
+            [p | p <- IntSet.toList deps, Map.member p paramsByUnique]
+
+      stillNeededAtoms = atomsOfSet res.support
+
+      inputAtoms :: [(Int, [QueryAtom])]
+      inputAtoms =
+        [ (pUniq, [a | a <- stillNeededAtoms, pUniq `elem` atomParamDeps a.unique])
+        | (pUniq, _lbl) <- Map.toList paramsByUnique
+        ]
+
+      inputScores :: [(Int, Double)]
+      inputScores =
+        [ ( pUniq
+          , sum
+              [ let deps = atomParamDeps a.unique
+                    w = 1 / max 1 (fromIntegral (length deps))
+                 in w * impactScoreFor a.unique
+              | a <- as
+              ]
+          )
+        | (pUniq, as) <- inputAtoms
+        ]
+
+      inputsRanked =
+        [ QueryInput
+            { inputUnique = pUniq
+            , inputLabel = Map.findWithDefault (Text.pack (show pUniq)) pUniq paramsByUnique
+            , score = sc
+            , atoms = Map.findWithDefault [] pUniq (Map.fromList inputAtoms)
+            }
+        | (pUniq, sc) <-
+            List.sortOn
+              (\(u, sc0) -> (Down sc0, Map.findWithDefault "" u paramsByUnique))
+              inputScores
+        , sc > 0
+        ]
+
       noteTxt =
-        "StillNeeded/ranked are boolean atoms from ladder visualization; these may be derived predicates rather than original user inputs. Bindings are matched by atom label."
+        "StillNeeded/ranked are boolean atoms from ladder visualization; these may be derived predicates rather than original user inputs. Bindings are matched by atom label or by atom unique (as a decimal string). `inputs` ranks function parameters using a simple dependency-based heuristic."
 
   pure
     QueryPlanResponse
       { determined = res.determined
       , stillNeeded = atomsOfSet res.support
       , ranked = map atomOf res.ranked
+      , inputs = inputsRanked
       , impact = impactJson
       , note = noteTxt
       , ladder = Just cached.ladderInfo
@@ -492,17 +567,19 @@ buildDecisionQueryCache funName fn = do
 
   verDocId <- mkVerDocId fileName
   let vizCfg = LadderViz.mkVizConfig verDocId tcRes.module' tcRes.substitution True
-  (ladderInfo, _vizState) <- case LadderViz.doVisualize decide vizCfg of
+  (ladderInfo, vizState) <- case LadderViz.doVisualize decide vizCfg of
     Left e -> throwError err500 {errBody = encodeTextLBS (LadderViz.prettyPrintVizError e)}
     Right x -> pure x
 
   let (boolExpr, labels, order) = vizExprToBoolExpr ladderInfo.funDecl.body
       compiled = BDQ.compileDecisionQuery order boolExpr
+      deps = LadderViz.getAtomDeps vizState
 
   pure
     CachedDecisionQuery
       { ladderInfo
       , varLabelByUnique = labels
+      , varDepsByUnique = deps
       , compiled
       }
 
