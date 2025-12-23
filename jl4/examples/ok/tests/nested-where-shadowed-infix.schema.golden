@@ -1,0 +1,21 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "deductions": {
+            "$ref": "#/$defs/NUMBER"
+        },
+        "exclusions": {
+            "$ref": "#/$defs/NUMBER"
+        },
+        "grossIncome": {
+            "$ref": "#/$defs/NUMBER"
+        }
+    },
+    "required": [
+        "grossIncome",
+        "deductions",
+        "exclusions"
+    ],
+    "title": "assessableIncome",
+    "type": "object"
+}
