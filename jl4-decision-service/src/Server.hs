@@ -768,13 +768,23 @@ resolvedNameText =
 getAllFunctions :: AppM [SimpleFunction]
 getAllFunctions = do
   functions <- liftIO . readTVarIO =<< asks (.functionDatabase)
-  pure $ fmap (toSimpleFunction . (.fnImpl)) $ Map.elems functions
+  pure $ fmap (toSimpleFunction . (.fnImpl)) $ filter (not . looksLikeUUID . (.fnImpl.name)) $ Map.elems functions
  where
   toSimpleFunction s =
     SimpleFunction
       { simpleName = s.name
       , simpleDescription = s.description
       }
+  
+  -- | Check if a function name looks like a UUID (with optional suffix after colon)
+  -- Matches patterns like:
+  --   b52992ed-39fd-4226-bad2-2deee2473881
+  --   b52992ed-39fd-4226-bad2-2deee2473881:functionName
+  looksLikeUUID :: Text -> Bool
+  looksLikeUUID name =
+    let (beforeColon, _) = Text.breakOn ":" name
+        nameToCheck = if Text.null beforeColon then name else beforeColon
+    in Maybe.isJust (UUID.fromText nameToCheck)
 
 getFunctionHandler :: String -> AppM Function
 getFunctionHandler name = do
