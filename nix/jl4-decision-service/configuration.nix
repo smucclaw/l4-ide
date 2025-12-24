@@ -43,8 +43,8 @@
           --port ${toString config.services.jl4-decision-service.port} \
           --serverName https://${config.networking.domain + config.services.jl4-decision-service.path} \
           $sourcePathsArgs \
-          --crudServerName localhost \
-          --crudServerPort ${toString config.services.jl4-websessions.port}
+          --websessionsHost localhost \
+          --websessionsPort ${toString config.services.jl4-websessions.port}
       '';
       Restart = "always";
 

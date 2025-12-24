@@ -43,7 +43,7 @@ opts =
 
 defaultMain :: IO ()
 defaultMain = do
-  Options{port, serverName, sourcePaths, crudServerName} <- execParser opts
+  Options{port, serverName, sourcePaths, websessionsUrl} <- execParser opts
 
   l4Files <- expandSourcePaths sourcePaths
   when (null sourcePaths) $ putStrLn $ "sourcePaths expanded to empty: " <> show sourcePaths
@@ -56,9 +56,9 @@ defaultMain = do
   exampleFunctions <- Examples.functionSpecs
   dbRef <- newTVarIO (exampleFunctions <> l4Functions)
   mgr <- newManager defaultManagerSettings
-  putStrLn $ "will contact crud server on following base url: " <> show crudServerName
+  putStrLn $ "will contact websessions service at: " <> show websessionsUrl
   let
-    initialState = MkAppEnv dbRef crudServerName mgr
+    initialState = MkAppEnv dbRef websessionsUrl mgr
   putStrLn $ "Application started on port: " <> show port
   withStdoutLogger $ \aplogger -> do
     let
