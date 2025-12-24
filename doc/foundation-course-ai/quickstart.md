@@ -271,6 +271,8 @@ WHERE
     helper2 MEANS expression2
 ```
 
+`WHERE` can be attached to any expression (not just top-level definitions), so you can place local helpers close to where they are used and even nest `WHERE` blocks for smaller scopes.
+
 ### 9. Boolean Logic
 
 ```l4

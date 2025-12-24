@@ -161,6 +161,41 @@ function passes_salary_check(employee, employer) {
 }
 ```
 
+### WHERE vs LET for Mixfix Operators
+
+**Important**: If you need to define **mixfix operators** (like postfix functions), you must use WHERE clauses, not LET blocks:
+
+```l4
+-- ✓ CORRECT: Postfix operator in WHERE
+GIVEN radius IS A NUMBER
+GIVETH A NUMBER
+circleArea radius MEANS
+  LET pi BE 3
+  IN radius `squared` TIMES pi
+  WHERE
+    GIVEN r IS A NUMBER
+    r `squared` MEANS r * r
+
+-- ✗ INCORRECT: Postfix operator in LET (will fail typecheck)
+-- circleAreaBroken radius MEANS
+--   LET pi BE 3
+--       r `squared` MEANS r * r  -- ERROR!
+--   IN radius `squared` TIMES pi
+```
+
+This is because mixfix operators must be registered during the scanning phase, which only happens for WHERE clause definitions. LET blocks are for regular value and function bindings.
+
+If you need a helper function in a LET block, use regular function syntax (without mixfix notation):
+
+```l4
+circleAreaWithHelper radius MEANS
+  LET pi BE 3
+      squared r IS r * r  -- Regular function (not mixfix)
+  IN squared radius TIMES pi
+```
+
+See `jl4/examples/not-ok/tc/postfix-in-let-block.l4` for a demonstration of this constraint.
+
 ### Complex WHERE Example
 
 ```l4

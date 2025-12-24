@@ -26,6 +26,7 @@ services:
       - "8001:8001"
     volumes:
       - ./jl4/examples:/app/examples:ro
+      - ./jl4/experiments:/app/experiments:ro
       - ./doc/tutorial-code:/app/tutorial-code:ro
     depends_on:
       jl4-websessions:

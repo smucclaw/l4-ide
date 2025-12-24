@@ -21,7 +21,8 @@ case "$MODE" in
     cd jl4-decision-service
     cabal run jl4-decision-service-exe -- \
       --port "$DECISION_PORT" \
-      --sourcePaths ../jl4/examples
+      --sourcePaths ../jl4/experiments/britishcitizen5.l4 \
+      --sourcePaths ../jl4/experiments/parking.l4
     ;;
 
   websessions-only)
@@ -57,7 +58,8 @@ case "$MODE" in
       echo "Starting decision service on port $DECISION_PORT..."
       (cd jl4-decision-service && cabal run jl4-decision-service-exe -- \
         --port "$DECISION_PORT" \
-        --sourcePaths ../jl4/examples \
+        --sourcePaths ../jl4/experiments/britishcitizen5.l4 \
+        --sourcePaths ../jl4/experiments/parking.l4 \
         --crudServerName localhost \
         --crudServerPort "$WEBSESSIONS_PORT") > /tmp/jl4-decision.log 2>&1 &
       echo "DECISION_PID=$!" >> "$PIDFILE"
@@ -108,7 +110,9 @@ case "$MODE" in
       echo ""
       echo "Terminal 2 - Decision Service:"
       echo "  cd jl4-decision-service && cabal run jl4-decision-service-exe -- \\"
-      echo "    --port $DECISION_PORT --sourcePaths ../jl4/examples \\"
+      echo "    --port $DECISION_PORT \\"
+      echo "    --sourcePaths ../jl4/experiments/britishcitizen5.l4 \\"
+      echo "    --sourcePaths ../jl4/experiments/parking.l4 \\"
       echo "    --crudServerName localhost --crudServerPort $WEBSESSIONS_PORT"
       echo ""
       echo "Terminal 3 - Websessions (after decision service starts):"
