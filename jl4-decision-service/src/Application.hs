@@ -56,7 +56,9 @@ defaultMain = do
   exampleFunctions <- Examples.functionSpecs
   dbRef <- newTVarIO (exampleFunctions <> l4Functions)
   mgr <- newManager defaultManagerSettings
-  putStrLn $ "will contact websessions service at: " <> show websessionsUrl
+  putStrLn $ "Websessions integration enabled at: " <> show websessionsUrl
+  putStrLn $ "  - Will accept pushed functions from websessions (on save)"
+  putStrLn $ "  - Will pull missing functions from websessions on demand (cache miss)"
   let
     initialState = MkAppEnv dbRef websessionsUrl mgr
   putStrLn $ "Application started on port: " <> show port

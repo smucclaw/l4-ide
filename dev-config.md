@@ -137,6 +137,62 @@ Development:
 - nginx proxies public traffic from **/session** → localhost:8002 and **/decision** → localhost:8001
 - Swagger uses **external domain** (https://jl4.legalese.com) for API documentation
 
+### Service Architecture & Communication Flows
+
+**Service Responsibilities:**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ websessions (Port 8002)                                     │
+│ - Persistence layer / SQLite gateway                        │
+│ - Stores L4 programs with UUID keys                         │
+│ - Provides GET ?id=<uuid> for retrieval                     │
+│ - Accepts POST / to create new session                      │
+│ - PUSHES to decision service on save (if configured)        │
+└─────────────────────────────────────────────────────────────┘
+                        │
+                        │ Flow 1: Push (on save)
+                        │ POST /functions/{uuid}
+                        ▼
+┌─────────────────────────────────────────────────────────────┐
+│ decision-service (Port 8001)                                │
+│ - Computation layer / L4 evaluator                          │
+│ - In-memory cache of L4 functions                           │
+│ - Provides GET /functions/{uuid}:fnName                     │
+│ - Provides POST /functions/{uuid}:fnName/evaluation         │
+│ - PULLS from websessions on cache miss (if configured)      │
+└─────────────────────────────────────────────────────────────┘
+                        │
+                        │ Flow 2: Pull (on cache miss)
+                        │ GET ?id=<uuid>
+                        ▼
+                  (back to websessions)
+```
+
+**Bidirectional Communication:**
+
+1. **Flow 1 - Push (websessions → decision service):**
+   - User saves L4 program in web IDE (hits "Share")
+   - websessions stores in SQLite with UUID
+   - websessions immediately POSTs to decision service `/functions/{uuid}`
+   - decision service parses and caches in memory
+   - Function becomes immediately available via decision service API
+
+2. **Flow 2 - Pull (decision service → websessions):**
+   - User requests `/functions/{uuid}:functionName` from decision service
+   - decision service checks in-memory cache
+   - On cache miss, decision service GETs from websessions `?id={uuid}`
+   - websessions retrieves from SQLite and returns
+   - decision service parses, caches, and returns to user
+
+**Why This Architecture:**
+
+- **Separation of concerns:** websessions handles persistence, decision service handles computation
+- **Loose coupling:** Services can operate independently (push is optional)
+- **Performance:** In-memory cache for fast evaluation, SQLite for durability
+- **Fallback:** Pull mechanism ensures functions are available even if push fails
+- **Scalability:** Each service can scale independently based on workload
+
 ### Port Configuration
 
 **Default Development Ports:**
