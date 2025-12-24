@@ -99,6 +99,7 @@ import Servant.Client.Core.HasClient
 
 import Data.UUID (UUID)
 import qualified Data.UUID as UUID
+import qualified Data.UUID.V5 as UUIDV5
 import Servant.Client (BaseUrl, ClientError, ClientM, runClientM, mkClientEnv)
 import qualified L4.CRUD as CRUD
 import Servant.Client.Generic (genericClient)
@@ -253,6 +254,7 @@ data SingleFunctionApi' mode = SingleFunctionApi
 
 data QueryAtom = QueryAtom
   { unique :: !Int
+  , atomId :: !Text
   , label :: !Text
   }
   deriving stock (Show, Read, Ord, Eq, Generic)
@@ -279,6 +281,7 @@ data QueryPlanResponse = QueryPlanResponse
   , inputs :: ![QueryInput]
   , asks :: ![QueryAsk]
   , impact :: !(Map Int QueryImpact)
+  , impactByAtomId :: !(Map Text QueryImpact)
   , note :: !Text
   , ladder :: !(Maybe VizExpr.RenderAsLadderInfo)
   }
@@ -461,7 +464,56 @@ queryPlanHandler name' args = do
     Nothing -> throwError err500
     Just c -> pure c
 
-  let parseUniqueKey t = readMaybe (Text.unpack t) :: Maybe Int
+  let
+      paramsByUnique :: Map Int Text
+      paramsByUnique =
+        Map.fromList [(p.unique, p.label) | p <- cached.ladderInfo.funDecl.params]
+
+      renderInputRef :: LadderViz.InputRef -> Text
+      renderInputRef ref =
+        let
+            rootLbl =
+              fromMaybe
+                (Text.pack (show ref.rootUnique))
+                ( Map.lookup ref.rootUnique paramsByUnique
+                    <|> Map.lookup ref.rootUnique cached.varLabelByUnique
+                )
+            pathTxt =
+              case ref.path of
+                [] -> ""
+                xs -> "." <> Text.intercalate "." xs
+         in rootLbl <> pathTxt
+
+      stableAtomId :: Int -> Text -> Text
+      stableAtomId u lbl =
+        let refs =
+              List.sort
+                [ renderInputRef ref
+                | ref <- Set.toList (IntMap.findWithDefault Set.empty u cached.varInputRefsByUnique)
+                ]
+            canonical =
+              Text.intercalate
+                "|"
+                ( [name, lbl]
+                    <> ["refs=" <> Text.intercalate ";" refs | not (null refs)]
+                )
+         in UUID.toText (UUIDV5.generateNamed UUIDV5.namespaceURL (BS.unpack (Text.encodeUtf8 canonical)))
+
+      atomIdByUnique :: Map Int Text
+      atomIdByUnique =
+        Map.fromList
+          [ (u, stableAtomId u lbl)
+          | (u, lbl) <- Map.toList cached.varLabelByUnique
+          ]
+
+      uniqueByAtomId :: Map Text Int
+      uniqueByAtomId =
+        Map.fromList
+          [ (aid, u)
+          | (u, aid) <- Map.toList atomIdByUnique
+          ]
+
+      parseUniqueKey t = readMaybe (Text.unpack t) :: Maybe Int
       stripBackticks t =
         fromMaybe t $
           Text.stripPrefix "`" t >>= \t1 ->
@@ -496,6 +548,17 @@ queryPlanHandler name' args = do
           | (k, mv) <- Map.toList args.fnArguments
           ]
 
+      answeredAskKeys :: Set (Text, Maybe Text)
+      answeredAskKeys =
+        Set.fromList $
+          concat
+            [ case Text.breakOn "." k of
+                (containerLabel, rest)
+                  | Text.null rest -> [(containerLabel, Nothing)]
+                  | otherwise -> [(containerLabel, Just (Text.drop 1 rest))]
+            | (k, _b) <- flattenedLabelBindings
+            ]
+
       labelToUniques0 :: Map Text [Int]
       labelToUniques0 =
         Map.fromListWith (<>)
@@ -523,12 +586,16 @@ queryPlanHandler name' args = do
               fromMaybe []
                 ( Map.lookup k labelToUniques
                     <|> (pure <$> parseUniqueKey k)
+                    <|> (pure <$> Map.lookup k uniqueByAtomId)
                 )
           , Map.member u cached.varLabelByUnique
           ]
 
       res = BDQ.queryDecision cached.compiled knownBindings
-      atomOf u = QueryAtom u (Map.findWithDefault (Text.pack (show u)) u cached.varLabelByUnique)
+      atomOf u =
+        let lbl = Map.findWithDefault (Text.pack (show u)) u cached.varLabelByUnique
+            aid = Map.findWithDefault (stableAtomId u lbl) u atomIdByUnique
+         in QueryAtom u aid lbl
       atomsOfSet s = map atomOf (Set.toList s)
 
       outcomeToJson o =
@@ -547,10 +614,16 @@ queryPlanHandler name' args = do
             )
           | (u, imp) <- Map.toList res.impact
           ]
-
-      paramsByUnique :: Map Int Text
-      paramsByUnique =
-        Map.fromList [(p.unique, p.label) | p <- cached.ladderInfo.funDecl.params]
+      impactByAtomIdJson =
+        Map.fromList
+          [ ( (atomOf u).atomId
+            , QueryImpact
+                { ifTrue = outcomeToJson imp.ifTrue
+                , ifFalse = outcomeToJson imp.ifFalse
+                }
+            )
+          | (u, imp) <- Map.toList res.impact
+          ]
 
       impactScoreFor :: Int -> Double
       impactScoreFor u =
@@ -615,7 +688,11 @@ queryPlanHandler name' args = do
           Set.fromList
             [ (containerLabel, keyMaybe)
             | ref <- Set.toList refs
-            , containerLabel <- Maybe.maybeToList (Map.lookup ref.rootUnique paramsByUnique)
+            , containerLabel <-
+                Maybe.maybeToList
+                  ( Map.lookup ref.rootUnique paramsByUnique
+                      <|> Map.lookup ref.rootUnique cached.varLabelByUnique
+                  )
             , let
                 keyMaybe =
                   case ref.path of
@@ -691,10 +768,11 @@ queryPlanHandler name' args = do
               (\((c, k), sc0) -> (Down sc0, c, k))
               (Map.toList askScores)
         , sc > 0
+        , (containerLabel, keyMaybe) `Set.notMember` answeredAskKeys
         ]
 
       noteTxt =
-        "StillNeeded/ranked are boolean atoms from ladder visualization; these may be derived predicates rather than original user inputs. Bindings are matched by atom label (including dotted labels for nested fields) or by atom unique (as a decimal string). `inputs` ranks function parameters using a simple dependency-based heuristic."
+        "StillNeeded/ranked are boolean atoms from ladder visualization; these may be derived predicates rather than original user inputs. Bindings are matched by atom label (including dotted labels for nested fields), atom unique (as a decimal string), or atomId (a stable UUIDv5 derived from function name, atom label, and input refs). `inputs` ranks function parameters using a simple dependency-based heuristic."
           <> " `asks` ranks askable keys; for record parameters this includes projected field paths discovered via `Proj`."
 
   pure
@@ -705,6 +783,7 @@ queryPlanHandler name' args = do
       , inputs = inputsRanked
       , asks = asksRanked
       , impact = impactJson
+      , impactByAtomId = impactByAtomIdJson
       , note = noteTxt
       , ladder = Just cached.ladderInfo
       }

@@ -273,6 +273,32 @@ spec = describe "integration" do
                   -- Some progress: either walks is no longer needed, or it's still needed but in a reduced form.
                   fmap (.inputLabel) qp1.inputs `shouldSatisfy` (not . ("walks" `elem`))
 
+    it "accepts bindings by atomId (stable UUIDv5 key)" do
+      runDecisionService \api -> do
+        qp0 <-
+          (api.functionRoutes.singleEntity "compute_qualifies").queryPlan
+            FnArguments
+              { fnEvalBackend = Just JL4
+              , fnArguments = Map.empty
+              }
+        let
+          mWalks = List.find (\i -> i.inputLabel == "walks") qp0.inputs
+        case mWalks of
+          Nothing -> liftIO $ expectationFailure "expected an input named walks"
+          Just walksInput -> do
+            case walksInput.atoms of
+              [] -> liftIO $ expectationFailure "expected walks to affect at least one atom"
+              (a : _) -> do
+                qp1 <-
+                  (api.functionRoutes.singleEntity "compute_qualifies").queryPlan
+                    FnArguments
+                      { fnEvalBackend = Just JL4
+                      , fnArguments = Map.singleton a.atomId (Just (FnLitBool True))
+                      }
+                liftIO do
+                  qp1.determined `shouldBe` Nothing
+                  fmap (.inputLabel) qp1.inputs `shouldSatisfy` (not . ("walks" `elem`))
+
     it "suggests nested record keys for vermin_and_rodent" do
       runDecisionService \api -> do
         qp <-

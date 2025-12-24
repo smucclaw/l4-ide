@@ -400,14 +400,14 @@ varLeaf :: V.ID -> V.Name -> Resolved -> Viz IRExpr
 varLeaf vid vname resolved = do
   canInline <- case resolved of
     Ref _ uniq _ -> hasDefForInlining uniq
-    _            -> pure False
+    Def uniq _ -> hasDefForInlining uniq
+    _ -> pure False
   -- TODO: Prob need to do this `canInline` thing for things that aren't App of no args too?
-  refs <- case resolved of
-    Ref _ uniq _ ->
-      lookupLocalDecideBody uniq.unique >>= \case
-        Nothing -> pure (Set.singleton (MkInputRef vname.unique []))
-        Just body -> freeInputRefsExpanded (Set.singleton vname.unique) body
-    _ -> pure (Set.singleton (MkInputRef vname.unique []))
+  let target = (getUnique resolved).unique
+  refs <-
+    lookupLocalDecideBody target >>= \case
+      Nothing -> pure (Set.singleton (MkInputRef vname.unique []))
+      Just body -> freeInputRefsExpanded (Set.singleton vname.unique) body
   recordAtomInputRefs vname.unique refs
   pure $ V.UBoolVar vid vname defaultUBoolVarValue canInline
 

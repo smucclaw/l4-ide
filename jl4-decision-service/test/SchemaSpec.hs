@@ -172,7 +172,7 @@ instance Arbitrary OutputSummary where
       <*> arbitrary
 
 instance Arbitrary QueryAtom where
-  arbitrary = QueryAtom <$> arbitrary <*> arbitrary
+  arbitrary = QueryAtom <$> arbitrary <*> arbitrary <*> arbitrary
 
 instance Arbitrary QueryOutcome where
   arbitrary = QueryOutcome <$> arbitrary <*> arbitrary
@@ -201,6 +201,7 @@ instance Arbitrary QueryPlanResponse where
   arbitrary =
     QueryPlanResponse
       <$> arbitrary
+      <*> arbitrary
       <*> arbitrary
       <*> arbitrary
       <*> arbitrary
