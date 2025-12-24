@@ -49,6 +49,7 @@ library
     Backend.Api
     Backend.BooleanDecisionQuery
     Backend.CodeGen
+    Backend.DecisionQueryPlan
     Backend.DirectiveFilter
     Backend.GraphVizRender
     Backend.Jl4

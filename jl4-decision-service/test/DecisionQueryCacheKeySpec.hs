@@ -5,7 +5,8 @@ import Test.Hspec
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text
 
-import Server
+import Backend.Api (EvalBackend (..))
+import Backend.DecisionQueryPlan (decisionQueryCacheKey)
 
 spec :: Spec
 spec = describe "decisionQueryCacheKey" do
@@ -16,9 +17,9 @@ spec = describe "decisionQueryCacheKey" do
           [ "GIVETH A BOOLEAN"
           , "DECIDE f IS TRUE"
           ]
-      fn0 = mkFn "desc0" src
-      fn1 = mkFn "desc1" src
-    decisionQueryCacheKey "f" fn0 `shouldBe` decisionQueryCacheKey "f" fn1
+      sources0 = Map.singleton JL4 src
+      sources1 = Map.singleton JL4 src
+    decisionQueryCacheKey "f" sources0 `shouldBe` decisionQueryCacheKey "f" sources1
 
   it "changes when the function source changes" do
     let
@@ -32,26 +33,6 @@ spec = describe "decisionQueryCacheKey" do
           [ "GIVETH A BOOLEAN"
           , "DECIDE f IS FALSE"
           ]
-      fn0 = mkFn "desc" src0
-      fn1 = mkFn "desc" src1
-    decisionQueryCacheKey "f" fn0 `shouldNotBe` decisionQueryCacheKey "f" fn1
-
-mkFn :: Text.Text -> Text.Text -> ValidatedFunction
-mkFn desc src =
-  let
-    decl =
-      Function
-        { name = "f"
-        , description = desc
-        , parameters = MkParameters {parameterMap = Map.empty, required = []}
-        , supportedEvalBackend = [JL4]
-        }
-  in
-    ValidatedFunction
-      { fnImpl = decl
-      , fnEvaluator = Map.empty
-      , fnCompiled = Nothing
-      , fnSources = Map.singleton JL4 src
-      , fnDecisionQueryCache = Nothing
-      }
-
+      sources0 = Map.singleton JL4 src0
+      sources1 = Map.singleton JL4 src1
+    decisionQueryCacheKey "f" sources0 `shouldNotBe` decisionQueryCacheKey "f" sources1
