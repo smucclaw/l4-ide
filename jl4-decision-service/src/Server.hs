@@ -55,6 +55,7 @@ module Server (
   -- * utilities
   toDecl,
   parametersOfDecide,
+  decisionQueryCacheKey,
 ) where
 
 import Base
@@ -139,7 +140,8 @@ data ValidatedFunction = ValidatedFunction
   }
 
 data CachedDecisionQuery = CachedDecisionQuery
-  { ladderInfo :: !VizExpr.RenderAsLadderInfo
+  { cacheKey :: !Text
+  , ladderInfo :: !VizExpr.RenderAsLadderInfo
   , varLabelByUnique :: !(Map Int Text)
   , varDepsByUnique :: !(IntMap IntSet)
   , varInputRefsByUnique :: !(IntMap (Set LadderViz.InputRef))
@@ -448,21 +450,7 @@ queryPlanHandler :: String -> FnArguments -> AppM QueryPlanResponse
 queryPlanHandler name' args = do
   let name = Text.pack name'
   functionsTVar <- asks (.functionDatabase)
-  functions <- liftIO $ readTVarIO functionsTVar
-  fn <- case Map.lookup name functions of
-    Nothing -> throwError err404
-    Just f -> pure f
-
-  fnWithCache <- case fn.fnDecisionQueryCache of
-    Just _ -> pure fn
-    Nothing -> do
-      cached <- buildDecisionQueryCache name fn
-      liftIO $ atomically $ modifyTVar' functionsTVar $ Map.adjust (\f0 -> f0 {fnDecisionQueryCache = Just cached}) name
-      pure fn {fnDecisionQueryCache = Just cached}
-
-  cached <- case fnWithCache.fnDecisionQueryCache of
-    Nothing -> throwError err500
-    Just c -> pure c
+  cached <- getOrBuildDecisionQueryCache functionsTVar name
 
   let
       paramsByUnique :: Map Int Text
@@ -817,12 +805,66 @@ buildDecisionQueryCache funName fn = do
 
   pure
     CachedDecisionQuery
-      { ladderInfo
+      { cacheKey = decisionQueryCacheKey funName fn
+      , ladderInfo
       , varLabelByUnique = labels
       , varDepsByUnique = deps
       , varInputRefsByUnique = inputRefs
       , compiled
       }
+
+decisionQueryCacheKey :: Text -> ValidatedFunction -> Text
+decisionQueryCacheKey funName fn =
+  let
+    sourcesTxt =
+      Text.intercalate
+        "\n\n"
+        [ Text.pack (show b) <> "\n" <> src
+        | (b, src) <- Map.toAscList fn.fnSources
+        ]
+    canonical =
+      Text.intercalate
+        "\n\n"
+        [ "function=" <> funName
+        , "sources=" <> sourcesTxt
+        ]
+  in UUID.toText (UUIDV5.generateNamed UUIDV5.namespaceURL (BS.unpack (Text.encodeUtf8 canonical)))
+
+getOrBuildDecisionQueryCache :: TVar (Map Text ValidatedFunction) -> Text -> AppM CachedDecisionQuery
+getOrBuildDecisionQueryCache functionsTVar name =
+  go (2 :: Int)
+ where
+  go retriesRemaining = do
+    fn <- do
+      functions <- liftIO $ readTVarIO functionsTVar
+      case Map.lookup name functions of
+        Nothing -> throwError err404
+        Just f -> pure f
+
+    let keyNow = decisionQueryCacheKey name fn
+    case fn.fnDecisionQueryCache of
+      Just cached | cached.cacheKey == keyNow -> pure cached
+      _ -> do
+        cached <- buildDecisionQueryCache name fn
+
+        stored <-
+          liftIO $
+            atomically $
+              stateTVar functionsTVar $ \functions ->
+                case Map.lookup name functions of
+                  Nothing ->
+                    (False, functions)
+                  Just fn0 ->
+                    if decisionQueryCacheKey name fn0 == cached.cacheKey
+                      then (True, Map.insert name (fn0 {fnDecisionQueryCache = Just cached}) functions)
+                      else (False, functions)
+
+        if stored
+          then pure cached
+          else
+            if retriesRemaining <= 0
+              then pure cached
+              else go (retriesRemaining - 1)
 
 mkVerDocId :: FilePath -> AppM LSP.VersionedTextDocumentIdentifier
 mkVerDocId fileName = do

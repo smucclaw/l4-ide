@@ -123,6 +123,7 @@ test-suite jl4-decision-service-test
   other-modules:
     Paths_jl4_decision_service
     BooleanDecisionQuerySpec
+    DecisionQueryCacheKeySpec
     IntegrationSpec
     SchemaSpec
     TestData
