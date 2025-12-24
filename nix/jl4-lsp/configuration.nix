@@ -26,7 +26,8 @@
   config.systemd.services.jl4-lsp = {
     enable = true;
     description = "jl4-lsp";
-    after = [ "network.target" ];
+    after = [ "network.target" "nginx.service" ];
+    requires = [ "nginx.service" ];
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
       ExecStart = ''

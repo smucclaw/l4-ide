@@ -34,7 +34,8 @@
   config.systemd.services.jl4-decision-service = {
     enable = true;
     description = "jl4-decision-service";
-    after = [ "network.target" ];
+    after = [ "network.target" "nginx.service" ];
+    requires = [ "nginx.service" ];
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
       ExecStart = ''
