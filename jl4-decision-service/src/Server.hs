@@ -514,7 +514,7 @@ queryPlanHandler name' args = do
           , sum
               [ let deps = atomParamDeps a.unique
                     w = 1 / max 1 (fromIntegral (length deps))
-                 in w * impactScoreFor a.unique
+                 in w * (1 + impactScoreFor a.unique)
               | a <- as
               ]
           )
@@ -537,6 +537,7 @@ queryPlanHandler name' args = do
 
       noteTxt =
         "StillNeeded/ranked are boolean atoms from ladder visualization; these may be derived predicates rather than original user inputs. Bindings are matched by atom label or by atom unique (as a decimal string). `inputs` ranks function parameters using a simple dependency-based heuristic."
+          <> " Currently `inputs` only considers top-level function parameters (not nested record fields)."
 
   pure
     QueryPlanResponse

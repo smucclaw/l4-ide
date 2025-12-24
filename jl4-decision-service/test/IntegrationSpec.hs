@@ -11,6 +11,7 @@ import Servant.Client.Generic (genericClient)
 import Application (app)
 import Control.Concurrent.STM (newTVarIO)
 import qualified Data.Map.Strict as Map
+import qualified Data.List as List
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Examples
@@ -226,6 +227,48 @@ spec = describe "integration" do
         liftIO do
           s <- requireSuccess r
           s.values `shouldBe` [("result", FnLitBool True)]
+
+  describe "query-plan" do
+    it "suggests remaining boolean inputs for compute_qualifies" do
+      runDecisionService \api -> do
+        qp <-
+          (api.functionRoutes.singleEntity "compute_qualifies").queryPlan
+            FnArguments
+              { fnEvalBackend = Just JL4
+              , fnArguments = Map.empty
+              }
+        liftIO do
+          qp.determined `shouldBe` Nothing
+          fmap (.inputLabel) qp.inputs `shouldContain` ["walks"]
+
+    it "accepts bindings by atom unique (string key)" do
+      runDecisionService \api -> do
+        qp0 <-
+          (api.functionRoutes.singleEntity "compute_qualifies").queryPlan
+            FnArguments
+              { fnEvalBackend = Just JL4
+              , fnArguments = Map.empty
+              }
+        let
+          mWalks = List.find (\i -> i.inputLabel == "walks") qp0.inputs
+        case mWalks of
+          Nothing -> liftIO $ expectationFailure "expected an input named walks"
+          Just walksInput -> do
+            let
+              walkAtomUniques = fmap (.unique) walksInput.atoms
+            case walkAtomUniques of
+              [] -> liftIO $ expectationFailure "expected walks to affect at least one atom"
+              (u : _) -> do
+                qp1 <-
+                  (api.functionRoutes.singleEntity "compute_qualifies").queryPlan
+                    FnArguments
+                      { fnEvalBackend = Just JL4
+                      , fnArguments = Map.singleton (Text.pack (show u)) (Just (FnLitBool True))
+                      }
+                liftIO do
+                  qp1.determined `shouldBe` Nothing
+                  -- Some progress: either walks is no longer needed, or it's still needed but in a reduced form.
+                  fmap (.inputLabel) qp1.inputs `shouldSatisfy` (not . ("walks" `elem`))
 
     it "batch evaluation with precompiled module (parallel)" do
       runDecisionService $ \api -> do
