@@ -127,6 +127,7 @@ instance ToSchema QueryAtom
 instance ToSchema QueryOutcome
 instance ToSchema QueryImpact
 instance ToSchema QueryInput
+instance ToSchema QueryAsk
 instance ToSchema QueryPlanResponse
 
 instance ToSchema VizExpr.RenderAsLadderInfo where

@@ -188,10 +188,20 @@ instance Arbitrary QueryInput where
       <*> arbitrary
       <*> arbitrary
 
+instance Arbitrary QueryAsk where
+  arbitrary =
+    QueryAsk
+      <$> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+
 instance Arbitrary QueryPlanResponse where
   arbitrary =
     QueryPlanResponse
       <$> arbitrary
+      <*> arbitrary
       <*> arbitrary
       <*> arbitrary
       <*> arbitrary

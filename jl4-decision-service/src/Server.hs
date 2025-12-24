@@ -49,6 +49,7 @@ module Server (
   QueryOutcome (..),
   QueryImpact (..),
   QueryInput (..),
+  QueryAsk (..),
   QueryPlanResponse (..),
 
   -- * utilities
@@ -140,6 +141,7 @@ data CachedDecisionQuery = CachedDecisionQuery
   { ladderInfo :: !VizExpr.RenderAsLadderInfo
   , varLabelByUnique :: !(Map Int Text)
   , varDepsByUnique :: !(IntMap IntSet)
+  , varInputRefsByUnique :: !(IntMap (Set LadderViz.InputRef))
   , compiled :: !(BDQ.CompiledDecisionQuery Int)
   }
 
@@ -275,6 +277,7 @@ data QueryPlanResponse = QueryPlanResponse
   , stillNeeded :: ![QueryAtom]
   , ranked :: ![QueryAtom]
   , inputs :: ![QueryInput]
+  , asks :: ![QueryAsk]
   , impact :: !(Map Int QueryImpact)
   , note :: !Text
   , ladder :: !(Maybe VizExpr.RenderAsLadderInfo)
@@ -285,6 +288,16 @@ data QueryPlanResponse = QueryPlanResponse
 data QueryInput = QueryInput
   { inputUnique :: !Int
   , inputLabel :: !Text
+  , score :: !Double
+  , atoms :: ![QueryAtom]
+  }
+  deriving stock (Show, Read, Ord, Eq, Generic)
+  deriving anyclass (FromJSON, ToJSON)
+
+data QueryAsk = QueryAsk
+  { container :: !Text
+  , key :: !(Maybe Text)
+  , label :: !Text
   , score :: !Double
   , atoms :: ![QueryAtom]
   }
@@ -448,15 +461,69 @@ queryPlanHandler name' args = do
     Nothing -> throwError err500
     Just c -> pure c
 
-  let labelToUnique =
-        Map.fromList [(lbl, u) | (u, lbl) <- Map.toList cached.varLabelByUnique]
-      parseUniqueKey t = readMaybe (Text.unpack t) :: Maybe Int
+  let parseUniqueKey t = readMaybe (Text.unpack t) :: Maybe Int
+      stripBackticks t =
+        fromMaybe t $
+          Text.stripPrefix "`" t >>= \t1 ->
+            Text.stripSuffix "`" t1
+
+      parseProjectionLabel :: Text -> Maybe (Text, Text)
+      parseProjectionLabel lbl = do
+        (container0, rest0) <- Text.breakOn "'s " lbl & \case
+          (c, r) | not (Text.null r) -> Just (c, Text.drop 3 r)
+          _ -> Nothing
+        let field = stripBackticks (Text.strip rest0)
+        guard (not (Text.null (Text.strip container0)))
+        guard (not (Text.null field))
+        pure (Text.strip container0, field)
+
+      flattenBoolBindings :: Text -> FnLiteral -> [(Text, Bool)]
+      flattenBoolBindings prefix = \case
+        FnLitBool b -> [(prefix, b)]
+        FnObject kvs ->
+          concat
+            [ flattenBoolBindings (prefix <> "." <> k) v
+            | (k, v) <- kvs
+            ]
+        _ -> []
+
+      flattenedLabelBindings :: [(Text, Bool)]
+      flattenedLabelBindings =
+        concat
+          [ case mv of
+              Nothing -> []
+              Just v -> flattenBoolBindings k v
+          | (k, mv) <- Map.toList args.fnArguments
+          ]
+
+      labelToUniques0 :: Map Text [Int]
+      labelToUniques0 =
+        Map.fromListWith (<>)
+          [ (lbl, [u])
+          | (u, lbl) <- Map.toList cached.varLabelByUnique
+          ]
+
+      projectionLabelToUniques :: Map Text [Int]
+      projectionLabelToUniques =
+        Map.fromListWith (<>)
+          [ (container <> "." <> field, [u])
+          | (u, lbl) <- Map.toList cached.varLabelByUnique
+          , Just (container, field) <- [parseProjectionLabel lbl]
+          ]
+
+      labelToUniques :: Map Text [Int]
+      labelToUniques =
+        labelToUniques0 <> projectionLabelToUniques
+
       knownBindings =
         Map.fromList
           [ (u, b)
-          | (k, mv) <- Map.toList args.fnArguments
-          , Just (FnLitBool b) <- [mv]
-          , Just u <- [Map.lookup k labelToUnique <|> parseUniqueKey k]
+          | (k, b) <- flattenedLabelBindings
+          , u <-
+              fromMaybe []
+                ( Map.lookup k labelToUniques
+                    <|> (pure <$> parseUniqueKey k)
+                )
           , Map.member u cached.varLabelByUnique
           ]
 
@@ -535,9 +602,100 @@ queryPlanHandler name' args = do
         , sc > 0
         ]
 
+      askKeyDepsForAtom :: Int -> Set (Text, Maybe Text)
+      askKeyDepsForAtom atomUniq =
+        let
+          refs =
+            fromMaybe Set.empty (IntMap.lookup atomUniq cached.varInputRefsByUnique)
+          fallback = do
+            lbl <- Map.lookup atomUniq cached.varLabelByUnique
+            (c, f) <- parseProjectionLabel lbl
+            pure (Set.singleton (c, Just f))
+         in
+          Set.fromList
+            [ (containerLabel, keyMaybe)
+            | ref <- Set.toList refs
+            , containerLabel <- Maybe.maybeToList (Map.lookup ref.rootUnique paramsByUnique)
+            , let
+                keyMaybe =
+                  case ref.path of
+                    [] -> Nothing
+                    xs -> Just (Text.intercalate "." xs)
+            ]
+            <> fromMaybe Set.empty fallback
+
+      askAtomsMap0 :: Map (Text, Maybe Text) [QueryAtom]
+      askAtomsMap0 =
+        Map.fromListWith (<>)
+          [ (askKey, [a])
+          | a <- stillNeededAtoms
+          , askKey <- Set.toList (askKeyDepsForAtom a.unique)
+          ]
+
+      askAtomsMap :: Map (Text, Maybe Text) [QueryAtom]
+      askAtomsMap =
+        let
+          containers = Set.fromList [c | ((c, _), _) <- Map.toList askAtomsMap0]
+          atomsByUniques = fmap (Set.fromList . map (.unique)) askAtomsMap0
+         in
+          List.foldl'
+            ( \m containerLabel ->
+                let
+                  emptyKey = (containerLabel, Nothing)
+                  otherKeys = [k | k@(_, Just _) <- Map.keys m, fst k == containerLabel]
+                 in
+                  case Map.lookup emptyKey atomsByUniques of
+                    Nothing -> m
+                    Just emptyAtoms ->
+                      if null otherKeys
+                        then m
+                        else
+                          let otherAtoms =
+                                Set.unions
+                                  [ Map.findWithDefault Set.empty k atomsByUniques
+                                  | k <- otherKeys
+                                  ]
+                           in if emptyAtoms `Set.isSubsetOf` otherAtoms then Map.delete emptyKey m else m
+            )
+            askAtomsMap0
+            (Set.toList containers)
+
+      askDepsSize :: QueryAtom -> Double
+      askDepsSize a =
+        max 1 (fromIntegral (Set.size (askKeyDepsForAtom a.unique)))
+
+      askScores :: Map (Text, Maybe Text) Double
+      askScores =
+        Map.mapWithKey
+          ( \_ atoms ->
+              sum
+                [ (1 / askDepsSize a) * (1 + impactScoreFor a.unique)
+                | a <- atoms
+                ]
+          )
+          askAtomsMap
+
+      asksRanked =
+        [ QueryAsk
+            { container = containerLabel
+            , key = keyMaybe
+            , label =
+                case keyMaybe of
+                  Nothing -> containerLabel
+                  Just k -> containerLabel <> "." <> k
+            , score = sc
+            , atoms = Map.findWithDefault [] (containerLabel, keyMaybe) askAtomsMap
+            }
+        | ((containerLabel, keyMaybe), sc) <-
+            List.sortOn
+              (\((c, k), sc0) -> (Down sc0, c, k))
+              (Map.toList askScores)
+        , sc > 0
+        ]
+
       noteTxt =
-        "StillNeeded/ranked are boolean atoms from ladder visualization; these may be derived predicates rather than original user inputs. Bindings are matched by atom label or by atom unique (as a decimal string). `inputs` ranks function parameters using a simple dependency-based heuristic."
-          <> " Currently `inputs` only considers top-level function parameters (not nested record fields)."
+        "StillNeeded/ranked are boolean atoms from ladder visualization; these may be derived predicates rather than original user inputs. Bindings are matched by atom label (including dotted labels for nested fields) or by atom unique (as a decimal string). `inputs` ranks function parameters using a simple dependency-based heuristic."
+          <> " `asks` ranks askable keys; for record parameters this includes projected field paths discovered via `Proj`."
 
   pure
     QueryPlanResponse
@@ -545,6 +703,7 @@ queryPlanHandler name' args = do
       , stillNeeded = atomsOfSet res.support
       , ranked = map atomOf res.ranked
       , inputs = inputsRanked
+      , asks = asksRanked
       , impact = impactJson
       , note = noteTxt
       , ladder = Just cached.ladderInfo
@@ -575,12 +734,14 @@ buildDecisionQueryCache funName fn = do
   let (boolExpr, labels, order) = vizExprToBoolExpr ladderInfo.funDecl.body
       compiled = BDQ.compileDecisionQuery order boolExpr
       deps = LadderViz.getAtomDeps vizState
+      inputRefs = LadderViz.getAtomInputRefs vizState
 
   pure
     CachedDecisionQuery
       { ladderInfo
       , varLabelByUnique = labels
       , varDepsByUnique = deps
+      , varInputRefsByUnique = inputRefs
       , compiled
       }
 

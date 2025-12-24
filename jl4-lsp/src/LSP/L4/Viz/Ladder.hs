@@ -15,6 +15,8 @@ module LSP.L4.Viz.Ladder (
   -- * Viz State helpers
   lookupAppExprMaker,
   getAtomDeps,
+  InputRef (..),
+  getAtomInputRefs,
   getVizConfig,
 
   -- * Other helpers
@@ -26,6 +28,8 @@ import Data.IntMap.Lazy (IntMap)
 import qualified Data.IntMap.Lazy as Map
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
+import qualified Data.Set as Set
+import qualified Data.List.NonEmpty as NE
 import Optics.State.Operators ((<%=), (%=))
 import Optics
 import Control.Monad.Extra (unlessM)
@@ -84,16 +88,18 @@ data VizState = MkVizState
   -- ^ Map from Unique of V.ID to eval-app-directive maker
   , defsForInlining :: IntMap (Expr Resolved)
   , atomDeps       :: IntMap IntSet
+  , atomInputRefs  :: IntMap (Set InputRef)
   }
   deriving stock (Generic)
 
 instance Show VizState where
-  show MkVizState{cfg, maxId, appExprMakers, defsForInlining, atomDeps} =
+  show MkVizState{cfg, maxId, appExprMakers, defsForInlining, atomDeps, atomInputRefs} =
     "MkVizState { cfg = " <> show cfg <>
     ", maxId = " <> show maxId <>
     ", (keys of) appExprMakers =   " <> show (Map.keys appExprMakers) <>
     ", defsForInlining =  " <> show defsForInlining <>
-    ", (keys of) atomDeps = " <> show (Map.keys atomDeps) <> " }"
+    ", (keys of) atomDeps = " <> show (Map.keys atomDeps) <>
+    ", (keys of) atomInputRefs = " <> show (Map.keys atomInputRefs) <> " }"
 
 mkInitialVizState :: VizConfig -> VizState
 mkInitialVizState cfg =
@@ -103,6 +109,7 @@ mkInitialVizState cfg =
     , appExprMakers = Map.empty
     , defsForInlining = Map.empty
     , atomDeps = Map.empty
+    , atomInputRefs = Map.empty
     }
 
 ------------------------------------------------------
@@ -158,6 +165,44 @@ recordAtomDeps :: V.Unique -> IntSet -> Viz ()
 recordAtomDeps uniq deps =
   #atomDeps %= Map.insertWith (<>) uniq deps
 
+data InputRef = MkInputRef
+  { rootUnique :: !Int
+  , path :: ![Text]
+  }
+  deriving stock (Eq, Ord, Show, Generic)
+
+recordAtomInputRefs :: V.Unique -> Set InputRef -> Viz ()
+recordAtomInputRefs uniq refs = do
+  recordAtomDeps uniq (IntSet.fromList (map (.rootUnique) (Set.toList refs)))
+  #atomInputRefs %= Map.insertWith (<>) uniq refs
+
+lookupLocalDecideBody :: Int -> Viz (Maybe (Expr Resolved))
+lookupLocalDecideBody target = do
+  localDecls <- getLocalDecls
+  pure $
+    listToMaybe $
+      flip mapMaybe localDecls $ \case
+        LocalDecide _ (MkDecide _ _ (MkAppForm _ n _ _) body) ->
+          if (getUnique n).unique == target then Just body else Nothing
+        _ -> Nothing
+
+freeInputRefsExpanded :: Set Int -> Expr Resolved -> Viz (Set InputRef)
+freeInputRefsExpanded visited expr = do
+  expanded <- traverse expandOne (Set.toList (freeInputRefs expr))
+  pure (Set.unions expanded)
+ where
+  expandOne :: InputRef -> Viz (Set InputRef)
+  expandOne r =
+    case r.path of
+      _ : _ -> pure (Set.singleton r)
+      [] ->
+        if Set.member r.rootUnique visited
+          then pure (Set.singleton r)
+          else do
+            lookupLocalDecideBody r.rootUnique >>= \case
+              Nothing -> pure (Set.singleton r)
+              Just body -> freeInputRefsExpanded (Set.insert r.rootUnique visited) body
+
 collectDefsForInlining :: Viz (IntMap (Expr Resolved))
 collectDefsForInlining = do
   cfg <- getVizCfg
@@ -191,6 +236,9 @@ lookupAppExprMaker vs vid = Map.lookup vid.id vs.appExprMakers
 
 getAtomDeps :: VizState -> IntMap IntSet
 getAtomDeps vs = vs.atomDeps
+
+getAtomInputRefs :: VizState -> IntMap (Set InputRef)
+getAtomInputRefs vs = vs.atomInputRefs
 
 getVizConfig :: VizState -> VizConfig
 getVizConfig vs = vs.cfg
@@ -251,7 +299,7 @@ vizProgram decide = MkRenderAsLadderInfo <$> getVerTxtDocId <*> translateDecide 
 --
 -- Simple implementation: Translate Decide iff <= 1 Given
 translateDecide :: Decide Resolved -> Viz V.FunDecl
-translateDecide (MkDecide _ (MkTypeSig _ givenSig _) (MkAppForm _ funResolved _ _) body) =
+translateDecide (MkDecide _ (MkTypeSig _ givenSig _) (MkAppForm _ funResolved appArgs _) body) =
   do
     unlessM (hasBooleanType (getAnno body)) $
       throwError InvalidDecideMustHaveBoolRetType
@@ -264,12 +312,16 @@ translateDecide (MkDecide _ (MkTypeSig _ givenSig _) (MkAppForm _ funResolved _ 
       vid
       -- didn't want a backtick'd name in the header
       (mkPrettyVizName funResolved)
-      (paramNamesFromGivens givenSig)
+      (paramNamesFromGivens givenSig appArgs)
       vizBody
       where
-        paramNamesFromGivens :: GivenSig Resolved -> [V.Name]
-        paramNamesFromGivens (MkGivenSig _ optionallyTypedNames) =
-          mkPrettyVizName . getResolved <$> optionallyTypedNames
+        paramNamesFromGivens :: GivenSig Resolved -> [Resolved] -> [V.Name]
+        paramNamesFromGivens (MkGivenSig _ optionallyTypedNames) args =
+          let
+            fromGivens = mkPrettyVizName . getResolved <$> optionallyTypedNames
+            fromAppArgs = mkPrettyVizName <$> args
+           in
+            Map.elems $ Map.fromList [(p.unique, p) | p <- fromGivens <> fromAppArgs]
 
         -- TODO: I imagine there will be functionality for this kind of thing in a more central place soon;
         -- this can be replaced with that when that happens.
@@ -316,7 +368,7 @@ translateExpr False = go
               prepEvalAppMaker vid e
               let uniq = vid.id
                   vname = V.MkName uniq (prettyLayout e)
-              recordAtomDeps uniq (freeRefUniques e)
+              recordAtomInputRefs uniq =<< freeInputRefsExpanded Set.empty e
               V.App vid vname <$> traverse go args
             else
               leafFromExpr e
@@ -350,7 +402,13 @@ varLeaf vid vname resolved = do
     Ref _ uniq _ -> hasDefForInlining uniq
     _            -> pure False
   -- TODO: Prob need to do this `canInline` thing for things that aren't App of no args too?
-  recordAtomDeps vname.unique (IntSet.singleton vname.unique)
+  refs <- case resolved of
+    Ref _ uniq _ ->
+      lookupLocalDecideBody uniq.unique >>= \case
+        Nothing -> pure (Set.singleton (MkInputRef vname.unique []))
+        Just body -> freeInputRefsExpanded (Set.singleton vname.unique) body
+    _ -> pure (Set.singleton (MkInputRef vname.unique []))
+  recordAtomInputRefs vname.unique refs
   pure $ V.UBoolVar vid vname defaultUBoolVarValue canInline
 
 leafFromExpr :: Expr Resolved -> Viz IRExpr
@@ -358,7 +416,7 @@ leafFromExpr expr = do
   vid <- getFresh
   tempUniqueTODO <- getFresh
   let uniq = tempUniqueTODO.id
-  recordAtomDeps uniq (freeRefUniques expr)
+  recordAtomInputRefs uniq =<< freeInputRefsExpanded Set.empty expr
   pure $
     V.UBoolVar
       vid
@@ -384,11 +442,39 @@ mkVizNameWith printer (getUniqueName -> (MkUnique {unique}, name)) =
 -- Crude dependency tracking
 ------------------------------------------------------
 
-freeRefUniques :: Expr Resolved -> IntSet
-freeRefUniques =
-  foldMapOf (Optics.gplate @(Expr Resolved)) $ \case
-    App _ (Ref _ uniq _) [] -> IntSet.singleton uniq.unique
-    _ -> IntSet.empty
+freeInputRefs :: Expr Resolved -> Set InputRef
+freeInputRefs expr =
+  refsFromVars expr <> refsFromProjections expr
+ where
+  refsFromVars :: Expr Resolved -> Set InputRef
+  refsFromVars =
+    foldMapOf (Optics.gplate @(Expr Resolved)) $ \case
+      App _ (Ref _ uniq _) [] -> Set.singleton (MkInputRef uniq.unique [])
+      _ -> Set.empty
+
+  refsFromProjections :: Expr Resolved -> Set InputRef
+  refsFromProjections =
+    foldMapOf (Optics.gplate @(Expr Resolved)) $ \case
+      p@(Proj _ _ _) ->
+        case projChain [] p of
+          Nothing -> Set.empty
+          Just r -> Set.singleton r
+      _ -> Set.empty
+
+  projChain :: [Text] -> Expr Resolved -> Maybe InputRef
+  projChain acc = \case
+    Proj _ base fieldResolved ->
+      projChain (projectionSegments fieldResolved <> acc) base
+    App _ (Ref _ uniq _) [] ->
+      Just (MkInputRef uniq.unique acc)
+    _ -> Nothing
+
+  projectionSegments :: Resolved -> [Text]
+  projectionSegments resolved =
+    case rawName (getActual resolved) of
+      QualifiedName qs n -> NE.toList qs <> [n]
+      NormalName n -> [n]
+      PreDef n -> [n]
 
 ------------------------------------------------------
 -- Helpers for checking if an Expr has Boolean type
