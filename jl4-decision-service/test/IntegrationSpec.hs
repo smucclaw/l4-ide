@@ -332,6 +332,9 @@ spec = describe "integration" do
             liftIO do
               qp1.determined `shouldBe` Nothing
               qp1.asks `shouldSatisfy` (not . List.any (\a -> a.container == "i" && a.key == Just fieldKey))
+              -- Providing a nested record key should also reduce the underlying boolean query,
+              -- not just hide the ask.
+              length qp1.stillNeeded `shouldSatisfy` (< length qp0.stillNeeded)
 
     it "batch evaluation with precompiled module (parallel)" do
       runDecisionService $ \api -> do

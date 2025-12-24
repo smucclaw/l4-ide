@@ -457,6 +457,13 @@ queryPlanHandler name' args = do
       paramsByUnique =
         Map.fromList [(p.unique, p.label) | p <- cached.ladderInfo.funDecl.params]
 
+      paramUniqueByLabel :: Map Text Int
+      paramUniqueByLabel =
+        Map.fromList
+          [ (lbl, u)
+          | (u, lbl) <- Map.toList paramsByUnique
+          ]
+
       renderInputRef :: LadderViz.InputRef -> Text
       renderInputRef ref =
         let
@@ -547,6 +554,32 @@ queryPlanHandler name' args = do
             | (k, _b) <- flattenedLabelBindings
             ]
 
+      leafUniquesByInputRef :: Map LadderViz.InputRef [Int]
+      leafUniquesByInputRef =
+        Map.fromListWith (<>)
+          [ (ref, [u])
+          | (u, refs) <- IntMap.toList cached.varInputRefsByUnique
+          , [ref] <- [Set.toList refs]
+          ]
+
+      candidateInputRefsForKey :: Text -> [LadderViz.InputRef]
+      candidateInputRefsForKey k =
+        case Text.breakOn "." k of
+          (containerLabel, rest) ->
+            case Map.lookup containerLabel paramUniqueByLabel of
+              Nothing -> []
+              Just rootUnique ->
+                if Text.null rest
+                  then [LadderViz.MkInputRef rootUnique []]
+                  else
+                    let
+                      raw = Text.drop 1 rest
+                      singletonRef = LadderViz.MkInputRef rootUnique [raw]
+                      segmented =
+                        let segs = filter (not . Text.null) (Text.splitOn "." raw)
+                         in LadderViz.MkInputRef rootUnique segs
+                     in if singletonRef == segmented then [singletonRef] else [singletonRef, segmented]
+
       labelToUniques0 :: Map Text [Int]
       labelToUniques0 =
         Map.fromListWith (<>)
@@ -578,6 +611,14 @@ queryPlanHandler name' args = do
                 )
           , Map.member u cached.varLabelByUnique
           ]
+          <>
+          Map.fromList
+            [ (u, b)
+            | (k, b) <- flattenedLabelBindings
+            , ref <- candidateInputRefsForKey k
+            , u <- Map.findWithDefault [] ref leafUniquesByInputRef
+            , Map.member u cached.varLabelByUnique
+            ]
 
       res = BDQ.queryDecision cached.compiled knownBindings
       atomOf u =
