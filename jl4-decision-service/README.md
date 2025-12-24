@@ -119,6 +119,13 @@ Other functions can be loaded at start time using the `--sourcePaths` command li
 
 The argument to the option is a directory or individual `.l4` files.
 
+**Important**: By default, the decision service only loads L4 files that either:
+
+1. Have a matching `.yaml` sidecar (being deprecated), OR
+2. Have explicit `@export` directives in their source
+
+Files without either will be ignored. This prevents implicitly exposing helper functions and ensures only intentionally exported functions are available via the API.
+
 For each `.l4` file, if a matching `.yaml` sidecar exists, it is used as the function declaration. Otherwise, functions are exposed when their leading comment uses the `@export` (or `@export default`) syntax:
 
 ```l4
@@ -189,7 +196,56 @@ function:
     - "jl4"
 ```
 
+## Integration with Web IDE and Session Management
+
+The decision service integrates with `jl4-websessions` to support the browser-based playground for L4 programs.
+
+### How Web Sessions Work
+
+When users upload or edit L4 code through the web IDE:
+
+1. **Session Creation**: The `jl4-websessions` service generates a random UUID for each session and stores the L4 code in SQLite.
+
+2. **Auto-Registration**: The websessions service automatically registers the session with the decision service by calling `POST /functions/{uuid}:{functionName}` for each `@export` function in the user's L4 code.
+
+3. **Function Naming**: Functions from web sessions are named using the pattern `{uuid}:{functionName}`, for example:
+
+   ```
+   b52992ed-39fd-4226-bad2-2deee2473881:compute_qualifies
+   ```
+
+4. **Access Control**: These UUID-based functions remain fully accessible through:
+   - `GET /functions/{uuid}:{name}` - Get function details
+   - `POST /functions/{uuid}:{name}/evaluation` - Evaluate the function
+   - All other function-specific endpoints
+
+However, UUID-named functions are **filtered from the public function listing** (`GET /functions`) to prevent exposing user sessions to public discovery. This keeps the function list clean while still allowing anyone with the UUID to interact with the function directly.
+
+### Example Session Workflow
+
+```bash
+# User uploads L4 code through web IDE
+# → websessions generates UUID: b52992ed-39fd-4226-bad2-2deee2473881
+# → websessions registers function with decision service
+
+# Public listing doesn't show UUID functions
+curl http://localhost:8081/functions
+# Returns only explicitly published functions (no UUIDs)
+
+# But direct access still works with the UUID
+curl http://localhost:8081/functions/b52992ed-39fd-4226-bad2-2deee2473881:myFunction
+
+# And evaluation works
+curl -X POST \
+  'http://localhost:8081/functions/b52992ed-39fd-4226-bad2-2deee2473881:myFunction/evaluation' \
+  -H 'Content-Type: application/json' \
+  -d '{"fnEvalBackend":"JL4","fnArguments":{"x": 42}}'
+```
+
+This design allows web sessions to be shareable via permalink while keeping the public API focused on official, published functions.
+
 ## See Also
 
 - [http://github.com/smucclaw/lag](http://github.com/smucclaw/lag)
 - [https://jl4.legalese.com/decision/swagger-ui/](https://jl4.legalese.com/decision/swagger-ui/)
+- [jl4-websessions/README.md](../jl4-websessions/README.md) - Web IDE session management
