@@ -1,0 +1,147 @@
+-- Response parsing examples for LLM queries
+-- Demonstrates how to extract content from different provider response formats
+
+IMPORT llm
+
+-- Example 1: Basic parsing with the unified helper
+-- This is the recommended approach for most use cases
+DECIDE basicParsing IS
+  LET rawResponse BE queryLLMWithDefaults "What is 2+2?"
+  IN
+    extractLLMResponse "openrouter" rawResponse
+
+-- Example 2: Parsing with error handling and fallback message
+DECIDE parsingWithFallback prompt IS
+  LET rawResponse BE queryLLMWithDefaults prompt
+  IN
+    CONSIDER extractLLMResponse "openrouter" rawResponse
+      WHEN RIGHT text THEN text
+      WHEN LEFT error THEN
+        CONCAT "Could not parse LLM response: " error
+
+-- Example 3: Provider-specific parsing
+-- Explicitly parse responses from different providers
+DECIDE providerSpecificParsing IS
+  -- OpenRouter/OpenAI parsing
+  LET openrouterResponse BE
+    CONSIDER ENV "OPENROUTER_API_KEY"
+      WHEN JUST key THEN callOpenRouter key gpt35Model "Test" 50
+      WHEN NOTHING THEN "{}"
+  IN
+    LET openrouterParsed BE
+      CONSIDER parseResponse openrouterResponse
+        WHEN RIGHT jsonObj THEN extractOpenAIContent jsonObj
+        WHEN LEFT error THEN LEFT (CONCAT "JSON parse error: " error)
+    IN
+      -- Anthropic parsing
+      LET anthropicResponse BE
+        CONSIDER ENV "ANTHROPIC_API_KEY"
+          WHEN JUST key THEN callClaude key "Test"
+          WHEN NOTHING THEN "{}"
+      IN
+        LET anthropicParsed BE
+          CONSIDER parseResponse anthropicResponse
+            WHEN RIGHT jsonObj THEN extractAnthropicContent jsonObj
+            WHEN LEFT error THEN LEFT (CONCAT "JSON parse error: " error)
+        IN
+          CONCAT
+            "OpenRouter result: "
+            (CONSIDER openrouterParsed
+               WHEN RIGHT t THEN t
+               WHEN LEFT e THEN e)
+            "\nAnthropic result: "
+            (CONSIDER anthropicParsed
+               WHEN RIGHT t THEN t
+               WHEN LEFT e THEN e)
+
+-- Example 4: Chained parsing with validation
+-- Parse response and validate it meets certain criteria
+DECIDE validatedParsing minLength IS
+  LET rawResponse BE queryLLMWithDefaults "Explain consideration in contract law"
+  IN
+    CONSIDER extractLLMResponse "openrouter" rawResponse
+      WHEN RIGHT text THEN
+        -- Validate minimum length
+        IF (LENGTH text) >= minLength
+        THEN RIGHT text
+        ELSE LEFT (CONCAT "Response too short: expected at least "
+                         (minLength AS STRING)
+                         " characters, got "
+                         ((LENGTH text) AS STRING))
+      WHEN LEFT error THEN
+        LEFT (CONCAT "Parse error: " error)
+
+-- Example 5: Parsing multiple responses
+-- Query multiple times and collect all successful responses
+DECIDE batchParsing prompts IS
+  -- Helper to parse a single prompt
+  LET parseOne prompt BE
+    LET raw BE queryLLMWithDefaults prompt
+    IN extractLLMResponse "openrouter" raw
+  IN
+    -- Process each prompt (simplified - would need proper list processing)
+    LET results BE MAP parseOne prompts
+    IN results
+
+-- Example 6: Defensive parsing with comprehensive error details
+-- Provide detailed error information for debugging
+DECIDE defensiveParsing prompt IS
+  LET startTime BE NOW
+  IN
+    LET rawResponse BE queryLLMWithDefaults prompt
+    IN
+      LET endTime BE NOW
+      IN
+        LET latency BE endTime MINUS startTime
+        IN
+          CONSIDER extractLLMResponse "openrouter" rawResponse
+            WHEN RIGHT text THEN
+              -- Success: return text with metadata
+              RIGHT (CONCAT
+                "Response received in " (latency AS STRING) "ms:\n"
+                text)
+            WHEN LEFT error THEN
+              -- Failure: return detailed error with raw response for debugging
+              LEFT (CONCAT
+                "Parse error after " (latency AS STRING) "ms:\n"
+                "Error: " error "\n"
+                "Raw response: " rawResponse)
+
+-- Example 7: Extract and transform response
+-- Parse response and apply business logic transformation
+DECIDE extractAndTransform prompt IS
+  CONSIDER extractLLMResponse "openrouter" (queryLLMWithDefaults prompt)
+    WHEN RIGHT text THEN
+      -- Transform: convert to uppercase and add prefix
+      RIGHT (CONCAT "LEGAL ANSWER: " (UPPERCASE text))
+    WHEN LEFT error THEN
+      LEFT error
+
+-- Example 8: Robust parsing with retry logic
+-- If parsing fails, retry with a simpler model
+DECIDE robustParsing prompt IS
+  LET firstTry BE queryLLM claudeSonnetModel prompt 1000
+  IN
+    CONSIDER extractLLMResponse "openrouter" firstTry
+      WHEN RIGHT text THEN RIGHT (CONCAT "Primary model: " text)
+      WHEN LEFT error1 THEN
+        -- Retry with simpler/cheaper model
+        LET secondTry BE queryLLM gpt35Model prompt 500
+        IN
+          CONSIDER extractLLMResponse "openrouter" secondTry
+            WHEN RIGHT text THEN RIGHT (CONCAT "Fallback model: " text)
+            WHEN LEFT error2 THEN
+              LEFT (CONCAT "Both attempts failed:\n"
+                          "Primary: " error1 "\n"
+                          "Fallback: " error2)
+
+-- Usage examples:
+-- export OPENROUTER_API_KEY="sk-or-v1-..."
+--
+-- #EVAL basicParsing
+-- #EVAL parsingWithFallback "What is consideration?"
+-- #EVAL providerSpecificParsing
+-- #EVAL validatedParsing 100
+-- #EVAL defensiveParsing "Define tort"
+-- #EVAL extractAndTransform "What is legal capacity?"
+-- #EVAL robustParsing "Explain promissory estoppel"

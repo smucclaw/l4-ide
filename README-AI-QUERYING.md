@@ -194,28 +194,35 @@ DECIDE structuredQuery IS
 
 ### Parsing JSON Responses
 
-```l4
--- Make the query
-DECIDE rawResponse IS
-  CONSIDER ENV "OPENROUTER_API_KEY"
-    WHEN JUST apiKey THEN
-      POST
-        "https://openrouter.ai/api/v1/chat/completions"
-        (CONCAT
-          "Content-Type: application/json\n",
-          "Authorization: Bearer ", apiKey)
-        "{\"model\": \"gpt-3.5-turbo\", \"messages\": [{\"role\": \"user\", \"content\": \"Hi\"}], \"max_tokens\": 50}"
-    WHEN NOTHING THEN
-      "{}"
+The `llm.l4` library provides automatic response parsing for all supported providers:
 
--- Parse it
-DECIDE parsedResponse IS
+```l4
+IMPORT "jl4-core/libraries/llm.l4"
+
+-- Method 1: Use the library's unified extraction helper
+DECIDE rawResponse IS queryLLMWithDefaults "What is consideration in contract law?"
+DECIDE extractedContent IS extractLLMResponse "openrouter" rawResponse
+
+DECIDE finalAnswer IS
+  CONSIDER extractedContent
+    WHEN RIGHT text THEN text  -- Got the actual LLM response text
+    WHEN LEFT error THEN CONCAT "Extraction error: " error
+
+-- Method 2: Manual parsing for custom scenarios
+DECIDE manualParse IS
   CONSIDER JSONDECODE rawResponse
     WHEN RIGHT jsonData THEN
-      "Successfully parsed JSON"
+      extractOpenAIContent jsonData  -- Returns EITHER STRING String
     WHEN LEFT errorMsg THEN
-      CONCAT "Parse error: ", errorMsg
+      LEFT (CONCAT "Parse error: " errorMsg)
 ```
+
+**Supported response formats:**
+
+- **OpenAI/OpenRouter**: `{"choices": [{"message": {"content": "..."}}]}`
+- **Anthropic**: `{"content": [{"text": "..."}]}`
+
+The library automatically handles the different response structures, extracting the actual text content and providing helpful error messages if parsing fails.
 
 ### Fallback Strategy
 
@@ -314,6 +321,11 @@ CONSIDER ENV "API_KEY"
 - **Claude 3 Opus**: Most capable, for critical analysis
 - **Llama 3.1 70B**: Open source, free tier available
 
+## Recently Added Features
+
+✅ **Response parsing** - Automatic content extraction from OpenAI, Anthropic, and OpenRouter responses with `extractLLMResponse`
+✅ **Helper library** - Complete `llm.l4` library with multi-provider support, fallback strategies, and unified API
+
 ## Future Enhancements
 
 Potential improvements to L4's AI integration:
@@ -326,16 +338,26 @@ Potential improvements to L4's AI integration:
 6. **Batch queries** - Process multiple prompts efficiently
 7. **Fine-tuned models** - Support for custom models
 8. **Function calling** - Structured tool use with GPT-4/Claude
-9. **Helper library** - Simplified wrappers for common patterns
-10. **Response parsing** - Extract content from JSON automatically
 
 ## Resources
+
+### Provider Documentation
 
 - **OpenRouter**: https://openrouter.ai/
 - **OpenAI API**: https://platform.openai.com/docs/api-reference
 - **Anthropic API**: https://docs.anthropic.com/claude/reference
-- **L4 Examples**: `jl4/examples/ok/ai-simple.l4`
-- **Documentation**: `doc/AI-QUERYING.md`
+
+### L4 Examples and Tests
+
+- **Simple examples**: `jl4/examples/ok/ai-simple.l4`
+- **Multi-provider fallback**: `jl4/examples/ok/ai-multi-provider.l4`
+- **Response parsing patterns**: `jl4/examples/ok/ai-with-parsing.l4`
+- **Unit tests** (no API calls): `jl4/examples/ok/llm-parsing-tests.l4`
+
+### Library Documentation
+
+- **LLM Library**: `jl4-core/libraries/llm.l4`
+- **Integration Spec**: `doc/todo/LLM-INTEGRATION-SPEC.md`
 
 ## Gateway Abstraction Projects
 

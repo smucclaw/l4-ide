@@ -162,13 +162,106 @@ DECIDE queryLLMWithDefaults prompt IS
 DECIDE parseResponse jsonString IS
   JSONDECODE jsonString
 
--- TODO: Add extractContent helper once we define response type structures
--- Different providers have different response formats:
--- - OpenAI/OpenRouter: {"choices": [{"message": {"content": "..."}}]}
--- - Anthropic: {"content": [{"text": "..."}]}
---
--- For now, users should use JSONDECODE directly and extract fields
--- based on their provider's response format
+-- ============================================================================
+-- Response Type Definitions
+-- ============================================================================
+
+-- OpenAI/OpenRouter response structure
+DECLARE `OpenAIMessage` HAS
+  `role`    IS A STRING
+  `content` IS A STRING
+
+DECLARE `OpenAIChoice` HAS
+  `message` IS AN `OpenAIMessage`
+  `finish_reason` IS A STRING
+
+DECLARE `OpenAIResponse` HAS
+  `choices` IS A LIST OF `OpenAIChoice`
+
+-- Anthropic response structure
+DECLARE `AnthropicContentBlock` HAS
+  `type` IS A STRING
+  `text` IS A STRING
+
+DECLARE `AnthropicResponse` HAS
+  `content` IS A LIST OF `AnthropicContentBlock`
+  `stop_reason` IS A STRING
+
+-- ============================================================================
+-- Response Content Extraction
+-- ============================================================================
+
+-- Extract content from OpenAI/OpenRouter response
+-- Input: Decoded JSON object of type OpenAIResponse
+-- Output: EITHER error message (LEFT) or extracted content text (RIGHT)
+DECIDE extractOpenAIContent jsonObj IS
+  CONSIDER jsonObj
+    WHEN `OpenAIResponse` WITH
+      `choices` IS choices
+    THEN
+      CONSIDER choices
+        WHEN [] THEN
+          LEFT "No choices in response"
+        WHEN (choice :: _) THEN
+          CONSIDER choice
+            WHEN `OpenAIChoice` WITH
+              `message` IS msg
+            THEN
+              CONSIDER msg
+                WHEN `OpenAIMessage` WITH
+                  `content` IS text
+                THEN
+                  RIGHT text
+                ELSE
+                  LEFT "Invalid message structure"
+            ELSE
+              LEFT "Invalid choice structure"
+        ELSE
+          LEFT "Invalid choices structure"
+    ELSE
+      LEFT "Invalid OpenAI response structure"
+
+-- Extract content from Anthropic response
+-- Input: Decoded JSON object of type AnthropicResponse
+-- Output: EITHER error message (LEFT) or extracted content text (RIGHT)
+DECIDE extractAnthropicContent jsonObj IS
+  CONSIDER jsonObj
+    WHEN `AnthropicResponse` WITH
+      `content` IS contentBlocks
+    THEN
+      CONSIDER contentBlocks
+        WHEN [] THEN
+          LEFT "No content blocks in response"
+        WHEN (block :: _) THEN
+          CONSIDER block
+            WHEN `AnthropicContentBlock` WITH
+              `text` IS text
+            THEN
+              RIGHT text
+            ELSE
+              LEFT "Invalid content block structure"
+        ELSE
+          LEFT "Invalid content structure"
+    ELSE
+      LEFT "Invalid Anthropic response structure"
+
+-- ============================================================================
+-- Unified Response Extraction
+-- ============================================================================
+
+-- Extract LLM response content with automatic provider detection
+-- Input: provider name ("openai", "openrouter", or "anthropic") and raw JSON string
+-- Output: EITHER error message (LEFT) or extracted content (RIGHT)
+DECIDE extractLLMResponse provider jsonString IS
+  CONSIDER parseResponse jsonString
+    WHEN LEFT error THEN
+      LEFT (CONCAT "JSON parse error: " error)
+    WHEN RIGHT jsonObj THEN
+      CONSIDER provider
+        WHEN "openai" THEN extractOpenAIContent jsonObj
+        WHEN "openrouter" THEN extractOpenAIContent jsonObj
+        WHEN "anthropic" THEN extractAnthropicContent jsonObj
+        ELSE LEFT (CONCAT "Unknown provider: " provider)
 
 -- ============================================================================
 -- Common LLM Models (for OpenRouter)
@@ -209,10 +302,35 @@ DECIDE geminiProModel IS "google/gemini-pro"
 --       "ERROR: ANTHROPIC_API_KEY not set"
 -- #EVAL claudeResponse
 
--- Example 4: Parse response
--- DECIDE parsed IS parseResponse answer
--- DECIDE content IS
---   CONSIDER parsed
---     WHEN RIGHT json THEN "Success"
---     WHEN LEFT error THEN CONCAT "Parse error: ", error
--- #EVAL content
+-- Example 4: Query and parse response (OpenRouter)
+-- DECIDE rawResponse IS queryLLMWithDefaults "What is consideration in contract law?"
+-- DECIDE extractedContent IS extractLLMResponse "openrouter" rawResponse
+-- DECIDE finalAnswer IS
+--   CONSIDER extractedContent
+--     WHEN RIGHT text THEN text
+--     WHEN LEFT error THEN CONCAT "Extraction error: " error
+-- #EVAL finalAnswer
+
+-- Example 5: Direct Anthropic call with parsing
+-- DECIDE anthropicRaw IS
+--   CONSIDER ENV "ANTHROPIC_API_KEY"
+--     WHEN JUST key THEN
+--       callAnthropic key "claude-sonnet-4-5-20250929" "Explain tort liability" 1000
+--     WHEN NOTHING THEN
+--       "ERROR: ANTHROPIC_API_KEY not set"
+-- DECIDE anthropicContent IS extractLLMResponse "anthropic" anthropicRaw
+-- DECIDE anthropicResult IS
+--   CONSIDER anthropicContent
+--     WHEN RIGHT text THEN text
+--     WHEN LEFT error THEN CONCAT "Parse error: " error
+-- #EVAL anthropicResult
+
+-- Example 6: OpenAI with error handling
+-- DECIDE openaiRaw IS
+--   CONSIDER ENV "OPENAI_API_KEY"
+--     WHEN JUST key THEN
+--       callOpenAI key "gpt-4" "Define legal capacity" 500
+--     WHEN NOTHING THEN
+--       "ERROR: OPENAI_API_KEY not set"
+-- DECIDE openaiContent IS extractLLMResponse "openai" openaiRaw
+-- #EVAL openaiContent  -- Returns EITHER STRING String

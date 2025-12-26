@@ -1,0 +1,113 @@
+-- Multi-provider LLM querying with custom fallback strategies
+-- Demonstrates how to work with multiple LLM providers and handle failures gracefully
+
+IMPORT llm
+
+-- Example 1: Use the built-in multi-provider fallback
+-- This is the simplest approach - the library handles everything
+DECIDE autoFallback IS
+  queryLLMWithDefaults "Explain the concept of consideration in contract law"
+
+-- Example 2: Custom fallback with specific models
+-- Choose different models based on task complexity
+DECIDE customModelFallback prompt IS
+  CONSIDER ENV "OPENROUTER_API_KEY"
+    WHEN JUST key THEN
+      -- Try Claude Opus first for complex reasoning
+      LET opus BE callOpenRouter key claudeOpusModel prompt 2000
+      IN
+        CONSIDER extractLLMResponse "openrouter" opus
+          WHEN RIGHT text THEN RIGHT text
+          WHEN LEFT error THEN
+            -- Fall back to GPT-4
+            LET gpt4 BE callOpenRouter key gpt4Model prompt 2000
+            IN extractLLMResponse "openrouter" gpt4
+    WHEN NOTHING THEN
+      LEFT "ERROR: No OPENROUTER_API_KEY configured"
+
+-- Example 3: Cost-optimized fallback
+-- Try free models first, then paid models if needed
+DECIDE costOptimizedQuery prompt IS
+  CONSIDER ENV "OPENROUTER_API_KEY"
+    WHEN JUST key THEN
+      -- Try free Llama 3.1 70B first
+      LET freeTry BE callOpenRouter key llama3FreeModel prompt 1000
+      IN
+        CONSIDER extractLLMResponse "openrouter" freeTry
+          WHEN RIGHT text THEN RIGHT (CONCAT "Free model: " text)
+          WHEN LEFT error THEN
+            -- Fall back to paid Claude if free model fails
+            LET paidTry BE callOpenRouter key claudeSonnetModel prompt 1000
+            IN
+              CONSIDER extractLLMResponse "openrouter" paidTry
+                WHEN RIGHT text THEN RIGHT (CONCAT "Paid model: " text)
+                WHEN LEFT paidError THEN LEFT (CONCAT "Both failed: " paidError)
+    WHEN NOTHING THEN
+      LEFT "ERROR: OPENROUTER_API_KEY not set"
+
+-- Example 4: Provider-specific fallback
+-- Try each provider's direct API in turn
+DECIDE providerChain prompt IS
+  -- First try: Anthropic direct
+  CONSIDER ENV "ANTHROPIC_API_KEY"
+    WHEN JUST anthropicKey THEN
+      LET anthropicTry BE callAnthropic anthropicKey "claude-sonnet-4-5-20250929" prompt 1000
+      IN
+        CONSIDER extractLLMResponse "anthropic" anthropicTry
+          WHEN RIGHT text THEN RIGHT (CONCAT "Anthropic: " text)
+          WHEN LEFT error THEN
+            -- Second try: OpenAI direct
+            CONSIDER ENV "OPENAI_API_KEY"
+              WHEN JUST openaiKey THEN
+                LET openaiTry BE callOpenAI openaiKey "gpt-4" prompt 1000
+                IN
+                  CONSIDER extractLLMResponse "openai" openaiTry
+                    WHEN RIGHT text THEN RIGHT (CONCAT "OpenAI: " text)
+                    WHEN LEFT openaiError THEN
+                      -- Third try: OpenRouter as universal fallback
+                      CONSIDER ENV "OPENROUTER_API_KEY"
+                        WHEN JUST routerKey THEN
+                          LET routerTry BE callOpenRouter routerKey gpt35Model prompt 1000
+                          IN
+                            CONSIDER extractLLMResponse "openrouter" routerTry
+                              WHEN RIGHT text THEN RIGHT (CONCAT "OpenRouter: " text)
+                              WHEN LEFT routerError THEN
+                                LEFT "ERROR: All providers failed"
+                        WHEN NOTHING THEN
+                          LEFT "ERROR: No more providers available"
+              WHEN NOTHING THEN
+                LEFT "ERROR: No OpenAI key, cannot continue fallback"
+    WHEN NOTHING THEN
+      LEFT "ERROR: No Anthropic key, starting fallback chain failed"
+
+-- Example 5: Parallel query with result comparison
+-- Query multiple models and compare responses (useful for sensitive tasks)
+DECIDE parallelQuery prompt IS
+  LET result1 BE queryLLM "claude-sonnet-4-5-20250929" prompt 500
+  IN
+    LET result2 BE queryLLM "gpt-4" prompt 500
+    IN
+      CONSIDER extractLLMResponse "anthropic" result1
+        WHEN RIGHT text1 THEN
+          CONSIDER extractLLMResponse "openai" result2
+            WHEN RIGHT text2 THEN
+              RIGHT (CONCAT "Model 1: " text1 "\n\nModel 2: " text2)
+            WHEN LEFT error2 THEN
+              RIGHT (CONCAT "Only model 1 succeeded: " text1)
+        WHEN LEFT error1 THEN
+          CONSIDER extractLLMResponse "openai" result2
+            WHEN RIGHT text2 THEN
+              RIGHT (CONCAT "Only model 2 succeeded: " text2)
+            WHEN LEFT error2 THEN
+              LEFT "ERROR: Both models failed"
+
+-- Usage examples:
+-- export OPENROUTER_API_KEY="sk-or-v1-..."
+-- export OPENAI_API_KEY="sk-..."
+-- export ANTHROPIC_API_KEY="sk-ant-..."
+--
+-- #EVAL autoFallback
+-- #EVAL customModelFallback "What are the elements of a valid contract?"
+-- #EVAL costOptimizedQuery "Define tort"
+-- #EVAL providerChain "What is legal capacity?"
+-- #EVAL parallelQuery "Explain the doctrine of promissory estoppel"

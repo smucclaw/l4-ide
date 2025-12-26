@@ -1,0 +1,224 @@
+-- Unit tests for LLM library response parsing
+-- Uses hardcoded mock JSON responses - no API calls, no cost!
+
+IMPORT llm
+
+-- ============================================================================
+-- Test 1: OpenAI/OpenRouter Response Parsing - Valid Response
+-- ============================================================================
+
+DECIDE mockOpenAIResponseValid IS
+  "{\"id\":\"chatcmpl-123\",\"object\":\"chat.completion\",\"created\":1677652288,\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Hello! How can I help you today?\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":9,\"completion_tokens\":12,\"total_tokens\":21}}"
+
+DECIDE test1_extractOpenAI IS
+  extractLLMResponse "openrouter" mockOpenAIResponseValid
+
+DECIDE test1_expected IS
+  "Hello! How can I help you today?"
+
+DECIDE test1_result IS
+  CONSIDER test1_extractOpenAI
+    WHEN RIGHT text THEN
+      IF text == test1_expected
+      THEN "PASS: OpenAI valid response parsing"
+      ELSE CONCAT "FAIL: Expected '" test1_expected "' but got '" text "'"
+    WHEN LEFT error THEN
+      CONCAT "FAIL: " error
+
+-- ============================================================================
+-- Test 2: Anthropic Response Parsing - Valid Response
+-- ============================================================================
+
+DECIDE mockAnthropicResponseValid IS
+  "{\"id\":\"msg_01XFDUDYJgAACzvnptvVoYEL\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Consideration is a fundamental concept in contract law.\"}],\"model\":\"claude-3-opus-20240229\",\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":10,\"output_tokens\":25}}"
+
+DECIDE test2_extractAnthropic IS
+  extractLLMResponse "anthropic" mockAnthropicResponseValid
+
+DECIDE test2_expected IS
+  "Consideration is a fundamental concept in contract law."
+
+DECIDE test2_result IS
+  CONSIDER test2_extractAnthropic
+    WHEN RIGHT text THEN
+      IF text == test2_expected
+      THEN "PASS: Anthropic valid response parsing"
+      ELSE CONCAT "FAIL: Expected '" test2_expected "' but got '" text "'"
+    WHEN LEFT error THEN
+      CONCAT "FAIL: " error
+
+-- ============================================================================
+-- Test 3: OpenAI Response - Empty Choices Array
+-- ============================================================================
+
+DECIDE mockOpenAIResponseEmptyChoices IS
+  "{\"choices\":[]}"
+
+DECIDE test3_extractOpenAI IS
+  extractLLMResponse "openrouter" mockOpenAIResponseEmptyChoices
+
+DECIDE test3_result IS
+  CONSIDER test3_extractOpenAI
+    WHEN RIGHT text THEN
+      CONCAT "FAIL: Should have returned error for empty choices, got: " text
+    WHEN LEFT error THEN
+      IF "No choices" `CONTAINS` error
+      THEN "PASS: Correctly detected empty choices"
+      ELSE CONCAT "FAIL: Wrong error message: " error
+
+-- ============================================================================
+-- Test 4: Anthropic Response - Empty Content Array
+-- ============================================================================
+
+DECIDE mockAnthropicResponseEmptyContent IS
+  "{\"content\":[]}"
+
+DECIDE test4_extractAnthropic IS
+  extractLLMResponse "anthropic" mockAnthropicResponseEmptyContent
+
+DECIDE test4_result IS
+  CONSIDER test4_extractAnthropic
+    WHEN RIGHT text THEN
+      CONCAT "FAIL: Should have returned error for empty content, got: " text
+    WHEN LEFT error THEN
+      IF "No content blocks" `CONTAINS` error
+      THEN "PASS: Correctly detected empty content blocks"
+      ELSE CONCAT "FAIL: Wrong error message: " error
+
+-- ============================================================================
+-- Test 5: Malformed JSON
+-- ============================================================================
+
+DECIDE mockMalformedJSON IS
+  "{\"choices\":[{\"message\":{\"content\":\"test\""  -- Missing closing braces
+
+DECIDE test5_extractMalformed IS
+  extractLLMResponse "openrouter" mockMalformedJSON
+
+DECIDE test5_result IS
+  CONSIDER test5_extractMalformed
+    WHEN RIGHT text THEN
+      CONCAT "FAIL: Should have returned JSON parse error, got: " text
+    WHEN LEFT error THEN
+      IF "JSON parse error" `CONTAINS` error
+      THEN "PASS: Correctly detected malformed JSON"
+      ELSE CONCAT "FAIL: Wrong error message: " error
+
+-- ============================================================================
+-- Test 6: Unknown Provider
+-- ============================================================================
+
+DECIDE mockValidJSON IS
+  "{\"test\":\"data\"}"
+
+DECIDE test6_extractUnknownProvider IS
+  extractLLMResponse "unknown-provider" mockValidJSON
+
+DECIDE test6_result IS
+  CONSIDER test6_extractUnknownProvider
+    WHEN RIGHT text THEN
+      CONCAT "FAIL: Should have returned unknown provider error, got: " text
+    WHEN LEFT error THEN
+      IF "Unknown provider" `CONTAINS` error
+      THEN "PASS: Correctly detected unknown provider"
+      ELSE CONCAT "FAIL: Wrong error message: " error
+
+-- ============================================================================
+-- Test 7: OpenAI Response - Missing Content Field
+-- ============================================================================
+
+DECIDE mockOpenAIResponseMissingContent IS
+  "{\"choices\":[{\"message\":{\"role\":\"assistant\"},\"finish_reason\":\"stop\"}]}"
+
+DECIDE test7_extractOpenAI IS
+  extractLLMResponse "openrouter" mockOpenAIResponseMissingContent
+
+DECIDE test7_result IS
+  CONSIDER test7_extractOpenAI
+    WHEN RIGHT text THEN
+      CONCAT "FAIL: Should have returned error for missing content, got: " text
+    WHEN LEFT error THEN
+      IF "Invalid" `CONTAINS` error
+      THEN "PASS: Correctly detected missing content field"
+      ELSE CONCAT "FAIL: Wrong error message: " error
+
+-- ============================================================================
+-- Test 8: Anthropic Response - Multiple Content Blocks (takes first)
+-- ============================================================================
+
+DECIDE mockAnthropicResponseMultipleBlocks IS
+  "{\"content\":[{\"type\":\"text\",\"text\":\"First block\"},{\"type\":\"text\",\"text\":\"Second block\"}],\"stop_reason\":\"end_turn\"}"
+
+DECIDE test8_extractAnthropic IS
+  extractLLMResponse "anthropic" mockAnthropicResponseMultipleBlocks
+
+DECIDE test8_result IS
+  CONSIDER test8_extractAnthropic
+    WHEN RIGHT text THEN
+      IF text == "First block"
+      THEN "PASS: Correctly extracted first content block"
+      ELSE CONCAT "FAIL: Expected 'First block' but got '" text "'"
+    WHEN LEFT error THEN
+      CONCAT "FAIL: " error
+
+-- ============================================================================
+-- Test 9: OpenAI Response with Special Characters
+-- ============================================================================
+
+DECIDE mockOpenAIResponseSpecialChars IS
+  "{\"choices\":[{\"message\":{\"content\":\"Test with \\\"quotes\\\" and \\nnewlines\"},\"finish_reason\":\"stop\"}]}"
+
+DECIDE test9_extractOpenAI IS
+  extractLLMResponse "openrouter" mockOpenAIResponseSpecialChars
+
+DECIDE test9_result IS
+  CONSIDER test9_extractOpenAI
+    WHEN RIGHT text THEN
+      "PASS: Successfully parsed response with special characters"
+    WHEN LEFT error THEN
+      CONCAT "FAIL: " error
+
+-- ============================================================================
+-- Test 10: Direct Type Extraction Functions
+-- ============================================================================
+
+-- Test parseResponse -> extractOpenAIContent directly
+DECIDE test10_directExtraction IS
+  CONSIDER parseResponse mockOpenAIResponseValid
+    WHEN RIGHT jsonObj THEN
+      extractOpenAIContent jsonObj
+    WHEN LEFT error THEN
+      LEFT (CONCAT "JSON parse error: " error)
+
+DECIDE test10_result IS
+  CONSIDER test10_directExtraction
+    WHEN RIGHT text THEN
+      IF text == test1_expected
+      THEN "PASS: Direct extraction via extractOpenAIContent"
+      ELSE CONCAT "FAIL: Expected '" test1_expected "' but got '" text "'"
+    WHEN LEFT error THEN
+      CONCAT "FAIL: " error
+
+-- ============================================================================
+-- Test Summary
+-- ============================================================================
+
+DECIDE allTestResults IS
+  CONCAT
+    "LLM Library Parsing Tests\n"
+    "=========================\n\n"
+    "Test 1: " test1_result "\n"
+    "Test 2: " test2_result "\n"
+    "Test 3: " test3_result "\n"
+    "Test 4: " test4_result "\n"
+    "Test 5: " test5_result "\n"
+    "Test 6: " test6_result "\n"
+    "Test 7: " test7_result "\n"
+    "Test 8: " test8_result "\n"
+    "Test 9: " test9_result "\n"
+    "Test 10: " test10_result "\n\n"
+    "Run with: cabal run jl4-cli -- jl4/examples/ok/llm-parsing-tests.l4\n"
+    "Then: #EVAL allTestResults"
+
+-- To run all tests, uncomment:
+-- #EVAL allTestResults
