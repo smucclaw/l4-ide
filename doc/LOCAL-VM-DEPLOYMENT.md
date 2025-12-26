@@ -26,9 +26,14 @@ This creates `result/bin/run-jl4-demo-vm` and will download ~160MB of packages o
 
 - `result` → symlink to `/nix/store/.../nixos-vm`
 - `result/bin/run-jl4-demo-vm` → VM launcher script
-- Creates `jl4-demo.qcow2` disk image (1GB virtual, ~200MB actual) on first run
+- Creates `jl4-demo.qcow2` disk image (1GB virtual, ~20MB actual) in the project directory on first run
+  - This disk image is the persistent VM state (gitignored)
+  - Located at `/path/to/l4-ide/jl4-demo.qcow2`
+  - Can be reused with libvirt/virt-manager
 
 ### 2. Run the VM
+
+**Method A: Direct QEMU (recommended, uses port forwarding)**
 
 **With SSH access (recommended for development):**
 
@@ -57,6 +62,39 @@ QEMU_NET_OPTS="hostfwd=tcp::2222-:22,hostfwd=tcp::8080-:80,hostfwd=tcp::8443-:44
 # Stop later with:
 pkill -f "qemu-system.*jl4-demo"
 ```
+
+**Method B: Using libvirt/virt-manager (for bridged networking)**
+
+If you want the VM to get its own IP on your network (instead of port forwarding), you can import the qcow2 disk image into libvirt:
+
+```bash
+# Prerequisites: host must have a bridge configured (e.g., br0)
+# Check virtualisation.libvirtd.allowedBridges in host's configuration.nix
+
+# Import the disk image into libvirt
+virt-install \
+  --name jl4-demo \
+  --memory 1024 \
+  --vcpus 1 \
+  --disk path=/home/mengwong/src/smucclaw/l4-ide/jl4-demo.qcow2,format=qcow2,bus=virtio \
+  --boot kernel=/nix/store/.../kernel,initrd=/nix/store/.../initrd,kernel_args="..." \
+  --network bridge=br0,model=virtio \
+  --graphics none \
+  --noautoconsole
+
+# Manage with virsh
+virsh list --all
+virsh start jl4-demo
+virsh shutdown jl4-demo
+virsh destroy jl4-demo  # force stop
+
+# Find VM IP
+virsh domifaddr jl4-demo --source arp
+# or check ARP table
+arp -an | grep "$(virsh domiflist jl4-demo | grep -o '52:54:00:[0-9a-f:]*')"
+```
+
+**Note:** The libvirt method requires specifying the full kernel/initrd paths and boot arguments. See `result/bin/run-jl4-demo-vm` for the exact paths. For most use cases, Method A (port forwarding) is simpler and sufficient.
 
 ### 3. Access the VM
 
@@ -92,6 +130,8 @@ curl http://localhost:8080/session/     # websessions service
 
 After modifying nix configuration:
 
+**If using Method A (direct QEMU):**
+
 ```bash
 # Rebuild the VM
 nixos-rebuild build-vm --flake '.#jl4-demo'
@@ -101,6 +141,17 @@ pkill -f "qemu-system.*jl4-demo"
 QEMU_NET_OPTS="hostfwd=tcp::2222-:22,hostfwd=tcp::8080-:80,hostfwd=tcp::8443-:443" \
   QEMU_OPTS="-display none" \
   result/bin/run-jl4-demo-vm &
+```
+
+**If using Method B (libvirt):**
+
+```bash
+# Rebuild the VM
+nixos-rebuild build-vm --flake '.#jl4-demo'
+
+# Restart the VM
+virsh shutdown jl4-demo  # or: virsh destroy jl4-demo
+virsh start jl4-demo
 ```
 
 **Or, deploy to running VM via SSH:**
@@ -377,7 +428,7 @@ nixos-rebuild switch --flake '.#jl4-aws-2505' --target-host nano
 | ----------------------------- | ------------------------------------ |
 | `result`                      | Symlink to `/nix/store/.../nixos-vm` |
 | `result/bin/run-jl4-demo-vm`  | VM launcher script                   |
-| `jl4-demo.qcow2`              | VM disk image (gitignored)           |
+| `jl4-demo.qcow2`              | VM disk image (1GB virtual, ~20MB actual) in project root (gitignored) |
 | `/tmp/nix-vm.*/xchg/`         | Shared directory between host and VM |
 | `/tmp/nix-vm.*/xchg/ip-*.txt` | VM network info (written by VM)      |
 
