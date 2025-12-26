@@ -10,11 +10,11 @@ For comprehensive provisioning and deployment instructions, see:
 
 ### Available Flake Targets
 
-| Target         | Domain                 | Environment           |
-| -------------- | ---------------------- | --------------------- |
+| Target         | Domain                 | Environment             |
+| -------------- | ---------------------- | ----------------------- |
 | `jl4-demo`     | `jl4.well-typed.com`   | Local VM / Hetzner demo |
-| `jl4-aws-2505` | `jl4.legalese.com`     | Production AWS EC2    |
-| `jl4-dev`      | `dev.jl4.legalese.com` | Dev/staging AWS EC2   |
+| `jl4-aws-2505` | `jl4.legalese.com`     | Production AWS EC2      |
+| `jl4-dev`      | `dev.jl4.legalese.com` | Dev/staging AWS EC2     |
 
 **Note:** `jl4-demo` can be run as a local QEMU VM for testing. See **[LOCAL-VM-DEPLOYMENT.md](../doc/LOCAL-VM-DEPLOYMENT.md)** for details.
 

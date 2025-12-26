@@ -23,6 +23,7 @@ nixos-rebuild build-vm --flake '.#jl4-demo'
 This creates `result/bin/run-jl4-demo-vm` and will download ~160MB of packages on first build.
 
 **Build output:**
+
 - `result` → symlink to `/nix/store/.../nixos-vm`
 - `result/bin/run-jl4-demo-vm` → VM launcher script
 - Creates `jl4-demo.qcow2` disk image (1GB virtual, ~200MB actual) on first run
@@ -122,14 +123,14 @@ nixos-rebuild switch --flake '.#jl4-demo'
 
 The VM is configured via `nix/aws-vm.nix` which overrides production settings:
 
-| Setting | Production | VM |
-|---------|-----------|-----|
-| **ACME/TLS** | Let's Encrypt | Self-signed certificates |
-| **forceSSL** | Enabled | Disabled |
-| **Memory** | 4GB+ | 1GB |
-| **CPUs** | 2+ | 1 |
-| **Networking** | Public IP | User-mode NAT (port forwarding) |
-| **Admin user** | No | Yes (username: admin, password: admin) |
+| Setting        | Production    | VM                                     |
+| -------------- | ------------- | -------------------------------------- |
+| **ACME/TLS**   | Let's Encrypt | Self-signed certificates               |
+| **forceSSL**   | Enabled       | Disabled                               |
+| **Memory**     | 4GB+          | 1GB                                    |
+| **CPUs**       | 2+            | 1                                      |
+| **Networking** | Public IP     | User-mode NAT (port forwarding)        |
+| **Admin user** | No            | Yes (username: admin, password: admin) |
 
 ### Flake Configuration
 
@@ -316,6 +317,7 @@ QEMU_NET_OPTS="hostfwd=tcp::2222-:22,hostfwd=tcp::8080-:80,hostfwd=tcp::8443-:44
 ### Test Configuration Changes
 
 1. **Edit nix configuration:**
+
    ```bash
    vim nix/jl4-decision-service/configuration.nix
    # or
@@ -323,11 +325,13 @@ QEMU_NET_OPTS="hostfwd=tcp::2222-:22,hostfwd=tcp::8080-:80,hostfwd=tcp::8443-:44
    ```
 
 2. **Rebuild VM:**
+
    ```bash
    nixos-rebuild build-vm --flake '.#jl4-demo'
    ```
 
 3. **Restart VM:**
+
    ```bash
    pkill -f "qemu-system.*jl4-demo"
    QEMU_NET_OPTS="hostfwd=tcp::2222-:22,hostfwd=tcp::8080-:80,hostfwd=tcp::8443-:443" \
@@ -356,26 +360,26 @@ nixos-rebuild switch --flake '.#jl4-aws-2505' --target-host nano
 
 ## Comparison: Local VM vs Production
 
-| Aspect | Local VM | Production AWS |
-|--------|----------|---------------|
-| **Build** | `nixos-rebuild build-vm --flake '.#jl4-demo'` | N/A (deployed directly) |
-| **Deploy** | `result/bin/run-jl4-demo-vm` | `nixos-rebuild switch --flake '.#jl4-aws-2505' --target-host nano` |
-| **Access** | `ssh root@localhost -p 2222` | `ssh root@jl4.legalese.com` |
-| **URL** | `http://localhost:8080` | `https://jl4.legalese.com` |
-| **TLS** | Self-signed | Let's Encrypt |
-| **Domain** | jl4.well-typed.com (config) | jl4.legalese.com |
-| **State** | Ephemeral (unless backed up) | Persistent |
-| **DB** | Fresh on each boot | `/var/lib/private/jl4-websessions/` |
+| Aspect     | Local VM                                      | Production AWS                                                     |
+| ---------- | --------------------------------------------- | ------------------------------------------------------------------ |
+| **Build**  | `nixos-rebuild build-vm --flake '.#jl4-demo'` | N/A (deployed directly)                                            |
+| **Deploy** | `result/bin/run-jl4-demo-vm`                  | `nixos-rebuild switch --flake '.#jl4-aws-2505' --target-host nano` |
+| **Access** | `ssh root@localhost -p 2222`                  | `ssh root@jl4.legalese.com`                                        |
+| **URL**    | `http://localhost:8080`                       | `https://jl4.legalese.com`                                         |
+| **TLS**    | Self-signed                                   | Let's Encrypt                                                      |
+| **Domain** | jl4.well-typed.com (config)                   | jl4.legalese.com                                                   |
+| **State**  | Ephemeral (unless backed up)                  | Persistent                                                         |
+| **DB**     | Fresh on each boot                            | `/var/lib/private/jl4-websessions/`                                |
 
 ## Files Created
 
-| File | Purpose |
-|------|---------|
-| `result` | Symlink to `/nix/store/.../nixos-vm` |
-| `result/bin/run-jl4-demo-vm` | VM launcher script |
-| `jl4-demo.qcow2` | VM disk image (gitignored) |
-| `/tmp/nix-vm.*/xchg/` | Shared directory between host and VM |
-| `/tmp/nix-vm.*/xchg/ip-*.txt` | VM network info (written by VM) |
+| File                          | Purpose                              |
+| ----------------------------- | ------------------------------------ |
+| `result`                      | Symlink to `/nix/store/.../nixos-vm` |
+| `result/bin/run-jl4-demo-vm`  | VM launcher script                   |
+| `jl4-demo.qcow2`              | VM disk image (gitignored)           |
+| `/tmp/nix-vm.*/xchg/`         | Shared directory between host and VM |
+| `/tmp/nix-vm.*/xchg/ip-*.txt` | VM network info (written by VM)      |
 
 ## See Also
 
