@@ -47,6 +47,7 @@ Legend: ✅ done · 🔄 in progress · ⏳ todo · ⚠️ blocked/deferred
 
 - `586836e2` — TS tests for `PartialEvalAnalyzer`
 - `a26f523b` — Decision-service: nested `parameterProperties` for record types
+- `db88a4eb` — Decision-service: add `Parameter.items` for arrays
 - `818e74f9` — Extract query-plan into shared `jl4-query-plan` package
 - `6ee39aca` — Decision-service: self-invalidating `fnDecisionQueryCache`
 - `a3363062` — Decision-service: stable `atomId` for query-plan
