@@ -47,7 +47,7 @@ defaultMain = do
 
   l4Files <- expandSourcePaths sourcePaths
   when (null sourcePaths) $ putStrLn $ "sourcePaths expanded to empty: " <> show sourcePaths
-  unless (null sourcePaths) $ putStrLn $ "Choosing .l4 + .yaml pairs from: " <> show l4Files
+  unless (null sourcePaths) $ putStrLn $ "Scanning .l4 files from: " <> show l4Files
 
   (l4Functions, _moduleContext) <- Examples.loadL4Functions l4Files
   unless (null sourcePaths) $ putStrLn $ "** Loaded l4 functions from disk: " <> show (length l4Functions)

@@ -46,6 +46,18 @@ Key applications include:
 
 ## Development Guide
 
+### Shell Quoting
+
+**Backticks (`` `...` ``) are meaningful to both L4 and the shell.** In L4 sources they denote quoted identifiers, but in `bash`/`zsh` they trigger command substitution. When running `rg`, `sed`, etc. against L4 snippets containing backticks, quote or escape them (e.g. `rg 'foo `bar`'` or `rg \"foo \\`bar\\`\"`) to avoid accidentally executing commands.
+
+When you need to pass multi-line text containing backticks to shell commands (e.g. GitHub issue bodies), prefer a single-quoted heredoc to prevent command substitution:
+
+```bash
+cat > /tmp/body.md <<'EOF'
+This refers to `WHERE` and `LET` in L4.
+EOF
+```
+
 ### Testing
 
 **We aspire to follow Test-Driven Development (TDD) practices.** This means:

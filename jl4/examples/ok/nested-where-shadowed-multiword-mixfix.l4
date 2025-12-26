@@ -1,0 +1,27 @@
+§ `Idiom: Shadowed multiword mixfix in nested WHERE`
+
+IMPORT prelude
+
+GIVEN amount IS A NUMBER, capA IS A NUMBER, capB IS A NUMBER
+GIVETH A NUMBER
+benefit amount capA capB MEANS
+  LET
+    partA BE
+      amount `capped at` capA
+        WHERE
+          GIVEN x IS A NUMBER, limit IS A NUMBER
+          GIVETH A NUMBER
+          x `capped at` limit MEANS
+            IF x LESS THAN limit THEN x ELSE limit
+
+    partB BE
+      amount `capped at` capB
+        WHERE
+          GIVEN x IS A NUMBER, limit IS A NUMBER
+          GIVETH A NUMBER
+          -- Different local semantics: “capped at” is treated as a floor.
+          x `capped at` limit MEANS
+            IF x GREATER THAN limit THEN x ELSE limit
+  IN partA PLUS partB
+
+#EVAL benefit 10 7 7
