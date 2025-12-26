@@ -124,6 +124,7 @@ test-suite jl4-decision-service-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+    AskOrderingSpec
     Paths_jl4_decision_service
     BooleanDecisionQuerySpec
     DecisionQueryCacheKeySpec

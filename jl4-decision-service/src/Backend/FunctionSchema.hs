@@ -32,6 +32,7 @@ data Parameter = Parameter
   , parameterEnum :: ![Text]
   , parameterDescription :: !Text
   , parameterProperties :: !(Maybe (Map Text Parameter)) -- Nested properties for object types
+  , parameterPropertyOrder :: !(Maybe [Text]) -- Field order for object types (declaration order when available)
   , parameterItems :: !(Maybe Parameter) -- Array items schema for array types
   }
   deriving stock (Show, Read, Ord, Eq, Generic)
@@ -62,6 +63,9 @@ instance ToJSON Parameter where
         ++ case p.parameterProperties of
           Nothing -> []
           Just props -> ["properties" .= props]
+        ++ case p.parameterPropertyOrder of
+          Nothing -> []
+          Just ord -> ["propertyOrder" .= ord]
         ++ case p.parameterItems of
           Nothing -> []
           Just items -> ["items" .= items]
@@ -74,6 +78,7 @@ instance FromJSON Parameter where
       <*> p .:? "enum" .!= []
       <*> p .: "description"
       <*> p .:? "properties"
+      <*> p .:? "propertyOrder"
       <*> p .:? "items"
 
 declaresFromModule :: Module Resolved -> Map Text (Declare Resolved)
@@ -127,6 +132,7 @@ typeToParameter declares visited ty =
       , parameterEnum = []
       , parameterDescription = ""
       , parameterProperties = Nothing
+      , parameterPropertyOrder = Nothing
       , parameterItems = Nothing
       }
 
@@ -164,6 +170,7 @@ typeToParameter declares visited ty =
           RecordDecl _ _ fields ->
             let
               visited' = Set.insert typeName visited
+              fieldOrder = [resolvedNameText fieldName | MkTypedName _ fieldName _ <- fields]
               props =
                 Map.fromList
                   [ (resolvedNameText fieldName, addDesc fieldDesc (typeToParameter declares visited' fieldTy))
@@ -174,6 +181,7 @@ typeToParameter declares visited ty =
               (emptyParam "object")
                 { parameterDescription = Maybe.fromMaybe "" (fmap getDesc (declAnn Optics.^. annDesc))
                 , parameterProperties = Just props
+                , parameterPropertyOrder = Just fieldOrder
                 }
           EnumDecl _ constructors ->
             (emptyParam "string")
@@ -212,6 +220,7 @@ parametersFromDecide resolvedModule (MkDecide _ (MkTypeSig _ (MkGivenSig _ names
       , parameterEnum = []
       , parameterDescription = ""
       , parameterProperties = Nothing
+      , parameterPropertyOrder = Nothing
       , parameterItems = Nothing
       }
 

@@ -10,6 +10,7 @@ module Backend.DecisionQueryPlan (
   decisionQueryCacheKey,
   getOrBuildDecisionQueryCache,
   buildDecisionQueryCache,
+  orderAsksForElicitation,
   QueryAtom (..),
   QueryOutcome (..),
   QueryImpact (..),
@@ -30,9 +31,11 @@ import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Char as Char
 import qualified Data.List as List
 import qualified Data.Map.Strict as Map
+import Data.Ord (Down (..))
 import qualified Data.Set as Set
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
+import Text.Read (readMaybe)
 import Servant (ServerError (..), err400, err404, err500)
 
 import qualified Data.UUID as UUID
@@ -66,6 +69,75 @@ data QueryAsk = QueryAsk
   }
   deriving stock (Show, Generic)
   deriving anyclass (FromJSON, ToJSON)
+
+data PathSortKey
+  = KSField !Int !Text
+  | KSIndex !Int
+  | KSWildcard
+  | KSUnknown !Text
+  deriving stock (Show, Eq, Ord)
+
+orderAsksForElicitation :: Parameters -> [QueryAsk] -> [QueryAsk]
+orderAsksForElicitation params =
+  let
+    rootSchemaFor :: QueryAsk -> Maybe Parameter
+    rootSchemaFor a = Map.lookup a.container params.parameterMap
+
+    fieldOrderIndex :: Parameter -> Map Text Int
+    fieldOrderIndex p =
+      let
+        props = Map.keys (fromMaybe Map.empty p.parameterProperties)
+        ord = fromMaybe (List.sort props) p.parameterPropertyOrder
+       in Map.fromList (zip ord [0 ..])
+
+    consumePropertyWithKey :: Map Text Parameter -> [Text] -> Maybe (Text, Parameter, [Text])
+    consumePropertyWithKey props segs =
+      let
+        n = length segs
+        tryLen k =
+          let key0 = Text.intercalate "." (take k segs)
+           in (\p1 -> (key0, p1, drop k segs)) <$> Map.lookup key0 props
+       in
+        listToMaybe (mapMaybe tryLen [n, n - 1 .. 1])
+
+    pathSortKeyFromSchema :: Parameter -> [Text] -> [PathSortKey]
+    pathSortKeyFromSchema p0 = go p0
+     where
+      go p segs =
+        case segs of
+          [] -> []
+          (seg : rest) ->
+            case p.parameterItems of
+              Just items ->
+                case seg of
+                  "*" -> KSWildcard : go items rest
+                  "[]" -> KSWildcard : go items rest
+                  _ | Text.all Char.isDigit seg ->
+                        case readMaybe (Text.unpack seg) of
+                          Just idx -> KSIndex idx : go items rest
+                          Nothing -> KSUnknown seg : go items rest
+                  _ -> KSUnknown seg : go items rest
+              Nothing ->
+                case p.parameterProperties of
+                  Just props ->
+                    case consumePropertyWithKey props segs of
+                      Nothing -> KSUnknown seg : go p rest
+                      Just (fieldKey, p1, rest') ->
+                        let
+                          idx =
+                            Map.findWithDefault maxBound fieldKey (fieldOrderIndex p)
+                         in KSField idx fieldKey : go p1 rest'
+                  Nothing -> KSUnknown seg : go p rest
+
+    pathSortKey :: QueryAsk -> [PathSortKey]
+    pathSortKey a =
+      case rootSchemaFor a of
+        Nothing -> map KSUnknown a.path
+        Just root -> pathSortKeyFromSchema root a.path
+
+    sortKey a = (Down a.score, a.container, pathSortKey a, a.label)
+   in
+    List.sortOn sortKey
 
 decisionQueryCacheKey :: Text -> Map EvalBackend Text -> Text
 decisionQueryCacheKey funName sources =
@@ -315,13 +387,14 @@ queryPlan name cached args =
           }
       | a <- asksRanked
       ]
+    asksOrdered = orderAsksForElicitation cached.paramSchema asksEnriched
    in
     QueryPlanResponse
       { determined
       , stillNeeded
       , ranked
       , inputs
-      , asks = asksEnriched
+      , asks = asksOrdered
       , impact
       , impactByAtomId
       , note

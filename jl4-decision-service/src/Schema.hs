@@ -211,6 +211,7 @@ instance ToSchema Parameter where
     textSchema <- declareSchemaRef (Proxy @Text)
     mTextSchema <- declareSchemaRef (Proxy @(Maybe Text))
     textListSchema <- declareSchemaRef (Proxy @[Text])
+    mTextListSchema <- declareSchemaRef (Proxy @(Maybe [Text]))
     nestedPropsSchema <- declareSchemaRef (Proxy @(Maybe (Map Text Parameter)))
     itemsSchema <- declareSchemaRef (Proxy @(Maybe Parameter))
     pure $
@@ -224,6 +225,7 @@ instance ToSchema Parameter where
                , ("alias", mTextSchema)
                , ("type", textSchema)
                , ("properties", nestedPropsSchema)
+               , ("propertyOrder", mTextListSchema)
                , ("items", itemsSchema)
                ]
           & required .~ ["type"]

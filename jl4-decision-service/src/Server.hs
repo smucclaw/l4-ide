@@ -732,7 +732,7 @@ paramToParameter :: Map Text (Declare Resolved) -> ExportedParam -> Parameter
 paramToParameter declares param =
   let p0 =
         Maybe.fromMaybe
-          (Parameter "object" Nothing [] "" Nothing Nothing)
+          (Parameter "object" Nothing [] "" Nothing Nothing Nothing)
           (typeToParameter declares Set.empty <$> param.paramType)
    in
     p0
@@ -791,6 +791,7 @@ typeToParameter declares visited ty =
       , parameterEnum = []
       , parameterDescription = ""
       , parameterProperties = Nothing
+      , parameterPropertyOrder = Nothing
       , parameterItems = Nothing
       }
 
@@ -828,6 +829,7 @@ typeToParameter declares visited ty =
           RecordDecl _ _ fields ->
             let
               visited' = Set.insert typeName visited
+              fieldOrder = [resolvedNameText fieldName | MkTypedName _ fieldName _ <- fields]
               props =
                 Map.fromList
                   [ (resolvedNameText fieldName, addDesc fieldDesc (typeToParameter declares visited' fieldTy))
@@ -838,6 +840,7 @@ typeToParameter declares visited ty =
               (emptyParam "object")
                 { parameterDescription = Maybe.fromMaybe "" (fmap getDesc (declAnn Optics.^. annDesc))
                 , parameterProperties = Just props
+                , parameterPropertyOrder = Just fieldOrder
                 }
           EnumDecl _ constructors ->
             (emptyParam "string")
@@ -952,7 +955,7 @@ parametersOfDecideWithModule mMod (MkDecide _ (MkTypeSig _ (MkGivenSig _ typedNa
                     argInfo = lookup x bestEffortArgInfo
                     baseParam =
                       case argInfo >>= \(_tyText, mTy, _desc) -> mTy of
-                        Nothing -> Parameter "object" Nothing [] "" Nothing Nothing
+                        Nothing -> Parameter "object" Nothing [] "" Nothing Nothing Nothing
                         Just ty -> typeToParameter declares Set.empty ty
                     descTxt = maybe "" (\(_tyText, _mTy, d) -> d) argInfo
                    in

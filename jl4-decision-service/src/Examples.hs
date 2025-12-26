@@ -142,7 +142,7 @@ paramToParameter :: Map.Map Text (Declare Resolved) -> ExportedParam -> Paramete
 paramToParameter declares param =
   let p0 =
         fromMaybe
-          (Parameter "object" Nothing [] "" Nothing Nothing)
+          (Parameter "object" Nothing [] "" Nothing Nothing Nothing)
           (typeToParameter declares Set.empty <$> param.paramType)
    in
     p0
@@ -201,6 +201,7 @@ typeToParameter declares visited ty =
       , parameterEnum = []
       , parameterDescription = ""
       , parameterProperties = Nothing
+      , parameterPropertyOrder = Nothing
       , parameterItems = Nothing
       }
 
@@ -238,6 +239,7 @@ typeToParameter declares visited ty =
           RecordDecl _ _ fields ->
             let
               visited' = Set.insert typeName visited
+              fieldOrder = [resolvedNameText fieldName | MkTypedName _ fieldName _ <- fields]
               props =
                 Map.fromList
                   [ (resolvedNameText fieldName, addDesc fieldDesc (typeToParameter declares visited' fieldTy))
@@ -248,6 +250,7 @@ typeToParameter declares visited ty =
               (emptyParam "object")
                 { parameterDescription = fromMaybe "" (fmap getDesc (declAnn Optics.^. annDesc))
                 , parameterProperties = Just props
+                , parameterPropertyOrder = Just fieldOrder
                 }
           EnumDecl _ constructors ->
             (emptyParam "string")
@@ -340,10 +343,10 @@ personQualifiesFunction = do
         , parameters =
             MkParameters
               { parameterMap =
-                  Map.fromList
-                    [ ("walks", Parameter "string" Nothing ["true", "false"] "Did the person walk?" Nothing Nothing)
-                    , ("eats", Parameter "string" Nothing ["true", "false"] "Did the person eat?" Nothing Nothing)
-                    , ("drinks", Parameter "string" Nothing ["true", "false"] "Did the person drink?" Nothing Nothing)
+                Map.fromList
+                    [ ("walks", Parameter "string" Nothing ["true", "false"] "Did the person walk?" Nothing Nothing Nothing)
+                    , ("eats", Parameter "string" Nothing ["true", "false"] "Did the person eat?" Nothing Nothing Nothing)
+                    , ("drinks", Parameter "string" Nothing ["true", "false"] "Did the person drink?" Nothing Nothing Nothing)
                     ]
               , required = ["walks", "eats", "drinks"]
               }
@@ -378,16 +381,16 @@ rodentsAndVerminFunction = do
             let
               params =
                 Map.fromList
-                  [ ("Loss or Damage.caused by insects", Parameter "string" Nothing ["true", "false"] "Was the damage caused by insects?" Nothing Nothing)
-                  , ("Loss or Damage.caused by birds", Parameter "string" Nothing ["true", "false"] "Was the damage caused by birds?" Nothing Nothing)
-                  , ("Loss or Damage.caused by vermin", Parameter "string" Nothing ["true", "false"] "Was the damage caused by vermin?" Nothing Nothing)
-                  , ("Loss or Damage.caused by rodents", Parameter "string" Nothing ["true", "false"] "Was the damage caused by rodents?" Nothing Nothing)
-                  , ("Loss or Damage.to Contents", Parameter "string" Nothing ["true", "false"] "Is the damage to your contents?" Nothing Nothing)
-                  , ("Loss or Damage.ensuing covered loss", Parameter "string" Nothing ["true", "false"] "Is the damage ensuing covered loss" Nothing Nothing)
-                  , ("any other exclusion applies", Parameter "string" Nothing ["true", "false"] "Are any other exclusions besides mentioned ones?" Nothing Nothing)
-                  , ("a household appliance", Parameter "string" Nothing ["true", "false"] "Did water escape from a household appliance due to an animal?" Nothing Nothing)
-                  , ("a swimming pool", Parameter "string" Nothing ["true", "false"] "Did water escape from a swimming pool due to an animal?" Nothing Nothing)
-                  , ("a plumbing, heating, or air conditioning system", Parameter "string" Nothing ["true", "false"] "Did water escape from a plumbing, heating or conditioning system due to an animal?" Nothing Nothing)
+                  [ ("Loss or Damage.caused by insects", Parameter "string" Nothing ["true", "false"] "Was the damage caused by insects?" Nothing Nothing Nothing)
+                  , ("Loss or Damage.caused by birds", Parameter "string" Nothing ["true", "false"] "Was the damage caused by birds?" Nothing Nothing Nothing)
+                  , ("Loss or Damage.caused by vermin", Parameter "string" Nothing ["true", "false"] "Was the damage caused by vermin?" Nothing Nothing Nothing)
+                  , ("Loss or Damage.caused by rodents", Parameter "string" Nothing ["true", "false"] "Was the damage caused by rodents?" Nothing Nothing Nothing)
+                  , ("Loss or Damage.to Contents", Parameter "string" Nothing ["true", "false"] "Is the damage to your contents?" Nothing Nothing Nothing)
+                  , ("Loss or Damage.ensuing covered loss", Parameter "string" Nothing ["true", "false"] "Is the damage ensuing covered loss" Nothing Nothing Nothing)
+                  , ("any other exclusion applies", Parameter "string" Nothing ["true", "false"] "Are any other exclusions besides mentioned ones?" Nothing Nothing Nothing)
+                  , ("a household appliance", Parameter "string" Nothing ["true", "false"] "Did water escape from a household appliance due to an animal?" Nothing Nothing Nothing)
+                  , ("a swimming pool", Parameter "string" Nothing ["true", "false"] "Did water escape from a swimming pool due to an animal?" Nothing Nothing Nothing)
+                  , ("a plumbing, heating, or air conditioning system", Parameter "string" Nothing ["true", "false"] "Did water escape from a plumbing, heating or conditioning system due to an animal?" Nothing Nothing Nothing)
                   ]
             in
               MkParameters
