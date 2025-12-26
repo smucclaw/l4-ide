@@ -76,6 +76,7 @@ library
     http-types,
     filepath,
     jl4-core,
+    jl4-query-plan,
     jl4-lsp,
     jl4-websessions,
     lens,

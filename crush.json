@@ -20,6 +20,8 @@
       "rm",
       "gh",
       "edit",
+      "bash",
+      "ssh",
       "mcp_context7_get-library-doc"
     ]
   }
