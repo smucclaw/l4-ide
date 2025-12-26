@@ -424,13 +424,13 @@ nixos-rebuild switch --flake '.#jl4-aws-2505' --target-host nano
 
 ## Files Created
 
-| File                          | Purpose                              |
-| ----------------------------- | ------------------------------------ |
-| `result`                      | Symlink to `/nix/store/.../nixos-vm` |
-| `result/bin/run-jl4-demo-vm`  | VM launcher script                   |
+| File                          | Purpose                                                                |
+| ----------------------------- | ---------------------------------------------------------------------- |
+| `result`                      | Symlink to `/nix/store/.../nixos-vm`                                   |
+| `result/bin/run-jl4-demo-vm`  | VM launcher script                                                     |
 | `jl4-demo.qcow2`              | VM disk image (1GB virtual, ~20MB actual) in project root (gitignored) |
-| `/tmp/nix-vm.*/xchg/`         | Shared directory between host and VM |
-| `/tmp/nix-vm.*/xchg/ip-*.txt` | VM network info (written by VM)      |
+| `/tmp/nix-vm.*/xchg/`         | Shared directory between host and VM                                   |
+| `/tmp/nix-vm.*/xchg/ip-*.txt` | VM network info (written by VM)                                        |
 
 ## See Also
 
