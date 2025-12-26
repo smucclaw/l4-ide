@@ -69,6 +69,83 @@ spec = describe "disk loading" do
       (functions, _ctx) <- Examples.loadL4Functions [exportedPath, implicitPath]
       Map.keys functions `shouldBe` ["exported"]
 
+  describe "@export placement" do
+    it "works when @export is before GIVEN" do
+      withTempDir \dir -> do
+        let l4Path = dir </> "export-before-given.l4"
+        TIO.writeFile l4Path $
+          T.unlines
+            [ "@export default Export before GIVEN"
+            , "GIVEN x IS A BOOLEAN"
+            , "GIVETH A BOOLEAN"
+            , "DECIDE test_before_given IS x"
+            ]
+        (functions, _ctx) <- Examples.loadL4Functions [l4Path]
+        Map.keys functions `shouldBe` ["test_before_given"]
+
+    it "works when @export is before GIVETH (no GIVEN clause)" do
+      withTempDir \dir -> do
+        let l4Path = dir </> "export-before-giveth.l4"
+        TIO.writeFile l4Path $
+          T.unlines
+            [ "@export default Export before GIVETH"
+            , "GIVETH A BOOLEAN"
+            , "DECIDE test_before_giveth IS TRUE"
+            ]
+        (functions, _ctx) <- Examples.loadL4Functions [l4Path]
+        Map.keys functions `shouldBe` ["test_before_giveth"]
+
+    it "works when @export is before MEANS" do
+      withTempDir \dir -> do
+        let l4Path = dir </> "export-before-means.l4"
+        TIO.writeFile l4Path $
+          T.unlines
+            [ "@export default Export before MEANS"
+            , "GIVEN x IS A BOOLEAN"
+            , "test_with_means x MEANS x"
+            ]
+        (functions, _ctx) <- Examples.loadL4Functions [l4Path]
+        Map.keys functions `shouldBe` ["test_with_means"]
+
+    it "does NOT work when @export is between GIVEN and GIVETH" do
+      withTempDir \dir -> do
+        let l4Path = dir </> "export-between-given-giveth.l4"
+        TIO.writeFile l4Path $
+          T.unlines
+            [ "GIVEN x IS A BOOLEAN"
+            , "@export default Export between GIVEN and GIVETH"
+            , "GIVETH A BOOLEAN"
+            , "DECIDE test_between IS x"
+            ]
+        (functions, _ctx) <- Examples.loadL4Functions [l4Path]
+        Map.keys functions `shouldBe` []
+
+    it "does NOT work when @export is between GIVETH and DECIDE" do
+      withTempDir \dir -> do
+        let l4Path = dir </> "export-after-giveth.l4"
+        TIO.writeFile l4Path $
+          T.unlines
+            [ "GIVEN x IS A BOOLEAN"
+            , "GIVETH A BOOLEAN"
+            , "@export default Export after GIVETH"
+            , "DECIDE test_after_giveth IS x"
+            ]
+        (functions, _ctx) <- Examples.loadL4Functions [l4Path]
+        Map.keys functions `shouldBe` []
+
+    it "does NOT work when @export is right before DECIDE (after GIVETH)" do
+      withTempDir \dir -> do
+        let l4Path = dir </> "export-before-decide.l4"
+        TIO.writeFile l4Path $
+          T.unlines
+            [ "GIVEN x IS A BOOLEAN"
+            , "GIVETH A BOOLEAN"
+            , "@export default Export right before DECIDE"
+            , "DECIDE test_before_decide IS x"
+            ]
+        (functions, _ctx) <- Examples.loadL4Functions [l4Path]
+        Map.keys functions `shouldBe` []
+
 withTempDir :: (FilePath -> IO a) -> IO a
 withTempDir k = do
   tmp <- getTemporaryDirectory

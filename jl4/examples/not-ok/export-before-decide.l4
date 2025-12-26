@@ -1,0 +1,5 @@
+-- @export placed right before DECIDE (after GIVETH) - does NOT work
+GIVEN x IS A BOOLEAN
+GIVETH A BOOLEAN
+@export default Export right before DECIDE
+DECIDE export_before_decide IS x
