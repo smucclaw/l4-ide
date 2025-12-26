@@ -82,6 +82,7 @@ data QueryInput = QueryInput
 data QueryAsk = QueryAsk
   { container :: !Text
   , key :: !(Maybe Text)
+  , path :: ![Text]
   , label :: !Text
   , score :: !Double
   , atoms :: ![QueryAtom]
@@ -180,14 +181,21 @@ queryPlan name paramsByUnique cached flattenedLabelBindings =
       guard (not (Text.null field))
       pure (Text.strip container0, field)
 
-    answeredAskKeys :: Set (Text, Maybe Text)
+    answeredAskKeys :: Set (Text, [Text])
     answeredAskKeys =
       Set.fromList $
         concat
           [ case Text.breakOn "." k of
               (containerLabel, rest)
-                | Text.null rest -> [(containerLabel, Nothing)]
-                | otherwise -> [(containerLabel, Just (Text.drop 1 rest))]
+                | Text.null rest -> [(containerLabel, [])]
+                | otherwise ->
+                    let
+                      raw = Text.drop 1 rest
+                      singletonPath = [raw]
+                      segmentedPath = filter (not . Text.null) (Text.splitOn "." raw)
+                     in if singletonPath == segmentedPath
+                          then [(containerLabel, singletonPath)]
+                          else [(containerLabel, singletonPath), (containerLabel, segmentedPath)]
           | (k, _b) <- flattenedLabelBindings
           ]
 
@@ -371,33 +379,35 @@ queryPlan name paramsByUnique cached flattenedLabelBindings =
       , sc > 0
       ]
 
-    askKeyDepsForAtom :: Int -> Set (Text, Maybe Text)
+    askKeyDepsForAtom :: Int -> Set (Text, [Text])
     askKeyDepsForAtom atomUniq =
       let
         refs =
           Maybe.fromMaybe Set.empty (IntMap.lookup atomUniq cached.varInputRefsByUnique)
+        fallback :: Maybe (Set (Text, [Text]))
         fallback = do
           lbl <- Map.lookup atomUniq cached.varLabelByUnique
           (c, f) <- parseProjectionLabel lbl
-          pure (Set.singleton (c, Just f))
+          let singletonPath = [f]
+          let segmentedPath = filter (not . Text.null) (Text.splitOn "." f)
+          pure $
+            Set.fromList $
+              if singletonPath == segmentedPath
+                then [(c, singletonPath)]
+                else [(c, singletonPath), (c, segmentedPath)]
        in
         Set.fromList
-          [ (containerLabel, keyMaybe)
+          [ (containerLabel, ref.path)
           | ref <- Set.toList refs
           , containerLabel <-
               Maybe.maybeToList
                 ( Map.lookup ref.rootUnique paramsByUnique
                     <|> Map.lookup ref.rootUnique cached.varLabelByUnique
                 )
-          , let
-              keyMaybe =
-                case ref.path of
-                  [] -> Nothing
-                  xs -> Just (Text.intercalate "." xs)
           ]
           <> Maybe.fromMaybe Set.empty fallback
 
-    askAtomsMap0 :: Map (Text, Maybe Text) [QueryAtom]
+    askAtomsMap0 :: Map (Text, [Text]) [QueryAtom]
     askAtomsMap0 =
       Map.fromListWith (<>)
         [ (askKey, [a])
@@ -405,7 +415,7 @@ queryPlan name paramsByUnique cached flattenedLabelBindings =
         , askKey <- Set.toList (askKeyDepsForAtom a.unique)
         ]
 
-    askAtomsMap :: Map (Text, Maybe Text) [QueryAtom]
+    askAtomsMap :: Map (Text, [Text]) [QueryAtom]
     askAtomsMap =
       let
         containers = Set.fromList [c | ((c, _), _) <- Map.toList askAtomsMap0]
@@ -414,8 +424,8 @@ queryPlan name paramsByUnique cached flattenedLabelBindings =
         List.foldl'
           ( \m containerLabel ->
               let
-                emptyKey = (containerLabel, Nothing)
-                otherKeys = [k | k@(_, Just _) <- Map.keys m, fst k == containerLabel]
+                emptyKey = (containerLabel, [])
+                otherKeys = [k | k@(_, (_ : _)) <- Map.keys m, fst k == containerLabel]
                in
                 case Map.lookup emptyKey atomsByUniques of
                   Nothing -> m
@@ -437,7 +447,7 @@ queryPlan name paramsByUnique cached flattenedLabelBindings =
     askDepsSize a =
       max 1 (fromIntegral (Set.size (askKeyDepsForAtom a.unique)))
 
-    askScores :: Map (Text, Maybe Text) Double
+    askScores :: Map (Text, [Text]) Double
     askScores =
       Map.mapWithKey
         (\_ atoms -> sum [(1 / askDepsSize a) * (1 + impactScoreFor a.unique) | a <- atoms])
@@ -446,20 +456,24 @@ queryPlan name paramsByUnique cached flattenedLabelBindings =
     asksRanked =
       [ QueryAsk
           { container = containerLabel
-          , key = keyMaybe
+          , key =
+              case pathSegments of
+                [] -> Nothing
+                xs -> Just (Text.intercalate "." xs)
+          , path = pathSegments
           , label =
-              case keyMaybe of
-                Nothing -> containerLabel
-                Just k -> containerLabel <> "." <> k
+              case pathSegments of
+                [] -> containerLabel
+                xs -> containerLabel <> "." <> Text.intercalate "." xs
           , score = sc
-          , atoms = Map.findWithDefault [] (containerLabel, keyMaybe) askAtomsMap
+          , atoms = Map.findWithDefault [] (containerLabel, pathSegments) askAtomsMap
           }
-      | ((containerLabel, keyMaybe), sc) <-
+      | ((containerLabel, pathSegments), sc) <-
           List.sortOn
             (\((c, k), sc0) -> (Down sc0, c, k))
             (Map.toList askScores)
       , sc > 0
-      , (containerLabel, keyMaybe) `Set.notMember` answeredAskKeys
+      , (containerLabel, pathSegments) `Set.notMember` answeredAskKeys
       ]
 
     noteTxt =

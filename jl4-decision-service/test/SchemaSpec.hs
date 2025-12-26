@@ -204,6 +204,7 @@ instance Arbitrary QueryAsk where
       <*> arbitrary
       <*> arbitrary
       <*> arbitrary
+      <*> arbitrary
 
 instance Arbitrary QueryPlanResponse where
   arbitrary =

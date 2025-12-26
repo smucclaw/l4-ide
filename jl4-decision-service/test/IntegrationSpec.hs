@@ -384,6 +384,7 @@ spec = describe "integration" do
           qp.determined `shouldBe` Nothing
           qp.asks `shouldSatisfy` List.any (\a -> a.container == "i" && Maybe.isJust a.key)
           qp.asks `shouldSatisfy` List.any (\a -> a.container == "i" && Maybe.maybe False (\s -> s.parameterType == "boolean") a.schema)
+          qp.asks `shouldSatisfy` List.all (\a -> Text.intercalate "." a.path == Maybe.fromMaybe "" a.key)
 
     it "accepts nested record bindings (i.<field>)" do
       runDecisionService \api -> do
@@ -397,6 +398,7 @@ spec = describe "integration" do
           Nothing -> liftIO $ expectationFailure "expected a nested ask for container i"
           Just ask0 -> do
             let fieldKey = Maybe.fromMaybe "" ask0.key
+            liftIO $ Text.intercalate "." ask0.path `shouldBe` fieldKey
             qp1 <-
               (api.functionRoutes.singleEntity "vermin_and_rodent").queryPlan
                 FnArguments

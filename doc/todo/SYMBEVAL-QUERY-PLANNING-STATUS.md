@@ -39,7 +39,7 @@ Legend: ✅ done · 🔄 in progress · ⏳ todo · ⚠️ blocked/deferred
 |   5 | Cache invalidation for query-plan              | —                                                                                       |   ✅ |    ✅ | Prevents stale query-plan after function updates.                                                                        |
 |   6 | Refactor query-plan core into reusable library | —                                                                                       |   ✅ |    ✅ | New package: `jl4-query-plan/`.                                                                                          |
 |   7 | LSP reusable query-plan builder                | —                                                                                       |   ✅ |    ✅ | `jl4-lsp/src/LSP/L4/Viz/QueryPlan.hs`.                                                                                   |
-|   8 | Provenance beyond top-level params             | `doc/todo/BOOLEAN-MINIMIZATION-SPEC.md`                                                 |   🔄 |    ⏳ | “Ask keys” are derived from `InputRef` paths; next step is richer schema alignment (arrays/items).                       |
+|   8 | Provenance beyond top-level params             | `doc/todo/BOOLEAN-MINIMIZATION-SPEC.md`                                                 |   ✅ |    ✅ | `/query-plan` now includes `asks[*].path :: [Text]` (segments) alongside `key`; schema lookup tolerates dotted segments. |
 |   9 | JSON schema parity for arrays (`items`)        | —                                                                                       |   ✅ |    ✅ | Decision-service `Parameter.items` added; list-of-records can now expose element `properties`.                           |
 |  10 | “TYPICALLY” priors in optimizer                | `doc/todo/TYPICALLY-DEFAULTS-SPEC.md` / `doc/todo/TYPICALLY-STATUS-AND-NEXT-STEPS.html` |   ⚠️ |    ⚠️ | Deferred; would change relevance/prioritization semantics.                                                               |
 
@@ -58,4 +58,4 @@ Legend: ✅ done · 🔄 in progress · ⏳ todo · ⚠️ blocked/deferred
 ## What’s Next (Recommended)
 
 1. Use `items` + `properties` to improve query-plan elicitation ordering (especially for record-of-lists / list-of-records).
-2. Revisit “provenance beyond top-level params” with a consistent cross-layer notion of _input path_ (schema path ↔ ladder `InputRef.path` ↔ client keys).
+2. Update consumers (UI + decision API) to use `asks[*].path` + `asks[*].schema` instead of parsing `key`/`label` strings.

@@ -58,6 +58,7 @@ data CachedDecisionQuery = CachedDecisionQuery
 data QueryAsk = QueryAsk
   { container :: !Text
   , key :: !(Maybe Text)
+  , path :: ![Text]
   , label :: !Text
   , score :: !Double
   , atoms :: ![QueryAtom]
@@ -236,6 +237,11 @@ queryPlan name cached args =
     flattenBoolBindings :: Text -> FnLiteral -> [(Text, Bool)]
     flattenBoolBindings prefix = \case
       FnLitBool b -> [(prefix, b)]
+      FnArray xs ->
+        concat
+          [ flattenBoolBindings (prefix <> "." <> Text.pack (show (idx :: Int))) v
+          | (idx, v) <- zip [0 ..] xs
+          ]
       FnObject kvs ->
         concat
           [ flattenBoolBindings (prefix <> "." <> k) v
@@ -257,35 +263,51 @@ queryPlan name cached args =
     askSchemaFor :: QP.QueryAsk -> Maybe Parameter
     askSchemaFor qa = do
       root <- Map.lookup qa.container cached.paramSchema.parameterMap
-      case qa.key of
-        Nothing -> pure root
-        Just k -> schemaAtPath root (Text.splitOn "." k)
+      schemaAtPathVariants root qa.path
+
+    schemaAtPathVariants :: Parameter -> [Text] -> Maybe Parameter
+    schemaAtPathVariants root segs =
+      let
+        splitSegments =
+          concatMap
+            (\s -> filter (not . Text.null) (Text.splitOn "." s))
+            segs
+        variants = List.nub [segs, splitSegments]
+       in
+        listToMaybe (mapMaybe (schemaAtPath root) variants)
 
     schemaAtPath :: Parameter -> [Text] -> Maybe Parameter
     schemaAtPath p0 = \case
       [] -> Just p0
-      seg : rest ->
+      segs@(seg : rest) ->
         let
-          descendProps =
-            p0.parameterProperties >>= Map.lookup seg
           descendItems =
             p0.parameterItems
          in
           case seg of
             "*" -> descendItems >>= \p1 -> schemaAtPath p1 rest
             "[]" -> descendItems >>= \p1 -> schemaAtPath p1 rest
+            _ | Text.all Char.isDigit seg -> descendItems >>= \p1 -> schemaAtPath p1 rest
             _ ->
-              case descendProps of
-                Just p1 -> schemaAtPath p1 rest
-                Nothing ->
-                  if Text.all Char.isDigit seg
-                    then descendItems >>= \p1 -> schemaAtPath p1 rest
-                    else Nothing
+              p0.parameterProperties >>= \props ->
+                consumeProperty props segs >>= \(p1, rest') ->
+                  schemaAtPath p1 rest'
+
+    consumeProperty :: Map Text Parameter -> [Text] -> Maybe (Parameter, [Text])
+    consumeProperty props segs =
+      let
+        n = length segs
+        tryLen k =
+          let key0 = Text.intercalate "." (take k segs)
+           in (,drop k segs) <$> Map.lookup key0 props
+       in
+        listToMaybe (mapMaybe tryLen [n, n - 1 .. 1])
 
     asksEnriched =
       [ QueryAsk
           { container = a.container
           , key = a.key
+          , path = a.path
           , label = a.label
           , score = a.score
           , atoms = a.atoms
