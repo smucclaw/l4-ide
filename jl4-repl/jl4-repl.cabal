@@ -48,6 +48,8 @@ executable jl4-repl
   build-depends:
     jl4-core,
     jl4-lsp,
+    jl4-query-plan,
+    containers,
     directory,
     haskeline,
     hls-graph,
