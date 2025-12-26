@@ -43,9 +43,11 @@ Legend: ✅ done · 🔄 in progress · ⏳ todo · ⚠️ blocked/deferred
 |   9 | JSON schema parity for arrays (`items`)        | —                                                                                       |   ✅ |    ✅ | Decision-service `Parameter.items` added; list-of-records can now expose element `properties`.                           |
 |  10 | “TYPICALLY” priors in optimizer                | `doc/todo/TYPICALLY-DEFAULTS-SPEC.md` / `doc/todo/TYPICALLY-STATUS-AND-NEXT-STEPS.html` |   ⚠️ |    ⚠️ | Deferred; would change relevance/prioritization semantics.                                                               |
 |  11 | Schema-aware ask ordering                      | —                                                                                       |   ✅ |    ✅ | Decision-service orders `asks` using schema shape (`items`) + declaration field order; array indices sort numerically.   |
+|  12 | TS types/helpers for `/query-plan` consumers   | —                                                                                       |   ✅ |    ✅ | New package `@repo/decision-service-types` exposes `QueryPlanResponse` types and schema/path helpers.                    |
 
 ## Recent Commits (Milestones)
 
+- `585674fb` — TS: add `@repo/decision-service-types` (query-plan response/types, schema/path helpers, tests)
 - `dcc9ba9e` — Decision-service: preserve record field order in schema; schema-aware sorting for `asks` (numeric indices + dotted keys)
 - `2cc54bc9` — Query-plan: add `asks[*].path` segments (provenance) and schema lookup for dotted keys
 - `586836e2` — TS tests for `PartialEvalAnalyzer`
@@ -60,4 +62,4 @@ Legend: ✅ done · 🔄 in progress · ⏳ todo · ⚠️ blocked/deferred
 
 ## What’s Next (Recommended)
 
-1. Update consumers (UI + decision API) to use `asks[*].path` + `asks[*].schema` instead of parsing `key`/`label` strings.
+1. Update consumers (UI + decision API) to use `asks[*].path` + `asks[*].schema` (prefer `@repo/decision-service-types`) instead of parsing `key`/`label` strings.
