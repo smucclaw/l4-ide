@@ -36,6 +36,7 @@
             inputs.disko.nixosModules.default
             ./nix/configuration.nix
             ./nix/hetzner.nix
+            ./nix/aws-vm.nix
           ];
         };
 
