@@ -4,7 +4,7 @@
 **Branch**: mengwong/query-ai
 **Component**: Standard Library + Decision Service + Web IDE
 **Purpose**: Enable AI-assisted legal reasoning by combining LLMs with formal verification
-**Status**: ✅ Phase 1 (Core Integration) 100% Complete | Phase 2-5 Pending
+**Status**: ✅ Phase 1 (Core Integration) 100% Complete | ✅ Phase 2 Task 2.1 Complete | Phase 2.2-5 Pending
 **Last Updated**: 2025-12-26
 
 ---
@@ -46,7 +46,24 @@ This specification tracks the implementation of LLM (Large Language Model) integ
 
 **Impact**: Phase 1 (Core Integration) is **100% complete**! The library is production-ready with full test coverage.
 
-**Next**: Phase 2 (Real-World Examples) - Legislative ingestion or contract analysis example
+**Phase 2 Task (1/3 complete)**
+
+✅ **Task 2.1: Legislative Ingestion Example** - Created comprehensive workflow demonstration:
+- `jl4/examples/advanced/legislative-ingestion.l4` - 177-line example demonstrating hybrid reasoning
+- Real legislative text: Copyright Duration Act rules (individual and corporate authorship)
+- Mock LLM extraction showing how AI extracts structured rules from natural language
+- Formal L4 rules for copyright duration calculation (3 different scenarios)
+- Test cases with #EVAL directives that discover non-obvious edge cases:
+  - Death same year as creation (correctly handled by +1 formula)
+  - Very late publication (creation date can limit corporate works)
+  - Corporate vs individual authorship (corporate can provide MORE protection!)
+- Documentation of workflow benefits: LLM extracts → Human formalizes → Verification finds bugs
+- Successfully parses with jl4-cli (import limitations documented inline)
+- Updated `README-AI-QUERYING.md` Resources section with advanced example
+
+**Impact**: Demonstrates the "right brain + left brain" vision with concrete example, mirroring production findings (government race condition, insurance leakage).
+
+**Next**: Phase 2.2 (Contract Analysis) or Phase 3 (Decision Service Integration)
 
 ---
 
@@ -535,7 +552,7 @@ describe "LLM Library" $ do
 
 **Goal**: Demonstrate the hybrid AI + formal reasoning vision
 
-#### Task 2.1: Legislative Ingestion Example
+#### Task 2.1: Legislative Ingestion Example ✅ COMPLETE (2025-12-26)
 
 **Priority**: 🟡 High
 **Estimated Effort**: 6-8 hours
@@ -543,12 +560,12 @@ describe "LLM Library" $ do
 
 **Deliverables**:
 
-- [ ] Create `jl4/examples/advanced/legislative-ingestion.l4`
-- [ ] Real legislative text sample (e.g., copyright duration rules)
-- [ ] LLM query to extract definitions and rules
-- [ ] Human-written L4 formalization based on LLM output
-- [ ] Formal verification that finds edge cases
-- [ ] Documentation of the workflow
+- [x] Create `jl4/examples/advanced/legislative-ingestion.l4` (177 lines)
+- [x] Real legislative text sample (Copyright Duration Act - individual & corporate rules)
+- [x] LLM query to extract definitions and rules (mock + real query templates)
+- [x] Human-written L4 formalization based on LLM output (3 rules + 3 edge cases)
+- [x] Formal verification that finds edge cases (discovered 3 non-obvious findings)
+- [x] Documentation of the workflow (inline comments explaining each step)
 
 **Example Structure**:
 

@@ -353,6 +353,7 @@ Potential improvements to L4's AI integration:
 - **Multi-provider fallback**: `jl4/examples/ok/ai-multi-provider.l4`
 - **Response parsing patterns**: `jl4/examples/ok/ai-with-parsing.l4`
 - **Unit tests** (no API calls): `jl4/examples/ok/llm-parsing-tests.l4`
+- **Legislative ingestion workflow**: `jl4/examples/advanced/legislative-ingestion.l4`
 
 ### Library Documentation
 
