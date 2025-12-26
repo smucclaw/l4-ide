@@ -54,12 +54,14 @@ The response will be a JSON object containing the LLM's answer:
 
 ```json
 {
-  "choices": [{
-    "message": {
-      "role": "assistant",
-      "content": "2+2 equals 4"
+  "choices": [
+    {
+      "message": {
+        "role": "assistant",
+        "content": "2+2 equals 4"
+      }
     }
-  }]
+  ]
 }
 ```
 
@@ -84,13 +86,16 @@ Now that you've made your first query, you can:
 ## Troubleshooting
 
 **"ERROR: API key not set"**
+
 - Make sure you've exported the environment variable in your current shell
 - Verify the variable is set: `echo $OPENROUTER_API_KEY`
 
 **Build errors**
+
 - Run `cabal clean` and rebuild: `cabal build jl4-cli`
 
 **No response or timeout**
+
 - Check your internet connection
 - Verify your API key is valid (test at openrouter.ai)
 - Try a shorter prompt or smaller `max_tokens`

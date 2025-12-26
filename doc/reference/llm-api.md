@@ -20,35 +20,42 @@ Located in `jl4-core/libraries/llm.l4`
 ### Core Query Functions
 
 **`queryLLMWithDefaults :: String -> String`**
+
 - Queries LLM with automatic provider fallback
 - Tries: OpenRouter → OpenAI → Anthropic
 - Uses sensible defaults (1000 max tokens, best available model)
 
 **`queryLLM :: String -> String -> Int -> String`**
+
 - Parameters: model, prompt, maxTokens
 - More control than `queryLLMWithDefaults`
 
 ### Provider-Specific Functions
 
 **`callAnthropic :: String -> String -> String -> Int -> String`**
+
 - Parameters: apiKey, model, prompt, maxTokens
 - Endpoint: `https://api.anthropic.com/v1/messages`
 
 **`callOpenAI :: String -> String -> String -> Int -> String`**
+
 - Parameters: apiKey, model, prompt, maxTokens
 - Endpoint: `https://api.openai.com/v1/chat/completions`
 
 **`callOpenRouter :: String -> String -> String -> Int -> String`**
+
 - Parameters: apiKey, model, prompt, maxTokens
 - Endpoint: `https://openrouter.ai/api/v1/chat/completions`
 
 ### Convenience Wrappers
 
 **`callClaude :: String -> String -> String`**
+
 - Calls Anthropic's Claude Sonnet with 1000 max tokens
 - Parameters: apiKey, prompt
 
 **`callGPT4 :: String -> String -> String`**
+
 - Calls OpenAI GPT-4 via OpenRouter with 1000 max tokens
 - Parameters: apiKey, prompt
 
@@ -98,12 +105,14 @@ For OpenRouter, these model identifiers are predefined:
 
 ```json
 {
-  "choices": [{
-    "message": {
-      "role": "assistant",
-      "content": "The answer is..."
+  "choices": [
+    {
+      "message": {
+        "role": "assistant",
+        "content": "The answer is..."
+      }
     }
-  }]
+  ]
 }
 ```
 
@@ -112,6 +121,7 @@ For OpenRouter, these model identifiers are predefined:
 **Endpoint:** `https://api.anthropic.com/v1/messages`
 
 **Headers:**
+
 ```
 Content-Type: application/json
 x-api-key: <your-key>
@@ -132,7 +142,7 @@ anthropic-version: 2023-06-01
 
 ```json
 {
-  "content": [{"text": "The answer is..."}],
+  "content": [{ "text": "The answer is..." }],
   "stop_reason": "end_turn"
 }
 ```

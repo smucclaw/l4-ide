@@ -72,24 +72,20 @@ The following has been implemented:
    ```
 
 3. **Modified `matchLinearAfterHeadKeyword`** to return `MixfixMatchResult`:
-
    - Returns `MixfixSuccess` on successful match
    - Returns `MixfixError (WrongKeyword expected actual)` when wrong keyword found
    - Returns `MixfixNoMatch` when pattern doesn't match at all
 
 4. **Propagated errors through**:
-
    - `matchMixfixPattern`
    - `matchParamFirstPattern`
    - `tryMatchAnyPattern`
    - `tryMatchMixfixCall`
 
 5. **Added error reporting in `inferExpr` App case** (line ~1180):
-
    - Reports `MixfixMatchErrorCheck` when mixfix pattern matching finds an error
 
 6. **Added `prettyMixfixMatchError`** for user-friendly error messages:
-
    - "Expected keyword `mythen` but found `myelse`"
    - "Check that keywords are in the correct order."
 
@@ -200,7 +196,6 @@ Support partial application of mixfix functions where some arguments are provide
 ### Implementation Steps
 
 1. **Detect partial application** in `tryMatchMixfixCall`:
-
    - If pattern expects N params but only M < N are provided
    - Keywords must still all be present and in correct positions
 

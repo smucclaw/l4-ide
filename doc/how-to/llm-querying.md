@@ -106,6 +106,7 @@ Use LLMs to evaluate predicates that require human-like judgment:
 See `jl4/examples/advanced/llm-judgment-calls.l4` for the full pattern.
 
 **Pattern:**
+
 1. Define stub predicate (returns FALSE placeholder)
 2. Create prompt template function with decision boundaries
 3. Query LLM with template
@@ -113,6 +114,7 @@ See `jl4/examples/advanced/llm-judgment-calls.l4` for the full pattern.
 5. Use as boolean in formal logic
 
 **Example domains:**
+
 - Temporal boundaries: "Has the day begun based on illumination?"
 - Tone analysis: "Is this language professional?"
 - Document classification: "Is this a legal contract?"
@@ -124,6 +126,7 @@ Use LLMs to assist with formalizing legal text:
 See `jl4/examples/advanced/legislative-ingestion.l4` for the full workflow.
 
 **Workflow:**
+
 1. **LLM extraction**: Ask LLM to extract structured rules from natural language
 2. **Human review**: Review LLM output for accuracy
 3. **Formalization**: Write precise L4 rules based on extraction

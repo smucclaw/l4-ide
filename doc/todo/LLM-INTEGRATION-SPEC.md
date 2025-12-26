@@ -26,6 +26,7 @@ This specification tracks the implementation of LLM (Large Language Model) integ
 **Phase 1 Tasks (3/3 complete) ✅ PHASE 1 DONE!**
 
 ✅ **Task 1.1: Response Parsing Helpers** - Added complete response parsing infrastructure to `llm.l4`:
+
 - Defined `OpenAIResponse`, `AnthropicResponse`, and supporting types
 - Implemented `extractOpenAIContent` and `extractAnthropicContent` functions
 - Implemented unified `extractLLMResponse` helper with automatic provider detection
@@ -33,11 +34,13 @@ This specification tracks the implementation of LLM (Large Language Model) integ
 - Created Diataxis-organized documentation (tutorial, how-to, reference, explanation)
 
 ✅ **Task 1.2: Library Integration Examples** - Created 3 comprehensive example files:
+
 - `jl4/examples/ok/ai-simple.l4` - Updated to use library (was inline POST code, now `IMPORT llm`)
 - `jl4/examples/ok/ai-multi-provider.l4` - 5 examples of fallback strategies (137 lines)
 - `jl4/examples/ok/ai-with-parsing.l4` - 8 examples of response parsing patterns (112 lines)
 
 ✅ **Task 1.3: Basic Test Coverage** - Created L4-based unit tests with mock responses:
+
 - `jl4/examples/ok/llm-parsing-tests.l4` - 10 test cases covering all parsing functions
 - Tests valid responses, error cases (empty arrays, missing fields, malformed JSON)
 - Tests all providers (OpenAI, OpenRouter, Anthropic)
@@ -49,6 +52,7 @@ This specification tracks the implementation of LLM (Large Language Model) integ
 **Phase 2 Task (1/3 complete)**
 
 ✅ **Task 2.1: Legislative Ingestion Example** - Created comprehensive workflow demonstration:
+
 - `jl4/examples/advanced/legislative-ingestion.l4` - 177-line example demonstrating hybrid reasoning
 - Real legislative text: Copyright Duration Act rules (individual and corporate authorship)
 - Mock LLM extraction showing how AI extracts structured rules from natural language
@@ -64,11 +68,12 @@ This specification tracks the implementation of LLM (Large Language Model) integ
 **Impact**: Demonstrates the "right brain + left brain" vision with concrete example, mirroring production findings (government race condition, insurance leakage).
 
 ✅ **Task 2.2: LLM-Assisted Judgment Calls** - Created comprehensive pattern demonstration:
+
 - `jl4/examples/advanced/llm-judgment-calls.l4` - Complete example (186 lines)
 - Three non-NDA judgment call domains:
-  * Temporal/illumination: "Has the day begun?" (Fairbanks 6:46 AM scenario)
-  * Tone analysis: "Is this professional or informal language?"
-  * Document classification: "Is this a contract or invoice?"
+  - Temporal/illumination: "Has the day begun?" (Fairbanks 6:46 AM scenario)
+  - Tone analysis: "Is this professional or informal language?"
+  - Document classification: "Is this a contract or invoice?"
 - Prompt template functions using CONCAT to build detailed decision prompts
 - Clear decision boundaries with ✅ YES vs ❌ NO examples
 - Mock integration showing how LLM boolean feeds into formal logic
@@ -79,6 +84,7 @@ This specification tracks the implementation of LLM (Large Language Model) integ
 - Updated spec to remove @stub references (not official L4 syntax)
 
 **Impact**: Phase 2 (Real-World Examples) is **100% complete**! Demonstrates both workflows:
+
 1. Legislative ingestion (LLM extraction → formalization → verification)
 2. Judgment calls (stub predicates → LLM binary decision → formal reasoning)
 
@@ -141,6 +147,7 @@ parseResponse :: String -> EITHER STRING value
 - ✅ Future enhancements roadmap
 
 **Organization**: Split into four Diataxis categories:
+
 - `doc/tutorial/llm-getting-started.md` - Learning-oriented quickstart
 - `doc/how-to/llm-querying.md` - Task-oriented recipes
 - `doc/reference/llm-api.md` - Technical API documentation
@@ -626,6 +633,7 @@ DECIDE eligible IS
 This task demonstrates the core architectural pattern for integrating LLM judgment calls into formal L4 reasoning. The key insight is that formal legal rules often contain predicates that are difficult or impossible to fully formalize - they require human-like judgment about whether something "appears professional," "seems misleading," or "implies a therapeutic effect."
 
 The pattern is:
+
 1. **Formal rules contain stub predicates** - Functions with placeholder implementations (return FALSE) that represent judgment calls
 2. **LLM makes binary decisions** - Given a carefully crafted prompt, the LLM returns YES/NO + confidence + reasoning
 3. **Result feeds into formal logic** - The LLM's decision becomes a boolean input to traceable formal reasoning
@@ -788,12 +796,14 @@ In a production system evaluating compliance with regulatory standards:
 7. Audit trail: Full prompts, LLM responses, confidence scores
 
 This approach was validated in production where:
+
 - 100+ different judgment calls needed to be made per input
 - Each judgment required understanding nuanced regulatory language
 - False positives/negatives had significant compliance implications
 - Full audit trails were legally required for regulatory review
 
 ---
+
 ### Phase 3: Documentation Organization (Diataxis) ✅ COMPLETE (2025-12-26)
 
 **Goal**: Reorganize documentation per Diataxis framework
@@ -863,8 +873,10 @@ This approach was validated in production where:
 ## Functions
 
 ### callAnthropic
+
 **Signature**: `String -> String -> String -> Int -> String`
 **Parameters**:
+
 - `apiKey`: Anthropic API key
 - `model`: Model ID (e.g., "claude-sonnet-4-5-20250929")
 - `prompt`: User prompt
@@ -1001,7 +1013,7 @@ The original vision from CLAUDE.md is achieved when:
 **Total MVP** (Phases 1-2 + 5): 35-50 hours → **5-7 days**
 **Total Production** (Phases 1-5): 89-122 hours → **11-15 days**
 
-*Estimates assume one developer working full-time with no blockers.*
+_Estimates assume one developer working full-time with no blockers._
 
 ---
 

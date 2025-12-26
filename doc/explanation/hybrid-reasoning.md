@@ -24,6 +24,7 @@ Traditional legal technology faces a dilemma:
 - **Pure formal approaches** (academic systems): Rigorous but struggle with natural language and judgment calls
 
 **L4's hybrid approach** gets the best of both worlds:
+
 - Formal logic for what CAN be formalized (age >= 18, date arithmetic, boolean conditions)
 - LLM judgment for what CANNOT (does this appear misleading? has the day begun based on illumination?)
 - Full traceability showing both formal steps and LLM judgments
@@ -33,18 +34,21 @@ Traditional legal technology faces a dilemma:
 This approach has been validated in real deployments:
 
 ### Government Agency: Regulatory Compliance
+
 - **Task**: Formalize secondary legislation for compliance checking
 - **Method**: LLM extracted rules → Human formalized in L4 → Formal verification
 - **Finding**: Discovered race condition where one clause required action another prohibited
 - **Impact**: Bug found before deployment using deontic + temporal logic
 
 ### Insurance Provider: Policy Analysis
+
 - **Task**: Formalize insurance policy with complex payout formulas
 - **Method**: Similar hybrid approach
 - **Finding**: Ambiguity in formula potentially leaking millions in claims
 - **Impact**: Formula corrected before affecting customers
 
 ### Legislative Drafting Office
+
 - **Task**: Rules-as-code for future legislation
 - **Method**: Draft → Formalize → Verify → Generate web wizard
 - **Impact**: Legislation can be tested for edge cases before enactment
@@ -54,6 +58,7 @@ This approach has been validated in real deployments:
 ### Pattern 1: Legislative Ingestion
 
 **Workflow:**
+
 ```
 Legislative Text
     ↓
@@ -71,6 +76,7 @@ Legislative Text
 ### Pattern 2: LLM Judgment Calls
 
 **Workflow:**
+
 ```
 Formal Rule with Stub Predicate
     ↓
@@ -90,11 +96,13 @@ Formal Rule with Stub Predicate
 ### vs. Traditional LegalTech (Document-Centric)
 
 **LegalTech approach:**
+
 - Store contracts as documents (PDFs, DOCX)
 - Use AI for search and basic analysis
 - Manual review for interpretation
 
 **L4 hybrid approach:**
+
 - Contracts as executable specifications
 - AI assists with formalization and explanation
 - Automatic verification finds bugs
@@ -103,11 +111,13 @@ Formal Rule with Stub Predicate
 ### vs. Pure Formal Methods (Academic)
 
 **Pure formal approach:**
+
 - Everything must be precisely formalized
 - Struggle with natural language ambiguity
 - Limited adoption due to complexity
 
 **L4 hybrid approach:**
+
 - LLM handles natural language parts
 - Formal logic handles precise parts
 - More practical for real-world deployment
@@ -116,12 +126,14 @@ Formal Rule with Stub Predicate
 ### vs. Pure LLM Approaches
 
 **Pure LLM approach:**
+
 - Flexible and natural
 - Prone to hallucinations
 - Not audit-grade
 - Hard to verify correctness
 
 **L4 hybrid approach:**
+
 - LLM provides flexibility
 - Formal logic prevents hallucinations
 - Fully traceable and auditable
