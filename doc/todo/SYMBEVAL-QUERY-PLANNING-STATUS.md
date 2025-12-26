@@ -45,6 +45,7 @@ Legend: ✅ done · 🔄 in progress · ⏳ todo · ⚠️ blocked/deferred
 
 ## Recent Commits (Milestones)
 
+- `2cc54bc9` — Query-plan: add `asks[*].path` segments (provenance) and schema lookup for dotted keys
 - `586836e2` — TS tests for `PartialEvalAnalyzer`
 - `a26f523b` — Decision-service: nested `parameterProperties` for record types
 - `db88a4eb` — Decision-service: add `Parameter.items` for arrays
