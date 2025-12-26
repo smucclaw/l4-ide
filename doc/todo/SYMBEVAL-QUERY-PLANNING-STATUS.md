@@ -42,9 +42,11 @@ Legend: ✅ done · 🔄 in progress · ⏳ todo · ⚠️ blocked/deferred
 |   8 | Provenance beyond top-level params             | `doc/todo/BOOLEAN-MINIMIZATION-SPEC.md`                                                 |   ✅ |    ✅ | `/query-plan` now includes `asks[*].path :: [Text]` (segments) alongside `key`; schema lookup tolerates dotted segments. |
 |   9 | JSON schema parity for arrays (`items`)        | —                                                                                       |   ✅ |    ✅ | Decision-service `Parameter.items` added; list-of-records can now expose element `properties`.                           |
 |  10 | “TYPICALLY” priors in optimizer                | `doc/todo/TYPICALLY-DEFAULTS-SPEC.md` / `doc/todo/TYPICALLY-STATUS-AND-NEXT-STEPS.html` |   ⚠️ |    ⚠️ | Deferred; would change relevance/prioritization semantics.                                                               |
+|  11 | Schema-aware ask ordering                      | —                                                                                       |   ✅ |    ✅ | Decision-service orders `asks` using schema shape (`items`) + declaration field order; array indices sort numerically.   |
 
 ## Recent Commits (Milestones)
 
+- `dcc9ba9e` — Decision-service: preserve record field order in schema; schema-aware sorting for `asks` (numeric indices + dotted keys)
 - `2cc54bc9` — Query-plan: add `asks[*].path` segments (provenance) and schema lookup for dotted keys
 - `586836e2` — TS tests for `PartialEvalAnalyzer`
 - `a26f523b` — Decision-service: nested `parameterProperties` for record types
@@ -58,5 +60,4 @@ Legend: ✅ done · 🔄 in progress · ⏳ todo · ⚠️ blocked/deferred
 
 ## What’s Next (Recommended)
 
-1. Use `items` + `properties` to improve query-plan elicitation ordering (especially for record-of-lists / list-of-records).
-2. Update consumers (UI + decision API) to use `asks[*].path` + `asks[*].schema` instead of parsing `key`/`label` strings.
+1. Update consumers (UI + decision API) to use `asks[*].path` + `asks[*].schema` instead of parsing `key`/`label` strings.
