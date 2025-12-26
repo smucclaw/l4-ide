@@ -62,6 +62,7 @@ describe('PartialEvalAnalyzer', () => {
     expect(analysis.notAsked).toEqual([2])
     expect(analysis.stillNeeded).toEqual([2])
     expect(analysis.dontCare).toEqual([])
+    expect(analysis.ranked).toEqual([2])
   })
 
   it('marks short-circuited branches in a ∨ b with a=True', () => {
@@ -88,6 +89,7 @@ describe('PartialEvalAnalyzer', () => {
     expect(analysis.notAsked).toEqual([2])
     expect(analysis.stillNeeded).toEqual([])
     expect(analysis.dontCare).toEqual([2])
+    expect(analysis.ranked).toEqual([])
     expect(analysis.nodeRelevance.get(b.id)).toBe('short-circuited')
   })
 
@@ -115,5 +117,6 @@ describe('PartialEvalAnalyzer', () => {
     expect(analysis.notAsked).toEqual([1])
     expect(analysis.stillNeeded).toEqual([1])
     expect(analysis.dontCare).toEqual([])
+    expect(analysis.ranked).toEqual([1])
   })
 })

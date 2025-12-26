@@ -32,6 +32,16 @@
       ? 'highlighted-ladder-node'
       : ''
   )
+
+  const elicitationClassForUnique = (unique: number): string => {
+    const analysis = ladderGraph.getPartialEvalAnalysis(data.context)
+    if (!analysis) return ''
+    const rankedIndex = analysis.ranked.indexOf(unique)
+    if (rankedIndex === 0) return 'elicitation-next'
+    if (rankedIndex > 0) return 'elicitation-needed'
+    if (analysis.stillNeeded.includes(unique)) return 'elicitation-needed'
+    return ''
+  }
 </script>
 
 <!---------------------------------------------------
@@ -61,7 +71,11 @@
   <IsViableIndicator context={data.context} node={arg}>
     <ValueIndicator
       value={arg.getValue(data.context, ladderGraph)}
-      additionalClasses={['border', 'border-black', 'rounded-lg']}
+      additionalClasses={[
+        'ubool-var-node-border',
+        'rounded-lg',
+        elicitationClassForUnique(arg.getUnique(data.context)),
+      ]}
     >
       <!-- Yes, we need cursor-pointer here. -->
       <button

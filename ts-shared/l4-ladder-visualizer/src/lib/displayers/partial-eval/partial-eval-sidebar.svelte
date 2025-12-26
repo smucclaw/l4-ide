@@ -51,7 +51,7 @@
         </div>
       {:else}
         <ul class="bucket-list">
-          {#each analysis.stillNeeded as unique (unique)}
+          {#each analysis.ranked as unique (unique)}
             <li class="bucket-item relevant">
               <span class="param-name">{labelFor(unique)}</span>
               <div class="quick-assign">

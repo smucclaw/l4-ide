@@ -26,6 +26,7 @@
 
 <div
   class={[
+    'ladder-viability-transition',
     ladderGraph.nodeIsInNonViableSubgraph(context, node)
       ? FadedNodeCSSClass
       : '',

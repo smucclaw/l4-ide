@@ -22,6 +22,7 @@ export interface PartialEvalAnalysis {
   notAsked: Unique[]
   stillNeeded: Unique[]
   dontCare: Unique[]
+  ranked: Unique[]
 
   nodeRelevance: Map<IRId, RelevanceStatus>
   irrelevantRootIds: Set<IRId>
@@ -274,7 +275,9 @@ export class PartialEvalAnalyzer {
     })
 
     let support = new Set<Unique>()
+    let ranked: Unique[] = []
     let bddStats: PartialEvalAnalysis['bddStats'] = undefined
+    const notAskedSet = new Set<Unique>(notAsked)
 
     if (this.#usedBdd && this.#compiled) {
       const bindings = new Map<Unique, boolean>()
@@ -285,15 +288,20 @@ export class PartialEvalAnalyzer {
 
       const q = this.#compiled.query(bindings)
       support = new Set<Unique>(q.support)
+      ranked = q.ranked
       bddStats = { nodes: q.stats.nodes, support: q.stats.support }
     } else {
       // Fallback: syntactic support of the restricted expression.
       const vars = collectVarOrder(restrictedExpr)
       support = new Set<Unique>(vars)
+      ranked = vars
     }
 
     const stillNeeded = notAsked.filter((u) => support.has(u))
     const dontCare = notAsked.filter((u) => !support.has(u))
+    const rankedStillNeeded = ranked.filter(
+      (u) => support.has(u) && notAskedSet.has(u)
+    )
 
     // Expand short-circuit roots to whole subtrees for shading.
     const shortCircuitedNodeIds = new Set<IRId>()
@@ -340,6 +348,7 @@ export class PartialEvalAnalyzer {
       notAsked: uniqSorted(notAsked),
       stillNeeded: uniqSorted(stillNeeded),
       dontCare: uniqSorted(dontCare),
+      ranked: rankedStillNeeded,
       nodeRelevance,
       irrelevantRootIds,
       consultedUniques: evalResult.consultedUniques,
