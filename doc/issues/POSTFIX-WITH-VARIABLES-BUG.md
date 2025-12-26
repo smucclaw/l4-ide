@@ -146,6 +146,7 @@ The `app` parser (jl4-core/src/L4/Parser.hs:1404-1412) consumes same-line bare i
 - **Approach**: Create `nameAsAppForArg` that checks if an identifier is followed by another expression on the same line
 - **Logic**: If NOT followed by anything, reject it (might be postfix); if followed, consume as argument
 - **Implementation attempts**:
+
   1. Used `optional $ lookAhead $ atomicExpr'` - **Failed**: Type mismatch between Parser and AnnoParser contexts
   2. Simplified to `lookAhead anySingle` to check next token - **Failed**: Type ambiguity errors
   3. Added type annotations `(nextTok :: PosToken)` - **Failed**: Still type mismatches
