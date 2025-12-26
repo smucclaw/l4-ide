@@ -350,10 +350,10 @@ Potential improvements to L4's AI integration:
 ### L4 Examples and Tests
 
 - **Simple examples**: `jl4/examples/ok/ai-simple.l4`
-- **Multi-provider fallback**: `jl4/examples/ok/ai-multi-provider.l4`
-- **Response parsing patterns**: `jl4/examples/ok/ai-with-parsing.l4`
-- **Unit tests** (no API calls): `jl4/examples/ok/llm-parsing-tests.l4`
 - **Legislative ingestion workflow**: `jl4/examples/advanced/legislative-ingestion.l4`
+- **LLM judgment calls pattern**: `jl4/examples/advanced/llm-judgment-calls.l4`
+
+Note: Response parsing examples (ai-multi-provider, ai-with-parsing, llm-parsing-tests) are future work pending implementation of list access operators in L4.
 
 ### Library Documentation
 

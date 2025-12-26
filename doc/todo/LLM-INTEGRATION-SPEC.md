@@ -4,7 +4,7 @@
 **Branch**: mengwong/query-ai
 **Component**: Standard Library + Decision Service + Web IDE
 **Purpose**: Enable AI-assisted legal reasoning by combining LLMs with formal verification
-**Status**: ✅ Phase 1 (Core Integration) 100% Complete | ✅ Phase 2 Task 2.1 Complete | Phase 2.2-5 Pending
+**Status**: ✅ Phase 1 (Core Integration) 100% Complete | ✅ Phase 2 Task 2.1 Complete | Phase 2.2-3 Pending
 **Last Updated**: 2025-12-26
 
 ---
@@ -63,7 +63,20 @@ This specification tracks the implementation of LLM (Large Language Model) integ
 
 **Impact**: Demonstrates the "right brain + left brain" vision with concrete example, mirroring production findings (government race condition, insurance leakage).
 
-**Next**: Phase 2.2 (Contract Analysis) or Phase 3 (Decision Service Integration)
+**Phase 2 Task 2.2 (In Progress)**
+
+🔄 **Task 2.2: LLM-Assisted Judgment Calls** - Creating comprehensive pattern demonstration:
+- `jl4/examples/advanced/llm-judgment-calls.l4` - Comprehensive example (350+ lines)
+- Stub predicates representing judgment calls that require LLM evaluation
+- Prompt template functions building detailed decision boundary prompts
+- Integration pattern showing LLM YES/NO feeding into formal logic
+- Test cases: clear violations, clear compliance, boundary cases
+- Mock integration demonstrating traceability and audit trails
+- Production integration guidance with real LLM calls
+- Extensive documentation of prompt engineering best practices
+- Successfully demonstrates the core architectural pattern for LLM-assisted formal reasoning
+
+**Next**: Phase 3 (Documentation Organization)
 
 ---
 
@@ -592,219 +605,190 @@ DECIDE eligible IS
 -- What if age = 65.5? What if salary = 4999.99?
 ```
 
-#### Task 2.2: Contract Analysis Example
+#### Task 2.2: LLM-Assisted Judgment Calls
 
 **Priority**: 🟡 High
-**Estimated Effort**: 4-6 hours
-**Blockers**: Phase 1.1, 1.2
-
-**Deliverables**:
-
-- [ ] Create `jl4/examples/advanced/contract-analysis.l4`
-- [ ] Sample contract clause (e.g., payment terms)
-- [ ] LLM query to identify ambiguities
-- [ ] Formal L4 representation of the clause
-- [ ] Test scenarios showing edge cases
-- [ ] LLM-generated explanation of formal results
-
-**Example**:
-
-```l4
-DECIDE clause IS "The Buyer shall pay within 30 days."
-
--- Ask LLM: What's ambiguous about this clause?
-DECIDE ambiguities IS
-  queryLLMWithDefaults (CONCAT
-    "List ambiguities in this contract clause: ", clause)
-
--- Formalize with precision
-DECIDE paymentDue IS
-  invoiceDate PLUS (30 DAYS)
-
-DECIDE isOverdue IS
-  TODAY > paymentDue
-
--- Ask LLM: Explain why payment is overdue
-DECIDE explanation IS
-  queryLLMWithDefaults (CONCAT
-    "Explain why payment due on ", (paymentDue AS STRING),
-    " is now overdue given today is ", (TODAY AS STRING))
-```
-
-#### Task 2.3: Hybrid Reasoning Example
-
-**Priority**: 🟠 Medium
-**Estimated Effort**: 4-6 hours
-**Blockers**: Phase 1.1, 1.2
-
-**Deliverables**:
-
-- [ ] Create `jl4/examples/advanced/hybrid-reasoning.l4`
-- [ ] Demonstrate "left brain" (formal) + "right brain" (LLM) workflow
-- [ ] Show formal reasoner computing result
-- [ ] Show LLM explaining reasoning in plain language
-- [ ] Show combined output with citations and proof trace
-
-**Example**:
-
-```l4
--- Formal reasoning (left brain)
-DECIDE eligibleForVisa IS
-  age >= 18 AND hasValidPassport AND noConvictions
-
--- Get explanation (right brain)
-DECIDE explainEligibility IS
-  queryLLMWithDefaults (CONCAT
-    "Explain why someone is ",
-    IF eligibleForVisa THEN "eligible" ELSE "ineligible",
-    " for a visa given: age=", (age AS STRING),
-    ", hasValidPassport=", (hasValidPassport AS STRING),
-    ", noConvictions=", (noConvictions AS STRING))
-```
-
----
-
-### Phase 3: Decision Service Integration (Enterprise Ready)
-
-**Goal**: Expose LLM capabilities via REST API for production applications
-
-#### Task 3.1: LLM Query Endpoint
-
-**Priority**: 🟠 Medium
-**Estimated Effort**: 8-12 hours
-**Blockers**: Phase 1.1, 1.2
-
-**Deliverables**:
-
-- [ ] Add `POST /llm/query` endpoint to decision service
-- [ ] Request schema: `{provider, model, prompt, maxTokens}`
-- [ ] Response includes: LLM response + cost + latency + provider used
-- [ ] Implement provider fallback in service
-- [ ] Add OpenAPI/Swagger docs for new endpoint
-
-**API Design**:
-
-```typescript
-POST /llm/query
-Content-Type: application/json
-
-{
-  "prompt": "What is consideration in contract law?",
-  "provider": "auto",  // or "openai", "anthropic", "openrouter"
-  "model": "auto",     // or specific model ID
-  "maxTokens": 1000
-}
-
-Response:
-{
-  "response": "Consideration is...",
-  "provider": "openrouter",
-  "model": "anthropic/claude-3.5-sonnet",
-  "usage": {
-    "promptTokens": 12,
-    "completionTokens": 87,
-    "totalTokens": 99
-  },
-  "cost": 0.0015,
-  "latencyMs": 1234
-}
-```
-
-#### Task 3.2: LLM-Enhanced Decision Traces
-
-**Priority**: 🟠 Medium
-**Estimated Effort**: 8-12 hours
-**Blockers**: Task 3.1
-
-**Deliverables**:
-
-- [ ] Add LLM calls to decision trace output
-- [ ] Show LLM queries and responses in reasoning trace
-- [ ] Include cost and latency in trace
-- [ ] Add `POST /llm/explain` endpoint that explains formal results with LLM
-
-**Example Trace**:
-
-```json
-{
-  "function": "eligibleForVisa",
-  "result": true,
-  "trace": [
-    {"step": "evaluate", "expr": "age >= 18", "result": true},
-    {"step": "evaluate", "expr": "hasValidPassport", "result": true},
-    {"step": "llm_query", "provider": "openrouter", "prompt": "Explain...", "response": "...", "latencyMs": 456}
-  ]
-}
-```
-
-#### Task 3.3: Caching and Rate Limiting
-
-**Priority**: 🟢 Low
 **Estimated Effort**: 6-8 hours
-**Blockers**: Task 3.1
+**Blockers**: Phase 1.1, 1.2
+
+**Overview**:
+
+This task demonstrates the core architectural pattern for integrating LLM judgment calls into formal L4 reasoning. The key insight is that formal legal rules often contain predicates that are difficult or impossible to fully formalize - they require human-like judgment about whether something "appears professional," "seems misleading," or "implies a therapeutic effect."
+
+The pattern is:
+1. **Formal rules contain stub predicates** - Functions with placeholder implementations (return FALSE) that represent judgment calls
+2. **LLM makes binary decisions** - Given a carefully crafted prompt, the LLM returns YES/NO + confidence + reasoning
+3. **Result feeds into formal logic** - The LLM's decision becomes a boolean input to traceable formal reasoning
+4. **Auditability preserved** - The full prompt, response, and confidence are recorded in the trace
 
 **Deliverables**:
 
-- [ ] Implement response caching (SQLite or Redis)
-- [ ] Cache key: hash(provider, model, prompt, maxTokens)
-- [ ] Configurable TTL (default: 24 hours)
-- [ ] Rate limiting per API key (configurable)
-- [ ] Cost tracking and budget alerts
+- [ ] Create `jl4/examples/advanced/llm-judgment-calls.l4`
+- [ ] Example of formal rules with stub predicate functions (placeholder implementations)
+- [ ] Prompt template functions that take parameters and build detailed prompts
+- [ ] Integration showing how LLM YES/NO feeds into formal decision tree
+- [ ] Examples of traceability: "compliant because LLM said NO (confidence: 92%)"
+- [ ] Documentation of prompt engineering for binary decisions
+
+**Architectural Pattern**:
+
+```l4
+-- STUB PREDICATES: Formal rules with placeholders for judgment calls
+GIVEN claim IS A STRING
+GIVETH BOOLEAN
+`appears to make therapeutic claims` claim MEANS
+  -- STUB: Requires judgment about medicinal effects
+  FALSE
+
+`appears misleading` claim MEANS
+  -- STUB: Requires judgment about consumer perception
+  FALSE
+
+-- PROMPT TEMPLATE FUNCTIONS: Build detailed prompts for LLM judgment
+DECIDE `therapeutic claim test for` claimText IS
+  CONCAT
+    "JUDGMENT CALL: Therapeutic Claims\n\n",
+    "Context: Product claims must not suggest medicinal or therapeutic effects.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE (cosmetic effects):\n",
+    "  - 'helps skin appear smoother'\n",
+    "  - 'formulated for sensitive skin'\n\n",
+    "❌ PROHIBITED (therapeutic effects):\n",
+    "  - 'treats inflammation'\n",
+    "  - 'cures acne'\n",
+    "  - 'prevents infections'\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this claim suggest medicinal or therapeutic effects?\n\n",
+    "Answer with:\n",
+    "- YES (suggests therapeutic effects - prohibited) or NO (cosmetic only - acceptable)\n",
+    "- Confidence: [0-100%]\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+-- INTEGRATION: Replace stub with LLM call in production
+DECIDE `evaluate claim compliance` claimText IS
+  LET prompt BE `therapeutic claim test for` claimText
+  IN LET llmResponse BE queryLLMWithDefaults prompt
+     IN CONSIDER extractLLMResponse "openrouter" llmResponse
+          WHEN RIGHT response THEN
+            -- Parse YES/NO from response
+            LET isViolation BE CONTAINS response "YES"
+            IN IF isViolation
+               THEN "PROHIBITED: LLM detected therapeutic claim (see trace)"
+               ELSE "ACCEPTABLE: LLM confirmed cosmetic claim only"
+          WHEN LEFT error THEN
+            CONCAT "ERROR: Could not get LLM judgment: " error
+
+-- TEST CASES
+DECIDE claim1 IS "Eliminates acne-causing bacteria"
+DECIDE claim2 IS "Formulated for acne-prone skin"
+
+#EVAL `therapeutic claim test for` claim1
+-- Expected LLM response: YES (suggests therapeutic effect)
+
+#EVAL `therapeutic claim test for` claim2
+-- Expected LLM response: NO (describes formulation type)
+
+-- FORMAL REASONING WITH LLM JUDGMENTS
+DECIDE `overall compliance` claimText IS
+  LET therapeuticTest BE `evaluate claim compliance` claimText
+  IN LET otherTests BE "... other formal checks ..."
+     IN IF CONTAINS therapeuticTest "PROHIBITED"
+        THEN "CLAIM REJECTED: " # therapeuticTest
+        ELSE "CLAIM APPROVED: All tests passed"
+```
+
+**Key Benefits**:
+
+1. **Flexibility**: Hard-to-formalize predicates can be evaluated by LLM
+2. **Traceability**: Full prompt and response recorded in decision trace
+3. **Confidence Scoring**: LLM provides confidence levels for audit review
+4. **Testability**: Can test prompts with mock claims to refine decision boundaries
+5. **Modularity**: Prompt templates are reusable functions
+6. **Explainability**: LLM provides reasoning for its judgment
+
+**Use Cases**:
+
+This pattern is valuable wherever formal rules contain subjective predicates:
+
+- **Regulatory Compliance**: "Does this claim imply medical efficacy?"
+- **Content Moderation**: "Is this statement likely to cause offense?"
+- **Contract Analysis**: "Is this clause ambiguous to a reasonable person?"
+- **Risk Assessment**: "Does this situation present an elevated risk?"
+- **Quality Evaluation**: "Does this output meet professional standards?"
+
+**Prompt Engineering Guidelines**:
+
+1. **Provide context**: Explain the regulatory/legal framework
+2. **Define decision boundary**: Give clear examples of YES vs NO cases
+3. **Request structured output**: YES/NO + Confidence + Reasoning
+4. **Be specific about edge cases**: Call out tricky scenarios
+5. **Include relevant definitions**: E.g., "therapeutic means treating disease"
+
+**Example Prompt Structure**:
+
+```
+JUDGMENT CALL: [What you're asking about]
+
+Context: [Regulatory framework, legal standard, or policy]
+
+Decision Boundary:
+✅ ACCEPTABLE:
+  - [Example 1]
+  - [Example 2]
+
+❌ PROHIBITED:
+  - [Example 1]
+  - [Example 2]
+
+Evaluate this: [The specific input to judge]
+
+Question: [Precise yes/no question]
+
+Answer with: YES or NO, Confidence: [0-100%], Reasoning: [brief explanation]
+```
+
+**Testing Strategy**:
+
+```l4
+-- Test with clear-cut cases
+DECIDE obviousViolation IS "Cures cancer in 30 days"
+DECIDE obviousCompliance IS "For use on normal skin"
+
+-- Test boundary cases
+DECIDE boundaryCase1 IS "Helps reduce the appearance of fine lines"
+DECIDE boundaryCase2 IS "Clinically proven to minimize visible wrinkles"
+
+-- Collect LLM judgments
+#EVAL `therapeutic claim test for` obviousViolation     -- Expect: YES, 95%+
+#EVAL `therapeutic claim test for` obviousCompliance    -- Expect: NO, 95%+
+#EVAL `therapeutic claim test for` boundaryCase1        -- Expect: NO, 60-80%
+#EVAL `therapeutic claim test for` boundaryCase2        -- Expect: uncertain
+```
+
+**Real-World Example** (generalized):
+
+In a production system evaluating compliance with regulatory standards:
+
+1. Formal rule: "Claims must not suggest therapeutic effects"
+2. Stub: `suggests therapeutic effects :: String -> Boolean`
+3. Prompt template: 51 different regulatory tests, each as a function
+4. Integration: For each claim, apply relevant tests via LLM
+5. Formal reasoning: Aggregate results across all tests
+6. Output: "COMPLIANT" or "VIOLATION: [specific test failed]"
+7. Audit trail: Full prompts, LLM responses, confidence scores
+
+This approach was validated in production where:
+- 100+ different judgment calls needed to be made per input
+- Each judgment required understanding nuanced regulatory language
+- False positives/negatives had significant compliance implications
+- Full audit trails were legally required for regulatory review
 
 ---
-
-### Phase 4: Web IDE Integration (User Experience)
-
-**Goal**: Make LLM capabilities accessible to L4 developers in the browser
-
-#### Task 4.1: AI Assistant Panel
-
-**Priority**: 🟢 Low
-**Estimated Effort**: 8-12 hours
-**Blockers**: Phase 3.1
-
-**Deliverables**:
-
-- [ ] Add "AI Assistant" panel to jl4-web IDE
-- [ ] UI components: prompt input, model selector, provider selector
-- [ ] Display LLM responses with syntax highlighting
-- [ ] Show token usage and cost estimates
-- [ ] Save conversation history in session
-
-#### Task 4.2: Inline LLM Assistance
-
-**Priority**: 🟢 Low
-**Estimated Effort**: 12-16 hours
-**Blockers**: Task 4.1
-
-**Deliverables**:
-
-- [ ] "Ask AI" button in code editor (context menu)
-- [ ] Select code → right-click → "Explain this code"
-- [ ] Select code → right-click → "Find potential issues"
-- [ ] Select code → right-click → "Suggest test cases"
-- [ ] Display results in side panel
-
-#### Task 4.3: Hybrid Reasoning Visualization
-
-**Priority**: 🟢 Low
-**Estimated Effort**: 12-16 hours
-**Blockers**: Phase 3.2, Task 4.1
-
-**Deliverables**:
-
-- [ ] Visualize decision traces with LLM explanations
-- [ ] Graph view showing formal reasoning + LLM commentary
-- [ ] Toggle between "technical" and "plain language" explanations
-- [ ] Export reasoning traces as PDF/HTML reports
-
----
-
-### Phase 5: Documentation Organization (Diataxis)
+### Phase 3: Documentation Organization (Diataxis)
 
 **Goal**: Reorganize documentation per Diataxis framework
 
-#### Task 5.1: Create Foundation Course Module
+#### Task 3.1: Create Foundation Course Module
 
 **Priority**: 🟢 Low
 **Estimated Effort**: 3-4 hours
@@ -826,7 +810,7 @@ Response:
 5. Error handling
 6. Next steps
 
-#### Task 5.2: Update Advanced Course Module
+#### Task 3.2: Update Advanced Course Module
 
 **Priority**: 🟢 Low
 **Estimated Effort**: 3-4 hours
@@ -846,7 +830,7 @@ Response:
 3. Step-by-step: Extract → Review → Formalize → Verify
 4. Example: [Link to legislative-ingestion.l4]
 
-#### Task 5.3: Create Reference Documentation
+#### Task 3.3: Create Reference Documentation
 
 **Priority**: 🟢 Low
 **Estimated Effort**: 2-3 hours
@@ -880,7 +864,7 @@ Response:
 ...
 ```
 
-#### Task 5.4: Create Explanation Documentation
+#### Task 3.4: Create Explanation Documentation
 
 **Priority**: 🟢 Low
 **Estimated Effort**: 4-6 hours
@@ -902,7 +886,7 @@ Response:
 4. When to use LLMs vs formal methods
 5. Future directions
 
-#### Task 5.5: Cleanup and Remove Stray Files
+#### Task 3.5: Cleanup and Remove Stray Files
 
 **Priority**: 🟢 Low
 **Estimated Effort**: 1 hour
