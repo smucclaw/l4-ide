@@ -143,8 +143,47 @@ spec = describe "integration" do
         recordOfListsParam.parameterProperties `shouldSatisfy` Maybe.isJust
         let rolProps = Maybe.fromMaybe Map.empty recordOfListsParam.parameterProperties
         Map.keys rolProps `shouldMatchList` ["people", "wrappers"]
-        assertParam rolProps "people" "array" ""
-        assertParam rolProps "wrappers" "array" ""
+
+        let listParam = requireParam "listParam"
+        listParam.parameterItems `shouldSatisfy` Maybe.isJust
+        let listItems = Maybe.fromMaybe (error "missing items for listParam") listParam.parameterItems
+        listItems.parameterType `shouldBe` "string"
+
+        let listOfListsParam = requireParam "listOfListsParam"
+        listOfListsParam.parameterItems `shouldSatisfy` Maybe.isJust
+        let lolItems = Maybe.fromMaybe (error "missing items for listOfListsParam") listOfListsParam.parameterItems
+        lolItems.parameterType `shouldBe` "array"
+        lolItems.parameterItems `shouldSatisfy` Maybe.isJust
+        let lolInner = Maybe.fromMaybe (error "missing items for listOfListsParam inner") lolItems.parameterItems
+        lolInner.parameterType `shouldBe` "number"
+
+        let listOfRecordsParam = requireParam "listOfRecordsParam"
+        listOfRecordsParam.parameterItems `shouldSatisfy` Maybe.isJust
+        let lorItems = Maybe.fromMaybe (error "missing items for listOfRecordsParam") listOfRecordsParam.parameterItems
+        lorItems.parameterType `shouldBe` "object"
+        lorItems.parameterProperties `shouldSatisfy` Maybe.isJust
+        let lorProps = Maybe.fromMaybe Map.empty lorItems.parameterProperties
+        Map.keys lorProps `shouldMatchList` ["recordNumber", "recordLabel"]
+        assertParam lorProps "recordNumber" "number" ""
+        assertParam lorProps "recordLabel" "string" ""
+
+        let peopleParam = requireParamFrom "people" rolProps
+        peopleParam.parameterType `shouldBe` "array"
+        peopleParam.parameterItems `shouldSatisfy` Maybe.isJust
+        let peopleItems = Maybe.fromMaybe (error "missing items for recordOfListsParam.people") peopleParam.parameterItems
+        peopleItems.parameterType `shouldBe` "object"
+        peopleItems.parameterProperties `shouldSatisfy` Maybe.isJust
+        let peopleProps = Maybe.fromMaybe Map.empty peopleItems.parameterProperties
+        Map.keys peopleProps `shouldMatchList` ["recordNumber", "recordLabel"]
+
+        let wrappersParam = requireParamFrom "wrappers" rolProps
+        wrappersParam.parameterType `shouldBe` "array"
+        wrappersParam.parameterItems `shouldSatisfy` Maybe.isJust
+        let wrappersItems = Maybe.fromMaybe (error "missing items for recordOfListsParam.wrappers") wrappersParam.parameterItems
+        wrappersItems.parameterType `shouldBe` "object"
+        wrappersItems.parameterProperties `shouldSatisfy` Maybe.isJust
+        let wrappersProps = Maybe.fromMaybe Map.empty wrappersItems.parameterProperties
+        Map.keys wrappersProps `shouldMatchList` ["inner"]
         fun.parameters.required `shouldBe` expectedNames
   describe "evaluation" do
     it "zero-parameter constant function" do

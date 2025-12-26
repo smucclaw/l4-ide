@@ -268,6 +268,7 @@ data Parameter = Parameter
   , parameterEnum :: ![Text]
   , parameterDescription :: !Text
   , parameterProperties :: !(Maybe (Map Text Parameter))  -- Nested properties for object types
+  , parameterItems :: !(Maybe Parameter)  -- Array items schema for array types
   }
   deriving stock (Show, Read, Ord, Eq, Generic)
 
@@ -747,7 +748,7 @@ paramToParameter :: Map Text (Declare Resolved) -> ExportedParam -> Parameter
 paramToParameter declares param =
   let p0 =
         Maybe.fromMaybe
-          (Parameter "object" Nothing [] "" Nothing)
+          (Parameter "object" Nothing [] "" Nothing Nothing)
           (typeToParameter declares Set.empty <$> param.paramType)
    in
     p0
@@ -784,7 +785,10 @@ typeToParameter declares visited ty =
       let lowered = Text.toLower (resolvedNameText name)
        in
         if lowered `elem` ["list", "listof"]
-          then emptyParam "array"
+          then
+            (emptyParam "array")
+              { parameterItems = Just (typeToParameter declares visited inner)
+              }
           else
             if lowered `elem` ["maybe", "optional"]
               then typeToParameter declares visited inner
@@ -803,6 +807,7 @@ typeToParameter declares visited ty =
       , parameterEnum = []
       , parameterDescription = ""
       , parameterProperties = Nothing
+      , parameterItems = Nothing
       }
 
   typeNameToParameter :: Resolved -> Parameter
@@ -963,7 +968,7 @@ parametersOfDecideWithModule mMod (MkDecide _ (MkTypeSig _ (MkGivenSig _ typedNa
                     argInfo = lookup x bestEffortArgInfo
                     baseParam =
                       case argInfo >>= \(_tyText, mTy, _desc) -> mTy of
-                        Nothing -> Parameter "object" Nothing [] "" Nothing
+                        Nothing -> Parameter "object" Nothing [] "" Nothing Nothing
                         Just ty -> typeToParameter declares Set.empty ty
                     descTxt = maybe "" (\(_tyText, _mTy, d) -> d) argInfo
                    in
@@ -1115,9 +1120,13 @@ instance ToJSON Parameter where
       , "alias" .= p.parameterAlias -- omitNothingFields?
       , "enum" .= p.parameterEnum
       , "description" .= p.parameterDescription
-      ] ++ case p.parameterProperties of
-            Nothing -> []
-            Just props -> ["properties" .= props]
+      ]
+        ++ case p.parameterProperties of
+          Nothing -> []
+          Just props -> ["properties" .= props]
+        ++ case p.parameterItems of
+          Nothing -> []
+          Just items -> ["items" .= items]
 
 instance FromJSON Parameter where
   parseJSON = Aeson.withObject "Parameter" $ \p ->
@@ -1127,6 +1136,7 @@ instance FromJSON Parameter where
       <*> p .:? "enum" .!= []
       <*> p .: "description"
       <*> p .:? "properties"
+      <*> p .:? "items"
 
 toDecl :: Function -> Api.FunctionDeclaration
 toDecl fn =

@@ -103,8 +103,15 @@ instance Arbitrary Parameters where
 instance Arbitrary Parameter where
   arbitrary = Q.sized $ \n ->
     if n <= 0
-      then Parameter <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> pure Nothing
-      else Parameter <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> Q.resize (n `div` 4) arbitrary
+      then Parameter <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> pure Nothing <*> pure Nothing
+      else
+        Parameter
+          <$> arbitrary
+          <*> arbitrary
+          <*> arbitrary
+          <*> arbitrary
+          <*> Q.resize (n `div` 4) arbitrary
+          <*> Q.resize (n `div` 4) arbitrary
 
 instance Arbitrary Function where
   arbitrary = Server.Function <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary

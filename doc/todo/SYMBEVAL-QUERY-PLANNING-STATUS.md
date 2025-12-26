@@ -23,7 +23,7 @@ It complements the deeper design specs:
 | Stable atom IDs                               |           ✅ | `atomId` is UUIDv5 derived from function + atom label + input refs.                          |
 | Cache invalidation for query-plan             |           ✅ | `fnDecisionQueryCache` self-invalidates on PUT/DELETE.                                       |
 | Shared query-plan core library                |           ✅ | Extracted to `jl4-query-plan` for reuse by LSP/decision-service/others.                      |
-| Nested schema exposure in function metadata   | ✅ (partial) | Record-typed params expose `properties`; arrays still lack `items`.                          |
+| Nested schema exposure in function metadata   | ✅ (partial) | Record-typed params expose `properties`; arrays expose `items` (still no `$ref`/`oneOf`).    |
 | “TYPICALLY” priors integration                |           ⏳ | Intentionally deferred; will affect optimizer/prioritization semantics.                      |
 
 ## Work Items
@@ -40,7 +40,7 @@ Legend: ✅ done · 🔄 in progress · ⏳ todo · ⚠️ blocked/deferred
 |   6 | Refactor query-plan core into reusable library | —                                                                                       |   ✅ |    ✅ | New package: `jl4-query-plan/`.                                                                    |
 |   7 | LSP reusable query-plan builder                | —                                                                                       |   ✅ |    ✅ | `jl4-lsp/src/LSP/L4/Viz/QueryPlan.hs`.                                                             |
 |   8 | Provenance beyond top-level params             | `doc/todo/BOOLEAN-MINIMIZATION-SPEC.md`                                                 |   🔄 |    ⏳ | “Ask keys” are derived from `InputRef` paths; next step is richer schema alignment (arrays/items). |
-|   9 | JSON schema parity for arrays (`items`)        | —                                                                                       |   ⏳ |    ⏳ | Decision-service `Parameter` lacks `items`; limits “ask order” for list element fields.            |
+|   9 | JSON schema parity for arrays (`items`)        | —                                                                                       |   ✅ |    ✅ | Decision-service `Parameter.items` added; list-of-records can now expose element `properties`.     |
 |  10 | “TYPICALLY” priors in optimizer                | `doc/todo/TYPICALLY-DEFAULTS-SPEC.md` / `doc/todo/TYPICALLY-STATUS-AND-NEXT-STEPS.html` |   ⚠️ |    ⚠️ | Deferred; would change relevance/prioritization semantics.                                         |
 
 ## Recent Commits (Milestones)
@@ -55,6 +55,5 @@ Legend: ✅ done · 🔄 in progress · ⏳ todo · ⚠️ blocked/deferred
 
 ## What’s Next (Recommended)
 
-1. Add `items` support to decision-service parameter schema so arrays can carry element shape (record/list nesting).
-2. Use that richer schema to improve query-plan elicitation ordering (especially for record-of-lists / list-of-records).
-3. Revisit “provenance beyond top-level params” with a consistent cross-layer notion of _input path_ (schema path ↔ ladder `InputRef.path` ↔ client keys).
+1. Use `items` + `properties` to improve query-plan elicitation ordering (especially for record-of-lists / list-of-records).
+2. Revisit “provenance beyond top-level params” with a consistent cross-layer notion of _input path_ (schema path ↔ ladder `InputRef.path` ↔ client keys).
