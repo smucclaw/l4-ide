@@ -111,6 +111,40 @@ spec = describe "integration" do
           , (Text.pack "listOfRecordsParam", "array", "Crew members")
           , (Text.pack "recordOfListsParam", "object", "Container of lists")
           ]
+        let
+          requireParam name =
+            case Map.lookup name params of
+              Nothing -> error ("missing parameter: " <> Text.unpack name)
+              Just p -> p
+          requireParamFrom name ps =
+            case Map.lookup name ps of
+              Nothing -> error ("missing parameter: " <> Text.unpack name)
+              Just p -> p
+
+        let recordParam = requireParam "recordParam"
+        recordParam.parameterProperties `shouldSatisfy` Maybe.isJust
+        let recordProps = Maybe.fromMaybe Map.empty recordParam.parameterProperties
+        Map.keys recordProps `shouldMatchList` ["recordNumber", "recordLabel"]
+        assertParam recordProps "recordNumber" "number" ""
+        assertParam recordProps "recordLabel" "string" ""
+
+        let nestedRecordParam = requireParam "nestedRecordParam"
+        nestedRecordParam.parameterProperties `shouldSatisfy` Maybe.isJust
+        let nestedProps = Maybe.fromMaybe Map.empty nestedRecordParam.parameterProperties
+        Map.keys nestedProps `shouldMatchList` ["inner"]
+        let innerParam = requireParamFrom "inner" nestedProps
+        innerParam.parameterProperties `shouldSatisfy` Maybe.isJust
+        let innerProps = Maybe.fromMaybe Map.empty innerParam.parameterProperties
+        Map.keys innerProps `shouldMatchList` ["recordNumber", "recordLabel"]
+        assertParam innerProps "recordNumber" "number" ""
+        assertParam innerProps "recordLabel" "string" ""
+
+        let recordOfListsParam = requireParam "recordOfListsParam"
+        recordOfListsParam.parameterProperties `shouldSatisfy` Maybe.isJust
+        let rolProps = Maybe.fromMaybe Map.empty recordOfListsParam.parameterProperties
+        Map.keys rolProps `shouldMatchList` ["people", "wrappers"]
+        assertParam rolProps "people" "array" ""
+        assertParam rolProps "wrappers" "array" ""
         fun.parameters.required `shouldBe` expectedNames
   describe "evaluation" do
     it "zero-parameter constant function" do

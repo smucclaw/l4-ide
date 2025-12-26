@@ -703,7 +703,7 @@ deriveFunctionFromSource existing source = do
       case selectExport existing exports of
         Nothing -> pure Nothing
         Just exported -> do
-          let derived = exportToFunction exported
+          let derived = exportToFunction resolvedModule exported
           pure $ Just Function
             { name = chooseField existing.name derived.name
             , description = chooseField existing.description derived.description
@@ -725,65 +725,142 @@ selectExport existing exports =
       byDefault = List.find (.exportIsDefault) exports
   in byName <|> byDefault <|> Maybe.listToMaybe exports
 
-exportToFunction :: ExportedFunction -> Function
-exportToFunction export =
+exportToFunction :: Module Resolved -> ExportedFunction -> Function
+exportToFunction resolvedModule export =
   Function
     { name = export.exportName
     , description = T.strip export.exportDescription
-    , parameters = parametersFromExport export.exportParams
+    , parameters = parametersFromExport resolvedModule export.exportParams
     , supportedEvalBackend = [JL4]
     }
 
-parametersFromExport :: [ExportedParam] -> Parameters
-parametersFromExport params =
+parametersFromExport :: Module Resolved -> [ExportedParam] -> Parameters
+parametersFromExport resolvedModule params =
+  let declares = declaresFromModule resolvedModule
+   in
   MkParameters
-    { parameterMap = Map.fromList [(param.paramName, paramToParameter param) | param <- params]
+    { parameterMap = Map.fromList [(param.paramName, paramToParameter declares param) | param <- params]
     , required = [param.paramName | param <- params, param.paramRequired]
     }
 
-paramToParameter :: ExportedParam -> Parameter
-paramToParameter param =
-  Parameter
-    { parameterType = typeToJsonType param.paramType
-    , parameterAlias = Nothing
-    , parameterEnum = []
-    , parameterDescription = T.strip $ Maybe.fromMaybe "" param.paramDescription
-    , parameterProperties = Nothing  -- TODO: Extract nested properties from type
-    }
+paramToParameter :: Map Text (Declare Resolved) -> ExportedParam -> Parameter
+paramToParameter declares param =
+  let p0 =
+        Maybe.fromMaybe
+          (Parameter "object" Nothing [] "" Nothing)
+          (typeToParameter declares Set.empty <$> param.paramType)
+   in
+    p0
+      { parameterAlias = Nothing
+      , parameterDescription = T.strip $ Maybe.fromMaybe "" param.paramDescription
+      }
 
-typeToJsonType :: Maybe (Type' Resolved) -> Text
-typeToJsonType Nothing = "object"
-typeToJsonType (Just ty) =
+declaresFromModule :: Module Resolved -> Map Text (Declare Resolved)
+declaresFromModule (MkModule _ _ section) =
+  Map.fromList (collectSection section)
+ where
+  collectSection (MkSection _ _ _ decls) =
+    decls >>= collectDecl
+
+  collectDecl = \case
+    Declare _ decl@(MkDeclare _ _ (MkAppForm _ name _ _) _) ->
+      [(resolvedNameText name, decl)]
+    Section _ sub ->
+      collectSection sub
+    _ ->
+      []
+
+typeToParameter ::
+  Map Text (Declare Resolved) ->
+  Set Text ->
+  Type' Resolved ->
+  Parameter
+typeToParameter declares visited ty =
   case ty of
-    Type _ -> "object"
-    TyApp _ name [] -> baseType name
+    Type _ -> emptyParam "object"
+    TyApp _ name [] ->
+      typeNameToParameter name
     TyApp _ name [inner] ->
       let lowered = Text.toLower (resolvedNameText name)
-      in  if lowered `elem` ["list", "listof"]
-            then "array"
-            else if lowered `elem` ["maybe", "optional"]
-              then typeToJsonType (Just inner)
-              else baseType name
-    TyApp _ name _ -> baseType name
-    Fun{} -> "object"
-    Forall{} -> "object"
-    InfVar{} -> "object"
+       in
+        if lowered `elem` ["list", "listof"]
+          then emptyParam "array"
+          else
+            if lowered `elem` ["maybe", "optional"]
+              then typeToParameter declares visited inner
+              else typeNameToParameter name
+    TyApp _ name _ ->
+      typeNameToParameter name
+    Fun{} -> emptyParam "object"
+    Forall _ _ inner -> typeToParameter declares visited inner
+    InfVar{} -> emptyParam "object"
+ where
+  emptyParam :: Text -> Parameter
+  emptyParam t =
+    Parameter
+      { parameterType = t
+      , parameterAlias = Nothing
+      , parameterEnum = []
+      , parameterDescription = ""
+      , parameterProperties = Nothing
+      }
 
-baseType :: Resolved -> Text
-baseType name =
-  case Text.toLower (resolvedNameText name) of
-    "number" -> "number"
-    "int" -> "number"
-    "integer" -> "number"
-    "float" -> "number"
-    "double" -> "number"
-    "boolean" -> "boolean"
-    "bool" -> "boolean"
-    "string" -> "string"
-    "text" -> "string"
-    "date" -> "string"
-    "datetime" -> "string"
-    _ -> "object"
+  typeNameToParameter :: Resolved -> Parameter
+  typeNameToParameter name =
+    case primitiveJsonType name of
+      Just t -> emptyParam t
+      Nothing ->
+        case Map.lookup (resolvedNameText name) declares of
+          Nothing -> emptyParam "object"
+          Just decl -> declareToParameter (resolvedNameText name) decl
+
+  primitiveJsonType :: Resolved -> Maybe Text
+  primitiveJsonType name =
+    case Text.toLower (resolvedNameText name) of
+      "number" -> Just "number"
+      "int" -> Just "number"
+      "integer" -> Just "number"
+      "float" -> Just "number"
+      "double" -> Just "number"
+      "boolean" -> Just "boolean"
+      "bool" -> Just "boolean"
+      "string" -> Just "string"
+      "text" -> Just "string"
+      "date" -> Just "string"
+      "datetime" -> Just "string"
+      _ -> Nothing
+
+  declareToParameter :: Text -> Declare Resolved -> Parameter
+  declareToParameter typeName (MkDeclare declAnn _ _ typeDecl)
+    | typeName `Set.member` visited =
+        emptyParam "object"
+    | otherwise =
+        case typeDecl of
+          RecordDecl _ _ fields ->
+            let
+              visited' = Set.insert typeName visited
+              props =
+                Map.fromList
+                  [ (resolvedNameText fieldName, addDesc fieldDesc (typeToParameter declares visited' fieldTy))
+                  | MkTypedName fieldAnn fieldName fieldTy <- fields
+                  , let fieldDesc = fmap getDesc (fieldAnn Optics.^. annDesc)
+                  ]
+             in
+              (emptyParam "object")
+                { parameterDescription = Maybe.fromMaybe "" (fmap getDesc (declAnn Optics.^. annDesc))
+                , parameterProperties = Just props
+                }
+          EnumDecl _ constructors ->
+            (emptyParam "string")
+              { parameterDescription = Maybe.fromMaybe "" (fmap getDesc (declAnn Optics.^. annDesc))
+              , parameterEnum = [resolvedNameText c | MkConDecl _ c _ <- constructors]
+              }
+          SynonymDecl _ inner ->
+            typeToParameter declares (Set.insert typeName visited) inner
+   where
+    addDesc :: Maybe Text -> Parameter -> Parameter
+    addDesc Nothing p = p
+    addDesc (Just d) p = p {parameterDescription = d}
 
 resolvedNameText :: Resolved -> Text
 resolvedNameText =
@@ -825,15 +902,17 @@ withUUIDFunction uuidAndFun k err = case UUID.fromText muuid of
           hPutStrLn stderr $ displayException err'
         err (\e -> e {errBody = "uuid not present on remote backend: " <> UUID.toLazyASCIIBytes uuid})
       Right prog -> do
+        let fileName = Text.unpack muuid <> ".l4"
+        (typecheckErrs, mTcRes) <- liftIO $ Jl4.typecheckModule fileName prog Map.empty
+        let mResolvedModule = (\Rules.TypeCheckResult{module' = m} -> m) <$> mTcRes
+
         -- Derive actual function name from exports if not specified in UUID
         actualFunName <- if Text.null (Text.strip funNameFromUUID)
           then do
-            let fileName = Text.unpack muuid <> ".l4"
-            (errs, mTcRes) <- liftIO $ Jl4.typecheckModule fileName prog Map.empty
             case mTcRes of
               Nothing -> do
-                unless (null errs) $
-                  liftIO $ putStrLn $ "Failed to derive function name from exports: " <> Text.unpack (Text.intercalate "; " errs)
+                unless (null typecheckErrs) $
+                  liftIO $ putStrLn $ "Failed to derive function name from exports: " <> Text.unpack (Text.intercalate "; " typecheckErrs)
                 throwError err500 {errBody = "could not determine function name from exports"}
               Just Rules.TypeCheckResult{module' = resolvedModule} -> do
                 let exports = getExportedFunctions resolvedModule
@@ -857,7 +936,7 @@ withUUIDFunction uuidAndFun k err = case UUID.fromText muuid of
         (runFn, mCompiled) <- liftIO $ Jl4.createFunction (Text.unpack actualFunName <> ".l4") fnDecl prog Map.empty
 
         k ValidatedFunction
-          { fnImpl = fnImpl { parameters = parametersOfDecide decide }
+          { fnImpl = fnImpl { parameters = parametersOfDecideWithModule mResolvedModule decide }
           , fnEvaluator = Map.singleton JL4 runFn
           , fnCompiled = mCompiled
           , fnSources = Map.singleton JL4 prog
@@ -867,12 +946,32 @@ withUUIDFunction uuidAndFun k err = case UUID.fromText muuid of
    (muuid, funNameFromUUID) = T.drop 1 <$> T.breakOn ":" uuidAndFun
 
 parametersOfDecide :: Decide Resolved -> Parameters
-parametersOfDecide (MkDecide _ (MkTypeSig _ (MkGivenSig _ typedNames) _) (MkAppForm _ _ args _) _)  =
+parametersOfDecide = parametersOfDecideWithModule Nothing
+
+parametersOfDecideWithModule :: Maybe (Module Resolved) -> Decide Resolved -> Parameters
+parametersOfDecideWithModule mMod (MkDecide _ (MkTypeSig _ (MkGivenSig _ typedNames) _) (MkAppForm _ _ args _) _)  =
   -- TODO:
   -- need to change the description of the parameters as soon as we have it in the Decide
-  MkParameters {parameterMap = Map.fromList $ map (\x -> (x ,
-    let argInfo = lookup x bestEffortArgInfo
-     in Parameter (maybe "object" fst argInfo) Nothing [] (maybe "" snd argInfo) Nothing)) argList, required = argList}
+  let declares = maybe Map.empty declaresFromModule mMod
+   in
+    MkParameters
+      { parameterMap =
+          Map.fromList $
+            map
+              ( \x ->
+                  let
+                    argInfo = lookup x bestEffortArgInfo
+                    baseParam =
+                      case argInfo >>= \(_tyText, mTy, _desc) -> mTy of
+                        Nothing -> Parameter "object" Nothing [] "" Nothing
+                        Just ty -> typeToParameter declares Set.empty ty
+                    descTxt = maybe "" (\(_tyText, _mTy, d) -> d) argInfo
+                   in
+                    (x, baseParam {parameterDescription = descTxt, parameterAlias = Nothing})
+              )
+              argList
+      , required = argList
+      }
  where
   bestEffortArgInfo = foldr fn [] args
   fn r acc = case find (\(MkOptionallyTypedName _ r' _) -> r `sameResolved` r') typedNames of
@@ -881,7 +980,7 @@ parametersOfDecide (MkDecide _ (MkTypeSig _ (MkGivenSig _ typedNames) _) (MkAppF
       , let descTokens = Optics.toListOf (Optics.gplate @TAnnotations Optics.% #_TDesc) tn
             exportTokens = Optics.toListOf (Optics.gplate @TAnnotations Optics.% #_TExport) tn
             descriptions = mconcat $ nubOrd (descTokens <> exportTokens)
-      -> (prettyLayout r', (prettyLayout t, descriptions)) : acc
+      -> (prettyLayout r', (prettyLayout t, Just t, descriptions)) : acc
     _ -> acc
   sameResolved = (==) `on` getUnique
   argList = map prettyLayout args
