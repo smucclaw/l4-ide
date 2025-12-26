@@ -44,9 +44,11 @@ Legend: ✅ done · 🔄 in progress · ⏳ todo · ⚠️ blocked/deferred
 |  10 | “TYPICALLY” priors in optimizer                | `doc/todo/TYPICALLY-DEFAULTS-SPEC.md` / `doc/todo/TYPICALLY-STATUS-AND-NEXT-STEPS.html` |   ⚠️ |    ⚠️ | Deferred; would change relevance/prioritization semantics.                                                               |
 |  11 | Schema-aware ask ordering                      | —                                                                                       |   ✅ |    ✅ | Decision-service orders `asks` using schema shape (`items`) + declaration field order; array indices sort numerically.   |
 |  12 | TS types/helpers for `/query-plan` consumers   | —                                                                                       |   ✅ |    ✅ | New package `@repo/decision-service-types` exposes `QueryPlanResponse` types and schema/path helpers.                    |
+|  13 | Ladder UI: highlight “next questions”          | —                                                                                       |   ✅ |    ✅ | Ladder nodes now emphasize top-ranked unassigned inputs; irrelevant/short-circuited subgraphs fade+shrink with animation. |
 
 ## Recent Commits (Milestones)
 
+- `8f74e1f1` — Ladder: animate irrelevant nodes; highlight “next questions” via ranked still-needed vars
 - `585674fb` — TS: add `@repo/decision-service-types` (query-plan response/types, schema/path helpers, tests)
 - `dcc9ba9e` — Decision-service: preserve record field order in schema; schema-aware sorting for `asks` (numeric indices + dotted keys)
 - `2cc54bc9` — Query-plan: add `asks[*].path` segments (provenance) and schema lookup for dotted keys
