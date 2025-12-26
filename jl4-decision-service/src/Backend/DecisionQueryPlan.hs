@@ -21,11 +21,13 @@ module Backend.DecisionQueryPlan (
 
 import Base
 import qualified Backend.BooleanDecisionQuery as BDQ
+import Backend.FunctionSchema (Parameter (..), Parameters (..), parametersFromDecide)
 import Backend.Jl4 as Jl4
 import Control.Concurrent.STM
 import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
+import qualified Data.Char as Char
 import qualified Data.List as List
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
@@ -44,13 +46,25 @@ import qualified Language.LSP.Protocol.Types as LSP
 import Backend.Api (EvalBackend (..), FnArguments (..), FnLiteral (..))
 import L4.Syntax (RawName (..))
 import qualified L4.Decision.QueryPlan as QP
-import L4.Decision.QueryPlan (QueryAsk (..), QueryAtom (..), QueryImpact (..), QueryInput (..), QueryOutcome (..))
+import L4.Decision.QueryPlan (QueryAtom (..), QueryImpact (..), QueryInput (..), QueryOutcome (..))
 
 data CachedDecisionQuery = CachedDecisionQuery
   { cacheKey :: !Text
   , ladderInfo :: !VizExpr.RenderAsLadderInfo
   , core :: !QP.CachedDecisionQuery
+  , paramSchema :: !Parameters
   }
+
+data QueryAsk = QueryAsk
+  { container :: !Text
+  , key :: !(Maybe Text)
+  , label :: !Text
+  , score :: !Double
+  , atoms :: ![QueryAtom]
+  , schema :: !(Maybe Parameter)
+  }
+  deriving stock (Show, Generic)
+  deriving anyclass (FromJSON, ToJSON)
 
 decisionQueryCacheKey :: Text -> Map EvalBackend Text -> Text
 decisionQueryCacheKey funName sources =
@@ -158,6 +172,7 @@ buildDecisionQueryCache funName sources = do
                   inputRefs
             , compiled
             }
+      , paramSchema = parametersFromDecide resolvedModule decide
       }
 
 encodeTextLBS :: Text -> LBS.ByteString
@@ -238,13 +253,53 @@ queryPlan name cached args =
         ]
     QP.QueryPlanResponse{determined, stillNeeded, ranked, inputs, asks = asksRanked, impact, impactByAtomId, note} =
       QP.queryPlan name paramsByUnique cached.core flattenedLabelBindings
+
+    askSchemaFor :: QP.QueryAsk -> Maybe Parameter
+    askSchemaFor qa = do
+      root <- Map.lookup qa.container cached.paramSchema.parameterMap
+      case qa.key of
+        Nothing -> pure root
+        Just k -> schemaAtPath root (Text.splitOn "." k)
+
+    schemaAtPath :: Parameter -> [Text] -> Maybe Parameter
+    schemaAtPath p0 = \case
+      [] -> Just p0
+      seg : rest ->
+        let
+          descendProps =
+            p0.parameterProperties >>= Map.lookup seg
+          descendItems =
+            p0.parameterItems
+         in
+          case seg of
+            "*" -> descendItems >>= \p1 -> schemaAtPath p1 rest
+            "[]" -> descendItems >>= \p1 -> schemaAtPath p1 rest
+            _ ->
+              case descendProps of
+                Just p1 -> schemaAtPath p1 rest
+                Nothing ->
+                  if Text.all Char.isDigit seg
+                    then descendItems >>= \p1 -> schemaAtPath p1 rest
+                    else Nothing
+
+    asksEnriched =
+      [ QueryAsk
+          { container = a.container
+          , key = a.key
+          , label = a.label
+          , score = a.score
+          , atoms = a.atoms
+          , schema = askSchemaFor a
+          }
+      | a <- asksRanked
+      ]
    in
     QueryPlanResponse
       { determined
       , stillNeeded
       , ranked
       , inputs
-      , asks = asksRanked
+      , asks = asksEnriched
       , impact
       , impactByAtomId
       , note

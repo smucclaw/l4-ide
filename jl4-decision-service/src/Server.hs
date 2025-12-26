@@ -59,6 +59,7 @@ module Server (
 
 import Base
 import Backend.Api as Api
+import Backend.FunctionSchema (Parameter (..), Parameters (..))
 import qualified Backend.Jl4 as Jl4
 import Backend.GraphVizRender (isGraphVizAvailable, renderPNG, renderSVG)
 import Backend.DecisionQueryPlan (CachedDecisionQuery, QueryAsk (..), QueryAtom (..), QueryImpact (..), QueryInput (..), QueryOutcome (..), QueryPlanResponse (..))
@@ -69,7 +70,7 @@ import Control.Applicative
 import Control.Concurrent.Async (forConcurrently)
 import Control.Concurrent.STM
 import Control.Exception (displayException, evaluate)
-import Data.Aeson (FromJSON, ToJSON, (.:), (.:?), (.=), (.!=))
+import Data.Aeson (FromJSON, ToJSON, (.:), (.=))
 import qualified Data.Aeson as Aeson
 import Data.Aeson.Combinators.Decode (Decoder)
 import qualified Data.Aeson.Combinators.Decode as ACD
@@ -255,23 +256,6 @@ data FunctionImplementation = FunctionImplementation
   , implementation :: !(Map EvalBackend Text)
   }
   deriving stock (Show, Read, Ord, Eq, Generic)
-
-data Parameters = MkParameters
-  { parameterMap :: Map Text Parameter
-  , required :: [Text]
-  }
-  deriving stock (Show, Read, Ord, Eq, Generic)
-
-data Parameter = Parameter
-  { parameterType :: !Text
-  , parameterAlias :: !(Maybe Text)
-  , parameterEnum :: ![Text]
-  , parameterDescription :: !Text
-  , parameterProperties :: !(Maybe (Map Text Parameter))  -- Nested properties for object types
-  , parameterItems :: !(Maybe Parameter)  -- Array items schema for array types
-  }
-  deriving stock (Show, Read, Ord, Eq, Generic)
-
 data SimpleResponse
   = SimpleResponse !ResponseWithReason
   | SimpleError !EvaluatorError
@@ -1097,46 +1081,6 @@ instance FromJSON FunctionImplementation where
     FunctionImplementation
       <$> o .: "declaration"
       <*> o .: "implementation"
-
-instance ToJSON Parameters where
-  toJSON (MkParameters props reqProps) =
-    Aeson.object
-      [ "type" .= Aeson.String "object"
-      , "properties" .= props
-      , "required" .= reqProps
-      ]
-
-instance FromJSON Parameters where
-  parseJSON = Aeson.withObject "Parameters" $ \o -> do
-    _ :: Text <- o .: "type"
-    props <- o .: "properties"
-    reqProps <- o .: "required"
-    pure $ MkParameters props reqProps
-
-instance ToJSON Parameter where
-  toJSON p =
-    Aeson.object $
-      [ "type" .= p.parameterType
-      , "alias" .= p.parameterAlias -- omitNothingFields?
-      , "enum" .= p.parameterEnum
-      , "description" .= p.parameterDescription
-      ]
-        ++ case p.parameterProperties of
-          Nothing -> []
-          Just props -> ["properties" .= props]
-        ++ case p.parameterItems of
-          Nothing -> []
-          Just items -> ["items" .= items]
-
-instance FromJSON Parameter where
-  parseJSON = Aeson.withObject "Parameter" $ \p ->
-    Parameter
-      <$> p .: "type"
-      <*> p .:? "alias"
-      <*> p .:? "enum" .!= []
-      <*> p .: "description"
-      <*> p .:? "properties"
-      <*> p .:? "items"
 
 toDecl :: Function -> Api.FunctionDeclaration
 toDecl fn =

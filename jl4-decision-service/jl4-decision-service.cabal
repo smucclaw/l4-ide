@@ -51,6 +51,7 @@ library
     Backend.CodeGen
     Backend.DecisionQueryPlan
     Backend.DirectiveFilter
+    Backend.FunctionSchema
     Backend.GraphVizRender
     Backend.Jl4
     Examples

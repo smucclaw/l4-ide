@@ -383,6 +383,7 @@ spec = describe "integration" do
         liftIO do
           qp.determined `shouldBe` Nothing
           qp.asks `shouldSatisfy` List.any (\a -> a.container == "i" && Maybe.isJust a.key)
+          qp.asks `shouldSatisfy` List.any (\a -> a.container == "i" && Maybe.maybe False (\s -> s.parameterType == "boolean") a.schema)
 
     it "accepts nested record bindings (i.<field>)" do
       runDecisionService \api -> do
