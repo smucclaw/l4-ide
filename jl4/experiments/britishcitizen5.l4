@@ -50,6 +50,7 @@ is        ^     ^
 person    ^     ^
 
 § `S1 BNA possible redraft form`
+@export default Given some information about a person's birthplace, birthdate, and parentage, determine if that person is a British citizen.
 GIVEN p_name         IS A STRING  @desc the name of a natural person, the subject of the question of British citizenship
       p_birthPlace   IS A Place   @desc the birth-place of the person
       p_birthDate    IS A Date    @desc the birth-date of the person, given as a string in the format YYYY-MM-DD
@@ -58,7 +59,6 @@ GIVEN p_name         IS A STRING  @desc the name of a natural person, the subjec
       f_settledIn    IS A Place   @desc where the father was settled at the time of the birth of the person.
       f_knownBritish IS A BOOLEAN @desc if we know, a priori, that the father is a British citizen.
 GIVETH A BOOLEAN
-@export default Given some information about a person's birthplace, birthdate, and parentage, determine if that person is a British citizen.
 DECIDE `is British citizen`
   IF       `p is born in the UK`
       AND  `p is born after commencement`

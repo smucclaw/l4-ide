@@ -38,9 +38,9 @@
     requires = [ "nginx.service" ];
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
-      ExecStart = ''
+      ExecStart = pkgs.writeShellScript "jl4-decision-service-start" ''
         sourcePathsArgs="${lib.concatStringsSep " " (map (p: "--sourcePaths ${p}") config.services.jl4-decision-service.sourcePaths)}"
-        ${pkgs.callPackage ./package.nix { }}/bin/jl4-decision-service-exe \
+        exec ${pkgs.callPackage ./package.nix { }}/bin/jl4-decision-service-exe \
           --port ${toString config.services.jl4-decision-service.port} \
           --serverName https://${config.networking.domain + config.services.jl4-decision-service.path} \
           $sourcePathsArgs \

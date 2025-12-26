@@ -17,6 +17,7 @@ sky_is_romantic MEANS
        OR  ^               ^      "full moon"
 
 @desc Given the day of the week, a flag about whether it's a public holiday, and prevailing weather conditions, calculate the cost of parking.
+@export default Calculate the cost of parking
 GIVEN
   @desc the day of the week (1 = Monday, 2 = Tuesday, 3 = Wednesday, 4 = Thursday, 5 = Friday, 6 = Saturday, 7 = Sunday)
   day_of_week       IS A NUMBER
@@ -27,7 +28,6 @@ GIVEN
   @desc Current phase of the moon. Possible values are: new moon, waxing crescent, first quarter, waxing gibbous, full moon, waning gibbous, third quarter, waning crescent
   phase_of_moon     IS A STRING
 GIVETH A NUMBER
-@export default Calculate the cost of parking
 DECIDE parking_cost IS
    IF is_public_holiday
    THEN 0

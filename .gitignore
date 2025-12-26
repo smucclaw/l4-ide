@@ -1,74 +1,57 @@
-# Haskell files
-dist-newstyle/
+
+*~
+*.actual
+build
+# Build Outputs
+## Built Visual Studio Code Extensions
+.cabal
 cabal.project.local
 cabal.project.local~
-.cabal
-
-## golden actual files
-*.actual
-
-## test setup
-.vscode
-
-# Typescript-monorepo stuff
-
-## Turbo
-
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
+*.code-workspace
+coverage
+# Debug
 # Dependencies
+.direnv
+dist
+dist-newstyle/
+doc/*/*.html
+.DS_Store
+.env
+.env.development.local
+.env.local
+.env.production.local
+.envrc
+.env.test.local
+## golden actual files
+# Haskell files
+jl4-demo.qcow2
+\.jl4_history
+# Local env files
+# Misc
+.next/
+# Nix
 node_modules
+npm-debug.log*
+out/
+*.pem
+*.personalnotes
 .pnp
 .pnp.js
-
-# Local env files
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# Testing
-coverage
-
-# Turbo
-.turbo
-
-# Vercel
-.vercel
-
-# Build Outputs
-tsconfig.tsbuildinfo
-.next/
-out/
-build
-dist
-*/vscode/static/webview/
+result*
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 **/.svelte-kit/
+# Testing
+## test setup
 ts-apps/jl4-web/src/generated/
-
-
-## Built Visual Studio Code Extensions
+tsconfig.tsbuildinfo
+.turbo
+# Turbo
+## Turbo
+# Typescript-monorepo stuff
+.vercel
+# Vercel
+.vscode
+*/vscode/static/webview/
 *.vsix
-
-
-# Debug
-npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-
-# Misc
-.DS_Store
-\.jl4_history
-*.pem
-*~
-*.personalnotes
-
-# Nix
-.direnv
-.envrc
-result*
-
-*.code-workspace
-
-doc/*/*.html
