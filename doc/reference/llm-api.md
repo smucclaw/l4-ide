@@ -181,43 +181,6 @@ CONSIDER ENV "API_KEY"
 - Set appropriate `max_tokens` limits
 - Cache responses when possible
 
-### Indented LIST Syntax
-
-L4 supports indented list literals by aligning elements to the right of the `LIST` keyword:
-
-**✅ Correct - Elements aligned to right of LIST:**
-
-```l4
-LET attempts BE
-      LIST tryOpenRouter prompt
-           tryOpenAI prompt
-           tryAnthropic prompt
-IN fromMaybe "ERROR" (firstJust attempts)
-```
-
-**❌ Wrong - Elements on separate lines below LIST:**
-
-```l4
-LET attempts BE
-  LIST
-    tryOpenRouter prompt
-    tryOpenAI prompt
-    tryAnthropic prompt
-IN ...
-```
-
-**❌ Wrong - Using FOLLOWED BY for multi-element lists:**
-
-```l4
-LET attempts BE
-  LIST tryOpenRouter prompt
-  FOLLOWED BY tryOpenAI prompt
-  FOLLOWED BY tryAnthropic prompt
-IN ...
-```
-
-**Why this matters:** The indentation must align elements horizontally with `LIST` to form a valid list literal. Using `FOLLOWED BY` creates nested list types instead of a flat list.
-
 ## External Resources
 
 ### Provider Documentation
