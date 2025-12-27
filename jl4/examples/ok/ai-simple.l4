@@ -1,5 +1,5 @@
 -- Simple working example: Query LLMs from L4 using the llm.l4 library
--- This demonstrates LLM querying with automatic provider fallback and response parsing
+-- This demonstrates LLM querying with automatic provider fallback
 
 IMPORT llm
 
@@ -8,23 +8,13 @@ IMPORT llm
 DECIDE simpleQuery IS
   queryLLMWithDefaults "What is 2+2?"
 
--- Example 2: Query and parse the response to extract just the text
-DECIDE queryAndParse IS
-  LET rawResponse BE queryLLMWithDefaults "What is consideration in contract law?"
-  IN
-    CONSIDER extractLLMResponse "openrouter" rawResponse
-      WHEN RIGHT text THEN text
-      WHEN LEFT error THEN CONCAT "Error: " error
-
--- Example 3: Use a specific provider directly
+-- Example 2: Use a specific provider directly
 DECIDE anthropicQuery IS
   CONSIDER ENV "ANTHROPIC_API_KEY"
     WHEN JUST key THEN
-      LET rawResponse BE callClaude key "Define legal capacity"
-      IN
-        extractLLMResponse "anthropic" rawResponse
+      callClaude key "Define legal capacity"
     WHEN NOTHING THEN
-      LEFT "ERROR: ANTHROPIC_API_KEY not set"
+      "ERROR: ANTHROPIC_API_KEY not set"
 
 -- To run these examples, set at least one API key:
 -- export OPENROUTER_API_KEY="sk-or-v1-..."
@@ -33,5 +23,8 @@ DECIDE anthropicQuery IS
 --
 -- Then uncomment one of the EVAL lines:
 -- #EVAL simpleQuery
--- #EVAL queryAndParse
 -- #EVAL anthropicQuery
+
+-- Note: Response parsing (extractLLMResponse) is a future enhancement.
+-- For now, you get raw JSON responses. Use JSONDECODE to manually
+-- extract fields based on the provider's response format.
