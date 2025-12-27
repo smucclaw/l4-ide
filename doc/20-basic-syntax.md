@@ -105,6 +105,47 @@ OR TRUE
 
 yields `TRUE`.
 
+### Indented LIST Literals
+
+L4 supports indented list literals by aligning elements to the right of the `LIST` keyword:
+
+**✅ Correct - Elements aligned to right of LIST:**
+
+```l4
+LET myList BE
+      LIST "first"
+           "second"
+           "third"
+IN length myList
+```
+
+**❌ Wrong - Elements on separate lines below LIST:**
+
+```l4
+LET myList BE
+  LIST
+    "first"
+    "second"
+    "third"
+IN ...
+```
+
+This will fail with a parse error because L4 expects list elements to be horizontally aligned with `LIST`.
+
+**❌ Wrong - Using FOLLOWED BY for multi-element lists:**
+
+```l4
+LET myList BE
+  LIST "first"
+  FOLLOWED BY "second"
+  FOLLOWED BY "third"
+IN ...
+```
+
+This creates nested list types (`LIST OF LIST OF ...`) instead of a flat list.
+
+**Note:** `FOLLOWED BY` is the cons operator for building lists recursively, not for writing list literals. Use the indented `LIST` syntax instead for cleaner code.
+
 ## Ditto Syntax
 
 Strunk & White said: "Omit needless words". Edward Tufte talked about "data-ink".

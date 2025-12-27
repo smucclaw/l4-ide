@@ -1,0 +1,185 @@
+-- LLM-Assisted Judgment Calls Pattern
+-- ============================================================================
+--
+-- This example demonstrates integrating LLM judgment calls into formal L4
+-- reasoning. The pattern solves a key challenge: formal rules often contain
+-- predicates requiring human-like judgment that cannot be fully formalized.
+--
+-- PATTERN:
+-- 1. Formal rules contain stub predicates (placeholders for judgment calls)
+-- 2. Prompt template functions build detailed decision boundary prompts
+-- 3. LLM returns YES/NO + confidence + reasoning
+-- 4. LLM judgment feeds into formal logic as boolean
+-- 5. Full audit trail preserves prompt + response + confidence
+--
+-- ============================================================================
+
+IMPORT llm
+
+-- ============================================================================
+-- EXAMPLE 1: TEMPORAL/ILLUMINATION JUDGMENT
+-- ============================================================================
+
+-- User scenario: "It is 6:46 AM in Fairbanks, Alaska on April 4, 2025;
+-- the sky is overcast. Based on illumination levels, would it be defensible
+-- to say that the day has begun?"
+--
+-- This requires contextual judgment about illumination, geography, and season.
+
+-- Prompt template for day-boundary judgment
+DECIDE `day begun test for` time location date weather IS
+  CONCAT
+    "JUDGMENT CALL: Day Boundary Determination\n\n",
+    "Scenario: Time=", time, ", Location=", location, ", Date=", date, ", Weather=", weather, "\n\n",
+    "Decision Boundary:\n",
+    "✅ YES (day has begun): Sufficient natural light for outdoor activities\n",
+    "❌ NO (still night): Would need artificial light\n\n",
+    "Question: Based on illumination levels, has the day begun?\n",
+    "Answer: YES or NO, Confidence: [0-100%], Reasoning: [brief explanation]"
+
+-- Test: Fairbanks scenario
+DECIDE fairbanksTest IS
+  `day begun test for` "6:46 AM" "Fairbanks, Alaska" "April 4, 2025" "overcast"
+
+#EVAL fairbanksTest
+
+-- Test: Miami scenario (for comparison)
+DECIDE miamiTest IS
+  `day begun test for` "6:46 AM" "Miami, Florida" "April 4, 2025" "clear"
+
+#EVAL miamiTest
+
+-- ============================================================================
+-- EXAMPLE 2: TONE ANALYSIS
+-- ============================================================================
+
+-- Prompt template for tone judgment
+DECIDE `tone test for` text IS
+  CONCAT
+    "JUDGMENT CALL: Professional Tone\n\n",
+    "Text: ", text, "\n\n",
+    "Decision Boundary:\n",
+    "✅ YES (professional): Formal language, complete sentences, respectful\n",
+    "❌ NO (informal): Casual, slang, abbreviations, emoticons\n\n",
+    "Question: Is this professional in tone?\n",
+    "Answer: YES or NO, Confidence: [0-100%], Reasoning: [brief]"
+
+-- Test cases
+DECIDE formal IS "Please review the document and provide feedback by Friday."
+DECIDE casual IS "hey can you check this out thx!"
+
+#EVAL `tone test for` formal
+#EVAL `tone test for` casual
+
+-- ============================================================================
+-- EXAMPLE 3: DOCUMENT CLASSIFICATION
+-- ============================================================================
+
+-- Prompt template for document type judgment
+DECIDE `contract test for` documentText IS
+  CONCAT
+    "JUDGMENT CALL: Contract Identification\n\n",
+    "Document: ", documentText, "\n\n",
+    "Decision Boundary:\n",
+    "✅ YES (contract): Mutual obligations, offer/acceptance, consideration\n",
+    "❌ NO (other): Invoice, memo, letter, report\n\n",
+    "Question: Is this a legal contract?\n",
+    "Answer: YES or NO, Confidence: [0-100%], Reasoning: [brief]"
+
+-- Test cases
+DECIDE agreementDoc IS "Buyer agrees to purchase and Seller agrees to sell the Property for $500,000."
+DECIDE invoiceDoc IS "Invoice #12345. Amount due: $1,500. Payment terms: Net 30."
+
+#EVAL `contract test for` agreementDoc
+#EVAL `contract test for` invoiceDoc
+
+-- ============================================================================
+-- INTEGRATION: LLM Judgment → Formal Logic
+-- ============================================================================
+
+-- In production, the pattern would be:
+-- 1. Generate prompt using template function
+-- 2. Call LLM with prompt
+-- 3. Parse YES/NO from response
+-- 4. Use result in formal logic
+--
+-- Example pseudocode (requires response parsing):
+-- DECIDE checkDocumentTone text IS
+--   LET prompt BE `tone test for` text
+--   IN LET llmResponse BE queryLLMWithDefaults prompt
+--      IN IF CONTAINS llmResponse "YES"
+--         THEN "ACCEPTABLE: Professional tone"
+--         ELSE "REJECTED: Informal tone"
+
+-- ============================================================================
+-- AUDIT TRAIL EXAMPLE
+-- ============================================================================
+
+DECIDE auditExample IS
+  CONCAT
+    "SCENARIO: Fairbanks 6:46 AM, April 4, 2025, overcast\n",
+    "QUESTION: Has business day begun?\n\n",
+    "TRACE:\n",
+    "  LLM Prompt: [Day boundary judgment with context]\n",
+    "  LLM Response: NO (Confidence: 75%)\n",
+    "  Reasoning: 'Still 45 min before sunrise at 64°N latitude'\n",
+    "  Decision: BUSINESS DAY NOT BEGUN\n\n",
+    "Audit ID: AUD-2025-001"
+
+#EVAL auditExample
+
+-- ============================================================================
+-- ARCHITECTURAL BENEFITS
+-- ============================================================================
+
+-- This pattern provides:
+--
+-- 1. FLEXIBILITY: Hard-to-formalize predicates use LLM
+--    Example: Illumination levels depend on complex geo/temporal factors
+--
+-- 2. TRACEABILITY: Full prompt + response in audit trail
+--
+-- 3. CONFIDENCE: LLM provides confidence levels
+--    Low confidence flags cases for human review
+--
+-- 4. MODULARITY: Prompt templates are reusable functions
+--    Same template works for any time/location/weather
+--
+-- 5. EXPLAINABILITY: LLM provides reasoning
+--    Not just YES/NO but WHY with domain knowledge
+--
+-- 6. FORMAL + INFORMAL: Best of both worlds
+--    Formal logic: what CAN be formalized (time > 8:00 AM)
+--    LLM judgment: what CANNOT (illumination → "day begun")
+
+-- ============================================================================
+-- PROMPT ENGINEERING BEST PRACTICES
+-- ============================================================================
+
+-- For consistent LLM binary judgments:
+--
+-- 1. PROVIDE CONTEXT: Explain the standard or framework
+-- 2. DEFINE DECISION BOUNDARY: Clear YES vs NO examples
+-- 3. REQUEST STRUCTURED OUTPUT: YES/NO, Confidence, Reasoning
+-- 4. INCLUDE RELEVANT CONTEXT: All decision-relevant info
+-- 5. DEFINE KEY TERMS: Explain technical concepts
+-- 6. KEEP IT FOCUSED: One judgment per prompt
+-- 7. TEST EXTENSIVELY: Diverse edge cases
+
+-- ============================================================================
+-- SUMMARY
+-- ============================================================================
+
+-- This pattern enables L4 to make sophisticated judgment calls by combining:
+-- - Formal rigor for formalizable predicates
+-- - LLM judgment for contextual interpretation
+-- - Full traceability for audit and compliance
+-- - Confidence scoring for quality control
+--
+-- Use cases demonstrated:
+-- - Temporal boundaries (illumination-based day determination)
+-- - Tone analysis (professional vs informal)
+-- - Document classification (contract vs invoice)
+--
+-- These show the pattern's versatility across domains where formal rules
+-- contain predicates requiring contextual human-like judgment.
