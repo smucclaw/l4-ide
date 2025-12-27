@@ -20,7 +20,7 @@
 
   config.services.nginx.virtualHosts.${config.networking.domain}.locations = {
     ${config.services.jl4-lsp.path}.proxyPass =
-      "http://localhost:${toString config.services.jl4-lsp.port}";
+      "http://127.0.0.1:${toString config.services.jl4-lsp.port}";
   };
 
   config.systemd.services.jl4-lsp = {

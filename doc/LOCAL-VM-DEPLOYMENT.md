@@ -237,9 +237,43 @@ Then rebuild the VM:
 nixos-rebuild build-vm --flake '.#jl4-demo'
 ```
 
-## Port Forwarding
+## Networking
 
-The `QEMU_NET_OPTS` environment variable controls port forwarding:
+The VM is configured with **dual networking** for maximum flexibility:
+
+### 1. Bridged Network (Recommended for Network Access)
+
+The VM automatically connects to your local network via `br0` bridge and gets an IP address via DHCP.
+
+**Check the VM's IP address:**
+
+```bash
+# Via SSH from host
+ssh -p 2222 root@localhost 'ip addr show eth1 | grep "inet "'
+
+# Or check the shared directory
+cat /tmp/vm-xchg/ip-a.txt | grep -A 3 "eth1:"
+```
+
+**Example:** If the VM gets IP `192.168.252.40`, services are accessible from anywhere on your network:
+
+```bash
+# From any machine on your network
+curl http://192.168.252.40/decision/functions
+curl http://192.168.252.40/session/
+```
+
+**Benefits:**
+- ✅ Accessible from all machines on your network
+- ✅ VM gets its own IP like a physical machine
+- ✅ No port forwarding needed
+- ✅ Works with mobile devices, tablets, etc.
+
+**Note:** Requires host to have bridge `br0` configured (see host's `configuration.nix`).
+
+### 2. Port Forwarding (For Localhost-Only Access)
+
+The `QEMU_NET_OPTS` environment variable controls port forwarding for localhost access:
 
 ```bash
 # Syntax:
@@ -254,6 +288,17 @@ QEMU_NET_OPTS="hostfwd=tcp::2222-:22,hostfwd=tcp::8080-:80,hostfwd=tcp::8443-:44
 # Forward decision service directly (bypass nginx)
 QEMU_NET_OPTS="hostfwd=tcp::8001-:8001,hostfwd=tcp::8002-:8002"
 ```
+
+**Access via localhost:**
+
+```bash
+curl http://localhost:8080/decision/functions  # Only from host machine
+```
+
+**Limitations:**
+- ⚠️ Only works for connections from the host machine
+- ⚠️ External machines cannot connect via `host:8080`
+- ℹ️ Use bridged network IP for network-wide access
 
 ## Troubleshooting
 
@@ -302,7 +347,22 @@ systemctl status sshd
 journalctl -u sshd -n 50
 ```
 
-### Services Not Running
+### Services Not Running or Returning Errors
+
+**Symptom: nginx logs show "Connection refused" to upstream services**
+
+If you see errors like:
+```
+connect() failed (111: Connection refused) while connecting to upstream,
+upstream: "http://[::1]:8001/functions"
+```
+
+This indicates nginx is trying to connect via IPv6 `[::1]` but services are only listening on IPv4.
+
+**Fix applied:** The configuration now uses `127.0.0.1` (IPv4) instead of `localhost` in nginx proxy_pass directives to avoid IPv6 resolution issues. See:
+- `nix/jl4-decision-service/configuration.nix`
+- `nix/jl4-lsp/configuration.nix`
+- `nix/jl4-websessions/configuration.nix`
 
 **Check service status:**
 
