@@ -41,13 +41,13 @@
       forceSSL = lib.mkForce false;
     };
 
-    # Override decision service to use localhost for Swagger UI
+    # Override decision service to use VM hostname for Swagger UI
     systemd.services.jl4-decision-service.serviceConfig.ExecStart = lib.mkForce (
       pkgs.writeShellScript "jl4-decision-service-start" ''
         sourcePathsArgs="${lib.concatStringsSep " " (map (p: "--sourcePaths ${p}") config.services.jl4-decision-service.sourcePaths)}"
         exec ${pkgs.callPackage ./jl4-decision-service/package.nix { }}/bin/jl4-decision-service-exe \
           --port ${toString config.services.jl4-decision-service.port} \
-          --serverName https://localhost:8443${config.services.jl4-decision-service.path} \
+          --serverName http://${config.networking.hostName}${config.services.jl4-decision-service.path} \
           $sourcePathsArgs \
           --crudServerName localhost \
           --crudServerPort ${toString config.services.jl4-websessions.port}

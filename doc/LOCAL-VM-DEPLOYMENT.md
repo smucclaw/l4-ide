@@ -33,35 +33,39 @@ This creates `result/bin/run-jl4-demo-vm` and will download ~160MB of packages o
 
 ### 2. Run the VM
 
-**Method A: Direct QEMU (recommended, uses port forwarding)**
-
-**With SSH access (recommended for development):**
+**Recommended: Simple start (uses bridged networking)**
 
 ```bash
-# Forward ports: SSH (2222→22), HTTP (8080→80), HTTPS (8443→443)
-QEMU_NET_OPTS="hostfwd=tcp::2222-:22,hostfwd=tcp::8080-:80,hostfwd=tcp::8443-:443" \
-  QEMU_OPTS="-display none" \
-  result/bin/run-jl4-demo-vm
+# Start in background
+result/bin/run-jl4-demo-vm &
+
+# Or with no display
+QEMU_OPTS="-display none" result/bin/run-jl4-demo-vm &
+
+# Stop later with:
+pkill -f "qemu-system.*jl4-demo"
 ```
 
-**With serial console (for interactive debugging):**
+The VM will automatically get an IP address via DHCP on your local network and be accessible as `http://jl4-demo/` from any machine on your network.
+
+**Optional: Add port forwarding for localhost access**
+
+If you also want to access services via `localhost:8080` from the host machine:
+
+```bash
+# With port forwarding AND bridged networking
+QEMU_NET_OPTS="hostfwd=tcp::2222-:22,hostfwd=tcp::8080-:80,hostfwd=tcp::8443-:443" \
+  QEMU_OPTS="-display none" \
+  result/bin/run-jl4-demo-vm &
+```
+
+**For interactive debugging:**
 
 ```bash
 result/bin/run-jl4-demo-vm -nographic
 ```
 
 Press `Ctrl-A X` to exit QEMU serial console.
-
-**In background (headless):**
-
-```bash
-QEMU_NET_OPTS="hostfwd=tcp::2222-:22,hostfwd=tcp::8080-:80,hostfwd=tcp::8443-:443" \
-  QEMU_OPTS="-display none" \
-  result/bin/run-jl4-demo-vm &
-
-# Stop later with:
-pkill -f "qemu-system.*jl4-demo"
-```
 
 **Method B: Using libvirt/virt-manager (for bridged networking)**
 
@@ -98,32 +102,43 @@ arp -an | grep "$(virsh domiflist jl4-demo | grep -o '52:54:00:[0-9a-f:]*')"
 
 ### 3. Access the VM
 
-**Via SSH (requires SSH key configured):**
+**Primary: Via hostname (from any machine on your network)**
 
 ```bash
-# If your key is in flake.nix jl4-demo.root-ssh-keys:
-ssh root@localhost -p 2222
+# Web services (from any machine on your network)
+curl http://jl4-demo/                           # Main web app
+curl http://jl4-demo/decision/functions         # Decision service API
+curl http://jl4-demo/decision/swagger.json      # API documentation
+curl http://jl4-demo/session/                   # Session service
 
-# Otherwise, use serial console to add your key first
+# Or open in browser:
+# http://jl4-demo/
+# http://jl4-demo/decision/swagger-ui/
 ```
 
-**Via serial console:**
+**SSH access:**
 
 ```bash
-# Login credentials (console only - SSH uses keys):
+# Via bridged network (from any machine)
+ssh root@jl4-demo
+
+# Via port forwarding (only if QEMU_NET_OPTS configured, host machine only)
+ssh root@localhost -p 2222
+```
+
+**Serial console (for debugging):**
+
+```bash
+# Login credentials:
 # Username: admin
 # Password: admin
-
-# Or as root (with configured SSH key)
 ```
 
-**Via HTTP:**
+**Optional: Via localhost (only if port forwarding is configured)**
 
 ```bash
-# Access services through forwarded ports:
-curl http://localhost:8080/             # nginx (jl4-web)
+curl http://localhost:8080/                     # nginx (jl4-web)
 curl http://localhost:8080/decision/functions   # decision service
-curl http://localhost:8080/session/     # websessions service
 ```
 
 ### 4. Deploy Changes to Running VM
