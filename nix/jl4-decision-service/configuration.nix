@@ -28,7 +28,7 @@
 
   config.services.nginx.virtualHosts.${config.networking.domain}.locations = {
     ${config.services.jl4-decision-service.path}.proxyPass =
-      "http://127.0.0.1:${toString config.services.jl4-decision-service.port}/";
+      "http://localhost:${toString config.services.jl4-decision-service.port}/";
   };
 
   config.systemd.services.jl4-decision-service = {

@@ -20,7 +20,7 @@
 
   config.services.nginx.virtualHosts.${config.networking.domain}.locations = {
     ${config.services.jl4-websessions.path}.proxyPass =
-      "http://127.0.0.1:${toString config.services.jl4-websessions.port}/";
+      "http://localhost:${toString config.services.jl4-websessions.port}/";
   };
 
   config.systemd.services.jl4-websessions = {
@@ -33,7 +33,7 @@
         ${pkgs.callPackage ./package.nix { }}/bin/jl4-websessions \
           ${toString config.services.jl4-websessions.port} \
           /var/lib/private/jl4-websessions/sessions.db \
-          http://127.0.0.1:${toString config.services.jl4-decision-service.port}
+          http://localhost:${toString config.services.jl4-decision-service.port}
       '';
       Restart = "always";
 

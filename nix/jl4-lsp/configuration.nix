@@ -20,7 +20,7 @@
 
   config.services.nginx.virtualHosts.${config.networking.domain}.locations = {
     ${config.services.jl4-lsp.path}.proxyPass =
-      "http://127.0.0.1:${toString config.services.jl4-lsp.port}";
+      "http://localhost:${toString config.services.jl4-lsp.port}";
   };
 
   config.systemd.services.jl4-lsp = {
@@ -32,7 +32,7 @@
     serviceConfig = {
       ExecStart = ''
         ${pkgs.callPackage ./package.nix { }}/bin/jl4-lsp ws \
-          --host localhost \
+          --host "::" \
           --port ${toString config.services.jl4-lsp.port} \
           --cwd ${../../jl4-core/libraries}
       '';
