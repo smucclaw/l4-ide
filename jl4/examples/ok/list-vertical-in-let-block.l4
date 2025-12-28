@@ -1,0 +1,20 @@
+-- Vertical LIST block syntax inside LET...IN (workaround shape).
+--
+-- This form uses the pretty-printer-friendly LET layout:
+-- LET
+--   binding BE ...
+-- IN ...
+--
+-- It should already work and serves as a control test.
+
+DECIDE numbersFromLetJson IS
+  LET
+    numbers BE
+      LIST
+        1
+        2
+        3
+  IN JSONENCODE numbers
+
+#EVAL numbersFromLetJson
+

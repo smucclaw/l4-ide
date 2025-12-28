@@ -212,7 +212,7 @@ Before starting this course, you should:
 
 **Status:** Planned module. Related materials exist:
 
-- [README-AI-QUERYING.md](../../README-AI-QUERYING.md) - Shows how L4 can call LLMs (opposite direction)
+- [LLM Integration Docs](../tutorial/llm-getting-started.md) - Shows how L4 can call LLMs (opposite direction)
 - [proposal-jl4-nl-query-mar-24-2025.md](../proposal-jl4-nl-query-mar-24-2025.md) - Design proposal for semantic parser approach
 - Module A4 (Decision Service APIs) and Module A6 (JSON Integration) provide foundational knowledge
 
@@ -469,7 +469,7 @@ Under the following terms:
 
 - Added Module A10 (LLM-Powered Semantic Parser / Chatbot) as planned module
 - Updated learning paths to include A10
-- Noted related materials (README-AI-QUERYING.md, proposal document)
+- Noted related materials (LLM integration docs in doc/tutorial/, proposal document)
 
 ### Version 1.0 (2024-12-01)
 

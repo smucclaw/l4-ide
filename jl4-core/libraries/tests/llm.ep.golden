@@ -1,0 +1,268 @@
+-- L4 Library for LLM Integration
+-- Generic utilities for calling Large Language Models via HTTP APIs
+--
+-- Supports:
+-- - Anthropic Claude API (direct)
+-- - OpenAI API (direct)
+-- - OpenRouter (unified gateway for 500+ models)
+
+IMPORT prelude
+
+-- ============================================================================
+-- Type Definitions
+-- ============================================================================
+
+DECLARE `Message` HAS
+  `role`    IS A STRING
+  `content` IS A STRING
+
+-- ============================================================================
+-- Helper: Create Message
+-- ============================================================================
+
+GIVEN role IS A STRING
+      content IS A STRING
+createMessage MEANS
+  `Message` WITH
+    `role` IS role
+    `content` IS content
+
+-- ============================================================================
+-- Anthropic Claude API
+-- ============================================================================
+
+DECIDE anthropicEndpoint IS
+  "https://api.anthropic.com/v1/messages"
+
+DECIDE anthropicVersion IS
+  "2023-06-01"
+
+DECIDE buildAnthropicHeaders apiKey IS
+  CONCAT
+    "x-api-key: ", apiKey, "\n",
+    "anthropic-version: ", anthropicVersion, "\n",
+    "content-type: application/json"
+
+DECIDE buildAnthropicBody model prompt maxTokens IS
+  CONCAT
+    "{\"model\":\"", model,
+    "\",\"max_tokens\":", (maxTokens AS STRING),
+    ",\"messages\":[",
+    JSONENCODE (createMessage "user" prompt),
+    "]}"
+
+DECIDE callAnthropic apiKey model prompt maxTokens IS
+  POST
+    anthropicEndpoint
+    (buildAnthropicHeaders apiKey)
+    (buildAnthropicBody model prompt maxTokens)
+
+-- Convenience: Claude 3.5 Sonnet with sensible defaults
+DECIDE callClaude apiKey prompt IS
+  callAnthropic apiKey "claude-sonnet-4-5-20250929" prompt 1000
+
+-- ============================================================================
+-- OpenAI API
+-- ============================================================================
+
+DECIDE openaiEndpoint IS
+  "https://api.openai.com/v1/chat/completions"
+
+DECIDE buildOpenAIHeaders apiKey IS
+  CONCAT
+    "content-type: application/json\n",
+    "authorization: Bearer ", apiKey
+
+DECIDE buildOpenAIBody model prompt maxTokens IS
+  CONCAT
+    "{\"model\":\"", model,
+    "\",\"max_tokens\":", (maxTokens AS STRING),
+    ",\"messages\":[",
+    JSONENCODE (createMessage "user" prompt),
+    "]}"
+
+DECIDE callOpenAI apiKey model prompt maxTokens IS
+  POST
+    openaiEndpoint
+    (buildOpenAIHeaders apiKey)
+    (buildOpenAIBody model prompt maxTokens)
+
+-- Convenience: GPT-4 with sensible defaults
+DECIDE callGPT4 apiKey prompt IS
+  callOpenAI apiKey "gpt-4" prompt 1000
+
+-- ============================================================================
+-- OpenRouter (Unified Gateway for 500+ Models)
+-- ============================================================================
+
+DECIDE openrouterEndpoint IS
+  "https://openrouter.ai/api/v1/chat/completions"
+
+DECIDE buildOpenRouterHeaders apiKey IS
+  CONCAT
+    "content-type: application/json\n",
+    "authorization: Bearer ", apiKey, "\n",
+    "http-referer: https://l4-lang.org\n",
+    "x-title: L4 Legal DSL"
+
+DECIDE buildOpenRouterBody model prompt maxTokens IS
+  CONCAT
+    "{\"model\":\"", model,
+    "\",\"max_tokens\":", (maxTokens AS STRING),
+    ",\"messages\":[",
+    JSONENCODE (createMessage "user" prompt),
+    "]}"
+
+DECIDE callOpenRouter apiKey model prompt maxTokens IS
+  POST
+    openrouterEndpoint
+    (buildOpenRouterHeaders apiKey)
+    (buildOpenRouterBody model prompt maxTokens)
+
+-- ============================================================================
+-- Multi-Provider Fallback with BRANCH
+-- ============================================================================
+
+-- Query with automatic provider fallback
+-- Tries: OpenRouter → OpenAI → Anthropic
+DECIDE queryLLM model prompt maxTokens IS
+  CONSIDER ENV "OPENROUTER_API_KEY"
+    WHEN JUST openrouterKey THEN
+      callOpenRouter openrouterKey model prompt maxTokens
+    WHEN NOTHING THEN
+      CONSIDER ENV "OPENAI_API_KEY"
+        WHEN JUST openaiKey THEN
+          callOpenAI openaiKey model prompt maxTokens
+        WHEN NOTHING THEN
+          CONSIDER ENV "ANTHROPIC_API_KEY"
+            WHEN JUST anthropicKey THEN
+              callAnthropic anthropicKey model prompt maxTokens
+            WHEN NOTHING THEN
+              "ERROR: No LLM API keys configured. Set OPENROUTER_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY"
+
+-- Helper: Try to call OpenRouter if key available
+DECIDE tryOpenRouter prompt IS
+  CONSIDER ENV "OPENROUTER_API_KEY"
+    WHEN JUST key THEN
+      JUST (callOpenRouter key "anthropic/claude-3.5-sonnet" prompt 1000)
+    OTHERWISE NOTHING
+
+-- Helper: Try to call OpenAI if key available
+DECIDE tryOpenAI prompt IS
+  CONSIDER ENV "OPENAI_API_KEY"
+    WHEN JUST key THEN
+      JUST (callOpenAI key "gpt-4" prompt 1000)
+    OTHERWISE NOTHING
+
+-- Helper: Try to call Anthropic if key available
+DECIDE tryAnthropic prompt IS
+  CONSIDER ENV "ANTHROPIC_API_KEY"
+    WHEN JUST key THEN
+      JUST (callAnthropic key "claude-sonnet-4-5-20250929" prompt 1000)
+    OTHERWISE NOTHING
+
+-- Convenience: Query with sensible model defaults per provider
+-- Uses firstJust to find first successful provider attempt
+DECIDE queryLLMWithDefaults prompt IS
+  LET attempts BE
+    LIST
+      tryOpenRouter prompt
+      tryOpenAI prompt
+      tryAnthropic prompt
+  IN fromMaybe "ERROR: No LLM API keys configured" (firstJust attempts)
+
+-- ============================================================================
+-- Response Parsing Helpers
+-- ============================================================================
+
+-- Parse JSON response (returns EITHER STRING value)
+DECIDE parseResponse jsonString IS
+  JSONDECODE jsonString
+
+-- ============================================================================
+-- Response Parsing (Future Work)
+-- ============================================================================
+
+-- TODO: Implement response parsing once list pattern matching syntax is clarified.
+-- Different providers have different response formats:
+-- - OpenAI/OpenRouter: {"choices": [{"message": {"content": "..."}}]}
+-- - Anthropic: {"content": [{"text": "..."}]}
+--
+-- For now, users should use JSONDECODE and manually extract fields.
+--
+-- Planned functions:
+--   extractOpenAIContent :: JSON -> EITHER STRING String
+--   extractAnthropicContent :: JSON -> EITHER STRING String
+--   extractLLMResponse :: String -> String -> EITHER STRING String
+
+-- ============================================================================
+-- Common LLM Models (for OpenRouter)
+-- ============================================================================
+
+DECIDE claudeOpusModel IS "anthropic/claude-3-opus"
+DECIDE claudeSonnetModel IS "anthropic/claude-3.5-sonnet"
+DECIDE gpt4Model IS "openai/gpt-4"
+DECIDE gpt4TurboModel IS "openai/gpt-4-turbo"
+DECIDE gpt35Model IS "openai/gpt-3.5-turbo"
+DECIDE llama3Model IS "meta-llama/llama-3.1-70b-instruct"
+DECIDE llama3FreeModel IS "meta-llama/llama-3.1-70b-instruct:free"
+DECIDE geminiProModel IS "google/gemini-pro"
+
+-- ============================================================================
+-- Usage Examples (commented out)
+-- ============================================================================
+
+-- Example 1: Simple query with fallback
+-- DECIDE answer IS queryLLMWithDefaults "What is consideration in contract law?"
+-- #EVAL answer
+
+-- Example 2: Specific provider and model
+-- DECIDE response IS
+--   CONSIDER ENV "OPENROUTER_API_KEY"
+--     WHEN JUST key THEN
+--       callOpenRouter key claudeOpusModel "Explain tort liability" 2000
+--     WHEN NOTHING THEN
+--       "ERROR: OPENROUTER_API_KEY not set"
+-- #EVAL response
+
+-- Example 3: Direct Anthropic call
+-- DECIDE claudeResponse IS
+--   CONSIDER ENV "ANTHROPIC_API_KEY"
+--     WHEN JUST key THEN
+--       callClaude key "Define legal capacity"
+--     WHEN NOTHING THEN
+--       "ERROR: ANTHROPIC_API_KEY not set"
+-- #EVAL claudeResponse
+
+-- Example 4: Query and parse response (OpenRouter)
+-- DECIDE rawResponse IS queryLLMWithDefaults "What is consideration in contract law?"
+-- DECIDE extractedContent IS extractLLMResponse "openrouter" rawResponse
+-- DECIDE finalAnswer IS
+--   CONSIDER extractedContent
+--     WHEN RIGHT text THEN text
+--     WHEN LEFT error THEN CONCAT "Extraction error: " error
+-- #EVAL finalAnswer
+
+-- Example 5: Direct Anthropic call with parsing
+-- DECIDE anthropicRaw IS
+--   CONSIDER ENV "ANTHROPIC_API_KEY"
+--     WHEN JUST key THEN
+--       callAnthropic key "claude-sonnet-4-5-20250929" "Explain tort liability" 1000
+--     WHEN NOTHING THEN
+--       "ERROR: ANTHROPIC_API_KEY not set"
+-- DECIDE anthropicContent IS extractLLMResponse "anthropic" anthropicRaw
+-- DECIDE anthropicResult IS
+--   CONSIDER anthropicContent
+--     WHEN RIGHT text THEN text
+--     WHEN LEFT error THEN CONCAT "Parse error: " error
+-- #EVAL anthropicResult
+
+-- Example 6: OpenAI with error handling
+-- DECIDE openaiRaw IS
+--   CONSIDER ENV "OPENAI_API_KEY"
+--     WHEN JUST key THEN
+--       callOpenAI key "gpt-4" "Define legal capacity" 500
+--     WHEN NOTHING THEN
+--       "ERROR: OPENAI_API_KEY not set"
+-- DECIDE openaiContent IS extractLLMResponse "openai" openaiRaw
+-- #EVAL openaiContent  -- Returns EITHER STRING String
