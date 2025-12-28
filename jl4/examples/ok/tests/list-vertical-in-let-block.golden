@@ -1,0 +1,5 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+list-vertical-in-let-block.l4:19:1-25:
+  "[1,2,3]"
