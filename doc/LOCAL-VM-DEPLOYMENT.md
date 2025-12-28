@@ -67,38 +67,58 @@ result/bin/run-jl4-demo-vm -nographic
 
 Press `Ctrl-A X` to exit QEMU serial console.
 
-**Method B: Using libvirt/virt-manager (for bridged networking)**
+**Method B: Using libvirt/virsh (Advanced)**
 
-If you want the VM to get its own IP on your network (instead of port forwarding), you can import the qcow2 disk image into libvirt:
+The VM can also be managed via libvirt for better lifecycle control:
 
 ```bash
-# Prerequisites: host must have a bridge configured (e.g., br0)
-# Check virtualisation.libvirtd.allowedBridges in host's configuration.nix
+# Prerequisites:
+# - Host must have libvirt installed and running
+# - A bridge (br0) must be configured
+# - VM must be built first to create the disk image
 
-# Import the disk image into libvirt
-virt-install \
-  --name jl4-demo \
-  --memory 1024 \
-  --vcpus 1 \
-  --disk path=/home/mengwong/src/smucclaw/l4-ide/jl4-demo.qcow2,format=qcow2,bus=virtio \
-  --boot kernel=/nix/store/.../kernel,initrd=/nix/store/.../initrd,kernel_args="..." \
-  --network bridge=br0,model=virtio \
-  --graphics none \
-  --noautoconsole
+# First, run the VM once via Method A to create the disk image:
+QEMU_OPTS="-display none" result/bin/run-jl4-demo-vm &
+sleep 20
+pkill -f "qemu-system.*jl4-demo"
 
-# Manage with virsh
-virsh list --all
-virsh start jl4-demo
-virsh shutdown jl4-demo
-virsh destroy jl4-demo  # force stop
+# Define the VM in libvirt (kernel/initrd paths updated automatically):
+virsh define /path/to/jl4-demo.xml  # See note below for generating XML
 
-# Find VM IP
-virsh domifaddr jl4-demo --source arp
-# or check ARP table
-arp -an | grep "$(virsh domiflist jl4-demo | grep -o '52:54:00:[0-9a-f:]*')"
+# Start and manage the VM:
+virsh list --all              # List all VMs
+virsh start jl4-demo          # Start VM
+virsh shutdown jl4-demo       # Graceful shutdown
+virsh destroy jl4-demo        # Force stop
+
+# Check VM status:
+virsh dominfo jl4-demo        # VM information
+virsh domiflist jl4-demo      # Network interfaces
+virsh domifaddr jl4-demo --source arp  # Get IP address
 ```
 
-**Note:** The libvirt method requires specifying the full kernel/initrd paths and boot arguments. See `result/bin/run-jl4-demo-vm` for the exact paths. For most use cases, Method A (port forwarding) is simpler and sufficient.
+**Generating libvirt XML:**
+
+To create/update the libvirt configuration with current kernel/initrd paths:
+
+```bash
+# Get current build paths
+SYSTEM_PATH=$(readlink -f result/system)
+KERNEL_PATH="$SYSTEM_PATH/kernel"
+INITRD_PATH="$SYSTEM_PATH/initrd"
+KERNEL_PARAMS=$(cat "$SYSTEM_PATH/kernel-params")
+
+# Create XML definition (example in /tmp/jl4-demo.xml)
+# Then define/update: virsh define /tmp/jl4-demo.xml
+```
+
+**Known Limitations:**
+
+- Libvirt networking currently requires troubleshooting - the VM may not get DHCP properly
+- The direct QEMU method (Method A) uses dual networking (bridged + user-mode NAT) which is more reliable
+- For production use, Method A is recommended until libvirt networking is fully configured
+
+**Note:** Method A (direct QEMU) is simpler, more reliable, and supports both bridged networking and optional port forwarding.
 
 ### 3. Access the VM
 
@@ -164,9 +184,19 @@ QEMU_NET_OPTS="hostfwd=tcp::2222-:22,hostfwd=tcp::8080-:80,hostfwd=tcp::8443-:44
 # Rebuild the VM
 nixos-rebuild build-vm --flake '.#jl4-demo'
 
+# Update libvirt configuration with new kernel/initrd paths
+SYSTEM_PATH=$(readlink -f result/system)
+virsh dumpxml jl4-demo > /tmp/jl4-demo.xml
+# Edit /tmp/jl4-demo.xml to update kernel/initrd paths to $SYSTEM_PATH/kernel and $SYSTEM_PATH/initrd
+virsh undefine jl4-demo
+virsh define /tmp/jl4-demo.xml
+
 # Restart the VM
 virsh shutdown jl4-demo  # or: virsh destroy jl4-demo
 virsh start jl4-demo
+
+# Check status
+virsh list
 ```
 
 **Or, deploy to running VM via SSH:**
@@ -279,6 +309,7 @@ curl http://192.168.252.40/session/
 ```
 
 **Benefits:**
+
 - ✅ Accessible from all machines on your network
 - ✅ VM gets its own IP like a physical machine
 - ✅ No port forwarding needed
@@ -311,6 +342,7 @@ curl http://localhost:8080/decision/functions  # Only from host machine
 ```
 
 **Limitations:**
+
 - ⚠️ Only works for connections from the host machine
 - ⚠️ External machines cannot connect via `host:8080`
 - ℹ️ Use bridged network IP for network-wide access
@@ -367,6 +399,7 @@ journalctl -u sshd -n 50
 **Symptom: nginx logs show "Connection refused" to upstream services**
 
 If you see errors like:
+
 ```
 connect() failed (111: Connection refused) while connecting to upstream,
 upstream: "http://[::1]:8001/functions"
@@ -375,6 +408,7 @@ upstream: "http://[::1]:8001/functions"
 This indicates nginx is trying to connect via IPv6 `[::1]` but services are only listening on IPv4.
 
 **Fix applied:** The configuration now uses `127.0.0.1` (IPv4) instead of `localhost` in nginx proxy_pass directives to avoid IPv6 resolution issues. See:
+
 - `nix/jl4-decision-service/configuration.nix`
 - `nix/jl4-lsp/configuration.nix`
 - `nix/jl4-websessions/configuration.nix`
@@ -442,6 +476,12 @@ QEMU_NET_OPTS="hostfwd=tcp::2222-:22,hostfwd=tcp::8080-:80,hostfwd=tcp::8443-:44
 
 ### Test Configuration Changes
 
+There are two approaches to testing changes in the VM:
+
+#### Approach 1: Rebuild and Restart (for NixOS configuration changes)
+
+Use this when you modify files in `nix/` directory (NixOS configuration, systemd services, etc.):
+
 1. **Edit nix configuration:**
 
    ```bash
@@ -456,20 +496,76 @@ QEMU_NET_OPTS="hostfwd=tcp::2222-:22,hostfwd=tcp::8080-:80,hostfwd=tcp::8443-:44
    nixos-rebuild build-vm --flake '.#jl4-demo'
    ```
 
+   This updates the `result` symlink to point to the new VM build.
+
 3. **Restart VM:**
 
    ```bash
    pkill -f "qemu-system.*jl4-demo"
-   QEMU_NET_OPTS="hostfwd=tcp::2222-:22,hostfwd=tcp::8080-:80,hostfwd=tcp::8443-:443" \
-     QEMU_OPTS="-display none" \
-     result/bin/run-jl4-demo-vm &
+   QEMU_OPTS="-display none" result/bin/run-jl4-demo-vm &
+   ```
+
+   Or if using systemd service:
+
+   ```bash
+   sudo systemctl restart jl4-demo-vm
    ```
 
 4. **Verify changes:**
    ```bash
-   curl http://localhost:8080/decision/functions
-   ssh root@localhost -p 2222 'systemctl status jl4-decision-service'
+   curl http://jl4-demo/decision/functions
+   ssh root@jl4-demo 'systemctl status jl4-decision-service'
    ```
+
+#### Approach 2: Hot Reload via nixos-rebuild switch (for running VM)
+
+Use this to deploy changes to an already-running VM **without** restarting it:
+
+1. **Edit configuration and rebuild:**
+
+   ```bash
+   vim nix/jl4-decision-service/configuration.nix
+   nixos-rebuild build-vm --flake '.#jl4-demo'
+   ```
+
+2. **Deploy to running VM via SSH:**
+
+   ```bash
+   # Copy the new system closure to the VM and activate it
+   nixos-rebuild switch --flake '.#jl4-demo' \
+     --target-host root@jl4-demo \
+     --build-host localhost
+   ```
+
+   This will:
+
+   - Build the new configuration on your host
+   - Copy it to the VM
+   - Switch the VM to the new configuration
+   - Restart only the services that changed
+
+3. **Verify the update:**
+
+   ```bash
+   ssh root@jl4-demo 'systemctl status jl4-decision-service'
+   curl http://jl4-demo/decision/functions
+   ```
+
+**When to use each approach:**
+
+- **Approach 1 (Rebuild & Restart)**:
+
+  - Kernel/initrd changes
+  - Major system changes
+  - Testing from a clean state
+  - Faster for small iteration cycles (20-30 seconds)
+
+- **Approach 2 (Hot Reload)**:
+  - Service configuration changes
+  - Package updates
+  - Keep VM uptime and state (database, sessions)
+  - Production-like deployment testing
+  - Takes longer (~1-2 minutes) but preserves state
 
 ### Deploy to Production After Testing
 
@@ -483,6 +579,85 @@ git commit -m "Update jl4-decision-service configuration"
 # Deploy to production
 nixos-rebuild switch --flake '.#jl4-aws-2505' --target-host nano
 ```
+
+## Automatic VM Startup on Boot
+
+You can configure the VM to start automatically when the host system boots.
+
+### Option 1: Using libvirt autostart (Recommended for libvirt users)
+
+If you're using the libvirt method (Method B), enable autostart:
+
+```bash
+# Enable autostart for the VM
+virsh autostart jl4-demo
+
+# Verify autostart is enabled
+virsh dominfo jl4-demo | grep Autostart
+
+# Disable autostart if needed
+virsh autostart jl4-demo --disable
+```
+
+With `virtualisation.libvirtd.onBoot = "start"` in your NixOS configuration, libvirt will automatically start all VMs marked for autostart.
+
+**Note:** The libvirt VM currently has networking issues. Use Option 2 for a more reliable autostart.
+
+### Option 2: Using systemd service (Recommended for direct QEMU)
+
+For the direct QEMU method (Method A), add this to your NixOS `configuration.nix`:
+
+```nix
+systemd.services.jl4-demo-vm = {
+  description = "JL4 Demo VM";
+  after = [ "network.target" "libvirtd.service" ];
+  wants = [ "libvirtd.service" ];
+  wantedBy = [ "multi-user.target" ];
+
+  serviceConfig = {
+    Type = "forking";
+    User = "mengwong";  # Change to your username
+    Group = "users";
+    WorkingDirectory = "/home/mengwong/src/smucclaw/l4-ide";  # Adjust path
+    Environment = "QEMU_OPTS=-display none";
+    ExecStart = "/home/mengwong/src/smucclaw/l4-ide/result/bin/run-jl4-demo-vm";
+    ExecStop = "${pkgs.procps}/bin/pkill -f 'qemu-system.*jl4-demo'";
+    Restart = "on-failure";
+    RestartSec = "10s";
+    TimeoutStartSec = "60s";
+    TimeoutStopSec = "30s";
+  };
+};
+```
+
+Then rebuild your system:
+
+```bash
+sudo nixos-rebuild switch
+```
+
+**Managing the systemd service:**
+
+```bash
+# Check status
+systemctl status jl4-demo-vm
+
+# Start manually
+sudo systemctl start jl4-demo-vm
+
+# Stop
+sudo systemctl stop jl4-demo-vm
+
+# View logs
+journalctl -u jl4-demo-vm -f
+```
+
+**Important Notes:**
+
+- The `result` symlink must exist before the service starts
+- Rebuild the VM (`nixos-rebuild build-vm --flake '.#jl4-demo'`) before starting the service after NixOS system updates
+- The service will restart automatically if it fails
+- To update the VM, stop the service, rebuild, and restart
 
 ## Comparison: Local VM vs Production
 

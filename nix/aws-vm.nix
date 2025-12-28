@@ -26,8 +26,9 @@
       };
 
       qemu.networkingOptions = [
-        "-netdev bridge,br=br0,id=net0,helper=/run/wrappers/bin/qemu-bridge-helper"
-        "-device virtio-net-pci,netdev=net0"
+        # Use user-mode networking with port forwarding for localhost access
+        "-net nic,model=virtio"
+        "-net user,hostfwd=tcp::8080-:80,hostfwd=tcp::8443-:443"
       ];
     };
     networking = {

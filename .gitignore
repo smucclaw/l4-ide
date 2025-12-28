@@ -55,3 +55,4 @@ tsconfig.tsbuildinfo
 *.vsix
 yarn-debug.log*
 yarn-error.log*
+*.qcow2

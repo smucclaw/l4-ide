@@ -44,11 +44,6 @@
   # ssh
   # ---------------------------------------------
 
-  services.fail2ban = {
-    enable = true;
-    maxretry = 5;
-  };
-
   users.users.root.openssh.authorizedKeys.keys = config.jl4-demo.root-ssh-keys;
 
   services.openssh = {
