@@ -107,9 +107,20 @@ yields `TRUE`.
 
 ### Indented LIST Literals
 
-L4 supports indented list literals by aligning elements to the right of the `LIST` keyword:
+L4 supports multiple syntaxes for list literals. The most natural and recommended approach uses vertical block indentation:
 
-**✅ Correct - Elements aligned to right of LIST:**
+**✅ Recommended - Vertical block syntax (inline LET):**
+
+```l4
+LET myList BE
+  LIST
+    "first"
+    "second"
+    "third"
+IN length myList
+```
+
+**✅ Also correct - Horizontal alignment:**
 
 ```l4
 LET myList BE
@@ -119,18 +130,20 @@ LET myList BE
 IN length myList
 ```
 
-**❌ Wrong - Elements on separate lines below LIST:**
+**✅ Multiple bindings - Use multiline LET:**
 
 ```l4
-LET myList BE
-  LIST
-    "first"
-    "second"
-    "third"
+LET
+  list1 BE
+    LIST
+      "a"
+      "b"
+  list2 BE
+    LIST
+      1
+      2
 IN ...
 ```
-
-This will fail with a parse error because L4 expects list elements to be horizontally aligned with `LIST`.
 
 **❌ Wrong - Using FOLLOWED BY for multi-element lists:**
 
@@ -144,7 +157,7 @@ IN ...
 
 This creates nested list types (`LIST OF LIST OF ...`) instead of a flat list.
 
-**Note:** `FOLLOWED BY` is the cons operator for building lists recursively, not for writing list literals. Use the indented `LIST` syntax instead for cleaner code.
+**Note:** `FOLLOWED BY` is the cons operator for building lists recursively, not for writing list literals. The vertical block syntax is preferred for its clarity and consistency with other L4 constructs like `CONSIDER` and `DECLARE ... HAS`.
 
 ## Ditto Syntax
 
