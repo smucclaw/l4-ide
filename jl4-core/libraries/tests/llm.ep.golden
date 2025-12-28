@@ -6,6 +6,8 @@
 -- - OpenAI API (direct)
 -- - OpenRouter (unified gateway for 500+ models)
 
+IMPORT prelude
+
 -- ============================================================================
 -- Type Definitions
 -- ============================================================================
@@ -138,21 +140,35 @@ DECIDE queryLLM model prompt maxTokens IS
             WHEN NOTHING THEN
               "ERROR: No LLM API keys configured. Set OPENROUTER_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY"
 
--- Convenience: Query with sensible model defaults per provider
-DECIDE queryLLMWithDefaults prompt IS
+-- Helper: Try to call OpenRouter if key available
+DECIDE tryOpenRouter prompt IS
   CONSIDER ENV "OPENROUTER_API_KEY"
-    WHEN JUST openrouterKey THEN
-      callOpenRouter openrouterKey "anthropic/claude-3.5-sonnet" prompt 1000
-    WHEN NOTHING THEN
-      CONSIDER ENV "OPENAI_API_KEY"
-        WHEN JUST openaiKey THEN
-          callOpenAI openaiKey "gpt-4" prompt 1000
-        WHEN NOTHING THEN
-          CONSIDER ENV "ANTHROPIC_API_KEY"
-            WHEN JUST anthropicKey THEN
-              callAnthropic anthropicKey "claude-sonnet-4-5-20250929" prompt 1000
-            WHEN NOTHING THEN
-              "ERROR: No LLM API keys configured"
+    WHEN JUST key THEN
+      JUST (callOpenRouter key "anthropic/claude-3.5-sonnet" prompt 1000)
+    OTHERWISE NOTHING
+
+-- Helper: Try to call OpenAI if key available
+DECIDE tryOpenAI prompt IS
+  CONSIDER ENV "OPENAI_API_KEY"
+    WHEN JUST key THEN
+      JUST (callOpenAI key "gpt-4" prompt 1000)
+    OTHERWISE NOTHING
+
+-- Helper: Try to call Anthropic if key available
+DECIDE tryAnthropic prompt IS
+  CONSIDER ENV "ANTHROPIC_API_KEY"
+    WHEN JUST key THEN
+      JUST (callAnthropic key "claude-sonnet-4-5-20250929" prompt 1000)
+    OTHERWISE NOTHING
+
+-- Convenience: Query with sensible model defaults per provider
+-- Uses firstJust to find first successful provider attempt
+DECIDE queryLLMWithDefaults prompt IS
+  LET attempts BE
+        LIST tryOpenRouter prompt
+             tryOpenAI prompt
+             tryAnthropic prompt
+  IN fromMaybe "ERROR: No LLM API keys configured" (firstJust attempts)
 
 -- ============================================================================
 -- Response Parsing Helpers

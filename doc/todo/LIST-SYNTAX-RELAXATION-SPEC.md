@@ -15,11 +15,13 @@ L4 currently supports multiple LIST literal syntaxes but has inconsistent indent
 L4 currently accepts these LIST syntaxes:
 
 **Option 1: Inline with commas**
+
 ```l4
 LIST 1, 2, 3
 ```
 
 **Option 2: Multiline with commas**
+
 ```l4
 LIST
     1,
@@ -28,6 +30,7 @@ LIST
 ```
 
 **Option 3: Indented without commas (horizontal alignment)**
+
 ```l4
 LIST 1
      2
@@ -35,6 +38,7 @@ LIST 1
 ```
 
 **Option 4: FOLLOWED BY (cons operator)**
+
 ```l4
 1 FOLLOWED BY 2 FOLLOWED BY 3 FOLLOWED BY EMPTY
 ```
@@ -99,6 +103,7 @@ IN firstJust providers
 ### Syntax Variants to Support
 
 **Variant 1: Simple values**
+
 ```l4
 LIST
   1
@@ -107,6 +112,7 @@ LIST
 ```
 
 **Variant 2: Complex expressions**
+
 ```l4
 LIST
   tryProvider "openrouter"
@@ -115,6 +121,7 @@ LIST
 ```
 
 **Variant 3: With commas (currently works, keep supporting)**
+
 ```l4
 LIST
   1,
@@ -123,6 +130,7 @@ LIST
 ```
 
 **Variant 4: Records**
+
 ```l4
 LIST
   Person WITH name IS "Alice", age IS 25
@@ -146,6 +154,7 @@ The parser would need to:
 Location: Likely in `jl4-core/src/L4/Syntax/Parser.hs` or similar
 
 Current grammar (approximate):
+
 ```haskell
 listLiteral = do
   reserved "LIST"
@@ -154,6 +163,7 @@ listLiteral = do
 ```
 
 Proposed addition:
+
 ```haskell
 listLiteral = do
   reserved "LIST"
@@ -165,6 +175,7 @@ listLiteral = do
 ```
 
 Where `verticalBlockExprs` would:
+
 ```haskell
 verticalBlockExprs = do
   -- After LIST keyword, expect newline + indent
@@ -177,6 +188,7 @@ verticalBlockExprs = do
 ### Backward Compatibility
 
 This change is **100% backward compatible**:
+
 - All existing LIST syntaxes continue to work
 - New syntax is purely additive
 - No breaking changes to existing code
@@ -192,6 +204,7 @@ This change is **100% backward compatible**:
 Users currently work around this limitation by:
 
 1. **Using horizontal alignment** (awkward):
+
    ```l4
    LIST item1
         item2
@@ -199,6 +212,7 @@ Users currently work around this limitation by:
    ```
 
 2. **Using commas** (verbose for long lists):
+
    ```l4
    LIST
      item1,
@@ -229,6 +243,7 @@ LIST
 ### Use Case 1: Provider Fallback Lists
 
 **Before:**
+
 ```l4
 LET attempts BE
       LIST tryOpenRouter prompt
@@ -238,6 +253,7 @@ IN firstJust attempts
 ```
 
 **After:**
+
 ```l4
 LET attempts BE
   LIST
@@ -250,6 +266,7 @@ IN firstJust attempts
 ### Use Case 2: Configuration Lists
 
 **Before:**
+
 ```l4
 DECIDE supportedCurrencies IS
       LIST "USD"
@@ -259,6 +276,7 @@ DECIDE supportedCurrencies IS
 ```
 
 **After:**
+
 ```l4
 DECIDE supportedCurrencies IS
   LIST
@@ -271,6 +289,7 @@ DECIDE supportedCurrencies IS
 ### Use Case 3: Test Data
 
 **Before:**
+
 ```l4
 DECIDE testCases IS
       LIST TestCase WITH input IS 1, expected IS 2
@@ -279,6 +298,7 @@ DECIDE testCases IS
 ```
 
 **After:**
+
 ```l4
 DECIDE testCases IS
   LIST
@@ -292,6 +312,7 @@ DECIDE testCases IS
 ### Empty Lists
 
 Should this work?
+
 ```l4
 LIST
   -- No elements
@@ -302,6 +323,7 @@ LIST
 ### Mixed Separators
 
 Should commas be optional within vertical blocks?
+
 ```l4
 LIST
   1, 2,
@@ -329,6 +351,7 @@ LIST
 Add test cases for:
 
 1. **Basic vertical syntax**
+
    ```l4
    LIST
      1
@@ -337,6 +360,7 @@ Add test cases for:
    ```
 
 2. **With complex expressions**
+
    ```l4
    LIST
      foo bar
@@ -345,6 +369,7 @@ Add test cases for:
    ```
 
 3. **With records**
+
    ```l4
    LIST
      Person WITH name IS "Alice", age IS 25
@@ -352,6 +377,7 @@ Add test cases for:
    ```
 
 4. **Nested lists**
+
    ```l4
    LIST
      LIST 1, 2
@@ -372,16 +398,19 @@ Update golden test outputs for examples using the new syntax.
 ## Implementation Tasks
 
 - [ ] **Task 1**: Modify parser to accept vertical LIST blocks
+
   - Location: `jl4-core/src/L4/Syntax/Parser.hs` (or equivalent)
   - Add `verticalBlockExprs` alternative to `listLiteral` parser
   - Handle indentation tracking
 
 - [ ] **Task 2**: Add parser tests
+
   - Location: `jl4-core/test/` or `jl4/test/`
   - Add positive test cases for new syntax
   - Add negative test cases (empty blocks, bad indentation)
 
 - [ ] **Task 3**: Update golden tests
+
   - Run test suite to regenerate golden files
   - Verify outputs are correct
 
@@ -424,6 +453,7 @@ The LIST vertical syntax would align with these existing patterns.
 ### Inspiration from Other Languages
 
 **Python:**
+
 ```python
 my_list = [
     item1,
@@ -433,6 +463,7 @@ my_list = [
 ```
 
 **Haskell:**
+
 ```haskell
 myList =
   [ item1
@@ -442,12 +473,9 @@ myList =
 ```
 
 **JavaScript:**
+
 ```javascript
-const myList = [
-  item1,
-  item2,
-  item3
-]
+const myList = [item1, item2, item3];
 ```
 
 All support vertical list literals. L4 should too!
@@ -455,12 +483,15 @@ All support vertical list literals. L4 should too!
 ## Questions for Discussion
 
 1. Should commas be required, optional, or forbidden in vertical blocks?
+
    - **Recommendation**: Optional (most flexible)
 
 2. Should we deprecate horizontal alignment syntax?
+
    - **Recommendation**: No, keep it as an alternative
 
 3. Should empty vertical blocks be allowed?
+
    - **Recommendation**: No, use `EMPTY` instead
 
 4. Maximum indentation level for nested vertical lists?
