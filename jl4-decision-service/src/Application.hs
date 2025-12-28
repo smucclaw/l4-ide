@@ -62,7 +62,7 @@ defaultMain = do
   putStrLn $ "Application started on port: " <> show port
   withStdoutLogger $ \aplogger -> do
     let
-      settings = setPort port $ setLogger aplogger defaultSettings
+      settings = setHost "*" $ setPort port $ setLogger aplogger defaultSettings
     runSettings settings (corsMiddleware $ app initialState serverName)
 
 corsMiddleware :: Middleware

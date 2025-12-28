@@ -9,7 +9,7 @@ import System.IO
 main :: IO ()
 main = withEnv \p l env -> do
     hSetBuffering stdout LineBuffering
-    let s = Warp.setLogger l $ Warp.setPort p Warp.defaultSettings
+    let s = Warp.setHost "*" $ Warp.setLogger l $ Warp.setPort p Warp.defaultSettings
     putStrLn $ "Started server on port: " <> show p
     Warp.runSettings s $ corsMiddleware $ mkApp env
 
