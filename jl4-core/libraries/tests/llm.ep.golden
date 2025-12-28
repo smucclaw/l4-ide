@@ -165,9 +165,10 @@ DECIDE tryAnthropic prompt IS
 -- Uses firstJust to find first successful provider attempt
 DECIDE queryLLMWithDefaults prompt IS
   LET attempts BE
-        LIST tryOpenRouter prompt
-             tryOpenAI prompt
-             tryAnthropic prompt
+    LIST
+      tryOpenRouter prompt
+      tryOpenAI prompt
+      tryAnthropic prompt
   IN fromMaybe "ERROR: No LLM API keys configured" (firstJust attempts)
 
 -- ============================================================================
