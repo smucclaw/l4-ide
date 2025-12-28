@@ -1,0 +1,15 @@
+-- Vertical LIST block syntax (baseline).
+--
+-- This should already work: LIST introduces an indented block of expressions.
+
+DECIDE numbers IS
+  LIST
+    1
+    2
+    3
+
+DECIDE numbersJson IS
+  JSONENCODE numbers
+
+#EVAL numbersJson
+

@@ -1,0 +1,5 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+list-vertical-block.l4:14:1-18:
+  "[1,2,3]"

@@ -2,11 +2,20 @@
 
 **Status:** 📋 Proposed
 **Priority:** Low (Quality of Life)
-**Effort:** Small (Parser change)
+**Effort:** Small (Parser change + tests)
 
 ## Executive Summary
 
-L4 currently supports multiple LIST literal syntaxes but has inconsistent indentation requirements. Users naturally expect vertical list syntax (elements below `LIST`) to work, but it currently fails with parse errors. This spec proposes relaxing the parser to accept more intuitive list construction patterns.
+L4 supports multiple LIST literal syntaxes. Users naturally expect vertical list syntax (elements below `LIST`) to work everywhere, including inside `LET ... IN`. In practice, vertical `LIST` blocks already work in most contexts; the confusing failures happen specifically with _inline_ `LET` bindings where the RHS starts on the next line. This spec proposes a small, constrained parser relaxation so that inline `LET` bindings can use normal block indentation on their RHS.
+
+## Clarification (Author Misunderstanding)
+
+The original motivation text assumed “vertical LIST blocks don’t parse”. That’s not quite true in the current parser:
+
+- `LIST` already accepts a newline + indented block of element expressions in general expression contexts.
+- The failure people hit is triggered by the indentation policy for **inline** `LET` bindings (`LET name BE` on one line). In that form, the RHS expression used to be required to start _to the right of the binding name_, which makes a normal block-indented `LIST` (and other multiline RHS forms) look “incorrectly indented”.
+
+So the fix is not “teach LIST about vertical blocks”, but “relax inline-LET RHS indentation (in a constrained way)”.
 
 ## Current State
 
@@ -15,11 +24,13 @@ L4 currently supports multiple LIST literal syntaxes but has inconsistent indent
 L4 currently accepts these LIST syntaxes:
 
 **Option 1: Inline with commas**
+
 ```l4
 LIST 1, 2, 3
 ```
 
 **Option 2: Multiline with commas**
+
 ```l4
 LIST
     1,
@@ -28,6 +39,7 @@ LIST
 ```
 
 **Option 3: Indented without commas (horizontal alignment)**
+
 ```l4
 LIST 1
      2
@@ -35,13 +47,14 @@ LIST 1
 ```
 
 **Option 4: FOLLOWED BY (cons operator)**
+
 ```l4
 1 FOLLOWED BY 2 FOLLOWED BY 3 FOLLOWED BY EMPTY
 ```
 
 ### The Problem
 
-**Option 3 requires horizontal alignment with `LIST` keyword**, which is non-intuitive. Users naturally expect this to work:
+Users naturally expect this to work inside `LET ... IN`:
 
 ```l4
 LET myList BE
@@ -52,7 +65,7 @@ LET myList BE
 IN ...
 ```
 
-But it fails with: `unexpected <element>, expecting =, BE, IS, MEAN, MEANS`
+In older versions / current behavior before this change, it fails due to indentation rules in inline `LET` bindings (the RHS is required to start to the right of the binding name, not just under `LET`).
 
 The working version requires awkward alignment:
 
@@ -73,9 +86,9 @@ IN ...
 
 ## Proposed Enhancement
 
-### New Syntax: Vertical LIST Blocks
+### Enable Normal Block Indentation for Inline LET RHS
 
-Allow `LIST` to start an indented block where elements appear on subsequent lines:
+When `LET` and the binding name are on the same line, allow the RHS expression to begin at normal block indentation under `LET`:
 
 ```l4
 LET providers BE
@@ -86,7 +99,7 @@ LET providers BE
 IN firstJust providers
 ```
 
-This would be equivalent to:
+This is equivalent to (and should remain supported):
 
 ```l4
 LET providers BE
@@ -96,9 +109,23 @@ LET providers BE
 IN firstJust providers
 ```
 
+### Constraint (to keep parsing unambiguous)
+
+This relaxation applies only when the `LET ... IN` contains **exactly one** binding in that `LET` block. If you need multiple bindings, use the multiline `LET` layout:
+
+```l4
+LET
+  x BE
+    ...
+  y BE
+    ...
+IN ...
+```
+
 ### Syntax Variants to Support
 
 **Variant 1: Simple values**
+
 ```l4
 LIST
   1
@@ -107,6 +134,7 @@ LIST
 ```
 
 **Variant 2: Complex expressions**
+
 ```l4
 LIST
   tryProvider "openrouter"
@@ -115,6 +143,7 @@ LIST
 ```
 
 **Variant 3: With commas (currently works, keep supporting)**
+
 ```l4
 LIST
   1,
@@ -123,6 +152,7 @@ LIST
 ```
 
 **Variant 4: Records**
+
 ```l4
 LIST
   Person WITH name IS "Alice", age IS 25
@@ -134,52 +164,24 @@ LIST
 
 ### Parser Changes
 
-The parser would need to:
+Vertical `LIST` blocks are already parsed as a normal multi-line expression list. The required change is in the `LET` binding parser:
 
-1. **Detect `LIST` followed by newline + indent** → Enter block mode
-2. **Collect all indented expressions** at the same level as list elements
-3. **Exit block** when indentation returns to LIST level or less
-4. **Support both comma and newline separators** (currently commas work)
+1. Detect inline `LET <name> BE` bindings (binding name on the same line as `LET`).
+2. In the single-binding case, parse the RHS expression with indentation relative to `LET` (not relative to the binding name).
+3. Require `IN` immediately after that one binding (enforces the “single binding” constraint).
 
 ### Affected Grammar Rules
 
-Location: Likely in `jl4-core/src/L4/Syntax/Parser.hs` or similar
+Location: `jl4-core/src/L4/Parser.hs`
 
-Current grammar (approximate):
-```haskell
-listLiteral = do
-  reserved "LIST"
-  elems <- commaSep1 expr <|> horizontalAlignedExprs
-  return $ ListLit elems
-```
+Relevant rules:
 
-Proposed addition:
-```haskell
-listLiteral = do
-  reserved "LIST"
-  choice
-    [ commaSep1 expr              -- LIST 1, 2, 3
-    , horizontalAlignedExprs      -- LIST 1\n     2\n     3
-    , verticalBlockExprs          -- LIST\n  1\n  2\n  3  (NEW!)
-    ]
-```
-
-Where `verticalBlockExprs` would:
-```haskell
-verticalBlockExprs = do
-  -- After LIST keyword, expect newline + indent
-  newline
-  indentLevel <- getIndentLevel
-  elems <- many1 (indentedExpr indentLevel)
-  return elems
-```
+- `list` expression parser (already accepts vertical blocks)
+- `letInExpr` / LET binding parsing (needs the relaxation)
 
 ### Backward Compatibility
 
-This change is **100% backward compatible**:
-- All existing LIST syntaxes continue to work
-- New syntax is purely additive
-- No breaking changes to existing code
+This change is intended to be backward compatible for existing programs. It is additive in the sense that it allows additional indentation layouts for inline single-binding `LET` blocks.
 
 ### Type System Impact
 
@@ -192,6 +194,7 @@ This change is **100% backward compatible**:
 Users currently work around this limitation by:
 
 1. **Using horizontal alignment** (awkward):
+
    ```l4
    LIST item1
         item2
@@ -199,6 +202,7 @@ Users currently work around this limitation by:
    ```
 
 2. **Using commas** (verbose for long lists):
+
    ```l4
    LIST
      item1,
@@ -229,6 +233,7 @@ LIST
 ### Use Case 1: Provider Fallback Lists
 
 **Before:**
+
 ```l4
 LET attempts BE
       LIST tryOpenRouter prompt
@@ -238,6 +243,7 @@ IN firstJust attempts
 ```
 
 **After:**
+
 ```l4
 LET attempts BE
   LIST
@@ -250,6 +256,7 @@ IN firstJust attempts
 ### Use Case 2: Configuration Lists
 
 **Before:**
+
 ```l4
 DECIDE supportedCurrencies IS
       LIST "USD"
@@ -259,6 +266,7 @@ DECIDE supportedCurrencies IS
 ```
 
 **After:**
+
 ```l4
 DECIDE supportedCurrencies IS
   LIST
@@ -271,6 +279,7 @@ DECIDE supportedCurrencies IS
 ### Use Case 3: Test Data
 
 **Before:**
+
 ```l4
 DECIDE testCases IS
       LIST TestCase WITH input IS 1, expected IS 2
@@ -279,6 +288,7 @@ DECIDE testCases IS
 ```
 
 **After:**
+
 ```l4
 DECIDE testCases IS
   LIST
@@ -292,16 +302,18 @@ DECIDE testCases IS
 ### Empty Lists
 
 Should this work?
+
 ```l4
 LIST
   -- No elements
 ```
 
-**Recommendation**: No, use `EMPTY` for empty lists. `LIST` with no elements should be a parse error.
+**Note**: Current parser behavior accepts `LIST` with no elements; tightening that is out of scope for this change (and would be a breaking change).
 
 ### Mixed Separators
 
 Should commas be optional within vertical blocks?
+
 ```l4
 LIST
   1, 2,
@@ -329,6 +341,7 @@ LIST
 Add test cases for:
 
 1. **Basic vertical syntax**
+
    ```l4
    LIST
      1
@@ -337,6 +350,7 @@ Add test cases for:
    ```
 
 2. **With complex expressions**
+
    ```l4
    LIST
      foo bar
@@ -345,6 +359,7 @@ Add test cases for:
    ```
 
 3. **With records**
+
    ```l4
    LIST
      Person WITH name IS "Alice", age IS 25
@@ -352,6 +367,7 @@ Add test cases for:
    ```
 
 4. **Nested lists**
+
    ```l4
    LIST
      LIST 1, 2
@@ -372,16 +388,18 @@ Update golden test outputs for examples using the new syntax.
 ## Implementation Tasks
 
 - [ ] **Task 1**: Modify parser to accept vertical LIST blocks
-  - Location: `jl4-core/src/L4/Syntax/Parser.hs` (or equivalent)
-  - Add `verticalBlockExprs` alternative to `listLiteral` parser
-  - Handle indentation tracking
+
+  - Update: vertical LIST blocks are already supported; instead, relax inline single-binding LET RHS indentation
+  - Location: `jl4-core/src/L4/Parser.hs`
 
 - [ ] **Task 2**: Add parser tests
-  - Location: `jl4-core/test/` or `jl4/test/`
-  - Add positive test cases for new syntax
-  - Add negative test cases (empty blocks, bad indentation)
+
+  - Location: `jl4/examples/ok/` and `jl4/examples/not-ok/tc/`
+  - Add a regression example for inline LET + vertical LIST RHS (previously failing)
+  - Add a regression example for inline LET + record construction RHS (same indentation issue)
 
 - [ ] **Task 3**: Update golden tests
+
   - Run test suite to regenerate golden files
   - Verify outputs are correct
 
@@ -424,6 +442,7 @@ The LIST vertical syntax would align with these existing patterns.
 ### Inspiration from Other Languages
 
 **Python:**
+
 ```python
 my_list = [
     item1,
@@ -433,6 +452,7 @@ my_list = [
 ```
 
 **Haskell:**
+
 ```haskell
 myList =
   [ item1
@@ -442,12 +462,9 @@ myList =
 ```
 
 **JavaScript:**
+
 ```javascript
-const myList = [
-  item1,
-  item2,
-  item3
-]
+const myList = [item1, item2, item3];
 ```
 
 All support vertical list literals. L4 should too!
@@ -455,12 +472,15 @@ All support vertical list literals. L4 should too!
 ## Questions for Discussion
 
 1. Should commas be required, optional, or forbidden in vertical blocks?
+
    - **Recommendation**: Optional (most flexible)
 
 2. Should we deprecate horizontal alignment syntax?
+
    - **Recommendation**: No, keep it as an alternative
 
 3. Should empty vertical blocks be allowed?
+
    - **Recommendation**: No, use `EMPTY` instead
 
 4. Maximum indentation level for nested vertical lists?
