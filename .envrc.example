@@ -1,0 +1,4 @@
+# Only use flake on NixOS (non-NixOS developers can ignore this file)
+if [ -f /etc/NIXOS ]; then
+  use flake
+fi
