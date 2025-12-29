@@ -46,6 +46,7 @@ Legend: ✅ done · 🔄 in progress · ⏳ todo · ⚠️ blocked/deferred
 |  12 | TS types/helpers for `/query-plan` consumers   | —                                                                                       |   ✅ |    ✅ | New package `@repo/decision-service-types` exposes `QueryPlanResponse` types and schema/path helpers.                     |
 |  13 | Ladder UI: highlight “next questions”          | —                                                                                       |   ✅ |    ✅ | Ladder nodes now emphasize top-ranked unassigned inputs; irrelevant/short-circuited subgraphs fade+shrink with animation. |
 |  14 | REPL: text-mode query-plan                     | —                                                                                       |   ✅ |    ✅ | `jl4-repl` supports `:decides` and `:queryplan`/`:qp` for DECIDE query-plans under boolean bindings.                      |
+|  15 | jl4-web: wire `/query-plan` into ladder UI     | —                                                                                       |   ✅ |     — | `ts-apps/jl4-web` now upserts current buffer to decision-service and uses `/query-plan` to drive in-diagram highlighting. |
 
 ## Recent Commits (Milestones)
 
@@ -66,4 +67,5 @@ Legend: ✅ done · 🔄 in progress · ⏳ todo · ⚠️ blocked/deferred
 
 ## What’s Next (Recommended)
 
-1. Update consumers (UI + decision API) to use `asks[*].path` + `asks[*].schema` (prefer `@repo/decision-service-types`) instead of parsing `key`/`label` strings.
+1. Update remaining consumers (VSCode webview, decision-service API clients) to use `asks[*].path` + `asks[*].schema` (prefer `@repo/decision-service-types`) instead of parsing `key`/`label` strings.
+2. jl4-web: optionally surface `asks` (path/schema) as ladder annotations (no new pane), so elicitation can target original inputs rather than derived atoms.

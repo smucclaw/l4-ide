@@ -144,70 +144,117 @@
   {/if}
 </aside>
 
-<style lang="postcss">
-  @reference 'tailwindcss';
-
+<style>
   .partial-eval-sidebar {
-    @apply h-full overflow-y-auto border border-border rounded-md bg-background p-3;
+    height: 100%;
+    overflow-y: auto;
     width: 320px;
+    padding: 0.75rem;
+    border-radius: 0.375rem;
+    border: 1px solid var(--color-border, rgba(0, 0, 0, 0.15));
+    background: var(--color-background, white);
+    color: var(--color-foreground, inherit);
   }
 
   .bucket {
-    @apply mt-3;
+    margin-top: 0.75rem;
   }
 
   .bucket-title {
-    @apply text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1;
+    margin-bottom: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-muted-foreground, rgba(0, 0, 0, 0.55));
   }
 
   .bucket-empty {
-    @apply text-xs text-muted-foreground;
+    font-size: 0.75rem;
+    color: var(--color-muted-foreground, rgba(0, 0, 0, 0.55));
   }
 
   .bucket-list {
-    @apply list-none m-0 p-0 space-y-1;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
   }
 
   .bucket-item {
-    @apply flex items-center justify-between gap-2 rounded border border-border bg-card px-2 py-1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    border: 1px solid var(--color-border, rgba(0, 0, 0, 0.15));
+    background: var(--color-card, var(--color-background, white));
   }
 
   .bucket-item.relevant {
-    @apply border-amber-300 bg-amber-50;
+    border-color: #fcd34d;
+    background: #fffbeb;
   }
 
   .bucket-item.irrelevant {
-    @apply bg-muted opacity-70;
+    background: var(--color-muted, rgba(0, 0, 0, 0.04));
+    opacity: 0.7;
   }
 
   .param-name {
-    @apply text-xs font-mono text-left truncate;
     max-width: 14ch;
+    text-align: left;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+      'Liberation Mono', 'Courier New', monospace;
+    font-size: 0.75rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .quick-assign {
-    @apply flex gap-1;
+    display: flex;
+    gap: 0.25rem;
   }
 
   .btn {
-    @apply text-[0.7rem] font-semibold leading-none px-1.5 py-1 rounded border border-border bg-background hover:bg-accent;
+    font-size: 0.7rem;
+    font-weight: 600;
+    line-height: 1;
+    padding: 0.25rem 0.375rem;
+    border-radius: 0.25rem;
+    border: 1px solid var(--color-border, rgba(0, 0, 0, 0.15));
+    background: var(--color-background, white);
+    color: inherit;
+  }
+
+  .btn:hover {
+    background: var(--color-accent, rgba(0, 0, 0, 0.06));
   }
 
   .btn.t {
-    @apply text-emerald-700;
+    color: #047857;
   }
   .btn.f {
-    @apply text-red-700;
+    color: #b91c1c;
   }
   .btn.u {
-    @apply text-muted-foreground;
+    color: var(--color-muted-foreground, rgba(0, 0, 0, 0.55));
   }
 
   .expr {
-    @apply text-xs bg-muted rounded p-2 overflow-x-auto;
+    font-size: 0.75rem;
+    background: var(--color-muted, rgba(0, 0, 0, 0.04));
+    border-radius: 0.25rem;
+    padding: 0.5rem;
+    overflow-x: auto;
   }
 
   .result {
-    @apply text-xs mt-2;
+    margin-top: 0.5rem;
+    font-size: 0.75rem;
   }
 </style>

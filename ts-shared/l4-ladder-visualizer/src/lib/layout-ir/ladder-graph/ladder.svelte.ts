@@ -233,6 +233,8 @@ abstract class BaseLadderGraphLirNode
   #uniqueToLabel: Map<Unique, string> = new Map()
   #partialEvalAnalyzer: PartialEvalAnalyzer
   #partialEvalAnalysis: PartialEvalAnalysis | null = null
+  #elicitationOverride: { ranked: Unique[]; stillNeeded: Unique[] } | null =
+    null
 
   protected constructor(
     nodeInfo: LirNodeInfo,
@@ -469,11 +471,38 @@ abstract class BaseLadderGraphLirNode
   }
 
   getPartialEvalAnalysis(_context: LirContext): PartialEvalAnalysis | null {
-    return this.#partialEvalAnalysis
+    const analysis = this.#partialEvalAnalysis
+    if (!analysis) return null
+    if (!this.#elicitationOverride) return analysis
+    return {
+      ...analysis,
+      ranked: this.#elicitationOverride.ranked,
+      stillNeeded: this.#elicitationOverride.stillNeeded,
+    }
   }
 
   getLabelForUnique(_context: LirContext, unique: Unique): string {
     return this.#uniqueToLabel.get(unique) ?? `${unique}`
+  }
+
+  getBindings(_context: LirContext): Assignment {
+    return this.#bindings.clone()
+  }
+
+  getUniquesForLabel(_context: LirContext, label: string): Unique[] {
+    const out: Unique[] = []
+    for (const [u, lbl] of this.#uniqueToLabel.entries()) {
+      if (lbl === label) out.push(u)
+    }
+    return out
+  }
+
+  setElicitationOverride(
+    context: LirContext,
+    override: { ranked: Unique[]; stillNeeded: Unique[] } | null
+  ) {
+    this.#elicitationOverride = override
+    this.getRegistry().publish(context, this.getId())
   }
 
   private setEvalResult(_context: LirContext, result: EvalResult) {
