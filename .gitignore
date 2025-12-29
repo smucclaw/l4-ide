@@ -20,7 +20,6 @@ doc/*/*.html
 .env.development.local
 .env.local
 .env.production.local
-.envrc
 .env.test.local
 ## golden actual files
 # Haskell files

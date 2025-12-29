@@ -69,6 +69,8 @@ sudo apt install pkg-config liblzma-dev libgmp-dev
 
 Under Nix you can run `nix-shell nix/shell.nix` in the current directory to pick up the above packages (GraphViz included).
 
+Alternatively, if you use direnv, the included `.envrc` file will automatically load the nix flake environment when you `cd` into the repository (on NixOS systems only - it's harmless on other platforms).
+
 ## Tests
 
 ```sh

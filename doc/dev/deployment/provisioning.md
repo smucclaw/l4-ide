@@ -362,4 +362,4 @@ nixos-rebuild switch --rollback --generation N
 - [nixos-anywhere documentation](https://github.com/nix-community/nixos-anywhere)
 - [NixOS Manual](https://nixos.org/manual/nixos/stable/)
 - [Disko (disk partitioning)](https://github.com/nix-community/disko)
-- See also: [DEPLOYMENT.md](./DEPLOYMENT.md) for ongoing deployment procedures
+- See also: [deployment.md](./deployment.md) for ongoing deployment procedures
