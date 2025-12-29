@@ -31,14 +31,14 @@ L4 has been piloted with organizations in both public and private sectors:
 
 ### For Developers
 
-- **[Dev.md](./Dev.md)** - Complete developer setup guide for Haskell and TypeScript development
-- **[dev-config.md](./dev-config.md)** - Local development guide (running with `cabal`)
+- **[doc/dev/setup.md](./doc/dev/setup.md)** - Complete developer setup guide for Haskell and TypeScript development
+- **[doc/dev/local-config.md](./doc/dev/local-config.md)** - Local development guide (running with `cabal`)
 - **[dev-start.sh](./dev-start.sh)** - Helper script for starting services locally
 
 ### For DevOps
 
-- **[PROVISIONING.md](./PROVISIONING.md)** - Setting up new servers from scratch (nixos-anywhere)
-- **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Deploying to existing dev/prod servers
+- **[doc/dev/deployment/provisioning.md](./doc/dev/deployment/provisioning.md)** - Setting up new servers from scratch (nixos-anywhere)
+- **[doc/dev/deployment/deployment.md](./doc/dev/deployment/deployment.md)** - Deploying to existing dev/prod servers
 - **[nix/README.md](./nix/README.md)** - NixOS configuration reference
 
 ## Gallery
