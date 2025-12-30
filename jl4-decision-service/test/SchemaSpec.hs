@@ -180,7 +180,7 @@ instance Arbitrary OutputSummary where
       <*> arbitrary
 
 instance Arbitrary QueryAtom where
-  arbitrary = QueryAtom <$> arbitrary <*> arbitrary <*> arbitrary
+  arbitrary = QueryAtom <$> arbitrary <*> arbitrary <*> arbitrary <*> pure []
 
 instance Arbitrary QueryOutcome where
   arbitrary = QueryOutcome <$> arbitrary <*> arbitrary

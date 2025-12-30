@@ -54,6 +54,7 @@ Legend: ✅ done · 🔄 in progress · ⏳ todo · ⚠️ blocked/deferred
 |  20 | Propagate provenance via deps (transitive refs) | —                                                                                       |   ✅ |    ✅ | Query-plan now computes input-ref closure via `varDepsByUnique`, so derived atoms inherit provenance and `atomId` includes transitive refs.                |
 |  21 | Improve ask schema summaries                    | —                                                                                       |   ✅ |    ✅ | `@repo/decision-service-types` exports `schemaSummary`; jl4-web + VSCode webview use it for in-diagram “next” badges.                                      |
 |  22 | In-diagram tooltip for multi-ask atoms          | —                                                                                       |   ✅ |    ✅ | “Next” badges now show `(+N)` and a tooltip listing all asks/schemas for that atom (no new pane).                                                          |
+|  23 | Expose per-atom input provenance (`inputRefs`)  | —                                                                                       |   ✅ |    ✅ | `QueryAtom` now includes `inputRefs` (transitively propagated) so consumers can explain “what this depends on” without inverting `asks`.                   |
 
 ## Recent Commits (Milestones)
 

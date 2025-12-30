@@ -1,9 +1,15 @@
 import type { Parameter, Parameters } from './schema.js'
 
+export type InputRef = {
+  rootUnique: number
+  path: string[]
+}
+
 export type QueryAtom = {
   unique: number
   atomId: string
   label: string
+  inputRefs?: InputRef[]
 }
 
 export type QueryOutcome = {

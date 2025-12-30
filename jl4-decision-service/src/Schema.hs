@@ -21,6 +21,7 @@ import Data.Proxy
 import Data.Text (Text)
 import qualified Data.Text as Text
 import GHC.TypeLits
+import qualified L4.Decision.QueryPlan as QP
 import Servant
 import Servant.OpenApi
 import Server
@@ -123,6 +124,7 @@ instance ToSchema ReasonNode
 -- 'ToJSON' instance yet.
 instance ToSchema FnArguments
 
+instance ToSchema QP.InputRef
 instance ToSchema QueryAtom
 instance ToSchema QueryOutcome
 instance ToSchema QueryImpact

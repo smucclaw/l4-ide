@@ -101,6 +101,7 @@ data QueryAtom = QueryAtom
   { unique :: !Int
   , atomId :: !Text
   , label :: !Text
+  , inputRefs :: ![InputRef]
   }
   deriving stock (Show, Read, Ord, Eq, Generic)
   deriving anyclass (FromJSON, ToJSON)
@@ -345,6 +346,7 @@ queryPlan name paramsByUnique cached flattenedLabelBindings =
         { unique = u
         , atomId = Map.findWithDefault (Text.pack (show u)) u atomIdByUniqueMap
         , label = Map.findWithDefault (Text.pack (show u)) u cached.varLabelByUnique
+        , inputRefs = Set.toList (IntMap.findWithDefault Set.empty u refsByUnique)
         }
 
     atomsOfSet :: Set Int -> [QueryAtom]

@@ -8,6 +8,7 @@ export {
   sortAsksForElicitation,
 } from './query-plan.js'
 export type {
+  InputRef,
   QueryAtom,
   QueryOutcome,
   QueryImpact,
