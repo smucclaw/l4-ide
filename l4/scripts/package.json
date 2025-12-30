@@ -1,0 +1,12 @@
+{
+  "name": "l4-skill-scripts",
+  "version": "1.0.0",
+  "description": "Support scripts for L4 skill - cloud validation",
+  "type": "module",
+  "scripts": {
+    "validate": "node validate-cloud.mjs"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
