@@ -51,6 +51,11 @@
           "type": "string",
           "default": null,
           "description": "Path to the jl4-lsp executable"
+        },
+        "jl4.decisionServiceUrl": {
+          "type": "string",
+          "default": "http://localhost:8001",
+          "description": "Base URL for jl4-decision-service (used for query planning)"
         }
       }
     },
@@ -94,6 +99,7 @@
   },
   "prettier": "@repo/prettier-config",
   "dependencies": {
+    "@repo/vscode-webview-rpc": "*",
     "@repo/viz-expr": "*",
     "@repo/webview": "*",
     "jl4-client-rpc": "*",
@@ -132,6 +138,7 @@
     "build": "npm run clean && npm run prepare:webview && tsc -b tsconfig.json && npm run bundle-esbuild",
     "prepare:webview": "mkdir -p ./static/webview && cp -r ../webview/build/* ./static/webview/",
     "bundle-esbuild": "node scripts/build.mjs",
+    "test": "tsc -b tsconfig.json && node --test out/unit-tests/*.test.js",
     "package": "npm run lint && npx vsce package",
     "dev": "npm run build --watch",
     "format": "prettier --write . --ignore-path ../../.prettierignore",
