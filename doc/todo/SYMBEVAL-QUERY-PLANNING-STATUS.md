@@ -55,6 +55,7 @@ Legend: ✅ done · 🔄 in progress · ⏳ todo · ⚠️ blocked/deferred
 |  21 | Improve ask schema summaries                    | —                                                                                       |   ✅ |    ✅ | `@repo/decision-service-types` exports `schemaSummary`; jl4-web + VSCode webview use it for in-diagram “next” badges.                                      |
 |  22 | In-diagram tooltip for multi-ask atoms          | —                                                                                       |   ✅ |    ✅ | “Next” badges now show `(+N)` and a tooltip listing all asks/schemas for that atom (no new pane).                                                          |
 |  23 | Expose per-atom input provenance (`inputRefs`)  | —                                                                                       |   ✅ |    ✅ | `QueryAtom` now includes `inputRefs` (transitively propagated) so consumers can explain “what this depends on” without inverting `asks`.                   |
+|  24 | Refactor query-plan→UI mapping into module      | —                                                                                       |   ✅ |    ✅ | `l4-ladder-visualizer` exports `elicitationOverrideFromQueryPlan`; jl4-web + VSCode webview call it before `setElicitationOverride`.                       |
 
 ## Recent Commits (Milestones)
 

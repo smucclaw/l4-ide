@@ -30,6 +30,7 @@
     LirRegistry,
     type FunDeclLirNode,
     LadderEnv,
+    elicitationOverrideFromQueryPlan,
     VizDeclLirSource,
   } from 'l4-ladder-visualizer'
   import {
@@ -37,11 +38,9 @@
     type RenderAsLadderInfo,
     type VersionedDocId,
   } from '@repo/viz-expr'
-  import { schemaSummary as summarizeSchema } from '@repo/decision-service-types'
-
   /***********************************
-    Persistent-session-related vars
-  ************************************/
+	    Persistent-session-related vars
+	  ************************************/
 
   // `persistSession` does not need to be reactive
   let persistSession: undefined | (() => Promise<string | undefined>) =
@@ -218,72 +217,10 @@
 
     const ladderGraph = ladderEnv.getTopFunDeclLirNode(context).getBody(context)
 
-    const uniquesForAtom = (atom: { atomId: string; label: string }) => {
-      const byAtomId = ladderGraph.getUniquesForAtomId(context, atom.atomId)
-      return byAtomId.length > 0
-        ? byAtomId
-        : ladderGraph.getUniquesForLabel(context, atom.label)
-    }
-
-    const uniquesForAtoms = (
-      atoms: Array<{ atomId: string; label: string }>
-    ) => {
-      const out: number[] = []
-      const seen = new Set<number>()
-      for (const atom of atoms) {
-        for (const u of uniquesForAtom(atom)) {
-          if (seen.has(u)) continue
-          seen.add(u)
-          out.push(u)
-        }
-      }
-      return out
-    }
-
-    const askByUnique = new Map<
-      number,
-      Array<{
-        container: string
-        path: string[]
-        label: string
-        schemaSummary: string | null
-      }>
-    >()
-    const seenAskByUnique = new Map<number, Set<string>>()
-
-    for (const ask of resp.asks) {
-      for (const atom of ask.atoms) {
-        for (const u of uniquesForAtom(atom)) {
-          const seen = seenAskByUnique.get(u) ?? new Set<string>()
-          seenAskByUnique.set(u, seen)
-          if (seen.has(ask.label)) continue
-          seen.add(ask.label)
-
-          const entry = askByUnique.get(u) ?? []
-          askByUnique.set(u, entry)
-          entry.push({
-            container: ask.container,
-            path: ask.path,
-            label: ask.label,
-            schemaSummary: summarizeSchema(ask.schema),
-          })
-        }
-      }
-    }
-
-    const rankedAtoms =
-      resp.asks.length > 0 ? resp.asks.flatMap((ask) => ask.atoms) : resp.ranked
-    const rankedUniques = uniquesForAtoms(rankedAtoms)
-    const stillNeededUniques = uniquesForAtoms(resp.stillNeeded)
-    const nextUniques =
-      resp.asks.length > 0 ? uniquesForAtoms(resp.asks[0]!.atoms) : []
-
-    ladderGraph.setElicitationOverride(context, {
-      ranked: rankedUniques,
-      stillNeeded: stillNeededUniques,
-      next: nextUniques,
-      askByUnique,
-    })
+    ladderGraph.setElicitationOverride(
+      context,
+      elicitationOverrideFromQueryPlan(context, ladderGraph, resp)
+    )
   }
 
   function scheduleQueryPlanRefresh() {
