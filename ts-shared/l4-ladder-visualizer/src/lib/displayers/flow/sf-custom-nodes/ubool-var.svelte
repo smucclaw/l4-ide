@@ -44,6 +44,19 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
     if (analysis.stillNeeded.includes(u)) return 'elicitation-needed'
     return ''
   })
+
+  const maybeAskBadgeText = $derived.by((): string | null => {
+    const analysis = ladderGraph.getPartialEvalAnalysis(data.context)
+    if (!analysis) return null
+    const u = node.getUnique(data.context)
+    if (!analysis.next.includes(u)) return null
+    const asks = analysis.askByUnique.get(u) ?? []
+    const primary = asks[0]
+    if (!primary) return null
+    return primary.schemaSummary
+      ? `${primary.label}: ${primary.schemaSummary}`
+      : primary.label
+  })
 </script>
 
 {#snippet inlineUI()}
@@ -73,7 +86,7 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
 {#snippet coreUBoolVarUI()}
   <!-- Yes, we need cursor-pointer here. -->
   <button
-    class="label-wrapper-for-content-bearing-sf-node cursor-pointer"
+    class="label-wrapper-for-content-bearing-sf-node cursor-pointer flex flex-col gap-1"
     onclick={() => {
       const newValue = cycle(node.getValue(data.context, ladderGraph))
       ladderGraph.submitNewBinding(data.context, {
@@ -82,7 +95,10 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
       })
     }}
   >
-    {node.getLabel(data.context)}
+    <div>{node.getLabel(data.context)}</div>
+    {#if maybeAskBadgeText}
+      <div class="text-[0.65rem] opacity-70">{maybeAskBadgeText}</div>
+    {/if}
   </button>
 {/snippet}
 

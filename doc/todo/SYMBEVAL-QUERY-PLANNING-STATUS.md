@@ -49,6 +49,7 @@ Legend: ✅ done · 🔄 in progress · ⏳ todo · ⚠️ blocked/deferred
 |  15 | jl4-web: wire `/query-plan` into ladder UI     | —                                                                                       |   ✅ |     — | `ts-apps/jl4-web` now upserts current buffer to decision-service and uses `/query-plan` to drive in-diagram highlighting.                             |
 |  16 | VSCode webview: wire `/query-plan` into ladder | —                                                                                       |   ✅ |    ✅ | `ts-apps/webview` requests query-plan via extension RPC; extension upserts doc text to decision-service (config: `jl4.decisionServiceUrl`).           |
 |  17 | Prefer `asks[*]` for “next” emphasis           | —                                                                                       |   ✅ |    ✅ | Ladder UI supports multiple “next” nodes (top ask group) via `PartialEvalAnalysis.next`; jl4-web + VSCode webview derive `next` from `asks[0].atoms`. |
+|  18 | Annotate “next” nodes with ask schema          | —                                                                                       |   ✅ |    ✅ | Ladder nodes now show `asks[0].label` and a light schema summary (e.g. `Number`, `enum(n)`) on the highlighted “next” atoms, without adding a new pane. |
 
 ## Recent Commits (Milestones)
 
@@ -69,5 +70,5 @@ Legend: ✅ done · 🔄 in progress · ⏳ todo · ⚠️ blocked/deferred
 
 ## What’s Next (Recommended)
 
-1. Surface `asks[*].path` + `asks[*].schema` as ladder annotations (no new pane), so elicitation can target original inputs rather than derived atoms.
-2. Switch atom matching from `label` to stable `atomId` end-to-end once the ladder side can compute or receive it (eliminates label collisions and cross-compiler unique drift).
+1. Switch atom matching from `label` to stable `atomId` end-to-end once the ladder side can compute or receive it (eliminates label collisions and cross-compiler unique drift).
+2. Improve schema summaries (e.g. `Record{...}`, `List<T>`, enum value previews) and consider tooltips for multiple asks per atom.

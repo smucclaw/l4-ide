@@ -237,6 +237,7 @@ abstract class BaseLadderGraphLirNode
     ranked: Unique[]
     stillNeeded: Unique[]
     next?: Unique[]
+    askByUnique?: PartialEvalAnalysis['askByUnique']
   } | null = null
 
   protected constructor(
@@ -482,6 +483,8 @@ abstract class BaseLadderGraphLirNode
       next: this.#elicitationOverride.next ?? analysis.next,
       ranked: this.#elicitationOverride.ranked,
       stillNeeded: this.#elicitationOverride.stillNeeded,
+      askByUnique:
+        this.#elicitationOverride.askByUnique ?? analysis.askByUnique,
     }
   }
 
@@ -507,6 +510,7 @@ abstract class BaseLadderGraphLirNode
       ranked: Unique[]
       stillNeeded: Unique[]
       next?: Unique[]
+      askByUnique?: PartialEvalAnalysis['askByUnique']
     } | null
   ) {
     this.#elicitationOverride = override

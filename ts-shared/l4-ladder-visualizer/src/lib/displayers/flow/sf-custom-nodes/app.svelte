@@ -41,6 +41,18 @@
     if (analysis.stillNeeded.includes(unique)) return 'elicitation-needed'
     return ''
   }
+
+  const askBadgeTextForUnique = (unique: number): string | null => {
+    const analysis = ladderGraph.getPartialEvalAnalysis(data.context)
+    if (!analysis) return null
+    if (!analysis.next.includes(unique)) return null
+    const asks = analysis.askByUnique.get(unique) ?? []
+    const primary = asks[0]
+    if (!primary) return null
+    return primary.schemaSummary
+      ? `${primary.label}: ${primary.schemaSummary}`
+      : primary.label
+  }
 </script>
 
 <!---------------------------------------------------
@@ -67,6 +79,7 @@
                App Arg UI
 --------------------------------------------------->
 {#snippet argUI(arg: AppArgLirNode)}
+  {@const askBadgeText = askBadgeTextForUnique(arg.getUnique(data.context))}
   <IsViableIndicator context={data.context} node={arg}>
     <ValueIndicator
       value={arg.getValue(data.context, ladderGraph)}
@@ -78,7 +91,14 @@
     >
       <!-- Yes, we need cursor-pointer here. -->
       <button
-        class={['p-2', 'text-xs', 'cursor-pointer']}
+        class={[
+          'p-2',
+          'text-xs',
+          'cursor-pointer',
+          'flex',
+          'flex-col',
+          'gap-1',
+        ]}
         onclick={async () => {
           console.log('clicked: ', arg.getLabel(data.context), arg.getId())
 
@@ -89,7 +109,10 @@
           })
         }}
       >
-        {arg.getLabel(data.context)}
+        <div>{arg.getLabel(data.context)}</div>
+        {#if askBadgeText}
+          <div class="text-[0.6rem] opacity-70">{askBadgeText}</div>
+        {/if}
       </button>
     </ValueIndicator>
   </IsViableIndicator>

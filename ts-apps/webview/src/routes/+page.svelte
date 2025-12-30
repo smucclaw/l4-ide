@@ -122,6 +122,17 @@
 
     const ladderGraph = ladderEnv.getTopFunDeclLirNode(context).getBody(context)
 
+    const schemaSummary = (
+      schema: import('@repo/decision-service-types').Parameter | null
+    ): string | null => {
+      if (!schema) return null
+      if (schema.alias) return schema.alias
+      if (schema.enum && schema.enum.length > 0)
+        return `enum(${schema.enum.length})`
+      if (schema.items) return `${schema.type}[]`
+      return schema.type || null
+    }
+
     const uniquesForAtoms = (atoms: Array<{ label: string }>) => {
       const out: number[] = []
       const seen = new Set<number>()
@@ -135,6 +146,37 @@
       return out
     }
 
+    const askByUnique = new Map<
+      number,
+      Array<{
+        container: string
+        path: string[]
+        label: string
+        schemaSummary: string | null
+      }>
+    >()
+    const seenAskByUnique = new Map<number, Set<string>>()
+
+    for (const ask of resp.asks) {
+      for (const atom of ask.atoms) {
+        for (const u of ladderGraph.getUniquesForLabel(context, atom.label)) {
+          const seen = seenAskByUnique.get(u) ?? new Set<string>()
+          seenAskByUnique.set(u, seen)
+          if (seen.has(ask.label)) continue
+          seen.add(ask.label)
+
+          const entry = askByUnique.get(u) ?? []
+          askByUnique.set(u, entry)
+          entry.push({
+            container: ask.container,
+            path: ask.path,
+            label: ask.label,
+            schemaSummary: schemaSummary(ask.schema),
+          })
+        }
+      }
+    }
+
     const rankedAtoms =
       resp.asks.length > 0 ? resp.asks.flatMap((ask) => ask.atoms) : resp.ranked
     const rankedUniques = uniquesForAtoms(rankedAtoms)
@@ -146,6 +188,7 @@
       ranked: rankedUniques,
       stillNeeded: stillNeededUniques,
       next: nextUniques,
+      askByUnique,
     })
   }
 

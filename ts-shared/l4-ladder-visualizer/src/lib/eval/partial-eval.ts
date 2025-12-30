@@ -15,6 +15,13 @@ export type RelevanceStatus =
   | 'irrelevant'
   | 'short-circuited'
 
+export type ElicitationAsk = {
+  container: string
+  path: string[]
+  label: string
+  schemaSummary: string | null
+}
+
 export interface PartialEvalAnalysis {
   overallResult: UBoolVal
   isDetermined: boolean
@@ -25,6 +32,9 @@ export interface PartialEvalAnalysis {
   stillNeeded: Unique[]
   dontCare: Unique[]
   ranked: Unique[]
+
+  /** Optional “what original input does this atom depend on?” annotations from query-plan. */
+  askByUnique: Map<Unique, readonly ElicitationAsk[]>
 
   nodeRelevance: Map<IRId, RelevanceStatus>
   irrelevantRootIds: Set<IRId>
@@ -353,6 +363,7 @@ export class PartialEvalAnalyzer {
       stillNeeded: uniqSorted(stillNeeded),
       dontCare: uniqSorted(dontCare),
       ranked: rankedStillNeeded,
+      askByUnique: new Map(),
       nodeRelevance,
       irrelevantRootIds,
       consultedUniques: evalResult.consultedUniques,
