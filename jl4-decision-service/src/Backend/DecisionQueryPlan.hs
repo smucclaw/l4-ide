@@ -269,10 +269,10 @@ vizExprToBoolExpr expr =
   go = \case
     VizExpr.TrueE _ _ -> (BDQ.BTrue, Map.empty, [])
     VizExpr.FalseE _ _ -> (BDQ.BFalse, Map.empty, [])
-    VizExpr.UBoolVar _ nm _ _ ->
+    VizExpr.UBoolVar _ nm _ _ _ ->
       let u = nm.unique
        in (BDQ.BVar u, Map.singleton u nm.label, [u])
-    VizExpr.App _ nm _args ->
+    VizExpr.App _ nm _args _ ->
       let u = nm.unique
        in (BDQ.BVar u, Map.singleton u nm.label, [u])
     VizExpr.Not _ x ->

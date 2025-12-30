@@ -157,6 +157,8 @@ export interface App extends IRNode {
   readonly $type: 'App'
   readonly fnName: Name
   readonly args: readonly IRExpr[]
+  /** Stable UUIDv5 derived from function name, atom label, and input refs. */
+  readonly atomId: string
 }
 
 /** For the original Viz / IRExpr (as opposed to the values that the frontend evaluator uses) */
@@ -185,6 +187,8 @@ export const App = Schema.Struct({
   id: IRId,
   fnName: Name,
   args: Schema.Array(IRExpr),
+  /** Stable UUIDv5 derived from function name, atom label, and input refs. */
+  atomId: Schema.String,
 }).annotations({ identifier: 'App' })
 
 // // TODO: Need to look more carefully at L4's NamedExpr
@@ -240,6 +244,8 @@ export const UBoolVar = Schema.Struct({
   id: IRId,
   name: Name,
   canInline: Schema.Boolean,
+  /** Stable UUIDv5 derived from function name, atom label, and input refs. */
+  atomId: Schema.String,
 }).annotations({ identifier: 'UBoolVar' })
 
 /** We have an IRId even for bool lits b/c it's useful to be able to associate IRExprs with the Lir nodes that they get translated to */

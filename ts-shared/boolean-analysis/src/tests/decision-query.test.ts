@@ -9,6 +9,7 @@ function uboolVar(id: number, unique: number, label: string): IRExpr {
     name: { unique, label },
     value: 'UnknownV',
     canInline: false,
+    atomId: `atom-${unique}`,
   }
 }
 

@@ -20,6 +20,7 @@ function uboolVar(idNum: number, unique: number, label: string): IRExpr {
     name: mkName(unique, label),
     value: 'UnknownV',
     canInline: false,
+    atomId: `atom-${unique}`,
   }
 }
 
@@ -103,6 +104,7 @@ describe('PartialEvalAnalyzer', () => {
       id: rootId,
       fnName: mkName(999, 'p'),
       args: [a],
+      atomId: 'atom-999',
     }
 
     const analyzer = new PartialEvalAnalyzer(expr, [1])

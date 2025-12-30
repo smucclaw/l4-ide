@@ -369,7 +369,7 @@ translateExpr False = go
               let uniq = vid.id
                   vname = V.MkName uniq (prettyLayout e)
               recordAtomInputRefs uniq =<< freeInputRefsExpanded Set.empty e
-              V.App vid vname <$> traverse go args
+              V.App vid vname <$> traverse go args <*> pure ""
             else
               leafFromExpr e
 
@@ -409,7 +409,7 @@ varLeaf vid vname resolved = do
       Nothing -> pure (Set.singleton (MkInputRef vname.unique []))
       Just body -> freeInputRefsExpanded (Set.singleton vname.unique) body
   recordAtomInputRefs vname.unique refs
-  pure $ V.UBoolVar vid vname defaultUBoolVarValue canInline
+  pure $ V.UBoolVar vid vname defaultUBoolVarValue canInline ""
 
 leafFromExpr :: Expr Resolved -> Viz IRExpr
 leafFromExpr expr = do
@@ -423,6 +423,7 @@ leafFromExpr expr = do
       (V.MkName uniq (prettyLayout expr))
       defaultUBoolVarValue
       defaultUBoolVarCanInline
+      ""
 
 ------------------------------------------------------
 -- Name helpers

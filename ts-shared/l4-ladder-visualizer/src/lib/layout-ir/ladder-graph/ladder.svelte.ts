@@ -231,6 +231,8 @@ abstract class BaseLadderGraphLirNode
   #shortCircuitedSubgraph: DirectedAcyclicGraph<LirId> = empty()
 
   #uniqueToLabel: Map<Unique, string> = new Map()
+  #uniqueToAtomId: Map<Unique, string> = new Map()
+  #atomIdToUniques: Map<string, Unique[]> = new Map()
   #partialEvalAnalyzer: PartialEvalAnalyzer
   #partialEvalAnalysis: PartialEvalAnalysis | null = null
   #elicitationOverride: {
@@ -269,6 +271,20 @@ abstract class BaseLadderGraphLirNode
         n.getLabel(nodeInfo.context),
       ])
     )
+
+    this.#uniqueToAtomId = new Map(
+      varNodes.map((n) => [
+        n.getUnique(nodeInfo.context),
+        n.getAtomId(nodeInfo.context),
+      ])
+    )
+
+    this.#atomIdToUniques = new Map()
+    for (const [u, aid] of this.#uniqueToAtomId.entries()) {
+      const existing = this.#atomIdToUniques.get(aid) ?? []
+      existing.push(u)
+      this.#atomIdToUniques.set(aid, existing)
+    }
 
     // Make the initial args / assignment
     const initialAssignmentAssocList: Array<[Unique, UBoolVal]> = varNodes.map(
@@ -492,6 +508,10 @@ abstract class BaseLadderGraphLirNode
     return this.#uniqueToLabel.get(unique) ?? `${unique}`
   }
 
+  getAtomIdForUnique(_context: LirContext, unique: Unique): string | null {
+    return this.#uniqueToAtomId.get(unique) ?? null
+  }
+
   getBindings(_context: LirContext): Assignment {
     return this.#bindings.clone()
   }
@@ -502,6 +522,10 @@ abstract class BaseLadderGraphLirNode
       if (lbl === label) out.push(u)
     }
     return out
+  }
+
+  getUniquesForAtomId(_context: LirContext, atomId: string): Unique[] {
+    return this.#atomIdToUniques.get(atomId) ?? []
   }
 
   setElicitationOverride(
@@ -903,6 +927,10 @@ export class UBoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
 
   getUnique(_context: LirContext) {
     return this.#originalExpr.name.unique
+  }
+
+  getAtomId(_context: LirContext) {
+    return this.#originalExpr.atomId
   }
 
   canInline(_context: LirContext) {

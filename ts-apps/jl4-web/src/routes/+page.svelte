@@ -175,7 +175,7 @@
     return JSON.stringify(entries)
   }
 
-  function getCurrentAtomLabelBindings(): {
+  function getCurrentAtomBindings(): {
     fnName: string
     bindings: Record<string, boolean>
   } | null {
@@ -187,17 +187,20 @@
     const out: Record<string, boolean> = {}
     for (const [unique, val] of ladderGraph.getBindings(context).getEntries()) {
       if (!val) continue
+      const atomId =
+        ladderGraph.getAtomIdForUnique(context, unique) ??
+        ladderGraph.getLabelForUnique(context, unique)
       if (val.$type === 'TrueV') {
-        out[ladderGraph.getLabelForUnique(context, unique)] = true
+        out[atomId] = true
       } else if (val.$type === 'FalseV') {
-        out[ladderGraph.getLabelForUnique(context, unique)] = false
+        out[atomId] = false
       }
     }
     return { fnName: currentDecisionServiceFunctionName, bindings: out }
   }
 
   async function refreshQueryPlanFromDecisionService() {
-    const curr = getCurrentAtomLabelBindings()
+    const curr = getCurrentAtomBindings()
     if (!curr) return
 
     const nextKey = `${curr.fnName}|${bindingsKey(curr.bindings)}`
@@ -225,11 +228,20 @@
       return schema.type || null
     }
 
-    const uniquesForAtoms = (atoms: Array<{ label: string }>) => {
+    const uniquesForAtom = (atom: { atomId: string; label: string }) => {
+      const byAtomId = ladderGraph.getUniquesForAtomId(context, atom.atomId)
+      return byAtomId.length > 0
+        ? byAtomId
+        : ladderGraph.getUniquesForLabel(context, atom.label)
+    }
+
+    const uniquesForAtoms = (
+      atoms: Array<{ atomId: string; label: string }>
+    ) => {
       const out: number[] = []
       const seen = new Set<number>()
       for (const atom of atoms) {
-        for (const u of ladderGraph.getUniquesForLabel(context, atom.label)) {
+        for (const u of uniquesForAtom(atom)) {
           if (seen.has(u)) continue
           seen.add(u)
           out.push(u)
@@ -251,7 +263,7 @@
 
     for (const ask of resp.asks) {
       for (const atom of ask.atoms) {
-        for (const u of ladderGraph.getUniquesForLabel(context, atom.label)) {
+        for (const u of uniquesForAtom(atom)) {
           const seen = seenAskByUnique.get(u) ?? new Set<string>()
           seenAskByUnique.set(u, seen)
           if (seen.has(ask.label)) continue

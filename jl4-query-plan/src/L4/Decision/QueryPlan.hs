@@ -10,6 +10,7 @@ module L4.Decision.QueryPlan (
   QueryInput (..),
   QueryAsk (..),
   QueryPlanResponse (..),
+  atomIdByUnique,
   queryPlan,
 ) where
 
@@ -103,23 +104,14 @@ data QueryPlanResponse = QueryPlanResponse
   deriving stock (Show, Generic)
   deriving anyclass (FromJSON, ToJSON)
 
-queryPlan ::
+atomIdByUnique ::
   Text ->
   -- | Parameter labels keyed by unique.
   Map Int Text ->
   CachedDecisionQuery ->
-  -- | Flattened boolean bindings keyed by label (including dotted keys), plus optionally `unique` (decimal) or `atomId`.
-  [(Text, Bool)] ->
-  QueryPlanResponse
-queryPlan name paramsByUnique cached flattenedLabelBindings =
+  Map Int Text
+atomIdByUnique name paramsByUnique cached =
   let
-    paramUniqueByLabel :: Map Text Int
-    paramUniqueByLabel =
-      Map.fromList
-        [ (lbl, u)
-        | (u, lbl) <- Map.toList paramsByUnique
-        ]
-
     renderInputRef :: InputRef -> Text
     renderInputRef ref =
       let
@@ -150,19 +142,37 @@ queryPlan name paramsByUnique cached flattenedLabelBindings =
                 <> ["refs=" <> Text.intercalate ";" refs | not (null refs)]
             )
        in UUID.toText (UUIDV5.generateNamed UUIDV5.namespaceURL (BS.unpack (Text.encodeUtf8 canonical)))
+   in
+    Map.fromList
+      [ (u, stableAtomId u lbl)
+      | (u, lbl) <- Map.toList cached.varLabelByUnique
+      ]
 
-    atomIdByUnique :: Map Int Text
-    atomIdByUnique =
+queryPlan ::
+  Text ->
+  -- | Parameter labels keyed by unique.
+  Map Int Text ->
+  CachedDecisionQuery ->
+  -- | Flattened boolean bindings keyed by label (including dotted keys), plus optionally `unique` (decimal) or `atomId`.
+  [(Text, Bool)] ->
+  QueryPlanResponse
+queryPlan name paramsByUnique cached flattenedLabelBindings =
+  let
+    paramUniqueByLabel :: Map Text Int
+    paramUniqueByLabel =
       Map.fromList
-        [ (u, stableAtomId u lbl)
-        | (u, lbl) <- Map.toList cached.varLabelByUnique
+        [ (lbl, u)
+        | (u, lbl) <- Map.toList paramsByUnique
         ]
+
+    atomIdByUniqueMap :: Map Int Text
+    atomIdByUniqueMap = atomIdByUnique name paramsByUnique cached
 
     uniqueByAtomId :: Map Text Int
     uniqueByAtomId =
       Map.fromList
         [ (aid, u)
-        | (u, aid) <- Map.toList atomIdByUnique
+        | (u, aid) <- Map.toList atomIdByUniqueMap
         ]
 
     parseUniqueKey t = readMaybe (Text.unpack t) :: Maybe Int
@@ -279,7 +289,7 @@ queryPlan name paramsByUnique cached flattenedLabelBindings =
     atomOf u =
       QueryAtom
         { unique = u
-        , atomId = Map.findWithDefault (Text.pack (show u)) u atomIdByUnique
+        , atomId = Map.findWithDefault (Text.pack (show u)) u atomIdByUniqueMap
         , label = Map.findWithDefault (Text.pack (show u)) u cached.varLabelByUnique
         }
 
@@ -323,9 +333,9 @@ queryPlan name paramsByUnique cached flattenedLabelBindings =
     impactByAtomIdJson :: Map Text QueryImpact
     impactByAtomIdJson =
       Map.fromList
-        [ (atomIdByUnique Map.! u, imp)
+        [ (atomIdByUniqueMap Map.! u, imp)
         | (u, imp) <- Map.toList impactJson
-        , Map.member u atomIdByUnique
+        , Map.member u atomIdByUniqueMap
         ]
 
     depAtoms :: Int -> [Int]
