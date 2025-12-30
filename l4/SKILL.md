@@ -71,9 +71,94 @@ GIVETH A RiskCategory
     OTHERWISE Uninsurable
 ```
 
-### 4. Formalize Modal Logic (Advanced)
+### 4. Model State Transitions and Obligations (Advanced)
 
-For multi-party contracts with obligations and deadlines, use L4's deontic, temporal, and epistemic modalities (see Advanced Course for details).
+For multi-party contracts with obligations, deadlines, and state transitions, L4 provides regulative rule syntax. This is essential for contracts like promissory notes, loan agreements, and service contracts.
+
+#### Regulative Rules: The Provision Pattern
+
+Regulative rules govern party behavior over time:
+
+```l4
+PARTY   actor
+WHO     preconditions      -- Optional: who can perform this action
+MUST    action            -- Or MAY, SHANT
+        parameters        -- Details of the action
+WITHIN  deadline          -- Or BEFORE
+HENCE   nextState         -- What happens if fulfilled
+LEST    penaltyState      -- What happens if breached
+```
+
+**Example: Loan Payment Obligation**
+
+```l4
+GIVEN outstandingAmount IS A Money
+PARTY `The Borrower`
+MUST  `pay debts to` `The Lender` outstandingAmount
+WITHIN `Payment Due Date`
+HENCE  FULFILLED
+LEST   PARTY `The Borrower`
+       MUST  `pay debts to` `The Lender` amountWithPenalty
+       WITHIN defaultDeadline
+       LEST  BREACH
+       WHERE
+           amountWithPenalty MEANS
+               Money WITH
+                   Currency IS outstandingAmount's Currency
+                   Value IS outstandingAmount's Value TIMES 1.05
+           defaultDeadline MEANS `Payment Due Date` PLUS 30
+```
+
+#### Deontic Modals
+
+| Modal | Meaning    | Default HENCE | Default LEST |
+| ----- | ---------- | ------------- | ------------ |
+| MUST  | Obligatory | FULFILLED     | BREACH       |
+| MAY   | Permitted  | FULFILLED     | FULFILLED    |
+| SHANT | Prohibited | FULFILLED     | BREACH       |
+
+#### Recursive Obligations with HENCE
+
+For recurring payments (like monthly installments), use recursive HENCE:
+
+```l4
+GIVEN remainingBalance IS A Money
+`Payment Obligations` remainingBalance MEANS
+    IF remainingBalance's Value GREATER THAN 0
+    THEN PARTY `The Borrower`
+         MUST `pay` `monthly payment`
+         WITHIN `next due date`
+         HENCE `Payment Obligations` newBalance
+         LEST `Payment Obligations` penaltyBalance
+         WHERE
+             newBalance MEANS
+                 Money WITH
+                     Currency IS remainingBalance's Currency
+                     Value IS remainingBalance's Value MINUS `monthly payment`'s Value
+             penaltyBalance MEANS
+                 Money WITH
+                     Currency IS remainingBalance's Currency
+                     Value IS remainingBalance's Value PLUS penalty
+    ELSE FULFILLED
+```
+
+#### Testing Temporal Obligations
+
+Use `#TRACE` to test state transitions over time:
+
+```l4
+#TRACE `Payment Obligations` (USD 12000) AT 365 WITH
+    PARTY `The Borrower` DOES `pay` (USD 1000) AT 30
+    PARTY `The Borrower` DOES `pay` (USD 1000) AT 60
+    -- ... test complete payment schedule
+```
+
+The `AT` keyword specifies days since commencement. The `WITH` clause lists actions taken by parties.
+
+For more details, see:
+
+- Advanced Course Module A3: Temporal Logic
+- `jl4/experiments/promissory-note-tracking.l4`
 
 ### 5. Validate with jl4-cli or Cloud Validation
 
@@ -227,6 +312,49 @@ BRANCH IF status EQUALS Active   THEN "Running"
        IF ^      EQUALS Inactive THEN "Stopped"
        OTHERWISE "Unknown"
 ```
+
+### Regulative Rules (State Transitions)
+
+For multi-party contracts with obligations and deadlines:
+
+```l4
+-- Basic obligation
+PARTY actorName
+WHO   preconditions  -- Optional qualifier
+MUST  action         -- Or MAY, SHANT
+      parameters
+WITHIN deadline
+HENCE nextObligation
+LEST  penaltyObligation
+
+-- Recursive obligations (loans, subscriptions)
+GIVEN state IS A StateType
+obligationFunction state MEANS
+    IF condition
+    THEN PARTY actor
+         MUST action
+         WITHIN deadline
+         HENCE obligationFunction newState
+         LEST obligationFunction penaltyState
+    ELSE FULFILLED
+
+-- Testing temporal behavior
+#TRACE obligationFunction initialState AT maxTime WITH
+    PARTY actor DOES action AT time1
+    PARTY actor DOES action AT time2
+```
+
+**Key keywords:**
+
+- `PARTY` - Identifies the actor with an obligation
+- `WHO` - Preconditions for the party (optional)
+- `MUST` / `MAY` / `SHANT` - Deontic modals (obligatory / permitted / prohibited)
+- `WITHIN` / `BEFORE` - Deadline for action
+- `HENCE` - Next state if obligation fulfilled
+- `LEST` - Next state if obligation breached
+- `FULFILLED` - Terminal success state
+- `BREACH` - Terminal failure state
+- `#TRACE` - Test temporal execution with actions
 
 ### Operators
 
@@ -422,6 +550,39 @@ processRecursive list MEANS
         combineResults (process head) (processRecursive tail)
 ```
 
+### Contractual State Machines
+
+For contracts with sequential obligations:
+
+```l4
+-- Simple two-party contract
+PARTY `The Seller`
+MAY `offer` product price
+HENCE PARTY `The Buyer`
+      MAY `accept`
+      HENCE PARTY `The Buyer`
+            MUST `pay` price
+            WITHIN (DATE OF 15, 3, 2025)
+            HENCE PARTY `The Seller`
+                  MUST `deliver` product
+                  WITHIN (DATE OF 30, 3, 2025)
+                  HENCE FULFILLED
+                  LEST BREACH
+            LEST BREACH
+      LEST FULFILLED  -- Buyer declines, contract ends
+
+-- Recurring obligations (subscriptions, loans)
+GIVEN remaining IS A NUMBER
+`monthly obligations` remaining MEANS
+    IF remaining GREATER THAN 0
+    THEN PARTY subscriber
+         MUST pay monthlyFee
+         WITHIN nextDueDate
+         HENCE `monthly obligations` (remaining MINUS 1)
+         LEST `late payment process` remaining
+    ELSE FULFILLED
+```
+
 ## Troubleshooting
 
 ### Type Errors
@@ -474,10 +635,12 @@ Consult these references when you need:
 3. **GIVEN/GIVETH/MEANS defines functions** with mandatory type signatures
 4. **Pattern matching with CONSIDER/WHEN** is more powerful than switch/case
 5. **Mixfix notation** enables natural language function names
-6. **Validate with jl4-cli** before testing
+6. **Validate with jl4-cli or cloud validator** before testing
 7. **#EVAL and #ASSERT** for comprehensive testing
-8. **Isomorphic encoding**: Match legal text structure in code structure
-9. **Import prelude and daydate** for standard library functions
-10. **Use WHERE clauses** for local helpers and cleaner code
+8. **Regulative rules (PARTY/MUST/WITHIN/HENCE/LEST)** model contracts and state transitions
+9. **#TRACE** tests temporal obligations over time
+10. **Isomorphic encoding**: Match legal text structure in code structure
+11. **Import prelude and daydate** for standard library functions
+12. **Use WHERE clauses** for local helpers and cleaner code
 
 For complete tutorials, see `https://github.com/smucclaw/l4-ide/tree/main/doc/foundation-course-ai`
