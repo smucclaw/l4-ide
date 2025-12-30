@@ -233,8 +233,11 @@ abstract class BaseLadderGraphLirNode
   #uniqueToLabel: Map<Unique, string> = new Map()
   #partialEvalAnalyzer: PartialEvalAnalyzer
   #partialEvalAnalysis: PartialEvalAnalysis | null = null
-  #elicitationOverride: { ranked: Unique[]; stillNeeded: Unique[] } | null =
-    null
+  #elicitationOverride: {
+    ranked: Unique[]
+    stillNeeded: Unique[]
+    next?: Unique[]
+  } | null = null
 
   protected constructor(
     nodeInfo: LirNodeInfo,
@@ -476,6 +479,7 @@ abstract class BaseLadderGraphLirNode
     if (!this.#elicitationOverride) return analysis
     return {
       ...analysis,
+      next: this.#elicitationOverride.next ?? analysis.next,
       ranked: this.#elicitationOverride.ranked,
       stillNeeded: this.#elicitationOverride.stillNeeded,
     }
@@ -499,7 +503,11 @@ abstract class BaseLadderGraphLirNode
 
   setElicitationOverride(
     context: LirContext,
-    override: { ranked: Unique[]; stillNeeded: Unique[] } | null
+    override: {
+      ranked: Unique[]
+      stillNeeded: Unique[]
+      next?: Unique[]
+    } | null
   ) {
     this.#elicitationOverride = override
     this.getRegistry().publish(context, this.getId())

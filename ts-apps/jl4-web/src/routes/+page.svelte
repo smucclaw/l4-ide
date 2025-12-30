@@ -214,28 +214,30 @@
 
     const ladderGraph = ladderEnv.getTopFunDeclLirNode(context).getBody(context)
 
-    const rankedUniques: number[] = []
-    const seen = new Set<number>()
-    for (const atom of resp.ranked) {
-      for (const u of ladderGraph.getUniquesForLabel(context, atom.label)) {
-        if (seen.has(u)) continue
-        seen.add(u)
-        rankedUniques.push(u)
+    const uniquesForAtoms = (atoms: Array<{ label: string }>) => {
+      const out: number[] = []
+      const seen = new Set<number>()
+      for (const atom of atoms) {
+        for (const u of ladderGraph.getUniquesForLabel(context, atom.label)) {
+          if (seen.has(u)) continue
+          seen.add(u)
+          out.push(u)
+        }
       }
+      return out
     }
 
-    const stillNeededUniques: number[] = []
-    for (const atom of resp.stillNeeded) {
-      for (const u of ladderGraph.getUniquesForLabel(context, atom.label)) {
-        if (seen.has(u)) continue
-        seen.add(u)
-        stillNeededUniques.push(u)
-      }
-    }
+    const rankedAtoms =
+      resp.asks.length > 0 ? resp.asks.flatMap((ask) => ask.atoms) : resp.ranked
+    const rankedUniques = uniquesForAtoms(rankedAtoms)
+    const stillNeededUniques = uniquesForAtoms(resp.stillNeeded)
+    const nextUniques =
+      resp.asks.length > 0 ? uniquesForAtoms(resp.asks[0]!.atoms) : []
 
     ladderGraph.setElicitationOverride(context, {
       ranked: rankedUniques,
       stillNeeded: stillNeededUniques,
+      next: nextUniques,
     })
   }
 

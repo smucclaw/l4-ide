@@ -39,9 +39,8 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
     const analysis = ladderGraph.getPartialEvalAnalysis(data.context)
     if (!analysis) return ''
     const u = node.getUnique(data.context)
-    const rankedIndex = analysis.ranked.indexOf(u)
-    if (rankedIndex === 0) return 'elicitation-next'
-    if (rankedIndex > 0) return 'elicitation-needed'
+    if (analysis.next.includes(u)) return 'elicitation-next'
+    if (analysis.ranked.includes(u)) return 'elicitation-needed'
     if (analysis.stillNeeded.includes(u)) return 'elicitation-needed'
     return ''
   })

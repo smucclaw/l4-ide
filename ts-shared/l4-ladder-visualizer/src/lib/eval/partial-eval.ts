@@ -20,6 +20,8 @@ export interface PartialEvalAnalysis {
   isDetermined: boolean
 
   notAsked: Unique[]
+  /** UBoolVars most valuable to elicit next (may be multiple). */
+  next: Unique[]
   stillNeeded: Unique[]
   dontCare: Unique[]
   ranked: Unique[]
@@ -302,6 +304,7 @@ export class PartialEvalAnalyzer {
     const rankedStillNeeded = ranked.filter(
       (u) => support.has(u) && notAskedSet.has(u)
     )
+    const next = rankedStillNeeded.length > 0 ? [rankedStillNeeded[0]!] : []
 
     // Expand short-circuit roots to whole subtrees for shading.
     const shortCircuitedNodeIds = new Set<IRId>()
@@ -346,6 +349,7 @@ export class PartialEvalAnalyzer {
       overallResult: evalResult.result,
       isDetermined: isDeterminedValue(evalResult.result),
       notAsked: uniqSorted(notAsked),
+      next,
       stillNeeded: uniqSorted(stillNeeded),
       dontCare: uniqSorted(dontCare),
       ranked: rankedStillNeeded,
