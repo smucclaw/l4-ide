@@ -37,6 +37,7 @@
     type RenderAsLadderInfo,
     type VersionedDocId,
   } from '@repo/viz-expr'
+  import { schemaSummary as summarizeSchema } from '@repo/decision-service-types'
 
   /***********************************
     Persistent-session-related vars
@@ -217,17 +218,6 @@
 
     const ladderGraph = ladderEnv.getTopFunDeclLirNode(context).getBody(context)
 
-    const schemaSummary = (
-      schema: import('@repo/decision-service-types').Parameter | null
-    ): string | null => {
-      if (!schema) return null
-      if (schema.alias) return schema.alias
-      if (schema.enum && schema.enum.length > 0)
-        return `enum(${schema.enum.length})`
-      if (schema.items) return `${schema.type}[]`
-      return schema.type || null
-    }
-
     const uniquesForAtom = (atom: { atomId: string; label: string }) => {
       const byAtomId = ladderGraph.getUniquesForAtomId(context, atom.atomId)
       return byAtomId.length > 0
@@ -275,7 +265,7 @@
             container: ask.container,
             path: ask.path,
             label: ask.label,
-            schemaSummary: schemaSummary(ask.schema),
+            schemaSummary: summarizeSchema(ask.schema),
           })
         }
       }

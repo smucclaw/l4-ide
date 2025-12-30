@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { schemaAtPathVariants, sortAsksForElicitation } from '../query-plan.js'
+import { schemaSummary } from '../schema.js'
 import type { Parameter, Parameters, QueryAsk } from '../index.js'
 
 const pBool: Parameter = {
@@ -93,5 +94,35 @@ describe('sortAsksForElicitation', () => {
       ['people', '10', 'recordLabel'],
       ['wrappers', '1', 'recordLabel'],
     ])
+  })
+})
+
+describe('schemaSummary', () => {
+  it('summarizes scalar, enum, list, and record shapes', () => {
+    expect(schemaSummary(pBool)).toBe('Bool')
+    expect(
+      schemaSummary({ ...pBool, enum: ['Yes', 'No'], type: 'string' })
+    ).toBe('enum{Yes|No}')
+    expect(
+      schemaSummary({
+        ...pBool,
+        enum: ['a', 'b', 'c', 'd', 'e'],
+        type: 'string',
+      })
+    ).toBe('enum(5)')
+
+    expect(schemaSummary({ ...pBool, type: 'array', items: pBool })).toBe(
+      'List<Bool>'
+    )
+
+    const rec: Parameter = {
+      type: 'object',
+      alias: null,
+      enum: [],
+      description: '',
+      properties: { z: pBool, a: pBool, b: pBool, c: pBool, d: pBool },
+      propertyOrder: ['b', 'a', 'z', 'c', 'd'],
+    }
+    expect(schemaSummary(rec)).toBe('Record{b,a,z,c,…}')
   })
 })

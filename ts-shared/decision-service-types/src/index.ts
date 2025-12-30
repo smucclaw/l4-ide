@@ -1,4 +1,5 @@
 export type { Parameter, Parameters } from './schema.js'
+export { schemaSummary } from './schema.js'
 export {
   askKeyFromPath,
   askLabelFromPath,
