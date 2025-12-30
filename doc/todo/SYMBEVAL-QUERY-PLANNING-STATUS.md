@@ -76,5 +76,5 @@ Legend: ✅ done · 🔄 in progress · ⏳ todo · ⚠️ blocked/deferred
 
 ## What’s Next (Recommended)
 
-1. Extend provenance semantics beyond simple paths (multi-ref atoms, better aggregation for record/array containers, and UI treatment for “this atom depends on several asks”).
+1. Decide semantics for multi-ref atoms (should we treat these as composite asks, and how should they influence ranking?).
 2. Decide how `TYPICALLY` priors should bias ask ordering/impact once the keyword lands (keep current heuristic semantics stable until then).
