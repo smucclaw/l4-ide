@@ -52,7 +52,8 @@ Legend: ✅ done · 🔄 in progress · ⏳ todo · ⚠️ blocked/deferred
 |  18 | Annotate “next” nodes with ask schema           | —                                                                                       |   ✅ |    ✅ | Ladder nodes now show `asks[0].label` and a light schema summary (e.g. `Number`, `enum(n)`) on the highlighted “next” atoms, without adding a new pane.    |
 |  19 | End-to-end `atomId` wiring (LSP → ladder UIs)   | —                                                                                       |   ✅ |    ✅ | LSP ladder render includes `IRExpr.atomId` for `UBoolVar`/`App`; jl4-web + VSCode use `atomId` for bindings and atom↔node matching (label fallback kept). |
 |  20 | Propagate provenance via deps (transitive refs) | —                                                                                       |   ✅ |    ✅ | Query-plan now computes input-ref closure via `varDepsByUnique`, so derived atoms inherit provenance and `atomId` includes transitive refs.                |
-|  21 | Improve ask schema summaries                    | —                                                                                       |   ✅ |    ✅ | `@repo/decision-service-types` exports `schemaSummary`; jl4-web + VSCode webview use it for in-diagram “next” badges.                                     |
+|  21 | Improve ask schema summaries                    | —                                                                                       |   ✅ |    ✅ | `@repo/decision-service-types` exports `schemaSummary`; jl4-web + VSCode webview use it for in-diagram “next” badges.                                      |
+|  22 | In-diagram tooltip for multi-ask atoms          | —                                                                                       |   ✅ |    ✅ | “Next” badges now show `(+N)` and a tooltip listing all asks/schemas for that atom (no new pane).                                                          |
 
 ## Recent Commits (Milestones)
 
@@ -74,5 +75,4 @@ Legend: ✅ done · 🔄 in progress · ⏳ todo · ⚠️ blocked/deferred
 ## What’s Next (Recommended)
 
 1. Extend provenance semantics beyond simple paths (multi-ref atoms, better aggregation for record/array containers, and UI treatment for “this atom depends on several asks”).
-2. Add richer per-ask UI affordances in-diagram (tooltip/menu to show multiple asks per atom + their schemas, without introducing a new pane).
-3. Decide how `TYPICALLY` priors should bias ask ordering/impact once the keyword lands (keep current heuristic semantics stable until then).
+2. Decide how `TYPICALLY` priors should bias ask ordering/impact once the keyword lands (keep current heuristic semantics stable until then).

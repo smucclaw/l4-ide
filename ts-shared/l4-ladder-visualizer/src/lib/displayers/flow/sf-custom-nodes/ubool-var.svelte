@@ -45,18 +45,21 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
     return ''
   })
 
-  const maybeAskBadgeText = $derived.by((): string | null => {
-    const analysis = ladderGraph.getPartialEvalAnalysis(data.context)
-    if (!analysis) return null
-    const u = node.getUnique(data.context)
-    if (!analysis.next.includes(u)) return null
-    const asks = analysis.askByUnique.get(u) ?? []
-    const primary = asks[0]
-    if (!primary) return null
-    return primary.schemaSummary
-      ? `${primary.label}: ${primary.schemaSummary}`
-      : primary.label
-  })
+  const maybeAskBadge = $derived.by(
+    (): { primaryText: string; allTexts: string[] } | null => {
+      const analysis = ladderGraph.getPartialEvalAnalysis(data.context)
+      if (!analysis) return null
+      const u = node.getUnique(data.context)
+      if (!analysis.next.includes(u)) return null
+      const asks = analysis.askByUnique.get(u) ?? []
+      const allTexts = asks.map((ask) =>
+        ask.schemaSummary ? `${ask.label}: ${ask.schemaSummary}` : ask.label
+      )
+      const primaryText = allTexts[0]
+      if (!primaryText) return null
+      return { primaryText, allTexts }
+    }
+  )
 </script>
 
 {#snippet inlineUI()}
@@ -96,8 +99,25 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
     }}
   >
     <div>{node.getLabel(data.context)}</div>
-    {#if maybeAskBadgeText}
-      <div class="text-[0.65rem] opacity-70">{maybeAskBadgeText}</div>
+    {#if maybeAskBadge}
+      {#if maybeAskBadge.allTexts.length > 1}
+        <Tooltip.Root>
+          <Tooltip.Trigger>
+            <div class="text-[0.65rem] opacity-70">
+              {maybeAskBadge.primaryText} (+{maybeAskBadge.allTexts.length - 1})
+            </div>
+          </Tooltip.Trigger>
+          <Tooltip.Content>
+            <div class="flex flex-col gap-1 max-w-xs">
+              {#each maybeAskBadge.allTexts as line}
+                <div>{line}</div>
+              {/each}
+            </div>
+          </Tooltip.Content>
+        </Tooltip.Root>
+      {:else}
+        <div class="text-[0.65rem] opacity-70">{maybeAskBadge.primaryText}</div>
+      {/if}
     {/if}
   </button>
 {/snippet}

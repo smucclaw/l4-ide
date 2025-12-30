@@ -12,6 +12,7 @@
     type AppArgLirNode,
     type AppLirNode,
   } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
+  import * as Tooltip from '$lib/ui-primitives/tooltip/index.js'
 
   import WithNormalHandles from '$lib/displayers/flow/helpers/with-normal-handles.svelte'
   import WithNonBundlingNodeBaseStyles from '$lib/displayers/flow/helpers/with-non-bundling-node-base-styles.svelte'
@@ -42,16 +43,19 @@
     return ''
   }
 
-  const askBadgeTextForUnique = (unique: number): string | null => {
+  const askBadgeForUnique = (
+    unique: number
+  ): { primaryText: string; allTexts: string[] } | null => {
     const analysis = ladderGraph.getPartialEvalAnalysis(data.context)
     if (!analysis) return null
     if (!analysis.next.includes(unique)) return null
     const asks = analysis.askByUnique.get(unique) ?? []
-    const primary = asks[0]
-    if (!primary) return null
-    return primary.schemaSummary
-      ? `${primary.label}: ${primary.schemaSummary}`
-      : primary.label
+    const allTexts = asks.map((ask) =>
+      ask.schemaSummary ? `${ask.label}: ${ask.schemaSummary}` : ask.label
+    )
+    const primaryText = allTexts[0]
+    if (!primaryText) return null
+    return { primaryText, allTexts }
   }
 </script>
 
@@ -79,7 +83,7 @@
                App Arg UI
 --------------------------------------------------->
 {#snippet argUI(arg: AppArgLirNode)}
-  {@const askBadgeText = askBadgeTextForUnique(arg.getUnique(data.context))}
+  {@const askBadge = askBadgeForUnique(arg.getUnique(data.context))}
   <IsViableIndicator context={data.context} node={arg}>
     <ValueIndicator
       value={arg.getValue(data.context, ladderGraph)}
@@ -110,8 +114,25 @@
         }}
       >
         <div>{arg.getLabel(data.context)}</div>
-        {#if askBadgeText}
-          <div class="text-[0.6rem] opacity-70">{askBadgeText}</div>
+        {#if askBadge}
+          {#if askBadge.allTexts.length > 1}
+            <Tooltip.Root>
+              <Tooltip.Trigger>
+                <div class="text-[0.6rem] opacity-70">
+                  {askBadge.primaryText} (+{askBadge.allTexts.length - 1})
+                </div>
+              </Tooltip.Trigger>
+              <Tooltip.Content>
+                <div class="flex flex-col gap-1 max-w-xs">
+                  {#each askBadge.allTexts as line}
+                    <div>{line}</div>
+                  {/each}
+                </div>
+              </Tooltip.Content>
+            </Tooltip.Root>
+          {:else}
+            <div class="text-[0.6rem] opacity-70">{askBadge.primaryText}</div>
+          {/if}
         {/if}
       </button>
     </ValueIndicator>
