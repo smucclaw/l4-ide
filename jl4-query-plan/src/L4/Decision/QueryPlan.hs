@@ -35,6 +35,54 @@ import Text.Read (readMaybe)
 import qualified Data.UUID as UUID
 import qualified Data.UUID.V5 as UUIDV5
 
+inputRefsClosureByUnique :: CachedDecisionQuery -> IntMap (Set InputRef)
+inputRefsClosureByUnique cached =
+  let
+    depMap :: IntMap IntSet
+    depMap = cached.varDepsByUnique
+
+    directRefs :: IntMap (Set InputRef)
+    directRefs = cached.varInputRefsByUnique
+
+    allUniques :: [Int]
+    allUniques =
+      Set.toList $
+        Set.fromList (Map.keys cached.varLabelByUnique)
+          <> Set.fromList (IntMap.keys depMap)
+          <> Set.fromList (IntMap.keys directRefs)
+          <> Set.fromList (concatMap IntSet.toList (IntMap.elems depMap))
+
+    go :: IntMap (Set InputRef) -> IntSet -> Int -> (Set InputRef, IntMap (Set InputRef))
+    go memo visiting u =
+      case IntMap.lookup u memo of
+        Just s -> (s, memo)
+        Nothing ->
+          let
+            base = IntMap.findWithDefault Set.empty u directRefs
+           in
+            if IntSet.member u visiting
+              then (base, IntMap.insert u base memo)
+              else
+                let
+                  visiting' = IntSet.insert u visiting
+                  deps = IntSet.toList (IntMap.findWithDefault IntSet.empty u depMap)
+                  (depSets, memo') =
+                    List.foldl'
+                      ( \(acc, memo0) d ->
+                          let (childRefs, memo1) = go memo0 visiting' d
+                           in (childRefs : acc, memo1)
+                      )
+                      ([], memo)
+                      deps
+                  refs = Set.unions (base : depSets)
+                 in
+                  (refs, IntMap.insert u refs memo')
+   in
+    List.foldl'
+      (\memo u -> snd (go memo IntSet.empty u))
+      IntMap.empty
+      allUniques
+
 data InputRef = MkInputRef
   { rootUnique :: !Int
   , path :: ![Text]
@@ -112,6 +160,9 @@ atomIdByUnique ::
   Map Int Text
 atomIdByUnique name paramsByUnique cached =
   let
+    refsByUnique :: IntMap (Set InputRef)
+    refsByUnique = inputRefsClosureByUnique cached
+
     renderInputRef :: InputRef -> Text
     renderInputRef ref =
       let
@@ -133,7 +184,7 @@ atomIdByUnique name paramsByUnique cached =
         refs =
           List.sort
             [ renderInputRef ref
-            | ref <- Set.toList (IntMap.findWithDefault Set.empty u cached.varInputRefsByUnique)
+            | ref <- Set.toList (IntMap.findWithDefault Set.empty u refsByUnique)
             ]
         canonical =
           Text.intercalate
@@ -158,6 +209,9 @@ queryPlan ::
   QueryPlanResponse
 queryPlan name paramsByUnique cached flattenedLabelBindings =
   let
+    refsByUnique :: IntMap (Set InputRef)
+    refsByUnique = inputRefsClosureByUnique cached
+
     paramUniqueByLabel :: Map Text Int
     paramUniqueByLabel =
       Map.fromList
@@ -213,7 +267,7 @@ queryPlan name paramsByUnique cached flattenedLabelBindings =
     leafUniquesByInputRef =
       Map.fromListWith (<>)
         [ (ref, [u])
-        | (u, refs) <- IntMap.toList cached.varInputRefsByUnique
+        | (u, refs) <- IntMap.toList refsByUnique
         , [ref] <- [Set.toList refs]
         ]
 
@@ -338,20 +392,13 @@ queryPlan name paramsByUnique cached flattenedLabelBindings =
         , Map.member u atomIdByUniqueMap
         ]
 
-    depAtoms :: Int -> [Int]
-    depAtoms atomUniq =
-      IntSet.toList (IntMap.findWithDefault IntSet.empty atomUniq cached.varDepsByUnique)
-
     atomParamDeps :: Int -> [Int]
     atomParamDeps atomUniq =
       List.nub $
-        concat
-          [ [pUniq]
-          | a <- atomUniq : depAtoms atomUniq
-          , ref <- Set.toList (IntMap.findWithDefault Set.empty a cached.varInputRefsByUnique)
-          , pUniq <- [ref.rootUnique]
-          , Map.member pUniq paramsByUnique
-          ]
+        [ ref.rootUnique
+        | ref <- Set.toList (IntMap.findWithDefault Set.empty atomUniq refsByUnique)
+        , Map.member ref.rootUnique paramsByUnique
+        ]
 
     stillNeededAtoms :: [QueryAtom]
     stillNeededAtoms = atomsOfSet res.support
@@ -393,7 +440,7 @@ queryPlan name paramsByUnique cached flattenedLabelBindings =
     askKeyDepsForAtom atomUniq =
       let
         refs =
-          Maybe.fromMaybe Set.empty (IntMap.lookup atomUniq cached.varInputRefsByUnique)
+          IntMap.findWithDefault Set.empty atomUniq refsByUnique
         fallback :: Maybe (Set (Text, [Text]))
         fallback = do
           lbl <- Map.lookup atomUniq cached.varLabelByUnique
