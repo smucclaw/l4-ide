@@ -78,3 +78,5 @@ Legend: ✅ done · 🔄 in progress · ⏳ todo · ⚠️ blocked/deferred
 
 1. Decide semantics for multi-ref atoms (should we treat these as composite asks, and how should they influence ranking?).
 2. Decide how `TYPICALLY` priors should bias ask ordering/impact once the keyword lands (keep current heuristic semantics stable until then).
+
+Note: the current query-planning + ladder elicitation flow is already usable; these “next” items are about improving optimality/explanations rather than unblocking end-to-end functionality.
