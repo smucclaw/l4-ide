@@ -107,9 +107,10 @@ carameliseObligation = \ case
 
 carameliseRAction :: HasName n => RAction n -> RAction n
 carameliseRAction = \ case
-  MkAction { anno, action, provided } ->
+  MkAction { anno, modal, action, provided } ->
     MkAction
       { anno
+      , modal
       , action
       , provided = fmap carameliseExpr provided
       }

@@ -1083,13 +1083,13 @@ checkObligation ann party action due hence lest partyT actionT = do
   pure (MkObligation ann partyR actionR dueR henceR lestR)
 
 checkAction :: RAction Name -> Type' Resolved -> Check (RAction Resolved, [CheckInfo])
-checkAction MkAction {anno, action, provided = mprovided} actionT = do
+checkAction MkAction {anno, modal, action, provided = mprovided} actionT = do
   (pat, bounds) <- checkPattern ExpectRegulativeActionContext action actionT
   -- NOTE: the provided clauses must evaluate to booleans
   provided <- forM mprovided \provided ->
     extendKnownMany bounds do
       checkExpr ExpectRegulativeProvidedContext provided boolean
-  pure (MkAction {anno, action = pat, provided}, bounds)
+  pure (MkAction {anno, modal, action = pat, provided}, bounds)
 
 buildConstructorLookup :: [DeclChecked (Declare Resolved)] -> Map Unique [Resolved]
 buildConstructorLookup = foldMap \decl ->

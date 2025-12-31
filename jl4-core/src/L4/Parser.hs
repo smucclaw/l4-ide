@@ -1674,15 +1674,18 @@ must :: Pos -> Parser (RAction Name)
 must current = attachAnno $
    MkAction emptyAnno
      <$> asum
-      [ annoLexeme (spacedKeyword_ TKMust)
-        *> optional (annoLexeme (spacedKeyword_ TKDo))
-        *> annoHole (indentedPattern current)
-      , annoLexeme (spacedKeyword_ TKMay)
-        *> optional (annoLexeme (spacedKeyword_ TKDo))
-        *> annoHole (indentedPattern current)
-      , annoLexeme (spacedKeyword_ TKDo)
-        *> annoHole (indentedPattern current)
+      [ DMust <$ annoLexeme (spacedKeyword_ TKMust)
+        <* optional (annoLexeme (spacedKeyword_ TKDo))
+      , DMay <$ annoLexeme (spacedKeyword_ TKMay)
+        <* optional (annoLexeme (spacedKeyword_ TKDo))
+      , DMustNot <$ annoLexeme (spacedKeyword_ TKShant)
+        <* optional (annoLexeme (spacedKeyword_ TKDo))
+      , DMustNot <$ annoLexeme (spacedKeyword_ TKMust)
+        <* annoLexeme (spacedKeyword_ TKNot)
+        <* optional (annoLexeme (spacedKeyword_ TKDo))
+      , DDo <$ annoLexeme (spacedKeyword_ TKDo)
       ]
+     <*> annoHole (indentedPattern current)
      <*> optionalWithHole do
       annoLexeme (spacedKeyword_ TKProvided)
         *> annoHole (indentedExpr current)

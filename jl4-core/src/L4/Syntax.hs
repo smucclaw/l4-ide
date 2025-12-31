@@ -258,9 +258,19 @@ data Obligation n
   deriving stock (GHC.Generic, Eq, Ord, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
+-- | Deontic modal operators for regulative rules
+data DeonticModal
+  = DMust    -- ^ MUST: Action required (breach if not done)
+  | DMay     -- ^ MAY: Action permitted (no breach either way)
+  | DMustNot -- ^ MUST NOT / SHANT: Action prohibited (breach if done)
+  | DDo      -- ^ DO: Bare action (explicit HENCE/LEST required)
+  deriving stock (GHC.Generic, Eq, Ord, Show)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
+
 data RAction n
   = MkAction
   { anno :: Anno
+  , modal :: DeonticModal  -- ^ Which deontic modal was used
   , action :: Pattern n
   , provided :: Maybe (Expr n)
   }
@@ -540,6 +550,9 @@ deriving anyclass instance ToConcreteNodes PosToken (Aka Name)
 deriving anyclass instance ToConcreteNodes PosToken (Expr Name)
 deriving anyclass instance ToConcreteNodes PosToken (GuardedExpr Name)
 deriving anyclass instance ToConcreteNodes PosToken (Obligation Name)
+-- DeonticModal has no source tokens, so return empty list
+instance ToConcreteNodes PosToken DeonticModal where
+  toNodes _ = pure []
 deriving anyclass instance ToConcreteNodes PosToken (RAction Name)
 deriving anyclass instance ToConcreteNodes PosToken (LocalDecl Name)
 deriving anyclass instance ToConcreteNodes PosToken (NamedExpr Name)

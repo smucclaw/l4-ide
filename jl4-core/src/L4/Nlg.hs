@@ -14,6 +14,14 @@ import L4.Utils.Ratio (prettyRatio)
 import L4.Desugar
 import Optics
 
+-- | Convert a deontic modal to its text representation for NLG
+deonticModalText :: DeonticModal -> Text
+deonticModalText = \case
+  DMust    -> "must"
+  DMay     -> "may"
+  DMustNot -> "must not"
+  DDo      -> "do"
+
 -- TODO: I would like to be able to attach meta information and
 -- to be able to tell apart variables, parameters and global definitions.
 -- So, perhaps we rather want a 'Doc' type?
@@ -222,10 +230,10 @@ instance Linearize (Expr Resolved) where
     MultiWayIf _ conds o -> hcat $
       foldMap (\(MkGuardedExpr _ c f) -> ["if", lin c, "then", lin f]) conds
       <> ["otherwise", lin o ]
-    Regulative _ (MkObligation _ party (MkAction _ rule mprovided) mdeadline mfollowup mlest) -> hcat $
+    Regulative _ (MkObligation _ party (MkAction _ modal rule mprovided) mdeadline mfollowup mlest) -> hcat $
       [ text "party"
       , lin party
-      , text "must"
+      , text (deonticModalText modal)
       , lin rule
       ]
       <> maybe [] (\ provided -> [ text "provided that", lin provided ]) mprovided
