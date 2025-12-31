@@ -51,6 +51,10 @@ buildNpmPackage rec {
     npm run build
     popd
 
+    pushd ./boolean-analysis
+    npm run build
+    popd
+
     pushd ./jl4-client-rpc
     npm run build
     popd
