@@ -81,13 +81,7 @@ L4 provides audit-grade explainability and observability. Textual decision trace
 - ✅ JSON operations (JSONENCODE, JSONDECODE) with bidirectional type checking
 - ✅ Excel date compatibility for business applications
 - ✅ Temporal logic with multi-temporal evaluation contexts
-
-### Application Libraries ✅
-
-- ✅ Jurisdiction library (ISO 3166 country/region codes, US states, Canadian provinces)
-- ✅ Currency library (ISO 4217 codes with integer minor unit storage)
-- ✅ Legal persons library (individuals, corporations, partnerships)
-- ✅ Holdings library (ownership structures and percentages)
+- ✅ Application libraries (jurisdiction, currency, legal persons, holdings)
 
 ### IDE & Developer Tools ✅
 
@@ -199,8 +193,9 @@ Production-grade L4 development for enterprise systems. Covers professional work
 - **Module A8**: Multi-File Architecture
 - **Module A9**: OPM/OIA Migration
 - **Module A10**: LLM-Powered Semantic Parser / Chatbot [PLANNED]
+- **Module A11**: Regulative Rules & Contract Logic
 
-**Who it's for**: Developers building production systems, enterprise architects, teams migrating from legacy systems, developers building AI-powered legal interfaces.
+**Who it's for**: Developers building production systems, enterprise architects, teams migrating from legacy systems, developers building AI-powered legal interfaces, and developers building contract management or compliance systems.
 
 ### Other Tutorials
 
