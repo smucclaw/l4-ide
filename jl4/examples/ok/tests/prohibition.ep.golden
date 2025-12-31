@@ -52,6 +52,21 @@ noSmokingBreachWithReason MEANS
   WITHIN 30
   LEST BREACH BY Alice BECAUSE "violated no-smoking policy"
 
+-- Test BREACH BECAUSE reason (without BY - reason only)
+noSmokingBreachReasonOnly MEANS
+  PARTY Alice
+  MUST NOT smoke
+  WITHIN 30
+  LEST BREACH BECAUSE "health code violation"
+
+-- Test BREACH in HENCE position (unusual but valid for isomorphism)
+-- A MAY permission where exercising it is itself a breach condition
+breachInHence MEANS
+  PARTY Alice
+  MAY smoke
+  WITHIN 30
+  HENCE BREACH BY Alice BECAUSE "smoking is always a breach"
+
 -- Test MAY DO (permission - existing functionality)
 mayDrink MEANS
   PARTY Bob
