@@ -1,0 +1,62 @@
+-- Parking Cost Calculator Example
+-- Demonstrates decision logic with CONSIDER/WHEN pattern matching
+-- This example shows how the chatbot UI can read the evaluation trace
+-- and give justifications for the reasoning
+
+GIVEN current_weather   IS A STRING
+DECIDE weather_is_rotten IS
+   IF    current_weather EQUALS "rain"
+      OR current_weather EQUALS "snow"
+   THEN TRUE
+   ELSE FALSE
+
+GIVEN current_weather   IS A STRING
+      phase_of_moon     IS A STRING
+sky_is_romantic MEANS
+       current_weather EQUALS "fair"
+   AND     phase_of_moon   EQUALS "full"
+       OR  ^               ^      "new moon"
+       OR  ^               ^      "new"
+       OR  ^               ^      "full moon"
+
+@desc Given the day of the week, a flag about whether it's a public holiday, and prevailing weather conditions, calculate the cost of parking.
+@export default Calculate the cost of parking
+GIVEN
+  @desc the day of the week (1 = Monday, 2 = Tuesday, 3 = Wednesday, 4 = Thursday, 5 = Friday, 6 = Saturday, 7 = Sunday)
+  day_of_week       IS A NUMBER
+  @desc whether it is a public holiday
+  is_public_holiday IS A BOOLEAN
+  @desc Current weather conditions. Possible values are: fair, rain, snow
+  current_weather   IS A STRING
+  @desc Current phase of the moon. Possible values are: new moon, waxing crescent, first quarter, waxing gibbous, full moon, waning gibbous, third quarter, waning crescent
+  phase_of_moon     IS A STRING
+GIVETH A NUMBER
+DECIDE parking_cost IS
+   IF is_public_holiday
+   THEN 0
+   ELSE IF weather_is_rotten current_weather
+        THEN 2
+        ELSE IF day_of_week LESS THAN 6
+             THEN 5
+             ELSE IF      day_of_week EQUALS 6
+                      AND sky_is_romantic current_weather phase_of_moon
+                  THEN 3
+                  ELSE IF day_of_week EQUALS 7
+                       THEN 1
+                       ELSE 4
+
+-- this works
+-- #EVAL parking_cost 8 FALSE "fair" "new moon"
+
+-- let's convert the above logic to a decision table, just so we can see how it looks differently.
+-- e.g. "new moon", "full moon", "new", "full"
+
+-- #TABLE parking_cost
+-- | is_public_holiday | day_of_week | current_weather | phase_of_moon | parking_cost |
+-- |----------------------------------------------------------------------------------|
+-- | true              | -           | -               | -             | 0            |
+-- | false             | -           | rain, snow      | -             | 2            |
+-- | false             | 1-5         | -               | -             | 5            |
+-- | false             | 6           | fair            | full, new     | 3            |
+-- | false             | 7           | -               | -             | 1            |
+-- | false             | -           | -               | -             | 4            |
