@@ -1,0 +1,44 @@
+-- Tests for prohibition modals: SHANT and MUST NOT
+
+DECLARE Person IS ONE OF Alice, Bob
+DECLARE Action IS ONE OF
+  drink
+  smoke
+  gamble HAS amount IS A NUMBER
+
+-- Test SHANT (prohibition)
+noSmoking MEANS
+  PARTY Alice
+  SHANT smoke
+  WITHIN 30
+
+-- Test MUST NOT (alternative prohibition syntax)
+noDrinking MEANS
+  PARTY Bob
+  MUST NOT drink
+  WITHIN 30
+
+-- Test SHANT with PROVIDED clause
+limitedGambling MEANS
+  PARTY Alice
+  SHANT gamble amt PROVIDED amt > 100
+  WITHIN 30
+
+-- Test MUST NOT with HENCE/LEST
+noSmokingWithConsequences MEANS
+  PARTY Alice
+  MUST NOT smoke
+  WITHIN 30
+  LEST PARTY Alice MUST drink WITHIN 10
+
+-- Test MAY DO (permission - existing functionality)
+mayDrink MEANS
+  PARTY Bob
+  MAY DO drink
+  WITHIN 30
+
+-- Test MUST DO (obligation - existing functionality)
+mustDrink MEANS
+  PARTY Alice
+  MUST DO drink
+  WITHIN 30

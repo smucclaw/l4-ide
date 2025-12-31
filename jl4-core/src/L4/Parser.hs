@@ -1674,14 +1674,13 @@ must :: Pos -> Parser (RAction Name)
 must current = attachAnno $
    MkAction emptyAnno
      <$> asum
-      [ DMust <$ annoLexeme (spacedKeyword_ TKMust)
-        <* optional (annoLexeme (spacedKeyword_ TKDo))
+      -- Parse MUST, then check for optional NOT to determine modal
+      [ annoLexeme (spacedKeyword_ TKMust) *>
+        (DMustNot <$ annoLexeme (spacedKeyword_ TKNot) <* optional (annoLexeme (spacedKeyword_ TKDo))
+         <|> DMust <$ optional (annoLexeme (spacedKeyword_ TKDo)))
       , DMay <$ annoLexeme (spacedKeyword_ TKMay)
         <* optional (annoLexeme (spacedKeyword_ TKDo))
       , DMustNot <$ annoLexeme (spacedKeyword_ TKShant)
-        <* optional (annoLexeme (spacedKeyword_ TKDo))
-      , DMustNot <$ annoLexeme (spacedKeyword_ TKMust)
-        <* annoLexeme (spacedKeyword_ TKNot)
         <* optional (annoLexeme (spacedKeyword_ TKDo))
       , DDo <$ annoLexeme (spacedKeyword_ TKDo)
       ]
