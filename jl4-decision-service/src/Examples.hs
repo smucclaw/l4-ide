@@ -28,7 +28,6 @@ import Server
 import System.Directory (doesFileExist)
 import System.FilePath (replaceExtension, takeBaseName, takeDirectory, (</>))
 import qualified Data.Set as Set
-import qualified Optics
 
 -- ----------------------------------------------------------------------------
 -- load example L4 files and descriptions from disk.
