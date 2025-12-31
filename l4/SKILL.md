@@ -75,32 +75,64 @@ GIVETH A RiskCategory
 
 For multi-party contracts with obligations, deadlines, and state transitions, L4 provides regulative rule syntax. This is essential for contracts like promissory notes, loan agreements, and service contracts.
 
-#### Regulative Rules: The Provision Pattern
+#### Key Concepts: Traces, Blame, and Reparation
+
+L4's regulative rules are grounded in formal contract semantics (based on research by Tom Hvitved; see _Contract Formalisation and Modular Implementation of Domain-Specific Languages_, PhD thesis, IT University of Copenhagen).
+
+- **Traces**: A contract execution is a sequence of timestamped events (actions by parties). Use `#TRACE` to simulate.
+- **Blame assignment**: Every breach identifies which party failed to meet their obligation.
+- **Reparation**: Missing a primary deadline (violation) can be recovered via `LEST` clauses; only unrecovered violations become breaches.
+
+#### The Obligation Pattern
 
 Regulative rules govern party behavior over time:
 
 ```l4
 PARTY   actor
 WHO     preconditions      -- Optional: who can perform this action
-MUST    action            -- Or MAY, SHANT
+MUST    action            -- Or MAY
         parameters        -- Details of the action
-WITHIN  deadline          -- Or BEFORE
+WITHIN  deadline          -- Deadline in days (number)
 HENCE   nextState         -- What happens if fulfilled
-LEST    penaltyState      -- What happens if breached
+LEST    penaltyState      -- What happens if breached (reparation clause)
 ```
 
-**Example: Loan Payment Obligation**
+**Key insight**: Without a `LEST` clause, missing the deadline causes immediate breach. With `LEST`, the party gets a chance to make reparations.
+
+#### Action Constraints: EXACTLY and PROVIDED
+
+Actions can be constrained in two ways:
+
+**EXACTLY** — The action must match a specific value:
+
+```l4
+MUST `pay to` EXACTLY `The Lender`   -- Must be exactly this lender, no substitutes
+```
+
+**PROVIDED** — The action must satisfy a predicate:
+
+```l4
+MUST `pay amount`
+     `Amount Transferred` PROVIDED
+         `Amount Transferred` AT LEAST `Minimum Payment`
+```
+
+**Example: Loan Payment with Reparation**
 
 ```l4
 GIVEN outstandingAmount IS A Money
 PARTY `The Borrower`
-MUST  `pay debts to` `The Lender` outstandingAmount
+MUST  `pay debts to` EXACTLY `The Lender`
+      `Amount Transferred` PROVIDED
+          `Amount Transferred` AT LEAST outstandingAmount
 WITHIN `Payment Due Date`
 HENCE  FULFILLED
-LEST   PARTY `The Borrower`
-       MUST  `pay debts to` `The Lender` amountWithPenalty
+LEST   PARTY `The Borrower`                    -- Reparation clause
+       MUST  `pay debts to` EXACTLY `The Lender`
+             `Amount Transferred` PROVIDED
+                 `Amount Transferred` AT LEAST amountWithPenalty
        WITHIN defaultDeadline
-       LEST  BREACH
+       -- No LEST here: missing this deadline = breach
        WHERE
            amountWithPenalty MEANS
                Money WITH
@@ -111,11 +143,12 @@ LEST   PARTY `The Borrower`
 
 #### Deontic Modals
 
-| Modal | Meaning    | Default HENCE | Default LEST |
-| ----- | ---------- | ------------- | ------------ |
-| MUST  | Obligatory | FULFILLED     | BREACH       |
-| MAY   | Permitted  | FULFILLED     | FULFILLED    |
-| SHANT | Prohibited | FULFILLED     | BREACH       |
+| Modal | Meaning    | Notes                                                   |
+| ----- | ---------- | ------------------------------------------------------- |
+| MUST  | Obligatory | Missing deadline triggers LEST (or breach if no LEST)   |
+| MAY   | Permitted  | Party can choose to act or not; no penalty for inaction |
+
+**Note**: `SHANT` (prohibition) is not yet implemented. See Current Limitations below.
 
 #### Recursive Obligations with HENCE
 
@@ -142,23 +175,82 @@ GIVEN remainingBalance IS A Money
     ELSE FULFILLED
 ```
 
-#### Testing Temporal Obligations
+#### Testing Temporal Obligations with #TRACE
 
-Use `#TRACE` to test state transitions over time:
+Use `#TRACE` to simulate contract execution with a sequence of events:
 
 ```l4
-#TRACE `Payment Obligations` (USD 12000) AT 365 WITH
-    PARTY `The Borrower` DOES `pay` (USD 1000) AT 30
-    PARTY `The Borrower` DOES `pay` (USD 1000) AT 60
-    -- ... test complete payment schedule
+#TRACE <contract> <initial-args> AT Day <start-date> WITH
+    PARTY <who> DOES <action> <args> AT Day <when>
+    PARTY <who> DOES <action> <args> AT Day <when>
+    ...
 ```
 
-The `AT` keyword specifies days since commencement. The `WITH` clause lists actions taken by parties.
+**Happy path example** (from promissory note):
+
+```l4
+#TRACE `Payment Obligations` `Total Repayment Amount` AT Day (February 4 2025) WITH
+    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2256.46) AT Day (March 4 2025)
+    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2256.46) AT Day (April 4 2025)
+    -- ... all 12 payments on time
+```
+
+**Result**: `FULFILLED` — All obligations met.
+
+**Late payment example**:
+
+```l4
+#TRACE `Payment Obligations` `Total Repayment Amount` AT Day (February 4 2025) WITH
+    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2256.46) AT Day (April 3 2025)
+```
+
+**Result**: Returns the _residual obligation_ — what's still required:
+
+```
+PARTY `The Borrower`
+MUST `pay monthly installment to` EXACTLY `The Lender`
+     `Amount Transferred` PROVIDED ... `Next Payment Due Amount With Penalty`
+WITHIN `Default After Days Beyond Commencement`
+LEST ...
+```
+
+The trace shows the contract is now in the "penalty" state — borrower must pay with penalty or face default.
+
+#### Contract Composition
+
+**Conjunction (AND)** — Both obligations must be fulfilled:
+
+```l4
+`Complete Transaction` MEANS
+    PARTY `Seller`
+    MUST  `deliver goods`
+    WITHIN 14
+    AND
+    PARTY `Buyer`
+    MUST  `make payment`
+    WITHIN 30
+```
+
+**Disjunction (OR)** — At least one must be fulfilled:
+
+```l4
+`Payment Options` MEANS
+    PARTY `Buyer`
+    MUST  `pay in full`
+    WITHIN 30
+    OR
+    PARTY `Buyer`
+    MUST  `pay first installment`
+    WITHIN 30
+    HENCE `Installment Schedule`
+```
+
+**Note**: For OR, L4 requires that the same party is blamed in both branches (deterministic blame).
 
 For more details, see:
 
-- Advanced Course Module A3: Temporal Logic
-- `jl4/experiments/promissory-note-tracking.l4`
+- Advanced Course Module A11: Regulative Rules
+- `jl4/examples/legal/promissory-note.l4`
 
 ### 5. Validate with jl4-cli or Cloud Validation
 
@@ -320,12 +412,13 @@ For multi-party contracts with obligations and deadlines:
 ```l4
 -- Basic obligation
 PARTY actorName
-WHO   preconditions  -- Optional qualifier
-MUST  action         -- Or MAY, SHANT
-      parameters
-WITHIN deadline
-HENCE nextObligation
-LEST  penaltyObligation
+WHO   preconditions      -- Optional qualifier
+MUST  action             -- Or MAY (MUST NOT not yet implemented)
+      EXACTLY value      -- Must match exactly
+      param PROVIDED p   -- Must satisfy predicate p
+WITHIN deadline          -- Days (number)
+HENCE nextObligation     -- If fulfilled
+LEST  reparationClause   -- If deadline missed (violation recovery)
 
 -- Recursive obligations (loans, subscriptions)
 GIVEN state IS A StateType
@@ -338,23 +431,29 @@ obligationFunction state MEANS
          LEST obligationFunction penaltyState
     ELSE FULFILLED
 
+-- Composing obligations
+obligation1 AND obligation2   -- Both must be fulfilled
+obligation1 OR obligation2    -- At least one (same blame party)
+
 -- Testing temporal behavior
-#TRACE obligationFunction initialState AT maxTime WITH
-    PARTY actor DOES action AT time1
-    PARTY actor DOES action AT time2
+#TRACE obligationFunction initialState AT Day startDate WITH
+    PARTY actor DOES action args AT Day when
+    PARTY actor DOES action args AT Day when
 ```
 
 **Key keywords:**
 
-- `PARTY` - Identifies the actor with an obligation
+- `PARTY` - Identifies the actor responsible (blamed if they fail)
 - `WHO` - Preconditions for the party (optional)
-- `MUST` / `MAY` / `SHANT` - Deontic modals (obligatory / permitted / prohibited)
-- `WITHIN` / `BEFORE` - Deadline for action
+- `MUST` / `MAY` - Deontic modals (obligatory / permitted)
+- `EXACTLY` - Action must match specific value
+- `PROVIDED` - Action must satisfy predicate
+- `WITHIN` - Deadline in days
 - `HENCE` - Next state if obligation fulfilled
-- `LEST` - Next state if obligation breached
+- `LEST` - Reparation clause if deadline missed (no LEST = breach)
 - `FULFILLED` - Terminal success state
-- `BREACH` - Terminal failure state
-- `#TRACE` - Test temporal execution with actions
+- `AND` / `OR` - Compose obligations
+- `#TRACE` - Test contract execution with event sequence
 
 ### Operators
 
@@ -603,6 +702,42 @@ GIVEN remaining IS A NUMBER
 **Error:** "Not in scope: `function name`"
 **Fix:** Ensure function is defined before use, or add IMPORT statement
 
+## Current Limitations (Regulative Rules)
+
+### No MUST NOT (Prohibitions)
+
+L4 currently lacks a `MUST NOT` keyword for prohibitions.
+
+**Workaround**: Model prohibitions as actions that, if performed, trigger an impossible-to-fulfill obligation:
+
+```l4
+-- Prohibition: Employee must not disclose for 5 years
+IF Disclosure happens within 5 years
+   THEN PARTY Employee
+        MUST `do impossible action` PROVIDED FALSE
+        WITHIN 0   -- Immediate breach
+   ELSE FULFILLED
+```
+
+A future `MUST NOT` keyword will provide cleaner syntax and enable static analysis.
+
+### BREACH is an Outcome, Not a Keyword
+
+You don't write `BREACH` in L4 code. A breach occurs when:
+
+1. A `WITHIN` deadline passes
+2. No `LEST` clause handles the failure
+
+The evaluator produces a breach result with:
+
+- Which party breached
+- What action was required
+- What deadline was missed
+
+### MAY Has Limited Use
+
+`MAY` exists but is essentially an option: the party can act or not. Without consequences for counter-parties, `MAY` is a no-op. Most real contracts use `MUST` with `LEST` reparation clauses.
+
 ## Resources
 
 This skill includes comprehensive reference materials about L4:
@@ -618,6 +753,16 @@ Consult these references when you need:
 - Syntax reminders for specific constructs
 - Links to example programs
 - Guidance on the complete formalization workflow
+
+### Academic Background
+
+- **Tom Hvitved**: _Contract Formalisation and Modular Implementation of Domain-Specific Languages_ (PhD thesis, IT University of Copenhagen) — Theoretical foundation for L4's regulative rules
+
+### L4 Documentation
+
+- **Foundation Course**: Basic L4 syntax, types, and functions
+- **Advanced Course Module A11**: Detailed treatment of regulative rules with promissory note walkthrough
+- **jl4/examples/legal/promissory-note.l4**: Complete executable example
 
 ### scripts/
 
@@ -637,10 +782,15 @@ Consult these references when you need:
 5. **Mixfix notation** enables natural language function names
 6. **Validate with jl4-cli or cloud validator** before testing
 7. **#EVAL and #ASSERT** for comprehensive testing
-8. **Regulative rules (PARTY/MUST/WITHIN/HENCE/LEST)** model contracts and state transitions
-9. **#TRACE** tests temporal obligations over time
-10. **Isomorphic encoding**: Match legal text structure in code structure
-11. **Import prelude and daydate** for standard library functions
-12. **Use WHERE clauses** for local helpers and cleaner code
+8. **Regulative rules (PARTY/MUST/WITHIN/HENCE/LEST)** model contracts with deadlines, blame, and reparation
+9. **#TRACE** simulates contract execution and shows residual obligations
+10. **AND/OR compose obligations**; LEST provides reparation before breach
+11. **Current limitations**: No MUST NOT yet; BREACH is an evaluation outcome, not syntax
+12. **Isomorphic encoding**: Match legal text structure in code structure
+13. **Import prelude and daydate** for standard library functions
+14. **Use WHERE clauses** for local helpers and cleaner code
 
-For complete tutorials, see `https://github.com/smucclaw/l4-ide/tree/main/doc/foundation-course-ai`
+For complete tutorials, see:
+
+- Foundation Course: `https://github.com/smucclaw/l4-ide/tree/main/doc/foundation-course-ai`
+- Advanced Course Module A11 (Regulative Rules): `https://github.com/smucclaw/l4-ide/tree/main/doc/advanced-course-ai`

@@ -18,6 +18,7 @@ This course covers the full stack of production L4 development:
 - **Multi-file architecture** for large projects
 - **Legacy system migration** from Oracle Policy Modeling
 - **LLM-powered semantic parsing** for natural language interfaces [planned]
+- **Regulative rules** for multiparty contracts with obligations and deadlines
 
 By the end of this course, you'll be able to build enterprise-grade legal systems that integrate with modern software stacks.
 
@@ -220,13 +221,33 @@ Before starting this course, you should:
 
 ---
 
+### Module A11: Regulative Rules & Contract Logic
+
+**What you'll learn:**
+
+- Theoretical foundations from Hvitved's CSL (Contract Specification Language)
+- The obligation pattern: PARTY, MUST/MAY, WITHIN, HENCE, LEST
+- Modeling multiparty contracts with deadlines and consequences
+- Using #TRACE to simulate contract execution
+- Contract composition with AND/OR
+- Blame assignment and breach handling
+- Type definitions for contract-specific data structures
+
+**Key takeaway:** Model real-world contracts as executable specifications with formal semantics for obligations, deadlines, reparations, and breach.
+
+**Status:** Covers current L4 implementation. Future versions will add MUST NOT (prohibitions) and explicit BREACH syntax.
+
+[Start Module A11 →](module-a11-regulative-rules.md)
+
+---
+
 ## Learning Paths
 
 ### Path 1: Full Stack Legal Engineer (All Modules)
 
 Complete all modules in sequence for comprehensive mastery.
 
-**Timeline:** 4-6 weeks (Module A10 adds 1 week when available)
+**Timeline:** 5-7 weeks (Modules A10 and A11 add ~1 week each)
 **Best for:** Developers building enterprise legal systems from scratch
 
 ---
@@ -240,12 +261,12 @@ Focus on integrating L4 with existing systems and user interfaces.
 
 ---
 
-### Path 3: Legal Rule Migration Expert (A1, A2, A9)
+### Path 3: Legal Rule Migration Expert (A1, A2, A9, A11)
 
-Specialize in ingesting and migrating legal rules.
+Specialize in ingesting and migrating legal rules, including contracts with obligations.
 
-**Timeline:** 2-3 weeks
-**Best for:** Developers migrating from legacy systems or digitizing legal documents
+**Timeline:** 3-4 weeks
+**Best for:** Developers migrating from legacy systems or digitizing legal documents and contracts
 
 ---
 
@@ -264,6 +285,15 @@ Master large-scale system design and team collaboration.
 
 **Timeline:** 3-4 weeks
 **Best for:** Tech leads and architects designing multi-team L4 projects
+
+---
+
+### Path 6: Contract & Compliance Specialist (A1, A3, A7, A11)
+
+Focus on modeling contracts, obligations, and compliance monitoring.
+
+**Timeline:** 3-4 weeks
+**Best for:** Developers building contract management systems, compliance engines, or obligation tracking
 
 ---
 
@@ -464,6 +494,12 @@ Under the following terms:
 ---
 
 ## Changelog
+
+### Version 1.2 (2025-12-31)
+
+- Added Module A11 (Regulative Rules & Contract Logic) covering CSL foundations and obligation patterns
+- Added Path 6: Contract & Compliance Specialist learning path
+- Updated Path 3 to include A11 for contract migration scenarios
 
 ### Version 1.1 (2025-12-17)
 

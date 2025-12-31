@@ -1,17 +1,18 @@
-name: Release L4 Skill
+name: Release L4 Plugin
 
 on:
   push:
     branches: [main]
     paths:
       - "l4/**"
+      - ".claude-plugin/**"
       - "!l4/l4.skill"
       - "!l4/l4.zip"
   workflow_dispatch:
 
 jobs:
-  release-skill:
-    name: Build and Release L4 Skill
+  release-plugin:
+    name: Build and Release L4 Plugin
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -25,23 +26,37 @@ jobs:
       - name: Get version from commits
         id: version
         run: |
-          # Count commits to l4/ directory for versioning
-          COMMIT_COUNT=$(git log --oneline -- l4/ | wc -l | tr -d ' ')
-          # Get short hash of latest commit touching l4/
-          SHORT_SHA=$(git log -1 --format=%h -- l4/)
+          # Count commits to l4/ and .claude-plugin/ directories for versioning
+          COMMIT_COUNT=$(git log --oneline -- l4/ .claude-plugin/ | wc -l | tr -d ' ')
+          # Get short hash of latest commit touching plugin directories
+          SHORT_SHA=$(git log -1 --format=%h -- l4/ .claude-plugin/)
           # Create version string
           VERSION="v0.1.${COMMIT_COUNT}"
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "tag=${VERSION}-${SHORT_SHA}" >> $GITHUB_OUTPUT
           echo "Release version will be: ${VERSION}-${SHORT_SHA}"
 
-      - name: Create skill package
+      - name: Update plugin version
         run: |
-          cd l4
-          # Remove existing skill/zip files if present
-          rm -f l4.skill l4.zip
+          # Update version in plugin.json
+          VERSION="${{ steps.version.outputs.version }}"
+          jq --arg ver "${VERSION#v}" '.version = $ver' .claude-plugin/plugin.json > .claude-plugin/plugin.json.tmp
+          mv .claude-plugin/plugin.json.tmp .claude-plugin/plugin.json
 
-          # Create the skill package
+          # Update version in marketplace.json
+          jq --arg ver "${VERSION#v}" '
+            .metadata.version = $ver |
+            .plugins[0].version = $ver
+          ' .claude-plugin/marketplace.json > .claude-plugin/marketplace.json.tmp
+          mv .claude-plugin/marketplace.json.tmp .claude-plugin/marketplace.json
+
+      - name: Create plugin packages
+        run: |
+          # Remove existing packages if present
+          rm -f l4/l4.skill l4/l4.zip l4-plugin.zip
+
+          # Create skill-only package (for manual skill installation)
+          cd l4
           zip -r l4.skill \
             assets/ \
             references/ \
@@ -50,11 +65,28 @@ jobs:
             -x "*.DS_Store" \
             -x "*/__pycache__/*" \
             -x "*/node_modules/.cache/*"
+          cd ..
 
-          # Verify the package was created
-          ls -lh l4.skill
-          echo "Package contents:"
-          unzip -l l4.skill
+          # Create full plugin package (includes .claude-plugin/ directory)
+          zip -r l4-plugin.zip \
+            .claude-plugin/ \
+            l4/ \
+            PLUGIN.md \
+            -x "*.DS_Store" \
+            -x "*/__pycache__/*" \
+            -x "*/node_modules/.cache/*" \
+            -x "l4/l4.skill" \
+            -x "l4/l4.zip"
+
+          # Verify packages
+          echo "=== Skill Package ==="
+          ls -lh l4/l4.skill
+          echo ""
+          echo "=== Plugin Package ==="
+          ls -lh l4-plugin.zip
+          echo ""
+          echo "Plugin package contents:"
+          unzip -l l4-plugin.zip | head -30
 
       - name: Check if release exists
         id: check_release
@@ -74,32 +106,61 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.version.outputs.tag }}
-          name: "L4 Skill ${{ steps.version.outputs.version }}"
+          name: "L4 Computational Law Plugin ${{ steps.version.outputs.version }}"
           body: |
-            ## L4 Skill Release
+            ## L4 Computational Law Plugin for Claude Code
 
-            This release contains the L4 skill for Claude Code - a comprehensive guide and toolset for working with L4, the programming language for computational law.
+            This release contains the L4 plugin for Claude Code - a comprehensive tool for writing legal rules, contracts, and regulations as executable, verifiable code.
 
-            ### Installation
+            ### Installation Methods
 
-            Download `l4.skill` and install it in your Claude Code skills directory.
+            **Via Marketplace (Recommended):**
+            ```
+            /plugin marketplace add legalese/l4-ide
+            /plugin install l4-computational-law@legalese
+            ```
+
+            **Manual Plugin Installation:**
+            1. Download `l4-plugin.zip`
+            2. Extract to your plugins directory
+            3. Restart Claude Code
+
+            **Skill-Only Installation:**
+            1. Download `l4.skill`
+            2. Place in `~/.claude/skills/l4/` or `.claude/skills/l4/`
 
             ### What's Included
 
-            - **Comprehensive L4 documentation** covering syntax, semantics, and best practices
-            - **Validation scripts** for checking L4 code against the LSP server
-            - **Reference guides** for GitHub workflows and quick syntax lookup
+            - **L4 Language Skill**: Expert guidance for encoding legal logic
+            - **LSP Integration**: Cloud-based code intelligence via `wss://jl4.legalese.com/lsp`
+            - **Validation Scripts**: Cloud validation without local Haskell installation
+            - **Comprehensive Documentation**: Syntax guides, workflows, and examples
 
-            ### Changes
+            ### Features
 
-            See commit history for details of changes in this release.
+            - Real-time syntax validation and type checking
+            - Code completion and navigation
+            - Formal verification capabilities
+            - Web app generation from legal rules
+            - Audit-grade evaluation traces
+
+            ### Access Tiers
+
+            - **Free Tier**: Cloud validation, basic type checking, community support
+            - **Premium Tier** (coming soon): Higher limits, priority support, advanced features
+
+            ### Documentation
+
+            See [PLUGIN.md](https://github.com/legalese/l4-ide/blob/main/skill/PLUGIN.md) for complete documentation.
 
             ---
 
+            **Version:** ${{ steps.version.outputs.version }}
             **Commit:** ${{ github.sha }}
             **Generated:** ${{ github.event.head_commit.timestamp }}
           files: |
             l4/l4.skill
+            l4-plugin.zip
           draft: false
           prerelease: false
         env:
@@ -109,7 +170,7 @@ jobs:
         if: steps.check_release.outputs.exists == 'true'
         run: |
           echo "Updating existing release ${{ steps.version.outputs.tag }}"
-          gh release upload ${{ steps.version.outputs.tag }} l4/l4.skill --clobber
+          gh release upload ${{ steps.version.outputs.tag }} l4/l4.skill l4-plugin.zip --clobber
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -118,7 +179,13 @@ jobs:
           echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Version:** ${{ steps.version.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Package:** l4.skill" >> $GITHUB_STEP_SUMMARY
-          echo "- **Size:** $(ls -lh l4/l4.skill | awk '{print $5}')" >> $GITHUB_STEP_SUMMARY
+          echo "- **Skill Package:** l4.skill ($(ls -lh l4/l4.skill | awk '{print $5}'))" >> $GITHUB_STEP_SUMMARY
+          echo "- **Plugin Package:** l4-plugin.zip ($(ls -lh l4-plugin.zip | awk '{print $5}'))" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Installation" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "/plugin marketplace add legalese/l4-ide" >> $GITHUB_STEP_SUMMARY
+          echo "/plugin install l4-computational-law@legalese" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "View the release: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ steps.version.outputs.tag }}" >> $GITHUB_STEP_SUMMARY

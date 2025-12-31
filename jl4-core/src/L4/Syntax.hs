@@ -233,6 +233,7 @@ data Expr n =
   | Post       Anno (Expr n) (Expr n) (Expr n)  -- url, headers, body
   | Concat     Anno [Expr n] -- string concatenation
   | AsString   Anno (Expr n) -- type coercion to string
+  | Breach     Anno (Maybe (Expr n)) (Maybe (Expr n))  -- BREACH [BY party] [BECAUSE reason]
   deriving stock (GHC.Generic, Eq, Ord, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
@@ -258,9 +259,19 @@ data Obligation n
   deriving stock (GHC.Generic, Eq, Ord, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
+-- | Deontic modal operators for regulative rules
+data DeonticModal
+  = DMust    -- ^ MUST: Action required (breach if not done)
+  | DMay     -- ^ MAY: Action permitted (no breach either way)
+  | DMustNot -- ^ MUST NOT / SHANT: Action prohibited (breach if done)
+  | DDo      -- ^ DO: Bare action (explicit HENCE/LEST required)
+  deriving stock (GHC.Generic, Eq, Ord, Show)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
+
 data RAction n
   = MkAction
   { anno :: Anno
+  , modal :: DeonticModal  -- ^ Which deontic modal was used
   , action :: Pattern n
   , provided :: Maybe (Expr n)
   }
@@ -540,7 +551,13 @@ deriving anyclass instance ToConcreteNodes PosToken (Aka Name)
 deriving anyclass instance ToConcreteNodes PosToken (Expr Name)
 deriving anyclass instance ToConcreteNodes PosToken (GuardedExpr Name)
 deriving anyclass instance ToConcreteNodes PosToken (Obligation Name)
-deriving anyclass instance ToConcreteNodes PosToken (RAction Name)
+-- DeonticModal has no source tokens, so return empty list
+instance ToConcreteNodes PosToken DeonticModal where
+  toNodes _ = pure []
+-- Manual instance for RAction to skip the modal field (which has no source tokens)
+instance ToConcreteNodes PosToken (RAction Name) where
+  toNodes (MkAction ann _modal action provided) =
+    flattenConcreteNodes ann [toNodes action, toNodes provided]
 deriving anyclass instance ToConcreteNodes PosToken (LocalDecl Name)
 deriving anyclass instance ToConcreteNodes PosToken (NamedExpr Name)
 deriving anyclass instance ToConcreteNodes PosToken (Branch Name)
@@ -584,7 +601,10 @@ deriving anyclass instance ToConcreteNodes PosToken (Aka Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (Expr Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (GuardedExpr Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (Obligation Resolved)
-deriving anyclass instance ToConcreteNodes PosToken (RAction Resolved)
+-- Manual instance for RAction to skip the modal field (which has no source tokens)
+instance ToConcreteNodes PosToken (RAction Resolved) where
+  toNodes (MkAction ann _modal action provided) =
+    flattenConcreteNodes ann [toNodes action, toNodes provided]
 deriving anyclass instance ToConcreteNodes PosToken (LocalDecl Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (NamedExpr Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (Branch Resolved)

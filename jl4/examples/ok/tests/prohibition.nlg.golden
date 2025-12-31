@@ -1,0 +1,8 @@
+executing contract `noSmoking` at 0 with the following events: 
+executing contract `noSmoking` at 0 with the following events:  party `Alice` did `smoke` at 15
+executing contract `noDrinking` at 0 with the following events: 
+executing contract `noDrinking` at 0 with the following events:  party `Bob` did `drink` at 10
+executing contract `mustDrink` at 0 with the following events:  party `Alice` did `drink` at 15
+executing contract `mustDrink` at 0 with the following events: 
+executing contract `mayDrink` at 0 with the following events:  party `Bob` did `drink` at 15
+executing contract `mayDrink` at 0 with the following events: 

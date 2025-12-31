@@ -136,6 +136,7 @@ data ExpectationContext =
   | ExpectPostBodyContext -- body argument of POST
   | ExpectConcatArgumentContext -- argument of CONCAT
   | ExpectAsStringArgumentContext -- argument of AS STRING
+  | ExpectBreachReasonContext -- reason argument of BREACH
   deriving stock (Eq, Generic, Show)
   deriving anyclass NFData
 

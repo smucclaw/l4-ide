@@ -164,6 +164,9 @@ data TKeywords
   | TKDoes
   | TKMust
   | TKMay
+  | TKShant
+  | TKBreach
+  | TKBecause
   | TKProvided
   | TKWithin
   | TKHence
@@ -242,7 +245,10 @@ keywords = Map.fromList
   , ("DO"         , TKDo         )
   , ("DOES"       , TKDoes       )
   , ("MUST"       , TKMust       )
-  , ("MAY"        , TKMay       )
+  , ("MAY"        , TKMay        )
+  , ("SHANT"      , TKShant      )
+  , ("BREACH"     , TKBreach     )
+  , ("BECAUSE"    , TKBecause    )
   , ("PROVIDED"   , TKProvided   )
   , ("WITHIN"     , TKWithin     )
   , ("HENCE"      , TKHence      )
