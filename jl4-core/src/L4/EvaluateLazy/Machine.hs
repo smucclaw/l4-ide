@@ -477,6 +477,7 @@ backward val = WithPoppedFrame $ \ case
         PushFrame (TernaryBuiltin1 fn arg2 z)
         EvalRef arg1
       ValFulfilled -> Backward ValFulfilled
+      ValBreached r -> Backward (ValBreached r)
       ValAssumed r ->
         StuckOnAssumed r -- TODO: we can do better here
       res -> InternalException (RuntimeTypeError $ "expected a function but found: " <> prettyLayout res)

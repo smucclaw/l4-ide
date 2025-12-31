@@ -74,10 +74,10 @@ Authentication and billing are handled transparently when connecting to cloud se
 
 ## Documentation
 
-- **Syntax Quick Reference**: `l4/references/syntax-quick-ref.md`
-- **Workflow Guide**: `l4/references/workflow-guide.md`
-- **GitHub Resources**: `l4/references/github-resources.md`
-- **Complete Skill Guide**: `l4/SKILL.md`
+- **Syntax Quick Reference**: `skill/references/syntax-quick-ref.md`
+- **Workflow Guide**: `skill/references/workflow-guide.md`
+- **GitHub Resources**: `skill/references/github-resources.md`
+- **Complete Skill Guide**: `skill/SKILL.md`
 
 ## Cloud Validation
 
@@ -96,7 +96,7 @@ For standalone validation outside Claude Code:
 
 ```bash
 # Validate an L4 file via WebSocket
-cd l4/scripts
+cd skill/scripts
 npm install
 node validate-cloud.mjs ../path/to/your/file.l4
 ```
