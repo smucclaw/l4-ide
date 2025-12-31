@@ -1,2 +1,31 @@
 Parsing successful
 Typechecking successful
+Evaluation successful
+prohibition.l4:57:1-27:
+  PARTY Alice
+  MUST smoke
+  WITHIN 30
+  HENCE FULFILLED
+prohibition.l4:62:1-63:31:
+  FULFILLED
+prohibition.l4:68:1-28:
+  PARTY Bob
+  MUST drink
+  WITHIN 30
+  HENCE FULFILLED
+prohibition.l4:73:1-74:29:
+  FULFILLED
+prohibition.l4:78:1-79:31:
+  FULFILLED
+prohibition.l4:83:1-27:
+  PARTY Alice
+  MUST drink
+  WITHIN 30
+  HENCE FULFILLED
+prohibition.l4:87:1-88:29:
+  FULFILLED
+prohibition.l4:93:1-26:
+  PARTY Bob
+  MUST drink
+  WITHIN 30
+  HENCE FULFILLED
