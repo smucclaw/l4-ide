@@ -240,6 +240,29 @@ LEST BREACH    -- OK: Borrower is blamed
 LEST BREACH BY Borrower  -- OK: Explicit
 ```
 
+#### Explicit Party Disagreement Warning
+
+If the user specifies an explicit `BREACH BY party` that disagrees with the computed blame assignment (based on the enclosing `PARTY` clause), the compiler should WARN:
+
+```l4
+PARTY Borrower
+MUST pay
+WITHIN 30
+LEST BREACH BY Lender  -- Warning: Explicit party 'Lender' differs from
+                       -- computed blame 'Borrower' (from enclosing PARTY clause)
+```
+
+This warning helps catch potential drafting errors where the wrong party is blamed. The explicit party OVERRIDES the computed blame (intentional blame redirection is valid), but the warning ensures the drafter is aware of the discrepancy.
+
+To suppress the warning, the drafter can acknowledge the override with a comment or annotation:
+
+```l4
+PARTY Borrower
+MUST pay
+WITHIN 30
+LEST BREACH BY Lender  -- @desc Lender bears risk if Borrower defaults
+```
+
 #### Unique Blame in OR Compositions
 
 CSL requires that in `c1 OR c2`, if both branches can breach, they must blame the same party. This ensures deterministic blame assignment.
