@@ -1,0 +1,124 @@
+name: Release L4 Skill
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "l4/**"
+      - "!l4/l4.skill"
+      - "!l4/l4.zip"
+  workflow_dispatch:
+
+jobs:
+  release-skill:
+    name: Build and Release L4 Skill
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Get full history for versioning
+
+      - name: Get version from commits
+        id: version
+        run: |
+          # Count commits to l4/ directory for versioning
+          COMMIT_COUNT=$(git log --oneline -- l4/ | wc -l | tr -d ' ')
+          # Get short hash of latest commit touching l4/
+          SHORT_SHA=$(git log -1 --format=%h -- l4/)
+          # Create version string
+          VERSION="v0.1.${COMMIT_COUNT}"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "tag=${VERSION}-${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "Release version will be: ${VERSION}-${SHORT_SHA}"
+
+      - name: Create skill package
+        run: |
+          cd l4
+          # Remove existing skill/zip files if present
+          rm -f l4.skill l4.zip
+
+          # Create the skill package
+          zip -r l4.skill \
+            assets/ \
+            references/ \
+            scripts/ \
+            SKILL.md \
+            -x "*.DS_Store" \
+            -x "*/__pycache__/*" \
+            -x "*/node_modules/.cache/*"
+
+          # Verify the package was created
+          ls -lh l4.skill
+          echo "Package contents:"
+          unzip -l l4.skill
+
+      - name: Check if release exists
+        id: check_release
+        run: |
+          if gh release view ${{ steps.version.outputs.tag }} >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Release ${{ steps.version.outputs.tag }} already exists"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Release ${{ steps.version.outputs.tag }} does not exist"
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Create GitHub Release
+        if: steps.check_release.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "L4 Skill ${{ steps.version.outputs.version }}"
+          body: |
+            ## L4 Skill Release
+
+            This release contains the L4 skill for Claude Code - a comprehensive guide and toolset for working with L4, the programming language for computational law.
+
+            ### Installation
+
+            Download `l4.skill` and install it in your Claude Code skills directory.
+
+            ### What's Included
+
+            - **Comprehensive L4 documentation** covering syntax, semantics, and best practices
+            - **Validation scripts** for checking L4 code against the LSP server
+            - **Reference guides** for GitHub workflows and quick syntax lookup
+
+            ### Changes
+
+            See commit history for details of changes in this release.
+
+            ---
+
+            **Commit:** ${{ github.sha }}
+            **Generated:** ${{ github.event.head_commit.timestamp }}
+          files: |
+            l4/l4.skill
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update existing release
+        if: steps.check_release.outputs.exists == 'true'
+        run: |
+          echo "Updating existing release ${{ steps.version.outputs.tag }}"
+          gh release upload ${{ steps.version.outputs.tag }} l4/l4.skill --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Release summary
+        run: |
+          echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version:** ${{ steps.version.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Package:** l4.skill" >> $GITHUB_STEP_SUMMARY
+          echo "- **Size:** $(ls -lh l4/l4.skill | awk '{print $5}')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "View the release: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ steps.version.outputs.tag }}" >> $GITHUB_STEP_SUMMARY

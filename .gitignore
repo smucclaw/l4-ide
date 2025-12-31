@@ -55,3 +55,7 @@ tsconfig.tsbuildinfo
 yarn-debug.log*
 yarn-error.log*
 *.qcow2
+
+# Generated skill packages
+l4/l4.skill
+l4/l4.zip
