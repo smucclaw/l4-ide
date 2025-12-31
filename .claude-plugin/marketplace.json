@@ -1,11 +1,11 @@
 {
-  "name": "smucclaw-cclaw",
+  "name": "legalese",
   "owner": {
-    "name": "SMU Centre for Computational Law",
-    "email": "cclaw@smu.edu.sg"
+    "name": "Legalese",
+    "email": "hello@legalese.com"
   },
   "metadata": {
-    "description": "Official SMU CCLaw plugin marketplace for computational law tools",
+    "description": "Official Legalese plugin marketplace for computational law tools",
     "version": "1.0.0"
   },
   "plugins": [
@@ -13,17 +13,17 @@
       "name": "l4-computational-law",
       "source": {
         "source": "github",
-        "repo": "smucclaw/l4-ide",
+        "repo": "legalese/l4-ide",
         "path": "skill"
       },
       "description": "L4 programming language for computational law - encode contracts, regulations, and policies as executable, testable, verifiable programs",
       "version": "0.1.0",
       "author": {
-        "name": "SMU Centre for Computational Law",
-        "email": "mengwong@smu.edu.sg"
+        "name": "Legalese",
+        "email": "hello@legalese.com"
       },
-      "homepage": "https://github.com/smucclaw/l4-ide",
-      "repository": "https://github.com/smucclaw/l4-ide",
+      "homepage": "https://github.com/legalese/l4-ide",
+      "repository": "https://github.com/legalese/l4-ide",
       "license": "BSD-3-Clause",
       "keywords": [
         "legal",

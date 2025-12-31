@@ -16,20 +16,20 @@ A Claude Code plugin that provides comprehensive support for L4, the programming
 
 ### Via Marketplace (Recommended)
 
-1. Add the SMU CCLaw marketplace:
+1. Add the Legalese marketplace:
 
    ```
-   /plugin marketplace add smucclaw/l4-ide
+   /plugin marketplace add legalese/l4-ide
    ```
 
 2. Install the L4 plugin:
    ```
-   /plugin install l4-computational-law@smucclaw-cclaw
+   /plugin install l4-computational-law@legalese
    ```
 
 ### Manual Installation
 
-1. Download the latest `l4.skill` from [GitHub Releases](https://github.com/smucclaw/l4-ide/releases)
+1. Download the latest `l4.skill` from [GitHub Releases](https://github.com/legalese/l4-ide/releases)
 2. Extract to your Claude Code skills directory:
    - Personal: `~/.claude/skills/l4/`
    - Project: `.claude/skills/l4/`
@@ -70,7 +70,7 @@ The L4 cloud services operate on a tiered access model:
   - Multi-file project analysis
 - Commercial use license
 
-Authentication and billing are handled transparently when connecting to cloud services. Contact cclaw@smu.edu.sg for premium tier access.
+Authentication and billing are handled transparently when connecting to cloud services. Contact hello@legalese.com for premium tier access.
 
 ## Documentation
 
@@ -148,10 +148,10 @@ DEFINE calculatePremium
 
 ## Support
 
-- **Documentation**: https://github.com/smucclaw/l4-ide
-- **Issues**: https://github.com/smucclaw/l4-ide/issues
-- **Email**: cclaw@smu.edu.sg
-- **Website**: https://cclaw.smu.edu.sg
+- **Documentation**: https://github.com/legalese/l4-ide
+- **Issues**: https://github.com/legalese/l4-ide/issues
+- **Email**: hello@legalese.com
+- **Website**: https://legalese.com
 
 ## License
 
@@ -159,4 +159,4 @@ BSD-3-Clause
 
 ## Credits
 
-Developed by the SMU Centre for Computational Law
+Developed by Legalese

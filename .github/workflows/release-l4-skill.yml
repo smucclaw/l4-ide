@@ -116,8 +116,8 @@ jobs:
 
             **Via Marketplace (Recommended):**
             ```
-            /plugin marketplace add smucclaw/l4-ide
-            /plugin install l4-computational-law@smucclaw-cclaw
+            /plugin marketplace add legalese/l4-ide
+            /plugin install l4-computational-law@legalese
             ```
 
             **Manual Plugin Installation:**
@@ -151,7 +151,7 @@ jobs:
 
             ### Documentation
 
-            See [PLUGIN.md](https://github.com/smucclaw/l4-ide/blob/main/skill/PLUGIN.md) for complete documentation.
+            See [PLUGIN.md](https://github.com/legalese/l4-ide/blob/main/skill/PLUGIN.md) for complete documentation.
 
             ---
 
@@ -184,8 +184,8 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Installation" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "/plugin marketplace add smucclaw/l4-ide" >> $GITHUB_STEP_SUMMARY
-          echo "/plugin install l4-computational-law@smucclaw-cclaw" >> $GITHUB_STEP_SUMMARY
+          echo "/plugin marketplace add legalese/l4-ide" >> $GITHUB_STEP_SUMMARY
+          echo "/plugin install l4-computational-law@legalese" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "View the release: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ steps.version.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
