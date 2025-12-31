@@ -495,6 +495,10 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Expr n) where
       es' <- traverse addNlg es
       pure $ Concat ann es'
     AsString ann e -> AsString ann <$> addNlg e
+    Breach ann mParty mReason -> do
+      mParty' <- traverse addNlg mParty
+      mReason' <- traverse addNlg mReason
+      pure $ Breach ann mParty' mReason'
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Obligation n) where
   addNlg (MkObligation ann' party event deadline followup lest) = do

@@ -194,6 +194,10 @@ nlgExpr = \ case
       pure $ Concat ann es'
     AsString ann e ->
       AsString ann <$> nlgExpr e
+    Breach ann mParty mReason -> do
+      mParty' <- traverse nlgExpr mParty
+      mReason' <- traverse nlgExpr mReason
+      pure $ Breach ann mParty' mReason'
 
 nlgPattern :: Pattern Resolved -> Check (Pattern Resolved)
 nlgPattern = \ case

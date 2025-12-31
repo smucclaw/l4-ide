@@ -58,6 +58,7 @@ carameliseExpr = carameliseNode >>> \ case
   Post       ann e1 e2 e3 -> Post ann (carameliseExpr e1) (carameliseExpr e2) (carameliseExpr e3)
   Concat     ann es -> Concat ann (fmap carameliseExpr es)
   AsString   ann e -> AsString ann (carameliseExpr e)
+  Breach     ann mParty mReason -> Breach ann (fmap carameliseExpr mParty) (fmap carameliseExpr mReason)
 
 carameliseLocalDecl :: HasName n => LocalDecl n -> LocalDecl n
 carameliseLocalDecl = \ case

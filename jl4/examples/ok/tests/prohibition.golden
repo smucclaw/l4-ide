@@ -1,12 +1,12 @@
 Parsing successful
 Typechecking successful
 Evaluation successful
-prohibition.l4:57:1-27:
+prohibition.l4:78:1-27:
   PARTY Alice
   MUST NOT smoke
   WITHIN 30
   HENCE FULFILLED
-prohibition.l4:62:1-63:31:
+prohibition.l4:83:1-84:31:
   PROVISION BREACHED:
     party
       Alice
@@ -20,12 +20,12 @@ prohibition.l4:62:1-63:31:
       MUST NOT smoke
     before their deadline, which was at
       15
-prohibition.l4:68:1-28:
+prohibition.l4:89:1-28:
   PARTY Bob
   MUST NOT drink
   WITHIN 30
   HENCE FULFILLED
-prohibition.l4:73:1-74:29:
+prohibition.l4:94:1-95:29:
   PROVISION BREACHED:
     party
       Bob
@@ -39,16 +39,16 @@ prohibition.l4:73:1-74:29:
       MUST NOT drink
     before their deadline, which was at
       10
-prohibition.l4:78:1-79:31:
+prohibition.l4:99:1-100:31:
   FULFILLED
-prohibition.l4:83:1-27:
+prohibition.l4:104:1-27:
   PARTY Alice
   MUST drink
   WITHIN 30
   HENCE FULFILLED
-prohibition.l4:87:1-88:29:
+prohibition.l4:108:1-109:29:
   FULFILLED
-prohibition.l4:93:1-26:
+prohibition.l4:114:1-26:
   PARTY Bob
   MAY drink
   WITHIN 30

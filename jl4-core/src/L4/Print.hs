@@ -340,6 +340,10 @@ instance LayoutPrinterWithName a => LayoutPrinter (Expr a) where
       "CONCAT" <+> hsep (punctuate comma (fmap parensIfNeeded exprs))
     AsString _ e ->
       parensIfNeeded e <+> "AS STRING"
+    Breach _ mParty mReason ->
+      "BREACH" <>
+        maybe mempty (\p -> " BY" <+> printWithLayout p) mParty <>
+        maybe mempty (\r -> " BECAUSE" <+> printWithLayout r) mReason
 
   parensIfNeeded :: LayoutPrinter a => Expr a -> Doc ann
   parensIfNeeded e = case e of
@@ -529,6 +533,10 @@ instance LayoutPrinter a => LayoutPrinter (ReasonForBreach a) where
       , i2 $ pretty (prettyRatio deadline)
       ]
       where i2 = indent 2
+    ExplicitBreach mParty mReason -> vcat $
+      [ "BREACH" ]
+      <> maybe [] (\p -> [ "BY" <+> printWithLayout p ]) mParty
+      <> maybe [] (\r -> [ "BECAUSE" <+> printWithLayout r ]) mReason
 
 instance LayoutPrinter Lazy.NF where
   printWithLayout = \ case

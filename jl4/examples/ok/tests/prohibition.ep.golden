@@ -31,6 +31,27 @@ noSmokingWithConsequences MEANS
   WITHIN 30
   LEST PARTY Alice MUST drink WITHIN 10
 
+-- Test BREACH terminal clause (simple form)
+noSmokingExplicitBreach MEANS
+  PARTY Alice
+  MUST NOT smoke
+  WITHIN 30
+  LEST BREACH
+
+-- Test BREACH BY party (explicit party form)
+noSmokingBreachByAlice MEANS
+  PARTY Alice
+  MUST NOT smoke
+  WITHIN 30
+  LEST BREACH BY Alice
+
+-- Test BREACH BY party BECAUSE reason (full form)
+noSmokingBreachWithReason MEANS
+  PARTY Alice
+  MUST NOT smoke
+  WITHIN 30
+  LEST BREACH BY Alice BECAUSE "violated no-smoking policy"
+
 -- Test MAY DO (permission - existing functionality)
 mayDrink MEANS
   PARTY Bob

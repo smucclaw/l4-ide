@@ -274,6 +274,10 @@ instance Linearize (Expr Resolved) where
     Post _ e1 e2 e3 -> hcat [ text "post", lin e1, lin e2, lin e3 ]
     Concat _ exprs -> hcat [ text "concatenate", enumerate (punctuate ",") (spaced $ text "and") (fmap lin exprs) ]
     AsString _ e -> hcat [ lin e, text "as", text "string" ]
+    Breach _ mParty mReason -> hcat $
+      [ text "breach" ]
+      <> maybe [] (\p -> [ text "by", lin p ]) mParty
+      <> maybe [] (\r -> [ text "because", lin r ]) mReason
 
 instance Linearize (Event Resolved) where
   linearize (MkEvent _ p a t _) = hcat

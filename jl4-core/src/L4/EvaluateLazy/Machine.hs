@@ -398,6 +398,11 @@ forwardExpr env = \ case
   AsString _ann e -> do
     PushFrame AsStringFrame
     ForwardExpr env e
+  Breach _ann mParty mReason -> do
+    -- Explicit breach terminal clause - immediately produces a breach value
+    mPartyRef <- traverse (\p -> allocate_ p env) mParty
+    mReasonRef <- traverse (\r -> allocate_ r env) mReason
+    Backward (ValBreached (ExplicitBreach mPartyRef mReasonRef))
 
 backward :: WHNF -> Machine Config
 backward val = WithPoppedFrame $ \ case

@@ -1358,6 +1358,13 @@ inferExpr' g =
       unless (isStringCoercible te) $
         addError (TypeMismatch ExpectAsStringArgumentContext string te)
       pure (AsString ann re, string)
+    Breach ann mParty mReason -> do
+      -- Breach is a terminal clause that represents a contract breach
+      partyT <- fresh (NormalName "party")
+      actionT <- fresh (NormalName "action")
+      mParty' <- traverse (\p -> checkExpr ExpectRegulativePartyContext p partyT) mParty
+      mReason' <- traverse (\r -> checkExpr ExpectBreachReasonContext r string) mReason
+      pure (Breach ann mParty' mReason', contract partyT actionT)
 
 isStringCoercible :: Type' Resolved -> Bool
 isStringCoercible ty = case ty of
@@ -3109,6 +3116,8 @@ prettyTypeMismatch ExpectRegulativeProvidedContext expected given =
   standardTypeMismatch [ "The PROVIDED clause for filtering the ACTION is expected to be of type" ] expected given
 prettyTypeMismatch ExpectAssertContext expected given =
   standardTypeMismatch [ "An ASSERT directive is expected to be of type" ] expected given
+prettyTypeMismatch ExpectBreachReasonContext expected given =
+  standardTypeMismatch [ "The BECAUSE clause of a BREACH is expected to be of type" ] expected given
 
 -- | Best effort, only small numbers will occur"
 prettyOrdinal :: Int -> Text
