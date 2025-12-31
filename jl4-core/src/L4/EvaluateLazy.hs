@@ -394,6 +394,10 @@ nfAux d (ValBreached r')             = do
       act' <- evalAndNF d ev'act
       party' <- evalAndNF d party
       pure (DeadlineMissed ev'party' act' ev'timestamp party' act deadline)
+    ExplicitBreach mParty mReason -> do
+      mParty' <- traverse (evalAndNF d) mParty
+      mReason' <- traverse (evalAndNF d) mReason
+      pure (ExplicitBreach mParty' mReason')
   pure (MkNF (ValBreached r))
 nfAux d (ValROp env op l r) = do
   l' <- traverseAndNF d l

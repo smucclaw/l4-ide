@@ -340,6 +340,10 @@ instance LayoutPrinterWithName a => LayoutPrinter (Expr a) where
       "CONCAT" <+> hsep (punctuate comma (fmap parensIfNeeded exprs))
     AsString _ e ->
       parensIfNeeded e <+> "AS STRING"
+    Breach _ mParty mReason ->
+      "BREACH" <>
+        maybe mempty (\p -> " BY" <+> printWithLayout p) mParty <>
+        maybe mempty (\r -> " BECAUSE" <+> printWithLayout r) mReason
 
   parensIfNeeded :: LayoutPrinter a => Expr a -> Doc ann
   parensIfNeeded e = case e of
@@ -364,10 +368,18 @@ mprint :: (Foldable t, LayoutPrinter a) => Doc ann -> t a -> [Doc ann]
 mprint kw = foldMap \x -> [kw <+> printWithLayout x]
 
 instance LayoutPrinterWithName n => LayoutPrinter (RAction n) where
-  printWithLayout MkAction {action, provided} = hsep $
-    [ "MUST", printWithLayout action
+  printWithLayout MkAction {modal, action, provided} = hsep $
+    [ printDeonticModal modal, printWithLayout action
     ]
     <> mprint "PROVIDED" provided
+
+-- | Print deontic modal keyword
+printDeonticModal :: DeonticModal -> Doc ann
+printDeonticModal = \case
+  DMust -> "MUST"
+  DMay -> "MAY"
+  DMustNot -> "MUST NOT"
+  DDo -> "DO"
 
 instance LayoutPrinterWithName a => LayoutPrinter (NamedExpr a) where
   printWithLayout = \ case
@@ -521,6 +533,10 @@ instance LayoutPrinter a => LayoutPrinter (ReasonForBreach a) where
       , i2 $ pretty (prettyRatio deadline)
       ]
       where i2 = indent 2
+    ExplicitBreach mParty mReason -> vcat $
+      [ "BREACH" ]
+      <> maybe [] (\p -> [ "BY" <+> printWithLayout p ]) mParty
+      <> maybe [] (\r -> [ "BECAUSE" <+> printWithLayout r ]) mReason
 
 instance LayoutPrinter Lazy.NF where
   printWithLayout = \ case

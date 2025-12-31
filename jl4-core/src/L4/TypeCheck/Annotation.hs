@@ -144,14 +144,14 @@ nlgExpr = \ case
         pure $ MkGuardedExpr ann' c' f'
       e' <- nlgExpr e
       pure $ MultiWayIf ann es' e'
-    Regulative ann (MkObligation ann'' party (MkAction ann' rule provided) deadline followup lest) -> do
+    Regulative ann (MkObligation ann'' party (MkAction ann' modal rule provided) deadline followup lest) -> do
       party' <- nlgExpr party
       rule' <- nlgPattern rule
       provided' <- traverse nlgExpr provided
       deadline' <- traverse nlgExpr deadline
       followup' <- traverse nlgExpr followup
       lest' <- traverse nlgExpr lest
-      pure $ Regulative ann (MkObligation ann'' party' (MkAction ann' rule' provided') deadline' followup' lest')
+      pure $ Regulative ann (MkObligation ann'' party' (MkAction ann' modal rule' provided') deadline' followup' lest')
     Consider ann e branches  -> do
       e' <- nlgExpr e
       -- Since the bindings in the branches bring new variables into
@@ -194,6 +194,10 @@ nlgExpr = \ case
       pure $ Concat ann es'
     AsString ann e ->
       AsString ann <$> nlgExpr e
+    Breach ann mParty mReason -> do
+      mParty' <- traverse nlgExpr mParty
+      mReason' <- traverse nlgExpr mReason
+      pure $ Breach ann mParty' mReason'
 
 nlgPattern :: Pattern Resolved -> Check (Pattern Resolved)
 nlgPattern = \ case
