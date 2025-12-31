@@ -1,0 +1,25 @@
+{
+  "name": "l4-computational-law",
+  "version": "0.1.0",
+  "description": "L4 programming language for computational law - encode contracts, regulations, and policies as executable, testable, verifiable programs",
+  "author": {
+    "name": "SMU Centre for Computational Law",
+    "email": "mengwong@smu.edu.sg",
+    "url": "https://github.com/smucclaw"
+  },
+  "homepage": "https://github.com/smucclaw/l4-ide",
+  "repository": "https://github.com/smucclaw/l4-ide",
+  "license": "BSD-3-Clause",
+  "keywords": [
+    "legal",
+    "law",
+    "computational-law",
+    "contracts",
+    "regulations",
+    "formal-methods",
+    "verification",
+    "functional-programming"
+  ],
+  "skills": "./l4/",
+  "lspServers": "./.lsp.json"
+}
