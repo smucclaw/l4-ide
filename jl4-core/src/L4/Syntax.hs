@@ -553,7 +553,10 @@ deriving anyclass instance ToConcreteNodes PosToken (Obligation Name)
 -- DeonticModal has no source tokens, so return empty list
 instance ToConcreteNodes PosToken DeonticModal where
   toNodes _ = pure []
-deriving anyclass instance ToConcreteNodes PosToken (RAction Name)
+-- Manual instance for RAction to skip the modal field (which has no source tokens)
+instance ToConcreteNodes PosToken (RAction Name) where
+  toNodes (MkAction ann _modal action provided) =
+    flattenConcreteNodes ann [toNodes action, toNodes provided]
 deriving anyclass instance ToConcreteNodes PosToken (LocalDecl Name)
 deriving anyclass instance ToConcreteNodes PosToken (NamedExpr Name)
 deriving anyclass instance ToConcreteNodes PosToken (Branch Name)
@@ -597,7 +600,10 @@ deriving anyclass instance ToConcreteNodes PosToken (Aka Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (Expr Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (GuardedExpr Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (Obligation Resolved)
-deriving anyclass instance ToConcreteNodes PosToken (RAction Resolved)
+-- Manual instance for RAction to skip the modal field (which has no source tokens)
+instance ToConcreteNodes PosToken (RAction Resolved) where
+  toNodes (MkAction ann _modal action provided) =
+    flattenConcreteNodes ann [toNodes action, toNodes provided]
 deriving anyclass instance ToConcreteNodes PosToken (LocalDecl Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (NamedExpr Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (Branch Resolved)
