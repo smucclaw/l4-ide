@@ -486,44 +486,65 @@ DECLARE `pay monthly installment to`
 
 ---
 
-## 7. Current Limitations
+## 7. Prohibitions with MUST NOT / SHANT
 
-### 7.1 No Native MUST NOT (Prohibitions)
+### 7.1 Native Prohibition Syntax
 
-L4 currently lacks a `MUST NOT` keyword. In CSL, prohibitions are modeled as external choices that trigger unfulfillable obligations if the prohibited action occurs.
-
-**Workaround pattern:**
+L4 supports prohibitions with `MUST NOT` or `SHANT` keywords:
 
 ```l4
--- Prohibition: Employee must not disclose information for 5 years
-IF Disclosure happens within 5 years
-   THEN PARTY Employee
-        MUST `do impossible action`
-             PROVIDED FALSE
-        WITHIN 0
-   ELSE FULFILLED
+PARTY Employee
+MUST NOT disclose
+WITHIN 365
+LEST PARTY Employee
+     MUST `pay damages`
+     WITHIN 30
 ```
 
-This is awkward. A future `MUST NOT` keyword would:
+Or equivalently with `SHANT`:
 
-1. Provide cleaner syntax
-2. Enable static analysis (ensure every prohibition has consequences)
-3. Improve readability
+```l4
+PARTY Employee
+SHANT disclose
+WITHIN 365
+LEST BREACH BY Employee BECAUSE "violated NDA"
+```
 
-### 7.2 No Explicit BREACH Keyword
+### 7.2 Flipped Polarity for Natural Reading
 
-`BREACH` is an evaluation outcome, not something you write in L4 code. A contract breaches when:
+For prohibitions, HENCE and LEST have **flipped meanings** compared to MUST:
 
-1. A `WITHIN` deadline passes
-2. No `LEST` clause handles the failure
+| Modal     | HENCE triggers when...           | LEST triggers when...              |
+|-----------|----------------------------------|-----------------------------------|
+| `MUST`    | action is taken                  | deadline passes without action    |
+| `MUST NOT`| deadline passes (respected)      | action is taken (violation!)      |
 
-The evaluator produces `ValBreached` with a `ReasonForBreach` containing:
+This matches natural English: "Don't smoke, **lest** you face consequences."
 
-- The party who breached
-- The action that was required
-- The deadline that was missed
+```l4
+PARTY Alice
+SHANT smoke
+WITHIN 30
+HENCE FULFILLED    -- 30 days pass without smoking → success
+LEST BREACH        -- Alice smokes → breach!
+```
 
-### 7.3 MAY is Syntactic Sugar
+### 7.3 The BREACH Terminal Clause
+
+`BREACH` can be used as an explicit terminal clause, parallel to `FULFILLED`:
+
+```l4
+LEST BREACH                                    -- Simple form
+LEST BREACH BY `The Employee`                  -- With explicit party
+LEST BREACH BY `The Employee` BECAUSE "violated policy"  -- With reason
+```
+
+When evaluated, `BREACH` produces `ValBreached` containing:
+
+- The party who breached (explicit or inferred from enclosing PARTY)
+- The reason for breach (explicit or generated from context)
+
+### 7.4 MAY is Syntactic Sugar
 
 `MAY` exists in the lexer but is essentially equivalent to an external choice:
 

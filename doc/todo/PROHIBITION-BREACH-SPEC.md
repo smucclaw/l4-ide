@@ -79,16 +79,20 @@ This parallels how `FULFILLED` works as an explicit terminal.
 
 From `doc/regulative.md`, the deontic operators are sugar over a basic `DO`:
 
-| Deontic Modal | If Action IS Taken | Default HENCE  | If Action NOT Taken | Default LEST |
-|---------------|-------------------|----------------|---------------------|--------------|
-| `DO`          | (taken)           | *required*     | (not taken)         | *required*   |
-| `MUST`        | (taken)           | `FULFILLED`    | (not taken)         | `BREACH`     |
-| `MAY`         | (taken)           | `FULFILLED`    | (not taken)         | `FULFILLED`  |
-| `MUST NOT`    | (not taken)       | `FULFILLED`    | (taken)             | `BREACH`     |
+| Deontic Modal | HENCE (default)       | LEST (default)         |
+|---------------|-----------------------|------------------------|
+| `DO`          | *required*            | *required*             |
+| `MUST`        | action done → `FULFILLED` | deadline passed → `BREACH` |
+| `MAY`         | action done → `FULFILLED` | deadline passed → `FULFILLED` |
+| `MUST NOT`    | deadline passed → `FULFILLED` | action done → `BREACH` |
 
-Key insight: **`MUST NOT` is the inverse of `MUST`**:
-- `MUST`: Action required → Success if done, Breach if not done
-- `MUST NOT`: Action prohibited → Success if NOT done, Breach if done
+Key insight: **`MUST NOT` / `SHANT` flips the polarity of HENCE/LEST**:
+- `MUST`: HENCE = action done; LEST = deadline passed without action
+- `MUST NOT`: HENCE = deadline passed (prohibition respected); LEST = action done (violation!)
+
+This makes the natural language reading intuitive:
+- "You SHANT smoke LEST you BREACH" reads naturally as "don't smoke, or you breach"
+- Compare to English: "Don't smoke, **lest** you face consequences"
 
 ### Syntax Design
 
@@ -132,13 +136,19 @@ With HENCE/LEST clauses:
 PARTY p
 MUST NOT action
 WITHIN d
-HENCE continuation    -- What happens if prohibition is respected (NOT done)
-LEST  consequence     -- What happens if prohibition is violated (IS done)
+HENCE continuation    -- What happens if deadline passes without action (prohibition respected)
+LEST  consequence     -- What happens if action IS done (prohibition violated!)
 ```
 
-Note the inversion from `MUST`:
-- For `MUST`: HENCE = after action done; LEST = after action not done
-- For `MUST NOT`: HENCE = after action NOT done (prohibition respected); LEST = after action IS done (violation)
+**The polarity is flipped from `MUST`** to match natural English:
+
+| Modal    | HENCE triggers when...            | LEST triggers when...              |
+|----------|-----------------------------------|-----------------------------------|
+| `MUST`   | action is taken                   | deadline passes without action    |
+| `MUST NOT` | deadline passes without action  | action is taken (violation!)      |
+
+This reads naturally: "You SHANT disclose secrets LEST you pay damages" means
+"don't disclose, **lest** (for fear that) you face the penalty clause."
 
 #### BREACH
 
@@ -174,17 +184,21 @@ The `BY` and `BECAUSE` clauses are optional. If omitted:
 PARTY p
 MUST NOT action
 WITHIN d
-HENCE c1
-LEST c2
+HENCE c1   -- runs if prohibition respected (deadline passes, action NOT taken)
+LEST c2    -- runs if prohibition violated (action IS taken)
 
 -- Desugars to:
 IF action happens WITHIN d
-   THEN c2     -- Prohibition violated: action WAS taken
-   ELSE c1     -- Prohibition respected: action was NOT taken
+   THEN c2     -- LEST: Prohibition violated (action WAS taken)
+   ELSE c1     -- HENCE: Prohibition respected (deadline passed, action was NOT taken)
 ```
 
-If `HENCE` is omitted, default is `FULFILLED`.
-If `LEST` is omitted, default is `BREACH BY p`.
+If `HENCE` is omitted, default is `FULFILLED` (prohibition was respected).
+If `LEST` is omitted, default is `BREACH BY p` (prohibition was violated).
+
+**Note on polarity:** For MUST NOT, the evaluator swaps HENCE↔LEST internally:
+- When action matches → trigger LEST (violation)
+- When deadline passes → trigger HENCE (respected)
 
 #### BREACH Desugaring
 
@@ -552,19 +566,21 @@ If an action occurs at the exact start time, is it a violation? **Yes** — `WIT
 
 ### 2. MUST NOT with HENCE and LEST
 
-Both can be specified:
+Both can be specified. Note the natural reading:
 
 ```l4
 PARTY Employee
 MUST NOT disclose
 WITHIN 365
-HENCE PARTY Employer        -- If respected (no disclosure)
-      MUST `pay bonus`
+HENCE PARTY Employer        -- If prohibition respected (365 days pass, no disclosure)
+      MUST `pay bonus`      -- "hence you get a bonus"
       WITHIN 30
-LEST  PARTY Employee        -- If violated (disclosure happened)
-      MUST `pay damages`
+LEST  PARTY Employee        -- If prohibition violated (disclosure happened)
+      MUST `pay damages`    -- "lest you pay damages"
       WITHIN 14
 ```
+
+This reads naturally: "Employee must not disclose for 365 days, **hence** employer pays bonus, **lest** employee pays damages."
 
 ### 3. Nested MUST NOT in AND/OR
 
