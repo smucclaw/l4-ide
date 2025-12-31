@@ -1404,6 +1404,7 @@ baseExpr' =
   <|> multiWayIf
   <|> try event
   <|> regulative
+  <|> breach
   <|> lam
   <|> consider
   <|> try namedApp -- This is not nice
@@ -1655,6 +1656,17 @@ regulative :: Parser (Expr Name)
 regulative = attachAnno $
   Regulative emptyAnno <$> annoHole obligation
 
+-- | Parse BREACH [BY party] [BECAUSE reason]
+-- Terminal clause for explicit breach declaration
+breach :: Parser (Expr Name)
+breach = do
+  current <- Lexer.indentLevel
+  attachAnno $
+    Breach emptyAnno
+      <$  annoLexeme (spacedKeyword_ TKBreach)
+      <*> optionalWithHole (annoLexeme (spacedKeyword_ TKBy) *> annoHole (indentedExpr current))
+      <*> optionalWithHole (annoLexeme (spacedKeyword_ TKBecause) *> annoHole (indentedExpr current))
+
 optionalWithHole :: HasSrcRange a => AnnoParser a -> AnnoParser (Maybe a)
 optionalWithHole p = Just <$> p <|> annoHole (pure Nothing)
 
@@ -1674,15 +1686,17 @@ must :: Pos -> Parser (RAction Name)
 must current = attachAnno $
    MkAction emptyAnno
      <$> asum
-      [ annoLexeme (spacedKeyword_ TKMust)
-        *> optional (annoLexeme (spacedKeyword_ TKDo))
-        *> annoHole (indentedPattern current)
-      , annoLexeme (spacedKeyword_ TKMay)
-        *> optional (annoLexeme (spacedKeyword_ TKDo))
-        *> annoHole (indentedPattern current)
-      , annoLexeme (spacedKeyword_ TKDo)
-        *> annoHole (indentedPattern current)
+      -- Parse MUST, then check for optional NOT to determine modal
+      [ annoLexeme (spacedKeyword_ TKMust) *>
+        (DMustNot <$ annoLexeme (spacedKeyword_ TKNot) <* optional (annoLexeme (spacedKeyword_ TKDo))
+         <|> DMust <$ optional (annoLexeme (spacedKeyword_ TKDo)))
+      , DMay <$ annoLexeme (spacedKeyword_ TKMay)
+        <* optional (annoLexeme (spacedKeyword_ TKDo))
+      , DMustNot <$ annoLexeme (spacedKeyword_ TKShant)
+        <* optional (annoLexeme (spacedKeyword_ TKDo))
+      , DDo <$ annoLexeme (spacedKeyword_ TKDo)
       ]
+     <*> annoHole (indentedPattern current)
      <*> optionalWithHole do
       annoLexeme (spacedKeyword_ TKProvided)
         *> annoHole (indentedExpr current)

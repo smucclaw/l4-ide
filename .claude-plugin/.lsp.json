@@ -1,0 +1,26 @@
+{
+  "l4": {
+    "command": null,
+    "args": [],
+    "initializationOptions": {},
+    "settings": {},
+    "transport": {
+      "kind": "websocket",
+      "url": "wss://jl4.legalese.com/lsp"
+    },
+    "documentSelector": [
+      {
+        "language": "l4",
+        "scheme": "file"
+      },
+      {
+        "pattern": "**/*.l4",
+        "scheme": "file"
+      },
+      {
+        "pattern": "**/*.yaml",
+        "scheme": "file"
+      }
+    ]
+  }
+}

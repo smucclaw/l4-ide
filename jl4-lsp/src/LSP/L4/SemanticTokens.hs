@@ -197,6 +197,9 @@ instance ToSemTokens Context PosToken (Event Name) where
 instance ToSemTokens Context PosToken (Expr Name) where
 instance ToSemTokens Context PosToken (GuardedExpr Name) where
 instance ToSemTokens Context PosToken (Obligation Name) where
+-- DeonticModal has no tokens to highlight
+instance ToSemTokens Context PosToken DeonticModal where
+  toSemTokens _ = pure []
 instance ToSemTokens Context PosToken (RAction Name) where
 instance ToSemTokens Context PosToken (LocalDecl Name) where
 instance ToSemTokens Context PosToken (Assume Name) where
@@ -289,6 +292,9 @@ instance ToSemTokens () PosToken (Type' Resolved) where
 instance ToSemTokens () PosToken (AppForm Resolved) where
 
 instance ToSemTokens () PosToken (Obligation Resolved) where
+-- DeonticModal has no tokens to highlight
+instance ToSemTokens () PosToken DeonticModal where
+  toSemTokens _ = pure []
 instance ToSemTokens () PosToken (RAction Resolved) where
 instance ToSemTokens () PosToken (Event Resolved) where
   toSemTokens (MkEvent ann p a t atFirst) = traverseCsnWithHoles ann $ map toSemTokens
