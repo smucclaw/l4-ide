@@ -79,18 +79,20 @@ This parallels how `FULFILLED` works as an explicit terminal.
 
 From `doc/regulative.md`, the deontic operators are sugar over a basic `DO`:
 
-| Deontic Modal | HENCE (default)       | LEST (default)         |
-|---------------|-----------------------|------------------------|
-| `DO`          | *required*            | *required*             |
-| `MUST`        | action done → `FULFILLED` | deadline passed → `BREACH` |
-| `MAY`         | action done → `FULFILLED` | deadline passed → `FULFILLED` |
-| `MUST NOT`    | deadline passed → `FULFILLED` | action done → `BREACH` |
+| Deontic Modal | HENCE (default)               | LEST (default)                |
+| ------------- | ----------------------------- | ----------------------------- |
+| `DO`          | _required_                    | _required_                    |
+| `MUST`        | action done → `FULFILLED`     | deadline passed → `BREACH`    |
+| `MAY`         | action done → `FULFILLED`     | deadline passed → `FULFILLED` |
+| `MUST NOT`    | deadline passed → `FULFILLED` | action done → `BREACH`        |
 
 Key insight: **`MUST NOT` / `SHANT` flips the polarity of HENCE/LEST**:
+
 - `MUST`: HENCE = action done; LEST = deadline passed without action
 - `MUST NOT`: HENCE = deadline passed (prohibition respected); LEST = action done (violation!)
 
 This makes the natural language reading intuitive:
+
 - "You SHANT smoke LEST you BREACH" reads naturally as "don't smoke, or you breach"
 - Compare to English: "Don't smoke, **lest** you face consequences"
 
@@ -142,10 +144,10 @@ LEST  consequence     -- What happens if action IS done (prohibition violated!)
 
 **The polarity is flipped from `MUST`** to match natural English:
 
-| Modal    | HENCE triggers when...            | LEST triggers when...              |
-|----------|-----------------------------------|-----------------------------------|
-| `MUST`   | action is taken                   | deadline passes without action    |
-| `MUST NOT` | deadline passes without action  | action is taken (violation!)      |
+| Modal      | HENCE triggers when...         | LEST triggers when...          |
+| ---------- | ------------------------------ | ------------------------------ |
+| `MUST`     | action is taken                | deadline passes without action |
+| `MUST NOT` | deadline passes without action | action is taken (violation!)   |
 
 This reads naturally: "You SHANT disclose secrets LEST you pay damages" means
 "don't disclose, **lest** (for fear that) you face the penalty clause."
@@ -172,6 +174,7 @@ LEST BREACH BY `The Borrower` BECAUSE `failed to pay within grace period`
 ```
 
 The `BY` and `BECAUSE` clauses are optional. If omitted:
+
 - Party is inferred from the nearest enclosing `PARTY` clause
 - Reason is generated from the missed deadline context
 
@@ -197,12 +200,14 @@ If `HENCE` is omitted, default is `FULFILLED` (prohibition was respected).
 If `LEST` is omitted, default is `BREACH BY p` (prohibition was violated).
 
 **Note on polarity:** For MUST NOT, the evaluator swaps HENCE↔LEST internally:
+
 - When action matches → trigger LEST (violation)
 - When deadline passes → trigger HENCE (respected)
 
 #### BREACH Desugaring
 
 `BREACH` is a primitive terminal that produces `ValBreached` with:
+
 - The party to blame
 - The timestamp of breach
 - The action/deadline that caused it (from evaluation context)
@@ -224,6 +229,7 @@ ValBreached (ReasonForBreach {
 #### MUST NOT Requirements
 
 A `MUST NOT` clause MUST have either:
+
 1. An explicit `LEST` clause, OR
 2. Implicit `BREACH` as the default consequence
 
@@ -643,18 +649,19 @@ The evaluator should resolve `p` to the actual party at instantiation time.
 
 ## Differences from CSL
 
-| Feature | CSL | L4 (This Spec) |
-|---------|-----|----------------|
-| Prohibition syntax | External choice + unfulfillable obligation | Native `MUST NOT` / `SHANT` |
-| Explicit BREACH | No (only `fulfilment` is terminal) | Yes (`BREACH` is terminal) |
-| Blame in BREACH | Implicit from obligation | Explicit `BY party` optional |
-| Prohibition HENCE/LEST | N/A (workaround only) | Full support |
+| Feature                | CSL                                        | L4 (This Spec)               |
+| ---------------------- | ------------------------------------------ | ---------------------------- |
+| Prohibition syntax     | External choice + unfulfillable obligation | Native `MUST NOT` / `SHANT`  |
+| Explicit BREACH        | No (only `fulfilment` is terminal)         | Yes (`BREACH` is terminal)   |
+| Blame in BREACH        | Implicit from obligation                   | Explicit `BY party` optional |
+| Prohibition HENCE/LEST | N/A (workaround only)                      | Full support                 |
 
 ## Migration Path
 
 ### Backward Compatibility
 
 Both features are purely additive:
+
 - Existing L4 code without `MUST NOT` or `BREACH` continues to work
 - The workaround pattern (`IF action THEN unfulfillable ELSE FULFILLED`) remains valid
 
@@ -684,12 +691,15 @@ obligation. Consider using `MUST NOT` for clarity:
 ## Open Questions
 
 1. **Keyword choice:** Should we support both `MUST NOT` (two words) and `SHANT` (one word), or pick one?
+
    - Recommendation: Support both, with `MUST NOT` as canonical in docs.
 
 2. **BECAUSE clause:** Is the reason string sufficient, or should it support expressions?
+
    - Recommendation: Start with string literals, extend later if needed.
 
 3. **Visualization:** How should `MUST NOT` appear in Graphviz contract diagrams?
+
    - Recommendation: Show as a "prohibition node" with distinctive styling (e.g., red border, "⊘" symbol).
 
 4. **BREACH propagation:** In `c1 AND c2`, if `c1` is `BREACH`, should evaluation short-circuit?

@@ -514,10 +514,10 @@ LEST BREACH BY Employee BECAUSE "violated NDA"
 
 For prohibitions, HENCE and LEST have **flipped meanings** compared to MUST:
 
-| Modal     | HENCE triggers when...           | LEST triggers when...              |
-|-----------|----------------------------------|-----------------------------------|
-| `MUST`    | action is taken                  | deadline passes without action    |
-| `MUST NOT`| deadline passes (respected)      | action is taken (violation!)      |
+| Modal      | HENCE triggers when...      | LEST triggers when...          |
+| ---------- | --------------------------- | ------------------------------ |
+| `MUST`     | action is taken             | deadline passes without action |
+| `MUST NOT` | deadline passes (respected) | action is taken (violation!)   |
 
 This matches natural English: "Don't smoke, **lest** you face consequences."
 
