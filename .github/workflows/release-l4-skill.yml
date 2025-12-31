@@ -4,21 +4,23 @@ on:
   push:
     branches: [main]
     paths:
-      - 'l4/**'
-      - '!l4/l4.skill'
-      - '!l4/l4.zip'
+      - "l4/**"
+      - "!l4/l4.skill"
+      - "!l4/l4.zip"
   workflow_dispatch:
 
 jobs:
   release-skill:
     name: Build and Release L4 Skill
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Get full history for versioning
+          fetch-depth: 0 # Get full history for versioning
 
       - name: Get version from commits
         id: version
