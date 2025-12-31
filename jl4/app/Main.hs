@@ -23,7 +23,7 @@ import Options.Applicative (ReadM, eitherReader, fullDesc, header, footer, helpe
 import qualified Options.Applicative as Options
 import System.Directory (getCurrentDirectory, createDirectoryIfMissing)
 import System.Exit (exitSuccess, exitFailure)
-import System.IO (stdin, stdout, hIsTerminalDevice)
+import System.IO (stdin, stdout, stderr, hIsTerminalDevice, hPutStrLn)
 import System.FilePath (takeBaseName, (</>))
 import System.Process (callCommand)
 import Text.Pretty.Simple (pShow, pShowNoColor)
@@ -253,7 +253,17 @@ isGraphVizEnabled opts recorder = do
 main :: IO ()
 main = do
   curDir   <- getCurrentDirectory
-  options  <- Options.execParser optionsConfig
+  rawOptions  <- Options.execParser optionsConfig
+  -- Filter out spurious subcommand-like first arguments ("eval", "check")
+  -- that may be passed by tools unfamiliar with jl4-cli's interface
+  options <- case sanitizeFileArgs rawOptions.files of
+    (_, Nothing) -> do
+      putStrLn "Error: No L4 files specified (only found spurious 'eval' or 'check' argument)"
+      exitFailure
+    (Just spurious, Just sanitizedFiles) -> do
+      hPutStrLn stderr $ "Warning: ignoring spurious '" ++ spurious ++ "' argument (jl4-cli has no subcommands)"
+      pure rawOptions { files = sanitizedFiles }
+    (Nothing, Just _) -> pure rawOptions
   baseRecorder <- makeDefaultStderrRecorder Nothing
   let recorder = cmapWithPrio pretty baseRecorder
 
@@ -578,3 +588,13 @@ optionsConfig = info
     <> header "## jl4-cli"
     <> footer "## Part of the L4 tool family from Legalese.com"
   )
+
+-- | Sanitize file arguments by removing spurious subcommand-like first arguments.
+-- Some tools (e.g., AI assistants) may incorrectly invoke "jl4-cli eval foo.l4"
+-- instead of "jl4-cli foo.l4". This function drops "eval" or "check" if they
+-- appear as the first argument.
+-- Returns (Maybe spurious, Maybe sanitizedFiles).
+sanitizeFileArgs :: NonEmpty FilePath -> (Maybe FilePath, Maybe (NonEmpty FilePath))
+sanitizeFileArgs files@(first NE.:| rest)
+  | first `elem` ["eval", "check"] = (Just first, NE.nonEmpty rest)
+  | otherwise = (Nothing, Just files)
