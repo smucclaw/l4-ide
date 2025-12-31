@@ -55,14 +55,14 @@ ceo-performance-award.l4:701:1-702:95:
   FULFILLED
 ceo-performance-award.l4:704:1-706:83:
   PARTY `Award Participant` OF "Elon Reeve Musk", (DATE OF 28, 6, 1971)
-  MUST `achieve market cap milestone` `tranche no`
-                                       `mkt cap` PROVIDED     `mkt cap` GREATER THAN (`Required Market Cap For Tranche` OF `tranche no`)
+  MAY `achieve market cap milestone` `tranche no`
+                                      `mkt cap` PROVIDED     `mkt cap` GREATER THAN (`Required Market Cap For Tranche` OF `tranche no`)
   AND    `Market Cap Milestone Met` OF `tranche no`, (`award state`'s `Performance Metrics`)
       OR `Market Cap Milestone Met For Change In Control` OF `tranche no`, (`award state`'s `Performance Metrics`)
   WITHIN 2922
   HENCE   PARTY `Elon Musk`
-          MUST `achieve operational milestone` `tranche n`
-                                                `Milestone Type` PROVIDED    `Operational Milestone Met` OF `tranche n`, (`award state`'s `Performance Metrics`)
+          MAY `achieve operational milestone` `tranche n`
+                                               `Milestone Type` PROVIDED    `Operational Milestone Met` OF `tranche n`, (`award state`'s `Performance Metrics`)
           OR `Deemed Achievement Applies` OF `tranche n`, `award state`
           WITHIN `Date to days` OF (`Performance End Date` MINUS (`award state`'s `Current Date`))
   WHERE
@@ -74,14 +74,14 @@ ceo-performance-award.l4:704:1-706:83:
       ELSE "EBITDA Goal"
 ceo-performance-award.l4:709:1-710:80:
   PARTY `Award Participant` OF "Elon Reeve Musk", (DATE OF 28, 6, 1971)
-  MUST `achieve market cap milestone` `tranche no`
-                                       `mkt cap` PROVIDED     `mkt cap` GREATER THAN (`Required Market Cap For Tranche` OF `tranche no`)
+  MAY `achieve market cap milestone` `tranche no`
+                                      `mkt cap` PROVIDED     `mkt cap` GREATER THAN (`Required Market Cap For Tranche` OF `tranche no`)
   AND    `Market Cap Milestone Met` OF `tranche no`, (`award state`'s `Performance Metrics`)
       OR `Market Cap Milestone Met For Change In Control` OF `tranche no`, (`award state`'s `Performance Metrics`)
   WITHIN 3287
   HENCE   PARTY `Elon Musk`
-          MUST `achieve operational milestone` `tranche n`
-                                                `Milestone Type` PROVIDED    `Operational Milestone Met` OF `tranche n`, (`award state`'s `Performance Metrics`)
+          MAY `achieve operational milestone` `tranche n`
+                                               `Milestone Type` PROVIDED    `Operational Milestone Met` OF `tranche n`, (`award state`'s `Performance Metrics`)
           OR `Deemed Achievement Applies` OF `tranche n`, `award state`
           WITHIN `Date to days` OF (`Performance End Date` MINUS (`award state`'s `Current Date`))
   WHERE

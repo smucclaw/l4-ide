@@ -3,18 +3,42 @@ Typechecking successful
 Evaluation successful
 prohibition.l4:57:1-27:
   PARTY Alice
-  MUST smoke
+  MUST NOT smoke
   WITHIN 30
   HENCE FULFILLED
 prohibition.l4:62:1-63:31:
-  FULFILLED
+  PROVISION BREACHED:
+    party
+      Alice
+    who did action
+      smoke
+    at
+      15
+    surpassed the deadline of party
+      Alice
+    who had to do obligatory action
+      MUST NOT smoke
+    before their deadline, which was at
+      15
 prohibition.l4:68:1-28:
   PARTY Bob
-  MUST drink
+  MUST NOT drink
   WITHIN 30
   HENCE FULFILLED
 prohibition.l4:73:1-74:29:
-  FULFILLED
+  PROVISION BREACHED:
+    party
+      Bob
+    who did action
+      drink
+    at
+      10
+    surpassed the deadline of party
+      Bob
+    who had to do obligatory action
+      MUST NOT drink
+    before their deadline, which was at
+      10
 prohibition.l4:78:1-79:31:
   FULFILLED
 prohibition.l4:83:1-27:
@@ -26,6 +50,6 @@ prohibition.l4:87:1-88:29:
   FULFILLED
 prohibition.l4:93:1-26:
   PARTY Bob
-  MUST drink
+  MAY drink
   WITHIN 30
   HENCE FULFILLED

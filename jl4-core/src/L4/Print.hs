@@ -364,10 +364,18 @@ mprint :: (Foldable t, LayoutPrinter a) => Doc ann -> t a -> [Doc ann]
 mprint kw = foldMap \x -> [kw <+> printWithLayout x]
 
 instance LayoutPrinterWithName n => LayoutPrinter (RAction n) where
-  printWithLayout MkAction {action, provided} = hsep $
-    [ "MUST", printWithLayout action
+  printWithLayout MkAction {modal, action, provided} = hsep $
+    [ printDeonticModal modal, printWithLayout action
     ]
     <> mprint "PROVIDED" provided
+
+-- | Print deontic modal keyword
+printDeonticModal :: DeonticModal -> Doc ann
+printDeonticModal = \case
+  DMust -> "MUST"
+  DMay -> "MAY"
+  DMustNot -> "MUST NOT"
+  DDo -> "DO"
 
 instance LayoutPrinterWithName a => LayoutPrinter (NamedExpr a) where
   printWithLayout = \ case
