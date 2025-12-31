@@ -250,6 +250,88 @@ WHEN Submitted THEN ...
 WHEN Approved THEN ...
 ```
 
+## BRANCH: Multi-Way Decisions Without Indentation
+
+When you have multiple conditions to check on the same value, `BRANCH` provides a flat alternative to nested `IF` statements or `CONSIDER` blocks. This is especially useful when:
+
+- You're checking multiple conditions on the same value
+- Deep indentation would reduce readability
+- You want to avoid repeating the subject expression
+
+### Basic BRANCH Syntax
+
+```l4
+GIVEN category IS AN EmploymentCategory
+GIVETH A NUMBER
+`minimum salary for` category MEANS
+    BRANCH IF category EQUALS TechProfessional  THEN 5000
+           IF ^        EQUALS HealthcareWorker   THEN 4500
+           IF ^        EQUALS Researcher         THEN 5500
+           OTHERWISE 3000
+```
+
+The `^` character means **"ditto from above line"**—it repeats whatever was in that position on the previous line. This lets you write flat, table-like decision logic without nesting.
+
+### BRANCH vs CONSIDER
+
+**CONSIDER approach** (with indentation):
+
+```l4
+`risk level for` category MEANS
+    CONSIDER category
+    WHEN TechProfessional  THEN "Low"
+    WHEN HealthcareWorker  THEN "Medium"
+    WHEN Researcher        THEN "Low"
+    OTHERWISE "High"
+```
+
+**BRANCH approach** (flat structure):
+
+```l4
+`risk level for` category MEANS
+    BRANCH IF category EQUALS TechProfessional  THEN "Low"
+           IF ^        EQUALS HealthcareWorker   THEN "Medium"
+           IF ^        EQUALS Researcher         THEN "Low"
+           OTHERWISE "High"
+```
+
+### When to Use BRANCH
+
+- **Use BRANCH** when checking multiple equality conditions on the same value
+- **Use CONSIDER** when you need pattern matching (destructuring data, matching list patterns)
+- **Use IF** for binary decisions
+
+```l4
+-- Good use of BRANCH (multiple equality checks)
+BRANCH IF status EQUALS Active   THEN "Running"
+       IF ^      EQUALS Inactive THEN "Stopped"
+       OTHERWISE "Unknown"
+
+-- Good use of CONSIDER (pattern matching with data extraction)
+CONSIDER outcome
+WHEN Approved WITH permitNumber, expiryDate THEN ...
+WHEN Rejected WITH reason THEN ...
+
+-- Good use of IF (binary decision)
+IF age AT LEAST 18 THEN "Adult" ELSE "Minor"
+```
+
+### BRANCH with Complex Conditions
+
+You can use any boolean expression in BRANCH conditions:
+
+```l4
+GIVEN employee IS AN Employee
+GIVETH A NUMBER
+`bonus rate for` employee MEANS
+    BRANCH IF employee's yearsExperience AT LEAST 10 THEN 0.20
+           IF ^'s        ^               AT LEAST 5  THEN 0.15
+           IF ^'s        ^               AT LEAST 2  THEN 0.10
+           OTHERWISE 0.05
+```
+
+The `^` repeats the corresponding element from the line above, letting you build readable tiered conditions without repetition.
+
 ## Decision Tables in L4
 
 Legal and business rules often appear as decision tables. L4's pattern matching naturally expresses these:
@@ -457,9 +539,10 @@ GIVETH A LIST OF Document
 3. **OTHERWISE** is your default case
 4. **List patterns**: `EMPTY` and `head FOLLOWED BY tail`
 5. **IF/THEN/ELSE** for simple binary decisions
-6. **Decision tables** map naturally to nested CONSIDER expressions
-7. **Exhaustiveness checking** catches missing cases at compile time
-8. **Pattern guards (PROVIDED)** add conditions to matches
+6. **BRANCH** for flat, multi-way decisions without indentation cascades
+7. **Decision tables** map naturally to nested CONSIDER expressions or flat BRANCH structures
+8. **Exhaustiveness checking** catches missing cases at compile time
+9. **Pattern guards (PROVIDED)** add conditions to matches
 
 ## Exercises
 

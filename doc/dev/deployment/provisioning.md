@@ -214,15 +214,15 @@ systemctl restart nginx
 # Test websessions
 UUID=$(curl -s -X POST https://dev.jl4.legalese.com/session \
   -H "Content-Type: application/json" \
-  -d '"GIVEN x IS A NUMBER\nDECIDE x IS EVEN MEANS x MOD 2 = 0\n@export even"' | tr -d '"')
+  -d '"GIVEN x IS A NUMBER\nGIVETH A BOOLEAN\n@export\nisEven MEANS x % 2 = 0"' | tr -d '"')
 
 echo "Created session: $UUID"
 
 # Verify it's in decision service
-curl https://dev.jl4.legalese.com/decision/functions/${UUID}:even
+curl https://dev.jl4.legalese.com/decision/functions/${UUID}:isEven
 
 # Test evaluation
-curl -X POST https://dev.jl4.legalese.com/decision/functions/${UUID}:even/evaluation \
+curl -X POST https://dev.jl4.legalese.com/decision/functions/${UUID}:isEven/evaluation \
   -H "Content-Type: application/json" \
   -d '{"fnArguments": {"x": 4}}'
 ```
@@ -362,4 +362,4 @@ nixos-rebuild switch --rollback --generation N
 - [nixos-anywhere documentation](https://github.com/nix-community/nixos-anywhere)
 - [NixOS Manual](https://nixos.org/manual/nixos/stable/)
 - [Disko (disk partitioning)](https://github.com/nix-community/disko)
-- See also: [DEPLOYMENT.md](./DEPLOYMENT.md) for ongoing deployment procedures
+- See also: [deployment.md](./deployment.md) for ongoing deployment procedures

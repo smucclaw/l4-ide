@@ -7,6 +7,7 @@ Quick reference for deploying L4 services to different environments.
 | Environment    | URL                                | Deployment Method            | Use Case                      |
 | -------------- | ---------------------------------- | ---------------------------- | ----------------------------- |
 | **Local Dev**  | `localhost:8001`, `localhost:8002` | Docker (`./jl4-dev start`)   | Local development and testing |
+| **Local VM**   | `localhost:8080` (forwarded)       | NixOS VM (`jl4-demo`)        | Test NixOS config locally     |
 | **Dev Server** | `https://dev.jl4.legalese.com`     | NixOS flake (`jl4-dev`)      | Cloud-based testing, staging  |
 | **Production** | `https://jl4.legalese.com`         | NixOS flake (`jl4-aws-2505`) | Live production environment   |
 
@@ -30,6 +31,21 @@ Quick reference for deploying L4 services to different environments.
 ```bash
 # See dev-config.md for detailed instructions
 ./dev-start.sh full
+```
+
+### Local VM (Test NixOS Configuration)
+
+```bash
+# See doc/LOCAL-VM-DEPLOYMENT.md for detailed instructions
+
+# Build and run VM
+nixos-rebuild build-vm --flake '.#jl4-demo'
+QEMU_NET_OPTS="hostfwd=tcp::2222-:22,hostfwd=tcp::8080-:80" \
+  QEMU_OPTS="-display none" \
+  result/bin/run-jl4-demo-vm &
+
+# Access services
+curl http://localhost:8080/decision/functions
 ```
 
 ### Dev Server
@@ -164,4 +180,5 @@ nixos-rebuild switch --rollback --generation N
 
 - **[dev-config.md](./dev-config.md)** - Detailed local development guide
 - **[dev-start.sh](./dev-start.sh)** - Helper script for local dev
+- **[doc/LOCAL-VM-DEPLOYMENT.md](./doc/LOCAL-VM-DEPLOYMENT.md)** - Running local VM for testing
 - **[nix/README.md](./nix/README.md)** - NixOS configuration details

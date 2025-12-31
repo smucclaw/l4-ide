@@ -26,8 +26,9 @@
       };
 
       qemu.networkingOptions = [
-        "-netdev bridge,br=br0,id=net0,helper=/run/wrappers/bin/qemu-bridge-helper"
-        "-device virtio-net-pci,netdev=net0"
+        # Use user-mode networking with port forwarding for localhost access
+        "-net nic,model=virtio"
+        "-net user,hostfwd=tcp::8080-:80,hostfwd=tcp::8443-:443"
       ];
     };
     networking = {
@@ -40,6 +41,19 @@
       enableACME = lib.mkForce false;
       forceSSL = lib.mkForce false;
     };
+
+    # Override decision service to use VM hostname for Swagger UI
+    systemd.services.jl4-decision-service.serviceConfig.ExecStart = lib.mkForce (
+      pkgs.writeShellScript "jl4-decision-service-start" ''
+        sourcePathsArgs="${lib.concatStringsSep " " (map (p: "--sourcePaths ${p}") config.services.jl4-decision-service.sourcePaths)}"
+        exec ${pkgs.callPackage ./jl4-decision-service/package.nix { }}/bin/jl4-decision-service-exe \
+          --port ${toString config.services.jl4-decision-service.port} \
+          --serverName http://${config.networking.hostName}${config.services.jl4-decision-service.path} \
+          $sourcePathsArgs \
+          --crudServerName localhost \
+          --crudServerPort ${toString config.services.jl4-websessions.port}
+      ''
+    );
 
     users.groups.admin = {};
     users.users = {

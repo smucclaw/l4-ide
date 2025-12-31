@@ -1,20 +1,30 @@
--- Simple working example: Query OpenRouter from L4
--- This demonstrates basic LLM querying using L4's built-in HTTP capabilities
+-- Simple working example: Query LLMs from L4 using the llm.l4 library
+-- This demonstrates LLM querying with automatic provider fallback
 
--- Basic query using OpenRouter (requires OPENROUTER_API_KEY environment variable)
-DECIDE simpleAIQuery IS
-  CONSIDER ENV "OPENROUTER_API_KEY"
-    WHEN JUST apiKey THEN
-      POST
-        "https://openrouter.ai/api/v1/chat/completions"
-        (CONCAT
-          "Content-Type: application/json\n",
-          "Authorization: Bearer ", apiKey, "\n",
-          "HTTP-Referer: https://l4-lang.org")
-        "{\"model\": \"openai/gpt-3.5-turbo\", \"messages\": [{\"role\": \"user\", \"content\": \"What is 2+2?\"}], \"max_tokens\": 50}"
+IMPORT llm
+
+-- Example 1: Simplest possible query with automatic provider fallback
+-- This will try OpenRouter -> OpenAI -> Anthropic in order
+DECIDE simpleQuery IS
+  queryLLMWithDefaults "What is 2+2?"
+
+-- Example 2: Use a specific provider directly
+DECIDE anthropicQuery IS
+  CONSIDER ENV "ANTHROPIC_API_KEY"
+    WHEN JUST key THEN
+      callClaude key "Define legal capacity"
     WHEN NOTHING THEN
-      "ERROR: OPENROUTER_API_KEY not set"
+      "ERROR: ANTHROPIC_API_KEY not set"
 
--- To run this, set your API key and uncomment the EVAL line:
+-- To run these examples, set at least one API key:
 -- export OPENROUTER_API_KEY="sk-or-v1-..."
--- #EVAL simpleAIQuery
+-- export OPENAI_API_KEY="sk-..."
+-- export ANTHROPIC_API_KEY="sk-ant-..."
+--
+-- Then uncomment one of the EVAL lines:
+-- #EVAL simpleQuery
+-- #EVAL anthropicQuery
+
+-- Note: Response parsing (extractLLMResponse) is a future enhancement.
+-- For now, you get raw JSON responses. Use JSONDECODE to manually
+-- extract fields based on the provider's response format.

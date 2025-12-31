@@ -398,6 +398,11 @@ forwardExpr env = \ case
   AsString _ann e -> do
     PushFrame AsStringFrame
     ForwardExpr env e
+  Breach _ann mParty mReason -> do
+    -- Explicit breach terminal clause - immediately produces a breach value
+    mPartyRef <- traverse (\p -> allocate_ p env) mParty
+    mReasonRef <- traverse (\r -> allocate_ r env) mReason
+    Backward (ValBreached (ExplicitBreach mPartyRef mReasonRef))
 
 backward :: WHNF -> Machine Config
 backward val = WithPoppedFrame $ \ case
@@ -472,6 +477,7 @@ backward val = WithPoppedFrame $ \ case
         PushFrame (TernaryBuiltin1 fn arg2 z)
         EvalRef arg1
       ValFulfilled -> Backward ValFulfilled
+      ValBreached r -> Backward (ValBreached r)
       ValAssumed r ->
         StuckOnAssumed r -- TODO: we can do better here
       res -> InternalException (RuntimeTypeError $ "expected a function but found: " <> prettyLayout res)
@@ -864,17 +870,26 @@ backwardContractFrame val = \ case
       -- now earlier, it is  due within 2, i.e. 3 - (3 - 2)
       newDue = due' - (stamp - time')
     if stamp > deadline
-      -- NOTE: the deadline has passed. there are now two options:
-      -- 1. there's no lest clause, i.e. this is an obligation. We return a breach.
-      -- 2. there's a lest clause, i.e. this is an external choice. We continue by reducing
-      --    the lest clause
-      then case lest of
-        Nothing -> do
-          -- NOTE: this is not too nice, but not wanting this would require to change `App1` to take MaybeEvaluated's
-          partyR <- either (`allocate_` env) AllocateValue party
-          Backward (ValBreached (DeadlineMissed ev'party ev'act stamp partyR act deadline))
-        Just lestFollowup -> AllocateValue ev'time
-          >>= continueWithFollowup env lestFollowup events
+      -- NOTE: the deadline has passed. What happens depends on the deontic modal:
+      -- MUST/DO: deadline passed without action = BREACH (or LEST if specified)
+      -- MUST NOT: deadline passed without prohibited action = FULFILLED (or HENCE if specified)
+      -- MAY: deadline passed without exercising permission = FULFILLED (or HENCE if specified)
+      then case act.modal of
+        DMustNot ->
+          -- Prohibition was RESPECTED: the prohibited action didn't occur before deadline
+          -- Continue with HENCE (followup), which defaults to FULFILLED
+          AllocateValue ev'time >>= continueWithFollowup env followup events
+        DMay ->
+          -- Permission was NOT EXERCISED: that's fine, continue with HENCE/FULFILLED
+          AllocateValue ev'time >>= continueWithFollowup env followup events
+        _ -> -- DMust, DDo: deadline passed = failure
+          case lest of
+            Nothing -> do
+              -- NOTE: this is not too nice, but not wanting this would require to change `App1` to take MaybeEvaluated's
+              partyR <- either (`allocate_` env) AllocateValue party
+              Backward (ValBreached (DeadlineMissed ev'party ev'act stamp partyR act deadline))
+            Just lestFollowup -> AllocateValue ev'time
+              >>= continueWithFollowup env lestFollowup events
       else do
         -- NOTE: we have observed the event and do not branch, either, the
         -- only thing that may now happen is that we try a new event. Hence we
@@ -910,8 +925,28 @@ backwardContractFrame val = \ case
         "expected environment but found: " <> prettyLayout val
   Contract10 ScrutinizeActions {..} ->
     case val of
-      ValBool True -> AllocateValue time
-        >>= continueWithFollowup (env `Map.union` henceEnv) followup events
+      ValBool True ->
+        -- Action matched! What happens depends on the deontic modal:
+        -- MUST/MAY/DO: action done = success → continue with HENCE (followup)
+        -- MUST NOT: action done = VIOLATION → continue with LEST (or BREACH if no LEST)
+        case act.modal of
+          DMustNot -> case lest of
+            -- Prohibition violated: action was done, trigger LEST clause
+            Just lestFollowup -> AllocateValue time
+              >>= continueWithFollowup (env `Map.union` henceEnv) lestFollowup events
+            -- No LEST clause: immediate breach
+            Nothing -> do
+              -- Extract timestamp from time (which has been updated to event time)
+              stamp <- assertTime time
+              -- Allocate references for the WHNF values
+              ev'partyRef <- AllocateValue ev'party
+              partyRef <- AllocateValue party
+              -- For prohibition breach, we use the action time as "deadline"
+              -- since the action should never have happened
+              Backward (ValBreached (DeadlineMissed ev'partyRef ev'act stamp partyRef act stamp))
+          -- MUST, MAY, DO: action done = success
+          _ -> AllocateValue time
+            >>= continueWithFollowup (env `Map.union` henceEnv) followup events
       ValBool False -> do
         newTime <- AllocateValue time
         tryNextEvent ScrutinizeEvents {party = Right party, time = newTime, ..} events

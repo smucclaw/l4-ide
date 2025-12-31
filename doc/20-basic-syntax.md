@@ -105,6 +105,60 @@ OR TRUE
 
 yields `TRUE`.
 
+### Indented LIST Literals
+
+L4 supports multiple syntaxes for list literals. The most natural and recommended approach uses vertical block indentation:
+
+**✅ Recommended - Vertical block syntax (inline LET):**
+
+```l4
+LET myList BE
+  LIST
+    "first"
+    "second"
+    "third"
+IN length myList
+```
+
+**✅ Also correct - Horizontal alignment:**
+
+```l4
+LET myList BE
+      LIST "first"
+           "second"
+           "third"
+IN length myList
+```
+
+**✅ Multiple bindings - Use multiline LET:**
+
+```l4
+LET
+  list1 BE
+    LIST
+      "a"
+      "b"
+  list2 BE
+    LIST
+      1
+      2
+IN ...
+```
+
+**❌ Wrong - Using FOLLOWED BY for multi-element lists:**
+
+```l4
+LET myList BE
+  LIST "first"
+  FOLLOWED BY "second"
+  FOLLOWED BY "third"
+IN ...
+```
+
+This creates nested list types (`LIST OF LIST OF ...`) instead of a flat list.
+
+**Note:** `FOLLOWED BY` is the cons operator for building lists recursively, not for writing list literals. The vertical block syntax is preferred for its clarity and consistency with other L4 constructs like `CONSIDER` and `DECLARE ... HAS`.
+
 ## Ditto Syntax
 
 Strunk & White said: "Omit needless words". Edward Tufte talked about "data-ink".

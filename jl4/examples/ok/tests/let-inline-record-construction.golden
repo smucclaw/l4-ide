@@ -1,0 +1,5 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+let-inline-record-construction.l4:17:1-17:
+  "{\"name\":\"Alice\",\"age\":25}"

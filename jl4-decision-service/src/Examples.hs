@@ -19,9 +19,11 @@ import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
 import qualified Data.Text.IO as TIO
 import qualified Data.Yaml as Yaml
-import L4.Export (ExportedFunction (..), ExportedParam (..), getExportedFunctions)
+import L4.Annotation (getAnno)
+import L4.Export (DescFlags (..), ExportedFunction (..), ExportedParam (..), ParsedDesc (..), getExportedFunctions, parseDescText)
 import L4.Syntax
 import qualified LSP.L4.Rules as Rules
+import Optics ((^.))
 import Server
 import System.Directory (doesFileExist)
 import System.FilePath (replaceExtension, takeBaseName, takeDirectory, (</>))
@@ -69,12 +71,16 @@ loadL4File moduleContents path = do
       putStrLn $ "- skipping " <> path <> " (missing source content)"
       pure []
     Just content -> do
-      annotationResult <- tryLoadFromAnnotations moduleContents path content
-      case annotationResult of
-        [] -> loadFromYaml content
-        xs -> do
-          putStrLn $ "- loaded " <> show (length xs) <> " exported function(s) from annotations in " <> path
-          pure [ (path, fnName, content, fnDecl) | (fnName, fnDecl) <- xs ]
+      yamlResult <- loadFromYaml content
+      case yamlResult of
+        [] -> do
+          annotationResult <- tryLoadFromAnnotationsExplicit moduleContents path content
+          case annotationResult of
+            [] -> pure []
+            xs -> do
+              putStrLn $ "- loaded " <> show (length xs) <> " exported function(s) from annotations in " <> path
+              pure [ (path, fnName, content, fnDecl) | (fnName, fnDecl) <- xs ]
+        xs -> pure xs
  where
   loadFromYaml content = do
     let yamlPath = replaceExtension path ".yaml"
@@ -97,8 +103,8 @@ loadL4File moduleContents path = do
             print fnDeclWithName
             pure [(path, fnDeclWithName.name, content, fnDeclWithName)]
 
-tryLoadFromAnnotations :: Map.Map FilePath Text -> FilePath -> Text -> IO [(Text, Function)]
-tryLoadFromAnnotations moduleContext path content = do
+tryLoadFromAnnotationsExplicit :: Map.Map FilePath Text -> FilePath -> Text -> IO [(Text, Function)]
+tryLoadFromAnnotationsExplicit moduleContext path content = do
   (errs, mTcRes) <- typecheckModule path content moduleContext
   case mTcRes of
     Nothing -> do
@@ -107,7 +113,7 @@ tryLoadFromAnnotations moduleContext path content = do
         mapM_ (putStrLn . ("    " <>) . T.unpack) errs
       pure []
     Just Rules.TypeCheckResult{module' = resolvedModule} -> do
-      let exports = getExportedFunctions resolvedModule
+      let exports = explicitExportsOnly (getExportedFunctions resolvedModule)
       case exports of
         [] -> pure []
         xs -> do
@@ -117,6 +123,15 @@ tryLoadFromAnnotations moduleContext path content = do
     orderExports xs =
       let (defaults, rest) = List.partition (.exportIsDefault) xs
       in defaults <> rest
+
+explicitExportsOnly :: [ExportedFunction] -> [ExportedFunction]
+explicitExportsOnly =
+  filter \export ->
+    case getAnno export.exportDecide ^. annDesc of
+      Nothing -> False
+      Just desc ->
+        case parseDescText (getDesc desc) of
+          ParsedDesc{flags = DescFlags{isExport}} -> isExport
 
 exportToFunction :: Module Resolved -> ExportedFunction -> Function
 exportToFunction resolvedModule export =
@@ -273,7 +288,7 @@ loadL4Functions paths = do
   when (null paths) $ do
     putStrLn "* to load L4 functions from disk, run with --sourcePaths"
     putStrLn "  for example, --sourcePaths ../doc/tutorial-code/fruit.l4"
-    putStrLn "  each .l4 file needs a matching .yaml definition"
+    putStrLn "  functions load from either a matching .yaml sidecar, or a Decide annotated with @export"
 
   -- Automatically discover all files including imports
   allFiles <- discoverAllFiles Set.empty paths

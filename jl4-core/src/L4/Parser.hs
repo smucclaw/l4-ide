@@ -484,12 +484,18 @@ letAppForm current =
 -- Returns a Decide with proper source range annotations (required by type checker)
 letDecide :: Pos -> Parser (Decide Name)
 letDecide current =
+  letDecideWithExprIndent current current
+
+-- | Like 'letDecide', but allows controlling the indentation threshold for the RHS expression.
+-- This is useful for constrained layout relaxations of LET bindings.
+letDecideWithExprIndent :: Pos -> Pos -> Parser (Decide Name)
+letDecideWithExprIndent bindingIndent exprIndent =
   attachAnno $
     MkDecide emptyAnno
       <$> annoHole (pure emptyTypeSig)
-      <*> annoHole (letAppForm current)
+      <*> annoHole (letAppForm bindingIndent)
       <*  annoLexeme letBindingKeyword
-      <*> annoHole (indentedExpr current)
+      <*> annoHole (indentedExpr exprIndent)
   where
     emptyTypeSig = MkTypeSig emptyAnno (MkGivenSig emptyAnno []) Nothing
 
@@ -510,12 +516,31 @@ letLocalDecl = do
 letInExpr :: Parser (Expr Name)
 letInExpr = do
   current <- Lexer.indentLevel
-  attachAnno $
+  letLine <- unPos . sourceLine <$> getSourcePos
+  attachAnno do
     LetIn emptyAnno
       <$  annoLexeme (spacedKeyword_ TKLet)
-      <*> annoHole (many (indented letLocalDecl current))
+      <*> annoHole (try (singleInlineLetDeclRelaxed current letLine) <|> many (indented letLocalDecl current))
       <*  annoLexeme (spacedKeyword_ TKIn)
       <*> annoHole (indentedExpr current)
+
+-- | Parse a single LET binding whose name appears on the same line as the LET keyword,
+-- while relaxing the indentation requirement for the RHS expression to be relative to
+-- the LET keyword (instead of the binding name). This is intentionally constrained:
+-- it only applies when the LET contains exactly one binding (enforced by the caller,
+-- which expects IN immediately after parsing this binding).
+singleInlineLetDeclRelaxed :: Pos -> Int -> Parser [LocalDecl Name]
+singleInlineLetDeclRelaxed letIndent letLine = do
+  nextTok <- lookAhead anySingle
+  guard (nextTok.range.start.line == letLine)
+  bindingIndent <- Lexer.indentLevel
+  decl <- attachAnno $
+    LocalDecide emptyAnno <$> annoHole (letDecideWithExprIndent bindingIndent letIndent)
+  -- Constraint: only apply this relaxation when the LET has exactly one binding.
+  -- If another binding starts instead of IN, this alternative must fail so that
+  -- we fall back to the regular multi-binding LET parser.
+  void $ lookAhead (spacedKeyword_ TKIn)
+  pure [decl]
 
 withTypeSig :: (TypeSig Name -> Parser (d Name)) -> Parser (d Name)
 withTypeSig p = do
@@ -1379,6 +1404,7 @@ baseExpr' =
   <|> multiWayIf
   <|> try event
   <|> regulative
+  <|> breach
   <|> lam
   <|> consider
   <|> try namedApp -- This is not nice
@@ -1630,6 +1656,17 @@ regulative :: Parser (Expr Name)
 regulative = attachAnno $
   Regulative emptyAnno <$> annoHole obligation
 
+-- | Parse BREACH [BY party] [BECAUSE reason]
+-- Terminal clause for explicit breach declaration
+breach :: Parser (Expr Name)
+breach = do
+  current <- Lexer.indentLevel
+  attachAnno $
+    Breach emptyAnno
+      <$  annoLexeme (spacedKeyword_ TKBreach)
+      <*> optionalWithHole (annoLexeme (spacedKeyword_ TKBy) *> annoHole (indentedExpr current))
+      <*> optionalWithHole (annoLexeme (spacedKeyword_ TKBecause) *> annoHole (indentedExpr current))
+
 optionalWithHole :: HasSrcRange a => AnnoParser a -> AnnoParser (Maybe a)
 optionalWithHole p = Just <$> p <|> annoHole (pure Nothing)
 
@@ -1649,15 +1686,17 @@ must :: Pos -> Parser (RAction Name)
 must current = attachAnno $
    MkAction emptyAnno
      <$> asum
-      [ annoLexeme (spacedKeyword_ TKMust)
-        *> optional (annoLexeme (spacedKeyword_ TKDo))
-        *> annoHole (indentedPattern current)
-      , annoLexeme (spacedKeyword_ TKMay)
-        *> optional (annoLexeme (spacedKeyword_ TKDo))
-        *> annoHole (indentedPattern current)
-      , annoLexeme (spacedKeyword_ TKDo)
-        *> annoHole (indentedPattern current)
+      -- Parse MUST, then check for optional NOT to determine modal
+      [ annoLexeme (spacedKeyword_ TKMust) *>
+        (DMustNot <$ annoLexeme (spacedKeyword_ TKNot) <* optional (annoLexeme (spacedKeyword_ TKDo))
+         <|> DMust <$ optional (annoLexeme (spacedKeyword_ TKDo)))
+      , DMay <$ annoLexeme (spacedKeyword_ TKMay)
+        <* optional (annoLexeme (spacedKeyword_ TKDo))
+      , DMustNot <$ annoLexeme (spacedKeyword_ TKShant)
+        <* optional (annoLexeme (spacedKeyword_ TKDo))
+      , DDo <$ annoLexeme (spacedKeyword_ TKDo)
       ]
+     <*> annoHole (indentedPattern current)
      <*> optionalWithHole do
       annoLexeme (spacedKeyword_ TKProvided)
         *> annoHole (indentedExpr current)

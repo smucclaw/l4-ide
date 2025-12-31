@@ -31,14 +31,14 @@ L4 has been piloted with organizations in both public and private sectors:
 
 ### For Developers
 
-- **[Dev.md](./Dev.md)** - Complete developer setup guide for Haskell and TypeScript development
-- **[dev-config.md](./dev-config.md)** - Local development guide (running with `cabal`)
+- **[doc/dev/setup.md](./doc/dev/setup.md)** - Complete developer setup guide for Haskell and TypeScript development
+- **[doc/dev/local-config.md](./doc/dev/local-config.md)** - Local development guide (running with `cabal`)
 - **[dev-start.sh](./dev-start.sh)** - Helper script for starting services locally
 
 ### For DevOps
 
-- **[PROVISIONING.md](./PROVISIONING.md)** - Setting up new servers from scratch (nixos-anywhere)
-- **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Deploying to existing dev/prod servers
+- **[doc/dev/deployment/provisioning.md](./doc/dev/deployment/provisioning.md)** - Setting up new servers from scratch (nixos-anywhere)
+- **[doc/dev/deployment/deployment.md](./doc/dev/deployment/deployment.md)** - Deploying to existing dev/prod servers
 - **[nix/README.md](./nix/README.md)** - NixOS configuration reference
 
 ## Gallery
@@ -81,13 +81,7 @@ L4 provides audit-grade explainability and observability. Textual decision trace
 - ✅ JSON operations (JSONENCODE, JSONDECODE) with bidirectional type checking
 - ✅ Excel date compatibility for business applications
 - ✅ Temporal logic with multi-temporal evaluation contexts
-
-### Application Libraries ✅
-
-- ✅ Jurisdiction library (ISO 3166 country/region codes, US states, Canadian provinces)
-- ✅ Currency library (ISO 4217 codes with integer minor unit storage)
-- ✅ Legal persons library (individuals, corporations, partnerships)
-- ✅ Holdings library (ownership structures and percentages)
+- ✅ Application libraries (jurisdiction, currency, legal persons, holdings)
 
 ### IDE & Developer Tools ✅
 
@@ -201,8 +195,9 @@ Production-grade L4 development for enterprise systems. Covers professional work
 - **Module A8**: Multi-File Architecture
 - **Module A9**: OPM/OIA Migration
 - **Module A10**: LLM-Powered Semantic Parser / Chatbot [PLANNED]
+- **Module A11**: Regulative Rules & Contract Logic
 
-**Who it's for**: Developers building production systems, enterprise architects, teams migrating from legacy systems, developers building AI-powered legal interfaces.
+**Who it's for**: Developers building production systems, enterprise architects, teams migrating from legacy systems, developers building AI-powered legal interfaces, and developers building contract management or compliance systems.
 
 ### Other Tutorials
 

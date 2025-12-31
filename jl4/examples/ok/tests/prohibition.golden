@@ -1,0 +1,55 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+prohibition.l4:93:1-27:
+  PARTY Alice
+  MUST NOT smoke
+  WITHIN 30
+  HENCE FULFILLED
+prohibition.l4:98:1-99:31:
+  PROVISION BREACHED:
+    party
+      Alice
+    who did action
+      smoke
+    at
+      15
+    surpassed the deadline of party
+      Alice
+    who had to do obligatory action
+      MUST NOT smoke
+    before their deadline, which was at
+      15
+prohibition.l4:104:1-28:
+  PARTY Bob
+  MUST NOT drink
+  WITHIN 30
+  HENCE FULFILLED
+prohibition.l4:109:1-110:29:
+  PROVISION BREACHED:
+    party
+      Bob
+    who did action
+      drink
+    at
+      10
+    surpassed the deadline of party
+      Bob
+    who had to do obligatory action
+      MUST NOT drink
+    before their deadline, which was at
+      10
+prohibition.l4:114:1-115:31:
+  FULFILLED
+prohibition.l4:119:1-27:
+  PARTY Alice
+  MUST drink
+  WITHIN 30
+  HENCE FULFILLED
+prohibition.l4:123:1-124:29:
+  FULFILLED
+prohibition.l4:129:1-26:
+  PARTY Bob
+  MAY drink
+  WITHIN 30
+  HENCE FULFILLED

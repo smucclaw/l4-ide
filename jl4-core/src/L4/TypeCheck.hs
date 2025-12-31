@@ -1083,13 +1083,13 @@ checkObligation ann party action due hence lest partyT actionT = do
   pure (MkObligation ann partyR actionR dueR henceR lestR)
 
 checkAction :: RAction Name -> Type' Resolved -> Check (RAction Resolved, [CheckInfo])
-checkAction MkAction {anno, action, provided = mprovided} actionT = do
+checkAction MkAction {anno, modal, action, provided = mprovided} actionT = do
   (pat, bounds) <- checkPattern ExpectRegulativeActionContext action actionT
   -- NOTE: the provided clauses must evaluate to booleans
   provided <- forM mprovided \provided ->
     extendKnownMany bounds do
       checkExpr ExpectRegulativeProvidedContext provided boolean
-  pure (MkAction {anno, action = pat, provided}, bounds)
+  pure (MkAction {anno, modal, action = pat, provided}, bounds)
 
 buildConstructorLookup :: [DeclChecked (Declare Resolved)] -> Map Unique [Resolved]
 buildConstructorLookup = foldMap \decl ->
@@ -1358,6 +1358,13 @@ inferExpr' g =
       unless (isStringCoercible te) $
         addError (TypeMismatch ExpectAsStringArgumentContext string te)
       pure (AsString ann re, string)
+    Breach ann mParty mReason -> do
+      -- Breach is a terminal clause that represents a contract breach
+      partyT <- fresh (NormalName "party")
+      actionT <- fresh (NormalName "action")
+      mParty' <- traverse (\p -> checkExpr ExpectRegulativePartyContext p partyT) mParty
+      mReason' <- traverse (\r -> checkExpr ExpectBreachReasonContext r string) mReason
+      pure (Breach ann mParty' mReason', contract partyT actionT)
 
 isStringCoercible :: Type' Resolved -> Bool
 isStringCoercible ty = case ty of
@@ -3109,6 +3116,8 @@ prettyTypeMismatch ExpectRegulativeProvidedContext expected given =
   standardTypeMismatch [ "The PROVIDED clause for filtering the ACTION is expected to be of type" ] expected given
 prettyTypeMismatch ExpectAssertContext expected given =
   standardTypeMismatch [ "An ASSERT directive is expected to be of type" ] expected given
+prettyTypeMismatch ExpectBreachReasonContext expected given =
+  standardTypeMismatch [ "The BECAUSE clause of a BREACH is expected to be of type" ] expected given
 
 -- | Best effort, only small numbers will occur"
 prettyOrdinal :: Int -> Text

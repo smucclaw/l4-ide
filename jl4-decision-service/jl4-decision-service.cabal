@@ -125,6 +125,7 @@ test-suite jl4-decision-service-test
   main-is: Spec.hs
   other-modules:
     AskOrderingSpec
+    DiskLoadingSpec
     Paths_jl4_decision_service
     BooleanDecisionQuerySpec
     DecisionQueryCacheKeySpec
@@ -144,6 +145,8 @@ test-suite jl4-decision-service-test
     containers ^>=0.6.7,
     stm ^>=2.5.1.0,
     base >=4.7 && <5,
+    directory,
+    filepath,
     hspec,
     http-client,
     jl4-decision-service,

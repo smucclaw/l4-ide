@@ -495,6 +495,10 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Expr n) where
       es' <- traverse addNlg es
       pure $ Concat ann es'
     AsString ann e -> AsString ann <$> addNlg e
+    Breach ann mParty mReason -> do
+      mParty' <- traverse addNlg mParty
+      mReason' <- traverse addNlg mReason
+      pure $ Breach ann mParty' mReason'
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Obligation n) where
   addNlg (MkObligation ann' party event deadline followup lest) = do
@@ -506,10 +510,10 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Obligation n) where
     pure $  MkObligation ann' party' event' deadline' followup' lest'
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (RAction n) where
-  addNlg (MkAction ann rule provided) = do
+  addNlg (MkAction ann modal rule provided) = do
     rule' <- addNlg rule
     provided' <- traverse addNlg provided
-    pure $  MkAction ann rule' provided'
+    pure $  MkAction ann modal rule' provided'
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Branch n) where
   addNlg a = extendNlgA a $ case a of

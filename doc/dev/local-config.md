@@ -22,7 +22,9 @@ This guide explains how to run the L4 services locally for development and testi
 ```bash
 # Terminal 1: Decision service
 cd jl4-decision-service
-cabal run jl4-decision-service-exe -- --port 8001 --sourcePaths ../jl4/examples \
+cabal run jl4-decision-service-exe -- --port 8001 \
+  --sourcePaths ../jl4/experiments/britishcitizen5.l4 \
+  --sourcePaths ../jl4/experiments/parking.l4 \
   --crudServerName localhost --crudServerPort 8002
 
 # Terminal 2: Websessions (after decision service starts)
@@ -158,12 +160,14 @@ cd jl4-decision-service
 # Without websessions integration (basic mode)
 cabal run jl4-decision-service-exe -- \
   --port 8001 \
-  --sourcePaths ../jl4/examples
+  --sourcePaths ../jl4/experiments/britishcitizen5.l4 \
+  --sourcePaths ../jl4/experiments/parking.l4
 
 # With websessions integration (full mode)
 cabal run jl4-decision-service-exe -- \
   --port 8001 \
-  --sourcePaths ../jl4/examples \
+  --sourcePaths ../jl4/experiments/britishcitizen5.l4 \
+  --sourcePaths ../jl4/experiments/parking.l4 \
   --crudServerName localhost \
   --crudServerPort 8002 \
   --crudServerPath ""
@@ -229,7 +233,9 @@ Once all services are running:
 ```bash
 # Start decision service with preloaded examples
 cd jl4-decision-service
-cabal run jl4-decision-service-exe -- --port 8001 --sourcePaths ../jl4/examples
+cabal run jl4-decision-service-exe -- --port 8001 \
+  --sourcePaths ../jl4/experiments/britishcitizen5.l4 \
+  --sourcePaths ../jl4/experiments/parking.l4
 
 # Start web frontend
 cd ts-apps/jl4-web
@@ -242,7 +248,9 @@ npm run dev
 # Terminal 1: Decision service
 cd jl4-decision-service
 cabal run jl4-decision-service-exe -- \
-  --port 8001 --sourcePaths ../jl4/examples \
+  --port 8001 \
+  --sourcePaths ../jl4/experiments/britishcitizen5.l4 \
+  --sourcePaths ../jl4/experiments/parking.l4 \
   --crudServerName localhost --crudServerPort 8002
 
 # Terminal 2: Websessions (wait for decision service to start)

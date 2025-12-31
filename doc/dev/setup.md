@@ -69,6 +69,8 @@ sudo apt install pkg-config liblzma-dev libgmp-dev
 
 Under Nix you can run `nix-shell nix/shell.nix` in the current directory to pick up the above packages (GraphViz included).
 
+Alternatively, if you use direnv, the included `.envrc` file will automatically load the nix flake environment when you `cd` into the repository (on NixOS systems only - it's harmless on other platforms).
+
 ## Tests
 
 ```sh
@@ -123,5 +125,5 @@ The general overview is as follows:
   `cd ts-apps/jl4-web; npm ci; npm run dev`
 - check out `--help` for `jl4-websessions` and `jl4-lsp`
 - to run the decision service locally:
-  `cabal run jl4-decision-service-exe -- --port 8081 --serverName http://localhost:8081/ --sourcePaths doc/tutorial-code/`
+  `cabal run jl4-decision-service-exe -- --port 8081 --serverName http://localhost:8081/ --sourcePaths jl4/experiments/britishcitizen5.l4 --sourcePaths jl4/experiments/parking.l4`
   The default is set to connect to the webessions service on port 5007
