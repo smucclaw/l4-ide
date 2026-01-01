@@ -1,6 +1,11 @@
 # Server Provisioning Guide
 
+> **Navigation:** [Documentation Index](./README.md) | Provisioning (you are here) | [Deployment](./deployment.md)
+
 This guide explains how to provision a new server (dev or production) from scratch using `nixos-anywhere` to convert a standard Ubuntu EC2 instance to NixOS.
+
+**Use this guide for:** One-time initial server setup
+**For ongoing deployments, see:** [deployment.md](./deployment.md)
 
 ## Overview
 
@@ -229,25 +234,7 @@ curl -X POST https://dev.jl4.legalese.com/decision/functions/${UUID}:isEven/eval
 
 ## Subsequent Deployments
 
-After initial provisioning, use standard deployment:
-
-```bash
-# SSH to server
-ssh root@dev.jl4.legalese.com
-
-# Pull latest code
-cd /path/to/l4-ide
-git pull origin mengwong/auto-update-decision-service-from-websessions
-
-# Rebuild
-nixos-rebuild switch --flake .#jl4-dev
-```
-
-Or remote deployment:
-
-```bash
-nixos-rebuild switch --flake .#jl4-dev --target-host root@dev.jl4.legalese.com
-```
+After initial provisioning is complete, see [deployment.md](./deployment.md) for ongoing deployment procedures.
 
 ## Configuration Reference
 
@@ -336,30 +323,29 @@ nix-env --delete-generations 10
 
 ## Rollback
 
-If provisioning fails or you need to start over:
+### If Provisioning Fails
+
+If `nixos-anywhere` fails or you need to start completely over:
 
 ```bash
-# Terminate the EC2 instance
-# Create a new one
-# Run nixos-anywhere again
+# 1. Terminate the EC2 instance in AWS console
+# 2. Create a new Ubuntu instance
+# 3. Run nixos-anywhere again from Step 1
 ```
 
-If NixOS is already installed but configuration is broken:
+### If NixOS is Installed But Broken
 
-```bash
-ssh root@dev.jl4.legalese.com
-
-# Rollback to previous generation
-nixos-rebuild switch --rollback
-
-# Or specific generation
-nix-env --list-generations
-nixos-rebuild switch --rollback --generation N
-```
+Once NixOS is installed, use standard rollback procedures documented in [deployment.md](./deployment.md#rollback).
 
 ## Reference Documentation
+
+### Internal Documentation
+
+- **[README.md](./README.md)** - Deployment documentation index
+- **[deployment.md](./deployment.md)** - Ongoing deployment procedures
+
+### External Documentation
 
 - [nixos-anywhere documentation](https://github.com/nix-community/nixos-anywhere)
 - [NixOS Manual](https://nixos.org/manual/nixos/stable/)
 - [Disko (disk partitioning)](https://github.com/nix-community/disko)
-- See also: [deployment.md](./deployment.md) for ongoing deployment procedures

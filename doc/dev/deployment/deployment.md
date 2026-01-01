@@ -1,6 +1,11 @@
 # Deployment Guide
 
+> **Navigation:** [Documentation Index](./README.md) | [Provisioning](./provisioning.md) | Deployment (you are here)
+
 Quick reference for deploying L4 services to different environments.
+
+**Use this guide for:** Ongoing code deployments, testing, and troubleshooting
+**For initial server setup, see:** [provisioning.md](./provisioning.md)
 
 ## Environments
 
@@ -50,20 +55,48 @@ curl http://localhost:8080/decision/functions
 
 ### Dev Server
 
+**On-server deployment:**
+
 ```bash
-# On dev server (dev.jl4.legalese.com)
+# SSH to server
+ssh root@dev.jl4.legalese.com
+
+# Pull latest code
 cd /path/to/l4-ide
 git pull
+
+# Rebuild and switch
 nixos-rebuild switch --flake .#jl4-dev
+```
+
+**Remote deployment (from your local machine):**
+
+```bash
+# Deploy from local machine without SSH-ing first
+nixos-rebuild switch --flake .#jl4-dev --target-host root@dev.jl4.legalese.com
 ```
 
 ### Production
 
+**On-server deployment:**
+
 ```bash
-# On production server (jl4.legalese.com)
+# SSH to server
+ssh root@jl4.legalese.com
+
+# Pull latest code
 cd /path/to/l4-ide
 git pull
+
+# Rebuild and switch
 nixos-rebuild switch --flake .#jl4-aws-2505
+```
+
+**Remote deployment (from your local machine):**
+
+```bash
+# Deploy from local machine without SSH-ing first
+nixos-rebuild switch --flake .#jl4-aws-2505 --target-host root@jl4.legalese.com
 ```
 
 ## Service Architecture
@@ -166,19 +199,36 @@ systemctl list-dependencies jl4-websessions
 
 ## Rollback
 
-If deployment fails:
+If a deployment breaks something, NixOS makes it easy to roll back:
+
+### Quick Rollback
 
 ```bash
-# On server
+# On server - rollback to previous generation
+ssh root@dev.jl4.legalese.com  # or jl4.legalese.com
 nixos-rebuild switch --rollback
+```
 
-# Or switch to specific generation
+### Rollback to Specific Generation
+
+```bash
+# List available generations
+nix-env --list-generations
+
+# Rollback to specific generation number
 nixos-rebuild switch --rollback --generation N
+```
+
+### Remote Rollback
+
+```bash
+# Rollback from local machine without SSH-ing first
+nixos-rebuild switch --rollback --target-host root@dev.jl4.legalese.com
 ```
 
 ## Documentation
 
-- **[dev-config.md](./dev-config.md)** - Detailed local development guide
-- **[dev-start.sh](./dev-start.sh)** - Helper script for local dev
-- **[doc/LOCAL-VM-DEPLOYMENT.md](./doc/LOCAL-VM-DEPLOYMENT.md)** - Running local VM for testing
-- **[nix/README.md](./nix/README.md)** - NixOS configuration details
+- **[README.md](./README.md)** - Deployment documentation index
+- **[provisioning.md](./provisioning.md)** - One-time server setup guide
+- **[docker.md](./docker.md)** - Docker-based local development
+- **[local-vm.md](./local-vm.md)** - Local NixOS VM testing
