@@ -1,6 +1,7 @@
 packages:
   ./jl4
   ./jl4-core
+  ./jl4-query-plan
   ./jl4-lsp
   ./jl4-repl
   ./jl4-decision-service

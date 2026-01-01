@@ -21,6 +21,7 @@ import Text.Printf (printf)
 
 import Development.IDE.Graph.Database (shakeRunDatabase)
 import Language.LSP.Protocol.Types (toNormalizedFilePath, normalizedFilePathToUri, fromNormalizedUri, NormalizedUri)
+import qualified Language.LSP.Protocol.Types as LSP
 
 import LSP.Logger (makeDefaultStderrRecorder, cmapWithPrio, cfilter, pretty, Recorder, WithPriority(..), Priority(..))
 import L4.TypeCheck.Types (CheckError(..), CheckErrorWithContext(..))
@@ -28,6 +29,9 @@ import qualified LSP.Core.Shake as Shake
 import qualified LSP.Core.FileStore as Store
 import qualified LSP.L4.Rules as Rules
 import qualified LSP.L4.Oneshot as Oneshot
+import qualified LSP.L4.Viz.Ladder as LadderViz
+import qualified LSP.L4.Viz.QueryPlan as LspQueryPlan
+import qualified LSP.L4.Viz.VizExpr as VizExpr
 
 import L4.EvaluateLazy (EvalConfig, resolveEvalConfig, EvalDirectiveResult(..), EvalDirectiveValue(..), prettyEvalException)
 import qualified L4.EvaluateLazy.GraphViz2 as GraphViz
@@ -35,11 +39,14 @@ import L4.EvaluateLazy.GraphVizOptions (defaultGraphVizOptions)
 import L4.TracePolicy (replDefaultPolicy)
 import L4.DirectiveFilter (filterIdeDirectives)
 import qualified L4.Print as Print
-import L4.Syntax (Module, Resolved, RawName(..), Unique, rawNameToText, Name(..))
+import L4.Syntax (Module (..), Resolved, RawName (..), Unique, rawName, rawNameToText, getActual, Name (..), Decide (..), TopDecl (..), Section (..), AppForm (..))
 import L4.Annotation (Anno_(..))
 import L4.Parser.SrcSpan (SrcRange(..), SrcPos(..))
 import L4.TypeCheck.Types (CheckEntity(..), EntityInfo)
 import qualified Base.Map as Map
+import qualified Data.Map.Strict as MapStrict
+
+import qualified L4.Decision.QueryPlan as QP
 
 -- | Command line options
 data Options = Options
@@ -203,6 +210,32 @@ processInput st input
   | ":q" == stripped = pure ("", st, True)
   | ":help" `Text.isPrefixOf` stripped = pure (helpText, st, False)
   | ":h" == stripped = pure (helpText, st, False)
+  | ":decides" == stripped = do
+      case st.loadedFile of
+        Nothing -> pure ("No file loaded. Use :load <file> first.", st, False)
+        Just fp -> do
+          msg <- listDecides st fp
+          pure (msg, st, False)
+  | ":queryplan" == stripped || ":qp" == stripped = do
+      case st.loadedFile of
+        Nothing -> pure ("No file loaded. Use :load <file> first.", st, False)
+        Just fp -> do
+          msg <- queryPlanCommand st fp ""
+          pure (msg, st, False)
+  | ":queryplan " `Text.isPrefixOf` stripped = do
+      case st.loadedFile of
+        Nothing -> pure ("No file loaded. Use :load <file> first.", st, False)
+        Just fp -> do
+          let args = Text.strip (Text.drop 10 stripped)
+          msg <- queryPlanCommand st fp args
+          pure (msg, st, False)
+  | ":qp " `Text.isPrefixOf` stripped = do
+      case st.loadedFile of
+        Nothing -> pure ("No file loaded. Use :load <file> first.", st, False)
+        Just fp -> do
+          let args = Text.strip (Text.drop 4 stripped)
+          msg <- queryPlanCommand st fp args
+          pure (msg, st, False)
   | ":tracefile" == stripped =
       pure ("Usage: :tracefile <path|off>", st, False)
   | ":tracefile " `Text.isPrefixOf` stripped = do
@@ -326,6 +359,192 @@ processInput st input
           pure (result, st, False)
   where
     stripped = Text.strip input
+
+-- | Extract Decide declarations from a resolved module.
+decidesInModule :: Module Resolved -> [(Text, Decide Resolved)]
+decidesInModule (MkModule _ _ sect) = goSection sect
+ where
+  goSection (MkSection _ _ _ decls) =
+    decls >>= goTopDecl
+
+  goTopDecl = \case
+    Decide _ dec ->
+      let (MkDecide _ _ (MkAppForm _ n _ _) _) = dec
+          nm = rawNameToText (rawName (getActual n))
+       in [(nm, dec)]
+    Section _ s -> goSection s
+    _ -> []
+
+-- | Get successful typecheck result for a file, or an error message.
+getTcForFile :: ReplState -> FilePath -> IO (Either Text Rules.TypeCheckResult)
+getTcForFile st fp = do
+  let contextUri = normalizedFilePathToUri (toNormalizedFilePath fp)
+  [mTc] <- shakeRunDatabase st.ideState.shakeDb [Shake.use Rules.SuccessfulTypeCheck contextUri]
+  case mTc of
+    Nothing -> pure (Left "Failed to type check file")
+    Just tc | not tc.success -> pure (Left "Type checking failed (see diagnostics above)")
+    Just tc -> pure (Right tc)
+
+listDecides :: ReplState -> FilePath -> IO Text
+listDecides st fp = do
+  getTcForFile st fp >>= \case
+    Left e -> pure e
+    Right tc ->
+      let decides = decidesInModule tc.module'
+       in
+        if null decides
+          then pure "No DECIDE declarations found."
+          else
+            pure $
+              Text.unlines
+                ( ["DECIDE declarations:"]
+                    <> ["  " <> nm | (nm, _) <- decides]
+                )
+
+parseBoolText :: Text -> Maybe Bool
+parseBoolText t =
+  case Text.toLower (Text.strip t) of
+    "true" -> Just True
+    "t" -> Just True
+    "yes" -> Just True
+    "y" -> Just True
+    "1" -> Just True
+    "false" -> Just False
+    "f" -> Just False
+    "no" -> Just False
+    "n" -> Just False
+    "0" -> Just False
+    _ -> Nothing
+
+parseBindings :: [Text] -> Either Text [(Text, Bool)]
+parseBindings toks =
+  sequence
+    [ case Text.breakOn "=" tok of
+        (k, v0)
+          | Text.null v0 ->
+              Left ("Expected binding of form key=true|false, got: " <> tok)
+          | otherwise ->
+              let v = Text.drop 1 v0
+               in case parseBoolText v of
+                    Nothing -> Left ("Expected boolean value for " <> k <> ", got: " <> v)
+                    Just b -> Right (Text.strip k, b)
+    | tok <- toks
+    ]
+
+queryPlanCommand :: ReplState -> FilePath -> Text -> IO Text
+queryPlanCommand st fp argText = do
+  getTcForFile st fp >>= \case
+    Left e -> pure e
+    Right tc -> do
+      let tokens = filter (not . Text.null) (Text.words argText)
+      let (mFun, bindingToks) =
+            case tokens of
+              [] -> (Nothing, [])
+              (x : xs) ->
+                if Text.isInfixOf "=" x then (Nothing, tokens) else (Just x, xs)
+
+      let decides = decidesInModule tc.module'
+      let selected =
+            case mFun of
+              Nothing ->
+                case decides of
+                  [(nm, dec)] -> Right (nm, dec)
+                  [] -> Left "No DECIDE declarations found. Use :load on a file with DECIDE."
+                  _ ->
+                    Left $
+                      "Multiple DECIDEs found; specify one: "
+                        <> Text.intercalate ", " (map fst decides)
+              Just nm ->
+                case lookup nm decides of
+                  Nothing ->
+                    Left $
+                      "No DECIDE named " <> nm <> ". Available: "
+                        <> Text.intercalate ", " (map fst decides)
+                  Just dec -> Right (nm, dec)
+
+      bindings <- case parseBindings bindingToks of
+        Left err -> pure (Left err)
+        Right bs -> pure (Right bs)
+
+      case (selected, bindings) of
+        (Left err, _) -> pure err
+        (_, Left err) -> pure err
+        (Right (funName, decide), Right flattenedLabelBindings) -> do
+          let contextUri = normalizedFilePathToUri (toNormalizedFilePath fp)
+          let verDocId =
+                LSP.VersionedTextDocumentIdentifier
+                  { _uri = fromNormalizedUri contextUri
+                  , _version = 1
+                  }
+          let vizCfg = LadderViz.mkVizConfig verDocId tc.module' tc.substitution True
+          case LadderViz.doVisualize decide vizCfg of
+            Left vizErr -> pure (LadderViz.prettyPrintVizError vizErr)
+            Right (ladderInfo, vizState) -> do
+              let VizExpr.MkRenderAsLadderInfo{funDecl = VizExpr.MkFunDecl{params}} = ladderInfo
+              let paramsByUnique =
+                    MapStrict.fromList
+                      [ (u, l)
+                      | VizExpr.MkName{unique = u, label = l} <- params
+                      ]
+              let qp = LspQueryPlan.queryPlanFromLadder funName paramsByUnique ladderInfo vizState flattenedLabelBindings
+              pure (renderQueryPlan qp)
+
+renderQueryPlan :: QP.QueryPlanResponse -> Text
+renderQueryPlan qp =
+  let
+    detTxt = case qp.determined of
+      Nothing -> "Unknown"
+      Just True -> "True"
+      Just False -> "False"
+
+    nextAskTxt =
+      case qp.asks of
+        [] -> "next: (none)"
+        (a : _) -> "next: " <> a.label
+
+    atomLine a =
+      "  - "
+        <> Text.pack (show a.unique)
+        <> " "
+        <> a.label
+        <> " (atomId="
+        <> a.atomId
+        <> ")"
+
+    topAsks = take 12 qp.asks
+    askLine a =
+      "  - "
+        <> a.label
+        <> " (score="
+        <> Text.pack (printf "%.3f" a.score)
+        <> ", atoms="
+        <> Text.pack (show (length a.atoms))
+        <> ")"
+
+    topInputs = take 12 qp.inputs
+    inputLine i =
+      "  - "
+        <> i.inputLabel
+        <> " (score="
+        <> Text.pack (printf "%.3f" i.score)
+        <> ", atoms="
+        <> Text.pack (show (length i.atoms))
+        <> ")"
+   in
+    Text.unlines $
+      [ "determined: " <> detTxt
+      , nextAskTxt
+      , "stillNeeded atoms: " <> Text.pack (show (length qp.stillNeeded))
+      ]
+        <> map atomLine (take 12 qp.stillNeeded)
+        <> [ ""
+           , "inputs (top): " <> Text.pack (show (length topInputs)) <> " of " <> Text.pack (show (length qp.inputs))
+           ]
+        <> map inputLine topInputs
+        <> [ ""
+           , "asks (top): " <> Text.pack (show (length topAsks)) <> " of " <> Text.pack (show (length qp.asks))
+           ]
+        <> map askLine topAsks
 
 -- | Add an import statement to the session
 addImport :: ReplState -> Text -> IO (Text, ReplState, Bool)
@@ -763,10 +982,12 @@ helpText = Text.unlines
   , "  :reset             Reset REPL (clear imports, reload file)"
   , ""
   , "Inspection:"
+  , "  :decides           List DECIDE declarations in the loaded file"
   , "  :type <expr>       Show the type of an expression"
   , "  :t <expr>          Short for :type"
   , "  :info <name>       Show definition and type of a name"
   , "  :env, :e           List all names in scope"
+  , "  :queryplan [DECIDE] [k=v...]   Show query-plan ranking (alias: :qp)"
   , ""
   , "Tracing:"
   , "  :trace <expr>      Show evaluation trace as GraphViz DOT"

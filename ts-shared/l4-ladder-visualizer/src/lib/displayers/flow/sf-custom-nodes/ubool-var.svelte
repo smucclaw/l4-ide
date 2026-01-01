@@ -34,6 +34,32 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
       ? 'highlighted-ladder-node'
       : ''
   )
+
+  const maybeElicitationStyle = $derived.by((): string => {
+    const analysis = ladderGraph.getPartialEvalAnalysis(data.context)
+    if (!analysis) return ''
+    const u = node.getUnique(data.context)
+    if (analysis.next.includes(u)) return 'elicitation-next'
+    if (analysis.ranked.includes(u)) return 'elicitation-needed'
+    if (analysis.stillNeeded.includes(u)) return 'elicitation-needed'
+    return ''
+  })
+
+  const maybeAskBadge = $derived.by(
+    (): { primaryText: string; allTexts: string[] } | null => {
+      const analysis = ladderGraph.getPartialEvalAnalysis(data.context)
+      if (!analysis) return null
+      const u = node.getUnique(data.context)
+      if (!analysis.next.includes(u)) return null
+      const asks = analysis.askByUnique.get(u) ?? []
+      const allTexts = asks.map((ask) =>
+        ask.schemaSummary ? `${ask.label}: ${ask.schemaSummary}` : ask.label
+      )
+      const primaryText = allTexts[0]
+      if (!primaryText) return null
+      return { primaryText, allTexts }
+    }
+  )
 </script>
 
 {#snippet inlineUI()}
@@ -63,7 +89,7 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
 {#snippet coreUBoolVarUI()}
   <!-- Yes, we need cursor-pointer here. -->
   <button
-    class="label-wrapper-for-content-bearing-sf-node cursor-pointer"
+    class="label-wrapper-for-content-bearing-sf-node cursor-pointer flex flex-col gap-1"
     onclick={() => {
       const newValue = cycle(node.getValue(data.context, ladderGraph))
       ladderGraph.submitNewBinding(data.context, {
@@ -72,7 +98,27 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
       })
     }}
   >
-    {node.getLabel(data.context)}
+    <div>{node.getLabel(data.context)}</div>
+    {#if maybeAskBadge}
+      {#if maybeAskBadge.allTexts.length > 1}
+        <Tooltip.Root>
+          <Tooltip.Trigger>
+            <div class="text-[0.65rem] opacity-70">
+              {maybeAskBadge.primaryText} (+{maybeAskBadge.allTexts.length - 1})
+            </div>
+          </Tooltip.Trigger>
+          <Tooltip.Content>
+            <div class="flex flex-col gap-1 max-w-xs">
+              {#each maybeAskBadge.allTexts as line}
+                <div>{line}</div>
+              {/each}
+            </div>
+          </Tooltip.Content>
+        </Tooltip.Root>
+      {:else}
+        <div class="text-[0.65rem] opacity-70">{maybeAskBadge.primaryText}</div>
+      {/if}
+    {/if}
   </button>
 {/snippet}
 
@@ -87,6 +133,7 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
       additionalClasses={[
         // It's easier if the highlighted border styles are on the same element as the normal border styles.
         'ubool-var-node-border',
+        maybeElicitationStyle,
         // TODO: This could prob be cleaner.
         maybeHighlightedStyle,
       ]}

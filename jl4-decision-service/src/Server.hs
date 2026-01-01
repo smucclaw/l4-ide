@@ -45,6 +45,12 @@ module Server (
   OutputCase (..),
   BatchResponse (..),
   OutputSummary (..),
+  QueryAtom (..),
+  QueryOutcome (..),
+  QueryImpact (..),
+  QueryInput (..),
+  QueryAsk (..),
+  QueryPlanResponse (..),
 
   -- * utilities
   toDecl,
@@ -53,20 +59,22 @@ module Server (
 
 import Base
 import Backend.Api as Api
+import Backend.FunctionSchema (Parameter (..), Parameters (..))
 import qualified Backend.Jl4 as Jl4
 import Backend.GraphVizRender (isGraphVizAvailable, renderPNG, renderSVG)
+import Backend.DecisionQueryPlan (CachedDecisionQuery, QueryAsk (..), QueryAtom (..), QueryImpact (..), QueryInput (..), QueryOutcome (..), QueryPlanResponse (..))
+import qualified Backend.DecisionQueryPlan as DecisionQueryPlan
 
 import qualified Chronos
 import Control.Applicative
 import Control.Concurrent.Async (forConcurrently)
 import Control.Concurrent.STM
 import Control.Exception (displayException, evaluate)
-import Data.Aeson (FromJSON, FromJSONKey, ToJSON, ToJSONKey, (.:), (.:?), (.=), (.!=))
+import Data.Aeson (FromJSON, ToJSON, (.:), (.=))
 import qualified Data.Aeson as Aeson
 import Data.Aeson.Combinators.Decode (Decoder)
 import qualified Data.Aeson.Combinators.Decode as ACD
 import qualified Data.Aeson.Key as Aeson
-import qualified Data.Aeson.Types as Aeson
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
 import Data.Fixed
@@ -117,8 +125,9 @@ data ValidatedFunction = ValidatedFunction
   { fnImpl :: !Function
   , fnEvaluator :: !(Map EvalBackend RunFunction)
   , fnCompiled :: !(Maybe Jl4.CompiledModule)
+  , fnSources :: !(Map EvalBackend Text)
+  , fnDecisionQueryCache :: !(Maybe CachedDecisionQuery)
   }
-  deriving stock (Generic)
 
 type AppM = ReaderT AppEnv Handler
 type Api = NamedRoutes FunctionApi'
@@ -212,11 +221,21 @@ data SingleFunctionApi' mode = SingleFunctionApi
           :> QueryParam "graphviz" Bool
           :> ReqBody '[JSON] BatchRequest
           :> Post '[JSON] BatchResponse
+  , queryPlan ::
+      mode
+        :- "query-plan"
+          :> Summary "Suggest which boolean inputs to elicit next"
+          :> Description "Returns remaining relevant boolean atoms (not necessarily original inputs), per-atom impact analysis, and a heuristic ranking of function parameters inferred from atom dependencies."
+          :> ReqBody '[JSON] FnArguments
+          :> OperationId "queryPlan"
+          :> Post '[JSON] QueryPlanResponse
   -- ^ Run a function with a "batch" of parameters.
   -- This API aims to be consistent with
   -- https://docs.oracle.com/en/cloud/saas/b2c-service/opawx/using-batch-assess-rest-api.html
   }
   deriving stock (Generic)
+
+-- Query-plan API types are defined in Backend.DecisionQueryPlan and re-exported here.
 
 data SimpleFunction = SimpleFunction
   { simpleName :: Text
@@ -237,32 +256,9 @@ data FunctionImplementation = FunctionImplementation
   , implementation :: !(Map EvalBackend Text)
   }
   deriving stock (Show, Read, Ord, Eq, Generic)
-
-data Parameters = MkParameters
-  { parameterMap :: Map Text Parameter
-  , required :: [Text]
-  }
-  deriving stock (Show, Read, Ord, Eq, Generic)
-
-data Parameter = Parameter
-  { parameterType :: !Text
-  , parameterAlias :: !(Maybe Text)
-  , parameterEnum :: ![Text]
-  , parameterDescription :: !Text
-  , parameterProperties :: !(Maybe (Map Text Parameter))  -- Nested properties for object types
-  }
-  deriving stock (Show, Read, Ord, Eq, Generic)
-
 data SimpleResponse
   = SimpleResponse !ResponseWithReason
   | SimpleError !EvaluatorError
-  deriving stock (Show, Read, Ord, Eq, Generic)
-  deriving anyclass (FromJSON, ToJSON)
-
-data FnArguments = FnArguments
-  { fnEvalBackend :: Maybe EvalBackend
-  , fnArguments :: Map Text (Maybe FnLiteral)
-  }
   deriving stock (Show, Read, Ord, Eq, Generic)
   deriving anyclass (FromJSON, ToJSON)
 
@@ -319,12 +315,6 @@ determineTraceLevel (Just headerVal) _ = parseTraceHeader (Just $ Text.encodeUtf
 determineTraceLevel Nothing (Just paramVal) = paramVal
 determineTraceLevel Nothing Nothing = Api.TraceNone  -- Default to no trace
 
--- TODO: this has become redundant
-data EvalBackend
-  = JL4
-  deriving ()
-  deriving stock (Show, Eq, Ord, Enum, Read, Bounded, Generic)
-
 handler :: ServerT Api AppM
 handler =
   FunctionApi
@@ -349,9 +339,26 @@ handler =
                     evalFunctionTraceSvgHandler name mTraceHeader mTraceParam
                 , batchFunction = \mTraceHeader mTraceParam mGraphViz ->
                     batchFunctionHandler name mTraceHeader mTraceParam mGraphViz
+                , queryPlan =
+                    queryPlanHandler name
                 }
           }
     }
+
+queryPlanHandler :: String -> FnArguments -> AppM QueryPlanResponse
+queryPlanHandler name' args = do
+  let name = Text.pack name'
+  functionsTVar <- asks (.functionDatabase)
+  cached <-
+    DecisionQueryPlan.getOrBuildDecisionQueryCache
+      functionsTVar
+      name
+      (.fnDecisionQueryCache)
+      (\fn -> DecisionQueryPlan.decisionQueryCacheKey name fn.fnSources)
+      (\c fn -> fn {fnDecisionQueryCache = Just c})
+      (\funName fn -> DecisionQueryPlan.buildDecisionQueryCache funName fn.fnSources)
+
+  pure (DecisionQueryPlan.queryPlan name cached args)
 
 evalFunctionHandler :: String -> Maybe Text -> Maybe Api.TraceLevel -> Maybe Bool -> FnArguments -> AppM SimpleResponse
 evalFunctionHandler name' mTraceHeader mTraceParam mGraphViz args = do
@@ -640,6 +647,8 @@ validateFunction fn = do
       { fnImpl = fnWithDeclaration.declaration
       , fnEvaluator = evaluators
       , fnCompiled = mCompiled
+      , fnSources = fnWithDeclaration.implementation
+      , fnDecisionQueryCache = Nothing
       }
  where
   validateImplementation :: FunctionImplementation -> EvalBackend -> Text -> AppM (RunFunction, Maybe Jl4.CompiledModule)
@@ -679,7 +688,7 @@ deriveFunctionFromSource existing source = do
       case selectExport existing exports of
         Nothing -> pure Nothing
         Just exported -> do
-          let derived = exportToFunction exported
+          let derived = exportToFunction resolvedModule exported
           pure $ Just Function
             { name = chooseField existing.name derived.name
             , description = chooseField existing.description derived.description
@@ -701,65 +710,149 @@ selectExport existing exports =
       byDefault = List.find (.exportIsDefault) exports
   in byName <|> byDefault <|> Maybe.listToMaybe exports
 
-exportToFunction :: ExportedFunction -> Function
-exportToFunction export =
+exportToFunction :: Module Resolved -> ExportedFunction -> Function
+exportToFunction resolvedModule export =
   Function
     { name = export.exportName
     , description = T.strip export.exportDescription
-    , parameters = parametersFromExport export.exportParams
+    , parameters = parametersFromExport resolvedModule export.exportParams
     , supportedEvalBackend = [JL4]
     }
 
-parametersFromExport :: [ExportedParam] -> Parameters
-parametersFromExport params =
+parametersFromExport :: Module Resolved -> [ExportedParam] -> Parameters
+parametersFromExport resolvedModule params =
+  let declares = declaresFromModule resolvedModule
+   in
   MkParameters
-    { parameterMap = Map.fromList [(param.paramName, paramToParameter param) | param <- params]
+    { parameterMap = Map.fromList [(param.paramName, paramToParameter declares param) | param <- params]
     , required = [param.paramName | param <- params, param.paramRequired]
     }
 
-paramToParameter :: ExportedParam -> Parameter
-paramToParameter param =
-  Parameter
-    { parameterType = typeToJsonType param.paramType
-    , parameterAlias = Nothing
-    , parameterEnum = []
-    , parameterDescription = T.strip $ Maybe.fromMaybe "" param.paramDescription
-    , parameterProperties = Nothing  -- TODO: Extract nested properties from type
-    }
+paramToParameter :: Map Text (Declare Resolved) -> ExportedParam -> Parameter
+paramToParameter declares param =
+  let p0 =
+        Maybe.fromMaybe
+          (Parameter "object" Nothing [] "" Nothing Nothing Nothing)
+          (typeToParameter declares Set.empty <$> param.paramType)
+   in
+    p0
+      { parameterAlias = Nothing
+      , parameterDescription = T.strip $ Maybe.fromMaybe "" param.paramDescription
+      }
 
-typeToJsonType :: Maybe (Type' Resolved) -> Text
-typeToJsonType Nothing = "object"
-typeToJsonType (Just ty) =
+declaresFromModule :: Module Resolved -> Map Text (Declare Resolved)
+declaresFromModule (MkModule _ _ section) =
+  Map.fromList (collectSection section)
+ where
+  collectSection (MkSection _ _ _ decls) =
+    decls >>= collectDecl
+
+  collectDecl = \case
+    Declare _ decl@(MkDeclare _ _ (MkAppForm _ name _ _) _) ->
+      [(resolvedNameText name, decl)]
+    Section _ sub ->
+      collectSection sub
+    _ ->
+      []
+
+typeToParameter ::
+  Map Text (Declare Resolved) ->
+  Set Text ->
+  Type' Resolved ->
+  Parameter
+typeToParameter declares visited ty =
   case ty of
-    Type _ -> "object"
-    TyApp _ name [] -> baseType name
+    Type _ -> emptyParam "object"
+    TyApp _ name [] ->
+      typeNameToParameter name
     TyApp _ name [inner] ->
       let lowered = Text.toLower (resolvedNameText name)
-      in  if lowered `elem` ["list", "listof"]
-            then "array"
-            else if lowered `elem` ["maybe", "optional"]
-              then typeToJsonType (Just inner)
-              else baseType name
-    TyApp _ name _ -> baseType name
-    Fun{} -> "object"
-    Forall{} -> "object"
-    InfVar{} -> "object"
+       in
+        if lowered `elem` ["list", "listof"]
+          then
+            (emptyParam "array")
+              { parameterItems = Just (typeToParameter declares visited inner)
+              }
+          else
+            if lowered `elem` ["maybe", "optional"]
+              then typeToParameter declares visited inner
+              else typeNameToParameter name
+    TyApp _ name _ ->
+      typeNameToParameter name
+    Fun{} -> emptyParam "object"
+    Forall _ _ inner -> typeToParameter declares visited inner
+    InfVar{} -> emptyParam "object"
+ where
+  emptyParam :: Text -> Parameter
+  emptyParam t =
+    Parameter
+      { parameterType = t
+      , parameterAlias = Nothing
+      , parameterEnum = []
+      , parameterDescription = ""
+      , parameterProperties = Nothing
+      , parameterPropertyOrder = Nothing
+      , parameterItems = Nothing
+      }
 
-baseType :: Resolved -> Text
-baseType name =
-  case Text.toLower (resolvedNameText name) of
-    "number" -> "number"
-    "int" -> "number"
-    "integer" -> "number"
-    "float" -> "number"
-    "double" -> "number"
-    "boolean" -> "boolean"
-    "bool" -> "boolean"
-    "string" -> "string"
-    "text" -> "string"
-    "date" -> "string"
-    "datetime" -> "string"
-    _ -> "object"
+  typeNameToParameter :: Resolved -> Parameter
+  typeNameToParameter name =
+    case primitiveJsonType name of
+      Just t -> emptyParam t
+      Nothing ->
+        case Map.lookup (resolvedNameText name) declares of
+          Nothing -> emptyParam "object"
+          Just decl -> declareToParameter (resolvedNameText name) decl
+
+  primitiveJsonType :: Resolved -> Maybe Text
+  primitiveJsonType name =
+    case Text.toLower (resolvedNameText name) of
+      "number" -> Just "number"
+      "int" -> Just "number"
+      "integer" -> Just "number"
+      "float" -> Just "number"
+      "double" -> Just "number"
+      "boolean" -> Just "boolean"
+      "bool" -> Just "boolean"
+      "string" -> Just "string"
+      "text" -> Just "string"
+      "date" -> Just "string"
+      "datetime" -> Just "string"
+      _ -> Nothing
+
+  declareToParameter :: Text -> Declare Resolved -> Parameter
+  declareToParameter typeName (MkDeclare declAnn _ _ typeDecl)
+    | typeName `Set.member` visited =
+        emptyParam "object"
+    | otherwise =
+        case typeDecl of
+          RecordDecl _ _ fields ->
+            let
+              visited' = Set.insert typeName visited
+              fieldOrder = [resolvedNameText fieldName | MkTypedName _ fieldName _ <- fields]
+              props =
+                Map.fromList
+                  [ (resolvedNameText fieldName, addDesc fieldDesc (typeToParameter declares visited' fieldTy))
+                  | MkTypedName fieldAnn fieldName fieldTy <- fields
+                  , let fieldDesc = fmap getDesc (fieldAnn Optics.^. annDesc)
+                  ]
+             in
+              (emptyParam "object")
+                { parameterDescription = Maybe.fromMaybe "" (fmap getDesc (declAnn Optics.^. annDesc))
+                , parameterProperties = Just props
+                , parameterPropertyOrder = Just fieldOrder
+                }
+          EnumDecl _ constructors ->
+            (emptyParam "string")
+              { parameterDescription = Maybe.fromMaybe "" (fmap getDesc (declAnn Optics.^. annDesc))
+              , parameterEnum = [resolvedNameText c | MkConDecl _ c _ <- constructors]
+              }
+          SynonymDecl _ inner ->
+            typeToParameter declares (Set.insert typeName visited) inner
+   where
+    addDesc :: Maybe Text -> Parameter -> Parameter
+    addDesc Nothing p = p
+    addDesc (Just d) p = p {parameterDescription = d}
 
 resolvedNameText :: Resolved -> Text
 resolvedNameText =
@@ -811,15 +904,17 @@ withUUIDFunction uuidAndFun k err = case UUID.fromText muuid of
           hPutStrLn stderr $ displayException err'
         err (\e -> e {errBody = "uuid not present on remote backend: " <> UUID.toLazyASCIIBytes uuid})
       Right prog -> do
+        let fileName = Text.unpack muuid <> ".l4"
+        (typecheckErrs, mTcRes) <- liftIO $ Jl4.typecheckModule fileName prog Map.empty
+        let mResolvedModule = (\Rules.TypeCheckResult{module' = m} -> m) <$> mTcRes
+
         -- Derive actual function name from exports if not specified in UUID
         actualFunName <- if Text.null (Text.strip funNameFromUUID)
           then do
-            let fileName = Text.unpack muuid <> ".l4"
-            (errs, mTcRes) <- liftIO $ Jl4.typecheckModule fileName prog Map.empty
             case mTcRes of
               Nothing -> do
-                unless (null errs) $
-                  liftIO $ putStrLn $ "Failed to derive function name from exports: " <> Text.unpack (Text.intercalate "; " errs)
+                unless (null typecheckErrs) $
+                  liftIO $ putStrLn $ "Failed to derive function name from exports: " <> Text.unpack (Text.intercalate "; " typecheckErrs)
                 throwError err500 {errBody = "could not determine function name from exports"}
               Just Rules.TypeCheckResult{module' = resolvedModule} -> do
                 let exports = getExportedFunctions resolvedModule
@@ -843,20 +938,42 @@ withUUIDFunction uuidAndFun k err = case UUID.fromText muuid of
         (runFn, mCompiled) <- liftIO $ Jl4.createFunction (Text.unpack actualFunName <> ".l4") fnDecl prog Map.empty
 
         k ValidatedFunction
-          { fnImpl = fnImpl { parameters = parametersOfDecide decide }
+          { fnImpl = fnImpl { parameters = parametersOfDecideWithModule mResolvedModule decide }
           , fnEvaluator = Map.singleton JL4 runFn
           , fnCompiled = mCompiled
+          , fnSources = Map.singleton JL4 prog
+          , fnDecisionQueryCache = Nothing
           }
   where
    (muuid, funNameFromUUID) = T.drop 1 <$> T.breakOn ":" uuidAndFun
 
 parametersOfDecide :: Decide Resolved -> Parameters
-parametersOfDecide (MkDecide _ (MkTypeSig _ (MkGivenSig _ typedNames) _) (MkAppForm _ _ args _) _)  =
+parametersOfDecide = parametersOfDecideWithModule Nothing
+
+parametersOfDecideWithModule :: Maybe (Module Resolved) -> Decide Resolved -> Parameters
+parametersOfDecideWithModule mMod (MkDecide _ (MkTypeSig _ (MkGivenSig _ typedNames) _) (MkAppForm _ _ args _) _)  =
   -- TODO:
   -- need to change the description of the parameters as soon as we have it in the Decide
-  MkParameters {parameterMap = Map.fromList $ map (\x -> (x ,
-    let argInfo = lookup x bestEffortArgInfo
-     in Parameter (maybe "object" fst argInfo) Nothing [] (maybe "" snd argInfo) Nothing)) argList, required = argList}
+  let declares = maybe Map.empty declaresFromModule mMod
+   in
+    MkParameters
+      { parameterMap =
+          Map.fromList $
+            map
+              ( \x ->
+                  let
+                    argInfo = lookup x bestEffortArgInfo
+                    baseParam =
+                      case argInfo >>= \(_tyText, mTy, _desc) -> mTy of
+                        Nothing -> Parameter "object" Nothing [] "" Nothing Nothing Nothing
+                        Just ty -> typeToParameter declares Set.empty ty
+                    descTxt = maybe "" (\(_tyText, _mTy, d) -> d) argInfo
+                   in
+                    (x, baseParam {parameterDescription = descTxt, parameterAlias = Nothing})
+              )
+              argList
+      , required = argList
+      }
  where
   bestEffortArgInfo = foldr fn [] args
   fn r acc = case find (\(MkOptionallyTypedName _ r' _) -> r `sameResolved` r') typedNames of
@@ -865,7 +982,7 @@ parametersOfDecide (MkDecide _ (MkTypeSig _ (MkGivenSig _ typedNames) _) (MkAppF
       , let descTokens = Optics.toListOf (Optics.gplate @TAnnotations Optics.% #_TDesc) tn
             exportTokens = Optics.toListOf (Optics.gplate @TAnnotations Optics.% #_TExport) tn
             descriptions = mconcat $ nubOrd (descTokens <> exportTokens)
-      -> (prettyLayout r', (prettyLayout t, descriptions)) : acc
+      -> (prettyLayout r', (prettyLayout t, Just t, descriptions)) : acc
     _ -> acc
   sameResolved = (==) `on` getUnique
   argList = map prettyLayout args
@@ -977,60 +1094,6 @@ instance FromJSON FunctionImplementation where
     FunctionImplementation
       <$> o .: "declaration"
       <*> o .: "implementation"
-
-instance ToJSON Parameters where
-  toJSON (MkParameters props reqProps) =
-    Aeson.object
-      [ "type" .= Aeson.String "object"
-      , "properties" .= props
-      , "required" .= reqProps
-      ]
-
-instance FromJSON Parameters where
-  parseJSON = Aeson.withObject "Parameters" $ \o -> do
-    _ :: Text <- o .: "type"
-    props <- o .: "properties"
-    reqProps <- o .: "required"
-    pure $ MkParameters props reqProps
-
-instance ToJSON Parameter where
-  toJSON p =
-    Aeson.object $
-      [ "type" .= p.parameterType
-      , "alias" .= p.parameterAlias -- omitNothingFields?
-      , "enum" .= p.parameterEnum
-      , "description" .= p.parameterDescription
-      ] ++ case p.parameterProperties of
-            Nothing -> []
-            Just props -> ["properties" .= props]
-
-instance FromJSON Parameter where
-  parseJSON = Aeson.withObject "Parameter" $ \p ->
-    Parameter
-      <$> p .: "type"
-      <*> p .:? "alias"
-      <*> p .:? "enum" .!= []
-      <*> p .: "description"
-      <*> p .:? "properties"
-
-instance FromHttpApiData EvalBackend where
-  parseQueryParam t = case Text.toLower t of
-    "jl4" -> Right JL4
-    _ -> Left $ "Invalid evaluation backend: " <> t
-
-instance ToJSON EvalBackend where
-  toJSON = \ case
-    JL4 -> Aeson.String "jl4"
-
-instance FromJSON EvalBackend where
-  parseJSON (Aeson.String s) = case Text.toLower s of
-    "jl4" -> pure JL4
-    o -> Aeson.prependFailure "EvalBackend" (Aeson.typeMismatch "String" $ Aeson.String o)
-  parseJSON o = Aeson.prependFailure "EvalBackend" (Aeson.typeMismatch "String" o)
-
-instance ToJSONKey EvalBackend
-
-instance FromJSONKey EvalBackend
 
 toDecl :: Function -> Api.FunctionDeclaration
 toDecl fn =

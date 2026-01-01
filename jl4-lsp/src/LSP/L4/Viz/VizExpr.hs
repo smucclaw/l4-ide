@@ -38,8 +38,8 @@ data IRExpr
   = And ID [IRExpr]
   | Or ID [IRExpr]
   | Not ID IRExpr
-  | UBoolVar ID Name UBoolValue Bool -- ^ id name ubvalue canInline
-  | App ID Name [IRExpr]
+  | UBoolVar ID Name UBoolValue Bool Text -- ^ id name ubvalue canInline atomId
+  | App ID Name [IRExpr] Text
   | TrueE ID Name 
   | FalseE ID Name
   deriving (Show, Eq, Generic)
@@ -95,8 +95,8 @@ instance HasCodec IRExpr where
         And uid args -> ("And", mapToEncoder (uid, args) naryExprCodec)
         Or uid args -> ("Or", mapToEncoder (uid, args) naryExprCodec)
         Not uid expr -> ("Not", mapToEncoder (uid, expr) notExprCodec)
-        UBoolVar uid name value canInline -> ("UBoolVar", mapToEncoder (uid, name, value, canInline) uBoolVarCodec)
-        App uid name args -> ("App", mapToEncoder (uid, name, args) appExprCodec)
+        UBoolVar uid name value canInline atomId -> ("UBoolVar", mapToEncoder (uid, name, value, canInline, atomId) uBoolVarCodec)
+        App uid name args atomId -> ("App", mapToEncoder (uid, name, args, atomId) appExprCodec)
         TrueE uid name -> ("TrueE", mapToEncoder (uid, name) boolLitCodec)
         FalseE uid name -> ("FalseE", mapToEncoder (uid, name) boolLitCodec)
 
@@ -112,8 +112,8 @@ instance HasCodec IRExpr where
             ("FalseE", ("FalseE", mapToDecoder (uncurry FalseE) boolLitCodec))
           ]
 
-      mkUBoolVar (uid, name, value, canInline) = UBoolVar uid name value canInline
-      mkAppExpr (uid, name, args) = App uid name args
+      mkUBoolVar (uid, name, value, canInline, atomId) = UBoolVar uid name value canInline atomId
+      mkAppExpr (uid, name, args, atomId) = App uid name args atomId
 
       -- Codec for 'And' and 'Or' expressions.
       naryExprCodec =
@@ -127,17 +127,19 @@ instance HasCodec IRExpr where
           <*> requiredField' "negand" .= snd
 
       uBoolVarCodec =
-        (,,,)
+        (,,,,)
           <$> requiredField' "id" .= view _1
           <*> requiredField' "name" .= view _2
           <*> requiredField' "value" .= view _3
           <*> requiredField' "canInline" .= view _4
+          <*> requiredField' "atomId" .= view _5
 
       appExprCodec =
-        (,,)
+        (,,,)
           <$> requiredField' "id" .= view _1
           <*> requiredField' "fnName" .= view _2
           <*> requiredField' "args" .= view _3
+          <*> requiredField' "atomId" .= view _4
 
       boolLitCodec =
         (,)

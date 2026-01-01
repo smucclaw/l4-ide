@@ -44,6 +44,7 @@
   },
   "dependencies": {
     "@codingame/monaco-vscode-api": "^14.0.4",
+    "@repo/decision-service-types": "*",
     "@repo/viz-expr": "*",
     "@sveltejs/adapter-static": "^3.0.8",
     "@sveltejs/vite-plugin-svelte": "^5.0.3",

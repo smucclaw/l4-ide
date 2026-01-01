@@ -1,0 +1,54 @@
+cabal-version: 3.0
+name: jl4-query-plan
+version: 0.1.0.0
+build-type: Simple
+tested-with: ghc ==9.6.6
+
+source-repository head
+  type: git
+  location: https://github.com/smucclaw/l4-ide/tree/main/jl4-query-plan
+
+common defaults
+  default-language: GHC2021
+  ghc-options:
+    -Wall
+    -Wderiving-typeable
+    -Wunused-packages
+    -Werror
+    -Widentities
+    -Wincomplete-record-updates
+    -Wincomplete-uni-patterns
+    -Wmissing-export-lists
+    -Wmissing-home-modules
+    -Wpartial-fields
+    -Wredundant-constraints
+
+  default-extensions:
+    BlockArguments
+    DeriveAnyClass
+    DerivingStrategies
+    DuplicateRecordFields
+    LambdaCase
+    NoFieldSelectors
+    OverloadedRecordDot
+    OverloadedStrings
+    -- This is annoying with fourmolu
+    NoImportQualifiedPost
+
+  build-depends:
+    base >=4.7 && <5
+
+library
+  import: defaults
+  hs-source-dirs:
+    src
+  exposed-modules:
+    L4.Decision.BooleanDecisionQuery
+    L4.Decision.QueryPlan
+  build-depends:
+    aeson,
+    bytestring,
+    containers,
+    jl4-core,
+    text,
+    uuid

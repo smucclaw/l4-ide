@@ -35,6 +35,7 @@ import qualified LSP.L4.Viz.VizExpr as Ladder
 import qualified LSP.L4.Viz.CustomProtocol as Ladder
 import           LSP.L4.Viz.CustomProtocol (EvalAppRequestParams (..),
                                             EvalAppResult (..))
+import qualified LSP.L4.Viz.QueryPlan as VizQueryPlan
 
 import Language.LSP.Protocol.Message
 import Language.LSP.Protocol.Types
@@ -212,7 +213,7 @@ visualise mtcRes (getRecVis, setRecVis) verTextDocId msrcPos = do
       case Ladder.doVisualize decide vizConfig of
         Right (vizProgramInfo, vizState) -> do
           traverse_ (lift . setRecVis) $ recentlyVisualisedDecide decide vizState
-          pure $ InL $ Aeson.toJSON vizProgramInfo
+          pure $ InL $ Aeson.toJSON (VizQueryPlan.annotateLadderWithAtomIds vizProgramInfo vizState)
         Left vizError ->
           defaultResponseError $ Text.unlines
             [ "Could not visualize:"

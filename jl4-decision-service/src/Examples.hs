@@ -21,7 +21,7 @@ import qualified Data.Text.IO as TIO
 import qualified Data.Yaml as Yaml
 import L4.Annotation (getAnno)
 import L4.Export (DescFlags (..), ExportedFunction (..), ExportedParam (..), ParsedDesc (..), getExportedFunctions, parseDescText)
-import L4.Syntax (Resolved, Type' (..), annDesc, getActual, getDesc, rawName, rawNameToText)
+import L4.Syntax
 import qualified LSP.L4.Rules as Rules
 import Optics ((^.))
 import Server
@@ -117,7 +117,7 @@ tryLoadFromAnnotationsExplicit moduleContext path content = do
         [] -> pure []
         xs -> do
           let ordered = orderExports xs
-          pure [ (export.exportName, exportToFunction export) | export <- ordered ]
+          pure [ (export.exportName, exportToFunction resolvedModule export) | export <- ordered ]
   where
     orderExports xs =
       let (defaults, rest) = List.partition (.exportIsDefault) xs
@@ -132,67 +132,151 @@ explicitExportsOnly =
         case parseDescText (getDesc desc) of
           ParsedDesc{flags = DescFlags{isExport}} -> isExport
 
-exportToFunction :: ExportedFunction -> Function
-exportToFunction export =
+exportToFunction :: Module Resolved -> ExportedFunction -> Function
+exportToFunction resolvedModule export =
   Function
     { name = export.exportName
     , description =
         let desc = T.strip export.exportDescription
         in if T.null desc then "Exported function" else desc
-    , parameters = parametersFromExport export.exportParams
+    , parameters = parametersFromExport resolvedModule export.exportParams
     , supportedEvalBackend = [JL4]
     }
 
-parametersFromExport :: [ExportedParam] -> Parameters
-parametersFromExport params =
+parametersFromExport :: Module Resolved -> [ExportedParam] -> Parameters
+parametersFromExport resolvedModule params =
+  let declares = declaresFromModule resolvedModule
+   in
   MkParameters
-    { parameterMap = Map.fromList [(param.paramName, paramToParameter param) | param <- params]
+    { parameterMap = Map.fromList [(param.paramName, paramToParameter declares param) | param <- params]
     , required = [param.paramName | param <- params, param.paramRequired]
     }
 
-paramToParameter :: ExportedParam -> Parameter
-paramToParameter param =
-  Parameter
-    { parameterType = typeToJsonType param.paramType
-    , parameterAlias = Nothing
-    , parameterEnum = []
-    , parameterDescription = T.strip $ fromMaybe "" param.paramDescription
-    , parameterProperties = Nothing  -- TODO: Extract nested properties from type
-    }
+paramToParameter :: Map.Map Text (Declare Resolved) -> ExportedParam -> Parameter
+paramToParameter declares param =
+  let p0 =
+        fromMaybe
+          (Parameter "object" Nothing [] "" Nothing Nothing Nothing)
+          (typeToParameter declares Set.empty <$> param.paramType)
+   in
+    p0
+      { parameterAlias = Nothing
+      , parameterDescription = T.strip $ fromMaybe "" param.paramDescription
+      }
 
-typeToJsonType :: Maybe (Type' Resolved) -> Text
-typeToJsonType Nothing = "object"
-typeToJsonType (Just ty) =
+declaresFromModule :: Module Resolved -> Map.Map Text (Declare Resolved)
+declaresFromModule (MkModule _ _ section) =
+  Map.fromList (collectSection section)
+ where
+  collectSection (MkSection _ _ _ decls) =
+    decls >>= collectDecl
+
+  collectDecl = \case
+    Declare _ decl@(MkDeclare _ _ (MkAppForm _ name _ _) _) ->
+      [(resolvedNameText name, decl)]
+    Section _ sub ->
+      collectSection sub
+    _ ->
+      []
+
+typeToParameter ::
+  Map.Map Text (Declare Resolved) ->
+  Set.Set Text ->
+  Type' Resolved ->
+  Parameter
+typeToParameter declares visited ty =
   case ty of
-    Type _ -> "object"
-    TyApp _ name [] -> baseType name
+    Type _ -> emptyParam "object"
+    TyApp _ name [] ->
+      typeNameToParameter name
     TyApp _ name [inner] ->
       let lowered = T.toLower (resolvedNameText name)
-      in  if lowered `elem` ["list", "listof"]
-            then "array"
-            else if lowered `elem` ["maybe", "optional"]
-              then typeToJsonType (Just inner)
-              else baseType name
-    TyApp _ name _ -> baseType name
-    Fun{} -> "object"
-    Forall{} -> "object"
-    InfVar{} -> "object"
+       in
+        if lowered `elem` ["list", "listof"]
+          then
+            (emptyParam "array")
+              { parameterItems = Just (typeToParameter declares visited inner)
+              }
+          else
+            if lowered `elem` ["maybe", "optional"]
+              then typeToParameter declares visited inner
+              else typeNameToParameter name
+    TyApp _ name _ ->
+      typeNameToParameter name
+    Fun{} -> emptyParam "object"
+    Forall _ _ inner -> typeToParameter declares visited inner
+    InfVar{} -> emptyParam "object"
+ where
+  emptyParam :: Text -> Parameter
+  emptyParam t =
+    Parameter
+      { parameterType = t
+      , parameterAlias = Nothing
+      , parameterEnum = []
+      , parameterDescription = ""
+      , parameterProperties = Nothing
+      , parameterPropertyOrder = Nothing
+      , parameterItems = Nothing
+      }
 
-baseType :: Resolved -> Text
-baseType name =
-  case T.toLower (resolvedNameText name) of
-    "number" -> "number"
-    "int" -> "number"
-    "integer" -> "number"
-    "float" -> "number"
-    "double" -> "number"
-    "boolean" -> "boolean"
-    "bool" -> "boolean"
-    "string" -> "string"
-    "text" -> "string"
-    "date" -> "string"
-    "datetime" -> "string"
-    _ -> "object"
+  typeNameToParameter :: Resolved -> Parameter
+  typeNameToParameter name =
+    case primitiveJsonType name of
+      Just t -> emptyParam t
+      Nothing ->
+        case Map.lookup (resolvedNameText name) declares of
+          Nothing -> emptyParam "object"
+          Just decl -> declareToParameter (resolvedNameText name) decl
+
+  primitiveJsonType :: Resolved -> Maybe Text
+  primitiveJsonType name =
+    case T.toLower (resolvedNameText name) of
+      "number" -> Just "number"
+      "int" -> Just "number"
+      "integer" -> Just "number"
+      "float" -> Just "number"
+      "double" -> Just "number"
+      "boolean" -> Just "boolean"
+      "bool" -> Just "boolean"
+      "string" -> Just "string"
+      "text" -> Just "string"
+      "date" -> Just "string"
+      "datetime" -> Just "string"
+      _ -> Nothing
+
+  declareToParameter :: Text -> Declare Resolved -> Parameter
+  declareToParameter typeName (MkDeclare declAnn _ _ typeDecl)
+    | typeName `Set.member` visited =
+        emptyParam "object"
+    | otherwise =
+        case typeDecl of
+          RecordDecl _ _ fields ->
+            let
+              visited' = Set.insert typeName visited
+              fieldOrder = [resolvedNameText fieldName | MkTypedName _ fieldName _ <- fields]
+              props =
+                Map.fromList
+                  [ (resolvedNameText fieldName, addDesc fieldDesc (typeToParameter declares visited' fieldTy))
+                  | MkTypedName fieldAnn fieldName fieldTy <- fields
+                  , let fieldDesc = fmap getDesc (fieldAnn Optics.^. annDesc)
+                  ]
+             in
+              (emptyParam "object")
+                { parameterDescription = fromMaybe "" (fmap getDesc (declAnn Optics.^. annDesc))
+                , parameterProperties = Just props
+                , parameterPropertyOrder = Just fieldOrder
+                }
+          EnumDecl _ constructors ->
+            (emptyParam "string")
+              { parameterDescription = fromMaybe "" (fmap getDesc (declAnn Optics.^. annDesc))
+              , parameterEnum = [resolvedNameText c | MkConDecl _ c _ <- constructors]
+              }
+          SynonymDecl _ inner ->
+            typeToParameter declares (Set.insert typeName visited) inner
+   where
+    addDesc :: Maybe Text -> Parameter -> Parameter
+    addDesc Nothing p = p
+    addDesc (Just d) p = p {parameterDescription = d}
 
 resolvedNameText :: Resolved -> Text
 resolvedNameText =
@@ -232,6 +316,8 @@ createValidatedFunction filepath _filename content fnDecl moduleContext = do
     { fnImpl = fnDecl
     , fnEvaluator = Map.fromList [(JL4, runFn)]
     , fnCompiled = mCompiled
+    , fnSources = Map.fromList [(JL4, content)]
+    , fnDecisionQueryCache = Nothing
     }
 
 -- ----------------------------------------------------------------------------
@@ -271,10 +357,10 @@ personQualifiesFunction = do
         , parameters =
             MkParameters
               { parameterMap =
-                  Map.fromList
-                    [ ("walks", Parameter "string" Nothing ["true", "false"] "Did the person walk?" Nothing)
-                    , ("eats", Parameter "string" Nothing ["true", "false"] "Did the person eat?" Nothing)
-                    , ("drinks", Parameter "string" Nothing ["true", "false"] "Did the person drink?" Nothing)
+                Map.fromList
+                    [ ("walks", Parameter "string" Nothing ["true", "false"] "Did the person walk?" Nothing Nothing Nothing)
+                    , ("eats", Parameter "string" Nothing ["true", "false"] "Did the person eat?" Nothing Nothing Nothing)
+                    , ("drinks", Parameter "string" Nothing ["true", "false"] "Did the person drink?" Nothing Nothing Nothing)
                     ]
               , required = ["walks", "eats", "drinks"]
               }
@@ -286,6 +372,8 @@ personQualifiesFunction = do
       { fnImpl = fnDecl
       , fnEvaluator = Map.fromList [(JL4, runFn)]
       , fnCompiled = mCompiled
+      , fnSources = Map.fromList [(JL4, computeQualifiesJL4NoInput)]
+      , fnDecisionQueryCache = Nothing
       }
 
 -- | Metadata about the function that the user might want to know.
@@ -307,16 +395,16 @@ rodentsAndVerminFunction = do
             let
               params =
                 Map.fromList
-                  [ ("Loss or Damage.caused by insects", Parameter "string" Nothing ["true", "false"] "Was the damage caused by insects?" Nothing)
-                  , ("Loss or Damage.caused by birds", Parameter "string" Nothing ["true", "false"] "Was the damage caused by birds?" Nothing)
-                  , ("Loss or Damage.caused by vermin", Parameter "string" Nothing ["true", "false"] "Was the damage caused by vermin?" Nothing)
-                  , ("Loss or Damage.caused by rodents", Parameter "string" Nothing ["true", "false"] "Was the damage caused by rodents?" Nothing)
-                  , ("Loss or Damage.to Contents", Parameter "string" Nothing ["true", "false"] "Is the damage to your contents?" Nothing)
-                  , ("Loss or Damage.ensuing covered loss", Parameter "string" Nothing ["true", "false"] "Is the damage ensuing covered loss" Nothing)
-                  , ("any other exclusion applies", Parameter "string" Nothing ["true", "false"] "Are any other exclusions besides mentioned ones?" Nothing)
-                  , ("a household appliance", Parameter "string" Nothing ["true", "false"] "Did water escape from a household appliance due to an animal?" Nothing)
-                  , ("a swimming pool", Parameter "string" Nothing ["true", "false"] "Did water escape from a swimming pool due to an animal?" Nothing)
-                  , ("a plumbing, heating, or air conditioning system", Parameter "string" Nothing ["true", "false"] "Did water escape from a plumbing, heating or conditioning system due to an animal?" Nothing)
+                  [ ("Loss or Damage.caused by insects", Parameter "string" Nothing ["true", "false"] "Was the damage caused by insects?" Nothing Nothing Nothing)
+                  , ("Loss or Damage.caused by birds", Parameter "string" Nothing ["true", "false"] "Was the damage caused by birds?" Nothing Nothing Nothing)
+                  , ("Loss or Damage.caused by vermin", Parameter "string" Nothing ["true", "false"] "Was the damage caused by vermin?" Nothing Nothing Nothing)
+                  , ("Loss or Damage.caused by rodents", Parameter "string" Nothing ["true", "false"] "Was the damage caused by rodents?" Nothing Nothing Nothing)
+                  , ("Loss or Damage.to Contents", Parameter "string" Nothing ["true", "false"] "Is the damage to your contents?" Nothing Nothing Nothing)
+                  , ("Loss or Damage.ensuing covered loss", Parameter "string" Nothing ["true", "false"] "Is the damage ensuing covered loss" Nothing Nothing Nothing)
+                  , ("any other exclusion applies", Parameter "string" Nothing ["true", "false"] "Are any other exclusions besides mentioned ones?" Nothing Nothing Nothing)
+                  , ("a household appliance", Parameter "string" Nothing ["true", "false"] "Did water escape from a household appliance due to an animal?" Nothing Nothing Nothing)
+                  , ("a swimming pool", Parameter "string" Nothing ["true", "false"] "Did water escape from a swimming pool due to an animal?" Nothing Nothing Nothing)
+                  , ("a plumbing, heating, or air conditioning system", Parameter "string" Nothing ["true", "false"] "Did water escape from a plumbing, heating or conditioning system due to an animal?" Nothing Nothing Nothing)
                   ]
             in
               MkParameters
@@ -331,6 +419,8 @@ rodentsAndVerminFunction = do
       { fnImpl = fnDecl
       , fnEvaluator = Map.fromList [(JL4, runFn)]
       , fnCompiled = mCompiled
+      , fnSources = Map.fromList [(JL4, rodentsAndVerminJL4)]
+      , fnDecisionQueryCache = Nothing
       }
 
 computeQualifiesJL4NoInput :: Text
@@ -416,6 +506,8 @@ constantFunction = do
       { fnImpl = fnDecl
       , fnEvaluator = Map.fromList [(JL4, runFn)]
       , fnCompiled = mCompiled
+      , fnSources = Map.fromList [(JL4, constantJL4)]
+      , fnDecisionQueryCache = Nothing
       }
 
 constantJL4 :: Text

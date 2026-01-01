@@ -87,6 +87,39 @@ instance ToHttpApiData TraceLevel where
   toQueryParam TraceNone = "none"
   toQueryParam TraceFull = "full"
 
+data EvalBackend
+  = JL4
+  deriving ()
+  deriving stock (Show, Eq, Ord, Enum, Read, Bounded, Generic)
+
+instance FromHttpApiData EvalBackend where
+  parseQueryParam = \case
+    "jl4" -> Right JL4
+    "JL4" -> Right JL4
+    other -> Left $ "Invalid eval backend: " <> other <> ". Expected: JL4"
+
+instance ToJSON EvalBackend where
+  toJSON = Aeson.String . \case
+    JL4 -> "jl4"
+
+instance FromJSON EvalBackend where
+  parseJSON (Aeson.String s) =
+    case Text.toLower s of
+      "jl4" -> pure JL4
+      o -> Aeson.prependFailure "EvalBackend" (Aeson.typeMismatch "String" $ Aeson.String o)
+  parseJSON o = Aeson.prependFailure "EvalBackend" (Aeson.typeMismatch "String" o)
+
+instance ToJSONKey EvalBackend
+
+instance FromJSONKey EvalBackend
+
+data FnArguments = FnArguments
+  { fnEvalBackend :: Maybe EvalBackend
+  , fnArguments :: Map Text (Maybe FnLiteral)
+  }
+  deriving stock (Show, Read, Ord, Eq, Generic)
+  deriving anyclass (FromJSON, ToJSON)
+
 newtype RunFunction = RunFunction
   { -- | Run a function with parameters
     runFunction ::

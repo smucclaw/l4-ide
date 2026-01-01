@@ -124,18 +124,20 @@ L4 provides audit-grade explainability and observability. Textual decision trace
 An interactive Read-Eval-Print Loop for exploring L4 code in real-time.
 
 ```bash
-jl4-repl
+cabal run jl4-repl -- path/to/file.l4
 ```
 
 The REPL provides:
 
 - Live evaluation of L4 expressions
-- Trace visualization controls (`:trace on/off/all`, `:graphviz on/png/svg`)
-- Module loading and reloading (`:load myfile.l4`)
+- Module loading and reloading (`:load`, `:reload`)
 - Interactive exploration of language features
-- Output directory configuration for saving traces
+- Query planning helpers (`:decides`, `:queryplan` / `:qp`)
+- Trace output (GraphViz DOT via `:trace`, ASCII via `:traceascii`, file output via `:tracefile`)
 
 Perfect for prototyping logic, testing functions, and learning L4 interactively.
+
+See `jl4-repl/README.md:1` for the current command list and examples.
 
 ## The Web Editor
 

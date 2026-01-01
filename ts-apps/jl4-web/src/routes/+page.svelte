@@ -18,6 +18,11 @@
 
   import { defaultExample, type LegalExample } from '$lib/legal-examples'
   import ExampleSelector from '$lib/components/example-selector.svelte'
+  import {
+    fetchQueryPlan,
+    upsertFunctionFromSource,
+    type DecisionServiceClient,
+  } from '$lib/decision-service-client'
 
   import {
     LadderFlow,
@@ -25,6 +30,7 @@
     LirRegistry,
     type FunDeclLirNode,
     LadderEnv,
+    elicitationOverrideFromQueryPlan,
     VizDeclLirSource,
   } from 'l4-ladder-visualizer'
   import {
@@ -32,15 +38,26 @@
     type RenderAsLadderInfo,
     type VersionedDocId,
   } from '@repo/viz-expr'
-
   /***********************************
-    Persistent-session-related vars
-  ************************************/
+	    Persistent-session-related vars
+	  ************************************/
 
   // `persistSession` does not need to be reactive
   let persistSession: undefined | (() => Promise<string | undefined>) =
     undefined
   const sessionUrl = import.meta.env.VITE_SESSION_URL || 'http://localhost:5008'
+  const decisionServiceUrl =
+    import.meta.env.VITE_DECISION_SERVICE_URL || 'http://localhost:8001'
+  const decisionServiceClient: DecisionServiceClient = {
+    baseUrl: decisionServiceUrl,
+  }
+
+  let currentDecisionServiceFunctionName: string | null = null
+  let currentLadderGraphId: import('l4-ladder-visualizer').LirId | null = null
+  let ensureDecisionServiceFnReady: Promise<void> = Promise.resolve()
+  let lastQueryPlanBindingsKey: string | null = null
+  let queryPlanInFlight = false
+  let queryPlanNeedsRerun = false
 
   let persistButtonBlocked = $state(false)
 
@@ -150,6 +167,80 @@
   let editor: monaco.editor.IStandaloneCodeEditor | undefined
   let monacoL4LangClient: MonacoL4LanguageClient | undefined
   let monacoErrorLens: MonacoErrorLens | undefined
+
+  function bindingsKey(bindings: Record<string, boolean>) {
+    const entries = Object.entries(bindings).sort(([a], [b]) =>
+      a.localeCompare(b)
+    )
+    return JSON.stringify(entries)
+  }
+
+  function getCurrentAtomBindings(): {
+    fnName: string
+    bindings: Record<string, boolean>
+  } | null {
+    if (!currentDecisionServiceFunctionName) return null
+    const top = ladderEnv?.getTopFunDeclLirNode(context)
+    const ladderGraph = top?.getBody(context)
+    if (!ladderGraph) return null
+
+    const out: Record<string, boolean> = {}
+    for (const [unique, val] of ladderGraph.getBindings(context).getEntries()) {
+      if (!val) continue
+      const atomId =
+        ladderGraph.getAtomIdForUnique(context, unique) ??
+        ladderGraph.getLabelForUnique(context, unique)
+      if (val.$type === 'TrueV') {
+        out[atomId] = true
+      } else if (val.$type === 'FalseV') {
+        out[atomId] = false
+      }
+    }
+    return { fnName: currentDecisionServiceFunctionName, bindings: out }
+  }
+
+  async function refreshQueryPlanFromDecisionService() {
+    const curr = getCurrentAtomBindings()
+    if (!curr) return
+
+    const nextKey = `${curr.fnName}|${bindingsKey(curr.bindings)}`
+    if (lastQueryPlanBindingsKey === nextKey) return
+
+    await ensureDecisionServiceFnReady
+
+    const resp = await fetchQueryPlan(
+      decisionServiceClient,
+      curr.fnName,
+      curr.bindings
+    )
+    lastQueryPlanBindingsKey = nextKey
+
+    const ladderGraph = ladderEnv.getTopFunDeclLirNode(context).getBody(context)
+
+    ladderGraph.setElicitationOverride(
+      context,
+      elicitationOverrideFromQueryPlan(context, ladderGraph, resp)
+    )
+  }
+
+  function scheduleQueryPlanRefresh() {
+    if (queryPlanInFlight) {
+      queryPlanNeedsRerun = true
+      return
+    }
+    queryPlanInFlight = true
+    void refreshQueryPlanFromDecisionService()
+      .catch((e) => {
+        console.warn('decision-service query-plan failed', e)
+      })
+      .finally(() => {
+        queryPlanInFlight = false
+        if (queryPlanNeedsRerun) {
+          queryPlanNeedsRerun = false
+          scheduleQueryPlanRefresh()
+        }
+      })
+  }
 
   // TODO: Need to refactor this --- too long
   onMount(async () => {
@@ -410,6 +501,26 @@
       await renderLadderPromise
       // Automatically show visualizer when ladder object is updated
       showVisualizer = true
+
+      const fnName = ladderInfo.funDecl.name.label
+      currentDecisionServiceFunctionName = fnName
+      lastQueryPlanBindingsKey = null
+
+      const source = editor?.getValue() ?? ''
+      ensureDecisionServiceFnReady = upsertFunctionFromSource(
+        decisionServiceClient,
+        fnName,
+        source
+      ).catch((e) => {
+        console.warn('decision-service upsert failed', e)
+      })
+
+      const ladderGraph = ladderEnv
+        .getTopFunDeclLirNode(context)
+        .getBody(context)
+      currentLadderGraphId = ladderGraph.getId()
+      scheduleQueryPlanRefresh()
+
       // Re-initialize editor after state change
       setTimeout(() => {
         if (editorElement && editor) {
@@ -515,6 +626,14 @@
     console.log('📍 About to call runClient()')
     await runClient()
     console.log('✅ runClient() completed')
+
+    const sub = lirRegistry.subscribe((_ctx, id) => {
+      if (!currentLadderGraphId) return
+      if (!id.isEqualTo(currentLadderGraphId)) return
+      scheduleQueryPlanRefresh()
+    })
+
+    onDestroy(() => sub.unsubscribe())
   })
 
   onDestroy(() => {

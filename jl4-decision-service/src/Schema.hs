@@ -21,9 +21,11 @@ import Data.Proxy
 import Data.Text (Text)
 import qualified Data.Text as Text
 import GHC.TypeLits
+import qualified L4.Decision.QueryPlan as QP
 import Servant
 import Servant.OpenApi
 import Server
+import qualified LSP.L4.Viz.VizExpr as VizExpr
 
 type ServerName = Text
 
@@ -122,6 +124,22 @@ instance ToSchema ReasonNode
 -- 'ToJSON' instance yet.
 instance ToSchema FnArguments
 
+instance ToSchema QP.InputRef
+instance ToSchema QueryAtom
+instance ToSchema QueryOutcome
+instance ToSchema QueryImpact
+instance ToSchema QueryInput
+instance ToSchema QueryAsk
+instance ToSchema QueryPlanResponse
+
+instance ToSchema VizExpr.RenderAsLadderInfo where
+  declareNamedSchema _ =
+    pure $
+      NamedSchema (Just "RenderAsLadderInfo") $
+        mempty
+          & type_ ?~ OpenApiObject
+          & additionalProperties ?~ AdditionalPropertiesAllowed True
+
 instance ToSchema PngImage where
   declareNamedSchema _ =
     pure $
@@ -195,7 +213,9 @@ instance ToSchema Parameter where
     textSchema <- declareSchemaRef (Proxy @Text)
     mTextSchema <- declareSchemaRef (Proxy @(Maybe Text))
     textListSchema <- declareSchemaRef (Proxy @[Text])
+    mTextListSchema <- declareSchemaRef (Proxy @(Maybe [Text]))
     nestedPropsSchema <- declareSchemaRef (Proxy @(Maybe (Map Text Parameter)))
+    itemsSchema <- declareSchemaRef (Proxy @(Maybe Parameter))
     pure $
       NamedSchema (Just "FunctionParameter") $
         mempty
@@ -207,6 +227,8 @@ instance ToSchema Parameter where
                , ("alias", mTextSchema)
                , ("type", textSchema)
                , ("properties", nestedPropsSchema)
+               , ("propertyOrder", mTextListSchema)
+               , ("items", itemsSchema)
                ]
           & required .~ ["type"]
           & example
