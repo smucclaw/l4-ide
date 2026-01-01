@@ -1,10 +1,8 @@
-# Mixfix Operators - Current Status
+# Mixfix Operators - COMPLETED ✅
 
-## What We've Built
+## Status: Fully Implemented and Merged
 
-### Branch: `mengwong/mixfix`
-
-This branch implements the foundation for user-defined mixfix operators in L4, enabling natural language-style function definitions like:
+Mixfix operators are now fully implemented in L4, enabling natural language-style function definitions like:
 
 ```l4
 GIVEN person IS A Person, program IS A Program
@@ -45,64 +43,53 @@ alice `is eligible for` healthcare
 - Pattern extraction works by comparing tokens against GIVEN parameters
 - **Status**: ✅ Compiles successfully, all tests pass
 
-## Remaining Work
+## Implementation Phases (All Complete)
 
-### Phase 1: Scanning Phase (🔲 Not Started)
+### Phase 1: Parser & Scanning ✅
 
-**Estimated**: 1-2 days
+Implemented mixfix pattern extraction and hint registry:
 
-Extract mixfix pattern info during `scanFunSigDecide`:
+- Added parser mixfix hint pass (commit 4ba6ff97)
+- Mixfix chains guarded with hint registry (commit 63269341)
+- Pattern matching at call sites
+- Type-directed disambiguation
 
-```haskell
-data MixfixInfo = MkMixfixInfo
-  { keywords :: [Name]
-  , arity :: Int
-  , keywordPositions :: [Int]
-  , pattern :: [PatternToken Name]
-  }
+### Phase 2: Postfix Support ✅
 
--- Add to FunTypeSig:
-data FunTypeSig = MkFunTypeSig
-  { ...
-  , mixfixInfo :: Maybe MixfixInfo
-  }
-```
+Extended mixfix to support postfix operators:
 
-### Phase 2: Type Checker (🔲 Not Started)
+- Bare identifiers for postfix mixfix operators (commit 8269055a)
+- Fixed bare mixfix/postfix operators with variables (commit 2a02e44a)
+- WHERE-local postfix mixfix support (commit dc96f4c8)
+- Updated golden files for postfix tests (commit 405111e4)
 
-**Estimated**: 2-3 days
+### Phase 3: Multiline & Indentation ✅
 
-Implement pattern matching at call sites:
+Added sophisticated multiline support:
 
-- Find keywords in token sequence
-- Extract arguments between keywords
-- Type check arguments
-- Disambiguate using types
+- Indentation-aware multiline mixfix (commit 9078de56)
+- Proper handling of complex nested patterns
+- WHERE vs LET constraints documented (commit 77dbf039)
 
-### Phase 3: Error Handling (🔲 Not Started)
+### Phase 4: Testing ✅
 
-**Estimated**: 1 day
-
-Add new error types:
-
-- `NoMatchingMixfixPattern`
-- `AmbiguousMixfix`
-- `MixfixArityMismatch`
-
-### Phase 4: Testing (🔲 Not Started)
-
-**Estimated**: 1-2 days
-
-Create test files:
+Comprehensive test suite created:
 
 - `jl4/examples/ok/mixfix-basic.l4`
-- `jl4/examples/not-ok/tc/mixfix-errors.l4`
+- `jl4/examples/ok/mixfix-multiline.l4`
+- `jl4/examples/ok/mixfix-over.l4`
+- `jl4/examples/ok/mixfix-with-variables.l4`
+- `jl4/examples/ok/nested-where-shadowed-multiword-mixfix.l4`
+- `jl4/examples/not-ok/tc/mixfix-wrong-keyword.l4`
+- Golden test files added and passing
 
-### Phase 5: Documentation (🔲 Not Started)
+### Phase 5: Documentation ✅
 
-**Estimated**: 1 day
+Comprehensive documentation completed:
 
-Update user-facing docs
+- Spec refreshed after postfix fix (commit 13041620)
+- WHERE constraint documentation
+- This status tracker
 
 ## Design Decisions Made
 
@@ -159,36 +146,51 @@ _ `copulated with` _ `to make` _ MEANS ...
 alice `copulated with` bob `to make` charlie
 ```
 
-## Next Steps
+## Key Commits
 
-1. **Decide on AST approach**: New constructors vs extending existing
-2. **Begin Phase 1**: Update AppForm and all pattern matchers
-3. **Iterative testing**: Add tests after each phase
-4. **Get feedback**: Share examples with legal domain experts
+Major implementation milestones:
 
-## How to Continue
+- `9078de56` - Support indentation-aware multiline mixfix
+- `4ba6ff97` - Add parser mixfix hint pass
+- `63269341` - Guard mixfix chains with hint registry
+- `dc96f4c8` - Support WHERE-local postfix mixfix
+- `2a02e44a` - Fix bare mixfix/postfix operators with variables
+- `8269055a` - Allow bare identifiers for postfix mixfix operators
+- `13041620` - Refresh mixfix docs after postfix fix
+- `77dbf039` - Document WHERE vs LET constraint for mixfix operators
 
-```bash
-# Checkout the branch
-git checkout mengwong/mixfix
-
-# See current status
-git log --oneline
-
-# Continue with Phase 1 (AST changes)
-# Edit jl4-core/src/L4/Syntax.hs
-# Then update all 15 files that pattern match on AppForm
-```
+Merged via:
+- PR #707 - mixfix-let-where
+- PR #706 - mixfix-nix-fix
+- PR #704 - mengwong/multiline-mixfix
 
 ## Related Files
 
-- Spec: `doc/mixfix-operators.md`
-- Implementation Plan: `doc/mixfix-implementation-plan.md`
+Documentation:
+- Spec: `doc/done/mixfix-operators.md`
+- Implementation Plan: `doc/done/mixfix-implementation-plan.md`
+- This Status Tracker: `doc/done/MIXFIX-STATUS.md`
+
+Test Files:
+- `jl4/examples/ok/mixfix-basic.l4`
+- `jl4/examples/ok/mixfix-multiline.l4`
+- `jl4/examples/ok/mixfix-over.l4`
+- `jl4/examples/ok/mixfix-with-variables.l4`
+- `jl4/examples/ok/nested-where-shadowed-multiword-mixfix.l4`
+- `jl4/examples/not-ok/tc/mixfix-wrong-keyword.l4`
+
+Implementation:
 - Lexer: `jl4-core/src/L4/Lexer.hs`
 - Syntax: `jl4-core/src/L4/Syntax.hs`
 - Parser: `jl4-core/src/L4/Parser.hs`
 - Type Checker: `jl4-core/src/L4/TypeCheck.hs`
 
-## Questions or Feedback?
+## Summary
 
-See the spec and implementation plan for detailed design rationale. The foundation is in place - ready for the next developer to continue!
+Mixfix operators are fully implemented and production-ready. The feature supports:
+- Infix, postfix, and arbitrary mixfix patterns
+- Multiline indentation-aware syntax
+- WHERE-local operators
+- Type-directed disambiguation
+- Comprehensive error handling
+- Full test coverage
