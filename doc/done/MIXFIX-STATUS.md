@@ -160,6 +160,7 @@ Major implementation milestones:
 - `77dbf039` - Document WHERE vs LET constraint for mixfix operators
 
 Merged via:
+
 - PR #707 - mixfix-let-where
 - PR #706 - mixfix-nix-fix
 - PR #704 - mengwong/multiline-mixfix
@@ -167,11 +168,13 @@ Merged via:
 ## Related Files
 
 Documentation:
+
 - Spec: `doc/done/mixfix-operators.md`
 - Implementation Plan: `doc/done/mixfix-implementation-plan.md`
 - This Status Tracker: `doc/done/MIXFIX-STATUS.md`
 
 Test Files:
+
 - `jl4/examples/ok/mixfix-basic.l4`
 - `jl4/examples/ok/mixfix-multiline.l4`
 - `jl4/examples/ok/mixfix-over.l4`
@@ -180,6 +183,7 @@ Test Files:
 - `jl4/examples/not-ok/tc/mixfix-wrong-keyword.l4`
 
 Implementation:
+
 - Lexer: `jl4-core/src/L4/Lexer.hs`
 - Syntax: `jl4-core/src/L4/Syntax.hs`
 - Parser: `jl4-core/src/L4/Parser.hs`
@@ -188,6 +192,7 @@ Implementation:
 ## Summary
 
 Mixfix operators are fully implemented and production-ready. The feature supports:
+
 - Infix, postfix, and arbitrary mixfix patterns
 - Multiline indentation-aware syntax
 - WHERE-local operators
