@@ -136,12 +136,12 @@ cabal install exe:jl4-lsp --overwrite-policy=always
 
 ### Specifications
 
-Task specifications and feature designs are organized in the `doc/` directory:
+Task specifications and feature designs are organized in the `doc/dev/specs/` directory:
 
-- **`doc/todo/`** - Specifications for planned features and tasks in progress (e.g., `EXPORT-SYNTAX-SPEC.md`, `BOOLEAN-MINIMIZATION-SPEC.md`)
-- **`doc/done/`** - Completed specifications for reference (e.g., `BIDIRECTIONAL-TYPE-CHECKING-SPEC.md`, `STRING-CONCAT-SPEC.md`)
+- **`doc/dev/specs/todo/`** - Specifications for planned features and tasks in progress (e.g., `EXPORT-SYNTAX-SPEC.md`, `BOOLEAN-MINIMIZATION-SPEC.md`)
+- **`doc/dev/specs/done/`** - Completed specifications for reference (e.g., `BIDIRECTIONAL-TYPE-CHECKING-SPEC.md`, `STRING-CONCAT-SPEC.md`)
 
-When working on a feature, check if there's an existing spec in `doc/todo/` that describes the requirements.
+When working on a feature, check if there's an existing spec in `doc/dev/specs/todo/` that describes the requirements.
 
 ### GitHub Issues
 
@@ -163,8 +163,8 @@ Reviewing merged PRs helps understand what work has been done recently, ongoing 
 
 **Always update documentation alongside code changes.** When completing work:
 
-1. **Update the relevant spec** in `doc/todo/` to reflect what was implemented, any deviations from the original plan, and remaining work
-2. **Move completed specs** from `doc/todo/` to `doc/done/` when a feature is fully implemented
+1. **Update the relevant spec** in `doc/dev/specs/todo/` to reflect what was implemented, any deviations from the original plan, and remaining work
+2. **Move completed specs** from `doc/dev/specs/todo/` to `doc/dev/specs/done/` when a feature is fully implemented
 3. **Update related docs** (e.g., `doc/README.md`, tutorials) if the change affects user-facing behavior
 4. **Note any new limitations or known issues** discovered during implementation
 

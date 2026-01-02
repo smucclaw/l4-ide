@@ -27,7 +27,7 @@ This document specifies how `@ref` annotations should be attached to AST nodes. 
 | Annotation | Spec                             | Attachment Rule                                    |
 | ---------- | -------------------------------- | -------------------------------------------------- |
 | `@nlg`     | (implemented)                    | Attaches to `Name` nodes based on source position  |
-| `@desc`    | `doc/todo/EXPORT-SYNTAX-SPEC.md` | Attaches to immediately following `TopDecl`        |
+| `@desc`    | `doc/dev/specs/todo/EXPORT-SYNTAX-SPEC.md` | Attaches to immediately following `TopDecl`        |
 | `@ref`     | this document                    | Attaches to **any** immediately following AST node |
 
 ## Design
@@ -163,5 +163,5 @@ Add test files:
 ## References
 
 - `jl4-core/src/L4/Parser/ResolveAnnotation.hs` — existing `@nlg` attachment pattern
-- `doc/todo/EXPORT-SYNTAX-SPEC.md` — `@desc` attachment specification
+- `doc/dev/specs/todo/EXPORT-SYNTAX-SPEC.md` — `@desc` attachment specification
 - Issue #635 — decision service improvements (related)

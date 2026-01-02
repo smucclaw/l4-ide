@@ -1,6 +1,6 @@
 # Temporal Work Master Tracker
 
-This note summarizes the current state of temporal support across l4-ide and opm2l4 and records decisions from the temporals-2 branch review. It aligns the historical experiments with the latest proposal `~/src/legalese/opm2l4/docs/PROPOSAL_L4_IDE_TEMPORAL.md` and `doc/todo/TEMPORAL_EVAL_SPEC.md`.
+This note summarizes the current state of temporal support across l4-ide and opm2l4 and records decisions from the temporals-2 branch review. It aligns the historical experiments with the latest proposal `~/src/legalese/opm2l4/docs/PROPOSAL_L4_IDE_TEMPORAL.md` and `doc/dev/specs/todo/TEMPORAL_EVAL_SPEC.md`.
 
 ## Current Findings
 

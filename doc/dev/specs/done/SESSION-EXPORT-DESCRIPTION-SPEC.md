@@ -372,6 +372,6 @@ Once description extraction is working, consider:
 
 ## References
 
-- EXPORT syntax spec: `doc/done/EXPORT-SYNTAX-SPEC.md`
-- DESC annotation spec: `doc/todo/DESC-ANNOTATION-SPEC.md`
+- EXPORT syntax spec: `doc/dev/specs/done/EXPORT-SYNTAX-SPEC.md`
+- DESC annotation spec: `doc/dev/specs/todo/DESC-ANNOTATION-SPEC.md`
 - Decision service README: `jl4-decision-service/README.md`

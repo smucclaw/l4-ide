@@ -701,7 +701,7 @@ In a future version, consider:
 - [ ] All four phases implemented and tested
 - [ ] Test suite passes (`cabal test all`)
 - [ ] Documentation updated
-- [ ] Spec moved to `doc/done/`
+- [ ] Spec moved to `doc/dev/specs/done/`
 - [ ] Branch merged to main
 
 **Minimum Viable Product (MVP):**

@@ -5,7 +5,7 @@
 ### Completed
 
 - ✅ `doc/mixfix-operators.md` specification kept current with regression coverage
-- ✅ Type-checker reinterpretation for multi-operand mixfix calls (`tryMatchMixfixCall`, Dec 2024; see `doc/done/MIXFIX-USAGE-SPAN-FIX.md`)
+- ✅ Type-checker reinterpretation for multi-operand mixfix calls (`tryMatchMixfixCall`, Dec 2024; see `doc/dev/specs/done/MIXFIX-USAGE-SPAN-FIX.md`)
 - ✅ Type-checker reinterpretation for postfix mixfix calls with bare variables (`reinterpretPostfixAppIfNeeded`, Dec 2025; see `doc/issues/POSTFIX-WITH-VARIABLES-BUG.md`)
 - ✅ Regression programs `jl4/examples/ok/postfix-with-variables.l4` and `jl4/examples/ok/mixfix-with-variables.l4`
 - ✅ Parser hint scaffolding (`L4.Parser.MixfixRegistry`, Dec 2025) builds a mixfix keyword registry before the second parse so syntax/IDE layers can opt into registry-aware parsing
