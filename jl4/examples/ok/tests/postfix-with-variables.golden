@@ -1,0 +1,19 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+postfix-with-variables.l4:15:1-12:
+  25
+postfix-with-variables.l4:23:1-17:
+  25
+postfix-with-variables.l4:32:1-12:
+  25
+postfix-with-variables.l4:39:1-23:
+  25
+postfix-with-variables.l4:46:1-29:
+  25
+postfix-with-variables.l4:55:1-23:
+  25
+postfix-with-variables.l4:65:1-24:
+  25
+postfix-with-variables.l4:79:1-37:
+  12

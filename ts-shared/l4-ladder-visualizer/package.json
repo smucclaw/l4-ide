@@ -72,6 +72,7 @@
   },
   "dependencies": {
     "@dagrejs/dagre": "^1.1.4",
+    "@repo/boolean-analysis": "*",
     "@repo/layout-ir": "*",
     "@repo/type-utils": "*",
     "@repo/viz-expr": "*",

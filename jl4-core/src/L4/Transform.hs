@@ -15,7 +15,7 @@ nnf (Not _ e)         = neg (nnf e)
 nnf (And _ e1 e2)     = And emptyAnno (nnf e1) (nnf e2)
 nnf (Or _ e1 e2)      = Or emptyAnno (nnf e1) (nnf e2)
 nnf (Implies _ e1 e2) = nnf (implies e1 e2)
-nnf (Where _ e _ds)   = nnf e -- TODO: lossy
+nnf (Where ann e ds)  = Where ann (nnf e) ds
 nnf e                 = e
 
 cnf :: Expr Resolved -> Expr Resolved
@@ -24,7 +24,7 @@ cnf (And _ e1 e2)            = And emptyAnno (cnf e1) (cnf e2)
 cnf (Or _ (Or _ e1 e2) e3)   = cnf (Or emptyAnno e1 (Or emptyAnno e2 e3))
 cnf (Or _ e1 e2)             = distr (cnf e1) (cnf e2)
 cnf (Implies _ e1 e2)        = cnf (implies e1 e2)
-cnf (Where _ e _ds)          = cnf e -- TODO: lossy
+cnf (Where ann e ds)         = Where ann (cnf e) ds
 cnf e                        = e
 
 -- | Try to exploit distributivity laws.
@@ -42,7 +42,7 @@ neg (Implies _ e1 e2) = neg (implies e1 e2)
 -- the following would be great, but we'd have to check the types
 -- neg (Equals _ e1 e2)  = equivExpr e1 e2
 -- neg (IfThenElse _ e1 e2 e3) = ...
-neg (Where _ e _ds)   = neg e -- TODO: lossy
+neg (Where ann e ds)  = Where ann (neg e) ds
 neg e                 = Not emptyAnno e
 
 -- | Classically interpret implication.
@@ -52,5 +52,4 @@ implies e1 e2 = Or emptyAnno (Not emptyAnno e1) e2
 -- | Classically interpret equivalence.
 equiv :: Expr Resolved -> Expr Resolved -> Expr Resolved
 equiv e1 e2 = And emptyAnno (implies e1 e2) (implies e2 e1)
-
 

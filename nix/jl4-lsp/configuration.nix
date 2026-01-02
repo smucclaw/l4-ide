@@ -19,19 +19,26 @@
   };
 
   config.services.nginx.virtualHosts.${config.networking.domain}.locations = {
-    ${config.services.jl4-lsp.path}.proxyPass =
-      "http://localhost:${toString config.services.jl4-lsp.port}";
+    ${config.services.jl4-lsp.path} = {
+      proxyPass = "http://localhost:${toString config.services.jl4-lsp.port}";
+      proxyWebsockets = true;
+      extraConfig = ''
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+      '';
+    };
   };
 
   config.systemd.services.jl4-lsp = {
     enable = true;
     description = "jl4-lsp";
-    after = [ "network.target" ];
+    after = [ "network.target" "nginx.service" ];
+    requires = [ "nginx.service" ];
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
       ExecStart = ''
         ${pkgs.callPackage ./package.nix { }}/bin/jl4-lsp ws \
-          --host localhost \
+          --host "::" \
           --port ${toString config.services.jl4-lsp.port} \
           --cwd ${../../jl4-core/libraries}
       '';

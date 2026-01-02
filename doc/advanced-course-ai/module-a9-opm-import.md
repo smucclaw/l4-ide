@@ -139,7 +139,7 @@ git clone https://github.com/smucclaw/opm2l4
 cd opm2l4
 
 # Install dependencies
-npm install
+npm ci
 
 # Build
 npm run build

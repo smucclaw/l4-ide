@@ -1,0 +1,19 @@
+-- Vertical LIST block syntax inside LET...IN (inline LET binding).
+--
+-- This is the "natural" layout people try first:
+--   LET name BE
+--     LIST
+--       ...
+--
+-- This should parse and typecheck.
+
+DECIDE numbersFromLetInlineJson IS
+  LET numbers BE
+    LIST
+      1
+      2
+      3
+  IN JSONENCODE numbers
+
+#EVAL numbersFromLetInlineJson
+

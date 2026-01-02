@@ -1,0 +1,10 @@
+`testLetInIfCondition` with 5
+`testLetInIfCondition` with 15
+`testLetInIfBranches` with 5
+`testLetInIfBranches` with -3
+`testLetInIfAll` with 10
+`testLetInIfAll` with 3
+`testLetAsFunctionArg`
+`testNestedFunctionWithLet`
+`testLetInArithmetic` with 5
+`testLetInArithmetic` with 100

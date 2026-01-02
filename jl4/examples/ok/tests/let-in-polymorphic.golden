@@ -1,0 +1,11 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+let-in-polymorphic.l4:10:1-23:
+  52
+let-in-polymorphic.l4:19:1-20:
+  42
+let-in-polymorphic.l4:27:1-20:
+  42
+let-in-polymorphic.l4:37:1-22:
+  21

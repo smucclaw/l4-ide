@@ -1,0 +1,49 @@
+{
+    "$defs": {
+        "Nat": {
+            "oneOf": [
+                {
+                    "properties": {
+                        "tag": {
+                            "const": "Zero"
+                        }
+                    },
+                    "required": [
+                        "tag"
+                    ],
+                    "type": "object"
+                },
+                {
+                    "properties": {
+                        "pred": {
+                            "$ref": "#/$defs/Nat"
+                        },
+                        "tag": {
+                            "const": "Suc"
+                        }
+                    },
+                    "required": [
+                        "tag",
+                        "pred"
+                    ],
+                    "type": "object"
+                }
+            ]
+        }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "m": {
+            "$ref": "#/$defs/Nat"
+        },
+        "n": {
+            "$ref": "#/$defs/Nat"
+        }
+    },
+    "required": [
+        "m",
+        "n"
+    ],
+    "title": "add",
+    "type": "object"
+}

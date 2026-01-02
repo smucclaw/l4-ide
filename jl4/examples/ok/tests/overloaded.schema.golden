@@ -1,0 +1,34 @@
+{
+    "$defs": {
+        "Vector": {
+            "properties": {
+                "x": {
+                    "$ref": "#/$defs/NUMBER"
+                },
+                "y": {
+                    "$ref": "#/$defs/NUMBER"
+                }
+            },
+            "required": [
+                "x",
+                "y"
+            ],
+            "type": "object"
+        }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "a": {
+            "$ref": "#/$defs/Vector"
+        },
+        "b": {
+            "$ref": "#/$defs/Vector"
+        }
+    },
+    "required": [
+        "a",
+        "b"
+    ],
+    "title": "__PLUS__",
+    "type": "object"
+}

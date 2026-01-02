@@ -149,8 +149,8 @@ pushToDecisionService env sessionid jl4program = case env.decisionServiceUrl of
   Just baseUrl -> do
     let
       uuidText = UUID.toText sessionid
-      -- Strip directive lines (like #EVAL, #ASSERT) to prevent unintended execution
-      cleanedProgram = stripDirectives jl4program
+      -- Note: Decision service applies filterIdeDirectives (AST-level filtering)
+      -- when it parses and evaluates the program, so we send it as-is
       -- Build the FunctionImplementation JSON that the decision service expects
       -- Note: implementation uses array format [["jl4", "program"]] for Map EvalBackend Text
       functionImpl = Aeson.object
@@ -158,7 +158,7 @@ pushToDecisionService env sessionid jl4program = case env.decisionServiceUrl of
             [ "type" .= ("function" :: Text)
             , "function" .= Aeson.object
                 [ "name" .= uuidText
-                , "description" .= cleanedProgram
+                , "description" .= ("" :: Text)  -- Let decision service extract from @desc annotations
                 , "parameters" .= Aeson.object
                     [ "type" .= ("object" :: Text)
                     , "properties" .= Aeson.object []
@@ -167,7 +167,7 @@ pushToDecisionService env sessionid jl4program = case env.decisionServiceUrl of
                 , "supportedBackends" .= (["jl4"] :: [Text])
                 ]
             ]
-        , "implementation" .= [[("jl4" :: Text), cleanedProgram]]
+        , "implementation" .= [[("jl4" :: Text), jl4program]]
         ]
       url = baseUrl <> "/functions/" <> Text.unpack uuidText
 
@@ -184,14 +184,6 @@ pushToDecisionService env sessionid jl4program = case env.decisionServiceUrl of
     putStrLn $ "Pushed function " <> Text.unpack uuidText <> " to decision service"
   `catch` \(e :: HTTP.HttpException) -> do
     putStrLn $ "Warning: Failed to push to decision service: " <> show e
-
--- | Strip or double-comment all lines beginning with # (directives like #EVAL, #ASSERT)
-stripDirectives :: Text -> Text
-stripDirectives = Text.unlines . map processLine . Text.lines
-  where
-    processLine line
-      | Text.isPrefixOf "#" (Text.stripStart line) = "##" <> line
-      | otherwise = line
 
 -- | to avoid orphan instance
 withToFieldUUID :: ((SQLite.ToField UUID) => r) -> r

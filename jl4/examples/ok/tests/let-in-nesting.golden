@@ -1,0 +1,13 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+let-in-nesting.l4:10:1-25:
+  30
+let-in-nesting.l4:16:1-22:
+  6
+let-in-nesting.l4:25:1-24:
+  200
+let-in-nesting.l4:32:1-22:
+  55
+let-in-nesting.l4:41:1-25:
+  30

@@ -10,7 +10,10 @@ import L4.Annotation
 -- import qualified L4.Evaluate.Value as Eval
 import qualified L4.Evaluate.ValueLazy as Eval
 import qualified L4.EvaluateLazy as Eval
+import L4.EvaluateLazy.Machine (EvalException)
 import L4.EvaluateLazy.Trace
+import qualified L4.EvaluateLazy.GraphViz2 as GraphViz
+import L4.TracePolicy (apiDefaultPolicy)
 import L4.Names
 import L4.Print
 import qualified L4.Print as Print
@@ -98,8 +101,9 @@ evaluateWithCompiled
   -> CompiledModule
   -> [(Text, Maybe FnLiteral)]
   -> TraceLevel
+  -> Bool
   -> ExceptT EvaluatorError IO ResponseWithReason
-evaluateWithCompiled filepath fnDecl compiled params traceLevel = do
+evaluateWithCompiled filepath fnDecl compiled params traceLevel includeGraphViz = do
   -- Extract parameter types from the compiled function definition
   let paramTypes = extractParamTypes compiled.compiledDecide
 
@@ -120,7 +124,7 @@ evaluateWithCompiled filepath fnDecl compiled params traceLevel = do
   case mEvalRes of
     Nothing -> throwError $ InterpreterError (mconcat errs)
     Just [Eval.MkEvalDirectiveResult{result, trace}] ->
-      handleEvalResult result trace genCode.decodeFailedSentinel traceLevel
+      handleEvalResult result trace genCode.decodeFailedSentinel traceLevel includeGraphViz compiled.compiledModule
     Just [] -> throwError $ InterpreterError "L4: No #EVAL found in the program."
     Just _xs -> throwError $ InterpreterError "L4: More than ONE #EVAL found in the program."
 
@@ -158,15 +162,16 @@ createFunction filepath fnDecl fnImpl moduleContext = do
     Right compiled -> do
       -- Fast path: use precompiled module
       let runFn = RunFunction
-            { runFunction = \params' _outFilter traceLevel ->
-                evaluateWithCompiled filepath fnDecl compiled params' traceLevel
+            { runFunction = \params' _outFilter traceLevel includeGraphViz ->
+                evaluateWithCompiled filepath fnDecl compiled params' traceLevel includeGraphViz
             }
       pure (runFn, Just compiled)
 
     Left _err -> do
       -- Slow path fallback: use original implementation
       let runFn = RunFunction
-            { runFunction = \params' _outFilter {- TODO: how to handle the outFilter? -} traceLevel -> do
+            { runFunction = \params' _outFilter traceLevel includeGraphViz -> do
+                -- TODO: consider supporting output filters in slow path
                 -- 1. Typecheck original source to get function signature
                 (initErrs, mTcRes) <- typecheckModule filepath fnImpl moduleContext
 
@@ -200,7 +205,7 @@ createFunction filepath fnDecl fnImpl moduleContext = do
                 case mEvalRes of
                   Nothing -> throwError $ InterpreterError (mconcat errs)
                   Just [Eval.MkEvalDirectiveResult{result, trace}] ->
-                    handleEvalResult result trace genCode.decodeFailedSentinel traceLevel
+                    handleEvalResult result trace genCode.decodeFailedSentinel traceLevel includeGraphViz tcRes.module'
                   Just [] -> throwError $ InterpreterError "L4: No #EVAL found in the program."
                   Just _xs -> throwError $ InterpreterError "L4: More than ONE #EVAL found in the program."
             }
@@ -245,8 +250,10 @@ handleEvalResult
   -> Maybe EvalTrace
   -> Text
   -> TraceLevel
+  -> Bool
+  -> Module Resolved
   -> ExceptT EvaluatorError IO ResponseWithReason
-handleEvalResult result trace _sentinel traceLevel = case result of
+handleEvalResult result trace _sentinel traceLevel includeGraphViz mModule = case result of
   Eval.Assertion _ -> throwError $ InterpreterError "L4: Got an assertion instead of a normal result."
   Eval.Reduction (Left evalExc) -> throwError $ InterpreterError $ Text.show evalExc
   Eval.Reduction (Right val) -> do
@@ -274,6 +281,19 @@ handleEvalResult result trace _sentinel traceLevel = case result of
       , reasoning = case traceLevel of
           TraceNone -> emptyTree
           TraceFull -> buildReasoningTree trace
+      , graphviz =
+          if includeGraphViz && traceLevel == TraceFull
+            then
+              fmap
+                ( \tr ->
+                    GraphVizResponse
+                      { dot = GraphViz.traceToGraphViz GraphViz.defaultGraphVizOptions (Just mModule) tr
+                      , png = Nothing
+                      , svg = Nothing
+                      }
+                )
+                trace
+            else Nothing
       }
 
 
@@ -321,6 +341,7 @@ valueToFnLiteral = \case
   Eval.ValNil -> pure $ FnArray []
   Eval.ValCons v1 v2 -> nfToFnLiteral v1 >>= \ l1 -> listToFnLiteral (DList.singleton l1) v2
   Eval.ValClosure{} -> throwError $ InterpreterError "#EVAL produced function closure."
+  Eval.ValNullaryBuiltinFun{} -> throwError $ InterpreterError "#EVAL produced builtin closure."
   Eval.ValBinaryBuiltinFun{} -> throwError $ InterpreterError "#EVAL produced function closure."
   Eval.ValUnaryBuiltinFun{} -> throwError $ InterpreterError "#EVAL produced builtin closure."
   Eval.ValTernaryBuiltinFun{} -> throwError $ InterpreterError "#EVAL produced builtin closure."
@@ -359,7 +380,9 @@ listToFnLiteral _acc (Eval.MkNF _)                   =
 
 typecheckModule :: (MonadIO m) => FilePath -> Text -> ModuleContext -> m ([Text], Maybe Rules.TypeCheckResult)
 typecheckModule file input moduleContext = do
-  liftIO $ oneshotL4ActionAndErrors file \nfp -> do
+  fixedNow <- liftIO Eval.readFixedNowEnv
+  evalConfig <- liftIO $ Eval.resolveEvalConfig fixedNow apiDefaultPolicy
+  liftIO $ oneshotL4ActionAndErrors evalConfig file \nfp -> do
     let
       uri = normalizedFilePathToUri nfp
     -- Add all module files as virtual files for IMPORT resolution
@@ -372,8 +395,10 @@ typecheckModule file input moduleContext = do
     Shake.use Rules.TypeCheck uri
 
 evaluateModule :: (MonadIO m) => FilePath -> Text -> ModuleContext -> m ([Text], Maybe [Eval.EvalDirectiveResult])
-evaluateModule file input moduleContext =
-  liftIO $ oneshotL4ActionAndErrors file \nfp -> do
+evaluateModule file input moduleContext = do
+  fixedNow <- liftIO Eval.readFixedNowEnv
+  evalConfig <- liftIO $ Eval.resolveEvalConfig fixedNow apiDefaultPolicy
+  liftIO $ oneshotL4ActionAndErrors evalConfig file \nfp -> do
     let
       uri = normalizedFilePathToUri nfp
     -- Add all module files as virtual files for IMPORT resolution
@@ -407,32 +432,32 @@ toReasoningTree Nothing  = ReasoningTree (ReasonNode [] []) []
 toReasoningTree (Just t) = toReasoningTree' t
 
 toReasoningTree' :: EvalTrace -> ReasoningTree
-toReasoningTree' (Trace [] val) =
+toReasoningTree' (Trace lbl [] val) =
   ReasoningTree
     { payload =
         ReasonNode
-          { exampleCode = []
-          , explanation =
-              [ "Result: " <> case val of
-                  Left exc -> Text.unlines (Eval.prettyEvalException exc)
-                  Right v -> Print.prettyLayout v
-              ]
+          { exampleCode = labelExample lbl
+          , explanation = [resultLine val]
           }
     , children = []
     }
-toReasoningTree' (Trace [(expr, children)] val) =
+toReasoningTree' (Trace lbl [(expr, children)] val) =
   ReasoningTree
     { payload =
         ReasonNode
-          { exampleCode =
-              [Print.prettyLayout expr]
-          , explanation =
-              [ "Result: " <> case val of
-                  Left exc -> Text.unlines (Eval.prettyEvalException exc)
-                  Right v -> Print.prettyLayout v
-              ]
+          { exampleCode = labelExample lbl <> [Print.prettyLayout expr]
+          , explanation = [resultLine val]
           }
     , children = fmap toReasoningTree' children
     }
-toReasoningTree' (Trace ((expr, children) : rest) val) =
-  toReasoningTree' (Trace [(expr, children ++ [Trace rest val])] val)
+toReasoningTree' (Trace lbl ((expr, children) : rest) val) =
+  toReasoningTree' (Trace lbl [(expr, children ++ [Trace lbl rest val])] val)
+
+labelExample :: Maybe Resolved -> [Text]
+labelExample = maybe [] (\resolved -> [nameToText (getOriginal resolved)])
+
+resultLine :: Either EvalException Eval.NF -> Text
+resultLine val =
+  "Result: " <> case val of
+    Left exc -> Text.unlines (Eval.prettyEvalException exc)
+    Right v -> Print.prettyLayout v

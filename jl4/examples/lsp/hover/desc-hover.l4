@@ -1,0 +1,22 @@
+-- Test file for @desc annotation hover functionality
+
+-- Test 1: GIVEN param with @desc (should show in hover)
+@desc This function tests if a person qualifies
+GIVEN age IS A NUMBER @desc The age of the claimant in years
+      income IS A NUMBER @desc Annual income in dollars
+      hasInsurance IS A BOOLEAN
+DECIDE qualifies IF
+  age >= 18
+  AND income < 50000
+  AND hasInsurance
+
+-- Test 2: DECLARE with @desc on fields (for fallback testing)
+@desc A person record type
+DECLARE Person
+  HAS name IS A STRING @desc The person's full legal name
+      salary IS A NUMBER @desc Annual salary in USD
+      isEmployed IS A BOOLEAN
+
+-- Test 3: Reference to Person field (should use DECLARE's @desc as fallback)
+GIVEN employee IS A Person
+DECIDE employeeName IS employee's name

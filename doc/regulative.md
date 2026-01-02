@@ -447,12 +447,17 @@ We can replace the `DO` with the following operators. Each one differs
 in that, if the `HENCE` or `LEST` elements are omitted from the
 stanza, default values are interpolated.
 
-| deontic modal | if the action | default `HENCE` | if the action | default `LEST` |
-| ------------- | ------------- | --------------- | ------------- | -------------- |
-| DO            | is taken      | required        | is not taken  | required       |
-| MUST          | is taken      | FULFILLED       | is not taken  | BREACH         |
-| MAY           | is taken      | FULFILLED       | is not taken  | FULFILLED      |
-| SHANT         | is not taken  | FULFILLED       | is taken      | BREACH         |
+| deontic modal | HENCE triggers when... | default `HENCE` | LEST triggers when...        | default `LEST` |
+| ------------- | ---------------------- | --------------- | ---------------------------- | -------------- |
+| DO            | action is taken        | required        | deadline passes              | required       |
+| MUST          | action is taken        | FULFILLED       | deadline passes              | BREACH         |
+| MAY           | action is taken        | FULFILLED       | deadline passes              | FULFILLED      |
+| SHANT         | deadline passes        | FULFILLED       | action is taken (violation!) | BREACH         |
+
+**Note:** For `SHANT` / `MUST NOT`, the polarity is flipped from `MUST` to match
+natural English: "You SHANT smoke LEST you breach" reads as "don't smoke,
+**lest** (for fear that) you face consequences." The LEST clause triggers when
+the prohibited action occurs, not when the deadline passes.
 
 ## Is UPON sufficient or do we need a WHENCE?
 

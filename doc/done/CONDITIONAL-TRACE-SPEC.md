@@ -94,7 +94,7 @@ curl -X POST /functions/myFunc/evaluation \
   -H "X-L4-Trace: none" \
   -d '{"fnArguments": {"x": 5}}'
 
-# Full trace (current behavior, also the default)
+# Full trace (opt-in)
 curl -X POST /functions/myFunc/evaluation \
   -H "X-L4-Trace: full" \
   -d '{"fnArguments": {"x": 5}}'
@@ -155,7 +155,7 @@ The header takes precedence if both are provided.
 
 ## Response Formats
 
-### With Trace (`X-L4-Trace: full` or default)
+### With Trace (`X-L4-Trace: full`)
 
 No change from current behavior:
 
@@ -216,11 +216,11 @@ instance FromHttpApiData TraceLevel where
 
 -- | Parse trace level from header value
 parseTraceHeader :: Maybe ByteString -> TraceLevel
-parseTraceHeader Nothing = TraceFull  -- Default to full trace
+parseTraceHeader Nothing = TraceNone  -- Default to no trace
 parseTraceHeader (Just bs) = case Text.toLower (decodeUtf8 bs) of
   "none" -> TraceNone
   "full" -> TraceFull
-  _ -> TraceFull  -- Default to full on invalid value
+  _ -> TraceNone  -- Default to no trace on invalid value
 ```
 
 ### Step 2: Add Header to API
@@ -273,7 +273,7 @@ evalFunctionHandler name' mTraceHeader mTraceParam args = do
 determineTraceLevel :: Maybe Text -> Maybe TraceLevel -> TraceLevel
 determineTraceLevel (Just headerVal) _ = parseTraceHeader (Just $ encodeUtf8 headerVal)
 determineTraceLevel Nothing (Just paramVal) = paramVal
-determineTraceLevel Nothing Nothing = TraceFull  -- Default
+determineTraceLevel Nothing Nothing = TraceNone  -- Default
 ```
 
 ### Step 4: Pass Trace Level to Evaluator
@@ -431,7 +431,7 @@ traceHeaderSchema = mempty
   & #schema ?~ OpenApi.Inline (mempty
       & #type ?~ OpenApi.OpenApiString
       & #enum ?~ ["none", "full"]
-      & #default_ ?~ "full"
+      & #default_ ?~ "none"
     )
 ```
 
@@ -442,18 +442,18 @@ traceHeaderSchema = mempty
 1. **Header parsing**:
 
    ```haskell
-   parseTraceHeader Nothing == TraceFull
+   parseTraceHeader Nothing == TraceNone
    parseTraceHeader (Just "none") == TraceNone
    parseTraceHeader (Just "NONE") == TraceNone  -- case insensitive
    parseTraceHeader (Just "full") == TraceFull
-   parseTraceHeader (Just "invalid") == TraceFull  -- default
+   parseTraceHeader (Just "invalid") == TraceNone  -- default
    ```
 
 2. **Trace level precedence**:
    ```haskell
    determineTraceLevel (Just "none") (Just TraceFull) == TraceNone  -- header wins
    determineTraceLevel Nothing (Just TraceNone) == TraceNone
-   determineTraceLevel Nothing Nothing == TraceFull
+   determineTraceLevel Nothing Nothing == TraceNone
    ```
 
 ### Integration Tests
@@ -472,7 +472,7 @@ traceHeaderSchema = mempty
 3. **Default behavior**:
 
    - Send request without header
-   - Verify response has full trace (backward compatible)
+   - Verify response omits reasoning (default TraceNone)
 
 4. **Query parameter fallback**:
    - Send request with `?trace=none`
@@ -488,22 +488,22 @@ traceHeaderSchema = mempty
 
 ### Backward Compatibility
 
-- **Default is full trace**: Existing clients get same behavior
+- **Default is now TraceNone**: Responses stay minimal unless the client requests trace data
 - **Response schema unchanged**: `reasoning` field always present (may be empty)
-- **No breaking changes**: All existing requests continue to work
+- **Explicit opt-in for traces**: Clients needing reasoning must send `X-L4-Trace: full` or `?trace=full`
 
 ### Client Updates
 
-Clients wanting smaller responses simply add the header:
+Clients wanting full traces now opt in explicitly:
 
 ```bash
-# Before (no change needed)
+# Default (no trace)
 curl -X POST /functions/myFunc/evaluation \
   -d '{"fnArguments": {"x": 5}}'
 
-# After (opt-in to smaller response)
+# Opt-in to trace detail
 curl -X POST /functions/myFunc/evaluation \
-  -H "X-L4-Trace: none" \
+  -H "X-L4-Trace: full" \
   -d '{"fnArguments": {"x": 5}}'
 ```
 
@@ -543,20 +543,20 @@ X-L4-Trace: stream
 
 ### ✅ Completed (2025-11-29, commit 131dd4a0)
 
-| Component                           | Status  | Location                                          | Notes                                      |
-| ----------------------------------- | ------- | ------------------------------------------------- | ------------------------------------------ |
-| TraceLevel type definition          | ✅ Done | `jl4-decision-service/src/Backend/Api.hs:71-81`   | Defines TraceNone and TraceFull            |
-| FromHttpApiData instance            | ✅ Done | `jl4-decision-service/src/Backend/Api.hs:77-81`   | Parses "none" and "full" from query params |
-| X-L4-Trace header support           | ✅ Done | `jl4-decision-service/src/Server.hs:172`          | Added to evalFunction endpoint             |
-| Query param fallback (?trace=)      | ✅ Done | `jl4-decision-service/src/Server.hs:173`          | Added to evalFunction endpoint             |
-| Batch endpoint support              | ✅ Done | `jl4-decision-service/src/Server.hs:182-183`      | Both header and query param                |
-| TraceLevel parameter in RunFunction | ✅ Done | `jl4-decision-service/src/Backend/Api.hs:85-87`   | Added to function signature                |
-| Conditional directive selection     | ✅ Done | `jl4-decision-service/src/Backend/Jl4.hs:68-71`   | Uses #EVAL or #EVALTRACE                   |
-| mkEval function (no trace)          | ✅ Done | `jl4-decision-service/src/Backend/Jl4.hs:407-408` | Creates LazyEval directive                 |
-| Empty tree response                 | ✅ Done | `jl4-decision-service/src/Backend/Jl4.hs:91-93`   | Returns emptyTree for TraceNone            |
-| OpenAPI schema documentation        | ✅ Done | `jl4-decision-service/src/Schema.hs:47-51`        | ToParamSchema instance with enum           |
-| Backward compatibility              | ✅ Done | All                                               | Default is TraceFull                       |
-| Header precedence over query        | ✅ Done | `jl4-decision-service/src/Server.hs:293-296`      | determineTraceLevel function               |
+| Component                           | Status  | Location                                          | Notes                                       |
+| ----------------------------------- | ------- | ------------------------------------------------- | ------------------------------------------- |
+| TraceLevel type definition          | ✅ Done | `jl4-decision-service/src/Backend/Api.hs:71-81`   | Defines TraceNone and TraceFull             |
+| FromHttpApiData instance            | ✅ Done | `jl4-decision-service/src/Backend/Api.hs:77-81`   | Parses "none" and "full" from query params  |
+| X-L4-Trace header support           | ✅ Done | `jl4-decision-service/src/Server.hs:172`          | Added to evalFunction endpoint              |
+| Query param fallback (?trace=)      | ✅ Done | `jl4-decision-service/src/Server.hs:173`          | Added to evalFunction endpoint              |
+| Batch endpoint support              | ✅ Done | `jl4-decision-service/src/Server.hs:182-183`      | Both header and query param                 |
+| TraceLevel parameter in RunFunction | ✅ Done | `jl4-decision-service/src/Backend/Api.hs:85-87`   | Added to function signature                 |
+| Conditional directive selection     | ✅ Done | `jl4-decision-service/src/Backend/Jl4.hs:68-71`   | Uses #EVAL or #EVALTRACE                    |
+| mkEval function (no trace)          | ✅ Done | `jl4-decision-service/src/Backend/Jl4.hs:407-408` | Creates LazyEval directive                  |
+| Empty tree response                 | ✅ Done | `jl4-decision-service/src/Backend/Jl4.hs:91-93`   | Returns emptyTree for TraceNone             |
+| OpenAPI schema documentation        | ✅ Done | `jl4-decision-service/src/Schema.hs:47-51`        | ToParamSchema instance with enum            |
+| Backward compatibility              | ✅ Done | All                                               | Default is TraceNone; traces require opt-in |
+| Header precedence over query        | ✅ Done | `jl4-decision-service/src/Server.hs:293-296`      | determineTraceLevel function                |
 
 ### 🔄 Future Extensions (Not Yet Implemented)
 
@@ -578,7 +578,7 @@ The following extensions were identified in the spec but are not yet implemented
 - Golden files remain unchanged
 - Additional tests recommended for:
   - Verifying response size reduction with `TraceNone`
-  - Confirming backward compatibility (default behavior unchanged)
+  - Confirming default TraceNone behavior when no trace hint is provided
   - Testing header/query parameter precedence
   - Batch endpoint trace control
 

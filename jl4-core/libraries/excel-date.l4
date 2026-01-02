@@ -1,0 +1,478 @@
+IMPORT prelude
+IMPORT daydate
+
+§§ `Runtime Bridges`
+
+`Today serial` MEANS DATE_SERIAL TODAY
+`Now serial` MEANS NOW
+
+GIVEN text IS A STRING
+GIVETH AN EITHER STRING NUMBER
+`DateValue serial` text MEANS
+    CONSIDER DATEVALUE text
+    WHEN LEFT err THEN LEFT err
+    WHEN RIGHT d THEN RIGHT (DATE_SERIAL d)
+
+GIVEN text IS A STRING
+GIVETH AN EITHER STRING NUMBER
+`TimeValue fraction` text MEANS TIMEVALUE text
+
+§ `Excel Date Compatibility Library`
+
+-- Provides Excel-compatible helpers for serial conversions, date differences,
+-- month math, and workday calculations built on top of the daydate primitives.
+
+
+
+§§ `Serial Epochs`
+
+`Excel 1900 epoch`        MEANS Date OF 31, 12, 1899
+`Excel 1900 bug threshold` MEANS Date OF 1, 3, 1900
+`Excel 1900 bug serial`    MEANS 60
+`Excel 1904 epoch`        MEANS Date OF 1, 1, 1904
+
+`Excel 1900 epoch days`   MEANS Day `Excel 1900 epoch`
+`Excel 1904 epoch days`   MEANS Day `Excel 1904 epoch`
+
+
+
+§§ `Serial Conversion Helpers`
+
+GIVEN date IS A DATE
+GIVETH A NUMBER
+day date MEANS DATE_DAY date
+
+GIVEN date IS A DATE
+GIVETH A NUMBER
+month date MEANS DATE_MONTH date
+
+GIVEN date IS A DATE
+GIVETH A NUMBER
+year date MEANS DATE_YEAR date
+
+GIVEN date IS A DATE
+GIVETH A NUMBER
+excelSerial1900 date MEANS
+    baseSerial PLUS leapOffset
+    WHERE
+        baseSerial MEANS Day date MINUS `Excel 1900 epoch days`
+        leapOffset MEANS IF date AT LEAST `Excel 1900 bug threshold` THEN 1 ELSE 0
+
+GIVEN date IS A DATE
+GIVETH A NUMBER
+excelSerial1904 date MEANS
+    Day date MINUS `Excel 1904 epoch days`
+
+GIVEN serial IS A NUMBER
+GIVETH AN EITHER STRING DATE
+dateFromExcelSerial serial MEANS
+    CONSIDER ensureWhole "Excel serial" serial
+    WHEN LEFT err THEN LEFT err
+    WHEN RIGHT normalized THEN
+        IF normalized EQUALS `Excel 1900 bug serial`
+        THEN LEFT "Excel serial 60 corresponds to 1900-02-29, which is not representable in the Gregorian calendar."
+        ELSE RIGHT (Date (`Excel 1900 epoch days` PLUS adjust normalized))
+    WHERE
+        adjust n MEANS
+            IF n GREATER THAN `Excel 1900 bug serial`
+            THEN n MINUS 1
+            ELSE n
+
+GIVEN serial IS A NUMBER
+GIVETH AN EITHER STRING DATE
+dateFromExcelSerial1904 serial MEANS
+    CONSIDER ensureWhole "Excel serial" serial
+    WHEN LEFT err THEN LEFT err
+    WHEN RIGHT normalized THEN RIGHT (Date (`Excel 1904 epoch days` PLUS normalized))
+
+
+
+§§ `Current Clock Helpers`
+
+GIVETH A DATE
+excelToday MEANS
+    TODAY
+
+GIVETH A NUMBER
+excelNow MEANS
+    serialDate PLUS timeFraction
+    WHERE
+        nowSerial MEANS `Now serial`
+        dateStamp MEANS FLOOR nowSerial
+        serialDate MEANS excelSerial1900 (Date dateStamp)
+        timeFraction MEANS nowSerial MINUS dateStamp
+
+GIVEN text IS A STRING
+GIVETH AN EITHER STRING DATE
+ExcelDateValue text MEANS
+    CONSIDER `DateValue serial` text
+    WHEN LEFT err THEN LEFT err
+    WHEN RIGHT serial THEN RIGHT (Date serial)
+
+GIVEN text IS A STRING
+GIVETH AN EITHER STRING NUMBER
+ExcelTimeValue text MEANS
+    `TimeValue fraction` text
+
+
+§§ `DAYS & DATEDIF`
+
+GIVEN endDate   IS A DATE
+      startDate IS A DATE
+GIVETH A NUMBER
+ExcelDays endDate startDate MEANS
+    Day endDate MINUS Day startDate
+
+GIVEN endSerial   IS A NUMBER
+      startSerial IS A NUMBER
+GIVETH A NUMBER
+ExcelDays endSerial startSerial MEANS
+    endSerial MINUS startSerial
+
+GIVEN startDate IS A DATE
+      endDate   IS A DATE
+      unit      IS A STRING
+GIVETH AN EITHER STRING NUMBER
+DATEDIF startDate endDate unit MEANS
+    IF Day endDate LESS THAN Day startDate
+    THEN LEFT "DATEDIF requires start_date AT MOST end_date."
+    ELSE dispatch normalizedUnit
+    WHERE
+        normalizedUnit MEANS TOUPPER unit
+        dispatch key MEANS
+            IF    key EQUALS "Y"
+            THEN  RIGHT completeYears
+            ELSE  IF key EQUALS "M"
+                  THEN RIGHT completeMonths
+                  ELSE IF key EQUALS "D"
+                       THEN RIGHT (ExcelDays endDate startDate)
+                       ELSE IF key EQUALS "MD"
+                            THEN RIGHT mdPart
+                            ELSE IF key EQUALS "YM"
+                                 THEN RIGHT ymPart
+                                 ELSE IF key EQUALS "YD"
+                                      THEN RIGHT ydPart
+                                      ELSE LEFT "DATEDIF unit must be one of Y, M, D, MD, YM, YD."
+
+        startDay   MEANS startDate's day
+        startMonth MEANS startDate's month
+        startYear  MEANS startDate's year
+
+        endDay     MEANS endDate's day
+        endMonth   MEANS endDate's month
+        endYear    MEANS endDate's year
+
+        completeYears MEANS
+            yearDiff MINUS adjust
+            WHERE
+                yearDiff MEANS endYear MINUS startYear
+                adjust MEANS
+                    IF    endMonth LESS THAN startMonth
+                    THEN 1
+                    ELSE  IF endMonth EQUALS startMonth AND endDay LESS THAN startDay
+                          THEN 1
+                          ELSE 0
+
+        completeMonths MEANS
+            totalMonths MINUS adjust
+            WHERE
+                totalMonths MEANS (endYear MINUS startYear) TIMES `Months in a year` PLUS (endMonth MINUS startMonth)
+                adjust MEANS
+                    IF endDay LESS THAN startDay
+                    THEN 1
+                    ELSE 0
+
+        mdPart MEANS
+            IF endDay AT LEAST startDay
+            THEN endDay MINUS startDay
+            ELSE (`Days in month` prevMonth prevYear) MINUS startDay PLUS endDay
+            WHERE
+                prevMonth MEANS
+                    IF endMonth EQUALS 1
+                    THEN 12
+                    ELSE endMonth MINUS 1
+                prevYear MEANS
+                    IF endMonth EQUALS 1
+                    THEN endYear MINUS 1
+                    ELSE endYear
+
+        ymPart MEANS
+            (completeMonths MODULO `Months in a year` PLUS `Months in a year`) MODULO `Months in a year`
+
+        ydPart MEANS
+            Day endDate MINUS Day anniversary
+            WHERE
+                anniversary MEANS
+                    IF Day candidate AT MOST Day endDate
+                    THEN candidate
+                    ELSE Date (Day candidate MINUS `Days in year` candidate)
+                candidate MEANS Date startDay startMonth endYear
+
+GIVEN startSerial IS A NUMBER
+      endSerial   IS A NUMBER
+      unit        IS A STRING
+GIVETH AN EITHER STRING NUMBER
+DATEDIF startSerial endSerial unit MEANS
+    CONSIDER dateFromExcelSerial startSerial
+    WHEN LEFT err THEN LEFT err
+    WHEN RIGHT startDate THEN
+        CONSIDER dateFromExcelSerial endSerial
+        WHEN LEFT err THEN LEFT err
+        WHEN RIGHT endDate THEN DATEDIF startDate endDate unit
+
+GIVEN startDate IS A DATE
+      endSerial IS A NUMBER
+      unit      IS A STRING
+GIVETH AN EITHER STRING NUMBER
+DATEDIF startDate endSerial unit MEANS
+    CONSIDER dateFromExcelSerial endSerial
+    WHEN LEFT err THEN LEFT err
+    WHEN RIGHT endDate THEN DATEDIF startDate endDate unit
+
+GIVEN startSerial IS A NUMBER
+      endDate   IS A DATE
+      unit      IS A STRING
+GIVETH AN EITHER STRING NUMBER
+DATEDIF startSerial endDate unit MEANS
+    CONSIDER dateFromExcelSerial startSerial
+    WHEN LEFT err THEN LEFT err
+    WHEN RIGHT startDate THEN DATEDIF startDate endDate unit
+
+
+
+§§ `DAYS360`
+
+GIVEN startDate IS A DATE
+      endDate   IS A DATE
+GIVETH AN EITHER STRING NUMBER
+ExcelDays360 startDate endDate MEANS
+    ExcelDays360 startDate endDate FALSE
+
+GIVEN startDate IS A DATE
+      endDate   IS A DATE
+      european  IS A BOOLEAN
+GIVETH AN EITHER STRING NUMBER
+ExcelDays360 startDate endDate european MEANS
+    RIGHT numerator
+    WHERE
+        startDayAdj MEANS adjustStartDay startDate
+        endDayAdj   MEANS adjustEndDay endDate startDayAdj
+        startMonth  MEANS startDate's month
+        endMonth    MEANS endDate's month
+        startYear   MEANS startDate's year
+        endYear     MEANS endDate's year
+        numerator MEANS
+            (endYear MINUS startYear) TIMES 360
+                PLUS (endMonth MINUS startMonth) TIMES 30
+                PLUS (endDayAdj MINUS startDayAdj)
+
+        adjustStartDay date MEANS
+            IF european
+            THEN adjustEuropean date
+            ELSE  IF DATE_DAY date EQUALS 31
+                  THEN 30
+                  ELSE DATE_DAY date
+
+        adjustEndDay date startDay MEANS
+            IF european
+            THEN adjustEuropean date
+            ELSE  IF DATE_DAY date EQUALS 31 AND startDay AT LEAST 30
+                  THEN 30
+                  ELSE DATE_DAY date
+
+        adjustEuropean date MEANS
+            IF DATE_DAY date EQUALS 31
+            THEN 30
+            ELSE DATE_DAY date
+
+
+
+§§ `YEARFRAC`
+
+GIVEN startDate IS A DATE
+      endDate   IS A DATE
+GIVETH AN EITHER STRING NUMBER
+ExcelYearFrac startDate endDate MEANS
+    ExcelYearFrac startDate endDate 0
+
+GIVEN startDate IS A DATE
+      endDate   IS A DATE
+      basis     IS A NUMBER
+GIVETH AN EITHER STRING NUMBER
+ExcelYearFrac startDate endDate basis MEANS
+    IF basis LESS THAN 0 OR basis GREATER THAN 4
+    THEN LEFT "YEARFRAC basis must be between 0 and 4."
+    ELSE
+        IF Day startDate GREATER THAN Day endDate
+        THEN CONSIDER ExcelYearFrac endDate startDate basis
+             WHEN LEFT err THEN LEFT err
+             WHEN RIGHT value THEN RIGHT (0 MINUS value)
+        ELSE RIGHT (dispatch basis)
+    WHERE
+        daysBetween MEANS Day endDate MINUS Day startDate
+        dispatch b MEANS
+            IF    b EQUALS 0
+            THEN  usDaysDivided DIVIDED BY 360
+            ELSE  IF b EQUALS 1
+                  THEN actualActual
+                  ELSE IF b EQUALS 2
+                       THEN daysBetween DIVIDED BY 360
+                       ELSE IF b EQUALS 3
+                            THEN daysBetween DIVIDED BY 365
+                            ELSE europeanDaysDivided DIVIDED BY 360
+
+        usDaysDivided MEANS
+            CONSIDER ExcelDays360 startDate endDate FALSE
+            WHEN LEFT err THEN 0
+            WHEN RIGHT v THEN v
+        europeanDaysDivided MEANS
+            CONSIDER ExcelDays360 startDate endDate TRUE
+            WHEN LEFT err THEN 0
+            WHEN RIGHT v THEN v
+
+        actualActual MEANS
+            IF startDate's year EQUALS endDate's year
+            THEN daysBetween DIVIDED BY (`Days in year` startDate)
+            ELSE
+                (firstYearPortion PLUS middleYears PLUS lastYearPortion)
+                WHERE
+                    startYearDays MEANS `Days in year` startDate
+                    startYearRemaining MEANS startYearDays MINUS dayOfYear startDate
+                    endYearDays MEANS `Days in year` endDate
+                    endYearElapsed MEANS dayOfYear endDate
+                    middleYears MEANS
+                        IF endDate's year MINUS startDate's year LESS THAN 1
+                        THEN 0
+                        ELSE (endDate's year MINUS startDate's year MINUS 1)
+                    firstYearPortion MEANS startYearRemaining DIVIDED BY startYearDays
+                    lastYearPortion MEANS endYearElapsed DIVIDED BY endYearDays
+
+
+
+§§ `Month Arithmetic`
+
+GIVEN startDate IS A DATE
+      months    IS A NUMBER
+GIVETH AN EITHER STRING DATE
+ExcelEDate startDate months MEANS
+    CONSIDER ensureWhole "EDATE months" months
+    WHEN LEFT err THEN LEFT err
+    WHEN RIGHT monthsInt THEN
+        RIGHT (Date newDay newMonth newYear)
+        WHERE
+            startDay   MEANS startDate's day
+            startMonth MEANS startDate's month
+            startYear  MEANS startDate's year
+            totalMonths MEANS startMonth MINUS 1 PLUS monthsInt
+            yearOffset MEANS FLOOR (totalMonths DIVIDED BY `Months in a year`)
+            newMonthBase MEANS (totalMonths MODULO `Months in a year`) PLUS 1
+            newYear  MEANS startYear PLUS yearOffset
+            daysInTarget MEANS `Days in month` newMonthBase newYear
+            newMonth MEANS newMonthBase
+            newDay   MEANS IF startDay AT MOST daysInTarget THEN startDay ELSE daysInTarget
+
+GIVEN startDate IS A DATE
+      months    IS A NUMBER
+GIVETH AN EITHER STRING DATE
+ExcelEOMonth startDate months MEANS
+    CONSIDER ExcelEDate startDate (months PLUS 1)
+    WHEN LEFT err THEN LEFT err
+    WHEN RIGHT nextMonthFirst THEN RIGHT (Date (Day nextMonthFirst MINUS 1))
+
+
+
+§§ `Workday Helpers`
+
+GIVEN startDate IS A DATE
+      days      IS A NUMBER
+GIVETH AN EITHER STRING DATE
+ExcelWorkday startDate days MEANS
+    ExcelWorkday startDate days EMPTY
+
+GIVEN startDate IS A DATE
+      days      IS A NUMBER
+      holidays  IS A LIST OF DATE
+GIVETH AN EITHER STRING DATE
+ExcelWorkday startDate days holidays MEANS
+    CONSIDER ensureWhole "WORKDAY days" days
+    WHEN LEFT err THEN LEFT err
+    WHEN RIGHT normalized THEN
+        RIGHT (walk startDate steps)
+        WHERE
+            direction MEANS IF normalized LESS THAN 0 THEN -1 ELSE 1
+            steps MEANS absoluteValue normalized
+            holidayDays MEANS map Day holidays
+
+            walk date remaining MEANS
+                IF remaining EQUALS 0
+                THEN date
+                ELSE walk nextDate (remaining MINUS stepConsumed)
+                WHERE
+                    nextDate MEANS date PLUS direction
+                    isWorkday MEANS NOT `is weekend` nextDate AND NOT isHoliday nextDate
+                    stepConsumed MEANS IF isWorkday THEN 1 ELSE 0
+
+            isHoliday date MEANS containsDay (Day date) holidayDays
+
+GIVEN startDate IS A DATE
+      endDate   IS A DATE
+GIVETH AN EITHER STRING NUMBER
+ExcelNetworkDays startDate endDate MEANS
+    ExcelNetworkDays startDate endDate EMPTY
+
+GIVEN startDate IS A DATE
+      endDate   IS A DATE
+      holidays  IS A LIST OF DATE
+GIVETH AN EITHER STRING NUMBER
+ExcelNetworkDays startDate endDate holidays MEANS
+    RIGHT (directionSign TIMES countBusiness minDate maxDate)
+    WHERE
+        startDay MEANS Day startDate
+        endDay   MEANS Day endDate
+        minDate  MEANS IF startDay AT MOST endDay THEN startDate ELSE endDate
+        maxDate  MEANS IF startDay AT MOST endDay THEN endDate ELSE startDate
+        directionSign MEANS IF startDay AT MOST endDay THEN 1 ELSE -1
+        holidayDays MEANS map Day holidays
+
+        countBusiness current target MEANS
+            IF Day current GREATER THAN Day target
+            THEN 0
+            ELSE thisDay PLUS countBusiness (current PLUS 1) target
+            WHERE
+                isWorkday MEANS NOT `is weekend` current AND NOT containsDay (Day current) holidayDays
+                thisDay MEANS IF isWorkday THEN 1 ELSE 0
+
+
+
+§§ `Utility Helpers`
+
+GIVEN label IS A STRING
+      value IS A NUMBER
+GIVETH AN EITHER STRING NUMBER
+ensureWhole label value MEANS
+    IF value EQUALS FLOOR value
+    THEN RIGHT value
+    ELSE LEFT (CONCAT label, " must be an integer.")
+
+GIVEN value IS A NUMBER
+GIVETH A NUMBER
+absoluteValue value MEANS
+    IF value LESS THAN 0
+    THEN 0 MINUS value
+    ELSE value
+
+GIVEN day IS A NUMBER
+      days IS A LIST OF NUMBER
+GIVETH A BOOLEAN
+containsDay day days MEANS
+    CONSIDER days
+    WHEN EMPTY THEN FALSE
+    WHEN x FOLLOWED BY xs THEN
+        IF x EQUALS day
+        THEN TRUE
+        ELSE containsDay day xs
+
+GIVEN date IS A DATE
+GIVETH A NUMBER
+dayOfYear date MEANS
+    Day date MINUS Day (Year date) PLUS 1

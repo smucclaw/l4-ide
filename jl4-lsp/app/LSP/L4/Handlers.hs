@@ -32,6 +32,7 @@ import qualified Data.Text.Lazy as LazyText
 import GHC.Generics
 import GHC.TypeLits (Symbol)
 import Data.Proxy (Proxy (..))
+import System.FilePath (takeExtension)
 import LSP.L4.Base
 import LSP.L4.Config
 import LSP.L4.Rules hiding (Log (..))
@@ -57,6 +58,7 @@ import Language.LSP.Server hiding (notificationHandler, requestHandler)
 import qualified Language.LSP.Server as LSP
 import Language.LSP.VFS (VFS)
 import LSP.L4.Actions
+import L4.EvaluateLazy (EvalConfig)
 
 data ReactorMessage
   = ReactorNotification (IO ())
@@ -107,6 +109,16 @@ instance Pretty Log where
     LogHandlingCustomRequest uri method -> "Handling custom request:" <+> pretty (getUri uri) <+> pretty method
 
 -- ----------------------------------------------------------------------------
+-- Helper Functions
+-- ----------------------------------------------------------------------------
+
+-- | Check if a URI represents an L4 file (.l4 or .jl4 extension, or no extension for in-memory models)
+isL4File :: Uri -> Bool
+isL4File uri = 
+  let ext = takeExtension (Text.unpack $ getUri uri)
+  in ext `elem` [".l4", ".jl4", ""]
+
+-- ----------------------------------------------------------------------------
 -- Reactor
 -- ----------------------------------------------------------------------------
 
@@ -141,8 +153,8 @@ notificationHandler m k = LSP.notificationHandler m $ \TNotificationMessage{_par
 -- Handlers
 -- ----------------------------------------------------------------------------
 
-handlers :: Recorder (WithPriority Log) -> Handlers (ServerM Config)
-handlers recorder =
+handlers :: EvalConfig -> Recorder (WithPriority Log) -> Handlers (ServerM Config)
+handlers evalConfig recorder =
   mconcat
     [ -- We need these notifications handlers to declare that we handle these requests
       notificationHandler SMethod_Initialized $ \ide _ _ -> do
@@ -153,29 +165,35 @@ handlers recorder =
           doc = msg ^. J.textDocument . J.uri
           version = msg ^. J.textDocument . J.version
           uri = toNormalizedUri doc
-        atomically $ updatePositionMapping ide (VersionedTextDocumentIdentifier doc version) []
-        -- We don't know if the file actually exists, or if the contents match those on disk
-        -- For example, vscode restores previously unsaved contents on open
-        setFileModified (VFSModified vfs) ide uri $
-          addFileOfInterest ide uri Modified{firstOpen=True}
-        logWith recorder Debug $ LogOpenedTextDocument doc
+        -- Only process .l4 files
+        Extra.when (isL4File doc) $ do
+          atomically $ updatePositionMapping ide (VersionedTextDocumentIdentifier doc version) []
+          -- We don't know if the file actually exists, or if the contents match those on disk
+          -- For example, vscode restores previously unsaved contents on open
+          setFileModified (VFSModified vfs) ide uri $
+            addFileOfInterest ide uri Modified{firstOpen=True}
+          logWith recorder Debug $ LogOpenedTextDocument doc
     , notificationHandler SMethod_TextDocumentDidChange $ \ide vfs msg -> liftIO $ do
         let
           doc = msg ^. J.textDocument . J.uri
           uri = toNormalizedUri doc
           version = msg ^. J.textDocument . J.version
           changes = msg ^. J.contentChanges
-        atomically $ updatePositionMapping ide (VersionedTextDocumentIdentifier doc version) changes
-        setFileModified (VFSModified vfs) ide uri $
-          addFileOfInterest ide uri Modified{firstOpen=False}
-        logWith recorder Debug $ LogModifiedTextDocument doc
+        -- Only process .l4 files
+        Extra.when (isL4File doc) $ do
+          atomically $ updatePositionMapping ide (VersionedTextDocumentIdentifier doc version) changes
+          setFileModified (VFSModified vfs) ide uri $
+            addFileOfInterest ide uri Modified{firstOpen=False}
+          logWith recorder Debug $ LogModifiedTextDocument doc
     , notificationHandler SMethod_TextDocumentDidSave $ \ide vfs msg -> liftIO $ do
         let
           doc = msg ^. J.textDocument . J.uri
           uri = toNormalizedUri doc
-        setFileModified (VFSModified vfs) ide uri $
-          addFileOfInterest ide uri OnDisk
-        logWith recorder Debug $ LogSavedTextDocument doc
+        -- Only process .l4 files
+        Extra.when (isL4File doc) $ do
+          setFileModified (VFSModified vfs) ide uri $
+            addFileOfInterest ide uri OnDisk
+          logWith recorder Debug $ LogSavedTextDocument doc
     , notificationHandler SMethod_TextDocumentDidClose $ \ide vfs msg -> liftIO $ do
         let
           doc = msg ^. J.textDocument . J.uri
@@ -345,7 +363,7 @@ handlers recorder =
                 , _xdata = Nothing
                 }
               Just (evalEnv, _) -> do
-                result <- MkVizHandler $ evalApp tcRes.entityInfo (evalEnv, tcRes.module') evalParams recentViz
+                result <- MkVizHandler $ evalApp evalConfig tcRes.entityInfo (evalEnv, tcRes.module') evalParams recentViz
                 logWith recorder Debug $
                   LogHandlingCustomRequest evalParams.verDocId._uri
                   ("Eval result: " <> Text.show result)

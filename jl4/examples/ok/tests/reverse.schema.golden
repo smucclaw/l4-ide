@@ -1,0 +1,17 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "a": {
+            "type": "string"
+        },
+        "list": {
+            "$ref": "#/$defs/LIST"
+        }
+    },
+    "required": [
+        "a",
+        "list"
+    ],
+    "title": "reverse",
+    "type": "object"
+}

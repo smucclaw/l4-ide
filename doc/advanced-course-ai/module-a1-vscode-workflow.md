@@ -104,7 +104,7 @@ IMPORT daydate
 
 ```bash
 cd ts-apps/vscode
-npm install
+npm ci
 npm run compile
 ```
 

@@ -1,0 +1,15 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+days360-yearfrac.l4:11:1-50:
+  364
+days360-yearfrac.l4:12:1-53:
+  RIGHT OF 360
+days360-yearfrac.l4:13:1-58:
+  RIGHT OF 360
+days360-yearfrac.l4:15:1-48:
+  RIGHT OF 0.5
+days360-yearfrac.l4:16:1-48:
+  RIGHT OF 0.4958904109589041
+days360-yearfrac.l4:17:1-48:
+  RIGHT OF 0.5027777777777778

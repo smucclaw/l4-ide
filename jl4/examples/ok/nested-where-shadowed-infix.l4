@@ -1,0 +1,26 @@
+§ `Idiom: Nested WHERE shadows mixfix`
+
+IMPORT prelude
+
+GIVEN grossIncome IS A NUMBER, deductions IS A NUMBER, exclusions IS A NUMBER
+GIVETH A NUMBER
+assessableIncome grossIncome deductions exclusions MEANS
+  LET
+    -- Paragraph (a): “income” means gross minus deductions
+    incomeA BE
+      grossIncome `income` deductions
+        WHERE
+          GIVEN g IS A NUMBER, d IS A NUMBER
+          GIVETH A NUMBER
+          g `income` d MEANS g MINUS d
+
+    -- Paragraph (b): “income” means gross minus exclusions
+    incomeB BE
+      grossIncome `income` exclusions
+        WHERE
+          GIVEN g IS A NUMBER, e IS A NUMBER
+          GIVETH A NUMBER
+          g `income` e MEANS g MINUS e
+  IN incomeA PLUS incomeB
+
+#EVAL assessableIncome 100 10 7

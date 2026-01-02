@@ -1,0 +1,13 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "list": {
+            "type": "string"
+        }
+    },
+    "required": [
+        "list"
+    ],
+    "title": "and",
+    "type": "object"
+}

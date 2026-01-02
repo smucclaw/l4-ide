@@ -10,6 +10,7 @@ import L4.Parser.SrcSpan (SrcRange(..), SrcPos)
 import L4.Syntax
 import L4.TypeCheck.With
 import qualified L4.Utils.IntervalMap as IV
+import L4.Mixfix (MixfixInfo(..))
 
 import Control.Applicative
 import qualified Data.Map.Strict as Map
@@ -24,6 +25,7 @@ type RangeMap     = IV.IntervalMap SrcPos
 type InfoMap      = RangeMap Info
 type ScopeMap     = RangeMap (Environment, EntityInfo)
 type NlgMap       = RangeMap Nlg
+type DescMap      = RangeMap Text
 
 -- | Note that 'KnownType' does not imply this is a new generative type on its own,
 -- because it includes type synonyms now. For type synonyms primarily, we also store
@@ -44,6 +46,7 @@ data CheckState =
     , infoMap      :: !InfoMap
     , scopeMap     :: !ScopeMap
     , nlgMap       :: !NlgMap
+    , descMap      :: !DescMap
     }
   deriving stock (Generic)
 
@@ -133,6 +136,7 @@ data ExpectationContext =
   | ExpectPostBodyContext -- body argument of POST
   | ExpectConcatArgumentContext -- argument of CONCAT
   | ExpectAsStringArgumentContext -- argument of AS STRING
+  | ExpectBreachReasonContext -- reason argument of BREACH
   deriving stock (Eq, Generic, Show)
   deriving anyclass NFData
 
@@ -179,14 +183,6 @@ instance HasSrcRange CheckError where
 
 -- | A token in a mixfix pattern, representing either a keyword (part of the function name)
 -- or a parameter slot.
-data MixfixPatternToken
-  = MixfixKeyword RawName
-    -- ^ A keyword part of the function name (e.g., "is eligible for")
-  | MixfixParam RawName
-    -- ^ A parameter slot, with the original parameter name for documentation
-  deriving stock (Show, Eq, Generic)
-  deriving anyclass (NFData)
-
 -- | Errors that can occur during mixfix pattern matching.
 -- These provide detailed information for user-friendly error messages.
 data MixfixMatchError
@@ -238,17 +234,6 @@ data MixfixArgMatch a
 -- | Information about a mixfix function pattern.
 -- A mixfix function is one where the function name is interspersed with parameters,
 -- like @person `is eligible for` program@ instead of @isEligibleFor person program@.
-data MixfixInfo = MkMixfixInfo
-  { pattern :: [MixfixPatternToken]
-    -- ^ The complete pattern, e.g., [Param "person", Keyword "is eligible for", Param "program"]
-  , keywords :: [RawName]
-    -- ^ Just the keyword parts, for quick lookup (e.g., ["is eligible for"])
-  , arity :: Int
-    -- ^ Number of parameters (parameter slots in the pattern)
-  }
-  deriving stock (Show, Eq, Generic)
-  deriving anyclass (NFData)
-
 -- | A checked function signature.
 data FunTypeSig = MkFunTypeSig
   { anno :: Anno
@@ -371,6 +356,7 @@ data CheckResult =
     , infoMap      :: !InfoMap
     , nlgMap       :: !NlgMap
     , scopeMap     :: !ScopeMap
+    , descMap      :: !DescMap
     }
 
 -- -------------------
@@ -495,6 +481,11 @@ addNlgForSrcRange :: SrcRange -> Nlg -> Check ()
 addNlgForSrcRange srcRange i =
   modifying' #nlgMap $
     IV.insert (IV.srcRangeToInterval srcRange) i
+
+addDescForSrcRange :: SrcRange -> Text -> Check ()
+addDescForSrcRange srcRange t =
+  modifying' #descMap $
+    IV.insert (IV.srcRangeToInterval srcRange) t
 
 -- ----------------------------------------------------------------------------
 -- JL4 specific primitives for resolving names
@@ -733,6 +724,12 @@ orElse m1 m2 = do
 
 -- | Allow the subcomputation to have at most one result.
 --
+-- NOTE: This backtracking search is type-directed and prunes only after it
+-- sees a second success. If surface code leaves obvious disambiguators out
+-- (e.g. missing `day/month/year` helpers while overloading `+/-/<` on DATE
+-- and NUMBER) the candidate space can balloon and appear to “hang” before we
+-- finally report ambiguity/out-of-scope. Keep cheap, unambiguous helpers in
+-- libraries to keep this search from going quadratic in practice.
 prune :: forall a. Check a -> Check a
 prune m = do
   ctx <- asks (.errorContext)
@@ -886,4 +883,3 @@ ref n a =
     (u, o) = getUniqueName a
   in
     pure (Ref n u o)
-

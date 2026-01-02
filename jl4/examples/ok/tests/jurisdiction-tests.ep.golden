@@ -1,0 +1,89 @@
+IMPORT prelude
+IMPORT jurisdiction
+
+§ `Jurisdiction Library Tests`
+
+-- Test ISO 3166-1 alpha-2 country codes
+#EVAL `United States alpha-2`
+#EVAL `United Kingdom alpha-2`
+#EVAL `Canada alpha-2`
+#EVAL `Japan alpha-2`
+#EVAL `Singapore alpha-2`
+
+-- Test ISO 3166-1 alpha-3 country codes
+#EVAL `United States alpha-3`
+#EVAL `Germany alpha-3`
+#EVAL `Australia alpha-3`
+
+-- Test numeric codes
+#EVAL `United States numeric`
+#EVAL `United Kingdom numeric`
+#EVAL `Japan numeric`
+
+-- Test supranational regions
+#EVAL `European Union code`
+#EVAL `ASEAN code`
+
+-- Test US state codes
+#EVAL `California code`
+#EVAL `New York code`
+#EVAL `Delaware code`
+#EVAL `Texas code`
+
+-- Test Canadian province codes
+#EVAL `Ontario code`
+#EVAL `Quebec code`
+#EVAL `British Columbia code`
+
+-- Test UK constituent country codes
+#EVAL `England code`
+#EVAL `Scotland code`
+#EVAL `Wales code`
+
+-- Test code validation
+#EVAL `is valid ISO 3166-1 alpha-2` "US"
+#EVAL `is valid ISO 3166-1 alpha-2` "USA"  -- Should be FALSE (3 chars)
+#EVAL `is valid ISO 3166-1 alpha-2` "us"   -- Should be FALSE (lowercase)
+
+#EVAL `is valid ISO 3166-1 alpha-3` "USA"
+#EVAL `is valid ISO 3166-1 alpha-3` "US"   -- Should be FALSE (2 chars)
+#EVAL `is valid ISO 3166-1 alpha-3` "usa"  -- Should be FALSE (lowercase)
+
+#EVAL `is valid ISO 3166-2` "US-CA"
+#EVAL `is valid ISO 3166-2` "CA-ON"
+#EVAL `is valid ISO 3166-2` "GB-ENG"
+#EVAL `is valid ISO 3166-2` "INVALID"  -- Should be FALSE
+
+-- Test country name lookup
+#EVAL `country name from alpha-2` "US"
+#EVAL `country name from alpha-2` "GB"
+#EVAL `country name from alpha-2` "CA"
+#EVAL `country name from alpha-2` "JP"
+#EVAL `country name from alpha-2` "SG"
+#EVAL `country name from alpha-2` "DE"
+#EVAL `country name from alpha-2` "ZZ"  -- Unknown code
+
+#EVAL `country name from alpha-3` "USA"
+#EVAL `country name from alpha-3` "GBR"
+#EVAL `country name from alpha-3` "CAN"
+#EVAL `country name from alpha-3` "JPN"
+#EVAL `country name from alpha-3` "ZZZ"  -- Unknown code
+
+-- Test code conversions
+#EVAL `alpha-2 to alpha-3` "US"
+#EVAL `alpha-2 to alpha-3` "GB"
+#EVAL `alpha-2 to alpha-3` "CA"
+#EVAL `alpha-2 to alpha-3` "JP"
+#EVAL `alpha-2 to alpha-3` "SG"
+#EVAL `alpha-2 to alpha-3` "DE"
+#EVAL `alpha-2 to alpha-3` "FR"
+#EVAL `alpha-2 to alpha-3` "ZZ"  -- Unknown code
+
+#EVAL `alpha-3 to alpha-2` "USA"
+#EVAL `alpha-3 to alpha-2` "GBR"
+#EVAL `alpha-3 to alpha-2` "CAN"
+#EVAL `alpha-3 to alpha-2` "JPN"
+#EVAL `alpha-3 to alpha-2` "SGP"
+#EVAL `alpha-3 to alpha-2` "DEU"
+#EVAL `alpha-3 to alpha-2` "FRA"
+#EVAL `alpha-3 to alpha-2` "ZZZ"  -- Unknown code

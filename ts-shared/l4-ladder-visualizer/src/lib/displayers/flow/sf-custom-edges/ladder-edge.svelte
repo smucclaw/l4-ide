@@ -9,6 +9,8 @@
     HighlightedEdgeStyle,
     NonHighlightedEdgeStyle,
     FadedEdgeStyle,
+    IrrelevantEdgeStyle,
+    ShortCircuitedEdgeStyle,
   } from '$lib/layout-ir/ladder-graph/edge-attributes.js'
   import { isNNFLadderGraphLirNode } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
 
@@ -35,6 +37,18 @@
       ? FadedEdgeStyle
       : ''
   )
+
+  const maybeIrrelevantEdgeStyle = $derived(
+    ladderGraph.edgeIsInIrrelevantSubgraph(data.context, data.originalEdge)
+      ? IrrelevantEdgeStyle
+      : ''
+  )
+
+  const maybeShortCircuitedEdgeStyle = $derived(
+    ladderGraph.edgeIsInShortCircuitedSubgraph(data.context, data.originalEdge)
+      ? ShortCircuitedEdgeStyle
+      : ''
+  )
 </script>
 
 <BezierEdge
@@ -55,6 +69,9 @@
       : NonHighlightedEdgeStyle,
     // fade edge if it's in the non-viable subgraph
     maybeFadedEdgeStyle,
+    // dim edges under don't-care/short-circuited subgraphs
+    maybeIrrelevantEdgeStyle,
+    maybeShortCircuitedEdgeStyle,
   ].join(' ')}
   labelStyle={maybeFadedEdgeStyle}
 />

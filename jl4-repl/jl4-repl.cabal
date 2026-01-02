@@ -1,0 +1,61 @@
+cabal-version: 3.0
+name: jl4-repl
+version: 0.1
+build-type: Simple
+tested-with: GHC==9.6.6
+synopsis: Interactive REPL for the L4 language
+description:
+  A Read-Eval-Print Loop for L4, providing fast iteration on expressions
+  without the overhead of reloading imports on every evaluation.
+
+common defaults
+  default-language: GHC2021
+  ghc-options: -Wall -Wderiving-typeable -Wunused-packages -Werror
+  default-extensions:
+    BlockArguments
+    DefaultSignatures
+    DeriveAnyClass
+    DerivingStrategies
+    DerivingVia
+    DuplicateRecordFields
+    NoFieldSelectors
+    OverloadedRecordDot
+    OverloadedStrings
+    OverloadedLabels
+    LambdaCase
+    NoImportQualifiedPost
+  build-depends:
+    base
+
+library
+  import: defaults
+  hs-source-dirs: src
+  exposed-modules:
+    L4.Repl
+    L4.Repl.Types
+    L4.Repl.Eval
+  build-depends:
+    jl4-core,
+    jl4-lsp,
+    containers,
+    hls-graph,
+    lsp-types,
+
+executable jl4-repl
+  import: defaults
+  hs-source-dirs: app
+  main-is: Main.hs
+  build-depends:
+    jl4-core,
+    jl4-lsp,
+    jl4-query-plan,
+    containers,
+    directory,
+    haskeline,
+    hls-graph,
+    lsp-types,
+    optparse-applicative,
+    filepath,
+    text,
+    time,
+  ghc-options: -threaded -rtsopts

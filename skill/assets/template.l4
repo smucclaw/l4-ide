@@ -1,0 +1,65 @@
+IMPORT prelude
+IMPORT daydate
+
+§ `[Your Project Name Here]`
+
+§§ `Type Definitions`
+
+-- Define your enums (fixed sets of values)
+-- Example:
+-- DECLARE Status IS ONE OF
+--     Active
+--     Inactive
+--     Pending
+
+-- Define your records (structured data)
+-- Example:
+-- DECLARE Person HAS
+--     name IS A STRING
+--     age  IS A NUMBER
+--     email IS A STRING
+
+§§ `Business Logic`
+
+-- Define your decision rules and functions
+-- Example:
+-- GIVEN person IS A Person
+-- GIVETH A BOOLEAN
+-- DECIDE `is adult` IF
+--     person's age AT LEAST 18
+
+-- Example with pattern matching:
+-- GIVEN status IS A Status
+-- GIVETH A STRING
+-- `status message` status MEANS
+--     CONSIDER status
+--     WHEN Active THEN "Currently active"
+--     WHEN Inactive THEN "Not active"
+--     WHEN Pending THEN "Awaiting activation"
+
+§§ `Helper Functions`
+
+-- Define reusable helper functions
+-- Use WHERE clauses for local helpers
+
+§§ `Test Data`
+
+-- Define sample data for testing
+-- Example:
+-- `Alice` MEANS Person WITH
+--     name  IS "Alice"
+--     age   IS 30
+--     email IS "alice@example.com"
+
+§§ `Test Execution`
+
+-- Test your functions with sample data
+-- Example:
+-- #EVAL `is adult` `Alice`
+-- #ASSERT `is adult` `Alice`
+
+-- Run multiple test cases
+-- #EVAL LIST
+--     `is adult` `Alice`,
+--     `status message` Active,
+--     `status message` Pending

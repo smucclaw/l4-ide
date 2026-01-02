@@ -1,0 +1,18 @@
+-- Record construction inside LET...IN (inline LET binding, block RHS).
+--
+-- This exercises the same indentation relaxation as LIST:
+-- the record constructor begins at the normal block indent under LET.
+
+DECLARE Person HAS
+  name IS A STRING,
+  age IS A NUMBER
+
+DECIDE personJson IS
+  LET person BE
+    Person WITH
+      name IS "Alice",
+      age IS 25
+  IN JSONENCODE person
+
+#EVAL personJson
+

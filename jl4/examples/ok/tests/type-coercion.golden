@@ -1,0 +1,35 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+type-coercion.l4:24:1-17:
+  "1.2"
+type-coercion.l4:25:1-15:
+  "TRUE"
+type-coercion.l4:26:1-15:
+  "2024-02-29"
+type-coercion.l4:27:1-19:
+  "TRUE"
+type-coercion.l4:28:1-19:
+  "2024-01-01"
+type-coercion.l4:29:1-23:
+  JUST OF -12.5
+type-coercion.l4:30:1-22:
+  JUST OF 1200
+type-coercion.l4:31:1-22:
+  NOTHING
+type-coercion.l4:32:1-21:
+  JUST OF (DATE OF 29, 2, 2024)
+type-coercion.l4:33:1-22:
+  JUST OF (DATE OF 15, 1, 2024)
+type-coercion.l4:34:1-22:
+  JUST OF (DATE OF 1, 2, 2024)
+type-coercion.l4:35:1-20:
+  NOTHING
+type-coercion.l4:36:1-17:
+  12
+type-coercion.l4:37:1-20:
+  12.98
+type-coercion.l4:38:1-26:
+  120
+type-coercion.l4:39:1-26:
+  -123.4

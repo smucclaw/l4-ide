@@ -410,6 +410,24 @@ orElse x y MEANS
   WHEN JUST x  THEN JUST x
 
 GIVEN
+  a    IS A TYPE
+  list IS A LIST OF MAYBE a
+GIVETH A MAYBE a
+asum list MEANS
+  CONSIDER list
+  WHEN EMPTY THEN NOTHING
+  WHEN x FOLLOWED BY xs THEN
+    CONSIDER x
+    WHEN JUST y  THEN JUST y
+    WHEN NOTHING THEN asum xs
+
+GIVEN
+  a    IS A TYPE
+  list IS A LIST OF MAYBE a
+GIVETH A MAYBE a
+firstJust list MEANS asum list
+
+GIVEN
   a       IS A TYPE
   x       IS A MAYBE a
 GIVETH A LIST OF a

@@ -1,0 +1,61 @@
+-- LET...IN function tests: parameterized bindings
+
+-- Single parameter function
+DECIDE testSingleParam x IS
+  LET
+    double n IS n TIMES 2
+  IN double x
+
+#EVAL testSingleParam 5
+#EVAL testSingleParam 0
+
+-- Two parameter function
+DECIDE testTwoParams x y IS
+  LET
+    add a b IS a PLUS b
+  IN add x y
+
+#EVAL testTwoParams 3 7
+#EVAL testTwoParams 100 200
+
+-- Multiple functions
+DECIDE testMultipleFunctions x IS
+  LET
+    double n IS n TIMES 2
+    triple n IS n TIMES 3
+  IN double x PLUS triple x
+
+#EVAL testMultipleFunctions 5
+#EVAL testMultipleFunctions 10
+
+-- Forward reference between functions
+DECIDE testFunctionChain x IS
+  LET
+    f n IS g n PLUS 1
+    g n IS n TIMES 2
+  IN f x
+
+#EVAL testFunctionChain 5
+#EVAL testFunctionChain 10
+
+-- Self-recursive function (factorial)
+DECIDE testFactorial n IS
+  LET
+    fact x IS IF x EQUALS 0 THEN 1 ELSE x TIMES fact (x MINUS 1)
+  IN fact n
+
+#EVAL testFactorial 0
+#EVAL testFactorial 1
+#EVAL testFactorial 5
+#EVAL testFactorial 6
+
+-- Self-recursive function (fibonacci)
+DECIDE testFibonacci n IS
+  LET
+    fib x IS IF x EQUALS 0 THEN 0 ELSE IF x EQUALS 1 THEN 1 ELSE fib (x MINUS 1) PLUS fib (x MINUS 2)
+  IN fib n
+
+#EVAL testFibonacci 0
+#EVAL testFibonacci 1
+#EVAL testFibonacci 6
+#EVAL testFibonacci 10

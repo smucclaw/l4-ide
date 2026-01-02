@@ -1,0 +1,30 @@
+-- Simple working example: Query LLMs from L4 using the llm.l4 library
+-- This demonstrates LLM querying with automatic provider fallback
+
+IMPORT llm
+
+-- Example 1: Simplest possible query with automatic provider fallback
+-- This will try OpenRouter -> OpenAI -> Anthropic in order
+DECIDE simpleQuery IS
+  queryLLMWithDefaults "What is 2+2?"
+
+-- Example 2: Use a specific provider directly
+DECIDE anthropicQuery IS
+  CONSIDER ENV "ANTHROPIC_API_KEY"
+    WHEN JUST key THEN
+      callClaude key "Define legal capacity"
+    WHEN NOTHING THEN
+      "ERROR: ANTHROPIC_API_KEY not set"
+
+-- To run these examples, set at least one API key:
+-- export OPENROUTER_API_KEY="sk-or-v1-..."
+-- export OPENAI_API_KEY="sk-..."
+-- export ANTHROPIC_API_KEY="sk-ant-..."
+--
+-- Then uncomment one of the EVAL lines:
+-- #EVAL simpleQuery
+-- #EVAL anthropicQuery
+
+-- Note: Response parsing (extractLLMResponse) is a future enhancement.
+-- For now, you get raw JSON responses. Use JSONDECODE to manually
+-- extract fields based on the provider's response format.

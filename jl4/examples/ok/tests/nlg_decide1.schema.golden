@@ -1,0 +1,13 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "p": {
+            "$ref": "#/$defs/Person"
+        }
+    },
+    "required": [
+        "p"
+    ],
+    "title": "must sing",
+    "type": "object"
+}

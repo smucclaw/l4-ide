@@ -1,0 +1,35 @@
+# Build stage for frontend
+FROM node:20-slim AS builder
+
+WORKDIR /app
+
+# Copy package files
+COPY package.json package-lock.json* turbo.json ./
+COPY ts-apps/jl4-web/package.json ts-apps/jl4-web/
+COPY ts-shared ts-shared
+
+# Install dependencies
+RUN npm ci
+
+# Copy source code
+COPY ts-apps/jl4-web ts-apps/jl4-web
+
+# Build the frontend
+WORKDIR /app/ts-apps/jl4-web
+RUN npm run build
+
+# Production stage - serve with a simple HTTP server
+FROM node:20-slim
+
+WORKDIR /app
+
+# Install serve for production serving
+RUN npm install -g serve
+
+# Copy built assets
+COPY --from=builder /app/ts-apps/jl4-web/build /app/build
+
+EXPOSE 5173
+
+# Serve on port 5173 to match dev environment
+CMD ["serve", "-s", "build", "-l", "5173"]

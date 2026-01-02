@@ -5,7 +5,7 @@ lazytrace2.l4:22:1-17:
   16
   ─────
   ┌ x TIMES x
-  └ 16
+  └ 16• 16
 lazytrace2.l4:23:1-30:
   5
   ─────
@@ -13,31 +13,36 @@ lazytrace2.l4:23:1-30:
   │ THEN 3
   │ ELSE 5
   │┌ y
-  │└ FALSE
+  │└ FALSE│• FALSE
   ├ 5
-  └ 5
+  └ 5┌ 5
+  └ 5• 5
 lazytrace2.l4:24:1-22:
   MkPair OF 1, 2
   ─────
   ┌ MkPair OF 1, 2
-  └ MkPair OF 1, 2
+  └ MkPair OF 1, 2• MkPair OF 1, 2
 lazytrace2.l4:25:1-32:
   3
   ─────
   ┌ addPair OF (MkPair OF 1, 2)
   │┌ MkPair OF 1, 2
-  │└ MkPair OF 1, 2
+  │└ MkPair OF 1, 2│• MkPair OF 1, 2
   │┌ addPair
-  │└ <function>
+  │└ <function>│• <function>
   ├ CONSIDER p WHEN MkPair p1
   │                         p2 THEN p1 PLUS p2
   ├ p1 PLUS p2
-  └ 3
+  └ 3┌ CONSIDER p WHEN MkPair p1
+  │                         p2 THEN p1 PLUS p2
+  ├ p1 PLUS p2
+  └ 3┌ p1 PLUS p2
+  └ 3• 3
 lazytrace2.l4:26:1-13:
   LIST 1, 2, 3
   ─────
   ┌ l
-  └ LIST 1, 2, 3
+  └ LIST 1, 2, 3• LIST 1, 2, 3
 lazytrace2.l4:27:1-32:
   6
   ─────
@@ -49,43 +54,488 @@ lazytrace2.l4:27:1-32:
   │││┌ LIST 3
   │││├ 3 FOLLOWED BY (LIST )
   ││││┌ LIST 
-  ││││└ EMPTY
-  │││└ LIST 3
-  ││└ LIST 2, 3
-  │└ LIST 1, 2, 3
+  ││││└ EMPTY││││• EMPTY
+  │││└ LIST 3│││┌ 3 FOLLOWED BY (LIST )
+  ││││┌ LIST 
+  ││││└ EMPTY││││• EMPTY
+  │││└ LIST 3│││• LIST 3
+  ││└ LIST 2, 3││┌ 2 FOLLOWED BY (LIST 3)
+  │││┌ LIST 3
+  │││├ 3 FOLLOWED BY (LIST )
+  ││││┌ LIST 
+  ││││└ EMPTY││││• EMPTY
+  │││└ LIST 3│││┌ 3 FOLLOWED BY (LIST )
+  ││││┌ LIST 
+  ││││└ EMPTY││││• EMPTY
+  │││└ LIST 3│││• LIST 3
+  ││└ LIST 2, 3││• LIST 2, 3
+  │└ LIST 1, 2, 3│┌ 1 FOLLOWED BY (LIST 2, 3)
+  ││┌ LIST 2, 3
+  ││├ 2 FOLLOWED BY (LIST 3)
+  │││┌ LIST 3
+  │││├ 3 FOLLOWED BY (LIST )
+  ││││┌ LIST 
+  ││││└ EMPTY││││• EMPTY
+  │││└ LIST 3│││┌ 3 FOLLOWED BY (LIST )
+  ││││┌ LIST 
+  ││││└ EMPTY││││• EMPTY
+  │││└ LIST 3│││• LIST 3
+  ││└ LIST 2, 3││┌ 2 FOLLOWED BY (LIST 3)
+  │││┌ LIST 3
+  │││├ 3 FOLLOWED BY (LIST )
+  ││││┌ LIST 
+  ││││└ EMPTY││││• EMPTY
+  │││└ LIST 3│││┌ 3 FOLLOWED BY (LIST )
+  ││││┌ LIST 
+  ││││└ EMPTY││││• EMPTY
+  │││└ LIST 3│││• LIST 3
+  ││└ LIST 2, 3││• LIST 2, 3
+  │└ LIST 1, 2, 3│• LIST 1, 2, 3
   │┌ sumList
-  │└ <function>
+  │└ <function>│• <function>
   ├ CONSIDER list WHEN EMPTY THEN 0,
   │                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
   ├ z PLUS (sumList OF zs)
   │┌ sumList OF zs
   ││┌ sumList
-  ││└ <function>
+  ││└ <function>││• <function>
   │├ CONSIDER list WHEN EMPTY THEN 0,
   ││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
   │├ z PLUS (sumList OF zs)
   ││┌ sumList OF zs
   │││┌ sumList
-  │││└ <function>
+  │││└ <function>│││• <function>
   ││├ CONSIDER list WHEN EMPTY THEN 0,
   │││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
   ││├ z PLUS (sumList OF zs)
   │││┌ sumList OF zs
   ││││┌ sumList
-  ││││└ <function>
+  ││││└ <function>││││• <function>
   │││├ CONSIDER list WHEN EMPTY THEN 0,
   ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
   │││├ 0
-  │││└ 0
-  ││└ 3
-  │└ 5
-  └ 6
+  │││└ 0│││┌ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ 0
+  │││└ 0│││• 0
+  ││└ 3││┌ CONSIDER list WHEN EMPTY THEN 0,
+  │││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  ││├ z PLUS (sumList OF zs)
+  │││┌ sumList OF zs
+  ││││┌ sumList
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ 0
+  │││└ 0│││• 0
+  ││└ 3││┌ z PLUS (sumList OF zs)
+  │││┌ sumList OF zs
+  ││││┌ sumList
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ 0
+  │││└ 0│││• 0
+  ││└ 3││• 3
+  │└ 5│┌ CONSIDER list WHEN EMPTY THEN 0,
+  ││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │├ z PLUS (sumList OF zs)
+  ││┌ sumList OF zs
+  │││┌ sumList
+  │││└ <function>│││• <function>
+  ││├ CONSIDER list WHEN EMPTY THEN 0,
+  │││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  ││├ z PLUS (sumList OF zs)
+  │││┌ sumList OF zs
+  ││││┌ sumList
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ 0
+  │││└ 0│││• 0
+  ││└ 3││┌ CONSIDER list WHEN EMPTY THEN 0,
+  │││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  ││├ z PLUS (sumList OF zs)
+  │││┌ sumList OF zs
+  ││││┌ sumList
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ 0
+  │││└ 0│││• 0
+  ││└ 3││┌ z PLUS (sumList OF zs)
+  │││┌ sumList OF zs
+  ││││┌ sumList
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ 0
+  │││└ 0│││• 0
+  ││└ 3││• 3
+  │└ 5│┌ z PLUS (sumList OF zs)
+  ││┌ sumList OF zs
+  │││┌ sumList
+  │││└ <function>│││• <function>
+  ││├ CONSIDER list WHEN EMPTY THEN 0,
+  │││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  ││├ z PLUS (sumList OF zs)
+  │││┌ sumList OF zs
+  ││││┌ sumList
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ 0
+  │││└ 0│││• 0
+  ││└ 3││┌ CONSIDER list WHEN EMPTY THEN 0,
+  │││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  ││├ z PLUS (sumList OF zs)
+  │││┌ sumList OF zs
+  ││││┌ sumList
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ 0
+  │││└ 0│││• 0
+  ││└ 3││┌ z PLUS (sumList OF zs)
+  │││┌ sumList OF zs
+  ││││┌ sumList
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ 0
+  │││└ 0│││• 0
+  ││└ 3││• 3
+  │└ 5│• 5
+  └ 6┌ CONSIDER list WHEN EMPTY THEN 0,
+  │                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  ├ z PLUS (sumList OF zs)
+  │┌ sumList OF zs
+  ││┌ sumList
+  ││└ <function>││• <function>
+  │├ CONSIDER list WHEN EMPTY THEN 0,
+  ││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │├ z PLUS (sumList OF zs)
+  ││┌ sumList OF zs
+  │││┌ sumList
+  │││└ <function>│││• <function>
+  ││├ CONSIDER list WHEN EMPTY THEN 0,
+  │││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  ││├ z PLUS (sumList OF zs)
+  │││┌ sumList OF zs
+  ││││┌ sumList
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ 0
+  │││└ 0│││• 0
+  ││└ 3││┌ CONSIDER list WHEN EMPTY THEN 0,
+  │││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  ││├ z PLUS (sumList OF zs)
+  │││┌ sumList OF zs
+  ││││┌ sumList
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ 0
+  │││└ 0│││• 0
+  ││└ 3││┌ z PLUS (sumList OF zs)
+  │││┌ sumList OF zs
+  ││││┌ sumList
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ 0
+  │││└ 0│││• 0
+  ││└ 3││• 3
+  │└ 5│┌ CONSIDER list WHEN EMPTY THEN 0,
+  ││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │├ z PLUS (sumList OF zs)
+  ││┌ sumList OF zs
+  │││┌ sumList
+  │││└ <function>│││• <function>
+  ││├ CONSIDER list WHEN EMPTY THEN 0,
+  │││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  ││├ z PLUS (sumList OF zs)
+  │││┌ sumList OF zs
+  ││││┌ sumList
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ 0
+  │││└ 0│││• 0
+  ││└ 3││┌ CONSIDER list WHEN EMPTY THEN 0,
+  │││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  ││├ z PLUS (sumList OF zs)
+  │││┌ sumList OF zs
+  ││││┌ sumList
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ 0
+  │││└ 0│││• 0
+  ││└ 3││┌ z PLUS (sumList OF zs)
+  │││┌ sumList OF zs
+  ││││┌ sumList
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ 0
+  │││└ 0│││• 0
+  ││└ 3││• 3
+  │└ 5│┌ z PLUS (sumList OF zs)
+  ││┌ sumList OF zs
+  │││┌ sumList
+  │││└ <function>│││• <function>
+  ││├ CONSIDER list WHEN EMPTY THEN 0,
+  │││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  ││├ z PLUS (sumList OF zs)
+  │││┌ sumList OF zs
+  ││││┌ sumList
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ 0
+  │││└ 0│││• 0
+  ││└ 3││┌ CONSIDER list WHEN EMPTY THEN 0,
+  │││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  ││├ z PLUS (sumList OF zs)
+  │││┌ sumList OF zs
+  ││││┌ sumList
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ 0
+  │││└ 0│││• 0
+  ││└ 3││┌ z PLUS (sumList OF zs)
+  │││┌ sumList OF zs
+  ││││┌ sumList
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ 0
+  │││└ 0│││• 0
+  ││└ 3││• 3
+  │└ 5│• 5
+  └ 6┌ z PLUS (sumList OF zs)
+  │┌ sumList OF zs
+  ││┌ sumList
+  ││└ <function>││• <function>
+  │├ CONSIDER list WHEN EMPTY THEN 0,
+  ││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │├ z PLUS (sumList OF zs)
+  ││┌ sumList OF zs
+  │││┌ sumList
+  │││└ <function>│││• <function>
+  ││├ CONSIDER list WHEN EMPTY THEN 0,
+  │││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  ││├ z PLUS (sumList OF zs)
+  │││┌ sumList OF zs
+  ││││┌ sumList
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ 0
+  │││└ 0│││• 0
+  ││└ 3││┌ CONSIDER list WHEN EMPTY THEN 0,
+  │││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  ││├ z PLUS (sumList OF zs)
+  │││┌ sumList OF zs
+  ││││┌ sumList
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ 0
+  │││└ 0│││• 0
+  ││└ 3││┌ z PLUS (sumList OF zs)
+  │││┌ sumList OF zs
+  ││││┌ sumList
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ 0
+  │││└ 0│││• 0
+  ││└ 3││• 3
+  │└ 5│┌ CONSIDER list WHEN EMPTY THEN 0,
+  ││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │├ z PLUS (sumList OF zs)
+  ││┌ sumList OF zs
+  │││┌ sumList
+  │││└ <function>│││• <function>
+  ││├ CONSIDER list WHEN EMPTY THEN 0,
+  │││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  ││├ z PLUS (sumList OF zs)
+  │││┌ sumList OF zs
+  ││││┌ sumList
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ 0
+  │││└ 0│││• 0
+  ││└ 3││┌ CONSIDER list WHEN EMPTY THEN 0,
+  │││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  ││├ z PLUS (sumList OF zs)
+  │││┌ sumList OF zs
+  ││││┌ sumList
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ 0
+  │││└ 0│││• 0
+  ││└ 3││┌ z PLUS (sumList OF zs)
+  │││┌ sumList OF zs
+  ││││┌ sumList
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ 0
+  │││└ 0│││• 0
+  ││└ 3││• 3
+  │└ 5│┌ z PLUS (sumList OF zs)
+  ││┌ sumList OF zs
+  │││┌ sumList
+  │││└ <function>│││• <function>
+  ││├ CONSIDER list WHEN EMPTY THEN 0,
+  │││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  ││├ z PLUS (sumList OF zs)
+  │││┌ sumList OF zs
+  ││││┌ sumList
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ 0
+  │││└ 0│││• 0
+  ││└ 3││┌ CONSIDER list WHEN EMPTY THEN 0,
+  │││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  ││├ z PLUS (sumList OF zs)
+  │││┌ sumList OF zs
+  ││││┌ sumList
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ 0
+  │││└ 0│││• 0
+  ││└ 3││┌ z PLUS (sumList OF zs)
+  │││┌ sumList OF zs
+  ││││┌ sumList
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││├ 0
+  │││└ 0│││┌ 0
+  │││└ 0│││• 0
+  ││└ 3││• 3
+  │└ 5│• 5
+  └ 6• 6
 lazytrace2.l4:28:1-29:
   45
   ─────
   ┌ (2 PLUS 3) TIMES (4 PLUS 5)
   │┌ 2 PLUS 3
-  │└ 5
+  │└ 5│• 5
   │┌ 4 PLUS 5
-  │└ 9
-  └ 45
+  │└ 9│• 9
+  └ 45• 45

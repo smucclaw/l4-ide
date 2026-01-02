@@ -164,6 +164,9 @@ data TKeywords
   | TKDoes
   | TKMust
   | TKMay
+  | TKShant
+  | TKBreach
+  | TKBecause
   | TKProvided
   | TKWithin
   | TKHence
@@ -198,6 +201,10 @@ data TKeywords
   | TKEnv
   | TKConcat
   | TKAs
+  | TKLet
+  | TKIn
+  | TKBe
+  | TKMean
   deriving stock (Eq, Generic, Ord, Show)
   deriving anyclass (ToExpr, NFData)
 
@@ -238,7 +245,10 @@ keywords = Map.fromList
   , ("DO"         , TKDo         )
   , ("DOES"       , TKDoes       )
   , ("MUST"       , TKMust       )
-  , ("MAY"        , TKMay       )
+  , ("MAY"        , TKMay        )
+  , ("SHANT"      , TKShant      )
+  , ("BREACH"     , TKBreach     )
+  , ("BECAUSE"    , TKBecause    )
   , ("PROVIDED"   , TKProvided   )
   , ("WITHIN"     , TKWithin     )
   , ("HENCE"      , TKHence      )
@@ -273,6 +283,10 @@ keywords = Map.fromList
   , ("ENV"        , TKEnv        )
   , ("CONCAT"     , TKConcat     )
   , ("AS"         , TKAs         )
+  , ("LET"        , TKLet        )
+  , ("IN"         , TKIn         )
+  , ("BE"         , TKBe         )
+  , ("MEAN"       , TKMean       )
   ]
 
 data TOperators

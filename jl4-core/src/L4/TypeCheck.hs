@@ -92,6 +92,7 @@ import L4.TypeCheck.Types as X
 import L4.TypeCheck.Unify
 import L4.TypeCheck.With as X
 import qualified L4.Utils.IntervalMap as IV
+import L4.Mixfix (MixfixInfo(..), MixfixPatternToken(..), extractMixfixInfo)
 
 import Control.Applicative
 import Data.Monoid
@@ -101,7 +102,7 @@ import Data.Either (partitionEithers)
 import qualified Data.List as List
 import Data.Tuple.Extra (firstM)
 import Data.List.Split (splitWhen)
-import Optics ((%~))
+import Optics ((%~), (^.))
 import qualified Base.Set as Set
 import Data.Function (on)
 import Control.Exception (assert)
@@ -114,6 +115,7 @@ mkInitialCheckState substitution =
     , infoMap      = IV.empty
     , nlgMap       = IV.empty
     , scopeMap     = IV.empty
+    , descMap      = IV.empty
     }
 
 mkInitialCheckEnv :: NormalizedUri -> Environment -> EntityInfo -> CheckEnv
@@ -171,21 +173,38 @@ doCheckProgramWithDependencies checkState checkEnv program =
               , infoMap = s'.infoMap
               , nlgMap = s'.nlgMap
               , scopeMap = s'.scopeMap
+              , descMap = s'.descMap
               }
 
 checkProgram :: Module Name -> Check (Module Resolved, [CheckInfo])
 checkProgram module' = do
-  withScanTypeAndSigEnvironment scanTyDeclModule inferTyDeclModule scanFunSigModule module' do
+  withScanTypeAndSigEnvironment scanTyDeclModule inferTyDeclModule scanFunSigModule module' \_ -> do
     inferProgram module'
 
 withDecides :: [FunTypeSig] -> Check a -> Check a
 withDecides rdecides =
   extendKnownMany topDecides . local \s -> s
     { functionTypeSigs = Map.fromList $ mapMaybe (\d -> (,d) <$> rangeOf d.anno) rdecides
-    , mixfixRegistry = buildMixfixRegistry rdecides
+    , mixfixRegistry = Map.union (buildMixfixRegistry rdecides) s.mixfixRegistry
     }
   where
     topDecides = fmap (.name) rdecides
+
+withExtraMixfix :: MixfixRegistry -> Check a -> Check a
+withExtraMixfix mixfixAdds =
+  local \s -> s { mixfixRegistry = Map.union mixfixAdds s.mixfixRegistry }
+
+dedupCheckInfos :: [CheckInfo] -> [CheckInfo]
+dedupCheckInfos = go Set.empty []
+  where
+    go _ acc [] = reverse acc
+    go seen acc (ci:cis) =
+      let ciNames = ci.names
+          overlaps = any (`Set.member` seen) ciNames
+          seen' = List.foldl' (flip Set.insert) seen ciNames
+      in if overlaps
+          then go seen acc cis
+          else go seen' (ci:acc) cis
 
 -- | Build the mixfix registry from a list of FunTypeSigs.
 -- The registry maps from the first keyword of each mixfix function to the list
@@ -803,6 +822,11 @@ inferSelector rappForm (MkTypedName ann n t) = do
   rt <- inferType t
   dn <- def n
   let selectorInfo = KnownTerm (forall' (view appFormArgs rappForm) (fun_ [appFormType rappForm] rt)) Selector
+  -- Record @desc annotation for LSP hover
+  case ann ^. annDesc of
+    Just desc -> for_ (rangeOf dn) $ \srcRange ->
+      addDescForSrcRange srcRange (getDesc desc)
+    Nothing -> pure ()
   pure (MkTypedName ann dn rt, [makeKnown dn selectorInfo])
 
 -- | Infers / checks a type to be of kind TYPE.
@@ -912,11 +936,21 @@ inferLamGivens (MkGivenSig ann otns) = do
     inferOptionallyTypedName (MkOptionallyTypedName ann' n Nothing) = do
       rn <- def n
       v <- fresh (rawName n)
+      recordDescForParam ann' rn
       pure (MkOptionallyTypedName ann' rn (Just v), v, [makeKnown rn (KnownTerm v Local)])
     inferOptionallyTypedName (MkOptionallyTypedName ann' n (Just t)) = do
       rn <- def n
       rt <- inferType t
+      recordDescForParam ann' rn
       pure (MkOptionallyTypedName ann' rn (Just rt), rt, [makeKnown rn (KnownTerm rt Local)])
+
+    -- | Record @desc annotation for a parameter in the descMap for LSP hover
+    recordDescForParam :: Anno -> Resolved -> Check ()
+    recordDescForParam paramAnno resolved =
+      case paramAnno ^. annDesc of
+        Just desc -> for_ (rangeOf resolved) $ \srcRange ->
+          addDescForSrcRange srcRange (getDesc desc)
+        Nothing -> pure ()
 
 -- | Turn a type signature into a type, introducing inference variables for
 -- unknown types. Also returns the result type.
@@ -929,6 +963,8 @@ inferLamGivens (MkGivenSig ann otns) = do
 typeSigType :: TypeSig Resolved -> Check (Type' Resolved, Type' Resolved, [CheckInfo])
 typeSigType (MkTypeSig _ (MkGivenSig _ otns) mgiveth) = do
   let (tyvars, others) = partitionEithers (isQuantifier <$> otns)
+  -- Record @desc annotations for LSP hover (must iterate over original otns to get annotations)
+  traverse_ recordDescForTypedName otns
   ronts <- traverse mkOptionallyNamedType others
   rt <- extendKnownMany (foldMap proc ronts) $
     maybeGivethType mgiveth
@@ -949,6 +985,14 @@ typeSigType (MkTypeSig _ (MkGivenSig _ otns) mgiveth) = do
 isQuantifier :: OptionallyTypedName Resolved -> Either Resolved (Resolved, Maybe (Type' Resolved))
 isQuantifier (MkOptionallyTypedName _ n (Just (Type _))) = Left n
 isQuantifier (MkOptionallyTypedName _ n mt             ) = Right (n, mt)
+
+-- | Record @desc annotation for a parameter in the descMap for LSP hover
+recordDescForTypedName :: OptionallyTypedName Resolved -> Check ()
+recordDescForTypedName (MkOptionallyTypedName ann n _) =
+  case ann ^. annDesc of
+    Just desc -> for_ (rangeOf n) $ \srcRange ->
+      addDescForSrcRange srcRange (getDesc desc)
+    Nothing -> pure ()
 
 maybeGivethType :: Maybe (GivethSig Resolved) -> Check (Type' Resolved)
 maybeGivethType Nothing                  = fresh (NormalName "r") -- we have no obvious prefix?
@@ -977,14 +1021,32 @@ checkExpr ec (Where ann e ds) t = softprune $ do
     scanDecl = mapMaybeM inferTyDeclLocalDecl
     scanFuns = mapMaybeM scanFunSigLocalDecl
 
-  (rds, extends) <- withScanTypeAndSigEnvironment preScanDecl scanDecl scanFuns ds do
-     unzip <$> traverse (firstM nlgLocalDecl <=< inferLocalDecl) ds
-  re <- extendKnownMany (concat extends) do
-    re <- checkExpr ec e t
-    -- We have to immediately resolve 'Nlg' annotations, as 'ds'
-    -- brings new bindings into scope.
-    nlgExpr re
+  (rds, extends, mixfixAdds) <- withScanTypeAndSigEnvironment preScanDecl scanDecl scanFuns ds \rdecides -> do
+    (rds, extends) <- unzip <$> traverse (firstM nlgLocalDecl <=< inferLocalDecl) ds
+    pure (rds, extends, buildMixfixRegistry rdecides)
+  re <- withExtraMixfix mixfixAdds do
+    let knownExtends = dedupCheckInfos (concat extends)
+    re <- extendKnownMany knownExtends do
+      re <- checkExpr ec e t
+      -- We have to immediately resolve 'Nlg' annotations, as 'ds'
+      -- brings new bindings into scope.
+      nlgExpr re
+    pure re
   setAnnResolvedType t Nothing (Where ann re rds)
+checkExpr ec (LetIn ann ds e) t = softprune $ do
+  let
+    preScanDecl = mapMaybeM scanTyDeclLocalDecl
+    scanDecl = mapMaybeM inferTyDeclLocalDecl
+    scanFuns = mapMaybeM scanFunSigLocalDecl
+
+  (rds, extends, mixfixAdds) <- withScanTypeAndSigEnvironment preScanDecl scanDecl scanFuns ds \rdecides -> do
+    (rds, extends) <- unzip <$> traverse (firstM nlgLocalDecl <=< inferLocalDecl) ds
+    pure (rds, extends, buildMixfixRegistry rdecides)
+  re <- withExtraMixfix mixfixAdds $
+    extendKnownMany (dedupCheckInfos (concat extends)) do
+      re <- checkExpr ec e t
+      nlgExpr re
+  setAnnResolvedType t Nothing (LetIn ann rds re)
 checkExpr ec e t = softprune $ errorContext (WhileCheckingExpression e) do
   (re, rt) <- inferExpr e
   expect ec t rt
@@ -1021,13 +1083,13 @@ checkObligation ann party action due hence lest partyT actionT = do
   pure (MkObligation ann partyR actionR dueR henceR lestR)
 
 checkAction :: RAction Name -> Type' Resolved -> Check (RAction Resolved, [CheckInfo])
-checkAction MkAction {anno, action, provided = mprovided} actionT = do
+checkAction MkAction {anno, modal, action, provided = mprovided} actionT = do
   (pat, bounds) <- checkPattern ExpectRegulativeActionContext action actionT
   -- NOTE: the provided clauses must evaluate to booleans
   provided <- forM mprovided \provided ->
     extendKnownMany bounds do
       checkExpr ExpectRegulativeProvidedContext provided boolean
-  pure (MkAction {anno, action = pat, provided}, bounds)
+  pure (MkAction {anno, modal, action = pat, provided}, bounds)
 
 buildConstructorLookup :: [DeclChecked (Declare Resolved)] -> Map Unique [Resolved]
 buildConstructorLookup = foldMap \decl ->
@@ -1159,6 +1221,7 @@ inferExpr' g =
         pure (nlgRe, te, rgivens)
       pure (Lam ann rgivens re, fun_ rargts te)
     App ann n es -> do
+      (initialFuncName, initialArgs, rewrotePostfix) <- reinterpretPostfixAppIfNeeded n es
       -- We want good type error messages. Therefore, we pursue the
       -- following strategy:
       --
@@ -1180,16 +1243,16 @@ inferExpr' g =
       -- If the function is a registered mixfix and the args contain the expected
       -- keywords, restructure the args to remove the keywords.
       -- For param-first patterns, this also returns the correct function name.
-      mMixfixMatch <- tryMatchMixfixCall n es
+      mMixfixMatch <- tryMatchMixfixCall initialFuncName initialArgs
       let (actualFuncName, actualArgs, needsAnnoRebuild, mMixfixError) = case mMixfixMatch of
-            Nothing -> (n, es, False, Nothing)  -- Not a mixfix call, use original
+            Nothing -> (initialFuncName, initialArgs, rewrotePostfix, Nothing)  -- Not a mixfix call, use original
             Just (funcRawName, restructuredArgs, mErr) ->
               -- Create a Name with the correct function name, preserving the annotation
-              let MkName nameAnno _ = n
+              let MkName nameAnno _ = initialFuncName
                   newName = MkName nameAnno funcRawName
                   -- We need to rebuild annotation if args were restructured
                   -- (i.e., keyword placeholders were removed)
-                  argsChanged = length restructuredArgs /= length es
+                  argsChanged = length restructuredArgs /= length initialArgs || rewrotePostfix
               in (newName, restructuredArgs, argsChanged, mErr)
 
       -- Report any mixfix matching errors (e.g., wrong keyword, typo)
@@ -1251,10 +1314,24 @@ inferExpr' g =
         scanDecl = mapMaybeM inferTyDeclLocalDecl
         scanFuns = mapMaybeM scanFunSigLocalDecl
 
-      (rds, extends) <- withScanTypeAndSigEnvironment preScanDecl scanDecl scanFuns ds do
-        unzip <$> traverse inferLocalDecl ds
-      (re, t) <- extendKnownMany (concat extends) $ inferExpr e
+      (rds, extends, mixfixAdds) <- withScanTypeAndSigEnvironment preScanDecl scanDecl scanFuns ds \rdecides -> do
+        (rds, extends) <- unzip <$> traverse inferLocalDecl ds
+        pure (rds, extends, buildMixfixRegistry rdecides)
+      (re, t) <- withExtraMixfix mixfixAdds $
+        extendKnownMany (dedupCheckInfos (concat extends)) $ inferExpr e
       pure (Where ann re rds, t)
+    LetIn ann ds e -> do
+      let
+        preScanDecl = mapMaybeM scanTyDeclLocalDecl
+        scanDecl = mapMaybeM inferTyDeclLocalDecl
+        scanFuns = mapMaybeM scanFunSigLocalDecl
+
+      (rds, extends, mixfixAdds) <- withScanTypeAndSigEnvironment preScanDecl scanDecl scanFuns ds \rdecides -> do
+        (rds, extends) <- unzip <$> traverse inferLocalDecl ds
+        pure (rds, extends, buildMixfixRegistry rdecides)
+      (re, t) <- withExtraMixfix mixfixAdds $
+        extendKnownMany (dedupCheckInfos (concat extends)) $ inferExpr e
+      pure (LetIn ann rds re, t)
     Event ann ev -> do
       (ev', ty) <- inferEvent ev
       pure (Event ann ev', ty)
@@ -1278,10 +1355,24 @@ inferExpr' g =
     AsString ann e -> do
       -- AsString can accept any primitive type and convert it to string
       (re, te) <- inferExpr e
-      -- For now, we'll only allow NUMBER to be converted to STRING
-      -- Could extend this to other types in the future
-      expect ExpectAsStringArgumentContext number te
+      unless (isStringCoercible te) $
+        addError (TypeMismatch ExpectAsStringArgumentContext string te)
       pure (AsString ann re, string)
+    Breach ann mParty mReason -> do
+      -- Breach is a terminal clause that represents a contract breach
+      partyT <- fresh (NormalName "party")
+      actionT <- fresh (NormalName "action")
+      mParty' <- traverse (\p -> checkExpr ExpectRegulativePartyContext p partyT) mParty
+      mReason' <- traverse (\r -> checkExpr ExpectBreachReasonContext r string) mReason
+      pure (Breach ann mParty' mReason', contract partyT actionT)
+
+isStringCoercible :: Type' Resolved -> Bool
+isStringCoercible ty = case ty of
+  InfVar{} -> True
+  TyApp _ tyRef [] ->
+    let t = nameToText (getName tyRef)
+    in t `elem` ["NUMBER", "STRING", "BOOLEAN", "DATE"]
+  _ -> False
 
 inferEvent :: Event Name -> Check (Event Resolved, Type' Resolved)
 inferEvent (MkEvent ann party action timestamp atFirst) = do
@@ -1790,14 +1881,14 @@ withScanTypeAndSigEnvironment ::
   (a -> Check [DeclChecked DeclareOrAssume]) ->
   (a -> Check [FunTypeSig]) ->
   a ->
-  Check b ->
+  ([FunTypeSig] -> Check b) ->
   Check b
 withScanTypeAndSigEnvironment preScanDecls scanDecl scanTySig a act = do
   rdeclares <- scanDeclares preScanDecls scanDecl a
   withDeclares rdeclares do
     rdecides <- scanTySig a
     withDecides rdecides $ do
-      act
+      act rdecides
 
 -- | @'withQualified' rs ce@ takes a list of 'Resolved' names and creates
 -- a 'CheckInfo' of @rs@ pointing to the @ce@ 'CheckInfo'.
@@ -1976,82 +2067,6 @@ scanTyDeclAssume _ = do
   pure Nothing
 
 -- ----------------------------------------------------------------------------
--- Phase 2: Scan Function Declarations (DECIDE & ASSUME)
--- ----------------------------------------------------------------------------
-
--- | Extract mixfix pattern information by comparing the AppForm against
--- the GIVEN parameters in the TypeSig.
---
--- A function is mixfix if any of its AppForm tokens match GIVEN parameter names.
--- For example:
---   GIVEN person IS A Person, program IS A Program
---   person `is eligible for` program MEANS ...
---
--- Here the AppForm is [person, is eligible for, program], and the GIVEN params
--- are [person, program]. Since 'person' and 'program' are GIVEN params, this
--- is a mixfix pattern: [Param "person", Keyword "is eligible for", Param "program"]
---
-extractMixfixInfo :: TypeSig Name -> AppForm Name -> Maybe MixfixInfo
-extractMixfixInfo tysig appForm =
-  let
-    -- Get the GIVEN parameter names as a set for fast lookup
-    givenParams :: Set RawName
-    givenParams = Set.fromList $ givenParamNames tysig
-
-    -- Get all tokens from the AppForm (head + args)
-    appFormTokens :: [Name]
-    appFormTokens = appFormHead' : appFormArgs'
-      where
-        MkAppForm _ appFormHead' appFormArgs' _ = appForm
-
-    -- Classify each token as either a parameter or a keyword
-    classifyToken :: Name -> MixfixPatternToken
-    classifyToken n
-      | rawName n `Set.member` givenParams = MixfixParam (rawName n)
-      | otherwise                          = MixfixKeyword (rawName n)
-
-    -- Build the pattern
-    patternTokens :: [MixfixPatternToken]
-    patternTokens = map classifyToken appFormTokens
-
-    -- Extract just the keywords
-    extractKeyword :: MixfixPatternToken -> Maybe RawName
-    extractKeyword (MixfixKeyword k) = Just k
-    extractKeyword (MixfixParam _)   = Nothing
-
-    keywordList :: [RawName]
-    keywordList = mapMaybe extractKeyword patternTokens
-
-    -- Count parameters
-    paramCount :: Int
-    paramCount = length $ filter isParam patternTokens
-
-    isParam :: MixfixPatternToken -> Bool
-    isParam (MixfixParam _)   = True
-    isParam (MixfixKeyword _) = False
-
-  in
-    -- Only return MixfixInfo if there's at least one param in non-head position
-    -- (i.e., if the first token is a param, this is mixfix)
-    -- OR if there are keywords between params
-    if paramCount > 0 && (maybe False isParam (listToMaybe patternTokens) || paramCount < length patternTokens)
-       then Just MkMixfixInfo
-              { pattern = patternTokens
-              , keywords = keywordList
-              , arity = paramCount
-              }
-       else Nothing
-
--- | Extract parameter names from a TypeSig's GIVEN clause.
-givenParamNames :: TypeSig Name -> [RawName]
-givenParamNames (MkTypeSig _ givenSig _) =
-  case givenSig of
-    MkGivenSig _ otns -> map optionallyTypedNameToRawName otns
-  where
-    optionallyTypedNameToRawName :: OptionallyTypedName Name -> RawName
-    optionallyTypedNameToRawName (MkOptionallyTypedName _ n _) = rawName n
-
--- ----------------------------------------------------------------------------
 -- Call-site Mixfix Pattern Matching
 -- ----------------------------------------------------------------------------
 
@@ -2115,6 +2130,33 @@ tryMatchMixfixCall funcName args = do
                 Nothing -> tryFlatteningApproach registry  -- Fall through to original logic
             Nothing -> tryFlatteningApproach registry
         _ -> tryFlatteningApproach registry
+
+    -- Multi-arg case: App funcName [kw1, arg1, kw2, arg2, ...]
+    -- This handles cases like: alice `copulated with` bob `to make` charlie
+    -- which parses as: App alice [`copulated with`, bob, `to make`, charlie]
+    (firstArg:restArgs) | isSimpleName funcName && length args >= 2 -> do
+      funcNameInScope <- lookupRawNameInEnvironment (rawName funcName)
+      let isCallable = any isCallableEntity funcNameInScope
+      case (not isCallable, getExprName firstArg) of
+        (True, Just potentialOpName) | Map.member (rawName potentialOpName) registry -> do
+          -- funcName is NOT callable, and firstArg is a registered mixfix keyword
+          -- Reinterpret as mixfix: funcName becomes first param, firstArg is the function
+          let opRawName = rawName potentialOpName
+          case Map.lookup opRawName registry of
+            Just sigs -> do
+              -- funcName is the first param, restArgs are [arg1, kw2, arg2, ...]
+              let funcAsExpr = App (getAnno funcName) funcName []
+                  -- Build the new args: [funcAsExpr, arg1, Var kw2, arg2, ...]
+                  -- which is [funcAsExpr] ++ restArgs
+                  newArgs = funcAsExpr : restArgs
+              -- Try to match against the mixfix pattern
+              result <- tryMatchAnyPattern opRawName newArgs sigs
+              case result of
+                Just (restructuredArgs, mErr) -> pure $ Just (opRawName, restructuredArgs, mErr)
+                Nothing -> tryRegularMatch
+            Nothing -> tryRegularMatch
+        _ -> tryRegularMatch
+
     _ -> tryRegularMatch
   where
     tryFlatteningApproach registry = do
@@ -2148,6 +2190,36 @@ getExprName :: Expr Name -> Maybe Name
 getExprName (Var _ n) = Just n
 getExprName (App _ n []) = Just n
 getExprName _ = Nothing
+
+-- | Reinterpret a mis-parsed postfix application of the form:
+--   App operand [keyword]
+-- into the expected form:
+--   App keyword [operand]
+-- when keyword is a registered postfix mixfix operator and operand is not callable.
+reinterpretPostfixAppIfNeeded :: Name -> [Expr Name] -> Check (Name, [Expr Name], Bool)
+reinterpretPostfixAppIfNeeded operandName args =
+  case args of
+    [kwExpr]
+      | Just kwName <- getExprName kwExpr -> do
+          registry <- asks (.mixfixRegistry)
+          let kwRaw = rawName kwName
+          case Map.lookup kwRaw registry of
+            Just sigs | any isPostfixMixfix sigs -> do
+              funcNameInScope <- lookupRawNameInEnvironment (rawName operandName)
+              let isCallable = any isCallableEntity funcNameInScope
+              if isCallable
+                then pure (operandName, args, False)
+                else do
+                  let operandExpr = App (getAnno operandName) operandName []
+                  pure (kwName, [operandExpr], True)
+            _ -> pure (operandName, args, False)
+    _ -> pure (operandName, args, False)
+
+-- | Detects mixfix signatures that define pure postfix operators
+-- of the shape: <param> <keyword>
+isPostfixMixfix :: FunTypeSig -> Bool
+isPostfixMixfix MkFunTypeSig {mixfixInfo = Just MkMixfixInfo {pattern = [MixfixParam _, MixfixKeyword _], arity = 1}} = True
+isPostfixMixfix _ = False
 
 -- | Check if a CheckEntity is callable (function, constructor, etc.)
 -- This is used to determine if a name can be applied to arguments.
@@ -2936,8 +3008,10 @@ prettyTypeMismatch ExpectPostBodyContext expected given =
   standardTypeMismatch [ "The body argument of POST is expected to be of type" ] expected given
 prettyTypeMismatch ExpectConcatArgumentContext expected given =
   standardTypeMismatch [ "The argument of CONCAT is expected to be of type" ] expected given
-prettyTypeMismatch ExpectAsStringArgumentContext expected given =
-  standardTypeMismatch [ "The argument of AS STRING is expected to be of type" ] expected given
+prettyTypeMismatch ExpectAsStringArgumentContext _expected given =
+  [ "The argument of AS STRING is expected to be NUMBER, BOOLEAN, DATE, or STRING."
+  , "I inferred the argument to have type " <> prettyLayout given
+  ]
 prettyTypeMismatch ExpectConsArgument2Context expected given =
   standardTypeMismatch [ "The second argument of FOLLOWED BY is expected to be of type" ] expected given
 prettyTypeMismatch (ExpectPatternScrutineeContext scrutinee) expected given =
@@ -3042,6 +3116,8 @@ prettyTypeMismatch ExpectRegulativeProvidedContext expected given =
   standardTypeMismatch [ "The PROVIDED clause for filtering the ACTION is expected to be of type" ] expected given
 prettyTypeMismatch ExpectAssertContext expected given =
   standardTypeMismatch [ "An ASSERT directive is expected to be of type" ] expected given
+prettyTypeMismatch ExpectBreachReasonContext expected given =
+  standardTypeMismatch [ "The BECAUSE clause of a BREACH is expected to be of type" ] expected given
 
 -- | Best effort, only small numbers will occur"
 prettyOrdinal :: Int -> Text

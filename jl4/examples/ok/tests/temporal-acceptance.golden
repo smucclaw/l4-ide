@@ -1,0 +1,17 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+temporal-acceptance.l4:7:1-64:
+  TRUE
+temporal-acceptance.l4:8:1-66:
+  TRUE
+temporal-acceptance.l4:9:1-81:
+  TRUE
+temporal-acceptance.l4:10:1-46:
+  JUST OF (DATE OF 7, 1, 2024)
+temporal-acceptance.l4:11:1-46:
+  JUST OF (DATE OF 13, 1, 2024)
+temporal-acceptance.l4:12:1-51:
+  DATE OF 4, 7, 1776
+temporal-acceptance.l4:13:1-66:
+  DATE OF 25, 12, 2000

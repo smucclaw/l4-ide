@@ -1,0 +1,15 @@
+§ `Idiom: Local WHERE defines postfix`
+
+IMPORT prelude
+
+GIVEN radius IS A NUMBER
+GIVETH A NUMBER
+circleArea radius MEANS
+  LET pi BE 3.14159
+  IN radius `squared` TIMES pi
+     WHERE
+       GIVEN r IS A NUMBER
+       GIVETH A NUMBER
+       r `squared` MEANS r TIMES r
+
+#EVAL circleArea 2

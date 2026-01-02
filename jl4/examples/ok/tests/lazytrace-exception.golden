@@ -23,19 +23,127 @@ lazytrace-exception.l4:10:1-66:
   ││││ THEN TRUE
   ││││ ELSE b
   ││││┌ a
-  ││││└ FALSE
+  ││││└ FALSE││││• FALSE
   │││├ b
-  │││└ TRUE
+  │││└ TRUE│││┌ IF a
+  ││││ THEN TRUE
+  ││││ ELSE b
+  ││││┌ a
+  ││││└ FALSE││││• FALSE
+  │││├ b
+  │││└ TRUE│││┌ b
+  │││└ TRUE│││• TRUE
   │││┌ LIST TRUE, something, FALSE
   │││├ TRUE FOLLOWED BY (LIST something, FALSE)
   ││││┌ LIST something, FALSE
   ││││├ something FOLLOWED BY (LIST FALSE)
-  ││││└ LIST something, ...
-  │││└ LIST TRUE, something, ...
-  ││└ LIST TRUE, TRUE, something, ...
-  │└ LIST TRUE, TRUE, TRUE, something, ...
+  ││││└ LIST something, ...││││┌ something FOLLOWED BY (LIST FALSE)
+  ││││└ LIST something, ...││││• LIST something, ...
+  │││└ LIST TRUE, something, ...│││┌ TRUE FOLLOWED BY (LIST something, FALSE)
+  ││││┌ LIST something, FALSE
+  ││││├ something FOLLOWED BY (LIST FALSE)
+  ││││└ LIST something, ...││││┌ something FOLLOWED BY (LIST FALSE)
+  ││││└ LIST something, ...││││• LIST something, ...
+  │││└ LIST TRUE, something, ...│││• LIST TRUE, something, ...
+  ││└ LIST TRUE, TRUE, something, ...││┌ (   FALSE
+  │││ OR TRUE) FOLLOWED BY (LIST TRUE, something, FALSE)
+  │││┌    FALSE
+  ││││ OR TRUE
+  │││├ IF a
+  ││││ THEN TRUE
+  ││││ ELSE b
+  ││││┌ a
+  ││││└ FALSE││││• FALSE
+  │││├ b
+  │││└ TRUE│││┌ IF a
+  ││││ THEN TRUE
+  ││││ ELSE b
+  ││││┌ a
+  ││││└ FALSE││││• FALSE
+  │││├ b
+  │││└ TRUE│││┌ b
+  │││└ TRUE│││• TRUE
+  │││┌ LIST TRUE, something, FALSE
+  │││├ TRUE FOLLOWED BY (LIST something, FALSE)
+  ││││┌ LIST something, FALSE
+  ││││├ something FOLLOWED BY (LIST FALSE)
+  ││││└ LIST something, ...││││┌ something FOLLOWED BY (LIST FALSE)
+  ││││└ LIST something, ...││││• LIST something, ...
+  │││└ LIST TRUE, something, ...│││┌ TRUE FOLLOWED BY (LIST something, FALSE)
+  ││││┌ LIST something, FALSE
+  ││││├ something FOLLOWED BY (LIST FALSE)
+  ││││└ LIST something, ...││││┌ something FOLLOWED BY (LIST FALSE)
+  ││││└ LIST something, ...││││• LIST something, ...
+  │││└ LIST TRUE, something, ...│││• LIST TRUE, something, ...
+  ││└ LIST TRUE, TRUE, something, ...││• LIST TRUE, TRUE, something, ...
+  │└ LIST TRUE, TRUE, TRUE, something, ...│┌ TRUE FOLLOWED BY (LIST (   FALSE
+  ││ OR TRUE), TRUE, something, FALSE)
+  ││┌ LIST (   FALSE
+  │││ OR TRUE), TRUE, something, FALSE
+  ││├ (   FALSE
+  │││ OR TRUE) FOLLOWED BY (LIST TRUE, something, FALSE)
+  │││┌    FALSE
+  ││││ OR TRUE
+  │││├ IF a
+  ││││ THEN TRUE
+  ││││ ELSE b
+  ││││┌ a
+  ││││└ FALSE││││• FALSE
+  │││├ b
+  │││└ TRUE│││┌ IF a
+  ││││ THEN TRUE
+  ││││ ELSE b
+  ││││┌ a
+  ││││└ FALSE││││• FALSE
+  │││├ b
+  │││└ TRUE│││┌ b
+  │││└ TRUE│││• TRUE
+  │││┌ LIST TRUE, something, FALSE
+  │││├ TRUE FOLLOWED BY (LIST something, FALSE)
+  ││││┌ LIST something, FALSE
+  ││││├ something FOLLOWED BY (LIST FALSE)
+  ││││└ LIST something, ...││││┌ something FOLLOWED BY (LIST FALSE)
+  ││││└ LIST something, ...││││• LIST something, ...
+  │││└ LIST TRUE, something, ...│││┌ TRUE FOLLOWED BY (LIST something, FALSE)
+  ││││┌ LIST something, FALSE
+  ││││├ something FOLLOWED BY (LIST FALSE)
+  ││││└ LIST something, ...││││┌ something FOLLOWED BY (LIST FALSE)
+  ││││└ LIST something, ...││││• LIST something, ...
+  │││└ LIST TRUE, something, ...│││• LIST TRUE, something, ...
+  ││└ LIST TRUE, TRUE, something, ...││┌ (   FALSE
+  │││ OR TRUE) FOLLOWED BY (LIST TRUE, something, FALSE)
+  │││┌    FALSE
+  ││││ OR TRUE
+  │││├ IF a
+  ││││ THEN TRUE
+  ││││ ELSE b
+  ││││┌ a
+  ││││└ FALSE││││• FALSE
+  │││├ b
+  │││└ TRUE│││┌ IF a
+  ││││ THEN TRUE
+  ││││ ELSE b
+  ││││┌ a
+  ││││└ FALSE││││• FALSE
+  │││├ b
+  │││└ TRUE│││┌ b
+  │││└ TRUE│││• TRUE
+  │││┌ LIST TRUE, something, FALSE
+  │││├ TRUE FOLLOWED BY (LIST something, FALSE)
+  ││││┌ LIST something, FALSE
+  ││││├ something FOLLOWED BY (LIST FALSE)
+  ││││└ LIST something, ...││││┌ something FOLLOWED BY (LIST FALSE)
+  ││││└ LIST something, ...││││• LIST something, ...
+  │││└ LIST TRUE, something, ...│││┌ TRUE FOLLOWED BY (LIST something, FALSE)
+  ││││┌ LIST something, FALSE
+  ││││├ something FOLLOWED BY (LIST FALSE)
+  ││││└ LIST something, ...││││┌ something FOLLOWED BY (LIST FALSE)
+  ││││└ LIST something, ...││││• LIST something, ...
+  │││└ LIST TRUE, something, ...│││• LIST TRUE, something, ...
+  ││└ LIST TRUE, TRUE, something, ...││• LIST TRUE, TRUE, something, ...
+  │└ LIST TRUE, TRUE, TRUE, something, ...│• LIST TRUE, TRUE, TRUE, something, ...
   │┌ and
-  │└ <function>
+  │└ <function>│• <function>
   ├ CONSIDER list WHEN EMPTY THEN TRUE,
   │                 WHEN x FOLLOWED BY xs THEN     x
   │                 AND and OF xs
@@ -43,7 +151,7 @@ lazytrace-exception.l4:10:1-66:
   │ AND and OF xs
   │┌ and OF xs
   ││┌ and
-  ││└ <function>
+  ││└ <function>││• <function>
   │├ CONSIDER list WHEN EMPTY THEN TRUE,
   ││                 WHEN x FOLLOWED BY xs THEN     x
   ││                 AND and OF xs
@@ -51,7 +159,7 @@ lazytrace-exception.l4:10:1-66:
   ││ AND and OF xs
   ││┌ and OF xs
   │││┌ and
-  │││└ <function>
+  │││└ <function>│││• <function>
   ││├ CONSIDER list WHEN EMPTY THEN TRUE,
   │││                 WHEN x FOLLOWED BY xs THEN     x
   │││                 AND and OF xs
@@ -59,7 +167,7 @@ lazytrace-exception.l4:10:1-66:
   │││ AND and OF xs
   │││┌ and OF xs
   ││││┌ and
-  ││││└ <function>
+  ││││└ <function>││││• <function>
   │││├ CONSIDER list WHEN EMPTY THEN TRUE,
   ││││                 WHEN x FOLLOWED BY xs THEN     x
   ││││                 AND and OF xs
@@ -69,29 +177,1475 @@ lazytrace-exception.l4:10:1-66:
   ││││ THEN b
   ││││ ELSE FALSE
   ││││┌ a
-  ││││└ something
-  │││└ ↯ stuck
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││• ↯ stuck
   ││├ IF a
   │││ THEN b
   │││ ELSE FALSE
   │││┌ a
-  │││└ TRUE
+  │││└ TRUE│││• TRUE
   ││├ b
-  ││└ ↯ stuck
+  ││└ ↯ stuck││┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  │││                 WHEN x FOLLOWED BY xs THEN     x
+  │││                 AND and OF xs
+  ││├     x
+  │││ AND and OF xs
+  │││┌ and OF xs
+  ││││┌ and
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││• ↯ stuck
+  ││├ IF a
+  │││ THEN b
+  │││ ELSE FALSE
+  │││┌ a
+  │││└ TRUE│││• TRUE
+  ││├ b
+  ││└ ↯ stuck││┌     x
+  │││ AND and OF xs
+  │││┌ and OF xs
+  ││││┌ and
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││• ↯ stuck
+  ││├ IF a
+  │││ THEN b
+  │││ ELSE FALSE
+  │││┌ a
+  │││└ TRUE│││• TRUE
+  ││├ b
+  ││└ ↯ stuck││┌ IF a
+  │││ THEN b
+  │││ ELSE FALSE
+  │││┌ a
+  │││└ TRUE│││• TRUE
+  ││├ b
+  ││└ ↯ stuck││┌ b
+  ││└ ↯ stuck││• ↯ stuck
   │├ IF a
   ││ THEN b
   ││ ELSE FALSE
   ││┌ a
-  ││└ TRUE
+  ││└ TRUE││• TRUE
   │├ b
-  │└ ↯ stuck
+  │└ ↯ stuck│┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││                 WHEN x FOLLOWED BY xs THEN     x
+  ││                 AND and OF xs
+  │├     x
+  ││ AND and OF xs
+  ││┌ and OF xs
+  │││┌ and
+  │││└ <function>│││• <function>
+  ││├ CONSIDER list WHEN EMPTY THEN TRUE,
+  │││                 WHEN x FOLLOWED BY xs THEN     x
+  │││                 AND and OF xs
+  ││├     x
+  │││ AND and OF xs
+  │││┌ and OF xs
+  ││││┌ and
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││• ↯ stuck
+  ││├ IF a
+  │││ THEN b
+  │││ ELSE FALSE
+  │││┌ a
+  │││└ TRUE│││• TRUE
+  ││├ b
+  ││└ ↯ stuck││┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  │││                 WHEN x FOLLOWED BY xs THEN     x
+  │││                 AND and OF xs
+  ││├     x
+  │││ AND and OF xs
+  │││┌ and OF xs
+  ││││┌ and
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││• ↯ stuck
+  ││├ IF a
+  │││ THEN b
+  │││ ELSE FALSE
+  │││┌ a
+  │││└ TRUE│││• TRUE
+  ││├ b
+  ││└ ↯ stuck││┌     x
+  │││ AND and OF xs
+  │││┌ and OF xs
+  ││││┌ and
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││• ↯ stuck
+  ││├ IF a
+  │││ THEN b
+  │││ ELSE FALSE
+  │││┌ a
+  │││└ TRUE│││• TRUE
+  ││├ b
+  ││└ ↯ stuck││┌ IF a
+  │││ THEN b
+  │││ ELSE FALSE
+  │││┌ a
+  │││└ TRUE│││• TRUE
+  ││├ b
+  ││└ ↯ stuck││┌ b
+  ││└ ↯ stuck││• ↯ stuck
+  │├ IF a
+  ││ THEN b
+  ││ ELSE FALSE
+  ││┌ a
+  ││└ TRUE││• TRUE
+  │├ b
+  │└ ↯ stuck│┌     x
+  ││ AND and OF xs
+  ││┌ and OF xs
+  │││┌ and
+  │││└ <function>│││• <function>
+  ││├ CONSIDER list WHEN EMPTY THEN TRUE,
+  │││                 WHEN x FOLLOWED BY xs THEN     x
+  │││                 AND and OF xs
+  ││├     x
+  │││ AND and OF xs
+  │││┌ and OF xs
+  ││││┌ and
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││• ↯ stuck
+  ││├ IF a
+  │││ THEN b
+  │││ ELSE FALSE
+  │││┌ a
+  │││└ TRUE│││• TRUE
+  ││├ b
+  ││└ ↯ stuck││┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  │││                 WHEN x FOLLOWED BY xs THEN     x
+  │││                 AND and OF xs
+  ││├     x
+  │││ AND and OF xs
+  │││┌ and OF xs
+  ││││┌ and
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││• ↯ stuck
+  ││├ IF a
+  │││ THEN b
+  │││ ELSE FALSE
+  │││┌ a
+  │││└ TRUE│││• TRUE
+  ││├ b
+  ││└ ↯ stuck││┌     x
+  │││ AND and OF xs
+  │││┌ and OF xs
+  ││││┌ and
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││• ↯ stuck
+  ││├ IF a
+  │││ THEN b
+  │││ ELSE FALSE
+  │││┌ a
+  │││└ TRUE│││• TRUE
+  ││├ b
+  ││└ ↯ stuck││┌ IF a
+  │││ THEN b
+  │││ ELSE FALSE
+  │││┌ a
+  │││└ TRUE│││• TRUE
+  ││├ b
+  ││└ ↯ stuck││┌ b
+  ││└ ↯ stuck││• ↯ stuck
+  │├ IF a
+  ││ THEN b
+  ││ ELSE FALSE
+  ││┌ a
+  ││└ TRUE││• TRUE
+  │├ b
+  │└ ↯ stuck│┌ IF a
+  ││ THEN b
+  ││ ELSE FALSE
+  ││┌ a
+  ││└ TRUE││• TRUE
+  │├ b
+  │└ ↯ stuck│┌ b
+  │└ ↯ stuck│• ↯ stuck
   ├ IF a
   │ THEN b
   │ ELSE FALSE
   │┌ a
-  │└ TRUE
+  │└ TRUE│• TRUE
   ├ b
-  └ ↯ stuck
+  └ ↯ stuck┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  │                 WHEN x FOLLOWED BY xs THEN     x
+  │                 AND and OF xs
+  ├     x
+  │ AND and OF xs
+  │┌ and OF xs
+  ││┌ and
+  ││└ <function>││• <function>
+  │├ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││                 WHEN x FOLLOWED BY xs THEN     x
+  ││                 AND and OF xs
+  │├     x
+  ││ AND and OF xs
+  ││┌ and OF xs
+  │││┌ and
+  │││└ <function>│││• <function>
+  ││├ CONSIDER list WHEN EMPTY THEN TRUE,
+  │││                 WHEN x FOLLOWED BY xs THEN     x
+  │││                 AND and OF xs
+  ││├     x
+  │││ AND and OF xs
+  │││┌ and OF xs
+  ││││┌ and
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││• ↯ stuck
+  ││├ IF a
+  │││ THEN b
+  │││ ELSE FALSE
+  │││┌ a
+  │││└ TRUE│││• TRUE
+  ││├ b
+  ││└ ↯ stuck││┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  │││                 WHEN x FOLLOWED BY xs THEN     x
+  │││                 AND and OF xs
+  ││├     x
+  │││ AND and OF xs
+  │││┌ and OF xs
+  ││││┌ and
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││• ↯ stuck
+  ││├ IF a
+  │││ THEN b
+  │││ ELSE FALSE
+  │││┌ a
+  │││└ TRUE│││• TRUE
+  ││├ b
+  ││└ ↯ stuck││┌     x
+  │││ AND and OF xs
+  │││┌ and OF xs
+  ││││┌ and
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││• ↯ stuck
+  ││├ IF a
+  │││ THEN b
+  │││ ELSE FALSE
+  │││┌ a
+  │││└ TRUE│││• TRUE
+  ││├ b
+  ││└ ↯ stuck││┌ IF a
+  │││ THEN b
+  │││ ELSE FALSE
+  │││┌ a
+  │││└ TRUE│││• TRUE
+  ││├ b
+  ││└ ↯ stuck││┌ b
+  ││└ ↯ stuck││• ↯ stuck
+  │├ IF a
+  ││ THEN b
+  ││ ELSE FALSE
+  ││┌ a
+  ││└ TRUE││• TRUE
+  │├ b
+  │└ ↯ stuck│┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││                 WHEN x FOLLOWED BY xs THEN     x
+  ││                 AND and OF xs
+  │├     x
+  ││ AND and OF xs
+  ││┌ and OF xs
+  │││┌ and
+  │││└ <function>│││• <function>
+  ││├ CONSIDER list WHEN EMPTY THEN TRUE,
+  │││                 WHEN x FOLLOWED BY xs THEN     x
+  │││                 AND and OF xs
+  ││├     x
+  │││ AND and OF xs
+  │││┌ and OF xs
+  ││││┌ and
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││• ↯ stuck
+  ││├ IF a
+  │││ THEN b
+  │││ ELSE FALSE
+  │││┌ a
+  │││└ TRUE│││• TRUE
+  ││├ b
+  ││└ ↯ stuck││┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  │││                 WHEN x FOLLOWED BY xs THEN     x
+  │││                 AND and OF xs
+  ││├     x
+  │││ AND and OF xs
+  │││┌ and OF xs
+  ││││┌ and
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││• ↯ stuck
+  ││├ IF a
+  │││ THEN b
+  │││ ELSE FALSE
+  │││┌ a
+  │││└ TRUE│││• TRUE
+  ││├ b
+  ││└ ↯ stuck││┌     x
+  │││ AND and OF xs
+  │││┌ and OF xs
+  ││││┌ and
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││• ↯ stuck
+  ││├ IF a
+  │││ THEN b
+  │││ ELSE FALSE
+  │││┌ a
+  │││└ TRUE│││• TRUE
+  ││├ b
+  ││└ ↯ stuck││┌ IF a
+  │││ THEN b
+  │││ ELSE FALSE
+  │││┌ a
+  │││└ TRUE│││• TRUE
+  ││├ b
+  ││└ ↯ stuck││┌ b
+  ││└ ↯ stuck││• ↯ stuck
+  │├ IF a
+  ││ THEN b
+  ││ ELSE FALSE
+  ││┌ a
+  ││└ TRUE││• TRUE
+  │├ b
+  │└ ↯ stuck│┌     x
+  ││ AND and OF xs
+  ││┌ and OF xs
+  │││┌ and
+  │││└ <function>│││• <function>
+  ││├ CONSIDER list WHEN EMPTY THEN TRUE,
+  │││                 WHEN x FOLLOWED BY xs THEN     x
+  │││                 AND and OF xs
+  ││├     x
+  │││ AND and OF xs
+  │││┌ and OF xs
+  ││││┌ and
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││• ↯ stuck
+  ││├ IF a
+  │││ THEN b
+  │││ ELSE FALSE
+  │││┌ a
+  │││└ TRUE│││• TRUE
+  ││├ b
+  ││└ ↯ stuck││┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  │││                 WHEN x FOLLOWED BY xs THEN     x
+  │││                 AND and OF xs
+  ││├     x
+  │││ AND and OF xs
+  │││┌ and OF xs
+  ││││┌ and
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││• ↯ stuck
+  ││├ IF a
+  │││ THEN b
+  │││ ELSE FALSE
+  │││┌ a
+  │││└ TRUE│││• TRUE
+  ││├ b
+  ││└ ↯ stuck││┌     x
+  │││ AND and OF xs
+  │││┌ and OF xs
+  ││││┌ and
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││• ↯ stuck
+  ││├ IF a
+  │││ THEN b
+  │││ ELSE FALSE
+  │││┌ a
+  │││└ TRUE│││• TRUE
+  ││├ b
+  ││└ ↯ stuck││┌ IF a
+  │││ THEN b
+  │││ ELSE FALSE
+  │││┌ a
+  │││└ TRUE│││• TRUE
+  ││├ b
+  ││└ ↯ stuck││┌ b
+  ││└ ↯ stuck││• ↯ stuck
+  │├ IF a
+  ││ THEN b
+  ││ ELSE FALSE
+  ││┌ a
+  ││└ TRUE││• TRUE
+  │├ b
+  │└ ↯ stuck│┌ IF a
+  ││ THEN b
+  ││ ELSE FALSE
+  ││┌ a
+  ││└ TRUE││• TRUE
+  │├ b
+  │└ ↯ stuck│┌ b
+  │└ ↯ stuck│• ↯ stuck
+  ├ IF a
+  │ THEN b
+  │ ELSE FALSE
+  │┌ a
+  │└ TRUE│• TRUE
+  ├ b
+  └ ↯ stuck┌     x
+  │ AND and OF xs
+  │┌ and OF xs
+  ││┌ and
+  ││└ <function>││• <function>
+  │├ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││                 WHEN x FOLLOWED BY xs THEN     x
+  ││                 AND and OF xs
+  │├     x
+  ││ AND and OF xs
+  ││┌ and OF xs
+  │││┌ and
+  │││└ <function>│││• <function>
+  ││├ CONSIDER list WHEN EMPTY THEN TRUE,
+  │││                 WHEN x FOLLOWED BY xs THEN     x
+  │││                 AND and OF xs
+  ││├     x
+  │││ AND and OF xs
+  │││┌ and OF xs
+  ││││┌ and
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││• ↯ stuck
+  ││├ IF a
+  │││ THEN b
+  │││ ELSE FALSE
+  │││┌ a
+  │││└ TRUE│││• TRUE
+  ││├ b
+  ││└ ↯ stuck││┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  │││                 WHEN x FOLLOWED BY xs THEN     x
+  │││                 AND and OF xs
+  ││├     x
+  │││ AND and OF xs
+  │││┌ and OF xs
+  ││││┌ and
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││• ↯ stuck
+  ││├ IF a
+  │││ THEN b
+  │││ ELSE FALSE
+  │││┌ a
+  │││└ TRUE│││• TRUE
+  ││├ b
+  ││└ ↯ stuck││┌     x
+  │││ AND and OF xs
+  │││┌ and OF xs
+  ││││┌ and
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││• ↯ stuck
+  ││├ IF a
+  │││ THEN b
+  │││ ELSE FALSE
+  │││┌ a
+  │││└ TRUE│││• TRUE
+  ││├ b
+  ││└ ↯ stuck││┌ IF a
+  │││ THEN b
+  │││ ELSE FALSE
+  │││┌ a
+  │││└ TRUE│││• TRUE
+  ││├ b
+  ││└ ↯ stuck││┌ b
+  ││└ ↯ stuck││• ↯ stuck
+  │├ IF a
+  ││ THEN b
+  ││ ELSE FALSE
+  ││┌ a
+  ││└ TRUE││• TRUE
+  │├ b
+  │└ ↯ stuck│┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││                 WHEN x FOLLOWED BY xs THEN     x
+  ││                 AND and OF xs
+  │├     x
+  ││ AND and OF xs
+  ││┌ and OF xs
+  │││┌ and
+  │││└ <function>│││• <function>
+  ││├ CONSIDER list WHEN EMPTY THEN TRUE,
+  │││                 WHEN x FOLLOWED BY xs THEN     x
+  │││                 AND and OF xs
+  ││├     x
+  │││ AND and OF xs
+  │││┌ and OF xs
+  ││││┌ and
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││• ↯ stuck
+  ││├ IF a
+  │││ THEN b
+  │││ ELSE FALSE
+  │││┌ a
+  │││└ TRUE│││• TRUE
+  ││├ b
+  ││└ ↯ stuck││┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  │││                 WHEN x FOLLOWED BY xs THEN     x
+  │││                 AND and OF xs
+  ││├     x
+  │││ AND and OF xs
+  │││┌ and OF xs
+  ││││┌ and
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││• ↯ stuck
+  ││├ IF a
+  │││ THEN b
+  │││ ELSE FALSE
+  │││┌ a
+  │││└ TRUE│││• TRUE
+  ││├ b
+  ││└ ↯ stuck││┌     x
+  │││ AND and OF xs
+  │││┌ and OF xs
+  ││││┌ and
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││• ↯ stuck
+  ││├ IF a
+  │││ THEN b
+  │││ ELSE FALSE
+  │││┌ a
+  │││└ TRUE│││• TRUE
+  ││├ b
+  ││└ ↯ stuck││┌ IF a
+  │││ THEN b
+  │││ ELSE FALSE
+  │││┌ a
+  │││└ TRUE│││• TRUE
+  ││├ b
+  ││└ ↯ stuck││┌ b
+  ││└ ↯ stuck││• ↯ stuck
+  │├ IF a
+  ││ THEN b
+  ││ ELSE FALSE
+  ││┌ a
+  ││└ TRUE││• TRUE
+  │├ b
+  │└ ↯ stuck│┌     x
+  ││ AND and OF xs
+  ││┌ and OF xs
+  │││┌ and
+  │││└ <function>│││• <function>
+  ││├ CONSIDER list WHEN EMPTY THEN TRUE,
+  │││                 WHEN x FOLLOWED BY xs THEN     x
+  │││                 AND and OF xs
+  ││├     x
+  │││ AND and OF xs
+  │││┌ and OF xs
+  ││││┌ and
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││• ↯ stuck
+  ││├ IF a
+  │││ THEN b
+  │││ ELSE FALSE
+  │││┌ a
+  │││└ TRUE│││• TRUE
+  ││├ b
+  ││└ ↯ stuck││┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  │││                 WHEN x FOLLOWED BY xs THEN     x
+  │││                 AND and OF xs
+  ││├     x
+  │││ AND and OF xs
+  │││┌ and OF xs
+  ││││┌ and
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││• ↯ stuck
+  ││├ IF a
+  │││ THEN b
+  │││ ELSE FALSE
+  │││┌ a
+  │││└ TRUE│││• TRUE
+  ││├ b
+  ││└ ↯ stuck││┌     x
+  │││ AND and OF xs
+  │││┌ and OF xs
+  ││││┌ and
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ CONSIDER list WHEN EMPTY THEN TRUE,
+  ││││                 WHEN x FOLLOWED BY xs THEN     x
+  ││││                 AND and OF xs
+  │││├     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌     x
+  ││││ AND and OF xs
+  │││├ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││┌ IF a
+  ││││ THEN b
+  ││││ ELSE FALSE
+  ││││┌ a
+  ││││└ something││││• something
+  │││└ ↯ stuck│││• ↯ stuck
+  ││├ IF a
+  │││ THEN b
+  │││ ELSE FALSE
+  │││┌ a
+  │││└ TRUE│││• TRUE
+  ││├ b
+  ││└ ↯ stuck││┌ IF a
+  │││ THEN b
+  │││ ELSE FALSE
+  │││┌ a
+  │││└ TRUE│││• TRUE
+  ││├ b
+  ││└ ↯ stuck││┌ b
+  ││└ ↯ stuck││• ↯ stuck
+  │├ IF a
+  ││ THEN b
+  ││ ELSE FALSE
+  ││┌ a
+  ││└ TRUE││• TRUE
+  │├ b
+  │└ ↯ stuck│┌ IF a
+  ││ THEN b
+  ││ ELSE FALSE
+  ││┌ a
+  ││└ TRUE││• TRUE
+  │├ b
+  │└ ↯ stuck│┌ b
+  │└ ↯ stuck│• ↯ stuck
+  ├ IF a
+  │ THEN b
+  │ ELSE FALSE
+  │┌ a
+  │└ TRUE│• TRUE
+  ├ b
+  └ ↯ stuck┌ IF a
+  │ THEN b
+  │ ELSE FALSE
+  │┌ a
+  │└ TRUE│• TRUE
+  ├ b
+  └ ↯ stuck┌ b
+  └ ↯ stuck• ↯ stuck
 lazytrace-exception.l4:19:1-52:
   Division by zero in the operation:
   DIVIDED
@@ -107,21 +1661,411 @@ lazytrace-exception.l4:19:1-52:
   ││││┌ LIST (4 DIVIDED 0), 5, 6
   ││││├ (4 DIVIDED 0) FOLLOWED BY (LIST 5, 6)
   │││││┌ 4 DIVIDED 0
-  │││││└ ↯ division by zero
+  │││││└ ↯ division by zero│││││• ↯ division by zero
   │││││┌ LIST 5, 6
   │││││├ 5 FOLLOWED BY (LIST 6)
   ││││││┌ LIST 6
   ││││││├ 6 FOLLOWED BY (LIST )
   │││││││┌ LIST 
-  │││││││└ EMPTY
-  ││││││└ LIST ...
-  │││││└ LIST ..., ...
-  ││││└ LIST ..., ..., ...
-  │││└ LIST 3, ..., ..., ...
-  ││└ LIST 2, 3, ..., ..., ...
-  │└ LIST 1, 2, 3, ..., ..., ...
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││┌ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││• LIST ...
+  │││││└ LIST ..., ...│││││┌ 5 FOLLOWED BY (LIST 6)
+  ││││││┌ LIST 6
+  ││││││├ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││┌ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││• LIST ...
+  │││││└ LIST ..., ...│││││• LIST ..., ...
+  ││││└ LIST ..., ..., ...││││┌ (4 DIVIDED 0) FOLLOWED BY (LIST 5, 6)
+  │││││┌ 4 DIVIDED 0
+  │││││└ ↯ division by zero│││││• ↯ division by zero
+  │││││┌ LIST 5, 6
+  │││││├ 5 FOLLOWED BY (LIST 6)
+  ││││││┌ LIST 6
+  ││││││├ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││┌ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││• LIST ...
+  │││││└ LIST ..., ...│││││┌ 5 FOLLOWED BY (LIST 6)
+  ││││││┌ LIST 6
+  ││││││├ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││┌ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││• LIST ...
+  │││││└ LIST ..., ...│││││• LIST ..., ...
+  ││││└ LIST ..., ..., ...││││• LIST ..., ..., ...
+  │││└ LIST 3, ..., ..., ...│││┌ 3 FOLLOWED BY (LIST (4 DIVIDED 0), 5, 6)
+  ││││┌ LIST (4 DIVIDED 0), 5, 6
+  ││││├ (4 DIVIDED 0) FOLLOWED BY (LIST 5, 6)
+  │││││┌ 4 DIVIDED 0
+  │││││└ ↯ division by zero│││││• ↯ division by zero
+  │││││┌ LIST 5, 6
+  │││││├ 5 FOLLOWED BY (LIST 6)
+  ││││││┌ LIST 6
+  ││││││├ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││┌ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││• LIST ...
+  │││││└ LIST ..., ...│││││┌ 5 FOLLOWED BY (LIST 6)
+  ││││││┌ LIST 6
+  ││││││├ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││┌ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││• LIST ...
+  │││││└ LIST ..., ...│││││• LIST ..., ...
+  ││││└ LIST ..., ..., ...││││┌ (4 DIVIDED 0) FOLLOWED BY (LIST 5, 6)
+  │││││┌ 4 DIVIDED 0
+  │││││└ ↯ division by zero│││││• ↯ division by zero
+  │││││┌ LIST 5, 6
+  │││││├ 5 FOLLOWED BY (LIST 6)
+  ││││││┌ LIST 6
+  ││││││├ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││┌ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││• LIST ...
+  │││││└ LIST ..., ...│││││┌ 5 FOLLOWED BY (LIST 6)
+  ││││││┌ LIST 6
+  ││││││├ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││┌ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││• LIST ...
+  │││││└ LIST ..., ...│││││• LIST ..., ...
+  ││││└ LIST ..., ..., ...││││• LIST ..., ..., ...
+  │││└ LIST 3, ..., ..., ...│││• LIST 3, ..., ..., ...
+  ││└ LIST 2, 3, ..., ..., ...││┌ 2 FOLLOWED BY (LIST 3, (4 DIVIDED 0), 5, 6)
+  │││┌ LIST 3, (4 DIVIDED 0), 5, 6
+  │││├ 3 FOLLOWED BY (LIST (4 DIVIDED 0), 5, 6)
+  ││││┌ LIST (4 DIVIDED 0), 5, 6
+  ││││├ (4 DIVIDED 0) FOLLOWED BY (LIST 5, 6)
+  │││││┌ 4 DIVIDED 0
+  │││││└ ↯ division by zero│││││• ↯ division by zero
+  │││││┌ LIST 5, 6
+  │││││├ 5 FOLLOWED BY (LIST 6)
+  ││││││┌ LIST 6
+  ││││││├ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││┌ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││• LIST ...
+  │││││└ LIST ..., ...│││││┌ 5 FOLLOWED BY (LIST 6)
+  ││││││┌ LIST 6
+  ││││││├ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││┌ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││• LIST ...
+  │││││└ LIST ..., ...│││││• LIST ..., ...
+  ││││└ LIST ..., ..., ...││││┌ (4 DIVIDED 0) FOLLOWED BY (LIST 5, 6)
+  │││││┌ 4 DIVIDED 0
+  │││││└ ↯ division by zero│││││• ↯ division by zero
+  │││││┌ LIST 5, 6
+  │││││├ 5 FOLLOWED BY (LIST 6)
+  ││││││┌ LIST 6
+  ││││││├ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││┌ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││• LIST ...
+  │││││└ LIST ..., ...│││││┌ 5 FOLLOWED BY (LIST 6)
+  ││││││┌ LIST 6
+  ││││││├ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││┌ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││• LIST ...
+  │││││└ LIST ..., ...│││││• LIST ..., ...
+  ││││└ LIST ..., ..., ...││││• LIST ..., ..., ...
+  │││└ LIST 3, ..., ..., ...│││┌ 3 FOLLOWED BY (LIST (4 DIVIDED 0), 5, 6)
+  ││││┌ LIST (4 DIVIDED 0), 5, 6
+  ││││├ (4 DIVIDED 0) FOLLOWED BY (LIST 5, 6)
+  │││││┌ 4 DIVIDED 0
+  │││││└ ↯ division by zero│││││• ↯ division by zero
+  │││││┌ LIST 5, 6
+  │││││├ 5 FOLLOWED BY (LIST 6)
+  ││││││┌ LIST 6
+  ││││││├ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││┌ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││• LIST ...
+  │││││└ LIST ..., ...│││││┌ 5 FOLLOWED BY (LIST 6)
+  ││││││┌ LIST 6
+  ││││││├ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││┌ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││• LIST ...
+  │││││└ LIST ..., ...│││││• LIST ..., ...
+  ││││└ LIST ..., ..., ...││││┌ (4 DIVIDED 0) FOLLOWED BY (LIST 5, 6)
+  │││││┌ 4 DIVIDED 0
+  │││││└ ↯ division by zero│││││• ↯ division by zero
+  │││││┌ LIST 5, 6
+  │││││├ 5 FOLLOWED BY (LIST 6)
+  ││││││┌ LIST 6
+  ││││││├ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││┌ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││• LIST ...
+  │││││└ LIST ..., ...│││││┌ 5 FOLLOWED BY (LIST 6)
+  ││││││┌ LIST 6
+  ││││││├ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││┌ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││• LIST ...
+  │││││└ LIST ..., ...│││││• LIST ..., ...
+  ││││└ LIST ..., ..., ...││││• LIST ..., ..., ...
+  │││└ LIST 3, ..., ..., ...│││• LIST 3, ..., ..., ...
+  ││└ LIST 2, 3, ..., ..., ...││• LIST 2, 3, ..., ..., ...
+  │└ LIST 1, 2, 3, ..., ..., ...│┌ 1 FOLLOWED BY (LIST 2, 3, (4 DIVIDED 0), 5, 6)
+  ││┌ LIST 2, 3, (4 DIVIDED 0), 5, 6
+  ││├ 2 FOLLOWED BY (LIST 3, (4 DIVIDED 0), 5, 6)
+  │││┌ LIST 3, (4 DIVIDED 0), 5, 6
+  │││├ 3 FOLLOWED BY (LIST (4 DIVIDED 0), 5, 6)
+  ││││┌ LIST (4 DIVIDED 0), 5, 6
+  ││││├ (4 DIVIDED 0) FOLLOWED BY (LIST 5, 6)
+  │││││┌ 4 DIVIDED 0
+  │││││└ ↯ division by zero│││││• ↯ division by zero
+  │││││┌ LIST 5, 6
+  │││││├ 5 FOLLOWED BY (LIST 6)
+  ││││││┌ LIST 6
+  ││││││├ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││┌ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││• LIST ...
+  │││││└ LIST ..., ...│││││┌ 5 FOLLOWED BY (LIST 6)
+  ││││││┌ LIST 6
+  ││││││├ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││┌ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││• LIST ...
+  │││││└ LIST ..., ...│││││• LIST ..., ...
+  ││││└ LIST ..., ..., ...││││┌ (4 DIVIDED 0) FOLLOWED BY (LIST 5, 6)
+  │││││┌ 4 DIVIDED 0
+  │││││└ ↯ division by zero│││││• ↯ division by zero
+  │││││┌ LIST 5, 6
+  │││││├ 5 FOLLOWED BY (LIST 6)
+  ││││││┌ LIST 6
+  ││││││├ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││┌ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││• LIST ...
+  │││││└ LIST ..., ...│││││┌ 5 FOLLOWED BY (LIST 6)
+  ││││││┌ LIST 6
+  ││││││├ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││┌ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││• LIST ...
+  │││││└ LIST ..., ...│││││• LIST ..., ...
+  ││││└ LIST ..., ..., ...││││• LIST ..., ..., ...
+  │││└ LIST 3, ..., ..., ...│││┌ 3 FOLLOWED BY (LIST (4 DIVIDED 0), 5, 6)
+  ││││┌ LIST (4 DIVIDED 0), 5, 6
+  ││││├ (4 DIVIDED 0) FOLLOWED BY (LIST 5, 6)
+  │││││┌ 4 DIVIDED 0
+  │││││└ ↯ division by zero│││││• ↯ division by zero
+  │││││┌ LIST 5, 6
+  │││││├ 5 FOLLOWED BY (LIST 6)
+  ││││││┌ LIST 6
+  ││││││├ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││┌ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││• LIST ...
+  │││││└ LIST ..., ...│││││┌ 5 FOLLOWED BY (LIST 6)
+  ││││││┌ LIST 6
+  ││││││├ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││┌ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││• LIST ...
+  │││││└ LIST ..., ...│││││• LIST ..., ...
+  ││││└ LIST ..., ..., ...││││┌ (4 DIVIDED 0) FOLLOWED BY (LIST 5, 6)
+  │││││┌ 4 DIVIDED 0
+  │││││└ ↯ division by zero│││││• ↯ division by zero
+  │││││┌ LIST 5, 6
+  │││││├ 5 FOLLOWED BY (LIST 6)
+  ││││││┌ LIST 6
+  ││││││├ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││┌ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││• LIST ...
+  │││││└ LIST ..., ...│││││┌ 5 FOLLOWED BY (LIST 6)
+  ││││││┌ LIST 6
+  ││││││├ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││┌ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││• LIST ...
+  │││││└ LIST ..., ...│││││• LIST ..., ...
+  ││││└ LIST ..., ..., ...││││• LIST ..., ..., ...
+  │││└ LIST 3, ..., ..., ...│││• LIST 3, ..., ..., ...
+  ││└ LIST 2, 3, ..., ..., ...││┌ 2 FOLLOWED BY (LIST 3, (4 DIVIDED 0), 5, 6)
+  │││┌ LIST 3, (4 DIVIDED 0), 5, 6
+  │││├ 3 FOLLOWED BY (LIST (4 DIVIDED 0), 5, 6)
+  ││││┌ LIST (4 DIVIDED 0), 5, 6
+  ││││├ (4 DIVIDED 0) FOLLOWED BY (LIST 5, 6)
+  │││││┌ 4 DIVIDED 0
+  │││││└ ↯ division by zero│││││• ↯ division by zero
+  │││││┌ LIST 5, 6
+  │││││├ 5 FOLLOWED BY (LIST 6)
+  ││││││┌ LIST 6
+  ││││││├ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││┌ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││• LIST ...
+  │││││└ LIST ..., ...│││││┌ 5 FOLLOWED BY (LIST 6)
+  ││││││┌ LIST 6
+  ││││││├ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││┌ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││• LIST ...
+  │││││└ LIST ..., ...│││││• LIST ..., ...
+  ││││└ LIST ..., ..., ...││││┌ (4 DIVIDED 0) FOLLOWED BY (LIST 5, 6)
+  │││││┌ 4 DIVIDED 0
+  │││││└ ↯ division by zero│││││• ↯ division by zero
+  │││││┌ LIST 5, 6
+  │││││├ 5 FOLLOWED BY (LIST 6)
+  ││││││┌ LIST 6
+  ││││││├ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││┌ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││• LIST ...
+  │││││└ LIST ..., ...│││││┌ 5 FOLLOWED BY (LIST 6)
+  ││││││┌ LIST 6
+  ││││││├ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││┌ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││• LIST ...
+  │││││└ LIST ..., ...│││││• LIST ..., ...
+  ││││└ LIST ..., ..., ...││││• LIST ..., ..., ...
+  │││└ LIST 3, ..., ..., ...│││┌ 3 FOLLOWED BY (LIST (4 DIVIDED 0), 5, 6)
+  ││││┌ LIST (4 DIVIDED 0), 5, 6
+  ││││├ (4 DIVIDED 0) FOLLOWED BY (LIST 5, 6)
+  │││││┌ 4 DIVIDED 0
+  │││││└ ↯ division by zero│││││• ↯ division by zero
+  │││││┌ LIST 5, 6
+  │││││├ 5 FOLLOWED BY (LIST 6)
+  ││││││┌ LIST 6
+  ││││││├ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││┌ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││• LIST ...
+  │││││└ LIST ..., ...│││││┌ 5 FOLLOWED BY (LIST 6)
+  ││││││┌ LIST 6
+  ││││││├ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││┌ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││• LIST ...
+  │││││└ LIST ..., ...│││││• LIST ..., ...
+  ││││└ LIST ..., ..., ...││││┌ (4 DIVIDED 0) FOLLOWED BY (LIST 5, 6)
+  │││││┌ 4 DIVIDED 0
+  │││││└ ↯ division by zero│││││• ↯ division by zero
+  │││││┌ LIST 5, 6
+  │││││├ 5 FOLLOWED BY (LIST 6)
+  ││││││┌ LIST 6
+  ││││││├ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││┌ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││• LIST ...
+  │││││└ LIST ..., ...│││││┌ 5 FOLLOWED BY (LIST 6)
+  ││││││┌ LIST 6
+  ││││││├ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││┌ 6 FOLLOWED BY (LIST )
+  │││││││┌ LIST 
+  │││││││└ EMPTY│││││││• EMPTY
+  ││││││└ LIST ...││││││• LIST ...
+  │││││└ LIST ..., ...│││││• LIST ..., ...
+  ││││└ LIST ..., ..., ...││││• LIST ..., ..., ...
+  │││└ LIST 3, ..., ..., ...│││• LIST 3, ..., ..., ...
+  ││└ LIST 2, 3, ..., ..., ...││• LIST 2, 3, ..., ..., ...
+  │└ LIST 1, 2, 3, ..., ..., ...│• LIST 1, 2, 3, ..., ..., ...
   │┌ sum
-  │└ <function>
+  │└ <function>│• <function>
   ├   go OF 0, l
   │ WHERE
   │   GIVEN acc
@@ -131,53 +2075,514 @@ lazytrace-exception.l4:19:1-52:
   │                     WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
   ├ go OF 0, l
   │┌ go
-  │└ <function>
+  │└ <function>│• <function>
   ├ CONSIDER list WHEN EMPTY THEN acc,
   │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
   ├ go OF (acc PLUS x), xs
   │┌ acc PLUS x
-  │└ 1
+  │└ 1│• 1
   │┌ go
-  │└ <function>
+  │└ <function>│• <function>
   ├ CONSIDER list WHEN EMPTY THEN acc,
   │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
   ├ go OF (acc PLUS x), xs
   │┌ acc PLUS x
-  │└ 3
+  │└ 3│• 3
   │┌ go
-  │└ <function>
+  │└ <function>│• <function>
   ├ CONSIDER list WHEN EMPTY THEN acc,
   │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
   ├ go OF (acc PLUS x), xs
   │┌ acc PLUS x
-  │└ 6
+  │└ 6│• 6
   │┌ go
-  │└ <function>
-  ├ CONSIDER list WHEN EMPTY THEN acc,
-  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
-  ├ go OF (acc PLUS x), xs
-  │┌ acc PLUS x
-  ││• ↯ division by zero
-  │└ ↯ division by zero
-  │┌ go
-  │└ <function>
+  │└ <function>│• <function>
   ├ CONSIDER list WHEN EMPTY THEN acc,
   │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
   ├ go OF (acc PLUS x), xs
   │┌ acc PLUS x
   ││• ↯ division by zero
-  │└ ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
   │┌ go
-  │└ <function>
+  │└ <function>│• <function>
   ├ CONSIDER list WHEN EMPTY THEN acc,
   │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
   ├ go OF (acc PLUS x), xs
   │┌ acc PLUS x
   ││• ↯ division by zero
-  │└ ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
   │┌ go
-  │└ <function>
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││• ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
+  │┌ go
+  │└ <function>│• <function>
   ├ CONSIDER list WHEN EMPTY THEN acc,
   │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
   ├ acc
-  └ ↯ division by zero
+  └ ↯ division by zero┌   go OF 0, l
+  │ WHERE
+  │   GIVEN acc
+  │         list
+  │   DECIDE go acc list IS
+  │     CONSIDER list WHEN EMPTY THEN acc,
+  │                     WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF 0, l
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  │└ 1│• 1
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  │└ 3│• 3
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  │└ 6│• 6
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││• ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││• ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││• ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ acc
+  └ ↯ division by zero┌ go OF 0, l
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  │└ 1│• 1
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  │└ 3│• 3
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  │└ 6│• 6
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││• ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││• ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││• ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ acc
+  └ ↯ division by zero┌ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  │└ 1│• 1
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  │└ 3│• 3
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  │└ 6│• 6
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││• ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││• ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││• ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ acc
+  └ ↯ division by zero┌ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  │└ 1│• 1
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  │└ 3│• 3
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  │└ 6│• 6
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││• ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││• ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││• ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ acc
+  └ ↯ division by zero┌ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  │└ 3│• 3
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  │└ 6│• 6
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││• ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││• ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││• ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ acc
+  └ ↯ division by zero┌ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  │└ 3│• 3
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  │└ 6│• 6
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││• ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││• ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││• ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ acc
+  └ ↯ division by zero┌ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  │└ 6│• 6
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││• ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││• ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││• ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ acc
+  └ ↯ division by zero┌ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  │└ 6│• 6
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││• ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││• ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││• ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ acc
+  └ ↯ division by zero┌ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││• ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││• ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││• ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ acc
+  └ ↯ division by zero┌ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││• ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││• ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││• ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ acc
+  └ ↯ division by zero┌ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││• ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││• ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ acc
+  └ ↯ division by zero┌ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││• ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││• ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ acc
+  └ ↯ division by zero┌ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││• ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ acc
+  └ ↯ division by zero┌ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││• ↯ division by zero
+  │└ ↯ division by zero│• ↯ division by zero
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ acc
+  └ ↯ division by zero┌ CONSIDER list WHEN EMPTY THEN acc,
+  │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ acc
+  └ ↯ division by zero┌ acc
+  └ ↯ division by zero• ↯ division by zero

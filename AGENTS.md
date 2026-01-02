@@ -46,13 +46,27 @@ Key applications include:
 
 ## Development Guide
 
+### Shell Quoting
+
+**Backticks (`` `...` ``) are meaningful to both L4 and the shell.** In L4 sources they denote quoted identifiers, but in `bash`/`zsh` they trigger command substitution. When running `rg`, `sed`, etc. against L4 snippets containing backticks, quote or escape them (e.g. `rg 'foo `bar`'` or `rg \"foo \\`bar\\`\"`) to avoid accidentally executing commands.
+
+When you need to pass multi-line text containing backticks to shell commands (e.g. GitHub issue bodies), prefer a single-quoted heredoc to prevent command substitution:
+
+```bash
+cat > /tmp/body.md <<'EOF'
+This refers to `WHERE` and `LET` in L4.
+EOF
+```
+
 ### Testing
 
-Follow test-driven development (TDD) practices:
+**We aspire to follow Test-Driven Development (TDD) practices.** This means:
 
 1. **Write tests first** when adding new features - define expected behavior before implementation
 2. **Update tests** when modifying existing behavior - tests should reflect the current spec
 3. **Add regression tests** when fixing bugs - prevent the same bug from recurring
+
+TDD helps us catch issues early and ensures our code meets specifications before we consider a feature complete.
 
 Before committing changes, always run the full test suite to ensure nothing is broken:
 
@@ -61,6 +75,19 @@ cabal test all
 ```
 
 The test suite should pass before creating a git commit.
+
+**Note:** The test output is extensive (hundreds of examples). For easier analysis, pipe to a file:
+
+```bash
+cabal test all 2>&1 | tee /tmp/test-output.txt
+```
+
+Then you can:
+
+- Check summary: `tail -50 /tmp/test-output.txt`
+- Search for failures: `grep -i "fail\|error" /tmp/test-output.txt`
+- Check specific tests: `grep "ok/factorial" /tmp/test-output.txt`
+- Read incrementally: `less /tmp/test-output.txt`
 
 Also before committing changes, run `npm run format` so that Github's CI doesn't fail PRs on formatting errors.
 

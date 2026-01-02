@@ -3,6 +3,10 @@
   "lsp": {
     "l4": {
       "command": "jl4-lsp"
+    },
+    "haskell": {
+      "command": "haskell-language-server-wrapper",
+      "args": ["--lsp"]
     }
   },
   "permissions": {
@@ -16,6 +20,10 @@
       "rm",
       "gh",
       "edit",
+      "bash",
+      "ssh",
+      "nixos-rebuild",
+      "bash:execute",
       "mcp_context7_get-library-doc"
     ]
   }

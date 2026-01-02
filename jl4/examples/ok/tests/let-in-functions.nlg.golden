@@ -1,0 +1,16 @@
+`testSingleParam` with 5
+`testSingleParam` with 0
+`testTwoParams` with 3 and 7
+`testTwoParams` with 100 and 200
+`testMultipleFunctions` with 5
+`testMultipleFunctions` with 10
+`testFunctionChain` with 5
+`testFunctionChain` with 10
+`testFactorial` with 0
+`testFactorial` with 1
+`testFactorial` with 5
+`testFactorial` with 6
+`testFibonacci` with 0
+`testFibonacci` with 1
+`testFibonacci` with 6
+`testFibonacci` with 10

@@ -1,0 +1,59 @@
+# Development override - uses hot reload and local builds
+services:
+  jl4-lsp:
+    build:
+      context: .
+      dockerfile: Dockerfile.jl4-lsp
+      target: builder
+    command: |
+      sh -c "cd /build/jl4-lsp && cabal run jl4-lsp -- ws --host 0.0.0.0 --port 8000 --cwd /build/jl4-core/libraries"
+    volumes:
+      - .:/build
+      - cabal-cache:/root/.cabal
+
+  jl4-decision-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.jl4-decision-service
+      target: builder
+    command: |
+      sh -c "cd /build/jl4-decision-service && cabal run jl4-decision-service-exe -- \
+        --port 8001 \
+        --serverName http://localhost:8001 \
+        --sourcePaths /build/jl4/experiments/britishcitizen5.l4 \
+        --sourcePaths /build/jl4/experiments/parking.l4 \
+        --crudServerName jl4-websessions \
+        --crudServerPort 8002"
+    volumes:
+      - .:/build
+      - cabal-cache:/root/.cabal
+
+  jl4-websessions:
+    build:
+      context: .
+      dockerfile: Dockerfile.jl4-websessions
+      target: builder
+    command: |
+      sh -c "cd /build/jl4-websessions && cabal run jl4-websessions -- 8002 /data/sessions.db http://jl4-decision-service:8001"
+    volumes:
+      - .:/build
+      - websessions-data:/data
+      - cabal-cache:/root/.cabal
+
+  jl4-web:
+    build:
+      context: .
+      dockerfile: Dockerfile.jl4-web
+      target: builder
+    command: sh -c "cd /app/ts-apps/jl4-web && npm run dev -- --host 0.0.0.0"
+    volumes:
+      - ./ts-apps:/app/ts-apps
+      - ./ts-shared:/app/ts-shared
+      - /app/node_modules
+      - /app/ts-apps/jl4-web/node_modules
+
+volumes:
+  cabal-cache:
+    driver: local
+  websessions-data:
+    driver: local

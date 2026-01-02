@@ -3,11 +3,26 @@ module Main where
 import Test.Hspec
 
 import Control.Monad.IO.Class (liftIO)
+import qualified Data.Aeson as Aeson
+import Data.Text (Text)
+import qualified Data.Text as Text
+import Data.UUID (UUID)
+import qualified Data.UUID as UUID
 import Database.SQLite.Simple as SQLite (withConnection)
 import Network.HTTP.Client (defaultManagerSettings, newManager)
-import Network.Wai.Handler.Warp (testWithApplication)
-import Servant.Client
-import Servant.Client.Generic (genericClient)
+import Network.HTTP.Types (hContentType, methodGet, methodPost, status200)
+import Network.HTTP.Types.URI (renderQuery)
+import Network.Wai (Request (..))
+import Network.Wai.Test
+  ( SRequest (..)
+  , SResponse
+  , Session
+  , defaultRequest
+  , runSession
+  , simpleBody
+  , simpleStatus
+  , srequest
+  )
 import System.FilePath ((</>))
 import System.IO.Temp (withSystemTempDirectory)
 
@@ -19,35 +34,70 @@ main = hspec do
   it "performs all crud operations as expected" crudSmokeTest
 
 crudSmokeTest :: Expectation
-crudSmokeTest = do
-  let apiClient = genericClient @Api @ClientM
-      runC port c =  do
-        mgr <- newManager defaultManagerSettings
-        let baseUrl = BaseUrl Http "localhost" port ""
-        runClientM c $ mkClientEnv mgr baseUrl
-  result <- withSystemTempDirectory "crud-smoke-test" \fp -> do
+crudSmokeTest =
+  withSystemTempDirectory "crud-smoke-test" \fp -> do
     let dbPath = fp </> "test.db"
+        program = Text.pack "add x y MEANS x + y"
     createDB dbPath
     httpMgr <- newManager defaultManagerSettings
     SQLite.withConnection dbPath \dbConn -> do
       let env = MkHandlerEnv
             { dbConn = dbConn
             , httpManager = httpMgr
-            , decisionServiceUrl = Nothing  -- No decision service for tests
+            , decisionServiceUrl = Nothing
             }
-      testWithApplication (pure $ mkApp env) \port -> do
-        runC port do
-          let prog = "add x y MEANS x + y"
-          uuid <- apiClient.createSession prog
-          prog' <- apiClient.readSession uuid
-          liftIO $ prog `shouldBe` prog'
+      runSession (crudSession program) (mkApp env)
 
-          -- NOTE: this test was for putting an updated file
-          -- but it has become redundant b/c all sessions are
-          -- supposed to stay persistant
-          -- let prog2 = "sub x y MEANS x - y"
-          -- NoContent <- apiClient.updateSession MkJL4Program {jl4program = prog2, sessionid = uuid}
-          -- prog2' <- apiClient.readSession uuid
-          -- liftIO $ prog2 `shouldBe` prog2'
+crudSession :: Text -> Session ()
+crudSession program = do
+  sessionId <- createSessionRequest program
+  retrieved <- readSessionRequest sessionId
+  liftIO $ retrieved `shouldBe` program
 
-  result `shouldBe` Right ()
+createSessionRequest :: Text -> Session UUID
+createSessionRequest program = do
+  let req =
+        defaultRequest
+          { requestMethod = methodPost
+          , requestHeaders = [(hContentType, "application/json")]
+          , pathInfo = []
+          , rawPathInfo = "/"
+          }
+  response <- srequest $ SRequest req (Aeson.encode program)
+  assertStatus response
+  decodeJson response
+
+readSessionRequest :: UUID -> Session Text
+readSessionRequest sessionId = do
+  let req =
+        defaultRequest
+          { requestMethod = methodGet
+          , queryString = query
+          , rawQueryString = renderQuery True query
+          , pathInfo = []
+          , rawPathInfo = "/"
+          }
+  response <- srequest $ SRequest req mempty
+  assertStatus response
+  decodeJson response
+  where
+    query = [("id", Just $ UUID.toASCIIBytes sessionId)]
+
+assertStatus :: SResponse -> Session ()
+assertStatus response =
+  if simpleStatus response == status200
+    then pure ()
+    else
+      liftIO
+        $ expectationFailure
+        $ "Expected 200 OK but got "
+        <> show (simpleStatus response)
+        <> " with body: "
+        <> show (simpleBody response)
+
+decodeJson :: Aeson.FromJSON a => SResponse -> Session a
+decodeJson response = case Aeson.eitherDecode (simpleBody response) of
+  Left err -> do
+    liftIO $ expectationFailure $ "Failed to decode JSON response: " <> err
+    pure (error "unreachable")
+  Right value -> pure value

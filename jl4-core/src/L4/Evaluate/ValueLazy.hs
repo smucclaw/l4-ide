@@ -48,6 +48,7 @@ data Value a =
   | ValClosure (GivenSig Resolved) (Expr Resolved) Environment
   | ValObligation Environment (Either RExpr (Value a)) (RAction Resolved) (Either (Maybe RExpr) (Value a)) RExpr (Maybe RExpr)
   | ValROp Environment RBinOp (Either RExpr (Value a)) (Either RExpr (Value a))
+  | ValNullaryBuiltinFun NullaryBuiltinFun
   | ValUnaryBuiltinFun UnaryBuiltinFun
   | ValBinaryBuiltinFun BinOp
   | ValTernaryBuiltinFun TernaryBuiltinFun
@@ -67,9 +68,16 @@ instance NFData RBinOp where
   rnf ValROr = ()
   rnf ValRAnd = ()
 
-data ReasonForBreach a = DeadlineMissed a a Rational a (RAction Resolved) Rational
+data ReasonForBreach a
+  = DeadlineMissed a a Rational a (RAction Resolved) Rational
+  | ExplicitBreach (Maybe a) (Maybe a)  -- optional party, optional reason
   deriving stock (Generic, Show, Functor, Foldable, Traversable)
   deriving anyclass NFData
+
+data NullaryBuiltinFun
+  = NullaryTodaySerial
+  | NullaryNowSerial
+  deriving stock (Show)
 
 data UnaryBuiltinFun
   = UnaryIsInteger
@@ -78,6 +86,14 @@ data UnaryBuiltinFun
   | UnaryFloor
   | UnaryPercent
   | UnarySqrt            -- NUMBER → NUMBER (square root)
+  | UnaryLn              -- NUMBER → NUMBER (natural log, positive domain)
+  | UnaryLog10           -- NUMBER → NUMBER (base-10 log, positive domain)
+  | UnarySin             -- NUMBER → NUMBER (sine)
+  | UnaryCos             -- NUMBER → NUMBER (cosine)
+  | UnaryTan             -- NUMBER → NUMBER (tangent)
+  | UnaryAsin            -- NUMBER → NUMBER (arcsine, [-1,1] domain)
+  | UnaryAcos            -- NUMBER → NUMBER (arccosine, [-1,1] domain)
+  | UnaryAtan            -- NUMBER → NUMBER (arctangent)
   -- String unary functions
   | UnaryStringLength    -- STRING → NUMBER
   | UnaryToUpper         -- STRING → STRING
@@ -88,12 +104,25 @@ data UnaryBuiltinFun
   | UnaryEnv
   | UnaryJsonEncode
   | UnaryJsonDecode
+  | UnaryDateValue
+  | UnaryDateSerial
+  | UnaryDateFromSerial
+  | UnaryDateDay
+  | UnaryDateMonth
+  | UnaryDateYear
+  | UnaryTimeValue
+  | UnaryToString        -- α → STRING (runtime-restricted to supported types)
+  | UnaryToNumber        -- STRING → MAYBE NUMBER
+  | UnaryToDate          -- STRING → MAYBE DATE (uses runtime type info)
   deriving stock (Show)
 
 data TernaryBuiltinFun
   = TernarySubstring     -- STRING → NUMBER → NUMBER → STRING
   | TernaryReplace       -- STRING → STRING → STRING → STRING
   | TernaryPost          -- from main
+  | TernaryDateFromDMY   -- NUMBER → NUMBER → NUMBER → DATE
+  | TernaryEverBetween
+  | TernaryAlwaysBetween
   deriving stock (Show)
 
 -- | This is a non-standard instance because environments can be recursive, hence we must
@@ -107,6 +136,7 @@ instance NFData a => NFData (Value a) where
   rnf ValNil                      = ()
   rnf (ValCons r1 r2)             = rnf r1 `seq` rnf r2
   rnf (ValClosure given expr env) = env `seq` rnf given `seq` rnf expr
+  rnf (ValNullaryBuiltinFun r)    = rnf r
   rnf (ValUnaryBuiltinFun r)      = rnf r
   rnf (ValBinaryBuiltinFun r)     = rnf r
   rnf (ValTernaryBuiltinFun r)    = rnf r
@@ -125,6 +155,11 @@ type MaybeEvaluated' a = Either a WHNF
 
 type RExpr = Expr Resolved
 
+instance NFData NullaryBuiltinFun where
+  rnf :: NullaryBuiltinFun -> ()
+  rnf NullaryTodaySerial = ()
+  rnf NullaryNowSerial = ()
+
 instance NFData UnaryBuiltinFun where
   rnf :: UnaryBuiltinFun -> ()
   rnf UnaryIsInteger = ()
@@ -133,17 +168,39 @@ instance NFData UnaryBuiltinFun where
   rnf UnaryFloor = ()
   rnf UnaryPercent = ()
   rnf UnarySqrt = ()
+  rnf UnaryLn = ()
+  rnf UnaryLog10 = ()
+  rnf UnarySin = ()
+  rnf UnaryCos = ()
+  rnf UnaryTan = ()
+  rnf UnaryAsin = ()
+  rnf UnaryAcos = ()
+  rnf UnaryAtan = ()
   rnf UnaryStringLength = ()
   rnf UnaryToUpper = ()
   rnf UnaryToLower = ()
   rnf UnaryTrim = ()
+  rnf UnaryToString = ()
+  rnf UnaryToNumber = ()
+  rnf UnaryToDate = ()
   rnf UnaryFetch = ()
   rnf UnaryEnv = ()
   rnf UnaryJsonEncode = ()
   rnf UnaryJsonDecode = ()
+  rnf UnaryDateValue = ()
+  rnf UnaryDateSerial = ()
+  rnf UnaryDateFromSerial = ()
+  rnf UnaryDateDay = ()
+  rnf UnaryDateMonth = ()
+  rnf UnaryDateYear = ()
+  rnf UnaryTimeValue = ()
 
 instance NFData TernaryBuiltinFun where
   rnf :: TernaryBuiltinFun -> ()
   rnf TernarySubstring = ()
   rnf TernaryReplace = ()
   rnf TernaryPost = ()
+  -- new temporals
+  rnf TernaryDateFromDMY = ()
+  rnf TernaryEverBetween = ()
+  rnf TernaryAlwaysBetween = ()

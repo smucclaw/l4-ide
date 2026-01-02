@@ -1,0 +1,17 @@
+IMPORT prelude
+IMPORT daydate
+IMPORT `excel-date`
+
+`US 30/360 start` MEANS Date 31 1 2011
+`US 30/360 end`   MEANS Date 30 1 2012
+
+`Basis start` MEANS Date 1 1 2015
+`Basis end`   MEANS Date 1 7 2015
+
+#EVAL ExcelDays `US 30/360 end` `US 30/360 start`
+#EVAL ExcelDays360 `US 30/360 start` `US 30/360 end`
+#EVAL ExcelDays360 `US 30/360 start` `US 30/360 end` TRUE
+
+#EVAL ExcelYearFrac `Basis start` `Basis end` 0
+#EVAL ExcelYearFrac `Basis start` `Basis end` 1
+#EVAL ExcelYearFrac `Basis start` `Basis end` 2

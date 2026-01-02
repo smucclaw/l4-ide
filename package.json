@@ -18,21 +18,13 @@
   "devDependencies": {
     "prettier": "3.4.2",
     "turbo": "^2.3.3",
-    "typescript": "^5.7.3",
-    "v8-compile-cache-lib": "^3.0.1",
-    "yn": "^3.1.1"
+    "typescript": "^5.7.3"
   },
-  "packageManager": "npm@10.9.2",
+  "packageManager": "npm@10.8.2",
   "engines": {
     "node": ">=20"
   },
   "overrides": {
     "vite": "6.0.7"
-  },
-  "dependencies": {
-    "d3-drag": "^3.0.0",
-    "d3-interpolate": "^3.0.1",
-    "d3-selection": "^3.0.0",
-    "d3-zoom": "^3.0.0"
   }
 }

@@ -1,0 +1,37 @@
+-- LET...IN mutual recursion tests
+
+-- Even/odd mutual recursion (from spec)
+DECIDE testEvenOdd x IS
+  LET
+    myeven n IS IF n EQUALS 0 THEN TRUE ELSE myodd (n MINUS 1)
+    myodd n IS IF n EQUALS 0 THEN FALSE ELSE myeven (n MINUS 1)
+  IN myeven x
+
+#EVAL testEvenOdd 0
+#EVAL testEvenOdd 1
+#EVAL testEvenOdd 10
+#EVAL testEvenOdd 11
+
+-- Mutual recursion returning numbers
+DECIDE testMutualNumbers x IS
+  LET
+    f n IS IF n EQUALS 0 THEN 1 ELSE g (n MINUS 1)
+    g n IS IF n EQUALS 0 THEN 2 ELSE f (n MINUS 1)
+  IN f x
+
+#EVAL testMutualNumbers 0
+#EVAL testMutualNumbers 1
+#EVAL testMutualNumbers 5
+
+-- Three-way mutual recursion
+DECIDE testThreeWay x IS
+  LET
+    a n IS IF n EQUALS 0 THEN 1 ELSE b (n MINUS 1)
+    b n IS IF n EQUALS 0 THEN 2 ELSE c (n MINUS 1)
+    c n IS IF n EQUALS 0 THEN 3 ELSE a (n MINUS 1)
+  IN a x
+
+#EVAL testThreeWay 0
+#EVAL testThreeWay 1
+#EVAL testThreeWay 2
+#EVAL testThreeWay 3

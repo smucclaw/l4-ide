@@ -23,6 +23,9 @@ import qualified L4.Lexer as Lexer
 import LSP.L4.LanguageServer (runLanguageServer, Communication (..))
 import qualified LSP.L4.LanguageServer as LanguageServer
 import qualified LSP.L4.Rules as Rules
+import qualified L4.EvaluateLazy as EvaluateLazy
+import L4.TracePolicy (lspDefaultPolicy)
+import L4.EvaluateLazy.GraphVizOptions (defaultGraphVizOptions)
 
 import Control.Concurrent.Strict
     ( newEmptyMVar, putMVar, tryReadMVar, withNumCapabilities, writeChan, newChan, readChan )
@@ -139,6 +142,7 @@ instance Pretty WebsocketLog where
 data Arguments = Arguments
   { projectRoot :: FilePath
   , rules :: Rules ()
+  , evalConfig :: EvaluateLazy.EvalConfig
   , lspOptions :: LSP.Options
   , defaultConfig :: Config
   , debouncer :: IO (Debouncer NormalizedUri)
@@ -188,10 +192,15 @@ getDefaultArguments recorder = do
   MkCliOptions
     { communication, cwd } <- Opa.execParser parseComm
   projectRoot <- maybe getCurrentDirectory pure cwd
+  fixedNow <- EvaluateLazy.readFixedNowEnv
+  -- LSP default: avoid editor noise (TRACE-GRAPHVIZ-ARCHITECTURE.md)
+  let tracePolicy = lspDefaultPolicy defaultGraphVizOptions
+  evalConfig <- EvaluateLazy.resolveEvalConfig fixedNow tracePolicy
   logWith recorder Debug $ LogWorkingDirectory projectRoot
   pure Arguments
     { projectRoot
-    , rules = Rules.jl4Rules projectRoot (cmapWithPrio LogRules recorder)
+    , rules = Rules.jl4Rules evalConfig projectRoot (cmapWithPrio LogRules recorder)
+    , evalConfig
     , lspOptions = lspOptions
     , defaultConfig = defConfig
     , debouncer = newAsyncDebouncer
@@ -263,7 +272,7 @@ defaultMain recorder args = do
       setup = LanguageServer.setupLSP
           (cmapWithPrio LogLanguageServer recorder)
           args.projectRoot
-          (handlers (cmapWithPrio LogHandlers recorder))
+          (handlers args.evalConfig (cmapWithPrio LogHandlers recorder))
 
       -- See Note [Client configuration in Rules]
       onConfigChange :: MVar IdeState -> Config -> ServerM Config ()

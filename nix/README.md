@@ -2,18 +2,21 @@
 
 For comprehensive provisioning and deployment instructions, see:
 
-- **[PROVISIONING.md](../PROVISIONING.md)** - Full guide for setting up new servers
-- **[DEPLOYMENT.md](../DEPLOYMENT.md)** - Quick reference for deploying to existing servers
+- **[provisioning.md](../doc/dev/deployment/provisioning.md)** - Full guide for setting up new servers
+- **[deployment.md](../doc/dev/deployment/deployment.md)** - Quick reference for deploying to existing servers
+- **[local-vm.md](../doc/dev/deployment/local-vm.md)** - Running jl4-demo VM locally for testing
 
 ## Quick Reference
 
 ### Available Flake Targets
 
-| Target         | Domain                 | Environment           |
-| -------------- | ---------------------- | --------------------- |
-| `jl4-demo`     | `jl4.well-typed.com`   | Original Hetzner demo |
-| `jl4-aws-2505` | `jl4.legalese.com`     | Production AWS EC2    |
-| `jl4-dev`      | `dev.jl4.legalese.com` | Dev/staging AWS EC2   |
+| Target         | Domain                 | Environment             |
+| -------------- | ---------------------- | ----------------------- |
+| `jl4-demo`     | `jl4.well-typed.com`   | Local VM / Hetzner demo |
+| `jl4-aws-2505` | `jl4.legalese.com`     | Production AWS EC2      |
+| `jl4-dev`      | `dev.jl4.legalese.com` | Dev/staging AWS EC2     |
+
+**Note:** `jl4-demo` can be run as a local QEMU VM for testing. See **[local-vm.md](../doc/dev/deployment/local-vm.md)** for details.
 
 ### Redeploying to Existing Server
 
@@ -40,7 +43,7 @@ nixos-rebuild switch --flake .#jl4-dev
 nixos-anywhere --flake .#jl4-dev root@dev.jl4.legalese.com
 ```
 
-See **[PROVISIONING.md](../PROVISIONING.md)** for detailed step-by-step instructions.
+See **[provisioning.md](../doc/dev/deployment/provisioning.md)** for detailed step-by-step instructions.
 
 ### State to Transfer When Migrating Servers
 

@@ -1,0 +1,13 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+mixfix-with-variables.l4:29:1-34:
+  12
+mixfix-with-variables.l4:37:1-31:
+  8
+mixfix-with-variables.l4:46:1-29:
+  7
+mixfix-with-variables.l4:56:1-37:
+  15
+mixfix-with-variables.l4:62:1-33:
+  12

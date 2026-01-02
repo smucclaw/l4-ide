@@ -1,0 +1,23 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+let-in-context.l4:10:1-29:
+  0
+let-in-context.l4:11:1-30:
+  1
+let-in-context.l4:19:1-28:
+  10
+let-in-context.l4:20:1-29:
+  3
+let-in-context.l4:28:1-24:
+  110
+let-in-context.l4:29:1-23:
+  -47
+let-in-context.l4:37:1-27:
+  42
+let-in-context.l4:43:1-32:
+  20
+let-in-context.l4:49:1-28:
+  25
+let-in-context.l4:50:1-30:
+  120
