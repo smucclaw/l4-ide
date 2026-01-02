@@ -1,0 +1,33 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "f": {
+            "$ref": "#/$defs/t3"
+        },
+        "g": {
+            "$ref": "#/$defs/t2"
+        },
+        "t1": {
+            "type": "string"
+        },
+        "t2": {
+            "type": "string"
+        },
+        "t3": {
+            "type": "string"
+        },
+        "x": {
+            "$ref": "#/$defs/t1"
+        }
+    },
+    "required": [
+        "t1",
+        "t2",
+        "t3",
+        "f",
+        "g",
+        "x"
+    ],
+    "title": "s",
+    "type": "object"
+}

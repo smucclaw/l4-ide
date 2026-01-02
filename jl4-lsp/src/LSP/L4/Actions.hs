@@ -35,6 +35,7 @@ import qualified LSP.L4.Viz.VizExpr as Ladder
 import qualified LSP.L4.Viz.CustomProtocol as Ladder
 import           LSP.L4.Viz.CustomProtocol (EvalAppRequestParams (..),
                                             EvalAppResult (..))
+import qualified LSP.L4.Viz.QueryPlan as VizQueryPlan
 
 import Language.LSP.Protocol.Message
 import Language.LSP.Protocol.Types
@@ -116,17 +117,18 @@ gotoDefinition pos m positionMapping = do
 evalApp
   :: forall m.
   (MonadIO m)
-  => EL.EntityInfo
+  => EL.EvalConfig
+  -> EL.EntityInfo
   -> (EL.Environment, Module Resolved)
   -> Ladder.EvalAppRequestParams
   -> RecentlyVisualised
   -> ExceptT (TResponseError ('Method_CustomMethod Ladder.EvalAppMethodName)) m Aeson.Value
-evalApp entityInfo contextModule evalParams recentViz =
+evalApp evalConfig entityInfo contextModule evalParams recentViz =
   case Ladder.lookupAppExprMaker recentViz.vizState evalParams.appExpr of
     Nothing -> defaultResponseError "No expr maker found" -- TODO: Improve error codehere
     Just evalAppMaker -> do
       let appExpr = evalAppMaker evalParams
-      res <- liftIO $ EL.execEvalExprInContextOfModule entityInfo appExpr contextModule
+      res <- liftIO $ EL.execEvalExprInContextOfModule evalConfig entityInfo appExpr contextModule
       case res of
         Just evalRes -> Aeson.toJSON <$> evalResultToLadderEvalAppResult evalRes
         Nothing -> defaultResponseError "No eval result found"
@@ -211,7 +213,7 @@ visualise mtcRes (getRecVis, setRecVis) verTextDocId msrcPos = do
       case Ladder.doVisualize decide vizConfig of
         Right (vizProgramInfo, vizState) -> do
           traverse_ (lift . setRecVis) $ recentlyVisualisedDecide decide vizState
-          pure $ InL $ Aeson.toJSON vizProgramInfo
+          pure $ InL $ Aeson.toJSON (VizQueryPlan.annotateLadderWithAtomIds vizProgramInfo vizState)
         Left vizError ->
           defaultResponseError $ Text.unlines
             [ "Could not visualize:"
@@ -348,12 +350,13 @@ typeHover pos nuri tcRes positionMapping = do
   let oldLspPos = lspPositionToSrcPos oldPos
   (range, i) <- IV.smallestContaining nuri oldLspPos tcRes.infoMap
   let mNlg = IV.smallestContaining nuri oldLspPos tcRes.nlgMap
+  let mDesc = IV.smallestContaining nuri oldLspPos tcRes.descMap
   let lspRange = srcRangeToLspRange (Just range)
   newLspRange <- toCurrentRange positionMapping lspRange
-  pure (infoToHover nuri tcRes.substitution newLspRange i (fmap snd mNlg))
+  pure (infoToHover nuri tcRes.substitution newLspRange i (fmap snd mNlg) (fmap snd mDesc))
 
-infoToHover :: NormalizedUri -> Substitution -> Range -> Info -> Maybe Nlg -> Hover
-infoToHover nuri subst r i mNlg =
+infoToHover :: NormalizedUri -> Substitution -> Range -> Info -> Maybe Nlg -> Maybe Text -> Hover
+infoToHover nuri subst r i mNlg mDesc =
   Hover (InL (mkMarkdown x)) (Just r)
   where
     x =
@@ -363,6 +366,10 @@ infoToHover nuri subst r i mNlg =
             case mNlg of
               Nothing -> mempty
               Just nlg -> mdSeparator <> mdCodeBlock (simpleLinearizer nlg)
+            <>
+            case mDesc of
+              Nothing -> mempty
+              Just desc -> mdSeparator <> desc
         KindInfo k -> mdCodeBlock $ prettyLayout $ typeFunction k
         TypeVariable -> "TYPE VAR"
 

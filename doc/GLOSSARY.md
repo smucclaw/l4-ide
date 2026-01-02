@@ -90,6 +90,7 @@
 - [**MEANS**](25-functions.md#functions) - Assignment operator for definitions
 - [**MINUS**](10-data-types.md#numbers) - Subtraction operator `-`
 - [**MODULO**](10-data-types.md#numbers) - Modulo operator for numbers `%`
+- [**Math Library**](libraries/math.md) - Optional helpers such as `EULER`, `exp`, `ln`, and `log10`
 - [**MUST**](regulative.md#regulative-rules) - Obligation operator in regulative rules
 - [**Multitemporal Logic**](multitemporals.md#multitemporal-logic) - Handling time-based logic and constraints
 

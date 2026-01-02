@@ -1,0 +1,37 @@
+DECLARE Person
+  HAS name IS A STRING
+
+GIVEN person1 IS A Person
+      person2 IS A Person
+      child   IS A Person
+GIVETH A Person
+person1 `copulated with` person2 `to make` child MEANS
+  child
+
+alice   MEANS Person WITH name IS "Alice Apple"
+bob     MEANS Person WITH name IS "Roberto Boberto"
+charlie MEANS Person WITH name IS "Charles Camelotte"
+
+#EVAL (alice) `copulated with` (bob) `to make` charlie
+
+#EVAL  alice  `copulated with`  bob  `to make` charlie
+
+
+-- #EVAL                     alice
+-- #       `copulated with`  bob
+-- #       `to make`         charlie
+
+-- Simple infix test
+GIVEN a IS A NUMBER
+      b IS A NUMBER
+GIVETH A NUMBER
+a `plus` b MEANS
+  a + b
+
+#EVAL 3 `plus` 5
+#EVAL 3  plus  5
+
+-- Note: Single-word mixfix operators can omit backticks
+-- Examples: `plus` → plus, `percent` → percent
+-- Multi-word keywords still require backticks (e.g., `copulated with`)
+-- This works for infix and postfix operators

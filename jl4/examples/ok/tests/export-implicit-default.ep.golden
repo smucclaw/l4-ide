@@ -1,0 +1,9 @@
+-- Test: File with no @export annotations should export topmost function as default
+
+@desc a simple sample function
+GIVEN n IS A NUMBER @desc preferably a whole number
+n cubed MEANS n * n * n
+
+-- This is a helper, not exported
+GIVEN x IS A NUMBER
+helper x MEANS x * 2

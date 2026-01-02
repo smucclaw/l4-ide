@@ -14,6 +14,7 @@ import { Assignment } from './assignment.js'
 import type { L4Connection } from '$lib/l4-connection.js'
 import type { VersionedDocId } from '@repo/viz-expr'
 import { match, P } from 'ts-pattern'
+import type { Unique } from '@repo/viz-expr'
 
 /**********************************************************
                    Evaluator
@@ -46,6 +47,10 @@ and since 2 might align better with synchronizing with the backend in the future
 export interface EvalResult {
   result: UBoolVal
   intermediate: Map<IRId, UBoolVal>
+  /** UBoolVar uniques consulted during evaluation. */
+  consultedUniques: Set<Unique>
+  /** Expression roots that would be short-circuited in left-to-right semantics. */
+  shortCircuitedRoots: Set<IRId>
 }
 
 /** Boolean operator evaluator */
@@ -76,6 +81,8 @@ export const Evaluator: LadderEvaluator = {
           return {
             result,
             intermediate: newIntermediate,
+            consultedUniques: new Set<Unique>(),
+            shortCircuitedRoots: new Set<IRId>(),
           }
         })
         .with({ $type: 'FalseE' }, () => {
@@ -84,6 +91,8 @@ export const Evaluator: LadderEvaluator = {
           return {
             result,
             intermediate: newIntermediate,
+            consultedUniques: new Set<Unique>(),
+            shortCircuitedRoots: new Set<IRId>(),
           }
         })
         .with({ $type: 'UBoolVar' }, (expr: EvUBoolVar) => {
@@ -92,31 +101,39 @@ export const Evaluator: LadderEvaluator = {
           return {
             result,
             intermediate: newIntermediate,
+            consultedUniques: new Set([expr.name.unique]),
+            shortCircuitedRoots: new Set<IRId>(),
           }
         })
         .with({ $type: 'Not' }, async (expr: Not) => {
-          const { result: negandV, intermediate: intermediate2 } = await eval_(
-            expr.negand,
-            intermediate
-          )
+          const child = await eval_(expr.negand, intermediate)
+          const negandV = child.result
           const result = match(negandV)
             .with(P.when(isTrueVal), () => new FalseVal())
             .with(P.when(isFalseVal), () => new TrueVal())
             .with(P.when(isUnknownVal), () => new UnknownVal())
             .exhaustive()
 
-          const finalIntermediate = new Map(intermediate2).set(expr.id, result)
+          const finalIntermediate = new Map(child.intermediate).set(
+            expr.id,
+            result
+          )
 
           return {
             result,
             intermediate: finalIntermediate,
+            consultedUniques: child.consultedUniques,
+            shortCircuitedRoots: child.shortCircuitedRoots,
           }
         })
         .with({ $type: 'And' }, async (expr: And) => {
           const andResults = await Promise.all(
             expr.args.map((arg) => eval_(arg, intermediate))
           )
-          const result = evalAndChain(andResults.map((res) => res.result))
+          const { result, shortCircuitedRoots } = evalAndChain(
+            andResults.map((res) => res.result),
+            expr.args.map((arg) => arg.id)
+          )
 
           const finalIntermediate = combineIntermediates(
             andResults.map((res) => res.intermediate)
@@ -125,13 +142,23 @@ export const Evaluator: LadderEvaluator = {
           return {
             result,
             intermediate: finalIntermediate,
+            consultedUniques: unionSets(
+              andResults.map((r) => r.consultedUniques)
+            ),
+            shortCircuitedRoots: unionSets([
+              shortCircuitedRoots,
+              ...andResults.map((r) => r.shortCircuitedRoots),
+            ]),
           }
         })
         .with({ $type: 'Or' }, async (expr: Or) => {
           const orResults = await Promise.all(
             expr.args.map((arg) => eval_(arg, intermediate))
           )
-          const result = evalOrChain(orResults.map((res) => res.result))
+          const { result, shortCircuitedRoots } = evalOrChain(
+            orResults.map((res) => res.result),
+            expr.args.map((arg) => arg.id)
+          )
 
           const finalIntermediate = combineIntermediates(
             orResults.map((res) => res.intermediate)
@@ -140,6 +167,13 @@ export const Evaluator: LadderEvaluator = {
           return {
             result,
             intermediate: finalIntermediate,
+            consultedUniques: unionSets(
+              orResults.map((r) => r.consultedUniques)
+            ),
+            shortCircuitedRoots: unionSets([
+              shortCircuitedRoots,
+              ...orResults.map((r) => r.shortCircuitedRoots),
+            ]),
           }
         })
         .with({ $type: 'App' }, async (expr: App) => {
@@ -159,6 +193,12 @@ export const Evaluator: LadderEvaluator = {
             return {
               result: res,
               intermediate: finalIntermediate,
+              consultedUniques: unionSets(
+                argResults.map((r) => r.consultedUniques)
+              ),
+              shortCircuitedRoots: unionSets(
+                argResults.map((r) => r.shortCircuitedRoots)
+              ),
             }
           }
           const argsForApp = args
@@ -182,6 +222,12 @@ export const Evaluator: LadderEvaluator = {
           return {
             result: res,
             intermediate: finalIntermediate,
+            consultedUniques: unionSets(
+              argResults.map((r) => r.consultedUniques)
+            ),
+            shortCircuitedRoots: unionSets(
+              argResults.map((r) => r.shortCircuitedRoots)
+            ),
           }
         })
         .exhaustive()
@@ -195,24 +241,44 @@ export const Evaluator: LadderEvaluator = {
       AndChain, OrChain
 ****************************/
 
-function evalAndChain(bools: UBoolVal[]) {
-  if (bools.some(isFalseVal)) {
-    return new FalseVal()
+function evalAndChain(bools: UBoolVal[], ids: IRId[]) {
+  const firstFalse = bools.findIndex(isFalseVal)
+  if (firstFalse !== -1) {
+    return {
+      result: new FalseVal(),
+      shortCircuitedRoots: new Set(ids.slice(firstFalse + 1)),
+    }
   }
   if (bools.every(isTrueVal)) {
-    return new TrueVal()
+    return {
+      result: new TrueVal(),
+      shortCircuitedRoots: new Set<IRId>(),
+    }
   }
-  return new UnknownVal()
+  return {
+    result: new UnknownVal(),
+    shortCircuitedRoots: new Set<IRId>(),
+  }
 }
 
-function evalOrChain(bools: UBoolVal[]) {
-  if (bools.some(isTrueVal)) {
-    return new TrueVal()
+function evalOrChain(bools: UBoolVal[], ids: IRId[]) {
+  const firstTrue = bools.findIndex(isTrueVal)
+  if (firstTrue !== -1) {
+    return {
+      result: new TrueVal(),
+      shortCircuitedRoots: new Set(ids.slice(firstTrue + 1)),
+    }
   }
   if (bools.every(isFalseVal)) {
-    return new FalseVal()
+    return {
+      result: new FalseVal(),
+      shortCircuitedRoots: new Set<IRId>(),
+    }
   }
-  return new UnknownVal()
+  return {
+    result: new UnknownVal(),
+    shortCircuitedRoots: new Set<IRId>(),
+  }
 }
 
 /***************************
@@ -229,4 +295,12 @@ function combineIntermediates(
       [] as [IRId, UBoolVal][]
     )
   )
+}
+
+function unionSets<T>(sets: ReadonlyArray<ReadonlySet<T>>): Set<T> {
+  const out = new Set<T>()
+  for (const s of sets) {
+    for (const v of s) out.add(v)
+  }
+  return out
 }

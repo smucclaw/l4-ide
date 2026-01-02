@@ -1,0 +1,17 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+jsonencode-enums.l4:48:1-19:
+  "\"Red\""
+jsonencode-enums.l4:49:1-19:
+  "\"Solanum tuberosum\""
+jsonencode-enums.l4:50:1-23:
+  "[\"Red\",\"Green\",\"Blue\"]"
+jsonencode-enums.l4:51:1-20:
+  "{\"latinName\":\"Solanum tuberosum\",\"commonName\":\"Potato\"}"
+jsonencode-enums.l4:52:1-15:
+  Garden OF "Kitchen Garden", (LIST `Solanum tuberosum`, `Daucus carota`)
+jsonencode-enums.l4:53:1-20:
+  "{\"name\":\"Kitchen Garden\",\"plants\":[\"Solanum tuberosum\",\"Daucus carota\"]}"
+jsonencode-enums.l4:54:1-20:
+  RIGHT OF (Garden OF "Kitchen Garden", (LIST `Solanum tuberosum`, `Daucus carota`))

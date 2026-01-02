@@ -1,0 +1,21 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "day": {
+            "$ref": "#/$defs/NUMBER"
+        },
+        "month": {
+            "$ref": "#/$defs/NUMBER"
+        },
+        "year": {
+            "$ref": "#/$defs/NUMBER"
+        }
+    },
+    "required": [
+        "day",
+        "month",
+        "year"
+    ],
+    "title": "DATE",
+    "type": "object"
+}

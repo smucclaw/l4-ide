@@ -6,25 +6,40 @@ A week begins on Monday.
 
 See examples or play around with it in our [online-editor](https://jl4.legalese.com/?id=6f9b3d0a-9afa-4c2d-9360-84a98e3bdb35).
 
+> **Need Excel parity?** Use [`excel-date`](excel-date.md) for helpers such as `DATEDIF`, `WORKDAY`, and serial conversions. That library builds on `daydate` but reproduces Excel's quirks (1900 leap-year bug, 30/360 methods, etc.).
+
+## Migration Notice (December 2025)
+
+The DATE type has been moved from a userland record type to **builtins** for better performance and consistency. If you have existing code using the old syntax, here's how to migrate:
+
+| Old Syntax                                | New Syntax            |
+| ----------------------------------------- | --------------------- |
+| `DATE OF d, m, y`                         | `Date d m y`          |
+| `DATE WITH day IS d month IS m year IS y` | `Date d m y`          |
+| `someDate's day`                          | `DATE_DAY someDate`   |
+| `someDate's month`                        | `DATE_MONTH someDate` |
+| `someDate's year`                         | `DATE_YEAR someDate`  |
+
+For backwards compatibility, you can `IMPORT date-compat` which provides a `DATE` alias and helper functions like `day of`, `month of`, `year of`.
+
 ### General use of the DATE type and constructing dates
 
-The type DATE is used throughout the library. It is important to not directly use the uppercase DATE type constructor but to use the following syntax to create DATE objects safely and to make sure the date actually exists in the calendar.
+The type DATE is used throughout the library. Always use the `Date` constructor (lowercase 'ate') to create DATE objects safely and ensure the date exists in the calendar.
 
 ```l4
 IMPORT daydate
 
 -- Safe ways to construct dates:
-#EVAL August 12 2020          -- DATE OF 12, 8, 2020
-#EVAL Date 2 July 2027        -- DATE OF 2, 7, 2027
-#EVAL Month Jul 2027          -- DATE OF 1, 7, 2027
-#EVAL Year 2027               -- DATE OF 1, 1, 2027
-#EVAL Week 1 2027             -- DATE OF 4, 1, 2027
-#EVAL Date 12 8 2020          -- DATE OF 12, 8, 2020
-#EVAL Date 35 -2 2025         -- DATE OF 4, 11, 2024 - Calculates the days and months fore and backwards based on existing dates
+#EVAL August 12 2020          -- Date 12 8 2020
+#EVAL Date 2 July 2027        -- Date 2 7 2027
+#EVAL Month Jul 2027          -- Date 1 7 2027
+#EVAL Year 2027               -- Date 1 1 2027
+#EVAL Week 1 2027             -- Date 4 1 2027
+#EVAL Date 12 8 2020          -- Date 12 8 2020
+#EVAL Date 35 -2 2025         -- Date 4 11 2024 - Calculates the days and months fore and backwards based on existing dates
 
--- DO NOT DO THIS! Unsafe ways to construct dates:
-#EVAL Date Apr 1 2025         -- CAREFUL! This returns (DATE OF 4, 1, 2025) or 4th of January 2025 because Apr is used as the NUMBER 4 in this context!
-#EVAL DATE 35 2 2025          -- CAREFUL! This returns (DATE OF 35, 2, 2025) because the DATE constructor does not apply the calendar. Always use Date!
+-- CAREFUL: Month names used as first argument are treated as numbers!
+#EVAL Date Apr 1 2025         -- Returns Date 4 1 2025 (4th of January 2025) because Apr = 4
 
 -- When using dates in PROVISION statements behind the AT or WITHIN keywords, use the Day function to convert DATE objects to NUMBER (Days since 1st January 0000)
 `A provision` MEANS
@@ -212,7 +227,7 @@ Creates a DATE object for the first day of a week (Monday) for a given date.
 ## Month Helpers
 
 The following functions create DATE objects within specific months. Each takes a day and year and returns a DATE object.
-E.g. `January 1 2025 -> DATE WITH day IS 1, month IS 1, year IS 2025`
+E.g. `January 1 2025 -> Date 1 1 2025`
 
 - `January` (AKA `Jan`)
 - `February` (AKA `Feb`)

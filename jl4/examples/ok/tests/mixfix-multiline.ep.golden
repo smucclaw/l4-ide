@@ -1,0 +1,38 @@
+§ `Mixfix Multiline Regression`
+
+-- Verifies that mixfix/postfix operators can be invoked across multiple
+-- lines when keywords stay aligned with the operand indentation.
+
+IMPORT prelude
+
+GIVEN radius IS A NUMBER
+radius squared MEANS radius * radius
+
+GIVEN base IS A NUMBER
+      exponent IS A NUMBER
+base `raised to` exponent MEANS base * exponent
+
+GIVEN payer IS A NUMBER
+      payee IS A NUMBER
+      ledger IS A NUMBER
+payer `remits` payee `to settle` ledger MEANS payer + payee + ledger
+
+DECIDE demo_multiline_postfix radius IS
+  `squared`
+
+DECIDE demo_multiline_mixfix base exponent IS
+  `raised to`
+  base
+  exponent
+
+DECIDE demo_multiline_chain payer payee ledger IS
+  `remits`
+  `to settle`
+  payer
+  payee
+  `to settle`
+  ledger
+
+#EVAL demo_multiline_postfix OF 3
+#EVAL demo_multiline_mixfix OF 2,4
+#EVAL demo_multiline_chain OF 1,2,3

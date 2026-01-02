@@ -17,6 +17,8 @@ This course covers the full stack of production L4 development:
 - **Regression testing** and change control
 - **Multi-file architecture** for large projects
 - **Legacy system migration** from Oracle Policy Modeling
+- **LLM-powered semantic parsing** for natural language interfaces [planned]
+- **Regulative rules** for multiparty contracts with obligations and deadlines
 
 By the end of this course, you'll be able to build enterprise-grade legal systems that integrate with modern software stacks.
 
@@ -98,7 +100,7 @@ Before starting this course, you should:
 
 ---
 
-### Module A5: Rebuttable Presumptions with TYPICALLY [WIP]
+### Module A5: Rebuttable Presumptions with TYPICALLY [ROADMAP]
 
 **What you'll learn:**
 
@@ -110,7 +112,7 @@ Before starting this course, you should:
 
 **Key takeaway:** Encode legal defaults explicitly rather than hardcoding assumptions.
 
-**Status:** Work in progress — TYPICALLY keyword is being specified
+**Status:** On roadmap — TYPICALLY keyword is not yet implemented. An initial implementation was attempted in December 2025 but was reverted due to technical issues. See [TYPICALLY-DEFAULTS-SPEC.md](../todo/TYPICALLY-DEFAULTS-SPEC.md) for details. This module describes the planned design and serves as a preview of what's coming.
 
 [Start Module A5 →](module-a5-rebuttable-presumptions.md)
 
@@ -123,12 +125,15 @@ Before starting this course, you should:
 - Mapping L4 types to JSON schemas
 - Handling JSON input in decision service calls
 - Generating JSON output from L4 functions
+- Using JSONDECODE and JSONENCODE for type-safe JSON processing
+- Making HTTP requests with FETCH (GET) and POST operators
+- Accessing environment variables with ENV keyword
 - Schema evolution and versioning
 - Integration patterns: REST bridge, database sync, batch processing, event-driven
 - API discovery with Swagger endpoints (/swagger-ui, /swagger)
 - Performance optimization
 
-**Key takeaway:** Seamlessly integrate L4 with databases, web apps, and enterprise systems via JSON.
+**Key takeaway:** Seamlessly integrate L4 with databases, web apps, external APIs, and enterprise systems via JSON and HTTP.
 
 [Start Module A6 →](module-a6-json-integration.md)
 
@@ -192,32 +197,76 @@ Before starting this course, you should:
 
 ---
 
+### Module A10: LLM-Powered Semantic Parser / Chatbot [PLANNED]
+
+**What you'll learn:**
+
+- Building an LLM-powered interface to the L4 decision service
+- Semantic parsing: converting natural language queries to function calls
+- Function discovery and argument extraction with prompt engineering
+- Displaying evaluation traces and visualizations to users
+- Structured interaction patterns vs. free-form chatbots
+- Error handling, confidence thresholds, and fallback strategies
+- Integration with OpenRouter, OpenAI, or Anthropic APIs
+
+**Key takeaway:** Create an intelligent natural language interface where users can ask questions in plain English and get structured answers from L4 reasoners.
+
+**Status:** Planned module. Related materials exist:
+
+- [LLM Integration Docs](../tutorial/llm-getting-started.md) - Shows how L4 can call LLMs (opposite direction)
+- [proposal-jl4-nl-query-mar-24-2025.md](../proposal-jl4-nl-query-mar-24-2025.md) - Design proposal for semantic parser approach
+- Module A4 (Decision Service APIs) and Module A6 (JSON Integration) provide foundational knowledge
+
+**Contributions welcome!** This would be a valuable addition to the course.
+
+---
+
+### Module A11: Regulative Rules & Contract Logic
+
+**What you'll learn:**
+
+- Theoretical foundations from Hvitved's CSL (Contract Specification Language)
+- The obligation pattern: PARTY, MUST/MAY, WITHIN, HENCE, LEST
+- Modeling multiparty contracts with deadlines and consequences
+- Using #TRACE to simulate contract execution
+- Contract composition with AND/OR
+- Blame assignment and breach handling
+- Type definitions for contract-specific data structures
+
+**Key takeaway:** Model real-world contracts as executable specifications with formal semantics for obligations, deadlines, reparations, and breach.
+
+**Status:** Covers current L4 implementation. Future versions will add MUST NOT (prohibitions) and explicit BREACH syntax.
+
+[Start Module A11 →](module-a11-regulative-rules.md)
+
+---
+
 ## Learning Paths
 
 ### Path 1: Full Stack Legal Engineer (All Modules)
 
 Complete all modules in sequence for comprehensive mastery.
 
-**Timeline:** 4-6 weeks
+**Timeline:** 5-7 weeks (Modules A10 and A11 add ~1 week each)
 **Best for:** Developers building enterprise legal systems from scratch
 
 ---
 
-### Path 2: API Integration Specialist (A1, A4, A6)
+### Path 2: API Integration Specialist (A1, A4, A6, A10)
 
-Focus on integrating L4 with existing systems.
+Focus on integrating L4 with existing systems and user interfaces.
 
-**Timeline:** 1-2 weeks
-**Best for:** Backend developers integrating L4 into existing applications
+**Timeline:** 1-2 weeks (+ 1 week for A10 when available)
+**Best for:** Backend developers integrating L4 into existing applications, building chatbots and conversational interfaces
 
 ---
 
-### Path 3: Legal Rule Migration Expert (A1, A2, A9)
+### Path 3: Legal Rule Migration Expert (A1, A2, A9, A11)
 
-Specialize in ingesting and migrating legal rules.
+Specialize in ingesting and migrating legal rules, including contracts with obligations.
 
-**Timeline:** 2-3 weeks
-**Best for:** Developers migrating from legacy systems or digitizing legal documents
+**Timeline:** 3-4 weeks
+**Best for:** Developers migrating from legacy systems or digitizing legal documents and contracts
 
 ---
 
@@ -236,6 +285,15 @@ Master large-scale system design and team collaboration.
 
 **Timeline:** 3-4 weeks
 **Best for:** Tech leads and architects designing multi-team L4 projects
+
+---
+
+### Path 6: Contract & Compliance Specialist (A1, A3, A7, A11)
+
+Focus on modeling contracts, obligations, and compliance monitoring.
+
+**Timeline:** 3-4 weeks
+**Best for:** Developers building contract management systems, compliance engines, or obligation tracking
 
 ---
 
@@ -436,6 +494,18 @@ Under the following terms:
 ---
 
 ## Changelog
+
+### Version 1.2 (2025-12-31)
+
+- Added Module A11 (Regulative Rules & Contract Logic) covering CSL foundations and obligation patterns
+- Added Path 6: Contract & Compliance Specialist learning path
+- Updated Path 3 to include A11 for contract migration scenarios
+
+### Version 1.1 (2025-12-17)
+
+- Added Module A10 (LLM-Powered Semantic Parser / Chatbot) as planned module
+- Updated learning paths to include A10
+- Noted related materials (LLM integration docs in doc/tutorial/, proposal document)
 
 ### Version 1.0 (2024-12-01)
 

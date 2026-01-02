@@ -42,14 +42,6 @@
 §§ `Type`
 
 
-DECLARE DATE 
-    HAS day   IS A NUMBER
-        month IS A NUMBER
-        year  IS A NUMBER
-
-
-
-
 §§ `Date Constructors`
 
 
@@ -58,44 +50,12 @@ GIVEN day   IS A NUMBER
       year  IS A NUMBER
 GIVETH A DATE
 `Date` AKA `Days to date` MEANS
-    Date (Day day month year)
+    DATE_FROM_DMY day month year
 
 GIVEN days  IS A NUMBER
 GIVETH A DATE
 `Date` AKA `Days to date` MEANS
-    DATE WITH
-        day   IS  d MINUS dy MINUS dm
-        month IS  m
-        year  IS  y
-    WHERE
-        d   MEANS FLOOR days PLUS 1
-        y   MEANS `Year of days` days
-        dy  MEANS `Years to days` y
-        m   MEANS `Month of days` 1 (d MINUS dy)
-        dm  MEANS `Months since year start to days` m y
-
-        GIVEN i IS A NUMBER
-              c IS A NUMBER
-        `Month of days` MEANS
-            IF    i LESS THAN `Months in a year` AND a LESS THAN c
-            THEN  `Month of days` (i PLUS 1) c
-            ELSE  i
-            WHERE
-                a MEANS `Months since year start to days` (i PLUS 1) y
-
-        GIVEN v IS A NUMBER
-        GIVETH A NUMBER
-        `Year of days` MEANS
-            y400 PLUS y100 PLUS y4 PLUS z
-            WHERE
-                x     MEANS FLOOR v
-                y400  MEANS FLOOR (x DIVIDED BY 146097) TIMES 400
-                r400  MEANS x MODULO 146097
-                y100  MEANS FLOOR (r400 DIVIDED BY 36524) TIMES 100
-                r100  MEANS r400 MODULO 36524
-                y4    MEANS FLOOR (r100 DIVIDED BY 1461) TIMES 4
-                r4    MEANS r100 MODULO 1461
-                z     MEANS FLOOR (r4 DIVIDED BY 365)
+    DATE_FROM_SERIAL days
 
 GIVEN date  IS A DATE
 GIVETH A DATE
@@ -110,25 +70,14 @@ GIVETH A DATE
 GIVEN date  IS A DATE
 GIVETH A NUMBER
 `Day` AKA `Date to days` MEANS
-    Day (date's day) (date's month) (date's year) 
+    DATE_SERIAL date
 
 GIVEN day   IS A NUMBER
       month IS A NUMBER
       year  IS A NUMBER
 GIVETH A NUMBER
 `Day` AKA `Date to days` MEANS
-    IF    month LESS THAN 1
-    THEN  d PLUS (`Years to days` y                 -- negative month handling
-            PLUS `Months since year start to days`
-                    (month PLUS (`Months in a year` TIMES n))
-                    y)
-    ELSE  d PLUS (`Years to days` year
-            PLUS `Months since year start to days` month year)
-    WHERE
-        d MEANS FLOOR day MINUS 1
-        m MEANS FLOOR month MINUS 1
-        n MEANS FLOOR (1 MINUS (m DIVIDED BY `Months in a year`))
-        y MEANS FLOOR year MINUS n
+    DATE_SERIAL (DATE_FROM_DMY day month year)
 
 GIVEN days  IS A NUMBER
 GIVETH A NUMBER
@@ -143,7 +92,7 @@ GIVETH A DATE
 GIVEN date  IS A DATE
 GIVETH A DATE
 `Year` MEANS
-    Year (date's year)
+    Year (DATE_YEAR date)
 
 GIVEN month IS A NUMBER
       year  IS A NUMBER
@@ -159,7 +108,7 @@ GIVETH A DATE
 GIVEN date  IS A DATE
 GIVETH A DATE
 `Month` MEANS
-    Month (date's month) (date's year)
+    Month (DATE_MONTH date) (DATE_YEAR date)
 
 GIVEN week  IS A NUMBER
       year  IS A NUMBER
@@ -197,73 +146,73 @@ GIVEN day   IS A NUMBER
       year  IS A NUMBER
 GIVETH A DATE
 `January` AKA `Jan` MEANS
-    DATE day 1 year
+    Date day 1 year
 
 GIVEN day   IS A NUMBER
       year  IS A NUMBER
 GIVETH A DATE
 `February` AKA `Feb` MEANS
-    DATE day 2 year
+    Date day 2 year
 
 GIVEN day   IS A NUMBER
       year  IS A NUMBER
 GIVETH A DATE
 `March` AKA `Mar` MEANS
-    DATE day 3 year
+    Date day 3 year
 
 GIVEN day   IS A NUMBER
       year  IS A NUMBER
 GIVETH A DATE
 `April` AKA `Apr` MEANS
-    DATE day 4 year
+    Date day 4 year
 
 GIVEN day   IS A NUMBER
       year  IS A NUMBER
 GIVETH A DATE
 `May` MEANS
-    DATE day 5 year
+    Date day 5 year
 
 GIVEN day   IS A NUMBER
       year  IS A NUMBER
 GIVETH A DATE
 `June` AKA `Jun` MEANS
-    DATE day 6 year
+    Date day 6 year
 
 GIVEN day   IS A NUMBER
       year  IS A NUMBER
 GIVETH A DATE
 `July` AKA `Jul` MEANS
-    DATE day 7 year
+    Date day 7 year
 
 GIVEN day   IS A NUMBER
       year  IS A NUMBER
 GIVETH A DATE
 `August` AKA `Aug` MEANS
-    DATE day 8 year
+    Date day 8 year
 
 GIVEN day   IS A NUMBER
       year  IS A NUMBER
 GIVETH A DATE
 `September` AKA `Sep` MEANS
-    DATE day 9 year
+    Date day 9 year
 
 GIVEN day   IS A NUMBER
       year  IS A NUMBER
 GIVETH A DATE
 `October` AKA `Oct` MEANS
-    DATE day 10 year
+    Date day 10 year
 
 GIVEN day   IS A NUMBER
       year  IS A NUMBER
 GIVETH A DATE
 `November` AKA `Nov` MEANS
-    DATE day 11 year
+    Date day 11 year
 
 GIVEN day   IS A NUMBER
       year  IS A NUMBER
 GIVETH A DATE
 `December` AKA `Dec` MEANS
-    DATE day 12 year
+    Date day 12 year
 
 
 GIVEN days  IS A NUMBER
@@ -274,7 +223,7 @@ GIVETH A NUMBER
 GIVEN date  IS A DATE
 GIVETH A NUMBER
 `Month of the year` MEANS                     -- Returns the number of the week of this date
-    `Month of days` 1 (`Months since year start to days` (date's month PLUS 1) (date's year))
+    `Month of days` 1 (`Months since year start to days` (DATE_MONTH date PLUS 1) (DATE_YEAR date))
     WHERE
         GIVEN i IS A NUMBER
               c IS A NUMBER
@@ -283,7 +232,7 @@ GIVETH A NUMBER
             THEN  `Month of days` (i PLUS 1) c
             ELSE  i
             WHERE
-                a MEANS `Months since year start to days` (i PLUS 1) (date's year)
+                a MEANS `Months since year start to days` (i PLUS 1) (DATE_YEAR date)
 
 
 
@@ -310,7 +259,7 @@ GIVETH A NUMBER
 GIVEN date  IS A DATE
 GIVETH A NUMBER
 `Months since year start to days` MEANS
-    `Months since year start to days` (date's month) (date's year)
+    `Months since year start to days` (DATE_MONTH date) (DATE_YEAR date)
 
 GIVEN month IS A NUMBER
       year  IS A NUMBER
@@ -342,7 +291,7 @@ GIVETH A NUMBER
 GIVEN date  IS A DATE
 GIVETH A NUMBER
 `Days in month` MEANS
-    `Days in month` (date's month) (date's year)
+    `Days in month` (DATE_MONTH date) (DATE_YEAR date)
 
 GIVEN year  IS A NUMBER
 GIVETH A NUMBER
@@ -354,7 +303,7 @@ GIVETH A NUMBER
 GIVEN date  IS A DATE
 GIVETH A NUMBER
 `Days in year` MEANS
-    `Days in year` (date's year)
+    `Days in year` (DATE_YEAR date)
 
 GIVEN year  IS A NUMBER
 GIVETH A NUMBER
@@ -369,7 +318,7 @@ GIVETH A NUMBER
 GIVEN date  IS A DATE
 GIVETH A NUMBER
 `Years to days` MEANS
-    `Years to days` (date's year)
+    `Years to days` (DATE_YEAR date)
 
 
 
@@ -402,7 +351,7 @@ GIVETH A NUMBER
 GIVEN date   IS A DATE
 GIVETH A NUMBER
 `Weekday of 1st day of month` MEANS
-    `Weekday of 1st day of month` (date's month) (date's year)
+    `Weekday of 1st day of month` (DATE_MONTH date) (DATE_YEAR date)
 
 GIVEN year  IS A NUMBER
 GIVETH A NUMBER
@@ -412,7 +361,7 @@ GIVETH A NUMBER
 GIVEN date  IS A DATE
 GIVETH A NUMBER
 `Weekday of 1st day of year` MEANS
-    `Weekday of 1st day of year` (date's year)
+    `Weekday of 1st day of year` (DATE_YEAR date)
 
 
 
@@ -427,15 +376,15 @@ GIVETH A NUMBER
 GIVEN date  IS A DATE
 GIVETH A NUMBER
 `Week of the year` MEANS                     -- Returns the number of the week of this date
-    IF    n EQUALS 53 AND `Weeks in year` (date's year) EQUALS 52
+    IF    n EQUALS 53 AND `Weeks in year` (DATE_YEAR date) EQUALS 52
     THEN  1
     ELSE  IF    n EQUALS 0
-          THEN  `Weeks in year` (date's year MINUS 1)
+          THEN  `Weeks in year` (DATE_YEAR date MINUS 1)
           ELSE  n
     WHERE
         s MEANS (`Months since year start to days` date)
-            PLUS (date's day MINUS 1)
-        w MEANS (`Days in a week` PLUS 2 PLUS (`Weekday of 1st day of year` (date's year)))
+            PLUS (DATE_DAY date MINUS 1)
+        w MEANS (`Days in a week` PLUS 2 PLUS (`Weekday of 1st day of year` (DATE_YEAR date)))
             MODULO `Days in a week`
         n MEANS CEILING ((s PLUS w MINUS 2) DIVIDED BY `Days in a week`)
 
@@ -459,7 +408,7 @@ GIVETH A NUMBER
 GIVEN date   IS A DATE
 GIVETH A NUMBER
 `Weeks in year` MEANS
-    `Weeks in year` (date's year)   
+    `Weeks in year` (DATE_YEAR date)   
 
 
 
@@ -504,7 +453,7 @@ GIVETH A BOOLEAN
 GIVEN date   IS A DATE
 GIVETH A BOOLEAN
 `is leap year` MEANS
-    `is leap year` (date's year)
+    `is leap year` (DATE_YEAR date)
 
 
 
@@ -546,22 +495,22 @@ GIVETH A DATE
 GIVEN date   IS A DATE
 GIVETH A DATE
 `the month after` MEANS
-    Date 1 (date's month PLUS 1) (date's year)
+    Date 1 (DATE_MONTH date PLUS 1) (DATE_YEAR date)
 
 GIVEN date   IS A DATE
 GIVETH A DATE
 `the month before` MEANS
-    Date 1 (date's month MINUS 1) (date's year)
+    Date 1 (DATE_MONTH date MINUS 1) (DATE_YEAR date)
 
 GIVEN date   IS A DATE
 GIVETH A DATE
 `the year after` MEANS
-    Date 1 1 (date's year PLUS 1)
+    Date 1 1 (DATE_YEAR date PLUS 1)
 
 GIVEN date   IS A DATE
 GIVETH A DATE
 `the year before` MEANS
-    Date 1 1 (date's year MINUS 1)
+    Date 1 1 (DATE_YEAR date MINUS 1)
 
 
 §§ `Comperators`
@@ -610,7 +559,7 @@ GIVETH A STRING
         d MEANS FLOOR days
         m MEANS IF    d GREATER THAN 0 AND d LESS THAN 13
                 THEN  d MINUS 1
-                ELSE  FLOOR ((Date d)'s month MINUS 1)
+                ELSE  FLOOR (DATE_MONTH (Date d) MINUS 1)
 
 GIVEN days   IS A NUMBER
 GIVETH A STRING

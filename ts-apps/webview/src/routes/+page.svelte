@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
+  import { onDestroy, onMount } from 'svelte'
   import { RenderAsLadderInfo } from '@repo/viz-expr'
   import { LadderApiForWebview } from '$lib/ladder-api-for-webview'
+  import { DecisionServiceQueryPlanRequest } from '@repo/vscode-webview-rpc'
   import {
     RenderAsLadder,
     makeRenderAsLadderSuccessResponse,
@@ -19,6 +20,7 @@
     LadderEnv,
     LadderFlow,
     type FunDeclLirNode,
+    elicitationOverrideFromQueryPlan,
     VizDeclLirSource,
   } from 'l4-ladder-visualizer'
 
@@ -70,6 +72,85 @@
   let vsCodeApi: WebviewApi<null>
   let messenger: Messenger
 
+  let currentLadderGraphId: import('l4-ladder-visualizer').LirId | null = null
+  let lastQueryPlanBindingsKey: string | null = null
+  let queryPlanInFlight = false
+  let queryPlanNeedsRerun = false
+
+  function bindingsKey(bindings: Record<string, boolean>) {
+    const entries = Object.entries(bindings).sort(([a], [b]) =>
+      a.localeCompare(b)
+    )
+    return JSON.stringify(entries)
+  }
+
+  function getCurrentAtomBindings(): {
+    docUri: string
+    fnName: string
+    bindings: Record<string, boolean>
+  } | null {
+    if (!ladderEnv) return null
+    const docId = ladderEnv.getVersionedTextDocIdentifier()
+    const top = ladderEnv.getTopFunDeclLirNode(context)
+    const ladderGraph = top.getBody(context)
+
+    const out: Record<string, boolean> = {}
+    for (const [unique, val] of ladderGraph.getBindings(context).getEntries()) {
+      if (!val) continue
+      const atomId =
+        ladderGraph.getAtomIdForUnique(context, unique) ??
+        ladderGraph.getLabelForUnique(context, unique)
+      if (val.$type === 'TrueV') {
+        out[atomId] = true
+      } else if (val.$type === 'FalseV') {
+        out[atomId] = false
+      }
+    }
+
+    return { docUri: docId.uri, fnName: top.getFunName(context), bindings: out }
+  }
+
+  async function refreshQueryPlanFromExtension(): Promise<void> {
+    const curr = getCurrentAtomBindings()
+    if (!curr) return
+
+    const nextKey = `${curr.docUri}|${curr.fnName}|${bindingsKey(curr.bindings)}`
+    if (lastQueryPlanBindingsKey === nextKey) return
+
+    const resp = await messenger.sendRequest(
+      DecisionServiceQueryPlanRequest,
+      HOST_EXTENSION,
+      curr
+    )
+    lastQueryPlanBindingsKey = nextKey
+
+    const ladderGraph = ladderEnv.getTopFunDeclLirNode(context).getBody(context)
+
+    ladderGraph.setElicitationOverride(
+      context,
+      elicitationOverrideFromQueryPlan(context, ladderGraph, resp)
+    )
+  }
+
+  function scheduleQueryPlanRefresh() {
+    if (queryPlanInFlight) {
+      queryPlanNeedsRerun = true
+      return
+    }
+    queryPlanInFlight = true
+    void refreshQueryPlanFromExtension()
+      .catch((e) => {
+        console.warn('decision-service query-plan failed', e)
+      })
+      .finally(() => {
+        queryPlanInFlight = false
+        if (queryPlanNeedsRerun) {
+          queryPlanNeedsRerun = false
+          scheduleQueryPlanRefresh()
+        }
+      })
+  }
+
   // This needs to be inside onMount so that acquireVsCodeApi does not get looked up during SSR or pre-rendering
   onMount(() => {
     /*************************************************************
@@ -101,6 +182,13 @@
         ladderInfo
       )
       await renderLadderPromise
+
+      currentLadderGraphId = ladderEnv
+        .getTopFunDeclLirNode(context)
+        .getBody(context)
+        .getId()
+      lastQueryPlanBindingsKey = null
+      scheduleQueryPlanRefresh()
     }
     backendApi = new LadderApiForWebview(messenger, makeLadderFlow)
 
@@ -124,6 +212,13 @@
     )
 
     messenger.start()
+
+    const sub = lirRegistry.subscribe((_ctx, id) => {
+      if (!currentLadderGraphId) return
+      if (!id.isEqualTo(currentLadderGraphId)) return
+      scheduleQueryPlanRefresh()
+    })
+    onDestroy(() => sub.unsubscribe())
   })
 </script>
 

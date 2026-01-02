@@ -410,6 +410,24 @@ orElse x y MEANS
   WHEN JUST x  THEN JUST x
 
 GIVEN
+  a    IS A TYPE
+  list IS A LIST OF MAYBE a
+GIVETH A MAYBE a
+asum list MEANS
+  CONSIDER list
+  WHEN EMPTY THEN NOTHING
+  WHEN x FOLLOWED BY xs THEN
+    CONSIDER x
+    WHEN JUST y  THEN JUST y
+    WHEN NOTHING THEN asum xs
+
+GIVEN
+  a    IS A TYPE
+  list IS A LIST OF MAYBE a
+GIVETH A MAYBE a
+firstJust list MEANS asum list
+
+GIVEN
   a       IS A TYPE
   x       IS A MAYBE a
 GIVETH A LIST OF a
@@ -669,4 +687,342 @@ GIVETH A BOOLEAN
         WHEN JUST x THEN CONSIDER b
             WHEN NOTHING THEN FALSE
             WHEN JUST y THEN (x GREATER THAN y)
+
+-- a simple implementation of a Dictionary type
+GIVEN k IS A TYPE
+      v IS A TYPE
+GIVETH A TYPE
+DECLARE Dictionary k v
+    HAS contents IS A LIST OF PAIR OF k, v
+
+GIVEN  a IS A TYPE
+       b IS A TYPE
+       k IS AN a
+       v IS A  b 
+singleToDict MEANS  Dictionary WITH contents IS LIST (PAIR OF k, v)
+
+GIVEN k IS A TYPE
+      v IS A TYPE
+      pair IS A PAIR OF k, v
+pairToDict MEANS  Dictionary WITH contents IS LIST pair
+
+GIVEN k IS A TYPE
+      v IS A TYPE
+      pairs IS A LIST OF PAIR OF k, v
+listToDict MEANS  Dictionary WITH contents IS pairs
+
+fromList MEANS listToDict
+
+-- Dictionary: empty
+GIVEN k IS A TYPE
+      v IS A TYPE
+GIVETH A Dictionary k v
+emptyDict MEANS Dictionary WITH contents IS EMPTY
+
+-- Dictionary: singleton (alias for singleToDict)
+singleton MEANS singleToDict
+
+-- Dictionary: dictToList (extract contents)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      dict IS A Dictionary k v
+GIVETH A LIST OF PAIR OF k, v
+dictToList dict MEANS dict's contents
+
+-- Dictionary: dictKeys (extract all keys)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      dict IS A Dictionary k v
+GIVETH A LIST OF k
+dictKeys dict MEANS map fst (dict's contents)
+
+-- Dictionary: dictElems (extract all values)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      dict IS A Dictionary k v
+GIVETH A LIST OF v
+dictElems dict MEANS map snd (dict's contents)
+
+-- Dictionary: dictSize (count entries)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      dict IS A Dictionary k v
+GIVETH A NUMBER
+dictSize dict MEANS go 0 (dict's contents)
+  WHERE
+    go acc list MEANS
+      CONSIDER list
+      WHEN EMPTY THEN acc
+      WHEN x FOLLOWED BY xs THEN go (acc + 1) xs
+
+-- Dictionary: dictIsEmpty (test if empty)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      dict IS A Dictionary k v
+GIVETH A BOOLEAN
+dictIsEmpty dict MEANS null (dict's contents)
+
+-- Dictionary: lookup (query by key, returns MAYBE)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      key IS A k
+      dict IS A Dictionary k v
+GIVETH A MAYBE v
+dictLookup key dict MEANS lookup key (dict's contents)
+
+-- Dictionary: dictMember (test if key exists)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      key IS A k
+      dict IS A Dictionary k v
+GIVETH A BOOLEAN
+dictMember key dict MEANS isJust (dictLookup key dict)
+
+-- Dictionary: dictNotMember (test if key does not exist)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      key IS A k
+      dict IS A Dictionary k v
+GIVETH A BOOLEAN
+dictNotMember key dict MEANS NOT dictMember key dict
+
+-- Dictionary: dictFindWithDefault (lookup with default)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      default IS A v
+      key IS A k
+      dict IS A Dictionary k v
+GIVETH A v
+dictFindWithDefault default key dict MEANS fromMaybe default (dictLookup key dict)
+
+-- Dictionary: dictInsert (add or replace entry)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      key IS A k
+      value IS A v
+      dict IS A Dictionary k v
+GIVETH A Dictionary k v
+dictInsert key value dict MEANS Dictionary WITH contents IS go (dict's contents)
+  WHERE
+    go list MEANS
+      CONSIDER list
+      WHEN EMPTY THEN LIST (PAIR OF key, value)
+      WHEN PAIR OF k0, v0 FOLLOWED BY rest THEN
+        IF key EQUALS k0
+          THEN (PAIR OF key, value) FOLLOWED BY rest
+          ELSE (PAIR OF k0, v0) FOLLOWED BY go rest
+
+-- Dictionary: dictInsertWith (insert with combining function for existing values)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      combiner IS A FUNCTION FROM v AND v TO v
+      key IS A k
+      value IS A v
+      dict IS A Dictionary k v
+GIVETH A Dictionary k v
+dictInsertWith combiner key value dict MEANS Dictionary WITH contents IS go (dict's contents)
+  WHERE
+    go list MEANS
+      CONSIDER list
+      WHEN EMPTY THEN LIST (PAIR OF key, value)
+      WHEN PAIR OF k0, v0 FOLLOWED BY rest THEN
+        IF key EQUALS k0
+          THEN (PAIR OF key, combiner value v0) FOLLOWED BY rest
+          ELSE (PAIR OF k0, v0) FOLLOWED BY go rest
+
+-- Dictionary: dictDelete (remove entry by key)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      key IS A k
+      dict IS A Dictionary k v
+GIVETH A Dictionary k v
+dictDelete key dict MEANS Dictionary WITH contents IS go (dict's contents)
+  WHERE
+    go list MEANS
+      CONSIDER list
+      WHEN EMPTY THEN EMPTY
+      WHEN PAIR OF k0, v0 FOLLOWED BY rest THEN
+        IF key EQUALS k0
+          THEN rest
+          ELSE (PAIR OF k0, v0) FOLLOWED BY go rest
+
+-- Dictionary: dictAdjust (modify value at key if it exists)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      f IS A FUNCTION FROM v TO v
+      key IS A k
+      dict IS A Dictionary k v
+GIVETH A Dictionary k v
+dictAdjust f key dict MEANS Dictionary WITH contents IS go (dict's contents)
+  WHERE
+    go list MEANS
+      CONSIDER list
+      WHEN EMPTY THEN EMPTY
+      WHEN PAIR OF k0, v0 FOLLOWED BY rest THEN
+        IF key EQUALS k0
+          THEN (PAIR OF key, f v0) FOLLOWED BY rest
+          ELSE (PAIR OF k0, v0) FOLLOWED BY go rest
+
+-- Dictionary: dictUpdate (modify or delete value at key)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      f IS A FUNCTION FROM v TO MAYBE v
+      key IS A k
+      dict IS A Dictionary k v
+GIVETH A Dictionary k v
+dictUpdate f key dict MEANS Dictionary WITH contents IS go (dict's contents)
+  WHERE
+    go list MEANS
+      CONSIDER list
+      WHEN EMPTY THEN EMPTY
+      WHEN PAIR OF k0, v0 FOLLOWED BY rest THEN
+        IF key EQUALS k0
+          THEN CONSIDER f v0
+               WHEN NOTHING THEN rest
+               WHEN JUST newV THEN (PAIR OF key, newV) FOLLOWED BY rest
+          ELSE (PAIR OF k0, v0) FOLLOWED BY go rest
+
+-- Dictionary: dictUnion (left-biased union of two dictionaries)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      dict1 IS A Dictionary k v
+      dict2 IS A Dictionary k v
+GIVETH A Dictionary k v
+dictUnion dict1 dict2 MEANS
+  foldl (GIVEN acc, pair YIELD CONSIDER pair WHEN PAIR OF key, val THEN dictInsert key val acc)
+        dict2
+        (dict1's contents)
+
+-- Dictionary: dictUnionWith (union with combining function)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      combiner IS A FUNCTION FROM v AND v TO v
+      dict1 IS A Dictionary k v
+      dict2 IS A Dictionary k v
+GIVETH A Dictionary k v
+dictUnionWith combiner dict1 dict2 MEANS
+  foldl (GIVEN acc, pair YIELD
+           CONSIDER pair
+           WHEN PAIR OF key, val THEN dictInsertWith combiner key val acc)
+        dict2
+        (dict1's contents)
+
+-- Dictionary: mapDict (map over values)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      w IS A TYPE
+      f IS A FUNCTION FROM v TO w
+      dict IS A Dictionary k v
+GIVETH A Dictionary k w
+mapDict f dict MEANS Dictionary WITH contents IS map (GIVEN p YIELD CONSIDER p WHEN PAIR OF key, val THEN PAIR OF key, f val) (dict's contents)
+
+-- Dictionary: dictMapWithKey (map over values with access to key)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      w IS A TYPE
+      f IS A FUNCTION FROM k AND v TO w
+      dict IS A Dictionary k v
+GIVETH A Dictionary k w
+dictMapWithKey f dict MEANS Dictionary WITH contents IS map (GIVEN p YIELD CONSIDER p WHEN PAIR OF key, val THEN PAIR OF key, f key val) (dict's contents)
+
+-- Dictionary: filterDict (filter entries by value predicate)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      pred IS A FUNCTION FROM v TO BOOLEAN
+      dict IS A Dictionary k v
+GIVETH A Dictionary k v
+filterDict pred dict MEANS Dictionary WITH contents IS filter (GIVEN p YIELD CONSIDER p WHEN PAIR OF key, val THEN pred val) (dict's contents)
+
+-- Dictionary: dictFilterWithKey (filter entries by key-value predicate)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      pred IS A FUNCTION FROM k AND v TO BOOLEAN
+      dict IS A Dictionary k v
+GIVETH A Dictionary k v
+dictFilterWithKey pred dict MEANS Dictionary WITH contents IS filter (GIVEN p YIELD CONSIDER p WHEN PAIR OF key, val THEN pred key val) (dict's contents)
+
+-- Dictionary: foldrDict (right fold over values)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      r IS A TYPE
+      f IS A FUNCTION FROM v AND r TO r
+      z IS AN r
+      dict IS A Dictionary k v
+GIVETH AN r
+foldrDict f z dict MEANS foldr (GIVEN p, acc YIELD CONSIDER p WHEN PAIR OF key, val THEN f val acc) z (dict's contents)
+
+-- Dictionary: foldlDict (left fold over values)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      r IS A TYPE
+      f IS A FUNCTION FROM r AND v TO r
+      z IS AN r
+      dict IS A Dictionary k v
+GIVETH AN r
+foldlDict f z dict MEANS foldl (GIVEN acc, p YIELD CONSIDER p WHEN PAIR OF key, val THEN f acc val) z (dict's contents)
+
+-- Dictionary: dictFoldrWithKey (right fold with keys)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      r IS A TYPE
+      f IS A FUNCTION FROM k AND v AND r TO r
+      z IS AN r
+      dict IS A Dictionary k v
+GIVETH AN r
+dictFoldrWithKey f z dict MEANS foldr (GIVEN p, acc YIELD CONSIDER p WHEN PAIR OF key, val THEN f key val acc) z (dict's contents)
+
+-- Dictionary: dictFoldlWithKey (left fold with keys)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      r IS A TYPE
+      f IS A FUNCTION FROM r AND k AND v TO r
+      z IS AN r
+      dict IS A Dictionary k v
+GIVETH AN r
+dictFoldlWithKey f z dict MEANS foldl (GIVEN acc, p YIELD CONSIDER p WHEN PAIR OF key, val THEN f acc key val) z (dict's contents)
+
+-- Grouping: insertValue (insert into grouped association list)
+-- Accumulates values for the same key into a list
+GIVEN k IS A TYPE
+      v IS A TYPE
+      key IS A k
+      value IS A v
+      dictPairs IS A LIST OF PAIR OF k, LIST OF v
+GIVETH A LIST OF PAIR OF k, LIST OF v
+insertValue key value dictPairs MEANS
+  CONSIDER dictPairs
+    WHEN EMPTY
+      THEN LIST (PAIR OF key, LIST value)
+    WHEN PAIR OF k0, vs FOLLOWED BY rest
+      THEN IF key EQUALS k0
+           THEN (PAIR OF k0, append vs (LIST value)) FOLLOWED BY rest
+           ELSE (PAIR OF k0, vs) FOLLOWED BY insertValue key value rest
+
+-- Grouping: groupPairs (group flat pairs by key)
+-- [(k,v)] -> [(k,[v])]
+GIVEN k IS A TYPE
+      v IS A TYPE
+      pairs IS A LIST OF PAIR OF k, v
+GIVETH A LIST OF PAIR OF k, LIST OF v
+groupPairs pairs MEANS go EMPTY pairs
+  WHERE
+    go acc list MEANS
+      CONSIDER list
+      WHEN EMPTY THEN acc
+      WHEN PAIR OF key, value FOLLOWED BY xs THEN go (insertValue key value acc) xs
+
+-- Grouping: fromListGrouped (create dictionary grouping by key)
+-- [(k,v)] -> Dictionary k [v]
+GIVEN k IS A TYPE
+      v IS A TYPE
+      pairs IS A LIST OF PAIR OF k, v
+GIVETH A Dictionary k (LIST OF v)
+fromListGrouped pairs MEANS Dictionary WITH contents IS groupPairs pairs
+
+-- Pair: mapSnd (map over second element - alias for pmap)
+mapSnd MEANS pmap
+
+-- Pair: mapPairs (map over second element of each pair - alias for fmap on pairs)
+-- Note: This is fmap specialized to List of Pairs
+mapPairs MEANS fmap
 

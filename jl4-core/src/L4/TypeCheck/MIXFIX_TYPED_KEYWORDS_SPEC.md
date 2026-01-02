@@ -232,6 +232,53 @@ This enhancement is more complex and may require:
 
 Consider implementing Enhancements 1 and 2 first before tackling this.
 
+## Critical Constraint: WHERE vs LET for Mixfix Operators
+
+**Mixfix operators (including postfix) must be defined in WHERE clauses and cannot be defined inside LET blocks.**
+
+### Rationale
+
+The mixfix operator registry is built during the scanning phase from WHERE clause definitions. The type checker's postfix reinterpretation (`reinterpretPostfixAppIfNeeded`) and mixfix pattern matching rely on this registry. LET blocks define local bindings but do not register mixfix operators.
+
+### Examples
+
+```l4
+-- ✓ CORRECT: Postfix operator in WHERE
+GIVEN radius IS A NUMBER
+GIVETH A NUMBER
+circleArea radius MEANS
+  LET pi BE 3
+  IN radius `squared` TIMES pi
+  WHERE
+    GIVEN r IS A NUMBER
+    r `squared` MEANS r * r
+
+-- ✗ INCORRECT: Postfix operator in LET block (will fail typecheck)
+-- GIVEN radius IS A NUMBER
+-- GIVETH A NUMBER
+-- circleAreaBroken radius MEANS
+--   LET pi BE 3
+--       r `squared` MEANS r * r  -- ERROR: not registered in mixfix registry
+--   IN radius `squared` TIMES pi
+```
+
+### Alternative
+
+Use regular function syntax (not mixfix notation) in LET blocks:
+
+```l4
+GIVEN radius IS A NUMBER
+GIVETH A NUMBER
+circleAreaWithHelper radius MEANS
+  LET pi BE 3
+      squared r IS r * r  -- Regular function (not mixfix)
+  IN squared radius TIMES pi
+```
+
+### Test Coverage
+
+See `jl4/examples/not-ok/tc/postfix-in-let-block.l4` for a test demonstrating this constraint.
+
 ## Testing Strategy
 
 ### For Enhancement 1 (Error Messages)
@@ -289,8 +336,8 @@ test2 MEANS sixDivBy 3  -- Should be True
 | prettyMixfixMatchError      | L4/TypeCheck.hs             | 2813-2845          |
 | Fuzzy matching utilities    | L4/TypeCheck.hs             | 2312-2347          |
 | Keyword built-in            | L4/TypeCheck/Environment.hs | 25, 96-98, 282-285 |
-| MixfixInfo type             | L4/TypeCheck/Types.hs       | 240-250            |
-| MixfixPatternToken          | L4/TypeCheck/Types.hs       | 178-186            |
+| MixfixInfo type             | L4/Mixfix.hs                | 29-63              |
+| MixfixPatternToken          | L4/Mixfix.hs                | 17-27              |
 
 ## Notes for Implementer
 

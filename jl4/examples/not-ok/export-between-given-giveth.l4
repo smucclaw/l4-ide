@@ -1,0 +1,5 @@
+-- @export placed between GIVEN and GIVETH - does NOT work
+GIVEN x IS A BOOLEAN
+@export default Export between GIVEN and GIVETH
+GIVETH A BOOLEAN
+DECIDE export_between IS x

@@ -1,0 +1,13 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "n": {
+            "$ref": "#/$defs/NUMBER"
+        }
+    },
+    "required": [
+        "n"
+    ],
+    "title": "downFrom",
+    "type": "object"
+}

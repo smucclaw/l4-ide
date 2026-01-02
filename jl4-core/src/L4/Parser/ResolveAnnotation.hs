@@ -59,12 +59,13 @@ type DescWithSpan = WithSpan Desc
 
 data DescWarning
   = DescMissingLocation Desc
+  | DescDuplicatePreferInline DescWithSpan DescWithSpan
   deriving stock (Show, Eq, Generic)
   deriving anyclass (SOP.Generic)
 
 data DescS = DescS
   { descs :: ![DescWithSpan]
-  , warnings :: ![DescWarning]
+  , descWarnings :: ![DescWarning]
   }
   deriving stock (Generic, Eq, Show)
   deriving anyclass (SOP.Generic)
@@ -76,7 +77,7 @@ addDescCommentsToAst descs ast =
     initialS =
       DescS
         { descs = List.sortOn (.range.start) withSpan
-        , warnings = fmap DescMissingLocation missing
+        , descWarnings = fmap DescMissingLocation missing
         }
   in
     runState (addDesc ast) initialS
@@ -209,11 +210,10 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Decide n) where
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Assume n) where
   addNlg a = extendNlgA a $ case a of
-    MkAssume ann tySig appFormAka order typically -> do
+    MkAssume ann tySig appFormAka order -> do
       tySig' <- addNlg tySig
       appFormAka' <- addNlg appFormAka
-      typically' <- traverse addNlg typically
-      pure $ MkAssume ann tySig' appFormAka' order typically'
+      pure $ MkAssume ann tySig' appFormAka' order
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Directive n) where
   addNlg a = extendNlgA a $ case a of
@@ -223,12 +223,6 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Directive n) where
     LazyEvalTrace ann e -> do
       e' <- addNlg e
       pure $ LazyEvalTrace ann e'
-    PresumptiveEval ann e -> do
-      e' <- addNlg e
-      pure $ PresumptiveEval ann e'
-    PresumptiveEvalTrace ann e -> do
-      e' <- addNlg e
-      pure $ PresumptiveEvalTrace ann e'
     Check ann e -> do
       e' <- addNlg e
       pure $ Check ann e'
@@ -240,9 +234,6 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Directive n) where
     Assert ann e -> do
       e' <- addNlg e
       pure $ Assert ann e'
-    PresumptiveAssert ann e -> do
-      e' <- addNlg e
-      pure $ PresumptiveAssert ann e'
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Event n) where
   addNlg a@(MkEvent ann party act timestamp atFirst) = extendNlgA a do
@@ -272,11 +263,10 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (TypeDecl n) where
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (TypedName n) where
   addNlg a = extendNlgA a $ case a of
-    MkTypedName ann n ty typically -> do
+    MkTypedName ann n ty -> do
       n' <- addNlg n
       ty' <- addNlg ty
-      typically' <- traverse addNlg typically
-      pure $ MkTypedName ann n' ty' typically'
+      pure $ MkTypedName ann n' ty'
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (ConDecl n) where
   addNlg a = extendNlgA a $ case a of
@@ -300,11 +290,10 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (GivenSig n) where
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (OptionallyTypedName n) where
   addNlg a = extendNlgA a $ case a of
-    MkOptionallyTypedName ann n mty typically -> do
+    MkOptionallyTypedName ann n mty -> do
       n' <- addNlg n
       tys' <- traverse addNlg mty
-      typically' <- traverse addNlg typically
-      pure $ MkOptionallyTypedName ann n' tys' typically'
+      pure $ MkOptionallyTypedName ann n' tys'
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (GivethSig n) where
   addNlg a = extendNlgA a $ case a of
@@ -490,6 +479,10 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Expr n) where
       e' <- addNlg e
       lcl' <- traverse addNlg lcl
       pure $ Where ann e' lcl'
+    LetIn ann lcl e -> do
+      lcl' <- traverse addNlg lcl
+      e' <- addNlg e
+      pure $ LetIn ann lcl' e'
     Event ann e -> Event ann <$> addNlg e
     Fetch ann e -> Fetch ann <$> addNlg e
     Env ann e -> Env ann <$> addNlg e
@@ -502,6 +495,10 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Expr n) where
       es' <- traverse addNlg es
       pure $ Concat ann es'
     AsString ann e -> AsString ann <$> addNlg e
+    Breach ann mParty mReason -> do
+      mParty' <- traverse addNlg mParty
+      mReason' <- traverse addNlg mReason
+      pure $ Breach ann mParty' mReason'
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Obligation n) where
   addNlg (MkObligation ann' party event deadline followup lest) = do
@@ -513,10 +510,10 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Obligation n) where
     pure $  MkObligation ann' party' event' deadline' followup' lest'
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (RAction n) where
-  addNlg (MkAction ann rule provided) = do
+  addNlg (MkAction ann modal rule provided) = do
     rule' <- addNlg rule
     provided' <- traverse addNlg provided
-    pure $  MkAction ann rule' provided'
+    pure $  MkAction ann modal rule' provided'
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Branch n) where
   addNlg a = extendNlgA a $ case a of
@@ -587,39 +584,38 @@ instance HasDesc (TopDecl n) where
 
 instance HasDesc (Declare n) where
   addDesc decl@(MkDeclare ann tySig appForm tyDecl) = do
+    ann' <- attachLeadingDesc decl ann
     tySig' <- addDesc tySig
     app' <- addDesc appForm
     tyDecl' <- addDesc tyDecl
-    ann' <- attachLeadingDesc decl ann
     pure $ MkDeclare ann' tySig' app' tyDecl'
 
 instance HasDesc (Decide n) where
   addDesc dec@(MkDecide ann tySig appForm expr) = do
+    -- Attach leading desc to Decide FIRST, before processing children.
+    -- This ensures @export annotations are claimed by Decide before
+    -- parameters in the tySig can consume them.
+    ann' <- attachLeadingDesc dec ann
     tySig' <- addDesc tySig
     app' <- addDesc appForm
     expr' <- addDesc expr
-    ann' <- attachLeadingDesc dec ann
     pure $ MkDecide ann' tySig' app' expr'
 
 instance HasDesc (Assume n) where
-  addDesc asm@(MkAssume ann tySig appForm mType typically) = do
+  addDesc asm@(MkAssume ann tySig appForm mType) = do
+    ann' <- attachLeadingDesc asm ann
     tySig' <- addDesc tySig
     app' <- addDesc appForm
     mType' <- traverse addDesc mType
-    typically' <- traverse addDesc typically
-    ann' <- attachLeadingDesc asm ann
-    pure $ MkAssume ann' tySig' app' mType' typically'
+    pure $ MkAssume ann' tySig' app' mType'
 
 instance HasDesc (Directive n) where
   addDesc = \ case
     LazyEval ann e -> LazyEval ann <$> addDesc e
     LazyEvalTrace ann e -> LazyEvalTrace ann <$> addDesc e
-    PresumptiveEval ann e -> PresumptiveEval ann <$> addDesc e
-    PresumptiveEvalTrace ann e -> PresumptiveEvalTrace ann <$> addDesc e
     Check ann e -> Check ann <$> addDesc e
     Contract ann e t evs -> Contract ann <$> addDesc e <*> addDesc t <*> traverse addDesc evs
     Assert ann e -> Assert ann <$> addDesc e
-    PresumptiveAssert ann e -> PresumptiveAssert ann <$> addDesc e
 
 instance HasDesc (Import n) where
   addDesc a = pure a
@@ -633,11 +629,10 @@ instance HasDesc (GivenSig n) where
     MkGivenSig ann <$> traverse addDesc names
 
 instance HasDesc (OptionallyTypedName n) where
-  addDesc name@(MkOptionallyTypedName ann n mType typically) = do
+  addDesc name@(MkOptionallyTypedName ann n mType) = do
     mType' <- traverse addDesc mType
-    typically' <- traverse addDesc typically
-    ann' <- attachInlineDesc name ann
-    pure $ MkOptionallyTypedName ann' n mType' typically'
+    ann' <- attachLeadingOrInlineDesc name ann
+    pure $ MkOptionallyTypedName ann' n mType'
 
 instance HasDesc (GivethSig n) where
   addDesc (MkGivethSig ann ty) = do
@@ -658,11 +653,10 @@ instance HasDesc (ConDecl n) where
     MkConDecl ann name <$> traverse addDesc names
 
 instance HasDesc (TypedName n) where
-  addDesc name@(MkTypedName ann n ty typically) = do
+  addDesc name@(MkTypedName ann n ty) = do
     ty' <- addDesc ty
-    typically' <- traverse addDesc typically
-    ann' <- attachInlineDesc name ann
-    pure $ MkTypedName ann' n ty' typically'
+    ann' <- attachLeadingOrInlineDesc name ann
+    pure $ MkTypedName ann' n ty'
 
 instance HasDesc (Type' n) where
   addDesc = pure
@@ -692,13 +686,25 @@ attachLeadingDesc node ann =
       matches <- takeMatchingDescs (descPrecedesNode nodeRange)
       pure $ maybe ann (\d -> setDesc d.payload ann) (lastMaybe matches)
 
-attachInlineDesc :: (HasSrcRange a) => a -> Anno -> State DescS Anno
-attachInlineDesc node ann =
+attachLeadingOrInlineDesc :: (HasSrcRange a) => a -> Anno -> State DescS Anno
+attachLeadingOrInlineDesc node ann =
   case nodeSpan node of
     Nothing -> pure ann
     Just nodeRange -> do
-      matches <- takeMatchingDescs (descInlineFor nodeRange)
-      pure $ maybe ann (\d -> setDesc d.payload ann) (lastMaybe matches)
+      leadingMatches <- takeMatchingDescs (descPrecedesNode nodeRange)
+      inlineMatches <- takeMatchingDescs (descInlineFor nodeRange)
+      let mLeading = lastMaybe leadingMatches
+          mInline = lastMaybe inlineMatches
+      case (mLeading, mInline) of
+        (Nothing, Nothing) -> pure ann
+        (Just d, Nothing) -> pure $ setDesc d.payload ann
+        (Nothing, Just d) -> pure $ setDesc d.payload ann
+        (Just leadingD, Just inlineD) -> do
+          addDescWarning $ DescDuplicatePreferInline leadingD inlineD
+          pure $ setDesc inlineD.payload ann
+
+addDescWarning :: DescWarning -> State DescS ()
+addDescWarning w = modify' $ \s -> s{descWarnings = w : s.descWarnings}
 
 nodeSpan :: (HasSrcRange a) => a -> Maybe SrcSpan
 nodeSpan = fmap fromSrcRange . rangeOf

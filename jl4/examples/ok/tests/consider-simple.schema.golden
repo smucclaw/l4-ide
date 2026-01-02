@@ -1,0 +1,38 @@
+{
+    "$defs": {
+        "TwoNumbers": {
+            "oneOf": [
+                {
+                    "properties": {
+                        "num1": {
+                            "$ref": "#/$defs/NUMBER"
+                        },
+                        "num2": {
+                            "$ref": "#/$defs/NUMBER"
+                        },
+                        "tag": {
+                            "const": "MkTwoNumbers"
+                        }
+                    },
+                    "required": [
+                        "tag",
+                        "num1",
+                        "num2"
+                    ],
+                    "type": "object"
+                }
+            ]
+        }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "tn": {
+            "$ref": "#/$defs/TwoNumbers"
+        }
+    },
+    "required": [
+        "tn"
+    ],
+    "title": "test",
+    "type": "object"
+}

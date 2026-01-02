@@ -6,6 +6,7 @@ import L4.Evaluate.ValueLazy as Lazy
 import L4.Syntax
 
 import Data.Char
+import Data.Time (toGregorian)
 import Prettyprinter
 import Prettyprinter.Render.Text
 import qualified Data.List.NonEmpty as NE
@@ -332,6 +333,13 @@ instance LayoutPrinterWithName a => LayoutPrinter (Expr a) where
         , "WHERE"
         , indent 2 (vsep $ fmap printWithLayout decls)
         ]
+    LetIn _ decls e1 ->
+      vcat
+        [ "LET"
+        , indent 2 (vsep $ fmap printLetBinding decls)
+        , "IN"
+        , indent 2 (printWithLayout e1)
+        ]
     Event _ MkEvent {timestamp, party, action} ->
       vcat
         [ "PARTY" <+> printWithLayout party
@@ -348,6 +356,10 @@ instance LayoutPrinterWithName a => LayoutPrinter (Expr a) where
       "CONCAT" <+> hsep (punctuate comma (fmap parensIfNeeded exprs))
     AsString _ e ->
       parensIfNeeded e <+> "AS STRING"
+    Breach _ mParty mReason ->
+      "BREACH" <>
+        maybe mempty (\p -> " BY" <+> printWithLayout p) mParty <>
+        maybe mempty (\r -> " BECAUSE" <+> printWithLayout r) mReason
 
   parensIfNeeded :: LayoutPrinter a => Expr a -> Doc ann
   parensIfNeeded e = case e of
@@ -372,15 +384,31 @@ mprint :: (Foldable t, LayoutPrinter a) => Doc ann -> t a -> [Doc ann]
 mprint kw = foldMap \x -> [kw <+> printWithLayout x]
 
 instance LayoutPrinterWithName n => LayoutPrinter (RAction n) where
-  printWithLayout MkAction {action, provided} = hsep $
-    [ "MUST", printWithLayout action
+  printWithLayout MkAction {modal, action, provided} = hsep $
+    [ printDeonticModal modal, printWithLayout action
     ]
     <> mprint "PROVIDED" provided
+
+-- | Print deontic modal keyword
+printDeonticModal :: DeonticModal -> Doc ann
+printDeonticModal = \case
+  DMust -> "MUST"
+  DMay -> "MAY"
+  DMustNot -> "MUST NOT"
+  DDo -> "DO"
 
 instance LayoutPrinterWithName a => LayoutPrinter (NamedExpr a) where
   printWithLayout = \ case
     MkNamedExpr _ name e ->
       printWithLayout name <+> "IS" <+> printWithLayout e
+
+-- | Print a LocalDecl in LET context (without DECIDE keyword and without type signature)
+-- Uses "BE" as the binding keyword in honour of The Beatles' "Let It Be"
+printLetBinding :: LayoutPrinterWithName a => LocalDecl a -> Doc ann
+printLetBinding = \ case
+  LocalDecide _ (MkDecide _ _tySig appForm expr) ->
+    Prettyprinter.group $ printWithLayout appForm <+> "BE" <+> Prettyprinter.align (printWithLayout expr)
+  LocalAssume _ t -> printWithLayout t
 
 instance LayoutPrinterWithName a => LayoutPrinter (LocalDecl a) where
   printWithLayout = \ case
@@ -437,10 +465,13 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
   printWithLayout = \ case
     Lazy.ValNumber i               -> pretty (prettyRatio i)
     Lazy.ValString t               -> surround (pretty $ escapeStringLiteral t) "\"" "\""
-    Lazy.ValDate day               -> pretty (Text.show day)
+    Lazy.ValDate day               ->
+      let (y, m, d) = toGregorian day
+      in "DATE OF" <+> hsep [pretty d <> ",", pretty m <> ",", pretty y]
     Lazy.ValNil                    -> "EMPTY"
     Lazy.ValCons v1 v2             -> "(" <> printWithLayout v1 <> " FOLLOWED BY " <> printWithLayout v2 <> ")" -- TODO: parens
     Lazy.ValClosure{}              -> "<function>"
+    Lazy.ValNullaryBuiltinFun{}    -> "<builtin-function>"
     Lazy.ValUnaryBuiltinFun{}      -> "<builtin-function>"
     Lazy.ValBinaryBuiltinFun{}     -> "<function>"
     Lazy.ValTernaryBuiltinFun{}    -> "<builtin-function>"
@@ -484,6 +515,7 @@ instance LayoutPrinter BinOp where
     BinOpDividedBy -> "DIVIDED"
     BinOpModulo -> "MODULO"
     BinOpExponent -> "TO THE POWER OF"
+    BinOpTrunc -> "TRUNC"
     BinOpCons -> "FOLLOWED BY"
     BinOpEquals -> "EQUALS"
     BinOpLeq -> "AT MOST"
@@ -496,6 +528,9 @@ instance LayoutPrinter BinOp where
     BinOpIndexOf -> "INDEXOF"
     BinOpSplit -> "SPLIT"
     BinOpCharAt -> "CHARAT"
+    BinOpWhenLast -> "WHEN LAST"
+    BinOpWhenNext -> "WHEN NEXT"
+    BinOpValueAt -> "VALUE AT"
 
 instance LayoutPrinter a => LayoutPrinter (ReasonForBreach a) where
   printWithLayout = \ case
@@ -514,6 +549,10 @@ instance LayoutPrinter a => LayoutPrinter (ReasonForBreach a) where
       , i2 $ pretty (prettyRatio deadline)
       ]
       where i2 = indent 2
+    ExplicitBreach mParty mReason -> vcat $
+      [ "BREACH" ]
+      <> maybe [] (\p -> [ "BY" <+> printWithLayout p ]) mParty
+      <> maybe [] (\r -> [ "BECAUSE" <+> printWithLayout r ]) mReason
 
 instance LayoutPrinter Lazy.NF where
   printWithLayout = \ case

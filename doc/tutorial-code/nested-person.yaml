@@ -1,0 +1,45 @@
+---
+type: function
+function:
+  name: "greetPerson"
+  description: Greet a person with their full address information
+  parameters:
+    type: object
+    properties:
+      p:
+        type: "object"
+        description: Person with nested address and contact info
+        properties:
+          name:
+            type: "string"
+            description: Person's full name
+          age:
+            type: "number"
+            description: Person's age in years
+          address:
+            type: "object"
+            description: Residential address
+            properties:
+              street:
+                type: "string"
+                description: Street address
+              city:
+                type: "string"
+                description: City name
+              zipCode:
+                type: "string"
+                description: Postal code
+          contact:
+            type: "object"
+            description: Contact information
+            properties:
+              email:
+                type: "string"
+                description: Email address
+              phone:
+                type: "string"
+                description: Phone number
+    required:
+      - "p"
+  supportedBackends:
+    - "jl4"

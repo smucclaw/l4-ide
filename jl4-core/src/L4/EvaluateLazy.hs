@@ -1,9 +1,17 @@
 {-# LANGUAGE GADTs #-}
 module L4.EvaluateLazy
-( EvalDirectiveResult (..)
+( EvalConfig(..)
+, resolveEvalConfig
+, parseFixedNow
+, readFixedNowEnv
+, EvalDirectiveResult (..)
 , EvalDirectiveValue(..)
 , EntityInfo
+, getTemporalContext
+, setTemporalContext
+, withEvalClauses
 , execEvalModuleWithEnv
+, execEvalModuleWithJSON
 , execEvalExprInContextOfModule
 , prettyEvalException
 , prettyEvalDirectiveResult
@@ -23,8 +31,14 @@ import L4.Annotation
 import L4.Print
 import L4.Syntax
 import L4.TypeCheck.Types (EntityInfo)
+import L4.TemporalContext (EvalClause, TemporalContext, applyEvalClauses, initialTemporalContext)
+import L4.TracePolicy (TracePolicy)
 
 import Control.Concurrent
+import Data.Time (UTCTime, getCurrentTime)
+import qualified Data.Time.Format.ISO8601 as ISO8601
+import System.Environment (lookupEnv)
+import qualified Data.Aeson as Aeson
 
 -----------------------------------------------------------------------------
 -- The Eval monad and the required types for the monad
@@ -36,7 +50,30 @@ data EvalState =
     , supply     :: !(IORef Int)   -- used for uniques and addresses
     , evalTrace  :: !(Maybe (IORef (DList EvalTraceAction)))
     , entityInfo :: !EntityInfo    -- type information for constructors/records
+    , evalTime   :: !UTCTime
+    , temporalContext :: !(IORef TemporalContext)
+    , tracePolicy :: !TracePolicy  -- controls trace collection and output
     }
+
+data EvalConfig = EvalConfig
+  { evalTime :: !UTCTime
+  , tracePolicy :: !TracePolicy
+  }
+
+resolveEvalConfig :: Maybe UTCTime -> TracePolicy -> IO EvalConfig
+resolveEvalConfig mTime tracePolicy = case mTime of
+  Nothing -> do
+    time <- getCurrentTime
+    pure (EvalConfig time tracePolicy)
+  Just time -> pure (EvalConfig time tracePolicy)
+
+parseFixedNow :: Text -> Maybe UTCTime
+parseFixedNow = ISO8601.iso8601ParseM . Text.unpack
+
+readFixedNowEnv :: IO (Maybe UTCTime)
+readFixedNowEnv = do
+  menv <- lookupEnv "JL4_FIXED_NOW"
+  pure $ menv >>= parseFixedNow . Text.pack
 
 newtype Eval a = MkEval (EvalState -> IO (Either EvalException a))
   deriving (Functor, Applicative, Monad, MonadError EvalException, MonadReader EvalState, MonadIO)
@@ -63,6 +100,25 @@ readRef r = asks r >>= liftIO . readIORef
 
 writeRef :: (EvalState -> IORef a) -> a -> Eval ()
 writeRef r !x = asks r >>= liftIO . flip writeIORef x
+
+getTemporalContext :: Eval TemporalContext
+getTemporalContext = readRef (.temporalContext)
+
+setTemporalContext :: TemporalContext -> Eval ()
+setTemporalContext = writeRef (.temporalContext)
+
+-- | Apply runtime EVAL clauses for the duration of an action,
+-- restoring the previous temporal context afterwards.
+withEvalClauses :: [EvalClause] -> Eval a -> Eval a
+withEvalClauses clauses action = do
+  original <- getTemporalContext
+  setTemporalContext (applyEvalClauses clauses original)
+  result <-
+    action `catchError` \e -> do
+      setTemporalContext original
+      throwError e
+  setTemporalContext original
+  pure result
 
 pushFrame :: (EvalException -> Eval ()) -> Frame -> Eval ()
 pushFrame k frame = do
@@ -162,6 +218,10 @@ interpMachine = \ case
     tid <- liftIO myThreadId
     conf <- lookupAndUpdateRef rf (k tid)
     interpMachine $ pure conf
+  GetEvalTime ->
+    asks (.evalTime)
+  GetTracePolicy ->
+    asks (.tracePolicy)
   Bind act k -> interpMachine act >>= interpMachine . k
   LiftIO m -> liftIO m >>= interpMachine . pure
   PushFrame f -> do
@@ -169,6 +229,9 @@ interpMachine = \ case
     pushFrame (interpMachine . Exception) f
   NewUnique -> newUnique
   GetEntityInfo -> asks (.entityInfo)
+  GetTemporalContext -> getTemporalContext
+  PutTemporalContext ctx -> setTemporalContext ctx
+  GetModuleUri -> asks (.moduleUri)
 
 traceEval :: EvalTraceAction -> Eval ()
 traceEval ta = do
@@ -291,13 +354,15 @@ allocateDefaults defaults closureEnv = do
 postprocessTrace :: [EvalTraceAction] -> EvalTrace
 postprocessTrace actions =
   let
+    labels = collectTraceLabels actions
     splitActions = splitEvalTraceActions actions
     tracedHeap = buildEvalPreTraces splitActions
     mainTrace = case Map.lookup Nothing tracedHeap of
                   Nothing -> err
                   Just t  -> t
     err = error "postprocessTrace: no trace for main value"
-    finalTrace = simplifyEvalTrace (buildEvalTrace tracedHeap (either err id mainTrace))
+    mainPreTrace = either err id mainTrace
+    finalTrace = simplifyEvalTrace (buildEvalTrace labels tracedHeap Nothing mainPreTrace)
   in
     finalTrace
 
@@ -347,6 +412,7 @@ nfAux  d (ValCons r1 r2)             = do
   v2 <- evalAndNF d r2
   pure (MkNF (ValCons v1 v2))
 nfAux _d (ValClosure givens e env)   = pure (MkNF (ValClosure givens e env))
+nfAux _d (ValNullaryBuiltinFun b)    = pure (MkNF (ValNullaryBuiltinFun b))
 nfAux d (ValObligation env party act due followup lest) = do
   party' <- traverseAndNF d party
   due' <- traverseAndNF d due
@@ -374,6 +440,10 @@ nfAux d (ValBreached r')             = do
       act' <- evalAndNF d ev'act
       party' <- evalAndNF d party
       pure (DeadlineMissed ev'party' act' ev'timestamp party' act deadline)
+    ExplicitBreach mParty mReason -> do
+      mParty' <- traverse (evalAndNF d) mParty
+      mReason' <- traverse (evalAndNF d) mReason
+      pure (ExplicitBreach mParty' mReason')
   pure (MkNF (ValBreached r))
 nfAux d (ValROp env op l r) = do
   l' <- traverseAndNF d l
@@ -396,21 +466,24 @@ evalAndNF d r = do
 -- Returns the environment of the entities defined in *this* module, and
 -- the results of the (L)EVAL directives in this module.
 --
-execEvalModuleWithEnv :: EntityInfo -> Environment -> Module Resolved -> IO (Environment, [EvalDirectiveResult])
-execEvalModuleWithEnv entityInfo env m@(MkModule _ moduleUri _) = do
+execEvalModuleWithEnv :: EvalConfig -> EntityInfo -> Environment -> Module Resolved -> IO (Environment, [EvalDirectiveResult])
+execEvalModuleWithEnv evalConfig entityInfo env m@(MkModule _ moduleUri _) = do
   case evalModuleAndDirectives env m of
     MkEval f -> do
       stack     <- newIORef emptyStack
       supply    <- newIORef 0
+      let temporalCtx = initialTemporalContext evalConfig.evalTime
+      temporalContext <- newIORef temporalCtx
       let evalTrace = Nothing
-      r <- f MkEvalState {moduleUri, stack, supply, evalTrace, entityInfo}
+      r <- f MkEvalState {moduleUri, stack, supply, evalTrace, entityInfo, evalTime = evalConfig.evalTime, temporalContext, tracePolicy = evalConfig.tracePolicy}
       case r of
-        Left _exc -> do
+        Left exc -> do
+          hPutStrLn stderr $ "Eval failure in module: " <> show moduleUri
+          traverse_ (hPutStrLn stderr . Text.unpack) (prettyEvalException exc)
           -- exceptions at the top-level are unusual; after all, we don't actually
           -- force any evaluation here, and we catch exceptions for eval directives
           pure (emptyEnvironment, [])
-        Right result -> do
-          pure result
+        Right result -> pure result
 
 -- TODO: This currently allocates the initial environment once per module.
 -- This isn't a big deal, but can we somehow do this only once per program,
@@ -425,6 +498,39 @@ evalModuleAndDirectives env m = do
   -- Depending on future export semantics, this may have to change.
   pure (env', results)
 
+-- | Evaluate module with JSON input bindings for batch processing.
+-- JSON keys are matched to ASSUME'd L4 variables by name.
+-- The approach: first evaluate the module normally (which pre-allocates References),
+-- then write JSON values into the References for ASSUME'd variables.
+evalModuleAndDirectivesWithJSON :: Aeson.Value -> Environment -> Module Resolved -> Eval (Environment, [EvalDirectiveResult])
+evalModuleAndDirectivesWithJSON json env m = do
+  (env', directives) <- interpMachine do
+    ienv <- initialEnvironment
+    (moduleEnv, dirs) <- evalModule (env <> ienv) m
+    -- Now write JSON values into the pre-allocated References
+    -- The combined environment includes both the initial env and the moduleEnv
+    let combinedEnv = moduleEnv <> env <> ienv
+    writeJSONToReferences json combinedEnv
+    pure (moduleEnv, dirs)
+  results <- traverse nfDirective directives
+  pure (env', results)
+
+execEvalModuleWithJSON :: EvalConfig -> EntityInfo -> Aeson.Value -> Module Resolved -> IO (Environment, [EvalDirectiveResult])
+execEvalModuleWithJSON evalConfig entityInfo json m@(MkModule _ moduleUri _) = do
+  case evalModuleAndDirectivesWithJSON json emptyEnvironment m of
+    MkEval f -> do
+      stack <- newIORef emptyStack
+      supply <- newIORef 0
+      let temporalCtx = initialTemporalContext evalConfig.evalTime
+      temporalContext <- newIORef temporalCtx
+      let evalTrace = Nothing
+      r <- f MkEvalState {moduleUri, stack, supply, evalTrace, entityInfo, evalTime = evalConfig.evalTime, temporalContext, tracePolicy = evalConfig.tracePolicy}
+      case r of
+        Left exc -> do
+          hPutStrLn stderr $ "Eval failure in module: " <> show moduleUri
+          traverse_ (hPutStrLn stderr . Text.unpack) (prettyEvalException exc)
+          pure (emptyEnvironment, [])
+        Right result -> pure result
 
 {- | Evaluate an expression in the context of a module and initial environment.
 
@@ -434,15 +540,15 @@ be Uri-focused, and so you'll emd up needing to pretty print and then re-parse.
 Also, it's not clear how much caching can actually be done,
 given that we won't be re-using the result from this.
  -}
-execEvalExprInContextOfModule :: EntityInfo -> Expr Resolved -> (Environment, Module Resolved) -> IO (Maybe EvalDirectiveResult)
-execEvalExprInContextOfModule entityInfo expr (env, m) = do
+execEvalExprInContextOfModule :: EvalConfig -> EntityInfo -> Expr Resolved -> (Environment, Module Resolved) -> IO (Maybe EvalDirectiveResult)
+execEvalExprInContextOfModule evalConfig entityInfo expr (env, m) = do
   let
     evalExprDirective =
       Directive emptyAnno $ LazyEval emptyAnno expr
     -- Didn't make a new module that imported the context module,
     -- because making the import requires a Resolved.
     moduleWithoutDirectives = over moduleTopDecls (filter $ not . isDirective) m
-  (_, res) <- execEvalModuleWithEnv entityInfo env (evalExprDirective `prependToModule` moduleWithoutDirectives)
+  (_, res) <- execEvalModuleWithEnv evalConfig entityInfo env (evalExprDirective `prependToModule` moduleWithoutDirectives)
   case res of
     [result] -> pure (Just result)
     _        -> pure Nothing

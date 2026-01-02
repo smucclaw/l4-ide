@@ -88,3 +88,7 @@ export const NonHighlightedEdgeStyle =
 
 export const FadedEdgeStyle =
   'opacity: var(--opacity-ladder-nonviable);' as const
+
+export const IrrelevantEdgeStyle = 'opacity: 0.35;' as const
+export const ShortCircuitedEdgeStyle =
+  'opacity: 0.25; stroke-dasharray: 3 3;' as const

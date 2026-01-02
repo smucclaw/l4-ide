@@ -1,0 +1,72 @@
+IMPORT prelude
+IMPORT daydate
+IMPORT prelude  -- for EVAL builtin exposed as `EVAL AS OF SYSTEM TIME`
+
+-- Draft temporal prelude layer that complements the stock prelude/daydate combo.
+-- These helpers provide high-level mixfix combinators for sliding windows,
+-- rolling lookups, and natural-language styled temporal clauses.
+
+DECLARE InfinityDate IS A DATE
+InfinityDate MEANS December 31 9999
+
+GIVEN date IS A DATE
+GIVETH A NUMBER
+`stamp of` date MEANS DATE_SERIAL date
+
+GIVEN stamp IS A NUMBER
+GIVETH A DATE
+`date from stamp` stamp MEANS DATE_FROM_SERIAL stamp
+
+GIVEN base IS A DATE
+      days IS A NUMBER
+GIVETH A DATE
+`add days` base days MEANS
+  `date from stamp` (`stamp of` base PLUS days)
+
+GIVEN date IS A DATE
+GIVETH A DATE
+`next day` date MEANS
+  `add days` date 1
+
+GIVEN duration IS A NUMBER
+      anchor   IS A DATE
+      verdict  IS A FUNCTION FROM DATE TO BOOLEAN
+GIVETH A BOOLEAN
+`within` duration `days after` anchor `ever` verdict MEANS
+  `EVER BETWEEN` anchor endDate verdict
+  WHERE
+    endDate MEANS `add days` anchor duration
+
+GIVEN anchor IS A DATE
+      check  IS A FUNCTION FROM DATE TO BOOLEAN
+GIVETH A BOOLEAN
+`strictly after` anchor `ever` check MEANS
+  `EVER BETWEEN` (`add days` anchor 1) InfinityDate check
+
+GIVEN
+  a        IS A TYPE
+  retroDate IS A DATE
+  expr      IS A FUNCTION FROM DATE TO a
+GIVETH AN a
+`retroactive to` retroDate `evaluate` expr MEANS
+  `EVAL RETROACTIVE TO` (`stamp of` retroDate) (expr retroDate)
+
+GIVEN
+  a      IS A TYPE
+  atDate IS A DATE
+  attr   IS A FUNCTION FROM DATE TO a
+GIVETH AN a
+`value-at` atDate attr MEANS
+  `VALUE AT` atDate attr
+
+GIVEN beforeDate IS A DATE
+      predicate IS A FUNCTION FROM DATE TO BOOLEAN
+GIVETH A MAYBE DATE
+`when-last` beforeDate `satisfying` predicate MEANS
+  `WHEN LAST` beforeDate predicate
+
+GIVEN afterDate IS A DATE
+      predicate IS A FUNCTION FROM DATE TO BOOLEAN
+GIVETH A MAYBE DATE
+`when-next` afterDate `satisfying` predicate MEANS
+  `WHEN NEXT` afterDate predicate

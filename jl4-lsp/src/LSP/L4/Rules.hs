@@ -118,6 +118,7 @@ data TypeCheckResult = TypeCheckResult
   , infoMap :: TypeCheck.InfoMap
   , nlgMap :: TypeCheck.NlgMap
   , scopeMap :: TypeCheck.ScopeMap
+  , descMap :: TypeCheck.DescMap
   , success :: Bool
   , environment :: TypeCheck.Environment
   , entityInfo :: TypeCheck.EntityInfo
@@ -134,6 +135,7 @@ instance NFData TypeCheckResult where
     `seq` infoMap
     `seq` nlgMap
     `seq` scopeMap
+    `seq` descMap
     `seq` rnf success
     `seq` rnf environment
     `seq` rnf entityInfo
@@ -225,6 +227,7 @@ data Log
   | LogTraverseAnnoError !Text !TraverseAnnoError
   | LogRelSemanticTokenError !Text
   | LogSemanticTokens !Text [SemanticToken]
+  | LogImportResolution !Text
 
 instance Pretty Log where
   pretty = \ case
@@ -239,9 +242,10 @@ instance Pretty Log where
           pretty s.start._line <> ":" <> pretty s.start._character <> "-"
             <> pretty (s.start._character + s.length)
             <+> pretty s.category
+    LogImportResolution msg -> "[Import Resolution]" <+> pretty msg
 
-jl4Rules :: FilePath -> Recorder (WithPriority Log) -> Rules ()
-jl4Rules rootDirectory recorder = do
+jl4Rules :: EvaluateLazy.EvalConfig -> FilePath -> Recorder (WithPriority Log) -> Rules ()
+jl4Rules evalConfig rootDirectory recorder = do
   define shakeRecorder $ \GetLexTokens uri -> do
     mRope <- runMaybeT $
       MaybeT (snd <$> use_ GetFileContents uri)
@@ -269,58 +273,125 @@ jl4Rules rootDirectory recorder = do
     (tokens, contents) <- use_ GetLexTokens uri
     case Parser.execProgramParserForTokens uri contents tokens of
       Left errs -> do
-        let
-          diags = toList $ fmap mkParseErrorDiagnostic errs
+        let diags = toList $ fmap mkParseErrorDiagnostic errs
         pure (fmap (mkSimpleFileDiagnostic uri) diags , Nothing)
-      Right (prog, warns) -> do
-        let
-          diags = fmap mkNlgWarning warns
-
-        pure (fmap (mkSimpleFileDiagnostic uri) diags, Just prog)
+      Right (firstProg, _) -> do
+        let hints = Parser.buildMixfixHintRegistry firstProg
+        case Parser.execProgramParserForTokensWithHints hints uri contents tokens of
+          Left errs -> do
+            let diags = toList $ fmap mkParseErrorDiagnostic errs
+            pure (fmap (mkSimpleFileDiagnostic uri) diags , Nothing)
+          Right (finalProg, warns) -> do
+            let diags = fmap mkNlgWarning warns
+            pure (fmap (mkSimpleFileDiagnostic uri) diags, Just finalProg)
 
   define shakeRecorder $ \GetImports uri -> do
     let -- NOTE: we curently don't allow any relative or absolute file paths, just bare module names
-        mkImportPath :: Import Name -> Action (Maybe SrcRange, String, [FilePath], Maybe FilePath)
+        -- Generate candidate URIs to check in VFS
+        mkCandidateVfsUris :: String -> [NormalizedUri]
+        mkCandidateVfsUris modName =
+          let -- Standard project:/ URI scheme used by Monaco
+              projectUri = toNormalizedUri $ Uri $ Text.pack $ "project:/" <> modName <.> "l4"
+              -- file:/// URI relative to current file's directory (if applicable)
+              relativeUri = do
+                nfp <- uriToNormalizedFilePath uri
+                let dir = takeDirectory $ fromNormalizedFilePath nfp
+                pure $ toNormalizedUri $ filePathToUri $ dir </> modName <.> "l4"
+              -- file:/// URI in root directory
+              rootUri = toNormalizedUri $ filePathToUri $ rootDirectory </> modName <.> "l4"
+          in [projectUri] <> Maybe.maybeToList relativeUri <> [rootUri]
+
+        -- Check if a URI exists in VFS
+        checkVfsUri :: NormalizedUri -> Action (Maybe NormalizedUri)
+        checkVfsUri candidateUri = do
+          mContent <- use GetFileContents candidateUri
+          case mContent of
+            Just (_, Just _rope) -> do
+              logWith recorder Info $ LogImportResolution $
+                "VFS HIT: " <> (fromNormalizedUri candidateUri).getUri
+              pure $ Just candidateUri
+            _ -> do
+              logWith recorder Debug $ LogImportResolution $
+                "VFS MISS: " <> (fromNormalizedUri candidateUri).getUri
+              pure Nothing
+
+        mkImportPath :: Import Name -> Action (Maybe SrcRange, String, [FilePath], [NormalizedUri], Maybe (Either NormalizedUri FilePath))
         mkImportPath (MkImport a n _mr) = do
 
           let modName = takeBaseName $ Text.unpack $ rawNameToText $ rawName n
-          paths <- catMaybes <$> do
-            -- NOTE: if the current URI is a file uri, we first check the directory relative to the current file
-            --
-            let relPath = do
-                  dir <- takeDirectory . fromNormalizedFilePath <$> uriToNormalizedFilePath uri
-                  pure $ dir </> modName <.> "l4"
 
-            let rootPath = rootDirectory </> modName <.> "l4"
+          logWith recorder Info $ LogImportResolution $
+            "Resolving import: " <> Text.pack modName <> " from " <> (fromNormalizedUri uri).getUri
 
-            builtinPath <- do
-              dataDir <- liftIO Paths_jl4_core.getDataDir
-              pure $ dataDir </> "libraries" </> modName <.> "l4"
+          -- First, try VFS (for web-based usage)
+          let vfsUris = mkCandidateVfsUris modName
+          logWith recorder Debug $ LogImportResolution $
+            "Checking VFS URIs: " <> Text.intercalate ", " (map ((.getUri) . fromNormalizedUri) vfsUris)
 
-            pure [Just rootPath, relPath, Just builtinPath]
+          vfsResult <- runMaybeT $ asum $ map (MaybeT . checkVfsUri) vfsUris
 
-          existingPaths <- runMaybeT do
+          case vfsResult of
+            Just vfsUri -> do
+              logWith recorder Info $ LogImportResolution $
+                "Found in VFS: " <> (fromNormalizedUri vfsUri).getUri
+              pure (rangeOf a, modName, [], vfsUris, Just (Left vfsUri))
+            Nothing -> do
+              -- Fall back to filesystem
+              logWith recorder Debug $ LogImportResolution $
+                "Not in VFS, checking filesystem..."
 
-            let guardExists pth = do
-                  guard =<< liftIO (doesFileExist pth)
-                  pure pth
+              paths <- catMaybes <$> do
+                -- NOTE: if the current URI is a file uri, we first check the directory relative to the current file
+                --
+                let relPath = do
+                      dir <- takeDirectory . fromNormalizedFilePath <$> uriToNormalizedFilePath uri
+                      pure $ dir </> modName <.> "l4"
 
-            asum $ guardExists <$> paths
+                let rootPath = rootDirectory </> modName <.> "l4"
 
-          pure (rangeOf a, modName, paths, existingPaths)
+                builtinPath <- do
+                  dataDir <- liftIO Paths_jl4_core.getDataDir
+                  pure $ dataDir </> "libraries" </> modName <.> "l4"
 
-        mkImportUri (range, modName, pths, mfp) = case mfp of
-          Just fp -> do
+                pure [Just rootPath, relPath, Just builtinPath]
+
+              logWith recorder Debug $ LogImportResolution $
+                "Checking filesystem paths: " <> Text.intercalate ", " (map Text.pack paths)
+
+              existingPaths <- runMaybeT do
+
+                let guardExists pth = do
+                      exists <- liftIO (doesFileExist pth)
+                      guard exists
+                      pure pth
+
+                asum $ guardExists <$> paths
+
+              case existingPaths of
+                Just fp -> logWith recorder Info $ LogImportResolution $
+                  "Found on filesystem: " <> Text.pack fp
+                Nothing -> logWith recorder Warning $ LogImportResolution $
+                  "Module not found: " <> Text.pack modName
+
+              pure (rangeOf a, modName, paths, vfsUris, fmap Right existingPaths)
+
+        mkImportUri (range, modName, fsPaths, vfsUris, mResult) = case mResult of
+          Just (Left vfsUri) -> do
+            -- Found in VFS
+            pure ([], range, vfsUri)
+          Just (Right fp) -> do
+            -- Found on filesystem
             let u = toNormalizedUri $ filePathToUri fp
             pure ([], range, u)
           Nothing ->
-            let diag = mkSimpleFileDiagnostic uri
+            let allPaths = map ((.getUri) . fromNormalizedUri) vfsUris <> map Text.pack fsPaths
+                diag = mkSimpleFileDiagnostic uri
                   $ mkSimpleDiagnostic
                     (fromNormalizedUri uri).getUri
                     (Text.unlines
                       [ "I could not find a module with this name: " <> Text.pack modName
-                      , "I have tried the following paths:"
-                      , Text.intercalate ",\n" (map Text.pack pths)
+                      , "I have tried the following locations:"
+                      , Text.intercalate ",\n" allPaths
                       ])
                     (fromSrcRange <$> range)
              in pure ([diag], range, uri)
@@ -328,7 +399,7 @@ jl4Rules rootDirectory recorder = do
         mkDiagsAndImports :: TopDecl Name -> Ap Action [([FileDiagnostic], ImportResult)]
         mkDiagsAndImports = \ case
           Import _a i@(MkImport _ n _) -> Ap do
-            (diag, r, u) <- liftIO . mkImportUri =<< mkImportPath i
+            (diag, r, u) <- mkImportUri =<< mkImportPath i
             pure [(diag, MkImportResult n r u)]
           _ -> pure []
 
@@ -356,6 +427,7 @@ jl4Rules rootDirectory recorder = do
           , infoMap = IV.empty
           , nlgMap = IV.empty
           , scopeMap = IV.empty
+          , descMap = IV.empty
           }
         unionCheckEnv cEnv tcRes =
           TypeCheck.MkCheckEnv
@@ -391,6 +463,7 @@ jl4Rules rootDirectory recorder = do
         , infoMap = result.infoMap
         , nlgMap = result.nlgMap
         , scopeMap = result.scopeMap
+        , descMap = result.descMap
         , dependencies = dependencies <> foldMap (.dependencies) dependencies
         }
       )
@@ -435,7 +508,7 @@ jl4Rules rootDirectory recorder = do
     -- put the diagnostic on that IMPORT
     deps    <- fmap catMaybes $ uses (AttachCallStack (f : cs) GetLazyEvaluationDependencies) $ map (.moduleUri) imports
     let environment = mconcat (fst <$> deps)
-    (ownEnv, ownDirectives) <- liftIO (EvaluateLazy.execEvalModuleWithEnv tcRes.entityInfo environment tcRes.module')
+    (ownEnv, ownDirectives) <- liftIO (EvaluateLazy.execEvalModuleWithEnv evalConfig tcRes.entityInfo environment tcRes.module')
     pure ([], Just (ownEnv <> environment, ownDirectives))
 
   define shakeRecorder $ \EvaluateLazy uri -> do

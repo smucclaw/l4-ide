@@ -1,0 +1,15 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+workdays.l4:9:1-33:
+  RIGHT OF (DATE OF 15, 1, 2024)
+workdays.l4:10:1-36:
+  RIGHT OF (DATE OF 24, 1, 2024)
+workdays.l4:11:1-47:
+  RIGHT OF (DATE OF 15, 1, 2024)
+workdays.l4:13:1-48:
+  RIGHT OF 23
+workdays.l4:14:1-48:
+  RIGHT OF -23
+workdays.l4:15:1-62:
+  RIGHT OF 23

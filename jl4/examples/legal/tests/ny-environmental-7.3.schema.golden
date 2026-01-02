@@ -1,0 +1,87 @@
+{
+    "$defs": {
+        "Action that may have a significant adverse effect on the environment": {
+            "properties": {
+                "EIS": {
+                    "$ref": "#/$defs/Environmental Impact Statement"
+                },
+                "Has been withdrawn": {
+                    "$ref": "#/$defs/BOOLEAN"
+                },
+                "Has hearing required by statute": {
+                    "$ref": "#/$defs/BOOLEAN"
+                },
+                "Lead agency": {
+                    "$ref": "#/$defs/Commission"
+                },
+                "Potential effect area": {
+                    "$ref": "#/$defs/STRING"
+                },
+                "Proposed by": {
+                    "$ref": "#/$defs/Applicant"
+                }
+            },
+            "required": [
+                "Proposed by",
+                "Lead agency",
+                "Potential effect area",
+                "Has hearing required by statute",
+                "Has been withdrawn",
+                "EIS"
+            ],
+            "type": "object"
+        },
+        "Applicant": {
+            "properties": {
+                "Name": {
+                    "$ref": "#/$defs/STRING"
+                }
+            },
+            "required": [
+                "Name"
+            ],
+            "type": "object"
+        },
+        "Commission": {
+            "properties": {
+                "Name": {
+                    "$ref": "#/$defs/STRING"
+                }
+            },
+            "required": [
+                "Name"
+            ],
+            "type": "object"
+        },
+        "Environmental Impact Statement": {
+            "properties": {
+                "Draft filing date": {
+                    "$ref": "#/$defs/DATE"
+                },
+                "Final filing date": {
+                    "$ref": "#/$defs/MAYBE"
+                }
+            },
+            "required": [
+                "Draft filing date",
+                "Final filing date"
+            ],
+            "type": "object"
+        }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "The action": {
+            "$ref": "#/$defs/Action that may have a significant adverse effect on the environment"
+        },
+        "The commission": {
+            "$ref": "#/$defs/Commission"
+        }
+    },
+    "required": [
+        "The commission",
+        "The action"
+    ],
+    "title": "Filing of draft copy of EIS and causing notice of hearing to be published",
+    "type": "object"
+}

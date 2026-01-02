@@ -1,0 +1,41 @@
+-- LET...IN nested scoping tests
+-- Test case 9 from spec: Nested LETs with different variable names
+-- Note: L4 does NOT allow variable shadowing - same name in nested scope is an error
+
+-- Nested LETs with distinct names
+DECIDE testNestedDistinct IS
+  LET x IS 10
+  IN (LET y IS 20 IN x PLUS y)
+
+#EVAL testNestedDistinct
+
+-- Deep nesting with distinct names
+DECIDE testDeepNesting IS
+  (LET a IS 1 IN (LET b IS 2 IN (LET c IS 3 IN a PLUS b PLUS c)))
+
+#EVAL testDeepNesting
+
+-- Function parameter in LET (parameter name distinct from outer)
+DECIDE testParamDistinct IS
+  LET
+    x IS 100
+    f n IS n TIMES 2
+  IN f x
+
+#EVAL testParamDistinct
+
+-- Nested access to outer bindings
+DECIDE testOuterAccess IS
+  LET x IS 10
+  IN (LET y IS x PLUS 5 IN (LET z IS y TIMES 2 IN x PLUS y PLUS z))
+
+#EVAL testOuterAccess
+
+-- Complex nesting with functions
+DECIDE testComplexNesting IS
+  LET
+    base IS 10
+    addBase n IS n PLUS base
+  IN (LET derived IS addBase 5 IN derived TIMES 2)
+
+#EVAL testComplexNesting

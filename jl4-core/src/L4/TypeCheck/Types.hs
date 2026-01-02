@@ -10,6 +10,7 @@ import L4.Parser.SrcSpan (SrcRange(..), SrcPos)
 import L4.Syntax
 import L4.TypeCheck.With
 import qualified L4.Utils.IntervalMap as IV
+import L4.Mixfix (MixfixInfo(..))
 
 import Control.Applicative
 import qualified Data.Map.Strict as Map
@@ -24,6 +25,7 @@ type RangeMap     = IV.IntervalMap SrcPos
 type InfoMap      = RangeMap Info
 type ScopeMap     = RangeMap (Environment, EntityInfo)
 type NlgMap       = RangeMap Nlg
+type DescMap      = RangeMap Text
 
 -- | Note that 'KnownType' does not imply this is a new generative type on its own,
 -- because it includes type synonyms now. For type synonyms primarily, we also store
@@ -44,6 +46,7 @@ data CheckState =
     , infoMap      :: !InfoMap
     , scopeMap     :: !ScopeMap
     , nlgMap       :: !NlgMap
+    , descMap      :: !DescMap
     }
   deriving stock (Generic)
 
@@ -77,15 +80,12 @@ data CheckError =
   | DesugarAnnoRewritingError (Expr Name) HoleInfo
   | MixfixMatchErrorCheck Name MixfixMatchError
     -- ^ Error in mixfix pattern matching (function name, error details)
-  | TypicallyNotAllowedOnAssume Name
-    -- ^ TYPICALLY defaults are not allowed on ASSUME declarations
   deriving stock (Eq, Generic, Show)
   deriving anyclass NFData
 
 data CheckWarning
   = PatternMatchRedundant [Branch Resolved]
   | PatternMatchesMissing [BranchLhs Resolved]
-  | AssumeDeprecated Name
   deriving stock (Eq, Generic, Show)
   deriving anyclass NFData
 
@@ -136,7 +136,7 @@ data ExpectationContext =
   | ExpectPostBodyContext -- body argument of POST
   | ExpectConcatArgumentContext -- argument of CONCAT
   | ExpectAsStringArgumentContext -- argument of AS STRING
-  | ExpectTypicallyValueContext Name -- TYPICALLY value must match declared type (field/param name)
+  | ExpectBreachReasonContext -- reason argument of BREACH
   deriving stock (Eq, Generic, Show)
   deriving anyclass NFData
 
@@ -183,14 +183,6 @@ instance HasSrcRange CheckError where
 
 -- | A token in a mixfix pattern, representing either a keyword (part of the function name)
 -- or a parameter slot.
-data MixfixPatternToken
-  = MixfixKeyword RawName
-    -- ^ A keyword part of the function name (e.g., "is eligible for")
-  | MixfixParam RawName
-    -- ^ A parameter slot, with the original parameter name for documentation
-  deriving stock (Show, Eq, Generic)
-  deriving anyclass (NFData)
-
 -- | Errors that can occur during mixfix pattern matching.
 -- These provide detailed information for user-friendly error messages.
 data MixfixMatchError
@@ -242,17 +234,6 @@ data MixfixArgMatch a
 -- | Information about a mixfix function pattern.
 -- A mixfix function is one where the function name is interspersed with parameters,
 -- like @person `is eligible for` program@ instead of @isEligibleFor person program@.
-data MixfixInfo = MkMixfixInfo
-  { pattern :: [MixfixPatternToken]
-    -- ^ The complete pattern, e.g., [Param "person", Keyword "is eligible for", Param "program"]
-  , keywords :: [RawName]
-    -- ^ Just the keyword parts, for quick lookup (e.g., ["is eligible for"])
-  , arity :: Int
-    -- ^ Number of parameters (parameter slots in the pattern)
-  }
-  deriving stock (Show, Eq, Generic)
-  deriving anyclass (NFData)
-
 -- | A checked function signature.
 data FunTypeSig = MkFunTypeSig
   { anno :: Anno
@@ -375,6 +356,7 @@ data CheckResult =
     , infoMap      :: !InfoMap
     , nlgMap       :: !NlgMap
     , scopeMap     :: !ScopeMap
+    , descMap      :: !DescMap
     }
 
 -- -------------------
@@ -470,80 +452,16 @@ outOfScope n t = do
   pure (OutOfScope u n)
 
 ambiguousTerm :: Name -> [(Resolved, Type' Resolved)] -> Check Resolved
-ambiguousTerm n [] = do
-  addError InternalAmbiguityError
+ambiguousTerm n xs = do
+  addError (AmbiguousTermError n xs)
   u <- newUnique
   pure (OutOfScope u n)
-ambiguousTerm n xs@(x:_)
-  | allSameTermDescriptor xs = pure (fst x)
-  | otherwise =
-      -- HEISENBUG WARNING [2025-12-05]:
-      -- DO NOT REMOVE this trace! The `seq` here forces evaluation in a specific order
-      -- that is critical for correct operation. Removing this trace (commits 2fb292fe
-      -- and fc639ac0) caused widespread "internal ambiguity errors" throughout the
-      -- type checker, breaking the prelude.l4 library and all dependent code.
-      --
-      -- The bug manifests as:
-      --   - Type checker fails with "I've encountered an internal ambiguity error"
-      --   - Occurs in prelude.l4 at position 1:1 (start of file)
-      --   - Repeated ~20 times for different constructs
-      --   - Makes ceo-performance-award.l4 and other files unusable
-      --
-      -- Hypothesis: The trace's forced evaluation affects lazy evaluation order,
-      -- preventing some kind of race condition or evaluation loop in the type checker.
-      -- Further investigation needed to understand root cause before traces can be
-      -- safely removed.
-      let _debug = trace ("AMBIG term " ++ show (map termInfo xs)) ()
-      in _debug `seq`
-      case dedupByOrigin xs of
-        [(r, _)] -> pure r
-        xsDedup -> do
-          addError (AmbiguousTermError n xsDedup)
-          u <- newUnique
-          pure (OutOfScope u n)
-  where
-    termInfo (r, _) = (rawName (getOriginal r), rangeOf r, getUnique r)
 
 ambiguousType :: Name -> [(Resolved, Kind)] -> Check Resolved
-ambiguousType n [] = do
-  addError InternalAmbiguityError
+ambiguousType n xs = do
+  addError (AmbiguousTypeError n xs)
   u <- newUnique
   pure (OutOfScope u n)
-ambiguousType n xs@(x:_)
-  | allSameTypeDescriptor xs = pure (fst x)
-  | otherwise =
-      case dedupByOrigin xs of
-        [(r, _)] -> pure r
-        xsDedup -> do
-          addError (AmbiguousTypeError n xsDedup)
-          u <- newUnique
-          pure (OutOfScope u n)
-
-dedupByOrigin :: [(Resolved, a)] -> [(Resolved, a)]
-dedupByOrigin =
-  Map.elems
-  . Map.fromListWith const
-  . fmap (\rt@(r, _) -> (descriptor r, rt))
-  where
-    descriptor r =
-      let n' = getOriginal r
-      in (rawName n', rangeOf r)
-
-allSameTermDescriptor :: [(Resolved, Type' Resolved)] -> Bool
-allSameTermDescriptor [] = True
-allSameTermDescriptor (x:xs) = all ((== descriptor x) . descriptor) xs
-  where
-    descriptor (r, t) =
-      let n' = getOriginal r
-      in (rawName n', rangeOf r, t)
-
-allSameTypeDescriptor :: [(Resolved, Kind)] -> Bool
-allSameTypeDescriptor [] = True
-allSameTypeDescriptor (x:xs) = all ((== descriptor x) . descriptor) xs
-  where
-    descriptor (r, k) =
-      let n' = getOriginal r
-      in (rawName n', rangeOf r, k)
 
 -- ----------------------------------------------------------------------------
 -- Info Map
@@ -563,6 +481,11 @@ addNlgForSrcRange :: SrcRange -> Nlg -> Check ()
 addNlgForSrcRange srcRange i =
   modifying' #nlgMap $
     IV.insert (IV.srcRangeToInterval srcRange) i
+
+addDescForSrcRange :: SrcRange -> Text -> Check ()
+addDescForSrcRange srcRange t =
+  modifying' #descMap $
+    IV.insert (IV.srcRangeToInterval srcRange) t
 
 -- ----------------------------------------------------------------------------
 -- JL4 specific primitives for resolving names
@@ -609,7 +532,7 @@ isTopLevelBindingInSection u (MkSection _a  _mn _maka decls) = any (elem u . map
   relevantResolveds = \ case
     Declare _ (MkDeclare _ _ af _) -> appFormHeads af
     Decide _ (MkDecide _ _ af _) -> appFormHeads af
-    Assume _ (MkAssume _ _ af _ _) -> appFormHeads af
+    Assume _ (MkAssume _ _ af _) -> appFormHeads af
     Directive _ _ -> []
     Import _ _ -> []
     -- NOTE: Sections are a toplevel binding in the current section but can also contain further
@@ -801,6 +724,12 @@ orElse m1 m2 = do
 
 -- | Allow the subcomputation to have at most one result.
 --
+-- NOTE: This backtracking search is type-directed and prunes only after it
+-- sees a second success. If surface code leaves obvious disambiguators out
+-- (e.g. missing `day/month/year` helpers while overloading `+/-/<` on DATE
+-- and NUMBER) the candidate space can balloon and appear to “hang” before we
+-- finally report ambiguity/out-of-scope. Keep cheap, unambiguous helpers in
+-- libraries to keep this search from going quadratic in practice.
 prune :: forall a. Check a -> Check a
 prune m = do
   ctx <- asks (.errorContext)

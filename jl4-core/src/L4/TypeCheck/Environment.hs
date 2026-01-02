@@ -21,6 +21,7 @@ mkBuiltins
   , "false"
   , "true"
   , "number"
+  , "date" `rename` "DATE"
   , "string"
   , "keyword"  -- For mixfix keyword placeholders
   , "list"
@@ -41,6 +42,14 @@ mkBuiltins
   , "ceiling" `rename` "CEILING"
   , "round" `rename` "ROUND"
   , "sqrt" `rename` "SQRT"
+  , "ln" `rename` "LN"
+  , "log10" `rename` "LOG10"
+  , "sin" `rename` "SIN"
+  , "cos" `rename` "COS"
+  , "tan" `rename` "TAN"
+  , "asin" `rename` "ASIN"
+  , "acos" `rename` "ACOS"
+  , "atan" `rename` "ATAN"
   , "exponent" `rename` "EXPONENT"
   , "waitUntil" `rename`  "WAIT UNTIL"
   , "fetch" `rename` "FETCH"
@@ -48,6 +57,27 @@ mkBuiltins
   , "post" `rename` "POST"
   , "jsonEncode" `rename` "JSONENCODE"
   , "jsonDecode" `rename` "JSONDECODE"
+  , "todaySerial" `rename` "TODAY"
+  , "nowSerial" `rename` "NOW"
+  , "dateFromText" `rename` "DATEVALUE"
+  , "dateSerial" `rename` "DATE_SERIAL"
+  , "dateFromSerial" `rename` "DATE_FROM_SERIAL"
+  , "dateFromDMY" `rename` "DATE_FROM_DMY"
+  , "dateDay" `rename` "DATE_DAY"
+  , "dateMonth" `rename` "DATE_MONTH"
+  , "dateYear" `rename` "DATE_YEAR"
+  , "timeValueFraction" `rename` "TIMEVALUE"
+  , "everBetween" `rename` "EVER BETWEEN"
+  , "alwaysBetween" `rename` "ALWAYS BETWEEN"
+  , "whenLast" `rename` "WHEN LAST"
+  , "whenNext" `rename` "WHEN NEXT"
+  , "valueAt" `rename` "VALUE AT"
+  , "evalAsOfSystemTime" `rename` "EVAL AS OF SYSTEM TIME"
+  , "evalUnderValidTime" `rename` "EVAL UNDER VALID TIME"
+  , "evalUnderRulesEffectiveAt" `rename` "EVAL UNDER RULES EFFECTIVE AT"
+  , "evalUnderRulesEncodedAt" `rename` "EVAL UNDER RULES ENCODED AT"
+  , "evalUnderCommit" `rename` "EVAL UNDER COMMIT"
+  , "evalRetroactiveTo" `rename` "EVAL RETROACTIVE TO"
   , "a'" `rename` "a", "b'" `rename` "b"
   , "plus" `rename` "__PLUS__"
   , "minus" `rename` "__MINUS__"
@@ -85,6 +115,10 @@ mkBuiltins
   -- String functions (ternary)
   , "substring" `rename` "SUBSTRING"
   , "replace" `rename` "REPLACE"
+  , "toString" `rename` "TOSTRING"
+  , "toNumber" `rename` "TONUMBER"
+  , "toDate" `rename` "TODATE"
+  , "trunc" `rename` "TRUNC"
   ]
 
 boolean :: Type' Resolved
@@ -94,6 +128,11 @@ boolean = app booleanRef []
 
 number :: Type' Resolved
 number = app numberRef []
+
+-- DATE
+
+date :: Type' Resolved
+date = app dateRef []
 
 -- STRING
 
@@ -141,6 +180,30 @@ floorBuiltin = fun_ [number] number
 sqrtBuiltin :: Type' Resolved
 sqrtBuiltin = fun_ [number] number
 
+lnBuiltin :: Type' Resolved
+lnBuiltin = fun_ [number] number
+
+log10Builtin :: Type' Resolved
+log10Builtin = fun_ [number] number
+
+sinBuiltin :: Type' Resolved
+sinBuiltin = fun_ [number] number
+
+cosBuiltin :: Type' Resolved
+cosBuiltin = fun_ [number] number
+
+tanBuiltin :: Type' Resolved
+tanBuiltin = fun_ [number] number
+
+asinBuiltin :: Type' Resolved
+asinBuiltin = fun_ [number] number
+
+acosBuiltin :: Type' Resolved
+acosBuiltin = fun_ [number] number
+
+atanBuiltin :: Type' Resolved
+atanBuiltin = fun_ [number] number
+
 exponentBuiltin :: Type' Resolved
 exponentBuiltin = binOpFun
 
@@ -162,6 +225,84 @@ jsonDecodeBuiltin :: Type' Resolved
 jsonDecodeBuiltin = forall' [aDef] $ fun_ [string] (eitherType string a)
   where
     a = app aRef []
+
+todayBuiltin :: Type' Resolved
+todayBuiltin = date
+
+nowBuiltin :: Type' Resolved
+nowBuiltin = number
+
+dateValueBuiltin :: Type' Resolved
+dateValueBuiltin = fun_ [string] (eitherType string date)
+
+dateSerialBuiltin :: Type' Resolved
+dateSerialBuiltin = fun_ [date] number
+
+dateFromSerialBuiltin :: Type' Resolved
+dateFromSerialBuiltin = fun_ [number] date
+
+dateFromDmyBuiltin :: Type' Resolved
+dateFromDmyBuiltin = fun_ [number, number, number] date
+
+dateDayBuiltin, dateMonthBuiltin, dateYearBuiltin :: Type' Resolved
+dateDayBuiltin = fun_ [date] number
+dateMonthBuiltin = fun_ [date] number
+dateYearBuiltin = fun_ [date] number
+
+timeValueBuiltin :: Type' Resolved
+timeValueBuiltin = fun_ [string] (eitherType string number)
+
+datePredicate :: Type' Resolved
+datePredicate = fun_ [date] boolean
+
+everBetweenBuiltin, alwaysBetweenBuiltin :: Type' Resolved
+everBetweenBuiltin = fun_ [date, date, datePredicate] boolean
+alwaysBetweenBuiltin = fun_ [date, date, datePredicate] boolean
+
+whenLastBuiltin, whenNextBuiltin :: Type' Resolved
+whenLastBuiltin = fun_ [date, datePredicate] (maybeType date)
+whenNextBuiltin = fun_ [date, datePredicate] (maybeType date)
+
+valueAtBuiltin :: Type' Resolved
+valueAtBuiltin =
+  forall' [aDef] $
+    fun_ [date, fun_ [date] (app aRef [])] (app aRef [])
+
+-- EVAL under alternate system time (serial-based). Type: NUMBER -> a -> a
+evalAsOfSystemTimeBuiltin :: Type' Resolved
+evalAsOfSystemTimeBuiltin =
+  forall' [aDef] $
+    fun_ [number, app aRef []] (app aRef [])
+
+-- EVAL under valid time (serial-based). Type: NUMBER -> a -> a
+evalUnderValidTimeBuiltin :: Type' Resolved
+evalUnderValidTimeBuiltin =
+  forall' [aDef] $
+    fun_ [number, app aRef []] (app aRef [])
+
+-- EVAL under rules effective date. Type: DATE SERIAL -> a -> a
+evalUnderRulesEffectiveAtBuiltin :: Type' Resolved
+evalUnderRulesEffectiveAtBuiltin =
+  forall' [aDef] $
+    fun_ [number, app aRef []] (app aRef [])
+
+-- EVAL under rules encoded date. Type: DATE SERIAL -> a -> a
+evalUnderRulesEncodedAtBuiltin :: Type' Resolved
+evalUnderRulesEncodedAtBuiltin =
+  forall' [aDef] $
+    fun_ [number, app aRef []] (app aRef [])
+
+-- EVAL under commit hash. Type: STRING -> a -> a
+evalUnderCommitBuiltin :: Type' Resolved
+evalUnderCommitBuiltin =
+  forall' [aDef] $
+    fun_ [string, app aRef []] (app aRef [])
+
+-- EVAL retroactive convenience (sets rules and system time). Type: NUMBER -> a -> a
+evalRetroactiveToBuiltin :: Type' Resolved
+evalRetroactiveToBuiltin =
+  forall' [aDef] $
+    fun_ [number, app aRef []] (app aRef [])
 
 -- Basic Arithmetic
 
@@ -283,6 +424,18 @@ substringBuiltin = fun_ [string, number, number] string
 replaceBuiltin :: Type' Resolved
 replaceBuiltin = fun_ [string, string, string] string
 
+toStringBuiltin :: Type' Resolved
+toStringBuiltin = forall' [aDef] $ fun_ [app aRef []] string
+
+toNumberBuiltin :: Type' Resolved
+toNumberBuiltin = fun_ [string] (maybeType number)
+
+toDateBuiltin :: Type' Resolved
+toDateBuiltin = forall' [aDef] $ fun_ [string] (maybeType (app aRef []))
+
+truncBuiltin :: Type' Resolved
+truncBuiltin = fun_ [number, number] number
+
 -- infos
 
 booleanInfo :: CheckEntity
@@ -303,6 +456,10 @@ numberInfo =
 
 rationalInfo :: CheckEntity
 rationalInfo =
+  KnownType 0 [] Nothing
+
+dateInfo :: CheckEntity
+dateInfo =
   KnownType 0 [] Nothing
 
 stringInfo :: CheckEntity
@@ -368,6 +525,38 @@ sqrtInfo :: CheckEntity
 sqrtInfo =
   KnownTerm sqrtBuiltin Computable
 
+lnInfo :: CheckEntity
+lnInfo =
+  KnownTerm lnBuiltin Computable
+
+log10Info :: CheckEntity
+log10Info =
+  KnownTerm log10Builtin Computable
+
+sinInfo :: CheckEntity
+sinInfo =
+  KnownTerm sinBuiltin Computable
+
+cosInfo :: CheckEntity
+cosInfo =
+  KnownTerm cosBuiltin Computable
+
+tanInfo :: CheckEntity
+tanInfo =
+  KnownTerm tanBuiltin Computable
+
+asinInfo :: CheckEntity
+asinInfo =
+  KnownTerm asinBuiltin Computable
+
+acosInfo :: CheckEntity
+acosInfo =
+  KnownTerm acosBuiltin Computable
+
+atanInfo :: CheckEntity
+atanInfo =
+  KnownTerm atanBuiltin Computable
+
 exponentInfo :: CheckEntity
 exponentInfo =
   KnownTerm exponentBuiltin Computable
@@ -391,6 +580,57 @@ jsonEncodeInfo =
 jsonDecodeInfo :: CheckEntity
 jsonDecodeInfo =
   KnownTerm jsonDecodeBuiltin Computable
+
+todayInfo :: CheckEntity
+todayInfo = KnownTerm todayBuiltin Computable
+
+nowInfo :: CheckEntity
+nowInfo = KnownTerm nowBuiltin Computable
+
+dateFromTextInfo :: CheckEntity
+dateFromTextInfo = KnownTerm dateValueBuiltin Computable
+
+dateSerialInfo, dateFromSerialInfo, dateFromDmyInfo :: CheckEntity
+dateSerialInfo = KnownTerm dateSerialBuiltin Computable
+dateFromSerialInfo = KnownTerm dateFromSerialBuiltin Computable
+dateFromDmyInfo = KnownTerm dateFromDmyBuiltin Computable
+
+dateDayInfo, dateMonthInfo, dateYearInfo :: CheckEntity
+dateDayInfo = KnownTerm dateDayBuiltin Computable
+dateMonthInfo = KnownTerm dateMonthBuiltin Computable
+dateYearInfo = KnownTerm dateYearBuiltin Computable
+
+timeValueInfo :: CheckEntity
+timeValueInfo = KnownTerm timeValueBuiltin Computable
+
+everBetweenInfo, alwaysBetweenInfo :: CheckEntity
+everBetweenInfo = KnownTerm everBetweenBuiltin Computable
+alwaysBetweenInfo = KnownTerm alwaysBetweenBuiltin Computable
+
+whenLastInfo, whenNextInfo :: CheckEntity
+whenLastInfo = KnownTerm whenLastBuiltin Computable
+whenNextInfo = KnownTerm whenNextBuiltin Computable
+
+valueAtInfo :: CheckEntity
+valueAtInfo = KnownTerm valueAtBuiltin Computable
+
+evalAsOfSystemTimeInfo :: CheckEntity
+evalAsOfSystemTimeInfo = KnownTerm evalAsOfSystemTimeBuiltin Computable
+
+evalUnderValidTimeInfo :: CheckEntity
+evalUnderValidTimeInfo = KnownTerm evalUnderValidTimeBuiltin Computable
+
+evalUnderRulesEffectiveAtInfo :: CheckEntity
+evalUnderRulesEffectiveAtInfo = KnownTerm evalUnderRulesEffectiveAtBuiltin Computable
+
+evalUnderRulesEncodedAtInfo :: CheckEntity
+evalUnderRulesEncodedAtInfo = KnownTerm evalUnderRulesEncodedAtBuiltin Computable
+
+evalUnderCommitInfo :: CheckEntity
+evalUnderCommitInfo = KnownTerm evalUnderCommitBuiltin Computable
+
+evalRetroactiveToInfo :: CheckEntity
+evalRetroactiveToInfo = KnownTerm evalRetroactiveToBuiltin Computable
 
 -- Basic Arithmetic
 
@@ -472,6 +712,18 @@ substringInfo = KnownTerm substringBuiltin Computable
 replaceInfo :: CheckEntity
 replaceInfo = KnownTerm replaceBuiltin Computable
 
+toStringInfo :: CheckEntity
+toStringInfo = KnownTerm toStringBuiltin Computable
+
+toNumberInfo :: CheckEntity
+toNumberInfo = KnownTerm toNumberBuiltin Computable
+
+toDateInfo :: CheckEntity
+toDateInfo = KnownTerm toDateBuiltin Computable
+
+truncInfo :: CheckEntity
+truncInfo = KnownTerm truncBuiltin Computable
+
 -- Comparison
 
 ltInfos :: [CheckEntity]
@@ -529,6 +781,7 @@ initialEnvironment =
     , (rawName falseName,        [falseUnique       ])
     , (rawName trueName,         [trueUnique        ])
     , (rawName numberName,       [numberUnique      ])
+    , (rawName dateName,         [dateUnique        ])
     , (rawName stringName,       [stringUnique      ])
     , (rawName listName,         [listUnique        ])
     , (rawName emptyName,        [emptyUnique       ])
@@ -548,11 +801,40 @@ initialEnvironment =
     , (rawName ceilingName,      [ceilingUnique   ])
     , (rawName floorName,        [floorUnique     ])
     , (rawName sqrtName,         [sqrtUnique      ])
+    , (rawName lnName,           [lnUnique        ])
+    , (rawName log10Name,        [log10Unique     ])
+    , (rawName sinName,          [sinUnique       ])
+    , (rawName cosName,          [cosUnique       ])
+    , (rawName tanName,          [tanUnique       ])
+    , (rawName asinName,         [asinUnique      ])
+    , (rawName acosName,         [acosUnique      ])
+    , (rawName atanName,         [atanUnique      ])
     , (rawName exponentName,     [exponentUnique  ])
     , (rawName fetchName,        [fetchUnique     ])
     , (rawName envName,          [envUnique       ])
     , (rawName jsonEncodeName,   [jsonEncodeUnique])
     , (rawName jsonDecodeName,   [jsonDecodeUnique])
+    , (rawName todaySerialName,  [todaySerialUnique])
+    , (rawName nowSerialName,    [nowSerialUnique])
+    , (rawName dateFromTextName, [dateFromTextUnique])
+    , (rawName dateSerialName,   [dateSerialUnique])
+    , (rawName dateFromSerialName, [dateFromSerialUnique])
+    , (rawName dateFromDMYName,  [dateFromDMYUnique])
+    , (rawName dateDayName,      [dateDayUnique])
+    , (rawName dateMonthName,    [dateMonthUnique])
+    , (rawName dateYearName,     [dateYearUnique])
+    , (rawName timeValueFractionName, [timeValueFractionUnique])
+    , (rawName everBetweenName,  [everBetweenUnique])
+    , (rawName alwaysBetweenName, [alwaysBetweenUnique])
+    , (rawName whenLastName,     [whenLastUnique])
+    , (rawName whenNextName,     [whenNextUnique])
+    , (rawName valueAtName,      [valueAtUnique])
+    , (rawName evalAsOfSystemTimeName, [evalAsOfSystemTimeUnique])
+    , (rawName evalUnderValidTimeName, [evalUnderValidTimeUnique])
+    , (rawName evalUnderRulesEffectiveAtName, [evalUnderRulesEffectiveAtUnique])
+    , (rawName evalUnderRulesEncodedAtName, [evalUnderRulesEncodedAtUnique])
+    , (rawName evalUnderCommitName, [evalUnderCommitUnique])
+    , (rawName evalRetroactiveToName, [evalRetroactiveToUnique])
     , (rawName plusName,         [plusUnique      ])
     , (rawName minusName,        [minusUnique     ])
     , (rawName timesName,        [timesUnique     ])
@@ -582,6 +864,10 @@ initialEnvironment =
     , (rawName charAtName,       [charAtUnique      ])
     , (rawName substringName,    [substringUnique   ])
     , (rawName replaceName,      [replaceUnique     ])
+    , (rawName toStringName,     [toStringUnique    ])
+    , (rawName toNumberName,     [toNumberUnique    ])
+    , (rawName toDateName,       [toDateUnique      ])
+    , (rawName truncName,        [truncUnique       ])
     ]
       -- NOTE: we currently do not include the Cons constructor because it has special syntax
 
@@ -592,6 +878,7 @@ initialEntityInfo =
     , (falseUnique,        (falseName,        falseInfo       ))
     , (trueUnique,         (trueName,         trueInfo        ))
     , (numberUnique,       (numberName,       numberInfo      ))
+    , (dateUnique,         (dateName,         dateInfo        ))
     , (stringUnique,       (stringName,       stringInfo      ))
     , (listUnique,         (listName,         listInfo        ))
     , (emptyUnique,        (emptyName,        emptyInfo       ))
@@ -611,12 +898,41 @@ initialEntityInfo =
     , (ceilingUnique,      (ceilingName,      ceilingInfo     ))
     , (floorUnique,        (floorName,        floorInfo       ))
     , (sqrtUnique,         (sqrtName,         sqrtInfo        ))
+    , (lnUnique,           (lnName,           lnInfo          ))
+    , (log10Unique,        (log10Name,        log10Info       ))
+    , (sinUnique,          (sinName,          sinInfo         ))
+    , (cosUnique,          (cosName,          cosInfo         ))
+    , (tanUnique,          (tanName,          tanInfo         ))
+    , (asinUnique,         (asinName,         asinInfo        ))
+    , (acosUnique,         (acosName,         acosInfo        ))
+    , (atanUnique,         (atanName,         atanInfo        ))
     , (exponentUnique,     (exponentName,     exponentInfo    ))
     , (fetchUnique,        (fetchName,        fetchInfo       ))
     , (envUnique,          (envName,          envInfo         ))
     , (postUnique,         (postName,         postInfo        ))
     , (jsonEncodeUnique,   (jsonEncodeName,   jsonEncodeInfo  ))
     , (jsonDecodeUnique,   (jsonDecodeName,   jsonDecodeInfo  ))
+    , (todaySerialUnique,  (todaySerialName,  todayInfo       ))
+    , (nowSerialUnique,    (nowSerialName,    nowInfo         ))
+    , (dateFromTextUnique, (dateFromTextName, dateFromTextInfo))
+    , (dateSerialUnique,   (dateSerialName,   dateSerialInfo  ))
+    , (dateFromSerialUnique, (dateFromSerialName, dateFromSerialInfo))
+    , (dateFromDMYUnique,  (dateFromDMYName,  dateFromDmyInfo))
+    , (dateDayUnique,      (dateDayName,      dateDayInfo))
+    , (dateMonthUnique,    (dateMonthName,    dateMonthInfo))
+    , (dateYearUnique,     (dateYearName,     dateYearInfo))
+    , (timeValueFractionUnique, (timeValueFractionName, timeValueInfo))
+    , (everBetweenUnique,  (everBetweenName,  everBetweenInfo))
+    , (alwaysBetweenUnique, (alwaysBetweenName, alwaysBetweenInfo))
+    , (whenLastUnique,     (whenLastName,     whenLastInfo))
+    , (whenNextUnique,     (whenNextName,     whenNextInfo))
+    , (valueAtUnique,      (valueAtName,      valueAtInfo))
+    , (evalAsOfSystemTimeUnique, (evalAsOfSystemTimeName, evalAsOfSystemTimeInfo))
+    , (evalUnderValidTimeUnique, (evalUnderValidTimeName, evalUnderValidTimeInfo))
+    , (evalUnderRulesEffectiveAtUnique, (evalUnderRulesEffectiveAtName, evalUnderRulesEffectiveAtInfo))
+    , (evalUnderRulesEncodedAtUnique, (evalUnderRulesEncodedAtName, evalUnderRulesEncodedAtInfo))
+    , (evalUnderCommitUnique, (evalUnderCommitName, evalUnderCommitInfo))
+    , (evalRetroactiveToUnique, (evalRetroactiveToName, evalRetroactiveToInfo))
     , (plusUnique,         (plusName,         plusInfo        ))
     , (minusUnique,        (minusName,        minusInfo       ))
     , (timesUnique,        (timesName,        timesInfo       ))
@@ -642,6 +958,10 @@ initialEntityInfo =
     , (charAtUnique,       (charAtName,       charAtInfo      ))
     , (substringUnique,    (substringName,    substringInfo   ))
     , (replaceUnique,      (replaceName,      replaceInfo     ))
+    , (toStringUnique,     (toStringName,     toStringInfo    ))
+    , (toNumberUnique,     (toNumberName,     toNumberInfo    ))
+    , (toDateUnique,       (toDateName,       toDateInfo      ))
+    , (truncUnique,        (truncName,        truncInfo       ))
     ]
     <>
       [ (uniq, (name, info))

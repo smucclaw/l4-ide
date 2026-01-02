@@ -92,6 +92,7 @@ import L4.TypeCheck.Types as X
 import L4.TypeCheck.Unify
 import L4.TypeCheck.With as X
 import qualified L4.Utils.IntervalMap as IV
+import L4.Mixfix (MixfixInfo(..), MixfixPatternToken(..), extractMixfixInfo)
 
 import Control.Applicative
 import Data.Monoid
@@ -101,7 +102,7 @@ import Data.Either (partitionEithers)
 import qualified Data.List as List
 import Data.Tuple.Extra (firstM)
 import Data.List.Split (splitWhen)
-import Optics ((%~))
+import Optics ((%~), (^.))
 import qualified Base.Set as Set
 import Data.Function (on)
 import Control.Exception (assert)
@@ -114,6 +115,7 @@ mkInitialCheckState substitution =
     , infoMap      = IV.empty
     , nlgMap       = IV.empty
     , scopeMap     = IV.empty
+    , descMap      = IV.empty
     }
 
 mkInitialCheckEnv :: NormalizedUri -> Environment -> EntityInfo -> CheckEnv
@@ -171,21 +173,38 @@ doCheckProgramWithDependencies checkState checkEnv program =
               , infoMap = s'.infoMap
               , nlgMap = s'.nlgMap
               , scopeMap = s'.scopeMap
+              , descMap = s'.descMap
               }
 
 checkProgram :: Module Name -> Check (Module Resolved, [CheckInfo])
 checkProgram module' = do
-  withScanTypeAndSigEnvironment scanTyDeclModule inferTyDeclModule scanFunSigModule module' do
+  withScanTypeAndSigEnvironment scanTyDeclModule inferTyDeclModule scanFunSigModule module' \_ -> do
     inferProgram module'
 
 withDecides :: [FunTypeSig] -> Check a -> Check a
 withDecides rdecides =
   extendKnownMany topDecides . local \s -> s
     { functionTypeSigs = Map.fromList $ mapMaybe (\d -> (,d) <$> rangeOf d.anno) rdecides
-    , mixfixRegistry = buildMixfixRegistry rdecides
+    , mixfixRegistry = Map.union (buildMixfixRegistry rdecides) s.mixfixRegistry
     }
   where
     topDecides = fmap (.name) rdecides
+
+withExtraMixfix :: MixfixRegistry -> Check a -> Check a
+withExtraMixfix mixfixAdds =
+  local \s -> s { mixfixRegistry = Map.union mixfixAdds s.mixfixRegistry }
+
+dedupCheckInfos :: [CheckInfo] -> [CheckInfo]
+dedupCheckInfos = go Set.empty []
+  where
+    go _ acc [] = reverse acc
+    go seen acc (ci:cis) =
+      let ciNames = ci.names
+          overlaps = any (`Set.member` seen) ciNames
+          seen' = List.foldl' (flip Set.insert) seen ciNames
+      in if overlaps
+          then go seen acc cis
+          else go seen' (ci:acc) cis
 
 -- | Build the mixfix registry from a list of FunTypeSigs.
 -- The registry maps from the first keyword of each mixfix function to the list
@@ -343,21 +362,13 @@ inferDeclare (MkDeclare ann _tysig appForm _t) =
 -- which would currently not match the first case.
 --
 inferAssume :: Assume Name -> Check (Assume Resolved, [CheckInfo])
-inferAssume (MkAssume ann _tysig appForm (Just (Type _tann)) typically) = do
+inferAssume (MkAssume ann _tysig appForm (Just (Type _tann))) = do
   -- declaration of a type
   errorContext (WhileCheckingAssume (getName appForm)) do
-    -- addWarning $ AssumeDeprecated (getName appForm)
-    case typically of
-      Just _ -> addError $ TypicallyNotAllowedOnAssume (getName appForm)
-      Nothing -> pure ()
     lookupAssumeCheckedByAnno ann >>= \ d -> pure (d.payload, d.publicNames)
-inferAssume (MkAssume ann _tysig appForm mt typically) = do
+inferAssume (MkAssume ann _tysig appForm mt) = do
   -- declaration of a term
   errorContext (WhileCheckingAssume (getName appForm)) do
-    -- addWarning $ AssumeDeprecated (getName appForm)
-    case typically of
-      Just _ -> addError $ TypicallyNotAllowedOnAssume (getName appForm)
-      Nothing -> pure ()
     lookupFunTypeSigByAnno ann >>= \ dHead -> do
         -- check that the given result type matches the result type in the type signature
         extendKnownMany dHead.arguments do
@@ -374,7 +385,6 @@ inferAssume (MkAssume ann _tysig appForm mt typically) = do
               <$> traverse resolvedType dHead.rtysig
               <*> traverse resolvedType dHead.rappForm
               <*> pure rmt
-              <*> pure Nothing
               >>= nlgAssume
           pure (assume, [dHead.name])
 
@@ -385,12 +395,6 @@ inferDirective (LazyEval ann e) = errorContext (WhileCheckingExpression e) do
 inferDirective (LazyEvalTrace ann e) = errorContext (WhileCheckingExpression e) do
   (re, _) <- prune $ inferExpr e
   pure (LazyEvalTrace ann re)
-inferDirective (PresumptiveEval ann e) = errorContext (WhileCheckingExpression e) do
-  (re, _) <- prune $ inferExpr e
-  pure (PresumptiveEval ann re)
-inferDirective (PresumptiveEvalTrace ann e) = errorContext (WhileCheckingExpression e) do
-  (re, _) <- prune $ inferExpr e
-  pure (PresumptiveEvalTrace ann re)
 inferDirective (Check ann e) = errorContext (WhileCheckingExpression e) do
   (re, te) <- prune $ inferExpr e
   addError (CheckInfo te)
@@ -407,9 +411,6 @@ inferDirective (Contract ann e t evs) = errorContext (WhileCheckingExpression e)
 inferDirective (Assert ann e) = errorContext (WhileCheckingExpression e) do
   e' <- checkExpr ExpectAssertContext e boolean
   pure (Assert ann e')
-inferDirective (PresumptiveAssert ann e) = errorContext (WhileCheckingExpression e) do
-  e' <- checkExpr ExpectAssertContext e boolean
-  pure (PresumptiveAssert ann e')
 
 -- We process imports prior to normal scope- and type-checking. Therefore, this is trivial.
 inferImport :: Import Name -> Check (Import Resolved)
@@ -428,53 +429,9 @@ inferSection (MkSection ann mn maka topdecls) = do
       Nothing -> pure Nothing -- we do not support anonymous sections with AKAs
       Just rn -> traverse (inferAka rn) maka
 
-  -- First pass: Type-check all DECIDEs to get their resolved names
   (rtopdecls, topDeclExtends) <- unzip <$> traverse inferTopDecl topdecls
 
-  -- Second pass: Generate presumptive wrappers and get mapping
-  wrapperDeclsWithMapping <- generatePresumptiveWrappersWithMapping rtopdecls
-
-  let wrapperDecls = [decl | (_, decl, _) <- wrapperDeclsWithMapping]
-      -- Build mapping from original function name text to wrapper arity
-      wrapperPairs =
-        [ (getNameText origName, arity)
-        | (origName, _, arity) <- wrapperDeclsWithMapping
-        ]
-      wrapperNameMap =
-        if enablePresumptiveDirectiveRewriting
-          then Map.fromList wrapperPairs
-          else Map.empty
-
-  -- Create CheckInfo for each wrapper with proper function type
-  let wrapperExtends = [makeWrapperCheckInfo wrapperName givenSig mGivethSig
-                       | Decide _ (MkDecide _ (MkTypeSig _ givenSig mGivethSig) (MkAppForm _ wrapperName _ _) _) <- wrapperDecls]
-      -- Force evaluation of each CheckInfo by pattern matching and accessing fields
-      forceCheckInfo ci@(MkCheckInfo {names = ns}) = length ns `seq` ci
-      forceList [] = []
-      forceList (x:xs) = forceCheckInfo x `seq` (x : forceList xs)
-      -- Force full evaluation of wrapperExtends before entering pass 3
-      !wrapperExtends' = forceList wrapperExtends
-
-  -- Third pass: Add wrappers to environment, then rewrite and recheck ONLY directives
-  --  For non-directives, reuse the results from pass 1 to avoid re-registering them
-  dirRewritten <-
-    extendKnownMany wrapperExtends' $
-    forM (zip topdecls (zip rtopdecls topDeclExtends)) $ \(nameDecl, (resolvedDecl, extends)) ->
-      case nameDecl of
-        Directive dirAnn directive
-          | enablePresumptiveDirectiveRewriting ->
-              case rewritePresumptiveDirective wrapperNameMap directive of
-                Nothing -> pure (resolvedDecl, extends)
-                Just rewrittenDirective -> do
-                  rdirective <- inferDirective rewrittenDirective
-                  pure (Directive dirAnn rdirective, [])
-          | otherwise -> pure (resolvedDecl, extends)
-        _ ->
-          -- Non-directives: use resolved version from pass 1
-          pure (resolvedDecl, extends)
-  let (rtopdeclsFinal, topDeclExtendsFinal) = unzip dirRewritten
-
-  pure (MkSection ann rmn rmaka (rtopdeclsFinal ++ wrapperDecls), concat topDeclExtends ++ concat topDeclExtendsFinal ++ wrapperExtends')
+  pure (MkSection ann rmn rmaka rtopdecls, concat topDeclExtends)
 
 inferLocalDecl :: LocalDecl Name -> Check (LocalDecl Resolved, [CheckInfo])
 inferLocalDecl (LocalDecide ann decide) = do
@@ -560,7 +517,7 @@ checkTermAppFormTypeSigConsistency :: AppForm Name -> TypeSig Name -> Check (App
 checkTermAppFormTypeSigConsistency appForm@(MkAppForm _ _ ns _) (MkTypeSig tann (MkGivenSig gann []) mgiveth) =
   checkTermAppFormTypeSigConsistency'
     appForm
-    (MkTypeSig tann (MkGivenSig gann ((\ n -> MkOptionallyTypedName emptyAnno n Nothing Nothing) <$> ns)) mgiveth)
+    (MkTypeSig tann (MkGivenSig gann ((\ n -> MkOptionallyTypedName emptyAnno n Nothing) <$> ns)) mgiveth)
 checkTermAppFormTypeSigConsistency (MkAppForm aann n [] maka) tysig@(MkTypeSig _ (MkGivenSig _ otns) _) =
   checkTermAppFormTypeSigConsistency'
     (MkAppForm aann n (clearSourceAnno . getName <$> filter isTerm otns) maka)
@@ -630,7 +587,7 @@ isMixfixPatternHeadIsKeyword (MkAppForm _ headName args _) (MkTypeSig _ (MkGiven
     headIsKeyword && hasParams && hasKeywords
 
 isTerm :: OptionallyTypedName Name -> Bool
-isTerm (MkOptionallyTypedName _ _ (Just (Type _)) _) = False
+isTerm (MkOptionallyTypedName _ _ (Just (Type _))) = False
 isTerm _                                           = True
 
 -- | Handles the third case described in 'checkTermAppFormTypeSigConsistency'.
@@ -662,7 +619,7 @@ checkTypeAppFormTypeSigConsistency :: AppForm Name -> TypeSig Name -> Check (App
 checkTypeAppFormTypeSigConsistency appForm@(MkAppForm _ _ ns _) (MkTypeSig tann (MkGivenSig gann []) mgiveth) =
   checkTypeAppFormTypeSigConsistency'
     appForm
-    (MkTypeSig tann (MkGivenSig gann ((\ n -> MkOptionallyTypedName emptyAnno n (Just (Type emptyAnno)) Nothing) <$> ns)) mgiveth)
+    (MkTypeSig tann (MkGivenSig gann ((\ n -> MkOptionallyTypedName emptyAnno n (Just (Type emptyAnno))) <$> ns)) mgiveth)
 checkTypeAppFormTypeSigConsistency (MkAppForm aann n [] maka) tysig@(MkTypeSig _ (MkGivenSig _ otns) _) =
   checkTypeAppFormTypeSigConsistency'
     (MkAppForm aann n (clearSourceAnno . getName <$> otns) maka)
@@ -703,11 +660,11 @@ inferTypeGiveth (MkGivethSig ann t) =
 --
 ensureNameConsistency :: [Name] -> [OptionallyTypedName Name] -> Check ([Resolved], [OptionallyTypedName Resolved], [CheckInfo])
 ensureNameConsistency [] [] = pure ([], [], [])
-ensureNameConsistency ns (MkOptionallyTypedName ann n (Just (Type tann)) _ : otns) = do
+ensureNameConsistency ns (MkOptionallyTypedName ann n (Just (Type tann)) : otns) = do
   rn <- def n
   extendKnown (makeKnown rn KnownTypeVariable) do
     (rns, rotns, extends) <- ensureNameConsistency ns otns
-    pure (rns, MkOptionallyTypedName ann rn (Just (Type tann)) Nothing : rotns, makeKnown rn KnownTypeVariable : extends)
+    pure (rns, MkOptionallyTypedName ann rn (Just (Type tann)) : rotns, makeKnown rn KnownTypeVariable : extends)
 ensureNameConsistency (n : ns) (otn : otns)
   | rawName n == rawName (getName otn) = do
       rn <- def n
@@ -726,12 +683,12 @@ ensureNameConsistency (n : ns) [] = do
   rn <- def n
   (rns, _, extends) <- ensureNameConsistency ns []
   pure (rn : rns, [], extends)
-ensureNameConsistency [] (MkOptionallyTypedName ann n mt _ : otns) = do
+ensureNameConsistency [] (MkOptionallyTypedName ann n mt : otns) = do
   addError (InconsistentNameInSignature n Nothing)
   rn <- def n
   rmt <- traverse inferType mt
   (_, rotns, extends) <- ensureNameConsistency [] otns
-  pure ([], MkOptionallyTypedName ann rn rmt Nothing : rotns, extends)
+  pure ([], MkOptionallyTypedName ann rn rmt : rotns, extends)
 
 -- | Checks that the names are consistent, and resolve the 'OptionallyTypedName's.
 --
@@ -740,18 +697,18 @@ ensureNameConsistency [] (MkOptionallyTypedName ann n mt _ : otns) = do
 --
 ensureTypeNameConsistency :: [Name] -> [OptionallyTypedName Name] -> Check ([Resolved], [OptionallyTypedName Resolved], [CheckInfo])
 ensureTypeNameConsistency [] [] = pure ([], [], [])
-ensureTypeNameConsistency (n : ns) (MkOptionallyTypedName ann n' (Just (Type tann)) _ : otns)
+ensureTypeNameConsistency (n : ns) (MkOptionallyTypedName ann n' (Just (Type tann)) : otns)
   | rawName n == rawName n' = do
   rn <- def n
   rn' <- ref n' rn
   (rns, rotns, extends) <- ensureTypeNameConsistency ns otns
-  pure (rn : rns, MkOptionallyTypedName ann rn' (Just (Type tann)) Nothing : rotns, extends)
-ensureTypeNameConsistency (n : ns) (MkOptionallyTypedName ann n' Nothing _ : otns)
+  pure (rn : rns, MkOptionallyTypedName ann rn' (Just (Type tann)) : rotns, extends)
+ensureTypeNameConsistency (n : ns) (MkOptionallyTypedName ann n' Nothing : otns)
   | rawName n == rawName n' = do
   rn <- def n
   rn' <- ref n' rn
   (rns, rotns, extends) <- ensureTypeNameConsistency ns otns
-  pure (rn : rns, MkOptionallyTypedName ann rn' Nothing Nothing : rotns, extends)
+  pure (rn : rns, MkOptionallyTypedName ann rn' Nothing : rotns, extends)
 ensureTypeNameConsistency (n : ns) (otn : otns) = do
   addError (InconsistentNameInAppForm n (Just (getName otn)))
   addError (InconsistentNameInSignature (getName otn) (Just n))
@@ -764,21 +721,18 @@ ensureTypeNameConsistency (n : ns) [] = do
   rn <- def n
   (rns, _, extends) <- ensureNameConsistency ns []
   pure (rn : rns, [], extends)
-ensureTypeNameConsistency [] (MkOptionallyTypedName ann n mt _ : otns) = do
+ensureTypeNameConsistency [] (MkOptionallyTypedName ann n mt : otns) = do
   addError (InconsistentNameInSignature n Nothing)
   rn <- def n
   rmt <- traverse inferType mt
   (_, rotns, extends) <- ensureNameConsistency [] otns
-  pure ([], MkOptionallyTypedName ann rn rmt Nothing : rotns, extends)
+  pure ([], MkOptionallyTypedName ann rn rmt : rotns, extends)
 
 mkref :: Resolved -> OptionallyTypedName Name -> Check (OptionallyTypedName Resolved)
-mkref r (MkOptionallyTypedName ann n mt typically) = do
+mkref r (MkOptionallyTypedName ann n mt) = do
   rn <- ref n r
   rmt <- traverse inferType mt
-  rTypically <- case (typically, rmt) of
-    (Just expr, Just ty) -> Just <$> checkExpr (ExpectTypicallyValueContext n) expr ty
-    _ -> pure Nothing
-  pure (MkOptionallyTypedName ann rn rmt rTypically)
+  pure (MkOptionallyTypedName ann rn rmt)
 
 appFormType :: AppForm Resolved -> Type' Resolved
 appFormType (MkAppForm _ann n args _maka) = app n (tyvar <$> args)
@@ -861,18 +815,19 @@ inferConDecl rappForm (MkConDecl ann n tns) = do
   pure (condecl, makeKnown dn conInfo : concat extends)
 
 typedNameOptionallyNamedType :: TypedName n -> OptionallyNamedType n
-typedNameOptionallyNamedType (MkTypedName _ n t _) = MkOptionallyNamedType emptyAnno (Just n) t
+typedNameOptionallyNamedType (MkTypedName _ n t) = MkOptionallyNamedType emptyAnno (Just n) t
 
 inferSelector :: AppForm Resolved -> TypedName Name -> Check (TypedName Resolved, [CheckInfo])
-inferSelector rappForm (MkTypedName ann n t typically) = do
+inferSelector rappForm (MkTypedName ann n t) = do
   rt <- inferType t
   dn <- def n
-  -- Check TYPICALLY value if present
-  rTypically <- case typically of
-    Nothing -> pure Nothing
-    Just expr -> Just <$> checkExpr (ExpectTypicallyValueContext n) expr rt
   let selectorInfo = KnownTerm (forall' (view appFormArgs rappForm) (fun_ [appFormType rappForm] rt)) Selector
-  pure (MkTypedName ann dn rt rTypically, [makeKnown dn selectorInfo])
+  -- Record @desc annotation for LSP hover
+  case ann ^. annDesc of
+    Just desc -> for_ (rangeOf dn) $ \srcRange ->
+      addDescForSrcRange srcRange (getDesc desc)
+    Nothing -> pure ()
+  pure (MkTypedName ann dn rt, [makeKnown dn selectorInfo])
 
 -- | Infers / checks a type to be of kind TYPE.
 inferType :: Type' Name -> Check (Type' Resolved)
@@ -978,22 +933,24 @@ inferLamGivens (MkGivenSig ann otns) = do
     -- TODO: there is unfortunate overlap between this and optionallyTypedNameType,
     -- but perhaps it's ok ...
     inferOptionallyTypedName :: OptionallyTypedName Name -> Check (OptionallyTypedName Resolved, Type' Resolved, [CheckInfo])
-    inferOptionallyTypedName (MkOptionallyTypedName ann' n Nothing typically) = do
+    inferOptionallyTypedName (MkOptionallyTypedName ann' n Nothing) = do
       rn <- def n
       v <- fresh (rawName n)
-      -- Check TYPICALLY value if present
-      rTypically <- case typically of
-        Nothing -> pure Nothing
-        Just expr -> Just <$> checkExpr (ExpectTypicallyValueContext n) expr v
-      pure (MkOptionallyTypedName ann' rn (Just v) rTypically, v, [makeKnown rn (KnownTerm v Local)])
-    inferOptionallyTypedName (MkOptionallyTypedName ann' n (Just t) typically) = do
+      recordDescForParam ann' rn
+      pure (MkOptionallyTypedName ann' rn (Just v), v, [makeKnown rn (KnownTerm v Local)])
+    inferOptionallyTypedName (MkOptionallyTypedName ann' n (Just t)) = do
       rn <- def n
       rt <- inferType t
-      -- Check TYPICALLY value if present
-      rTypically <- case typically of
-        Nothing -> pure Nothing
-        Just expr -> Just <$> checkExpr (ExpectTypicallyValueContext n) expr rt
-      pure (MkOptionallyTypedName ann' rn (Just rt) rTypically, rt, [makeKnown rn (KnownTerm rt Local)])
+      recordDescForParam ann' rn
+      pure (MkOptionallyTypedName ann' rn (Just rt), rt, [makeKnown rn (KnownTerm rt Local)])
+
+    -- | Record @desc annotation for a parameter in the descMap for LSP hover
+    recordDescForParam :: Anno -> Resolved -> Check ()
+    recordDescForParam paramAnno resolved =
+      case paramAnno ^. annDesc of
+        Just desc -> for_ (rangeOf resolved) $ \srcRange ->
+          addDescForSrcRange srcRange (getDesc desc)
+        Nothing -> pure ()
 
 -- | Turn a type signature into a type, introducing inference variables for
 -- unknown types. Also returns the result type.
@@ -1006,6 +963,8 @@ inferLamGivens (MkGivenSig ann otns) = do
 typeSigType :: TypeSig Resolved -> Check (Type' Resolved, Type' Resolved, [CheckInfo])
 typeSigType (MkTypeSig _ (MkGivenSig _ otns) mgiveth) = do
   let (tyvars, others) = partitionEithers (isQuantifier <$> otns)
+  -- Record @desc annotations for LSP hover (must iterate over original otns to get annotations)
+  traverse_ recordDescForTypedName otns
   ronts <- traverse mkOptionallyNamedType others
   rt <- extendKnownMany (foldMap proc ronts) $
     maybeGivethType mgiveth
@@ -1024,8 +983,16 @@ typeSigType (MkTypeSig _ (MkGivenSig _ otns) mgiveth) = do
       [makeKnown n (KnownTerm t Local)]
 
 isQuantifier :: OptionallyTypedName Resolved -> Either Resolved (Resolved, Maybe (Type' Resolved))
-isQuantifier (MkOptionallyTypedName _ n (Just (Type _)) _) = Left n
-isQuantifier (MkOptionallyTypedName _ n mt             _) = Right (n, mt)
+isQuantifier (MkOptionallyTypedName _ n (Just (Type _))) = Left n
+isQuantifier (MkOptionallyTypedName _ n mt             ) = Right (n, mt)
+
+-- | Record @desc annotation for a parameter in the descMap for LSP hover
+recordDescForTypedName :: OptionallyTypedName Resolved -> Check ()
+recordDescForTypedName (MkOptionallyTypedName ann n _) =
+  case ann ^. annDesc of
+    Just desc -> for_ (rangeOf n) $ \srcRange ->
+      addDescForSrcRange srcRange (getDesc desc)
+    Nothing -> pure ()
 
 maybeGivethType :: Maybe (GivethSig Resolved) -> Check (Type' Resolved)
 maybeGivethType Nothing                  = fresh (NormalName "r") -- we have no obvious prefix?
@@ -1054,14 +1021,32 @@ checkExpr ec (Where ann e ds) t = softprune $ do
     scanDecl = mapMaybeM inferTyDeclLocalDecl
     scanFuns = mapMaybeM scanFunSigLocalDecl
 
-  (rds, extends) <- withScanTypeAndSigEnvironment preScanDecl scanDecl scanFuns ds do
-     unzip <$> traverse (firstM nlgLocalDecl <=< inferLocalDecl) ds
-  re <- extendKnownMany (concat extends) do
-    re <- checkExpr ec e t
-    -- We have to immediately resolve 'Nlg' annotations, as 'ds'
-    -- brings new bindings into scope.
-    nlgExpr re
+  (rds, extends, mixfixAdds) <- withScanTypeAndSigEnvironment preScanDecl scanDecl scanFuns ds \rdecides -> do
+    (rds, extends) <- unzip <$> traverse (firstM nlgLocalDecl <=< inferLocalDecl) ds
+    pure (rds, extends, buildMixfixRegistry rdecides)
+  re <- withExtraMixfix mixfixAdds do
+    let knownExtends = dedupCheckInfos (concat extends)
+    re <- extendKnownMany knownExtends do
+      re <- checkExpr ec e t
+      -- We have to immediately resolve 'Nlg' annotations, as 'ds'
+      -- brings new bindings into scope.
+      nlgExpr re
+    pure re
   setAnnResolvedType t Nothing (Where ann re rds)
+checkExpr ec (LetIn ann ds e) t = softprune $ do
+  let
+    preScanDecl = mapMaybeM scanTyDeclLocalDecl
+    scanDecl = mapMaybeM inferTyDeclLocalDecl
+    scanFuns = mapMaybeM scanFunSigLocalDecl
+
+  (rds, extends, mixfixAdds) <- withScanTypeAndSigEnvironment preScanDecl scanDecl scanFuns ds \rdecides -> do
+    (rds, extends) <- unzip <$> traverse (firstM nlgLocalDecl <=< inferLocalDecl) ds
+    pure (rds, extends, buildMixfixRegistry rdecides)
+  re <- withExtraMixfix mixfixAdds $
+    extendKnownMany (dedupCheckInfos (concat extends)) do
+      re <- checkExpr ec e t
+      nlgExpr re
+  setAnnResolvedType t Nothing (LetIn ann rds re)
 checkExpr ec e t = softprune $ errorContext (WhileCheckingExpression e) do
   (re, rt) <- inferExpr e
   expect ec t rt
@@ -1098,13 +1083,13 @@ checkObligation ann party action due hence lest partyT actionT = do
   pure (MkObligation ann partyR actionR dueR henceR lestR)
 
 checkAction :: RAction Name -> Type' Resolved -> Check (RAction Resolved, [CheckInfo])
-checkAction MkAction {anno, action, provided = mprovided} actionT = do
+checkAction MkAction {anno, modal, action, provided = mprovided} actionT = do
   (pat, bounds) <- checkPattern ExpectRegulativeActionContext action actionT
   -- NOTE: the provided clauses must evaluate to booleans
   provided <- forM mprovided \provided ->
     extendKnownMany bounds do
       checkExpr ExpectRegulativeProvidedContext provided boolean
-  pure (MkAction {anno, action = pat, provided}, bounds)
+  pure (MkAction {anno, modal, action = pat, provided}, bounds)
 
 buildConstructorLookup :: [DeclChecked (Declare Resolved)] -> Map Unique [Resolved]
 buildConstructorLookup = foldMap \decl ->
@@ -1236,6 +1221,7 @@ inferExpr' g =
         pure (nlgRe, te, rgivens)
       pure (Lam ann rgivens re, fun_ rargts te)
     App ann n es -> do
+      (initialFuncName, initialArgs, rewrotePostfix) <- reinterpretPostfixAppIfNeeded n es
       -- We want good type error messages. Therefore, we pursue the
       -- following strategy:
       --
@@ -1257,16 +1243,16 @@ inferExpr' g =
       -- If the function is a registered mixfix and the args contain the expected
       -- keywords, restructure the args to remove the keywords.
       -- For param-first patterns, this also returns the correct function name.
-      mMixfixMatch <- tryMatchMixfixCall n es
+      mMixfixMatch <- tryMatchMixfixCall initialFuncName initialArgs
       let (actualFuncName, actualArgs, needsAnnoRebuild, mMixfixError) = case mMixfixMatch of
-            Nothing -> (n, es, False, Nothing)  -- Not a mixfix call, use original
+            Nothing -> (initialFuncName, initialArgs, rewrotePostfix, Nothing)  -- Not a mixfix call, use original
             Just (funcRawName, restructuredArgs, mErr) ->
               -- Create a Name with the correct function name, preserving the annotation
-              let MkName nameAnno _ = n
+              let MkName nameAnno _ = initialFuncName
                   newName = MkName nameAnno funcRawName
                   -- We need to rebuild annotation if args were restructured
                   -- (i.e., keyword placeholders were removed)
-                  argsChanged = length restructuredArgs /= length es
+                  argsChanged = length restructuredArgs /= length initialArgs || rewrotePostfix
               in (newName, restructuredArgs, argsChanged, mErr)
 
       -- Report any mixfix matching errors (e.g., wrong keyword, typo)
@@ -1328,10 +1314,24 @@ inferExpr' g =
         scanDecl = mapMaybeM inferTyDeclLocalDecl
         scanFuns = mapMaybeM scanFunSigLocalDecl
 
-      (rds, extends) <- withScanTypeAndSigEnvironment preScanDecl scanDecl scanFuns ds do
-        unzip <$> traverse inferLocalDecl ds
-      (re, t) <- extendKnownMany (concat extends) $ inferExpr e
+      (rds, extends, mixfixAdds) <- withScanTypeAndSigEnvironment preScanDecl scanDecl scanFuns ds \rdecides -> do
+        (rds, extends) <- unzip <$> traverse inferLocalDecl ds
+        pure (rds, extends, buildMixfixRegistry rdecides)
+      (re, t) <- withExtraMixfix mixfixAdds $
+        extendKnownMany (dedupCheckInfos (concat extends)) $ inferExpr e
       pure (Where ann re rds, t)
+    LetIn ann ds e -> do
+      let
+        preScanDecl = mapMaybeM scanTyDeclLocalDecl
+        scanDecl = mapMaybeM inferTyDeclLocalDecl
+        scanFuns = mapMaybeM scanFunSigLocalDecl
+
+      (rds, extends, mixfixAdds) <- withScanTypeAndSigEnvironment preScanDecl scanDecl scanFuns ds \rdecides -> do
+        (rds, extends) <- unzip <$> traverse inferLocalDecl ds
+        pure (rds, extends, buildMixfixRegistry rdecides)
+      (re, t) <- withExtraMixfix mixfixAdds $
+        extendKnownMany (dedupCheckInfos (concat extends)) $ inferExpr e
+      pure (LetIn ann rds re, t)
     Event ann ev -> do
       (ev', ty) <- inferEvent ev
       pure (Event ann ev', ty)
@@ -1355,10 +1355,24 @@ inferExpr' g =
     AsString ann e -> do
       -- AsString can accept any primitive type and convert it to string
       (re, te) <- inferExpr e
-      -- For now, we'll only allow NUMBER to be converted to STRING
-      -- Could extend this to other types in the future
-      expect ExpectAsStringArgumentContext number te
+      unless (isStringCoercible te) $
+        addError (TypeMismatch ExpectAsStringArgumentContext string te)
       pure (AsString ann re, string)
+    Breach ann mParty mReason -> do
+      -- Breach is a terminal clause that represents a contract breach
+      partyT <- fresh (NormalName "party")
+      actionT <- fresh (NormalName "action")
+      mParty' <- traverse (\p -> checkExpr ExpectRegulativePartyContext p partyT) mParty
+      mReason' <- traverse (\r -> checkExpr ExpectBreachReasonContext r string) mReason
+      pure (Breach ann mParty' mReason', contract partyT actionT)
+
+isStringCoercible :: Type' Resolved -> Bool
+isStringCoercible ty = case ty of
+  InfVar{} -> True
+  TyApp _ tyRef [] ->
+    let t = nameToText (getName tyRef)
+    in t `elem` ["NUMBER", "STRING", "BOOLEAN", "DATE"]
+  _ -> False
 
 inferEvent :: Event Name -> Check (Event Resolved, Type' Resolved)
 inferEvent (MkEvent ann party action timestamp atFirst) = do
@@ -1867,14 +1881,14 @@ withScanTypeAndSigEnvironment ::
   (a -> Check [DeclChecked DeclareOrAssume]) ->
   (a -> Check [FunTypeSig]) ->
   a ->
-  Check b ->
+  ([FunTypeSig] -> Check b) ->
   Check b
 withScanTypeAndSigEnvironment preScanDecls scanDecl scanTySig a act = do
   rdeclares <- scanDeclares preScanDecls scanDecl a
   withDeclares rdeclares do
     rdecides <- scanTySig a
     withDecides rdecides $ do
-      act
+      act rdecides
 
 -- | @'withQualified' rs ce@ takes a list of 'Resolved' names and creates
 -- a 'CheckInfo' of @rs@ pointing to the @ce@ 'CheckInfo'.
@@ -1969,18 +1983,18 @@ inferTyDeclDeclare (MkDeclare ann _tysig appForm t) = prune $
             }
 
 inferTyDeclAssume :: Assume Name -> Check (Maybe (DeclChecked (Assume Resolved)))
-inferTyDeclAssume (MkAssume ann _tysig appForm (Just (Type tann)) _) =
+inferTyDeclAssume (MkAssume ann _tysig appForm (Just (Type tann))) =
   -- declaration of a type
   errorContext (WhileCheckingAssume (getName appForm)) do
     lookupDeclTypeSigByAnno ann >>= \ declHead -> do
         assume <- extendKnownMany (declHead.name:declHead.tyVars) do
-          traverse resolvedType (MkAssume ann declHead.rtysig declHead.rappForm (Just (Type tann)) Nothing)
+          traverse resolvedType (MkAssume ann declHead.rtysig declHead.rappForm (Just (Type tann)))
             >>= nlgAssume
         pure $ Just $ MkDeclChecked
           { payload = assume
           , publicNames = [declHead.name]
           }
-inferTyDeclAssume (MkAssume _   _      _        _ _) = pure Nothing
+inferTyDeclAssume (MkAssume _   _      _        _) = pure Nothing
 
 scanTyDeclModule :: Module Name -> Check [DeclTypeSig]
 scanTyDeclModule (MkModule _ _ sects) =
@@ -2025,7 +2039,7 @@ scanTyDeclDeclare (MkDeclare ann tysig appForm decl) = prune $
       _ -> Nothing
 
 scanTyDeclAssume :: Assume Name -> Check (Maybe DeclTypeSig)
-scanTyDeclAssume (MkAssume ann tysig appForm (Just (Type _tann)) _) = do
+scanTyDeclAssume (MkAssume ann tysig appForm (Just (Type _tann))) = do
   -- declaration of a type
   errorContext (WhileCheckingAssume (getName appForm)) do
     (rappForm, rtysig) <- checkTypeAppFormTypeSigConsistency appForm tysig
@@ -2051,82 +2065,6 @@ scanTyDeclAssume (MkAssume ann tysig appForm (Just (Type _tann)) _) = do
       }
 scanTyDeclAssume _ = do
   pure Nothing
-
--- ----------------------------------------------------------------------------
--- Phase 2: Scan Function Declarations (DECIDE & ASSUME)
--- ----------------------------------------------------------------------------
-
--- | Extract mixfix pattern information by comparing the AppForm against
--- the GIVEN parameters in the TypeSig.
---
--- A function is mixfix if any of its AppForm tokens match GIVEN parameter names.
--- For example:
---   GIVEN person IS A Person, program IS A Program
---   person `is eligible for` program MEANS ...
---
--- Here the AppForm is [person, is eligible for, program], and the GIVEN params
--- are [person, program]. Since 'person' and 'program' are GIVEN params, this
--- is a mixfix pattern: [Param "person", Keyword "is eligible for", Param "program"]
---
-extractMixfixInfo :: TypeSig Name -> AppForm Name -> Maybe MixfixInfo
-extractMixfixInfo tysig appForm =
-  let
-    -- Get the GIVEN parameter names as a set for fast lookup
-    givenParams :: Set RawName
-    givenParams = Set.fromList $ givenParamNames tysig
-
-    -- Get all tokens from the AppForm (head + args)
-    appFormTokens :: [Name]
-    appFormTokens = appFormHead' : appFormArgs'
-      where
-        MkAppForm _ appFormHead' appFormArgs' _ = appForm
-
-    -- Classify each token as either a parameter or a keyword
-    classifyToken :: Name -> MixfixPatternToken
-    classifyToken n
-      | rawName n `Set.member` givenParams = MixfixParam (rawName n)
-      | otherwise                          = MixfixKeyword (rawName n)
-
-    -- Build the pattern
-    patternTokens :: [MixfixPatternToken]
-    patternTokens = map classifyToken appFormTokens
-
-    -- Extract just the keywords
-    extractKeyword :: MixfixPatternToken -> Maybe RawName
-    extractKeyword (MixfixKeyword k) = Just k
-    extractKeyword (MixfixParam _)   = Nothing
-
-    keywordList :: [RawName]
-    keywordList = mapMaybe extractKeyword patternTokens
-
-    -- Count parameters
-    paramCount :: Int
-    paramCount = length $ filter isParam patternTokens
-
-    isParam :: MixfixPatternToken -> Bool
-    isParam (MixfixParam _)   = True
-    isParam (MixfixKeyword _) = False
-
-  in
-    -- Only return MixfixInfo if there's at least one param in non-head position
-    -- (i.e., if the first token is a param, this is mixfix)
-    -- OR if there are keywords between params
-    if paramCount > 0 && (maybe False isParam (listToMaybe patternTokens) || paramCount < length patternTokens)
-       then Just MkMixfixInfo
-              { pattern = patternTokens
-              , keywords = keywordList
-              , arity = paramCount
-              }
-       else Nothing
-
--- | Extract parameter names from a TypeSig's GIVEN clause.
-givenParamNames :: TypeSig Name -> [RawName]
-givenParamNames (MkTypeSig _ givenSig _) =
-  case givenSig of
-    MkGivenSig _ otns -> map optionallyTypedNameToRawName otns
-  where
-    optionallyTypedNameToRawName :: OptionallyTypedName Name -> RawName
-    optionallyTypedNameToRawName (MkOptionallyTypedName _ n _ _) = rawName n
 
 -- ----------------------------------------------------------------------------
 -- Call-site Mixfix Pattern Matching
@@ -2192,6 +2130,33 @@ tryMatchMixfixCall funcName args = do
                 Nothing -> tryFlatteningApproach registry  -- Fall through to original logic
             Nothing -> tryFlatteningApproach registry
         _ -> tryFlatteningApproach registry
+
+    -- Multi-arg case: App funcName [kw1, arg1, kw2, arg2, ...]
+    -- This handles cases like: alice `copulated with` bob `to make` charlie
+    -- which parses as: App alice [`copulated with`, bob, `to make`, charlie]
+    (firstArg:restArgs) | isSimpleName funcName && length args >= 2 -> do
+      funcNameInScope <- lookupRawNameInEnvironment (rawName funcName)
+      let isCallable = any isCallableEntity funcNameInScope
+      case (not isCallable, getExprName firstArg) of
+        (True, Just potentialOpName) | Map.member (rawName potentialOpName) registry -> do
+          -- funcName is NOT callable, and firstArg is a registered mixfix keyword
+          -- Reinterpret as mixfix: funcName becomes first param, firstArg is the function
+          let opRawName = rawName potentialOpName
+          case Map.lookup opRawName registry of
+            Just sigs -> do
+              -- funcName is the first param, restArgs are [arg1, kw2, arg2, ...]
+              let funcAsExpr = App (getAnno funcName) funcName []
+                  -- Build the new args: [funcAsExpr, arg1, Var kw2, arg2, ...]
+                  -- which is [funcAsExpr] ++ restArgs
+                  newArgs = funcAsExpr : restArgs
+              -- Try to match against the mixfix pattern
+              result <- tryMatchAnyPattern opRawName newArgs sigs
+              case result of
+                Just (restructuredArgs, mErr) -> pure $ Just (opRawName, restructuredArgs, mErr)
+                Nothing -> tryRegularMatch
+            Nothing -> tryRegularMatch
+        _ -> tryRegularMatch
+
     _ -> tryRegularMatch
   where
     tryFlatteningApproach registry = do
@@ -2225,6 +2190,36 @@ getExprName :: Expr Name -> Maybe Name
 getExprName (Var _ n) = Just n
 getExprName (App _ n []) = Just n
 getExprName _ = Nothing
+
+-- | Reinterpret a mis-parsed postfix application of the form:
+--   App operand [keyword]
+-- into the expected form:
+--   App keyword [operand]
+-- when keyword is a registered postfix mixfix operator and operand is not callable.
+reinterpretPostfixAppIfNeeded :: Name -> [Expr Name] -> Check (Name, [Expr Name], Bool)
+reinterpretPostfixAppIfNeeded operandName args =
+  case args of
+    [kwExpr]
+      | Just kwName <- getExprName kwExpr -> do
+          registry <- asks (.mixfixRegistry)
+          let kwRaw = rawName kwName
+          case Map.lookup kwRaw registry of
+            Just sigs | any isPostfixMixfix sigs -> do
+              funcNameInScope <- lookupRawNameInEnvironment (rawName operandName)
+              let isCallable = any isCallableEntity funcNameInScope
+              if isCallable
+                then pure (operandName, args, False)
+                else do
+                  let operandExpr = App (getAnno operandName) operandName []
+                  pure (kwName, [operandExpr], True)
+            _ -> pure (operandName, args, False)
+    _ -> pure (operandName, args, False)
+
+-- | Detects mixfix signatures that define pure postfix operators
+-- of the shape: <param> <keyword>
+isPostfixMixfix :: FunTypeSig -> Bool
+isPostfixMixfix MkFunTypeSig {mixfixInfo = Just MkMixfixInfo {pattern = [MixfixParam _, MixfixKeyword _], arity = 1}} = True
+isPostfixMixfix _ = False
 
 -- | Check if a CheckEntity is callable (function, constructor, etc.)
 -- This is used to determine if a name can be applied to arguments.
@@ -2593,8 +2588,8 @@ scanFunSigDecide d@(MkDecide _ tysig appForm _) = prune $
       }
 
 scanFunSigAssume :: Assume Name -> Check (Maybe FunTypeSig)
-scanFunSigAssume (MkAssume _ _     _       (Just (Type _tann)) _) = pure Nothing
-scanFunSigAssume a@(MkAssume _ tysig appForm mt _) = do
+scanFunSigAssume (MkAssume _ _     _       (Just (Type _tann))) = pure Nothing
+scanFunSigAssume a@(MkAssume _ tysig appForm mt) = do
   -- declaration of a term
   let tysig' = mergeResultTypeInto tysig mt
   errorContext (WhileCheckingAssume (getName appForm)) do
@@ -2930,11 +2925,6 @@ prettyCheckError (DesugarAnnoRewritingError context errorInfo) =
 prettyCheckError (CheckWarning warning) = prettyCheckWarning warning
 prettyCheckError (MixfixMatchErrorCheck funcName err) =
   prettyMixfixMatchError funcName err
-prettyCheckError (TypicallyNotAllowedOnAssume n) =
-  [ "TYPICALLY defaults are not allowed on ASSUME declarations:"
-  , "  " <> prettyLayout n
-  , "The ASSUME keyword is deprecated. Use GIVEN or DECLARE instead."
-  ]
 
 -- | Pretty print mixfix match errors with helpful suggestions.
 prettyMixfixMatchError :: Name -> MixfixMatchError -> [Text]
@@ -2985,15 +2975,6 @@ prettyCheckWarning = \ case
     <>
     map (("  " <>) . prettyLayout) b
     <> [ "" ]
-  AssumeDeprecated name ->
-    [ "ASSUME is deprecated and will be removed in a future version."
-    , ""
-    , "The declaration of " <> quotedName name <> " uses ASSUME."
-    , ""
-    , "Consider using one of these alternatives:"
-    , "  - GIVEN: for function parameters"
-    , "  - DECLARE: for type declarations"
-    ]
 
 
 -- | Forms a plural when needed.
@@ -3027,8 +3008,10 @@ prettyTypeMismatch ExpectPostBodyContext expected given =
   standardTypeMismatch [ "The body argument of POST is expected to be of type" ] expected given
 prettyTypeMismatch ExpectConcatArgumentContext expected given =
   standardTypeMismatch [ "The argument of CONCAT is expected to be of type" ] expected given
-prettyTypeMismatch ExpectAsStringArgumentContext expected given =
-  standardTypeMismatch [ "The argument of AS STRING is expected to be of type" ] expected given
+prettyTypeMismatch ExpectAsStringArgumentContext _expected given =
+  [ "The argument of AS STRING is expected to be NUMBER, BOOLEAN, DATE, or STRING."
+  , "I inferred the argument to have type " <> prettyLayout given
+  ]
 prettyTypeMismatch ExpectConsArgument2Context expected given =
   standardTypeMismatch [ "The second argument of FOLLOWED BY is expected to be of type" ] expected given
 prettyTypeMismatch (ExpectPatternScrutineeContext scrutinee) expected given =
@@ -3133,8 +3116,8 @@ prettyTypeMismatch ExpectRegulativeProvidedContext expected given =
   standardTypeMismatch [ "The PROVIDED clause for filtering the ACTION is expected to be of type" ] expected given
 prettyTypeMismatch ExpectAssertContext expected given =
   standardTypeMismatch [ "An ASSERT directive is expected to be of type" ] expected given
-prettyTypeMismatch (ExpectTypicallyValueContext n) expected given =
-  standardTypeMismatch [ "The TYPICALLY value for " <> quotedName n <> " is expected to be of type" ] expected given
+prettyTypeMismatch ExpectBreachReasonContext expected given =
+  standardTypeMismatch [ "The BECAUSE clause of a BREACH is expected to be of type" ] expected given
 
 -- | Best effort, only small numbers will occur"
 prettyOrdinal :: Int -> Text
@@ -3254,394 +3237,3 @@ prettyNameWithRange n =
 --
 --    inferX :: X Name -> Check (X Resolved, Type' Resolved)
 --    checkX :: X Name -> Type' Resolved -> Check (X Resolved)
-
--- ===========================================================================
--- Presumptive Wrapper Generation for TYPICALLY Defaults
--- ===========================================================================
-
--- Returns wrappers along with original name and arity.
-generatePresumptiveWrappersWithMapping :: [TopDecl Resolved] -> Check [(Resolved, TopDecl Resolved, Int)]
-generatePresumptiveWrappersWithMapping decls = do
-  -- Collect DECIDEs with TYPICALLY defaults and generate wrappers
-  wrappers <- forM decls $ \case
-    Decide ann decide ->
-      let MkDecide _ (MkTypeSig _ (MkGivenSig _ otns) _) (MkAppForm _ origName _ _) _ = decide
-          arity = length otns
-      in do
-        if hasTypicallyDefaults decide
-           then do
-             wrapper <- generateWrapper ann decide
-             pure (Just (origName, wrapper, arity))
-           else pure Nothing
-    _ -> pure Nothing
-
-  pure (catMaybes wrappers)
-
--- | Get the text of a function name
-getNameText :: Resolved -> Text
-getNameText resolved =
-  let origName = getOriginal resolved
-      origRawName = rawName (getName origName)
-  in rawNameToText origRawName
-
-data PresumptiveExpr =
-  MkPresumptiveExpr
-    (Expr Name) -- ^ rewritten expression
-    Bool        -- ^ does it evaluate to Maybe?
-    Bool        -- ^ did anything change?
-
-mkUnchangedExpr :: Expr Name -> PresumptiveExpr
-mkUnchangedExpr e = MkPresumptiveExpr e False False
-
-presExpr :: PresumptiveExpr -> Expr Name
-presExpr (MkPresumptiveExpr e _ _) = e
-
-presProducesMaybe :: PresumptiveExpr -> Bool
-presProducesMaybe (MkPresumptiveExpr _ p _) = p
-
-presChanged :: PresumptiveExpr -> Bool
-presChanged (MkPresumptiveExpr _ _ c) = c
-
--- | Rewrite Name-level expression to use wrapper name
-rewriteExprForPEvalName :: Map Text Int -> Expr Name -> PresumptiveExpr
-rewriteExprForPEvalName wrapperMap expr =
-  case expr of
-    -- Replace bare function reference (no args) with wrapper call filled with NOTHINGs
-    Var ann name ->
-      let nameText = rawNameToText (rawName name)
-      in case Map.lookup nameText wrapperMap of
-           Just arity -> buildWrapperCall ann name [] arity
-           Nothing    -> MkPresumptiveExpr (Var ann name) (isMaybeLikeName name) False
-
-    -- Rewrite function application to call wrapper with JUST/NOTHING arguments
-    App ann name args ->
-      let rewrittenArgs = map (rewriteExprForPEvalName wrapperMap) args
-          nameText = rawNameToText (rawName name)
-      in case Map.lookup nameText wrapperMap of
-           Just arity -> buildWrapperCall ann name rewrittenArgs arity
-           Nothing    ->
-             let argExprs = map presExpr rewrittenArgs
-                 changed = or (map presChanged rewrittenArgs)
-             in MkPresumptiveExpr (App ann name argExprs) (isMaybeLikeName name) changed
-
-    -- Other cases: return unchanged. We intentionally do not descend further
-    -- because #PEVAL is scoped to decision/function invocations, and rewriting
-    -- inside arithmetic / logical nodes would produce invalid types.
-    _ -> mkUnchangedExpr expr
-  where
-    buildWrapperCall :: Anno -> Name -> [PresumptiveExpr] -> Int -> PresumptiveExpr
-    buildWrapperCall ann name providedArgs arity
-      | length providedArgs > arity =
-          let changed = or (map presChanged providedArgs)
-          in MkPresumptiveExpr (App ann name (map presExpr providedArgs)) False changed
-      | otherwise =
-          let wrapperText = "'presumptive " <> rawNameToText (rawName name) <> "'"
-              wrapperName = MkName (getAnno name) (NormalName wrapperText)
-              justCtorName = MkName ann (NormalName "JUST")
-              nothingCtorName = MkName ann (NormalName "NOTHING")
-              wrapArg argExpr =
-                if presProducesMaybe argExpr
-                  then presExpr argExpr
-                  else App ann justCtorName [presExpr argExpr]
-              wrappedProvided = map wrapArg providedArgs
-              missingCount = arity - length providedArgs
-              paddedMissing = replicate missingCount (Var ann nothingCtorName)
-              rewrittenApp = App ann wrapperName (wrappedProvided ++ paddedMissing)
-          in MkPresumptiveExpr rewrittenApp True True
-
-isMaybeLikeName :: Name -> Bool
-isMaybeLikeName name =
-  case rawNameToText (rawName name) of
-    "JUST"    -> True
-    "NOTHING" -> True
-    txt       -> "'presumptive " `Text.isPrefixOf` txt
-
-rewritePresumptiveDirective :: Map Text Int -> Directive Name -> Maybe (Directive Name)
-rewritePresumptiveDirective wrapperMap = \case
-  PresumptiveEval ann expr ->
-    let rewritten = rewriteExprForPEvalName wrapperMap expr
-    in if presChanged rewritten
-         then Just (PresumptiveEval ann (presExpr rewritten))
-         else Nothing
-  PresumptiveEvalTrace ann expr ->
-    let rewritten = rewriteExprForPEvalName wrapperMap expr
-    in if presChanged rewritten
-         then Just (PresumptiveEvalTrace ann (presExpr rewritten))
-         else Nothing
-  PresumptiveAssert ann expr ->
-    let rewritten = rewriteExprForPEvalName wrapperMap expr
-        needsWrap = presProducesMaybe rewritten
-        rewrittenExpr =
-          if needsWrap
-            then wrapPresumptiveResultForAssert (presExpr rewritten)
-            else presExpr rewritten
-    in if presChanged rewritten || needsWrap
-         then Just (PresumptiveAssert ann rewrittenExpr)
-         else Nothing
-  _ -> Nothing
-
-wrapPresumptiveResultForAssert :: Expr Name -> Expr Name
-wrapPresumptiveResultForAssert expr =
-  let ann = getAnno expr
-      nothingCtorName = MkName ann (NormalName "NOTHING")
-      justCtorName = MkName ann (NormalName "JUST")
-      falseCtorName = MkName ann (NormalName "FALSE")
-      resultName = MkName ann (NormalName "_presumptive_assert_value")
-      nothingBranch =
-        MkBranch ann
-          (When ann (PatApp ann nothingCtorName []))
-          (Var ann falseCtorName)
-      justBranch =
-        MkBranch ann
-          (When ann (PatApp ann justCtorName [PatVar ann resultName]))
-          (Var ann resultName)
-  in Consider ann expr [nothingBranch, justBranch]
-
--- | Feature flag: keep compile-time directive rewriting disabled until wrappers
--- are fully ready for end-to-end presumptive evaluation (tracked in
--- doc/todo/TYPICALLY-DEFAULTS-SPEC.md). The runtime still honors defaults via
--- maybeApplyDefaults when this flag is False.
-enablePresumptiveDirectiveRewriting :: Bool
-enablePresumptiveDirectiveRewriting = False
-
--- | Create CheckInfo for a wrapper function to add it to the environment
--- Builds the full function type from GIVEN parameters and GIVETH return type
-makeWrapperCheckInfo :: Resolved -> GivenSig Resolved -> Maybe (GivethSig Resolved) -> CheckInfo
-makeWrapperCheckInfo wrapperName givenSig mGivethSig =
-  let MkGivenSig _ otns = givenSig
-      -- Extract parameter types and names from OptionallyTypedName
-      namedParams = [MkOptionallyNamedType emptyAnno (Just name) ty
-                    | MkOptionallyTypedName _ name (Just ty) _ <- otns]
-      returnType = case mGivethSig of
-        Just (MkGivethSig _ ty) -> ty
-        Nothing -> error "Wrapper should always have a return type"
-      -- Build function type using Fun constructor
-      funcType = Fun emptyAnno namedParams returnType
-      checkInfo = MkCheckInfo
-        { names = [wrapperName]
-        , checkEntity = KnownTerm funcType Computable  -- Wrappers are computable functions
-        }
-  in checkInfo
-
--- | Check if a DECIDE has any TYPICALLY defaults in its GIVEN clause.
--- Also ensures we don't generate wrappers for wrappers (infinite chain prevention).
-hasTypicallyDefaults :: Decide Resolved -> Bool
-hasTypicallyDefaults (MkDecide _ (MkTypeSig _ givenSig _) (MkAppForm _ funcName _ _) _) =
-  let defaults = extractTypicallyDefaultsFromGiven givenSig
-      hasDefaults = not (null defaults)
-      result = not (isPresumptiveWrapper funcName) && hasDefaults
-  in result
-
--- | Check if a function name is already a presumptive wrapper
--- (starts with "'presumptive ")
-isPresumptiveWrapper :: Resolved -> Bool
-isPresumptiveWrapper resolved =
-  let origName = getOriginal resolved
-      origRawName = rawName (getName origName)
-      nameText = rawNameToText origRawName
-  in "'presumptive " `Text.isPrefixOf` nameText
-
--- | Extract TYPICALLY defaults from a GivenSig
-extractTypicallyDefaultsFromGiven :: GivenSig Resolved -> [(Resolved, Expr Resolved)]
-extractTypicallyDefaultsFromGiven (MkGivenSig _ otns) =
-  [ (n, expr)
-  | MkOptionallyTypedName _ n _ (Just expr) <- otns
-  ]
-
--- | Generate a presumptive wrapper for a single DECIDE with TYPICALLY defaults
-generateWrapper :: Anno -> Decide Resolved -> Check (TopDecl Resolved)
-generateWrapper ann (MkDecide _ typeSig@(MkTypeSig _ givenSig mReturnType) appForm bodyExpr) = do
-  let MkAppForm _ funcName _ _ = appForm
-
-  -- Create the wrapper function name: 'presumptive <original-name>' with fresh unique
-  wrapperName <- makePresumptiveName funcName
-
-  -- Convert GIVEN parameters to MAYBE-wrapped versions with fresh Def nodes
-  let MkGivenSig gsAnn otns = givenSig
-  paramsWithMapping <- mapM wrapParameterWithFreshName otns
-  let (maybeOtns, paramMappings) = unzip paramsWithMapping
-  let maybeGivenSig = MkGivenSig gsAnn maybeOtns
-
-  -- Wrap return type with MAYBE (if it exists)
-  maybeReturnType <- case mReturnType of
-    Nothing -> pure Nothing
-    Just (MkGivethSig gsAnn' ty) -> do
-      wrappedType <- wrapTypeWithMaybe ty
-      pure $ Just (MkGivethSig gsAnn' wrappedType)
-
-  let maybeTypeSig = MkTypeSig (getAnno typeSig) maybeGivenSig maybeReturnType
-
-  -- Generate CONSIDER expression for each parameter
-  -- paramMappings is [(wrapperParam, origParam)], otns is [OptionallyTypedName]
-  -- We need [(wrapperParam, OptionallyTypedName)]
-  let paramPairs = [(wrapperParam, otn) | ((wrapperParam, _origParam), otn) <- zip paramMappings otns]
-  considerExpr <- generateConsiderChain funcName paramPairs bodyExpr
-
-  -- Create wrapper DECIDE
-  let wrapperArgs = map fst paramMappings
-  let wrapperAppForm = MkAppForm (getAnno appForm) wrapperName wrapperArgs Nothing
-  let wrapperDecide = MkDecide ann maybeTypeSig wrapperAppForm considerExpr
-
-  pure $ Decide ann wrapperDecide
-
--- | Create a presumptive wrapper name with a fresh unique
--- This ensures the wrapper has a distinct identity from the original function
-makePresumptiveName :: Resolved -> Check Resolved
-makePresumptiveName resolved = do
-  let origName = getOriginal resolved
-      origRawName = rawName (getName origName)
-      newText = "'presumptive " <> rawNameToText origRawName <> "'"
-      newRawName = NormalName newText
-      newName = MkName (getAnno origName) newRawName
-  -- Generate a fresh unique for the wrapper
-  freshU <- newUnique
-  pure $ Def freshU newName
-
--- | Create a fresh Def node for a wrapper parameter
--- This ensures parameters in the wrapper have proper scoping
-makeFreshParamName :: Resolved -> Check Resolved
-makeFreshParamName resolved = do
-  let origName = getOriginal resolved
-  freshU <- newUnique
-  pure (Def freshU origName)  -- Give wrapper params their own uniques
-
--- | Create an explicit Ref to the original function
--- This ensures the wrapper calls the original function, not itself
-makeOriginalFuncRef :: Resolved -> Resolved
-makeOriginalFuncRef resolved =
-  let origName = getOriginal resolved
-      u = getUnique resolved
-  in Ref origName u origName  -- Create a Ref that explicitly points to the original
-
-resolvedToRef :: Resolved -> Resolved
-resolvedToRef (Ref n u o) = Ref n u o
-resolvedToRef (Def u n) = Ref n u n
-resolvedToRef (OutOfScope u n) = OutOfScope u n
-
--- | Wrap a parameter with MAYBE type and create fresh Def node for wrapper
--- Returns (wrapped parameter, mapping from new wrapper param to original param)
-wrapParameterWithFreshName :: OptionallyTypedName Resolved -> Check (OptionallyTypedName Resolved, (Resolved, Resolved))
-wrapParameterWithFreshName (MkOptionallyTypedName ann origName mType _typically) = do
-  -- Create a fresh Def node for this parameter in the wrapper's context
-  freshName <- makeFreshParamName origName
-
-  -- Wrap the type with MAYBE
-  wrappedType <- case mType of
-    Nothing -> pure Nothing
-    Just ty -> Just <$> wrapTypeWithMaybe ty
-
-  let wrappedParam = MkOptionallyTypedName ann freshName wrappedType Nothing
-  pure (wrappedParam, (freshName, origName))
-
--- | Wrap a type with MAYBE
-wrapTypeWithMaybe :: Type' Resolved -> Check (Type' Resolved)
-wrapTypeWithMaybe ty = do
-  let ann = getAnno ty
-  let maybeTypeRef = Ref maybeName maybeUnique maybeName
-  pure $ TyApp ann maybeTypeRef [ty]
-
--- | Generate nested CONSIDER expressions to unwrap parameters and apply defaults
--- For each parameter:
---   CONSIDER param
---     WHEN NOTHING  -> (if has TYPICALLY: use default, else: return NOTHING)
---     WHEN (JUST x) -> (continue with unwrapped x)
--- Takes: funcName, [(wrapperParam, originalParam)], bodyExpr
-generateConsiderChain :: Resolved -> [(Resolved, OptionallyTypedName Resolved)] -> Expr Resolved -> Check (Expr Resolved)
-generateConsiderChain funcName paramPairs bodyExpr = do
-  let ann = getAnno bodyExpr
-
-  -- Get JUST and NOTHING constructors
-  let justCtor = Ref justName justUnique justName
-  let nothingCtor = Ref nothingName nothingUnique nothingName
-
-  -- Create an explicit Ref to the original function
-  -- This ensures we call the original, not the wrapper, even if both are in scope
-  let origFuncRef = makeOriginalFuncRef funcName
-
-  -- Build the innermost expression: JUST (origFunc arg1_unwrapped arg2_unwrapped ...)
-  -- The unwrapped variable names will be created in buildConsiderForParam
-  -- For now, collect the original parameter names to pass to the original function
-  let origParamVars = [origName | (_, MkOptionallyTypedName _ origName _ _) <- paramPairs]
-  let funcCall = case origParamVars of
-        [] -> Var ann origFuncRef
-        _  -> App ann origFuncRef (map (Var ann . resolvedToRef) origParamVars)
-  let innermostExpr = App ann justCtor [funcCall]
-
-  -- Build CONSIDER chain from innermost outward
-  -- Process parameters in reverse order so we build from inside out
-  considerExpr <- foldM (buildConsiderForParam ann justCtor nothingCtor) innermostExpr (reverse paramPairs)
-
-  pure considerExpr
-
--- | Build a CONSIDER expression for a single parameter
--- Takes (wrapperParam, originalParam) tuple
-buildConsiderForParam :: Anno -> Resolved -> Resolved -> Expr Resolved
-                      -> (Resolved, OptionallyTypedName Resolved) -> Check (Expr Resolved)
-buildConsiderForParam ann justCtor nothingCtor innerExpr (wrapperParam, MkOptionallyTypedName paramAnn origParamName _mType mDefault) = do
-  -- Create a fresh variable name for the JUST pattern (unwrapped value)
-  unwrappedName <- makeUnwrappedVarName origParamName
-
-  -- Build the NOTHING branch
-  nothingBranch <- case mDefault of
-    Just defaultExpr -> do
-      -- Has TYPICALLY default: use it
-      -- WHEN NOTHING -> (continue with default value substituted)
-      -- Substitute the origParamName (used in innerExpr) with the default value
-      let substitutedExpr = substituteVar origParamName defaultExpr innerExpr
-      pure $ MkBranch ann (When ann (PatApp ann nothingCtor [])) substitutedExpr
-    Nothing -> do
-      -- No TYPICALLY default: return NOTHING (Unknown)
-      pure $ MkBranch ann (When ann (PatApp ann nothingCtor [])) (Var ann nothingCtor)
-
-  -- Build the JUST branch
-  -- WHEN (JUST x) -> innerExpr (with origParamName bound to unwrapped x)
-  let justPattern = PatApp ann justCtor [PatVar ann unwrappedName]
-  let substitutedInner = substituteVar origParamName (Var ann (resolvedToRef unwrappedName)) innerExpr
-  let justBranch = MkBranch ann (When ann justPattern) substitutedInner
-
-  -- Build CONSIDER expression
-  -- Scrutinize the wrapper parameter (the MAYBE-wrapped one from the GIVEN clause)
-  let scrutinee = Var ann (resolvedToRef wrapperParam)
-  pure $ Consider paramAnn scrutinee [nothingBranch, justBranch]
-
--- | Create an unwrapped variable name from a Resolved name
--- For a parameter 'age', create 'age_unwrapped' or similar
-makeUnwrappedVarName :: Resolved -> Check Resolved
-makeUnwrappedVarName resolved = do
-  let origName = getOriginal resolved
-      origRawName = rawName (getName origName)
-      newText = rawNameToText origRawName <> "_unwrapped"
-      newRawName = NormalName newText
-      newName = MkName (getAnno origName) newRawName
-  freshU <- newUnique
-  pure (Def freshU newName)
-
--- | Substitute a variable with an expression throughout an expression tree
--- This is a simple substitution that doesn't handle capture-avoiding properly
--- For our use case (fresh variable names), this should be sufficient
-substituteVar :: Resolved -> Expr Resolved -> Expr Resolved -> Expr Resolved
-substituteVar target replacement = go
-  where
-    targetUnique = getUnique target
-    go expr = case expr of
-      Var _ v | getUnique v == targetUnique -> replacement
-      Var ann v -> Var ann v
-      App ann f args -> App ann f (map go args)
-      Lam ann givens body -> Lam ann givens (go body)  -- TODO: check shadowing
-      And ann e1 e2 -> And ann (go e1) (go e2)
-      Or ann e1 e2 -> Or ann (go e1) (go e2)
-      Implies ann e1 e2 -> Implies ann (go e1) (go e2)
-      Plus ann e1 e2 -> Plus ann (go e1) (go e2)
-      Minus ann e1 e2 -> Minus ann (go e1) (go e2)
-      Times ann e1 e2 -> Times ann (go e1) (go e2)
-      DividedBy ann e1 e2 -> DividedBy ann (go e1) (go e2)
-      Equals ann e1 e2 -> Equals ann (go e1) (go e2)
-      Leq ann e1 e2 -> Leq ann (go e1) (go e2)
-      Geq ann e1 e2 -> Geq ann (go e1) (go e2)
-      Lt ann e1 e2 -> Lt ann (go e1) (go e2)
-      Gt ann e1 e2 -> Gt ann (go e1) (go e2)
-      IfThenElse ann cond then' else' -> IfThenElse ann (go cond) (go then') (go else')
-      Consider ann scrut branches -> Consider ann (go scrut) (map goBranch branches)
-      other -> other  -- For literals, etc.
-
-    goBranch (MkBranch ann lhs rhs) = MkBranch ann lhs (go rhs)

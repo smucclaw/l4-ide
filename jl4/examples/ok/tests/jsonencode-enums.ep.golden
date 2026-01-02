@@ -1,0 +1,54 @@
+-- Test JSONENCODE for ONE OF (enum) types
+
+-- Test 1: Simple enum
+DECLARE Color IS ONE OF Red
+                        Green
+                        Blue
+
+DECIDE myColor IS Red
+DECIDE encodedColor IS JSONENCODE myColor
+
+-- Test 2: Enum with spaces in name (backtick syntax)
+DECLARE LatinName IS ONE OF `Solanum tuberosum`
+                            `Ipomoea batatas`
+                            `Daucus carota`
+
+DECIDE myPlant IS `Solanum tuberosum`
+DECIDE encodedPlant IS JSONENCODE myPlant
+
+-- Test 3: List of enums
+DECIDE colorList IS LIST Red, Green, Blue
+DECIDE encodedColorList IS JSONENCODE colorList
+
+-- Test 4: Record containing enum field
+DECLARE Vegetable HAS
+  latinName IS A LatinName
+  commonName IS A STRING
+
+DECIDE potato IS Vegetable WITH
+  latinName IS `Solanum tuberosum`
+  commonName IS "Potato"
+
+DECIDE encodedPotato IS JSONENCODE potato
+
+-- Test 5: Record with list of enums
+DECLARE Garden HAS
+  name IS A STRING
+  plants IS A LIST OF LatinName
+
+DECIDE myGarden IS Garden WITH
+  name IS "Kitchen Garden"
+  plants IS LIST `Solanum tuberosum`, `Daucus carota`
+
+DECIDE encodedGarden IS JSONENCODE myGarden
+
+GIVETH AN EITHER STRING Garden
+decodedGarden MEANS JSONDECODE encodedGarden
+
+#EVAL encodedColor
+#EVAL encodedPlant
+#EVAL encodedColorList
+#EVAL encodedPotato
+#EVAL myGarden
+#EVAL encodedGarden
+#EVAL decodedGarden

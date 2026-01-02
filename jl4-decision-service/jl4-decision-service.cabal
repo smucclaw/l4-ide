@@ -47,8 +47,12 @@ library
   exposed-modules:
     Application
     Backend.Api
+    Backend.BooleanDecisionQuery
     Backend.CodeGen
+    Backend.DecisionQueryPlan
     Backend.DirectiveFilter
+    Backend.FunctionSchema
+    Backend.GraphVizRender
     Backend.Jl4
     Examples
     Options
@@ -70,8 +74,10 @@ library
     extra,
     directory,
     http-client,
+    http-types,
     filepath,
     jl4-core,
+    jl4-query-plan,
     jl4-lsp,
     jl4-websessions,
     lens,
@@ -79,6 +85,7 @@ library
     openapi3,
     optics,
     optparse-applicative,
+    process,
     scientific,
     servant >=0.20.2 && <0.21,
     servant-client,
@@ -117,7 +124,11 @@ test-suite jl4-decision-service-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+    AskOrderingSpec
+    DiskLoadingSpec
     Paths_jl4_decision_service
+    BooleanDecisionQuerySpec
+    DecisionQueryCacheKeySpec
     IntegrationSpec
     SchemaSpec
     TestData
@@ -134,6 +145,8 @@ test-suite jl4-decision-service-test
     containers ^>=0.6.7,
     stm ^>=2.5.1.0,
     base >=4.7 && <5,
+    directory,
+    filepath,
     hspec,
     http-client,
     jl4-decision-service,

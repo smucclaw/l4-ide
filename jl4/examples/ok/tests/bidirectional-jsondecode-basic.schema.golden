@@ -1,0 +1,13 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "s": {
+            "$ref": "#/$defs/STRING"
+        }
+    },
+    "required": [
+        "s"
+    ],
+    "title": "decodePerson",
+    "type": "object"
+}

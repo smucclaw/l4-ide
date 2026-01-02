@@ -1,5 +1,9 @@
 # Default Values
 
+> **Note:** This document is a conceptual design exploration. The `TYPICALLY` keyword mentioned herein
+> is on the L4 roadmap but **not yet implemented**. See [TYPICALLY-DEFAULTS-SPEC.md](todo/TYPICALLY-DEFAULTS-SPEC.md)
+> for the current specification and implementation status.
+
 How many ways can we architect a Boolean any/all tree?
 
 ## Running Example

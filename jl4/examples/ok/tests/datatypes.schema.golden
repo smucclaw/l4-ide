@@ -1,0 +1,28 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "a": {
+            "type": "string"
+        },
+        "b": {
+            "type": "string"
+        },
+        "f": {
+            "$ref": "#/$defs/b"
+        },
+        "list": {
+            "items": {
+                "$ref": "#/$defs/a"
+            },
+            "type": "array"
+        }
+    },
+    "required": [
+        "a",
+        "b",
+        "f",
+        "list"
+    ],
+    "title": "map",
+    "type": "object"
+}

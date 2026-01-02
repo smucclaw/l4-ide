@@ -5,7 +5,7 @@ IMPORT daydate
 
 §§ `Core Constants`
 
-`Grant Date` MEANS DATE OF 3, 9, 2025
+`Grant Date` MEANS Date 3 9 2025
 `Performance Period Years` MEANS 10
 `Performance End Date` MEANS `years after` `Performance Period Years` `Grant Date`
 `Reference Stock Price` MEANS 334.09
@@ -348,7 +348,7 @@ GIVETH A BOOLEAN
 
 `Elon Musk` MEANS `Award Participant` WITH
                     `Name` IS "Elon Reeve Musk"
-                    `Birthdate` IS DATE OF 28, 6, 1971
+                    `Birthdate` IS Date 28 6 1971
 
 GIVEN `award state` IS A `CEO Award State`
 GIVETH A PROVISION OF `Award Participant`, `Award Action`
@@ -485,14 +485,12 @@ GIVEN n IS A NUMBER
       d IS A DATE
 GIVETH A DATE
 `years after` MEANS
-    Date WITH
-        day IS d's day PLUS FLOOR days
-        month IS d's month
-        year IS year
+    Date newDay newMonth newYear
     WHERE
-        year MEANS d's year PLUS FLOOR n
-        days MEANS `Days in year` year 
-                        TIMES (n MINUS FLOOR n)
+        newYear MEANS (DATE_YEAR d) PLUS FLOOR n
+        fractionalDays MEANS (`Days in year` newYear) TIMES (n MINUS FLOOR n)
+        newDay MEANS (DATE_DAY d) PLUS FLOOR fractionalDays
+        newMonth MEANS DATE_MONTH d
 
 GIVEN `item` IS A NUMBER
       `list` IS A LIST OF NUMBER
@@ -697,7 +695,7 @@ GIVETH A STRING
 -- Termination scenarios
 #EVAL `Immediate Vesting Applies` `Example Award State Terminated`
 #EVAL `Forfeiture Applies` `Example Award State Terminated`
-#EVAL `Holding Period Met` `Grant Date` (DATE OF 1, 1, 2032)
+#EVAL `Holding Period Met` `Grant Date` (Date 1 1 2032)
 
 -- Regulatory provision traces - High Performance
 #TRACE `Eligible Service Requirement` `Example Award State Active` AT 0 WITH

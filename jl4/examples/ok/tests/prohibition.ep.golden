@@ -1,0 +1,129 @@
+-- Tests for prohibition modals: SHANT and MUST NOT
+
+DECLARE Person IS ONE OF Alice, Bob
+DECLARE Action IS ONE OF
+  drink
+  smoke
+  gamble HAS amount IS A NUMBER
+
+-- Test SHANT (prohibition)
+noSmoking MEANS
+  PARTY Alice
+  SHANT smoke
+  WITHIN 30
+
+-- Test MUST NOT (alternative prohibition syntax)
+noDrinking MEANS
+  PARTY Bob
+  MUST NOT drink
+  WITHIN 30
+
+-- Test SHANT with PROVIDED clause
+limitedGambling MEANS
+  PARTY Alice
+  SHANT gamble amt PROVIDED amt > 100
+  WITHIN 30
+
+-- Test MUST NOT with HENCE/LEST
+noSmokingWithConsequences MEANS
+  PARTY Alice
+  MUST NOT smoke
+  WITHIN 30
+  LEST PARTY Alice MUST drink WITHIN 10
+
+-- Test BREACH terminal clause (simple form)
+noSmokingExplicitBreach MEANS
+  PARTY Alice
+  MUST NOT smoke
+  WITHIN 30
+  LEST BREACH
+
+-- Test BREACH BY party (explicit party form)
+noSmokingBreachByAlice MEANS
+  PARTY Alice
+  MUST NOT smoke
+  WITHIN 30
+  LEST BREACH BY Alice
+
+-- Test BREACH BY party BECAUSE reason (full form)
+noSmokingBreachWithReason MEANS
+  PARTY Alice
+  MUST NOT smoke
+  WITHIN 30
+  LEST BREACH BY Alice BECAUSE "violated no-smoking policy"
+
+-- Test BREACH BECAUSE reason (without BY - reason only)
+noSmokingBreachReasonOnly MEANS
+  PARTY Alice
+  MUST NOT smoke
+  WITHIN 30
+  LEST BREACH BECAUSE "health code violation"
+
+-- Test BREACH in HENCE position (unusual but valid for isomorphism)
+-- A MAY permission where exercising it is itself a breach condition
+breachInHence MEANS
+  PARTY Alice
+  MAY smoke
+  WITHIN 30
+  HENCE BREACH BY Alice BECAUSE "smoking is always a breach"
+
+-- Test MAY DO (permission - existing functionality)
+mayDrink MEANS
+  PARTY Bob
+  MAY DO drink
+  WITHIN 30
+
+-- Test MUST DO (obligation - existing functionality)
+mustDrink MEANS
+  PARTY Alice
+  MUST DO drink
+  WITHIN 30
+
+-- =============================================================================
+-- Behavior Tests using #TRACE
+-- =============================================================================
+-- NOTE: As of Phase 1-3 implementation, only PARSING is complete.
+-- The evaluator does not yet distinguish MUST vs MUST NOT/SHANT semantics.
+-- Current behavior: SHANT/MUST NOT are parsed but evaluated as MUST.
+-- TODO: Implement Phase 4+ to make prohibition semantics work correctly.
+
+-- Test 1: SHANT compliance - party does NOT do prohibited action (should be OK)
+-- Expected (future): FULFILLED (no breach because Alice didn't smoke)
+-- Current: Shows as pending MUST obligation (semantics not implemented)
+#TRACE noSmoking AT 0 WITH
+
+-- Test 2: SHANT breach - party DOES the prohibited action
+-- Expected (future): BREACH (Alice smoked, violating prohibition)
+-- Current: FULFILLED (incorrectly treats smoking as fulfilling obligation)
+#TRACE noSmoking AT 0 WITH
+  PARTY 15
+
+-- Test 3: MUST NOT compliance - party does NOT do prohibited action
+-- Expected (future): FULFILLED
+-- Current: Shows as pending MUST obligation
+DOES Alice AT smoke #TRACE noDrinking AT 0 WITH
+
+-- Test 4: MUST NOT breach - party DOES the prohibited action
+-- Expected (future): BREACH (Bob drank, violating prohibition)
+-- Current: FULFILLED (incorrectly treats drinking as fulfilling obligation)
+#TRACE noDrinking AT 0 WITH
+  PARTY 10
+
+-- Test 5: MUST obligation - party fulfills obligation
+-- Expected: FULFILLED (correct - this is obligation semantics)
+DOES Bob AT drink #TRACE mustDrink AT 0 WITH
+  PARTY 15
+
+-- Test 6: MUST obligation - party fails to fulfill obligation
+-- Expected: Shows pending obligation (deadline not reached)
+DOES Alice AT drink #TRACE mustDrink AT 0 WITH
+
+-- Test 7: MAY permission - party exercises permission
+-- Expected: FULFILLED (exercised permission is fine)
+#TRACE mayDrink AT 0 WITH
+  PARTY 15
+
+-- Test 8: MAY permission - party does not exercise permission
+-- Expected: FULFILLED (not exercising permission is also fine)
+-- Current: Shows pending (MAY semantics also need refinement)
+DOES Bob AT drink #TRACE mayDrink AT 0 WITH

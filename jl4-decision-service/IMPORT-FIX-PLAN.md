@@ -202,7 +202,7 @@ curl -X POST "http://localhost:8080/functions/evaluate%20cosmetics%20claim/evalu
 
 1. ✅ Implement changes in branch `mengwong/decision-imports`
 2. ⏳ Run `cabal test all` to ensure no regressions
-3. ✅ Test with thailand-cosmetics modular files - **SUCCESS!**
+3. ✅ Test with multi-file modular L4 projects - **SUCCESS!**
 4. ⏳ Update documentation
 5. ⏳ Submit PR for review
 
@@ -232,22 +232,17 @@ curl -X POST "http://localhost:8080/functions/evaluate%20cosmetics%20claim/evalu
 Successfully tested with modular cosmetics-api.l4 using IMPORT statements:
 
 ```bash
-# Server started with all three modules:
---sourcePaths ~/src/legalese/thailand-cosmetics/l4-encodings/anthropicClient.l4
---sourcePaths ~/src/legalese/thailand-cosmetics/l4-encodings/promptLibrary.l4
---sourcePaths ~/src/legalese/thailand-cosmetics/l4-encodings/cosmetics-api.l4
-
-# API call succeeded:
-curl -X POST "http://localhost:8080/functions/evaluate%20cosmetics%20claim/evaluation" \
-  -H "Content-Type: application/json" \
-  -d '{"fnEvalBackend": "jl4", "fnArguments": {"claim_text": "This cream treats acne", "test_type": 3}}'
+# Server started with multiple modules:
+--sourcePaths path/to/file1.l4
+--sourcePaths path/to/file2.l4
+--sourcePaths path/to/main.l4
 ```
 
-**Result**: Full evaluation trace returned successfully. No IMPORT errors. All imported functions (`callClaude`, `promptMedicinalTherapeutic`, `buildHeaders`, etc.) resolved correctly.
+**Result**: Full evaluation trace returned successfully. No IMPORT errors. All imported functions resolved correctly.
 
 ### Why It Works
 
-By using the actual source file path (e.g., `/Users/mengwong/src/legalese/thailand-cosmetics/l4-encodings/cosmetics-api.l4`) instead of a fake filename derived from the function name:
+By using the actual source file path instead of a fake filename derived from the function name:
 
 1. `oneshotL4ActionAndErrors` sets `curDir` to the actual source directory
 2. The module resolver looks for imports relative to that directory
@@ -412,35 +407,28 @@ Now automatically discovers all dependencies before loading files.
 
 ### Test Results
 
-Successfully tested with modular cosmetics-api.l4:
+Successfully tested with multi-file L4 projects:
 
 ```bash
 # Server started with ONLY the main file
 cd ~/src/smucclaw/l4-ide && cabal run jl4-decision-service-exe -- \
   --port 8080 \
   --serverName http://localhost:8080/ \
-  --sourcePaths ~/src/legalese/thailand-cosmetics/l4-encodings/cosmetics-api.l4
+  --sourcePaths path/to/main.l4
 
 # Server output:
-* Discovering dependencies for: /Users/mengwong/src/legalese/thailand-cosmetics/l4-encodings/cosmetics-api.l4
-  Found imports: ["anthropicClient","promptLibrary"]
-* Discovering dependencies for: /Users/mengwong/src/legalese/thailand-cosmetics/l4-encodings/anthropicClient.l4
+* Discovering dependencies for: /path/to/main.l4
+  Found imports: ["module1","module2"]
+* Discovering dependencies for: /path/to/module1.l4
   Found imports: []
-* Discovering dependencies for: /Users/mengwong/src/legalese/thailand-cosmetics/l4-encodings/promptLibrary.l4
+* Discovering dependencies for: /path/to/module2.l4
   Found imports: []
 * Auto-discovered 3 total files (including imports)
 ** Loaded l4 functions from disk: 1
-["evaluate cosmetics claim"]
+["my_function"]
 ```
 
-```bash
-# API call succeeded
-curl -X POST "http://localhost:8080/functions/evaluate%20cosmetics%20claim/evaluation" \
-  -H "Content-Type: application/json" \
-  -d '{"fnEvalBackend":"jl4","fnArguments":{"claim_text":"treats acne","test_type":3}}'
-```
-
-**Result**: Full evaluation trace returned successfully. All imported functions (`callClaude`, `promptMedicinalTherapeutic`, `buildHeaders`, `buildRequest`, `createMessage`, etc.) resolved and executed correctly.
+**Result**: Full evaluation trace returned successfully. All imported functions resolved and executed correctly.
 
 ### Benefits
 
@@ -457,16 +445,16 @@ curl -X POST "http://localhost:8080/functions/evaluate%20cosmetics%20claim/evalu
 
 ```bash
 cabal run jl4-decision-service-exe -- \
-  --sourcePaths ~/src/legalese/thailand-cosmetics/l4-encodings/anthropicClient.l4 \
-  --sourcePaths ~/src/legalese/thailand-cosmetics/l4-encodings/promptLibrary.l4 \
-  --sourcePaths ~/src/legalese/thailand-cosmetics/l4-encodings/cosmetics-api.l4
+  --sourcePaths path/to/module1.l4 \
+  --sourcePaths path/to/module2.l4 \
+  --sourcePaths path/to/main.l4
 ```
 
 **After** (automatic discovery):
 
 ```bash
 cabal run jl4-decision-service-exe -- \
-  --sourcePaths ~/src/legalese/thailand-cosmetics/l4-encodings/cosmetics-api.l4
+  --sourcePaths path/to/main.l4
 ```
 
 Both commands now work identically, with the second being more convenient.

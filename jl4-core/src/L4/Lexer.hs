@@ -53,25 +53,19 @@ data AnnoType
 data TDirectives
   = TLazyEvalDirective
   | TLazyEvalTraceDirective
-  | TPresumptiveEvalDirective       -- ^ #PEVAL - honors TYPICALLY defaults via Maybe-wrapped args
-  | TPresumptiveEvalTraceDirective  -- ^ #PEVALTRACE - trace + honors defaults
   | TCheckDirective
   | TContractDirective
   | TAssertDirective
-  | TPresumptiveAssertDirective     -- ^ #PASSERT - assert with Maybe-wrapped args
   | TDirectiveContinue  -- ^ '# ' at start of line continues a directive
   deriving stock (Eq, Generic, Ord, Show)
   deriving anyclass (ToExpr, NFData)
 
 directives :: Map Text TDirectives
 directives = Map.fromList
-  [ ("PEVALTRACE", TPresumptiveEvalTraceDirective)
-  , ("PEVAL"     , TPresumptiveEvalDirective)
-  , ("EVALTRACE", TLazyEvalTraceDirective)
+  [ ("EVALTRACE", TLazyEvalTraceDirective)
   , ("EVAL"     , TLazyEvalDirective)
   , ("CHECK"    , TCheckDirective)
   , ("TRACE"    , TContractDirective)
-  , ("PASSERT"  , TPresumptiveAssertDirective)
   , ("ASSERT"   , TAssertDirective)
   ]
 
@@ -170,6 +164,9 @@ data TKeywords
   | TKDoes
   | TKMust
   | TKMay
+  | TKShant
+  | TKBreach
+  | TKBecause
   | TKProvided
   | TKWithin
   | TKHence
@@ -204,7 +201,10 @@ data TKeywords
   | TKEnv
   | TKConcat
   | TKAs
-  | TKTypically
+  | TKLet
+  | TKIn
+  | TKBe
+  | TKMean
   deriving stock (Eq, Generic, Ord, Show)
   deriving anyclass (ToExpr, NFData)
 
@@ -245,7 +245,10 @@ keywords = Map.fromList
   , ("DO"         , TKDo         )
   , ("DOES"       , TKDoes       )
   , ("MUST"       , TKMust       )
-  , ("MAY"        , TKMay       )
+  , ("MAY"        , TKMay        )
+  , ("SHANT"      , TKShant      )
+  , ("BREACH"     , TKBreach     )
+  , ("BECAUSE"    , TKBecause    )
   , ("PROVIDED"   , TKProvided   )
   , ("WITHIN"     , TKWithin     )
   , ("HENCE"      , TKHence      )
@@ -280,7 +283,10 @@ keywords = Map.fromList
   , ("ENV"        , TKEnv        )
   , ("CONCAT"     , TKConcat     )
   , ("AS"         , TKAs         )
-  , ("TYPICALLY"  , TKTypically  )
+  , ("LET"        , TKLet        )
+  , ("IN"         , TKIn         )
+  , ("BE"         , TKBe         )
+  , ("MEAN"       , TKMean       )
   ]
 
 data TOperators

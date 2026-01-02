@@ -1,27 +1,34 @@
 # Decision Service Backend
 
-Exposes certain pre-compiled JL4 programs for use by an LLM AI, via the Tool Calling / Function Calling API.
+Exposes L4 programs for use by LLM AI agents via the Tool Calling / Function Calling API.
 
-The current MVP exposes a couple of example programs which are hardcoded.
+## Current Features
 
-In a future iteration the backend will
+The decision service supports multiple ways to load and manage L4 functions:
 
-1. dynamically load the available programs from the `jl4/examples` directory
-2. parse and run an L4 program `POST`ed in as part of the API call itself.
+1. **Hardcoded examples** - A few demonstration functions are built-in for testing (see `src/Examples.hs`)
+2. **Dynamic loading from disk** - L4 files can be loaded at startup via `--sourcePaths` (see "Loading L4 Functions" below)
+3. **Runtime function management** - Functions can be created, updated, and deleted via REST API while the service is running
+
+## Planned Features
+
+- Improved error messages and validation feedback
+- Enhanced trace visualization options
+- Additional evaluation backends beyond JL4
 
 ## Usage
 
 Run the decision service backend locally from the project root:
 
 ```sh
-> cabal run jl4-decision-service-exe -- --port 8081 --serverName http://localhost:8081/ --sourcePaths doc/tutorial-code/
+> cabal run jl4-decision-service-exe -- --port 8081 --serverName http://localhost:8081/ --sourcePaths jl4/experiments/britishcitizen5.l4 --sourcePaths jl4/experiments/parking.l4
 ```
 
 or run it from the sub-directory:
 
 ```sh
 > cd jl4-decision-service
-> cabal run jl4-decision-service-exe -- --port 8081 --serverName http://localhost:8081/ --sourcePaths ../doc/tutorial-code/
+> cabal run jl4-decision-service-exe -- --port 8081 --serverName http://localhost:8081/ --sourcePaths ../jl4/experiments/britishcitizen5.l4 --sourcePaths ../jl4/experiments/parking.l4
 ```
 
 Then try executing a few things [swagger-ui at http://localhost:8081/swagger-ui/](http://localhost:8081/swagger-ui/).
@@ -36,9 +43,43 @@ These functions can be evaluated with user-given arguments.
 
 - `GET    /functions`: Get the function signature of all stored functions
 - `GET    /functions/<name>`: Get the full function signature of the function `<name>`
-- `PUT    /functions/<name>`: Update the function `<name>`
-- `POST   /functions/<name>`: Create a new function `<name>`
+- `PUT    /functions/<name>`: Update the function `<name>` with new L4 code
+- `POST   /functions/<name>`: Create a new function `<name>` with L4 code
 - `DELETE /functions/<name>`: Delete function `<name>`
+
+#### Runtime Function Management
+
+Functions can be dynamically created and updated while the service is running. To create a new function, POST to `/functions/<name>` with a JSON payload containing the function declaration and L4 implementation:
+
+```bash
+curl -X POST 'http://localhost:8081/functions/my_new_function' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "declaration": {
+      "type": "function",
+      "function": {
+        "name": "my_new_function",
+        "description": "A dynamically created function",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "number",
+              "description": "Input value"
+            }
+          },
+          "required": ["x"]
+        },
+        "supportedBackends": ["jl4"]
+      }
+    },
+    "implementation": {
+      "jl4": "GIVEN x IS A NUMBER\nGIVETH A NUMBER\nDECIDE my_new_function IS x + 1"
+    }
+  }'
+```
+
+Use `PUT` to update an existing function with the same JSON structure. Use `DELETE` to remove a function from the service.
 
 ### Evaluation
 
@@ -47,15 +88,79 @@ Function evaluation is provided via the endpoints:
 - `POST  /functions/<name>/evaluation`: Evaluate the function `<name>` with given arguments.
 - `POST  /functions/<name>/batch`: Evaluate the function `<name>` with an array of arguments.
 
+### Visualizing Evaluation Traces
+
+New to L4? You can now see how your logic flows by asking the decision service for a GraphViz trace. Start with `trace=full` so the engine records every lazy step, then toggle `graphviz=true` to include DOT output plus ready-made image links in the JSON response:
+
+```bash
+curl -s \
+  'http://localhost:8081/functions/compute_qualifies/evaluation?trace=full&graphviz=true' \
+  -H 'Content-Type: application/json' \
+  -d '{"fnEvalBackend":"JL4","fnArguments":{"walks": true, "drinks": true, "eats": true}}' \
+  | jq '.contents.graphviz'
+```
+
+`graphviz` is now an object with three helpful fields:
+
+```jsonc
+"graphviz": {
+  "dot": "digraph evaluation_trace { ... }",
+  "png": "/functions/compute_qualifies/evaluation/trace.png",
+  "svg": "/functions/compute_qualifies/evaluation/trace.svg"
+}
+```
+
+If you prefer pictures, the service can render the same trace as PNG or SVG when GraphViz’ `dot` binary is on your path (e.g. `brew install graphviz` or `apt-get install graphviz`). Use the dedicated image endpoints and pipe the response straight into a file:
+
+```bash
+# PNG
+curl -s \
+  'http://localhost:8081/functions/compute_qualifies/evaluation/trace.png?trace=full' \
+  -H 'Content-Type: application/json' \
+  -d '{"fnEvalBackend":"JL4","fnArguments":{"walks": true}}' > qualifies.png
+
+# SVG (easy to open in a browser)
+curl -s \
+  'http://localhost:8081/functions/compute_qualifies/evaluation/trace.svg?trace=full' \
+  -H 'Content-Type: application/json' \
+  -d '{"fnEvalBackend":"JL4","fnArguments":{"walks": true}}' > qualifies.svg
+```
+
+The PNG/SVG endpoints simply rerun the same evaluation on demand, keeping the primary `/evaluation` response pure (no cached blobs to invalidate, no race conditions to juggle). If the image routes ever feel slow you can always fall back to the `dot` text and render locally.
+
+Batch runs get the same treatment. When you add `graphviz=true` to `/functions/<name>/batch?trace=full`, each case in the response includes an `@graphviz` object alongside its usual outputs. That makes it easy to loop over results and stash every trace for later inspection:
+
+```bash
+curl -s \
+  'http://localhost:8081/functions/compute_qualifies/batch?trace=full&graphviz=true' \
+  -H 'Content-Type: application/json' \
+  -d '{"outcomes":["result"],"cases":[{"@id":1,"walks":true,"drinks":true,"eats":true}]}' \
+  | jq '.cases[0]["@graphviz"].dot'
+```
+
+Pro tip: feed the DOT text into `dot -Tsvg -o trace.svg` or tools like `xdot` whenever you want an interactive walkthrough of the evaluation tree.
+
+#### What am I Looking At?
+
+An evaluation trace is a play-by-play of the lazy evaluator—the closest thing we have to “explainable AI” for deterministic, rule-based logic. Each node represents an expression that actually ran, annotated with its final value (or error). Edges connect parents to the sub-expressions they forced, so you can read the graph top-down like a conversation: “we were evaluating `qualifies` → we needed `walks`, `drinks`, `eats` → that led to these conditionals…”. Because L4 is lazy, branches that never execute simply don’t appear—great for spotting short-circuit behavior or skipped `CONSIDER` branches. When the trace exporter adds metadata (expression text, timestamp, active file, result) you can match a dot file back to the exact REPL command or API call that produced it. If you’ve seen function-call graphs or data-flow diagrams before, think of this as a trimmed, execution-order version focused only on the choices the interpreter actually had to make. The resulting diagram is the receipt for every conclusion the engine reached.
+
+#### Example Trace Visualization
+
+Here's what a typical trace looks like—this one shows a scoring calculation with conditionals and pattern matching:
+
+![Example trace visualization](../doc/images/trace-showcase.png)
+
+More examples are available in `doc/images/trace-*.png` (short-circuit evaluation, recursion, CONSIDER branches, etc.).
+
 ## Loading L4 Functions
 
-Two functions are hardcoded by default; see [src/Backend/Examples.hs](src/Backend/Examples.hs) for details.
+Two functions are hardcoded by default; see [src/Examples.hs](src/Examples.hs) for details.
 
 Other functions can be loaded at start time using the `--sourcePaths` command line option.
 
 The argument to the option is a directory or individual `.l4` files.
 
-For each `.l4` file the loader first looks for in-source annotations. Functions are exposed when their leading comment uses the `@export` (or `@export default`) syntax:
+For each `.l4` file, if a matching `.yaml` sidecar exists, it is used as the function declaration. Otherwise, functions are exposed when their leading comment uses the `@export` (or `@export default`) syntax:
 
 ```l4
 @export default Demo entry point for the API
@@ -64,7 +169,7 @@ GIVETH A Number
 demo input MEANS input + 1
 ```
 
-Parameter descriptions can still use inline `@desc` annotations as shown above. If no `@export` annotations are found, the loader falls back to a matching `.yaml` metadata file.
+Parameter descriptions can still use inline `@desc` annotations as shown above. Files with neither a `.yaml` sidecar nor any `@export` decides are ignored (this avoids implicitly exposing helper functions).
 
 Use `@export default …` when you want a module-level “main” function. The decision service exposes every `@export` decide clause at `/functions/{name}`, but when a client loads a module without naming a function (for example by UUID or when uploading raw `.l4` code), the service chooses the decide marked `default`. If no default export exists, it falls back to the client-provided name or the first remaining export.
 

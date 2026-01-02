@@ -34,14 +34,17 @@ library
     bytestring,
     placeholder,
     cassava,
+    process,
     containers,
     data-default,
     deepseq,
     dlist,
     extra,
+    fgl,
     file-io,
     filepath,
     generics-sop,
+    graphviz,
     hw-fingertree,
     logict,
     lsp-types,
@@ -76,25 +79,34 @@ library
     L4.Annotation
     L4.Citations
     L4.Desugar
+    L4.DirectiveFilter
     L4.Evaluate.Operators
     L4.Evaluate.ValueLazy
     L4.EvaluateLazy
     L4.EvaluateLazy.Machine
     L4.EvaluateLazy.ContractFrame
+    L4.EvaluateLazy.GraphViz2
+    L4.EvaluateLazy.GraphVizOptions
     L4.EvaluateLazy.Trace
     L4.ExactPrint
     L4.Export
     L4.FindDefinition
+    L4.JsonSchema
     L4.Lexer
+    L4.Mixfix
     L4.Names
     L4.Nlg
     L4.Parser
     L4.Parser.Anno
+    L4.Parser.MixfixRegistry
     L4.Parser.ResolveAnnotation
     L4.Parser.SrcSpan
     L4.ParserCombinators
     L4.Print
     L4.Syntax
+    L4.TemporalContext
+    L4.TemporalGit
+    L4.TracePolicy
     L4.Transform
     L4.TypeCheck
     L4.TypeCheck.Annotation
@@ -106,3 +118,21 @@ library
     L4.Utils.IntervalMap
     L4.Utils.RevList
     L4.Utils.Ratio
+
+test-suite jl4-core-test
+  import: defaults
+  type: exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is: Spec.hs
+  other-modules:
+    Paths_jl4_core
+    TemporalContextSpec
+    MixfixParserSpec
+  build-tool-depends:
+    hspec-discover:hspec-discover
+  build-depends:
+    base,
+    hspec,
+    jl4-core,
+    text,
+    time

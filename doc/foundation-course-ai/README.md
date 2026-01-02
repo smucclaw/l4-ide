@@ -31,7 +31,7 @@ Defining enums, records, lists, and optional types in the WorkPass Authority dom
 
 ### [Module 2 — Functions Using GIVEN / GIVETH / MEANS](module-2-functions.md)
 
-Reusable logic, date arithmetic, Booleans, and numeric calculations with natural language syntax.
+Reusable logic, date arithmetic, Booleans, numeric calculations, string operations (SPLIT, TRIM, CONTAINS, etc.), and math functions (SQRT, EXPONENT) with natural language syntax.
 
 ### [Module 3 — Control Flow: CONSIDER, WHEN, BRANCH](module-3-control-flow.md)
 
@@ -39,7 +39,7 @@ Decision tables, branching logic, and deterministic modeling patterns with patte
 
 ### [Module 4 — Lists, MAYBE, and Higher-Order Helpers](module-4-lists-maybe.md)
 
-Working with lists, MAYBE values, map, filter, any, JUST, NOTHING.
+Working with lists, MAYBE values, dictionaries (key-value storage), map, filter, any, JUST, NOTHING.
 
 ### [Module 5 — WPA Eligibility Pipeline](module-5-wpa-pipeline.md)
 
@@ -82,6 +82,8 @@ cabal run jl4-cli -- jl4/examples/ok/factorial.l4
 # Run your own file
 cabal run jl4-cli -- your-file.l4
 ```
+
+> Need reproducible outputs for functions such as `TODAY` or `NOW`? Pass `--fixed-now=YYYY-MM-DDTHH:MM:SSZ` to `jl4-cli` or set the `JL4_FIXED_NOW` environment variable before running the command to pin the evaluation clock.
 
 ### VS Code Extension
 
@@ -133,7 +135,7 @@ Ready for production-grade legal systems? The [Advanced Course](../advanced-cour
 **Advanced Language Features:**
 
 - **Module A3:** Temporal logic for multi-temporal reasoning [WIP]
-- **Module A5:** Rebuttable presumptions with TYPICALLY keyword [WIP]
+- **Module A5:** Rebuttable presumptions with TYPICALLY keyword [ROADMAP - not yet implemented]
 
 **Integration & Deployment:**
 

@@ -1,0 +1,69 @@
+{
+    "$defs": {
+        "Choice": {
+            "oneOf": [
+                {
+                    "properties": {
+                        "payload": {
+                            "$ref": "#/$defs/a"
+                        },
+                        "tag": {
+                            "const": "Left"
+                        }
+                    },
+                    "required": [
+                        "tag",
+                        "payload"
+                    ],
+                    "type": "object"
+                },
+                {
+                    "properties": {
+                        "payload": {
+                            "$ref": "#/$defs/b"
+                        },
+                        "tag": {
+                            "const": "Right"
+                        }
+                    },
+                    "required": [
+                        "tag",
+                        "payload"
+                    ],
+                    "type": "object"
+                }
+            ]
+        }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "a": {
+            "type": "string"
+        },
+        "b": {
+            "type": "string"
+        },
+        "c": {
+            "type": "string"
+        },
+        "choice": {
+            "$ref": "#/$defs/Choice"
+        },
+        "left": {
+            "$ref": "#/$defs/c"
+        },
+        "right": {
+            "$ref": "#/$defs/c"
+        }
+    },
+    "required": [
+        "a",
+        "b",
+        "c",
+        "left",
+        "right",
+        "choice"
+    ],
+    "title": "choose",
+    "type": "object"
+}

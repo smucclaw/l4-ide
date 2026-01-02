@@ -25,8 +25,7 @@ module L4.EvaluateLazy.Machine
 , pattern ValBool
 -- * Constants exposed for the eager evaluator
 , builtinBinOps
--- * TYPICALLY defaults extraction (for Decision Service)
-, extractTypicallyDefaults
+, writeJSONToReferences
 )
 where
 
@@ -44,16 +43,29 @@ import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.Vector as Vector
+import qualified Data.Text.Read as TR
+import qualified Data.Char as Char
+import Data.Fixed (Pico)
+import Data.Time (UTCTime)
+import qualified Data.Time as Time
+import qualified Data.Time.Format as TimeFormat
 import L4.Annotation
 import L4.Evaluate.Operators
 import L4.Evaluate.ValueLazy
+import L4.TemporalContext (EvalClause (..), TemporalContext (..), applyEvalClauses)
+import L4.TemporalGit
+import Language.LSP.Protocol.Types (uriToFilePath)
 import L4.Parser.SrcSpan (SrcRange)
 import L4.Print
 import L4.Syntax
 import qualified L4.TypeCheck as TypeCheck
 import L4.TypeCheck.Types (EntityInfo)
 import L4.EvaluateLazy.ContractFrame
+import L4.TracePolicy (TracePolicy)
+import qualified L4.TracePolicy as TracePolicy
 import L4.Utils.Ratio
+import Text.Read (readMaybe)
+import qualified Data.Scientific as Sci
 
 data Frame =
     BinOp1 BinOp {- -} (Expr Resolved) Environment
@@ -83,10 +95,37 @@ data Frame =
   | TernaryBuiltin1 TernaryBuiltinFun Reference Reference  -- evaluating 1st arg, has refs to 2nd and 3rd
   | TernaryBuiltin2 TernaryBuiltinFun WHNF Reference       -- has 1st arg value, evaluating 2nd, has ref to 3rd
   | TernaryBuiltin3 TernaryBuiltinFun WHNF WHNF            -- has 1st and 2nd arg values, evaluating 3rd
+  -- Temporal context scoping for EVAL AS OF SYSTEM TIME
+  | EvalAsOfSystemTime1 Reference Environment
+  | EvalAsOfSystemTime2 TemporalContext
+  -- Temporal context scoping for EVAL UNDER VALID TIME
+  | EvalUnderValidTime1 Reference Environment
+  | EvalUnderValidTime2 TemporalContext
+  -- Temporal context scoping for rules effective time
+  | EvalUnderRulesEffectiveAt1 Reference Environment
+  | EvalUnderRulesEffectiveAt2 TemporalContext
+  -- Temporal context scoping for rules encoded time
+  | EvalUnderRulesEncodedAt1 Reference Environment
+  | EvalUnderRulesEncodedAt2 TemporalContext
+  -- Temporal context scoping for commit override
+  | EvalUnderCommit1 Reference Environment
+  | EvalUnderCommit2 TemporalContext
+  -- Temporal context scoping for retroactive shorthand
+  | EvalRetroactiveTo1 Reference Environment
+  | EvalRetroactiveTo2 TemporalContext
+  -- Temporal iteration frames
+  | EverBetweenFrame TemporalContext WHNF Time.Day Time.Day Integer
+  | AlwaysBetweenFrame TemporalContext WHNF Time.Day Time.Day Integer
+  | WhenLastFrame TemporalContext WHNF Time.Day
+  | WhenNextFrame TemporalContext WHNF Time.Day Time.Day
+  | ValueAtFrame TemporalContext
   | UpdateThunk Reference
   | ContractFrame ContractFrame
   | ConcatFrame [WHNF] {- -} [Expr Resolved] Environment -- accumulated values, remaining exprs, env
   | AsStringFrame -- AsString frame
+  | ToStringDate1 Reference Reference -- evaluating DATE day, have month & year refs
+  | ToStringDate2 Rational Reference  -- have day, evaluating month, have year ref
+  | ToStringDate3 Rational Rational   -- have day & month, evaluating year
   | JsonEncodeListFrame [Text] {- -} Reference Bool -- accumulated JSON strings, tail reference, expecting_tail (True = next value is tail, False = next value is element)
   | JsonEncodeNestedFrame [Text] {- -} Reference -- accumulated JSON strings, tail reference (waiting for element encoding to complete)
   | JsonEncodeConstructorFrame [(Text, Text)] Text [(Text, Reference)] -- accumulated (fieldName, encodedJson) pairs, current field name, remaining (fieldName, fieldRef) pairs to encode
@@ -126,6 +165,11 @@ data Machine a where
   Allocate' :: Allocation t -> Machine t
   NewUnique :: Machine Unique
   GetEntityInfo :: Machine EntityInfo
+  GetEvalTime :: Machine UTCTime
+  GetTemporalContext :: Machine TemporalContext
+  PutTemporalContext :: TemporalContext -> Machine ()
+  GetModuleUri :: Machine NormalizedUri
+  GetTracePolicy :: Machine TracePolicy
   PokeThunk :: Reference
     -> (ThreadId -> Thunk -> (Thunk, a))
     -> Machine a
@@ -253,12 +297,46 @@ forwardExpr env = \ case
   App _ann n [] ->
     expectTerm env n >>= EvalRef
   App ann n es@(_ : _) -> do
-    let expectedType = case getAnno ann of
-          Anno {extra = Extension {resolvedInfo = Just (TypeInfo ty _)}} -> Just ty
-          _ -> Nothing
-    rs <- traverse (`allocate_` env) es
-    PushFrame (App1 rs expectedType)
-    ForwardExpr env (Var emptyAnno n)
+    -- Handle temporal context override: EVAL AS OF SYSTEM TIME <serial> <thunk>
+    -- The second argument is evaluated under the mutated temporal context.
+    case getUnique n of
+      uniq | uniq == TypeCheck.evalAsOfSystemTimeUnique
+           , [dateExpr, thunkExpr] <- es -> do
+               thunkRef <- allocate_ thunkExpr env
+               PushFrame (EvalAsOfSystemTime1 thunkRef env)
+               ForwardExpr env dateExpr
+      uniq | uniq == TypeCheck.evalUnderValidTimeUnique
+           , [dateExpr, thunkExpr] <- es -> do
+               thunkRef <- allocate_ thunkExpr env
+               PushFrame (EvalUnderValidTime1 thunkRef env)
+               ForwardExpr env dateExpr
+      uniq | uniq == TypeCheck.evalUnderRulesEffectiveAtUnique
+           , [dateExpr, thunkExpr] <- es -> do
+               thunkRef <- allocate_ thunkExpr env
+               PushFrame (EvalUnderRulesEffectiveAt1 thunkRef env)
+               ForwardExpr env dateExpr
+      uniq | uniq == TypeCheck.evalUnderRulesEncodedAtUnique
+           , [dateExpr, thunkExpr] <- es -> do
+               thunkRef <- allocate_ thunkExpr env
+               PushFrame (EvalUnderRulesEncodedAt1 thunkRef env)
+               ForwardExpr env dateExpr
+      uniq | uniq == TypeCheck.evalUnderCommitUnique
+           , [commitExpr, thunkExpr] <- es -> do
+               thunkRef <- allocate_ thunkExpr env
+               PushFrame (EvalUnderCommit1 thunkRef env)
+               ForwardExpr env commitExpr
+      uniq | uniq == TypeCheck.evalRetroactiveToUnique
+           , [dateExpr, thunkExpr] <- es -> do
+               thunkRef <- allocate_ thunkExpr env
+               PushFrame (EvalRetroactiveTo1 thunkRef env)
+               ForwardExpr env dateExpr
+      _ -> do
+        let expectedType = case getAnno ann of
+              Anno {extra = Extension {resolvedInfo = Just (TypeInfo ty _)}} -> Just ty
+              _ -> Nothing
+        rs <- traverse (`allocate_` env) es
+        PushFrame (App1 rs expectedType)
+        ForwardExpr env (Var emptyAnno n)
   AppNamed ann n [] _ ->
     ForwardExpr env (App ann n [])
   AppNamed _ann _n _nes Nothing ->
@@ -295,6 +373,10 @@ forwardExpr env = \ case
     env' <- evalRecLocalDecls env ds
     let combinedEnv = Map.union env' env
     ForwardExpr combinedEnv e
+  LetIn _ann ds e -> do
+    env' <- evalRecLocalDecls env ds
+    let combinedEnv = Map.union env' env
+    ForwardExpr combinedEnv e
   Regulative _ann (MkObligation _ party action due followup lest) ->
     Backward (ValObligation env (Left party) action (Left due) (fromMaybe fulfilExpr followup) lest)
   Event _ann ev ->
@@ -316,6 +398,11 @@ forwardExpr env = \ case
   AsString _ann e -> do
     PushFrame AsStringFrame
     ForwardExpr env e
+  Breach _ann mParty mReason -> do
+    -- Explicit breach terminal clause - immediately produces a breach value
+    mPartyRef <- traverse (\p -> allocate_ p env) mParty
+    mReasonRef <- traverse (\r -> allocate_ r env) mReason
+    Backward (ValBreached (ExplicitBreach mPartyRef mReasonRef))
 
 backward :: WHNF -> Machine Config
 backward val = WithPoppedFrame $ \ case
@@ -390,9 +477,56 @@ backward val = WithPoppedFrame $ \ case
         PushFrame (TernaryBuiltin1 fn arg2 z)
         EvalRef arg1
       ValFulfilled -> Backward ValFulfilled
+      ValBreached r -> Backward (ValBreached r)
       ValAssumed r ->
         StuckOnAssumed r -- TODO: we can do better here
       res -> InternalException (RuntimeTypeError $ "expected a function but found: " <> prettyLayout res)
+  -- Evaluate thunk under overridden system time (serial number)
+  Just (EvalAsOfSystemTime1 thunkRef _env) -> do
+    serial <- expectNumber val
+    originalCtx <- GetTemporalContext
+    let newCtx = applyEvalClauses [AsOfSystemTime (serialToUTCTime serial)] originalCtx
+    PutTemporalContext newCtx
+    PushFrame (EvalAsOfSystemTime2 originalCtx)
+    EvalRef thunkRef
+  Just (EvalUnderValidTime1 thunkRef _env) -> do
+    serial <- expectNumber val
+    originalCtx <- GetTemporalContext
+    let newCtx = applyEvalClauses [UnderValidTime (Time.utctDay (serialToUTCTime serial))] originalCtx
+    PutTemporalContext newCtx
+    PushFrame (EvalUnderValidTime2 originalCtx)
+    EvalRef thunkRef
+  Just (EvalUnderRulesEffectiveAt1 thunkRef _env) -> do
+    serial <- expectNumber val
+    originalCtx <- GetTemporalContext
+    let retroDay = Time.utctDay (serialToUTCTime serial)
+    newCtx <- resolveRulesEffectiveContext originalCtx retroDay
+    PutTemporalContext newCtx
+    PushFrame (EvalUnderRulesEffectiveAt2 originalCtx)
+    EvalRef thunkRef
+  Just (EvalUnderRulesEncodedAt1 thunkRef _env) -> do
+    serial <- expectNumber val
+    originalCtx <- GetTemporalContext
+    let newCtx = applyEvalClauses [UnderRulesEncodedAt (serialToUTCTime serial)] originalCtx
+    PutTemporalContext newCtx
+    PushFrame (EvalUnderRulesEncodedAt2 originalCtx)
+    EvalRef thunkRef
+  Just (EvalUnderCommit1 thunkRef _env) -> do
+    commitTxt <- expectString val
+    originalCtx <- GetTemporalContext
+    newCtx <- resolveCommitContext originalCtx commitTxt
+    PutTemporalContext newCtx
+    PushFrame (EvalUnderCommit2 originalCtx)
+    EvalRef thunkRef
+  Just (EvalRetroactiveTo1 thunkRef _env) -> do
+    serial <- expectNumber val
+    originalCtx <- GetTemporalContext
+    let retroDay = Time.utctDay (serialToUTCTime serial)
+    retroCtx <- resolveRulesEffectiveContext originalCtx retroDay
+    let newCtx = applyEvalClauses [AsOfSystemTime (Time.UTCTime retroDay (Time.secondsToDiffTime 0))] retroCtx
+    PutTemporalContext newCtx
+    PushFrame (EvalRetroactiveTo2 originalCtx)
+    EvalRef thunkRef
   Just (IfThenElse1 e2 e3 env) ->
     case val of
       ValBool True -> ForwardExpr env e2
@@ -507,6 +641,92 @@ backward val = WithPoppedFrame $ \ case
   -- Ternary builtin handling: got all 3 args
   Just (TernaryBuiltin3 fn val1 val2) -> do
     runTernaryBuiltin fn val1 val2 val
+  -- Temporal context scoping: restore original context after thunk evaluation
+  Just (EvalAsOfSystemTime2 originalCtx) -> do
+    PutTemporalContext originalCtx
+    Backward val
+  Just (EvalUnderValidTime2 originalCtx) -> do
+    PutTemporalContext originalCtx
+    Backward val
+  Just (EvalUnderRulesEffectiveAt2 originalCtx) -> do
+    PutTemporalContext originalCtx
+    Backward val
+  Just (EvalUnderRulesEncodedAt2 originalCtx) -> do
+    PutTemporalContext originalCtx
+    Backward val
+  Just (EvalUnderCommit2 originalCtx) -> do
+    PutTemporalContext originalCtx
+    Backward val
+  Just (EvalRetroactiveTo2 originalCtx) -> do
+    PutTemporalContext originalCtx
+    Backward val
+  Just (EverBetweenFrame originalCtx predicate endDay currentDay step) -> do
+    PutTemporalContext originalCtx
+    case boolView val of
+      Just True -> Backward (valBool True)
+      Just False ->
+        if currentDay == endDay
+          then Backward (valBool False)
+          else do
+            let nextDay = Time.addDays (fromIntegral step) currentDay
+            let ctxForDay = applyEvalClauses [UnderValidTime nextDay, UnderRulesEffectiveAt nextDay] originalCtx
+            PutTemporalContext ctxForDay
+            PushFrame (EverBetweenFrame originalCtx predicate endDay nextDay step)
+            applyDatePredicate predicate nextDay
+      Nothing ->
+        InternalException $ RuntimeTypeError "EVER BETWEEN expects predicate returning BOOLEAN"
+  Just (AlwaysBetweenFrame originalCtx predicate endDay currentDay step) -> do
+    PutTemporalContext originalCtx
+    case boolView val of
+      Just False -> Backward (valBool False)
+      Just True ->
+        if currentDay == endDay
+          then Backward (valBool True)
+          else do
+            let nextDay = Time.addDays (fromIntegral step) currentDay
+            let ctxForDay = applyEvalClauses [UnderValidTime nextDay, UnderRulesEffectiveAt nextDay] originalCtx
+            PutTemporalContext ctxForDay
+            PushFrame (AlwaysBetweenFrame originalCtx predicate endDay nextDay step)
+            applyDatePredicate predicate nextDay
+      Nothing ->
+        InternalException $ RuntimeTypeError "ALWAYS BETWEEN expects predicate returning BOOLEAN"
+  Just (WhenLastFrame originalCtx predicate currentDay) -> do
+    PutTemporalContext originalCtx
+    case boolView val of
+      Just True -> do
+        dateRef <- AllocateValue (ValDate currentDay)
+        Backward $ ValConstructor TypeCheck.justRef [dateRef]
+      Just False -> do
+        if dayNumberFromDay currentDay <= 0
+          then Backward $ ValConstructor TypeCheck.nothingRef []
+          else do
+            let nextDay = Time.addDays (-1) currentDay
+            let ctxForDay = applyEvalClauses [UnderValidTime nextDay, UnderRulesEffectiveAt nextDay] originalCtx
+            PutTemporalContext ctxForDay
+            PushFrame (WhenLastFrame originalCtx predicate nextDay)
+            applyDatePredicate predicate nextDay
+      Nothing ->
+        InternalException $ RuntimeTypeError "WHEN LAST expects predicate returning BOOLEAN"
+  Just (WhenNextFrame originalCtx predicate currentDay limitDay) -> do
+    PutTemporalContext originalCtx
+    case boolView val of
+      Just True -> do
+        dateRef <- AllocateValue (ValDate currentDay)
+        Backward $ ValConstructor TypeCheck.justRef [dateRef]
+      Just False -> do
+        if currentDay >= limitDay
+          then Backward $ ValConstructor TypeCheck.nothingRef []
+          else do
+            let nextDay = Time.addDays 1 currentDay
+            let ctxForDay = applyEvalClauses [UnderValidTime nextDay, UnderRulesEffectiveAt nextDay] originalCtx
+            PutTemporalContext ctxForDay
+            PushFrame (WhenNextFrame originalCtx predicate nextDay limitDay)
+            applyDatePredicate predicate nextDay
+      Nothing ->
+        InternalException $ RuntimeTypeError "WHEN NEXT expects predicate returning BOOLEAN"
+  Just (ValueAtFrame originalCtx) -> do
+    PutTemporalContext originalCtx
+    Backward val
   Just (ConcatFrame acc [] _env) -> do
     -- All arguments evaluated, concatenate them
     runConcat (reverse (val : acc))
@@ -517,6 +737,17 @@ backward val = WithPoppedFrame $ \ case
   Just AsStringFrame -> do
     -- Convert the value to string
     runAsString val
+  Just (ToStringDate1 monthRef yearRef) -> do
+    dayNum <- expectNumber val
+    PushFrame (ToStringDate2 dayNum yearRef)
+    EvalRef monthRef
+  Just (ToStringDate2 dayNum yearRef) -> do
+    monthNum <- expectNumber val
+    PushFrame (ToStringDate3 dayNum monthNum)
+    EvalRef yearRef
+  Just (ToStringDate3 dayNum monthNum) -> do
+    yearNum <- expectNumber val
+    runDateToString dayNum monthNum yearNum
   Just (JsonEncodeListFrame acc tailRef expectingTail) -> do
     -- Handle the value we got back
     if expectingTail
@@ -639,17 +870,26 @@ backwardContractFrame val = \ case
       -- now earlier, it is  due within 2, i.e. 3 - (3 - 2)
       newDue = due' - (stamp - time')
     if stamp > deadline
-      -- NOTE: the deadline has passed. there are now two options:
-      -- 1. there's no lest clause, i.e. this is an obligation. We return a breach.
-      -- 2. there's a lest clause, i.e. this is an external choice. We continue by reducing
-      --    the lest clause
-      then case lest of
-        Nothing -> do
-          -- NOTE: this is not too nice, but not wanting this would require to change `App1` to take MaybeEvaluated's
-          partyR <- either (`allocate_` env) AllocateValue party
-          Backward (ValBreached (DeadlineMissed ev'party ev'act stamp partyR act deadline))
-        Just lestFollowup -> AllocateValue ev'time
-          >>= continueWithFollowup env lestFollowup events
+      -- NOTE: the deadline has passed. What happens depends on the deontic modal:
+      -- MUST/DO: deadline passed without action = BREACH (or LEST if specified)
+      -- MUST NOT: deadline passed without prohibited action = FULFILLED (or HENCE if specified)
+      -- MAY: deadline passed without exercising permission = FULFILLED (or HENCE if specified)
+      then case act.modal of
+        DMustNot ->
+          -- Prohibition was RESPECTED: the prohibited action didn't occur before deadline
+          -- Continue with HENCE (followup), which defaults to FULFILLED
+          AllocateValue ev'time >>= continueWithFollowup env followup events
+        DMay ->
+          -- Permission was NOT EXERCISED: that's fine, continue with HENCE/FULFILLED
+          AllocateValue ev'time >>= continueWithFollowup env followup events
+        _ -> -- DMust, DDo: deadline passed = failure
+          case lest of
+            Nothing -> do
+              -- NOTE: this is not too nice, but not wanting this would require to change `App1` to take MaybeEvaluated's
+              partyR <- either (`allocate_` env) AllocateValue party
+              Backward (ValBreached (DeadlineMissed ev'party ev'act stamp partyR act deadline))
+            Just lestFollowup -> AllocateValue ev'time
+              >>= continueWithFollowup env lestFollowup events
       else do
         -- NOTE: we have observed the event and do not branch, either, the
         -- only thing that may now happen is that we try a new event. Hence we
@@ -685,8 +925,28 @@ backwardContractFrame val = \ case
         "expected environment but found: " <> prettyLayout val
   Contract10 ScrutinizeActions {..} ->
     case val of
-      ValBool True -> AllocateValue time
-        >>= continueWithFollowup (env `Map.union` henceEnv) followup events
+      ValBool True ->
+        -- Action matched! What happens depends on the deontic modal:
+        -- MUST/MAY/DO: action done = success → continue with HENCE (followup)
+        -- MUST NOT: action done = VIOLATION → continue with LEST (or BREACH if no LEST)
+        case act.modal of
+          DMustNot -> case lest of
+            -- Prohibition violated: action was done, trigger LEST clause
+            Just lestFollowup -> AllocateValue time
+              >>= continueWithFollowup (env `Map.union` henceEnv) lestFollowup events
+            -- No LEST clause: immediate breach
+            Nothing -> do
+              -- Extract timestamp from time (which has been updated to event time)
+              stamp <- assertTime time
+              -- Allocate references for the WHNF values
+              ev'partyRef <- AllocateValue ev'party
+              partyRef <- AllocateValue party
+              -- For prohibition breach, we use the action time as "deadline"
+              -- since the action should never have happened
+              Backward (ValBreached (DeadlineMissed ev'partyRef ev'act stamp partyRef act stamp))
+          -- MUST, MAY, DO: action done = success
+          _ -> AllocateValue time
+            >>= continueWithFollowup (env `Map.union` henceEnv) followup events
       ValBool False -> do
         newTime <- AllocateValue time
         tryNextEvent ScrutinizeEvents {party = Right party, time = newTime, ..} events
@@ -792,31 +1052,6 @@ backwardContractFrame val = \ case
 maybeEvaluate :: Environment -> MaybeEvaluated -> Machine Config
 maybeEvaluate env = either (ForwardExpr env) Backward
 
--- | Extract TYPICALLY defaults from a GivenSig
--- Returns a map from parameter Unique to the default expression
-extractTypicallyDefaults :: GivenSig Resolved -> Map Unique (Expr Resolved)
-extractTypicallyDefaults (MkGivenSig _ann otns) =
-  Map.fromList
-    [ (getUnique n, expr)
-    | MkOptionallyTypedName _ann n _mty (Just expr) <- otns
-    ]
-
--- NOTE: The following functions were part of runtime wrapper generation (Option A).
--- They are kept for reference but are not used since we're implementing
--- compile-time wrapper generation (Option B) in TypeCheck.hs instead.
-{-
--- | Generate a "presumptive" wrapper name for a function
-generatePresumptiveName :: Resolved -> Machine Resolved
-generatePresumptiveName original = do
-  let originalName = getName original
-      originalRawName = rawName originalName
-      presumptiveName = case originalRawName of
-        NormalName t -> MkName emptyAnno (NormalName ("presumptive " <> t))
-        QualifiedName mods t -> MkName emptyAnno (QualifiedName mods ("presumptive " <> t))
-        PreDef t -> MkName emptyAnno (PreDef ("presumptive " <> t))
-  def presumptiveName
--}
-
 matchGivens :: GivenSig Resolved -> Frame -> [Reference] -> Machine Environment
 matchGivens (MkGivenSig _ann otns) f es = do
   let others = foldMap (either (const []) (\x -> [fst x]) . TypeCheck.isQuantifier) otns
@@ -907,10 +1142,22 @@ expectString = \ case
   ValString f -> pure f
   v -> InternalException $ RuntimeTypeError $ "expected a STRING but got: " <> prettyLayout v
 
+expectDateValue :: WHNF -> Machine Time.Day
+expectDateValue = \ case
+  ValDate d -> pure d
+  ValNumber serial -> pure (Time.utctDay (serialToUTCTime serial))
+  v -> InternalException $ RuntimeTypeError $ "expected a DATE but got: " <> prettyLayout v
+
 expectInteger :: BinOp -> Rational -> Machine Integer
 expectInteger op n = do
   case isInteger n of
     Nothing -> UserException (NotAnInteger op n)
+    Just i -> pure i
+
+expectWhole :: Text -> Rational -> Machine Integer
+expectWhole label n =
+  case isInteger n of
+    Nothing -> InternalException $ RuntimeTypeError label
     Just i -> pure i
 
 -- | Extract field names from a constructor's function type
@@ -947,6 +1194,19 @@ extractFieldNamesAndTypes ty = case ty of
         Just name -> Just (nameToText (TypeCheck.getName name), fieldType)
         Nothing -> Nothing
 
+-- | Check if a constructor type is nullary (no arguments) and returns the given type
+-- Used for enum (ONE OF) type detection
+isNullaryConstructorReturning :: Type' Resolved -> Resolved -> Bool
+isNullaryConstructorReturning conType targetTypeRef = case conType of
+  -- Strip forall quantifier if present
+  Forall _ _ innerTy -> isNullaryConstructorReturning innerTy targetTypeRef
+  -- If it's a function type, it's not nullary
+  Fun {} -> False
+  -- If it's directly a type application, check if it matches our target
+  TyApp _ tyRef [] -> getUnique tyRef == getUnique targetTypeRef
+  -- Other cases: not a match
+  _ -> False
+
 -- | Encode an L4 value to JSON string
 encodeValueToJson :: WHNF -> Machine Text
 encodeValueToJson = \case
@@ -964,6 +1224,7 @@ encodeValueToJson = \case
     | nameToText (TypeCheck.getName conRef) == "NOTHING" -> pure "null"
     | nameToText (TypeCheck.getName conRef) == "TRUE" -> pure "true"
     | nameToText (TypeCheck.getName conRef) == "FALSE" -> pure "false"
+    | otherwise -> pure $ "\"" <> escapeJson (nameToText (TypeCheck.getName conRef)) <> "\""
   -- Note: For constructors with fields, we can't encode them directly within encodeValueToJson
   -- because we need to evaluate (force) each field reference. This requires frames.
   -- So constructors are handled in runBuiltin where we can push frames.
@@ -1069,8 +1330,29 @@ jsonValueToWHNFTyped jsonValue ty = do
                     ]
 
               case matchingConstructor of
-                Nothing ->
-                  jsonValueToWHNF jsonValue
+                Nothing -> do
+                  -- No record constructor found. Check if this is an enum type
+                  -- by looking for nullary constructors that return this type.
+                  case jsonValue of
+                    Aeson.String enumName -> do
+                      -- Look for a nullary constructor with this name that returns tyRef
+                      let enumConstructor = listToMaybe
+                            [ (unique, name)
+                            | (unique, (name, TypeCheck.KnownTerm conType Constructor)) <- constructors
+                            , nameToText (TypeCheck.getName name) == enumName
+                            , isNullaryConstructorReturning conType tyRef
+                            ]
+                      case enumConstructor of
+                        Just (enumUnique, enumConName) -> do
+                          -- Found a matching enum constructor
+                          let enumRef = Def enumUnique enumConName
+                          pure $ ValConstructor enumRef []
+                        Nothing ->
+                          -- No matching enum constructor, fall back to generic decoding
+                          jsonValueToWHNF jsonValue
+                    _ ->
+                      -- Not a string, fall back to generic decoding
+                      jsonValueToWHNF jsonValue
                 Just (conUnique, conName, conType) -> do
                   -- Construct a Resolved reference for the constructor
                   let conRef = Def conUnique conName
@@ -1199,21 +1481,68 @@ runConcat vals = do
   Backward $ ValString (Text.concat strings)
 
 runAsString :: WHNF -> Machine Config
-runAsString val = do
-  case val of
-    ValNumber n ->
-      -- Convert number to string
-      -- If it's an integer, show without decimal point
-      -- Otherwise, show as decimal
-      let str = if denominator n == 1
-                then Text.pack $ show (numerator n)
-                else Text.pack $ show (fromRational n :: Double)
-      in Backward $ ValString str
-    ValString s ->
-      -- Already a string, just return it
-      Backward $ ValString s
-    _ -> InternalException $ RuntimeTypeError $
-      "AS STRING can only convert NUMBER or STRING to STRING, but found: " <> prettyLayout val
+runAsString = coerceToString
+
+coerceToString :: WHNF -> Machine Config
+coerceToString val = case val of
+  ValNumber n ->
+    Backward $ ValString (prettyRatio n)
+  ValString s ->
+    Backward $ ValString s
+  ValBool b ->
+    Backward $ ValString (if b then "TRUE" else "FALSE")
+  ValDate day ->
+    Backward $ ValString (formatDateIso day)
+  ValConstructor con fields
+    | isDateConstructor con -> do
+        case fields of
+          [dayRef, monthRef, yearRef] -> do
+            PushFrame (ToStringDate1 monthRef yearRef)
+            EvalRef dayRef
+          _ ->
+            InternalException $ RuntimeTypeError "DATE values must have three fields (day, month, year) for string conversion"
+    | otherwise ->
+        incompatible
+  _ ->
+    incompatible
+  where
+    incompatible =
+      InternalException $ RuntimeTypeError $
+        "AS STRING/TOSTRING can only convert NUMBER, BOOLEAN, DATE, or STRING to STRING, but found: " <> prettyLayout val
+
+formatDateIso :: Time.Day -> Text
+formatDateIso day =
+  let (year, month, dayOfMonth) = Time.toGregorian day
+  in formatDateParts (fromIntegral year) (fromIntegral month) (fromIntegral dayOfMonth)
+
+isDateConstructor :: Resolved -> Bool
+isDateConstructor con =
+  Text.toUpper (nameToText (TypeCheck.getName con)) == "DATE"
+
+runDateToString :: Rational -> Rational -> Rational -> Machine Config
+runDateToString dayNum monthNum yearNum = do
+  dayInt <- expectIntegerNamed "day" dayNum
+  monthInt <- expectIntegerNamed "month" monthNum
+  yearInt <- expectIntegerNamed "year" yearNum
+  Backward $ ValString (formatDateParts yearInt monthInt dayInt)
+
+expectIntegerNamed :: Text -> Rational -> Machine Integer
+expectIntegerNamed label n =
+  case isInteger n of
+    Just i -> pure i
+    Nothing ->
+      InternalException $ RuntimeTypeError $
+        "Expected an integer " <> label <> " but got: " <> prettyRatio n
+
+formatDateParts :: Integer -> Integer -> Integer -> Text
+formatDateParts year month day =
+  pad 4 year <> "-" <> pad 2 month <> "-" <> pad 2 day
+  where
+    pad width v =
+      let raw = Text.show v
+      in if Text.length raw >= width
+           then raw
+           else Text.replicate (width - Text.length raw) "0" <> raw
 
 runBuiltin :: WHNF -> UnaryBuiltinFun -> Maybe (Type' Resolved) -> Machine Config
 runBuiltin es op mTy = do
@@ -1261,9 +1590,12 @@ runBuiltin es op mTy = do
                   else
                     let fieldPairs = zip fieldNames fields
                     in case fieldPairs of
-                      [] ->
-                        -- Nullary constructor (no fields)
-                        Backward $ ValString "{}"
+                      [] -> do
+                        -- Nullary constructor (no fields) - encode as JSON string with constructor name
+                        -- This handles enum (ONE OF) values
+                        let conName = nameToText (TypeCheck.getName conRef)
+                        jsonStr <- encodeValueToJson (ValString conName)
+                        Backward $ ValString jsonStr
                       ((fn, fr):rest) -> do
                         -- Start frame-based encoding of fields
                         -- The frame stores: accumulated pairs, current field name being encoded, remaining pairs
@@ -1321,6 +1653,26 @@ runBuiltin es op mTy = do
         Nothing -> do
           -- Return NOTHING
           Backward (ValConstructor TypeCheck.nothingRef [])
+    UnaryToString -> do
+      coerceToString es
+    UnaryToNumber -> do
+      str <- expectString es
+      case parseNumberText str of
+        Just num -> do
+          numRef <- AllocateValue (ValNumber num)
+          Backward $ ValConstructor TypeCheck.justRef [numRef]
+        Nothing ->
+          Backward $ ValConstructor TypeCheck.nothingRef []
+    UnaryToDate -> do
+      str <- expectString es
+      case parseDateText str of
+        Nothing ->
+          Backward $ ValConstructor TypeCheck.nothingRef []
+        Just parsedDay -> do
+          maybeInner <- resolveMaybeInnerType mTy
+          dateVal <- buildDateValue parsedDay maybeInner
+          dateRef <- AllocateValue dateVal
+          Backward $ ValConstructor TypeCheck.justRef [dateRef]
     -- String unary operations
     UnaryStringLength -> do
       str <- expectString es
@@ -1334,16 +1686,78 @@ runBuiltin es op mTy = do
     UnaryTrim -> do
       str <- expectString es
       Backward $ ValString (Text.strip str)
+    UnaryDateValue -> do
+      str <- expectString es
+      case parseDateValueText str of
+        Left err -> do
+          errRef <- AllocateValue (ValString err)
+          Backward $ ValConstructor TypeCheck.leftRef [errRef]
+        Right dayVal -> do
+          valRef <- AllocateValue (ValDate dayVal)
+          Backward $ ValConstructor TypeCheck.rightRef [valRef]
+    UnaryDateSerial -> do
+      day <- expectDateValue es
+      Backward $ ValNumber (fromIntegral (dayNumberFromDay day))
+    UnaryDateFromSerial -> do
+      serial <- expectNumber es
+      Backward $ ValDate (Time.utctDay (serialToUTCTime serial))
+    UnaryDateDay -> do
+      day <- expectDateValue es
+      let (_, _, d) = Time.toGregorian day
+      Backward $ ValNumber (fromIntegral d)
+    UnaryDateMonth -> do
+      day <- expectDateValue es
+      let (_, m, _) = Time.toGregorian day
+      Backward $ ValNumber (fromIntegral m)
+    UnaryDateYear -> do
+      day <- expectDateValue es
+      let (y, _, _) = Time.toGregorian day
+      Backward $ ValNumber (fromIntegral y)
+    UnaryTimeValue -> do
+      str <- expectString es
+      case parseTimeValueText str of
+        Left err -> do
+          errRef <- AllocateValue (ValString err)
+          Backward $ ValConstructor TypeCheck.leftRef [errRef]
+        Right fraction -> do
+          valRef <- AllocateValue (ValNumber fraction)
+          Backward $ ValConstructor TypeCheck.rightRef [valRef]
     -- Numeric unary operations (catch-all)
     _ -> do
       val :: Rational <- expectNumber es
-      Backward case op of
-        UnaryIsInteger -> valBool $ isJust $ isInteger val
-        UnaryRound -> valInt $ round val
-        UnaryCeiling -> valInt $ ceiling val
-        UnaryFloor -> valInt $ floor val
-        UnaryPercent -> ValNumber (val / 100)
-        UnarySqrt -> ValNumber (toRational (sqrt (fromRational val :: Double)))
+      let valDouble :: Double
+          valDouble = fromRational val
+      case op of
+        UnaryLn ->
+          if val <= 0
+            then InternalException $ RuntimeTypeError "LN expects input greater than 0"
+            else Backward $ ValNumber (toRational (log valDouble))
+        UnaryLog10 ->
+          if val <= 0
+            then InternalException $ RuntimeTypeError "LOG10 expects input greater than 0"
+            else Backward $ ValNumber (toRational (logBase 10 valDouble))
+        UnarySin ->
+          Backward $ ValNumber (toRational (sin valDouble))
+        UnaryCos ->
+          Backward $ ValNumber (toRational (cos valDouble))
+        UnaryTan ->
+          Backward $ ValNumber (toRational (tan valDouble))
+        UnaryAsin ->
+          if val < (-1) || val > 1
+            then InternalException $ RuntimeTypeError "ASIN expects input between -1 and 1"
+            else Backward $ ValNumber (toRational (asin valDouble))
+        UnaryAcos ->
+          if val < (-1) || val > 1
+            then InternalException $ RuntimeTypeError "ACOS expects input between -1 and 1"
+            else Backward $ ValNumber (toRational (acos valDouble))
+        UnaryAtan ->
+          Backward $ ValNumber (toRational (atan valDouble))
+        UnaryIsInteger -> Backward $ valBool $ isJust $ isInteger val
+        UnaryRound -> Backward $ valInt $ round val
+        UnaryCeiling -> Backward $ valInt $ ceiling val
+        UnaryFloor -> Backward $ valInt $ floor val
+        UnaryPercent -> Backward $ ValNumber (val / 100)
+        UnarySqrt -> Backward $ ValNumber (toRational (sqrt valDouble))
   where
     valInt :: Integer -> WHNF
     valInt = ValNumber . toRational
@@ -1364,6 +1778,21 @@ runTernaryBuiltin TernaryReplace val1 val2 val3 = do
   -- Use Text.replace: replace needle replacement haystack
   Backward $ ValString (Text.replace old new str)
 runTernaryBuiltin TernaryPost val1 val2 val3 = runPost val1 val2 val3
+runTernaryBuiltin TernaryDateFromDMY dVal mVal yVal = do
+  dNum <- expectNumber dVal
+  mNum <- expectNumber mVal
+  yNum <- expectNumber yVal
+  dInt <- expectWhole "DATE_FROM_DMY expects integer day" dNum
+  mInt <- expectWhole "DATE_FROM_DMY expects integer month" mNum
+  yInt <- expectWhole "DATE_FROM_DMY expects integer year" yNum
+  case Time.fromGregorianValid yInt (fromInteger mInt) (fromInteger dInt) of
+    Just day -> Backward (ValDate day)
+    Nothing ->
+      InternalException $ RuntimeTypeError "DATE_FROM_DMY produced an invalid date"
+runTernaryBuiltin TernaryEverBetween startVal endVal predicate =
+  startEverBetween startVal endVal predicate
+runTernaryBuiltin TernaryAlwaysBetween startVal endVal predicate =
+  startAlwaysBetween startVal endVal predicate
 
 runBinOp :: BinOp -> WHNF -> WHNF -> Machine Config
 runBinOp BinOpPlus   (ValNumber num1) (ValNumber num2)           = Backward $ ValNumber (num1 + num2)
@@ -1380,6 +1809,18 @@ runBinOp BinOpModulo    (ValNumber num1) (ValNumber num2)      = do
     then Backward $ ValNumber (toRational $ n1 `mod` n2)
     else UserException (DivisionByZero BinOpModulo)
 runBinOp BinOpExponent  (ValNumber base) (ValNumber exp_)   = Backward $ ValNumber (toRational ((fromRational base :: Double) ** (fromRational exp_ :: Double)))
+runBinOp BinOpTrunc (ValNumber value) (ValNumber digits) =
+  let digitsInt = round digits :: Integer
+      scale k = (10 :: Rational) ^^ k
+      truncated =
+        if digitsInt >= 0
+          then
+            let factor = scale digitsInt
+            in fromInteger (truncate (value * factor)) / factor
+          else
+            let factor = scale (abs digitsInt)
+            in fromInteger (truncate (value / factor)) * factor
+  in Backward $ ValNumber truncated
 runBinOp BinOpEquals val1             val2                       = runBinOpEquals val1 val2
 runBinOp BinOpLeq    (ValNumber num1) (ValNumber num2)           = Backward $ ValBool (num1 <= num2)
 runBinOp BinOpLeq    (ValString str1) (ValString str2)           = Backward $ ValBool (str1 <= str2)
@@ -1416,6 +1857,9 @@ runBinOp BinOpCharAt     (ValString text) (ValNumber idx) =
   in if i < 0 || i >= Text.length text
      then Backward $ ValString ""  -- Out of bounds returns empty string
      else Backward $ ValString (Text.singleton (Text.index text i))
+runBinOp BinOpWhenLast startVal predicateVal = startWhenLast startVal predicateVal
+runBinOp BinOpWhenNext startVal predicateVal = startWhenNext startVal predicateVal
+runBinOp BinOpValueAt dateVal attrVal = startValueAt dateVal attrVal
 runBinOp _op         (ValAssumed r) _e2                          = StuckOnAssumed r
 runBinOp _op         _e1 (ValAssumed r)                          = StuckOnAssumed r
 runBinOp _           _                _                          = InternalException (RuntimeTypeError "running bin op with invalid operation / value combination")
@@ -1423,6 +1867,7 @@ runBinOp _           _                _                          = InternalExcep
 runBinOpEquals :: WHNF -> WHNF -> Machine Config
 runBinOpEquals (ValNumber num1)        (ValNumber num2) = Backward $ valBool $ num1 == num2
 runBinOpEquals (ValString str1)        (ValString str2) = Backward $ valBool $ str1 == str2
+runBinOpEquals (ValDate d1)            (ValDate d2) = Backward $ valBool $ d1 == d2
 runBinOpEquals ValNil                  ValNil           = Backward $ valBool True
 runBinOpEquals (ValCons r1 rs1)        (ValCons r2 rs2) = do
   PushFrame (EqConstructor1 r2 [(rs1, rs2)])
@@ -1441,6 +1886,70 @@ runBinOpEquals (ValConstructor n1 rs1) (ValConstructor n2 rs2)
 -- TODO: we probably also want to check ValObligations for equality
 runBinOpEquals (ValAssumed r)          _                = StuckOnAssumed r
 runBinOpEquals v1                       v2              = UserException (EqualityOnUnsupportedType v1 v2)
+
+infinityDay :: Time.Day
+infinityDay = Time.fromGregorian 9999 12 31
+
+applyDatePredicate :: WHNF -> Time.Day -> Machine Config
+applyDatePredicate predicate day = do
+  argRef <- AllocateValue (ValDate day)
+  PushFrame (App1 [argRef] Nothing)
+  Backward predicate
+
+startEverBetween :: WHNF -> WHNF -> WHNF -> Machine Config
+startEverBetween startVal endVal predicate = do
+  startDay <- expectDateValue startVal
+  endDay <- expectDateValue endVal
+  case compare startDay endDay of
+    GT -> Backward (valBool False)
+    _ -> do
+      originalCtx <- GetTemporalContext
+      let step = if startDay <= endDay then 1 else -1
+          ctxForDay = applyEvalClauses [UnderValidTime startDay, UnderRulesEffectiveAt startDay] originalCtx
+      PutTemporalContext ctxForDay
+      PushFrame (EverBetweenFrame originalCtx predicate endDay startDay step)
+      applyDatePredicate predicate startDay
+
+startAlwaysBetween :: WHNF -> WHNF -> WHNF -> Machine Config
+startAlwaysBetween startVal endVal predicate = do
+  startDay <- expectDateValue startVal
+  endDay <- expectDateValue endVal
+  case compare startDay endDay of
+    GT -> Backward (valBool True)
+    _ -> do
+      originalCtx <- GetTemporalContext
+      let step = if startDay <= endDay then 1 else -1
+          ctxForDay = applyEvalClauses [UnderValidTime startDay, UnderRulesEffectiveAt startDay] originalCtx
+      PutTemporalContext ctxForDay
+      PushFrame (AlwaysBetweenFrame originalCtx predicate endDay startDay step)
+      applyDatePredicate predicate startDay
+
+startWhenLast :: WHNF -> WHNF -> Machine Config
+startWhenLast startVal predicate = do
+  startDay <- expectDateValue startVal
+  originalCtx <- GetTemporalContext
+  let ctxForDay = applyEvalClauses [UnderValidTime startDay, UnderRulesEffectiveAt startDay] originalCtx
+  PutTemporalContext ctxForDay
+  PushFrame (WhenLastFrame originalCtx predicate startDay)
+  applyDatePredicate predicate startDay
+
+startWhenNext :: WHNF -> WHNF -> Machine Config
+startWhenNext startVal predicate = do
+  startDay <- expectDateValue startVal
+  originalCtx <- GetTemporalContext
+  let ctxForDay = applyEvalClauses [UnderValidTime startDay, UnderRulesEffectiveAt startDay] originalCtx
+  PutTemporalContext ctxForDay
+  PushFrame (WhenNextFrame originalCtx predicate startDay infinityDay)
+  applyDatePredicate predicate startDay
+
+startValueAt :: WHNF -> WHNF -> Machine Config
+startValueAt dateVal attrVal = do
+  day <- expectDateValue dateVal
+  originalCtx <- GetTemporalContext
+  let ctxForDay = applyEvalClauses [UnderValidTime day, UnderRulesEffectiveAt day] originalCtx
+  PutTemporalContext ctxForDay
+  PushFrame (ValueAtFrame originalCtx)
+  applyDatePredicate attrVal day
 
 pattern ValFulfilled :: Value a
 pattern ValFulfilled <- (fulfilView -> True)
@@ -1524,7 +2033,15 @@ updateThunkToWHNF rf v =
 evalRef :: Reference -> Machine Config
 evalRef rf =
   join $ PokeThunk rf \tid -> \ case
-    thunk@(WHNF val) -> (thunk, Backward val)
+    thunk@(WHNF val) ->
+      case val of
+        ValNullaryBuiltinFun fn ->
+          (thunk, do
+              evaluated <- evalNullaryBuiltin fn
+              updateThunkToWHNF rf evaluated
+              Backward evaluated)
+        _ ->
+          (thunk, Backward val)
     thunk@(Unevaluated tids e env)
       | tid `Set.member` tids ->  (thunk, UserException (BlackholeForced e))
       | otherwise -> (Unevaluated (Set.insert tid tids) e env, PushFrame (UpdateThunk rf) *> ForwardExpr env e)
@@ -1595,7 +2112,7 @@ scanDecide :: Decide Resolved -> Machine [Resolved]
 scanDecide (MkDecide _ann _tysig (MkAppForm _ n _ _) _expr) = pure [n]
 
 scanAssume :: Assume Resolved -> Machine [Resolved]
-scanAssume (MkAssume _ann _tysig (MkAppForm _ n _ _) _t _) = pure [n]
+scanAssume (MkAssume _ann _tysig (MkAppForm _ n _ _) _t) = pure [n]
 
 -- | The only run-time names a type declaration brings into scope are constructors and selectors.
 scanDeclare :: Declare Resolved -> Machine [Resolved]
@@ -1611,7 +2128,7 @@ scanTypeDecl (SynonymDecl _ann _t) =
 
 scanConDecl :: ConDecl Resolved -> Machine [Resolved]
 scanConDecl (MkConDecl _ann n [])  = pure [n]
-scanConDecl (MkConDecl _ann n tns) = pure (n : ((\ (MkTypedName _ n' _ _) -> n') <$> tns))
+scanConDecl (MkConDecl _ann n tns) = pure (n : ((\ (MkTypedName _ n' _) -> n') <$> tns))
 
 evalSection :: Environment -> Section Resolved -> Machine [EvalDirective]
 evalSection env (MkSection _ann _mn _maka topdecls) =
@@ -1632,22 +2149,28 @@ evalTopDecl _env (Import _ann _import_) =
   pure []
 
 evalDirective :: Environment -> Directive Resolved -> Machine [EvalDirective]
-evalDirective env (LazyEval ann expr) =
-  pure [MkEvalDirective (rangeOf ann) False False False expr env]
-evalDirective env (LazyEvalTrace ann expr) =
-  pure [MkEvalDirective (rangeOf ann) True False False expr env]
-evalDirective env (PresumptiveEval ann expr) =
-  pure [MkEvalDirective (rangeOf ann) False False True expr env]
-evalDirective env (PresumptiveEvalTrace ann expr) =
-  pure [MkEvalDirective (rangeOf ann) True False True expr env]
+evalDirective env (LazyEval ann expr) = do
+  tracePolicy <- GetTracePolicy
+  let shouldTrace = case tracePolicy.evalDirectiveTrace of
+        TracePolicy.NoTrace -> False
+        TracePolicy.CollectTrace _ -> True
+  pure [MkEvalDirective (rangeOf ann) shouldTrace False expr env]
+evalDirective env (LazyEvalTrace ann expr) = do
+  tracePolicy <- GetTracePolicy
+  let shouldTrace = case tracePolicy.evaltraceDirectiveTrace of
+        TracePolicy.NoTrace -> False
+        TracePolicy.CollectTrace _ -> True
+  pure [MkEvalDirective (rangeOf ann) shouldTrace False expr env]
 evalDirective _env (Check _ann _expr) =
   pure []
 evalDirective env (Contract ann expr t evs) =
   evalDirective env . LazyEval ann =<< contractToEvalDirective expr t evs
-evalDirective env (Assert ann expr) =
-  pure [MkEvalDirective (rangeOf ann) False True False expr env]
-evalDirective env (PresumptiveAssert ann expr) =
-  pure [MkEvalDirective (rangeOf ann) False True True expr env]
+evalDirective env (Assert ann expr) = do
+  tracePolicy <- GetTracePolicy
+  let shouldTrace = case tracePolicy.evalDirectiveTrace of
+        TracePolicy.NoTrace -> False
+        TracePolicy.CollectTrace _ -> True
+  pure [MkEvalDirective (rangeOf ann) shouldTrace True expr env]
 
 contractToEvalDirective :: Expr Resolved -> Expr Resolved -> [Expr Resolved] -> Machine (Expr Resolved)
 contractToEvalDirective contract t evs = do
@@ -1670,9 +2193,9 @@ evalLocalDecl env (LocalAssume _ann assume) =
 
 -- We are assuming that the environment already contains an entry with an address for us.
 evalAssume :: Environment -> Assume Resolved -> Machine ()
-evalAssume env (MkAssume _ann _tysig (MkAppForm _ n []   _maka) _ _) =
+evalAssume env (MkAssume _ann _tysig (MkAppForm _ n []   _maka) _) =
   updateTerm env n (WHNF (ValAssumed n))
-evalAssume env (MkAssume _ann _tysig (MkAppForm _ n _args _maka) _ _) = do
+evalAssume env (MkAssume _ann _tysig (MkAppForm _ n _args _maka) _) = do
   -- TODO: we should create a given here yielding an assumed, but we currently cannot do that easily,
   -- because we do not have Assumed as an expression, and we also cannot embed values into expressions.
   updateTerm env n (WHNF (ValAssumed n))
@@ -1686,12 +2209,10 @@ updateTerm env n thunk = do
 evalDecide :: Environment -> Decide Resolved -> Machine ()
 evalDecide env (MkDecide _ann _tysig (MkAppForm _ n []   _maka) expr) =
   updateTerm env n (Unevaluated Set.empty expr env)
-evalDecide env (MkDecide _ann (MkTypeSig _ givenSig _) (MkAppForm _ n _args _maka) expr) = do
+evalDecide env (MkDecide _ann _tysig (MkAppForm _ n args _maka) expr) = do
   let
-    v = ValClosure givenSig expr env
+    v = ValClosure (MkGivenSig emptyAnno ((\ r -> MkOptionallyTypedName emptyAnno r Nothing) <$> args)) expr env
   updateTerm env n (WHNF v)
-  -- Note: Presumptive wrapper generation now happens at compile-time in TypeCheck.hs
-  -- via generatePresumptiveWrappers function, not at runtime
 
 -- We are assuming that the environment already contains an entry with an address for us.
 evalDeclare :: Environment -> Declare Resolved -> Machine ()
@@ -1714,7 +2235,7 @@ evalConDecl env (MkConDecl _ann n tns) = do
   updateTerm env n (WHNF (ValUnappliedConstructor n))
   conRef <- ref (TypeCheck.getName n) n
   -- selectors (we need to create fresh names for the lambda abstractions so that every binder is unique)
-  traverse_ (\ (i, MkTypedName _ sn _t _) -> do
+  traverse_ (\ (i, MkTypedName _ sn _t) -> do
     arg    <- def (TypeCheck.getName n)
     argRef <- ref (TypeCheck.getName n) arg
     args <- traverse (def . TypeCheck.getName) tns
@@ -1722,7 +2243,7 @@ evalConDecl env (MkConDecl _ann n tns) = do
     let
       sel =
         ValClosure
-          (MkGivenSig emptyAnno [MkOptionallyTypedName emptyAnno arg Nothing Nothing])      -- \ x ->
+          (MkGivenSig emptyAnno [MkOptionallyTypedName emptyAnno arg Nothing])      -- \ x ->
           (Consider emptyAnno (App emptyAnno argRef [])                             -- case x of
             [ MkBranch emptyAnno (When emptyAnno (PatApp emptyAnno conRef (PatVar emptyAnno <$> args)))  --   Con y_1 ... y_n ->
                 (App emptyAnno body [])                                             --     y_i
@@ -1765,9 +2286,9 @@ evalContractVal = do
 
   pure $ ValClosure
     (MkGivenSig emptyAnno
-      [ MkOptionallyTypedName emptyAnno ad Nothing Nothing
-      , MkOptionallyTypedName emptyAnno bd Nothing Nothing
-      , MkOptionallyTypedName emptyAnno cd Nothing Nothing
+      [ MkOptionallyTypedName emptyAnno ad Nothing
+      , MkOptionallyTypedName emptyAnno bd Nothing
+      , MkOptionallyTypedName emptyAnno cd Nothing
       ]
     )
     (App emptyAnno ar [App emptyAnno br [], App emptyAnno cr []])
@@ -1779,7 +2300,7 @@ waitUntilVal eventcRef neverMatchesPartyRef neverMatchesActRef = do
   ad <- def an
   ar <- ref an ad
   pure $ ValClosure
-    (MkGivenSig emptyAnno [MkOptionallyTypedName emptyAnno ad Nothing Nothing])
+    (MkGivenSig emptyAnno [MkOptionallyTypedName emptyAnno ad Nothing])
     (App emptyAnno TypeCheck.eventCRef [neverMatchesPartyExpr, neverMatchesActExpr, Var emptyAnno ar])
     (Map.fromList
       [ (TypeCheck.eventCUnique, eventcRef)
@@ -1807,12 +2328,11 @@ emptyEnvironment = Map.empty
 
 data EvalDirective =
   MkEvalDirective
-    { range       :: Maybe SrcRange -- ^ of the (L)EVAL directive
-    , trace       :: !Bool -- ^ whether a trace is wanted
-    , isAssert    :: !Bool -- ^ whether it is to be treated as an assertion
-    , presumptive :: !Bool -- ^ whether to honor TYPICALLY defaults (True for PEVAL, False for EVAL)
-    , expr        :: !(Expr Resolved) -- ^ expression to evaluate
-    , env         :: !Environment -- ^ environment to evaluate the expression in
+    { range    :: Maybe SrcRange -- ^ of the (L)EVAL directive
+    , trace    :: !Bool -- ^ whether a trace is wanted
+    , isAssert :: !Bool -- ^ whether it is to be treated as an assertion
+    , expr     :: !(Expr Resolved) -- ^ expression to evaluate
+    , env      :: !Environment -- ^ environment to evaluate the expression in
     }
   deriving stock (Generic, Show)
 
@@ -1903,11 +2423,22 @@ initialEnvironment = do
   ceilingRef <- AllocateValue (ValUnaryBuiltinFun UnaryCeiling)
   floorRef <- AllocateValue (ValUnaryBuiltinFun UnaryFloor)
   sqrtRef <- AllocateValue (ValUnaryBuiltinFun UnarySqrt)
+  lnRef <- AllocateValue (ValUnaryBuiltinFun UnaryLn)
+  log10Ref <- AllocateValue (ValUnaryBuiltinFun UnaryLog10)
+  sinRef <- AllocateValue (ValUnaryBuiltinFun UnarySin)
+  cosRef <- AllocateValue (ValUnaryBuiltinFun UnaryCos)
+  tanRef <- AllocateValue (ValUnaryBuiltinFun UnaryTan)
+  asinRef <- AllocateValue (ValUnaryBuiltinFun UnaryAsin)
+  acosRef <- AllocateValue (ValUnaryBuiltinFun UnaryAcos)
+  atanRef <- AllocateValue (ValUnaryBuiltinFun UnaryAtan)
   -- String unary builtins
   stringLengthRef <- AllocateValue (ValUnaryBuiltinFun UnaryStringLength)
   toUpperRef <- AllocateValue (ValUnaryBuiltinFun UnaryToUpper)
   toLowerRef <- AllocateValue (ValUnaryBuiltinFun UnaryToLower)
   trimRef <- AllocateValue (ValUnaryBuiltinFun UnaryTrim)
+  toStringRef <- AllocateValue (ValUnaryBuiltinFun UnaryToString)
+  toNumberRef <- AllocateValue (ValUnaryBuiltinFun UnaryToNumber)
+  toDateRef <- AllocateValue (ValUnaryBuiltinFun UnaryToDate)
   -- Ternary string builtins
   substringRef <- AllocateValue (ValTernaryBuiltinFun TernarySubstring)
   replaceRef <- AllocateValue (ValTernaryBuiltinFun TernaryReplace)
@@ -1916,6 +2447,25 @@ initialEnvironment = do
   envRef <- AllocateValue (ValUnaryBuiltinFun UnaryEnv)
   jsonEncodeRef <- AllocateValue (ValUnaryBuiltinFun UnaryJsonEncode)
   jsonDecodeRef <- AllocateValue (ValUnaryBuiltinFun UnaryJsonDecode)
+  todayRef <- AllocateValue (ValNullaryBuiltinFun NullaryTodaySerial)
+  nowRef <- AllocateValue (ValNullaryBuiltinFun NullaryNowSerial)
+  dateFromTextRef <- AllocateValue (ValUnaryBuiltinFun UnaryDateValue)
+  dateSerialRef <- AllocateValue (ValUnaryBuiltinFun UnaryDateSerial)
+  dateFromSerialRef <- AllocateValue (ValUnaryBuiltinFun UnaryDateFromSerial)
+  dateFromDMYRef <- AllocateValue (ValTernaryBuiltinFun TernaryDateFromDMY)
+  dateDayRef <- AllocateValue (ValUnaryBuiltinFun UnaryDateDay)
+  dateMonthRef <- AllocateValue (ValUnaryBuiltinFun UnaryDateMonth)
+  dateYearRef <- AllocateValue (ValUnaryBuiltinFun UnaryDateYear)
+  timeValueRef <- AllocateValue (ValUnaryBuiltinFun UnaryTimeValue)
+  everBetweenRef <- AllocateValue (ValTernaryBuiltinFun TernaryEverBetween)
+  alwaysBetweenRef <- AllocateValue (ValTernaryBuiltinFun TernaryAlwaysBetween)
+  -- Temporal context switching entry (handled specially by the evaluator)
+  evalAsOfSystemTimeRef <- AllocateValue (ValAssumed TypeCheck.evalAsOfSystemTimeRef)
+  evalUnderValidTimeRef <- AllocateValue (ValAssumed TypeCheck.evalUnderValidTimeRef)
+  evalUnderRulesEffectiveAtRef <- AllocateValue (ValAssumed TypeCheck.evalUnderRulesEffectiveAtRef)
+  evalUnderRulesEncodedAtRef <- AllocateValue (ValAssumed TypeCheck.evalUnderRulesEncodedAtRef)
+  evalUnderCommitRef <- AllocateValue (ValAssumed TypeCheck.evalUnderCommitRef)
+  evalRetroactiveToRef <- AllocateValue (ValAssumed TypeCheck.evalRetroactiveToRef)
   fulfilRef <- AllocateValue ValFulfilled
   neverMatchesPartyRef <- AllocateValue ValNeverMatchesParty
   neverMatchesActRef <- AllocateValue ValNeverMatchesAct
@@ -1950,10 +2500,36 @@ initialEnvironment = do
       , (TypeCheck.ceilingUnique, ceilingRef)
       , (TypeCheck.floorUnique, floorRef)
       , (TypeCheck.sqrtUnique, sqrtRef)
+      , (TypeCheck.lnUnique, lnRef)
+      , (TypeCheck.log10Unique, log10Ref)
+      , (TypeCheck.sinUnique, sinRef)
+      , (TypeCheck.cosUnique, cosRef)
+      , (TypeCheck.tanUnique, tanRef)
+      , (TypeCheck.asinUnique, asinRef)
+      , (TypeCheck.acosUnique, acosRef)
+      , (TypeCheck.atanUnique, atanRef)
       , (TypeCheck.fetchUnique, fetchRef)
       , (TypeCheck.envUnique, envRef)
       , (TypeCheck.jsonEncodeUnique, jsonEncodeRef)
       , (TypeCheck.jsonDecodeUnique, jsonDecodeRef)
+      , (TypeCheck.todaySerialUnique, todayRef)
+      , (TypeCheck.nowSerialUnique, nowRef)
+      , (TypeCheck.dateFromTextUnique, dateFromTextRef)
+      , (TypeCheck.dateSerialUnique, dateSerialRef)
+      , (TypeCheck.dateFromSerialUnique, dateFromSerialRef)
+      , (TypeCheck.dateFromDMYUnique, dateFromDMYRef)
+      , (TypeCheck.dateDayUnique, dateDayRef)
+      , (TypeCheck.dateMonthUnique, dateMonthRef)
+      , (TypeCheck.dateYearUnique, dateYearRef)
+      , (TypeCheck.timeValueFractionUnique, timeValueRef)
+      , (TypeCheck.everBetweenUnique, everBetweenRef)
+      , (TypeCheck.alwaysBetweenUnique, alwaysBetweenRef)
+      , (TypeCheck.evalAsOfSystemTimeUnique, evalAsOfSystemTimeRef)
+      , (TypeCheck.evalUnderValidTimeUnique, evalUnderValidTimeRef)
+      , (TypeCheck.evalUnderRulesEffectiveAtUnique, evalUnderRulesEffectiveAtRef)
+      , (TypeCheck.evalUnderRulesEncodedAtUnique, evalUnderRulesEncodedAtRef)
+      , (TypeCheck.evalUnderCommitUnique, evalUnderCommitRef)
+      , (TypeCheck.evalRetroactiveToUnique, evalRetroactiveToRef)
       , (TypeCheck.waitUntilUnique, waitUntilRef)
       , (TypeCheck.andUnique, andRef)
       , (TypeCheck.orUnique, orRef)
@@ -1964,6 +2540,9 @@ initialEnvironment = do
       , (TypeCheck.toUpperUnique, toUpperRef)
       , (TypeCheck.toLowerUnique, toLowerRef)
       , (TypeCheck.trimUnique, trimRef)
+      , (TypeCheck.toStringUnique, toStringRef)
+      , (TypeCheck.toNumberUnique, toNumberRef)
+      , (TypeCheck.toDateUnique, toDateRef)
       -- Ternary string functions
       , (TypeCheck.substringUnique, substringRef)
       , (TypeCheck.replaceUnique, replaceRef)
@@ -1984,6 +2563,7 @@ builtinBinOps =
       , (BinOpDividedBy, [TypeCheck.divideUnique])
       , (BinOpModulo,    [TypeCheck.moduloUnique])
       , (BinOpExponent,  [TypeCheck.exponentUnique])
+      , (BinOpTrunc,     [TypeCheck.truncUnique])
       , (BinOpCons,      [TypeCheck.consUnique])
       , (BinOpEquals,    [TypeCheck.equalsUnique])
       -- String binary operations
@@ -1993,9 +2573,265 @@ builtinBinOps =
       , (BinOpIndexOf,    [TypeCheck.indexOfUnique])
       , (BinOpSplit,      [TypeCheck.splitUnique])
       , (BinOpCharAt,     [TypeCheck.charAtUnique])
+      , (BinOpWhenLast,   [TypeCheck.whenLastUnique])
+      , (BinOpWhenNext,   [TypeCheck.whenNextUnique])
+      , (BinOpValueAt,    [TypeCheck.valueAtUnique])
       ]
   , unique <- uniques
   ]
+
+----------------------------------------------------------------------------
+-- Clock & parsing utilities
+----------------------------------------------------------------------------
+
+evalNullaryBuiltin :: NullaryBuiltinFun -> Machine WHNF
+evalNullaryBuiltin = \case
+  NullaryTodaySerial -> do
+    tc <- GetTemporalContext
+    let TemporalContext { tcSystemTime = systemTime } = tc
+        todayDay = Time.utctDay systemTime
+    pure $ ValDate todayDay
+  NullaryNowSerial -> do
+    tc <- GetTemporalContext
+    let TemporalContext { tcSystemTime = systemTime } = tc
+    pure $ ValNumber (utcDatestamp systemTime)
+
+utcDatestamp :: Time.UTCTime -> Rational
+utcDatestamp time =
+  fromIntegral (dayNumberFromDay (Time.utctDay time))
+    + diffTimeFraction (Time.utctDayTime time)
+
+diffTimeFraction :: Time.DiffTime -> Rational
+diffTimeFraction dt =
+  let seconds :: Pico
+      seconds = realToFrac dt
+  in toRational seconds / secondsPerDay
+
+dayNumberFromDay :: Time.Day -> Integer
+dayNumberFromDay day =
+  Time.diffDays day l4EpochDay - 1
+
+l4EpochDay :: Time.Day
+l4EpochDay = Time.fromGregorian 0 1 1
+
+secondsPerDay :: Rational
+secondsPerDay = 86400
+
+serialToUTCTime :: Rational -> Time.UTCTime
+serialToUTCTime serial =
+  let (wholeDays, fraction) = properFraction serial :: (Integer, Rational)
+      day = Time.addDays (wholeDays + 1) l4EpochDay
+      seconds :: Pico
+      seconds = realToFrac (fraction * secondsPerDay)
+  in Time.UTCTime day (realToFrac seconds)
+
+requireModulePath :: Machine FilePath
+requireModulePath = do
+  uri <- GetModuleUri
+  case uriToFilePath (fromNormalizedUri uri) of
+    Nothing -> InternalException $ RuntimeTypeError "Temporal evaluation requires a file-backed module"
+    Just fp -> pure fp
+
+liftEitherIO :: IO (Either Text a) -> Machine a
+liftEitherIO action = do
+  res <- liftIO action
+  case res of
+    Left err -> InternalException $ RuntimeTypeError err
+    Right v -> pure v
+
+resolveCommitContext :: TemporalContext -> Text -> Machine TemporalContext
+resolveCommitContext originalCtx commitTxt = do
+  modulePath <- requireModulePath
+  repoRoot <- liftEitherIO (resolveRepoRoot modulePath)
+  commitInfo <- liftEitherIO (resolveCommitHash repoRoot commitTxt)
+  let withCommit = applyEvalClauses [UnderCommit commitInfo.commitHash] originalCtx
+      commitDay = Time.utctDay commitInfo.commitTime
+  pure
+    withCommit
+      { tcRuleEncodingTime = Just commitInfo.commitTime
+      , tcRuleVersionTime = case withCommit.tcRuleVersionTime of
+          Nothing -> Just commitDay
+          justDay -> justDay
+      }
+
+resolveRulesEffectiveContext :: TemporalContext -> Time.Day -> Machine TemporalContext
+resolveRulesEffectiveContext originalCtx day = do
+  modulePath <- requireModulePath
+  repoRoot <- liftEitherIO (resolveRepoRoot modulePath)
+  commitInfo <- liftEitherIO (resolveRulesCommitByDate repoRoot modulePath day)
+  let baseCtx = applyEvalClauses [UnderRulesEffectiveAt day] originalCtx
+  pure
+    baseCtx
+      { tcRuleCommit = Just commitInfo.commitHash
+      , tcRuleEncodingTime = Just commitInfo.commitTime
+      }
+
+dateFormats :: [String]
+dateFormats =
+  [ "%Y-%m-%d"
+  , "%Y/%m/%d"
+  , "%Y.%m.%d"
+  , "%m/%d/%Y"
+  , "%m-%d-%Y"
+  , "%m/%d/%y"
+  , "%m-%d-%y"
+  , "%d/%m/%Y"
+  , "%d-%m-%Y"
+  , "%d.%m.%Y"
+  , "%d-%b-%Y"
+  , "%b %d, %Y"
+  , "%d %b %Y"
+  ]
+
+toDateFormats :: [String]
+toDateFormats =
+  [ "%Y-%m-%d"
+  , "%Y/%m/%d"
+  , "%d-%b-%Y"
+  , "%d/%m/%Y"
+  , "%b %e, %Y"
+  ]
+
+parseNumberText :: Text -> Maybe Rational
+parseNumberText raw =
+  let trimmed = Text.strip raw
+  in if Text.null trimmed
+       then Nothing
+       else do
+         sci :: Sci.Scientific <- readMaybe (Text.unpack trimmed)
+         pure (toRational sci)
+
+parseDateText :: Text -> Maybe Time.Day
+parseDateText raw =
+  let trimmed = Text.strip raw
+      variants = [trimmed, Text.toUpper trimmed, Text.toLower trimmed]
+  in listToMaybe
+       [ day
+       | candidate <- variants
+       , fmt <- toDateFormats
+       , Just day <- [TimeFormat.parseTimeM True TimeFormat.defaultTimeLocale fmt (Text.unpack candidate)]
+       , let (year, _, _) = Time.toGregorian day
+       , year >= 1
+       , year <= 9999
+       ]
+
+resolveMaybeInnerType :: Maybe (Type' Resolved) -> Machine (Maybe (Type' Resolved))
+resolveMaybeInnerType Nothing = pure Nothing
+resolveMaybeInnerType (Just ty) =
+  case ty of
+    TyApp _ maybeRef [inner]
+      | nameToText (TypeCheck.getName maybeRef) == "MAYBE" -> pure (Just inner)
+    _ -> pure Nothing
+
+-- | Build a DATE value from a Time.Day. Since DATE is now a builtin type,
+-- we simply wrap the day in ValDate.
+buildDateValue :: Time.Day -> Maybe (Type' Resolved) -> Machine WHNF
+buildDateValue day _mInner = pure $ ValDate day
+
+parseDateValueText :: Text -> Either Text Time.Day
+parseDateValueText rawInput =
+  let trimmed = Text.strip rawInput
+  in if Text.null trimmed
+       then Left "DATEVALUE: input is empty."
+        else
+          case firstSuccessful trimmed of
+            Nothing -> Left "DATEVALUE: could not parse date string."
+            Just day -> Right day
+  where
+    firstSuccessful :: Text -> Maybe Time.Day
+    firstSuccessful txt = go dateFormats
+      where
+        str = Text.unpack txt
+        go = \case
+          [] -> Nothing
+          fmt : rest ->
+            case TimeFormat.parseTimeM True TimeFormat.defaultTimeLocale fmt str of
+              Just day -> Just day
+              Nothing -> go rest
+
+data AmPm = AM | PM
+
+parseTimeValueText :: Text -> Either Text Rational
+parseTimeValueText rawInput =
+  let trimmed = Text.strip rawInput
+  in if Text.null trimmed
+        then Left "TIMEVALUE: input is empty."
+        else do
+          (timePortion, mSuffix) <- extractSuffix trimmed
+          let pieces = Text.splitOn ":" timePortion
+          case pieces of
+            [hTxt, mTxt] -> buildTime hTxt mTxt "0" mSuffix
+            [hTxt, mTxt, sTxt] -> buildTime hTxt mTxt sTxt mSuffix
+            _ -> Left "TIMEVALUE: expected HH:MM or HH:MM:SS."
+
+buildTime :: Text -> Text -> Text -> Maybe AmPm -> Either Text Rational
+buildTime hTxt mTxt sTxt mSuffix = do
+  hourRaw <- parseNatBound "hour" 0 99 hTxt
+  minute <- parseNatBound "minute" 0 59 mTxt
+  secondsVal <- parseSecondsPart sTxt
+  hour24 <- case mSuffix of
+    Nothing -> if hourRaw >= 0 && hourRaw < 24
+                  then Right hourRaw
+                  else Left "TIMEVALUE: hour must be between 0 and 23."
+    Just AM ->
+      if hourRaw >= 1 && hourRaw <= 12
+        then Right (if hourRaw == 12 then 0 else hourRaw)
+        else Left "TIMEVALUE: hour must be between 1 and 12 for AM."
+    Just PM ->
+      if hourRaw >= 1 && hourRaw <= 12
+        then Right (if hourRaw == 12 then 12 else hourRaw + 12)
+        else Left "TIMEVALUE: hour must be between 1 and 12 for PM."
+  let totalSeconds =
+        fromIntegral hour24 * 3600
+          + fromIntegral minute * 60
+          + secondsVal
+  if totalSeconds < 0 || totalSeconds >= fromRational secondsPerDay
+    then Left "TIMEVALUE: time must be less than 24 hours."
+    else Right (toRational totalSeconds / secondsPerDay)
+
+extractSuffix :: Text -> Either Text (Text, Maybe AmPm)
+extractSuffix input =
+  let trimmed = Text.dropWhileEnd Char.isSpace input
+      letters = Text.takeWhileEnd Char.isLetter trimmed
+      rest = Text.dropWhileEnd Char.isLetter trimmed
+      base = Text.stripEnd rest
+  in if Text.null letters
+        then Right (base, Nothing)
+        else case Text.toCaseFold letters of
+          "am" -> Right (base, Just AM)
+          "pm" -> Right (base, Just PM)
+          _ -> Left "TIMEVALUE: unknown suffix; only AM/PM are supported."
+
+parseNatBound :: Text -> Int -> Int -> Text -> Either Text Int
+parseNatBound label lo hi txt =
+  case TR.decimal txt of
+    Right (value, rest)
+      | Text.null rest && value >= lo && value <= hi -> Right value
+      | Text.null rest -> Left (label <> " out of range.")
+    _ -> Left ("TIMEVALUE: " <> label <> " must be numeric.")
+
+parseSecondsPart :: Text -> Either Text Rational
+parseSecondsPart txt =
+  let (wholePart, fractionalPart) = Text.breakOn "." txt
+  in do
+    sec <- parseNatBound "second" 0 59 wholePart
+    frac <-
+      if Text.null fractionalPart
+        then Right 0
+        else do
+          let digits = Text.drop 1 fractionalPart
+          when (Text.null digits) $
+            Left "TIMEVALUE: fractional seconds must have digits."
+          fracInt <- parseDigits digits
+          let denom = 10 ^ Text.length digits :: Integer
+          pure (toRational fracInt / toRational denom)
+    pure (fromIntegral sec + frac)
+
+parseDigits :: Text -> Either Text Integer
+parseDigits txt =
+  if Text.all Char.isDigit txt
+    then Right (Text.foldl' (\acc ch -> acc * 10 + toInteger (Char.digitToInt ch)) 0 txt)
+    else Left "TIMEVALUE: expected only digits in fractional part."
 
 boolBinOpClosure :: Reference -> Reference -> (Resolved -> Resolved -> Expr Resolved) -> Machine (Value a)
 boolBinOpClosure true false buildExpr = do
@@ -2009,8 +2845,8 @@ boolBinOpClosure true false buildExpr = do
   bRef <- ref nb bDef
   pure $ ValClosure
     (MkGivenSig emptyAnno
-      [ MkOptionallyTypedName emptyAnno aDef (Just TypeCheck.boolean) Nothing
-      , MkOptionallyTypedName emptyAnno bDef (Just TypeCheck.boolean) Nothing
+      [ MkOptionallyTypedName emptyAnno aDef (Just TypeCheck.boolean)
+      , MkOptionallyTypedName emptyAnno bDef (Just TypeCheck.boolean)
       ])
     (buildExpr aRef bRef)
     ( Map.fromList
@@ -2028,7 +2864,7 @@ boolUnaryOpClosure true false buildExpr = do
   aRef <- ref na aDef
   pure $ ValClosure
     (MkGivenSig emptyAnno
-      [ MkOptionallyTypedName emptyAnno aDef (Just TypeCheck.boolean) Nothing
+      [ MkOptionallyTypedName emptyAnno aDef (Just TypeCheck.boolean)
       ])
     (buildExpr aRef)
     ( Map.fromList
@@ -2076,3 +2912,33 @@ impliesValClosure true false =
         (Var emptyAnno bRef)
         trueExpr
     )
+
+----------------------------------------------------------------------------
+-- JSON to Environment conversion for batch processing
+----------------------------------------------------------------------------
+
+-- | Write JSON values into existing References in the environment.
+-- This should be called after preAllocate has created References for ASSUME'd variables.
+-- The function looks up ASSUME'd variables by name from EntityInfo,
+-- finds their References in the provided environment, and writes JSON values into them.
+writeJSONToReferences :: Aeson.Value -> Environment -> Machine ()
+writeJSONToReferences json env = case json of
+  Aeson.Object obj -> do
+    entityInfo <- GetEntityInfo
+    let assumedVars =
+          [ (u, n, ty)
+          | (u, (n, TypeCheck.KnownTerm ty Assumed)) <- Map.toList entityInfo
+          ]
+    forM_ assumedVars $ \(unique, name, ty) -> do
+      let key = nameToText (TypeCheck.getName name)
+      case KeyMap.lookup (Key.fromText key) obj of
+        Nothing -> pure ()  -- No JSON value for this variable
+        Just val -> do
+          -- Look up the existing Reference for this variable
+          case Map.lookup unique env of
+            Nothing -> pure ()  -- No Reference found (shouldn't happen after preAllocate)
+            Just existingRef -> do
+              -- Convert JSON to WHNF and write into the existing Reference
+              whnf <- jsonValueToWHNFTyped val ty
+              updateThunkToWHNF existingRef whnf
+  _ -> pure ()

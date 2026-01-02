@@ -22,7 +22,7 @@
 `CEO Succession Framework Required Met` with 11 and `Example Award State Low Performance`
 `Immediate Vesting Applies` with `Example Award State Terminated`
 `Forfeiture Applies` with `Example Award State Terminated`
-`Holding Period Met` with `Grant Date` and `DATE` with 1, 1 and 2032
+`Holding Period Met` with `Grant Date` and `Date` with 1, 1 and 2032
 executing contract `Eligible Service Requirement` with `Example Award State Active` at 0 with the following events:  party `Elon Musk` did `maintain eligible service status` with `Chief Executive Officer` at 365
 executing contract `Milestone Achievement Requirement` with 1 and `Example Award State Active` at 0 with the following events:  party `Elon Musk` did `achieve market cap milestone` with 1 and `Trillion` with 2 at 365 party `Elon Musk` did `achieve operational milestone` with 1 and Product Goal at 730
 executing contract `Milestone Achievement Requirement` with 1 and `Example Award State Medium Performance` at 0 with the following events:  party `Elon Musk` did `achieve market cap milestone` with 1 and `Trillion` with 2 at 365

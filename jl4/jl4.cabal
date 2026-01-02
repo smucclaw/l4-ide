@@ -30,11 +30,35 @@ executable jl4-cli
   build-depends:
     jl4-core,
     jl4-lsp,
+    aeson,
+    bytestring,
+    cassava,
     directory,
+    filepath,
+    process,
+    text,
+    time,
     lsp-types,
     optparse-applicative,
     pretty-simple,
+    unordered-containers,
+    vector,
+    yaml,
   main-is: Main.hs
+
+executable jl4-schema
+  import: defaults
+  hs-source-dirs: app
+  build-depends:
+    jl4-core,
+    jl4-lsp,
+    aeson-pretty,
+    bytestring,
+    containers,
+    directory,
+    lsp-types,
+    optparse-applicative,
+  main-is: Schema.hs
 
 test-suite jl4-test
   import: defaults
@@ -43,11 +67,15 @@ test-suite jl4-test
   hs-source-dirs: tests
   main-is: Main.hs
   other-modules:
+    Hover
     SemanticTokens
     Paths_jl4
   autogen-modules:
     Paths_jl4
   build-depends:
+    aeson-pretty,
+    bytestring,
+    containers,
     Glob,
     filepath,
     hspec,

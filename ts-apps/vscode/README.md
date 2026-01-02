@@ -8,7 +8,7 @@ It includes a webview extension designed to visualize L4 programs as ladder diag
 From the root directory:
 
 ```bash
-npm install # if you haven't installed already
+npm ci # if you haven't installed already
 code .
 # In VSCode, press 'F5'
 ```
@@ -24,7 +24,7 @@ Make sure to open the root directory of this project in VSCode, to make sure `.v
 It is best to install starting from the root directory.
 
 ```bash
-npm install
+npm ci
 npm run build
 ```
 

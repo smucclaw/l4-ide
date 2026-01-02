@@ -548,6 +548,10 @@ Example debugging workflow:
 -- Bob's salary (4800) < minimum (5000)
 ```
 
+### Visual Traces for Curious Minds
+
+When the text trace feels too dense, turn it into a picture. From the REPL you can run `:trace some expression` (or the short `:tr` alias) to emit GraphViz DOT, then pipe it through `dot -Tsvg` for an instant diagram. Need a breadcrumb trail while you experiment? Run `:tracefile traces/session` once and every subsequent trace is saved as `session-01.dot`, `session-02.dot`, etc., with the expression, result, timestamp, and active imports recorded in the comments. Seeing the evaluation tree laid out helps beginners connect “L4 clauses” to the exact branch that fired—perfect for explaining results to teammates or stakeholders.
+
 ## Key Takeaways
 
 1. **Create reusable fixtures**—name your test data

@@ -1,0 +1,10 @@
+
+@desc calculate the zenzizenzic (fourth power) of a number
+GIVEN n IS A NUMBER @desc any number, but integers make it fun
+n zenzizenzic MEANS n * n * n * n
+
+#EVAL 2 `zenzizenzic`
+
+#EVAL 3 zenzizenzic
+
+#EVAL 10 zenzizenzic

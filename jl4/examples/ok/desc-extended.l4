@@ -1,0 +1,46 @@
+-- Test extended @desc annotation attachment for parameters and record fields
+-- Tests leading desc (on preceding line) as alternative to inline desc
+
+-- Test 1: Leading desc for GIVEN parameter (new feature)
+@desc Function with leading param desc
+GIVEN
+  @desc Leading description for x
+  x IS A NUMBER
+DECIDE test1 IS x + 1
+
+-- Test 2: Inline desc for parameter (existing behavior)
+@desc Function with inline param desc
+GIVEN y IS A NUMBER @desc Inline description for y
+DECIDE test2 IS y + 1
+
+-- Test 3: Multiple parameters with mixed styles
+@desc Function with mixed desc styles
+GIVEN
+  @desc Leading desc for a
+  a IS A NUMBER
+  b IS A NUMBER @desc Inline desc for b
+DECIDE test3 IS a + b
+
+-- Test 4: Leading desc for DECLARE HAS attribute (new feature)
+@desc Type with leading attribute desc
+DECLARE TestRecord HAS
+  @desc Leading description for the field
+  field IS A STRING
+
+-- Test 5: DECLARE with inline HAS desc (existing behavior)
+@desc Type with inline attribute desc
+DECLARE TestRecord2 HAS
+  field2 IS A STRING @desc Inline description for field2
+
+-- Test 6: DECLARE with multiple HAS fields, mixed styles
+@desc Type with mixed attribute desc styles
+DECLARE TestRecord3 HAS
+  @desc Leading desc for fieldA
+  fieldA IS A STRING
+  fieldB IS A NUMBER @desc Inline desc for fieldB
+  @desc Leading desc for fieldC
+  fieldC IS A BOOLEAN
+
+#EVAL test1 5
+#EVAL test2 10
+#EVAL test3 3 4

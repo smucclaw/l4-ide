@@ -1,0 +1,23 @@
+IMPORT prelude
+IMPORT daydate
+IMPORT `excel-date`
+
+`Sample iso`    MEANS "2024-02-29"
+`Sample slash`  MEANS "31/12/2023"
+`Bad date text` MEANS "not-a-date"
+`Bad time text` MEANS "24:00"
+
+#EVAL excelToday
+#EVAL excelNow
+
+#EVAL ExcelDateValue `Sample iso`
+#EVAL ExcelDateValue `Sample slash`
+#EVAL ExcelDateValue `Bad date text`
+
+#EVAL ExcelTimeValue "2:30 PM"
+#EVAL ExcelTimeValue "23:59:59"
+#EVAL ExcelTimeValue `Bad time text`
+
+#EVAL excelSerial1900 (Date 1 3 1900)
+#EVAL dateFromExcelSerial 61
+#EVAL dateFromExcelSerial 60

@@ -255,6 +255,30 @@ that a node might have (e.g., the darker background of (the 'function part' of) 
   opacity: var(--opacity-ladder-nonviable);
 }
 
+@utility ladder-viability-transition {
+  transform: scale(1);
+  transform-origin: center;
+  transition:
+    opacity 180ms ease,
+    filter 180ms ease,
+    transform 180ms ease,
+    text-decoration-color 180ms ease;
+}
+
+@utility irrelevant-ladder-element {
+  opacity: 0.35;
+  filter: grayscale(80%);
+  transform: scale(0.97);
+}
+
+@utility short-circuited-ladder-element {
+  opacity: 0.25;
+  transform: scale(0.96);
+  text-decoration-line: line-through;
+  text-decoration-thickness: 2px;
+  text-decoration-color: var(--color-destructive, #dc2626);
+}
+
 @utility bool-lit-node-border {
   border: var(--ladder-node-border-width) solid var(--ladder-node-border-color);
   border-radius: 2px;
@@ -284,6 +308,19 @@ that a node might have (e.g., the darker background of (the 'function part' of) 
     font-optical-sizing: auto;
     font-style: normal;
   }
+}
+
+/* Elicitation / query-plan emphasis: border thickness only (color stays default). */
+.elicitation-needed {
+  --ladder-node-border-width: calc(
+    var(--ladder-node-border-width-default) + 1px
+  );
+}
+
+.elicitation-next {
+  --ladder-node-border-width: calc(
+    var(--ladder-node-border-width-default) + 3px
+  );
 }
 
 /* Override border properties when highlighted */

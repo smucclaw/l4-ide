@@ -1,0 +1,17 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "x": {
+            "$ref": "#/$defs/NUMBER"
+        },
+        "y": {
+            "$ref": "#/$defs/NUMBER"
+        }
+    },
+    "required": [
+        "x",
+        "y"
+    ],
+    "title": "adder",
+    "type": "object"
+}

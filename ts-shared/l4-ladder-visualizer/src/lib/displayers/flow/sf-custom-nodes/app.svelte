@@ -12,6 +12,7 @@
     type AppArgLirNode,
     type AppLirNode,
   } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
+  import * as Tooltip from '$lib/ui-primitives/tooltip/index.js'
 
   import WithNormalHandles from '$lib/displayers/flow/helpers/with-normal-handles.svelte'
   import WithNonBundlingNodeBaseStyles from '$lib/displayers/flow/helpers/with-non-bundling-node-base-styles.svelte'
@@ -32,6 +33,30 @@
       ? 'highlighted-ladder-node'
       : ''
   )
+
+  const elicitationClassForUnique = (unique: number): string => {
+    const analysis = ladderGraph.getPartialEvalAnalysis(data.context)
+    if (!analysis) return ''
+    if (analysis.next.includes(unique)) return 'elicitation-next'
+    if (analysis.ranked.includes(unique)) return 'elicitation-needed'
+    if (analysis.stillNeeded.includes(unique)) return 'elicitation-needed'
+    return ''
+  }
+
+  const askBadgeForUnique = (
+    unique: number
+  ): { primaryText: string; allTexts: string[] } | null => {
+    const analysis = ladderGraph.getPartialEvalAnalysis(data.context)
+    if (!analysis) return null
+    if (!analysis.next.includes(unique)) return null
+    const asks = analysis.askByUnique.get(unique) ?? []
+    const allTexts = asks.map((ask) =>
+      ask.schemaSummary ? `${ask.label}: ${ask.schemaSummary}` : ask.label
+    )
+    const primaryText = allTexts[0]
+    if (!primaryText) return null
+    return { primaryText, allTexts }
+  }
 </script>
 
 <!---------------------------------------------------
@@ -58,14 +83,26 @@
                App Arg UI
 --------------------------------------------------->
 {#snippet argUI(arg: AppArgLirNode)}
+  {@const askBadge = askBadgeForUnique(arg.getUnique(data.context))}
   <IsViableIndicator context={data.context} node={arg}>
     <ValueIndicator
       value={arg.getValue(data.context, ladderGraph)}
-      additionalClasses={['border', 'border-black', 'rounded-lg']}
+      additionalClasses={[
+        'ubool-var-node-border',
+        'rounded-lg',
+        elicitationClassForUnique(arg.getUnique(data.context)),
+      ]}
     >
       <!-- Yes, we need cursor-pointer here. -->
       <button
-        class={['p-2', 'text-xs', 'cursor-pointer']}
+        class={[
+          'p-2',
+          'text-xs',
+          'cursor-pointer',
+          'flex',
+          'flex-col',
+          'gap-1',
+        ]}
         onclick={async () => {
           console.log('clicked: ', arg.getLabel(data.context), arg.getId())
 
@@ -76,7 +113,27 @@
           })
         }}
       >
-        {arg.getLabel(data.context)}
+        <div>{arg.getLabel(data.context)}</div>
+        {#if askBadge}
+          {#if askBadge.allTexts.length > 1}
+            <Tooltip.Root>
+              <Tooltip.Trigger>
+                <div class="text-[0.6rem] opacity-70">
+                  {askBadge.primaryText} (+{askBadge.allTexts.length - 1})
+                </div>
+              </Tooltip.Trigger>
+              <Tooltip.Content>
+                <div class="flex flex-col gap-1 max-w-xs">
+                  {#each askBadge.allTexts as line}
+                    <div>{line}</div>
+                  {/each}
+                </div>
+              </Tooltip.Content>
+            </Tooltip.Root>
+          {:else}
+            <div class="text-[0.6rem] opacity-70">{askBadge.primaryText}</div>
+          {/if}
+        {/if}
       </button>
     </ValueIndicator>
   </IsViableIndicator>

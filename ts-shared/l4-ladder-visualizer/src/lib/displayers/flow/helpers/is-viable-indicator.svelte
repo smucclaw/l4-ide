@@ -5,6 +5,10 @@
   import type { LadderLirNode } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
 
   import { FadedNodeCSSClass } from '$lib/layout-ir/ladder-graph/node-styles.js'
+  import {
+    IrrelevantNodeCSSClass,
+    ShortCircuitedNodeCSSClass,
+  } from '$lib/layout-ir/ladder-graph/node-styles.js'
 
   interface IsViableIndicatorProps {
     context: LirContext
@@ -21,9 +25,18 @@
 </script>
 
 <div
-  class={ladderGraph.nodeIsInNonViableSubgraph(context, node)
-    ? FadedNodeCSSClass
-    : ''}
+  class={[
+    'ladder-viability-transition',
+    ladderGraph.nodeIsInNonViableSubgraph(context, node)
+      ? FadedNodeCSSClass
+      : '',
+    ladderGraph.nodeIsInIrrelevantSubgraph(context, node)
+      ? IrrelevantNodeCSSClass
+      : '',
+    ladderGraph.nodeIsInShortCircuitedSubgraph(context, node)
+      ? ShortCircuitedNodeCSSClass
+      : '',
+  ].join(' ')}
 >
   {@render children()}
 </div>
