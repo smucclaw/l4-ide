@@ -24,11 +24,11 @@ This document specifies how `@ref` annotations should be attached to AST nodes. 
 
 ## Related Specifications
 
-| Annotation | Spec                             | Attachment Rule                                    |
-| ---------- | -------------------------------- | -------------------------------------------------- |
-| `@nlg`     | (implemented)                    | Attaches to `Name` nodes based on source position  |
+| Annotation | Spec                                       | Attachment Rule                                    |
+| ---------- | ------------------------------------------ | -------------------------------------------------- |
+| `@nlg`     | (implemented)                              | Attaches to `Name` nodes based on source position  |
 | `@desc`    | `doc/dev/specs/todo/EXPORT-SYNTAX-SPEC.md` | Attaches to immediately following `TopDecl`        |
-| `@ref`     | this document                    | Attaches to **any** immediately following AST node |
+| `@ref`     | this document                              | Attaches to **any** immediately following AST node |
 
 ## Design
 
