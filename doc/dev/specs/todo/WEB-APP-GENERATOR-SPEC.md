@@ -43,7 +43,39 @@ As users provide answers:
 - Parameters that become more relevant are emphasized (highlighted, moved to top)
 - The overall result updates live as soon as it becomes determined
 
-### 3. Explanation First
+### 3. Answer at Any Level of Granularity (Parent Node Assertions)
+
+Users should be able to assert truth values at **intermediate nodes**, not just leaf parameters.
+
+**Example:** Given a rule like:
+
+```
+DECIDE `eligible` IF
+    `is adult`
+    AND (`has income` OR `has assets`)
+```
+
+A traditional wizard would force the user to answer:
+1. "Are you an adult?" → Yes
+2. "Do you have income?" → ???
+3. "Do you have assets?" → ???
+
+But the user might *know* they satisfy the income-or-assets requirement without knowing (or wanting to disclose) which one. They should be able to click on the `(has income OR has assets)` node and assert "Yes, this is true" directly.
+
+**Benefits:**
+- Respects user privacy (no need to disclose *which* sub-condition is satisfied)
+- Matches how people actually reason ("I know I qualify for this part")
+- Reduces cognitive load for complex nested conditions
+- Enables "I don't know the details, but I know the answer" scenarios
+
+**UI Implication:** The parameter grid should show not just leaf inputs but also composite conditions that users can directly answer. These could be rendered as:
+- Collapsible groups with a "I know this is true/false" toggle at the group level
+- Inline assertion buttons next to OR/AND groups
+- A "shortcut" mode that shows only high-level conditions
+
+**Backend Implication:** The query-plan API already tracks atoms at various levels. The web app needs to map user assertions on parent nodes to the appropriate bindings, and the evaluator must respect these higher-level assertions.
+
+### 4. Explanation First
 
 Every determination comes with an explanation:
 - "You qualify because X and Y"
@@ -52,7 +84,7 @@ Every determination comes with an explanation:
 
 This is the "explainable AI" promise: the formal evaluation trace rendered in natural language.
 
-### 4. Schema-Driven Input Controls
+### 5. Schema-Driven Input Controls
 
 The decision-service provides JSON Schema for each parameter. The web app renders appropriate input controls:
 
@@ -65,7 +97,7 @@ The decision-service provides JSON Schema for each parameter. The web app render
 | `object` | Expandable fieldset |
 | `array` | Repeatable section |
 
-### 5. Embeddable and Standalone
+### 6. Embeddable and Standalone
 
 The web app should work as:
 - A standalone page (deployable to static hosting)
@@ -309,6 +341,17 @@ Generate a self-contained HTML/JS bundle that:
 4. **Partial saves**: Should we support saving progress and resuming later? (Implies persistence layer)
 
 5. **Multi-function apps**: Should one web app support multiple related decision functions? (e.g., "Check eligibility" then "Calculate amount")
+
+6. **Parent node assertion UI**: How exactly should we render intermediate/composite nodes for user assertion?
+   - Option A: Show the decision tree structure with toggles at each level
+   - Option B: Flat list with indentation showing hierarchy
+   - Option C: "Expert mode" toggle that reveals intermediate nodes
+   - Need to balance power-user flexibility with simplicity for casual users
+
+7. **Parent node assertion semantics**: When a user asserts a parent node, should we:
+   - Lock the child nodes as "answered by parent"?
+   - Allow overriding with specific child values later?
+   - Show a warning if child values would contradict the parent assertion?
 
 ## Success Criteria
 
