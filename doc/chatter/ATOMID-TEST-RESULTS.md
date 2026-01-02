@@ -1,7 +1,9 @@
 # AtomId Implementation Test Results
 
 ## Summary
+
 The atomId changes have been successfully implemented and tested. All integration tests pass, confirming that:
+
 1. AtomIds are being generated correctly
 2. They are stable UUIDv5 values based on function name + label + input refs
 3. They can be used to bind values in query-plan operations
@@ -9,9 +11,11 @@ The atomId changes have been successfully implemented and tested. All integratio
 ## Test Results
 
 ### Integration Test: "accepts bindings by atomId (stable UUIDv5 key)"
+
 **Status: ✅ PASSED**
 
 This test validates the core functionality:
+
 1. Calls `queryPlan` with no bindings to get initial atoms
 2. Extracts an atom's `atomId` field
 3. Uses that `atomId` to bind a value in a subsequent query-plan call
@@ -20,6 +24,7 @@ This test validates the core functionality:
 Test location: `jl4-decision-service/test/IntegrationSpec.hs:349-373`
 
 ### Build Test
+
 **Status: ✅ PASSED**
 
 ```bash
@@ -33,9 +38,11 @@ cabal build jl4-lsp
 ### Changes Made
 
 1. **Added functionName to VizState** (jl4-lsp/src/LSP/L4/Viz/Ladder.hs:92-93)
+
    - Tracks the function being visualized for atomId generation
 
 2. **Created generateAtomId helper** (jl4-lsp/src/LSP/L4/Viz/Ladder.hs:459-495)
+
    - Generates stable UUIDv5 atomIds
    - Algorithm matches jl4-query-plan implementation:
      ```
@@ -44,6 +51,7 @@ cabal build jl4-lsp
      ```
 
 3. **Updated all atom creation sites:**
+
    - `varLeaf` (line 424): Now generates atomId for UBoolVar nodes
    - `leafFromExpr` (line 436): Now generates atomId for UBoolVar nodes
    - `App` node creation (line 387): Now generates atomId for App nodes
@@ -53,12 +61,14 @@ cabal build jl4-lsp
 ### Before vs After
 
 **Before:**
+
 ```haskell
 V.UBoolVar vid vname defaultUBoolVarValue canInline ""
 V.App vid vname <$> traverse go args <*> pure ""
 ```
 
 **After:**
+
 ```haskell
 functionName <- use #functionName
 let atomId = generateAtomId functionName vname.label refs
@@ -69,6 +79,7 @@ V.App vid vname <$> traverse go args <*> pure atomId
 ## Frontend Impact
 
 With these changes, the frontend's `ladder.svelte.ts` can now:
+
 - Build atomId→unique mappings using the stable `atomId` field
 - Match query-plan atoms to ladder nodes correctly
 - Enable proper elicitation overrides and highlighting
@@ -77,6 +88,7 @@ With these changes, the frontend's `ladder.svelte.ts` can now:
 ## Verification
 
 The passing integration test confirms:
+
 - ✅ AtomIds are non-empty strings
 - ✅ AtomIds are stable (deterministic based on inputs)
 - ✅ AtomIds match between ladder output and query-plan output
