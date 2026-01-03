@@ -30,10 +30,16 @@ import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
 import qualified Data.Set as Set
 import qualified Data.List.NonEmpty as NE
+import qualified Data.List as List
 import Optics.State.Operators ((<%=), (%=))
 import Optics
 import Control.Monad.Extra (unlessM)
 import qualified Language.LSP.Protocol.Types as LSP
+import qualified Data.UUID as UUID
+import qualified Data.UUID.V5 as UUIDV5
+import qualified Data.ByteString as BS
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as TextEncoding
 
 import qualified L4.TypeCheck as TC
 import L4.Annotation
@@ -84,6 +90,8 @@ data VizConfig = MkVizConfig
 data VizState = MkVizState
   { cfg            :: !VizConfig
   , maxId          :: !ID
+  , functionName   :: !Text
+  -- ^ Name of the function being visualized (for atomId generation)
   , appExprMakers  :: IntMap (V.EvalAppRequestParams -> Expr Resolved)
   -- ^ Map from Unique of V.ID to eval-app-directive maker
   , defsForInlining :: IntMap (Expr Resolved)
@@ -93,9 +101,10 @@ data VizState = MkVizState
   deriving stock (Generic)
 
 instance Show VizState where
-  show MkVizState{cfg, maxId, appExprMakers, defsForInlining, atomDeps, atomInputRefs} =
+  show MkVizState{cfg, maxId, functionName, appExprMakers, defsForInlining, atomDeps, atomInputRefs} =
     "MkVizState { cfg = " <> show cfg <>
     ", maxId = " <> show maxId <>
+    ", functionName = " <> show functionName <>
     ", (keys of) appExprMakers =   " <> show (Map.keys appExprMakers) <>
     ", defsForInlining =  " <> show defsForInlining <>
     ", (keys of) atomDeps = " <> show (Map.keys atomDeps) <>
@@ -106,6 +115,7 @@ mkInitialVizState cfg =
   MkVizState
     { cfg
     , maxId = MkID 0
+    , functionName = ""
     , appExprMakers = Map.empty
     , defsForInlining = Map.empty
     , atomDeps = Map.empty
@@ -304,6 +314,8 @@ translateDecide (MkDecide _ (MkTypeSig _ givenSig _) (MkAppForm _ funResolved ap
     unlessM (hasBooleanType (getAnno body)) $
       throwError InvalidDecideMustHaveBoolRetType
 
+    let funName = mkPrettyVizName funResolved
+    assign #functionName funName.label
     assign #defsForInlining =<< collectDefsForInlining
     shouldSimplify <- getShouldSimplify
     vid            <- getFresh
@@ -311,7 +323,7 @@ translateDecide (MkDecide _ (MkTypeSig _ givenSig _) (MkAppForm _ funResolved ap
     pure $ V.MkFunDecl
       vid
       -- didn't want a backtick'd name in the header
-      (mkPrettyVizName funResolved)
+      funName
       (paramNamesFromGivens givenSig appArgs)
       vizBody
       where
@@ -367,9 +379,13 @@ translateExpr False = go
               vid <- getFresh
               prepEvalAppMaker vid e
               let uniq = vid.id
-                  vname = V.MkName uniq (prettyLayout e)
-              recordAtomInputRefs uniq =<< freeInputRefsExpanded Set.empty e
-              V.App vid vname <$> traverse go args <*> pure ""
+                  label = prettyLayout e
+                  vname = V.MkName uniq label
+              refs <- freeInputRefsExpanded Set.empty e
+              recordAtomInputRefs uniq refs
+              functionName <- use #functionName
+              let atomId = generateAtomId functionName label refs
+              V.App vid vname <$> traverse go args <*> pure atomId
             else
               leafFromExpr e
 
@@ -409,21 +425,27 @@ varLeaf vid vname resolved = do
       Nothing -> pure (Set.singleton (MkInputRef vname.unique []))
       Just body -> freeInputRefsExpanded (Set.singleton vname.unique) body
   recordAtomInputRefs vname.unique refs
-  pure $ V.UBoolVar vid vname defaultUBoolVarValue canInline ""
+  functionName <- use #functionName
+  let atomId = generateAtomId functionName vname.label refs
+  pure $ V.UBoolVar vid vname defaultUBoolVarValue canInline atomId
 
 leafFromExpr :: Expr Resolved -> Viz IRExpr
 leafFromExpr expr = do
   vid <- getFresh
   tempUniqueTODO <- getFresh
   let uniq = tempUniqueTODO.id
-  recordAtomInputRefs uniq =<< freeInputRefsExpanded Set.empty expr
+  refs <- freeInputRefsExpanded Set.empty expr
+  recordAtomInputRefs uniq refs
+  functionName <- use #functionName
+  let label = prettyLayout expr
+      atomId = generateAtomId functionName label refs
   pure $
     V.UBoolVar
       vid
-      (V.MkName uniq (prettyLayout expr))
+      (V.MkName uniq label)
       defaultUBoolVarValue
       defaultUBoolVarCanInline
-      ""
+      atomId
 
 ------------------------------------------------------
 -- Name helpers
@@ -438,6 +460,39 @@ mkPrettyVizName = mkVizNameWith prettyLayout
 mkVizNameWith :: (Name -> Text) -> Resolved -> V.Name
 mkVizNameWith printer (getUniqueName -> (MkUnique {unique}, name)) =
   V.MkName unique (printer name)
+
+------------------------------------------------------
+-- AtomId generation
+------------------------------------------------------
+
+-- | Generate a stable UUIDv5-based atomId from function name, label, and input refs.
+-- This matches the algorithm used in jl4-query-plan/src/L4/Decision/QueryPlan.hs
+generateAtomId :: Text -> Text -> Set InputRef -> Text
+generateAtomId functionName label refs =
+  let
+    renderInputRef :: InputRef -> Text
+    renderInputRef ref =
+      let
+        rootTxt = Text.pack (show ref.rootUnique)
+        pathTxt =
+          case ref.path of
+            [] -> ""
+            xs -> "." <> Text.intercalate "." xs
+       in rootTxt <> pathTxt
+
+    sortedRefs =
+      List.sort
+        [ renderInputRef ref
+        | ref <- Set.toList refs
+        ]
+
+    canonical =
+      Text.intercalate
+        "|"
+        ( [functionName, label]
+            <> ["refs=" <> Text.intercalate ";" sortedRefs | not (null sortedRefs)]
+        )
+   in UUID.toText (UUIDV5.generateNamed UUIDV5.namespaceURL (BS.unpack (TextEncoding.encodeUtf8 canonical)))
 
 ------------------------------------------------------
 -- Crude dependency tracking
