@@ -36,12 +36,32 @@ The query planner's ordering is used for:
 - Accessibility announcements
 - But NOT for restricting what users can answer
 
-### 2. Progressive Disclosure of Relevance
+### 2. Progressive Disclosure of Relevance with Real-Time Visual Feedback
 
-As users provide answers:
-- Parameters that become irrelevant (don't-care) are visually de-emphasized (gray, smaller, moved to bottom)
+As users provide answers, the UI provides **immediate, animated visual feedback** showing how their answers affect other questions:
+
+**Short-Circuit Visualization:**
+- When a user answers a question that short-circuits a logical condition (e.g., satisfying one branch of an OR), all other alternatives **immediately fade to gray**
+- The transition is smooth and animated (not instant) to help users understand the cause-and-effect relationship
+- Questions are **not hidden**, just visually de-emphasized - users can still see what became irrelevant and why
+- This makes the logical reasoning transparent: "I answered Yes to X, so Y and Z are no longer needed"
+
+**Example (Disjunction):**
+```
+Did a data breach occur?
+  - unauthorised access [Yes ✓]
+  - unauthorised use     [grayed out - no longer needed]
+  - unauthorised disclosure  [grayed out - no longer needed]
+  - unauthorised copying     [grayed out - no longer needed]
+```
+
+**Dynamic Relevance:**
+- Parameters that become irrelevant transition smoothly to grayed-out state
 - Parameters that become more relevant are emphasized (highlighted, moved to top)
+- Parameters maintain their spatial position during transitions (spatial stability)
 - The overall result updates live as soon as it becomes determined
+
+**Visual Principle:** Make the decision logic **visible** through UI state changes, not just functional.
 
 ### 3. Answer at Any Level of Granularity (Parent Node Assertions)
 
@@ -103,6 +123,52 @@ The web app should work as:
 - A standalone page (deployable to static hosting)
 - An embeddable component (iframe or web component)
 - A route within jl4-web for quick prototyping
+
+## Data Model
+
+### Parameter State Model
+
+Each parameter in the wizard maintains the following state:
+
+```typescript
+type ParameterState = {
+  key: string                    // Parameter identifier
+  label: string                  // Display label (from schema.alias or key)
+  schema: Parameter              // JSON schema for the parameter
+  value: unknown                 // Current user answer
+  status: ParameterStatus        // Current relevance status
+  rank: number                   // Priority ranking from query-plan
+  asks: QueryAsk[]              // Related query atoms from query-plan
+  error?: string                 // Validation error message
+}
+
+type ParameterStatus =
+  | 'unanswered-next'      // Should be answered next (highest priority)
+  | 'unanswered-relevant'  // Still needed but not next
+  | 'answered'             // User has provided an answer
+  | 'irrelevant'           // No longer needed based on other answers
+```
+
+### Component Structure
+
+```
+Wizard.svelte                    # Main orchestrator component
+├── OutcomeBanner.svelte        # Shows determination status/result
+└── ParameterGrid.svelte        # Organizes parameters into active/irrelevant groups
+    └── ParameterCard.svelte    # Individual parameter input with visual state transitions
+        ├── BooleanInput.svelte      # Yes/No toggle buttons
+        ├── TextInput.svelte         # Text field
+        ├── NumberInput.svelte       # Number field
+        └── EnumInput.svelte         # Radio buttons/select for enums
+```
+
+### Visual Design Principles
+
+1. **Transparency**: Make logical reasoning visible through UI state changes
+2. **Immediate Feedback**: Update UI instantly when answers change relevance
+3. **Spatial Stability**: Keep questions in consistent positions during transitions
+4. **Clear Hierarchy**: Use visual weight to indicate priority (next > relevant > irrelevant)
+5. **Graceful Degradation**: Irrelevant questions fade but remain visible and accessible
 
 ## Architecture
 
@@ -184,15 +250,21 @@ The web app should work as:
 
 ### Parameter Card States
 
-Each parameter is rendered as a card with visual states:
+Each parameter is rendered as a card with visual states. **All state transitions are animated smoothly** to provide visual feedback about logical relationships:
 
-| State | Appearance | Meaning |
-|-------|------------|---------|
-| `unanswered-relevant` | Normal, possibly highlighted border | Should answer this |
-| `unanswered-next` | Emphasized, pulsing indicator | Query planner's top recommendation |
-| `answered` | Filled, checkmark | User has provided value |
-| `irrelevant` | Grayed, smaller, at bottom | Don't-care under current assignments |
-| `error` | Red border | Validation failed |
+| State | Appearance | Meaning | Transition |
+|-------|------------|---------|------------|
+| `unanswered-next` | Emphasized border, highlighted | Query planner's top recommendation | Fade in emphasis when prioritized |
+| `unanswered-relevant` | Normal, clean appearance | Should answer this | Standard state |
+| `answered` | Filled, checkmark, accent color | User has provided value | Smooth fill animation |
+| `irrelevant` | Grayed out (50% opacity), subtle | No longer needed based on other answers | **300ms fade to gray** - most important transition |
+| `error` | Red border, shake animation | Validation failed | Shake effect on error |
+
+**Key Transition: Relevant → Irrelevant**
+- Duration: 300ms ease-out
+- Effect: Opacity fades from 100% to 50%, subtle scale down
+- Purpose: Make short-circuit logic visible ("your answer made this irrelevant")
+- Spatial: Card stays in place, doesn't jump or reflow
 
 ### Interaction Flow
 
@@ -291,28 +363,39 @@ Generate a self-contained HTML/JS bundle that:
 
 ## Implementation Plan
 
-### Phase 1: Core Component
+### Phase 1: Core Component ✅ COMPLETED
 
-1. Create `ts-apps/l4-wizard/` with Svelte + Vite
-2. Implement `ParameterGrid.svelte` with card-based layout
-3. Implement schema-to-control mapping
-4. Wire up decision-service client (reuse from jl4-web)
-5. Add query-plan integration for relevance highlighting
+1. ✅ Create `ts-apps/l4-wizard/` with Svelte + Vite
+2. ✅ Implement `ParameterGrid.svelte` with card-based layout
+3. ✅ Implement schema-to-control mapping (boolean, text, number, enum)
+4. ✅ Wire up decision-service client
+5. ✅ Add query-plan integration for relevance highlighting
+6. ✅ Fixed infinite loop bug in Svelte 5 reactivity
+7. ✅ Fixed API response structure mismatch (`data.function` not `data.declaration`)
+8. ✅ Fixed backtick normalization for L4 identifiers
 
-### Phase 2: Explanation & Trace
+### Phase 2: Visual Feedback ✅ COMPLETED
+
+1. ✅ Add smooth CSS transitions (300ms ease-out) to ParameterCard
+2. ✅ Enhance visual styling for irrelevant state (opacity 50%, scale 98%)
+3. ✅ Add "(no longer needed)" indicator for irrelevant parameters
+4. ✅ Text color transitions for fading effect
+5. ✅ Maintain spatial stability during state changes
+
+### Phase 3: Explanation & Trace
 
 1. Render evaluation trace as human-readable explanation
 2. Add collapsible explanation panel
 3. Support `@desc` annotations for parameter labels
 4. Add source citations (rule name, line number)
 
-### Phase 3: Deployment
+### Phase 4: Deployment
 
 1. Add route to jl4-web for embedded mode
 2. Create standalone build configuration
 3. Document embedding and static export options
 
-### Phase 4: Polish
+### Phase 5: Polish
 
 1. Accessibility audit (WCAG 2.1 AA)
 2. Mobile responsive design
