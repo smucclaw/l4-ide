@@ -181,4 +181,4 @@ The goal is guardrailed AI where hallucinations are impossible in the formal par
 - **How-To**: `doc/how-to/llm-querying.md` - Task-oriented recipes
 - **Reference**: `doc/reference/llm-api.md` - Technical API documentation
 - **Examples**: `jl4/examples/advanced/` - Real-world workflows
-- **Spec**: `doc/todo/LLM-INTEGRATION-SPEC.md` - Implementation roadmap
+- **Spec**: `doc/dev/specs/todo/LLM-INTEGRATION-SPEC.md` - Implementation roadmap

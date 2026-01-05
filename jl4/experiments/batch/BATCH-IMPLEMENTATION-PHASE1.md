@@ -138,6 +138,6 @@ To continue implementation (Phase 2):
 
 ## References
 
-- Spec: `doc/todo/BATCH-PROCESSING-SPEC.md`
+- Spec: `doc/dev/specs/todo/BATCH-PROCESSING-SPEC.md`
 - Export functions: `jl4-core/src/L4/Export.hs`
 - PR #682: `@desc` annotation support (merged)

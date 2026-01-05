@@ -1,6 +1,6 @@
 # Mixfix Usage Span Issue
 
-> **Update (2025-12)**: Both multi-operand mixfix expressions and postfix-with-bare-variable calls now work via the type-checker rewrites described in `doc/done/MIXFIX-USAGE-SPAN-FIX.md` and `doc/issues/POSTFIX-WITH-VARIABLES-BUG.md`. The notes below are preserved for historical context and potential parser refactors.
+> **Update (2025-12)**: Both multi-operand mixfix expressions and postfix-with-bare-variable calls now work via the type-checker rewrites described in `doc/dev/specs/done/MIXFIX-USAGE-SPAN-FIX.md` and `doc/issues/POSTFIX-WITH-VARIABLES-BUG.md`. The notes below are preserved for historical context and potential parser refactors.
 
 ## Context
 

@@ -625,6 +625,6 @@ The runtime tool (CLI/REPL/API/LSP) decides whether to actually collect/display 
 
 ## Related Documents
 
-- `doc/todo/GRAPHVIZ-SHARING-LETIN-WHERE.md` - Sharing visualization motivation
-- `doc/todo/GRAPHVIZ-REFACTOR-PLAN.md` - GraphViz2 refactoring history
-- `doc/todo/GRAPHVIZ-TRACE-VISUALIZATION-SPEC.md` - Original GraphViz spec
+- `doc/dev/specs/todo/GRAPHVIZ-SHARING-LETIN-WHERE.md` - Sharing visualization motivation
+- `doc/dev/specs/todo/GRAPHVIZ-REFACTOR-PLAN.md` - GraphViz2 refactoring history
+- `doc/dev/specs/todo/GRAPHVIZ-TRACE-VISUALIZATION-SPEC.md` - Original GraphViz spec
