@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **L4 is a domain-specific programming language for law.** It treats legal rules and contracts as executable specifications, bringing software engineering rigor (IDEs, compilers, debuggers, test suites, formal verification) to legal drafting and contract analysis.
 
 L4 enables:
+
 - Formalizing legal rules with mathematical precision
 - Testing contracts against scenarios before deployment
 - Finding logical contradictions and loopholes automatically
@@ -15,6 +16,7 @@ L4 enables:
 - Integrating with enterprise systems via REST APIs
 
 **Design Philosophy:**
+
 - Layout-sensitive syntax (like Python) for approachability
 - Strongly typed with algebraic data types (inspired by Haskell)
 - Isomorphic to legal text (closely follows original document structure)
@@ -25,6 +27,7 @@ L4 enables:
 This is a **dual-stack monorepo**:
 
 ### Haskell Stack (Cabal Multi-Package Project)
+
 - **`jl4-core/`** - Core L4 language implementation (parser, typechecker, evaluator)
   - `src/L4/Parser.hs` - Layout-sensitive parser
   - `src/L4/TypeCheck.hs` - Bidirectional type checker
@@ -40,6 +43,7 @@ This is a **dual-stack monorepo**:
 **Cabal packages:** Listed in `cabal.project` - all build together with `cabal build all`
 
 ### TypeScript Stack (Turborepo + npm Workspaces)
+
 - **`ts-apps/vscode/`** - VS Code extension
 - **`ts-apps/jl4-web/`** - Web-based editor (Svelte)
 - **`ts-apps/webview/`** - Webview components
@@ -54,6 +58,7 @@ This is a **dual-stack monorepo**:
 ## Common Commands
 
 ### Initial Setup
+
 ```bash
 # Install TypeScript dependencies (use ci for reproducible builds)
 npm ci && npm run build
@@ -146,6 +151,7 @@ npm run dev
 Then open http://localhost:5173
 
 **Helper script modes:**
+
 - `./dev-start.sh full` - Show commands for all services
 - `./dev-start.sh decision-only` - Just decision service
 - `./dev-start.sh websessions-with-push` - Websessions with push enabled
@@ -174,6 +180,7 @@ Source (.l4) → Parser → AST → Desugarer → Type Checker → Evaluator →
 ```
 
 **Key modules:**
+
 - `L4.Parser` - Layout-sensitive parsing (indentation-based)
 - `L4.Syntax` - AST definitions
 - `L4.Desugar` - Mixfix operator resolution, syntactic sugar expansion
@@ -205,6 +212,7 @@ VS Code Extension → jl4-lsp (WebSocket/stdio) → jl4-core → Type checking +
 ## L4 Language Features
 
 ### File Anatomy
+
 - `GIVEN` - Function parameters with types
 - `DECLARE` - Enums and record types
 - `DECIDE` / `MEANS` / `GIVETH` - Function definitions
@@ -215,6 +223,7 @@ VS Code Extension → jl4-lsp (WebSocket/stdio) → jl4-core → Type checking +
 - `@desc` - Semantic annotations for documentation/hover
 
 ### Type System
+
 - Primitive types: `NUMBER`, `STRING`, `BOOLEAN`, `DATE`
 - Algebraic types: Records, Enums, Optional (Maybe monad)
 - Lists: `LIST OF <type>`
@@ -222,9 +231,11 @@ VS Code Extension → jl4-lsp (WebSocket/stdio) → jl4-core → Type checking +
 - Type coercion builtins: `TOSTRING`, `TONUMBER`, `TODATE`, `TRUNC`
 
 ### Temporal Logic
+
 Multi-temporal evaluation contexts for time-dependent rules. See `jl4-core/libraries/temporal-prelude.l4`.
 
 ### Mixfix Operators
+
 Custom operators with mixed notation (prefix/infix/postfix/closed). Example: `_IS ELIGIBLE FOR_` becomes `person IS ELIGIBLE FOR benefit`.
 
 ## Query Planning & Symbolic Evaluation
@@ -234,6 +245,7 @@ Custom operators with mixed notation (prefix/infix/postfix/closed). Example: `_I
 ### What It Does
 
 When a user provides **partial input** to a boolean decision function, the system performs **symbolic evaluation** to:
+
 1. Determine which parameters are **relevant** given known inputs
 2. Return a **prioritized list** of parameters still needed to reach a decision
 3. Detect **don't-care** variables that can't affect the outcome
@@ -244,6 +256,7 @@ This enables conversational interfaces where an LLM chatbot asks only relevant q
 ### Example Use Case
 
 Consider a legal rule:
+
 ```l4
 DECIDE `may purchase alcohol` IF
            you are 21+ years old
@@ -256,6 +269,7 @@ DECIDE `may purchase alcohol` IF
 ```
 
 If user says they're 30 years old, the system automatically determines:
+
 - **Don't care:** parental approval, legal emancipation (can't affect outcome)
 - **Still needed:** marital status, spousal approval, beverage type
 - **Ranking:** Which question to ask next based on impact
@@ -263,6 +277,7 @@ If user says they're 30 years old, the system automatically determines:
 ### Architecture
 
 **Haskell Backend (`jl4-query-plan/`):**
+
 - `L4.Decision.BooleanDecisionQuery` - BDD (Binary Decision Diagram) implementation
   - Compiles boolean expressions into reduced ordered BDDs
   - Supports cofactoring (variable elimination under partial assignments)
@@ -274,6 +289,7 @@ If user says they're 30 years old, the system automatically determines:
   - Tracks provenance: which input parameters does each atom depend on?
 
 **TypeScript Frontend (`ts-shared/`):**
+
 - `boolean-analysis/` - ROBDD (Reduced Ordered BDD) implementation in TypeScript
   - Used when no `App` nodes present (pure boolean logic)
   - Falls back to simpler analysis when App nodes exist
@@ -283,6 +299,7 @@ If user says they're 30 years old, the system automatically determines:
 - `decision-service-types/` - Shared TypeScript types for `/query-plan` API
 
 **Integration Points:**
+
 - **Decision Service API:** `POST /functions/{id}/query-plan` endpoint
   - Accepts bindings: `{"label": {"age": true}, "unique": {42: false}, "atomId": {"uuid...": true}}`
   - Returns: `{asks: [{atoms, label, path, schema}], stillNeeded, impact, inputs, outcome}`
@@ -303,11 +320,13 @@ If user says they're 30 years old, the system automatically determines:
 ### Theory Background
 
 **Three-Valued Logic (Kleene):**
+
 - Extends boolean logic with `UNKNOWN` for partial information
 - `False AND Unknown = False` (short-circuit)
 - `True AND Unknown = Unknown` (need more info)
 
 **Binary Decision Diagrams (BDDs):**
+
 - Canonical representation of boolean functions
 - Ordered variables for efficient operations
 - Cofactoring: substitute variable value, simplify
@@ -318,6 +337,7 @@ See `doc/todo/BOOLEAN-MINIMIZATION-SPEC.md` for detailed specification.
 ### Working with Query Planning Code
 
 **Adding query-plan support to a new component:**
+
 1. Import `@repo/decision-service-types` for TypeScript types
 2. Call `/query-plan` endpoint with current bindings
 3. Use `elicitationOverrideFromQueryPlan()` to map response to ladder UI
@@ -325,6 +345,7 @@ See `doc/todo/BOOLEAN-MINIMIZATION-SPEC.md` for detailed specification.
 5. Use `asks[*].schema` for form generation/validation
 
 **Debugging query planning:**
+
 ```bash
 # REPL: Test query planning interactively
 cabal run jl4-repl -- file.l4
@@ -338,6 +359,7 @@ curl -X POST "http://localhost:8001/functions/uuid:function/query-plan" \
 ```
 
 **Related modules:**
+
 - `jl4-decision-service/src/Backend/DecisionQueryPlan.hs` - API endpoint implementation
 - `jl4-lsp/src/LSP/L4/Viz/QueryPlan.hs` - LSP query-plan builder (reuses `jl4-query-plan`)
 - `ts-shared/l4-ladder-visualizer/src/lib/eval/query-plan-override.ts` - UI mapping logic
@@ -345,18 +367,23 @@ curl -X POST "http://localhost:8001/functions/uuid:function/query-plan" \
 ## Testing Strategy
 
 ### Golden File Testing
+
 Test outputs are captured in `.golden/` directories. When adding new tests:
+
 1. First run creates golden file (test fails: "failFirstTime is set to True")
 2. Second run compares against golden file (should pass)
 3. To update: delete golden files and re-run twice
 
 ### Test Files Location
+
 - **Passing tests:** `jl4/ok/` - Files that should parse, typecheck, evaluate successfully
 - **Failing tests:** `jl4/not-ok/` - Files that should fail (parse errors, type errors)
 - **Experiments:** `jl4/experiments/` - Real-world examples (parking, citizenship, etc.)
 
 ### Test Performance
+
 The test suite is comprehensive but slow (~hundreds of examples). For faster iteration:
+
 ```bash
 # Filter to specific tests
 cabal test jl4-test --test-options='--match "tdnr"'
@@ -369,21 +396,25 @@ grep -i "fail" /tmp/test-output.txt
 ## Documentation
 
 ### For AI/LLM Context
+
 - **`AGENTS.md`** - AI agent development notes, design principles, testing guide
 - **`CLAUDE.md`** (this file) - Repository guide for Claude Code
 
 ### For Developers
+
 - **`README.md`** - High-level overview, real-world impact, status
 - **`doc/dev/setup.md`** - Developer setup (Haskell, TypeScript, GraphViz)
 - **`doc/dev/local-config.md`** - Running services locally
 - **`doc/dev/deployment/`** - NixOS provisioning and deployment
 
 ### For Learning L4
+
 - **`doc/foundation-course-ai/`** - Complete introduction (Modules 0-6)
 - **`doc/advanced-course-ai/`** - Production-grade development (Modules A1-A11)
 - **`doc/README.md`** - Language reference and theoretical foundations
 
 ### Specifications
+
 - **`doc/todo/`** - Planned features and in-progress tasks
 - **`doc/done/`** - Completed specifications for reference
 
@@ -442,7 +473,9 @@ Open `jl4/examples/` folder to test syntax highlighting and language features.
 ## Important Notes
 
 ### Shell Quoting with L4
+
 **Backticks (`` ` ``) are meaningful in L4** (quoted identifiers) but trigger command substitution in bash/zsh. When running shell commands with L4 snippets containing backticks, quote or escape them:
+
 ```bash
 rg 'foo `bar`'  # Good
 rg "foo \`bar\`"  # Good
@@ -450,16 +483,19 @@ rg foo `bar`  # BAD - executes bar command
 ```
 
 ### Package Manager Discipline
+
 - **Use `npm ci`** for regular development (reproducible, faster)
 - **Only use `npm install`** when adding/updating packages
 - If `npm ci` fails, investigate before running `npm install`
 
 ### Performance Considerations
+
 - Excel date/temporal tests are slow due to large library imports
 - Use test filtering during development: `--test-options='--match "pattern"'`
 - Decision service module precompilation gives 10-100x speedup
 
 ### Deployment Environments
+
 - **Local:** `cabal run` with command-line args, localhost URLs
 - **Dev Server:** NixOS flake target `jl4-dev`, domain `dev.jl4.legalese.com`
 - **Production:** NixOS flake target `jl4-aws-2505`, domain `jl4.legalese.com`
