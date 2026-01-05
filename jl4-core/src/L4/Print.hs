@@ -5,6 +5,7 @@ import qualified Base.Text as Text
 import L4.Evaluate.ValueLazy as Lazy
 import L4.Syntax
 
+import Data.Char
 import Data.Time (toGregorian)
 import Prettyprinter
 import Prettyprinter.Render.Text
@@ -567,7 +568,11 @@ instance LayoutPrinter Address where
   printWithLayout (MkAddress u a) = "&" <> pretty a <> "@" <> pretty u
 
 quoteIfNeeded :: Text.Text -> Text.Text
-quoteIfNeeded n = if Text.any (== ' ') n then quote n else n
+quoteIfNeeded n = case Text.uncons $ Text.dropAround (== '_') n of
+  Nothing -> n
+  Just (c, xs)
+    | isAlpha c && Text.all isAlphaNum xs -> n
+    | otherwise -> quote n
 
 quote :: Text.Text -> Text.Text
 quote n = "`" <> n <> "`"
