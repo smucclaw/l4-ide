@@ -1,0 +1,21 @@
+-- Level 4: Nested AND/OR combinations
+-- Formula: (a AND b) OR (c AND (d OR e))
+-- Tests more complex nesting and partial evaluation
+-- Expected behavior:
+--   a=true, b=true:     determined True, c/d/e are don't-care
+--   c=false:            still needs a and b, d and e are don't-care
+--   c=true, d=true:     determined True, a/b/e are don't-care
+--   c=true, e=true:     determined True, a/b/d are don't-care
+--   c=true, d=false:    still needs a, b, and e
+--   c=true, d=false, e=false: still needs a and b
+--   a=false, c=false:   determined False, b/d/e are don't-care
+--   a=false, c=true, d=false, e=false: determined False, b is don't-care
+
+@export default Test nested AND/OR combinations
+GIVEN a IS A BOOLEAN @desc first var in left branch
+      b IS A BOOLEAN @desc second var in left branch
+      c IS A BOOLEAN @desc first var in right branch
+      d IS A BOOLEAN @desc first option in nested OR
+      e IS A BOOLEAN @desc second option in nested OR
+GIVETH A BOOLEAN
+DECIDE `complex nested result` IF (a AND b) OR (c AND (d OR e))

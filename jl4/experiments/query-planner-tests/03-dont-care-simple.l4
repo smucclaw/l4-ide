@@ -1,0 +1,19 @@
+-- Level 3: Simple don't-care detection
+-- Formula: (a AND b) OR (c AND d)
+-- Tests that variables in one branch become don't-care when the other branch is determined
+-- Expected behavior:
+--   a=true, b=true:   determined True, c and d are don't-care
+--   c=true, d=true:   determined True, a and b are don't-care
+--   a=false:          still needs c and d, b is don't-care
+--   b=false:          still needs c and d, a is don't-care
+--   c=false:          still needs a and b, d is don't-care
+--   d=false:          still needs a and b, c is don't-care
+--   a=false, c=false: determined False, b and d are don't-care
+
+@export default Test don't-care variable detection
+GIVEN a IS A BOOLEAN @desc first condition in left branch
+      b IS A BOOLEAN @desc second condition in left branch
+      c IS A BOOLEAN @desc first condition in right branch
+      d IS A BOOLEAN @desc second condition in right branch
+GIVETH A BOOLEAN
+DECIDE `either branch succeeds` IF (a AND b) OR (c AND d)

@@ -17,7 +17,8 @@ module L4.Decision.QueryPlan (
 import Base
 import qualified L4.Decision.BooleanDecisionQuery as BDQ
 import Control.Applicative ((<|>))
-import Data.Aeson (FromJSON, ToJSON)
+import Data.Aeson (FromJSON, ToJSON, (.=), object)
+import qualified Data.Aeson as Aeson
 import qualified Data.ByteString as BS
 import qualified Data.IntMap.Lazy as IntMap
 import Data.IntMap.Lazy (IntMap)
@@ -104,7 +105,21 @@ data QueryAtom = QueryAtom
   , inputRefs :: ![InputRef]
   }
   deriving stock (Show, Read, Ord, Eq, Generic)
-  deriving anyclass (FromJSON, ToJSON)
+  deriving anyclass (FromJSON)
+
+-- | Strip backticks from L4 quoted identifiers when serializing to JSON.
+-- Backticks are L4's syntax for allowing spaces in identifiers, but in JSON
+-- we already have double quotes for string keys, so backticks shouldn't leak through.
+stripBackticks :: Text -> Text
+stripBackticks t = fromMaybe t $ Text.stripPrefix "`" t >>= Text.stripSuffix "`"
+
+instance ToJSON QueryAtom where
+  toJSON qa = object
+    [ "unique" .= qa.unique
+    , "atomId" .= qa.atomId
+    , "label" .= stripBackticks qa.label
+    , "inputRefs" .= qa.inputRefs
+    ]
 
 data QueryOutcome = QueryOutcome
   { determined :: !(Maybe Bool)
@@ -127,7 +142,15 @@ data QueryInput = QueryInput
   , atoms :: ![QueryAtom]
   }
   deriving stock (Show, Read, Ord, Eq, Generic)
-  deriving anyclass (FromJSON, ToJSON)
+  deriving anyclass (FromJSON)
+
+instance ToJSON QueryInput where
+  toJSON qi = object
+    [ "inputUnique" .= qi.inputUnique
+    , "inputLabel" .= stripBackticks qi.inputLabel
+    , "score" .= qi.score
+    , "atoms" .= qi.atoms
+    ]
 
 data QueryAsk = QueryAsk
   { container :: !Text
@@ -138,7 +161,17 @@ data QueryAsk = QueryAsk
   , atoms :: ![QueryAtom]
   }
   deriving stock (Show, Read, Ord, Eq, Generic)
-  deriving anyclass (FromJSON, ToJSON)
+  deriving anyclass (FromJSON)
+
+instance ToJSON QueryAsk where
+  toJSON qa = object
+    [ "container" .= stripBackticks qa.container
+    , "key" .= qa.key
+    , "path" .= qa.path
+    , "label" .= stripBackticks qa.label
+    , "score" .= qa.score
+    , "atoms" .= qa.atoms
+    ]
 
 data QueryPlanResponse = QueryPlanResponse
   { determined :: !(Maybe Bool)
@@ -231,10 +264,6 @@ queryPlan name paramsByUnique cached flattenedLabelBindings =
         ]
 
     parseUniqueKey t = readMaybe (Text.unpack t) :: Maybe Int
-    stripBackticks t =
-      Maybe.fromMaybe t $
-        Text.stripPrefix "`" t >>= \t1 ->
-          Text.stripSuffix "`" t1
 
     parseProjectionLabel :: Text -> Maybe (Text, Text)
     parseProjectionLabel lbl = do
@@ -317,8 +346,18 @@ queryPlan name paramsByUnique cached flattenedLabelBindings =
           | ref <- candidateInputRefsForKey k
           ]
 
+    -- | Try matching a binding key with and without backticks (for spaces in identifiers).
+    -- Internal labels may have backticks for L4 pretty-printing, but JSON bindings shouldn't.
+    tryMatchKey :: Text -> Maybe [Int]
+    tryMatchKey k =
+      Map.lookup k labelToUniques
+        <|> Map.lookup ("`" <> k <> "`") labelToUniques  -- Try with backticks if key has spaces
+        <|> (pure <$> parseUniqueKey k)
+        <|> (pure <$> Map.lookup k uniqueByAtomId)
+
     -- Apply boolean bindings to atoms by:
     -- - exact label match (including dotted keys)
+    -- - label with backticks added (for identifiers containing spaces)
     -- - `unique` as decimal string
     -- - atomId (stable UUIDv5)
     -- - for record parameters, treat `i.someField = true/false` as binding any leaf atom that depends solely on that input ref.
@@ -327,12 +366,7 @@ queryPlan name paramsByUnique cached flattenedLabelBindings =
       Map.fromList $
         concat
           [ [ (u, b)
-            | u <-
-                Maybe.fromMaybe []
-                  ( Map.lookup k labelToUniques
-                      <|> (pure <$> parseUniqueKey k)
-                      <|> (pure <$> Map.lookup k uniqueByAtomId)
-                  )
+            | u <- Maybe.fromMaybe [] (tryMatchKey k)
             ]
               <> [ (u, b) | u <- keyToLeafUniques k ]
           | (k, b) <- flattenedLabelBindings

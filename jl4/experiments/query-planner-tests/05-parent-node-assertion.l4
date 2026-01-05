@@ -1,0 +1,30 @@
+-- Level 5: Parent Node Assertion
+-- Formula: A AND (B OR C)
+-- Tests the ability to answer at the level of parent expressions
+--
+-- Expected behaviors:
+--   User can assert: "(B OR C) = true" without specifying B or C individually
+--   User can assert: "A = true" separately
+--   If user asserts both parent nodes are true, we get True without needing B or C details
+--
+-- This is important for privacy and user experience:
+--   - User may know the disjunction is satisfied without wanting to reveal which branch
+--   - User may be uncertain about details but certain about the aggregate
+--
+-- The query planner should support bindings at different expression levels:
+--   1. Leaf level: {"label": {"a": true, "b": true}}
+--   2. Parent level: {"label": {"b_or_c": true}}  (where b_or_c is the label for (B OR C))
+--   3. Mixed: {"label": {"a": true, "b_or_c": true}}
+
+@export default Test parent node assertion capability
+GIVEN
+  @desc First top-level condition
+  a IS A BOOLEAN
+  @desc Second condition - first option
+  b IS A BOOLEAN
+  @desc Second condition - second option
+  c IS A BOOLEAN
+GIVETH A BOOLEAN
+DECIDE `parent node result` IF a AND (b OR c)
+  WHERE
+    `b_or_c` MEANS b OR c
