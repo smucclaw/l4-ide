@@ -1,0 +1,13 @@
+-- Level 1: Simple AND operation
+-- Expected behavior:
+--   No bindings: asks for both a and b
+--   a=true:  still needs b (True AND Unknown = Unknown)
+--   a=false: determined False (False AND Unknown = False, short-circuit)
+--   b=true:  still needs a (Unknown AND True = Unknown)
+--   b=false: determined False (short-circuit)
+
+@export default Test simple AND operation
+GIVEN a IS A BOOLEAN @desc the first boolean variable
+      b IS A BOOLEAN @desc the second boolean variable
+GIVETH A BOOLEAN
+DECIDE `simple and result` IF a AND b

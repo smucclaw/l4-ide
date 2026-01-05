@@ -1,0 +1,34 @@
+-- Level 4: Realistic example - Alcohol purchase eligibility
+-- This is the example from BOOLEAN-MINIMIZATION-SPEC.md
+-- Tests the conversational query planning scenario
+-- Cache invalidation: v2 with backticks fix
+--
+-- Expected behavior:
+--   age_21_plus=true: parental_approval and legally_emancipated are don't-care
+--   age_21_plus=false: married, spousal_approval, beer_only are don't-care
+--   age_21_plus=true, married=false: spousal_approval is don't-care
+--   age_21_plus=true, beer_only=true: married and spousal_approval are don't-care
+
+@export default Determine if someone can purchase alcohol
+GIVEN
+  @desc Is the person 21 years of age or older?
+  age_21_plus         IS A BOOLEAN
+  @desc Is the person married?
+  married             IS A BOOLEAN
+  @desc Has the spouse given approval for the purchase?
+  spousal_approval    IS A BOOLEAN
+  @desc Is the person only buying beer (nothing harder)?
+  beer_only           IS A BOOLEAN
+  @desc Has the parent given approval? (only relevant if under 21)
+  parental_approval   IS A BOOLEAN
+  @desc Is the person legally emancipated? (only relevant if under 21)
+  legally_emancipated IS A BOOLEAN
+GIVETH A BOOLEAN
+DECIDE `may purchase alcohol` IF
+           age_21_plus
+      AND          NOT married
+               OR  spousal_approval
+               OR  beer_only
+  OR     NOT age_21_plus
+      AND      parental_approval
+           OR legally_emancipated

@@ -1,0 +1,35 @@
+-- Level 6: Reactive Relevance Changes
+-- Tests that parameters can become relevant/irrelevant as user provides input
+-- Formula: (switch AND option_a) OR (NOT switch AND option_b)
+--
+-- This is the if-then-else pattern: if switch then option_a else option_b
+--
+-- Scenario:
+--   1. User sets switch=true
+--      → option_a becomes relevant, option_b becomes irrelevant (grayed)
+--   2. User fills in grayed option_b anyway (allowed!)
+--      → System accepts it
+--   3. User changes mind: switch=false
+--      → option_b becomes relevant (un-grays), option_a becomes irrelevant
+--      → System uses the option_b value user already provided!
+--
+-- Expected behaviors:
+--   switch=true:  still needs option_a, option_b is don't-care
+--   switch=false: still needs option_b, option_a is don't-care
+--   switch=true, option_a=true:  determined True, option_b is don't-care
+--   switch=false, option_b=true: determined True, option_a is don't-care
+--
+-- Key UX requirement:
+--   Even when option_b is grayed (don't-care), user can input it
+--   If user later changes switch, that input becomes relevant!
+
+@export default Test reactive relevance changes
+GIVEN
+  @desc The switch that determines which branch to take
+  switch IS A BOOLEAN
+  @desc Option A - only relevant when switch is true
+  option_a IS A BOOLEAN
+  @desc Option B - only relevant when switch is false
+  option_b IS A BOOLEAN
+GIVETH A BOOLEAN
+DECIDE `if-then-else result` IF (switch AND option_a) OR (NOT switch AND option_b)
