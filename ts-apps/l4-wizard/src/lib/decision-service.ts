@@ -53,9 +53,9 @@ export async function fetchFunctionMetadata(
 
   const data = await resp.json()
   return {
-    name: data.declaration?.name ?? name,
-    description: data.declaration?.description ?? '',
-    parameters: data.declaration?.parameters ?? {
+    name: data.function?.name ?? name,
+    description: data.function?.description ?? '',
+    parameters: data.function?.parameters ?? {
       type: 'object',
       properties: {},
       required: [],
@@ -118,6 +118,39 @@ export async function evaluateFunction(
   return {
     result: data.result,
     trace: data.trace,
+  }
+}
+
+export async function fetchGraphviz(
+  client: DecisionServiceClient,
+  name: string,
+  bindings: Record<string, unknown>,
+  format: 'svg' | 'png' = 'svg'
+): Promise<string> {
+  const encodedName = encodeURIComponent(name)
+  const extension = format === 'svg' ? 'trace.svg' : 'trace.png'
+  const url = `${client.baseUrl}/functions/${encodedName}/evaluation/${extension}?trace=full`
+
+  const args: FnArguments = {
+    fnEvalBackend: 'jl4',
+    fnArguments: bindings,
+  }
+
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(args),
+  })
+
+  if (!resp.ok) {
+    await throwWithResponseBody(resp, `POST ${url}`)
+  }
+
+  if (format === 'svg') {
+    return await resp.text()
+  } else {
+    const blob = await resp.blob()
+    return URL.createObjectURL(blob)
   }
 }
 

@@ -4,7 +4,7 @@
 
   // Get configuration from URL params or environment
   let serviceUrl = $derived(
-    $page.url.searchParams.get('service') ?? 'http://localhost:8082'
+    $page.url.searchParams.get('service') ?? 'http://localhost:8001'
   )
   let functionName = $derived(
     $page.url.searchParams.get('fn') ?? 'example'
