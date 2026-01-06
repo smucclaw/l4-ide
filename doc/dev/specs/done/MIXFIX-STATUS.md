@@ -169,9 +169,9 @@ Merged via:
 
 Documentation:
 
-- Spec: `doc/done/mixfix-operators.md`
-- Implementation Plan: `doc/done/mixfix-implementation-plan.md`
-- This Status Tracker: `doc/done/MIXFIX-STATUS.md`
+- Spec: `doc/dev/specs/done/mixfix-operators.md`
+- Implementation Plan: `doc/dev/specs/done/mixfix-implementation-plan.md`
+- This Status Tracker: `doc/dev/specs/done/MIXFIX-STATUS.md`
 
 Test Files:
 

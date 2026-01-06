@@ -1,0 +1,38 @@
+-- Level 5: Nested Parent Node Assertion
+-- Formula: (A AND B) OR (C AND (D OR E))
+-- Tests ability to answer at multiple levels of nesting
+--
+-- Possible assertion levels:
+--   1. Leaf: a, b, c, d, e
+--   2. First level: (a AND b), (d OR e)
+--   3. Second level: (c AND (d OR e))
+--   4. Top level: entire expression
+--
+-- Example user assertions:
+--   - "I satisfy the left branch" -> (a AND b) = true
+--   - "I satisfy the right branch" -> (c AND (d OR e)) = true
+--   - "I satisfy one of the inner conditions" -> (d OR e) = true
+--
+-- This is especially useful for:
+--   - Privacy: "I meet the qualifications" without revealing which
+--   - Compound documents: "Section 3.2 is satisfied" without all sub-clauses
+--   - Expert systems: "This diagnosis is confirmed" without all symptoms
+
+@export default Test nested parent node assertions
+GIVEN
+  @desc Condition A in left branch
+  a IS A BOOLEAN
+  @desc Condition B in left branch
+  b IS A BOOLEAN
+  @desc Condition C in right branch
+  c IS A BOOLEAN
+  @desc Condition D in nested disjunction
+  d IS A BOOLEAN
+  @desc Condition E in nested disjunction
+  e IS A BOOLEAN
+GIVETH A BOOLEAN
+DECIDE `qualifies` IF (a AND b) OR (c AND (d OR e))
+  WHERE
+    `left_branch`  MEANS a AND b
+    `d_or_e`       MEANS d OR e
+    `right_branch` MEANS c AND `d_or_e`

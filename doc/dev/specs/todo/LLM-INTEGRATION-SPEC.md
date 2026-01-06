@@ -171,7 +171,7 @@ parseResponse :: String -> EITHER STRING value
 **Status**: ✅ Complete
 
 - ✅ Removed NDA project references from documentation
-- ✅ Genericized examples in `doc/todo/FETCH-POST-JSON-SPEC.md`
+- ✅ Genericized examples in `doc/dev/specs/todo/FETCH-POST-JSON-SPEC.md`
 - ✅ Cleaned up `jl4-decision-service/IMPORT-FIX-PLAN.md`
 
 ---
@@ -988,7 +988,7 @@ The original vision from CLAUDE.md is achieved when:
 
 ### Internal
 
-- `doc/todo/FETCH-POST-JSON-SPEC.md` - Enabled HTTP POST and JSON encoding (✅ Complete)
+- `doc/dev/specs/todo/FETCH-POST-JSON-SPEC.md` - Enabled HTTP POST and JSON encoding (✅ Complete)
 - `doc/advanced-course-ai/module-a2-ai-ingestion.md` - AI-assisted ingestion workflow
 - `CLAUDE.md` / `AGENTS.md` - Project vision and context
 - Pilot projects: Government compliance, insurance policy analysis

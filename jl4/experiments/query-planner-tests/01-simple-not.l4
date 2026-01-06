@@ -1,0 +1,10 @@
+-- Level 1: Simple NOT operation
+-- Expected behavior:
+--   No bindings: asks for a
+--   a=true:  determined False (NOT True = False)
+--   a=false: determined True (NOT False = True)
+
+@export default Test simple NOT operation
+GIVEN a IS A BOOLEAN @desc the boolean variable to negate
+GIVETH A BOOLEAN
+DECIDE `simple not result` IF NOT a

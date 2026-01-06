@@ -1,0 +1,15 @@
+-- Level 3: Don't-care in conditional branches
+-- Formula: (condition AND consequence) OR (NOT condition AND alternative)
+-- This pattern appears in if-then-else: "if condition then consequence else alternative"
+-- Expected behavior:
+--   condition=true:  still needs consequence, alternative is don't-care
+--   condition=false: still needs alternative, consequence is don't-care
+--   consequence=true, alternative=true: determined True, condition is don't-care
+
+@export default Test don't-care in if-then-else pattern
+GIVEN condition    IS A BOOLEAN @desc the condition to test
+      consequence  IS A BOOLEAN @desc what happens if condition is true
+      alternative  IS A BOOLEAN @desc what happens if condition is false
+GIVETH A BOOLEAN
+DECIDE `if-then-else result` IF
+  (condition AND consequence) OR (NOT condition AND alternative)

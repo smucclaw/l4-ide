@@ -144,4 +144,4 @@ properties:
 ## Related Work
 
 - **Issue #635 Items 1, 2**: Already completed (conditional trace, IDE directive filtering)
-- **JSONDECODE Spec**: Nested structures already work at runtime (doc/done/DECISION-SERVICE-JSONDECODE-SPEC.md)
+- **JSONDECODE Spec**: Nested structures already work at runtime (doc/dev/specs/done/DECISION-SERVICE-JSONDECODE-SPEC.md)

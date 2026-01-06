@@ -41,6 +41,19 @@ L4 has been piloted with organizations in both public and private sectors:
 - **[doc/dev/deployment/deployment.md](./doc/dev/deployment/deployment.md)** - Deploying to existing dev/prod servers
 - **[nix/README.md](./nix/README.md)** - NixOS configuration reference
 
+## Documentation
+
+### For Developers
+
+- **[dev-config.md](./dev-config.md)** - Local development guide (running with `cabal`)
+- **[dev-start.sh](./dev-start.sh)** - Helper script for starting services locally
+
+### For DevOps
+
+- **[PROVISIONING.md](./PROVISIONING.md)** - Setting up new servers from scratch (nixos-anywhere)
+- **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Deploying to existing dev/prod servers
+- **[nix/README.md](./nix/README.md)** - NixOS configuration reference
+
 ## Gallery
 
 Syntax Highlighting for Boolean-oriented decision logic
@@ -149,7 +162,7 @@ https://jl4.legalese.com/
 
 [Dev Build](Dev.md): for Haskell and JS developers to improve the toolchain and IDE developer experience. Requires Haskell and Typscript.
 
-[Quickstart for a local build](Quickstart.md): for legal engineers to experiment with writing L4 code locally. Download the VS Code extension and get started.
+[Quickstart for a local build](doc/quickstart.md): for legal engineers to experiment with writing L4 code locally. Download the VS Code extension and get started.
 
 ## Application Libraries
 

@@ -184,7 +184,7 @@ Phase 1 ships only the scalar forms (plus list-valued `holidays` arguments). The
 
 - Update `doc/libraries/daydate.md` to reference `excel-date` for compatibility use cases.
 - Add migration guide snippet to `doc/README.md` describing when to prefer Excel-compatible functions vs native `daydate` ones.
-- Record outstanding questions/bugs in `doc/todo/EXCEL-DATE-COMPAT-SPEC.md` until feature completed, then move to `doc/done/`.
+- Record outstanding questions/bugs in `doc/dev/specs/todo/EXCEL-DATE-COMPAT-SPEC.md` until feature completed, then move to `doc/dev/specs/done/`.
 
 ## Open Questions
 
@@ -194,7 +194,7 @@ Phase 1 ships only the scalar forms (plus list-valued `holidays` arguments). The
 4. Should we honour Excel’s leap-year bug for all functions or only conversions? (E.g., should `DATEDIF` think 1900-02-29 exists?)
 5. How do we freeze `TODAY`/`NOW` during deterministic tests (env var override vs dependency injection)?
 
-Once these questions resolve and implementations land, this spec should move to `doc/done/` with a changelog of any differences from Excel behavior.
+Once these questions resolve and implementations land, this spec should move to `doc/dev/specs/done/` with a changelog of any differences from Excel behavior.
 
 ## References
 

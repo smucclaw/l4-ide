@@ -1,0 +1,17 @@
+-- Level 2: AND short-circuit test
+-- Formula: a AND b AND c
+-- Tests that when any variable is false, the others become don't-care
+-- Expected behavior:
+--   a=false: determined False, b and c are don't-care
+--   b=false: determined False, a and c are don't-care (if a is unknown)
+--   c=false: determined False, a and b are don't-care (if both unknown)
+--   a=true:  still needs b and c
+--   a=true, b=true: still needs c
+--   a=true, b=true, c=true: determined True
+
+@export default Test AND short-circuiting
+GIVEN a IS A BOOLEAN @desc first condition
+      b IS A BOOLEAN @desc second condition
+      c IS A BOOLEAN @desc third condition
+GIVETH A BOOLEAN
+DECIDE `all conditions met` IF a AND b AND c

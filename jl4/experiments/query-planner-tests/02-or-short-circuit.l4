@@ -1,0 +1,17 @@
+-- Level 2: OR short-circuit test
+-- Formula: a OR b OR c
+-- Tests that when any variable is true, the others become don't-care
+-- Expected behavior:
+--   a=true:  determined True, b and c are don't-care
+--   b=true:  determined True, a and c are don't-care (if a is unknown)
+--   c=true:  determined True, a and b are don't-care (if both unknown)
+--   a=false: still needs b and c
+--   a=false, b=false: still needs c
+--   a=false, b=false, c=false: determined False
+
+@export default Test OR short-circuiting
+GIVEN a IS A BOOLEAN @desc first condition
+      b IS A BOOLEAN @desc second condition
+      c IS A BOOLEAN @desc third condition
+GIVETH A BOOLEAN
+DECIDE `any condition met` IF a OR b OR c

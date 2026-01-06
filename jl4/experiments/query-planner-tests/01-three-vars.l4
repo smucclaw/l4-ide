@@ -1,0 +1,17 @@
+-- Level 1: Three variables with AND/OR
+-- Formula: (a AND b) OR c
+-- Expected behavior:
+--   No bindings: asks for a, b, c
+--   c=true:  determined True (short-circuit, a and b are don't-care)
+--   c=false: still needs a and b (False OR (a AND b) = a AND b)
+--   c=false, a=true:  still needs b
+--   c=false, a=false: determined False (a and b both needed initially, but a=false short-circuits the AND)
+--   c=false, b=false: determined False
+--   a=true, b=true: determined True
+
+@export default Test three variables with mixed AND/OR
+GIVEN a IS A BOOLEAN @desc first variable in the AND
+      b IS A BOOLEAN @desc second variable in the AND
+      c IS A BOOLEAN @desc variable that can short-circuit the whole expression
+GIVETH A BOOLEAN
+DECIDE `three vars result` IF (a AND b) OR c

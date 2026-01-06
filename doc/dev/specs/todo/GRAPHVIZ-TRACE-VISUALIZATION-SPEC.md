@@ -1698,7 +1698,7 @@ This architecture ensures that:
 
 **Status:** Production-ready (2025-12-16)
 **Location:** `jl4-core/src/L4/EvaluateLazy/GraphViz2.hs`
-**Related Plan:** `doc/todo/GRAPHVIZ-REFACTOR-PLAN.md`
+**Related Plan:** `doc/dev/specs/todo/GRAPHVIZ-REFACTOR-PLAN.md`
 
 ### Motivation
 

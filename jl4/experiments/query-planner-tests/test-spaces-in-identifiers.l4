@@ -1,0 +1,17 @@
+-- Test: Identifiers with spaces (backtick quoting)
+-- This tests that backticks are properly used for identifiers with spaces
+-- but are stripped when serializing to JSON
+
+@export default Test decision with spaces in identifiers
+GIVEN
+  @desc Is the person's age over 21?
+  `age over 21`         IS A BOOLEAN
+  @desc Does the person have parental consent?
+  `has parental consent` IS A BOOLEAN
+  @desc Does the person have valid ID?
+  `has valid id`        IS A BOOLEAN
+GIVETH A BOOLEAN
+DECIDE `can enter venue` IF
+       `age over 21`
+   OR      `has parental consent`
+       AND `has valid id`

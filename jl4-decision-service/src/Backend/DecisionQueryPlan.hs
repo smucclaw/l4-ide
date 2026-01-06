@@ -25,7 +25,8 @@ import qualified Backend.BooleanDecisionQuery as BDQ
 import Backend.FunctionSchema (Parameter (..), Parameters (..), parametersFromDecide)
 import Backend.Jl4 as Jl4
 import Control.Concurrent.STM
-import Data.Aeson (FromJSON, ToJSON)
+import Data.Aeson (FromJSON, ToJSON, (.=), object)
+import qualified Data.Aeson as Aeson
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Char as Char
@@ -68,7 +69,24 @@ data QueryAsk = QueryAsk
   , schema :: !(Maybe Parameter)
   }
   deriving stock (Show, Generic)
-  deriving anyclass (FromJSON, ToJSON)
+  deriving anyclass (FromJSON)
+
+-- | Strip backticks from L4 quoted identifiers when serializing to JSON.
+-- Backticks are L4's syntax for allowing spaces in identifiers, but in JSON
+-- we already have double quotes for string keys, so backticks shouldn't leak through.
+stripBackticks :: Text -> Text
+stripBackticks t = fromMaybe t $ Text.stripPrefix "`" t >>= Text.stripSuffix "`"
+
+instance ToJSON QueryAsk where
+  toJSON qa = object
+    [ "container" .= stripBackticks qa.container
+    , "key" .= qa.key
+    , "path" .= qa.path
+    , "label" .= stripBackticks qa.label
+    , "score" .= qa.score
+    , "atoms" .= qa.atoms  -- QueryAtom has its own ToJSON that strips backticks
+    , "schema" .= qa.schema
+    ]
 
 data PathSortKey
   = KSField !Int !Text

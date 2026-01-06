@@ -1,0 +1,13 @@
+-- Level 1: Simple OR operation
+-- Expected behavior:
+--   No bindings: asks for both a and b
+--   a=true:  determined True (True OR Unknown = True, short-circuit)
+--   a=false: still needs b (False OR Unknown = Unknown)
+--   b=true:  determined True (short-circuit)
+--   b=false: still needs a (Unknown OR False = Unknown)
+
+@export default Test simple OR operation
+GIVEN a IS A BOOLEAN @desc the first boolean variable
+      b IS A BOOLEAN @desc the second boolean variable
+GIVETH A BOOLEAN
+DECIDE `simple or result` IF a OR b
