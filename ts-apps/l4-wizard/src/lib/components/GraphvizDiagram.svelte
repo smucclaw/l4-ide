@@ -47,12 +47,18 @@
 </script>
 
 <div class="rounded-lg border-2 border-gray-200 bg-white p-4">
-  <h3 class="mb-3 text-sm font-semibold text-gray-700">Graphviz Visualization</h3>
+  <h3 class="mb-3 text-sm font-semibold text-gray-700">
+    Graphviz Visualization
+  </h3>
 
   {#if isLoading}
-    <div class="py-8 text-center text-sm text-gray-500">Loading visualization...</div>
+    <div class="py-8 text-center text-sm text-gray-500">
+      Loading visualization...
+    </div>
   {:else if error}
-    <div class="rounded border border-gray-300 bg-gray-50 p-4 text-sm text-gray-600">
+    <div
+      class="rounded border border-gray-300 bg-gray-50 p-4 text-sm text-gray-600"
+    >
       {error}
     </div>
   {:else if svgContent}
@@ -60,7 +66,9 @@
       {@html svgContent}
     </div>
   {:else}
-    <div class="rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-8 text-center text-sm text-gray-500">
+    <div
+      class="rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-8 text-center text-sm text-gray-500"
+    >
       No graphviz visualization available
     </div>
   {/if}

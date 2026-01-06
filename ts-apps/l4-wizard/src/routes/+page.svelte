@@ -6,9 +6,7 @@
   let serviceUrl = $derived(
     $page.url.searchParams.get('service') ?? 'http://localhost:8001'
   )
-  let functionName = $derived(
-    $page.url.searchParams.get('fn') ?? 'example'
-  )
+  let functionName = $derived($page.url.searchParams.get('fn') ?? 'example')
 </script>
 
 <svelte:head>

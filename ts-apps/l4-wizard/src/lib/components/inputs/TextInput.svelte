@@ -17,7 +17,9 @@
     }
   }
 
-  let displayValue = $derived(value !== undefined && value !== null ? String(value) : '')
+  let displayValue = $derived(
+    value !== undefined && value !== null ? String(value) : ''
+  )
 </script>
 
 <input

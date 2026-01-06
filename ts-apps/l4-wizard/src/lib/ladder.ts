@@ -51,7 +51,7 @@ export function evaluateLadder(
     }
 
     case 'Not': {
-      const result = evaluateLadder(node.arg, atomValues)
+      const result = evaluateLadder(node.negand, atomValues)
       if (result === Ternary.True) return Ternary.False
       if (result === Ternary.False) return Ternary.True
       return Ternary.Unknown
@@ -97,7 +97,7 @@ export function extractAtomIds(node: LadderNode): Set<number> {
         n.args.forEach(traverse)
         break
       case 'Not':
-        traverse(n.arg)
+        traverse(n.negand)
         break
     }
   }
@@ -228,7 +228,7 @@ export function extractLogicalGroups(ladder: Ladder | null): LogicalGroup[] {
 
       case 'Not': {
         // For NOT nodes, just traverse through them
-        return traverse(node.arg, depth, parentType)
+        return traverse(node.negand, depth, parentType)
       }
     }
   }
