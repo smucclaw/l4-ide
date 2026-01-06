@@ -73,11 +73,16 @@ case "$MODE" in
         "$WEBSESSIONS_PORT" "$DB_PATH" "http://localhost:$DECISION_PORT") > /tmp/jl4-websessions.log 2>&1 &
       echo "WEBSESSIONS_PID=$!" >> "$PIDFILE"
       
-      # Start Web Frontend
-      echo "Starting web frontend..."
+      # Start Web Frontend (IDE)
+      echo "Starting web IDE frontend..."
       (cd ts-apps/jl4-web && npm run dev) > /tmp/jl4-web.log 2>&1 &
       echo "WEB_PID=$!" >> "$PIDFILE"
-      
+
+      # Start L4 Wizard (consumer-facing app)
+      echo "Starting l4-wizard frontend..."
+      (cd ts-apps/l4-wizard && npm run dev) > /tmp/l4-wizard.log 2>&1 &
+      echo "WIZARD_PID=$!" >> "$PIDFILE"
+
       echo ""
       echo "✓ All services started in background!"
       echo ""
@@ -85,13 +90,15 @@ case "$MODE" in
       echo "  LSP Server:      http://localhost:$LSP_PORT (ws://localhost:$LSP_PORT)"
       echo "  Decision:        http://localhost:$DECISION_PORT"
       echo "  Websessions:     http://localhost:$WEBSESSIONS_PORT"
-      echo "  Web Frontend:    http://localhost:5173"
+      echo "  Web IDE:         http://localhost:5173"
+      echo "  L4 Wizard:       http://localhost:5174 (or next available port)"
       echo ""
       echo "Logs:"
-      echo "  LSP:        tail -f /tmp/jl4-lsp.log"
-      echo "  Decision:   tail -f /tmp/jl4-decision.log"
+      echo "  LSP:         tail -f /tmp/jl4-lsp.log"
+      echo "  Decision:    tail -f /tmp/jl4-decision.log"
       echo "  Websessions: tail -f /tmp/jl4-websessions.log"
-      echo "  Web:        tail -f /tmp/jl4-web.log"
+      echo "  Web IDE:     tail -f /tmp/jl4-web.log"
+      echo "  L4 Wizard:   tail -f /tmp/l4-wizard.log"
       echo ""
       echo "PIDs saved to: $PIDFILE"
       echo ""
@@ -99,10 +106,12 @@ case "$MODE" in
       echo "  ./dev-stop.sh"
       echo "  or: kill \$(cat $PIDFILE | cut -d= -f2)"
       echo ""
-      echo "Open http://localhost:5173 in your browser"
+      echo "Open in your browser:"
+      echo "  IDE:    http://localhost:5173"
+      echo "  Wizard: http://localhost:5174 (or check l4-wizard log for actual port)"
     else
       echo "Starting full stack with integration..."
-      echo "Note: Run these in four separate terminals, or use a tool like tmux"
+      echo "Note: Run these in separate terminals, or use a tool like tmux"
       echo "      Or run './dev-start.sh full --run' to start all in background"
       echo ""
       echo "Terminal 1 - LSP Server:"
@@ -119,10 +128,15 @@ case "$MODE" in
       echo "  cd jl4-websessions && cabal run jl4-websessions -- \\"
       echo "    $WEBSESSIONS_PORT $DB_PATH http://localhost:$DECISION_PORT"
       echo ""
-      echo "Terminal 4 - Web Frontend:"
+      echo "Terminal 4 - Web IDE Frontend:"
       echo "  cd ts-apps/jl4-web && npm run dev"
       echo ""
-      echo "Then open http://localhost:5173 in your browser"
+      echo "Terminal 5 - L4 Wizard (optional, consumer-facing app):"
+      echo "  cd ts-apps/l4-wizard && npm run dev"
+      echo ""
+      echo "Then open in your browser:"
+      echo "  IDE:    http://localhost:5173"
+      echo "  Wizard: http://localhost:5174 (query-plan based decision interface)"
     fi
     ;;
 
