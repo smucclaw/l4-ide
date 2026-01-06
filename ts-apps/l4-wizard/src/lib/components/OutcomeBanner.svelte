@@ -33,13 +33,19 @@
     </div>
     <div
       class="mt-2 text-3xl font-bold
-        {isPositive ? 'text-green-700' : isNegative ? 'text-red-700' : 'text-blue-700'}"
+        {isPositive
+        ? 'text-green-700'
+        : isNegative
+          ? 'text-red-700'
+          : 'text-blue-700'}"
     >
       {formatResult(result)}
     </div>
   </div>
 {:else}
-  <div class="rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-6 text-center">
+  <div
+    class="rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-6 text-center"
+  >
     <div class="text-sm text-gray-500">
       Answer questions to determine the result
     </div>

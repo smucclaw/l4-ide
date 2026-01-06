@@ -1,5 +1,11 @@
 <script lang="ts">
-  import type { Parameter, Parameters, QueryAsk, QueryAtom, Ladder } from '@repo/decision-service-types'
+  import type {
+    Parameter,
+    Parameters,
+    QueryAsk,
+    QueryAtom,
+    Ladder,
+  } from '@repo/decision-service-types'
   import type { ParameterState, ParameterStatus } from '../types.js'
   import {
     createClient,
@@ -87,7 +93,10 @@
       return []
     }
 
-    for (const [key, schema] of Object.entries(params.properties) as [string, Parameter][]) {
+    for (const [key, schema] of Object.entries(params.properties) as [
+      string,
+      Parameter,
+    ][]) {
       paramList.push({
         key,
         label: schema.alias ?? key,
@@ -97,7 +106,7 @@
         rank: paramList.length,
         asks: [],
         group: undefined, // Will be set by ladder-based grouping
-        nestingLevel: 0,  // Will be set by ladder-based grouping
+        nestingLevel: 0, // Will be set by ladder-based grouping
       })
     }
 
@@ -109,7 +118,10 @@
     return s.replace(/^`|`$/g, '')
   }
 
-  async function updateQueryPlan(fn: string, currentBindings: Record<string, unknown>) {
+  async function updateQueryPlan(
+    fn: string,
+    currentBindings: Record<string, unknown>
+  ) {
     if (!client) return
 
     try {
@@ -125,7 +137,9 @@
       )
 
       // Ranked parameters (for ordering)
-      const rankedKeys = plan.asks.map((ask: QueryAsk) => stripBackticks(ask.container))
+      const rankedKeys = plan.asks.map((ask: QueryAsk) =>
+        stripBackticks(ask.container)
+      )
 
       // Build a map from ask container to asks (normalized by stripping backticks)
       const asksByContainer = new Map<string, QueryAsk[]>()
@@ -137,17 +151,25 @@
       }
 
       // Get the top-ranked "next" asks
-      const nextAsks: QueryAtom[] = plan.asks.length > 0 ? plan.asks[0]?.atoms ?? [] : []
-      const nextLabels = new Set(nextAsks.map((a: QueryAtom) => stripBackticks(a.label)))
+      const nextAsks: QueryAtom[] =
+        plan.asks.length > 0 ? (plan.asks[0]?.atoms ?? []) : []
+      const nextLabels = new Set(
+        nextAsks.map((a: QueryAtom) => stripBackticks(a.label))
+      )
 
       // Extract parameter groups from the ladder structure
       const parameterGroups = groupParametersByLadder(ladder, plan.asks)
 
       // Build a map from parameter key to its group info
-      const paramToGroupInfo = new Map<string, { groupId: string; depth: number; groupLabel: string }>()
+      const paramToGroupInfo = new Map<
+        string,
+        { groupId: string; depth: number; groupLabel: string }
+      >()
 
       function collectParamGroupInfo(group: ParameterGroup, parentLabel = '') {
-        const groupLabel = parentLabel ? `${parentLabel} > ${group.label}` : group.label
+        const groupLabel = parentLabel
+          ? `${parentLabel} > ${group.label}`
+          : group.label
         for (const paramKey of group.parameters) {
           paramToGroupInfo.set(paramKey, {
             groupId: group.id,
@@ -234,9 +256,7 @@
     }
 
     // Update parameter value
-    parameters = parameters.map((p) =>
-      p.key === key ? { ...p, value } : p
-    )
+    parameters = parameters.map((p) => (p.key === key ? { ...p, value } : p))
 
     // Refresh query plan and evaluation
     await updateQueryPlan(functionName, bindings)
@@ -254,6 +274,19 @@
         // Evaluation may fail if not all required inputs are provided
       }
     }
+  }
+
+  function handleLadderNodeClick(key: string, currentValue: unknown) {
+    // Cycle through: undefined → true → false → undefined
+    let nextValue: unknown
+    if (currentValue === undefined) {
+      nextValue = true
+    } else if (currentValue === true) {
+      nextValue = false
+    } else {
+      nextValue = undefined
+    }
+    handleParameterChange(key, nextValue)
   }
 
   function handleReset() {
@@ -301,7 +334,7 @@
 
     <!-- Ladder Diagram -->
     <section class="mb-8">
-      <LadderDiagram {ladder} />
+      <LadderDiagram {ladder} {bindings} onNodeClick={handleLadderNodeClick} />
     </section>
 
     <!-- Parameter Grid -->
@@ -309,10 +342,7 @@
       <h2 class="mb-4 text-lg font-medium text-gray-700">
         Answer the following questions:
       </h2>
-      <ParameterGrid
-        {parameters}
-        onchange={handleParameterChange}
-      />
+      <ParameterGrid {parameters} onchange={handleParameterChange} />
     </section>
 
     <!-- Graphviz Diagram -->

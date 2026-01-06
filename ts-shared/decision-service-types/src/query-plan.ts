@@ -42,7 +42,7 @@ export type QueryAsk = {
 export type LadderNode =
   | { $type: 'And'; id: { id: number }; args: LadderNode[] }
   | { $type: 'Or'; id: { id: number }; args: LadderNode[] }
-  | { $type: 'Not'; id: { id: number }; arg: LadderNode }
+  | { $type: 'Not'; id: { id: number }; negand: LadderNode }
   | {
       $type: 'UBoolVar'
       id: { id: number }

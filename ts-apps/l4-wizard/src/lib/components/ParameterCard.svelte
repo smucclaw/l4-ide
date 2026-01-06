@@ -17,8 +17,16 @@
     onchange: (key: string, value: unknown) => void
   }
 
-  let { paramKey, label, schema, value, status, error, nestingLevel = 0, onchange }: Props =
-    $props()
+  let {
+    paramKey,
+    label,
+    schema,
+    value,
+    status,
+    error,
+    nestingLevel = 0,
+    onchange,
+  }: Props = $props()
 
   const statusClasses: Record<ParameterStatus, string> = {
     'unanswered-relevant': 'border-gray-300 bg-white scale-100',
@@ -44,7 +52,9 @@
 </script>
 
 <div
-  class="rounded-lg border-2 p-4 transition-all duration-300 ease-out {statusClasses[status]}"
+  class="rounded-lg border-2 p-4 transition-all duration-300 ease-out {statusClasses[
+    status
+  ]}"
 >
   <label class="block">
     <span
@@ -74,18 +84,13 @@
     {/if}
 
     {#if inputType === 'boolean'}
-      <BooleanInput {value} onChange={handleChange} disabled={status === 'irrelevant'} />
+      <BooleanInput {value} onChange={handleChange} />
     {:else if inputType === 'enum'}
-      <EnumInput
-        {value}
-        options={schema.enum ?? []}
-        onChange={handleChange}
-        disabled={status === 'irrelevant'}
-      />
+      <EnumInput {value} options={schema.enum ?? []} onChange={handleChange} />
     {:else if inputType === 'number'}
-      <NumberInput {value} onChange={handleChange} disabled={status === 'irrelevant'} />
+      <NumberInput {value} onChange={handleChange} />
     {:else}
-      <TextInput {value} onChange={handleChange} disabled={status === 'irrelevant'} />
+      <TextInput {value} onChange={handleChange} />
     {/if}
 
     {#if error}
