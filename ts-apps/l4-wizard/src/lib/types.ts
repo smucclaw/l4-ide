@@ -18,6 +18,10 @@ export type ParameterState = {
   rank: number
   /** Associated asks from query-plan */
   asks: QueryAsk[]
+  /** Logical grouping (e.g., 'person', 'father', 'mother') */
+  group?: string
+  /** Nesting level for hierarchical display (0 = root) */
+  nestingLevel: number
 }
 
 export type WizardState = {

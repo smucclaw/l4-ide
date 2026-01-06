@@ -13,19 +13,20 @@
     value: unknown
     status: ParameterStatus
     error?: string
+    nestingLevel?: number
     onchange: (key: string, value: unknown) => void
   }
 
-  let { paramKey, label, schema, value, status, error, onchange }: Props =
+  let { paramKey, label, schema, value, status, error, nestingLevel = 0, onchange }: Props =
     $props()
 
   const statusClasses: Record<ParameterStatus, string> = {
-    'unanswered-relevant': 'border-gray-300 bg-white',
+    'unanswered-relevant': 'border-gray-300 bg-white scale-100',
     'unanswered-next':
-      'border-blue-500 bg-blue-50 ring-2 ring-blue-200 shadow-md',
-    answered: 'border-green-500 bg-green-50',
-    irrelevant: 'border-gray-200 bg-gray-100 opacity-60',
-    error: 'border-red-500 bg-red-50',
+      'border-blue-500 bg-blue-50 ring-2 ring-blue-200 shadow-md scale-100',
+    answered: 'border-green-500 bg-green-50 scale-100',
+    irrelevant: 'border-gray-200 bg-gray-100 opacity-50 scale-[0.98]',
+    error: 'border-red-500 bg-red-50 scale-100',
   }
 
   function handleChange(newValue: unknown) {
@@ -43,18 +44,33 @@
 </script>
 
 <div
-  class="rounded-lg border-2 p-4 transition-all duration-200 {statusClasses[status]}"
+  class="rounded-lg border-2 p-4 transition-all duration-300 ease-out {statusClasses[status]}"
 >
   <label class="block">
-    <span class="mb-2 block text-sm font-medium text-gray-700">
+    <span
+      class="mb-2 block text-sm font-medium transition-colors duration-300 ease-out {status ===
+      'irrelevant'
+        ? 'text-gray-400'
+        : 'text-gray-700'}"
+    >
       {label}
       {#if status === 'unanswered-next'}
         <span class="ml-2 text-xs text-blue-600">(recommended)</span>
       {/if}
+      {#if status === 'irrelevant'}
+        <span class="ml-2 text-xs italic text-gray-400">(not needed)</span>
+      {/if}
     </span>
 
     {#if schema.description}
-      <p class="mb-2 text-xs text-gray-500">{schema.description}</p>
+      <p
+        class="mb-2 text-xs transition-colors duration-300 ease-out {status ===
+        'irrelevant'
+          ? 'text-gray-400'
+          : 'text-gray-500'}"
+      >
+        {schema.description}
+      </p>
     {/if}
 
     {#if inputType === 'boolean'}

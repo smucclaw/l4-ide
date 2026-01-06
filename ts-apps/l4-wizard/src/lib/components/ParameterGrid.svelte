@@ -9,48 +9,61 @@
 
   let { parameters, onchange }: Props = $props()
 
-  // Separate relevant and irrelevant parameters
-  let relevantParams = $derived(
-    parameters
-      .filter((p) => p.status !== 'irrelevant')
-      .sort((a, b) => a.rank - b.rank)
-  )
+  // Group parameters by their group attribute
+  let grouped = $derived.by(() => {
+    const sorted = [...parameters].sort((a, b) => a.rank - b.rank)
+    const groups = new Map<string | undefined, ParameterState[]>()
 
-  let irrelevantParams = $derived(
-    parameters.filter((p) => p.status === 'irrelevant')
-  )
+    for (const param of sorted) {
+      const groupKey = param.group
+      if (!groups.has(groupKey)) {
+        groups.set(groupKey, [])
+      }
+      groups.get(groupKey)!.push(param)
+    }
 
-  let hasIrrelevant = $derived(irrelevantParams.length > 0)
+    return groups
+  })
+
+  // Get human-readable group labels
+  function getGroupLabel(group: string | undefined): string {
+    if (!group) return ''
+    const labels: Record<string, string> = {
+      p: 'Person',
+      f: 'Father',
+      m: 'Mother',
+    }
+    return labels[group] || group
+  }
 </script>
 
 <div class="space-y-6">
-  <!-- Relevant parameters -->
-  <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-    {#each relevantParams as param (param.key)}
-      <ParameterCard
-        paramKey={param.key}
-        label={param.label}
-        schema={param.schema}
-        value={param.value}
-        status={param.status}
-        error={param.error}
-        {onchange}
-      />
-    {/each}
-  </div>
-
-  <!-- Irrelevant parameters (collapsed section) -->
-  {#if hasIrrelevant}
-    <details class="rounded-lg border border-gray-200 bg-gray-50">
-      <summary
-        class="cursor-pointer px-4 py-2 text-sm text-gray-500 hover:text-gray-700"
-      >
-        {irrelevantParams.length} parameter{irrelevantParams.length === 1
-          ? ''
-          : 's'} no longer relevant
-      </summary>
-      <div class="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
-        {#each irrelevantParams as param (param.key)}
+  {#each Array.from(grouped.entries()) as [group, params]}
+    {#if group}
+      <!-- Grouped parameters with visual container -->
+      <div class="rounded-lg border-2 border-gray-200 bg-gray-50/30 p-4">
+        <h3 class="mb-3 text-sm font-semibold text-gray-700">
+          {getGroupLabel(group)}
+        </h3>
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {#each params as param (param.key)}
+            <ParameterCard
+              paramKey={param.key}
+              label={param.label}
+              schema={param.schema}
+              value={param.value}
+              status={param.status}
+              error={param.error}
+              nestingLevel={param.nestingLevel}
+              {onchange}
+            />
+          {/each}
+        </div>
+      </div>
+    {:else}
+      <!-- Ungrouped parameters at root level -->
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {#each params as param (param.key)}
           <ParameterCard
             paramKey={param.key}
             label={param.label}
@@ -58,10 +71,11 @@
             value={param.value}
             status={param.status}
             error={param.error}
+            nestingLevel={param.nestingLevel}
             {onchange}
           />
         {/each}
       </div>
-    </details>
-  {/if}
+    {/if}
+  {/each}
 </div>
