@@ -31,6 +31,7 @@ Traditional wizards force users through questions one at a time in a predetermin
 **Our approach:** Expose all input parameters on a single page. Users can click on any parameter to provide an answer, in any order they choose.
 
 The query planner's ordering is used for:
+
 - Visual emphasis (highlighting "recommended next" questions)
 - Keyboard navigation defaults
 - Accessibility announcements
@@ -41,12 +42,14 @@ The query planner's ordering is used for:
 As users provide answers, the UI provides **immediate, animated visual feedback** showing how their answers affect other questions:
 
 **Short-Circuit Visualization:**
+
 - When a user answers a question that short-circuits a logical condition (e.g., satisfying one branch of an OR), all other alternatives **immediately fade to gray**
 - The transition is smooth and animated (not instant) to help users understand the cause-and-effect relationship
 - Questions are **not hidden**, just visually de-emphasized - users can still see what became irrelevant and why
 - This makes the logical reasoning transparent: "I answered Yes to X, so Y and Z are no longer needed"
 
 **Example (Disjunction):**
+
 ```
 Did a data breach occur?
   - unauthorised access [Yes ✓]
@@ -56,6 +59,7 @@ Did a data breach occur?
 ```
 
 **Dynamic Relevance:**
+
 - Parameters that become irrelevant transition smoothly to grayed-out state
 - Parameters that become more relevant are emphasized (highlighted, moved to top)
 - Parameters maintain their spatial position during transitions (spatial stability)
@@ -76,19 +80,22 @@ DECIDE `eligible` IF
 ```
 
 A traditional wizard would force the user to answer:
+
 1. "Are you an adult?" → Yes
 2. "Do you have income?" → ???
 3. "Do you have assets?" → ???
 
-But the user might *know* they satisfy the income-or-assets requirement without knowing (or wanting to disclose) which one. They should be able to click on the `(has income OR has assets)` node and assert "Yes, this is true" directly.
+But the user might _know_ they satisfy the income-or-assets requirement without knowing (or wanting to disclose) which one. They should be able to click on the `(has income OR has assets)` node and assert "Yes, this is true" directly.
 
 **Benefits:**
-- Respects user privacy (no need to disclose *which* sub-condition is satisfied)
+
+- Respects user privacy (no need to disclose _which_ sub-condition is satisfied)
 - Matches how people actually reason ("I know I qualify for this part")
 - Reduces cognitive load for complex nested conditions
 - Enables "I don't know the details, but I know the answer" scenarios
 
 **UI Implication:** The parameter grid should show not just leaf inputs but also composite conditions that users can directly answer. These could be rendered as:
+
 - Collapsible groups with a "I know this is true/false" toggle at the group level
 - Inline assertion buttons next to OR/AND groups
 - A "shortcut" mode that shows only high-level conditions
@@ -98,6 +105,7 @@ But the user might *know* they satisfy the income-or-assets requirement without 
 ### 4. Explanation First
 
 Every determination comes with an explanation:
+
 - "You qualify because X and Y"
 - "You do not qualify because Z was false"
 - With citations back to the source rules
@@ -108,18 +116,19 @@ This is the "explainable AI" promise: the formal evaluation trace rendered in na
 
 The decision-service provides JSON Schema for each parameter. The web app renders appropriate input controls:
 
-| Schema Type | Control |
-|-------------|---------|
-| `boolean` | Toggle / Yes-No buttons |
-| `string` with `enum` | Radio buttons or select |
-| `number` | Number input with validation |
-| `string` (date format) | Date picker |
-| `object` | Expandable fieldset |
-| `array` | Repeatable section |
+| Schema Type            | Control                      |
+| ---------------------- | ---------------------------- |
+| `boolean`              | Toggle / Yes-No buttons      |
+| `string` with `enum`   | Radio buttons or select      |
+| `number`               | Number input with validation |
+| `string` (date format) | Date picker                  |
+| `object`               | Expandable fieldset          |
+| `array`                | Repeatable section           |
 
 ### 6. Embeddable and Standalone
 
 The web app should work as:
+
 - A standalone page (deployable to static hosting)
 - An embeddable component (iframe or web component)
 - A route within jl4-web for quick prototyping
@@ -132,21 +141,21 @@ Each parameter in the wizard maintains the following state:
 
 ```typescript
 type ParameterState = {
-  key: string                    // Parameter identifier
-  label: string                  // Display label (from schema.alias or key)
-  schema: Parameter              // JSON schema for the parameter
-  value: unknown                 // Current user answer
-  status: ParameterStatus        // Current relevance status
-  rank: number                   // Priority ranking from query-plan
-  asks: QueryAsk[]              // Related query atoms from query-plan
-  error?: string                 // Validation error message
-}
+  key: string; // Parameter identifier
+  label: string; // Display label (from schema.alias or key)
+  schema: Parameter; // JSON schema for the parameter
+  value: unknown; // Current user answer
+  status: ParameterStatus; // Current relevance status
+  rank: number; // Priority ranking from query-plan
+  asks: QueryAsk[]; // Related query atoms from query-plan
+  error?: string; // Validation error message
+};
 
 type ParameterStatus =
-  | 'unanswered-next'      // Should be answered next (highest priority)
-  | 'unanswered-relevant'  // Still needed but not next
-  | 'answered'             // User has provided an answer
-  | 'irrelevant'           // No longer needed based on other answers
+  | "unanswered-next" // Should be answered next (highest priority)
+  | "unanswered-relevant" // Still needed but not next
+  | "answered" // User has provided an answer
+  | "irrelevant"; // No longer needed based on other answers
 ```
 
 ### Component Structure
@@ -252,15 +261,16 @@ Wizard.svelte                    # Main orchestrator component
 
 Each parameter is rendered as a card with visual states. **All state transitions are animated smoothly** to provide visual feedback about logical relationships:
 
-| State | Appearance | Meaning | Transition |
-|-------|------------|---------|------------|
-| `unanswered-next` | Emphasized border, highlighted | Query planner's top recommendation | Fade in emphasis when prioritized |
-| `unanswered-relevant` | Normal, clean appearance | Should answer this | Standard state |
-| `answered` | Filled, checkmark, accent color | User has provided value | Smooth fill animation |
-| `irrelevant` | Grayed out (50% opacity), subtle | No longer needed based on other answers | **300ms fade to gray** - most important transition |
-| `error` | Red border, shake animation | Validation failed | Shake effect on error |
+| State                 | Appearance                       | Meaning                                 | Transition                                         |
+| --------------------- | -------------------------------- | --------------------------------------- | -------------------------------------------------- |
+| `unanswered-next`     | Emphasized border, highlighted   | Query planner's top recommendation      | Fade in emphasis when prioritized                  |
+| `unanswered-relevant` | Normal, clean appearance         | Should answer this                      | Standard state                                     |
+| `answered`            | Filled, checkmark, accent color  | User has provided value                 | Smooth fill animation                              |
+| `irrelevant`          | Grayed out (50% opacity), subtle | No longer needed based on other answers | **300ms fade to gray** - most important transition |
+| `error`               | Red border, shake animation      | Validation failed                       | Shake effect on error                              |
 
 **Key Transition: Relevant → Irrelevant**
+
 - Duration: 300ms ease-out
 - Effect: Opacity fades from 100% to 50%, subtle scale down
 - Purpose: Make short-circuit logic visible ("your answer made this irrelevant")
@@ -293,42 +303,42 @@ Each parameter is rendered as a card with visual states. **All state transitions
 
 ```typescript
 // 1. Get function metadata and schema
-const fn = await fetch(`${baseUrl}/functions/${fnName}`)
-const { parameters, description } = await fn.json()
+const fn = await fetch(`${baseUrl}/functions/${fnName}`);
+const { parameters, description } = await fn.json();
 
 // 2. Get initial query-plan (no bindings)
 const plan = await fetch(`${baseUrl}/functions/${fnName}/query-plan`, {
-  method: 'POST',
-  body: JSON.stringify({ bindings: {} })
-})
-const { asks, atoms, stillNeeded, dontCare } = await plan.json()
+  method: "POST",
+  body: JSON.stringify({ bindings: {} }),
+});
+const { asks, atoms, stillNeeded, dontCare } = await plan.json();
 ```
 
 ### On Value Change
 
 ```typescript
 async function onValueChange(paramPath: string, value: unknown) {
-  bindings[paramPath] = value
+  bindings[paramPath] = value;
 
   // Parallel: evaluate and get new query-plan
   const [evalResult, newPlan] = await Promise.all([
     fetch(`${baseUrl}/functions/${fnName}/evaluation`, {
-      method: 'POST',
-      body: JSON.stringify({ arguments: bindings, trace: 'full' })
+      method: "POST",
+      body: JSON.stringify({ arguments: bindings, trace: "full" }),
     }),
     fetch(`${baseUrl}/functions/${fnName}/query-plan`, {
-      method: 'POST',
-      body: JSON.stringify({ bindings })
-    })
-  ])
+      method: "POST",
+      body: JSON.stringify({ bindings }),
+    }),
+  ]);
 
-  updateUI(await evalResult.json(), await newPlan.json())
+  updateUI(await evalResult.json(), await newPlan.json());
 }
 ```
 
 ## Deployment Modes
 
-### Mode 1: Hosted (jl4.legalese.com/app/*)
+### Mode 1: Hosted (jl4.legalese.com/app/\*)
 
 - L4 source uploaded via jl4-web or websessions
 - Web app served at predictable URL
@@ -347,6 +357,7 @@ async function onValueChange(paramPath: string, value: unknown) {
 ### Mode 3: Static Export
 
 Generate a self-contained HTML/JS bundle that:
+
 - Includes the compiled decision logic (via decision-service snapshot)
 - Can be deployed to any static hosting (GitHub Pages, S3, etc.)
 - Works offline after initial load
@@ -355,9 +366,7 @@ Generate a self-contained HTML/JS bundle that:
 
 ```html
 <script src="https://jl4.legalese.com/l4-wizard.js"></script>
-<l4-wizard
-  function="my-function"
-  service-url="https://api.example.com">
+<l4-wizard function="my-function" service-url="https://api.example.com">
 </l4-wizard>
 ```
 
@@ -404,14 +413,14 @@ Generate a self-contained HTML/JS bundle that:
 
 ## Comparison: vue-pure-pdpa vs. l4-wizard
 
-| Aspect | vue-pure-pdpa (old) | l4-wizard (new) |
-|--------|---------------------|-----------------|
-| Input format | PureScript (.purs) | L4 source directly |
-| Backend | Flask + natural4 | Decision service API |
-| Query planning | Ad-hoc | Formal (ROBDD-based) |
-| Explanation | Limited | Full trace with citations |
-| Deployment | Custom server pool (v8k) | Static or embedded |
-| Framework | Vue 2 + PureScript | Svelte + TypeScript |
+| Aspect         | vue-pure-pdpa (old)      | l4-wizard (new)           |
+| -------------- | ------------------------ | ------------------------- |
+| Input format   | PureScript (.purs)       | L4 source directly        |
+| Backend        | Flask + natural4         | Decision service API      |
+| Query planning | Ad-hoc                   | Formal (ROBDD-based)      |
+| Explanation    | Limited                  | Full trace with citations |
+| Deployment     | Custom server pool (v8k) | Static or embedded        |
+| Framework      | Vue 2 + PureScript       | Svelte + TypeScript       |
 
 ## Open Questions
 
@@ -426,6 +435,7 @@ Generate a self-contained HTML/JS bundle that:
 5. **Multi-function apps**: Should one web app support multiple related decision functions? (e.g., "Check eligibility" then "Calculate amount")
 
 6. **Parent node assertion UI**: How exactly should we render intermediate/composite nodes for user assertion?
+
    - Option A: Show the decision tree structure with toggles at each level
    - Option B: Flat list with indentation showing hierarchy
    - Option C: "Expert mode" toggle that reveals intermediate nodes

@@ -4,7 +4,8 @@ This page is written for software developers who are helping to develop the L4 f
 
 The 'frontend' includes:
 
-- the VSCode and Monaco/jl4-web extensions
+- the VSCode extension and Monaco-based [jl4-web IDE](../../../ts-apps/jl4-web)
+- [l4-wizard](../../../ts-apps/l4-wizard) - consumer-facing web app generator
 - [the Ladder visualizer](../../../ts-shared/l4-ladder-visualizer)
 - as well as auxiliary or helper packages like [jl4-client-rpc](../../../ts-shared/jl4-client-rpc/)
 
