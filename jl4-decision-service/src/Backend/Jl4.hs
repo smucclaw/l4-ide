@@ -354,8 +354,13 @@ valueToFnLiteral = \case
   Eval.ValUnappliedConstructor name ->
     pure $ FnLitString $ prettyLayout name
   Eval.ValConstructor resolved [] ->
-    -- Constructors such as TRUE and FALSE
-    pure $ FnLitString $ prettyLayout $ getActual resolved
+    -- Special case boolean constructors (preserve original casing for others)
+    let name = prettyLayout $ getActual resolved
+     in case Text.toUpper name of
+          "TRUE" -> pure $ FnLitBool True
+          "FALSE" -> pure $ FnLitBool False
+          -- Other nullary constructors become strings (original casing preserved)
+          _ -> pure $ FnLitString name
   Eval.ValConstructor resolved vals -> do
     lits <- traverse nfToFnLiteral vals
     pure $
