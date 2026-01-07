@@ -137,9 +137,10 @@ export function buildAtomContexts(ladder: Ladder): Map<number, AtomContext> {
 
       case 'And':
       case 'Or': {
+        // Extract sibling atom IDs - filter for UBoolVar nodes and get their unique IDs
         const siblings = node.args
-          .filter((arg) => arg.$type === 'UBoolVar')
-          .map((arg) => (arg as BoolVarNode).name.unique)
+          .filter((arg): arg is Extract<LadderNode, { $type: 'UBoolVar' }> => arg.$type === 'UBoolVar')
+          .map((arg) => arg.name.unique)
 
         node.args.forEach((arg) => {
           if (arg.$type === 'UBoolVar') {
@@ -157,7 +158,7 @@ export function buildAtomContexts(ladder: Ladder): Map<number, AtomContext> {
       }
 
       case 'Not':
-        traverse(node.arg, 'Not')
+        traverse(node.negand, 'Not')
         break
     }
   }
