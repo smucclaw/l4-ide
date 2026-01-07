@@ -43,26 +43,28 @@ data FnLiteral
 
 instance ToJSON FnLiteral where
   toJSON = \ case
-    FnLitInt val -> String $ tshow val
-    FnLitDouble val -> String $ tshow val
-    FnLitBool val -> String $ tshow val
+    -- Use proper JSON types for symmetric ToJSON/FromJSON roundtripping
+    FnLitInt val -> Number $ fromIntegral val
+    FnLitDouble val -> Number $ Scientific.fromFloatDigits val
+    FnLitBool val -> Bool val
     FnLitString val -> String val
     FnArray vals -> Array $ V.fromList $ fmap toJSON vals
     FnObject ps -> Object $ Aeson.fromList $ fmap (bimap Aeson.fromText toJSON) ps
     FnUncertain -> Object $ Aeson.fromList []
     FnUnknown -> Null
-   where
-    tshow :: forall a. (Show a) => a -> Text
-    tshow = Text.pack . show
 
 instance FromJSON FnLiteral where
   parseJSON = \ case
-    String val -> pure $ parseTextAsFnLiteral val
+    -- JSON Strings should remain strings, not be coerced to numbers
+    -- (Type coercion is only for query parameters via FromHttpApiData)
+    String val -> pure $ FnLitString val
     Bool val -> pure $ FnLitBool val
     Number val
-      | Just (i :: Int) <- Scientific.toBoundedInteger val -> pure $ FnLitInt $ fromIntegral i
+      -- Check if it's an integer (no fractional part) - supports arbitrary precision
+      | Scientific.isInteger val -> pure $ FnLitInt $ Scientific.coefficient val * (10 ^ Scientific.base10Exponent val)
+      -- Otherwise it's a floating point number
       | Right d <- Scientific.toBoundedRealFloat val -> pure $ FnLitDouble d
-      | otherwise -> Aeson.typeMismatch "Failed to parse number into bounded real or integer" (Number val)
+      | otherwise -> Aeson.typeMismatch "Failed to parse number into bounded real" (Number val)
     Null -> pure FnUnknown
     Array vals -> FnArray <$> traverse parseJSON (Foldable.toList vals)
     Object o

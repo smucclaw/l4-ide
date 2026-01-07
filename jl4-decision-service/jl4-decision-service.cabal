@@ -124,6 +124,7 @@ test-suite jl4-decision-service-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+    ApiSpec
     AskOrderingSpec
     DiskLoadingSpec
     Paths_jl4_decision_service
@@ -145,6 +146,7 @@ test-suite jl4-decision-service-test
     containers ^>=0.6.7,
     stm ^>=2.5.1.0,
     base >=4.7 && <5,
+    aeson,
     directory,
     filepath,
     hspec,
