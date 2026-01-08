@@ -43,7 +43,7 @@
           depth,
         }
 
-      case 'UBoolVar':
+      case 'UBoolVar': {
         const paramKey = node.name.label.replace(/^`|`$/g, '')
         return {
           type: 'Var',
@@ -52,6 +52,7 @@
           depth,
           paramKey,
         }
+      }
     }
   }
 

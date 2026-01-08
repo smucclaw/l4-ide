@@ -13,20 +13,11 @@
     value: unknown
     status: ParameterStatus
     error?: string
-    nestingLevel?: number
     onchange: (key: string, value: unknown) => void
   }
 
-  let {
-    paramKey,
-    label,
-    schema,
-    value,
-    status,
-    error,
-    nestingLevel = 0,
-    onchange,
-  }: Props = $props()
+  let { paramKey, label, schema, value, status, error, onchange }: Props =
+    $props()
 
   const statusClasses: Record<ParameterStatus, string> = {
     'unanswered-relevant': 'border-gray-300 bg-white scale-100',

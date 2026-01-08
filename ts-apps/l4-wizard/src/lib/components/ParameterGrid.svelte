@@ -54,7 +54,6 @@
               value={param.value}
               status={param.status}
               error={param.error}
-              nestingLevel={param.nestingLevel}
               {onchange}
             />
           {/each}
@@ -71,7 +70,6 @@
             value={param.value}
             status={param.status}
             error={param.error}
-            nestingLevel={param.nestingLevel}
             {onchange}
           />
         {/each}

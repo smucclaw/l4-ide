@@ -1,8 +1,4 @@
-import type {
-  QueryPlanResponse,
-  Parameter,
-  Parameters,
-} from '@repo/decision-service-types'
+import type { QueryPlanResponse, Parameters } from '@repo/decision-service-types'
 
 export type DecisionServiceClient = {
   baseUrl: string
