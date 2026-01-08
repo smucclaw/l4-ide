@@ -32,6 +32,11 @@ jobs:
         with:
           submodules: true
 
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config liblzma-dev libgmp-dev
+
       - name: Set up GHC ${{ matrix.ghc-version }}
         uses: haskell-actions/setup@v2
         id: setup
