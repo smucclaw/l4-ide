@@ -87,10 +87,10 @@ l4Golden evalConfig isOk dir inputFile = do
   (output, _) <- capture (checkFile evalConfig isOk inputFile)
   pure
     Golden
-      { output
+      { output = stripAnsiCodesString output
       , encodePretty = show
       , writeToFile = writeFile
-      , readFromFile = readFile
+      , readFromFile = fmap stripAnsiCodesString . readFile
       , goldenFile = dir </> (takeFileName inputFile -<.> "golden")
       , actualFile = Just (dir </> (takeFileName inputFile -<.> "actual"))
       , failFirstTime = True
@@ -104,14 +104,15 @@ jl4ExactPrintGolden evalConfig dir inputFile = do
     Shake.use Rules.ExactPrint uri
 
   -- NOTE: we sort the output, because the traces are concurrent and might not be in order
-  let output = fromMaybe (sanitizeFilePaths $ mconcat errs) moutput
+  -- Strip ANSI codes from both success and error paths for cross-platform consistency
+  let output = stripAnsiCodes $ fromMaybe (sanitizeFilePaths $ mconcat errs) moutput
 
   pure
     Golden
       { output
       , encodePretty = Text.unpack
       , writeToFile = Text.writeFile
-      , readFromFile = Text.readFile
+      , readFromFile = fmap stripAnsiCodes . Text.readFile
       , goldenFile = dir </> (takeFileName inputFile -<.> "ep.golden")
       , actualFile = Just (dir </> (takeFileName inputFile -<.> "ep.actual"))
       , failFirstTime = True
@@ -131,7 +132,8 @@ jl4NlgAnnotationsGolden evalConfig isOk dir inputFile = do
             directives = toListOf (gplate @(Directive Resolved)) mod'
           in
             Text.unlines $ fmap Nlg.simpleLinearizer directives
-  let output =
+  -- Strip ANSI codes for cross-platform consistency
+  let output = stripAnsiCodes $
         if isOk
           then output_
           else output_ <> "\n" <> Text.unlines (fmap (Text.strip . sanitizeFilePaths) errs)
@@ -140,7 +142,7 @@ jl4NlgAnnotationsGolden evalConfig isOk dir inputFile = do
       { output
       , encodePretty = Text.unpack
       , writeToFile = Text.writeFile
-      , readFromFile = Text.readFile
+      , readFromFile = fmap stripAnsiCodes . Text.readFile
       , goldenFile = dir </> takeFileName inputFile -<.> "nlg.golden"
       , actualFile = Just (dir </> takeFileName inputFile -<.> "nlg.actual")
       , failFirstTime = True
@@ -217,14 +219,30 @@ sanitizeFilePaths = stripAnsiCodes . RE.replaceAll regex
 stripAnsiCodes :: Text -> Text
 stripAnsiCodes text =
   -- First strip proper ANSI codes with escape character
-  let text' = Text.pack $ go $ Text.unpack text
+  let text' = Text.pack $ stripAnsiCodesGo $ Text.unpack text
   -- Then strip literal bracket codes and any colored spaces pattern
   in foldr (\code -> Text.replace code "") text'
        ["[42m    [0m", "[41m    [0m", "[42m", "[41m", "[36m", "[32m", "[31m", "[0m", "[42m ", "[41m "]
+
+-- | Strip ANSI codes from String (for Golden tests using String type)
+stripAnsiCodesString :: String -> String
+stripAnsiCodesString str =
+  let str' = stripAnsiCodesGo str
+  -- Strip literal bracket codes
+  in foldl (\s code -> replaceString code "" s) str'
+       ["[42m    [0m", "[41m    [0m", "[42m", "[41m", "[36m", "[32m", "[31m", "[0m", "[42m ", "[41m "]
   where
-  go [] = []
-  go ('\x1b':'[':rest) = go (drop 1 $ dropWhile (/= 'm') rest)
-  go (c:cs) = c : go cs
+    replaceString :: String -> String -> String -> String
+    replaceString _ _ [] = []
+    replaceString old new s@(x:xs)
+      | old `List.isPrefixOf` s = new ++ replaceString old new (drop (length old) s)
+      | otherwise = x : replaceString old new xs
+
+-- | Core ANSI stripping logic for proper escape sequences
+stripAnsiCodesGo :: String -> String
+stripAnsiCodesGo [] = []
+stripAnsiCodesGo ('\x1b':'[':rest) = stripAnsiCodesGo (drop 1 $ dropWhile (/= 'm') rest)
+stripAnsiCodesGo (c:cs) = c : stripAnsiCodesGo cs
 
 checkFile :: JL4Lazy.EvalConfig -> Bool -> FilePath -> IO ()
 checkFile evalConfig isOk file = do
