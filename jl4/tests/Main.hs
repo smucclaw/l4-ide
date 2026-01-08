@@ -213,8 +213,14 @@ sanitizeFilePaths = stripAnsiCodes . RE.replaceAll regex
       RE.manyTextOf (CharSet.not $ CharSet.space `CharSet.union` CharSet.singleton ':')
 
 -- | Strip ANSI color codes from text output
+-- Handles both proper ANSI codes (\x1b[...m) and literal bracket codes
 stripAnsiCodes :: Text -> Text
-stripAnsiCodes = Text.pack . go . Text.unpack
+stripAnsiCodes text =
+  -- First strip proper ANSI codes with escape character
+  let text' = Text.pack $ go $ Text.unpack text
+  -- Then strip literal bracket codes and any colored spaces pattern
+  in foldr (\code -> Text.replace code "") text'
+       ["[42m    [0m", "[41m    [0m", "[42m", "[41m", "[36m", "[32m", "[31m", "[0m", "[42m ", "[41m "]
   where
   go [] = []
   go ('\x1b':'[':rest) = go (drop 1 $ dropWhile (/= 'm') rest)
