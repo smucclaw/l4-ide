@@ -118,6 +118,10 @@ export interface AtomContext {
 export function buildAtomContexts(ladder: Ladder): Map<number, AtomContext> {
   const contexts = new Map<number, AtomContext>()
 
+  if (!ladder) {
+    return contexts
+  }
+
   function traverse(
     node: LadderNode,
     parentType: 'And' | 'Or' | 'Root' | 'Not'

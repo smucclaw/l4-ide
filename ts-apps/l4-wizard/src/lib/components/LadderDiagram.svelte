@@ -132,6 +132,7 @@
               </span>
               {#if node.children[0]}
                 {@const child = node.children[0]}
+                <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
                 <div
                   class="inline-flex items-center gap-2 rounded border-2 px-3 py-1.5 text-sm font-medium {getNodeColor(
                     child.type,
@@ -143,7 +144,7 @@
                   role={child.type === 'Var' && onNodeClick
                     ? 'button'
                     : undefined}
-                  tabindex={child.type === 'Var' && onNodeClick ? 0 : undefined}
+                  tabindex={child.type === 'Var' && onNodeClick ? 0 : -1}
                 >
                   {#if child.type === 'And'}
                     <svg
@@ -185,6 +186,7 @@
               {/if}
             </div>
           {:else}
+            <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
             <div
               class="inline-flex items-center gap-2 rounded border-2 px-3 py-1.5 text-sm font-medium {getNodeColor(
                 node.type,
@@ -194,7 +196,7 @@
                 : ''}"
               onclick={() => handleNodeClick(node)}
               role={node.type === 'Var' && onNodeClick ? 'button' : undefined}
-              tabindex={node.type === 'Var' && onNodeClick ? 0 : undefined}
+              tabindex={node.type === 'Var' && onNodeClick ? 0 : -1}
             >
               {#if node.type === 'And'}
                 <svg
