@@ -223,11 +223,12 @@ prettyDiagnostics = vcat . map prettyDiagnostic
 -- This ensures consistent output across platforms by removing absolute path prefixes.
 uriFileName :: NormalizedUri -> T.Text
 uriFileName nuri =
-    case uriToFilePath' (toUri nuri) of
+    let uri = fromNormalizedUri nuri
+    in case uriToFilePath' uri of
         Just fp -> T.pack (takeFileName fp)
-        Nothing -> case T.stripPrefix "file://" (getUri nuri) of
+        Nothing -> case T.stripPrefix "file://" (uri.getUri) of
             Just path -> T.pack (takeFileName (T.unpack path))
-            Nothing -> getUri nuri
+            Nothing -> uri.getUri
 
 prettyDiagnostic :: FileDiagnostic -> Doc a
 prettyDiagnostic FileDiagnostic { fdFilePath, fdShouldShowDiagnostic, fdLspDiagnostic = LSP.Diagnostic{..} } =
