@@ -159,7 +159,7 @@ Then open http://localhost:5173
 ### Formatting and Linting
 
 ```bash
-# Format all TypeScript code (run before committing!)
+# Format all TypeScript code
 npm run format
 
 # Check formatting without changes
@@ -168,6 +168,31 @@ npm run format:check
 # Lint TypeScript
 npm run lint
 ```
+
+## Pre-Commit Checklist
+
+**IMPORTANT: Run these checks before every commit to avoid CI failures.**
+
+### For TypeScript/frontend changes:
+
+```bash
+npm ci && npm run format   # REQUIRED - CI will reject unformatted code
+npm run lint               # Recommended - catch issues early
+```
+
+### For Haskell changes:
+
+```bash
+cabal test all             # REQUIRED - run full test suite
+```
+
+### For mixed changes (both TypeScript and Haskell):
+
+```bash
+npm ci && npm run format && cabal test all
+```
+
+**Why this matters:** CI runs `npm run format:check` which fails if any files aren't formatted. Running `npm run format` locally before committing prevents these failures.
 
 ## Architecture Overview
 
