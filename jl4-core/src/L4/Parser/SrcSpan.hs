@@ -70,11 +70,10 @@ data SrcRange =
 prettySrcRange :: SrcRange -> Text
 prettySrcRange (MkSrcRange p1 p2 _ uri) =
     let fullUri = (fromNormalizedUri uri).getUri
-        fileName = case uriToFilePath (toUri uri) of
-            Just fp -> Text.pack (takeFileName fp)
-            Nothing -> case Text.stripPrefix "file://" fullUri of
-                Just path -> Text.pack (takeFileName (Text.unpack path))
-                Nothing -> fullUri
+        -- Extract filename from URI by removing file:// prefix and taking basename
+        fileName = case Text.stripPrefix "file://" fullUri of
+            Just path -> Text.pack $ takeFileName $ Text.unpack path
+            Nothing -> Text.pack $ takeFileName $ Text.unpack fullUri
     in fileName <> ":" <> prettySrcPos p1 <> prettyPartialSrcPos p1 p2
 
 prettySrcRangeM :: Maybe SrcRange -> Text
