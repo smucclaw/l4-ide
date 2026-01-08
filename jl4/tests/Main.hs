@@ -202,7 +202,7 @@ buildSchemaContext (MkModule _ _ section) =
 -- ----------------------------------------------------------------------------
 
 sanitizeFilePaths :: Text -> Text
-sanitizeFilePaths = RE.replaceAll regex
+sanitizeFilePaths = stripAnsiCodes . RE.replaceAll regex
   where
   mkFileName (Text.null -> hadNoWhiteSpace) (Text.unpack -> fp)
     = Text.pack $ (if hadNoWhiteSpace then id else (' ' :)) case OsPath.decodeUtf . OsPath.takeFileName =<< OsPath.encodeUtf fp of
@@ -211,6 +211,14 @@ sanitizeFilePaths = RE.replaceAll regex
 
   regex = mkFileName <$> RE.manyTextOf CharSet.space <* RE.text "file://" <*>
       RE.manyTextOf (CharSet.not $ CharSet.space `CharSet.union` CharSet.singleton ':')
+
+-- | Strip ANSI color codes from text output
+stripAnsiCodes :: Text -> Text
+stripAnsiCodes = Text.pack . go . Text.unpack
+  where
+  go [] = []
+  go ('\x1b':'[':rest) = go (drop 1 $ dropWhile (/= 'm') rest)
+  go (c:cs) = c : go cs
 
 checkFile :: JL4Lazy.EvalConfig -> Bool -> FilePath -> IO ()
 checkFile evalConfig isOk file = do
