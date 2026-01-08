@@ -252,18 +252,17 @@ instance ToParamSchema FnLiteral where
 
 instance ToSchema FnLiteral where
   declareNamedSchema p = do
-    intSchema <- declareSchemaRef (Proxy @Int)
     mTextSchema <- declareSchemaRef (Proxy @Text)
-    fracSchema <- declareSchemaRef (Proxy @Double)
     boolSchema <- declareSchemaRef (Proxy @Bool)
     fnLiteralSchema <- declareSchemaRef (Proxy @FnLiteral)
     pure $
       NamedSchema (Just "Literal") $
         toParamSchema p
           & oneOf
-            ?~ [ intSchema
+            ?~ [ -- Use a single number schema for both Int and Double
+                 -- (JSON doesn't distinguish between integer and floating-point)
+                 Inline $ mempty & type_ ?~ OpenApiNumber
                , mTextSchema
-               , fracSchema
                , boolSchema
                , Inline $
                   mempty
