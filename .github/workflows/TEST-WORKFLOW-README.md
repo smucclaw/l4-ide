@@ -17,6 +17,7 @@ The `windows-test.yml` workflow is triggered by pull requests, so:
 5. Once tests pass, convert to a regular PR for review
 
 **Command:**
+
 ```bash
 gh pr create --draft --title "Add Windows build support" \
   --body "Testing Windows build workflows. See [Windows Build Guide](./doc/dev/windows-build.md) for details."
@@ -48,6 +49,7 @@ gh run watch
 ## What Gets Tested
 
 ### windows-test.yml (On PRs)
+
 - ✓ GHC 9.8.4 installation on Windows
 - ✓ Cabal configuration and dependency resolution
 - ✓ Full build of all Haskell packages
@@ -56,6 +58,7 @@ gh run watch
 - ✓ Caching behavior
 
 ### windows-release.yml (On Tags)
+
 - Everything from windows-test.yml, plus:
 - ✓ Executable packaging
 - ✓ Documentation generation
@@ -68,19 +71,23 @@ gh run watch
 ### During First Run
 
 1. **Long build times** (~45-60 minutes for first build)
+
    - Expected: dependencies need to compile
    - Cache will speed up subsequent runs
 
 2. **Path length issues**
+
    - Windows has 260 character path limit by default
    - GitHub Actions runners have long paths enabled
    - Should not be an issue, but watch for it
 
 3. **Line ending problems**
+
    - We set `autocrlf: false` to prevent issues
    - Shell scripts should use LF not CRLF
 
 4. **Test failures**
+
    - Some path-based tests may fail on Windows
    - Document any expected failures
 
@@ -91,18 +98,21 @@ gh run watch
 ## Interpreting Results
 
 ### Success Indicators
+
 - ✅ All packages build without errors
 - ✅ Tests pass (or expected failures documented)
 - ✅ All expected executables are found
 - ✅ Archives are created with reasonable sizes
 
 ### Warning Signs
+
 - ⚠️ Build takes >90 minutes (possible hanging)
 - ⚠️ Missing expected executables
 - ⚠️ Archive is much smaller than expected
 - ⚠️ Excessive warnings in build output
 
 ### Failure Indicators
+
 - ❌ Compilation errors
 - ❌ Linker errors (missing Windows libraries)
 - ❌ Test suite crashes

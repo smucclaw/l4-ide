@@ -9,10 +9,12 @@ This document describes how to build L4 IDE on Windows and how the Windows relea
 **File:** `.github/workflows/windows-release.yml`
 
 **Triggers:**
+
 - Automatically on git tags matching `v*` (e.g., `v1.0.0`)
 - Manually via workflow_dispatch
 
 **What it does:**
+
 1. Sets up a Windows runner with GHC 9.8.4
 2. Builds all Haskell packages using Cabal
 3. Runs the test suite
@@ -21,6 +23,7 @@ This document describes how to build L4 IDE on Windows and how the Windows relea
 6. Creates a GitHub release with the binaries (if triggered by a tag)
 
 **Artifacts produced:**
+
 - `l4-ide-windows-<version>.zip` containing:
   - `bin/` - All executable files (.exe)
   - `VERSION.txt` - Build metadata
@@ -31,10 +34,12 @@ This document describes how to build L4 IDE on Windows and how the Windows relea
 **File:** `.github/workflows/windows-test.yml`
 
 **Triggers:**
+
 - Pull requests that modify Haskell code or workflows
 - Manually via workflow_dispatch
 
 **What it does:**
+
 - Builds and tests on Windows to catch platform-specific issues early
 - Does NOT create releases or artifacts
 - Provides faster feedback for PR authors
@@ -44,12 +49,14 @@ This document describes how to build L4 IDE on Windows and how the Windows relea
 ### Prerequisites
 
 1. **Install GHCup** (Haskell toolchain manager)
+
    ```powershell
    # In PowerShell
    Set-ExecutionPolicy Bypass -Scope Process -Force;[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; try { Invoke-Command -ScriptBlock ([ScriptBlock]::Create((Invoke-WebRequest https://www.haskell.org/ghcup/sh/bootstrap-haskell.ps1 -UseBasicParsing))) -ArgumentList $true } catch { Write-Error $_ }
    ```
 
 2. **Install GHC and Cabal via GHCup**
+
    ```powershell
    ghcup install ghc 9.8.4
    ghcup install cabal latest
@@ -57,6 +64,7 @@ This document describes how to build L4 IDE on Windows and how the Windows relea
    ```
 
 3. **Install Git** (if not already installed)
+
    - Download from: https://git-scm.com/download/win
 
 4. **Clone the repository**
@@ -85,16 +93,19 @@ cabal install all --overwrite-policy=always
 ### Finding Built Executables
 
 After building, executables are located in:
+
 ```
 dist-newstyle/build/x86_64-windows/ghc-9.8.4/<package>/x/<exe-name>/build/<exe-name>/
 ```
 
 For example:
+
 ```
 dist-newstyle/build/x86_64-windows/ghc-9.8.4/jl4-0.1/x/jl4-cli/build/jl4-cli/jl4-cli.exe
 ```
 
 Or use `cabal install` to copy them to `~/.cabal/bin/`:
+
 ```bash
 cabal install jl4:jl4-cli --overwrite-policy=always
 ```
@@ -147,6 +158,7 @@ cd ..
 **Common issues:**
 
 1. **Long path issues**
+
    - Windows has a 260 character path limit by default
    - Enable long paths in Windows 10/11:
      ```powershell
@@ -156,10 +168,12 @@ cd ..
    - Or use shorter directory names for the repository
 
 2. **Antivirus interference**
+
    - Some antivirus software may quarantine Haskell executables
    - Add `dist-newstyle/` and `~/.cabal/` to antivirus exclusions
 
 3. **Missing system dependencies**
+
    - GHCup installer should handle most dependencies
    - If you get linker errors, you may need Visual Studio Build Tools
    - Download from: https://visualstudio.microsoft.com/downloads/ (look for "Build Tools for Visual Studio")
@@ -189,11 +203,13 @@ These are expected and don't necessarily indicate problems with the core functio
 If `cabal install` doesn't put executables in your PATH:
 
 1. Find your cabal bin directory:
+
    ```bash
    cabal path --installdir
    ```
 
 2. Add it to your PATH:
+
    ```powershell
    # In PowerShell
    $env:PATH += ";$HOME\.cabal\bin"
@@ -221,38 +237,43 @@ The GitHub Actions workflows use caching to speed up builds:
 - **Cache invalidation:** Automatic when dependencies change
 
 To maximize cache hits:
+
 - Don't change `cabal.project` unnecessarily
 - Keep dependency versions stable
 - Run `cabal freeze` to lock versions
 
 ## Comparison with Linux Build
 
-| Aspect | Linux | Windows |
-|--------|-------|---------|
-| Build time | ~20-30 min | ~45-60 min |
-| Executable size | ~50-100 MB | ~50-100 MB |
-| Test pass rate | ~100% | ~95% (path issues) |
-| Container support | Yes (Ubuntu) | No |
-| Native runner | Yes | Yes |
+| Aspect            | Linux        | Windows            |
+| ----------------- | ------------ | ------------------ |
+| Build time        | ~20-30 min   | ~45-60 min         |
+| Executable size   | ~50-100 MB   | ~50-100 MB         |
+| Test pass rate    | ~100%        | ~95% (path issues) |
+| Container support | Yes (Ubuntu) | No                 |
+| Native runner     | Yes          | Yes                |
 
 ## Future Improvements
 
 Potential enhancements to the Windows build:
 
 1. **Cross-compilation from Linux**
+
    - Use GHC cross-compiler to build Windows binaries on Linux
    - Faster and more consistent with main CI
 
 2. **MSI Installer**
+
    - Create a proper Windows installer using WiX Toolset
    - Register file associations for `.l4` files
    - Add to Windows PATH automatically
 
 3. **Code signing**
+
    - Sign executables with a code signing certificate
    - Reduces Windows SmartScreen warnings
 
 4. **Scoop/Chocolatey packages**
+
    - Publish to Windows package managers
    - Easier installation and updates
 

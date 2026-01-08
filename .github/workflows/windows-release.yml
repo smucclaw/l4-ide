@@ -3,13 +3,13 @@ name: Windows Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
     inputs:
       create_release:
-        description: 'Create a GitHub release'
+        description: "Create a GitHub release"
         required: false
-        default: 'false'
+        default: "false"
 
 jobs:
   build-windows:

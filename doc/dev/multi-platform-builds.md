@@ -6,12 +6,12 @@ This document describes the multi-platform build and release system for L4 IDE.
 
 The L4 IDE project now supports automated builds and releases for multiple platforms and architectures via GitHub Actions:
 
-| Platform | Architecture | Runner | Status |
-|----------|-------------|--------|--------|
-| **Windows** | x86_64 | `windows-latest` | ✅ Configured |
-| **Linux** | x86_64 | `ubuntu-latest` | ✅ Configured |
-| **Linux** | aarch64 (ARM64) | `ubuntu-24.04-arm` | ✅ Configured |
-| **macOS** | Apple Silicon (M1/M2/M3/M4) | `macos-latest` | ✅ Configured |
+| Platform    | Architecture                | Runner             | Status        |
+| ----------- | --------------------------- | ------------------ | ------------- |
+| **Windows** | x86_64                      | `windows-latest`   | ✅ Configured |
+| **Linux**   | x86_64                      | `ubuntu-latest`    | ✅ Configured |
+| **Linux**   | aarch64 (ARM64)             | `ubuntu-24.04-arm` | ✅ Configured |
+| **macOS**   | Apple Silicon (M1/M2/M3/M4) | `macos-latest`     | ✅ Configured |
 
 ## Workflows
 
@@ -24,11 +24,13 @@ These workflows run automatically on pull requests to verify builds work:
 - **`.github/workflows/macos-test.yml`** - macOS Apple Silicon build verification
 
 **Triggers:**
+
 - Pull requests to `main` branch
 - Changes to `jl4*/**`, `cabal.project`, or workflow files
 - Manual dispatch via GitHub Actions UI
 
 **What they do:**
+
 1. Set up Haskell toolchain (GHC 9.6.6 + Cabal 3.16.1.0)
 2. Configure build with tests enabled
 3. Restore/save dependency cache for faster subsequent runs
@@ -45,11 +47,13 @@ These workflows create GitHub releases with binary distributions:
 - **`.github/workflows/macos-release.yml`** - macOS Apple Silicon releases
 
 **Triggers:**
+
 - Git tags matching `v*` (e.g., `v1.0.0`, `v0.1.0-beta`)
 - Manual dispatch with optional release creation
 
 **What they do:**
 Everything from test workflows, plus:
+
 1. Package executables into archive files
 2. Strip debug symbols to reduce size
 3. Generate VERSION.txt and README.md
@@ -71,6 +75,7 @@ All workflows use GitHub Actions caching to speed up builds:
 ### Concurrency Control
 
 Test workflows use concurrency groups to prevent multiple runs per PR:
+
 ```yaml
 concurrency:
   group: <platform>-build-${{ github.ref }}
@@ -82,6 +87,7 @@ This saves CI resources and provides faster feedback.
 ### Build Summaries
 
 All workflows generate detailed summaries in the GitHub Actions UI showing:
+
 - Platform and architecture
 - GHC version
 - List of built executables with sizes
@@ -120,11 +126,13 @@ All workflows generate detailed summaries in the GitHub Actions UI showing:
 ### Windows (`l4-ide-windows-<version>.zip`)
 
 **Contents:**
+
 - `bin/` - All `.exe` files
 - `VERSION.txt` - Build metadata
 - `README.md` - Installation instructions
 
 **Executables:**
+
 - `jl4-cli.exe`
 - `jl4-schema.exe`
 - `jl4-lsp.exe`
@@ -139,6 +147,7 @@ All workflows generate detailed summaries in the GitHub Actions UI showing:
 **Architectures:** `x86_64`, `aarch64`
 
 **Contents:**
+
 - `bin/` - All executable files (stripped)
 - `VERSION.txt` - Build metadata including architecture
 - `README.md` - Installation instructions
@@ -152,6 +161,7 @@ All workflows generate detailed summaries in the GitHub Actions UI showing:
 **Platform:** Apple Silicon (M1/M2/M3/M4)
 
 **Contents:**
+
 - `bin/` - All executable files (stripped and ad-hoc signed)
 - `VERSION.txt` - Build metadata
 - `README.md` - Installation and Gatekeeper bypass instructions
@@ -161,6 +171,7 @@ All workflows generate detailed summaries in the GitHub Actions UI showing:
 **Requirements:** macOS 11.0 (Big Sur) or later, Apple Silicon Mac
 
 **Note:** Binaries are ad-hoc signed but not notarized. Users must bypass Gatekeeper on first run:
+
 ```bash
 xattr -dr com.apple.quarantine bin/*
 ```
@@ -170,43 +181,52 @@ xattr -dr com.apple.quarantine bin/*
 ### Windows
 
 **Build Configuration:**
+
 - Uses GHC 9.6.6 (officially supported on Windows)
 - Builds take ~45-60 minutes on first run
 - Cache reduces to ~20-30 minutes
 - Uses Git Bash for shell commands
 
 **Known Issues:**
+
 - None currently
 
 **Dependencies:**
+
 - Removed unused `Win32` package dependency from `jl4-lsp`
 - Uses `directory` package for file operations on Windows
 
 ### Linux
 
 **Build Configuration:**
+
 - Separate matrix jobs for x86_64 and aarch64
 - Uses native Ubuntu runners
 - Binaries are stripped to reduce size
 
 **Known Issues:**
+
 - ARM64 builds may have dependency resolution issues (under investigation)
 
 **Runner Details:**
+
 - x86_64: `ubuntu-latest` (currently Ubuntu 22.04)
 - aarch64: `ubuntu-24.04-arm` (GitHub-hosted ARM runners)
 
 ### macOS
 
 **Build Configuration:**
+
 - Uses `macos-latest` runner (currently macOS 14 on M1)
 - Binaries are stripped and ad-hoc code signed
 - Uses `-perm +111` for finding executables
 
 **Known Issues:**
+
 - None currently
 
 **Runner Details:**
+
 - Free tier includes Apple Silicon runners as of macos-14
 - Previous `macos-latest-xlarge` required paid billing
 
@@ -217,6 +237,7 @@ xattr -dr com.apple.quarantine bin/*
 **Symptom:** Build fails with `-Werror=unused-packages` error
 
 **Solution:** Remove the unused dependency from the cabal file. Example:
+
 ```diff
 - if os(windows)
 -   build-depends: Win32
@@ -231,6 +252,7 @@ xattr -dr com.apple.quarantine bin/*
 **Symptom:** Every build takes full time even after first build
 
 **Possible causes:**
+
 1. `plan.json` changed (dependencies updated)
 2. GHC or Cabal version changed
 3. Cache expired (GitHub keeps caches for 7 days)
@@ -242,11 +264,13 @@ xattr -dr com.apple.quarantine bin/*
 **Symptom:** "No executables found" in build summary
 
 **Check:**
+
 1. Did the build complete successfully?
 2. Are executables named correctly in cabal files?
 3. Are you filtering test executables correctly?
 
 **Find command used:**
+
 ```bash
 # Windows
 find dist-newstyle -type f -name "*.exe"
@@ -306,6 +330,7 @@ When modifying workflows:
 ### Free Tier Limits
 
 GitHub Actions free tier (public repositories):
+
 - **Linux/Windows:** Unlimited minutes
 - **macOS:** 2000 minutes/month (10x multiplier = 200 actual minutes)
 

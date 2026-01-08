@@ -4,9 +4,9 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - 'jl4*/**'
-      - 'cabal.project'
-      - '.github/workflows/macos-*.yml'
+      - "jl4*/**"
+      - "cabal.project"
+      - ".github/workflows/macos-*.yml"
   workflow_dispatch:
 
 # Only run one build per PR to save resources
@@ -17,7 +17,7 @@ concurrency:
 jobs:
   build-macos:
     name: Test macOS Build - Apple Silicon - GHC ${{ matrix.ghc-version }}
-    runs-on: macos-latest  # Free runner (currently macos-14 = M1)
+    runs-on: macos-latest # Free runner (currently macos-14 = M1)
     strategy:
       fail-fast: false
       matrix:

@@ -3,18 +3,18 @@ name: macOS Release (Apple Silicon)
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
     inputs:
       create_release:
-        description: 'Create a GitHub release'
+        description: "Create a GitHub release"
         required: false
-        default: 'false'
+        default: "false"
 
 jobs:
   build-macos:
     name: Build macOS Release - Apple Silicon - GHC ${{ matrix.ghc-version }}
-    runs-on: macos-latest  # Free runner (currently macos-14 = M1)
+    runs-on: macos-latest # Free runner (currently macos-14 = M1)
     strategy:
       fail-fast: false
       matrix:

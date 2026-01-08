@@ -3,6 +3,7 @@
 These instructions are intended for L4 internal developers with experience in Typescript and/or Haskell.
 
 **Platform-specific guides:**
+
 - [Windows Build Guide](./windows-build.md) - Detailed Windows setup and release process
 
 ## Quick build and install

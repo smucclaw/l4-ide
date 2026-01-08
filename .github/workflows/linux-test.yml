@@ -4,9 +4,9 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - 'jl4*/**'
-      - 'cabal.project'
-      - '.github/workflows/linux-*.yml'
+      - "jl4*/**"
+      - "cabal.project"
+      - ".github/workflows/linux-*.yml"
   workflow_dispatch:
 
 # Only run one build per PR to save resources
