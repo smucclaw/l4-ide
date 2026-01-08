@@ -15,4 +15,6 @@ export type {
   QueryInput,
   QueryAsk,
   QueryPlanResponse,
+  Ladder,
+  LadderNode,
 } from './query-plan.js'

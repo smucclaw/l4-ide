@@ -17,7 +17,7 @@ This guide explains how to run the L4 services locally for development and testi
 ./dev-start.sh websessions-with-push   # Websessions with push enabled
 ```
 
-**Option 2: Manual startup (3 terminals)**
+**Option 2: Manual startup (separate terminals)**
 
 ```bash
 # Terminal 1: Decision service
@@ -31,12 +31,19 @@ cabal run jl4-decision-service-exe -- --port 8001 \
 cd jl4-websessions
 cabal run jl4-websessions -- 8002 /tmp/sessions.db http://localhost:8001
 
-# Terminal 3: Web frontend
+# Terminal 3: Web IDE (code editor)
 cd ts-apps/jl4-web
+npm run dev
+
+# Terminal 4 (optional): L4 Wizard (consumer-facing decision interface)
+cd ts-apps/l4-wizard
 npm run dev
 ```
 
-Then open http://localhost:5173 in your browser.
+Then open in your browser:
+
+- **IDE**: http://localhost:5173 (for writing L4 code)
+- **Wizard**: http://localhost:5174 (for testing decision interfaces)
 
 ### Development vs Production Bootstrapping
 
@@ -143,12 +150,37 @@ Development:
 
 - `jl4-websessions`: `localhost:8002`
 - `jl4-decision-service`: `localhost:8001`
-- `jl4-web` (Svelte frontend): `localhost:5173`
+- `jl4-web` (IDE/editor frontend): `localhost:5173`
+- `l4-wizard` (consumer-facing app): `localhost:5174` (or next available)
 
 **Production Ports (NixOS):**
 
-- Both services communicate internally via localhost
+- Backend services communicate internally via localhost
 - External access via nginx on ports 80/443
+- Frontend apps are built to static files and served by nginx
+
+### Frontend Applications
+
+The L4 IDE includes two web frontends:
+
+**jl4-web** (Code Editor / IDE)
+
+- Monaco-based editor for writing L4 code
+- Integrated LSP support (syntax highlighting, autocomplete, diagnostics)
+- Save/load programs to websessions
+- Visualizations: ladder diagrams, GraphViz traces
+- Primary use: **Developers writing L4 specifications**
+
+**l4-wizard** (Consumer-Facing Decision Interface)
+
+- Auto-generates interactive questionnaires from L4 functions
+- Query planning UI with smart question ordering
+- Visual short-circuit feedback (grays out irrelevant questions)
+- Interactive ladder diagram (clickable decision tree)
+- Real-time evaluation as users answer questions
+- Primary use: **End-users making decisions based on L4 rules**
+
+Both apps connect to the same decision service backend for evaluation.
 
 ### Starting Services
 
@@ -185,11 +217,24 @@ cabal run jl4-websessions -- 8002 /tmp/sessions.db
 cabal run jl4-websessions -- 8002 /tmp/sessions.db http://localhost:8001
 ```
 
-#### 3. Start the Web Frontend
+#### 3. Start the Web Frontends
+
+**jl4-web (IDE):**
 
 ```bash
 cd ts-apps/jl4-web
 npm run dev
+# Opens on http://localhost:5173
+```
+
+**l4-wizard (Consumer Interface - optional):**
+
+```bash
+cd ts-apps/l4-wizard
+npm run dev
+# Opens on http://localhost:5174 (or next available port)
+# Navigate to /?fn=<function-name> to test a decision function
+# Example: http://localhost:5174/?fn=may%20purchase%20alcohol
 ```
 
 ### Testing the Integration

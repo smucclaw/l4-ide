@@ -39,6 +39,26 @@ export type QueryAsk = {
   schema: Parameter | null
 }
 
+export type LadderNode =
+  | { $type: 'And'; id: { id: number }; args: LadderNode[] }
+  | { $type: 'Or'; id: { id: number }; args: LadderNode[] }
+  | { $type: 'Not'; id: { id: number }; negand: LadderNode }
+  | {
+      $type: 'UBoolVar'
+      id: { id: number }
+      name: { label: string; unique: number }
+      value: string
+      atomId: string
+      canInline: boolean
+    }
+
+export type Ladder = {
+  funDecl: {
+    $type: 'FunDecl'
+    body: LadderNode
+  }
+} | null
+
 export type QueryPlanResponse = {
   determined: boolean | null
   stillNeeded: QueryAtom[]
@@ -48,7 +68,7 @@ export type QueryPlanResponse = {
   impact: Record<string, QueryImpact>
   impactByAtomId: Record<string, QueryImpact>
   note: string
-  ladder: unknown | null
+  ladder: Ladder
 }
 
 export function askKeyFromPath(path: string[]): string | null {
