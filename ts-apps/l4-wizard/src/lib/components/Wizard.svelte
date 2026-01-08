@@ -14,14 +14,7 @@
     evaluateFunction,
     type DecisionServiceClient,
   } from '../decision-service.js'
-  import {
-    evaluateLadder,
-    extractAtomIds,
-    buildAtomContexts,
-    groupParametersByLadder,
-    Ternary,
-    type ParameterGroup,
-  } from '../ladder.js'
+  import { groupParametersByLadder, type ParameterGroup } from '../ladder.js'
   import ParameterGrid from './ParameterGrid.svelte'
   import OutcomeBanner from './OutcomeBanner.svelte'
   import LadderDiagram from './LadderDiagram.svelte'
@@ -106,7 +99,6 @@
         rank: paramList.length,
         asks: [],
         group: undefined, // Will be set by ladder-based grouping
-        nestingLevel: 0, // Will be set by ladder-based grouping
       })
     }
 
@@ -209,7 +201,6 @@
 
         // Fallback: if parameter not in ladder groups, use prefix-based grouping
         let finalGroup = groupInfo?.groupLabel
-        let finalDepth = groupInfo?.depth ?? 0
 
         if (!finalGroup) {
           const prefixMatch = param.key.match(/^([a-z]+)_/)
@@ -221,7 +212,6 @@
               m: 'Mother',
             }
             finalGroup = prefixLabels[prefix] || prefix
-            finalDepth = 1
           }
         }
 
@@ -231,7 +221,6 @@
           rank: rankIndex >= 0 ? rankIndex : 999,
           asks: asksByContainer.get(param.key) ?? [],
           group: finalGroup,
-          nestingLevel: finalDepth,
         }
       })
 
