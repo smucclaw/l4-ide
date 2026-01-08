@@ -303,6 +303,27 @@
 </script>
 
 <div class="mx-auto max-w-4xl px-4 py-8">
+  <!-- Back link -->
+  <a
+    href="?"
+    class="mb-4 inline-flex items-center text-sm text-gray-500 hover:text-gray-700"
+  >
+    <svg
+      class="mr-1 h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        d="M15 19l-7-7 7-7"
+      />
+    </svg>
+    All functions
+  </a>
+
   <!-- Header -->
   <header class="mb-8">
     <div class="flex items-center justify-between">
