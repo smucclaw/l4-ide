@@ -72,9 +72,7 @@ library
     directory,
     Glob,
 
-  if os(windows)
-    build-depends: Win32
-  else
+  if !os(windows)
     build-depends: unix
 
   exposed-modules:
