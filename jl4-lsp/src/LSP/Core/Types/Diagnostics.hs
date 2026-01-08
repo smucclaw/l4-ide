@@ -249,7 +249,7 @@ prettyDiagnostic FileDiagnostic { fdFilePath, fdShouldShowDiagnostic, fdLspDiagn
 
 -- | Label a document.
 slabel_ :: String -> Doc a -> Doc a
-slabel_ t d = nest 2 $ sep [pretty t, d]
+slabel_ t d = nest 2 $ pretty t <+> d
 
 makeLensesWith
     (lensRules & lensField .~ mappingNamer (pure . (++ "L")))
