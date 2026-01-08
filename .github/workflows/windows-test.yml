@@ -21,15 +21,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc-version: ["9.8.4"]
+        ghc-version: ["9.6.6"]
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           submodules: true
-          # Ensure consistent line endings for shell scripts
-          autocrlf: false
 
       - name: Set up GHC ${{ matrix.ghc-version }}
         uses: haskell-actions/setup@v2
