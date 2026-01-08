@@ -139,7 +139,10 @@ export function buildAtomContexts(ladder: Ladder): Map<number, AtomContext> {
       case 'Or': {
         // Extract sibling atom IDs - filter for UBoolVar nodes and get their unique IDs
         const siblings = node.args
-          .filter((arg): arg is Extract<LadderNode, { $type: 'UBoolVar' }> => arg.$type === 'UBoolVar')
+          .filter(
+            (arg): arg is Extract<LadderNode, { $type: 'UBoolVar' }> =>
+              arg.$type === 'UBoolVar'
+          )
           .map((arg) => arg.name.unique)
 
         node.args.forEach((arg) => {
