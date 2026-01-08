@@ -1,0 +1,251 @@
+name: Windows Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create a GitHub release'
+        required: false
+        default: 'false'
+
+jobs:
+  build-windows:
+    name: Build Windows Release - GHC ${{ matrix.ghc-version }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ghc-version: ["9.8.4"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+          # Ensure consistent line endings for shell scripts
+          autocrlf: false
+
+      - name: Set up GHC ${{ matrix.ghc-version }}
+        uses: haskell-actions/setup@v2
+        id: setup
+        with:
+          ghc-version: ${{ matrix.ghc-version }}
+          cabal-version: "latest"
+          cabal-update: true
+
+      - name: Configure the build
+        run: |
+          cabal update
+          cabal configure --enable-tests --disable-documentation
+          cabal build all --dry-run
+        shell: bash
+
+      - name: Restore cached dependencies
+        uses: actions/cache/restore@v4
+        id: cache
+        env:
+          key: ${{ runner.os }}-ghc-${{ steps.setup.outputs.ghc-version }}-cabal-${{ steps.setup.outputs.cabal-version }}
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: ${{ env.key }}-plan-${{ hashFiles('**/plan.json') }}
+          restore-keys: ${{ env.key }}-
+
+      - name: Install dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: cabal build all --only-dependencies
+        shell: bash
+
+      - name: Save cached dependencies
+        uses: actions/cache/save@v4
+        if: steps.cache.outputs.cache-hit != 'true'
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: ${{ steps.cache.outputs.cache-primary-key }}
+
+      - name: Build all executables
+        run: cabal build all
+        shell: bash
+
+      - name: Run tests
+        run: cabal test all
+        shell: bash
+
+      - name: Find and copy executables
+        run: |
+          # Create release directory
+          mkdir -p release/bin
+
+          # Find all built executables
+          # On Windows, cabal places executables in dist-newstyle/build/x86_64-windows/ghc-X.Y.Z/package-name/x/exe-name/build/exe-name/
+          find dist-newstyle -type f -name "*.exe" | while read exe; do
+            echo "Found: $exe"
+            cp "$exe" release/bin/
+          done
+
+          # List what we have
+          echo "Release contents:"
+          ls -lh release/bin/
+        shell: bash
+
+      - name: Create version info
+        run: |
+          # Get version information
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION="${{ github.ref_name }}"
+          else
+            VERSION="dev-$(git rev-parse --short HEAD)"
+          fi
+
+          echo "Version: $VERSION" > release/VERSION.txt
+          echo "Build Date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> release/VERSION.txt
+          echo "Commit: ${{ github.sha }}" >> release/VERSION.txt
+          echo "GHC Version: ${{ matrix.ghc-version }}" >> release/VERSION.txt
+
+          cat release/VERSION.txt
+        shell: bash
+
+      - name: Create README for release
+        run: |
+          cat > release/README.md << 'EOF'
+          # L4 IDE - Windows Release
+
+          This is a Windows build of the L4 IDE and related tools.
+
+          ## Included Executables
+
+          - **jl4-cli.exe** - Command-line interface for evaluating L4 files
+          - **jl4-schema.exe** - JSON schema generator
+          - **jl4-lsp.exe** - Language Server Protocol implementation
+          - **jl4-repl.exe** - Interactive Read-Eval-Print Loop
+          - **jl4-decision-service-exe.exe** - REST API for decision evaluation
+          - **jl4-websessions.exe** - Session persistence service
+
+          ## Quick Start
+
+          1. Add the `bin` directory to your PATH
+          2. Run `jl4-cli.exe --help` to see available options
+          3. For the REPL: `jl4-repl.exe path/to/file.l4`
+
+          ## Requirements
+
+          - Windows 10 or later
+          - No additional runtime dependencies required (statically linked)
+
+          ## Documentation
+
+          For full documentation, visit:
+          https://github.com/smucclaw/l4-ide
+
+          ## License
+
+          See the repository for license information.
+          EOF
+
+          cat release/README.md
+        shell: bash
+
+      - name: Package release
+        run: |
+          # Get version for filename
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION="${{ github.ref_name }}"
+          else
+            VERSION="dev-$(git rev-parse --short HEAD)"
+          fi
+
+          # Create zip archive
+          cd release
+          7z a "../l4-ide-windows-${VERSION}.zip" *
+          cd ..
+
+          # Verify archive
+          echo "Archive contents:"
+          7z l "l4-ide-windows-${VERSION}.zip"
+
+          # Get file size
+          ls -lh l4-ide-windows-*.zip
+        shell: bash
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: l4-ide-windows-${{ github.ref_name || github.sha }}
+          path: l4-ide-windows-*.zip
+          retention-days: 30
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/') || github.event.inputs.create_release == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name || format('dev-{0}', github.sha) }}
+          name: L4 IDE Windows Release ${{ github.ref_name || github.sha }}
+          body: |
+            ## L4 IDE - Windows Release
+
+            Windows binaries for the L4 Domain-Specific Language for Law.
+
+            ### What's Included
+
+            - `jl4-cli.exe` - CLI tool for evaluating L4 files
+            - `jl4-schema.exe` - JSON schema generator
+            - `jl4-lsp.exe` - Language Server Protocol server
+            - `jl4-repl.exe` - Interactive REPL
+            - `jl4-decision-service-exe.exe` - Decision evaluation REST API
+            - `jl4-websessions.exe` - Session persistence service
+
+            ### Installation
+
+            1. Download `l4-ide-windows-*.zip`
+            2. Extract to a directory of your choice
+            3. Add the `bin` directory to your system PATH
+            4. Run `jl4-cli.exe --help` to verify installation
+
+            ### Requirements
+
+            - Windows 10 or later (64-bit)
+            - No additional runtime dependencies required
+
+            ### Build Information
+
+            - **GHC Version:** ${{ matrix.ghc-version }}
+            - **Commit:** ${{ github.sha }}
+            - **Build Date:** ${{ github.event.head_commit.timestamp }}
+
+            ### Documentation
+
+            For comprehensive documentation, see:
+            - [Repository](https://github.com/smucclaw/l4-ide)
+            - [Language Reference](https://github.com/smucclaw/l4-ide/tree/main/doc)
+            - [Foundation Course](https://github.com/smucclaw/l4-ide/tree/main/doc/foundation-course-ai)
+
+            ---
+
+            Generated with [GitHub Actions](https://github.com/smucclaw/l4-ide/actions)
+          files: |
+            l4-ide-windows-*.zip
+          draft: false
+          prerelease: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build summary
+        run: |
+          echo "## Windows Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **OS:** Windows" >> $GITHUB_STEP_SUMMARY
+          echo "- **GHC Version:** ${{ matrix.ghc-version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Built Executables" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          ls -lh release/bin/ >> $GITHUB_STEP_SUMMARY || echo "No executables found" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Archive" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          ls -lh l4-ide-windows-*.zip >> $GITHUB_STEP_SUMMARY || echo "No archive created" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+        shell: bash
