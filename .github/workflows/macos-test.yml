@@ -17,7 +17,7 @@ concurrency:
 jobs:
   build-macos:
     name: Test macOS Build - Apple Silicon - GHC ${{ matrix.ghc-version }}
-    runs-on: macos-latest-xlarge  # M1/Apple Silicon runner
+    runs-on: macos-latest  # Free runner (currently macos-14 = M1)
     strategy:
       fail-fast: false
       matrix:
