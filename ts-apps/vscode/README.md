@@ -48,7 +48,9 @@ that means you aren't in the right directory.)
 
 ### Configuring the Language Server
 
-The extension expects to find `jl4-lsp` on the `$PATH`. If you didn't install the extension before, you can do this via:
+**Platform-specific builds:** If you're using a platform-specific build of the extension (available via GitHub releases), the `jl4-lsp` binary is bundled and no additional configuration is needed.
+
+**Universal builds / Development:** The extension expects to find `jl4-lsp` on the `$PATH`. Install it via:
 
 ```sh
 $ cabal install exe:jl4-lsp --overwrite-policy=always
@@ -63,6 +65,22 @@ Alternatively, you can specify the location of the binary via `.vscode/settings.
   "jl4.serverExecutablePath": "<path-to-jl4-lsp>"
 }
 ```
+
+#### Binary Resolution Order
+
+The extension looks for the language server in this order:
+
+1. User-configured path via `jl4.serverExecutablePath` setting
+2. Bundled binary at `<extension>/bin/<platform>-<arch>/jl4-lsp[.exe]`
+3. `jl4-lsp` on the system PATH
+
+#### Supported Bundled Platforms
+
+- `darwin-arm64` (macOS Apple Silicon)
+- `darwin-x64` (macOS Intel)
+- `win32-x64` (Windows x64)
+- `linux-x64` (Linux x64)
+- `linux-arm64` (Linux ARM64)
 
 ### Development
 
