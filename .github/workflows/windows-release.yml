@@ -32,6 +32,13 @@ jobs:
   build-windows:
     name: Build Windows Release - GHC ${{ matrix.ghc-version }}
     runs-on: windows-latest
+    # NOTE: Windows ARM64 (aarch64) is not supported.
+    # As of 2025, Windows ARM64 has ~1-2% market share (~5-10M devices).
+    # Key limitations:
+    # - GitHub Actions doesn't provide ARM64 Windows runners
+    # - Cross-compilation with GHC/Cabal is complex
+    # - Most ARM64 Windows devices can run x86_64 via emulation
+    # Revisit if: GitHub adds ARM64 runners, or market share grows significantly.
     strategy:
       fail-fast: false
       matrix:

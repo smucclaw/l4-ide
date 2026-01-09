@@ -18,6 +18,7 @@ jobs:
   build-windows:
     name: Test Windows Build - GHC ${{ matrix.ghc-version }}
     runs-on: windows-latest
+    # NOTE: Windows ARM64 not supported - see windows-release.yml for rationale
     strategy:
       fail-fast: false
       matrix:
