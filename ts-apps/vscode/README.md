@@ -69,6 +69,7 @@ Alternatively, you can specify the location of the binary via `.vscode/settings.
 #### Binary Resolution Order
 
 The extension looks for the language server in this order:
+
 1. User-configured path via `jl4.serverExecutablePath` setting
 2. Bundled binary at `<extension>/bin/<platform>-<arch>/jl4-lsp[.exe]`
 3. `jl4-lsp` on the system PATH

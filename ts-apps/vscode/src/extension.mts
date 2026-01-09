@@ -206,16 +206,9 @@ function findBundledBinary(
   const exeName = platform === 'win32' ? 'jl4-lsp.exe' : 'jl4-lsp'
 
   // Look in the extension's bin directory
-  const binPath = path.join(
-    context.extensionPath,
-    'bin',
-    platformArch,
-    exeName
-  )
+  const binPath = path.join(context.extensionPath, 'bin', platformArch, exeName)
 
-  outputChannel.appendLine(
-    `[client] Looking for bundled binary at: ${binPath}`
-  )
+  outputChannel.appendLine(`[client] Looking for bundled binary at: ${binPath}`)
 
   if (fs.existsSync(binPath)) {
     // Ensure the binary is executable (on Unix-like systems)
