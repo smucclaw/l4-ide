@@ -1,5 +1,7 @@
 import { ExtensionContext, workspace, window } from 'vscode'
 import * as vscode from 'vscode'
+import * as path from 'path'
+import * as fs from 'fs'
 import {
   LanguageClient,
   LanguageClientOptions,
@@ -139,6 +141,104 @@ function initializeWebviewMessenger(
 }
 
 /***************************************
+      Find bundled binary
+****************************************/
+
+/**
+ * Finds the jl4-lsp executable to use.
+ * Priority:
+ * 1. User-configured path via jl4.serverExecutablePath setting
+ * 2. Bundled binary in the extension (platform-specific)
+ * 3. Fall back to 'jl4-lsp' on PATH
+ */
+function findServerExecutable(
+  context: ExtensionContext,
+  outputChannel: vscode.OutputChannel
+): string {
+  // Check user configuration first
+  const configuredPath: string | undefined = workspace
+    .getConfiguration('jl4')
+    .get('serverExecutablePath')
+
+  if (configuredPath && configuredPath.trim() !== '') {
+    outputChannel.appendLine(
+      `[client] Using configured server path: ${configuredPath}`
+    )
+    return configuredPath
+  }
+
+  // Try to find bundled binary
+  const bundledPath = findBundledBinary(context, outputChannel)
+  if (bundledPath) {
+    outputChannel.appendLine(
+      `[client] Using bundled server binary: ${bundledPath}`
+    )
+    return bundledPath
+  }
+
+  // Fall back to PATH
+  outputChannel.appendLine(
+    '[client] No bundled binary found, falling back to jl4-lsp on PATH'
+  )
+  return 'jl4-lsp'
+}
+
+/**
+ * Looks for a bundled jl4-lsp binary in the extension directory.
+ * The binary should be in: <extension>/bin/<platform>-<arch>/jl4-lsp[.exe]
+ *
+ * Supported platforms:
+ * - darwin-arm64 (macOS Apple Silicon)
+ * - darwin-x64 (macOS Intel)
+ * - win32-x64 (Windows x64)
+ * - linux-x64 (Linux x64)
+ * - linux-arm64 (Linux ARM64)
+ */
+function findBundledBinary(
+  context: ExtensionContext,
+  outputChannel: vscode.OutputChannel
+): string | undefined {
+  const platform = process.platform
+  const arch = process.arch
+
+  // Map Node.js platform/arch to our naming convention
+  const platformArch = `${platform}-${arch}`
+  const exeName = platform === 'win32' ? 'jl4-lsp.exe' : 'jl4-lsp'
+
+  // Look in the extension's bin directory
+  const binPath = path.join(
+    context.extensionPath,
+    'bin',
+    platformArch,
+    exeName
+  )
+
+  outputChannel.appendLine(
+    `[client] Looking for bundled binary at: ${binPath}`
+  )
+
+  if (fs.existsSync(binPath)) {
+    // Ensure the binary is executable (on Unix-like systems)
+    if (platform !== 'win32') {
+      try {
+        fs.accessSync(binPath, fs.constants.X_OK)
+      } catch {
+        outputChannel.appendLine(
+          `[client] Binary found but not executable: ${binPath}`
+        )
+        return undefined
+      }
+    }
+    return binPath
+  }
+
+  outputChannel.appendLine(
+    `[client] No bundled binary found for platform: ${platformArch}`
+  )
+  return undefined
+}
+
+/***************************************
       Activate
 ****************************************/
 
@@ -150,8 +250,7 @@ export async function activate(context: ExtensionContext) {
     langId
   )
 
-  const serverCmd: string =
-    workspace.getConfiguration('jl4').get('serverExecutablePath') ?? 'jl4-lsp'
+  const serverCmd = findServerExecutable(context, outputChannel)
   // If the extension is launched in debug mode then the debug server options are used
   // Otherwise the run options are used
   const serverOptions: ServerOptions = {
