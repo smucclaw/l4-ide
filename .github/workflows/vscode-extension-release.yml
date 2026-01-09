@@ -98,67 +98,9 @@ jobs:
           path: bin/darwin-arm64/jl4-lsp
           retention-days: 1
 
-  build-lsp-macos-x64:
-    name: Build jl4-lsp - macOS x64
-    runs-on: macos-13
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: true
-
-      - name: Set up GHC
-        uses: haskell-actions/setup@v2
-        id: setup
-        with:
-          ghc-version: "9.6.6"
-          cabal-version: "latest"
-          cabal-update: true
-
-      - name: Configure and build
-        run: |
-          cabal update
-          cabal configure --disable-tests --disable-documentation
-          cabal build exe:jl4-lsp
-
-      - name: Restore cached dependencies
-        uses: actions/cache/restore@v4
-        id: cache
-        env:
-          key: lsp-macos-x64-ghc-${{ steps.setup.outputs.ghc-version }}-cabal-${{ steps.setup.outputs.cabal-version }}
-        with:
-          path: ${{ steps.setup.outputs.cabal-store }}
-          key: ${{ env.key }}-plan-${{ hashFiles('**/plan.json') }}
-          restore-keys: ${{ env.key }}-
-
-      - name: Install dependencies
-        if: steps.cache.outputs.cache-hit != 'true'
-        run: cabal build exe:jl4-lsp --only-dependencies
-
-      - name: Save cached dependencies
-        uses: actions/cache/save@v4
-        if: steps.cache.outputs.cache-hit != 'true'
-        with:
-          path: ${{ steps.setup.outputs.cabal-store }}
-          key: ${{ steps.cache.outputs.cache-primary-key }}
-
-      - name: Build jl4-lsp
-        run: cabal build exe:jl4-lsp
-
-      - name: Copy and process binary
-        run: |
-          mkdir -p bin/darwin-x64
-          cp $(cabal list-bin exe:jl4-lsp) bin/darwin-x64/jl4-lsp
-          strip bin/darwin-x64/jl4-lsp || true
-          codesign -s - bin/darwin-x64/jl4-lsp || true
-          chmod +x bin/darwin-x64/jl4-lsp
-          ls -lh bin/darwin-x64/
-
-      - name: Upload binary artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: jl4-lsp-darwin-x64
-          path: bin/darwin-x64/jl4-lsp
-          retention-days: 1
+  # NOTE: macOS x64 (macos-13) has been retired by GitHub Actions.
+  # Intel Mac users should use the universal extension and install jl4-lsp manually,
+  # or use Rosetta 2 to run the ARM64 binary.
 
   build-lsp-windows:
     name: Build jl4-lsp - Windows x64
@@ -364,7 +306,6 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - build-lsp-macos-arm64
-      - build-lsp-macos-x64
       - build-lsp-windows
       - build-lsp-linux-x64
       - build-lsp-linux-arm64
@@ -374,9 +315,6 @@ jobs:
         include:
           - target: darwin-arm64
             artifact: jl4-lsp-darwin-arm64
-            binary: jl4-lsp
-          - target: darwin-x64
-            artifact: jl4-lsp-darwin-x64
             binary: jl4-lsp
           - target: win32-x64
             artifact: jl4-lsp-win32-x64
@@ -432,7 +370,7 @@ jobs:
       - name: Package platform-specific extension
         working-directory: ts-apps/vscode
         run: |
-          npx vsce package --target ${{ matrix.target }} -o l4-vscode-${{ matrix.target }}-${{ steps.version.outputs.VERSION }}.vsix
+          npx vsce package --target ${{ matrix.target }} --no-dependencies -o l4-vscode-${{ matrix.target }}-${{ steps.version.outputs.VERSION }}.vsix
 
       - name: Upload VSIX artifact
         uses: actions/upload-artifact@v4
@@ -477,7 +415,7 @@ jobs:
       - name: Package universal extension
         working-directory: ts-apps/vscode
         run: |
-          npx vsce package -o l4-vscode-universal-${{ steps.version.outputs.VERSION }}.vsix
+          npx vsce package --no-dependencies -o l4-vscode-universal-${{ steps.version.outputs.VERSION }}.vsix
 
       - name: Upload VSIX artifact
         uses: actions/upload-artifact@v4
@@ -536,8 +474,7 @@ jobs:
 
             | Platform | File |
             |----------|------|
-            | macOS Apple Silicon (M1/M2/M3/M4) | `l4-vscode-darwin-arm64-*.vsix` |
-            | macOS Intel | `l4-vscode-darwin-x64-*.vsix` |
+            | macOS (Apple Silicon & Intel via Rosetta) | `l4-vscode-darwin-arm64-*.vsix` |
             | Windows x64 | `l4-vscode-win32-x64-*.vsix` |
             | Linux x64 | `l4-vscode-linux-x64-*.vsix` |
             | Linux ARM64 | `l4-vscode-linux-arm64-*.vsix` |
@@ -617,7 +554,6 @@ jobs:
           echo "| Platform | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| macOS ARM64 | ${{ needs.package-vscode-extension.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| macOS x64 | ${{ needs.package-vscode-extension.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Windows x64 | ${{ needs.package-vscode-extension.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Linux x64 | ${{ needs.package-vscode-extension.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Linux ARM64 | ${{ needs.package-vscode-extension.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
