@@ -37,10 +37,10 @@ jobs:
       matrix:
         include:
           - arch: arm64
-            runner: macos-latest  # M1/M2 Apple Silicon
+            runner: macos-latest # M1/M2 Apple Silicon
             ghc-version: "9.6.6"
           - arch: x86_64
-            runner: macos-13      # Intel
+            runner: macos-13 # Intel
             ghc-version: "9.6.6"
 
     steps:
