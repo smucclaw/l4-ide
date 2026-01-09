@@ -1,0 +1,560 @@
+name: VSCode Extension Release (with bundled binaries)
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+    paths:
+      # Haskell source code (for LSP binary)
+      - "jl4-core/**"
+      - "jl4/**"
+      - "jl4-lsp/**"
+      - "jl4-query-plan/**"
+      # TypeScript/VSCode extension source
+      - "ts-apps/vscode/**"
+      - "ts-shared/**"
+      - "package.json"
+      - "package-lock.json"
+      # Build configuration
+      - "*.cabal"
+      - "cabal.project"
+      - "cabal.project.freeze"
+      # This workflow
+      - ".github/workflows/vscode-extension-release.yml"
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: "Create a GitHub release"
+        required: false
+        default: "false"
+
+# Build binaries for each platform, then package VSCode extensions
+jobs:
+  # ============================================
+  # Build LSP binaries for each platform
+  # ============================================
+
+  build-lsp-macos-arm64:
+    name: Build jl4-lsp - macOS ARM64
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Set up GHC
+        uses: haskell-actions/setup@v2
+        id: setup
+        with:
+          ghc-version: "9.6.6"
+          cabal-version: "latest"
+          cabal-update: true
+
+      - name: Configure and build
+        run: |
+          cabal update
+          cabal configure --disable-tests --disable-documentation
+          cabal build exe:jl4-lsp
+
+      - name: Restore cached dependencies
+        uses: actions/cache/restore@v4
+        id: cache
+        env:
+          key: lsp-macos-arm64-ghc-${{ steps.setup.outputs.ghc-version }}-cabal-${{ steps.setup.outputs.cabal-version }}
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: ${{ env.key }}-plan-${{ hashFiles('**/plan.json') }}
+          restore-keys: ${{ env.key }}-
+
+      - name: Install dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: cabal build exe:jl4-lsp --only-dependencies
+
+      - name: Save cached dependencies
+        uses: actions/cache/save@v4
+        if: steps.cache.outputs.cache-hit != 'true'
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: ${{ steps.cache.outputs.cache-primary-key }}
+
+      - name: Build jl4-lsp
+        run: cabal build exe:jl4-lsp
+
+      - name: Copy and process binary
+        run: |
+          mkdir -p bin/darwin-arm64
+          cp $(cabal list-bin exe:jl4-lsp) bin/darwin-arm64/jl4-lsp
+          strip bin/darwin-arm64/jl4-lsp || true
+          codesign -s - bin/darwin-arm64/jl4-lsp || true
+          chmod +x bin/darwin-arm64/jl4-lsp
+          ls -lh bin/darwin-arm64/
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jl4-lsp-darwin-arm64
+          path: bin/darwin-arm64/jl4-lsp
+          retention-days: 1
+
+  # NOTE: macOS x64 (macos-13) has been retired by GitHub Actions.
+  # Intel Mac users should use the universal extension and install jl4-lsp manually,
+  # or use Rosetta 2 to run the ARM64 binary.
+
+  build-lsp-windows:
+    name: Build jl4-lsp - Windows x64
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Set up GHC
+        uses: haskell-actions/setup@v2
+        id: setup
+        with:
+          ghc-version: "9.6.6"
+          cabal-version: "latest"
+          cabal-update: true
+
+      - name: Configure and build
+        shell: bash
+        run: |
+          cabal update
+          cabal configure --disable-tests --disable-documentation
+          cabal build exe:jl4-lsp --dry-run
+
+      - name: Restore cached dependencies
+        uses: actions/cache/restore@v4
+        id: cache
+        env:
+          key: lsp-windows-x64-ghc-${{ steps.setup.outputs.ghc-version }}-cabal-${{ steps.setup.outputs.cabal-version }}
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: ${{ env.key }}-plan-${{ hashFiles('**/plan.json') }}
+          restore-keys: ${{ env.key }}-
+
+      - name: Install dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: cabal build exe:jl4-lsp --only-dependencies
+
+      - name: Save cached dependencies
+        uses: actions/cache/save@v4
+        if: steps.cache.outputs.cache-hit != 'true'
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: ${{ steps.cache.outputs.cache-primary-key }}
+
+      - name: Build jl4-lsp
+        shell: bash
+        run: cabal build exe:jl4-lsp
+
+      - name: Copy binary
+        shell: bash
+        run: |
+          mkdir -p bin/win32-x64
+          cp $(cabal list-bin exe:jl4-lsp) bin/win32-x64/jl4-lsp.exe
+          ls -lh bin/win32-x64/
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jl4-lsp-win32-x64
+          path: bin/win32-x64/jl4-lsp.exe
+          retention-days: 1
+
+  build-lsp-linux-x64:
+    name: Build jl4-lsp - Linux x64
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config liblzma-dev libgmp-dev
+
+      - name: Set up GHC
+        uses: haskell-actions/setup@v2
+        id: setup
+        with:
+          ghc-version: "9.6.6"
+          cabal-version: "latest"
+          cabal-update: true
+
+      - name: Configure and build
+        run: |
+          cabal update
+          cabal configure --disable-tests --disable-documentation
+          cabal build exe:jl4-lsp --dry-run
+
+      - name: Restore cached dependencies
+        uses: actions/cache/restore@v4
+        id: cache
+        env:
+          key: lsp-linux-x64-ghc-${{ steps.setup.outputs.ghc-version }}-cabal-${{ steps.setup.outputs.cabal-version }}
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: ${{ env.key }}-plan-${{ hashFiles('**/plan.json') }}
+          restore-keys: ${{ env.key }}-
+
+      - name: Install dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: cabal build exe:jl4-lsp --only-dependencies
+
+      - name: Save cached dependencies
+        uses: actions/cache/save@v4
+        if: steps.cache.outputs.cache-hit != 'true'
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: ${{ steps.cache.outputs.cache-primary-key }}
+
+      - name: Build jl4-lsp
+        run: cabal build exe:jl4-lsp
+
+      - name: Copy and process binary
+        run: |
+          mkdir -p bin/linux-x64
+          cp $(cabal list-bin exe:jl4-lsp) bin/linux-x64/jl4-lsp
+          strip bin/linux-x64/jl4-lsp || true
+          chmod +x bin/linux-x64/jl4-lsp
+          ls -lh bin/linux-x64/
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jl4-lsp-linux-x64
+          path: bin/linux-x64/jl4-lsp
+          retention-days: 1
+
+  build-lsp-linux-arm64:
+    name: Build jl4-lsp - Linux ARM64
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config liblzma-dev libgmp-dev
+
+      - name: Set up GHC
+        uses: haskell-actions/setup@v2
+        id: setup
+        with:
+          ghc-version: "9.6.6"
+          cabal-version: "latest"
+          cabal-update: true
+
+      - name: Configure and build
+        run: |
+          cabal update
+          cabal configure --disable-tests --disable-documentation
+          cabal build exe:jl4-lsp --dry-run
+
+      - name: Restore cached dependencies
+        uses: actions/cache/restore@v4
+        id: cache
+        env:
+          key: lsp-linux-arm64-ghc-${{ steps.setup.outputs.ghc-version }}-cabal-${{ steps.setup.outputs.cabal-version }}
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: ${{ env.key }}-plan-${{ hashFiles('**/plan.json') }}
+          restore-keys: ${{ env.key }}-
+
+      - name: Install dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: cabal build exe:jl4-lsp --only-dependencies
+
+      - name: Save cached dependencies
+        uses: actions/cache/save@v4
+        if: steps.cache.outputs.cache-hit != 'true'
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: ${{ steps.cache.outputs.cache-primary-key }}
+
+      - name: Build jl4-lsp
+        run: cabal build exe:jl4-lsp
+
+      - name: Copy and process binary
+        run: |
+          mkdir -p bin/linux-arm64
+          cp $(cabal list-bin exe:jl4-lsp) bin/linux-arm64/jl4-lsp
+          strip bin/linux-arm64/jl4-lsp || true
+          chmod +x bin/linux-arm64/jl4-lsp
+          ls -lh bin/linux-arm64/
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jl4-lsp-linux-arm64
+          path: bin/linux-arm64/jl4-lsp
+          retention-days: 1
+
+  # ============================================
+  # Package platform-specific VSCode extensions
+  # ============================================
+
+  package-vscode-extension:
+    name: Package VSCode Extension - ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    needs:
+      - build-lsp-macos-arm64
+      - build-lsp-windows
+      - build-lsp-linux-x64
+      - build-lsp-linux-arm64
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: darwin-arm64
+            artifact: jl4-lsp-darwin-arm64
+            binary: jl4-lsp
+          - target: win32-x64
+            artifact: jl4-lsp-win32-x64
+            binary: jl4-lsp.exe
+          - target: linux-x64
+            artifact: jl4-lsp-linux-x64
+            binary: jl4-lsp
+          - target: linux-arm64
+            artifact: jl4-lsp-linux-arm64
+            binary: jl4-lsp
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build TypeScript monorepo
+        run: npm run build
+
+      - name: Download LSP binary
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ts-apps/vscode/bin/${{ matrix.target }}
+
+      - name: Make binary executable
+        if: matrix.target != 'win32-x64'
+        run: chmod +x ts-apps/vscode/bin/${{ matrix.target }}/${{ matrix.binary }}
+
+      - name: Verify binary
+        run: |
+          echo "Binary location:"
+          ls -lh ts-apps/vscode/bin/${{ matrix.target }}/
+
+      - name: Create version info
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION="${{ github.ref_name }}"
+          else
+            VERSION="$(date -u '+%Y%m%d.%H%M')"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Package platform-specific extension
+        working-directory: ts-apps/vscode
+        run: |
+          npx vsce package --target ${{ matrix.target }} --no-dependencies -o l4-vscode-${{ matrix.target }}-${{ steps.version.outputs.VERSION }}.vsix
+
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: l4-vscode-${{ matrix.target }}-${{ steps.version.outputs.VERSION }}
+          path: ts-apps/vscode/*.vsix
+          retention-days: 30
+
+  # ============================================
+  # Package universal extension (no bundled binary)
+  # ============================================
+
+  package-vscode-universal:
+    name: Package VSCode Extension - Universal
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build TypeScript monorepo
+        run: npm run build
+
+      - name: Create version info
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION="${{ github.ref_name }}"
+          else
+            VERSION="$(date -u '+%Y%m%d.%H%M')"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Package universal extension
+        working-directory: ts-apps/vscode
+        run: |
+          npx vsce package --no-dependencies -o l4-vscode-universal-${{ steps.version.outputs.VERSION }}.vsix
+
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: l4-vscode-universal-${{ steps.version.outputs.VERSION }}
+          path: ts-apps/vscode/*.vsix
+          retention-days: 30
+
+  # ============================================
+  # Create GitHub Release
+  # ============================================
+
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.event.inputs.create_release == 'true'
+    needs:
+      - package-vscode-extension
+      - package-vscode-universal
+    steps:
+      - name: Create version info
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION="${{ github.ref_name }}"
+          else
+            VERSION="$(date -u '+%Y%m%d.%H%M')"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Download all VSIX artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: l4-vscode-*
+          path: vsix-files
+          merge-multiple: true
+
+      - name: List downloaded files
+        run: |
+          echo "Downloaded VSIX files:"
+          find vsix-files -name "*.vsix" -ls
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: vscode-${{ steps.version.outputs.VERSION }}
+          name: L4 VSCode Extension ${{ steps.version.outputs.VERSION }}
+          body: |
+            ## L4 VSCode Extension Release
+
+            This release includes the L4 VSCode extension with bundled `jl4-lsp` language server.
+
+            ### Platform-Specific Extensions (Recommended)
+
+            These extensions include the bundled language server - no separate installation required:
+
+            | Platform | File |
+            |----------|------|
+            | macOS (Apple Silicon & Intel via Rosetta) | `l4-vscode-darwin-arm64-*.vsix` |
+            | Windows x64 | `l4-vscode-win32-x64-*.vsix` |
+            | Linux x64 | `l4-vscode-linux-x64-*.vsix` |
+            | Linux ARM64 | `l4-vscode-linux-arm64-*.vsix` |
+
+            ### Universal Extension
+
+            For other platforms or if you prefer to install the language server separately:
+            - `l4-vscode-universal-*.vsix`
+
+            Requires `jl4-lsp` to be installed separately and available on PATH.
+
+            ### Installation
+
+            1. Download the appropriate `.vsix` file for your platform
+            2. In VSCode: Extensions → ⋯ → Install from VSIX...
+            3. Select the downloaded file
+
+            Or via command line:
+            ```bash
+            code --install-extension l4-vscode-<platform>-*.vsix
+            ```
+
+            ### macOS Security Note
+
+            On first run, macOS may block the bundled binary. To allow it:
+            ```bash
+            xattr -dr com.apple.quarantine ~/.vscode/extensions/legalese.l4-vscode-*/bin/darwin-*/jl4-lsp
+            ```
+
+            ### Build Information
+
+            - **Commit:** ${{ github.sha }}
+            - **Build Date:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+
+            ### Documentation
+
+            - [Repository](https://github.com/smucclaw/l4-ide)
+            - [VSCode Extension README](https://github.com/smucclaw/l4-ide/tree/main/ts-apps/vscode)
+          files: |
+            vsix-files/*.vsix
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ============================================
+  # Build summary
+  # ============================================
+
+  build-summary:
+    name: Build Summary
+    runs-on: ubuntu-latest
+    needs:
+      - package-vscode-extension
+      - package-vscode-universal
+    if: always()
+    steps:
+      - name: Create version info
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION="${{ github.ref_name }}"
+          else
+            VERSION="$(date -u '+%Y%m%d.%H%M')"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Summary
+        run: |
+          echo "## VSCode Extension Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ steps.version.outputs.VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Platform-Specific Extensions" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Platform | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| macOS ARM64 | ${{ needs.package-vscode-extension.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Windows x64 | ${{ needs.package-vscode-extension.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Linux x64 | ${{ needs.package-vscode-extension.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Linux ARM64 | ${{ needs.package-vscode-extension.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Universal | ${{ needs.package-vscode-universal.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY

@@ -34,7 +34,9 @@ L4 is a domain-specific language designed for expressing legal logic and rules i
 
 ### Language Server Setup
 
-The extension expects to find `jl4-lsp` on your system PATH. You can install it via:
+**Platform-specific versions (recommended):** If you installed a platform-specific version of the extension (e.g., for macOS ARM64, Windows x64, etc.), the `jl4-lsp` language server is bundled and ready to use—no additional setup required!
+
+**Universal version:** If you installed the universal extension, or if the bundled binary is not available for your platform, install the language server:
 
 ```bash
 cabal install exe:jl4-lsp --overwrite-policy=always
@@ -46,6 +48,14 @@ Alternatively, specify the path manually in VS Code settings:
 {
   "jl4.serverExecutablePath": "/path/to/jl4-lsp"
 }
+```
+
+#### macOS Security Note
+
+On first run, macOS may block the bundled binary. To allow it, run:
+
+```bash
+xattr -dr com.apple.quarantine ~/.vscode/extensions/legalese.l4-vscode-*/bin/darwin-*/jl4-lsp
 ```
 
 ## Using the Visualization

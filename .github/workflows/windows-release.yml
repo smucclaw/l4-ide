@@ -32,6 +32,13 @@ jobs:
   build-windows:
     name: Build Windows Release - GHC ${{ matrix.ghc-version }}
     runs-on: windows-latest
+    # NOTE: Windows ARM64 (aarch64) is not supported.
+    # As of 2025, Windows ARM64 has ~1-2% market share (~5-10M devices).
+    # Key limitations:
+    # - GitHub Actions doesn't provide ARM64 Windows runners
+    # - Cross-compilation with GHC/Cabal is complex
+    # - Most ARM64 Windows devices can run x86_64 via emulation
+    # Revisit if: GitHub adds ARM64 runners, or market share grows significantly.
     strategy:
       fail-fast: false
       matrix:
@@ -138,7 +145,7 @@ jobs:
           - **jl4-schema.exe** - JSON schema generator
           - **jl4-lsp.exe** - Language Server Protocol implementation
           - **jl4-repl.exe** - Interactive Read-Eval-Print Loop
-          - **jl4-decision-service-exe.exe** - REST API for decision evaluation
+          - **jl4-decision-service.exe** - REST API for decision evaluation
           - **jl4-websessions.exe** - Session persistence service
 
           ## Quick Start
@@ -206,7 +213,7 @@ jobs:
             - `jl4-schema.exe` - JSON schema generator
             - `jl4-lsp.exe` - Language Server Protocol server
             - `jl4-repl.exe` - Interactive REPL
-            - `jl4-decision-service-exe.exe` - Decision evaluation REST API
+            - `jl4-decision-service.exe` - Decision evaluation REST API
             - `jl4-websessions.exe` - Session persistence service
 
             ### Installation
