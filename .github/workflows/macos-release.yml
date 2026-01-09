@@ -146,7 +146,7 @@ jobs:
           - **jl4-schema** - JSON schema generator
           - **jl4-lsp** - Language Server Protocol implementation
           - **jl4-repl** - Interactive Read-Eval-Print Loop
-          - **jl4-decision-service-exe** - REST API for decision evaluation
+          - **jl4-decision-service** - REST API for decision evaluation
           - **jl4-websessions** - Session persistence service
 
           ## Quick Start
@@ -265,7 +265,7 @@ jobs:
             - `jl4-schema` - JSON schema generator
             - `jl4-lsp` - Language Server Protocol server
             - `jl4-repl` - Interactive REPL
-            - `jl4-decision-service-exe` - Decision evaluation REST API
+            - `jl4-decision-service` - Decision evaluation REST API
             - `jl4-websessions` - Session persistence service
 
             ### Installation

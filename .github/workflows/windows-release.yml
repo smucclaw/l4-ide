@@ -138,7 +138,7 @@ jobs:
           - **jl4-schema.exe** - JSON schema generator
           - **jl4-lsp.exe** - Language Server Protocol implementation
           - **jl4-repl.exe** - Interactive Read-Eval-Print Loop
-          - **jl4-decision-service-exe.exe** - REST API for decision evaluation
+          - **jl4-decision-service.exe** - REST API for decision evaluation
           - **jl4-websessions.exe** - Session persistence service
 
           ## Quick Start
@@ -206,7 +206,7 @@ jobs:
             - `jl4-schema.exe` - JSON schema generator
             - `jl4-lsp.exe` - Language Server Protocol server
             - `jl4-repl.exe` - Interactive REPL
-            - `jl4-decision-service-exe.exe` - Decision evaluation REST API
+            - `jl4-decision-service.exe` - Decision evaluation REST API
             - `jl4-websessions.exe` - Session persistence service
 
             ### Installation
