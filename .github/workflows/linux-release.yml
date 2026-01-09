@@ -2,8 +2,25 @@ name: Linux Release (Multi-Architecture)
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "v*"
+    paths:
+      # Haskell source code
+      - "jl4-core/**"
+      - "jl4/**"
+      - "jl4-lsp/**"
+      - "jl4-repl/**"
+      - "jl4-decision-service/**"
+      - "jl4-websessions/**"
+      - "jl4-query-plan/**"
+      # Build configuration
+      - "*.cabal"
+      - "cabal.project"
+      - "cabal.project.freeze"
+      # This workflow
+      - ".github/workflows/linux-release.yml"
   workflow_dispatch:
     inputs:
       create_release:
@@ -102,14 +119,17 @@ jobs:
           ls -lh
 
       - name: Create version info
+        id: version
         run: |
           # Get version information
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             VERSION="${{ github.ref_name }}"
           else
-            VERSION="dev-$(git rev-parse --short HEAD)"
+            # Date-based version: YYYYMMDD.HHMM
+            VERSION="$(date -u '+%Y%m%d.%H%M')"
           fi
 
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION" > release/VERSION.txt
           echo "Architecture: ${{ matrix.arch }}" >> release/VERSION.txt
           echo "Build Date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> release/VERSION.txt
@@ -187,12 +207,7 @@ jobs:
 
       - name: Package release
         run: |
-          # Get version for filename
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            VERSION="${{ github.ref_name }}"
-          else
-            VERSION="dev-$(git rev-parse --short HEAD)"
-          fi
+          VERSION="${{ steps.version.outputs.VERSION }}"
 
           # Create tar.gz archive
           cd release
@@ -209,16 +224,16 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: l4-ide-linux-${{ matrix.arch }}-${{ github.ref_name || github.sha }}
+          name: l4-ide-linux-${{ matrix.arch }}-${{ steps.version.outputs.VERSION }}
           path: l4-ide-linux-${{ matrix.arch }}-*.tar.gz
           retention-days: 30
 
       - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/') || github.event.inputs.create_release == 'true'
+        if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.event.inputs.create_release == 'true'
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ github.ref_name || format('dev-{0}', github.sha) }}
-          name: L4 IDE Linux Release ${{ github.ref_name || github.sha }}
+          tag_name: ${{ steps.version.outputs.VERSION }}
+          name: L4 IDE ${{ steps.version.outputs.VERSION }}
           body: |
             ## L4 IDE - Linux Release (${{ matrix.arch }})
 
@@ -266,7 +281,7 @@ jobs:
           files: |
             l4-ide-linux-${{ matrix.arch }}-*.tar.gz
           draft: false
-          prerelease: ${{ !startsWith(github.ref, 'refs/tags/') }}
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
