@@ -349,6 +349,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Update package.json version with build number
+        working-directory: ts-apps/vscode
+        run: |
+          # Extract current version and replace patch number with GitHub run number
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          MAJOR_MINOR=$(echo $CURRENT_VERSION | sed 's/\.[^.]*$//')
+          NEW_VERSION="${MAJOR_MINOR}.${{ github.run_number }}"
+          echo "Updating version: $CURRENT_VERSION -> $NEW_VERSION"
+          # Update package.json using node to preserve formatting
+          node -e "const fs = require('fs'); const pkg = JSON.parse(fs.readFileSync('package.json')); pkg.version = '$NEW_VERSION'; fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');"
+          echo "PACKAGE_VERSION=$NEW_VERSION" >> $GITHUB_ENV
+
       - name: Build TypeScript monorepo
         run: npm run build
 
@@ -367,25 +379,15 @@ jobs:
           echo "Binary location:"
           ls -lh ts-apps/vscode/bin/${{ matrix.target }}/
 
-      - name: Create version info
-        id: version
-        run: |
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            VERSION="${{ github.ref_name }}"
-          else
-            VERSION="$(date -u '+%Y%m%d.%H%M')"
-          fi
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-
       - name: Package platform-specific extension
         working-directory: ts-apps/vscode
         run: |
-          npx vsce package --target ${{ matrix.target }} --no-dependencies -o l4-vscode-${{ matrix.target }}-${{ steps.version.outputs.VERSION }}.vsix
+          npx vsce package --target ${{ matrix.target }} --no-dependencies -o l4-vscode-${{ matrix.target }}-${{ env.PACKAGE_VERSION }}.vsix
 
       - name: Upload VSIX artifact
         uses: actions/upload-artifact@v4
         with:
-          name: l4-vscode-${{ matrix.target }}-${{ steps.version.outputs.VERSION }}
+          name: l4-vscode-${{ matrix.target }}-${{ env.PACKAGE_VERSION }}
           path: ts-apps/vscode/*.vsix
           retention-days: 30
 
@@ -414,6 +416,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Update package.json version with build number
+        working-directory: ts-apps/vscode
+        run: |
+          # Extract current version and replace patch number with GitHub run number
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          MAJOR_MINOR=$(echo $CURRENT_VERSION | sed 's/\.[^.]*$//')
+          NEW_VERSION="${MAJOR_MINOR}.${{ github.run_number }}"
+          echo "Updating version: $CURRENT_VERSION -> $NEW_VERSION"
+          # Update package.json using node to preserve formatting
+          node -e "const fs = require('fs'); const pkg = JSON.parse(fs.readFileSync('package.json')); pkg.version = '$NEW_VERSION'; fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');"
+          echo "PACKAGE_VERSION=$NEW_VERSION" >> $GITHUB_ENV
+
       - name: Build TypeScript monorepo
         run: npm run build
 
@@ -439,25 +453,15 @@ jobs:
           echo "All binaries:"
           find . -type f -ls
 
-      - name: Create version info
-        id: version
-        run: |
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            VERSION="${{ github.ref_name }}"
-          else
-            VERSION="$(date -u '+%Y%m%d.%H%M')"
-          fi
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-
       - name: Package all-platforms extension
         working-directory: ts-apps/vscode
         run: |
-          npx vsce package --no-dependencies -o l4-vscode-all-platforms-${{ steps.version.outputs.VERSION }}.vsix
+          npx vsce package --no-dependencies -o l4-vscode-all-platforms-${{ env.PACKAGE_VERSION }}.vsix
 
       - name: Upload VSIX artifact
         uses: actions/upload-artifact@v4
         with:
-          name: l4-vscode-all-platforms-${{ steps.version.outputs.VERSION }}
+          name: l4-vscode-all-platforms-${{ env.PACKAGE_VERSION }}
           path: ts-apps/vscode/*.vsix
           retention-days: 30
 
@@ -481,28 +485,30 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Update package.json version with build number
+        working-directory: ts-apps/vscode
+        run: |
+          # Extract current version and replace patch number with GitHub run number
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          MAJOR_MINOR=$(echo $CURRENT_VERSION | sed 's/\.[^.]*$//')
+          NEW_VERSION="${MAJOR_MINOR}.${{ github.run_number }}"
+          echo "Updating version: $CURRENT_VERSION -> $NEW_VERSION"
+          # Update package.json using node to preserve formatting
+          node -e "const fs = require('fs'); const pkg = JSON.parse(fs.readFileSync('package.json')); pkg.version = '$NEW_VERSION'; fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');"
+          echo "PACKAGE_VERSION=$NEW_VERSION" >> $GITHUB_ENV
+
       - name: Build TypeScript monorepo
         run: npm run build
-
-      - name: Create version info
-        id: version
-        run: |
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            VERSION="${{ github.ref_name }}"
-          else
-            VERSION="$(date -u '+%Y%m%d.%H%M')"
-          fi
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Package universal extension
         working-directory: ts-apps/vscode
         run: |
-          npx vsce package --no-dependencies -o l4-vscode-universal-${{ steps.version.outputs.VERSION }}.vsix
+          npx vsce package --no-dependencies -o l4-vscode-universal-${{ env.PACKAGE_VERSION }}.vsix
 
       - name: Upload VSIX artifact
         uses: actions/upload-artifact@v4
         with:
-          name: l4-vscode-universal-${{ steps.version.outputs.VERSION }}
+          name: l4-vscode-universal-${{ env.PACKAGE_VERSION }}
           path: ts-apps/vscode/*.vsix
           retention-days: 30
 
@@ -519,16 +525,6 @@ jobs:
       - package-vscode-all-platforms
       - package-vscode-universal
     steps:
-      - name: Create version info
-        id: version
-        run: |
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            VERSION="${{ github.ref_name }}"
-          else
-            VERSION="$(date -u '+%Y%m%d.%H%M')"
-          fi
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-
       - name: Download all VSIX artifacts
         uses: actions/download-artifact@v4
         with:
@@ -544,8 +540,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: vscode-${{ steps.version.outputs.VERSION }}
-          name: L4 VSCode Extension ${{ steps.version.outputs.VERSION }}
+          tag_name: vscode-build-${{ github.run_number }}
+          name: L4 VSCode Extension (Build ${{ github.run_number }})
           body: |
             ## L4 VSCode Extension Release
 
@@ -621,21 +617,11 @@ jobs:
       - package-vscode-universal
     if: always()
     steps:
-      - name: Create version info
-        id: version
-        run: |
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            VERSION="${{ github.ref_name }}"
-          else
-            VERSION="$(date -u '+%Y%m%d.%H%M')"
-          fi
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-
       - name: Summary
         run: |
           echo "## VSCode Extension Build Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Version:** ${{ steps.version.outputs.VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Build Number:** ${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
           echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Platform-Specific Extensions" >> $GITHUB_STEP_SUMMARY
