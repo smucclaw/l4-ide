@@ -248,9 +248,10 @@ prettyDiagnostic FileDiagnostic { fdFilePath, fdShouldShowDiagnostic, fdLspDiagn
         sev = fromMaybe LSP.DiagnosticSeverity_Error _severity
 
 -- | Label a document.
--- Using sep places label and value side-by-side (or on separate lines if needed).
+-- Using hcat concatenates without adding extra spaces,
+-- ensuring consistent output across platforms.
 slabel_ :: String -> Doc a -> Doc a
-slabel_ t d = nest 2 $ sep [pretty t, d]
+slabel_ t d = nest 2 $ hcat [pretty t, d]
 
 makeLensesWith
     (lensRules & lensField .~ mappingNamer (pure . (++ "L")))
