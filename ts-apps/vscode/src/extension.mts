@@ -188,8 +188,7 @@ function findServerExecutable(
  * The binary should be in: <extension>/bin/<platform>-<arch>/jl4-lsp[.exe]
  *
  * Supported platforms:
- * - darwin-arm64 (macOS Apple Silicon)
- * - darwin-x64 (macOS Intel)
+ * - darwin-arm64 (macOS Apple Silicon - also works on Intel Macs via Rosetta 2)
  * - win32-x64 (Windows x64)
  * - linux-x64 (Linux x64)
  * - linux-arm64 (Linux ARM64)

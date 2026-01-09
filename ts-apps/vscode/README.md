@@ -76,11 +76,13 @@ The extension looks for the language server in this order:
 
 #### Supported Bundled Platforms
 
-- `darwin-arm64` (macOS Apple Silicon)
-- `darwin-x64` (macOS Intel)
+- `darwin-arm64` (macOS Apple Silicon - also works on Intel Macs via Rosetta 2)
 - `win32-x64` (Windows x64)
 - `linux-x64` (Linux x64)
 - `linux-arm64` (Linux ARM64)
+
+> **Note for Intel Mac users:** macOS x64 runners are no longer available on GitHub Actions.
+> Intel Mac users can either use the ARM64 build (runs via Rosetta 2) or install `jl4-lsp` manually.
 
 ### Development
 
