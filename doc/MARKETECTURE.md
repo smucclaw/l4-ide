@@ -61,9 +61,11 @@ L4 is not just a programming language—it's a **legal computation platform** th
 ## Input: Creating L4 Code
 
 ### 1. **AI-Assisted Ingestion** 🤖
+
 Upload legal documents (PDF, Word, web pages) and use LLM assistance to extract rules into L4.
 
 **Tools:**
+
 - Claude Code Plugin (cloud-based validation)
 - Module A2 workflow (prompt templates)
 - LLM Integration Library (multi-provider)
@@ -73,9 +75,11 @@ Upload legal documents (PDF, Word, web pages) and use LLM assistance to extract 
 ---
 
 ### 2. **Manual Authoring** ✍️
+
 Write L4 directly in professional IDEs with full language support.
 
 **Tools:**
+
 - VSCode Extension (syntax highlighting, type checking, visualization)
 - LSP Server (hover info, diagnostics, jump-to-definition)
 - Web IDE (browser-based editor at jl4.legalese.com)
@@ -88,9 +92,11 @@ Write L4 directly in professional IDEs with full language support.
 ## Development Outputs: Building Confidence
 
 ### 3. **Type Checking & Verification** ✅
+
 Catch errors before deployment—ambiguities, contradictions, type mismatches.
 
 **Capabilities:**
+
 - Bidirectional type inference
 - Exhaustiveness checking (pattern matching)
 - TDNR (Type-Directed Name Resolution)
@@ -101,9 +107,11 @@ Catch errors before deployment—ambiguities, contradictions, type mismatches.
 ---
 
 ### 4. **Visualization & Understanding** 📊
+
 See your logic as interactive diagrams, not just text.
 
 **Tools:**
+
 - Ladder Diagrams (interactive decision trees with AND/OR/NOT logic)
 - GraphViz Traces (evaluation step-by-step with timestamps)
 - Query Planning (relevance analysis showing which variables matter)
@@ -113,9 +121,11 @@ See your logic as interactive diagrams, not just text.
 ---
 
 ### 5. **Testing & Regression Suites** 🧪
+
 Test rules against scenarios before production deployment.
 
 **Capabilities:**
+
 - `#EVAL` for unit tests
 - `#ASSERT` for validation
 - Golden file testing (snapshot testing)
@@ -126,9 +136,11 @@ Test rules against scenarios before production deployment.
 ---
 
 ### 6. **Documentation Generation** 📚
+
 Auto-generate human-readable documentation from code.
 
 **Capabilities:**
+
 - `@desc` annotations extracted as documentation
 - JSON Schema generation (type definitions)
 - Swagger/OpenAPI specs (API documentation)
@@ -141,9 +153,11 @@ Auto-generate human-readable documentation from code.
 ## Production Outputs: Deploying Value
 
 ### 7. **REST API (Decision Service)** 🌐
+
 Expose L4 functions as HTTP endpoints with zero additional code.
 
 **Features:**
+
 - Single `@export` annotation creates API
 - Automatic JSON schema validation
 - Batch processing (parallel evaluation)
@@ -152,12 +166,14 @@ Expose L4 functions as HTTP endpoints with zero additional code.
 - Swagger UI at `/swagger-ui`
 
 **Use Cases:**
+
 - Microservices architecture
 - Mobile app backends
 - Chatbot integration
 - Enterprise system integration
 
 **Example:**
+
 ```bash
 # Single evaluation
 curl -X POST 'http://api.example.com/functions/eligibility/evaluation' \
@@ -173,9 +189,11 @@ curl -X POST 'http://api.example.com/functions/eligibility/batch' \
 ---
 
 ### 8. **Consumer Web Apps (l4-wizard)** 🧙
+
 Auto-generate interactive questionnaires with intelligent question ordering.
 
 **Features:**
+
 - Progressive disclosure (query planning)
 - Visual feedback (questions gray out when irrelevant)
 - Schema-driven inputs (boolean, number, enum, text)
@@ -184,12 +202,14 @@ Auto-generate interactive questionnaires with intelligent question ordering.
 - Shareable URLs with pre-filled answers
 
 **Use Cases:**
+
 - Public-facing eligibility checkers
 - Compliance assessment tools
 - Interactive policy explainers
 - Self-service legal guidance
 
 **Example:**
+
 ```
 https://wizard.example.com/?fn=may_purchase_alcohol
 → User answers age, marital status, beverage type
@@ -201,9 +221,11 @@ https://wizard.example.com/?fn=may_purchase_alcohol
 ---
 
 ### 9. **AI Chatbot Interface** 💬
+
 Natural language interface for non-technical users.
 
 **Features:**
+
 - Semantic parsing (natural language → function calls)
 - Function discovery (LLM finds relevant rules)
 - Argument extraction (LLM interprets user input)
@@ -211,12 +233,14 @@ Natural language interface for non-technical users.
 - Structured interaction patterns
 
 **Use Cases:**
+
 - Customer support automation
 - Legal advice chatbots
 - Regulatory compliance assistants
 - Employee self-service portals
 
 **Example Conversation:**
+
 ```
 User: "Can I purchase alcohol if I'm 25 and married?"
 Bot:  Checking eligibility rules...
@@ -232,33 +256,40 @@ Bot:  ✅ Yes, you may purchase alcohol.
 ---
 
 ### 10. **Enterprise System Integration** 🏢
+
 Connect L4 to existing databases, ERP systems, and business processes.
 
 **Integration Patterns:**
 
 #### **REST Bridge**
+
 - L4 Decision Service ↔ Enterprise API Gateway
 - JSON request/response with schema validation
 
 #### **Database Sync**
+
 - L4 queries pull data from SQL/NoSQL
 - Decision results written back to OLTP systems
 
 #### **Event Stream Processing**
+
 - Kafka/RabbitMQ events trigger L4 evaluation
 - Results published back to event bus
 
 #### **Batch Processing**
+
 - Nightly jobs evaluate thousands of cases
 - Results loaded into data warehouse
 
 **Capabilities:**
+
 - `FETCH` (HTTP GET) and `POST` operators
 - `JSONDECODE` / `JSONENCODE` (type-safe JSON)
 - `ENV` keyword (access environment variables)
 - Batch evaluation API (parallel processing)
 
 **Use Cases:**
+
 - Underwriting automation (insurance)
 - Credit decisioning (banking)
 - Compliance monitoring (regulatory)
@@ -269,21 +300,25 @@ Connect L4 to existing databases, ERP systems, and business processes.
 ## Real-World Value Delivered
 
 ### **Government Regulatory Compliance**
+
 - Encoded secondary legislation
 - Auto-generated web wizards
 - **Result:** Discovered race condition (double bind) via formal verification
 
 ### **Insurance Policy Analysis**
+
 - Formalized contracts from major providers
 - Found ambiguities in payout formulas
 - **Result:** Prevented millions in claims leakage
 
 ### **Legislative Drafting**
+
 - Rules-as-code initiatives with government legal offices
 - Legislation written in machine-verifiable form
 - **Result:** Faster iteration, fewer contradictions
 
 ### **Commercial Agreements**
+
 - Complex fee schedules and payment terms
 - SQL-like APIs for enterprise integration
 - **Result:** Real-time pricing calculations, audit trails
@@ -315,40 +350,44 @@ Connect L4 to existing databases, ERP systems, and business processes.
 
 ## Comparison: L4 vs Traditional Approaches
 
-| Capability | Traditional Legal Tech | L4 Platform |
-|-----------|------------------------|-------------|
-| **Source of Truth** | Word documents, scattered systems | Single L4 codebase |
-| **Testing** | Manual review, production bugs | Automated test suites, pre-deployment verification |
-| **Ambiguity Detection** | Litigation discovers it | Type checker catches it |
-| **API Development** | Months of backend coding | `@export` annotation |
-| **UI Development** | Custom React/Angular apps | Auto-generated wizard |
-| **Documentation** | Out-of-sync Word docs | Auto-generated from code |
-| **Explainability** | Black box decisions | GraphViz traces, audit trails |
-| **Change Management** | Risk of breaking changes | Regression tests, type safety |
-| **Integration** | Custom APIs per system | Standard REST, JSON schemas |
-| **Formal Verification** | Not available | SAT/SMT integration (roadmap) |
+| Capability              | Traditional Legal Tech            | L4 Platform                                        |
+| ----------------------- | --------------------------------- | -------------------------------------------------- |
+| **Source of Truth**     | Word documents, scattered systems | Single L4 codebase                                 |
+| **Testing**             | Manual review, production bugs    | Automated test suites, pre-deployment verification |
+| **Ambiguity Detection** | Litigation discovers it           | Type checker catches it                            |
+| **API Development**     | Months of backend coding          | `@export` annotation                               |
+| **UI Development**      | Custom React/Angular apps         | Auto-generated wizard                              |
+| **Documentation**       | Out-of-sync Word docs             | Auto-generated from code                           |
+| **Explainability**      | Black box decisions               | GraphViz traces, audit trails                      |
+| **Change Management**   | Risk of breaking changes          | Regression tests, type safety                      |
+| **Integration**         | Custom APIs per system            | Standard REST, JSON schemas                        |
+| **Formal Verification** | Not available                     | SAT/SMT integration (roadmap)                      |
 
 ---
 
 ## Deployment Options
 
 ### **Option 1: Cloud-Hosted Decision Service**
+
 - Deploy to AWS/Azure/GCP
 - Auto-scaling with load balancer
 - Monitoring with Prometheus/Grafana
 - Example: `https://jl4.legalese.com`
 
 ### **Option 2: On-Premises (Docker)**
+
 - Docker Compose for full stack
 - Internal network deployment
 - Air-gapped environments supported
 
 ### **Option 3: Embedded (Library)**
+
 - Link L4 evaluator as Haskell library
 - Embed in larger applications
 - Zero network latency
 
 ### **Option 4: Serverless (AWS Lambda)**
+
 - Function-as-a-Service deployment
 - Pay-per-evaluation pricing
 - Automatic scaling
@@ -358,6 +397,7 @@ Connect L4 to existing databases, ERP systems, and business processes.
 ## Getting Started: Three Paths
 
 ### **Path 1: Legal Engineer** (Writing L4)
+
 1. Complete Foundation Course (7 modules)
 2. Use AI ingestion to convert first document
 3. Refine in VSCode with LSP support
@@ -369,6 +409,7 @@ Connect L4 to existing databases, ERP systems, and business processes.
 ---
 
 ### **Path 2: Backend Developer** (Integrating L4)
+
 1. Read Advanced Course Module A4 (Decision Service)
 2. Call REST API from your application
 3. Use Swagger UI to explore endpoints
@@ -380,6 +421,7 @@ Connect L4 to existing databases, ERP systems, and business processes.
 ---
 
 ### **Path 3: End-User** (Using L4 Apps)
+
 1. Open l4-wizard URL (e.g., `?fn=eligibility`)
 2. Answer questions (only relevant ones asked)
 3. View decision with visual explanation
@@ -393,18 +435,21 @@ Connect L4 to existing databases, ERP systems, and business processes.
 ## Next Steps
 
 ### **For Your All-Hands Meeting**
+
 1. **Show the marketecture diagram** (this document)
 2. **Demo each output** (API, wizard, chatbot, visualization)
 3. **Highlight real-world impact** (government, insurance, legislative)
 4. **Call to action** (start with Foundation Course)
 
 ### **For New Users**
+
 1. **Read this document** to understand capabilities
 2. **Watch 5-minute demo video** (to be recorded)
 3. **Complete quickstart tutorial** (doc/quickstart.md)
 4. **Join community discussions** (GitHub, Discord)
 
 ### **For Contributors**
+
 1. **Review open issues** (48 issues, prioritized in CLAUDE.md)
 2. **Implement missing pieces** (chatbot UI, Docker Compose, templates)
 3. **Improve documentation** (videos, examples, patterns)
@@ -421,6 +466,7 @@ Connect L4 to existing databases, ERP systems, and business processes.
 ---
 
 **Questions? Issues? Contributions?**
+
 - GitHub: https://github.com/smucclaw/l4-ide
 - Documentation: https://jl4.legalese.com
 - Email: hello@legalese.com
