@@ -233,24 +233,24 @@ uriFileName nuri =
 prettyDiagnostic :: FileDiagnostic -> Doc a
 prettyDiagnostic FileDiagnostic { fdFilePath, fdShouldShowDiagnostic, fdLspDiagnostic = LSP.Diagnostic{..} } =
     hang 2 $ vcat
-        [ slabel_ "File:" $ pretty (uriFileName fdFilePath)
-        , slabel_ "Hidden:" $ if fdShouldShowDiagnostic == ShowDiag then "no" else "yes"
-        , slabel_ "Range:" $ prettyRange _range
-        , slabel_ "Source:" $ pretty _source
+        [ slabel_ "File:    " $ pretty (uriFileName fdFilePath)
+        , slabel_ "Hidden:  " $ if fdShouldShowDiagnostic == ShowDiag then "no" else "yes"
+        , slabel_ "Range:   " $ prettyRange _range
+        , slabel_ "Source:  " $ pretty _source
         , slabel_ "Severity:" $ pretty $ show sev
-        , slabel_ "Code:" $ case _code of
+        , slabel_ "Code:    " $ case _code of
                                   Just (InR text) -> pretty text
                                   Just (InL i)    -> pretty i
                                   Nothing         -> "<none>"
-        , slabel_ "Message:" $ pretty _message
+        , slabel_ "Message: " $ pretty _message
         ]
     where
         sev = fromMaybe LSP.DiagnosticSeverity_Error _severity
 
--- | Label a document with a single space separator.
--- Using <+> ensures consistent single-space separation across platforms.
+-- | Label a document.
+-- Using sep places label and value side-by-side (or on separate lines if needed).
 slabel_ :: String -> Doc a -> Doc a
-slabel_ t d = nest 2 $ pretty t <+> d
+slabel_ t d = nest 2 $ sep [pretty t, d]
 
 makeLensesWith
     (lensRules & lensField .~ mappingNamer (pure . (++ "L")))
