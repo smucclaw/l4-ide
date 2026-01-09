@@ -1,0 +1,124 @@
+name: Windows Build Test
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "jl4*/**"
+      - "cabal.project"
+      - ".github/workflows/windows-*.yml"
+  workflow_dispatch:
+
+# Only run one build per PR to save resources
+concurrency:
+  group: windows-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-windows:
+    name: Test Windows Build - GHC ${{ matrix.ghc-version }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ghc-version: ["9.6.6"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Set up GHC ${{ matrix.ghc-version }}
+        uses: haskell-actions/setup@v2
+        id: setup
+        with:
+          ghc-version: ${{ matrix.ghc-version }}
+          cabal-version: "latest"
+          cabal-update: true
+
+      - name: Configure the build
+        run: |
+          cabal update
+          cabal configure --enable-tests --disable-documentation
+          cabal build all --dry-run
+        shell: bash
+
+      - name: Restore cached dependencies
+        uses: actions/cache/restore@v4
+        id: cache
+        env:
+          key: ${{ runner.os }}-ghc-${{ steps.setup.outputs.ghc-version }}-cabal-${{ steps.setup.outputs.cabal-version }}
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: ${{ env.key }}-plan-${{ hashFiles('**/plan.json') }}
+          restore-keys: ${{ env.key }}-
+
+      - name: Install dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: cabal build all --only-dependencies
+        shell: bash
+
+      - name: Save cached dependencies
+        uses: actions/cache/save@v4
+        if: steps.cache.outputs.cache-hit != 'true'
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: ${{ steps.cache.outputs.cache-primary-key }}
+
+      - name: Build all executables
+        run: cabal build all
+        shell: bash
+
+      - name: Run tests
+        run: cabal test all
+        shell: bash
+
+      - name: Verify executables were built
+        run: |
+          echo "Looking for built executables..."
+          find dist-newstyle -type f -name "*.exe" | while read exe; do
+            echo "Found: $exe"
+            echo "Size: $(stat --format=%s "$exe" | numfmt --to=iec-i --suffix=B)"
+          done
+
+          # Count executables
+          EXE_COUNT=$(find dist-newstyle -type f -name "*.exe" | wc -l)
+          echo "Total executables found: $EXE_COUNT"
+
+          if [ "$EXE_COUNT" -eq 0 ]; then
+            echo "ERROR: No executables were built!"
+            exit 1
+          fi
+
+          # Expected executables
+          EXPECTED="jl4-cli jl4-schema jl4-lsp jl4-repl jl4-decision-service-exe jl4-websessions"
+          echo "Expected executables: $EXPECTED"
+
+          # Check each expected executable
+          MISSING=""
+          for exe in $EXPECTED; do
+            if ! find dist-newstyle -type f -name "${exe}.exe" | grep -q .; then
+              MISSING="$MISSING $exe"
+            fi
+          done
+
+          if [ -n "$MISSING" ]; then
+            echo "WARNING: Missing executables:$MISSING"
+            echo "This may be expected if not all packages build on Windows"
+          fi
+        shell: bash
+
+      - name: Build summary
+        run: |
+          echo "## Windows Build Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **OS:** Windows" >> $GITHUB_STEP_SUMMARY
+          echo "- **GHC Version:** ${{ matrix.ghc-version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Built Executables" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          find dist-newstyle -type f -name "*.exe" -exec basename {} \; | sort >> $GITHUB_STEP_SUMMARY || echo "No executables found" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+        shell: bash

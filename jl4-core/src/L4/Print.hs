@@ -15,6 +15,7 @@ import L4.Evaluate.Operators
 import L4.Names
 import L4.Desugar
 import Control.Category ((>>>))
+import System.FilePath (takeFileName)
 
 prettyLayout :: LayoutPrinter a => a -> Text
 prettyLayout a = docText $ printWithLayout a
@@ -565,7 +566,13 @@ instance LayoutPrinter Reference where
   printWithLayout rf = printWithLayout rf.address
 
 instance LayoutPrinter Address where
-  printWithLayout (MkAddress u a) = "&" <> pretty a <> "@" <> pretty u
+  printWithLayout (MkAddress u a) =
+    let fullUri = (fromNormalizedUri u).getUri
+        -- Extract just filename for consistent output across platforms
+        fileName = case Text.stripPrefix "file://" fullUri of
+            Just path -> Text.pack $ takeFileName $ Text.unpack path
+            Nothing -> Text.pack $ takeFileName $ Text.unpack fullUri
+    in "&" <> pretty a <> "@" <> pretty fileName
 
 quoteIfNeeded :: Text.Text -> Text.Text
 quoteIfNeeded n = case Text.uncons $ Text.dropAround (== '_') n of

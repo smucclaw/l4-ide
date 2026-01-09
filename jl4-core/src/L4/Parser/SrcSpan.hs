@@ -5,6 +5,7 @@ import Base
 
 import qualified Generics.SOP as SOP
 import qualified Base.Text as Text
+import System.FilePath (takeFileName)
 
 -- ----------------------------------------------------------------------------
 -- SrcSpan
@@ -64,8 +65,16 @@ data SrcRange =
   deriving stock (Eq, Ord, Show, Generic)
   deriving anyclass (ToExpr, NFData)
 
+-- | Pretty-print a source range with just the filename (not full path)
+-- to ensure consistent output across platforms (Windows vs Unix paths).
 prettySrcRange :: SrcRange -> Text
-prettySrcRange (MkSrcRange p1 p2 _ uri) = (fromNormalizedUri uri).getUri <> ":" <> prettySrcPos p1 <> prettyPartialSrcPos p1 p2
+prettySrcRange (MkSrcRange p1 p2 _ uri) =
+    let fullUri = (fromNormalizedUri uri).getUri
+        -- Extract filename from URI by removing file:// prefix and taking basename
+        fileName = case Text.stripPrefix "file://" fullUri of
+            Just path -> Text.pack $ takeFileName $ Text.unpack path
+            Nothing -> Text.pack $ takeFileName $ Text.unpack fullUri
+    in fileName <> ":" <> prettySrcPos p1 <> prettyPartialSrcPos p1 p2
 
 prettySrcRangeM :: Maybe SrcRange -> Text
 prettySrcRangeM = maybe "<no location>" prettySrcRange

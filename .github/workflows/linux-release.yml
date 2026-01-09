@@ -1,0 +1,304 @@
+name: Linux Release (Multi-Architecture)
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+    paths:
+      # Haskell source code
+      - "jl4-core/**"
+      - "jl4/**"
+      - "jl4-lsp/**"
+      - "jl4-repl/**"
+      - "jl4-decision-service/**"
+      - "jl4-websessions/**"
+      - "jl4-query-plan/**"
+      # Build configuration
+      - "*.cabal"
+      - "cabal.project"
+      - "cabal.project.freeze"
+      # This workflow
+      - ".github/workflows/linux-release.yml"
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: "Create a GitHub release"
+        required: false
+        default: "false"
+
+jobs:
+  build-linux:
+    name: Build Linux Release - ${{ matrix.arch }} - GHC ${{ matrix.ghc-version }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+            ghc-version: "9.6.6"
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+            ghc-version: "9.6.6"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config liblzma-dev libgmp-dev
+
+      - name: Set up GHC ${{ matrix.ghc-version }}
+        uses: haskell-actions/setup@v2
+        id: setup
+        with:
+          ghc-version: ${{ matrix.ghc-version }}
+          cabal-version: "latest"
+          cabal-update: true
+
+      - name: Configure the build
+        run: |
+          cabal update
+          cabal configure --enable-tests --disable-documentation
+          cabal build all --dry-run
+
+      - name: Restore cached dependencies
+        uses: actions/cache/restore@v4
+        id: cache
+        env:
+          key: ${{ runner.os }}-${{ runner.arch }}-ghc-${{ steps.setup.outputs.ghc-version }}-cabal-${{ steps.setup.outputs.cabal-version }}
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: ${{ env.key }}-plan-${{ hashFiles('**/plan.json') }}
+          restore-keys: ${{ env.key }}-
+
+      - name: Install dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: cabal build all --only-dependencies
+
+      - name: Save cached dependencies
+        uses: actions/cache/save@v4
+        if: steps.cache.outputs.cache-hit != 'true'
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: ${{ steps.cache.outputs.cache-primary-key }}
+
+      - name: Build all executables
+        run: cabal build all
+
+      - name: Run tests
+        run: cabal test all
+
+      - name: Find and copy executables
+        run: |
+          # Create release directory
+          mkdir -p release/bin
+
+          # Find all built executables (exclude test executables)
+          find dist-newstyle -type f -executable -name 'jl4-*' ! -name '*-test' | while read exe; do
+            echo "Found: $exe"
+            cp "$exe" release/bin/
+          done
+
+          # List what we have
+          echo "Release contents:"
+          ls -lh release/bin/
+
+      - name: Strip binaries
+        run: |
+          # Strip debug symbols to reduce size
+          cd release/bin
+          strip * || true
+          echo "Stripped binaries:"
+          ls -lh
+
+      - name: Create version info
+        id: version
+        run: |
+          # Get version information
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION="${{ github.ref_name }}"
+          else
+            # Date-based version: YYYYMMDD.HHMM
+            VERSION="$(date -u '+%Y%m%d.%H%M')"
+          fi
+
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION" > release/VERSION.txt
+          echo "Architecture: ${{ matrix.arch }}" >> release/VERSION.txt
+          echo "Build Date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> release/VERSION.txt
+          echo "Commit: ${{ github.sha }}" >> release/VERSION.txt
+          echo "GHC Version: ${{ matrix.ghc-version }}" >> release/VERSION.txt
+
+          cat release/VERSION.txt
+
+      - name: Create README for release
+        run: |
+          cat > release/README.md << 'EOF'
+          # L4 IDE - Linux Release (${{ matrix.arch }})
+
+          This is a Linux build of the L4 IDE and related tools for ${{ matrix.arch }} architecture.
+
+          ## Included Executables
+
+          - **jl4-cli** - Command-line interface for evaluating L4 files
+          - **jl4-schema** - JSON schema generator
+          - **jl4-lsp** - Language Server Protocol implementation
+          - **jl4-repl** - Interactive Read-Eval-Print Loop
+          - **jl4-decision-service-exe** - REST API for decision evaluation
+          - **jl4-websessions** - Session persistence service
+
+          ## Quick Start
+
+          1. Extract the archive:
+             ```bash
+             tar -xzf l4-ide-linux-${{ matrix.arch }}-*.tar.gz
+             cd l4-ide-linux-${{ matrix.arch }}
+             ```
+
+          2. Add the bin directory to your PATH:
+             ```bash
+             export PATH="$PWD/bin:$PATH"
+             ```
+
+          3. Verify installation:
+             ```bash
+             jl4-cli --help
+             ```
+
+          ## Requirements
+
+          - Linux kernel 3.2+ (glibc 2.17+)
+          - No additional runtime dependencies required
+          - Architecture: ${{ matrix.arch }}
+
+          ## Installation
+
+          ### System-wide (requires sudo)
+          ```bash
+          sudo cp bin/* /usr/local/bin/
+          ```
+
+          ### User installation
+          ```bash
+          mkdir -p ~/.local/bin
+          cp bin/* ~/.local/bin/
+          # Add to ~/.bashrc or ~/.zshrc:
+          export PATH="$HOME/.local/bin:$PATH"
+          ```
+
+          ## Documentation
+
+          For full documentation, visit:
+          https://github.com/smucclaw/l4-ide
+
+          ## License
+
+          See the repository for license information.
+          EOF
+
+          cat release/README.md
+
+      - name: Package release
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+
+          # Create tar.gz archive
+          cd release
+          tar -czf "../l4-ide-linux-${{ matrix.arch }}-${VERSION}.tar.gz" *
+          cd ..
+
+          # Verify archive
+          echo "Archive contents:"
+          tar -tzf "l4-ide-linux-${{ matrix.arch }}-${VERSION}.tar.gz" | head -20
+
+          # Get file size
+          ls -lh l4-ide-linux-${{ matrix.arch }}-*.tar.gz
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: l4-ide-linux-${{ matrix.arch }}-${{ steps.version.outputs.VERSION }}
+          path: l4-ide-linux-${{ matrix.arch }}-*.tar.gz
+          retention-days: 30
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.event.inputs.create_release == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.VERSION }}
+          name: L4 IDE ${{ steps.version.outputs.VERSION }}
+          body: |
+            ## L4 IDE - Linux Release (${{ matrix.arch }})
+
+            Linux binaries for the L4 Domain-Specific Language for Law.
+
+            ### What's Included
+
+            - `jl4-cli` - CLI tool for evaluating L4 files
+            - `jl4-schema` - JSON schema generator
+            - `jl4-lsp` - Language Server Protocol server
+            - `jl4-repl` - Interactive REPL
+            - `jl4-decision-service-exe` - Decision evaluation REST API
+            - `jl4-websessions` - Session persistence service
+
+            ### Installation
+
+            1. Download `l4-ide-linux-${{ matrix.arch }}-*.tar.gz`
+            2. Extract: `tar -xzf l4-ide-linux-${{ matrix.arch }}-*.tar.gz`
+            3. Add to PATH: `export PATH="$PWD/l4-ide-linux-${{ matrix.arch }}/bin:$PATH"`
+            4. Verify: `jl4-cli --help`
+
+            ### Requirements
+
+            - Linux kernel 3.2+ (glibc 2.17+)
+            - Architecture: ${{ matrix.arch }}
+            - No additional runtime dependencies required
+
+            ### Build Information
+
+            - **Architecture:** ${{ matrix.arch }}
+            - **GHC Version:** ${{ matrix.ghc-version }}
+            - **Commit:** ${{ github.sha }}
+            - **Build Date:** ${{ github.event.head_commit.timestamp }}
+
+            ### Documentation
+
+            For comprehensive documentation, see:
+            - [Repository](https://github.com/smucclaw/l4-ide)
+            - [Language Reference](https://github.com/smucclaw/l4-ide/tree/main/doc)
+            - [Foundation Course](https://github.com/smucclaw/l4-ide/tree/main/doc/foundation-course-ai)
+
+            ---
+
+            Generated with [GitHub Actions](https://github.com/smucclaw/l4-ide/actions)
+          files: |
+            l4-ide-linux-${{ matrix.arch }}-*.tar.gz
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build summary
+        run: |
+          echo "## Linux Build Summary (${{ matrix.arch }})" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Architecture:** ${{ matrix.arch }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **GHC Version:** ${{ matrix.ghc-version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Built Executables" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          ls -lh release/bin/ >> $GITHUB_STEP_SUMMARY || echo "No executables found" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Archive" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          ls -lh l4-ide-linux-${{ matrix.arch }}-*.tar.gz >> $GITHUB_STEP_SUMMARY || echo "No archive created" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY

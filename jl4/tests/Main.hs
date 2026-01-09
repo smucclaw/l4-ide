@@ -87,10 +87,10 @@ l4Golden evalConfig isOk dir inputFile = do
   (output, _) <- capture (checkFile evalConfig isOk inputFile)
   pure
     Golden
-      { output
+      { output = normalizeWhitespaceString $ stripAnsiCodesString output
       , encodePretty = show
       , writeToFile = writeFile
-      , readFromFile = readFile
+      , readFromFile = fmap (normalizeWhitespaceString . stripAnsiCodesString) . readFile
       , goldenFile = dir </> (takeFileName inputFile -<.> "golden")
       , actualFile = Just (dir </> (takeFileName inputFile -<.> "actual"))
       , failFirstTime = True
@@ -104,14 +104,15 @@ jl4ExactPrintGolden evalConfig dir inputFile = do
     Shake.use Rules.ExactPrint uri
 
   -- NOTE: we sort the output, because the traces are concurrent and might not be in order
-  let output = fromMaybe (sanitizeFilePaths $ mconcat errs) moutput
+  -- Strip ANSI codes and normalize whitespace for cross-platform consistency
+  let output = normalizeWhitespace $ stripAnsiCodes $ fromMaybe (sanitizeFilePaths $ mconcat errs) moutput
 
   pure
     Golden
       { output
       , encodePretty = Text.unpack
       , writeToFile = Text.writeFile
-      , readFromFile = Text.readFile
+      , readFromFile = fmap (normalizeWhitespace . stripAnsiCodes) . Text.readFile
       , goldenFile = dir </> (takeFileName inputFile -<.> "ep.golden")
       , actualFile = Just (dir </> (takeFileName inputFile -<.> "ep.actual"))
       , failFirstTime = True
@@ -131,7 +132,8 @@ jl4NlgAnnotationsGolden evalConfig isOk dir inputFile = do
             directives = toListOf (gplate @(Directive Resolved)) mod'
           in
             Text.unlines $ fmap Nlg.simpleLinearizer directives
-  let output =
+  -- Strip ANSI codes and normalize whitespace for cross-platform consistency
+  let output = normalizeWhitespace $ stripAnsiCodes $
         if isOk
           then output_
           else output_ <> "\n" <> Text.unlines (fmap (Text.strip . sanitizeFilePaths) errs)
@@ -140,7 +142,7 @@ jl4NlgAnnotationsGolden evalConfig isOk dir inputFile = do
       { output
       , encodePretty = Text.unpack
       , writeToFile = Text.writeFile
-      , readFromFile = Text.readFile
+      , readFromFile = fmap (normalizeWhitespace . stripAnsiCodes) . Text.readFile
       , goldenFile = dir </> takeFileName inputFile -<.> "nlg.golden"
       , actualFile = Just (dir </> takeFileName inputFile -<.> "nlg.actual")
       , failFirstTime = True
@@ -202,7 +204,7 @@ buildSchemaContext (MkModule _ _ section) =
 -- ----------------------------------------------------------------------------
 
 sanitizeFilePaths :: Text -> Text
-sanitizeFilePaths = RE.replaceAll regex
+sanitizeFilePaths = stripAnsiCodes . RE.replaceAll regex
   where
   mkFileName (Text.null -> hadNoWhiteSpace) (Text.unpack -> fp)
     = Text.pack $ (if hadNoWhiteSpace then id else (' ' :)) case OsPath.decodeUtf . OsPath.takeFileName =<< OsPath.encodeUtf fp of
@@ -211,6 +213,65 @@ sanitizeFilePaths = RE.replaceAll regex
 
   regex = mkFileName <$> RE.manyTextOf CharSet.space <* RE.text "file://" <*>
       RE.manyTextOf (CharSet.not $ CharSet.space `CharSet.union` CharSet.singleton ':')
+
+-- | Strip ANSI color codes from text output
+-- Handles both proper ANSI codes (\x1b[...m) and literal bracket codes
+stripAnsiCodes :: Text -> Text
+stripAnsiCodes text =
+  -- First strip proper ANSI codes with escape character
+  let text' = Text.pack $ stripAnsiCodesGo $ Text.unpack text
+  -- Then strip literal bracket codes and any colored spaces pattern
+  in foldr (\code -> Text.replace code "") text'
+       ["[42m    [0m", "[41m    [0m", "[42m", "[41m", "[36m", "[32m", "[31m", "[0m", "[42m ", "[41m "]
+
+-- | Strip ANSI codes from String (for Golden tests using String type)
+stripAnsiCodesString :: String -> String
+stripAnsiCodesString str =
+  let str' = stripAnsiCodesGo str
+  -- Strip literal bracket codes
+  in foldl (\s code -> replaceString code "" s) str'
+       ["[42m    [0m", "[41m    [0m", "[42m", "[41m", "[36m", "[32m", "[31m", "[0m", "[42m ", "[41m "]
+  where
+    replaceString :: String -> String -> String -> String
+    replaceString _ _ [] = []
+    replaceString old new s@(x:xs)
+      | old `List.isPrefixOf` s = new ++ replaceString old new (drop (length old) s)
+      | otherwise = x : replaceString old new xs
+
+-- | Core ANSI stripping logic for proper escape sequences
+stripAnsiCodesGo :: String -> String
+stripAnsiCodesGo [] = []
+stripAnsiCodesGo ('\x1b':'[':rest) = stripAnsiCodesGo (drop 1 $ dropWhile (/= 'm') rest)
+stripAnsiCodesGo (c:cs) = c : stripAnsiCodesGo cs
+
+-- | Normalize whitespace only on diagnostic label lines.
+-- This is a targeted fix for cross-platform prettyprinter differences
+-- without affecting L4's whitespace-sensitive output.
+normalizeWhitespace :: Text -> Text
+normalizeWhitespace = Text.unlines . map normalizeLine . Text.lines
+  where
+    normalizeLine line
+      | isDiagnosticLabel line = normalizeSpaces line
+      | otherwise = line
+    -- Only normalize lines that look like diagnostic labels
+    isDiagnosticLabel line = any (`Text.isPrefixOf` Text.stripStart line) diagnosticLabels
+    diagnosticLabels = ["File:", "Hidden:", "Range:", "Source:", "Severity:", "Code:", "Message:"]
+    normalizeSpaces line =
+      let (indent, rest) = Text.span (== ' ') line
+      in indent <> Text.unwords (Text.words rest)
+
+-- | String version of targeted whitespace normalization
+normalizeWhitespaceString :: String -> String
+normalizeWhitespaceString = unlines . map normalizeLine . lines
+  where
+    normalizeLine line
+      | isDiagnosticLabel line = normalizeSpaces line
+      | otherwise = line
+    isDiagnosticLabel line = any (`List.isPrefixOf` dropWhile (== ' ') line) diagnosticLabels
+    diagnosticLabels = ["File:", "Hidden:", "Range:", "Source:", "Severity:", "Code:", "Message:"]
+    normalizeSpaces line =
+      let (indent, rest) = span (== ' ') line
+      in indent ++ unwords (words rest)
 
 checkFile :: JL4Lazy.EvalConfig -> Bool -> FilePath -> IO ()
 checkFile evalConfig isOk file = do

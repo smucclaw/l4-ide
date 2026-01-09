@@ -47,6 +47,7 @@ import           Language.LSP.Protocol.Lens     (data_)
 import           Language.LSP.Protocol.Types    as LSP
 import           Prettyprinter
 import           Type.Reflection
+import           System.FilePath                (takeFileName)
 
 
 -- | The result of an IDE operation. Warnings and errors are in the Diagnostic,
@@ -218,10 +219,21 @@ prettyRange Range{..} = f _start <> "-" <> f _end
 prettyDiagnostics :: [FileDiagnostic] -> Doc a
 prettyDiagnostics = vcat . map prettyDiagnostic
 
+-- | Extract just the filename from a NormalizedUri for display purposes.
+-- This ensures consistent output across platforms by removing absolute path prefixes.
+uriFileName :: NormalizedUri -> T.Text
+uriFileName nuri =
+    let uri = fromNormalizedUri nuri
+    in case uriToFilePath' uri of
+        Just fp -> T.pack (takeFileName fp)
+        Nothing -> case T.stripPrefix "file://" (uri.getUri) of
+            Just path -> T.pack (takeFileName (T.unpack path))
+            Nothing -> uri.getUri
+
 prettyDiagnostic :: FileDiagnostic -> Doc a
 prettyDiagnostic FileDiagnostic { fdFilePath, fdShouldShowDiagnostic, fdLspDiagnostic = LSP.Diagnostic{..} } =
     hang 2 $ vcat
-        [ slabel_ "File:    " $ pretty fdFilePath
+        [ slabel_ "File:    " $ pretty (uriFileName fdFilePath)
         , slabel_ "Hidden:  " $ if fdShouldShowDiagnostic == ShowDiag then "no" else "yes"
         , slabel_ "Range:   " $ prettyRange _range
         , slabel_ "Source:  " $ pretty _source
