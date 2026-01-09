@@ -91,7 +91,7 @@ jobs:
           fi
 
           # Expected executables
-          EXPECTED="jl4-cli jl4-schema jl4-lsp jl4-repl jl4-decision-service-exe jl4-websessions"
+          EXPECTED="jl4-cli jl4-schema jl4-lsp jl4-repl jl4-decision-service jl4-websessions"
           echo "Expected executables: $EXPECTED"
 
           # Check each expected executable

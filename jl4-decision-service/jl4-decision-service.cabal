@@ -104,7 +104,7 @@ library
     warp,
     yaml,
 
-executable jl4-decision-service-exe
+executable jl4-decision-service
   import: defaults
   main-is: Main.hs
   other-modules:
