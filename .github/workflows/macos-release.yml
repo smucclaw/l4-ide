@@ -1,4 +1,4 @@
-name: macOS Release (Apple Silicon)
+name: macOS Release (Multi-Architecture)
 
 on:
   push:
@@ -30,12 +30,18 @@ on:
 
 jobs:
   build-macos:
-    name: Build macOS Release - Apple Silicon - GHC ${{ matrix.ghc-version }}
-    runs-on: macos-latest # Free runner (currently macos-14 = M1)
+    name: Build macOS Release - ${{ matrix.arch }} - GHC ${{ matrix.ghc-version }}
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
-        ghc-version: ["9.6.6"]
+        include:
+          - arch: arm64
+            runner: macos-latest  # M1/M2 Apple Silicon
+            ghc-version: "9.6.6"
+          - arch: x86_64
+            runner: macos-13      # Intel
+            ghc-version: "9.6.6"
 
     steps:
       - name: Checkout code
@@ -61,7 +67,7 @@ jobs:
         uses: actions/cache/restore@v4
         id: cache
         env:
-          key: ${{ runner.os }}-arm64-ghc-${{ steps.setup.outputs.ghc-version }}-cabal-${{ steps.setup.outputs.cabal-version }}
+          key: ${{ runner.os }}-${{ matrix.arch }}-ghc-${{ steps.setup.outputs.ghc-version }}-cabal-${{ steps.setup.outputs.cabal-version }}
         with:
           path: ${{ steps.setup.outputs.cabal-store }}
           key: ${{ env.key }}-plan-${{ hashFiles('**/plan.json') }}
@@ -126,7 +132,7 @@ jobs:
 
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION" > release/VERSION.txt
-          echo "Platform: macOS Apple Silicon (arm64)" >> release/VERSION.txt
+          echo "Architecture: ${{ matrix.arch }}" >> release/VERSION.txt
           echo "Build Date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> release/VERSION.txt
           echo "Commit: ${{ github.sha }}" >> release/VERSION.txt
           echo "GHC Version: ${{ matrix.ghc-version }}" >> release/VERSION.txt
@@ -135,10 +141,18 @@ jobs:
 
       - name: Create README for release
         run: |
-          cat > release/README.md << 'EOF'
-          # L4 IDE - macOS Release (Apple Silicon)
+          if [[ "${{ matrix.arch }}" == "arm64" ]]; then
+            ARCH_DESC="Apple Silicon (M1/M2/M3/M4)"
+            MACOS_REQ="macOS 11.0 (Big Sur) or later"
+          else
+            ARCH_DESC="Intel"
+            MACOS_REQ="macOS 10.15 (Catalina) or later"
+          fi
 
-          This is a macOS build of the L4 IDE and related tools for Apple Silicon (M1/M2/M3/M4) Macs.
+          cat > release/README.md << EOF
+          # L4 IDE - macOS Release ($ARCH_DESC)
+
+          This is a macOS build of the L4 IDE and related tools for $ARCH_DESC Macs.
 
           ## Included Executables
 
@@ -152,49 +166,49 @@ jobs:
           ## Quick Start
 
           1. Extract the archive:
-             ```bash
-             tar -xzf l4-ide-macos-arm64-*.tar.gz
-             cd l4-ide-macos-arm64
-             ```
+             \`\`\`bash
+             tar -xzf l4-ide-macos-${{ matrix.arch }}-*.tar.gz
+             cd l4-ide-macos-${{ matrix.arch }}
+             \`\`\`
 
           2. Add the bin directory to your PATH:
-             ```bash
-             export PATH="$PWD/bin:$PATH"
-             ```
+             \`\`\`bash
+             export PATH="\$PWD/bin:\$PATH"
+             \`\`\`
 
           3. Verify installation:
-             ```bash
+             \`\`\`bash
              jl4-cli --help
-             ```
+             \`\`\`
 
           ## Requirements
 
-          - macOS 11.0 (Big Sur) or later
-          - Apple Silicon Mac (M1/M2/M3/M4)
+          - $MACOS_REQ
+          - Architecture: ${{ matrix.arch }}
           - No additional runtime dependencies required
 
           ## Installation
 
           ### Using Homebrew (recommended - coming soon)
-          ```bash
+          \`\`\`bash
           brew tap smucclaw/l4
           brew install l4-ide
-          ```
+          \`\`\`
 
           ### Manual Installation
 
           #### System-wide (requires sudo)
-          ```bash
+          \`\`\`bash
           sudo cp bin/* /usr/local/bin/
-          ```
+          \`\`\`
 
           #### User installation
-          ```bash
+          \`\`\`bash
           mkdir -p ~/.local/bin
           cp bin/* ~/.local/bin/
           # Add to ~/.zshrc:
-          export PATH="$HOME/.local/bin:$PATH"
-          ```
+          export PATH="\$HOME/.local/bin:\$PATH"
+          \`\`\`
 
           ## First Run
 
@@ -207,9 +221,9 @@ jobs:
           4. Try running again and click "Open"
 
           Or use the command line to bypass Gatekeeper:
-          ```bash
+          \`\`\`bash
           xattr -dr com.apple.quarantine bin/*
-          ```
+          \`\`\`
 
           ## Documentation
 
@@ -229,21 +243,21 @@ jobs:
 
           # Create tar.gz archive
           cd release
-          tar -czf "../l4-ide-macos-arm64-${VERSION}.tar.gz" *
+          tar -czf "../l4-ide-macos-${{ matrix.arch }}-${VERSION}.tar.gz" *
           cd ..
 
           # Verify archive
           echo "Archive contents:"
-          tar -tzf "l4-ide-macos-arm64-${VERSION}.tar.gz" | head -20
+          tar -tzf "l4-ide-macos-${{ matrix.arch }}-${VERSION}.tar.gz" | head -20
 
           # Get file size
-          ls -lh l4-ide-macos-arm64-*.tar.gz
+          ls -lh l4-ide-macos-${{ matrix.arch }}-*.tar.gz
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: l4-ide-macos-arm64-${{ steps.version.outputs.VERSION }}
-          path: l4-ide-macos-arm64-*.tar.gz
+          name: l4-ide-macos-${{ matrix.arch }}-${{ steps.version.outputs.VERSION }}
+          path: l4-ide-macos-${{ matrix.arch }}-*.tar.gz
           retention-days: 30
 
       - name: Create GitHub Release
@@ -253,11 +267,11 @@ jobs:
           tag_name: ${{ steps.version.outputs.VERSION }}
           name: L4 IDE ${{ steps.version.outputs.VERSION }}
           body: |
-            ## L4 IDE - macOS Release (Apple Silicon)
+            ## L4 IDE - macOS Release (${{ matrix.arch }})
 
             macOS binaries for the L4 Domain-Specific Language for Law.
 
-            **Platform:** Apple Silicon (M1/M2/M3/M4) Macs
+            **Architecture:** ${{ matrix.arch }}
 
             ### What's Included
 
@@ -270,16 +284,16 @@ jobs:
 
             ### Installation
 
-            1. Download `l4-ide-macos-arm64-*.tar.gz`
-            2. Extract: `tar -xzf l4-ide-macos-arm64-*.tar.gz`
-            3. Allow execution: `xattr -dr com.apple.quarantine l4-ide-macos-arm64/bin/*`
-            4. Add to PATH: `export PATH="$PWD/l4-ide-macos-arm64/bin:$PATH"`
+            1. Download `l4-ide-macos-${{ matrix.arch }}-*.tar.gz`
+            2. Extract: `tar -xzf l4-ide-macos-${{ matrix.arch }}-*.tar.gz`
+            3. Allow execution: `xattr -dr com.apple.quarantine l4-ide-macos-${{ matrix.arch }}/bin/*`
+            4. Add to PATH: `export PATH="$PWD/l4-ide-macos-${{ matrix.arch }}/bin:$PATH"`
             5. Verify: `jl4-cli --help`
 
             ### Requirements
 
-            - macOS 11.0 (Big Sur) or later
-            - Apple Silicon Mac (M1/M2/M3/M4)
+            - macOS 10.15+ (Intel) or macOS 11.0+ (Apple Silicon)
+            - Architecture: ${{ matrix.arch }}
             - No additional runtime dependencies required
 
             ### First Run Security Note
@@ -293,7 +307,7 @@ jobs:
 
             ### Build Information
 
-            - **Platform:** macOS Apple Silicon (arm64)
+            - **Architecture:** ${{ matrix.arch }}
             - **GHC Version:** ${{ matrix.ghc-version }}
             - **Commit:** ${{ github.sha }}
             - **Build Date:** ${{ github.event.head_commit.timestamp }}
@@ -309,7 +323,7 @@ jobs:
 
             Generated with [GitHub Actions](https://github.com/smucclaw/l4-ide/actions)
           files: |
-            l4-ide-macos-arm64-*.tar.gz
+            l4-ide-macos-${{ matrix.arch }}-*.tar.gz
           draft: false
           prerelease: false
         env:
@@ -317,9 +331,9 @@ jobs:
 
       - name: Build summary
         run: |
-          echo "## macOS Build Summary (Apple Silicon)" >> $GITHUB_STEP_SUMMARY
+          echo "## macOS Build Summary (${{ matrix.arch }})" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Platform:** macOS Apple Silicon (arm64)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Architecture:** ${{ matrix.arch }}" >> $GITHUB_STEP_SUMMARY
           echo "- **GHC Version:** ${{ matrix.ghc-version }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -330,5 +344,5 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Archive" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          ls -lh l4-ide-macos-arm64-*.tar.gz >> $GITHUB_STEP_SUMMARY || echo "No archive created" >> $GITHUB_STEP_SUMMARY
+          ls -lh l4-ide-macos-${{ matrix.arch }}-*.tar.gz >> $GITHUB_STEP_SUMMARY || echo "No archive created" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
