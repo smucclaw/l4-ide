@@ -87,10 +87,10 @@ l4Golden evalConfig isOk dir inputFile = do
   (output, _) <- capture (checkFile evalConfig isOk inputFile)
   pure
     Golden
-      { output = stripAnsiCodesString output
+      { output = normalizeWhitespaceString $ stripAnsiCodesString output
       , encodePretty = show
       , writeToFile = writeFile
-      , readFromFile = fmap stripAnsiCodesString . readFile
+      , readFromFile = fmap (normalizeWhitespaceString . stripAnsiCodesString) . readFile
       , goldenFile = dir </> (takeFileName inputFile -<.> "golden")
       , actualFile = Just (dir </> (takeFileName inputFile -<.> "actual"))
       , failFirstTime = True
@@ -104,15 +104,15 @@ jl4ExactPrintGolden evalConfig dir inputFile = do
     Shake.use Rules.ExactPrint uri
 
   -- NOTE: we sort the output, because the traces are concurrent and might not be in order
-  -- Strip ANSI codes from both success and error paths for cross-platform consistency
-  let output = stripAnsiCodes $ fromMaybe (sanitizeFilePaths $ mconcat errs) moutput
+  -- Strip ANSI codes and normalize whitespace for cross-platform consistency
+  let output = normalizeWhitespace $ stripAnsiCodes $ fromMaybe (sanitizeFilePaths $ mconcat errs) moutput
 
   pure
     Golden
       { output
       , encodePretty = Text.unpack
       , writeToFile = Text.writeFile
-      , readFromFile = fmap stripAnsiCodes . Text.readFile
+      , readFromFile = fmap (normalizeWhitespace . stripAnsiCodes) . Text.readFile
       , goldenFile = dir </> (takeFileName inputFile -<.> "ep.golden")
       , actualFile = Just (dir </> (takeFileName inputFile -<.> "ep.actual"))
       , failFirstTime = True
@@ -132,8 +132,8 @@ jl4NlgAnnotationsGolden evalConfig isOk dir inputFile = do
             directives = toListOf (gplate @(Directive Resolved)) mod'
           in
             Text.unlines $ fmap Nlg.simpleLinearizer directives
-  -- Strip ANSI codes for cross-platform consistency
-  let output = stripAnsiCodes $
+  -- Strip ANSI codes and normalize whitespace for cross-platform consistency
+  let output = normalizeWhitespace $ stripAnsiCodes $
         if isOk
           then output_
           else output_ <> "\n" <> Text.unlines (fmap (Text.strip . sanitizeFilePaths) errs)
@@ -142,7 +142,7 @@ jl4NlgAnnotationsGolden evalConfig isOk dir inputFile = do
       { output
       , encodePretty = Text.unpack
       , writeToFile = Text.writeFile
-      , readFromFile = fmap stripAnsiCodes . Text.readFile
+      , readFromFile = fmap (normalizeWhitespace . stripAnsiCodes) . Text.readFile
       , goldenFile = dir </> takeFileName inputFile -<.> "nlg.golden"
       , actualFile = Just (dir </> takeFileName inputFile -<.> "nlg.actual")
       , failFirstTime = True
@@ -243,6 +243,25 @@ stripAnsiCodesGo :: String -> String
 stripAnsiCodesGo [] = []
 stripAnsiCodesGo ('\x1b':'[':rest) = stripAnsiCodesGo (drop 1 $ dropWhile (/= 'm') rest)
 stripAnsiCodesGo (c:cs) = c : stripAnsiCodesGo cs
+
+-- | Normalize whitespace: collapse multiple spaces to single space within lines.
+-- Preserves leading indentation and line structure.
+normalizeWhitespace :: Text -> Text
+normalizeWhitespace = Text.unlines . map normalizeLine . Text.lines
+  where
+    normalizeLine line =
+      let (indent, rest) = Text.span (== ' ') line
+      in indent <> collapseSpaces rest
+    collapseSpaces = Text.unwords . Text.words
+
+-- | String version of whitespace normalization
+normalizeWhitespaceString :: String -> String
+normalizeWhitespaceString = unlines . map normalizeLine . lines
+  where
+    normalizeLine line =
+      let (indent, rest) = span (== ' ') line
+      in indent ++ collapseSpaces rest
+    collapseSpaces = unwords . words
 
 checkFile :: JL4Lazy.EvalConfig -> Bool -> FilePath -> IO ()
 checkFile evalConfig isOk file = do
