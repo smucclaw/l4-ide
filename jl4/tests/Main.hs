@@ -244,24 +244,34 @@ stripAnsiCodesGo [] = []
 stripAnsiCodesGo ('\x1b':'[':rest) = stripAnsiCodesGo (drop 1 $ dropWhile (/= 'm') rest)
 stripAnsiCodesGo (c:cs) = c : stripAnsiCodesGo cs
 
--- | Normalize whitespace: collapse multiple spaces to single space within lines.
--- Preserves leading indentation and line structure.
+-- | Normalize whitespace only on diagnostic label lines.
+-- This is a targeted fix for cross-platform prettyprinter differences
+-- without affecting L4's whitespace-sensitive output.
 normalizeWhitespace :: Text -> Text
 normalizeWhitespace = Text.unlines . map normalizeLine . Text.lines
   where
-    normalizeLine line =
+    normalizeLine line
+      | isDiagnosticLabel line = normalizeSpaces line
+      | otherwise = line
+    -- Only normalize lines that look like diagnostic labels
+    isDiagnosticLabel line = any (`Text.isPrefixOf` Text.stripStart line) diagnosticLabels
+    diagnosticLabels = ["File:", "Hidden:", "Range:", "Source:", "Severity:", "Code:", "Message:"]
+    normalizeSpaces line =
       let (indent, rest) = Text.span (== ' ') line
-      in indent <> collapseSpaces rest
-    collapseSpaces = Text.unwords . Text.words
+      in indent <> Text.unwords (Text.words rest)
 
--- | String version of whitespace normalization
+-- | String version of targeted whitespace normalization
 normalizeWhitespaceString :: String -> String
 normalizeWhitespaceString = unlines . map normalizeLine . lines
   where
-    normalizeLine line =
+    normalizeLine line
+      | isDiagnosticLabel line = normalizeSpaces line
+      | otherwise = line
+    isDiagnosticLabel line = any (`List.isPrefixOf` dropWhile (== ' ') line) diagnosticLabels
+    diagnosticLabels = ["File:", "Hidden:", "Range:", "Source:", "Severity:", "Code:", "Message:"]
+    normalizeSpaces line =
       let (indent, rest) = span (== ' ') line
-      in indent ++ collapseSpaces rest
-    collapseSpaces = unwords . words
+      in indent ++ unwords (words rest)
 
 checkFile :: JL4Lazy.EvalConfig -> Bool -> FilePath -> IO ()
 checkFile evalConfig isOk file = do
