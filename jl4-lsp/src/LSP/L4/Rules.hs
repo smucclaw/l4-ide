@@ -356,15 +356,19 @@ jl4Rules evalConfig rootDirectory recorder = do
                 builtinPaths <- liftIO $ do
                   exePath <- getExecutablePath
                   let exeDir = takeDirectory exePath
-                  -- Try various relative paths from the executable:
-                  -- 1. ../libraries (for bundled VSCode extension: bin/<platform>/jl4-lsp -> libraries/)
-                  -- 2. ../share/libraries (alternative bundled layout)
-                  -- 3. Cabal's getDataDir (for development / cabal install)
-                  let bundledPath1 = exeDir </> ".." </> "libraries" </> modName <.> "l4"
-                  let bundledPath2 = exeDir </> ".." </> "share" </> "libraries" </> modName <.> "l4"
+                  -- The VSCode extension structure is:
+                  --   extension/
+                  --   ├── bin/<platform>/jl4-lsp[.exe]  <- executable is here
+                  --   └── libraries/*.l4                <- libraries are here
+                  -- So we need to go up TWO levels (../../) from the executable.
+                  let extensionRoot = exeDir </> ".." </> ".."
+                  -- Try:
+                  -- 1. ../../libraries (for bundled VSCode extension)
+                  -- 2. Cabal's getDataDir (for development / cabal install)
+                  let bundledPath = extensionRoot </> "libraries" </> modName <.> "l4"
                   dataDir <- Paths_jl4_core.getDataDir
                   let cabalPath = dataDir </> "libraries" </> modName <.> "l4"
-                  pure [bundledPath1, bundledPath2, cabalPath]
+                  pure [bundledPath, cabalPath]
 
                 pure $ [Just rootPath, relPath] <> map Just builtinPaths
 
