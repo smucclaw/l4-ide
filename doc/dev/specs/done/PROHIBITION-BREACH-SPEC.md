@@ -1,6 +1,6 @@
 # Specification: MUST NOT (Prohibitions) and BREACH Keywords
 
-**Status:** 📋 DRAFT (December 2025)
+**Status:** ✅ IMPLEMENTED (December 2025 - PR #726)
 **Related:** `doc/regulative.md`, `doc/regulative-spec.org`, `doc/advanced-course-ai/module-a11-regulative-rules.md`
 
 ## Executive Summary
