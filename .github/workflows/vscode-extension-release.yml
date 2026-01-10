@@ -52,11 +52,11 @@ jobs:
           cabal-version: "latest"
           cabal-update: true
 
-      - name: Configure and build
+      - name: Configure and generate build plan
         run: |
           cabal update
           cabal configure --disable-tests --disable-documentation
-          cabal build exe:jl4-lsp
+          cabal build exe:jl4-lsp --dry-run
 
       - name: Restore cached dependencies
         uses: actions/cache/restore@v4
