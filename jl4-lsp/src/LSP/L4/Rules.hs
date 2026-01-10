@@ -48,6 +48,7 @@ import qualified Language.LSP.Protocol.Types as LSP
 import Data.Either (partitionEithers)
 import qualified Data.List as List
 import System.Directory
+import System.Environment (getExecutablePath)
 import qualified Paths_jl4_core
 import qualified L4.Utils.IntervalMap as IV
 import UnliftIO
@@ -349,11 +350,23 @@ jl4Rules evalConfig rootDirectory recorder = do
 
                 let rootPath = rootDirectory </> modName <.> "l4"
 
-                builtinPath <- do
-                  dataDir <- liftIO Paths_jl4_core.getDataDir
-                  pure $ dataDir </> "libraries" </> modName <.> "l4"
+                -- Look for bundled libraries relative to the executable first
+                -- This handles the VSCode extension case where libraries are bundled
+                -- alongside the binary. Fall back to Cabal's data-dir for development.
+                builtinPaths <- liftIO $ do
+                  exePath <- getExecutablePath
+                  let exeDir = takeDirectory exePath
+                  -- Try various relative paths from the executable:
+                  -- 1. ../libraries (for bundled VSCode extension: bin/<platform>/jl4-lsp -> libraries/)
+                  -- 2. ../share/libraries (alternative bundled layout)
+                  -- 3. Cabal's getDataDir (for development / cabal install)
+                  let bundledPath1 = exeDir </> ".." </> "libraries" </> modName <.> "l4"
+                  let bundledPath2 = exeDir </> ".." </> "share" </> "libraries" </> modName <.> "l4"
+                  dataDir <- Paths_jl4_core.getDataDir
+                  let cabalPath = dataDir </> "libraries" </> modName <.> "l4"
+                  pure [bundledPath1, bundledPath2, cabalPath]
 
-                pure [Just rootPath, relPath, Just builtinPath]
+                pure $ [Just rootPath, relPath] <> map Just builtinPaths
 
               logWith recorder Debug $ LogImportResolution $
                 "Checking filesystem paths: " <> Text.intercalate ", " (map Text.pack paths)

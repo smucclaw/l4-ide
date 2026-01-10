@@ -374,6 +374,13 @@ jobs:
         if: matrix.target != 'win32-x64'
         run: chmod +x ts-apps/vscode/bin/${{ matrix.target }}/${{ matrix.binary }}
 
+      - name: Copy L4 libraries
+        run: |
+          mkdir -p ts-apps/vscode/libraries
+          cp jl4-core/libraries/*.l4 ts-apps/vscode/libraries/
+          echo "L4 libraries:"
+          ls -lh ts-apps/vscode/libraries/
+
       - name: Verify binary
         run: |
           echo "Binary location:"
@@ -452,6 +459,13 @@ jobs:
           chmod +x linux-arm64/jl4-lsp
           echo "All binaries:"
           find . -type f -ls
+
+      - name: Copy L4 libraries
+        run: |
+          mkdir -p ts-apps/vscode/libraries
+          cp jl4-core/libraries/*.l4 ts-apps/vscode/libraries/
+          echo "L4 libraries:"
+          ls -lh ts-apps/vscode/libraries/
 
       - name: Package all-platforms extension
         working-directory: ts-apps/vscode
