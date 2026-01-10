@@ -1,12 +1,6 @@
 name: Windows Build Test
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - "jl4*/**"
-      - "cabal.project"
-      - ".github/workflows/windows-*.yml"
   workflow_dispatch:
 
 # Only run one build per PR to save resources
