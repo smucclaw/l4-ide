@@ -1,131 +1,109 @@
-# jl4 LSP Client
+# L4 Rules-as-code Language Support
 
-This is the VSCode LSP client for `jl4` programs.
-It includes a webview extension designed to visualize L4 programs as ladder diagrams.
+Language support for L4 rules-as-code functional programming language with syntax highlighting, IntelliSense, and ladder diagram visualization.
 
-## Running the Extension
+Documentation: https://l4.legalese.com
 
-From the root directory:
+## Features
+
+- **Syntax Highlighting**: Full support for L4 syntax with proper color coding
+- **Language Server Protocol (LSP)**: Advanced language features including:
+  - IntelliSense and autocompletion
+  - Error detection and diagnostics
+  - Code navigation
+  - Symbol search
+- **Ladder Diagram Visualization**: Interactive visualization of L4 rules as ladder diagrams
+  - Real-time updates as you edit your code
+  - Visual representation of logical relationships
+  - Interactive exploration of rule structures
+
+## What is L4?
+
+L4 is a domain-specific language designed for expressing legal logic and rules in a formal, computable way. It allows legal professionals and developers to:
+
+- Write legal rules in a structured, unambiguous format
+- Visualize complex legal logic through ladder diagrams
+- Validate legal reasoning through formal methods
+- Generate executable code from legal specifications
+
+## Getting Started
+
+1. **Install the Extension**: Install this extension from the VS Code marketplace
+2. **Open an L4 File**: Create or open a file with the `.l4` extension
+3. **Configure the Language Server**: The extension requires the `jl4-lsp` language server
+
+### Language Server Setup
+
+**Platform-specific versions (recommended):** If you installed a platform-specific version of the extension (e.g., for macOS ARM64, Windows x64, etc.), the `jl4-lsp` language server is bundled and ready to use—no additional setup required!
+
+**Universal version:** If you installed the universal extension, or if the bundled binary is not available for your platform, install the language server:
 
 ```bash
-npm ci # if you haven't installed already
-code .
-# In VSCode, press 'F5'
+cabal install exe:jl4-lsp --overwrite-policy=always
 ```
 
-Pressing 'F5' will launch an `Extension Development Host` Editor with the extension installed.
-
-Make sure to open the root directory of this project in VSCode, to make sure `.vscode/launch.json` is picked up.
-
-### Installing the Extension
-
-1. Install dependencies and build the project
-
-It is best to install starting from the root directory.
-
-```bash
-npm ci
-npm run build
-```
-
-2. Package the extension
-
-From this (i.e., the `vscode`) directory:
-
-```bash
-npm run package
-```
-
-(If you get a `npm error Missing script: "package"` error,
-that means you aren't in the right directory.)
-
-3. Install the extension
-   The extension will be packaged as `l4-vscode-1.0.0`. Open VSCode, select the _Install from VSIX_ option, and install the file.
-
-   > Note: After installation, the extension might initially appear inactive. To activate it, load or write an L4 rule (see details below).
-
-   You can also install the extension from the command line with `code --install-extension *.vsix`.
-
-### Configuring the Language Server
-
-**Platform-specific builds:** If you're using a platform-specific build of the extension (available via GitHub releases), the `jl4-lsp` binary is bundled and no additional configuration is needed.
-
-**Universal builds / Development:** The extension expects to find `jl4-lsp` on the `$PATH`. Install it via:
-
-```sh
-$ cabal install exe:jl4-lsp --overwrite-policy=always
-```
-
-and make sure `cabal`'s `/bin` directory is part of your `$PATH`.
-
-Alternatively, you can specify the location of the binary via `.vscode/settings.json` like this:
+Alternatively, specify the path manually in VS Code settings:
 
 ```json
 {
-  "jl4.serverExecutablePath": "<path-to-jl4-lsp>"
+  "jl4.serverExecutablePath": "/path/to/jl4-lsp"
 }
 ```
 
-#### Binary Resolution Order
+#### macOS Security Note
 
-The extension looks for the language server in this order:
-
-1. User-configured path via `jl4.serverExecutablePath` setting
-2. Bundled binary at `<extension>/bin/<platform>-<arch>/jl4-lsp[.exe]`
-3. `jl4-lsp` on the system PATH
-
-#### Supported Bundled Platforms
-
-- `darwin-arm64` (macOS Apple Silicon - also works on Intel Macs via Rosetta 2)
-- `win32-x64` (Windows x64)
-- `linux-x64` (Linux x64)
-- `linux-arm64` (Linux ARM64)
-
-> **Note for Intel Mac users:** macOS x64 runners are no longer available on GitHub Actions.
-> Intel Mac users can either use the ARM64 build (runs via Rosetta 2) or install `jl4-lsp` manually.
-
-### Development
-
-It can be faster for development to use a workflow as follows:
-
-```sh
-cabal build exe:jl4-lsp
-cabal list-bin exe:jl4-lsp
-```
-
-and use the obtained path for `"jl4.serverExecutablePath": "<path-to-jl4-lsp>"`.
-Running `cabal build exe:jl4-lsp` and restarting the `Extension Development Host` Editor is sufficient to use the latest version of the JL4 Language Server.
-
-## Features and Functionalities
-
-### Ladder Diagram
-
-The extension uses a VSCode webview to render L4 rules as ladder diagrams, displaying them in a panel next to the editor. This setup enables the extension to update the visualisation dynamically, reflecting any changes made to the rules in real time.
-
-### Displaying the Diagram
-
-After opening a .l4 file, to visualize an eligible rule as a ladder diagram, click on the "Visualize" or "Simplify and visualize" codelens above the L4 expression you want to visualize.
-
-## More build / config notes
-
-### lib, DOM
-
-Jan 20 2025, tsconfig.json: `"DOM"` had to be added to the value for `lib` to avoid issues like the following
+On first run, macOS may block the bundled binary. To allow it, run:
 
 ```bash
-┌ l4-vscode#build > cache miss, executing a18c902b9c9c2a55
-│
-│
-│ > l4-vscode@1.0.0 build
-│ > tsc -b tsconfig.json && npm run esbuild-base
-│
-│ ../../node_modules/@types/d3-drag/index.d.ts:14:38 - error TS2304: Cannot find name 'Element'.
-│
-│ 14 export type DraggedElementBaseType = Element;
-│                                         ~~~~~~~
-│
-│ ../../node_modules/@types/d3-drag/index.d.ts:19:36 - error TS2304: Cannot find name 'HTMLElement'.
-│
-│ 19 export type DragContainerElement = HTMLElement | SVGSVGElement | SVGGElement; // HTMLElement inclu
-│ des HTMLCanvasElement
+xattr -dr com.apple.quarantine ~/.vscode/extensions/legalese.l4-vscode-*/bin/darwin-*/jl4-lsp
 ```
+
+## Using the Visualization
+
+1. Open an L4 file containing rules
+2. Look for "Visualize" or "Simplify and visualize" codelens above L4 expressions
+3. Click on the codelens to open the ladder diagram visualization
+4. The diagram will update automatically as you edit your code
+
+## Example L4 Code
+
+```l4
+DECLARE Person
+  HAS name    IS A STRING
+      age     IS A NUMBER
+      country IS A STRING
+
+GIVEN p IS A Person
+GIVETH A BOOLEAN
+DECIDE `is adult` p IF p's age >= 18
+
+GIVEN p IS A Person
+GIVETH A BOOLEAN
+DECIDE `can vote` p IF
+  `is adult` p
+  AND p's country = "UK"
+```
+
+## Requirements
+
+- VS Code 1.94.0 or higher
+- `jl4-lsp` language server (see setup instructions above)
+
+## Configuration
+
+The extension provides several configuration options:
+
+- `jl4.serverExecutablePath`: Path to the jl4-lsp executable
+- `jl4.trace.server`: Enable server communication tracing (off/messages/verbose)
+
+## Contributing
+
+This extension is part of the L4 IDE project. For issues, feature requests, or contributions, please visit the project repository.
+
+## License
+
+Apache 2.0 - See license file for details.
+
+## Support
+
+For support and documentation, please refer to the L4 project documentation and community resources.
