@@ -281,6 +281,53 @@ DECIDE eligible IF
     AND NOT `has disqualifying record` employee
 ```
 
+### Inert Elements: Grammatical Scaffolding
+
+Legal documents often contain phrases that provide context but don't affect the logical outcome. L4 supports **inert elements**—bare string literals in boolean context that serve as grammatical scaffolding:
+
+```l4
+DECIDE `contract valid` IF
+        "notwithstanding any provision to the contrary"
+    AND `parties have capacity`
+    AND `consideration present`
+```
+
+The string `"notwithstanding..."` evaluates to `TRUE` in the AND chain (the identity for AND), so it doesn't affect the result. In an OR chain, such strings evaluate to `FALSE` (the identity for OR).
+
+This feature enables L4 code that closely mirrors the structure of source legal documents while maintaining correct logical behavior.
+
+### Asyndetic Conjunction (`...`)
+
+L4 supports **asyndetic conjunction**—implicit AND without repeating the keyword. The **ellipsis (`...`)** is the _syntax_ (what you type); **asyndetic conjunction** is the _semantics_ (what it means).
+
+An _asyndeton_ is a rhetorical device where conjunctions are deliberately omitted, as in "I came, I saw, I conquered" (instead of "I came _and_ I saw _and_ I conquered").
+
+```l4
+DECIDE `rule applies` IF
+        "subject to the following conditions"
+    ... `condition one`
+    ... `condition two`
+    AND `condition three`
+```
+
+This is equivalent to writing `AND` before each condition.
+
+### Asyndetic Disjunction (`..`)
+
+For symmetry, L4 also supports **asyndetic disjunction** using **two dots (`..`)** for implicit OR:
+
+```l4
+DECIDE `qualifies` IF
+        `has license`
+    ..  `has permit`
+    OR  `has exemption`
+```
+
+| Syntax             | Semantics    |
+| ------------------ | ------------ |
+| `...` (three dots) | Implicit AND |
+| `..` (two dots)    | Implicit OR  |
+
 ## Comparison Operators
 
 | L4 Syntax      | Meaning  | JavaScript |

@@ -159,6 +159,56 @@ This creates nested list types (`LIST OF LIST OF ...`) instead of a flat list.
 
 **Note:** `FOLLOWED BY` is the cons operator for building lists recursively, not for writing list literals. The vertical block syntax is preferred for its clarity and consistency with other L4 constructs like `CONSIDER` and `DECLARE ... HAS`.
 
+## Asyndetic Conjunction (`...`)
+
+An **asyndeton** is a rhetorical device where conjunctions are deliberately omitted between items in a list (e.g., "I came, I saw, I conquered" instead of "I came and I saw and I conquered").
+
+L4 supports **asyndetic conjunction**—continuing an AND chain without repeating the conjunction keyword. The **syntax** for this is the **ellipsis** (`...`), three dots that represent an implicit AND:
+
+- **Ellipsis (`...`)** — the _syntax_: the three-dot symbol you type
+- **Asyndetic conjunction** — the _semantics_: the implicit AND meaning
+
+Using the ellipsis syntax, you can continue boolean expressions without repeating the `AND` keyword:
+
+```l4
+DECIDE `rule applies` IF
+        "subject to"
+    ... `condition one`
+    ... `condition two`
+    AND `condition three`
+```
+
+This is equivalent to:
+
+```l4
+DECIDE `rule applies` IF
+        "subject to"
+    AND `condition one`
+    AND `condition two`
+    AND `condition three`
+```
+
+The `...` syntax is particularly useful when combined with [inert elements](10-boolean-logic.md#inert-elements-grammatical-scaffolding) to create readable, natural-language-like boolean expressions that mirror the structure of legal documents.
+
+## Asyndetic Disjunction (`..`)
+
+For symmetry, L4 also provides a **two-dot ellipsis (`..`)** for **asyndetic disjunction** (implicit OR):
+
+- **Two-dot ellipsis (`..`)** — the _syntax_: two dots for implicit OR
+- **Asyndetic disjunction** — the _semantics_: continuing an OR chain without repeating the keyword
+
+```l4
+DECIDE `qualifies` IF
+        `has license`
+    ..  `has permit`
+    OR  `has exemption`
+```
+
+| Syntax             | Semantics                            |
+| ------------------ | ------------------------------------ |
+| `...` (three dots) | Implicit AND (asyndetic conjunction) |
+| `..` (two dots)    | Implicit OR (asyndetic disjunction)  |
+
 ## Ditto Syntax
 
 Strunk & White said: "Omit needless words". Edward Tufte talked about "data-ink".

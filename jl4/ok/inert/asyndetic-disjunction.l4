@@ -1,0 +1,70 @@
+-- Test file for asyndetic disjunction (`..` syntax)
+-- `..` is syntactic sugar for OR, just as `...` is syntactic sugar for AND
+
+-- Basic test: `..` as implicit OR
+GIVEN a IS A BOOLEAN
+      b IS A BOOLEAN
+      c IS A BOOLEAN
+DECIDE `basic or` IF
+        a
+    ..  b
+    OR  c
+
+#EVAL `basic or` TRUE FALSE FALSE
+-- Expected: TRUE (a is TRUE)
+
+#EVAL `basic or` FALSE TRUE FALSE
+-- Expected: TRUE (b is TRUE via ..)
+
+#EVAL `basic or` FALSE FALSE TRUE
+-- Expected: TRUE (c is TRUE)
+
+#EVAL `basic or` FALSE FALSE FALSE
+-- Expected: FALSE (all FALSE)
+
+-- Mixed test: combining `...` (AND) and `..` (OR)
+GIVEN x IS A BOOLEAN
+      y IS A BOOLEAN
+      z IS A BOOLEAN
+DECIDE `mixed ellipsis` IF
+        x
+    AND     y
+        ..  z
+
+#EVAL `mixed ellipsis` TRUE TRUE FALSE
+-- Expected: TRUE (x AND y)
+
+#EVAL `mixed ellipsis` TRUE FALSE TRUE
+-- Expected: TRUE (x AND z via ..)
+
+#EVAL `mixed ellipsis` TRUE FALSE FALSE
+-- Expected: FALSE (x is TRUE but neither y nor z)
+
+#EVAL `mixed ellipsis` FALSE TRUE TRUE
+-- Expected: FALSE (x is FALSE)
+
+-- Chained `..` test
+GIVEN p IS A BOOLEAN
+      q IS A BOOLEAN
+      r IS A BOOLEAN
+      s IS A BOOLEAN
+DECIDE `chained or` IF
+        p
+    ..  q
+    ..  r
+    OR  s
+
+#EVAL `chained or` TRUE FALSE FALSE FALSE
+-- Expected: TRUE
+
+#EVAL `chained or` FALSE TRUE FALSE FALSE
+-- Expected: TRUE
+
+#EVAL `chained or` FALSE FALSE TRUE FALSE
+-- Expected: TRUE
+
+#EVAL `chained or` FALSE FALSE FALSE TRUE
+-- Expected: TRUE
+
+#EVAL `chained or` FALSE FALSE FALSE FALSE
+-- Expected: FALSE

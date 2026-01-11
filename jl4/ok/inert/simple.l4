@@ -1,0 +1,34 @@
+-- Test inert expression parsing and evaluation
+
+-- Simple inert at head position
+test1 MEANS ... "hello world" AND TRUE
+
+-- Inert in middle position
+test2 MEANS TRUE AND ... "whether in sickness or in health" AND FALSE
+
+-- Inert at tail position
+test3 MEANS TRUE AND ... "for the avoidance of doubt"
+
+-- Multiple inerts
+test4 MEANS ... "notwithstanding" AND TRUE AND ... "subject to"
+
+-- Nested with OR, inert at end with AND
+test5 MEANS
+    ... "in accordance with section 1"
+    AND     TRUE
+        OR  FALSE
+    AND ... "where applicable"
+
+-- Nested with OR, inert at end WITHOUT explicit AND (should it group with OR?)
+test6 MEANS
+    ... "in accordance with section 1"
+    AND     TRUE
+        OR  FALSE
+        ... "where applicable"
+
+#EVAL test1
+#EVAL test2
+#EVAL test3
+#EVAL test4
+#EVAL test5
+#EVAL test6

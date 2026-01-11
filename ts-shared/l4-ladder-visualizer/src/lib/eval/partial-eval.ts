@@ -148,6 +148,7 @@ function restrictExpr(expr: IRExpr, assignment: Assignment): IRExpr {
       const args = app.args.map((x) => restrictExpr(x, assignment))
       return { ...app, args }
     })
+    .with({ $type: 'InertE' }, (inert) => inert) // Inert elements pass through unchanged
     .exhaustive()
 }
 
@@ -164,6 +165,7 @@ function exprToText(expr: IRExpr): string {
         const args = app.args.map(go).join(', ')
         return `${app.fnName.label}(${args})`
       })
+      .with({ $type: 'InertE' }, (inert) => `... "${inert.text}"`)
       .exhaustive()
   return go(expr)
 }

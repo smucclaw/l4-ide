@@ -52,6 +52,7 @@ import LSP.L4.Viz.VizExpr
   )
 import qualified LSP.L4.Viz.VizExpr as V
 import qualified LSP.L4.Viz.CustomProtocol as V (EvalAppRequestParams (..))
+import LSP.L4.Viz.VizExpr (InertContext(..))
 import L4.Desugar
 
 ------------------------------------------------------
@@ -340,25 +341,41 @@ translateDecide (MkDecide _ (MkTypeSig _ givenSig _) (MkAppForm _ funResolved ap
         getResolved :: OptionallyTypedName Resolved -> Resolved
         getResolved (MkOptionallyTypedName _ paramName _) = paramName
 
+-- | Context for translating expressions - tracks whether we're inside And or Or
+data TranslateContext = CtxAnd | CtxOr | CtxNone
+  deriving (Eq, Show)
+
 translateExpr :: Bool -> Expr Resolved -> Viz IRExpr
 translateExpr True  =
   translateExpr False . Transform.simplify
-translateExpr False = go
+translateExpr False = go CtxNone
   where
-    go e =
+    go :: TranslateContext -> Expr Resolved -> Viz IRExpr
+    go _ctx e =
       case e of
         Not _ negand -> do
           vid <- getFresh
-          V.Not vid <$> go negand
+          V.Not vid <$> go CtxNone negand
         And {} -> do
           vid <- getFresh
-          V.And vid <$> traverse go (scanAnd e)
+          V.And vid <$> traverse (go CtxAnd) (scanAnd e)
         Or {} -> do
           vid <- getFresh
-          V.Or vid <$> traverse go (scanOr e)
+          V.Or vid <$> traverse (go CtxOr) (scanOr e)
         Where _ e' ds ->
           withLocalDecls ds $
-            go e' -- TODO: lossy
+            go _ctx e' -- TODO: lossy
+
+        -- Inert elements: grammatical scaffolding that evaluates to the identity
+        -- for the containing operator (True for AND, False for OR)
+        -- The context is already determined by desugaring; we just map to VizExpr's InertContext
+        Inert _ txt coreCtx -> do
+          vid <- getFresh
+          let inertCtx = case coreCtx of
+                InertCtxAnd  -> InertAnd   -- evaluates to True (AND identity)
+                InertCtxOr   -> InertOr    -- evaluates to False (OR identity)
+                InertCtxNone -> InertAnd   -- default to AND context (evaluates to True)
+          pure $ V.InertE vid txt inertCtx
 
         -- 'var'
         App _ resolved [] -> do
@@ -385,7 +402,7 @@ translateExpr False = go
               recordAtomInputRefs uniq refs
               functionName <- use #functionName
               let atomId = generateAtomId functionName label refs
-              V.App vid vname <$> traverse go args <*> pure atomId
+              V.App vid vname <$> traverse (go CtxNone) args <*> pure atomId
             else
               leafFromExpr e
 
