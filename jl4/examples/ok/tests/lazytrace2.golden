@@ -9,9 +9,7 @@ lazytrace2.l4:22:1-17:
 lazytrace2.l4:23:1-30:
   5
   ─────
-  ┌ IF y
-  │ THEN 3
-  │ ELSE 5
+  ┌ IF y THEN 3 ELSE 5
   │┌ y
   │└ FALSE│• FALSE
   ├ 5

@@ -5,28 +5,14 @@ ny-environmental-7.3.l4:117:1-23:
   PARTY `The commission`
   MUST `File draft copy of EIS and cause notice of hearing to be published` `Hearing Notice`
                                                                              `Notice of EIS Completion`
-                                                                             `Prepared draft copy of EIS` PROVIDED     (`Hearing Notice`'s `Scheduled date`) AT LEAST ((`Hearing Notice`'s `Publish date`) PLUS 14)
-  AND     (`Hearing Notice`'s `Scheduled date`) AT MOST ((`Hearing Notice`'s `Publish date`) PLUS 60)
-      AND     CONSIDER `Prepared draft copy of EIS` WHEN NOTHING THEN FALSE,
-                                                      WHEN JUST EIS THEN     (`Hearing Notice`'s `Scheduled date`) AT LEAST ((EIS's `Draft filing date`) PLUS 15)
-                                                      AND (`Hearing Notice`'s `Scheduled date`) AT MOST ((EIS's `Draft filing date`) PLUS 60)
-          AND     ((`Hearing Notice`'s `Publishing medium`)'s `General circulation area`) EQUALS (`The action`'s `Potential effect area`)
-              AND     `Hearing Notice`'s `Is in accordance with the requirements of 6 NYCRR 617.10`
-                  AND `Notice of EIS Completion`'s `Is in accordance with the requirements of 6 NYCRR 617.10`
+                                                                             `Prepared draft copy of EIS` PROVIDED (`Hearing Notice`'s `Scheduled date`) AT LEAST ((`Hearing Notice`'s `Publish date`) PLUS 14) AND (`Hearing Notice`'s `Scheduled date`) AT MOST ((`Hearing Notice`'s `Publish date`) PLUS 60) AND CONSIDER `Prepared draft copy of EIS` WHEN NOTHING THEN FALSE, WHEN JUST EIS THEN (`Hearing Notice`'s `Scheduled date`) AT LEAST ((EIS's `Draft filing date`) PLUS 15) AND (`Hearing Notice`'s `Scheduled date`) AT MOST ((EIS's `Draft filing date`) PLUS 60) AND ((`Hearing Notice`'s `Publishing medium`)'s `General circulation area`) EQUALS (`The action`'s `Potential effect area`) AND `Hearing Notice`'s `Is in accordance with the requirements of 6 NYCRR 617.10` AND `Notice of EIS Completion`'s `Is in accordance with the requirements of 6 NYCRR 617.10`
   WITHIN Day OF (`the week after` OF (March OF 2, 2028))
   HENCE FULFILLED
 ny-environmental-7.3.l4:119:1-125:30:
   PARTY Commission OF "A commission"
   MUST `File draft copy of EIS and cause notice of hearing to be published` `Hearing Notice`
                                                                              `Notice of EIS Completion`
-                                                                             `Prepared draft copy of EIS` PROVIDED     (`Hearing Notice`'s `Scheduled date`) AT LEAST ((`Hearing Notice`'s `Publish date`) PLUS 14)
-  AND     (`Hearing Notice`'s `Scheduled date`) AT MOST ((`Hearing Notice`'s `Publish date`) PLUS 60)
-      AND     CONSIDER `Prepared draft copy of EIS` WHEN NOTHING THEN FALSE,
-                                                      WHEN JUST EIS THEN     (`Hearing Notice`'s `Scheduled date`) AT LEAST ((EIS's `Draft filing date`) PLUS 15)
-                                                      AND (`Hearing Notice`'s `Scheduled date`) AT MOST ((EIS's `Draft filing date`) PLUS 60)
-          AND     ((`Hearing Notice`'s `Publishing medium`)'s `General circulation area`) EQUALS (`The action`'s `Potential effect area`)
-              AND     `Hearing Notice`'s `Is in accordance with the requirements of 6 NYCRR 617.10`
-                  AND `Notice of EIS Completion`'s `Is in accordance with the requirements of 6 NYCRR 617.10`
+                                                                             `Prepared draft copy of EIS` PROVIDED (`Hearing Notice`'s `Scheduled date`) AT LEAST ((`Hearing Notice`'s `Publish date`) PLUS 14) AND (`Hearing Notice`'s `Scheduled date`) AT MOST ((`Hearing Notice`'s `Publish date`) PLUS 60) AND CONSIDER `Prepared draft copy of EIS` WHEN NOTHING THEN FALSE, WHEN JUST EIS THEN (`Hearing Notice`'s `Scheduled date`) AT LEAST ((EIS's `Draft filing date`) PLUS 15) AND (`Hearing Notice`'s `Scheduled date`) AT MOST ((EIS's `Draft filing date`) PLUS 60) AND ((`Hearing Notice`'s `Publishing medium`)'s `General circulation area`) EQUALS (`The action`'s `Potential effect area`) AND `Hearing Notice`'s `Is in accordance with the requirements of 6 NYCRR 617.10` AND `Notice of EIS Completion`'s `Is in accordance with the requirements of 6 NYCRR 617.10`
   WITHIN 740775
   HENCE FULFILLED
 ny-environmental-7.3.l4:160:1-86:
