@@ -294,11 +294,10 @@ instance LayoutPrinterWithName a => LayoutPrinter (Expr a) where
       <+> "WITH"
       <+> hang 2 (align (vcat (fmap printWithLayout namedExpr)))
     IfThenElse _ cond then' else' ->
-      vcat
-        [ "IF" <+> printWithLayout cond
-        , "THEN" <+> printWithLayout then'
-        , "ELSE" <+> printWithLayout else'
-        ]
+      -- Use single-line format to avoid layout/indentation issues when re-parsing
+      "IF" <+> parensIfNeeded cond
+        <+> "THEN" <+> parensIfNeeded then'
+        <+> "ELSE" <+> parensIfNeeded else'
     MultiWayIf _ conds o ->
       vcat $
         [ "BRANCH" ]
@@ -580,8 +579,11 @@ quoteIfNeeded :: Text.Text -> Text.Text
 quoteIfNeeded n = case Text.uncons $ Text.dropAround (== '_') n of
   Nothing -> n
   Just (c, xs)
-    | isAlpha c && Text.all isAlphaNum xs -> n
+    | isAlpha c && Text.all isIdentChar xs -> n
     | otherwise -> quote n
+  where
+    -- Match lexer: identifiers can contain alphanumeric chars and underscores
+    isIdentChar x = isAlphaNum x || x == '_'
 
 quote :: Text.Text -> Text.Text
 quote n = "`" <> n <> "`"
@@ -612,14 +614,9 @@ scanRAnd = scanOp \case
 prettyConj :: Text -> [Doc ann] -> Doc ann
 prettyConj _ [] = mempty
 prettyConj cnj (d:ds) =
-  indent (Text.length cnj + 1) d <>
-  case ds of
-    [] -> mempty
-    ds'@(_:_) -> go ds'
-  where
-    go [] = mempty
-    go (x:xs) =
-      line <> hang (Text.length cnj + 1) (pretty cnj <+> x) <> go xs
+  -- Use group with softline so it prefers single-line when possible
+  -- This avoids layout issues when the output is re-parsed
+  Prettyprinter.group $ d <> mconcat [softline <> pretty cnj <+> x | x <- ds]
 
 
 escapeStringLiteral :: Text -> Text
