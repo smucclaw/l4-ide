@@ -3,6 +3,8 @@
 # Usage: ./dev-start.sh [mode] [--run]
 # Modes: lsp-only | decision-only | websessions-only | websessions-with-push | websessions-test | full
 # Use 'full --run' to launch all services in background
+#
+# After starting services, verify health with: ./dev-healthcheck.sh
 
 set -euo pipefail
 
@@ -101,6 +103,9 @@ case "$MODE" in
       echo "  L4 Wizard:   tail -f /tmp/l4-wizard.log"
       echo ""
       echo "PIDs saved to: $PIDFILE"
+      echo ""
+      echo "To verify all services are healthy:"
+      echo "  ./dev-healthcheck.sh"
       echo ""
       echo "To stop all services:"
       echo "  ./dev-stop.sh"
