@@ -2679,71 +2679,73 @@ desugarUnaryOpToFunction name g ann e  = do
 -- | Set the inert context for Inert nodes and convert string literals to Inert.
 -- String literals are only converted when they appear as direct operands of
 -- boolean operators (AND/OR/RAnd/ROr), not inside other expressions.
+-- When descending into nested boolean operators, the context is updated:
+-- AND/RAnd -> InertCtxAnd, OR/ROr -> InertCtxOr.
 setInertContext :: InertContext -> Expr Name -> Expr Name
-setInertContext ctx = go True  -- True = we're at top level or direct boolean operand
+setInertContext = go True  -- True = we're at top level or direct boolean operand
   where
     -- go True means we should convert strings to Inert (direct boolean operand)
     -- go False means we should preserve strings (inside other expressions)
-    go convertStrings = \ case
+    go convertStrings ctx = \ case
       Inert ann txt _ -> Inert ann txt ctx
       -- String literals in direct boolean context become Inert nodes
       Lit ann (StringLit _ txt) | convertStrings -> Inert ann txt ctx
-      -- Boolean operators: continue converting strings in their operands
-      And ann e1 e2 -> And ann (go True e1) (go True e2)
-      Or ann e1 e2 -> Or ann (go True e1) (go True e2)
-      RAnd ann e1 e2 -> RAnd ann (go True e1) (go True e2)
-      ROr ann e1 e2 -> ROr ann (go True e1) (go True e2)
-      -- NOT is boolean but its operand should still convert strings
-      Not ann e -> Not ann (go True e)
-      -- IMPLIES is boolean
-      Implies ann e1 e2 -> Implies ann (go True e1) (go True e2)
+      -- Boolean operators: update context when descending into nested operators
+      And ann e1 e2 -> And ann (go True InertCtxAnd e1) (go True InertCtxAnd e2)
+      Or ann e1 e2 -> Or ann (go True InertCtxOr e1) (go True InertCtxOr e2)
+      RAnd ann e1 e2 -> RAnd ann (go True InertCtxAnd e1) (go True InertCtxAnd e2)
+      ROr ann e1 e2 -> ROr ann (go True InertCtxOr e1) (go True InertCtxOr e2)
+      -- NOT is boolean but its operand should still convert strings, inheriting context
+      Not ann e -> Not ann (go True ctx e)
+      -- IMPLIES is boolean, inheriting context
+      Implies ann e1 e2 -> Implies ann (go True ctx e1) (go True ctx e2)
       -- Non-boolean operators: stop converting strings in their operands
-      Equals ann e1 e2 -> Equals ann (go False e1) (go False e2)
-      Plus ann e1 e2 -> Plus ann (go False e1) (go False e2)
-      Minus ann e1 e2 -> Minus ann (go False e1) (go False e2)
-      Times ann e1 e2 -> Times ann (go False e1) (go False e2)
-      DividedBy ann e1 e2 -> DividedBy ann (go False e1) (go False e2)
-      Modulo ann e1 e2 -> Modulo ann (go False e1) (go False e2)
-      Exponent ann e1 e2 -> Exponent ann (go False e1) (go False e2)
-      Cons ann e1 e2 -> Cons ann (go False e1) (go False e2)
-      Leq ann e1 e2 -> Leq ann (go False e1) (go False e2)
-      Geq ann e1 e2 -> Geq ann (go False e1) (go False e2)
-      Lt ann e1 e2 -> Lt ann (go False e1) (go False e2)
-      Gt ann e1 e2 -> Gt ann (go False e1) (go False e2)
-      Proj ann e n -> Proj ann (go False e) n
-      Lam ann sig e -> Lam ann sig (go False e)
-      App ann n es -> App ann n (map (go False) es)
-      AppNamed ann n nes order -> AppNamed ann n (map goNamed nes) order
-      IfThenElse ann b t e -> IfThenElse ann (go True b) (go False t) (go False e)
-      MultiWayIf ann gs o -> MultiWayIf ann (map goGuarded gs) (go False o)
-      Regulative ann obl -> Regulative ann (goObl obl)
-      Consider ann e branches -> Consider ann (go False e) (map goBranch branches)
-      Percent ann e -> Percent ann (go False e)
-      List ann es -> List ann (map (go False) es)
-      Where ann e ds -> Where ann (go convertStrings e) (map goLocalDecl ds)
-      LetIn ann ds e -> LetIn ann (map goLocalDecl ds) (go convertStrings e)
-      Event ann ev -> Event ann (goEvent ev)
-      Fetch ann e -> Fetch ann (go False e)
-      Env ann e -> Env ann (go False e)
-      Post ann e1 e2 e3 -> Post ann (go False e1) (go False e2) (go False e3)
-      Concat ann es -> Concat ann (map (go False) es)
-      AsString ann e -> AsString ann (go False e)
-      Breach ann mp mr -> Breach ann (fmap (go False) mp) (fmap (go False) mr)
+      Equals ann e1 e2 -> Equals ann (go False ctx e1) (go False ctx e2)
+      Plus ann e1 e2 -> Plus ann (go False ctx e1) (go False ctx e2)
+      Minus ann e1 e2 -> Minus ann (go False ctx e1) (go False ctx e2)
+      Times ann e1 e2 -> Times ann (go False ctx e1) (go False ctx e2)
+      DividedBy ann e1 e2 -> DividedBy ann (go False ctx e1) (go False ctx e2)
+      Modulo ann e1 e2 -> Modulo ann (go False ctx e1) (go False ctx e2)
+      Exponent ann e1 e2 -> Exponent ann (go False ctx e1) (go False ctx e2)
+      Cons ann e1 e2 -> Cons ann (go False ctx e1) (go False ctx e2)
+      Leq ann e1 e2 -> Leq ann (go False ctx e1) (go False ctx e2)
+      Geq ann e1 e2 -> Geq ann (go False ctx e1) (go False ctx e2)
+      Lt ann e1 e2 -> Lt ann (go False ctx e1) (go False ctx e2)
+      Gt ann e1 e2 -> Gt ann (go False ctx e1) (go False ctx e2)
+      Proj ann e n -> Proj ann (go False ctx e) n
+      Lam ann sig e -> Lam ann sig (go False ctx e)
+      App ann n es -> App ann n (map (go False ctx) es)
+      AppNamed ann n nes order -> AppNamed ann n (map (goNamed ctx) nes) order
+      IfThenElse ann b t e -> IfThenElse ann (go True ctx b) (go False ctx t) (go False ctx e)
+      MultiWayIf ann gs o -> MultiWayIf ann (map (goGuarded ctx) gs) (go False ctx o)
+      Regulative ann obl -> Regulative ann (goObl ctx obl)
+      Consider ann e branches -> Consider ann (go False ctx e) (map (goBranch ctx) branches)
+      Percent ann e -> Percent ann (go False ctx e)
+      List ann es -> List ann (map (go False ctx) es)
+      Where ann e ds -> Where ann (go convertStrings ctx e) (map (goLocalDecl ctx) ds)
+      LetIn ann ds e -> LetIn ann (map (goLocalDecl ctx) ds) (go convertStrings ctx e)
+      Event ann ev -> Event ann (goEvent ctx ev)
+      Fetch ann e -> Fetch ann (go False ctx e)
+      Env ann e -> Env ann (go False ctx e)
+      Post ann e1 e2 e3 -> Post ann (go False ctx e1) (go False ctx e2) (go False ctx e3)
+      Concat ann es -> Concat ann (map (go False ctx) es)
+      AsString ann e -> AsString ann (go False ctx e)
+      Breach ann mp mr -> Breach ann (fmap (go False ctx) mp) (fmap (go False ctx) mr)
       -- Other leaves don't need transformation
       e@Lit{} -> e
 
-    goNamed (MkNamedExpr ann n e) = MkNamedExpr ann n (go False e)
-    goGuarded (MkGuardedExpr ann c f) = MkGuardedExpr ann (go True c) (go False f)
-    goObl (MkObligation ann party action due hence lest) =
-      MkObligation ann (go False party) (goRAction action) (fmap (go False) due) (fmap (go False) hence) (fmap (go False) lest)
-    goRAction (MkAction ann modal pat provided) =
-      MkAction ann modal pat (fmap (go False) provided)
-    goBranch (MkBranch ann lhs e) = MkBranch ann lhs (go False e)
-    goLocalDecl = \ case
-      LocalDecide ann d -> LocalDecide ann (goDecide d)
+    goNamed ctx' (MkNamedExpr ann n e) = MkNamedExpr ann n (go False ctx' e)
+    goGuarded ctx' (MkGuardedExpr ann c f) = MkGuardedExpr ann (go True ctx' c) (go False ctx' f)
+    goObl ctx' (MkObligation ann party action due hence lest) =
+      MkObligation ann (go False ctx' party) (goRAction ctx' action) (fmap (go False ctx') due) (fmap (go False ctx') hence) (fmap (go False ctx') lest)
+    goRAction ctx' (MkAction ann modal pat provided) =
+      MkAction ann modal pat (fmap (go False ctx') provided)
+    goBranch ctx' (MkBranch ann lhs e) = MkBranch ann lhs (go False ctx' e)
+    goLocalDecl ctx' = \ case
+      LocalDecide ann d -> LocalDecide ann (goDecide ctx' d)
       LocalAssume ann a -> LocalAssume ann a
-    goDecide (MkDecide ann tysig appform e) = MkDecide ann tysig appform (go False e)
-    goEvent (MkEvent ann p a t atFirst) = MkEvent ann (go False p) (go False a) (go False t) atFirst
+    goDecide ctx' (MkDecide ann tysig appform e) = MkDecide ann tysig appform (go False ctx' e)
+    goEvent ctx' (MkEvent ann p a t atFirst) = MkEvent ann (go False ctx' p) (go False ctx' a) (go False ctx' t) atFirst
 
 -- | Rewrite the 'Anno' of the given arguments @'NonEmpty' ('Expr' 'Name)'@ to
 -- include the concrete syntax nodes of the 'Anno' in the @'Expr' 'Name'@.

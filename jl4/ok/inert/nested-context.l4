@@ -1,0 +1,58 @@
+-- Test file for nested inert context propagation
+-- When AND contains OR, inert strings in the OR should evaluate to FALSE (OR identity)
+-- When OR contains AND, inert strings in the AND should evaluate to TRUE (AND identity)
+
+-- Test case: A AND ("scaffold" OR B)
+-- The "scaffold" is inside OR, so it should evaluate to FALSE
+-- Result should be A AND (FALSE OR B) = A AND B
+GIVEN a IS A BOOLEAN
+      b IS A BOOLEAN
+DECIDE `and containing or` IF
+        a
+    AND     "this scaffold is in OR context"
+        OR  b
+
+#EVAL `and containing or` TRUE TRUE
+-- Expected: TRUE (a AND (FALSE OR b) = TRUE AND TRUE = TRUE)
+
+#EVAL `and containing or` TRUE FALSE
+-- Expected: FALSE (a AND (FALSE OR b) = TRUE AND FALSE = FALSE)
+
+#EVAL `and containing or` FALSE TRUE
+-- Expected: FALSE (a is FALSE, so whole thing is FALSE)
+
+-- Test case: A OR ("scaffold" AND B)
+-- The "scaffold" is inside AND, so it should evaluate to TRUE
+-- Result should be A OR (TRUE AND B) = A OR B
+GIVEN x IS A BOOLEAN
+      y IS A BOOLEAN
+DECIDE `or containing and` IF
+        x
+    OR      "this scaffold is in AND context"
+        AND y
+
+#EVAL `or containing and` TRUE FALSE
+-- Expected: TRUE (x is TRUE)
+
+#EVAL `or containing and` FALSE TRUE
+-- Expected: TRUE (x OR (TRUE AND y) = FALSE OR TRUE = TRUE)
+
+#EVAL `or containing and` FALSE FALSE
+-- Expected: FALSE (x OR (TRUE AND y) = FALSE OR FALSE = FALSE)
+
+-- Deeply nested: A AND (B OR ("deep scaffold" AND C))
+-- The "deep scaffold" is in AND (innermost), so it should be TRUE
+GIVEN p IS A BOOLEAN
+      q IS A BOOLEAN
+      r IS A BOOLEAN
+DECIDE `deeply nested` IF
+        p
+    AND     q
+        OR      "deep scaffold in AND"
+            AND r
+
+#EVAL `deeply nested` TRUE FALSE TRUE
+-- Expected: TRUE (p AND (q OR (TRUE AND r)) = TRUE AND (FALSE OR TRUE) = TRUE AND TRUE = TRUE)
+
+#EVAL `deeply nested` TRUE FALSE FALSE
+-- Expected: FALSE (p AND (q OR (TRUE AND r)) = TRUE AND (FALSE OR FALSE) = TRUE AND FALSE = FALSE)
