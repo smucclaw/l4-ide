@@ -120,7 +120,7 @@ export interface FunDecl extends IRNode {
 }
 
 /** The Ladder graph visualizer focuses on boolean formulas. */
-export type IRExpr = And | Or | Not | UBoolVar | TrueE | FalseE | App
+export type IRExpr = And | Or | Not | UBoolVar | TrueE | FalseE | App | InertE
 
 /* Thanks to Andres for pointing out that an n-ary representation would be better for the arguments for And / Or.
 It's one of those things that seems obvious in retrospect; to quote
@@ -168,6 +168,9 @@ export type Value = UBoolValue
 
 export type UBoolVar = Schema.Schema.Type<typeof UBoolVar>
 
+/** Inert elements are grammatical scaffolding that always evaluate to True */
+export type InertE = Schema.Schema.Type<typeof InertE>
+
 /***********************************
   The corresponding Effect Schemas
 ************************************/
@@ -179,7 +182,8 @@ export const IRExpr = Schema.Union(
   Schema.suspend((): Schema.Schema<UBoolVar> => UBoolVar),
   Schema.suspend((): Schema.Schema<TrueE> => TrueE),
   Schema.suspend((): Schema.Schema<FalseE> => FalseE),
-  Schema.suspend((): Schema.Schema<App> => App)
+  Schema.suspend((): Schema.Schema<App> => App),
+  Schema.suspend((): Schema.Schema<InertE> => InertE)
 ).annotations({ identifier: 'IRExpr' })
 
 export const App = Schema.Struct({
@@ -262,6 +266,30 @@ export const FalseE = Schema.Struct({
   name: Name,
 }).annotations({ identifier: 'FalseE' })
 export type FalseE = Schema.Schema.Type<typeof FalseE>
+
+/**
+ * Context for inert elements - determines evaluation value.
+ * InertAnd → evaluates to True (identity for AND)
+ * InertOr → evaluates to False (identity for OR)
+ */
+export type InertContext = Schema.Schema.Type<typeof InertContext>
+export const InertContext = Schema.Union(
+  Schema.Literal('InertAnd'),
+  Schema.Literal('InertOr')
+).annotations({ identifier: 'InertContext' })
+
+/**
+ * Inert elements are grammatical scaffolding that evaluate to the identity
+ * for their containing boolean operator (True for AND, False for OR).
+ */
+export const InertE = Schema.Struct({
+  $type: Schema.tag('InertE'),
+  id: IRId,
+  /** The inert text (grammatical scaffolding) */
+  text: Schema.String,
+  /** Context determines evaluation: InertAnd→True, InertOr→False */
+  context: InertContext,
+}).annotations({ identifier: 'InertE' })
 
 /***********************************
   Wrapper / Protocol interfaces

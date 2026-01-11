@@ -3,6 +3,9 @@
 # Include bundled binaries
 !bin/**
 
+# Include bundled L4 libraries
+!libraries/**
+
 **/*.ts
 **/*.map
 .vscode/**

@@ -19,46 +19,57 @@ import Control.Category ((>>>))
 -- ----------------------------------------------------------------------------
 
 carameliseExpr :: HasName n => Expr n -> Expr n
-carameliseExpr = carameliseNode >>> \ case
-  Not        ann e -> Not ann (carameliseExpr e)
-  And        ann e1 e2 -> And       ann (carameliseExpr e1) (carameliseExpr e2)
-  Or         ann e1 e2 -> Or        ann (carameliseExpr e1) (carameliseExpr e2)
-  RAnd       ann e1 e2 -> RAnd      ann (carameliseExpr e1) (carameliseExpr e2)
-  ROr        ann e1 e2 -> ROr       ann (carameliseExpr e1) (carameliseExpr e2)
-  Implies    ann e1 e2 -> Implies   ann (carameliseExpr e1) (carameliseExpr e2)
-  Equals     ann e1 e2 -> Equals    ann (carameliseExpr e1) (carameliseExpr e2)
-  Plus       ann e1 e2 -> Plus      ann (carameliseExpr e1) (carameliseExpr e2)
-  Minus      ann e1 e2 -> Minus     ann (carameliseExpr e1) (carameliseExpr e2)
-  Times      ann e1 e2 -> Times     ann (carameliseExpr e1) (carameliseExpr e2)
-  DividedBy  ann e1 e2 -> DividedBy ann (carameliseExpr e1) (carameliseExpr e2)
-  Modulo     ann e1 e2 -> Modulo    ann (carameliseExpr e1) (carameliseExpr e2)
-  Exponent   ann e1 e2 -> Exponent  ann (carameliseExpr e1) (carameliseExpr e2)
-  Cons       ann e1 e2 -> Cons      ann (carameliseExpr e1) (carameliseExpr e2)
-  Leq        ann e1 e2 -> Leq       ann (carameliseExpr e1) (carameliseExpr e2)
-  Geq        ann e1 e2 -> Geq       ann (carameliseExpr e1) (carameliseExpr e2)
-  Lt         ann e1 e2 -> Lt        ann (carameliseExpr e1) (carameliseExpr e2)
-  Gt         ann e1 e2 -> Gt        ann (carameliseExpr e1) (carameliseExpr e2)
-  Proj       ann e n   -> Proj ann (carameliseExpr e) n
+carameliseExpr = carameliseExprWithContext InertCtxNone
+
+-- | Caramelize expression with context tracking for inert elements.
+-- Inert elements evaluate to the identity for their containing operator:
+-- - In AND context: True (AND identity)
+-- - In OR context: False (OR identity)
+carameliseExprWithContext :: HasName n => InertContext -> Expr n -> Expr n
+carameliseExprWithContext ctx = carameliseNode >>> \ case
+  Not        ann e -> Not ann (carameliseExprWithContext InertCtxNone e)
+  -- For AND/OR, we propagate the context to children
+  And        ann e1 e2 -> And       ann (carameliseExprWithContext InertCtxAnd e1) (carameliseExprWithContext InertCtxAnd e2)
+  Or         ann e1 e2 -> Or        ann (carameliseExprWithContext InertCtxOr e1) (carameliseExprWithContext InertCtxOr e2)
+  RAnd       ann e1 e2 -> RAnd      ann (carameliseExprWithContext InertCtxAnd e1) (carameliseExprWithContext InertCtxAnd e2)
+  ROr        ann e1 e2 -> ROr       ann (carameliseExprWithContext InertCtxOr e1) (carameliseExprWithContext InertCtxOr e2)
+  Implies    ann e1 e2 -> Implies   ann (carameliseExprWithContext InertCtxNone e1) (carameliseExprWithContext InertCtxNone e2)
+  Equals     ann e1 e2 -> Equals    ann (carameliseExprWithContext InertCtxNone e1) (carameliseExprWithContext InertCtxNone e2)
+  Plus       ann e1 e2 -> Plus      ann (carameliseExprWithContext InertCtxNone e1) (carameliseExprWithContext InertCtxNone e2)
+  Minus      ann e1 e2 -> Minus     ann (carameliseExprWithContext InertCtxNone e1) (carameliseExprWithContext InertCtxNone e2)
+  Times      ann e1 e2 -> Times     ann (carameliseExprWithContext InertCtxNone e1) (carameliseExprWithContext InertCtxNone e2)
+  DividedBy  ann e1 e2 -> DividedBy ann (carameliseExprWithContext InertCtxNone e1) (carameliseExprWithContext InertCtxNone e2)
+  Modulo     ann e1 e2 -> Modulo    ann (carameliseExprWithContext InertCtxNone e1) (carameliseExprWithContext InertCtxNone e2)
+  Exponent   ann e1 e2 -> Exponent  ann (carameliseExprWithContext InertCtxNone e1) (carameliseExprWithContext InertCtxNone e2)
+  Cons       ann e1 e2 -> Cons      ann (carameliseExprWithContext InertCtxNone e1) (carameliseExprWithContext InertCtxNone e2)
+  Leq        ann e1 e2 -> Leq       ann (carameliseExprWithContext InertCtxNone e1) (carameliseExprWithContext InertCtxNone e2)
+  Geq        ann e1 e2 -> Geq       ann (carameliseExprWithContext InertCtxNone e1) (carameliseExprWithContext InertCtxNone e2)
+  Lt         ann e1 e2 -> Lt        ann (carameliseExprWithContext InertCtxNone e1) (carameliseExprWithContext InertCtxNone e2)
+  Gt         ann e1 e2 -> Gt        ann (carameliseExprWithContext InertCtxNone e1) (carameliseExprWithContext InertCtxNone e2)
+  Proj       ann e n   -> Proj ann (carameliseExprWithContext InertCtxNone e) n
   Var        ann n     -> Var  ann n
-  Lam        ann sig e -> Lam ann sig (carameliseExpr e)
-  App        ann n es  -> App ann n (fmap carameliseExpr es)
+  Lam        ann sig e -> Lam ann sig (carameliseExprWithContext InertCtxNone e)
+  App        ann n es  -> App ann n (fmap (carameliseExprWithContext InertCtxNone) es)
   AppNamed   ann n nes morder -> AppNamed ann n (fmap caramliseNamedExpr nes) morder
-  IfThenElse ann b t e -> IfThenElse ann (carameliseExpr b) (carameliseExpr t) (carameliseExpr e)
-  MultiWayIf ann es e -> MultiWayIf ann (map (\(MkGuardedExpr ann' a b) -> MkGuardedExpr ann' (carameliseExpr a) (carameliseExpr b)) es) (carameliseExpr e)
+  IfThenElse ann b t e -> IfThenElse ann (carameliseExprWithContext InertCtxNone b) (carameliseExprWithContext InertCtxNone t) (carameliseExprWithContext InertCtxNone e)
+  MultiWayIf ann es e -> MultiWayIf ann (map (\(MkGuardedExpr ann' a b) -> MkGuardedExpr ann' (carameliseExprWithContext InertCtxNone a) (carameliseExprWithContext InertCtxNone b)) es) (carameliseExprWithContext InertCtxNone e)
   Regulative ann o -> Regulative ann (carameliseObligation o)
-  Consider   ann e branches -> Consider ann (carameliseExpr e) (fmap carameliseBranch branches)
+  Consider   ann e branches -> Consider ann (carameliseExprWithContext InertCtxNone e) (fmap carameliseBranch branches)
   Lit        ann l -> Lit ann l
-  Percent    ann e -> Percent ann (carameliseExpr e)
-  List       ann es -> List ann (fmap carameliseExpr es)
-  Where      ann e ds -> Where ann (carameliseExpr e) (fmap carameliseLocalDecl ds)
-  LetIn      ann ds e -> LetIn ann (fmap carameliseLocalDecl ds) (carameliseExpr e)
+  Percent    ann e -> Percent ann (carameliseExprWithContext InertCtxNone e)
+  List       ann es -> List ann (fmap (carameliseExprWithContext InertCtxNone) es)
+  Where      ann e ds -> Where ann (carameliseExprWithContext ctx e) (fmap carameliseLocalDecl ds)
+  LetIn      ann ds e -> LetIn ann (fmap carameliseLocalDecl ds) (carameliseExprWithContext ctx e)
   Event      ann ev -> Event ann (carameliseEvent ev)
-  Fetch      ann e -> Fetch ann (carameliseExpr e)
-  Env        ann e -> Env ann (carameliseExpr e)
-  Post       ann e1 e2 e3 -> Post ann (carameliseExpr e1) (carameliseExpr e2) (carameliseExpr e3)
-  Concat     ann es -> Concat ann (fmap carameliseExpr es)
-  AsString   ann e -> AsString ann (carameliseExpr e)
-  Breach     ann mParty mReason -> Breach ann (fmap carameliseExpr mParty) (fmap carameliseExpr mReason)
+  Fetch      ann e -> Fetch ann (carameliseExprWithContext InertCtxNone e)
+  Env        ann e -> Env ann (carameliseExprWithContext InertCtxNone e)
+  Post       ann e1 e2 e3 -> Post ann (carameliseExprWithContext InertCtxNone e1) (carameliseExprWithContext InertCtxNone e2) (carameliseExprWithContext InertCtxNone e3)
+  Concat     ann es -> Concat ann (fmap (carameliseExprWithContext InertCtxNone) es)
+  AsString   ann e -> AsString ann (carameliseExprWithContext InertCtxNone e)
+  Breach     ann mParty mReason -> Breach ann (fmap (carameliseExprWithContext InertCtxNone) mParty) (fmap (carameliseExprWithContext InertCtxNone) mReason)
+  -- Inert elements: update the context based on the desugaring context.
+  -- The evaluator (Machine.hs) will read this context to determine the value.
+  Inert      ann txt _oldCtx -> Inert ann txt ctx
 
 carameliseLocalDecl :: HasName n => LocalDecl n -> LocalDecl n
 carameliseLocalDecl = \ case

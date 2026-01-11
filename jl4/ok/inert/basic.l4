@@ -1,0 +1,52 @@
+-- Test file for inert elements (bare strings in boolean context)
+-- Inert elements are grammatical scaffolding with context-aware evaluation:
+-- - In AND context: evaluates to True (identity for AND)
+-- - In OR context: evaluates to False (identity for OR)
+
+-- First, define the placeholder variables
+`parties have capacity` MEANS TRUE
+`consideration present` MEANS TRUE
+`is over 21` MEANS TRUE
+`is married` MEANS TRUE
+`has parental consent` MEANS FALSE
+`condition one` MEANS TRUE
+`condition two` MEANS TRUE
+
+DECIDE `contract valid` IS
+        "notwithstanding any provision to the contrary"
+    AND `parties have capacity`
+    AND `consideration present`
+
+DECIDE `person qualifies` IF
+        "whether in sickness or in health"
+    ... `is over 21`
+    ... "for better or for poorer"
+    AND     `is married`
+        OR  `has parental consent`
+
+-- Test head position inert
+DECIDE `head inert` IF
+        "subject to the following conditions"
+    ... `condition one`
+    AND `condition two`
+
+-- Test middle position inert
+DECIDE `middle inert` IF
+       `condition one`
+   ... "for the avoidance of doubt"
+   AND `condition two`
+
+-- Test tail position inert
+GIVEN `condition three` IS A BOOLEAN
+DECIDE `tail inert` IF
+       `condition one`
+   AND `condition two`
+   AND `condition three`
+   ... "no cap"
+
+-- Directives to test evaluation
+#EVAL `contract valid`
+#EVAL `person qualifies`
+#EVAL `head inert`
+#EVAL `middle inert`
+#EVAL `tail inert`

@@ -63,11 +63,15 @@ Legal drafters may also appreciate VS Code's native "jump to definition" and "ju
 
 Click on "visualize" to see a visual representation of a given Boolean function, as a circuit. "OR" disjunctions are represented as parallel circuits. "AND" conjunctions are represented as series circuits.
 
+### Implemented Features
+
+**Asyndetic conjunction (`...`)**: Implicit AND using three-dot ellipsis syntax, allowing `... expr` instead of `AND expr`. Named after the rhetorical device where conjunctions are omitted. See [Asyndetic Conjunction](20-basic-syntax.md#asyndetic-conjunction-).
+
+**Asyndetic disjunction (`..`)**: Implicit OR using two-dot ellipsis syntax, allowing `.. expr` instead of `OR expr`. See [Asyndetic Disjunction](20-basic-syntax.md#asyndetic-disjunction-).
+
+**Inert elements**: String literals in boolean context serve as grammatical scaffolding—they evaluate to TRUE in AND chains and FALSE in OR chains, preserving original legal language without affecting logical outcomes. See [Inert Elements](10-boolean-logic.md#inert-elements-grammatical-scaffolding).
+
 ### Future Features
-
-Asyndetic conjunction operator: `..` instead of "AND" for readability.
-
-Strings to be allowed in Boolean expressions as non-valuatable visible comments.
 
 Three carets together will mean "repeat everything above to the end of the line".
 

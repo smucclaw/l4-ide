@@ -345,6 +345,8 @@ instance LayoutPrinterWithName a => LayoutPrinter (Expr a) where
       "BREACH" <>
         maybe mempty (\p -> " BY" <+> printWithLayout p) mParty <>
         maybe mempty (\r -> " BECAUSE" <+> printWithLayout r) mReason
+    Inert _ txt _ctx ->
+      "..." <+> dquotes (pretty txt)
 
   parensIfNeeded :: LayoutPrinter a => Expr a -> Doc ann
   parensIfNeeded e = case e of

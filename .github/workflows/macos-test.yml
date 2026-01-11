@@ -1,12 +1,6 @@
 name: macOS Build Test (Apple Silicon)
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - "jl4*/**"
-      - "cabal.project"
-      - ".github/workflows/macos-*.yml"
   workflow_dispatch:
 
 # Only run one build per PR to save resources

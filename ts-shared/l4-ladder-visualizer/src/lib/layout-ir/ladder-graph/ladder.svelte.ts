@@ -789,6 +789,7 @@ export type LadderLirNode =
   | BundlingFlowLirNode
   | TrueExprLirNode
   | FalseExprLirNode
+  | InertExprLirNode
 
 /** The name is perhaps misleading: these are nodes that can be given a highlighted / selected style;
  * but not all the nodes here can be selected for highlighting by the user.
@@ -804,6 +805,7 @@ export type SelectableLadderLirNode =
   | NotEndLirNode
   | TrueExprLirNode
   | FalseExprLirNode
+  | InertExprLirNode
 
 export function isSelectableLadderLirNode(
   node: LadderLirNode
@@ -814,7 +816,8 @@ export function isSelectableLadderLirNode(
     isNotStartLirNode(node) ||
     isNotEndLirNode(node) ||
     isTrueExprLirNode(node) ||
-    isFalseExprLirNode(node)
+    isFalseExprLirNode(node) ||
+    isInertExprLirNode(node)
   )
 }
 
@@ -883,6 +886,59 @@ export class TrueExprLirNode extends BaseFlowLirNode implements FlowLirNode {
 
   toString(): string {
     return 'TRUE_EXPR_LIR_NODE'
+  }
+}
+
+/**********************************************
+        Inert Expr Lir Node
+        (grammatical scaffolding that evaluates to the identity
+         for its containing operator: True for AND, False for OR)
+***********************************************/
+
+export type InertContext = 'InertAnd' | 'InertOr'
+
+export function isInertExprLirNode(
+  node: LadderLirNode
+): node is InertExprLirNode {
+  return node instanceof InertExprLirNode
+}
+
+export class InertExprLirNode extends BaseFlowLirNode implements FlowLirNode {
+  #text: string
+  #context: InertContext
+  #value: UBoolVal
+
+  constructor(
+    nodeInfo: LirNodeInfo,
+    text: string,
+    context: InertContext = 'InertAnd',
+    position: Position = DEFAULT_INITIAL_POSITION
+  ) {
+    super(nodeInfo, position)
+    this.#text = text
+    this.#context = context
+    // Evaluate to identity for the context: AND→True, OR→False
+    this.#value = context === 'InertAnd' ? new TrueVal() : new FalseVal()
+  }
+
+  getText(_context: LirContext) {
+    return this.#text
+  }
+
+  getInertContext() {
+    return this.#context
+  }
+
+  getValue(_context: LirContext) {
+    return this.#value
+  }
+
+  toPretty(_context: LirContext) {
+    return `... "${this.#text}"`
+  }
+
+  toString(): string {
+    return 'INERT_EXPR_LIR_NODE'
   }
 }
 

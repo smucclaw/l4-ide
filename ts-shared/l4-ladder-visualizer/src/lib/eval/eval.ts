@@ -230,6 +230,19 @@ export const Evaluator: LadderEvaluator = {
             ),
           }
         })
+        .with({ $type: 'InertE' }, (inert) => {
+          // Inert elements evaluate to the identity for their containing operator:
+          // InertAnd → True (identity for AND), InertOr → False (identity for OR)
+          const result =
+            inert.context === 'InertAnd' ? new TrueVal() : new FalseVal()
+          const newIntermediate = intermediate.set(ladder.id, result)
+          return {
+            result,
+            intermediate: newIntermediate,
+            consultedUniques: new Set<Unique>(),
+            shortCircuitedRoots: new Set<IRId>(),
+          }
+        })
         .exhaustive()
     }
 
