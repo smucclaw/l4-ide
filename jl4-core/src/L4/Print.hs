@@ -576,10 +576,14 @@ instance LayoutPrinter Address where
     in "&" <> pretty a <> "@" <> pretty fileName
 
 quoteIfNeeded :: Text.Text -> Text.Text
-quoteIfNeeded n = case Text.uncons $ Text.dropAround (== '_') n of
+quoteIfNeeded n = case Text.uncons n of
   Nothing -> n
-  Just (c, xs)
-    | isAlpha c && Text.all isIdentChar xs -> n
+  Just (firstChar, _)
+    -- If the identifier doesn't start with alpha, it must be quoted
+    -- (L4 lexer requires unquoted identifiers to start with alphabetic char)
+    | not (isAlpha firstChar) -> quote n
+    -- Otherwise check if all chars are valid identifier chars
+    | Text.all isIdentChar n -> n
     | otherwise -> quote n
   where
     -- Match lexer: identifiers can contain alphanumeric chars and underscores
