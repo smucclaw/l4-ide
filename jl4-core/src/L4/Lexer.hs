@@ -6,6 +6,7 @@
 module L4.Lexer where
 
 import Base
+import Data.Ord (Down(..))
 import qualified Base.Map as Map
 import qualified Base.Set as Set
 import qualified Base.Text as Text
@@ -101,6 +102,8 @@ data TSymbols
   | TComma
   | TSemicolon
   | TDot
+  | TEllipsis    -- ... for asyndetic conjunction (implicit AND)
+  | TEllipsisOr  -- .. for asyndetic disjunction (implicit OR)
   | TColon
   | TPercent
   | TCopy (Maybe TokenType)
@@ -123,6 +126,8 @@ symbols = Map.fromList
   , ("," , TComma)
   , (";" , TSemicolon)
   , ("." , TDot)
+  , ("...", TEllipsis)    -- three dots = implicit AND (must be before .. due to prefix)
+  , (".." , TEllipsisOr)  -- two dots = implicit OR
   , ("%" , TPercent)
   , (":" , TColon)
   ]
@@ -525,6 +530,7 @@ symbolsPayload :: Lexer TSymbols
 symbolsPayload
   = asum
   $ map (\(t, sym) -> sym <$ string t)
+  $ sortOn (Down . Text.length . fst)  -- try longer symbols first (e.g., ... before .)
   $ Map.toList symbols
 
 tokenPayload :: Lexer TokenType

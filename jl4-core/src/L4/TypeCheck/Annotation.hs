@@ -198,6 +198,7 @@ nlgExpr = \ case
       mParty' <- traverse nlgExpr mParty
       mReason' <- traverse nlgExpr mReason
       pure $ Breach ann mParty' mReason'
+    Inert ann txt ctx -> pure $ Inert ann txt ctx
 
 nlgPattern :: Pattern Resolved -> Check (Pattern Resolved)
 nlgPattern = \ case

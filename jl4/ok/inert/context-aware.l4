@@ -1,0 +1,66 @@
+-- Test file for context-aware inert elements
+-- Inert elements (bare strings in boolean context) evaluate to the identity:
+-- - In AND context: evaluates to True (AND identity)
+-- - In OR context: evaluates to False (OR identity)
+
+-- Define test variables
+`condition a` MEANS TRUE
+`condition b` MEANS FALSE
+`condition c` MEANS TRUE
+
+-- Test 1: Inert in AND context (should not affect result)
+-- "scaffolding" AND TRUE AND FALSE = TRUE AND TRUE AND FALSE = FALSE
+DECIDE `and context test` IS
+        "in an AND chain, this evaluates to True"
+    AND `condition a`
+    AND `condition b`
+
+-- Test 2: Inert in OR context (should not affect result)
+-- "scaffolding" OR FALSE = FALSE OR FALSE = FALSE (inert evaluates to False in OR)
+DECIDE `or context test` IS
+        "in an OR chain, this evaluates to False"
+    OR  `condition b`
+
+-- Test 3: Mixed - inert in nested OR within AND
+-- TRUE AND (FALSE OR FALSE) = TRUE AND FALSE = FALSE
+DECIDE `mixed test` IS
+    `condition a`
+    AND     "nested in OR"
+        OR  `condition b`
+
+-- Test 4: Another mixed case
+-- TRUE AND (TRUE OR FALSE) = TRUE AND TRUE = TRUE
+DECIDE `mixed test 2` IS
+    `condition a`
+    AND     `condition c`
+        OR  "this is in OR context, evaluates to False"
+
+-- Test 5: Pure OR chain
+-- FALSE OR FALSE OR FALSE = FALSE
+DECIDE `pure or` IS
+        "first in OR"
+    OR  "second in OR"
+    OR  `condition b`
+
+-- Test 6: Pure AND chain with multiple inerts
+-- TRUE AND TRUE AND TRUE = TRUE
+DECIDE `pure and multiple inerts` IS
+        "first inert"
+    AND "second inert"
+    AND `condition a`
+
+-- Test 7: Using ... as AND continuation with variable
+-- TRUE AND TRUE AND FALSE = FALSE
+DECIDE `ellipsis with var` IS
+    `condition a`
+    ... `condition c`
+    AND `condition b`
+
+-- Directives to test evaluation
+#EVAL `and context test`
+#EVAL `or context test`
+#EVAL `mixed test`
+#EVAL `mixed test 2`
+#EVAL `pure or`
+#EVAL `pure and multiple inerts`
+#EVAL `ellipsis with var`

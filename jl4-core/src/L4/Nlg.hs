@@ -278,6 +278,7 @@ instance Linearize (Expr Resolved) where
       [ text "breach" ]
       <> maybe [] (\p -> [ text "by", lin p ]) mParty
       <> maybe [] (\r -> [ text "because", lin r ]) mReason
+    Inert _ txt _ctx -> text txt
 
 instance Linearize (Event Resolved) where
   linearize (MkEvent _ p a t _) = hcat
