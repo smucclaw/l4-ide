@@ -1,7 +1,7 @@
 # Product Strategy & Prioritization - January 2025
 
 **Date:** January 9, 2026  
-**Context:** Pre-all-hands planning session  
+**Context:** Sprint planning session  
 **Status:** 📋 ACTIVE ROADMAP  
 **Related:** `doc/MARKETECTURE.md`, `CLAUDE.md`, `AGENTS.md`
 
@@ -17,7 +17,7 @@ L4 has achieved remarkable technical maturity in the last 3 months (l4-wizard, p
 2. **Error experience** - Messages cryptic, diagnostics missing common pitfalls
 3. **"Whole product" polish** - Missing connective tissue between components
 
-This document prioritizes upcoming work based on user impact and all-hands demo readiness.
+This document prioritizes upcoming work based on user impact and demo readiness.
 
 ---
 
@@ -84,9 +84,9 @@ _User Impact:_
 
 - Legal professionals give up before seeing value
 - Developers expect "works out of the box" experience
-- All-hands attendees may struggle to follow along
+- Demo attendees may struggle to follow along
 
-_Priority:_ **P0 - Pre All-Hands**
+_Priority:_ **P0 - Pre-Sprint**
 
 ---
 
@@ -108,7 +108,7 @@ _User Impact:_
 - WHERE mis-attachment is a "silent footgun"
 - Difficult to debug without deep L4 knowledge
 
-_Priority:_ **P0 - Pre All-Hands** (at least fix [#313](https://github.com/smucclaw/l4-ide/issues/313) for demos)
+_Priority:_ **P0 - Pre-Sprint** (at least fix [#313](https://github.com/smucclaw/l4-ide/issues/313) for demos)
 
 ---
 
@@ -132,7 +132,7 @@ _User Impact:_
 - Hard to share results with stakeholders
 - No "wow moment" in first 5 minutes
 
-_Priority:_ **P1 - Post All-Hands Week 1-2**
+_Priority:_ **P1 - Post-Sprint Week 1-2**
 
 ---
 
@@ -154,7 +154,7 @@ _User Impact:_
 - Hard for new contributors to test changes
 - No production observability
 
-_Priority:_ **P2 - Post All-Hands Week 3-4**
+_Priority:_ **P2 - Post-Sprint Week 3-4**
 
 ---
 
@@ -177,11 +177,13 @@ _Priority:_ **P2 - Post All-Hands Week 3-4**
 
 ---
 
-## Roadmap: All-Hands Preparation (Pre-Meeting)
+## Roadmap: Sprint Preparation (Pre-Demo)
 
 ### Week of Jan 9-16, 2026
 
-**Goal:** Ensure smooth all-hands demo and minimize attendee setup friction
+**Goal:** Ensure smooth demo and minimize attendee setup friction
+
+**Status Update (Jan 10, 2026):** 2 of 6 tasks complete, 11 hours of work remaining
 
 #### P0 Tasks (Must Complete)
 
@@ -267,7 +269,7 @@ _Priority:_ **P2 - Post All-Hands Week 3-4**
 
 ---
 
-## Roadmap: Post-All-Hands (4-Week Sprint)
+## Roadmap: Post-Sprint (4-Week Period)
 
 ### Week 1: Onboarding & Discoverability (Jan 16-23)
 
@@ -439,7 +441,7 @@ _Priority:_ **P2 - Post All-Hands Week 3-4**
 
 ### 🔴 High Priority (P0-P1)
 
-- [**#313**](https://github.com/smucclaw/l4-ide/issues/313) - Hover shows inference variables (P0 - fix pre-all-hands)
+- [**#313**](https://github.com/smucclaw/l4-ide/issues/313) - Hover shows inference variables (P0 - fix pre-demo)
 - [**#708**](https://github.com/smucclaw/l4-ide/issues/708) - LSP warn on WHERE indentation (P1 - Week 2)
 - [**#630**](https://github.com/smucclaw/l4-ide/issues/630) - Visualizer expansion improvements (P1 - investigate)
 
@@ -469,7 +471,7 @@ _Priority:_ **P2 - Post All-Hands Week 3-4**
 
 ---
 
-## All-Hands Demo Script (30 Minutes)
+## Demo Script (30 Minutes)
 
 ### Act 1: The Problem (5 min)
 
@@ -532,7 +534,7 @@ _Priority:_ **P2 - Post All-Hands Week 3-4**
 
 ## Success Metrics
 
-### Pre-All-Hands (Week of Jan 9)
+### Pre-Demo (Week of Jan 9)
 
 - [ ] Demo rehearsed 3x without errors
 - [ ] Quickstart.md complete and tested
@@ -541,28 +543,28 @@ _Priority:_ **P2 - Post All-Hands Week 3-4**
 - [ ] l4-wizard landing page deployed
 - [ ] Health-check script working
 
-### Post-All-Hands Week 1 (Onboarding)
+### Post-Demo Week 1 (Onboarding)
 
 - [ ] New user setup time: 30 min → 5 min
 - [ ] Docker Compose launches all services
 - [ ] Template gallery has 5+ examples
 - [ ] Common Mistakes cheat sheet published
 
-### Post-All-Hands Week 2 (Error Experience)
+### Post-Demo Week 2 (Error Experience)
 
 - [ ] WHERE indentation diagnostic implemented
 - [ ] Mixfix error hints added
 - [ ] Interactive GraphViz traces deployed
 - [ ] Golden test behavior documented
 
-### Post-All-Hands Week 3 (Deployment)
+### Post-Demo Week 3 (Deployment)
 
 - [ ] Auto-deploy to dev on main merge
 - [ ] Release artifacts attached to GitHub releases
 - [ ] Monitoring dashboard live
 - [ ] dev-stop.sh implemented
 
-### Post-All-Hands Week 4 (Documentation)
+### Post-Demo Week 4 (Documentation)
 
 - [ ] Pattern library has 15+ examples
 - [ ] Quick Integration Guide published
@@ -613,12 +615,12 @@ _Priority:_ **P2 - Post All-Hands Week 3-4**
 - Demo refinement loop
 - Set expectations: "LLM gives you 80%, you refine the 20%"
 
-### Risk 5: Post-All-Hands Momentum Loss
+### Risk 5: Post-Sprint Momentum Loss
 
 **Impact:** Medium | **Likelihood:** Medium  
 **Mitigation:**
 
-- Clear 4-week sprint plan with owners
+- Clear 4-week plan with owners
 - Weekly check-ins on progress
 - Ship incremental improvements (don't wait for perfect)
 - Celebrate wins publicly (Slack, GitHub discussions)
@@ -663,8 +665,8 @@ _Priority:_ **P2 - Post All-Hands Week 3-4**
 
    - Current: Infrastructure complete, UI planned
    - Options:
-     - A. Build now (pre-all-hands demo)
-     - B. Build post-all-hands (Week 2-3)
+     - A. Build now (pre-demo)
+     - B. Build post-demo (Week 2-3)
      - C. Defer to Q1 2026
    - Recommend: **Option B** - Show architecture, build after onboarding fixed
    - Trade-off: Demo shows potential, post-work delivers polish
@@ -713,7 +715,7 @@ _Priority:_ **P2 - Post All-Hands Week 3-4**
 - Consumer UX strong (8/10)
 - Gaps: Onboarding friction, error messages, connective tissue
 
-**Ask:** Support 4-week sprint post-all-hands for polish
+**Ask:** Support 4-week sprint for polish
 
 ### For Developers
 
@@ -793,7 +795,7 @@ _Priority:_ **P2 - Post All-Hands Week 3-4**
 
 - Analyzed recent PRs (l4-wizard, prohibition, LLM, plugin)
 - Triaged 48 open issues
-- Created 4-week post-all-hands roadmap
+- Created 4-week post-sprint roadmap
 - Defined success metrics and risk mitigation
 
 ---
