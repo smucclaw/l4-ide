@@ -35,6 +35,7 @@ import Backend.CodeGen (generateEvalWrapper, GeneratedCode(..))
 import Backend.DirectiveFilter (filterIdeDirectives)
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Aeson
+import qualified Data.Scientific as Scientific
 import qualified Data.Vector as Vector
 
 -- | Map from file path to file content for module resolution
@@ -102,17 +103,23 @@ precompileModule filepath source moduleContext funName = runExceptT $ do
 
 -- | Convert FnLiteral to Expr Resolved
 -- This allows us to build function call expressions directly without going through text
+-- Note: FnObject, FnUncertain, and FnUnknown require wrapper-based evaluation
+-- and should be filtered out by requiresWrapperEvaluation before calling this
 fnLiteralToExpr :: FnLiteral -> Expr Resolved
 fnLiteralToExpr = \case
   FnLitInt i -> Lit emptyAnno (NumericLit emptyAnno (fromIntegral i))
-  FnLitDouble d -> Lit emptyAnno (NumericLit emptyAnno (toRational d))
+  -- Use Scientific for exact decimal semantics matching JSONDECODE
+  -- This preserves decimal values like 0.1 as exact rationals (1/10)
+  -- Scientific has a Real instance so toRational works directly
+  FnLitDouble d -> Lit emptyAnno (NumericLit emptyAnno (toRational (Scientific.fromFloatDigits d)))
   FnLitBool True -> App emptyAnno TypeCheck.trueRef []
   FnLitBool False -> App emptyAnno TypeCheck.falseRef []
   FnLitString s -> Lit emptyAnno (StringLit emptyAnno s)
   FnArray xs -> List emptyAnno (map fnLiteralToExpr xs)
-  FnObject _fields -> error "fnLiteralToExpr: FnObject not yet supported for direct AST evaluation"
-  FnUncertain -> error "fnLiteralToExpr: FnUncertain not supported"
-  FnUnknown -> error "fnLiteralToExpr: FnUnknown not supported"
+  -- These cases should never be reached if requiresWrapperEvaluation is checked first
+  FnObject _fields -> error "fnLiteralToExpr: FnObject requires wrapper-based evaluation"
+  FnUncertain -> error "fnLiteralToExpr: FnUncertain requires wrapper-based evaluation"
+  FnUnknown -> error "fnLiteralToExpr: FnUnknown requires wrapper-based evaluation"
 
 -- | Get the function's Resolved name from the compiled decide
 getFunctionResolved :: Decide Resolved -> Resolved
@@ -124,14 +131,18 @@ buildFunctionCallExpr :: Resolved -> [Expr Resolved] -> Expr Resolved
 buildFunctionCallExpr funName args =
   App emptyAnno funName args
 
--- | Check if any parameter value contains FnObject (requires wrapper-based evaluation)
-containsFnObject :: [(Text, Maybe FnLiteral)] -> Bool
-containsFnObject = any (maybe False hasFnObject . snd)
+-- | Check if any parameter value requires wrapper-based evaluation
+-- This includes FnObject (records), FnUncertain, and FnUnknown (null/empty inputs)
+-- These types need JSONDECODE to handle properly (e.g., for MAYBE-typed fields)
+requiresWrapperEvaluation :: [(Text, Maybe FnLiteral)] -> Bool
+requiresWrapperEvaluation = any (maybe False needsWrapper . snd)
   where
-    hasFnObject :: FnLiteral -> Bool
-    hasFnObject (FnObject _) = True
-    hasFnObject (FnArray xs) = any hasFnObject xs
-    hasFnObject _ = False
+    needsWrapper :: FnLiteral -> Bool
+    needsWrapper (FnObject _) = True
+    needsWrapper FnUncertain = True
+    needsWrapper FnUnknown = True
+    needsWrapper (FnArray xs) = any needsWrapper xs
+    needsWrapper _ = False
 
 -- | Evaluate using precompiled module (fast path) - direct AST evaluation
 -- This avoids the text round-trip through prettyLayout and re-parsing
@@ -145,8 +156,9 @@ evaluateWithCompiled
   -> Bool
   -> ExceptT EvaluatorError IO ResponseWithReason
 evaluateWithCompiled filepath fnDecl compiled params traceLevel includeGraphViz = do
-  -- Check if we need to fall back to wrapper-based evaluation for FnObject
-  if containsFnObject params
+  -- Check if we need to fall back to wrapper-based evaluation
+  -- (for FnObject, FnUncertain, FnUnknown which require JSONDECODE)
+  if requiresWrapperEvaluation params
     then evaluateWithWrapper filepath fnDecl compiled params traceLevel includeGraphViz
     else evaluateDirectAST compiled params traceLevel includeGraphViz
 
