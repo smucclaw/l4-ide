@@ -57,6 +57,12 @@ append list1 list2 MEANS
   WHEN EMPTY            THEN list2
   WHEN x FOLLOWED BY xs THEN x FOLLOWED BY append xs list2
 
+-- String concatenation (infix wrapper for CONCAT builtin)
+GIVEN x IS A STRING
+      y IS A STRING
+GIVETH A STRING
+x APPEND y MEANS CONCAT x, y
+
 GIVEN
   a     IS A TYPE
   lists IS A LIST OF LIST OF a
