@@ -186,10 +186,10 @@ GIVETH A NUMBER
 
 -- Multiple test cases (trailing commas enable multiline)
 #EVAL LIST
-    `generate quote` `Alice` 25000,
-    `generate quote` `Bob` 30000,
-    `generate quote` `Charlie` 20000,
-    `generate quote` `Diana` 40000
+          `generate quote` `Alice`   25000,
+          `generate quote` `Bob`     30000,
+          `generate quote` `Charlie` 20000,
+          `generate quote` `Diana`   40000
 
 -- Assertions for testing
 #ASSERT `is eligible for insurance` `Alice`
