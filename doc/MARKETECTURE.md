@@ -445,7 +445,7 @@ Connect L4 to existing databases, ERP systems, and business processes.
 
 1. **Read this document** to understand capabilities
 2. **Watch 5-minute demo video** (to be recorded)
-3. **Complete quickstart tutorial** (doc/quickstart.md)
+3. **Complete quickstart tutorial** (doc/foundation-course-ai/quickstart.md)
 4. **Join community discussions** (GitHub, Discord)
 
 ### **For Contributors**
