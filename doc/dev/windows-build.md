@@ -64,7 +64,6 @@ This document describes how to build L4 IDE on Windows and how the Windows relea
    ```
 
 3. **Install Git** (if not already installed)
-
    - Download from: https://git-scm.com/download/win
 
 4. **Clone the repository**
@@ -158,7 +157,6 @@ cd ..
 **Common issues:**
 
 1. **Long path issues**
-
    - Windows has a 260 character path limit by default
    - Enable long paths in Windows 10/11:
      ```powershell
@@ -168,12 +166,10 @@ cd ..
    - Or use shorter directory names for the repository
 
 2. **Antivirus interference**
-
    - Some antivirus software may quarantine Haskell executables
    - Add `dist-newstyle/` and `~/.cabal/` to antivirus exclusions
 
 3. **Missing system dependencies**
-
    - GHCup installer should handle most dependencies
    - If you get linker errors, you may need Visual Studio Build Tools
    - Download from: https://visualstudio.microsoft.com/downloads/ (look for "Build Tools for Visual Studio")
@@ -257,23 +253,19 @@ To maximize cache hits:
 Potential enhancements to the Windows build:
 
 1. **Cross-compilation from Linux**
-
    - Use GHC cross-compiler to build Windows binaries on Linux
    - Faster and more consistent with main CI
 
 2. **MSI Installer**
-
    - Create a proper Windows installer using WiX Toolset
    - Register file associations for `.l4` files
    - Add to Windows PATH automatically
 
 3. **Code signing**
-
    - Sign executables with a code signing certificate
    - Reduces Windows SmartScreen warnings
 
 4. **Scoop/Chocolatey packages**
-
    - Publish to Windows package managers
    - Easier installation and updates
 

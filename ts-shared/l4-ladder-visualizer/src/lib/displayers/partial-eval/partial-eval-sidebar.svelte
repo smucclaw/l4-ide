@@ -207,8 +207,9 @@
   .param-name {
     max-width: 14ch;
     text-align: left;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-      'Liberation Mono', 'Courier New', monospace;
+    font-family:
+      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+      'Courier New', monospace;
     font-size: 0.75rem;
     overflow: hidden;
     text-overflow: ellipsis;

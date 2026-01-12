@@ -18,15 +18,14 @@ export interface Edge<A extends Ord<A>> {
 }
 
 export interface EdgeWithOrd<A extends Ord<A>>
-  extends Edge<A>,
-    Ord<EdgeWithOrd<A>> {
+  extends Edge<A>, Ord<EdgeWithOrd<A>> {
   isEqualTo<B extends EdgeWithOrd<A>>(that: B): boolean
   compare(that: this): ComparisonResult
 }
 
-export abstract class AbsEdgeWithOrd<A extends Ord<A>>
-  implements EdgeWithOrd<A>
-{
+export abstract class AbsEdgeWithOrd<
+  A extends Ord<A>,
+> implements EdgeWithOrd<A> {
   readonly u: A
   readonly v: A
   constructor(u: A, v: A) {

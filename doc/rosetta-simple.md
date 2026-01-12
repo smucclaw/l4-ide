@@ -520,7 +520,6 @@ Q.E.D.
 ## Key Translation Notes
 
 1. **Function Signature**:
-
    - L4: `GIVEN radius IS A NUMBER` / `GIVETH A NUMBER`
    - TypeScript: `function name(radius: number): number`
    - Python: `def name(radius: float) -> float:`
@@ -541,7 +540,6 @@ Q.E.D.
    - Racket: `(define (name radius) ...)` (S-expression syntax, dynamic typing)
 
 2. **Local Helper Functions**:
-
    - L4: Defined in a `WHERE` clause at the end
    - TypeScript/Python: Defined inside the main function body
    - Perl: Defined as anonymous subroutines (`sub { ... }`) assigned to lexical variables
@@ -560,7 +558,6 @@ Q.E.D.
    - Racket: Separate top-level definitions with `define` (can use internal definitions or `let`)
 
 3. **Local Variables**:
-
    - L4: `LET pi BE 3 IN ...`
    - TypeScript: `const pi: number = 3;`
    - Python: `pi: float = 3`
@@ -580,7 +577,6 @@ Q.E.D.
    - Racket: `(let ([pi 3]) ...)` (lexical binding within `let` form)
 
 4. **Type System**:
-
    - L4: Explicit type annotations (`IS A NUMBER`)
    - TypeScript: Static typing with `: number`
    - Python: Optional type hints with `: float`
@@ -601,7 +597,6 @@ Q.E.D.
    - Racket: Dynamic typing with optional contracts for runtime type checking
 
 5. **Operators**:
-
    - L4: Uses postfix notation (`radius squared`) and infix (`TIMES`)
    - TypeScript/Python/Perl/Fortran/Haskell/C/C++/Java/Ruby/Elixir/Go/Rust/Swift: Standard infix operators (`*`)
    - COBOL: `COMPUTE` statement for arithmetic operations
@@ -611,7 +606,6 @@ Q.E.D.
    - Racket: Prefix notation `(* a b)` (S-expression syntax, operator comes first)
 
 6. **Calling Local Functions**:
-
    - TypeScript/Python/Fortran/Haskell/OCaml/C/C++/Java/Ruby/Elixir/Go/Rust/Swift: Direct invocation `squared(radius)` or `squared radius`
    - Perl: Dereference syntax `$squared->($radius)`
    - COBOL: `PERFORM` statement to execute paragraphs
@@ -619,7 +613,6 @@ Q.E.D.
    - Racket: Prefix notation `(squared radius)` (function application as S-expression)
 
 7. **Naming Conventions**:
-
    - L4: Uses backticks for multi-word identifiers
    - TypeScript: camelCase
    - Python: snake_case
@@ -640,7 +633,6 @@ Q.E.D.
    - Racket: kebab-case (words separated by hyphens, common in Lisp family)
 
 8. **Historical Context & Design Philosophy**:
-
    - Fortran (1957): Oldest high-level language, still dominant in scientific computing
    - Lisp (1958): Second-oldest high-level language, pioneered garbage collection, symbolic computation, and code-as-data
    - COBOL (1959): Designed for business applications, still runs major financial systems

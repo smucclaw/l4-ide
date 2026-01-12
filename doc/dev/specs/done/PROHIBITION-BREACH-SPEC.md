@@ -691,15 +691,12 @@ obligation. Consider using `MUST NOT` for clarity:
 ## Open Questions
 
 1. **Keyword choice:** Should we support both `MUST NOT` (two words) and `SHANT` (one word), or pick one?
-
    - Recommendation: Support both, with `MUST NOT` as canonical in docs.
 
 2. **BECAUSE clause:** Is the reason string sufficient, or should it support expressions?
-
    - Recommendation: Start with string literals, extend later if needed.
 
 3. **Visualization:** How should `MUST NOT` appear in Graphviz contract diagrams?
-
    - Recommendation: Show as a "prohibition node" with distinctive styling (e.g., red border, "⊘" symbol).
 
 4. **BREACH propagation:** In `c1 AND c2`, if `c1` is `BREACH`, should evaluation short-circuit?

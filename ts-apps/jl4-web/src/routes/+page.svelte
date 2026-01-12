@@ -244,19 +244,16 @@
 
   // TODO: Need to refactor this --- too long
   onMount(async () => {
-    const { initServices } = await import(
-      'monaco-languageclient/vscode/services'
-    )
+    const { initServices } =
+      await import('monaco-languageclient/vscode/services')
     const { LogLevel } = await import('@codingame/monaco-vscode-api')
-    const { CloseAction, ErrorAction } = await import(
-      'vscode-languageclient/browser.js'
-    )
+    const { CloseAction, ErrorAction } =
+      await import('vscode-languageclient/browser.js')
     const { MonacoLanguageClient } = await import('monaco-languageclient')
     const { WebSocketMessageReader, WebSocketMessageWriter, toSocket } =
       await import('vscode-ws-jsonrpc')
-    const { configureDefaultWorkerFactory } = await import(
-      'monaco-editor-wrapper/workers/workerLoaders'
-    )
+    const { configureDefaultWorkerFactory } =
+      await import('monaco-editor-wrapper/workers/workerLoaders')
     const { ConsoleLogger } = await import('monaco-languageclient/tools')
 
     const websocketUrl =
