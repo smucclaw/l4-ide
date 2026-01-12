@@ -111,6 +111,7 @@ export type Or = VE.Or
 export type And = VE.And
 export type TrueE = VE.TrueE
 export type FalseE = VE.FalseE
+export type InertE = VE.InertE
 
 export function veExprToEvExpr(expr: IRExpr): Expr {
   return match(expr)

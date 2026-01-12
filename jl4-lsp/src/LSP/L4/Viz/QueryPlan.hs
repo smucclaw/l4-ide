@@ -55,6 +55,8 @@ annotateLadderWithAtomIds ladderInfo vizState =
         VizExpr.UBoolVar uid nm val canInline (Map.findWithDefault (Text.pack (show nm.unique)) nm.unique atomIds)
       VizExpr.App uid nm args _oldAtomId ->
         VizExpr.App uid nm (map annotateExpr args) (Map.findWithDefault (Text.pack (show nm.unique)) nm.unique atomIds)
+      VizExpr.InertE uid txt ctx ->
+        VizExpr.InertE uid txt ctx  -- Inert elements pass through unchanged
    in
     ladderInfo
       { VizExpr.funDecl =
@@ -119,3 +121,6 @@ vizExprToBoolExpr expr =
     VizExpr.Or _ xs ->
       let (es, ms, os) = unzip3 (map go xs)
        in (BDQ.BOr es, mconcat ms, mconcat os)
+    -- Inert elements evaluate to identity for their context: AND→True, OR→False
+    VizExpr.InertE _ _ VizExpr.InertAnd -> (BDQ.BTrue, mempty, [])
+    VizExpr.InertE _ _ VizExpr.InertOr -> (BDQ.BFalse, mempty, [])

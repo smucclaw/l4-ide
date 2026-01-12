@@ -1,0 +1,126 @@
+-- Singapore Penal Code Section 415: Cheating
+-- Translated from the layman/woon.ts representation to L4 with inert elements
+--
+-- This demonstrates how inert elements (bare strings) serve as grammatical
+-- scaffolding to make the logical structure readable while not affecting
+-- the boolean evaluation.
+
+-- Section 415: Cheating (simplified structure)
+-- A person commits cheating if, by deceiving any person, they:
+-- (a) fraudulently or dishonestly induce the person to deliver property, OR
+-- (b) intentionally induce the person to do/not do something causing harm
+
+GIVEN `deceiving any person` IS A BOOLEAN
+      `fraudulently induces` IS A BOOLEAN
+      `dishonestly induces` IS A BOOLEAN
+      `deliver property` IS A BOOLEAN
+      `cause delivery of property` IS A BOOLEAN
+      `consent to retain property` IS A BOOLEAN
+DECIDE `cheating simplified` IF
+        `deceiving any person`
+    AND "fraudulent or dishonest inducement"
+    AND     `fraudulently induces`
+        OR  `dishonestly induces`
+    AND "to deliver or retain property"
+    AND     `deliver property`
+        OR  `cause delivery of property`
+        OR  `consent to retain property`
+
+-- Expected: TRUE
+-- Because: deceiving=TRUE AND (fraudulently=TRUE OR dishonestly=FALSE)=TRUE
+--          AND (deliver=TRUE OR cause=FALSE OR consent=FALSE)=TRUE
+#EVAL `cheating simplified` TRUE TRUE FALSE TRUE FALSE FALSE
+
+
+-- The "cheating tautology" from woon.ts: "whether such deception was or was not
+-- the sole or main inducement" - demonstrates a phrase that is structurally
+-- a tautology when the boolean leaves are set appropriately.
+
+GIVEN `was the inducement` IS A BOOLEAN
+      `was not the inducement` IS A BOOLEAN
+      `sole inducement` IS A BOOLEAN
+      `main inducement` IS A BOOLEAN
+DECIDE `cheating tautology` IF
+    "whether such deception"
+    ...     `was the inducement`
+        OR  `was not the inducement`
+    ... "the"
+    AND     `sole inducement`
+        OR  `main inducement`
+    ... "inducement"
+
+-- Expected: TRUE
+-- Because: (was=TRUE OR was_not=FALSE)=TRUE AND (sole=FALSE OR main=TRUE)=TRUE
+#EVAL `cheating tautology` TRUE FALSE FALSE TRUE
+
+
+-- Full Section 415 structure with proper indentation
+-- The structure mirrors woon.ts cheating definition
+
+GIVEN `deceives` IS A BOOLEAN
+      `fraudulent` IS A BOOLEAN
+      `dishonest` IS A BOOLEAN
+      `delivers` IS A BOOLEAN
+      `causes delivery` IS A BOOLEAN
+      `consents retention` IS A BOOLEAN
+      `intentional` IS A BOOLEAN
+      `does something` IS A BOOLEAN
+      `omits something` IS A BOOLEAN
+      `causes harm` IS A BOOLEAN
+      `likely causes harm` IS A BOOLEAN
+      `harms body` IS A BOOLEAN
+      `harms mind` IS A BOOLEAN
+      `harms reputation` IS A BOOLEAN
+      `harms property` IS A BOOLEAN
+DECIDE `commits cheating` IF
+    "by deceiving any person"
+    ... `deceives`
+    AND "and"
+    AND     "fraudulently or dishonestly induces"
+            ... `fraudulent`
+            OR  `dishonest`
+        ... "the person so deceived to"
+        AND     `delivers`
+            OR  `causes delivery`
+            OR  `consents retention`
+       OR   "intentionally induces the person so deceived"
+            ... `intentional`
+        AND     `does something`
+            OR  `omits something`
+        AND "which act or omission"
+        AND     `causes harm`
+            OR  `likely causes harm`
+        AND "to any person in"
+        AND     `harms body`
+            OR  `harms mind`
+            OR  `harms reputation`
+            OR  `harms property`
+
+-- Expected: TRUE (fraudulent inducement to deliver property)
+-- Args: deceives=T, fraudulent=T, dishonest=F, delivers=T, causes_delivery=F, consents=F,
+--       intentional=F, does=F, omits=F, causes_harm=F, likely=F, body=F, mind=F, rep=F, prop=F
+#EVAL `commits cheating` TRUE TRUE FALSE TRUE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE
+
+
+-- Test case 2: Intentional harm branch with true values
+GIVEN `intentionally induces 2` IS A BOOLEAN
+      `do something 2` IS A BOOLEAN
+      `causes harm 2` IS A BOOLEAN
+      `body harm 2` IS A BOOLEAN
+DECIDE `intentional harm only` IF
+    "intentionally induces the person so deceived to"
+    ... `intentionally induces 2`
+    AND     `do something 2`
+        OR  "not do something"
+    ... "if he were not so deceived"
+    ... "and which act or omission"
+    AND     `causes harm 2`
+        OR  "is likely to cause"
+    ... "to any person in"
+    AND     `body harm 2`
+        OR  "mind"
+        OR  "reputation"
+        OR  "property"
+
+-- Expected: TRUE
+#EVAL `intentional harm only` TRUE TRUE TRUE TRUE

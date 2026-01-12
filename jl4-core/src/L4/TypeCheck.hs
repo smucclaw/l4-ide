@@ -1130,21 +1130,33 @@ inferExpr' :: Expr Name -> Check (Expr Resolved, Type' Resolved)
 inferExpr' g =
   case g of
     And ann e1 e2 -> do
-      dsFun <- desugarBinOpToFunction (rawName andName) g ann e1 e2
+      -- Set inert context to AND for subexpressions before desugaring
+      let e1' = setInertContext InertCtxAnd e1
+          e2' = setInertContext InertCtxAnd e2
+      dsFun <- desugarBinOpToFunction (rawName andName) (And ann e1' e2') ann e1' e2'
       inferExpr' dsFun
     Or ann e1 e2 -> do
-      dsFun <- desugarBinOpToFunction (rawName orName) g ann e1 e2
+      -- Set inert context to OR for subexpressions before desugaring
+      let e1' = setInertContext InertCtxOr e1
+          e2' = setInertContext InertCtxOr e2
+      dsFun <- desugarBinOpToFunction (rawName orName) (Or ann e1' e2') ann e1' e2'
       inferExpr' dsFun
     RAnd ann e1 e2 -> do
+      -- Set inert context to AND for subexpressions
+      let e1' = setInertContext InertCtxAnd e1
+          e2' = setInertContext InertCtxAnd e2
       partyT <- fresh (NormalName "party")
       actT <- fresh (NormalName "action")
       let contractT = contract partyT actT
-      checkBinOp contractT contractT contractT "AND" RAnd ann e1 e2
+      checkBinOp contractT contractT contractT "AND" RAnd ann e1' e2'
     ROr ann e1 e2 -> do
+      -- Set inert context to OR for subexpressions
+      let e1' = setInertContext InertCtxOr e1
+          e2' = setInertContext InertCtxOr e2
       partyT <- fresh (NormalName "party")
       actT <- fresh (NormalName "action")
       let contractT = contract partyT actT
-      checkBinOp contractT contractT contractT "OR" ROr ann  e1 e2
+      checkBinOp contractT contractT contractT "OR" ROr ann e1' e2'
     Implies ann e1 e2 -> do
       dsFun <- desugarBinOpToFunction (rawName impliesName) g ann e1 e2
       inferExpr' dsFun
@@ -1365,6 +1377,10 @@ inferExpr' g =
       mParty' <- traverse (\p -> checkExpr ExpectRegulativePartyContext p partyT) mParty
       mReason' <- traverse (\r -> checkExpr ExpectBreachReasonContext r string) mReason
       pure (Breach ann mParty' mReason', contract partyT actionT)
+    Inert ann txt ctx -> do
+      -- Inert elements are grammatical scaffolding with context-aware evaluation
+      -- In AND context: True (identity), in OR context: False (identity)
+      pure (Inert ann txt ctx, boolean)
 
 isStringCoercible :: Type' Resolved -> Bool
 isStringCoercible ty = case ty of
@@ -2659,6 +2675,77 @@ desugarUnaryOpToFunction name g ann e  = do
         , range = a.range
         , payload = [mkHoleWithSrcRangeHint Nothing, mkHoleWithSrcRange as]
         }
+
+-- | Set the inert context for Inert nodes and convert string literals to Inert.
+-- String literals are only converted when they appear as direct operands of
+-- boolean operators (AND/OR/RAnd/ROr), not inside other expressions.
+-- When descending into nested boolean operators, the context is updated:
+-- AND/RAnd -> InertCtxAnd, OR/ROr -> InertCtxOr.
+setInertContext :: InertContext -> Expr Name -> Expr Name
+setInertContext = go True  -- True = we're at top level or direct boolean operand
+  where
+    -- go True means we should convert strings to Inert (direct boolean operand)
+    -- go False means we should preserve strings (inside other expressions)
+    go convertStrings ctx = \ case
+      Inert ann txt _ -> Inert ann txt ctx
+      -- String literals in direct boolean context become Inert nodes
+      Lit ann (StringLit _ txt) | convertStrings -> Inert ann txt ctx
+      -- Boolean operators: update context when descending into nested operators
+      And ann e1 e2 -> And ann (go True InertCtxAnd e1) (go True InertCtxAnd e2)
+      Or ann e1 e2 -> Or ann (go True InertCtxOr e1) (go True InertCtxOr e2)
+      RAnd ann e1 e2 -> RAnd ann (go True InertCtxAnd e1) (go True InertCtxAnd e2)
+      ROr ann e1 e2 -> ROr ann (go True InertCtxOr e1) (go True InertCtxOr e2)
+      -- NOT is boolean but its operand should still convert strings, inheriting context
+      Not ann e -> Not ann (go True ctx e)
+      -- IMPLIES is boolean, inheriting context
+      Implies ann e1 e2 -> Implies ann (go True ctx e1) (go True ctx e2)
+      -- Non-boolean operators: stop converting strings in their operands
+      Equals ann e1 e2 -> Equals ann (go False ctx e1) (go False ctx e2)
+      Plus ann e1 e2 -> Plus ann (go False ctx e1) (go False ctx e2)
+      Minus ann e1 e2 -> Minus ann (go False ctx e1) (go False ctx e2)
+      Times ann e1 e2 -> Times ann (go False ctx e1) (go False ctx e2)
+      DividedBy ann e1 e2 -> DividedBy ann (go False ctx e1) (go False ctx e2)
+      Modulo ann e1 e2 -> Modulo ann (go False ctx e1) (go False ctx e2)
+      Exponent ann e1 e2 -> Exponent ann (go False ctx e1) (go False ctx e2)
+      Cons ann e1 e2 -> Cons ann (go False ctx e1) (go False ctx e2)
+      Leq ann e1 e2 -> Leq ann (go False ctx e1) (go False ctx e2)
+      Geq ann e1 e2 -> Geq ann (go False ctx e1) (go False ctx e2)
+      Lt ann e1 e2 -> Lt ann (go False ctx e1) (go False ctx e2)
+      Gt ann e1 e2 -> Gt ann (go False ctx e1) (go False ctx e2)
+      Proj ann e n -> Proj ann (go False ctx e) n
+      Lam ann sig e -> Lam ann sig (go False ctx e)
+      App ann n es -> App ann n (map (go False ctx) es)
+      AppNamed ann n nes order -> AppNamed ann n (map (goNamed ctx) nes) order
+      IfThenElse ann b t e -> IfThenElse ann (go True ctx b) (go False ctx t) (go False ctx e)
+      MultiWayIf ann gs o -> MultiWayIf ann (map (goGuarded ctx) gs) (go False ctx o)
+      Regulative ann obl -> Regulative ann (goObl ctx obl)
+      Consider ann e branches -> Consider ann (go False ctx e) (map (goBranch ctx) branches)
+      Percent ann e -> Percent ann (go False ctx e)
+      List ann es -> List ann (map (go False ctx) es)
+      Where ann e ds -> Where ann (go convertStrings ctx e) (map (goLocalDecl ctx) ds)
+      LetIn ann ds e -> LetIn ann (map (goLocalDecl ctx) ds) (go convertStrings ctx e)
+      Event ann ev -> Event ann (goEvent ctx ev)
+      Fetch ann e -> Fetch ann (go False ctx e)
+      Env ann e -> Env ann (go False ctx e)
+      Post ann e1 e2 e3 -> Post ann (go False ctx e1) (go False ctx e2) (go False ctx e3)
+      Concat ann es -> Concat ann (map (go False ctx) es)
+      AsString ann e -> AsString ann (go False ctx e)
+      Breach ann mp mr -> Breach ann (fmap (go False ctx) mp) (fmap (go False ctx) mr)
+      -- Other leaves don't need transformation
+      e@Lit{} -> e
+
+    goNamed ctx' (MkNamedExpr ann n e) = MkNamedExpr ann n (go False ctx' e)
+    goGuarded ctx' (MkGuardedExpr ann c f) = MkGuardedExpr ann (go True ctx' c) (go False ctx' f)
+    goObl ctx' (MkObligation ann party action due hence lest) =
+      MkObligation ann (go False ctx' party) (goRAction ctx' action) (fmap (go False ctx') due) (fmap (go False ctx') hence) (fmap (go False ctx') lest)
+    goRAction ctx' (MkAction ann modal pat provided) =
+      MkAction ann modal pat (fmap (go False ctx') provided)
+    goBranch ctx' (MkBranch ann lhs e) = MkBranch ann lhs (go False ctx' e)
+    goLocalDecl ctx' = \ case
+      LocalDecide ann d -> LocalDecide ann (goDecide ctx' d)
+      LocalAssume ann a -> LocalAssume ann a
+    goDecide ctx' (MkDecide ann tysig appform e) = MkDecide ann tysig appform (go False ctx' e)
+    goEvent ctx' (MkEvent ann p a t atFirst) = MkEvent ann (go False ctx' p) (go False ctx' a) (go False ctx' t) atFirst
 
 -- | Rewrite the 'Anno' of the given arguments @'NonEmpty' ('Expr' 'Name)'@ to
 -- include the concrete syntax nodes of the 'Anno' in the @'Expr' 'Name'@.
