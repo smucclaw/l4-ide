@@ -198,6 +198,8 @@ Create named constants for common scenarios:
 
 The expression is evaluated and the result is displayed.
 
+For complex expressions spanning multiple lines, see [Directives Reference: Multiline Syntax](../reference/directives.md#multiline-directive-syntax).
+
 ### Simple Tests
 
 ```l4
