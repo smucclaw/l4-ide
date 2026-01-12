@@ -178,7 +178,7 @@ https://jl4.legalese.com/
 
 [Dev Build](Dev.md): for Haskell and JS developers to improve the toolchain and IDE developer experience. Requires Haskell and Typscript.
 
-[Quickstart for a local build](doc/quickstart.md): for legal engineers to experiment with writing L4 code locally. Download the VS Code extension and get started.
+[Quickstart for a local build](doc/foundation-course-ai/quickstart.md): for legal engineers to experiment with writing L4 code locally. Download the VS Code extension and get started.
 
 ## Application Libraries
 
