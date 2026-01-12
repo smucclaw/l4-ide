@@ -551,6 +551,10 @@ jobs:
           echo "Downloaded VSIX files:"
           find vsix-files -name "*.vsix" -ls
 
+      - name: Get build date
+        id: build-date
+        run: echo "date=$(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_OUTPUT
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
@@ -605,7 +609,7 @@ jobs:
             ### Build Information
 
             - **Commit:** ${{ github.sha }}
-            - **Build Date:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+            - **Build Date:** ${{ steps.build-date.outputs.date }}
 
             ### Documentation
 
