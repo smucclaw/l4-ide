@@ -185,11 +185,10 @@ GIVETH A NUMBER
 #EVAL `filter eligible drivers` (LIST `Alice`, `Bob`, `Charlie`, `Diana`)
 
 -- Multiple test cases
-#EVAL LIST
-    `generate quote` `Alice` 25000,
-    `generate quote` `Bob` 30000,
-    `generate quote` `Charlie` 20000,
-    `generate quote` `Diana` 40000
+#EVAL LIST  `generate quote` `Alice`   25000,
+            `generate quote` `Bob`     30000,
+            `generate quote` `Charlie` 20000,
+            `generate quote` `Diana`   40000
 
 -- Assertions for testing
 #ASSERT `is eligible for insurance` `Alice`
