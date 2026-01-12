@@ -4,3 +4,9 @@
 `regular.b1`
 `regular.quoted child.b2`
 `another section.nested.c1`
+`section alpha.a1`
+`section alpha.subsection aa.a2`
+`section alpha.subsection aa.deep section.a3`
+`regular.b1`
+`regular.quoted child.b2`
+`another section.nested.c1`

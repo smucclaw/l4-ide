@@ -29,3 +29,12 @@ ASSUME b2 IS A BOOLEAN
 ASSUME c1 IS A BOOLEAN
 
 #CHECK `another section`.nested.c1
+
+-- Test genitive ('s) syntax for section dereferencing
+-- Both 's and . should work equivalently for section names
+#CHECK `section alpha`'s a1
+#CHECK `section alpha`'s `subsection aa`'s a2
+#CHECK `section alpha`'s `subsection aa`'s `deep section`'s a3
+#CHECK regular's b1
+#CHECK regular's `quoted child`'s b2
+#CHECK `another section`'s nested's c1

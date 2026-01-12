@@ -100,6 +100,7 @@ import Control.Monad.Extra (mapMaybeM)
 import qualified Control.Monad.Extra as Extra
 import Data.Either (partitionEithers)
 import qualified Data.List as List
+import qualified Data.List.NonEmpty as NE
 import Data.Tuple.Extra (firstM)
 import Data.List.Split (splitWhen)
 import Optics ((%~), (^.))
@@ -1200,21 +1201,61 @@ inferExpr' g =
       dsFun <- desugarBinOpToFunction (rawName consName) g ann e1 e2
       inferExpr' dsFun
     Proj ann e l -> do
-      -- Handling this similar to App.
-      --
-      -- 1.
-      (rl, pt) <- resolveTerm l
-      t <- instantiate pt
+      -- First, try to resolve as a qualified name (for section dereferencing).
+      -- If we have `a's b's c`, try to look up `a.b.c` as a qualified name.
+      -- If that succeeds, return it as a Var; otherwise, fall back to record projection.
+      let maybeQualifiedName = extractProjNameChain (Proj ann e l)
+      case maybeQualifiedName of
+        Just qualifiedRawName@(QualifiedName _ _) -> do
+          options <- lookupRawNameInEnvironment qualifiedRawName
+          case options of
+            [] -> inferRecordProjection ann e l  -- No match, fall back to record projection
+            _  -> do
+              -- Found as qualified name, resolve it
+              let qualifiedName = MkName (l ^. annoOf) qualifiedRawName
+              (resolved, ty) <- resolveTerm qualifiedName
+              pure (Var ann resolved, ty)
+        _ -> inferRecordProjection ann e l  -- Not a valid chain, use record projection
+      where
+        -- Helper to extract a chain of names from a Proj expression and convert to QualifiedName
+        -- For `a's b's c`, we want to produce QualifiedName ("a" :| ["b"]) "c"
+        -- Returns Just (QualifiedName qualifiers finalName) if successful
+        extractProjNameChain :: Expr Name -> Maybe RawName
+        extractProjNameChain expr = do
+          chain <- go expr  -- Returns names in order: [a, b, c]
+          case chain of
+            (hd : rest@(_ : _)) ->
+              -- At least 2 elements: qualifiers are all but last, final is the last
+              let (qualifiers, final) = (NE.fromList (init (hd : rest)), last (hd : rest))
+              in Just $ QualifiedName qualifiers final
+            _ -> Nothing  -- Need at least 2 elements for a qualified name
+          where
+            -- Extract names in order from innermost to outermost
+            go :: Expr Name -> Maybe [Text]
+            go (Var _ n) = Just [rawNameToText (rawName n)]
+            go (Proj _ inner fieldName) = do
+              innerNames <- go inner
+              pure $ innerNames ++ [rawNameToText (rawName fieldName)]
+            go _ = Nothing
 
-      -- 2. - 5.
-      (res, rt) <- matchFunTy True rl t [e]
+        -- Original record projection logic
+        inferRecordProjection :: Anno -> Expr Name -> Name -> Check (Expr Resolved, Type' Resolved)
+        inferRecordProjection projAnn projE projL = do
+          -- Handling this similar to App.
+          --
+          -- 1.
+          (rl, pt) <- resolveTerm projL
+          t <- instantiate pt
 
-      re <-
-        case res of
-          [re] -> pure re
-          _ -> pure $ error "internal error in matchFunTy"
+          -- 2. - 5.
+          (res, rt) <- matchFunTy True rl t [projE]
 
-      pure (Proj ann re rl, rt)
+          re <-
+            case res of
+              [re'] -> pure re'
+              _ -> pure $ error "internal error in matchFunTy"
+
+          pure (Proj projAnn re rl, rt)
     Var ann n -> do
       (r, pt) <- resolveTerm n
       t <- instantiate pt
