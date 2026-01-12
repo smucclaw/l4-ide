@@ -4,11 +4,11 @@ Directives are special instructions that begin with `#` and tell the L4 compiler
 
 ## Available Directives
 
-| Directive | Purpose |
-|-----------|---------|
-| `#EVAL` | Evaluate an expression and display the result |
+| Directive    | Purpose                                            |
+| ------------ | -------------------------------------------------- |
+| `#EVAL`      | Evaluate an expression and display the result      |
 | `#EVALTRACE` | Evaluate with full execution trace (for debugging) |
-| `#ASSERT` | Verify a boolean expression is TRUE |
+| `#ASSERT`    | Verify a boolean expression is TRUE                |
 
 ## Basic Syntax
 
@@ -34,6 +34,7 @@ Put the directive keyword on its own line, then write the expression on subseque
 ```
 
 This method works naturally with L4's indentation-sensitive syntax and is ideal for:
+
 - `CONSIDER`/`WHEN` blocks
 - `IF`/`THEN`/`ELSE` expressions
 - Complex nested expressions
@@ -66,6 +67,7 @@ When writing list literals, trailing commas allow the expression to continue to 
 ```
 
 The comma at the end of each line (except the last) is both:
+
 1. A list element separator (semantic meaning)
 2. A line continuation signal (parser behavior)
 
@@ -80,12 +82,12 @@ The comma at the end of each line (except the last) is both:
 
 ### Summary: When to Use Each Method
 
-| Situation | Recommended Syntax |
-|-----------|-------------------|
+| Situation                                    | Recommended Syntax                          |
+| -------------------------------------------- | ------------------------------------------- |
 | Complex expressions (CONSIDER, IF/THEN/ELSE) | Method 1: `#EVAL` on own line + indentation |
-| Operator chains (arithmetic, boolean) | Method 2: `# ` continuation marker |
-| List literals | Method 1 with trailing commas |
-| Simple single-line expressions | No continuation needed |
+| Operator chains (arithmetic, boolean)        | Method 2: `# ` continuation marker          |
+| List literals                                | Method 1 with trailing commas               |
+| Simple single-line expressions               | No continuation needed                      |
 
 ## Examples
 

@@ -1208,10 +1208,14 @@ inferExpr' g =
       case maybeQualifiedName of
         Just qualifiedRawName@(QualifiedName _ _) -> do
           options <- lookupRawNameInEnvironment qualifiedRawName
-          case options of
-            [] -> inferRecordProjection ann e l  -- No match, fall back to record projection
+          -- Filter to only term entities. If the qualified name exists only as a
+          -- section/type (not a term), we should fall back to record projection.
+          -- See PR #759 review comment for details.
+          let termOptions = filter isTermEntity options
+          case termOptions of
+            [] -> inferRecordProjection ann e l  -- No term match, fall back to record projection
             _  -> do
-              -- Found as qualified name, resolve it
+              -- Found as qualified name with a term binding, resolve it
               let qualifiedName = MkName (l ^. annoOf) qualifiedRawName
               (resolved, ty) <- resolveTerm qualifiedName
               pure (Var ann resolved, ty)
@@ -2277,6 +2281,12 @@ reinterpretPostfixAppIfNeeded operandName args =
 isPostfixMixfix :: FunTypeSig -> Bool
 isPostfixMixfix MkFunTypeSig {mixfixInfo = Just MkMixfixInfo {pattern = [MixfixParam _, MixfixKeyword _], arity = 1}} = True
 isPostfixMixfix _ = False
+
+-- | Check if a CheckEntity is a term (as opposed to a type, section, or type variable).
+-- This is used to filter environment lookups when we specifically need term bindings.
+isTermEntity :: (Unique, Name, CheckEntity) -> Bool
+isTermEntity (_, _, KnownTerm _ _) = True
+isTermEntity _ = False
 
 -- | Check if a CheckEntity is callable (function, constructor, etc.)
 -- This is used to determine if a name can be applied to arguments.
