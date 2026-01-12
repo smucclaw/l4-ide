@@ -119,10 +119,11 @@ GIVETH A STRING
     IF NOT `meets minimum age` driver
     THEN "Driver is under 18 years old"
     ELSE IF NOT `has sufficient experience` driver
-    THEN "Driver needs at least 2 years of experience"
-    ELSE IF driver's accidentCount GREATER THAN 3
-    THEN "Too many accidents on record"
-    ELSE "Unknown reason"
+         THEN "Driver needs at least 2 years of experience"
+         ELSE IF driver's accidentCount GREATER THAN 3
+              THEN "Too many accidents on record"
+              ELSE "Unknown reason"
+-- this cascade of nesting is not ideal; BRANCH syntax works better.
 
 -- List operations example
 GIVEN drivers IS A LIST OF Driver
