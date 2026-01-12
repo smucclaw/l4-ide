@@ -2,15 +2,15 @@ Parsing successful
 Typechecking successful
 Info | updateFileDiagnostics published different from new diagnostics - file diagnostics:
 File: postfix-in-let-block.l4
-  Hidden:   no
-  Range:    13:25-13:28
-  Source:   check
+  Hidden: no
+  Range: 13:25-13:28
+  Source: check
   Severity: DiagnosticSeverity_Error
-  Code:     <none>
-  Message: 
+  Code: <none>
+  Message:
     The first argument of function 
 
-      __TIMES__ (predefined)
+      `__TIMES__` (predefined)
 
     is expected to be of type
 
@@ -21,15 +21,15 @@ File: postfix-in-let-block.l4
       FUNCTION FROM squared9 TO NUMBER
 
 File: postfix-in-let-block.l4
-  Hidden:   no
-  Range:    13:29-13:30
-  Source:   check
+  Hidden: no
+  Range: 13:29-13:30
+  Source: check
   Severity: DiagnosticSeverity_Error
-  Code:     <none>
-  Message: 
+  Code: <none>
+  Message:
     The second argument of function 
 
-      __TIMES__ (predefined)
+      `__TIMES__` (predefined)
 
     is expected to be of type
 
@@ -40,12 +40,12 @@ File: postfix-in-let-block.l4
       FUNCTION FROM squared9 TO NUMBER
 
 File: postfix-in-let-block.l4
-  Hidden:   no
-  Range:    14:6-14:28
-  Source:   check
+  Hidden: no
+  Range: 14:6-14:28
+  Source: check
   Severity: DiagnosticSeverity_Error
-  Code:     <none>
-  Message: 
+  Code: <none>
+  Message:
     You are trying to apply
 
       radius (defined at postfix-in-let-block.l4:11:18-24) of type NUMBER
@@ -53,12 +53,12 @@ File: postfix-in-let-block.l4
     (which is not a function) to 1 argument here.
 
 File: postfix-in-let-block.l4
-  Hidden:   no
-  Range:    14:13-14:22
-  Source:   check
+  Hidden: no
+  Range: 14:13-14:22
+  Source: check
   Severity: DiagnosticSeverity_Error
-  Code:     <none>
-  Message: 
+  Code: <none>
+  Message:
     I could not find a definition for the identifier
 
       squared
