@@ -1,0 +1,224 @@
+-- Singapore Penal Code Section 420
+-- Cheating and dishonestly inducing a delivery of property
+-- Isomorphic encoding following statutory structure
+
+§ `Definitions`
+
+-- The actors in a cheating scenario
+DECLARE Person HAS
+    name IS A STRING
+
+-- Types of property/instruments involved
+DECLARE ValuableSecurity IS ONE OF
+    NegotiableInstrument
+    DocumentOfTitle
+    StampedDocument
+    OtherValuableSecurity
+
+DECLARE SignedSealedThing HAS
+    isSigned        IS A BOOLEAN
+    isSealed        IS A BOOLEAN
+    canBeConverted  IS A BOOLEAN   -- capable of being converted into valuable security
+
+DECLARE DestructionExtent IS ONE OF
+    WholeOf
+    PartOf
+
+-- The induced acts under Section 420(1)
+-- Simplified: acts involving signed/sealed things carry the thing separately
+DECLARE InducedAct IS ONE OF
+    DeliveryOfProperty
+    CauseDeliveryOfProperty
+    MakeValuableSecurity
+    AlterValuableSecurity
+    DestroyValuableSecurity
+    AlterSignedSealedThing
+    DestroySignedSealedThing
+
+-- How the deception was communicated
+DECLARE CommunicationMethod IS ONE OF
+    InPerson
+    RemoteCommunication   -- phone, internet, etc.
+
+-- The cheating scenario
+DECLARE CheatingScenario HAS
+    deceiver            IS A Person
+    victim              IS A Person
+    deceptionOccurred   IS A BOOLEAN
+    dishonestIntent     IS A BOOLEAN
+    inducedAct          IS AN InducedAct
+    signedSealedThing   IS A MAYBE SignedSealedThing  -- only relevant for Alter/DestroySignedSealedThing
+    communicationMethod IS A CommunicationMethod
+
+-- Punishment structure
+DECLARE Punishment HAS
+    maxImprisonment     IS A NUMBER    -- years
+    mandatoryCaning     IS A BOOLEAN
+    minCaneStrokes      IS A NUMBER
+    liableToFine        IS A BOOLEAN
+    liableToCaning      IS A BOOLEAN   -- discretionary caning
+
+
+§ `Section 415 - Cheating (definition)`
+
+-- A person cheats when they deceive another person
+-- (simplified from full 415 for this encoding)
+GIVEN scenario IS A CheatingScenario
+GIVETH A BOOLEAN
+DECIDE `cheating occurred` IF
+    scenario's deceptionOccurred
+
+
+§ `Section 420(1) - Basic Aggravated Cheating`
+
+-- A signed/sealed thing must be capable of conversion
+GIVEN thing IS A SignedSealedThing
+GIVETH A BOOLEAN
+`convertible to valuable security` thing MEANS
+    (thing's isSigned OR thing's isSealed) AND thing's canBeConverted
+
+-- Check if a Maybe SignedSealedThing is convertible
+GIVEN maybeThing IS A MAYBE SignedSealedThing
+GIVETH A BOOLEAN
+`maybe convertible` maybeThing MEANS
+    CONSIDER maybeThing
+    WHEN JUST thing THEN `convertible to valuable security` thing
+    OTHERWISE FALSE
+
+-- The induced act qualifies under 420(1)
+-- For signed/sealed things, we need to check convertibility separately
+GIVEN act IS AN InducedAct
+      maybeThing IS A MAYBE SignedSealedThing
+GIVETH A BOOLEAN
+`qualifies as 420 inducement` act maybeThing MEANS
+    CONSIDER act
+    WHEN DeliveryOfProperty THEN TRUE
+    WHEN CauseDeliveryOfProperty THEN TRUE
+    WHEN MakeValuableSecurity THEN TRUE
+    WHEN AlterValuableSecurity THEN TRUE
+    WHEN DestroyValuableSecurity THEN TRUE
+    WHEN AlterSignedSealedThing THEN `maybe convertible` maybeThing
+    WHEN DestroySignedSealedThing THEN `maybe convertible` maybeThing
+
+-- Section 420(1): Whoever cheats and thereby dishonestly induces...
+GIVEN scenario IS A CheatingScenario
+GIVETH A BOOLEAN
+DECIDE `liable under s420(1)` IF
+        `cheating occurred` scenario
+    AND scenario's dishonestIntent
+    AND `qualifies as 420 inducement` (scenario's inducedAct) (scenario's signedSealedThing)
+
+
+§ `Section 420(2) - Remote Communication Variant`
+
+-- Section 420(2): Whoever cheats BY REMOTE COMMUNICATION and thereby...
+GIVEN scenario IS A CheatingScenario
+GIVETH A BOOLEAN
+DECIDE `liable under s420(2)` IF
+        `liable under s420(1)` scenario
+    AND scenario's communicationMethod EQUALS RemoteCommunication
+
+
+§ `Sentencing`
+
+-- Punishment for 420(1)
+`punishment for s420(1)` MEANS
+    Punishment WITH
+        maxImprisonment   IS 10
+        mandatoryCaning   IS FALSE
+        minCaneStrokes    IS 0
+        liableToFine      IS TRUE
+        liableToCaning    IS TRUE   -- "liable to caning" = discretionary
+
+-- Punishment for 420(2) - more severe
+`punishment for s420(2)` MEANS
+    Punishment WITH
+        maxImprisonment   IS 10
+        mandatoryCaning   IS TRUE
+        minCaneStrokes    IS 6
+        liableToFine      IS TRUE
+        liableToCaning    IS TRUE
+
+-- Determine applicable punishment
+GIVEN scenario IS A CheatingScenario
+GIVETH A Punishment
+`sentencing for` scenario MEANS
+    IF `liable under s420(2)` scenario
+    THEN `punishment for s420(2)`
+    ELSE `punishment for s420(1)`
+
+
+§ `Test Scenarios`
+
+-- Scenario 1: In-person scam inducing property delivery
+`alice` MEANS Person WITH name IS "Alice"
+`bob` MEANS Person WITH name IS "Bob"
+
+`inPersonScam` MEANS CheatingScenario WITH
+    deceiver            IS `alice`
+    victim              IS `bob`
+    deceptionOccurred   IS TRUE
+    dishonestIntent     IS TRUE
+    inducedAct          IS DeliveryOfProperty
+    signedSealedThing   IS NOTHING
+    communicationMethod IS InPerson
+
+-- Scenario 2: Phone scam (remote communication)
+`phoneScam` MEANS CheatingScenario WITH
+    deceiver            IS `alice`
+    victim              IS `bob`
+    deceptionOccurred   IS TRUE
+    dishonestIntent     IS TRUE
+    inducedAct          IS DeliveryOfProperty
+    signedSealedThing   IS NOTHING
+    communicationMethod IS RemoteCommunication
+
+-- Scenario 3: Forging a signed document
+`signedDoc` MEANS SignedSealedThing WITH
+    isSigned       IS TRUE
+    isSealed       IS FALSE
+    canBeConverted IS TRUE
+
+`forgeryScam` MEANS CheatingScenario WITH
+    deceiver            IS `alice`
+    victim              IS `bob`
+    deceptionOccurred   IS TRUE
+    dishonestIntent     IS TRUE
+    inducedAct          IS AlterSignedSealedThing
+    signedSealedThing   IS JUST `signedDoc`
+    communicationMethod IS InPerson
+
+-- Scenario 4: No dishonest intent (not liable)
+`honestMistake` MEANS CheatingScenario WITH
+    deceiver            IS `alice`
+    victim              IS `bob`
+    deceptionOccurred   IS TRUE
+    dishonestIntent     IS FALSE
+    inducedAct          IS DeliveryOfProperty
+    signedSealedThing   IS NOTHING
+    communicationMethod IS InPerson
+
+
+§ `Assertions`
+
+-- Test: In-person scam is liable under 420(1) but not 420(2)
+#ASSERT `liable under s420(1)` `inPersonScam`
+#ASSERT NOT `liable under s420(2)` `inPersonScam`
+
+-- Test: Phone scam is liable under both 420(1) and 420(2)
+#ASSERT `liable under s420(1)` `phoneScam`
+#ASSERT `liable under s420(2)` `phoneScam`
+
+-- Test: Phone scam gets mandatory caning
+#ASSERT (`sentencing for` `phoneScam`)'s mandatoryCaning
+
+-- Test: Forgery qualifies
+#ASSERT `liable under s420(1)` `forgeryScam`
+
+-- Test: No liability without dishonest intent
+#ASSERT NOT `liable under s420(1)` `honestMistake`
+
+-- Evaluate scenarios
+#EVAL `liable under s420(1)` `inPersonScam`
+#EVAL `liable under s420(2)` `phoneScam`
+#EVAL `sentencing for` `phoneScam`
