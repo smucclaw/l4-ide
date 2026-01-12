@@ -10,14 +10,16 @@ import L4.Annotation
 -- import qualified L4.Evaluate.Value as Eval
 import qualified L4.Evaluate.ValueLazy as Eval
 import qualified L4.EvaluateLazy as Eval
-import L4.EvaluateLazy.Machine (EvalException)
+import L4.EvaluateLazy.Machine (EvalException, emptyEnvironment)
 import L4.EvaluateLazy.Trace
 import qualified L4.EvaluateLazy.GraphViz2 as GraphViz
-import L4.TracePolicy (apiDefaultPolicy)
+import L4.TracePolicy (apiDefaultPolicy, TracePolicy(..))
+import qualified L4.TracePolicy as TracePolicy
 import L4.Names
 import L4.Print
 import qualified L4.Print as Print
 import L4.Syntax
+import qualified L4.TypeCheck as TypeCheck
 import L4.TypeCheck.Types (EntityInfo, Environment)
 import L4.Utils.Ratio
 import qualified LSP.Core.Shake as Shake
@@ -33,6 +35,7 @@ import Backend.CodeGen (generateEvalWrapper, GeneratedCode(..))
 import Backend.DirectiveFilter (filterIdeDirectives)
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Aeson
+import qualified Data.Scientific as Scientific
 import qualified Data.Vector as Vector
 
 -- | Map from file path to file content for module resolution
@@ -94,7 +97,56 @@ precompileModule filepath source moduleContext funName = runExceptT $ do
   evalErrorToText (CannotHandleParameterType lit) = "Cannot handle parameter type: " <> Text.show lit
   evalErrorToText CannotHandleUnknownVars = "Cannot handle unknown variables"
 
--- | Evaluate using precompiled module (fast path)
+-- ----------------------------------------------------------------------------
+-- Direct AST evaluation (avoiding text round-trip)
+-- ----------------------------------------------------------------------------
+
+-- | Convert FnLiteral to Expr Resolved
+-- This allows us to build function call expressions directly without going through text
+-- Note: FnObject, FnUncertain, and FnUnknown require wrapper-based evaluation
+-- and should be filtered out by requiresWrapperEvaluation before calling this
+fnLiteralToExpr :: FnLiteral -> Expr Resolved
+fnLiteralToExpr = \case
+  FnLitInt i -> Lit emptyAnno (NumericLit emptyAnno (fromIntegral i))
+  -- Use Scientific for exact decimal semantics matching JSONDECODE
+  -- This preserves decimal values like 0.1 as exact rationals (1/10)
+  -- Scientific has a Real instance so toRational works directly
+  FnLitDouble d -> Lit emptyAnno (NumericLit emptyAnno (toRational (Scientific.fromFloatDigits d)))
+  FnLitBool True -> App emptyAnno TypeCheck.trueRef []
+  FnLitBool False -> App emptyAnno TypeCheck.falseRef []
+  FnLitString s -> Lit emptyAnno (StringLit emptyAnno s)
+  FnArray xs -> List emptyAnno (map fnLiteralToExpr xs)
+  -- These cases should never be reached if requiresWrapperEvaluation is checked first
+  FnObject _fields -> error "fnLiteralToExpr: FnObject requires wrapper-based evaluation"
+  FnUncertain -> error "fnLiteralToExpr: FnUncertain requires wrapper-based evaluation"
+  FnUnknown -> error "fnLiteralToExpr: FnUnknown requires wrapper-based evaluation"
+
+-- | Get the function's Resolved name from the compiled decide
+getFunctionResolved :: Decide Resolved -> Resolved
+getFunctionResolved (MkDecide _ _ (MkAppForm _ funName _ _) _) = funName
+
+-- | Build the function call expression from function name and argument expressions
+-- Arguments must be in the correct order (matching the function signature)
+buildFunctionCallExpr :: Resolved -> [Expr Resolved] -> Expr Resolved
+buildFunctionCallExpr funName args =
+  App emptyAnno funName args
+
+-- | Check if any parameter value requires wrapper-based evaluation
+-- This includes FnObject (records), FnUncertain, and FnUnknown (null/empty inputs)
+-- These types need JSONDECODE to handle properly (e.g., for MAYBE-typed fields)
+requiresWrapperEvaluation :: [(Text, Maybe FnLiteral)] -> Bool
+requiresWrapperEvaluation = any (maybe False needsWrapper . snd)
+  where
+    needsWrapper :: FnLiteral -> Bool
+    needsWrapper (FnObject _) = True
+    needsWrapper FnUncertain = True
+    needsWrapper FnUnknown = True
+    needsWrapper (FnArray xs) = any needsWrapper xs
+    needsWrapper _ = False
+
+-- | Evaluate using precompiled module (fast path) - direct AST evaluation
+-- This avoids the text round-trip through prettyLayout and re-parsing
+-- Falls back to wrapper-based evaluation for FnObject parameters
 evaluateWithCompiled
   :: FilePath
   -> FunctionDeclaration
@@ -104,6 +156,109 @@ evaluateWithCompiled
   -> Bool
   -> ExceptT EvaluatorError IO ResponseWithReason
 evaluateWithCompiled filepath fnDecl compiled params traceLevel includeGraphViz = do
+  -- Check if we need to fall back to wrapper-based evaluation
+  -- (for FnObject, FnUncertain, FnUnknown which require JSONDECODE)
+  if requiresWrapperEvaluation params
+    then evaluateWithWrapper filepath fnDecl compiled params traceLevel includeGraphViz
+    else evaluateDirectAST compiled params traceLevel includeGraphViz
+
+-- | Direct AST evaluation (fast path) - for simple types without FnObject
+evaluateDirectAST
+  :: CompiledModule
+  -> [(Text, Maybe FnLiteral)]
+  -> TraceLevel
+  -> Bool
+  -> ExceptT EvaluatorError IO ResponseWithReason
+evaluateDirectAST compiled params traceLevel includeGraphViz = do
+  -- Convert input parameters to a map for lookup
+  let paramMap = Map.fromList [(name, val) | (name, Just val) <- params]
+
+  -- Get parameter names in order from the function signature
+  let paramTypes = extractParamTypes compiled.compiledDecide
+      paramNames = map fst paramTypes
+
+  -- Build argument expressions in the correct order
+  argExprs <- forM paramNames $ \name -> case Map.lookup name paramMap of
+    Nothing -> throwError $ InterpreterError $ "Missing value for parameter: " <> name
+    Just val -> pure (fnLiteralToExpr val)
+
+  -- Get the function's Resolved name from the compiled decide
+  let funResolved = getFunctionResolved compiled.compiledDecide
+
+  -- Build the function call expression directly as AST
+  let callExpr = buildFunctionCallExpr funResolved argExprs
+
+  -- Configure evaluation with tracing based on trace level
+  let evalTracePolicy = case traceLevel of
+        TraceNone -> apiDefaultPolicy
+        TraceFull -> TracePolicy
+          { evalDirectiveTrace = TracePolicy.CollectTrace (TracePolicy.TraceOptions TracePolicy.TextTrace TracePolicy.ApiResponse GraphViz.defaultGraphVizOptions)
+          , evaltraceDirectiveTrace = TracePolicy.CollectTrace (TracePolicy.TraceOptions TracePolicy.TextTrace TracePolicy.ApiResponse GraphViz.defaultGraphVizOptions)
+          }
+
+  -- Evaluate the expression directly using the precompiled module
+  fixedNow <- liftIO Eval.readFixedNowEnv
+  evalConfig <- liftIO $ Eval.resolveEvalConfig fixedNow evalTracePolicy
+
+  -- Pass empty environment - the module will be evaluated fresh each time
+  -- The evaluator's Environment (Map Unique Reference) is different from
+  -- the typechecker's Environment (Map RawName [Unique])
+  mResult <- liftIO $ Eval.execEvalExprInContextOfModule
+    evalConfig
+    compiled.compiledEntityInfo
+    callExpr
+    (emptyEnvironment, compiled.compiledModule)
+
+  -- Handle result
+  case mResult of
+    Nothing -> throwError $ InterpreterError "L4: Expression evaluation failed."
+    Just Eval.MkEvalDirectiveResult{result, trace} ->
+      handleEvalResultDirect result trace traceLevel includeGraphViz compiled.compiledModule
+
+-- | Handle evaluation result (simplified version for direct evaluation)
+handleEvalResultDirect
+  :: Eval.EvalDirectiveValue
+  -> Maybe EvalTrace
+  -> TraceLevel
+  -> Bool
+  -> Module Resolved
+  -> ExceptT EvaluatorError IO ResponseWithReason
+handleEvalResultDirect result trace traceLevel includeGraphViz mModule = case result of
+  Eval.Assertion _ -> throwError $ InterpreterError "L4: Got an assertion instead of a normal result."
+  Eval.Reduction (Left evalExc) -> throwError $ InterpreterError $ Text.show evalExc
+  Eval.Reduction (Right val) -> do
+    r <- nfToFnLiteral val
+    pure $ ResponseWithReason
+      { values = [("result", r)]
+      , reasoning = case traceLevel of
+          TraceNone -> emptyTree
+          TraceFull -> buildReasoningTree trace
+      , graphviz =
+          if includeGraphViz && traceLevel == TraceFull
+            then
+              fmap
+                ( \tr ->
+                    GraphVizResponse
+                      { dot = GraphViz.traceToGraphViz GraphViz.defaultGraphVizOptions (Just mModule) tr
+                      , png = Nothing
+                      , svg = Nothing
+                      }
+                )
+                trace
+            else Nothing
+      }
+
+-- | Wrapper-based evaluation (fallback for FnObject parameters)
+-- Uses JSONDECODE to handle complex record types
+evaluateWithWrapper
+  :: FilePath
+  -> FunctionDeclaration
+  -> CompiledModule
+  -> [(Text, Maybe FnLiteral)]
+  -> TraceLevel
+  -> Bool
+  -> ExceptT EvaluatorError IO ResponseWithReason
+evaluateWithWrapper filepath fnDecl compiled params traceLevel includeGraphViz = do
   -- Extract parameter types from the compiled function definition
   let paramTypes = extractParamTypes compiled.compiledDecide
 
@@ -146,6 +301,78 @@ evaluateWrapperInContext filepath wrapperCode compiled = do
   -- Evaluate the combined program using the original module context
   -- This ensures IMPORT statements can be resolved correctly
   evaluateModule filepath combinedProgram compiled.compiledModuleContext
+
+-- | Convert FnLiteral parameters to Aeson.Value
+paramsToJson :: (Monad m) => [(Text, Maybe FnLiteral)] -> ExceptT EvaluatorError m Aeson.Value
+paramsToJson params = do
+  pairs <- forM params $ \(name, mVal) -> case mVal of
+    Nothing -> throwError $ InterpreterError $ "Missing value for parameter: " <> name
+    Just val -> pure (name, fnLiteralToJson val)
+  pure $ Aeson.object [(Aeson.fromText k, v) | (k, v) <- pairs]
+
+-- | Convert FnLiteral to Aeson.Value
+fnLiteralToJson :: FnLiteral -> Aeson.Value
+fnLiteralToJson = \case
+  FnLitInt i -> Aeson.Number (fromIntegral i)
+  FnLitDouble d -> Aeson.Number (realToFrac d)
+  FnLitBool b -> Aeson.Bool b
+  FnLitString s -> Aeson.String s
+  FnArray arr -> Aeson.Array (Vector.fromList (map fnLiteralToJson arr))
+  FnObject fields -> Aeson.object [(Aeson.fromText k, fnLiteralToJson v) | (k, v) <- fields]
+  FnUncertain -> Aeson.Null
+  FnUnknown -> Aeson.Null
+
+-- | Handle evaluation result, checking for decode failure sentinel
+handleEvalResult
+  :: Eval.EvalDirectiveValue
+  -> Maybe EvalTrace
+  -> Text
+  -> TraceLevel
+  -> Bool
+  -> Module Resolved
+  -> ExceptT EvaluatorError IO ResponseWithReason
+handleEvalResult result trace _sentinel traceLevel includeGraphViz mModule = case result of
+  Eval.Assertion _ -> throwError $ InterpreterError "L4: Got an assertion instead of a normal result."
+  Eval.Reduction (Left evalExc) -> throwError $ InterpreterError $ Text.show evalExc
+  Eval.Reduction (Right val) -> do
+    r <- nfToFnLiteral val
+    -- Check if the result is NOTHING (decode failure from LEFT error) or JUST value
+    actualResult <- case r of
+      -- If result is FnUnknown, it means evaluation produced undefined/unknown
+      FnUnknown ->
+        throwError $ InterpreterError "Evaluation produced unknown value"
+      -- If result is NOTHING constructor, it means JSONDECODE returned LEFT (JSON decode failed)
+      FnObject [("NOTHING", FnArray [])] ->
+        throwError $ InterpreterError "JSON decoding failed: input does not match expected schema"
+      -- If result is JUST x (wrapper returns JUST when JSONDECODE returns RIGHT)
+      FnObject [("JUST", FnArray [val'])] ->
+        pure val'
+      -- For backwards compatibility, if result is an array with one element
+      FnArray [val'] ->
+        pure val'
+      -- For any other result, return as-is
+      _ ->
+        pure r
+
+    pure $ ResponseWithReason
+      { values = [("result", actualResult)]
+      , reasoning = case traceLevel of
+          TraceNone -> emptyTree
+          TraceFull -> buildReasoningTree trace
+      , graphviz =
+          if includeGraphViz && traceLevel == TraceFull
+            then
+              fmap
+                ( \tr ->
+                    GraphVizResponse
+                      { dot = GraphViz.traceToGraphViz GraphViz.defaultGraphVizOptions (Just mModule) tr
+                      , png = Nothing
+                      , svg = Nothing
+                      }
+                )
+                trace
+            else Nothing
+      }
 
 createFunction ::
   FilePath ->
@@ -223,79 +450,6 @@ extractParamTypes (MkDecide _ (MkTypeSig _ (MkGivenSig _ typedNames) _) _ _) =
       case getAnno (getName resolved) ^. #extra % #resolvedInfo of
         Just (TypeInfo ty _) -> Just (rawNameToText (rawName $ getActual resolved), ty)
         _ -> Nothing
-
--- | Convert FnLiteral parameters to Aeson.Value
-paramsToJson :: (Monad m) => [(Text, Maybe FnLiteral)] -> ExceptT EvaluatorError m Aeson.Value
-paramsToJson params = do
-  pairs <- forM params $ \(name, mVal) -> case mVal of
-    Nothing -> throwError $ InterpreterError $ "Missing value for parameter: " <> name
-    Just val -> pure (name, fnLiteralToJson val)
-  pure $ Aeson.object [(Aeson.fromText k, v) | (k, v) <- pairs]
-
--- | Convert FnLiteral to Aeson.Value
-fnLiteralToJson :: FnLiteral -> Aeson.Value
-fnLiteralToJson = \case
-  FnLitInt i -> Aeson.Number (fromIntegral i)
-  FnLitDouble d -> Aeson.Number (realToFrac d)
-  FnLitBool b -> Aeson.Bool b
-  FnLitString s -> Aeson.String s
-  FnArray arr -> Aeson.Array (Vector.fromList (map fnLiteralToJson arr))
-  FnObject fields -> Aeson.object [(Aeson.fromText k, fnLiteralToJson v) | (k, v) <- fields]
-  FnUncertain -> Aeson.Null
-  FnUnknown -> Aeson.Null
-
--- | Handle evaluation result, checking for decode failure sentinel
-handleEvalResult
-  :: Eval.EvalDirectiveValue
-  -> Maybe EvalTrace
-  -> Text
-  -> TraceLevel
-  -> Bool
-  -> Module Resolved
-  -> ExceptT EvaluatorError IO ResponseWithReason
-handleEvalResult result trace _sentinel traceLevel includeGraphViz mModule = case result of
-  Eval.Assertion _ -> throwError $ InterpreterError "L4: Got an assertion instead of a normal result."
-  Eval.Reduction (Left evalExc) -> throwError $ InterpreterError $ Text.show evalExc
-  Eval.Reduction (Right val) -> do
-    r <- nfToFnLiteral val
-    -- Check if the result is NOTHING (decode failure from LEFT error) or JUST value
-    actualResult <- case r of
-      -- If result is FnUnknown, it means evaluation produced undefined/unknown
-      FnUnknown ->
-        throwError $ InterpreterError "Evaluation produced unknown value"
-      -- If result is NOTHING constructor, it means JSONDECODE returned LEFT (JSON decode failed)
-      FnObject [("NOTHING", FnArray [])] ->
-        throwError $ InterpreterError "JSON decoding failed: input does not match expected schema"
-      -- If result is JUST x (wrapper returns JUST when JSONDECODE returns RIGHT)
-      FnObject [("JUST", FnArray [val'])] ->
-        pure val'
-      -- For backwards compatibility, if result is an array with one element
-      FnArray [val'] ->
-        pure val'
-      -- For any other result, return as-is
-      _ ->
-        pure r
-
-    pure $ ResponseWithReason
-      { values = [("result", actualResult)]
-      , reasoning = case traceLevel of
-          TraceNone -> emptyTree
-          TraceFull -> buildReasoningTree trace
-      , graphviz =
-          if includeGraphViz && traceLevel == TraceFull
-            then
-              fmap
-                ( \tr ->
-                    GraphVizResponse
-                      { dot = GraphViz.traceToGraphViz GraphViz.defaultGraphVizOptions (Just mModule) tr
-                      , png = Nothing
-                      , svg = Nothing
-                      }
-                )
-                trace
-            else Nothing
-      }
-
 
 -- | Find the first function with the given name in the module.
 getFunctionDefinition :: (Monad m) => RawName -> Module Resolved -> ExceptT EvaluatorError m (Decide Resolved)
