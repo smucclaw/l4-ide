@@ -74,7 +74,7 @@ _Problem:_ New users face 30+ minute setup before "Hello World"
 
 _Evidence:_
 
-- `doc/quickstart.md` incomplete ("This document is under construction")
+- `doc/foundation-course-ai/quickstart.md` exists but needs better integration with main README
 - No single-command setup script
 - Requires manual: Haskell toolchain → npm packages → jl4-lsp install → VSCode extension VSIX
 - Five separate terminals without `dev-start.sh --run` flag
@@ -189,14 +189,14 @@ _Priority:_ **P2 - Post-Sprint Week 3-4**
 
 **1. Complete Quickstart Documentation** (4 hours)
 
-- Status: `doc/quickstart.md` is stub
+- Status: `doc/foundation-course-ai/quickstart.md` exists, references updated
 - Owner: Documentation lead
 - Acceptance:
   - Copy-paste commands for macOS, Linux, Windows
   - "Hello World in 5 minutes" section
   - Link from main README.md
   - Tested on fresh machine
-- Files: `doc/quickstart.md`
+- Files: `doc/foundation-course-ai/quickstart.md`
 
 **2. Add Dev Health-Check Script** (2 hours)
 
@@ -580,7 +580,7 @@ _Priority:_ **P2 - Post-Sprint Week 3-4**
 **Impact:** High | **Likelihood:** High  
 **Mitigation:**
 
-- P0: Complete quickstart.md with copy-paste commands
+- P0: Complete doc/foundation-course-ai/quickstart.md with copy-paste commands
 - P0: Record 5-minute video walkthrough
 - P1: Docker Compose for one-command setup
 - P1: One-click setup script
