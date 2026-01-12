@@ -1989,7 +1989,9 @@ withQualified rs ce = do
                   [ MkName (getAnno n) (QualifiedName qual t)
                   | qual <- toList $ sequence neSects
                   ]
-              traverse def newNames
+              -- Use defAka to share the same Unique as the original entity
+              -- This ensures the evaluator can find the entity via qualified name
+              traverse (defAka r) newNames
             PreDef _ -> pure []
             QualifiedName _ _ -> pure []
 

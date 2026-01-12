@@ -18,7 +18,7 @@ File: postfix-in-let-block.l4
 
     but is here of type
 
-      FUNCTION FROM squared9 TO NUMBER
+      FUNCTION FROM squared8 TO NUMBER
 
 File: postfix-in-let-block.l4
   Hidden: no
@@ -37,7 +37,7 @@ File: postfix-in-let-block.l4
 
     but is here of type
 
-      FUNCTION FROM squared9 TO NUMBER
+      FUNCTION FROM squared8 TO NUMBER
 
 File: postfix-in-let-block.l4
   Hidden: no
@@ -65,4 +65,4 @@ File: postfix-in-let-block.l4
 
     which I have inferred to be of type: 
 
-      squared11
+      squared10

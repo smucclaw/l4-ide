@@ -1,0 +1,15 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+cross-section-ref.l4:16:8-13:
+  NUMBER
+cross-section-ref.l4:17:8-13:
+  NUMBER
+cross-section-ref.l4:18:8-13:
+  NUMBER
+cross-section-ref.l4:20:1-12:
+  43
+cross-section-ref.l4:21:1-12:
+  43
+cross-section-ref.l4:22:1-12:
+  43
