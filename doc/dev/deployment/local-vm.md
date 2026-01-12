@@ -538,6 +538,7 @@ Use this to deploy changes to an already-running VM **without** restarting it:
    ```
 
    This will:
+
    - Build the new configuration on your host
    - Copy it to the VM
    - Switch the VM to the new configuration
@@ -553,6 +554,7 @@ Use this to deploy changes to an already-running VM **without** restarting it:
 **When to use each approach:**
 
 - **Approach 1 (Rebuild & Restart)**:
+
   - Kernel/initrd changes
   - Major system changes
   - Testing from a clean state

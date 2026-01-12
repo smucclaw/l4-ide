@@ -38,9 +38,11 @@ cabal build jl4-lsp
 ### Changes Made
 
 1. **Added functionName to VizState** (jl4-lsp/src/LSP/L4/Viz/Ladder.hs:92-93)
+
    - Tracks the function being visualized for atomId generation
 
 2. **Created generateAtomId helper** (jl4-lsp/src/LSP/L4/Viz/Ladder.hs:459-495)
+
    - Generates stable UUIDv5 atomIds
    - Algorithm matches jl4-query-plan implementation:
      ```
@@ -49,6 +51,7 @@ cabal build jl4-lsp
      ```
 
 3. **Updated all atom creation sites:**
+
    - `varLeaf` (line 424): Now generates atomId for UBoolVar nodes
    - `leafFromExpr` (line 436): Now generates atomId for UBoolVar nodes
    - `App` node creation (line 387): Now generates atomId for App nodes

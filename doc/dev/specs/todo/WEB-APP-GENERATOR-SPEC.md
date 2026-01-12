@@ -435,6 +435,7 @@ Generate a self-contained HTML/JS bundle that:
 5. **Multi-function apps**: Should one web app support multiple related decision functions? (e.g., "Check eligibility" then "Calculate amount")
 
 6. **Parent node assertion UI**: How exactly should we render intermediate/composite nodes for user assertion?
+
    - Option A: Show the decision tree structure with toggles at each level
    - Option B: Flat list with indentation showing hierarchy
    - Option C: "Expert mode" toggle that reveals intermediate nodes

@@ -248,6 +248,7 @@ Once all services are running:
    ```
 
 2. **The save will:**
+
    - Generate a UUID (e.g., `b52992ed-39fd-4226-bad2-2deee2473881`)
    - Store in SQLite (`/tmp/sessions.db`)
    - Push to decision service (if URL configured)

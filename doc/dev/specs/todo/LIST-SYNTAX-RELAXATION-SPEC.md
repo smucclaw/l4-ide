@@ -388,15 +388,18 @@ Update golden test outputs for examples using the new syntax.
 ## Implementation Tasks
 
 - [ ] **Task 1**: Modify parser to accept vertical LIST blocks
+
   - Update: vertical LIST blocks are already supported; instead, relax inline single-binding LET RHS indentation
   - Location: `jl4-core/src/L4/Parser.hs`
 
 - [ ] **Task 2**: Add parser tests
+
   - Location: `jl4/examples/ok/` and `jl4/examples/not-ok/tc/`
   - Add a regression example for inline LET + vertical LIST RHS (previously failing)
   - Add a regression example for inline LET + record construction RHS (same indentation issue)
 
 - [ ] **Task 3**: Update golden tests
+
   - Run test suite to regenerate golden files
   - Verify outputs are correct
 
@@ -469,12 +472,15 @@ All support vertical list literals. L4 should too!
 ## Questions for Discussion
 
 1. Should commas be required, optional, or forbidden in vertical blocks?
+
    - **Recommendation**: Optional (most flexible)
 
 2. Should we deprecate horizontal alignment syntax?
+
    - **Recommendation**: No, keep it as an alternative
 
 3. Should empty vertical blocks be allowed?
+
    - **Recommendation**: No, use `EMPTY` instead
 
 4. Maximum indentation level for nested vertical lists?

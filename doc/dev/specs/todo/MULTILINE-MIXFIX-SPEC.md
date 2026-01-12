@@ -23,17 +23,20 @@ program` (line break between operands and keywords) behaves the same as the sing
 ## Proposed Parser Changes
 
 1. **Indent-aware lookahead helper**
+
    - Extend `mixfixKeywordOnLine` (Parser.hs ~1211) into a generalized `mixfixKeywordAligned` helper that accepts `exprEndLine` and `exprEndColumn`.
    - Permit keyword tokens whose start line is either the same line **or** the next line provided the start column matches the col of the preceding operand.
    - Guard with registry membership (already done) to avoid consuming random identifiers.
 
 2. **Chain parser update**
+
    - Update `mixfixKeywordClause` inside `mixfixChainExpr` to use the new helper when deciding whether another `(keyword, expr)` pair can follow.
    - When a keyword is accepted on the next line, ensure the subsequently parsed argument inherits the same indentation guard so `a
 `foo`
 b` is legal while misaligned/ambiguous layouts still fail.
 
 3. **Postfix alignment**
+
    - `mixfixPostfixOp` should share the same helper so postfix-only keywords (`radius
 squared`) also respect indentation rather than being forced onto one line.
 
@@ -43,11 +46,13 @@ squared`) also respect indentation rather than being forced onto one line.
 ## Testing Strategy
 
 1. **New parser spec**
+
    - Extend `MixfixParserSpec` with golden snippets covering:
      - Multi-line postfix: `radius` on one line, `` `squared` `` indented to the same column on the following line.
      - Multi-line multi-operand chain: one keyword per line but aligned columns, verifying the parser still produces a `MixfixChain` with the same keywords as the single-line equivalent.
 
 2. **Regression programs**
+
    - Add `jl4/examples/ok/mixfix-multiline.l4` demonstrating IF/THEN style alignment for a user-defined mixfix declaration and ensure `cabal test` covers it (via existing example-driven tests or a new `golden` file).
 
 3. **Manual scenario**

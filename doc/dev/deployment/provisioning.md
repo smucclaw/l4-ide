@@ -36,6 +36,7 @@ nix run nixpkgs#nixos-anywhere -- --help
 ### Create the Instance
 
 1. **Launch EC2 instance:**
+
    - **AMI:** Ubuntu Server 22.04 LTS or later (e.g., `ami-0c55b159cbfafe1f0`)
    - **Instance type:** `t3.medium` or larger (minimum 2 vCPU, 4GB RAM)
    - **Storage:** 20GB+ EBS volume (NVMe)
