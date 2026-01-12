@@ -97,6 +97,10 @@ export function compileDecisionQuery(
           `Cannot compile decision query: App ${app.fnName.label} not supported`
         )
       })
+      .with({ $type: 'InertE' }, (inert) =>
+        // Inert elements evaluate to identity for their context: AND→True, OR→False
+        inert.context === 'InertAnd' ? ROBDD.TRUE : ROBDD.FALSE
+      )
       .exhaustive()
   }
 

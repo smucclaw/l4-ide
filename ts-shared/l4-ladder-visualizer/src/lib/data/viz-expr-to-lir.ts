@@ -17,6 +17,7 @@ import {
   AppLirNode,
   TrueExprLirNode,
   FalseExprLirNode,
+  InertExprLirNode,
   makeLadderGraphLirNode,
 } from '../layout-ir/ladder-graph/ladder.svelte.js'
 import type { DirectedAcyclicGraph, Vertex } from '../algebraic-graphs/dag.js'
@@ -312,6 +313,22 @@ function transform(
         graph: appGraph,
         vizExprToLirGraph: combinedEnv,
         noIntermediateBundlingNodeGraph: appGraph,
+      }
+    })
+    .with({ $type: 'InertE' }, (inertExpr) => {
+      // Inert elements evaluate to the identity for their context: AND→True, OR→False
+      const graph = vertex(
+        new InertExprLirNode(
+          nodeInfo,
+          inertExpr.text,
+          inertExpr.context
+        ).getId()
+      )
+      const vizExprToLirGraph = new Map(veToLir).set(inertExpr.id, graph)
+      return {
+        graph,
+        vizExprToLirGraph,
+        noIntermediateBundlingNodeGraph: graph,
       }
     })
     .exhaustive()

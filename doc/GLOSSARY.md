@@ -5,6 +5,8 @@
 - [**Algebraic Types**](30-algebraic-types.md#algebraic-types) - Ways to combine and structure data types
 - [**Annotations**](20-basic-syntax.md#textual-annotations) - Paratextual information enclosed in `[square brackets]`
 - [**AND**](10-boolean-logic.md#boolean-logic) - Logical conjunction operator
+- [**Asyndetic Conjunction (`...`)**](20-basic-syntax.md#asyndetic-conjunction-) - The _semantics_ of implicit AND where the conjunction keyword is omitted; expressed using three-dot ellipsis _syntax_ (see also: Ellipsis)
+- [**Asyndetic Disjunction (`..`)**](20-basic-syntax.md#asyndetic-disjunction-) - The _semantics_ of implicit OR where the disjunction keyword is omitted; expressed using two-dot ellipsis _syntax_
 - [**ASSUME**](guide-index.md#assume) - Declares a variable with a specific type
 - [**AT**](regulative.md#temporal-operators) - Temporal operator for specifying time points
 - [**AT LEAST**](default-logic.md#default-reasoning) - Operator for minimum quantity conditions `>=`
@@ -41,6 +43,7 @@
 ## E
 
 - [**EITHER**](30-algebraic-types.md#algebraic-types) - Algebraic data type for representing two possible types (LEFT/RIGHT)
+- [**Ellipsis (`...` / `..`)**](20-basic-syntax.md#asyndetic-conjunction-) - The _syntax_ for asyndetic operations: three dots (`...`) for AND, two dots (`..`) for OR; see _Asyndetic Conjunction_ and _Asyndetic Disjunction_
 - [**ELSE**](10-boolean-logic.md#boolean-logic) - Alternative branch in conditional logic
 - [**ENDSWITH**](10-data-types.md#strings) - String operator to check if string ends with suffix (STRING → STRING → BOOLEAN)
 - [**EQUALS**](10-boolean-logic.md#boolean-logic) - Equality comparison operator
@@ -73,6 +76,7 @@
 - [**Identifiers**](20-basic-syntax.md#identifiers) - Space-separated words enclosed in backticks
 - [**IF**](10-boolean-logic.md#boolean-logic) - Conditional operator
 - [**IMPLIES**](10-boolean-logic.md#boolean-logic) - Logical implication operator
+- [**Inert Elements**](10-boolean-logic.md#inert-elements-grammatical-scaffolding) - String literals in boolean context that serve as grammatical scaffolding (TRUE in AND, FALSE in OR)
 - [**IMPORT**](guide-index.md#import) - Keyword for importing external definitions
 - [**INDEXOF**](10-data-types.md#strings) - String operator to find index of substring (STRING → STRING → NUMBER)
 - [**IS**](10-data-types.md#user-defined-types) - Type assertion operator

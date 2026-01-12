@@ -302,6 +302,9 @@ vizExprToBoolExpr expr =
     VizExpr.Or _ xs ->
       let (es, ms, os) = unzip3 (map go xs)
        in (BDQ.BOr es, Map.unions ms, concat os)
+    -- Inert elements evaluate to identity for their context: AND→True, OR→False
+    VizExpr.InertE _ _ VizExpr.InertAnd -> (BDQ.BTrue, Map.empty, [])
+    VizExpr.InertE _ _ VizExpr.InertOr -> (BDQ.BFalse, Map.empty, [])
 
 data QueryPlanResponse = QueryPlanResponse
   { determined :: !(Maybe Bool)

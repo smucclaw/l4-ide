@@ -1,0 +1,142 @@
+-- Test file for nested inert context propagation
+-- When AND contains OR, inert strings in the OR should evaluate to FALSE (OR identity)
+-- When OR contains AND, inert strings in the AND should evaluate to TRUE (AND identity)
+
+-- Test case: A AND ("scaffold" OR B)
+-- The "scaffold" is inside OR, so it should evaluate to FALSE
+-- Result should be A AND (FALSE OR B) = A AND B
+GIVEN a IS A BOOLEAN
+      b IS A BOOLEAN
+DECIDE `and containing or` IF
+        a
+    AND     "this scaffold is in OR context"
+        OR  b
+
+#EVAL `and containing or` TRUE TRUE
+-- Expected: TRUE (a AND (FALSE OR b) = TRUE AND TRUE = TRUE)
+
+#EVAL `and containing or` TRUE FALSE
+-- Expected: FALSE (a AND (FALSE OR b) = TRUE AND FALSE = FALSE)
+
+#EVAL `and containing or` FALSE TRUE
+-- Expected: FALSE (a is FALSE, so whole thing is FALSE)
+
+-- Test case: A OR ("scaffold" AND B)
+-- The "scaffold" is inside AND, so it should evaluate to TRUE
+-- Result should be A OR (TRUE AND B) = A OR B
+GIVEN x IS A BOOLEAN
+      y IS A BOOLEAN
+DECIDE `or containing and` IF
+        x
+    OR      "this scaffold is in AND context"
+        AND y
+
+#EVAL `or containing and` TRUE FALSE
+-- Expected: TRUE (x is TRUE)
+
+#EVAL `or containing and` FALSE TRUE
+-- Expected: TRUE (x OR (TRUE AND y) = FALSE OR TRUE = TRUE)
+
+#EVAL `or containing and` FALSE FALSE
+-- Expected: FALSE (x OR (TRUE AND y) = FALSE OR FALSE = FALSE)
+
+-- Deeply nested: A AND (B OR ("deep scaffold" AND C))
+-- The "deep scaffold" is in AND (innermost), so it should be TRUE
+GIVEN p IS A BOOLEAN
+      q IS A BOOLEAN
+      r IS A BOOLEAN
+DECIDE `deeply nested` IF
+        p
+    AND     q
+        OR      "deep scaffold in AND"
+            AND r
+
+#EVAL `deeply nested` TRUE FALSE TRUE
+-- Expected: TRUE (p AND (q OR (TRUE AND r)) = TRUE AND (FALSE OR TRUE) = TRUE AND TRUE = TRUE)
+
+#EVAL `deeply nested` TRUE FALSE FALSE
+-- Expected: FALSE (p AND (q OR (TRUE AND r)) = TRUE AND (FALSE OR FALSE) = TRUE AND FALSE = FALSE)
+
+-- Multiple scaffolds at different levels: A AND ("outer scaffold" OR (B AND "inner scaffold"))
+-- "outer scaffold" is in OR context -> FALSE
+-- "inner scaffold" is in AND context -> TRUE
+-- Result: A AND (FALSE OR (B AND TRUE)) = A AND B
+GIVEN m IS A BOOLEAN
+      n IS A BOOLEAN
+DECIDE `multiple scaffolds` IF
+        m
+    AND     "outer scaffold in OR"
+        OR      n
+            AND "inner scaffold in AND"
+
+#EVAL `multiple scaffolds` TRUE TRUE
+-- Expected: TRUE (m AND (FALSE OR (n AND TRUE)) = TRUE AND TRUE = TRUE)
+
+#EVAL `multiple scaffolds` TRUE FALSE
+-- Expected: FALSE (m AND (FALSE OR (n AND TRUE)) = TRUE AND FALSE = FALSE)
+
+#EVAL `multiple scaffolds` FALSE TRUE
+-- Expected: FALSE (m is FALSE)
+
+-- Triple nesting: A OR (B AND ("middle" OR (C AND "deep")))
+-- "middle" is in OR context -> FALSE
+-- "deep" is in AND context -> TRUE
+-- Result: A OR (B AND (FALSE OR (C AND TRUE))) = A OR (B AND C)
+GIVEN t1 IS A BOOLEAN
+      t2 IS A BOOLEAN
+      t3 IS A BOOLEAN
+DECIDE `triple nesting` IF
+        t1
+    OR      t2
+        AND     "middle scaffold in OR"
+            OR      t3
+                AND "deep scaffold in AND"
+
+#EVAL `triple nesting` TRUE FALSE FALSE
+-- Expected: TRUE (t1 is TRUE)
+
+#EVAL `triple nesting` FALSE TRUE TRUE
+-- Expected: TRUE (t1 OR (t2 AND (FALSE OR (t3 AND TRUE))) = FALSE OR (TRUE AND TRUE) = TRUE)
+
+#EVAL `triple nesting` FALSE TRUE FALSE
+-- Expected: FALSE (t1 OR (t2 AND (FALSE OR (t3 AND TRUE))) = FALSE OR (TRUE AND FALSE) = FALSE)
+
+#EVAL `triple nesting` FALSE FALSE TRUE
+-- Expected: FALSE (t1 OR (t2 AND ...) where t2 is FALSE)
+
+-- Adjacent scaffolds in same context: A AND "s1" AND "s2" AND B
+-- Both s1 and s2 are in AND context -> TRUE
+-- Result: A AND TRUE AND TRUE AND B = A AND B
+GIVEN j IS A BOOLEAN
+      k IS A BOOLEAN
+DECIDE `adjacent scaffolds` IF
+        j
+    AND "first scaffold"
+    AND "second scaffold"
+    AND k
+
+#EVAL `adjacent scaffolds` TRUE TRUE
+-- Expected: TRUE
+
+#EVAL `adjacent scaffolds` TRUE FALSE
+-- Expected: FALSE
+
+#EVAL `adjacent scaffolds` FALSE TRUE
+-- Expected: FALSE
+
+-- Mixed: A AND ("s1" OR B OR "s2")
+-- Both s1 and s2 are in OR context -> FALSE
+-- Result: A AND (FALSE OR B OR FALSE) = A AND B
+GIVEN v IS A BOOLEAN
+      w IS A BOOLEAN
+DECIDE `mixed scaffolds in or` IF
+        v
+    AND     "first or scaffold"
+        OR  w
+        OR  "second or scaffold"
+
+#EVAL `mixed scaffolds in or` TRUE TRUE
+-- Expected: TRUE (v AND (FALSE OR w OR FALSE) = TRUE AND TRUE = TRUE)
+
+#EVAL `mixed scaffolds in or` TRUE FALSE
+-- Expected: FALSE (v AND (FALSE OR w OR FALSE) = TRUE AND FALSE = FALSE)

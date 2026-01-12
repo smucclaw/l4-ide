@@ -1108,7 +1108,7 @@ currentLine :: Parser Pos
 currentLine = sourceLine <$> getSourcePos
 
 expressionCont :: Pos -> Parser (Cont Expr)
-expressionCont = cont operator baseExpr
+expressionCont p = cont operator baseExpr p
 
 data ExprLineInfo =
   MkExprLineInfo
@@ -1166,8 +1166,8 @@ data Assoc = AssocLeft | AssocRight
 operator :: Parser (Prio, Assoc, Expr Name -> Expr Name -> Expr Name)
 operator =
       (\ op -> (1, AssocRight, infix2  Implies   op)) <$> (spacedKeyword_ TKImplies <|> spacedTokenOp_ TImplies )
-  <|> (\ op -> (2, AssocRight, infix2  Or        op)) <$> (spacedKeyword_ TKOr      <|> spacedTokenOp_ TOr      )
-  <|> (\ op -> (3, AssocRight, infix2  And       op)) <$> (spacedKeyword_ TKAnd     <|> spacedTokenOp_ TAnd     )
+  <|> (\ op -> (2, AssocRight, infix2  Or        op)) <$> (spacedKeyword_ TKOr      <|> spacedTokenOp_ TOr      <|> spacedSymbol_ TEllipsisOr)
+  <|> (\ op -> (3, AssocRight, infix2  And       op)) <$> (spacedKeyword_ TKAnd     <|> spacedTokenOp_ TAnd     <|> spacedSymbol_ TEllipsis)
   <|> (\ op -> (2, AssocRight, infix2  ROr       op)) <$> spacedKeyword_ TKROr
   <|> (\ op -> (3, AssocRight, infix2  RAnd      op)) <$> spacedKeyword_ TKRAnd
   <|> (\ op -> (4, AssocRight, infix2  Equals    op)) <$> (spacedKeyword_ TKEquals <|> spacedTokenOp_ TEquals)
@@ -1494,6 +1494,9 @@ stringLit =
   attachAnno $
     StringLit emptyAnno
       <$> annoEpa (spacedToken (#_TLiterals % #_TStringLit) "String Literal")
+
+-- Note: The `...` syntax is now handled by `implicitAndCont` as syntactic sugar for AND.
+-- String literals in boolean context are converted to Inert nodes during type checking.
 
 -- | Parser for function application.
 --

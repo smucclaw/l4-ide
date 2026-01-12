@@ -200,6 +200,9 @@ instance ToSemTokens Context PosToken (Obligation Name) where
 -- DeonticModal has no tokens to highlight
 instance ToSemTokens Context PosToken DeonticModal where
   toSemTokens _ = pure []
+-- InertContext has no tokens to highlight (derived during desugaring)
+instance ToSemTokens Context PosToken InertContext where
+  toSemTokens _ = pure []
 instance ToSemTokens Context PosToken (RAction Name) where
 instance ToSemTokens Context PosToken (LocalDecl Name) where
 instance ToSemTokens Context PosToken (Assume Name) where
@@ -224,6 +227,10 @@ instance ToSemTokens Context PosToken NormalizedUri where
   toSemTokens _ = pure []
 
 instance ToSemTokens Context PosToken Int where
+  toSemTokens _ = pure []
+
+-- Text has no tokens to highlight (used in Inert expressions)
+instance ToSemTokens Context PosToken Text where
   toSemTokens _ = pure []
 
 instance ToSemTokens Context PosToken Name where
@@ -295,6 +302,9 @@ instance ToSemTokens () PosToken (Obligation Resolved) where
 -- DeonticModal has no tokens to highlight
 instance ToSemTokens () PosToken DeonticModal where
   toSemTokens _ = pure []
+-- InertContext has no tokens to highlight (derived during desugaring)
+instance ToSemTokens () PosToken InertContext where
+  toSemTokens _ = pure []
 instance ToSemTokens () PosToken (RAction Resolved) where
 instance ToSemTokens () PosToken (Event Resolved) where
   toSemTokens (MkEvent ann p a t atFirst) = traverseCsnWithHoles ann $ map toSemTokens
@@ -322,6 +332,10 @@ instance ToSemTokens () PosToken NormalizedUri where
   toSemTokens _ = pure []
 
 instance ToSemTokens () PosToken Int where
+  toSemTokens _ = pure []
+
+-- Text has no tokens to highlight (used in Inert expressions)
+instance ToSemTokens () PosToken Text where
   toSemTokens _ = pure []
 
 instance ToSemTokens () PosToken Name where

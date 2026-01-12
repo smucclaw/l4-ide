@@ -234,7 +234,17 @@ data Expr n =
   | Concat     Anno [Expr n] -- string concatenation
   | AsString   Anno (Expr n) -- type coercion to string
   | Breach     Anno (Maybe (Expr n)) (Maybe (Expr n))  -- BREACH [BY party] [BECAUSE reason]
+  | Inert      Anno Text InertContext  -- ... "inert text" - grammatical scaffolding with context-aware evaluation
   deriving stock (GHC.Generic, Eq, Ord, Show, Functor, Foldable, Traversable)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
+
+-- | Context for inert element evaluation.
+-- Inert elements evaluate to the identity for their containing boolean operator.
+data InertContext
+  = InertCtxAnd   -- ^ In AND context, evaluates to True (AND identity)
+  | InertCtxOr    -- ^ In OR context, evaluates to False (OR identity)
+  | InertCtxNone  -- ^ Default context, evaluates to True
+  deriving stock (GHC.Generic, Eq, Ord, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 pattern Var :: Anno -> n -> Expr n
@@ -707,6 +717,14 @@ instance ToConcreteNodes PosToken Int where
   -- We could either be more precise about what occurs in which phase,
   -- or we could also possibly be more precise about the types, and not
   -- use plain Int, but some newtype-wrapped type.
+
+-- Text has no concrete syntax nodes (used in Inert expressions for the string content)
+instance ToConcreteNodes PosToken Text where
+  toNodes _ = pure []
+
+-- InertContext has no concrete syntax nodes (derived during desugaring)
+instance ToConcreteNodes PosToken InertContext where
+  toNodes _ = pure []
 
 instance ToConcreteNodes PosToken Name where
   toNodes (MkName ann _) =

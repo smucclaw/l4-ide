@@ -403,6 +403,13 @@ forwardExpr env = \ case
     mPartyRef <- traverse (\p -> allocate_ p env) mParty
     mReasonRef <- traverse (\r -> allocate_ r env) mReason
     Backward (ValBreached (ExplicitBreach mPartyRef mReasonRef))
+  Inert _ann _txt ctx ->
+    -- Inert elements are grammatical scaffolding with context-aware evaluation
+    -- In AND context: True (identity), in OR context: False (identity)
+    case ctx of
+      InertCtxAnd  -> Backward (ValBool True)
+      InertCtxOr   -> Backward (ValBool False)
+      InertCtxNone -> Backward (ValBool True)  -- Default to True for compatibility
 
 backward :: WHNF -> Machine Config
 backward val = WithPoppedFrame $ \ case
