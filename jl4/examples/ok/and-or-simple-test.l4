@@ -1,0 +1,17 @@
+-- Simple test for AND/OR linter
+
+ASSUME a IS BOOLEAN
+ASSUME b IS BOOLEAN
+ASSUME c IS BOOLEAN
+
+-- Case 1: This SHOULD trigger a warning (AND and OR at same column 5 on different lines)
+DECIDE `case1`
+IF  a
+    AND b
+    OR c
+
+-- Case 2: This should NOT trigger (all ANDs)
+DECIDE `case2`
+IF  a
+    AND b
+    AND c

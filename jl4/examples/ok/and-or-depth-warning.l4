@@ -1,0 +1,42 @@
+-- Test file for AND/OR depth linter warning
+-- This file contains patterns that SHOULD trigger lint warnings
+
+ASSUME a IS BOOLEAN
+ASSUME b IS BOOLEAN
+ASSUME c IS BOOLEAN
+ASSUME d IS BOOLEAN
+ASSUME e IS BOOLEAN
+
+-- This SHOULD trigger a warning: AND and OR at same indentation (column 5)
+DECIDE `mixed at same level`
+IF  a
+    AND b
+    OR c
+
+-- This should NOT trigger a warning: properly nested
+DECIDE `properly nested`
+IF  a
+    AND b
+    AND (c OR d)
+
+-- This should NOT trigger a warning: all ANDs at same level
+DECIDE `all ands`
+IF  a
+    AND b
+    AND c
+    AND d
+
+-- This should NOT trigger a warning: all ORs at same level
+DECIDE `all ors`
+IF  a
+    OR b
+    OR c
+    OR d
+
+-- This should NOT trigger: ORs are indented further than ANDs
+DECIDE `ors indented more`
+IF  a
+    AND b
+    AND c
+        OR d
+        OR e
