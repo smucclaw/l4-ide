@@ -184,11 +184,12 @@ GIVETH A NUMBER
 -- Testing with lists
 #EVAL `filter eligible drivers` (LIST `Alice`, `Bob`, `Charlie`, `Diana`)
 
--- Multiple test cases
-#EVAL LIST  `generate quote` `Alice`   25000,
-            `generate quote` `Bob`     30000,
-            `generate quote` `Charlie` 20000,
-            `generate quote` `Diana`   40000
+-- Multiple test cases (trailing commas enable multiline)
+#EVAL LIST
+          `generate quote` `Alice`   25000,
+          `generate quote` `Bob`     30000,
+          `generate quote` `Charlie` 20000,
+          `generate quote` `Diana`   40000
 
 -- Assertions for testing
 #ASSERT `is eligible for insurance` `Alice`
@@ -299,6 +300,8 @@ cabal run jl4-cli -- insurance.l4
 ```
 
 The compiler will:
+
+> **Tip:** For multiline `#EVAL` and `#ASSERT` syntax options, see the [Directives Reference](../reference/directives.md).
 
 1. **Type-check** all definitions
 2. **Execute** each #EVAL directive
