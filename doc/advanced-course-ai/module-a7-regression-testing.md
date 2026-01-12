@@ -60,6 +60,8 @@ Change Impact: 127 existing cases affected
 
 ## Part 2: Building a Test Suite
 
+> **Syntax Reference:** For multiline `#EVAL` and `#ASSERT` syntax (indentation, continuation markers, trailing commas), see the [Directives Reference](../reference/directives.md).
+
 ### Test File Organization
 
 ```
