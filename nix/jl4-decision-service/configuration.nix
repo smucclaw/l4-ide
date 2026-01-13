@@ -31,6 +31,10 @@
       "http://localhost:${toString config.services.jl4-decision-service.port}/";
   };
 
+  # Ensure nginx-config-reload waits for decision service to be ready
+  # This prevents reload timeouts when decision service is slow to start
+  config.systemd.services.nginx-config-reload.after = [ "jl4-decision-service.service" ];
+
   config.systemd.services.jl4-decision-service = {
     enable = true;
     description = "jl4-decision-service";
