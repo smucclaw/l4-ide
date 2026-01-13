@@ -1,0 +1,22 @@
+-- Test: Can section B refer to section A's MEANS definition without qualification?
+
+§ `Section A`
+sharedValue MEANS 42
+
+§ `Section B`
+-- Try to reference sharedValue without qualifying it
+test1 MEANS sharedValue PLUS 1
+
+-- What about with qualification?
+test2 MEANS `Section A`.sharedValue PLUS 1
+
+-- And with genitive syntax?
+test3 MEANS `Section A`'s sharedValue PLUS 1
+
+#CHECK test1
+#CHECK test2
+#CHECK test3
+
+#EVAL test1
+#EVAL test2
+#EVAL test3

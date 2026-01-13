@@ -319,13 +319,16 @@ simpleName =
 
 qualifiedName :: Parser (Epa Name)
 qualifiedName = do
-  -- TODO: in future we may also want to allow `tokOf #_TQuoted`
+  -- Allow both regular identifiers and quoted identifiers in qualified names
   let nameAndQualifiers = List.unsnoc . mapMaybe (either (const Nothing) (Just . snd))
+      identToken = tokOf $ #_TIdentifiers % #_TIdentifier
+      quotedToken = tokOf $ #_TIdentifiers % #_TQuoted
+      identOrQuoted = identToken <|> quotedToken
   res@(nameAndQualifiers -> Just (q : qs, n)) <- do
-    x <- tokOf $ #_TIdentifiers % #_TIdentifier
+    x <- identOrQuoted
     dotOrIdentifier <- some do
       d <- tokOf $ #_TSymbols % #_TDot
-      i <- tokOf $ #_TIdentifiers % #_TIdentifier
+      i <- identOrQuoted
       pure [Left $ fst d, Right i]
     pure $ (Right x :) $ mconcat dotOrIdentifier
   wsOrAnnotation <- spaceOrAnnotations
@@ -341,7 +344,7 @@ qualifiedName = do
  tokOf p = token (\t -> (t,) <$> preview p (computedPayload t)) Set.empty
 
 name :: Parser Name
-name = attachEpa (quotedName <|> try qualifiedName <|> simpleName) <?> "identifier"
+name = attachEpa (try qualifiedName <|> quotedName <|> simpleName) <?> "identifier"
 
 tokenAsName :: TokenType -> Parser Name
 tokenAsName tt =
