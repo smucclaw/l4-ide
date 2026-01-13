@@ -121,9 +121,16 @@ export async function evaluateFunction(
     throw new Error(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg))
   }
 
+  // Extract result from SimpleResponse structure: {contents: {values: [["result", value]]}}
+  const values = data.contents?.values
+  const resultPair = values?.find(
+    (pair: [string, unknown]) => pair[0] === 'result'
+  )
+  const resultValue = resultPair ? resultPair[1] : undefined
+
   return {
-    result: data.result,
-    trace: data.trace,
+    result: resultValue,
+    trace: data.contents?.reasoning,
   }
 }
 
