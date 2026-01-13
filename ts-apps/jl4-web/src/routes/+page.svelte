@@ -48,6 +48,7 @@
   const sessionUrl = import.meta.env.VITE_SESSION_URL || 'http://localhost:5008'
   const decisionServiceUrl =
     import.meta.env.VITE_DECISION_SERVICE_URL || 'http://localhost:8001'
+  const wizardUrl = import.meta.env.VITE_WIZARD_URL || 'http://localhost:5174'
   const decisionServiceClient: DecisionServiceClient = {
     baseUrl: decisionServiceUrl,
   }
@@ -692,13 +693,12 @@
 
       await navigator.clipboard.writeText(shareUrl)
 
-      // Build wizard URL - include function name if available
-      const wizardBase = `${window.location.origin}/wizard/`
-      const wizardUrl = currentDecisionServiceFunctionName
-        ? `${wizardBase}?fn=${encodeURIComponent(currentDecisionServiceFunctionName)}`
-        : wizardBase
+      // Build wizard URL using path-based routing: /wizard/{sessionId}/{functionName}
+      const shareWizardUrl = currentDecisionServiceFunctionName
+        ? `${wizardUrl}/${sessionId}/${encodeURIComponent(currentDecisionServiceFunctionName)}`
+        : `${wizardUrl}/${sessionId}`
       toast.push(
-        `Link copied to clipboard. <a href="${wizardUrl}" target="_blank" style="color: #60a5fa; text-decoration: underline;">Open in Wizard</a>`,
+        `Link copied to clipboard. <a href="${shareWizardUrl}" target="_blank" style="color: #60a5fa; text-decoration: underline;">Open in Wizard</a>`,
         { duration: 6000 }
       )
     } else {
@@ -710,8 +710,8 @@
     // Open window synchronously to avoid popup blocking (async awaits would make it non-user-initiated)
     const wizardWindow = window.open('about:blank', '_blank')
 
-    // Persist to session server
-    await handlePersist()
+    // Persist to session server - we need the session ID for the wizard URL
+    const sessionId = await handlePersist()
 
     // If we have a function, ensure it's uploaded to the decision service
     if (currentDecisionServiceFunctionName) {
@@ -722,14 +722,18 @@
       }
     }
 
-    // Navigate to wizard - with function if available, otherwise show function list
-    const wizardBase = `${window.location.origin}/wizard/`
-    const wizardUrl = currentDecisionServiceFunctionName
-      ? `${wizardBase}?fn=${encodeURIComponent(currentDecisionServiceFunctionName)}`
-      : wizardBase
+    // Navigate to wizard using path-based routing: /wizard/{sessionId}/{functionName}
+    let targetWizardUrl: string
+    if (sessionId && currentDecisionServiceFunctionName) {
+      targetWizardUrl = `${wizardUrl}/${sessionId}/${encodeURIComponent(currentDecisionServiceFunctionName)}`
+    } else if (sessionId) {
+      targetWizardUrl = `${wizardUrl}/${sessionId}`
+    } else {
+      targetWizardUrl = wizardUrl
+    }
 
     if (wizardWindow) {
-      wizardWindow.location.href = wizardUrl
+      wizardWindow.location.href = targetWizardUrl
     }
   }
 

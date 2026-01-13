@@ -1,6 +1,8 @@
 {
   socket-url ? "localhost:5007",
   session-url ? "localhost:5008",
+  decision-service-url ? "localhost:8001",
+  wizard-path ? "/wizard",  # Relative path for same-origin in production
   secure ? false,
   buildNpmPackage,
   importNpmLock,
@@ -36,6 +38,8 @@ buildNpmPackage rec {
     set -x
     export VITE_SOCKET_URL=${if secure then "wss" else "ws"}://${socket-url};
     export VITE_SESSION_URL=${if secure then "https" else "http"}://${session-url};
+    export VITE_DECISION_SERVICE_URL=${if secure then "https" else "http"}://${decision-service-url};
+    export VITE_WIZARD_URL=${wizard-path};
 
     pushd ./ts-shared
 

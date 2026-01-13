@@ -40,7 +40,8 @@
   }
 
   function selectFunction(name: string) {
-    goto(`?fn=${encodeURIComponent(name)}`)
+    // Use path-based routing: /wizard/functionName
+    goto(`/wizard/${encodeURIComponent(name)}`)
   }
 </script>
 
