@@ -9,6 +9,7 @@ import * as SF from '@xyflow/svelte'
 // SF custom node components
 import TrueExprSFNode from './sf-custom-nodes/true-expr.svelte'
 import FalseExprSFNode from './sf-custom-nodes/false-expr.svelte'
+import InertExprSFNode from './sf-custom-nodes/inert-expr.svelte'
 import UBoolVarSFNode from './sf-custom-nodes/ubool-var.svelte'
 import AppSFNode from './sf-custom-nodes/app.svelte'
 import NotStartSFNode from './sf-custom-nodes/not-start.svelte'
@@ -65,6 +66,7 @@ export const sourceWithOrAnnoNodeType = 'sourceWithOrAnnoNode' as const
 export const sinkNodeType = 'sinkNode' as const
 export const trueExprNodeType = 'trueExprNode' as const
 export const falseExprNodeType = 'falseExprNode' as const
+export const inertExprNodeType = 'inertExprNode' as const
 
 export type SFNode<T extends string> = SF.Node & { type: T }
 function isSFNode<T extends string>(node: SF.Node, type: T): node is SFNode<T> {
@@ -114,6 +116,7 @@ export const sfNodeTypes: SF.NodeTypes = {
   [sinkNodeType]: SinkSFNode,
   [trueExprNodeType]: TrueExprSFNode,
   [falseExprNodeType]: FalseExprSFNode,
+  [inertExprNodeType]: InertExprSFNode,
 }
 
 /************************************************
