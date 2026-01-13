@@ -1,0 +1,30 @@
+{
+    "$defs": {
+        "Person": {
+            "properties": {
+                "age": {
+                    "$ref": "#/$defs/NUMBER"
+                },
+                "name": {
+                    "$ref": "#/$defs/STRING"
+                }
+            },
+            "required": [
+                "name",
+                "age"
+            ],
+            "type": "object"
+        }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "person": {
+            "$ref": "#/$defs/Person"
+        }
+    },
+    "required": [
+        "person"
+    ],
+    "title": "is adult",
+    "type": "object"
+}
