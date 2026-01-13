@@ -114,6 +114,13 @@ export async function evaluateFunction(
   }
 
   const data = await resp.json()
+
+  // Check for error response structure (backend may return 200 with error payload)
+  if (data.tag === 'SimpleError' || data.tag === 'Error') {
+    const errorMsg = data.contents?.contents || data.contents || 'Evaluation failed'
+    throw new Error(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg))
+  }
+
   return {
     result: data.result,
     trace: data.trace,
