@@ -49,6 +49,7 @@ library
     Backend.Api
     Backend.BooleanDecisionQuery
     Backend.CodeGen
+    Backend.MaybeLift
     Backend.DecisionQueryPlan
     Backend.DirectiveFilter
     Backend.FunctionSchema
