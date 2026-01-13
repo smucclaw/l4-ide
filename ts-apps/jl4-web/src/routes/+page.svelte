@@ -52,7 +52,7 @@
     baseUrl: decisionServiceUrl,
   }
 
-  let currentDecisionServiceFunctionName: string | null = null
+  let currentDecisionServiceFunctionName: string | null = $state(null)
   let currentLadderGraphId: import('l4-ladder-visualizer').LirId | null = null
   let ensureDecisionServiceFnReady: Promise<void> = Promise.resolve()
   let lastQueryPlanBindingsKey: string | null = null
@@ -706,6 +706,33 @@
     }
   }
 
+  async function handleOpenWizard() {
+    // Open window synchronously to avoid popup blocking (async awaits would make it non-user-initiated)
+    const wizardWindow = window.open('about:blank', '_blank')
+
+    // Persist to session server
+    await handlePersist()
+
+    // If we have a function, ensure it's uploaded to the decision service
+    if (currentDecisionServiceFunctionName) {
+      try {
+        await ensureDecisionServiceFnReady
+      } catch (e) {
+        console.warn('Failed to ensure function is ready:', e)
+      }
+    }
+
+    // Navigate to wizard - with function if available, otherwise show function list
+    const wizardBase = `${window.location.origin}/wizard/`
+    const wizardUrl = currentDecisionServiceFunctionName
+      ? `${wizardBase}?fn=${encodeURIComponent(currentDecisionServiceFunctionName)}`
+      : wizardBase
+
+    if (wizardWindow) {
+      wizardWindow.location.href = wizardUrl
+    }
+  }
+
   function handleExampleSelect(example: LegalExample) {
     if (showExamples && editor) {
       editor.setValue(example.content)
@@ -957,6 +984,31 @@
         Logic Viz
       </button>
     {/if}
+    <button
+      class="fab fab-wizard"
+      onclick={handleOpenWizard}
+      aria-label="Open in Wizard"
+      title="Open in Wizard"
+    >
+      <svg
+        width="20"
+        height="20"
+        style="font-size: 24px; vertical-align: middle; margin-right: 0.2em;"
+        viewBox="0 0 24 24"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        stroke-width="1.5"
+        stroke="currentColor"
+      >
+        <!-- Magic wand / wizard icon -->
+        <path
+          d="M15 4V2M15 16V14M8 9H10M20 9H22M17.8 11.8L19 13M17.8 6.2L19 5M12.2 11.8L11 13M12.2 6.2L11 5"
+        />
+        <path d="M15 9L3 21" stroke-linecap="round" />
+        <path d="M13 7L17 11" stroke-linecap="round" />
+      </svg>
+      Wizard
+    </button>
     <button
       class="fab fab-share"
       onclick={handleShare}
