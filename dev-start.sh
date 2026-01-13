@@ -21,7 +21,7 @@ case "$MODE" in
   decision-only)
     echo "Starting decision service only (port $DECISION_PORT)..."
     cd jl4-decision-service
-    cabal run jl4-decision-service-exe -- \
+    cabal run jl4-decision-service -- \
       --port "$DECISION_PORT" \
       --sourcePaths ../jl4/experiments/britishcitizen5.l4 \
       --sourcePaths ../jl4/experiments/parking.l4
@@ -58,7 +58,7 @@ case "$MODE" in
       
       # Start Decision Service
       echo "Starting decision service on port $DECISION_PORT..."
-      (cd jl4-decision-service && cabal run jl4-decision-service-exe -- \
+      (cd jl4-decision-service && cabal run jl4-decision-service -- \
         --port "$DECISION_PORT" \
         --sourcePaths ../jl4/experiments/britishcitizen5.l4 \
         --sourcePaths ../jl4/experiments/parking.l4 \
@@ -123,7 +123,7 @@ case "$MODE" in
       echo "  cabal run exe:jl4-lsp -- ws --port $LSP_PORT --cwd $LSP_CWD"
       echo ""
       echo "Terminal 2 - Decision Service:"
-      echo "  cd jl4-decision-service && cabal run jl4-decision-service-exe -- \\"
+      echo "  cd jl4-decision-service && cabal run jl4-decision-service -- \\"
       echo "    --port $DECISION_PORT \\"
       echo "    --sourcePaths ../jl4/experiments/britishcitizen5.l4 \\"
       echo "    --sourcePaths ../jl4/experiments/parking.l4 \\"
