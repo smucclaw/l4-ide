@@ -525,7 +525,12 @@ rg foo `bar`  # BAD - executes bar command
 - **Dev Server:** NixOS flake target `jl4-dev`, domain `dev.jl4.legalese.com`
 - **Production:** NixOS flake target `jl4-aws-2505`, domain `jl4.legalese.com`
 
-Deploy with `nixos-rebuild switch --flake .#<target>`
+**Deploy to dev server** (from local machine via lhs jump host):
+```bash
+ssh lhs "cd src/smucclaw/l4-ide/main && git pull && nixos-rebuild switch --flake '.#jl4-dev' --target-host root@dev.jl4.legalese.com"
+```
+
+The `lhs` host has the NixOS build environment. The `--target-host` flag deploys directly to the dev server as root.
 
 ## Requirements
 
