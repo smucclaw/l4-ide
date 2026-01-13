@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation'
+  import { base } from '$app/paths'
 
   type Props = {
     serviceUrl: string
@@ -20,6 +21,7 @@
   let error: string | null = $state(null)
 
   $effect(() => {
+    void serviceUrl
     loadFunctions()
   })
 
@@ -40,7 +42,7 @@
   }
 
   function selectFunction(name: string) {
-    goto(`?fn=${encodeURIComponent(name)}`)
+    goto(`${base}/${encodeURIComponent(name)}`)
   }
 </script>
 
