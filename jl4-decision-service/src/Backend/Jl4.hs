@@ -132,12 +132,12 @@ buildFunctionCallExpr funName args =
   App emptyAnno funName args
 
 -- | Check if any parameter value requires wrapper-based evaluation
--- This includes FnObject (records), FnUncertain, FnUnknown (null/empty inputs),
--- and FnLitString (which may be enum constructor names needing type coercion)
--- These types need JSONDECODE to handle properly (e.g., for MAYBE-typed fields
--- or string-to-enum coercion)
+-- Returns True for:
+-- - Missing parameters (Nothing) - need wrapper to handle as UNKNOWN
+-- - FnObject, FnUncertain, FnUnknown, FnLitString (enum coercion)
+-- These types need JSONDECODE to handle properly
 requiresWrapperEvaluation :: [(Text, Maybe FnLiteral)] -> Bool
-requiresWrapperEvaluation = any (maybe False needsWrapper . snd)
+requiresWrapperEvaluation = any (\(_, mVal) -> maybe True needsWrapper mVal)
   where
     needsWrapper :: FnLiteral -> Bool
     needsWrapper (FnObject _) = True
@@ -306,12 +306,11 @@ evaluateWrapperInContext filepath wrapperCode compiled = do
   evaluateModule filepath combinedProgram compiled.compiledModuleContext
 
 -- | Convert FnLiteral parameters to Aeson.Value
+-- Missing parameters (Nothing) become FnUnknown -> Aeson.Null for partial evaluation
 paramsToJson :: (Monad m) => [(Text, Maybe FnLiteral)] -> ExceptT EvaluatorError m Aeson.Value
-paramsToJson params = do
-  pairs <- forM params $ \(name, mVal) -> case mVal of
-    Nothing -> throwError $ InterpreterError $ "Missing value for parameter: " <> name
-    Just val -> pure (name, fnLiteralToJson val)
-  pure $ Aeson.object [(Aeson.fromText k, v) | (k, v) <- pairs]
+paramsToJson params =
+  let pairs = [(name, fnLiteralToJson (maybe FnUnknown id mVal)) | (name, mVal) <- params]
+  in pure $ Aeson.object [(Aeson.fromText k, v) | (k, v) <- pairs]
 
 -- | Convert FnLiteral to Aeson.Value
 fnLiteralToJson :: FnLiteral -> Aeson.Value
