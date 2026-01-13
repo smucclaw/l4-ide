@@ -691,6 +691,16 @@
       }
 
       await navigator.clipboard.writeText(shareUrl)
+
+      // Build wizard URL - include function name if available
+      const wizardBase = `${window.location.origin}/wizard/`
+      const wizardUrl = currentDecisionServiceFunctionName
+        ? `${wizardBase}?fn=${encodeURIComponent(currentDecisionServiceFunctionName)}`
+        : wizardBase
+      toast.push(
+        `Link copied to clipboard. <a href="${wizardUrl}" target="_blank" style="color: #60a5fa; text-decoration: underline;">Open in Wizard</a>`,
+        { duration: 6000 }
+      )
     } else {
       toast.push('Could not persist the file to generate a share link.')
     }
