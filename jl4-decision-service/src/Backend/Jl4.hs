@@ -132,8 +132,10 @@ buildFunctionCallExpr funName args =
   App emptyAnno funName args
 
 -- | Check if any parameter value requires wrapper-based evaluation
--- This includes FnObject (records), FnUncertain, and FnUnknown (null/empty inputs)
--- These types need JSONDECODE to handle properly (e.g., for MAYBE-typed fields)
+-- This includes FnObject (records), FnUncertain, FnUnknown (null/empty inputs),
+-- and FnLitString (which may be enum constructor names needing type coercion)
+-- These types need JSONDECODE to handle properly (e.g., for MAYBE-typed fields
+-- or string-to-enum coercion)
 requiresWrapperEvaluation :: [(Text, Maybe FnLiteral)] -> Bool
 requiresWrapperEvaluation = any (maybe False needsWrapper . snd)
   where
@@ -141,6 +143,7 @@ requiresWrapperEvaluation = any (maybe False needsWrapper . snd)
     needsWrapper (FnObject _) = True
     needsWrapper FnUncertain = True
     needsWrapper FnUnknown = True
+    needsWrapper (FnLitString _) = True  -- Strings may be enum constructors
     needsWrapper (FnArray xs) = any needsWrapper xs
     needsWrapper _ = False
 
