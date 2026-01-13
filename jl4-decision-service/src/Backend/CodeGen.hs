@@ -48,13 +48,17 @@ generateEvalWrapper funName params inputJson traceLevel = do
       , decodeFailedSentinel = "DECODE_FAILED"
       }
     else
-      -- Partition parameters into provided (in JSON) and missing
-      let providedKeys = case inputJson of
-            Aeson.Object obj -> map Key.toText (KM.keys obj)
-            _ -> []
+      -- Partition parameters into provided (in JSON) and missing/null
+      let -- Check if a key has a non-null value in the JSON
+          isProvidedInJson name = case inputJson of
+            Aeson.Object obj -> case KM.lookup (Key.fromText name) obj of
+              Just Aeson.Null -> False  -- null means missing
+              Just _ -> True            -- non-null means provided
+              Nothing -> False          -- absent means missing
+            _ -> False
           -- Check which params are missing and if they're simple BOOLEAN types
           paramInfo = map (\p@(name, ty) ->
-            let isMissing = name `notElem` providedKeys
+            let isMissing = not (isProvidedInJson name)
                 isBooleanType = "BOOLEAN" `Text.isInfixOf` Text.toUpper (prettyLayout ty)
             in (p, isMissing, isBooleanType)) params
           -- Only use MAYBE for missing BOOLEAN parameters
