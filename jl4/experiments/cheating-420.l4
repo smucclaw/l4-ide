@@ -9,114 +9,114 @@ DECLARE Person HAS
     name IS A STRING
 
 -- Types of property/instruments involved
-DECLARE ValuableSecurity IS ONE OF
-    NegotiableInstrument
-    DocumentOfTitle
-    StampedDocument
-    OtherValuableSecurity
+DECLARE `Valuable Security` IS ONE OF
+    `Negotiable Instrument`
+    `Document of Title`
+    `Stamped Document`
+    `Other Valuable Security`
 
-DECLARE SignedSealedThing HAS
-    isSigned        IS A BOOLEAN
-    isSealed        IS A BOOLEAN
-    canBeConverted  IS A BOOLEAN   -- capable of being converted into valuable security
+DECLARE `Signed Sealed Thing` HAS
+    `is signed`        IS A BOOLEAN
+    `is sealed`        IS A BOOLEAN
+    `can be converted` IS A BOOLEAN   -- capable of being converted into valuable security
 
-DECLARE DestructionExtent IS ONE OF
-    WholeOf
-    PartOf
+DECLARE `Destruction Extent` IS ONE OF
+    `Whole of`
+    `Part of`
 
 -- The induced acts under Section 420(1)
 -- Simplified: acts involving signed/sealed things carry the thing separately
-DECLARE InducedAct IS ONE OF
-    DeliveryOfProperty
-    CauseDeliveryOfProperty
-    MakeValuableSecurity
-    AlterValuableSecurity
-    DestroyValuableSecurity
-    AlterSignedSealedThing
-    DestroySignedSealedThing
+DECLARE `Induced Act` IS ONE OF
+    `Delivery of Property`
+    `Cause Delivery of Property`
+    `Make Valuable Security`
+    `Alter Valuable Security`
+    `Destroy Valuable Security`
+    `Alter Signed Sealed Thing`
+    `Destroy Signed Sealed Thing`
 
 -- How the deception was communicated
-DECLARE CommunicationMethod IS ONE OF
-    InPerson
-    RemoteCommunication   -- phone, internet, etc.
+DECLARE `Communication Method` IS ONE OF
+    `In Person`
+    `Remote Communication`   -- phone, internet, etc.
 
 -- The cheating scenario
-DECLARE CheatingScenario HAS
-    deceiver            IS A Person
-    victim              IS A Person
-    deceptionOccurred   IS A BOOLEAN
-    dishonestIntent     IS A BOOLEAN
-    inducedAct          IS AN InducedAct
-    signedSealedThing   IS A MAYBE SignedSealedThing  -- only relevant for Alter/DestroySignedSealedThing
-    communicationMethod IS A CommunicationMethod
+DECLARE `Cheating Scenario` HAS
+    deceiver                IS A Person
+    victim                  IS A Person
+    `deception occurred`    IS A BOOLEAN
+    `dishonest intent`      IS A BOOLEAN
+    `induced act`           IS AN `Induced Act`
+    `signed sealed thing`   IS A MAYBE `Signed Sealed Thing`  -- only relevant for Alter/Destroy
+    `communication method`  IS A `Communication Method`
 
 -- Punishment structure
 DECLARE Punishment HAS
-    maxImprisonment     IS A NUMBER    -- years
-    mandatoryCaning     IS A BOOLEAN
-    minCaneStrokes      IS A NUMBER
-    liableToFine        IS A BOOLEAN
-    liableToCaning      IS A BOOLEAN   -- discretionary caning
+    `max imprisonment`   IS A NUMBER    -- years
+    `mandatory caning`   IS A BOOLEAN
+    `min cane strokes`   IS A NUMBER
+    `liable to fine`     IS A BOOLEAN
+    `liable to caning`   IS A BOOLEAN   -- discretionary caning
 
 
 § `Section 415 - Cheating (definition)`
 
 -- A person cheats when they deceive another person
 -- (simplified from full 415 for this encoding)
-GIVEN scenario IS A CheatingScenario
+GIVEN scenario IS A `Cheating Scenario`
 GIVETH A BOOLEAN
 DECIDE `cheating occurred` IF
-    scenario's deceptionOccurred
+    scenario's `deception occurred`
 
 
 § `Section 420(1) - Basic Aggravated Cheating`
 
 -- A signed/sealed thing must be capable of conversion
-GIVEN thing IS A SignedSealedThing
+GIVEN thing IS A `Signed Sealed Thing`
 GIVETH A BOOLEAN
 `convertible to valuable security` thing MEANS
-    (thing's isSigned OR thing's isSealed) AND thing's canBeConverted
+    (thing's `is signed` OR thing's `is sealed`) AND thing's `can be converted`
 
--- Check if a Maybe SignedSealedThing is convertible
-GIVEN maybeThing IS A MAYBE SignedSealedThing
+-- Check if a Maybe Signed Sealed Thing is convertible
+GIVEN `maybe thing` IS A MAYBE `Signed Sealed Thing`
 GIVETH A BOOLEAN
-`maybe convertible` maybeThing MEANS
-    CONSIDER maybeThing
+`maybe convertible` `maybe thing` MEANS
+    CONSIDER `maybe thing`
     WHEN JUST thing THEN `convertible to valuable security` thing
     OTHERWISE FALSE
 
 -- The induced act qualifies under 420(1)
 -- For signed/sealed things, we need to check convertibility separately
-GIVEN act IS AN InducedAct
-      maybeThing IS A MAYBE SignedSealedThing
+GIVEN act IS AN `Induced Act`
+      `maybe thing` IS A MAYBE `Signed Sealed Thing`
 GIVETH A BOOLEAN
-`qualifies as 420 inducement` act maybeThing MEANS
+`qualifies as 420 inducement` act `maybe thing` MEANS
     CONSIDER act
-    WHEN DeliveryOfProperty THEN TRUE
-    WHEN CauseDeliveryOfProperty THEN TRUE
-    WHEN MakeValuableSecurity THEN TRUE
-    WHEN AlterValuableSecurity THEN TRUE
-    WHEN DestroyValuableSecurity THEN TRUE
-    WHEN AlterSignedSealedThing THEN `maybe convertible` maybeThing
-    WHEN DestroySignedSealedThing THEN `maybe convertible` maybeThing
+    WHEN `Delivery of Property` THEN TRUE
+    WHEN `Cause Delivery of Property` THEN TRUE
+    WHEN `Make Valuable Security` THEN TRUE
+    WHEN `Alter Valuable Security` THEN TRUE
+    WHEN `Destroy Valuable Security` THEN TRUE
+    WHEN `Alter Signed Sealed Thing` THEN `maybe convertible` `maybe thing`
+    WHEN `Destroy Signed Sealed Thing` THEN `maybe convertible` `maybe thing`
 
 -- Section 420(1): Whoever cheats and thereby dishonestly induces...
-GIVEN scenario IS A CheatingScenario
+GIVEN scenario IS A `Cheating Scenario`
 GIVETH A BOOLEAN
 DECIDE `liable under s420(1)` IF
         `cheating occurred` scenario
-    AND scenario's dishonestIntent
-    AND `qualifies as 420 inducement` (scenario's inducedAct) (scenario's signedSealedThing)
+    AND scenario's `dishonest intent`
+    AND `qualifies as 420 inducement` (scenario's `induced act`) (scenario's `signed sealed thing`)
 
 
 § `Section 420(2) - Remote Communication Variant`
 
 -- Section 420(2): Whoever cheats BY REMOTE COMMUNICATION and thereby...
-GIVEN scenario IS A CheatingScenario
+GIVEN scenario IS A `Cheating Scenario`
 GIVETH A BOOLEAN
 DECIDE `liable under s420(2)` IF
         `liable under s420(1)` scenario
-    AND scenario's communicationMethod EQUALS RemoteCommunication
+    AND scenario's `communication method` EQUALS `Remote Communication`
 
 
 § `Sentencing`
@@ -124,23 +124,23 @@ DECIDE `liable under s420(2)` IF
 -- Punishment for 420(1)
 `punishment for s420(1)` MEANS
     Punishment WITH
-        maxImprisonment   IS 10
-        mandatoryCaning   IS FALSE
-        minCaneStrokes    IS 0
-        liableToFine      IS TRUE
-        liableToCaning    IS TRUE   -- "liable to caning" = discretionary
+        `max imprisonment`  IS 10
+        `mandatory caning`  IS FALSE
+        `min cane strokes`  IS 0
+        `liable to fine`    IS TRUE
+        `liable to caning`  IS TRUE   -- "liable to caning" = discretionary
 
 -- Punishment for 420(2) - more severe
 `punishment for s420(2)` MEANS
     Punishment WITH
-        maxImprisonment   IS 10
-        mandatoryCaning   IS TRUE
-        minCaneStrokes    IS 6
-        liableToFine      IS TRUE
-        liableToCaning    IS TRUE
+        `max imprisonment`  IS 10
+        `mandatory caning`  IS TRUE
+        `min cane strokes`  IS 6
+        `liable to fine`    IS TRUE
+        `liable to caning`  IS TRUE
 
 -- Determine applicable punishment
-GIVEN scenario IS A CheatingScenario
+GIVEN scenario IS A `Cheating Scenario`
 GIVETH A Punishment
 `sentencing for` scenario MEANS
     IF `liable under s420(2)` scenario
@@ -151,74 +151,74 @@ GIVETH A Punishment
 § `Test Scenarios`
 
 -- Scenario 1: In-person scam inducing property delivery
-`alice` MEANS Person WITH name IS "Alice"
-`bob` MEANS Person WITH name IS "Bob"
+`Alice` MEANS Person WITH name IS "Alice"
+`Bob` MEANS Person WITH name IS "Bob"
 
-`inPersonScam` MEANS CheatingScenario WITH
-    deceiver            IS `alice`
-    victim              IS `bob`
-    deceptionOccurred   IS TRUE
-    dishonestIntent     IS TRUE
-    inducedAct          IS DeliveryOfProperty
-    signedSealedThing   IS NOTHING
-    communicationMethod IS InPerson
+`in person scam` MEANS `Cheating Scenario` WITH
+    deceiver               IS `Alice`
+    victim                 IS `Bob`
+    `deception occurred`   IS TRUE
+    `dishonest intent`     IS TRUE
+    `induced act`          IS `Delivery of Property`
+    `signed sealed thing`  IS NOTHING
+    `communication method` IS `In Person`
 
 -- Scenario 2: Phone scam (remote communication)
-`phoneScam` MEANS CheatingScenario WITH
-    deceiver            IS `alice`
-    victim              IS `bob`
-    deceptionOccurred   IS TRUE
-    dishonestIntent     IS TRUE
-    inducedAct          IS DeliveryOfProperty
-    signedSealedThing   IS NOTHING
-    communicationMethod IS RemoteCommunication
+`phone scam` MEANS `Cheating Scenario` WITH
+    deceiver               IS `Alice`
+    victim                 IS `Bob`
+    `deception occurred`   IS TRUE
+    `dishonest intent`     IS TRUE
+    `induced act`          IS `Delivery of Property`
+    `signed sealed thing`  IS NOTHING
+    `communication method` IS `Remote Communication`
 
 -- Scenario 3: Forging a signed document
-`signedDoc` MEANS SignedSealedThing WITH
-    isSigned       IS TRUE
-    isSealed       IS FALSE
-    canBeConverted IS TRUE
+`signed doc` MEANS `Signed Sealed Thing` WITH
+    `is signed`        IS TRUE
+    `is sealed`        IS FALSE
+    `can be converted` IS TRUE
 
-`forgeryScam` MEANS CheatingScenario WITH
-    deceiver            IS `alice`
-    victim              IS `bob`
-    deceptionOccurred   IS TRUE
-    dishonestIntent     IS TRUE
-    inducedAct          IS AlterSignedSealedThing
-    signedSealedThing   IS JUST `signedDoc`
-    communicationMethod IS InPerson
+`forgery scam` MEANS `Cheating Scenario` WITH
+    deceiver               IS `Alice`
+    victim                 IS `Bob`
+    `deception occurred`   IS TRUE
+    `dishonest intent`     IS TRUE
+    `induced act`          IS `Alter Signed Sealed Thing`
+    `signed sealed thing`  IS JUST `signed doc`
+    `communication method` IS `In Person`
 
 -- Scenario 4: No dishonest intent (not liable)
-`honestMistake` MEANS CheatingScenario WITH
-    deceiver            IS `alice`
-    victim              IS `bob`
-    deceptionOccurred   IS TRUE
-    dishonestIntent     IS FALSE
-    inducedAct          IS DeliveryOfProperty
-    signedSealedThing   IS NOTHING
-    communicationMethod IS InPerson
+`honest mistake` MEANS `Cheating Scenario` WITH
+    deceiver               IS `Alice`
+    victim                 IS `Bob`
+    `deception occurred`   IS TRUE
+    `dishonest intent`     IS FALSE
+    `induced act`          IS `Delivery of Property`
+    `signed sealed thing`  IS NOTHING
+    `communication method` IS `In Person`
 
 
 § `Assertions`
 
 -- Test: In-person scam is liable under 420(1) but not 420(2)
-#ASSERT `liable under s420(1)` `inPersonScam`
-#ASSERT NOT `liable under s420(2)` `inPersonScam`
+#ASSERT `liable under s420(1)` `in person scam`
+#ASSERT NOT `liable under s420(2)` `in person scam`
 
 -- Test: Phone scam is liable under both 420(1) and 420(2)
-#ASSERT `liable under s420(1)` `phoneScam`
-#ASSERT `liable under s420(2)` `phoneScam`
+#ASSERT `liable under s420(1)` `phone scam`
+#ASSERT `liable under s420(2)` `phone scam`
 
 -- Test: Phone scam gets mandatory caning
-#ASSERT (`sentencing for` `phoneScam`)'s mandatoryCaning
+#ASSERT (`sentencing for` `phone scam`)'s `mandatory caning`
 
 -- Test: Forgery qualifies
-#ASSERT `liable under s420(1)` `forgeryScam`
+#ASSERT `liable under s420(1)` `forgery scam`
 
 -- Test: No liability without dishonest intent
-#ASSERT NOT `liable under s420(1)` `honestMistake`
+#ASSERT NOT `liable under s420(1)` `honest mistake`
 
 -- Evaluate scenarios
-#EVAL `liable under s420(1)` `inPersonScam`
-#EVAL `liable under s420(2)` `phoneScam`
-#EVAL `sentencing for` `phoneScam`
+#EVAL `liable under s420(1)` `in person scam`
+#EVAL `liable under s420(2)` `phone scam`
+#EVAL `sentencing for` `phone scam`

@@ -1,0 +1,48 @@
+-- Test file for quoted section names with dereferencing
+-- This file tests that section dereferencing works with quoted identifiers
+-- See: https://github.com/smucclaw/l4-ide/issues/756
+
+§ `section alpha`
+ASSUME a1 IS A BOOLEAN
+§§ `subsection aa`
+ASSUME a2 IS A BOOLEAN
+§§§ `deep section`
+ASSUME a3 IS A BOOLEAN
+
+-- Test dereferencing with quoted section names
+#CHECK `section alpha`.a1
+#CHECK `section alpha`.`subsection aa`.a2
+#CHECK `section alpha`.`subsection aa`.`deep section`.a3
+
+-- Test mixed quoted and unquoted names
+§ regular
+ASSUME b1 IS A BOOLEAN
+§§ `quoted child`
+ASSUME b2 IS A BOOLEAN
+
+#CHECK regular.b1
+#CHECK regular.`quoted child`.b2
+
+-- Test qualified names starting with quoted identifier
+§ `another section`
+§§ nested
+ASSUME c1 IS A BOOLEAN
+
+#CHECK `another section`.nested.c1
+
+-- Test genitive ('s) syntax for section dereferencing
+-- Both 's and . should work equivalently for section names
+#CHECK `section alpha`'s a1
+#CHECK `section alpha`'s `subsection aa`'s a2
+#CHECK `section alpha`'s `subsection aa`'s `deep section`'s a3
+#CHECK regular's b1
+#CHECK regular's `quoted child`'s b2
+#CHECK `another section`'s nested's c1
+
+-- Regression test: 's applied to an already-qualified base
+-- This tests that `section alpha`.`subsection aa`'s `deep section` correctly
+-- resolves by preserving the QualifiedName structure of the base, rather than
+-- flattening it to a single string segment.
+#CHECK `section alpha`.`subsection aa`'s `deep section`'s a3
+#CHECK `section alpha`.`subsection aa`'s a2
+#CHECK regular.`quoted child`'s b2

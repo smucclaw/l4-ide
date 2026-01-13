@@ -141,6 +141,7 @@ export interface FlowLirNode extends LirNode, Ord<FlowLirNode> {
 export type LadderNodeKind =
   | 'TrueExprLirNode'
   | 'FalseExprLirNode'
+  | 'InertExprLirNode'
   | 'UBoolVarLirNode'
   | 'NotStartLirNode'
   | 'NotEndLirNode'
@@ -926,10 +927,11 @@ export type InertContext = 'InertAnd' | 'InertOr'
 export function isInertExprLirNode(
   node: LadderLirNode
 ): node is InertExprLirNode {
-  return node instanceof InertExprLirNode
+  return node.nodeKind === 'InertExprLirNode'
 }
 
 export class InertExprLirNode extends BaseFlowLirNode implements FlowLirNode {
+  readonly nodeKind = 'InertExprLirNode' as const
   #text: string
   #context: InertContext
   #value: UBoolVal

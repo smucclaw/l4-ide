@@ -19,6 +19,7 @@ import qualified L4.Print as Print
 import L4.Syntax
 import L4.TypeCheck (CheckErrorWithContext (..), CheckResult (..), Substitution, applyFinalSubstitution, toResolved)
 import qualified L4.TypeCheck as TypeCheck
+import qualified L4.Lint.AndOrDepth as Lint
 
 import Control.Applicative
 import Control.Monad.Trans.Maybe
@@ -283,8 +284,10 @@ jl4Rules evalConfig rootDirectory recorder = do
             let diags = toList $ fmap mkParseErrorDiagnostic errs
             pure (fmap (mkSimpleFileDiagnostic uri) diags , Nothing)
           Right (finalProg, warns) -> do
-            let diags = fmap mkNlgWarning warns
-            pure (fmap (mkSimpleFileDiagnostic uri) diags, Just finalProg)
+            let nlgDiags = fmap mkNlgWarning warns
+                lintDiags = fmap mkAndOrLintWarning $ Lint.checkAndOrDepth finalProg
+                allDiags = nlgDiags <> lintDiags
+            pure (fmap (mkSimpleFileDiagnostic uri) allDiags, Just finalProg)
 
   define shakeRecorder $ \GetImports uri -> do
     let -- NOTE: we curently don't allow any relative or absolute file paths, just bare module names
@@ -686,6 +689,20 @@ jl4Rules evalConfig rootDirectory recorder = do
           , _codeDescription = Nothing
           , _source = Just "parser"
           , _message = prettyNlgResolveWarning warn
+          , _tags = Nothing
+          , _relatedInformation = Nothing
+          , _data_ = Nothing
+          }
+
+    mkAndOrLintWarning :: Lint.AndOrWarning -> Diagnostic
+    mkAndOrLintWarning warn =
+        Diagnostic
+          { _range = srcRangeToLspRange warn.warningRange
+          , _severity = Just LSP.DiagnosticSeverity_Warning
+          , _code = Nothing
+          , _codeDescription = Nothing
+          , _source = Just "linter"
+          , _message = Text.pack $ "AND and OR operators appear at the same indentation level (column " <> show warn.conflictingColumn <> "). This may indicate a precedence error - consider using parentheses to clarify intent."
           , _tags = Nothing
           , _relatedInformation = Nothing
           , _data_ = Nothing

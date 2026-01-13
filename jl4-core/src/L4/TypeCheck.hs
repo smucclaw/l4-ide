@@ -100,6 +100,7 @@ import Control.Monad.Extra (mapMaybeM)
 import qualified Control.Monad.Extra as Extra
 import Data.Either (partitionEithers)
 import qualified Data.List as List
+import qualified Data.List.NonEmpty as NE
 import Data.Tuple.Extra (firstM)
 import Data.List.Split (splitWhen)
 import Optics ((%~), (^.))
@@ -1200,21 +1201,100 @@ inferExpr' g =
       dsFun <- desugarBinOpToFunction (rawName consName) g ann e1 e2
       inferExpr' dsFun
     Proj ann e l -> do
-      -- Handling this similar to App.
-      --
-      -- 1.
-      (rl, pt) <- resolveTerm l
-      t <- instantiate pt
+      -- Try to resolve as a qualified name (for section dereferencing), but only
+      -- if the base is not a local binding. This ensures `r's f` prefers record
+      -- field access when `r` is a local variable, even if a global `r.f` exists.
+      baseIsLocal <- isBaseLocalBinding (Proj ann e l)
+      if baseIsLocal
+        then inferRecordProjection ann e l  -- Base is local, prefer record projection
+        else do
+          let maybeQualifiedName = extractProjNameChain (Proj ann e l)
+          case maybeQualifiedName of
+            Just qualifiedRawName@(QualifiedName _ _) -> do
+              options <- lookupRawNameInEnvironment qualifiedRawName
+              -- Filter to only term entities. If the qualified name exists only as a
+              -- section/type (not a term), we should fall back to record projection.
+              -- See PR #759 review comment for details.
+              let termOptions = filter isTermEntity options
+              case termOptions of
+                [] -> inferRecordProjection ann e l  -- No term match, fall back to record projection
+                _  -> do
+                  -- Found as qualified name with a term binding, resolve it
+                  -- Mirror the Var case: resolve then instantiate to freshen polymorphic types
+                  let qualifiedName = MkName (l ^. annoOf) qualifiedRawName
+                  (resolved, pt) <- resolveTerm qualifiedName
+                  t <- instantiate pt
+                  pure (Var ann resolved, t)
+            _ -> inferRecordProjection ann e l  -- Not a valid chain, use record projection
+      where
+        -- Check if the base (innermost) expression in a Proj chain is a local binding.
+        -- This is used to prefer record projection over qualified name resolution when
+        -- the base is a local variable (lambda parameter, pattern binding, etc.).
+        isBaseLocalBinding :: Expr Name -> Check Bool
+        isBaseLocalBinding expr = case getBaseVar expr of
+          Nothing -> pure False
+          Just baseName -> do
+            options <- lookupRawNameInEnvironment (rawName baseName)
+            pure $ any isLocalTerm options
+          where
+            -- Extract the innermost Var from a Proj chain
+            getBaseVar :: Expr Name -> Maybe Name
+            getBaseVar (Var _ n) = Just n
+            getBaseVar (Proj _ inner _) = getBaseVar inner
+            getBaseVar _ = Nothing
 
-      -- 2. - 5.
-      (res, rt) <- matchFunTy True rl t [e]
+            -- Check if a CheckEntity is a Local term
+            isLocalTerm :: (Unique, Name, CheckEntity) -> Bool
+            isLocalTerm (_, _, KnownTerm _ Local) = True
+            isLocalTerm _ = False
 
-      re <-
-        case res of
-          [re] -> pure re
-          _ -> pure $ error "internal error in matchFunTy"
+        -- Helper to extract a chain of names from a Proj expression and convert to QualifiedName
+        -- For `a's b's c`, we want to produce QualifiedName ("a" :| ["b"]) "c"
+        -- Returns Just (QualifiedName qualifiers finalName) if successful
+        extractProjNameChain :: Expr Name -> Maybe RawName
+        extractProjNameChain expr = do
+          chain <- go expr  -- Returns names in order: [a, b, c]
+          case chain of
+            (hd : rest@(_ : _)) ->
+              -- At least 2 elements: qualifiers are all but last, final is the last
+              let (qualifiers, final) = (NE.fromList (init (hd : rest)), last (hd : rest))
+              in Just $ QualifiedName qualifiers final
+            _ -> Nothing  -- Need at least 2 elements for a qualified name
+          where
+            -- Extract names in order from innermost to outermost
+            -- Preserves structure of already-qualified names (e.g., `Section Alpha`.`Subsection Beta`'s x
+            -- becomes ["Section Alpha", "Subsection Beta", "x"] not ["Section Alpha.Subsection Beta", "x"])
+            go :: Expr Name -> Maybe [Text]
+            go (Var _ n) = Just (rawNameToComponents (rawName n))
+            go (Proj _ inner fieldName) = do
+              innerNames <- go inner
+              pure $ innerNames ++ rawNameToComponents (rawName fieldName)
+            go _ = Nothing
 
-      pure (Proj ann re rl, rt)
+            -- Convert a RawName to its component parts, preserving QualifiedName structure
+            rawNameToComponents :: RawName -> [Text]
+            rawNameToComponents (NormalName t) = [t]
+            rawNameToComponents (PreDef t) = [t]
+            rawNameToComponents (QualifiedName qs final) = NE.toList qs ++ [final]
+
+        -- Original record projection logic
+        inferRecordProjection :: Anno -> Expr Name -> Name -> Check (Expr Resolved, Type' Resolved)
+        inferRecordProjection projAnn projE projL = do
+          -- Handling this similar to App.
+          --
+          -- 1.
+          (rl, pt) <- resolveTerm projL
+          t <- instantiate pt
+
+          -- 2. - 5.
+          (res, rt) <- matchFunTy True rl t [projE]
+
+          re <-
+            case res of
+              [re'] -> pure re'
+              _ -> pure $ error "internal error in matchFunTy"
+
+          pure (Proj projAnn re rl, rt)
     Var ann n -> do
       (r, pt) <- resolveTerm n
       t <- instantiate pt
@@ -1944,7 +2024,9 @@ withQualified rs ce = do
                   [ MkName (getAnno n) (QualifiedName qual t)
                   | qual <- toList $ sequence neSects
                   ]
-              traverse def newNames
+              -- Use defAka to share the same Unique as the original entity
+              -- This ensures the evaluator can find the entity via qualified name
+              traverse (defAka r) newNames
             PreDef _ -> pure []
             QualifiedName _ _ -> pure []
 
@@ -2236,6 +2318,12 @@ reinterpretPostfixAppIfNeeded operandName args =
 isPostfixMixfix :: FunTypeSig -> Bool
 isPostfixMixfix MkFunTypeSig {mixfixInfo = Just MkMixfixInfo {pattern = [MixfixParam _, MixfixKeyword _], arity = 1}} = True
 isPostfixMixfix _ = False
+
+-- | Check if a CheckEntity is a term (as opposed to a type, section, or type variable).
+-- This is used to filter environment lookups when we specifically need term bindings.
+isTermEntity :: (Unique, Name, CheckEntity) -> Bool
+isTermEntity (_, _, KnownTerm _ _) = True
+isTermEntity _ = False
 
 -- | Check if a CheckEntity is callable (function, constructor, etc.)
 -- This is used to determine if a name can be applied to arguments.
