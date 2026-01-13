@@ -149,7 +149,7 @@ requiresWrapperEvaluation = any (\(_, mVal) -> maybe True needsWrapper mVal)
 
 -- | Evaluate using precompiled module (fast path) - direct AST evaluation
 -- This avoids the text round-trip through prettyLayout and re-parsing
--- Falls back to wrapper-based evaluation for FnObject parameters
+-- Falls back to wrapper-based evaluation for FnObject parameters or missing params
 evaluateWithCompiled
   :: FilePath
   -> FunctionDeclaration
@@ -159,11 +159,22 @@ evaluateWithCompiled
   -> Bool
   -> ExceptT EvaluatorError IO ResponseWithReason
 evaluateWithCompiled filepath fnDecl compiled params traceLevel includeGraphViz = do
+  -- Fill in missing parameters with Nothing
+  -- The input params may only contain provided parameters; we need explicit Nothing
+  -- entries for missing parameters so requiresWrapperEvaluation can detect them
+  let expectedParams = map fst (extractParamTypes compiled.compiledDecide)
+      inputMap = Map.fromList params
+      -- join flattens Maybe (Maybe FnLiteral) -> Maybe FnLiteral:
+      -- - Nothing (not in input) -> Nothing
+      -- - Just Nothing (explicit unknown) -> Nothing
+      -- - Just (Just v) (provided value) -> Just v
+      fullParams = [(name, join $ Map.lookup name inputMap) | name <- expectedParams]
+
   -- Check if we need to fall back to wrapper-based evaluation
-  -- (for FnObject, FnUncertain, FnUnknown which require JSONDECODE)
-  if requiresWrapperEvaluation params
-    then evaluateWithWrapper filepath fnDecl compiled params traceLevel includeGraphViz
-    else evaluateDirectAST compiled params traceLevel includeGraphViz
+  -- (for FnObject, FnUncertain, FnUnknown, missing params which require JSONDECODE)
+  if requiresWrapperEvaluation fullParams
+    then evaluateWithWrapper filepath fnDecl compiled fullParams traceLevel includeGraphViz
+    else evaluateDirectAST compiled fullParams traceLevel includeGraphViz
 
 -- | Direct AST evaluation (fast path) - for simple types without FnObject
 evaluateDirectAST
