@@ -1201,28 +1201,53 @@ inferExpr' g =
       dsFun <- desugarBinOpToFunction (rawName consName) g ann e1 e2
       inferExpr' dsFun
     Proj ann e l -> do
-      -- First, try to resolve as a qualified name (for section dereferencing).
-      -- If we have `a's b's c`, try to look up `a.b.c` as a qualified name.
-      -- If that succeeds, return it as a Var; otherwise, fall back to record projection.
-      let maybeQualifiedName = extractProjNameChain (Proj ann e l)
-      case maybeQualifiedName of
-        Just qualifiedRawName@(QualifiedName _ _) -> do
-          options <- lookupRawNameInEnvironment qualifiedRawName
-          -- Filter to only term entities. If the qualified name exists only as a
-          -- section/type (not a term), we should fall back to record projection.
-          -- See PR #759 review comment for details.
-          let termOptions = filter isTermEntity options
-          case termOptions of
-            [] -> inferRecordProjection ann e l  -- No term match, fall back to record projection
-            _  -> do
-              -- Found as qualified name with a term binding, resolve it
-              -- Mirror the Var case: resolve then instantiate to freshen polymorphic types
-              let qualifiedName = MkName (l ^. annoOf) qualifiedRawName
-              (resolved, pt) <- resolveTerm qualifiedName
-              t <- instantiate pt
-              pure (Var ann resolved, t)
-        _ -> inferRecordProjection ann e l  -- Not a valid chain, use record projection
+      -- Try to resolve as a qualified name (for section dereferencing), but only
+      -- if the base is not a local binding. This ensures `r's f` prefers record
+      -- field access when `r` is a local variable, even if a global `r.f` exists.
+      baseIsLocal <- isBaseLocalBinding (Proj ann e l)
+      if baseIsLocal
+        then inferRecordProjection ann e l  -- Base is local, prefer record projection
+        else do
+          let maybeQualifiedName = extractProjNameChain (Proj ann e l)
+          case maybeQualifiedName of
+            Just qualifiedRawName@(QualifiedName _ _) -> do
+              options <- lookupRawNameInEnvironment qualifiedRawName
+              -- Filter to only term entities. If the qualified name exists only as a
+              -- section/type (not a term), we should fall back to record projection.
+              -- See PR #759 review comment for details.
+              let termOptions = filter isTermEntity options
+              case termOptions of
+                [] -> inferRecordProjection ann e l  -- No term match, fall back to record projection
+                _  -> do
+                  -- Found as qualified name with a term binding, resolve it
+                  -- Mirror the Var case: resolve then instantiate to freshen polymorphic types
+                  let qualifiedName = MkName (l ^. annoOf) qualifiedRawName
+                  (resolved, pt) <- resolveTerm qualifiedName
+                  t <- instantiate pt
+                  pure (Var ann resolved, t)
+            _ -> inferRecordProjection ann e l  -- Not a valid chain, use record projection
       where
+        -- Check if the base (innermost) expression in a Proj chain is a local binding.
+        -- This is used to prefer record projection over qualified name resolution when
+        -- the base is a local variable (lambda parameter, pattern binding, etc.).
+        isBaseLocalBinding :: Expr Name -> Check Bool
+        isBaseLocalBinding expr = case getBaseVar expr of
+          Nothing -> pure False
+          Just baseName -> do
+            options <- lookupRawNameInEnvironment (rawName baseName)
+            pure $ any isLocalTerm options
+          where
+            -- Extract the innermost Var from a Proj chain
+            getBaseVar :: Expr Name -> Maybe Name
+            getBaseVar (Var _ n) = Just n
+            getBaseVar (Proj _ inner _) = getBaseVar inner
+            getBaseVar _ = Nothing
+
+            -- Check if a CheckEntity is a Local term
+            isLocalTerm :: (Unique, Name, CheckEntity) -> Bool
+            isLocalTerm (_, _, KnownTerm _ Local) = True
+            isLocalTerm _ = False
+
         -- Helper to extract a chain of names from a Proj expression and convert to QualifiedName
         -- For `a's b's c`, we want to produce QualifiedName ("a" :| ["b"]) "c"
         -- Returns Just (QualifiedName qualifiers finalName) if successful
