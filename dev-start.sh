@@ -41,7 +41,7 @@ case "$MODE" in
 
   lsp-only)
     echo "Starting LSP server only (port $LSP_PORT)..."
-    cabal run exe:jl4-lsp -- ws --port "$LSP_PORT" --cwd "$LSP_CWD"
+    cabal run exe:jl4-lsp -- ws --host 0.0.0.0 --port "$LSP_PORT" --cwd "$LSP_CWD"
     ;;
 
   full)
@@ -53,7 +53,7 @@ case "$MODE" in
       
       # Start LSP Server
       echo "Starting LSP server on port $LSP_PORT..."
-      cabal run exe:jl4-lsp -- ws --port "$LSP_PORT" --cwd "$LSP_CWD" > /tmp/jl4-lsp.log 2>&1 &
+      cabal run exe:jl4-lsp -- ws --host 0.0.0.0 --port "$LSP_PORT" --cwd "$LSP_CWD" > /tmp/jl4-lsp.log 2>&1 &
       echo "LSP_PID=$!" >> "$PIDFILE"
       
       # Start Decision Service
@@ -120,7 +120,7 @@ case "$MODE" in
       echo "      Or run './dev-start.sh full --run' to start all in background"
       echo ""
       echo "Terminal 1 - LSP Server:"
-      echo "  cabal run exe:jl4-lsp -- ws --port $LSP_PORT --cwd $LSP_CWD"
+      echo "  cabal run exe:jl4-lsp -- ws --host 0.0.0.0 --port $LSP_PORT --cwd $LSP_CWD"
       echo ""
       echo "Terminal 2 - Decision Service:"
       echo "  cd jl4-decision-service && cabal run jl4-decision-service -- \\"

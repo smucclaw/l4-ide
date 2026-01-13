@@ -7,5 +7,6 @@ export default defineConfig({
   server: {
     host: true, // Listen on all addresses including LAN
     port: 5173,
+    allowedHosts: true as unknown as undefined, // Vite 6.0.6+ security feature
   },
 })
