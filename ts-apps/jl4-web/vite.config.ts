@@ -9,5 +9,6 @@ export default defineConfig({
   },
   server: {
     host: '0.0.0.0',
+    allowedHosts: true as unknown as undefined, // Vite 6.0.6+ security feature
   },
 })
