@@ -12,6 +12,10 @@ const config = {
       precompress: false,
       strict: true,
     }),
+    // Allow serving from a subdirectory (e.g., /wizard/) via VITE_BASE_PATH
+    paths: {
+      base: process.env.VITE_BASE_PATH || '',
+    },
   },
 }
 
