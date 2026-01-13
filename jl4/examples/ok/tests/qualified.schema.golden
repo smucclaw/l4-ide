@@ -1,33 +1,20 @@
 {
-    "$defs": {
-        "Inputs": {
-            "properties": {
-                "drinks": {
-                    "$ref": "#/$defs/BOOLEAN"
-                },
-                "eats": {
-                    "$ref": "#/$defs/BOOLEAN"
-                },
-                "walks": {
-                    "$ref": "#/$defs/BOOLEAN"
-                }
-            },
-            "required": [
-                "walks",
-                "drinks",
-                "eats"
-            ],
-            "type": "object"
-        }
-    },
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "properties": {
-        "i": {
-            "$ref": "#/$defs/Inputs"
+        "drinks": {
+            "$ref": "#/$defs/BOOLEAN"
+        },
+        "eats": {
+            "$ref": "#/$defs/BOOLEAN"
+        },
+        "walks": {
+            "$ref": "#/$defs/BOOLEAN"
         }
     },
     "required": [
-        "i"
+        "walks",
+        "drinks",
+        "eats"
     ],
     "title": "compute_qualifies",
     "type": "object"
