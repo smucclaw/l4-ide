@@ -1,12 +1,13 @@
 <script lang="ts">
   import { page } from '$app/stores'
   import { goto } from '$app/navigation'
+  import { base } from '$app/paths'
   import Wizard from '$lib/components/Wizard.svelte'
 
   const defaultServiceUrl =
     import.meta.env.VITE_DECISION_SERVICE_URL ?? 'http://localhost:8001'
 
-  let slug = $derived($page.params.slug)
+  let slug = $derived($page.params.slug ?? '')
 
   // Check if the slug looks like a UUID (session ID)
   // UUIDs are 32 hex chars, optionally with hyphens
@@ -57,9 +58,10 @@
 
       // If this returns a single function, redirect to the function page
       if (data.function?.name) {
-        goto(`/wizard/${slug}/${encodeURIComponent(data.function.name)}`, {
-          replaceState: true,
-        })
+        goto(
+          `${base}/${encodeURIComponent(slug)}/${encodeURIComponent(data.function.name)}`,
+          { replaceState: true }
+        )
         return
       }
 
@@ -73,7 +75,7 @@
   }
 
   function selectFunction(name: string) {
-    goto(`/wizard/${slug}/${encodeURIComponent(name)}`)
+    goto(`${base}/${encodeURIComponent(slug)}/${encodeURIComponent(name)}`)
   }
 </script>
 
@@ -91,7 +93,7 @@
   <div class="mx-auto max-w-4xl px-4 py-8">
     <!-- Back link -->
     <a
-      href="/wizard"
+      href={`${base}/`}
       class="mb-4 inline-flex items-center text-sm text-gray-500 hover:text-gray-700"
     >
       <svg

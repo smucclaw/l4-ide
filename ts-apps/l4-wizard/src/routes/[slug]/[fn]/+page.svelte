@@ -5,8 +5,8 @@
   const defaultServiceUrl =
     import.meta.env.VITE_DECISION_SERVICE_URL ?? 'http://localhost:8001'
 
-  let sessionId = $derived($page.params.slug)
-  let fn = $derived(decodeURIComponent($page.params.fn))
+  let sessionId = $derived($page.params.slug ?? '')
+  let fn = $derived($page.params.fn ?? '')
 
   // For UUID-based sessions, the function name is sessionId:functionName
   let functionName = $derived(`${sessionId}:${fn}`)
