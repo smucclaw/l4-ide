@@ -24,3 +24,9 @@ quoted-sections.l4:39:8-37:
   BOOLEAN
 quoted-sections.l4:40:8-39:
   BOOLEAN
+quoted-sections.l4:46:8-61:
+  BOOLEAN
+quoted-sections.l4:47:8-44:
+  BOOLEAN
+quoted-sections.l4:48:8-35:
+  BOOLEAN

@@ -1216,9 +1216,11 @@ inferExpr' g =
             [] -> inferRecordProjection ann e l  -- No term match, fall back to record projection
             _  -> do
               -- Found as qualified name with a term binding, resolve it
+              -- Mirror the Var case: resolve then instantiate to freshen polymorphic types
               let qualifiedName = MkName (l ^. annoOf) qualifiedRawName
-              (resolved, ty) <- resolveTerm qualifiedName
-              pure (Var ann resolved, ty)
+              (resolved, pt) <- resolveTerm qualifiedName
+              t <- instantiate pt
+              pure (Var ann resolved, t)
         _ -> inferRecordProjection ann e l  -- Not a valid chain, use record projection
       where
         -- Helper to extract a chain of names from a Proj expression and convert to QualifiedName
@@ -1235,12 +1237,20 @@ inferExpr' g =
             _ -> Nothing  -- Need at least 2 elements for a qualified name
           where
             -- Extract names in order from innermost to outermost
+            -- Preserves structure of already-qualified names (e.g., `Section Alpha`.`Subsection Beta`'s x
+            -- becomes ["Section Alpha", "Subsection Beta", "x"] not ["Section Alpha.Subsection Beta", "x"])
             go :: Expr Name -> Maybe [Text]
-            go (Var _ n) = Just [rawNameToText (rawName n)]
+            go (Var _ n) = Just (rawNameToComponents (rawName n))
             go (Proj _ inner fieldName) = do
               innerNames <- go inner
-              pure $ innerNames ++ [rawNameToText (rawName fieldName)]
+              pure $ innerNames ++ rawNameToComponents (rawName fieldName)
             go _ = Nothing
+
+            -- Convert a RawName to its component parts, preserving QualifiedName structure
+            rawNameToComponents :: RawName -> [Text]
+            rawNameToComponents (NormalName t) = [t]
+            rawNameToComponents (PreDef t) = [t]
+            rawNameToComponents (QualifiedName qs final) = NE.toList qs ++ [final]
 
         -- Original record projection logic
         inferRecordProjection :: Anno -> Expr Name -> Name -> Check (Expr Resolved, Type' Resolved)

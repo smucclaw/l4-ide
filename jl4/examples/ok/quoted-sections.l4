@@ -38,3 +38,11 @@ ASSUME c1 IS A BOOLEAN
 #CHECK regular's b1
 #CHECK regular's `quoted child`'s b2
 #CHECK `another section`'s nested's c1
+
+-- Regression test: 's applied to an already-qualified base
+-- This tests that `section alpha`.`subsection aa`'s `deep section` correctly
+-- resolves by preserving the QualifiedName structure of the base, rather than
+-- flattening it to a single string segment.
+#CHECK `section alpha`.`subsection aa`'s `deep section`'s a3
+#CHECK `section alpha`.`subsection aa`'s a2
+#CHECK regular.`quoted child`'s b2
