@@ -526,6 +526,7 @@ rg foo `bar`  # BAD - executes bar command
 - **Production:** NixOS flake target `jl4-aws-2505`, domain `jl4.legalese.com`
 
 **Deploy to dev server** (from local machine via lhs jump host):
+
 ```bash
 ssh lhs "cd src/smucclaw/l4-ide/main && git pull && nixos-rebuild switch --flake '.#jl4-dev' --target-host root@dev.jl4.legalese.com"
 ```

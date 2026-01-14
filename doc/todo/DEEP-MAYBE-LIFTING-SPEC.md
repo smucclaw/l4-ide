@@ -7,6 +7,7 @@
 When evaluating functions with partial parameters (some provided, some missing), we need a principled way to represent "unknown" values. The current approach in `Backend/CodeGen.hs` is a pragmatic hack that only handles missing BOOLEAN parameters, generating different code depending on which parameters are present in each request.
 
 This has limitations:
+
 - Only works for BOOLEAN types (uses `fromMaybe FALSE`)
 - Generates different wrapper code per invocation
 - Doesn't handle partial data within complex types (records)
@@ -32,6 +33,7 @@ lift (LIST OF a) = MAYBE (LIST OF (lift a))
 ### Example: vermin_and_rodent
 
 Original type:
+
 ```l4
 DECLARE Inputs HAS
     damage_caused_by_rodents IS A BOOLEAN
@@ -40,6 +42,7 @@ DECLARE Inputs HAS
 ```
 
 Lifted type for partial evaluation:
+
 ```l4
 DECLARE MaybeInputs HAS
     damage_caused_by_rodents IS A MAYBE BOOLEAN
@@ -48,6 +51,7 @@ DECLARE MaybeInputs HAS
 ```
 
 Now JSON `{"damage_caused_by_rodents": true}` decodes to:
+
 ```l4
 MaybeInputs
   (JUST TRUE)   -- damage_caused_by_rodents
@@ -85,6 +89,7 @@ f_partial maybeInputs MEANS
 ```
 
 Where `unwrap :: MAYBE a -> a` would:
+
 - Return the value for `JUST x`
 - Propagate as "omitted" for `NOTHING` (leveraging lazy evaluation)
 
@@ -93,17 +98,20 @@ This requires evaluator support for "omitted" values that short-circuit.
 ## Implementation Plan
 
 ### Phase 1: Type Transformation
+
 1. Add `liftToMaybe :: Type' Resolved -> Type' Resolved` in a new module
 2. Handle primitives (BOOLEAN, NUMBER, STRING, DATE)
 3. Handle records (recursively lift all fields)
 4. Handle lists (lift element type)
 
 ### Phase 2: Code Generation
+
 1. Generate lifted `InputArgs` record type
 2. Generate unwrapping code that handles NOTHING appropriately
 3. Integrate with existing JSONDECODE flow
 
 ### Phase 3: Evaluator Integration
+
 1. Ensure lazy evaluation properly short-circuits on NOTHING
 2. Or implement explicit `unwrap` that propagates omitted values
 
