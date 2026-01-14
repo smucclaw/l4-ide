@@ -318,6 +318,7 @@ createValidatedFunction filepath _filename content fnDecl moduleContext = do
     , fnCompiled = mCompiled
     , fnSources = Map.fromList [(JL4, content)]
     , fnDecisionQueryCache = Nothing
+    , fnExplicitlyExported = True  -- Functions loaded via loadL4Functions are always explicitly exported
     }
 
 -- ----------------------------------------------------------------------------
@@ -374,6 +375,7 @@ personQualifiesFunction = do
       , fnCompiled = mCompiled
       , fnSources = Map.fromList [(JL4, computeQualifiesJL4NoInput)]
       , fnDecisionQueryCache = Nothing
+      , fnExplicitlyExported = True  -- Hardcoded example functions are always visible
       }
 
 -- | Metadata about the function that the user might want to know.
@@ -421,6 +423,7 @@ rodentsAndVerminFunction = do
       , fnCompiled = mCompiled
       , fnSources = Map.fromList [(JL4, rodentsAndVerminJL4)]
       , fnDecisionQueryCache = Nothing
+      , fnExplicitlyExported = True  -- Hardcoded example functions are always visible
       }
 
 computeQualifiesJL4NoInput :: Text
@@ -508,6 +511,7 @@ constantFunction = do
       , fnCompiled = mCompiled
       , fnSources = Map.fromList [(JL4, constantJL4)]
       , fnDecisionQueryCache = Nothing
+      , fnExplicitlyExported = True  -- Hardcoded example functions are always visible
       }
 
 constantJL4 :: Text

@@ -104,7 +104,8 @@ import qualified L4.CRUD as CRUD
 import Servant.Client.Generic (genericClient)
 import Network.HTTP.Client (Manager)
 import qualified Base.Text as T
-import L4.Export (ExportedFunction (..), ExportedParam (..), getExportedFunctions)
+import L4.Export (ExportedFunction (..), ExportedParam (..), DescFlags (..), ParsedDesc (..), getExportedFunctions, parseDescText)
+import L4.Annotation (getAnno)
 import L4.Syntax
 import L4.Print (prettyLayout)
 import qualified L4.StateGraph as StateGraph
@@ -131,6 +132,10 @@ data ValidatedFunction = ValidatedFunction
   , fnCompiled :: !(Maybe Jl4.CompiledModule)
   , fnSources :: !(Map EvalBackend Text)
   , fnDecisionQueryCache :: !(Maybe CachedDecisionQuery)
+  , fnExplicitlyExported :: !Bool
+  -- ^ True if this function has an explicit @export annotation.
+  -- When a module has explicit exports, only explicitly exported functions
+  -- should be shown in getAllFunctions.
   }
 
 type AppM = ReaderT AppEnv Handler
@@ -745,6 +750,18 @@ validateFunction fn = do
             Nothing -> Nothing
       pure (Map.map fst evalMap, mCompiled)
 
+  -- Determine if this function is explicitly exported
+  let isExplicit = case mCompiled of
+        Nothing -> True  -- If no compiled module, assume explicitly exported (backwards compatible)
+        Just compiled ->
+          let resolvedModule = compiled.compiledModule
+              exports = getExportedFunctions resolvedModule
+              explicitExports = filter isExplicitExport exports
+              fnName = fnWithDeclaration.declaration.name
+          in case explicitExports of
+              [] -> True  -- No explicit exports in module, so implicit default counts as "exported"
+              xs -> any (\e -> e.exportName == fnName) xs  -- Must match an explicit export
+
   pure
     ValidatedFunction
       { fnImpl = fnWithDeclaration.declaration
@@ -752,11 +769,22 @@ validateFunction fn = do
       , fnCompiled = mCompiled
       , fnSources = fnWithDeclaration.implementation
       , fnDecisionQueryCache = Nothing
+      , fnExplicitlyExported = isExplicit
       }
  where
   validateImplementation :: FunctionImplementation -> EvalBackend -> Text -> AppM (RunFunction, Maybe Jl4.CompiledModule)
   validateImplementation fnImpl JL4 program =
     liftIO $ Jl4.createFunction (Text.unpack fnImpl.declaration.name <> ".l4") (toDecl fnImpl.declaration) program Map.empty
+
+-- | Check if an exported function has an explicit @export annotation
+-- (as opposed to being implicitly exported as the first DECIDE)
+isExplicitExport :: ExportedFunction -> Bool
+isExplicitExport export =
+  case getAnno export.exportDecide Optics.^. annDesc of
+    Nothing -> False
+    Just desc ->
+      case parseDescText (getDesc desc) of
+        ParsedDesc{flags = DescFlags{isExport}} -> isExport
 
 fillMetadataFromAnnotations :: FunctionImplementation -> AppM Function
 fillMetadataFromAnnotations fn =
@@ -975,8 +1003,14 @@ looksLikeUUID name =
 getAllFunctions :: AppM [SimpleFunction]
 getAllFunctions = do
   functions <- liftIO . readTVarIO =<< asks (.functionDatabase)
-  pure $ fmap (toSimpleFunction . (.fnImpl)) $ filter (not . looksLikeUUID . (.fnImpl.name)) $ Map.elems functions
+  -- Filter to only show:
+  -- 1. Functions that don't have UUID-like names
+  -- 2. Functions that are explicitly exported (when exports are present in the source)
+  let visibleFunctions = filter isVisible $ Map.elems functions
+  pure $ fmap (toSimpleFunction . (.fnImpl)) visibleFunctions
  where
+  isVisible vf =
+    not (looksLikeUUID vf.fnImpl.name) && vf.fnExplicitlyExported
   toSimpleFunction s =
     SimpleFunction
       { simpleName = s.name
@@ -1041,12 +1075,23 @@ withUUIDFunction uuidAndFun k err = case UUID.fromText muuid of
 
         (runFn, mCompiled) <- liftIO $ Jl4.createFunction (Text.unpack actualFunName <> ".l4") fnDecl prog Map.empty
 
+        -- Check if this function is explicitly exported
+        let isExplicit = case mCompiled of
+              Nothing -> True  -- No compiled module, assume exported
+              Just compiled ->
+                let exports = getExportedFunctions compiled.compiledModule
+                    explicitExports = filter isExplicitExport exports
+                in case explicitExports of
+                    [] -> True  -- No explicit exports, implicit default counts
+                    xs -> any (\e -> e.exportName == actualFunName) xs
+
         k ValidatedFunction
           { fnImpl = fnImpl { parameters = parametersOfDecideWithModule mResolvedModule decide }
           , fnEvaluator = Map.singleton JL4 runFn
           , fnCompiled = mCompiled
           , fnSources = Map.singleton JL4 prog
           , fnDecisionQueryCache = Nothing
+          , fnExplicitlyExported = isExplicit
           }
   where
    (muuid, funNameFromUUID) = T.drop 1 <$> T.breakOn ":" uuidAndFun
