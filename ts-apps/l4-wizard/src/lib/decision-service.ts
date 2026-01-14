@@ -156,3 +156,74 @@ export async function fetchGraphviz(
 export function createClient(baseUrl: string): DecisionServiceClient {
   return { baseUrl: baseUrl.replace(/\/$/, '') }
 }
+
+// ----------------------------------------------------------------------------
+// State Graph API
+// ----------------------------------------------------------------------------
+
+export type StateGraphInfo = {
+  graphName: string
+  graphDescription: string | null
+}
+
+export type StateGraphListResponse = {
+  graphs: StateGraphInfo[]
+}
+
+/**
+ * List all state graphs available in the module
+ */
+export async function fetchStateGraphList(
+  client: DecisionServiceClient,
+  functionName: string
+): Promise<StateGraphListResponse> {
+  const encodedName = encodeURIComponent(functionName)
+  const url = `${client.baseUrl}/functions/${encodedName}/state-graphs`
+
+  const resp = await fetch(url)
+  if (!resp.ok) {
+    await throwWithResponseBody(resp, `GET ${url}`)
+  }
+
+  return (await resp.json()) as StateGraphListResponse
+}
+
+/**
+ * Fetch a state graph as SVG
+ */
+export async function fetchStateGraphSvg(
+  client: DecisionServiceClient,
+  functionName: string,
+  graphName: string
+): Promise<string> {
+  const encodedFnName = encodeURIComponent(functionName)
+  const encodedGraphName = encodeURIComponent(graphName)
+  const url = `${client.baseUrl}/functions/${encodedFnName}/state-graphs/${encodedGraphName}/svg`
+
+  const resp = await fetch(url)
+  if (!resp.ok) {
+    await throwWithResponseBody(resp, `GET ${url}`)
+  }
+
+  return await resp.text()
+}
+
+/**
+ * Fetch a state graph as DOT source
+ */
+export async function fetchStateGraphDot(
+  client: DecisionServiceClient,
+  functionName: string,
+  graphName: string
+): Promise<string> {
+  const encodedFnName = encodeURIComponent(functionName)
+  const encodedGraphName = encodeURIComponent(graphName)
+  const url = `${client.baseUrl}/functions/${encodedFnName}/state-graphs/${encodedGraphName}`
+
+  const resp = await fetch(url)
+  if (!resp.ok) {
+    await throwWithResponseBody(resp, `GET ${url}`)
+  }
+
+  return await resp.text()
+}
