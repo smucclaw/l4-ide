@@ -132,12 +132,12 @@ buildFunctionCallExpr funName args =
   App emptyAnno funName args
 
 -- | Check if any parameter value requires wrapper-based evaluation
--- This includes FnObject (records), FnUncertain, FnUnknown (null/empty inputs),
--- and FnLitString (which may be enum constructor names needing type coercion)
--- These types need JSONDECODE to handle properly (e.g., for MAYBE-typed fields
--- or string-to-enum coercion)
+-- Returns True for:
+-- - Missing parameters (Nothing) - need wrapper to handle as UNKNOWN
+-- - FnObject, FnUncertain, FnUnknown, FnLitString (enum coercion)
+-- These types need JSONDECODE to handle properly
 requiresWrapperEvaluation :: [(Text, Maybe FnLiteral)] -> Bool
-requiresWrapperEvaluation = any (maybe False needsWrapper . snd)
+requiresWrapperEvaluation = any (\(_, mVal) -> maybe True needsWrapper mVal)
   where
     needsWrapper :: FnLiteral -> Bool
     needsWrapper (FnObject _) = True
@@ -149,7 +149,7 @@ requiresWrapperEvaluation = any (maybe False needsWrapper . snd)
 
 -- | Evaluate using precompiled module (fast path) - direct AST evaluation
 -- This avoids the text round-trip through prettyLayout and re-parsing
--- Falls back to wrapper-based evaluation for FnObject parameters
+-- Falls back to wrapper-based evaluation for FnObject parameters or missing params
 evaluateWithCompiled
   :: FilePath
   -> FunctionDeclaration
@@ -159,11 +159,22 @@ evaluateWithCompiled
   -> Bool
   -> ExceptT EvaluatorError IO ResponseWithReason
 evaluateWithCompiled filepath fnDecl compiled params traceLevel includeGraphViz = do
+  -- Fill in missing parameters with Nothing
+  -- The input params may only contain provided parameters; we need explicit Nothing
+  -- entries for missing parameters so requiresWrapperEvaluation can detect them
+  let expectedParams = map fst (extractParamTypes compiled.compiledDecide)
+      inputMap = Map.fromList params
+      -- join flattens Maybe (Maybe FnLiteral) -> Maybe FnLiteral:
+      -- - Nothing (not in input) -> Nothing
+      -- - Just Nothing (explicit unknown) -> Nothing
+      -- - Just (Just v) (provided value) -> Just v
+      fullParams = [(name, join $ Map.lookup name inputMap) | name <- expectedParams]
+
   -- Check if we need to fall back to wrapper-based evaluation
-  -- (for FnObject, FnUncertain, FnUnknown which require JSONDECODE)
-  if requiresWrapperEvaluation params
-    then evaluateWithWrapper filepath fnDecl compiled params traceLevel includeGraphViz
-    else evaluateDirectAST compiled params traceLevel includeGraphViz
+  -- (for FnObject, FnUncertain, FnUnknown, missing params which require JSONDECODE)
+  if requiresWrapperEvaluation fullParams
+    then evaluateWithWrapper filepath fnDecl compiled fullParams traceLevel includeGraphViz
+    else evaluateDirectAST compiled fullParams traceLevel includeGraphViz
 
 -- | Direct AST evaluation (fast path) - for simple types without FnObject
 evaluateDirectAST
@@ -306,12 +317,11 @@ evaluateWrapperInContext filepath wrapperCode compiled = do
   evaluateModule filepath combinedProgram compiled.compiledModuleContext
 
 -- | Convert FnLiteral parameters to Aeson.Value
+-- Missing parameters (Nothing) become FnUnknown -> Aeson.Null for partial evaluation
 paramsToJson :: (Monad m) => [(Text, Maybe FnLiteral)] -> ExceptT EvaluatorError m Aeson.Value
-paramsToJson params = do
-  pairs <- forM params $ \(name, mVal) -> case mVal of
-    Nothing -> throwError $ InterpreterError $ "Missing value for parameter: " <> name
-    Just val -> pure (name, fnLiteralToJson val)
-  pure $ Aeson.object [(Aeson.fromText k, v) | (k, v) <- pairs]
+paramsToJson params =
+  let pairs = [(name, fnLiteralToJson (maybe FnUnknown id mVal)) | (name, mVal) <- params]
+  in pure $ Aeson.object [(Aeson.fromText k, v) | (k, v) <- pairs]
 
 -- | Convert FnLiteral to Aeson.Value
 fnLiteralToJson :: FnLiteral -> Aeson.Value

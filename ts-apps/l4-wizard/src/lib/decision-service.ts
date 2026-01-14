@@ -114,9 +114,26 @@ export async function evaluateFunction(
   }
 
   const data = await resp.json()
+
+  // Check for error response structure (backend may return 200 with error payload)
+  if (data.tag === 'SimpleError' || data.tag === 'Error') {
+    const errorMsg =
+      data.contents?.contents || data.contents || 'Evaluation failed'
+    throw new Error(
+      typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg)
+    )
+  }
+
+  // Extract result from SimpleResponse structure: {contents: {values: [["result", value]]}}
+  const values = data.contents?.values
+  const resultPair = values?.find(
+    (pair: [string, unknown]) => pair[0] === 'result'
+  )
+  const resultValue = resultPair ? resultPair[1] : undefined
+
   return {
-    result: data.result,
-    trace: data.trace,
+    result: resultValue,
+    trace: data.contents?.reasoning,
   }
 }
 
