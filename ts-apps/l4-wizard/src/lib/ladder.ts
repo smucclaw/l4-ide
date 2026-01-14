@@ -56,6 +56,17 @@ export function evaluateLadder(
       if (result === Ternary.False) return Ternary.True
       return Ternary.Unknown
     }
+
+    case 'App': {
+      // Function application - treat as a single atom identified by fnName.unique
+      // The result depends on whether all its arguments are known
+      const results = node.args.map((arg) => evaluateLadder(arg, atomValues))
+      if (results.some((r) => r === Ternary.Unknown)) {
+        return Ternary.Unknown
+      }
+      // If all arguments are known, check if this specific atom has a value
+      return atomValues.get(node.fnName.unique) ?? Ternary.Unknown
+    }
   }
 }
 
@@ -98,6 +109,10 @@ export function extractAtomIds(node: LadderNode): Set<number> {
         break
       case 'Not':
         traverse(n.negand)
+        break
+      case 'App':
+        ids.add(n.fnName.unique)
+        n.args.forEach(traverse)
         break
     }
   }
@@ -167,6 +182,22 @@ export function buildAtomContexts(ladder: Ladder): Map<number, AtomContext> {
       case 'Not':
         traverse(node.negand, 'Not')
         break
+
+      case 'App': {
+        // App nodes represent function applications
+        // Add the function itself as an atom
+        const atomId = node.fnName.unique
+        if (!contexts.has(atomId)) {
+          contexts.set(atomId, {
+            atomId,
+            parentType,
+            siblings: [],
+          })
+        }
+        // Traverse arguments
+        node.args.forEach((arg) => traverse(arg, parentType))
+        break
+      }
     }
   }
 
@@ -217,6 +248,16 @@ export function extractLogicalGroups(ladder: Ladder | null): LogicalGroup[] {
         for (const arg of node.args) {
           if (arg.$type === 'UBoolVar') {
             atomIds.add(arg.name.unique)
+          } else if (arg.$type === 'App') {
+            // App nodes add their function name as an atom
+            atomIds.add(arg.fnName.unique)
+            // Also traverse App's arguments
+            for (const appArg of arg.args) {
+              const childGroup = traverse(appArg, depth + 1, node.$type)
+              if (childGroup) {
+                childGroups.push(childGroup)
+              }
+            }
           } else {
             const childGroup = traverse(arg, depth + 1, node.$type)
             if (childGroup) {
@@ -237,6 +278,29 @@ export function extractLogicalGroups(ladder: Ladder | null): LogicalGroup[] {
       case 'Not': {
         // For NOT nodes, just traverse through them
         return traverse(node.negand, depth, parentType)
+      }
+
+      case 'App': {
+        // For standalone App nodes, create a group containing the function atom
+        const groupId = `group_${groupIdCounter++}`
+        const atomIds = new Set<number>([node.fnName.unique])
+        const childGroups: LogicalGroup[] = []
+
+        // Traverse App's arguments
+        for (const arg of node.args) {
+          const childGroup = traverse(arg, depth + 1, parentType)
+          if (childGroup) {
+            childGroups.push(childGroup)
+          }
+        }
+
+        return {
+          id: groupId,
+          type: parentType,
+          atomIds,
+          childGroups,
+          depth,
+        }
       }
     }
   }
