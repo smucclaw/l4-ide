@@ -20,6 +20,7 @@
   import OutcomeBanner from './OutcomeBanner.svelte'
   import LadderDiagram from './LadderDiagram.svelte'
   import GraphvizDiagram from './GraphvizDiagram.svelte'
+  import StateGraphDiagram from './StateGraphDiagram.svelte'
 
   type Props = {
     serviceUrl: string
@@ -359,6 +360,11 @@
     <!-- Graphviz Diagram -->
     <section class="mt-8">
       <GraphvizDiagram {client} {functionName} {bindings} />
+    </section>
+
+    <!-- State Graph Diagram -->
+    <section class="mt-8">
+      <StateGraphDiagram {client} {functionName} />
     </section>
   {/if}
 </div>
