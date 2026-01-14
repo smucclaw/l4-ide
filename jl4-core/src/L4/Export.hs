@@ -10,6 +10,8 @@ module L4.Export (
   buildTypeDescMap,
   assumesFromModule,
   extractAssumeParamTypes,
+  extractImplicitAssumeParams,
+  hasTypeInferenceVars,
 ) where
 
 import Base
@@ -22,6 +24,7 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import L4.Annotation (getAnno)
 import L4.Syntax
+import L4.TypeCheck.Types (CheckErrorWithContext(..), CheckError(..))
 import Optics
 
 type TypeDescMap = Map.Map Unique Text
@@ -291,3 +294,37 @@ extractAssumeParamTypes mod' (MkDecide _ _ _ body) =
   assumeToTypeInfo (MkAssume _ _ (MkAppForm _ name _ _) (Just ty)) =
     Just (resolvedToText name, ty)
   assumeToTypeInfo _ = Nothing
+
+-- | Check if a type contains any unresolved inference variables.
+-- Types with inference variables cannot be used for implicit ASSUMEs
+-- because their concrete type is not yet known.
+hasTypeInferenceVars :: Type' Resolved -> Bool
+hasTypeInferenceVars = \case
+  Type   _ -> False
+  TyApp  _ _n ns -> any hasTypeInferenceVars ns
+  Fun    _ opts ty -> any hasNamedTypeInferenceVars opts || hasTypeInferenceVars ty
+  Forall _ _ ty -> hasTypeInferenceVars ty
+  InfVar {} -> True
+ where
+  hasNamedTypeInferenceVars :: OptionallyNamedType Resolved -> Bool
+  hasNamedTypeInferenceVars (MkOptionallyNamedType _ _ ty) = hasTypeInferenceVars ty
+
+-- | Extract implicit ASSUME parameters from type check errors.
+-- When a variable is used without declaration, the type checker records an
+-- OutOfScopeError with the inferred type. If the type is fully resolved
+-- (no inference variables), we can treat this as an implicit ASSUME.
+--
+-- This enables programs to omit explicit ASSUME declarations when the type
+-- can be inferred from usage context.
+--
+-- Example: `temperature + 0` forces `temperature :: NUMBER`
+-- The OutOfScopeError for `temperature` will have type NUMBER, which we
+-- can extract as an implicit ASSUME.
+extractImplicitAssumeParams
+  :: [CheckErrorWithContext]
+  -> [(Text, Type' Resolved)]
+extractImplicitAssumeParams errors =
+  [ (nameToText name, ty)
+  | MkCheckErrorWithContext{kind = OutOfScopeError name ty} <- errors
+  , not (hasTypeInferenceVars ty)
+  ]

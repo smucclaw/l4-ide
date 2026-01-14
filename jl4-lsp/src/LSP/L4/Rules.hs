@@ -125,6 +125,7 @@ data TypeCheckResult = TypeCheckResult
   , environment :: TypeCheck.Environment
   , entityInfo :: TypeCheck.EntityInfo
   , infos :: [TypeCheck.CheckErrorWithContext]
+  , errors :: [TypeCheck.CheckErrorWithContext]  -- ^ Actual errors (OutOfScopeError etc.) for implicit ASSUME extraction
   , dependencies :: [TypeCheckResult]
   }
   deriving stock (Generic)
@@ -142,6 +143,7 @@ instance NFData TypeCheckResult where
     `seq` rnf environment
     `seq` rnf entityInfo
     `seq` rnf infos
+    `seq` rnf errors
     `seq` rnf dependencies
 
 type instance RuleResult EvaluateLazy = [EvaluateLazy.EvalDirectiveResult]
@@ -479,6 +481,7 @@ jl4Rules evalConfig rootDirectory recorder = do
         , entityInfo = applyFinalSubstitution result.substitution uri result.entityInfo
         , success = null errors
         , infos
+        , errors  -- Include actual errors (OutOfScopeError etc.) for implicit ASSUME extraction
         , infoMap = result.infoMap
         , nlgMap = result.nlgMap
         , scopeMap = result.scopeMap
