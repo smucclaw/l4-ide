@@ -700,11 +700,12 @@ deriveFunctionFromSource existing source = do
             }
  where
   chooseField orig new =
-    if Text.null (Text.strip orig) then new else orig
+    -- If orig is empty or looks like a UUID, prefer the derived name
+    if Text.null (Text.strip orig) || looksLikeUUID orig then new else orig
 
 selectExport :: Function -> [ExportedFunction] -> Maybe ExportedFunction
 selectExport existing exports =
-  let byName = if Text.null (Text.strip existing.name)
+  let byName = if Text.null (Text.strip existing.name) || looksLikeUUID existing.name
                   then Nothing
                   else List.find (\e -> e.exportName == existing.name) exports
       byDefault = List.find (.exportIsDefault) exports
@@ -858,6 +859,16 @@ resolvedNameText :: Resolved -> Text
 resolvedNameText =
   rawNameToText . rawName . getActual
 
+-- | Check if a function name looks like a UUID (with optional suffix after colon)
+-- Matches patterns like:
+--   b52992ed-39fd-4226-bad2-2deee2473881
+--   b52992ed-39fd-4226-bad2-2deee2473881:functionName
+looksLikeUUID :: Text -> Bool
+looksLikeUUID name =
+  let (beforeColon, _) = Text.breakOn ":" name
+      nameToCheck = if Text.null beforeColon then name else beforeColon
+  in Maybe.isJust (UUID.fromText nameToCheck)
+
 getAllFunctions :: AppM [SimpleFunction]
 getAllFunctions = do
   functions <- liftIO . readTVarIO =<< asks (.functionDatabase)
@@ -868,16 +879,6 @@ getAllFunctions = do
       { simpleName = s.name
       , simpleDescription = s.description
       }
-  
-  -- | Check if a function name looks like a UUID (with optional suffix after colon)
-  -- Matches patterns like:
-  --   b52992ed-39fd-4226-bad2-2deee2473881
-  --   b52992ed-39fd-4226-bad2-2deee2473881:functionName
-  looksLikeUUID :: Text -> Bool
-  looksLikeUUID name =
-    let (beforeColon, _) = Text.breakOn ":" name
-        nameToCheck = if Text.null beforeColon then name else beforeColon
-    in Maybe.isJust (UUID.fromText nameToCheck)
 
 getFunctionHandler :: String -> AppM Function
 getFunctionHandler name = do
@@ -908,8 +909,8 @@ withUUIDFunction uuidAndFun k err = case UUID.fromText muuid of
         (typecheckErrs, mTcRes) <- liftIO $ Jl4.typecheckModule fileName prog Map.empty
         let mResolvedModule = (\Rules.TypeCheckResult{module' = m} -> m) <$> mTcRes
 
-        -- Derive actual function name from exports if not specified in UUID
-        actualFunName <- if Text.null (Text.strip funNameFromUUID)
+        -- Derive actual function name from exports if not specified in UUID or if it's a UUID itself
+        actualFunName <- if Text.null (Text.strip funNameFromUUID) || looksLikeUUID funNameFromUUID
           then do
             case mTcRes of
               Nothing -> do
