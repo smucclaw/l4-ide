@@ -261,8 +261,11 @@
           bindings
         )
         result = evalResult.result
-      } catch {
+        isDetermined = true
+      } catch (e) {
         // Evaluation may fail if not all required inputs are provided
+        console.warn('Evaluation failed:', e instanceof Error ? e.message : e)
+        // Don't override isDetermined from query plan if evaluation fails
       }
     }
   }
