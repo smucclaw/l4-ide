@@ -1,6 +1,21 @@
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "properties": {},
+    "properties": {
+        "a": {
+            "$ref": "#/$defs/BOOLEAN"
+        },
+        "b": {
+            "$ref": "#/$defs/BOOLEAN"
+        },
+        "c": {
+            "$ref": "#/$defs/BOOLEAN"
+        }
+    },
+    "required": [
+        "a",
+        "b",
+        "c"
+    ],
     "title": "case1",
     "type": "object"
 }

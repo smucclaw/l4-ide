@@ -1,12 +1,16 @@
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "properties": {
+        "walks": {
+            "$ref": "#/$defs/BOOLEAN"
+        },
         "x": {
             "$ref": "#/$defs/Person"
         }
     },
     "required": [
-        "x"
+        "x",
+        "walks"
     ],
     "title": "y",
     "type": "object"

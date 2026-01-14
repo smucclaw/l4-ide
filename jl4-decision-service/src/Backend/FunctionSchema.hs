@@ -17,6 +17,7 @@ import qualified Data.Maybe as Maybe
 import qualified Data.Set as Set
 import qualified Data.Text as Text
 
+import L4.Export (extractAssumeParamTypes)
 import L4.Syntax
 import qualified Optics
 
@@ -196,7 +197,7 @@ typeToParameter declares visited ty =
     addDesc (Just d) p = p {parameterDescription = d}
 
 parametersFromDecide :: Module Resolved -> Decide Resolved -> Parameters
-parametersFromDecide resolvedModule (MkDecide _ (MkTypeSig _ (MkGivenSig _ names) _) _ _) =
+parametersFromDecide resolvedModule decide@(MkDecide _ (MkTypeSig _ (MkGivenSig _ names) _) _ _) =
   let
     declares = declaresFromModule resolvedModule
     mkOne (MkOptionallyTypedName ann resolved mType) =
@@ -206,10 +207,19 @@ parametersFromDecide resolvedModule (MkDecide _ (MkTypeSig _ (MkGivenSig _ names
         desc = Maybe.fromMaybe "" (fmap getDesc (ann Optics.^. annDesc))
        in
         (resolvedNameText resolved, base {parameterDescription = desc, parameterAlias = Nothing})
+
+    -- Extract ASSUME params that this function references
+    assumeParams = extractAssumeParamTypes resolvedModule decide
+    mkAssumeParam (name, ty) =
+      let base = typeToParameter declares Set.empty ty
+      in (name, base {parameterDescription = "", parameterAlias = Nothing})
+
+    givenParamList = map mkOne names
+    assumeParamList = map mkAssumeParam assumeParams
    in
     MkParameters
-      { parameterMap = Map.fromList (map mkOne names)
-      , required = map (resolvedNameText . (\(MkOptionallyTypedName _ r _) -> r)) names
+      { parameterMap = Map.fromList (givenParamList <> assumeParamList)
+      , required = map fst givenParamList <> map fst assumeParamList
       }
  where
   emptyParam :: Text -> Parameter
