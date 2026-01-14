@@ -1,0 +1,12 @@
+digraph {
+    graph [rankdir=TB
+          ,label=a
+          ,labelloc=t
+          ,fontname=Helvetica
+          ,fontsize=14];
+    node [fontname=Helvetica
+         ,fontsize=11];
+    edge [fontname=Helvetica
+         ,fontsize=10];
+}
+
