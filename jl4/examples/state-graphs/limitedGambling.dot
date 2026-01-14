@@ -1,0 +1,32 @@
+digraph {
+    graph [rankdir=TB
+          ,label=limitedGambling
+          ,labelloc=t
+          ,fontname=Helvetica
+          ,fontsize=14];
+    node [fontname=Helvetica
+         ,fontsize=11];
+    edge [fontname=Helvetica
+         ,fontsize=10];
+    0 [label=initial
+      ,fillcolor=white
+      ,style=filled
+      ,shape=ellipse
+      ,fillcolor="#e8f4fd"];
+    1 [label=Fulfilled
+      ,fillcolor=white
+      ,style=filled
+      ,shape=doublecircle
+      ,fillcolor="#d4edda"];
+    2 [label=Breach
+      ,fillcolor=white
+      ,style=filled
+      ,shape=doublecircle
+      ,fillcolor="#f8d7da"];
+    0 -> 1 [label="Alice SHANT gamble ... [30] IF amt GREATER THAN 100"
+           ,color="#28a745"
+           ,style=solid];
+    0 -> 2 [label=violation
+           ,color="#dc3545"
+           ,style=dashed];
+}

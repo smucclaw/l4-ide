@@ -1,0 +1,24 @@
+digraph {
+    graph [rankdir=TB
+          ,label=breachInHence
+          ,labelloc=t
+          ,fontname=Helvetica
+          ,fontsize=14];
+    node [fontname=Helvetica
+         ,fontsize=11];
+    edge [fontname=Helvetica
+         ,fontsize=10];
+    0 [label=initial
+      ,fillcolor=white
+      ,style=filled
+      ,shape=ellipse
+      ,fillcolor="#e8f4fd"];
+    1 [label=Breach
+      ,fillcolor=white
+      ,style=filled
+      ,shape=doublecircle
+      ,fillcolor="#f8d7da"];
+    0 -> 1 [label="Alice MAY smoke [30]"
+           ,color="#28a745"
+           ,style=solid];
+}

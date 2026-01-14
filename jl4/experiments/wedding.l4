@@ -1,13 +1,131 @@
--- I, [Name], take you, [Partner's Name], to be my wedded [wife/husband], to have and to hold from this day forward, for better, for worse, for richer, for poorer, in sickness and in health, to love and to cherish, till death us do part
+-- Wedding Vows as L4 Regulative Rules
+--
+-- Traditional wedding vows formalized as mutual obligations:
+-- "I, [Name], take you, [Partner's Name], to be my wedded [wife/husband],
+--  to have and to hold from this day forward,
+--  for better, for worse, for richer, for poorer,
+--  in sickness and in health, to love and to cherish,
+--  till death do us part."
 
--- I, [Name],
--- take you,
--- [Partner's Name],
--- to be my wedded [wife/husband],
--- to have and to hold
--- from this day forward,
--- for better, for worse,
--- for richer, for poorer,
--- in sickness and in health,
--- to love and to cherish,
--- till death do us part.
+--------------------------------------------------------------------------------
+-- Type Declarations
+--------------------------------------------------------------------------------
+
+DECLARE Person IS ONE OF Spouse1, Spouse2
+
+DECLARE Action IS ONE OF
+  `exchange vows`
+  `love and cherish`
+  `have and hold`
+  `support`
+  `care for`
+  abandon
+  `be unfaithful`
+
+--------------------------------------------------------------------------------
+-- The Wedding Ceremony: Exchange of Vows
+--------------------------------------------------------------------------------
+
+-- The ceremony begins with both parties making their vows
+-- Spouse1 must exchange vows, then Spouse2 must respond
+`wedding ceremony` MEANS
+  PARTY Spouse1
+    MUST `exchange vows`
+    WITHIN 1
+  HENCE
+    PARTY Spouse2
+      MUST `exchange vows`
+      WITHIN 1
+    HENCE FULFILLED
+    LEST BREACH BY Spouse2 BECAUSE "failed to exchange vows"
+  LEST BREACH BY Spouse1 BECAUSE "failed to exchange vows"
+
+--------------------------------------------------------------------------------
+-- Marriage Obligations: The Core Vows
+--------------------------------------------------------------------------------
+
+-- "To love and to cherish" - Spouse1's obligation
+`Spouse1 loves Spouse2` MEANS
+  PARTY Spouse1
+    MUST `love and cherish`
+  HENCE FULFILLED
+  LEST BREACH BY Spouse1 BECAUSE "failed to love and cherish"
+
+-- "To love and to cherish" - Spouse2's obligation (mutual)
+`Spouse2 loves Spouse1` MEANS
+  PARTY Spouse2
+    MUST `love and cherish`
+  HENCE FULFILLED
+  LEST BREACH BY Spouse2 BECAUSE "failed to love and cherish"
+
+-- "To have and to hold" - Spouse1's obligation
+`Spouse1 holds Spouse2` MEANS
+  PARTY Spouse1
+    MUST `have and hold`
+  HENCE FULFILLED
+  LEST BREACH BY Spouse1 BECAUSE "failed to have and hold"
+
+-- "To have and to hold" - Spouse2's obligation (mutual)
+`Spouse2 holds Spouse1` MEANS
+  PARTY Spouse2
+    MUST `have and hold`
+  HENCE FULFILLED
+  LEST BREACH BY Spouse2 BECAUSE "failed to have and hold"
+
+--------------------------------------------------------------------------------
+-- Conditional Obligations: "For Better, For Worse"
+--------------------------------------------------------------------------------
+
+-- "For richer or poorer" - support obligation
+`support in all circumstances` MEANS
+  PARTY Spouse1
+    MUST `support`
+  HENCE FULFILLED
+  LEST BREACH BECAUSE "failed to support through richer or poorer"
+
+-- "In sickness and in health" - care obligation
+`care in sickness and health` MEANS
+  PARTY Spouse1
+    MUST `care for`
+  HENCE FULFILLED
+  LEST BREACH BECAUSE "failed to care in sickness and health"
+
+--------------------------------------------------------------------------------
+-- Termination: "Till Death Do Us Part"
+--------------------------------------------------------------------------------
+
+-- The marriage ends upon death - this is a permission (MAY be released)
+`death releases vows` MEANS
+  PARTY Spouse1
+    MAY `exchange vows`
+  HENCE FULFILLED
+
+--------------------------------------------------------------------------------
+-- Breach Scenarios: Prohibitions
+--------------------------------------------------------------------------------
+
+-- "Forsaking all others" - prohibition on abandonment
+`no abandonment` MEANS
+  PARTY Spouse1
+    MUST NOT abandon
+  HENCE FULFILLED
+  LEST BREACH BY Spouse1 BECAUSE "abandoned spouse"
+
+-- Implied fidelity obligation
+`fidelity` MEANS
+  PARTY Spouse1
+    MUST NOT `be unfaithful`
+  HENCE FULFILLED
+  LEST BREACH BY Spouse1 BECAUSE "was unfaithful"
+
+--------------------------------------------------------------------------------
+-- Combined Marriage Contract
+--------------------------------------------------------------------------------
+
+-- The full marriage as parallel obligations (using RAND for regulative AND)
+GIVETH PROVISION Person Action
+`marriage contract` MEANS
+      (PARTY Spouse1 MUST `love and cherish` HENCE FULFILLED LEST BREACH)
+  RAND (PARTY Spouse1 MUST `have and hold` HENCE FULFILLED LEST BREACH)
+  RAND (PARTY Spouse2 MUST `love and cherish` HENCE FULFILLED LEST BREACH)
+  RAND (PARTY Spouse2 MUST `have and hold` HENCE FULFILLED LEST BREACH)
