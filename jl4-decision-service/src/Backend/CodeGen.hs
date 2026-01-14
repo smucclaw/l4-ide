@@ -9,7 +9,8 @@ import qualified Data.Aeson as Aeson
 import qualified Data.Text as Text
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TL
-import L4.Syntax (Type'(..), Resolved, getOriginal, rawName, rawNameToText)
+import L4.Syntax (Type'(..), Resolved, getUnique)
+import L4.TypeCheck.Environment (booleanUnique)
 import Backend.Api (TraceLevel(..))
 import Backend.MaybeLift (liftTypeToMaybe)
 
@@ -52,10 +53,9 @@ generateEvalWrapper funName params inputJson traceLevel = do
     else
       -- Deep Maybe lifting: all parameters get MAYBE types
       let -- Check if a type is exactly BOOLEAN (not LIST OF BOOLEAN, etc.)
-          -- Pattern match on TyApp with "Boolean" name and no type arguments
+          -- Compare unique symbolically rather than via string comparison
           isBooleanType :: Type' Resolved -> Bool
-          isBooleanType (TyApp _ name []) =
-            Text.toUpper (rawNameToText (rawName (getOriginal name))) == "BOOLEAN"
+          isBooleanType (TyApp _ name []) = getUnique name == booleanUnique
           isBooleanType _ = False
           -- Annotate params with their boolean status
           paramInfo = map (\(name, ty) -> ((name, ty), isBooleanType ty)) params
