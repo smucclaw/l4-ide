@@ -991,8 +991,8 @@
     <button
       class="fab fab-wizard"
       onclick={handleOpenWizard}
-      aria-label="Open in Wizard"
-      title="Open in Wizard"
+      aria-label="Deploy"
+      title="Deploy"
     >
       <svg
         width="20"
@@ -1011,7 +1011,7 @@
         <path d="M15 9L3 21" stroke-linecap="round" />
         <path d="M13 7L17 11" stroke-linecap="round" />
       </svg>
-      Wizard
+      Deploy
     </button>
     <button
       class="fab fab-share"

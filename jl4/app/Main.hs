@@ -39,6 +39,7 @@ import qualified LSP.L4.Oneshot as Oneshot
 import L4.EvaluateLazy (parseFixedNow, readFixedNowEnv, resolveEvalConfig, EvalDirectiveResult(..), EvalDirectiveValue(..), prettyEvalException)
 import qualified L4.EvaluateLazy.GraphViz2 as GraphViz2
 import L4.Export (getExportedFunctions, getDefaultFunction, ExportedFunction(..), ExportedParam(..))
+import qualified L4.StateGraph as StateGraph
 import L4.Syntax (Type'(..), Resolved, Module(..))
 import L4.Print (prettyLayout)
 import L4.DirectiveFilter (filterIdeDirectives)
@@ -448,6 +449,19 @@ main = do
                   for_ (zip [1 :: Int ..] evalResults) $ \(idx, evalResult) -> do
                     let rendered = renderEvalOutput options.traceText idx evalResult
                     logWith recorder Info $ EvalOutput rendered
+          -- State graph mode: extract and output state transition graph
+          when options.stateGraph $ do
+            case mtc of
+              Just tcRes | tcRes.success -> do
+                let graphs = StateGraph.extractStateGraphs tcRes.module'
+                case graphs of
+                  [] -> liftIO $ hPutStrLn stderr "No regulative rules found in module"
+                  _  -> do
+                    let opts = StateGraph.defaultStateGraphOptions
+                    for_ graphs $ \sg -> do
+                      liftIO $ Text.IO.putStrLn $ StateGraph.stateGraphToDot opts sg
+              _ -> liftIO $ hPutStrLn stderr "Type checking failed, cannot extract state graph"
+
           case (mtc, mep) of
             (Just tcRes, Just ep)
               | tcRes.success -> do
@@ -460,8 +474,8 @@ main = do
                         let showFn = if isTTY then pShow else pShowNoColor
                         logWith recorder Info $ ShowAst (showFn ast)
                       Nothing -> pure ()
-                  -- Don't log success message in graphviz mode (keeps output clean)
-                  unless (options.verbose || options.showAst || options.outputGraphViz || options.outputGraphViz2) $
+                  -- Don't log success message in graphviz or state-graph mode (keeps output clean)
+                  unless (options.verbose || options.showAst || options.outputGraphViz || options.outputGraphViz2 || options.stateGraph) $
                     logWith recorder Info SuccessOnly
             (_, _)            -> do
               logWith    recorder Error $ CheckFailed uri
@@ -522,6 +536,7 @@ data Options = MkOptions
   , batchFile :: Maybe FilePath
   , batchFormat :: Maybe Text
   , entrypoint :: Maybe Text
+  , stateGraph :: Bool              -- Output state transition graph from regulative rules
   }
 
 optionsDescription :: Options.Parser Options
@@ -540,6 +555,7 @@ optionsDescription = MkOptions
   <*> optional (Options.strOption (long "batch" <> short 'b' <> metavar "BATCH_FILE" <> help "Batch input file (JSON/YAML/CSV); use '-' for stdin"))
   <*> optional (Options.strOption (long "format" <> short 'f' <> metavar "FORMAT" <> help "Input/output format (json|yaml|csv); required when reading from stdin"))
   <*> optional (Options.strOption (long "entrypoint" <> short 'e' <> metavar "FUNCTION" <> help "Name of @export function to call (defaults to @export default or first @export)"))
+  <*> switch (long "state-graph" <> help "Output state transition graph from regulative rules as GraphViz DOT")
 
 fixedNowReader :: ReadM UTCTime
 fixedNowReader =

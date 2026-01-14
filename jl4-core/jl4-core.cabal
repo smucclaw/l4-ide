@@ -88,6 +88,7 @@ library
     L4.EvaluateLazy.GraphViz2
     L4.EvaluateLazy.GraphVizOptions
     L4.EvaluateLazy.Trace
+    L4.StateGraph
     L4.ExactPrint
     L4.Export
     L4.FindDefinition

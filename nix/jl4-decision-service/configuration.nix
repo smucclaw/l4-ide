@@ -41,6 +41,7 @@
     after = [ "network.target" "nginx.service" ];
     requires = [ "nginx.service" ];
     wantedBy = [ "multi-user.target" ];
+    path = [ pkgs.graphviz ];  # Required for GraphViz trace rendering
     serviceConfig = {
       ExecStart = pkgs.writeShellScript "jl4-decision-service-start" ''
         sourcePathsArgs="${lib.concatStringsSep " " (map (p: "--sourcePaths ${p}") config.services.jl4-decision-service.sourcePaths)}"
