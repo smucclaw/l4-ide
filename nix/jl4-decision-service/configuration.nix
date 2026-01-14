@@ -31,6 +31,10 @@
       "http://localhost:${toString config.services.jl4-decision-service.port}/";
   };
 
+  # Ensure nginx-config-reload waits for decision service to be ready
+  # This prevents reload timeouts when decision service is slow to start
+  config.systemd.services.nginx-config-reload.after = [ "jl4-decision-service.service" ];
+
   config.systemd.services.jl4-decision-service = {
     enable = true;
     description = "jl4-decision-service";
@@ -40,7 +44,7 @@
     serviceConfig = {
       ExecStart = pkgs.writeShellScript "jl4-decision-service-start" ''
         sourcePathsArgs="${lib.concatStringsSep " " (map (p: "--sourcePaths ${p}") config.services.jl4-decision-service.sourcePaths)}"
-        exec ${pkgs.callPackage ./package.nix { }}/bin/jl4-decision-service-exe \
+        exec ${pkgs.callPackage ./package.nix { }}/bin/jl4-decision-service \
           --port ${toString config.services.jl4-decision-service.port} \
           --serverName https://${config.networking.domain + config.services.jl4-decision-service.path} \
           $sourcePathsArgs \

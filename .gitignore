@@ -50,7 +50,9 @@ tsconfig.tsbuildinfo
 .vercel
 # Vercel
 .vscode
-*/vscode/static/webview/
+ts-apps/vscode/bin
+ts-apps/vscode/static/webview/
+*.exe
 *.vsix
 yarn-debug.log*
 yarn-error.log*

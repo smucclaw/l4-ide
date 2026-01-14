@@ -2,9 +2,8 @@
   "name": "l4-vscode",
   "displayName": "L4 Rules-as-code",
   "description": "Language support for L4 rules-as-code with syntax highlighting, IntelliSense, and ladder diagram visualization",
-  "readme": "MARKETPLACE_README.md",
   "license": "Apache-2.0",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "publisher": "legalese",
   "categories": [
     "Programming Languages",
@@ -46,16 +45,30 @@
   ],
   "contributes": {
     "configuration": {
+      "title": "L4 Language Server",
       "properties": {
         "jl4.serverExecutablePath": {
+          "scope": "machine-overridable",
           "type": "string",
-          "default": null,
-          "description": "Path to the jl4-lsp executable"
+          "default": "",
+          "markdownDescription": "Path to the `jl4-lsp` executable. Leave empty to use the bundled binary or find `jl4-lsp` on your PATH."
         },
         "jl4.decisionServiceUrl": {
+          "scope": "resource",
           "type": "string",
           "default": "http://localhost:8001",
           "description": "Base URL for jl4-decision-service (used for query planning)"
+        },
+        "jl4.trace.server": {
+          "scope": "resource",
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the language server."
         }
       }
     },
@@ -77,25 +90,6 @@
         "title": "Visualize L4 expression"
       }
     ]
-  },
-  "configuration": {
-    "jl4.trace.server": {
-      "scope": "resource",
-      "type": "string",
-      "enum": [
-        "off",
-        "messages",
-        "verbose"
-      ],
-      "default": "off",
-      "description": "Traces the communication between VS Code and the language server."
-    },
-    "jl4.serverExecutablePath": {
-      "scope": "machine-overridable",
-      "type": "string",
-      "default": "",
-      "markdownDescription": "Manually set a language server executable. Can be something on the $PATH or the full path to the executable itself. "
-    }
   },
   "prettier": "@repo/prettier-config",
   "dependencies": {

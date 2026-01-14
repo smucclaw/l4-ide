@@ -19,6 +19,7 @@ import qualified L4.Print as Print
 import L4.Syntax
 import L4.TypeCheck (CheckErrorWithContext (..), CheckResult (..), Substitution, applyFinalSubstitution, toResolved)
 import qualified L4.TypeCheck as TypeCheck
+import qualified L4.Lint.AndOrDepth as Lint
 
 import Control.Applicative
 import Control.Monad.Trans.Maybe
@@ -48,6 +49,7 @@ import qualified Language.LSP.Protocol.Types as LSP
 import Data.Either (partitionEithers)
 import qualified Data.List as List
 import System.Directory
+import System.Environment (getExecutablePath)
 import qualified Paths_jl4_core
 import qualified L4.Utils.IntervalMap as IV
 import UnliftIO
@@ -282,8 +284,10 @@ jl4Rules evalConfig rootDirectory recorder = do
             let diags = toList $ fmap mkParseErrorDiagnostic errs
             pure (fmap (mkSimpleFileDiagnostic uri) diags , Nothing)
           Right (finalProg, warns) -> do
-            let diags = fmap mkNlgWarning warns
-            pure (fmap (mkSimpleFileDiagnostic uri) diags, Just finalProg)
+            let nlgDiags = fmap mkNlgWarning warns
+                lintDiags = fmap mkAndOrLintWarning $ Lint.checkAndOrDepth finalProg
+                allDiags = nlgDiags <> lintDiags
+            pure (fmap (mkSimpleFileDiagnostic uri) allDiags, Just finalProg)
 
   define shakeRecorder $ \GetImports uri -> do
     let -- NOTE: we curently don't allow any relative or absolute file paths, just bare module names
@@ -349,11 +353,27 @@ jl4Rules evalConfig rootDirectory recorder = do
 
                 let rootPath = rootDirectory </> modName <.> "l4"
 
-                builtinPath <- do
-                  dataDir <- liftIO Paths_jl4_core.getDataDir
-                  pure $ dataDir </> "libraries" </> modName <.> "l4"
+                -- Look for bundled libraries relative to the executable first
+                -- This handles the VSCode extension case where libraries are bundled
+                -- alongside the binary. Fall back to Cabal's data-dir for development.
+                builtinPaths <- liftIO $ do
+                  exePath <- getExecutablePath
+                  let exeDir = takeDirectory exePath
+                  -- The VSCode extension structure is:
+                  --   extension/
+                  --   ├── bin/<platform>/jl4-lsp[.exe]  <- executable is here
+                  --   └── libraries/*.l4                <- libraries are here
+                  -- So we need to go up TWO levels (../../) from the executable.
+                  let extensionRoot = exeDir </> ".." </> ".."
+                  -- Try:
+                  -- 1. ../../libraries (for bundled VSCode extension)
+                  -- 2. Cabal's getDataDir (for development / cabal install)
+                  let bundledPath = extensionRoot </> "libraries" </> modName <.> "l4"
+                  dataDir <- Paths_jl4_core.getDataDir
+                  let cabalPath = dataDir </> "libraries" </> modName <.> "l4"
+                  pure [bundledPath, cabalPath]
 
-                pure [Just rootPath, relPath, Just builtinPath]
+                pure $ [Just rootPath, relPath] <> map Just builtinPaths
 
               logWith recorder Debug $ LogImportResolution $
                 "Checking filesystem paths: " <> Text.intercalate ", " (map Text.pack paths)
@@ -669,6 +689,20 @@ jl4Rules evalConfig rootDirectory recorder = do
           , _codeDescription = Nothing
           , _source = Just "parser"
           , _message = prettyNlgResolveWarning warn
+          , _tags = Nothing
+          , _relatedInformation = Nothing
+          , _data_ = Nothing
+          }
+
+    mkAndOrLintWarning :: Lint.AndOrWarning -> Diagnostic
+    mkAndOrLintWarning warn =
+        Diagnostic
+          { _range = srcRangeToLspRange warn.warningRange
+          , _severity = Just LSP.DiagnosticSeverity_Warning
+          , _code = Nothing
+          , _codeDescription = Nothing
+          , _source = Just "linter"
+          , _message = Text.pack $ "AND and OR operators appear at the same indentation level (column " <> show warn.conflictingColumn <> "). This may indicate a precedence error - consider using parentheses to clarify intent."
           , _tags = Nothing
           , _relatedInformation = Nothing
           , _data_ = Nothing

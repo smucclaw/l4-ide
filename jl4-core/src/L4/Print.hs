@@ -15,6 +15,7 @@ import L4.Evaluate.Operators
 import L4.Names
 import L4.Desugar
 import Control.Category ((>>>))
+import System.FilePath (takeFileName)
 
 prettyLayout :: LayoutPrinter a => a -> Text
 prettyLayout a = docText $ printWithLayout a
@@ -293,11 +294,10 @@ instance LayoutPrinterWithName a => LayoutPrinter (Expr a) where
       <+> "WITH"
       <+> hang 2 (align (vcat (fmap printWithLayout namedExpr)))
     IfThenElse _ cond then' else' ->
-      vcat
-        [ "IF" <+> printWithLayout cond
-        , "THEN" <+> printWithLayout then'
-        , "ELSE" <+> printWithLayout else'
-        ]
+      -- Use single-line format to avoid layout/indentation issues when re-parsing
+      "IF" <+> parensIfNeeded cond
+        <+> "THEN" <+> parensIfNeeded then'
+        <+> "ELSE" <+> parensIfNeeded else'
     MultiWayIf _ conds o ->
       vcat $
         [ "BRANCH" ]
@@ -344,6 +344,8 @@ instance LayoutPrinterWithName a => LayoutPrinter (Expr a) where
       "BREACH" <>
         maybe mempty (\p -> " BY" <+> printWithLayout p) mParty <>
         maybe mempty (\r -> " BECAUSE" <+> printWithLayout r) mReason
+    Inert _ txt _ctx ->
+      "..." <+> dquotes (pretty txt)
 
   parensIfNeeded :: LayoutPrinter a => Expr a -> Doc ann
   parensIfNeeded e = case e of
@@ -565,14 +567,27 @@ instance LayoutPrinter Reference where
   printWithLayout rf = printWithLayout rf.address
 
 instance LayoutPrinter Address where
-  printWithLayout (MkAddress u a) = "&" <> pretty a <> "@" <> pretty u
+  printWithLayout (MkAddress u a) =
+    let fullUri = (fromNormalizedUri u).getUri
+        -- Extract just filename for consistent output across platforms
+        fileName = case Text.stripPrefix "file://" fullUri of
+            Just path -> Text.pack $ takeFileName $ Text.unpack path
+            Nothing -> Text.pack $ takeFileName $ Text.unpack fullUri
+    in "&" <> pretty a <> "@" <> pretty fileName
 
 quoteIfNeeded :: Text.Text -> Text.Text
-quoteIfNeeded n = case Text.uncons $ Text.dropAround (== '_') n of
+quoteIfNeeded n = case Text.uncons n of
   Nothing -> n
-  Just (c, xs)
-    | isAlpha c && Text.all isAlphaNum xs -> n
+  Just (firstChar, _)
+    -- If the identifier doesn't start with alpha, it must be quoted
+    -- (L4 lexer requires unquoted identifiers to start with alphabetic char)
+    | not (isAlpha firstChar) -> quote n
+    -- Otherwise check if all chars are valid identifier chars
+    | Text.all isIdentChar n -> n
     | otherwise -> quote n
+  where
+    -- Match lexer: identifiers can contain alphanumeric chars and underscores
+    isIdentChar x = isAlphaNum x || x == '_'
 
 quote :: Text.Text -> Text.Text
 quote n = "`" <> n <> "`"
@@ -603,14 +618,9 @@ scanRAnd = scanOp \case
 prettyConj :: Text -> [Doc ann] -> Doc ann
 prettyConj _ [] = mempty
 prettyConj cnj (d:ds) =
-  indent (Text.length cnj + 1) d <>
-  case ds of
-    [] -> mempty
-    ds'@(_:_) -> go ds'
-  where
-    go [] = mempty
-    go (x:xs) =
-      line <> hang (Text.length cnj + 1) (pretty cnj <+> x) <> go xs
+  -- Use group with softline so it prefers single-line when possible
+  -- This avoids layout issues when the output is re-parsed
+  Prettyprinter.group $ d <> mconcat [softline <> pretty cnj <+> x | x <- ds]
 
 
 escapeStringLiteral :: Text -> Text

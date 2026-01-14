@@ -34,14 +34,20 @@ data FunDecl = MkFunDecl
   , body   :: IRExpr }
   deriving (Show, Eq, Generic)
 
+-- | InertContext indicates whether an Inert element is inside an AND or OR chain.
+-- This determines its evaluation: AND context → True (identity), OR context → False (identity).
+data InertContext = InertAnd | InertOr
+  deriving (Show, Eq, Generic)
+
 data IRExpr
   = And ID [IRExpr]
   | Or ID [IRExpr]
   | Not ID IRExpr
   | UBoolVar ID Name UBoolValue Bool Text -- ^ id name ubvalue canInline atomId
   | App ID Name [IRExpr] Text
-  | TrueE ID Name 
+  | TrueE ID Name
   | FalseE ID Name
+  | InertE ID Text InertContext -- ^ id text context (AND→True, OR→False)
   deriving (Show, Eq, Generic)
 
 {- | See  viz-expr-to-lir.ts and ladder.svelte.ts for examples of how the IRIds get used -}
@@ -74,6 +80,10 @@ instance HasCodec ID where
 instance HasCodec UBoolValue where
   codec = stringConstCodec $ NE.fromList [(FalseV, "FalseV"), (TrueV, "TrueV"), (UnknownV, "UnknownV")]
 
+-- | Context for inert elements: determines whether they evaluate to True (AND) or False (OR)
+instance HasCodec InertContext where
+  codec = stringConstCodec $ NE.fromList [(InertAnd, "InertAnd"), (InertOr, "InertOr")]
+
 -- Related examples
 -- https://github.com/NorfairKing/autodocodec/blob/e939442995debec6d0e014bfcc45449b3a2cb6e6/autodocodec-api-usage/src/Autodocodec/Usage.hs#L688
 -- https://github.com/NorfairKing/autodocodec/blob/e939442995debec6d0e014bfcc45449b3a2cb6e6/autodocodec-api-usage/src/Autodocodec/Usage.hs#L740
@@ -99,6 +109,7 @@ instance HasCodec IRExpr where
         App uid name args atomId -> ("App", mapToEncoder (uid, name, args, atomId) appExprCodec)
         TrueE uid name -> ("TrueE", mapToEncoder (uid, name) boolLitCodec)
         FalseE uid name -> ("FalseE", mapToEncoder (uid, name) boolLitCodec)
+        InertE uid text ctx -> ("InertE", mapToEncoder (uid, text, ctx) inertExprCodec)
 
       -- Decoder: maps tag to (constructor name, codec)
       dec =
@@ -109,11 +120,13 @@ instance HasCodec IRExpr where
             ("UBoolVar", ("UBoolVar", mapToDecoder mkUBoolVar uBoolVarCodec)),
             ("App", ("App", mapToDecoder mkAppExpr appExprCodec)),
             ("TrueE", ("TrueE", mapToDecoder (uncurry TrueE) boolLitCodec)),
-            ("FalseE", ("FalseE", mapToDecoder (uncurry FalseE) boolLitCodec))
+            ("FalseE", ("FalseE", mapToDecoder (uncurry FalseE) boolLitCodec)),
+            ("InertE", ("InertE", mapToDecoder mkInertE inertExprCodec))
           ]
 
       mkUBoolVar (uid, name, value, canInline, atomId) = UBoolVar uid name value canInline atomId
       mkAppExpr (uid, name, args, atomId) = App uid name args atomId
+      mkInertE (uid, text, ctx) = InertE uid text ctx
 
       -- Codec for 'And' and 'Or' expressions.
       naryExprCodec =
@@ -146,6 +159,12 @@ instance HasCodec IRExpr where
           <$> requiredField' "id"   .= fst
           <*> requiredField' "name" .= snd
 
+      inertExprCodec =
+        (,,)
+          <$> requiredField' "id" .= view _1
+          <*> requiredField' "text" .= view _2
+          <*> requiredField' "context" .= view _3
+
 instance HasCodec RenderAsLadderInfo where
   codec =
     named "RenderAsLadderInfo" $
@@ -166,6 +185,9 @@ deriving via (Autodocodec ID) instance FromJSON ID
 
 deriving via (Autodocodec UBoolValue) instance ToJSON UBoolValue
 deriving via (Autodocodec UBoolValue) instance FromJSON UBoolValue
+
+deriving via (Autodocodec InertContext) instance ToJSON InertContext
+deriving via (Autodocodec InertContext) instance FromJSON InertContext
 
 deriving via (Autodocodec IRExpr) instance ToJSON IRExpr
 deriving via (Autodocodec IRExpr) instance FromJSON IRExpr

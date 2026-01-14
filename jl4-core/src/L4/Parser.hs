@@ -319,13 +319,16 @@ simpleName =
 
 qualifiedName :: Parser (Epa Name)
 qualifiedName = do
-  -- TODO: in future we may also want to allow `tokOf #_TQuoted`
+  -- Allow both regular identifiers and quoted identifiers in qualified names
   let nameAndQualifiers = List.unsnoc . mapMaybe (either (const Nothing) (Just . snd))
+      identToken = tokOf $ #_TIdentifiers % #_TIdentifier
+      quotedToken = tokOf $ #_TIdentifiers % #_TQuoted
+      identOrQuoted = identToken <|> quotedToken
   res@(nameAndQualifiers -> Just (q : qs, n)) <- do
-    x <- tokOf $ #_TIdentifiers % #_TIdentifier
+    x <- identOrQuoted
     dotOrIdentifier <- some do
       d <- tokOf $ #_TSymbols % #_TDot
-      i <- tokOf $ #_TIdentifiers % #_TIdentifier
+      i <- identOrQuoted
       pure [Left $ fst d, Right i]
     pure $ (Right x :) $ mconcat dotOrIdentifier
   wsOrAnnotation <- spaceOrAnnotations
@@ -341,7 +344,7 @@ qualifiedName = do
  tokOf p = token (\t -> (t,) <$> preview p (computedPayload t)) Set.empty
 
 name :: Parser Name
-name = attachEpa (quotedName <|> try qualifiedName <|> simpleName) <?> "identifier"
+name = attachEpa (try qualifiedName <|> quotedName <|> simpleName) <?> "identifier"
 
 tokenAsName :: TokenType -> Parser Name
 tokenAsName tt =
@@ -1108,7 +1111,7 @@ currentLine :: Parser Pos
 currentLine = sourceLine <$> getSourcePos
 
 expressionCont :: Pos -> Parser (Cont Expr)
-expressionCont = cont operator baseExpr
+expressionCont p = cont operator baseExpr p
 
 data ExprLineInfo =
   MkExprLineInfo
@@ -1166,8 +1169,8 @@ data Assoc = AssocLeft | AssocRight
 operator :: Parser (Prio, Assoc, Expr Name -> Expr Name -> Expr Name)
 operator =
       (\ op -> (1, AssocRight, infix2  Implies   op)) <$> (spacedKeyword_ TKImplies <|> spacedTokenOp_ TImplies )
-  <|> (\ op -> (2, AssocRight, infix2  Or        op)) <$> (spacedKeyword_ TKOr      <|> spacedTokenOp_ TOr      )
-  <|> (\ op -> (3, AssocRight, infix2  And       op)) <$> (spacedKeyword_ TKAnd     <|> spacedTokenOp_ TAnd     )
+  <|> (\ op -> (2, AssocRight, infix2  Or        op)) <$> (spacedKeyword_ TKOr      <|> spacedTokenOp_ TOr      <|> spacedSymbol_ TEllipsisOr)
+  <|> (\ op -> (3, AssocRight, infix2  And       op)) <$> (spacedKeyword_ TKAnd     <|> spacedTokenOp_ TAnd     <|> spacedSymbol_ TEllipsis)
   <|> (\ op -> (2, AssocRight, infix2  ROr       op)) <$> spacedKeyword_ TKROr
   <|> (\ op -> (3, AssocRight, infix2  RAnd      op)) <$> spacedKeyword_ TKRAnd
   <|> (\ op -> (4, AssocRight, infix2  Equals    op)) <$> (spacedKeyword_ TKEquals <|> spacedTokenOp_ TEquals)
@@ -1494,6 +1497,9 @@ stringLit =
   attachAnno $
     StringLit emptyAnno
       <$> annoEpa (spacedToken (#_TLiterals % #_TStringLit) "String Literal")
+
+-- Note: The `...` syntax is now handled by `implicitAndCont` as syntactic sugar for AND.
+-- String literals in boolean context are converted to Inert nodes during type checking.
 
 -- | Parser for function application.
 --

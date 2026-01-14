@@ -50,7 +50,7 @@ behavior (currently tools still use direct option fields).
 -}
 module L4.TracePolicy where
 
-import L4.EvaluateLazy.GraphVizOptions (GraphVizOptions)
+import L4.EvaluateLazy.GraphVizOptions (GraphVizOptions, defaultGraphVizOptions)
 
 -- | Unified trace policy that determines when and how to collect/display traces
 data TracePolicy = TracePolicy
@@ -107,11 +107,13 @@ replDefaultPolicy gvOpts = TracePolicy
   , evaltraceDirectiveTrace = CollectTrace (TraceOptions TextTrace Stdout gvOpts)
   }
 
--- | API default: Controlled by request parameters
+-- | API default: Collect traces for EVALTRACE directives
+-- The decision service uses #EVALTRACE when trace=full is requested,
+-- so we need to collect traces for those directives to enable GraphViz output.
 apiDefaultPolicy :: TracePolicy
 apiDefaultPolicy = TracePolicy
   { evalDirectiveTrace = NoTrace
-  , evaltraceDirectiveTrace = NoTrace
+  , evaltraceDirectiveTrace = CollectTrace (TraceOptions TextTrace ApiResponse defaultGraphVizOptions)
   }
 
 -- | LSP default: Avoid editor noise

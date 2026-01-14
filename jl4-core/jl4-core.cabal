@@ -93,6 +93,7 @@ library
     L4.FindDefinition
     L4.JsonSchema
     L4.Lexer
+    L4.Lint.AndOrDepth
     L4.Mixfix
     L4.Names
     L4.Nlg

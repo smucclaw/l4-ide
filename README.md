@@ -15,6 +15,22 @@ L4 treats legal rules and contracts as **executable specifications** rather than
 
 This repository includes the L4 compiler toolchain, IDE extensions for Visual Studio Code, an interactive REPL, a web-based editor, visualization tools, and a decision service for runtime evaluation.
 
+## What Can You Do With L4?
+
+**"After I convert my rules to L4, what can I usefully do with them?"**
+
+From a single L4 source file, you automatically get:
+
+- 🌐 **REST APIs** - Expose functions as HTTP endpoints with `@export` annotation
+- 🧙 **Web Applications** - Auto-generated questionnaires with smart question ordering
+- 💬 **Chatbot Interfaces** - Natural language interface for non-technical users
+- 📊 **Interactive Visualizations** - Ladder diagrams and evaluation traces
+- 🧪 **Test Suites** - Automated testing with golden files and assertions
+- 📚 **Documentation** - JSON schemas, Swagger specs, and type definitions
+- 🔗 **Enterprise Integration** - JSON/REST/SQL bridges to existing systems
+
+See [**doc/MARKETECTURE.md**](doc/MARKETECTURE.md) for the complete "whole product" picture of what L4 enables.
+
 ## Real-World Impact
 
 L4 has been piloted with organizations in both public and private sectors:
@@ -162,7 +178,7 @@ https://jl4.legalese.com/
 
 [Dev Build](Dev.md): for Haskell and JS developers to improve the toolchain and IDE developer experience. Requires Haskell and Typscript.
 
-[Quickstart for a local build](doc/quickstart.md): for legal engineers to experiment with writing L4 code locally. Download the VS Code extension and get started.
+[Quickstart for a local build](doc/foundation-course-ai/quickstart.md): for legal engineers to experiment with writing L4 code locally. Download the VS Code extension and get started.
 
 ## Application Libraries
 

@@ -100,6 +100,7 @@ import Control.Monad.Extra (mapMaybeM)
 import qualified Control.Monad.Extra as Extra
 import Data.Either (partitionEithers)
 import qualified Data.List as List
+import qualified Data.List.NonEmpty as NE
 import Data.Tuple.Extra (firstM)
 import Data.List.Split (splitWhen)
 import Optics ((%~), (^.))
@@ -1130,21 +1131,33 @@ inferExpr' :: Expr Name -> Check (Expr Resolved, Type' Resolved)
 inferExpr' g =
   case g of
     And ann e1 e2 -> do
-      dsFun <- desugarBinOpToFunction (rawName andName) g ann e1 e2
+      -- Set inert context to AND for subexpressions before desugaring
+      let e1' = setInertContext InertCtxAnd e1
+          e2' = setInertContext InertCtxAnd e2
+      dsFun <- desugarBinOpToFunction (rawName andName) (And ann e1' e2') ann e1' e2'
       inferExpr' dsFun
     Or ann e1 e2 -> do
-      dsFun <- desugarBinOpToFunction (rawName orName) g ann e1 e2
+      -- Set inert context to OR for subexpressions before desugaring
+      let e1' = setInertContext InertCtxOr e1
+          e2' = setInertContext InertCtxOr e2
+      dsFun <- desugarBinOpToFunction (rawName orName) (Or ann e1' e2') ann e1' e2'
       inferExpr' dsFun
     RAnd ann e1 e2 -> do
+      -- Set inert context to AND for subexpressions
+      let e1' = setInertContext InertCtxAnd e1
+          e2' = setInertContext InertCtxAnd e2
       partyT <- fresh (NormalName "party")
       actT <- fresh (NormalName "action")
       let contractT = contract partyT actT
-      checkBinOp contractT contractT contractT "AND" RAnd ann e1 e2
+      checkBinOp contractT contractT contractT "AND" RAnd ann e1' e2'
     ROr ann e1 e2 -> do
+      -- Set inert context to OR for subexpressions
+      let e1' = setInertContext InertCtxOr e1
+          e2' = setInertContext InertCtxOr e2
       partyT <- fresh (NormalName "party")
       actT <- fresh (NormalName "action")
       let contractT = contract partyT actT
-      checkBinOp contractT contractT contractT "OR" ROr ann  e1 e2
+      checkBinOp contractT contractT contractT "OR" ROr ann e1' e2'
     Implies ann e1 e2 -> do
       dsFun <- desugarBinOpToFunction (rawName impliesName) g ann e1 e2
       inferExpr' dsFun
@@ -1188,21 +1201,100 @@ inferExpr' g =
       dsFun <- desugarBinOpToFunction (rawName consName) g ann e1 e2
       inferExpr' dsFun
     Proj ann e l -> do
-      -- Handling this similar to App.
-      --
-      -- 1.
-      (rl, pt) <- resolveTerm l
-      t <- instantiate pt
+      -- Try to resolve as a qualified name (for section dereferencing), but only
+      -- if the base is not a local binding. This ensures `r's f` prefers record
+      -- field access when `r` is a local variable, even if a global `r.f` exists.
+      baseIsLocal <- isBaseLocalBinding (Proj ann e l)
+      if baseIsLocal
+        then inferRecordProjection ann e l  -- Base is local, prefer record projection
+        else do
+          let maybeQualifiedName = extractProjNameChain (Proj ann e l)
+          case maybeQualifiedName of
+            Just qualifiedRawName@(QualifiedName _ _) -> do
+              options <- lookupRawNameInEnvironment qualifiedRawName
+              -- Filter to only term entities. If the qualified name exists only as a
+              -- section/type (not a term), we should fall back to record projection.
+              -- See PR #759 review comment for details.
+              let termOptions = filter isTermEntity options
+              case termOptions of
+                [] -> inferRecordProjection ann e l  -- No term match, fall back to record projection
+                _  -> do
+                  -- Found as qualified name with a term binding, resolve it
+                  -- Mirror the Var case: resolve then instantiate to freshen polymorphic types
+                  let qualifiedName = MkName (l ^. annoOf) qualifiedRawName
+                  (resolved, pt) <- resolveTerm qualifiedName
+                  t <- instantiate pt
+                  pure (Var ann resolved, t)
+            _ -> inferRecordProjection ann e l  -- Not a valid chain, use record projection
+      where
+        -- Check if the base (innermost) expression in a Proj chain is a local binding.
+        -- This is used to prefer record projection over qualified name resolution when
+        -- the base is a local variable (lambda parameter, pattern binding, etc.).
+        isBaseLocalBinding :: Expr Name -> Check Bool
+        isBaseLocalBinding expr = case getBaseVar expr of
+          Nothing -> pure False
+          Just baseName -> do
+            options <- lookupRawNameInEnvironment (rawName baseName)
+            pure $ any isLocalTerm options
+          where
+            -- Extract the innermost Var from a Proj chain
+            getBaseVar :: Expr Name -> Maybe Name
+            getBaseVar (Var _ n) = Just n
+            getBaseVar (Proj _ inner _) = getBaseVar inner
+            getBaseVar _ = Nothing
 
-      -- 2. - 5.
-      (res, rt) <- matchFunTy True rl t [e]
+            -- Check if a CheckEntity is a Local term
+            isLocalTerm :: (Unique, Name, CheckEntity) -> Bool
+            isLocalTerm (_, _, KnownTerm _ Local) = True
+            isLocalTerm _ = False
 
-      re <-
-        case res of
-          [re] -> pure re
-          _ -> pure $ error "internal error in matchFunTy"
+        -- Helper to extract a chain of names from a Proj expression and convert to QualifiedName
+        -- For `a's b's c`, we want to produce QualifiedName ("a" :| ["b"]) "c"
+        -- Returns Just (QualifiedName qualifiers finalName) if successful
+        extractProjNameChain :: Expr Name -> Maybe RawName
+        extractProjNameChain expr = do
+          chain <- go expr  -- Returns names in order: [a, b, c]
+          case chain of
+            (hd : rest@(_ : _)) ->
+              -- At least 2 elements: qualifiers are all but last, final is the last
+              let (qualifiers, final) = (NE.fromList (init (hd : rest)), last (hd : rest))
+              in Just $ QualifiedName qualifiers final
+            _ -> Nothing  -- Need at least 2 elements for a qualified name
+          where
+            -- Extract names in order from innermost to outermost
+            -- Preserves structure of already-qualified names (e.g., `Section Alpha`.`Subsection Beta`'s x
+            -- becomes ["Section Alpha", "Subsection Beta", "x"] not ["Section Alpha.Subsection Beta", "x"])
+            go :: Expr Name -> Maybe [Text]
+            go (Var _ n) = Just (rawNameToComponents (rawName n))
+            go (Proj _ inner fieldName) = do
+              innerNames <- go inner
+              pure $ innerNames ++ rawNameToComponents (rawName fieldName)
+            go _ = Nothing
 
-      pure (Proj ann re rl, rt)
+            -- Convert a RawName to its component parts, preserving QualifiedName structure
+            rawNameToComponents :: RawName -> [Text]
+            rawNameToComponents (NormalName t) = [t]
+            rawNameToComponents (PreDef t) = [t]
+            rawNameToComponents (QualifiedName qs final) = NE.toList qs ++ [final]
+
+        -- Original record projection logic
+        inferRecordProjection :: Anno -> Expr Name -> Name -> Check (Expr Resolved, Type' Resolved)
+        inferRecordProjection projAnn projE projL = do
+          -- Handling this similar to App.
+          --
+          -- 1.
+          (rl, pt) <- resolveTerm projL
+          t <- instantiate pt
+
+          -- 2. - 5.
+          (res, rt) <- matchFunTy True rl t [projE]
+
+          re <-
+            case res of
+              [re'] -> pure re'
+              _ -> pure $ error "internal error in matchFunTy"
+
+          pure (Proj projAnn re rl, rt)
     Var ann n -> do
       (r, pt) <- resolveTerm n
       t <- instantiate pt
@@ -1365,6 +1457,10 @@ inferExpr' g =
       mParty' <- traverse (\p -> checkExpr ExpectRegulativePartyContext p partyT) mParty
       mReason' <- traverse (\r -> checkExpr ExpectBreachReasonContext r string) mReason
       pure (Breach ann mParty' mReason', contract partyT actionT)
+    Inert ann txt ctx -> do
+      -- Inert elements are grammatical scaffolding with context-aware evaluation
+      -- In AND context: True (identity), in OR context: False (identity)
+      pure (Inert ann txt ctx, boolean)
 
 isStringCoercible :: Type' Resolved -> Bool
 isStringCoercible ty = case ty of
@@ -1928,7 +2024,9 @@ withQualified rs ce = do
                   [ MkName (getAnno n) (QualifiedName qual t)
                   | qual <- toList $ sequence neSects
                   ]
-              traverse def newNames
+              -- Use defAka to share the same Unique as the original entity
+              -- This ensures the evaluator can find the entity via qualified name
+              traverse (defAka r) newNames
             PreDef _ -> pure []
             QualifiedName _ _ -> pure []
 
@@ -2220,6 +2318,12 @@ reinterpretPostfixAppIfNeeded operandName args =
 isPostfixMixfix :: FunTypeSig -> Bool
 isPostfixMixfix MkFunTypeSig {mixfixInfo = Just MkMixfixInfo {pattern = [MixfixParam _, MixfixKeyword _], arity = 1}} = True
 isPostfixMixfix _ = False
+
+-- | Check if a CheckEntity is a term (as opposed to a type, section, or type variable).
+-- This is used to filter environment lookups when we specifically need term bindings.
+isTermEntity :: (Unique, Name, CheckEntity) -> Bool
+isTermEntity (_, _, KnownTerm _ _) = True
+isTermEntity _ = False
 
 -- | Check if a CheckEntity is callable (function, constructor, etc.)
 -- This is used to determine if a name can be applied to arguments.
@@ -2659,6 +2763,77 @@ desugarUnaryOpToFunction name g ann e  = do
         , range = a.range
         , payload = [mkHoleWithSrcRangeHint Nothing, mkHoleWithSrcRange as]
         }
+
+-- | Set the inert context for Inert nodes and convert string literals to Inert.
+-- String literals are only converted when they appear as direct operands of
+-- boolean operators (AND/OR/RAnd/ROr), not inside other expressions.
+-- When descending into nested boolean operators, the context is updated:
+-- AND/RAnd -> InertCtxAnd, OR/ROr -> InertCtxOr.
+setInertContext :: InertContext -> Expr Name -> Expr Name
+setInertContext = go True  -- True = we're at top level or direct boolean operand
+  where
+    -- go True means we should convert strings to Inert (direct boolean operand)
+    -- go False means we should preserve strings (inside other expressions)
+    go convertStrings ctx = \ case
+      Inert ann txt _ -> Inert ann txt ctx
+      -- String literals in direct boolean context become Inert nodes
+      Lit ann (StringLit _ txt) | convertStrings -> Inert ann txt ctx
+      -- Boolean operators: update context when descending into nested operators
+      And ann e1 e2 -> And ann (go True InertCtxAnd e1) (go True InertCtxAnd e2)
+      Or ann e1 e2 -> Or ann (go True InertCtxOr e1) (go True InertCtxOr e2)
+      RAnd ann e1 e2 -> RAnd ann (go True InertCtxAnd e1) (go True InertCtxAnd e2)
+      ROr ann e1 e2 -> ROr ann (go True InertCtxOr e1) (go True InertCtxOr e2)
+      -- NOT is boolean but its operand should still convert strings, inheriting context
+      Not ann e -> Not ann (go True ctx e)
+      -- IMPLIES is boolean, inheriting context
+      Implies ann e1 e2 -> Implies ann (go True ctx e1) (go True ctx e2)
+      -- Non-boolean operators: stop converting strings in their operands
+      Equals ann e1 e2 -> Equals ann (go False ctx e1) (go False ctx e2)
+      Plus ann e1 e2 -> Plus ann (go False ctx e1) (go False ctx e2)
+      Minus ann e1 e2 -> Minus ann (go False ctx e1) (go False ctx e2)
+      Times ann e1 e2 -> Times ann (go False ctx e1) (go False ctx e2)
+      DividedBy ann e1 e2 -> DividedBy ann (go False ctx e1) (go False ctx e2)
+      Modulo ann e1 e2 -> Modulo ann (go False ctx e1) (go False ctx e2)
+      Exponent ann e1 e2 -> Exponent ann (go False ctx e1) (go False ctx e2)
+      Cons ann e1 e2 -> Cons ann (go False ctx e1) (go False ctx e2)
+      Leq ann e1 e2 -> Leq ann (go False ctx e1) (go False ctx e2)
+      Geq ann e1 e2 -> Geq ann (go False ctx e1) (go False ctx e2)
+      Lt ann e1 e2 -> Lt ann (go False ctx e1) (go False ctx e2)
+      Gt ann e1 e2 -> Gt ann (go False ctx e1) (go False ctx e2)
+      Proj ann e n -> Proj ann (go False ctx e) n
+      Lam ann sig e -> Lam ann sig (go False ctx e)
+      App ann n es -> App ann n (map (go False ctx) es)
+      AppNamed ann n nes order -> AppNamed ann n (map (goNamed ctx) nes) order
+      IfThenElse ann b t e -> IfThenElse ann (go True ctx b) (go False ctx t) (go False ctx e)
+      MultiWayIf ann gs o -> MultiWayIf ann (map (goGuarded ctx) gs) (go False ctx o)
+      Regulative ann obl -> Regulative ann (goObl ctx obl)
+      Consider ann e branches -> Consider ann (go False ctx e) (map (goBranch ctx) branches)
+      Percent ann e -> Percent ann (go False ctx e)
+      List ann es -> List ann (map (go False ctx) es)
+      Where ann e ds -> Where ann (go convertStrings ctx e) (map (goLocalDecl ctx) ds)
+      LetIn ann ds e -> LetIn ann (map (goLocalDecl ctx) ds) (go convertStrings ctx e)
+      Event ann ev -> Event ann (goEvent ctx ev)
+      Fetch ann e -> Fetch ann (go False ctx e)
+      Env ann e -> Env ann (go False ctx e)
+      Post ann e1 e2 e3 -> Post ann (go False ctx e1) (go False ctx e2) (go False ctx e3)
+      Concat ann es -> Concat ann (map (go False ctx) es)
+      AsString ann e -> AsString ann (go False ctx e)
+      Breach ann mp mr -> Breach ann (fmap (go False ctx) mp) (fmap (go False ctx) mr)
+      -- Other leaves don't need transformation
+      e@Lit{} -> e
+
+    goNamed ctx' (MkNamedExpr ann n e) = MkNamedExpr ann n (go False ctx' e)
+    goGuarded ctx' (MkGuardedExpr ann c f) = MkGuardedExpr ann (go True ctx' c) (go False ctx' f)
+    goObl ctx' (MkObligation ann party action due hence lest) =
+      MkObligation ann (go False ctx' party) (goRAction ctx' action) (fmap (go False ctx') due) (fmap (go False ctx') hence) (fmap (go False ctx') lest)
+    goRAction ctx' (MkAction ann modal pat provided) =
+      MkAction ann modal pat (fmap (go False ctx') provided)
+    goBranch ctx' (MkBranch ann lhs e) = MkBranch ann lhs (go False ctx' e)
+    goLocalDecl ctx' = \ case
+      LocalDecide ann d -> LocalDecide ann (goDecide ctx' d)
+      LocalAssume ann a -> LocalAssume ann a
+    goDecide ctx' (MkDecide ann tysig appform e) = MkDecide ann tysig appform (go False ctx' e)
+    goEvent ctx' (MkEvent ann p a t atFirst) = MkEvent ann (go False ctx' p) (go False ctx' a) (go False ctx' t) atFirst
 
 -- | Rewrite the 'Anno' of the given arguments @'NonEmpty' ('Expr' 'Name)'@ to
 -- include the concrete syntax nodes of the 'Anno' in the @'Expr' 'Name'@.
