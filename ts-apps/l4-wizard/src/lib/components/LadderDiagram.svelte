@@ -53,13 +53,25 @@
           paramKey,
         }
       }
+
+      case 'App': {
+        // Function application node - display as a named function with its arguments
+        const fnLabel = node.fnName.label.replace(/^`|`$/g, '')
+        return {
+          type: 'App',
+          label: fnLabel,
+          children: node.args.map((arg) => buildTree(arg, depth + 1)),
+          depth,
+          paramKey: fnLabel,
+        }
+      }
     }
   }
 
   let tree = $derived(ladder ? buildTree(ladder.funDecl.body) : null)
 
   function getNodeColor(type: string, paramKey?: string): string {
-    if (type === 'Var' && paramKey) {
+    if ((type === 'Var' || type === 'App') && paramKey) {
       const value = bindings[paramKey]
       if (value === true) {
         return 'bg-green-200 border-green-500 text-green-900'
@@ -76,6 +88,8 @@
         return 'bg-green-100 border-green-400 text-green-800'
       case 'Not':
         return 'bg-red-100 border-red-400 text-red-800'
+      case 'App':
+        return 'bg-purple-100 border-purple-400 text-purple-800'
       default:
         return 'bg-gray-100 border-gray-300 text-gray-700'
     }
@@ -89,7 +103,7 @@
   }
 
   function handleNodeClick(node: TreeNode) {
-    if (node.type === 'Var' && node.paramKey && onNodeClick) {
+    if ((node.type === 'Var' || node.type === 'App') && node.paramKey && onNodeClick) {
       const currentValue = bindings[node.paramKey]
       onNodeClick(node.paramKey, currentValue)
     }
@@ -177,7 +191,7 @@
                     </svg>
                   {/if}
                   <span>{child.label}</span>
-                  {#if child.type === 'Var' && child.paramKey}
+                  {#if (child.type === 'Var' || child.type === 'App') && child.paramKey}
                     <span class="ml-2 text-xs font-semibold">
                       {getValueLabel(child.paramKey)}
                     </span>
@@ -191,12 +205,12 @@
               class="inline-flex items-center gap-2 rounded border-2 px-3 py-1.5 text-sm font-medium {getNodeColor(
                 node.type,
                 node.paramKey
-              )} {node.type === 'Var' && onNodeClick
+              )} {(node.type === 'Var' || node.type === 'App') && onNodeClick
                 ? 'cursor-pointer hover:shadow-md transition-shadow'
                 : ''}"
               onclick={() => handleNodeClick(node)}
-              role={node.type === 'Var' && onNodeClick ? 'button' : undefined}
-              tabindex={node.type === 'Var' && onNodeClick ? 0 : -1}
+              role={(node.type === 'Var' || node.type === 'App') && onNodeClick ? 'button' : undefined}
+              tabindex={(node.type === 'Var' || node.type === 'App') && onNodeClick ? 0 : -1}
             >
               {#if node.type === 'And'}
                 <svg
@@ -227,16 +241,30 @@
                     d="M8 12h8"
                   />
                 </svg>
+              {:else if node.type === 'App'}
+                <svg
+                  class="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                  />
+                </svg>
               {/if}
               <span>{node.label}</span>
-              {#if node.type === 'Var' && node.paramKey}
+              {#if (node.type === 'Var' || node.type === 'App') && node.paramKey}
                 <span class="ml-2 text-xs font-semibold">
                   {getValueLabel(node.paramKey)}
                 </span>
               {/if}
             </div>
 
-            {#if node.children.length > 0 && node.type !== 'Not'}
+            {#if node.children.length > 0 && node.type !== 'Not' && node.type !== 'Var'}
               <div class="space-y-2">
                 {#each node.children as child}
                   {@render renderNode(child)}
