@@ -19,8 +19,7 @@ import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
 import qualified Data.Text.IO as TIO
 import qualified Data.Yaml as Yaml
-import L4.Annotation (getAnno)
-import L4.Export (DescFlags (..), ExportedFunction (..), ExportedParam (..), ParsedDesc (..), getExportedFunctions, parseDescText)
+import L4.Export (ExportedFunction (..), ExportedParam (..), getExportedFunctions)
 import L4.Syntax
 import qualified LSP.L4.Rules as Rules
 import Optics ((^.))
@@ -112,7 +111,7 @@ tryLoadFromAnnotationsExplicit moduleContext path content = do
         mapM_ (putStrLn . ("    " <>) . T.unpack) errs
       pure []
     Just Rules.TypeCheckResult{module' = resolvedModule} -> do
-      let exports = explicitExportsOnly (getExportedFunctions resolvedModule)
+      let exports = getExportedFunctions resolvedModule
       case exports of
         [] -> pure []
         xs -> do
@@ -122,15 +121,6 @@ tryLoadFromAnnotationsExplicit moduleContext path content = do
     orderExports xs =
       let (defaults, rest) = List.partition (.exportIsDefault) xs
       in defaults <> rest
-
-explicitExportsOnly :: [ExportedFunction] -> [ExportedFunction]
-explicitExportsOnly =
-  filter \export ->
-    case getAnno export.exportDecide ^. annDesc of
-      Nothing -> False
-      Just desc ->
-        case parseDescText (getDesc desc) of
-          ParsedDesc{flags = DescFlags{isExport}} -> isExport
 
 exportToFunction :: Module Resolved -> ExportedFunction -> Function
 exportToFunction resolvedModule export =
