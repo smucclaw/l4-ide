@@ -103,7 +103,11 @@
   }
 
   function handleNodeClick(node: TreeNode) {
-    if ((node.type === 'Var' || node.type === 'App') && node.paramKey && onNodeClick) {
+    if (
+      (node.type === 'Var' || node.type === 'App') &&
+      node.paramKey &&
+      onNodeClick
+    ) {
       const currentValue = bindings[node.paramKey]
       onNodeClick(node.paramKey, currentValue)
     }
@@ -209,8 +213,13 @@
                 ? 'cursor-pointer hover:shadow-md transition-shadow'
                 : ''}"
               onclick={() => handleNodeClick(node)}
-              role={(node.type === 'Var' || node.type === 'App') && onNodeClick ? 'button' : undefined}
-              tabindex={(node.type === 'Var' || node.type === 'App') && onNodeClick ? 0 : -1}
+              role={(node.type === 'Var' || node.type === 'App') && onNodeClick
+                ? 'button'
+                : undefined}
+              tabindex={(node.type === 'Var' || node.type === 'App') &&
+              onNodeClick
+                ? 0
+                : -1}
             >
               {#if node.type === 'And'}
                 <svg
