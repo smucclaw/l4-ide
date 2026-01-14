@@ -31,6 +31,11 @@
 
     const fn = functionName
 
+    // Reset state when function changes to avoid stale graph selection
+    selectedGraph = null
+    svgContent = null
+    graphs = []
+
     async function loadGraphList() {
       try {
         isLoadingGraphs = true
@@ -39,7 +44,7 @@
         graphs = response.graphs
 
         // Auto-select first graph if available
-        if (graphs.length > 0 && !selectedGraph) {
+        if (graphs.length > 0) {
           selectedGraph = graphs[0].graphName
         }
 
