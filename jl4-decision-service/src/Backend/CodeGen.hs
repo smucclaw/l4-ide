@@ -9,8 +9,7 @@ import qualified Data.Aeson as Aeson
 import qualified Data.Text as Text
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TL
-import L4.Syntax (Type'(..), Resolved)
-import L4.Print (prettyLayout)
+import L4.Syntax (Type'(..), Resolved, getOriginal, rawName, rawNameToText)
 import Backend.Api (TraceLevel(..))
 import Backend.MaybeLift (liftTypeToMaybe)
 
@@ -52,8 +51,12 @@ generateEvalWrapper funName params inputJson traceLevel = do
       }
     else
       -- Deep Maybe lifting: all parameters get MAYBE types
-      let -- Check if a type is a simple BOOLEAN
-          isBooleanType ty = "BOOLEAN" `Text.isInfixOf` Text.toUpper (prettyLayout ty)
+      let -- Check if a type is exactly BOOLEAN (not LIST OF BOOLEAN, etc.)
+          -- Pattern match on TyApp with "Boolean" name and no type arguments
+          isBooleanType :: Type' Resolved -> Bool
+          isBooleanType (TyApp _ name []) =
+            Text.toUpper (rawNameToText (rawName (getOriginal name))) == "BOOLEAN"
+          isBooleanType _ = False
           -- Annotate params with their boolean status
           paramInfo = map (\(name, ty) -> ((name, ty), isBooleanType ty)) params
           -- We always need prelude for fromMaybe (all booleans use it)
