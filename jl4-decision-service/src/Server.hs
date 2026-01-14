@@ -51,6 +51,9 @@ module Server (
   QueryInput (..),
   QueryAsk (..),
   QueryPlanResponse (..),
+  StateGraphListResponse (..),
+  StateGraphInfo (..),
+  StateGraphFormat (..),
 
   -- * utilities
   toDecl,
@@ -104,6 +107,7 @@ import qualified Base.Text as T
 import L4.Export (ExportedFunction (..), ExportedParam (..), getExportedFunctions)
 import L4.Syntax
 import L4.Print (prettyLayout)
+import qualified L4.StateGraph as StateGraph
 import Data.Function
 import qualified Optics
 import L4.Lexer
@@ -232,6 +236,36 @@ data SingleFunctionApi' mode = SingleFunctionApi
   -- ^ Run a function with a "batch" of parameters.
   -- This API aims to be consistent with
   -- https://docs.oracle.com/en/cloud/saas/b2c-service/opawx/using-batch-assess-rest-api.html
+  , listStateGraphs ::
+      mode
+        :- "state-graphs"
+          :> Summary "List all state transition graphs in this module"
+          :> Description "Extracts state graphs from regulative rules (MUST/MAY/SHANT) in the L4 module"
+          :> OperationId "listStateGraphs"
+          :> Get '[JSON] StateGraphListResponse
+  , getStateGraphDot ::
+      mode
+        :- "state-graphs"
+          :> Capture "graphName" Text
+          :> Summary "Get state transition graph as GraphViz DOT"
+          :> OperationId "getStateGraphDot"
+          :> Get '[PlainText] Text
+  , getStateGraphSvg ::
+      mode
+        :- "state-graphs"
+          :> Capture "graphName" Text
+          :> "svg"
+          :> Summary "Render state transition graph as SVG"
+          :> OperationId "getStateGraphSvg"
+          :> Get '[PlainText] Text
+  , getStateGraphPng ::
+      mode
+        :- "state-graphs"
+          :> Capture "graphName" Text
+          :> "png"
+          :> Summary "Render state transition graph as PNG"
+          :> OperationId "getStateGraphPng"
+          :> Get '[OctetStream] Api.PngImage
   }
   deriving stock (Generic)
 
@@ -341,6 +375,14 @@ handler =
                     batchFunctionHandler name mTraceHeader mTraceParam mGraphViz
                 , queryPlan =
                     queryPlanHandler name
+                , listStateGraphs =
+                    listStateGraphsHandler name
+                , getStateGraphDot =
+                    getStateGraphDotHandler name
+                , getStateGraphSvg =
+                    getStateGraphSvgHandler name
+                , getStateGraphPng =
+                    getStateGraphPngHandler name
                 }
           }
     }
@@ -359,6 +401,67 @@ queryPlanHandler name' args = do
       (\funName fn -> DecisionQueryPlan.buildDecisionQueryCache funName fn.fnSources)
 
   pure (DecisionQueryPlan.queryPlan name cached args)
+
+-- ----------------------------------------------------------------------------
+-- State Graph Handlers
+-- ----------------------------------------------------------------------------
+
+-- | List all state graphs available in the module
+listStateGraphsHandler :: String -> AppM StateGraphListResponse
+listStateGraphsHandler name' = do
+  let name = Text.pack name'
+  vf <- lookupValidatedFunction name
+  case vf.fnCompiled of
+    Nothing -> throwError err404 { errBody = "No compiled module found for function" }
+    Just compiled -> do
+      let graphs = StateGraph.extractStateGraphs compiled.compiledModule
+      pure $ StateGraphListResponse
+        { graphs = map (\sg -> StateGraphInfo sg.sgName Nothing) graphs
+        }
+
+-- | Get state graph as DOT text
+getStateGraphDotHandler :: String -> Text -> AppM Text
+getStateGraphDotHandler name' graphName = do
+  let name = Text.pack name'
+  vf <- lookupValidatedFunction name
+  case vf.fnCompiled of
+    Nothing -> throwError err404 { errBody = "No compiled module found for function" }
+    Just compiled -> do
+      let graphs = StateGraph.extractStateGraphs compiled.compiledModule
+      case find (\sg -> sg.sgName == graphName) graphs of
+        Nothing -> throwError err404 { errBody = "State graph not found: " <> encodeTextLBS graphName }
+        Just graph -> do
+          let opts = StateGraph.defaultStateGraphOptions
+          pure $ StateGraph.stateGraphToDot opts graph
+
+-- | Render state graph as SVG
+getStateGraphSvgHandler :: String -> Text -> AppM Text
+getStateGraphSvgHandler name' graphName = do
+  dot <- getStateGraphDotHandler name' graphName
+  ensureGraphVizAvailable
+  result <- liftIO $ renderSVG dot
+  case result of
+    Left err -> throwError err500 { errBody = encodeTextLBS err }
+    Right svgText -> pure svgText
+
+-- | Render state graph as PNG
+getStateGraphPngHandler :: String -> Text -> AppM Api.PngImage
+getStateGraphPngHandler name' graphName = do
+  dot <- getStateGraphDotHandler name' graphName
+  ensureGraphVizAvailable
+  result <- liftIO $ renderPNG dot
+  case result of
+    Left err -> throwError err500 { errBody = encodeTextLBS err }
+    Right bytes -> pure (Api.PngImage bytes)
+
+-- | Helper to look up a validated function by name
+lookupValidatedFunction :: Text -> AppM ValidatedFunction
+lookupValidatedFunction name = do
+  functionsTVar <- asks (.functionDatabase)
+  functions <- liftIO $ readTVarIO functionsTVar
+  case Map.lookup name functions of
+    Nothing -> throwError err404 { errBody = "Function not found: " <> encodeTextLBS name }
+    Just vf -> pure vf
 
 evalFunctionHandler :: String -> Maybe Text -> Maybe Api.TraceLevel -> Maybe Bool -> FnArguments -> AppM SimpleResponse
 evalFunctionHandler name' mTraceHeader mTraceParam mGraphViz args = do
