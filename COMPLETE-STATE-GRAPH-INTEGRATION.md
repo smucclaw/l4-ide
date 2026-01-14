@@ -18,6 +18,7 @@ State transition graph visualization from PR #773 is now fully integrated into t
 - `GET /functions/{name}/state-graphs/{graphName}/png` - PNG image
 
 **Key features:**
+
 - Reuses existing compiled modules (no double-compilation)
 - Leverages existing GraphViz rendering infrastructure
 - Proper error handling (404 for not found, 503 for missing GraphViz)
@@ -50,26 +51,31 @@ State transition graph visualization from PR #773 is now fully integrated into t
 ### Backend (`jl4-decision-service`)
 
 **Modified:**
+
 - `src/Backend/Api.hs` (+47 lines) - State graph types
 - `src/Server.hs` (+105 lines) - Routes and handlers
 
 **Created:**
+
 - `STATE-GRAPH-API.md` - API documentation
 - `test-state-graph-api.sh` - Test script
 
 ### Frontend (`ts-apps/l4-wizard`)
 
 **Modified:**
+
 - `src/lib/decision-service.ts` (+74 lines) - State graph API client
 - `src/lib/components/Wizard.svelte` (+5 lines) - Component integration
 
 **Created:**
+
 - `src/lib/components/StateGraphDiagram.svelte` - New component (133 lines)
 - `STATE-GRAPH-INTEGRATION.md` - Integration guide
 
 ### Documentation
 
 **Created:**
+
 - `STATE-GRAPH-REST-API-IMPLEMENTATION.md` - Implementation summary
 - `COMPLETE-STATE-GRAPH-INTEGRATION.md` - This file
 
@@ -78,15 +84,18 @@ State transition graph visualization from PR #773 is now fully integrated into t
 ## Testing Status
 
 ✅ **Backend:**
+
 - Compiles successfully: `cabal build exe:jl4-decision-service`
 - Test script created: `./jl4-decision-service/test-state-graph-api.sh`
 
 ✅ **Frontend:**
+
 - Compiles successfully: `cd ts-apps/l4-wizard && npm run build`
 - Type-safe TypeScript
 - No runtime errors
 
 ✅ **Integration:**
+
 - All components connect properly
 - Follows existing patterns
 - Error handling tested
@@ -126,6 +135,7 @@ curl -X PUT http://localhost:8001/functions/wedding \
 Navigate to: `http://localhost:5174/uuid:wedding/weddingceremony`
 
 Scroll to bottom to see:
+
 - GraphViz evaluation trace (existing)
 - **State Transition Graphs (NEW!)**
 
@@ -143,6 +153,7 @@ Scroll to bottom to see:
 ### No Infrastructure Changes
 
 Everything uses existing infrastructure:
+
 - ✅ Decision service already deployed
 - ✅ Wizard already deployed
 - ✅ nginx already configured
@@ -167,10 +178,12 @@ nixos-rebuild switch --flake .#jl4-aws-2505
 ### Post-Deployment URLs
 
 **Decision Service API:**
+
 - Dev: `https://dev.jl4.legalese.com/decision/functions/{name}/state-graphs`
 - Prod: `https://jl4.legalese.com/decision/functions/{name}/state-graphs`
 
 **Wizard UI:**
+
 - Dev: `https://dev.jl4.legalese.com/wizard/`
 - Prod: `https://jl4.legalese.com/wizard/`
 
@@ -180,14 +193,14 @@ nixos-rebuild switch --flake .#jl4-aws-2505
 
 These files generate state graphs:
 
-| File | Graphs | Description |
-|------|--------|-------------|
-| `jl4/experiments/wedding.l4` | 11 | Wedding vows formalized |
-| `jl4/examples/ok/prohibition.l4` | 11 | Simple SHANT rules |
-| `jl4/examples/ok/contracts.l4` | 7 | Chained obligations |
-| `jl4/experiments/patterns_and_idioms.l4` | 4 | Business contracts |
-| `jl4/experiments/safe-post.l4` | 1 | SAFE conversion |
-| **Total** | **37** | **Available now** |
+| File                                     | Graphs | Description             |
+| ---------------------------------------- | ------ | ----------------------- |
+| `jl4/experiments/wedding.l4`             | 11     | Wedding vows formalized |
+| `jl4/examples/ok/prohibition.l4`         | 11     | Simple SHANT rules      |
+| `jl4/examples/ok/contracts.l4`           | 7      | Chained obligations     |
+| `jl4/experiments/patterns_and_idioms.l4` | 4      | Business contracts      |
+| `jl4/experiments/safe-post.l4`           | 1      | SAFE conversion         |
+| **Total**                                | **37** | **Available now**       |
 
 ---
 
@@ -196,6 +209,7 @@ These files generate state graphs:
 ### Before This Integration
 
 Users could:
+
 - Write L4 regulative rules
 - View source code
 - See ladder diagrams (constitutive rules only)
@@ -205,6 +219,7 @@ But **could not visualize** the contract automata implicit in MUST/MAY/SHANT cha
 ### After This Integration
 
 Users can now:
+
 - **Automatically see state graphs** for any regulative rule
 - **Select between multiple graphs** if module has many rules
 - **View contract automata** showing states and transitions
@@ -278,6 +293,7 @@ Users can now:
 From Flood & Goodenough's "Contract as Automaton":
 
 **Node Styles:**
+
 - Ellipse: Regular state
 - Double circle: Terminal state
 - Light blue fill: Initial state
@@ -285,6 +301,7 @@ From Flood & Goodenough's "Contract as Automaton":
 - Light red fill: Breach (failure)
 
 **Edge Styles:**
+
 - Solid green: Success path (HENCE)
 - Dashed red: Failure path (LEST/timeout)
 - Labels: `<party> <MODAL> <action> [<deadline>]`
@@ -346,6 +363,7 @@ This completes the journey from PR #773 (infrastructure) to production-ready use
 ## Quick Reference
 
 ### Test the Backend
+
 ```bash
 cabal run jl4-decision-service -- --port 8001 \
   --sourcePaths jl4/experiments/wedding.l4
@@ -354,6 +372,7 @@ cabal run jl4-decision-service -- --port 8001 \
 ```
 
 ### Test the Frontend
+
 ```bash
 cd ts-apps/l4-wizard
 npm run dev
@@ -361,11 +380,13 @@ npm run dev
 ```
 
 ### Deploy to Production
+
 ```bash
 nixos-rebuild switch --flake .#jl4-aws-2505
 ```
 
 ### Access in Production
+
 - **API**: `https://jl4.legalese.com/decision/functions/{name}/state-graphs`
 - **UI**: `https://jl4.legalese.com/wizard/`
 

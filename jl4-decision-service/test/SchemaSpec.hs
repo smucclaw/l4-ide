@@ -219,3 +219,9 @@ instance Arbitrary QueryPlanResponse where
       <*> arbitrary
       <*> arbitrary
       <*> pure Nothing
+
+instance Arbitrary StateGraphInfo where
+  arbitrary = StateGraphInfo <$> arbitrary <*> arbitrary
+
+instance Arbitrary StateGraphListResponse where
+  arbitrary = StateGraphListResponse <$> arbitrary

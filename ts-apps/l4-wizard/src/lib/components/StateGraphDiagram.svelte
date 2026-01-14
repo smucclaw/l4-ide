@@ -84,9 +84,7 @@
 
 <div class="rounded-lg border-2 border-gray-200 bg-white p-4">
   <div class="mb-3 flex items-center justify-between">
-    <h3 class="text-sm font-semibold text-gray-700">
-      State Transition Graphs
-    </h3>
+    <h3 class="text-sm font-semibold text-gray-700">State Transition Graphs</h3>
 
     {#if graphs.length > 1}
       <select
@@ -127,8 +125,8 @@
     <div class="overflow-auto">
       <div class="text-xs text-gray-500 mb-2">
         {#if selectedGraph}
-          <span class="font-medium">{selectedGraph}</span> - Contract automaton
-          showing states and transitions
+          <span class="font-medium">{selectedGraph}</span> - Contract automaton showing
+          states and transitions
         {/if}
       </div>
       {@html svgContent}

@@ -24,6 +24,7 @@ fetchStateGraphDot(client, functionName, graphName): Promise<string>
 ### 2. State Graph Component (`src/lib/components/StateGraphDiagram.svelte`)
 
 New component that:
+
 - Automatically fetches all state graphs when a function is loaded
 - Shows a dropdown selector if multiple graphs are available
 - Auto-selects and displays the first graph
@@ -119,6 +120,7 @@ DECIDE `fidelity`
 ```
 
 **Multiple state graphs** appear:
+
 - `weddingceremony` (chained obligations)
 - `fidelity` (prohibition)
 
@@ -131,6 +133,7 @@ Users can switch between them using the dropdown.
 The component makes two API calls:
 
 1. **On mount**: `GET /functions/{name}/state-graphs`
+
    - Returns list of available graphs
    - Triggers once when function loads
 
@@ -143,11 +146,11 @@ The component makes two API calls:
 Uses Svelte 5 runes (`$state`, `$effect`):
 
 ```typescript
-let graphs = $state<StateGraphInfo[]>([])          // List of available graphs
-let selectedGraph = $state<string | null>(null)    // Currently selected
-let svgContent = $state<string | null>(null)       // SVG markup
-let isLoading = $state(false)                      // Loading state
-let error = $state<string | null>(null)            // Error messages
+let graphs = $state<StateGraphInfo[]>([]) // List of available graphs
+let selectedGraph = $state<string | null>(null) // Currently selected
+let svgContent = $state<string | null>(null) // SVG markup
+let isLoading = $state(false) // Loading state
+let error = $state<string | null>(null) // Error messages
 ```
 
 ### Reactivity
@@ -162,6 +165,7 @@ This ensures graphs update automatically when navigating between functions.
 ### Error Handling
 
 The component gracefully handles:
+
 - **No GraphViz installed** (503 error) - Shows error message
 - **Function not found** (404) - Shows error message
 - **Network errors** - Shows error message
@@ -170,6 +174,7 @@ The component gracefully handles:
 ## Configuration
 
 No configuration needed! The component:
+
 - Reuses the existing `DecisionServiceClient`
 - Automatically discovers available graphs
 - Works with any decision service URL
@@ -179,12 +184,14 @@ No configuration needed! The component:
 ### Local Testing
 
 1. Start decision service with a module containing regulative rules:
+
    ```bash
    cabal run jl4-decision-service -- --port 8001 \
      --sourcePaths ../jl4/experiments/wedding.l4
    ```
 
 2. Run wizard dev server:
+
    ```bash
    cd ts-apps/l4-wizard
    npm run dev
@@ -221,6 +228,7 @@ curl -X PUT http://localhost:8001/functions/prohibition \
 ### Styling
 
 The component matches existing wizard styling:
+
 - Same border/padding as GraphvizDiagram
 - Same rounded corners and spacing
 - Consistent typography and colors
@@ -229,6 +237,7 @@ The component matches existing wizard styling:
 ### Color Scheme
 
 State graphs use standard GraphViz colors:
+
 - **Light blue** (#e8f4fd) - Initial state
 - **Light green** (#d4edda) - Fulfilled (success)
 - **Light red** (#f8d7da) - Breach (failure)
@@ -242,6 +251,7 @@ No special deployment steps needed. The wizard is deployed as part of the standa
 ### NixOS Deployment
 
 The l4-wizard is served via nginx at:
+
 - **Dev**: `https://dev.jl4.legalese.com/wizard/`
 - **Prod**: `https://jl4.legalese.com/wizard/`
 
@@ -280,10 +290,12 @@ Potential improvements:
 ## Files Modified/Created
 
 ### Modified
+
 - `src/lib/decision-service.ts` - Added state graph API functions
 - `src/lib/components/Wizard.svelte` - Added StateGraphDiagram import and section
 
 ### Created
+
 - `src/lib/components/StateGraphDiagram.svelte` - New component
 - `STATE-GRAPH-INTEGRATION.md` - This documentation
 

@@ -26,6 +26,7 @@ GET /functions/{functionName}/state-graphs
 Returns a list of all state graphs extracted from the module containing the specified function.
 
 **Response:**
+
 ```json
 {
   "graphs": [
@@ -52,11 +53,13 @@ Returns the raw GraphViz DOT source for the specified state graph.
 **Response:** `text/plain` (DOT format)
 
 **Example:**
+
 ```
 GET /functions/mycontract/state-graphs/noSmoking
 ```
 
 Returns:
+
 ```dot
 digraph "noSmoking" {
   rankdir=LR;
@@ -115,17 +118,19 @@ curl http://localhost:8001/functions/myfunction/state-graphs/noSmoking/png > gra
 
 ```typescript
 // List graphs
-const response = await fetch('/functions/mycontract/state-graphs');
+const response = await fetch("/functions/mycontract/state-graphs");
 const { graphs } = await response.json();
 
 // Get SVG for display
-const svg = await fetch('/functions/mycontract/state-graphs/noSmoking/svg')
-  .then(r => r.text());
-document.getElementById('graph').innerHTML = svg;
+const svg = await fetch(
+  "/functions/mycontract/state-graphs/noSmoking/svg",
+).then((r) => r.text());
+document.getElementById("graph").innerHTML = svg;
 
 // Download PNG
-const blob = await fetch('/functions/mycontract/state-graphs/noSmoking/png')
-  .then(r => r.blob());
+const blob = await fetch(
+  "/functions/mycontract/state-graphs/noSmoking/png",
+).then((r) => r.blob());
 const url = URL.createObjectURL(blob);
 window.open(url);
 ```
@@ -133,6 +138,7 @@ window.open(url);
 ## Error Responses
 
 - **404 Not Found**: Function or graph name doesn't exist
+
   ```json
   "Function not found: myfunction"
   "State graph not found: invalidname"
@@ -166,6 +172,7 @@ These files from the codebase contain regulative rules that generate state graph
 ## Testing the API Locally
 
 See `test-state-graph-api.sh` for a comprehensive test script that:
+
 1. Starts the decision service with wedding.l4
 2. Uploads the function
 3. Lists available state graphs
@@ -175,11 +182,13 @@ See `test-state-graph-api.sh` for a comprehensive test script that:
 ## OpenAPI/Swagger Documentation
 
 The state graph endpoints are automatically included in the OpenAPI specification at:
+
 ```
 GET http://localhost:8001/swagger.json
 ```
 
 Operation IDs:
+
 - `listStateGraphs`
 - `getStateGraphDot`
 - `getStateGraphSvg`
