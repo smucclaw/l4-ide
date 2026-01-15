@@ -217,20 +217,56 @@ getTypeDesc typeDescMap = \ case
 
 -- | Collect all non-function ASSUME declarations from a module.
 -- Function-typed ASSUMEs are filtered out per design decision.
+-- This includes types that expand to functions via type synonyms.
 assumesFromModule :: Module Resolved -> Map.Map Unique (Assume Resolved)
-assumesFromModule (MkModule _ _ section) =
+assumesFromModule mod'@(MkModule _ _ section) =
   Map.fromList (collectSection section)
  where
+  synonyms = collectTypeSynonyms mod'
+
   collectSection (MkSection _ _ _ decls) =
     decls >>= collectDecl
 
   collectDecl = \case
     Assume _ assume@(MkAssume _ _ (MkAppForm _ name _ _) mType) ->
       case mType of
-        Just (Fun {}) -> []  -- Skip function-typed ASSUMEs
+        Just ty | isFunctionTypeExpanded synonyms ty -> []  -- Skip function-typed ASSUMEs
         _ -> [(getUnique name, assume)]
     Section _ sub -> collectSection sub
     _ -> []
+
+-- | Collect all type synonym declarations from a module.
+-- Returns a map from type name Unique to the underlying type.
+collectTypeSynonyms :: Module Resolved -> Map.Map Unique (Type' Resolved)
+collectTypeSynonyms (MkModule _ _ section) =
+  Map.fromList (goSection section)
+ where
+  goSection (MkSection _ _ _ decls) =
+    decls >>= goDecl
+
+  goDecl = \case
+    Declare _ (MkDeclare _ _ (MkAppForm _ name _ _) (SynonymDecl _ ty)) ->
+      [(getUnique name, ty)]
+    Section _ sub -> goSection sub
+    _ -> []
+
+-- | Check if a type is a function type, expanding type synonyms.
+-- This handles types like `DECLARE Pred IS A FUNCTION FROM NUMBER TO BOOLEAN`
+-- followed by `ASSUME p IS A Pred`.
+isFunctionTypeExpanded :: Map.Map Unique (Type' Resolved) -> Type' Resolved -> Bool
+isFunctionTypeExpanded synonyms = go Set.empty
+ where
+  go visited ty = case ty of
+    Fun {} -> True
+    Forall _ _ inner -> go visited inner
+    TyApp _ name [] ->
+      let u = getUnique name
+      in if Set.member u visited
+            then False  -- Prevent infinite recursion on cyclic synonyms
+            else case Map.lookup u synonyms of
+              Just expanded -> go (Set.insert u visited) expanded
+              Nothing -> False
+    _ -> False
 
 -- | Collect all free variable references (by Unique) from an expression.
 -- Uses cosmosOf gplate for recursive traversal of the expression AST.
