@@ -90,6 +90,13 @@
     if (unique === undefined) return undefined
 
     const keys = atomToKeys.get(unique)
+    // DEBUG: Log what we're looking up
+    console.log('[LadderDiagram] getAtomValue', {
+      unique,
+      keys,
+      bindings,
+      atomToKeysSize: atomToKeys.size,
+    })
     if (!keys || keys.length === 0) return undefined
 
     let hasTrue = false

@@ -143,6 +143,11 @@
         }
       }
       atomToKeys = newAtomToKeys
+      // DEBUG: Log the atomToKeys mapping
+      console.log(
+        '[Wizard] atomToKeys built:',
+        Object.fromEntries(newAtomToKeys)
+      )
 
       // Build set of parameters that are still needed based on asks
       // The asks array tells us which parameters we need to query
