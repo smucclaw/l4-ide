@@ -128,26 +128,24 @@
 
       // Build mapping from atom unique IDs to binding keys
       // This allows the ladder diagram to look up bindings correctly
-      const newAtomToKeys = new Map<number, string[]>()
+      // IMPORTANT: We MERGE new mappings into the existing map rather than replacing it
+      // because when some parameters are answered, the API returns only remaining asks,
+      // and we'd lose the mapping for already-answered parameters
+      const mergedAtomToKeys = new Map(atomToKeys)
       for (const ask of plan.asks) {
         // Use key if available, otherwise fall back to container (stripped of backticks)
         const bindingKey = ask.key ?? stripBackticks(ask.container)
         if (bindingKey) {
           for (const atom of ask.atoms) {
-            const existing = newAtomToKeys.get(atom.unique) ?? []
+            const existing = mergedAtomToKeys.get(atom.unique) ?? []
             if (!existing.includes(bindingKey)) {
               existing.push(bindingKey)
+              mergedAtomToKeys.set(atom.unique, existing)
             }
-            newAtomToKeys.set(atom.unique, existing)
           }
         }
       }
-      atomToKeys = newAtomToKeys
-      // DEBUG: Log the atomToKeys mapping
-      console.log(
-        '[Wizard] atomToKeys built:',
-        Object.fromEntries(newAtomToKeys)
-      )
+      atomToKeys = mergedAtomToKeys
 
       // Build set of parameters that are still needed based on asks
       // The asks array tells us which parameters we need to query
