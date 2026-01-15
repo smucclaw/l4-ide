@@ -1,0 +1,39 @@
+-- Test file for implicit ASSUME extraction in decision service
+--
+-- This file tests the "dynamic mode" where undeclared variables with
+-- type-inferred types are automatically exposed as API parameters.
+--
+-- Expected behavior:
+-- - IDE shows red error for undeclared `temperature` and `approved`
+-- - Decision service still generates valid function schema
+-- - Schema includes all three parameter types:
+--   1. GIVEN parameters (threshold)
+--   2. Explicit ASSUME parameters (humidity)
+--   3. Implicit ASSUME parameters (temperature, approved)
+
+DECLARE Rating IS ONE OF Hot, Warm, Cool, Cold
+
+-- Explicit ASSUME - should appear in schema
+ASSUME humidity IS A NUMBER
+
+-- Test 1: Implicit NUMBER from arithmetic context
+-- `temperature` is undeclared but inferred as NUMBER from `temperature > threshold`
+GIVEN threshold IS A NUMBER
+@export default Check if temperature exceeds threshold
+DECIDE `exceeds threshold` threshold MEANS temperature > threshold
+
+-- Test 2: Implicit BOOLEAN from boolean context
+-- `approved` is undeclared but inferred as BOOLEAN from `AND approved`
+@export Check if warm and approved
+DECIDE `is warm and approved` MEANS
+      temperature > 20
+  AND temperature < 30
+  AND approved
+
+-- Test 3: Mix of explicit ASSUME, implicit ASSUME, and GIVEN
+-- Should have: threshold (GIVEN), humidity (explicit ASSUME), temperature (implicit)
+@export Comfort check with humidity
+GIVEN threshold IS A NUMBER
+DECIDE `is comfortable` threshold MEANS
+      temperature > threshold
+  AND humidity < 70

@@ -19,7 +19,7 @@ import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
 import qualified Data.Text.IO as TIO
 import qualified Data.Yaml as Yaml
-import L4.Export (ExportedFunction (..), ExportedParam (..), getExportedFunctions)
+import L4.Export (ExportedFunction (..), ExportedParam (..), getExportedFunctions, extractImplicitAssumeParams)
 import L4.Syntax
 import qualified LSP.L4.Rules as Rules
 import Optics ((^.))
@@ -110,26 +110,41 @@ tryLoadFromAnnotationsExplicit moduleContext path content = do
         putStrLn $ "- annotation load failed for " <> path <> " due to typecheck errors:"
         mapM_ (putStrLn . ("    " <>) . T.unpack) errs
       pure []
-    Just Rules.TypeCheckResult{module' = resolvedModule} -> do
+    Just Rules.TypeCheckResult{module' = resolvedModule, errors = tcErrors} -> do
       let exports = getExportedFunctions resolvedModule
       case exports of
         [] -> pure []
         xs -> do
           let ordered = orderExports xs
-          pure [ (export.exportName, exportToFunction resolvedModule export) | export <- ordered ]
+              -- Extract implicit ASSUMEs from OutOfScopeError with resolved types
+              implicitParams = extractImplicitAssumeParams tcErrors
+          pure [ (export.exportName, exportToFunctionWithImplicits resolvedModule implicitParams export) | export <- ordered ]
   where
     orderExports xs =
       let (defaults, rest) = List.partition (.exportIsDefault) xs
       in defaults <> rest
 
-exportToFunction :: Module Resolved -> ExportedFunction -> Function
-exportToFunction resolvedModule export =
-  Function
+-- | Export function with implicit ASSUME parameters merged in
+exportToFunctionWithImplicits :: Module Resolved -> [(Text, Type' Resolved)] -> ExportedFunction -> Function
+exportToFunctionWithImplicits resolvedModule implicitParams export =
+  let baseParams = parametersFromExport resolvedModule export.exportParams
+      declares = declaresFromModule resolvedModule
+      -- Convert implicit params to Parameter objects, avoiding duplicates
+      implicitParamMap = Map.fromList
+        [ (name, (typeToParameter declares Set.empty ty) {parameterDescription = "", parameterAlias = Nothing})
+        | (name, ty) <- implicitParams
+        , name `Map.notMember` baseParams.parameterMap  -- Don't override explicit params
+        ]
+      mergedParams = baseParams
+        { parameterMap = baseParams.parameterMap <> implicitParamMap
+        , required = baseParams.required <> Map.keys implicitParamMap
+        }
+  in Function
     { name = export.exportName
     , description =
         let desc = T.strip export.exportDescription
         in if T.null desc then "Exported function" else desc
-    , parameters = parametersFromExport resolvedModule export.exportParams
+    , parameters = mergedParams
     , supportedEvalBackend = [JL4]
     }
 
