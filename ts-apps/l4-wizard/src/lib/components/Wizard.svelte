@@ -279,11 +279,14 @@
     // Update parameter value
     parameters = parameters.map((p) => (p.key === key ? { ...p, value } : p))
 
-    // Refresh query plan and evaluation
+    // Refresh query plan - this correctly implements three-valued (Kleene) logic
+    // and sets isDetermined only when the result is truly known
     await updateQueryPlan(functionName, bindings)
 
-    // If we have bindings, try to evaluate
-    if (Object.keys(bindings).length > 0 && client) {
+    // Only evaluate when the query plan says the result is determined.
+    // This ensures partial inputs don't get incorrectly evaluated as false,
+    // while still supporting non-boolean results (amounts, strings, etc.)
+    if (isDetermined && client) {
       try {
         const evalResult = await evaluateFunction(
           client,
@@ -291,11 +294,8 @@
           bindings
         )
         result = evalResult.result
-        isDetermined = true
       } catch (e) {
-        // Evaluation may fail if not all required inputs are provided
         console.warn('Evaluation failed:', e instanceof Error ? e.message : e)
-        // Don't override isDetermined from query plan if evaluation fails
       }
     }
   }
@@ -334,11 +334,11 @@
     }
     bindings = newBindings
 
-    // Refresh query plan and evaluation once (not per key)
+    // Refresh query plan (which correctly handles three-valued logic)
     await updateQueryPlan(functionName, bindings)
 
-    // If we have bindings, try to evaluate
-    if (Object.keys(bindings).length > 0 && client) {
+    // Only evaluate when determined - see comment in handleParameterChange
+    if (isDetermined && client) {
       try {
         const evalResult = await evaluateFunction(
           client,
@@ -346,7 +346,6 @@
           bindings
         )
         result = evalResult.result
-        isDetermined = true
       } catch (e) {
         console.warn('Evaluation failed:', e instanceof Error ? e.message : e)
       }
