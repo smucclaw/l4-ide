@@ -41,7 +41,13 @@
 
   # Fix deployment timeout: nginx-config-reload must wait for nginx to finish
   # starting/restarting before attempting a reload
-  systemd.services.nginx-config-reload.after = [ "nginx.service" ];
+  systemd.services.nginx-config-reload = {
+    after = [ "nginx.service" ];
+    # Prevent long hangs during deployment - if reload doesn't complete in 10s,
+    # fail and let the next trigger retry. This is safe because nginx will still
+    # be serving (just with potentially stale config until next successful reload).
+    serviceConfig.TimeoutStartSec = 10;
+  };
 
   security.sudo.wheelNeedsPassword = false;
 
