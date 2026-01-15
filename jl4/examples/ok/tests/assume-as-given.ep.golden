@@ -1,0 +1,32 @@
+-- Test file for automatic ASSUME-to-GIVEN conversion in decision service
+-- When @export functions reference ASSUME declarations, those should be
+-- automatically exposed as API input parameters.
+
+-- Simple value ASSUMEs should become API params
+ASSUME temperature IS A NUMBER
+ASSUME humidity IS A NUMBER
+
+-- Function ASSUMEs should be skipped (per design decision)
+ASSUME `is authorized` IS A FUNCTION FROM NUMBER TO BOOLEAN
+
+-- Test 1: Simple function referencing one ASSUME
+-- Expected: API exposes `temperature` as input parameter
+@export default Is the temperature warm?
+`is warm` MEANS temperature > 25
+
+-- Test 2: Function referencing multiple ASSUMEs
+-- Expected: API exposes both `temperature` and `humidity`
+@export Is the environment comfortable?
+`is comfortable` MEANS
+  temperature > 18 AND temperature < 26 AND humidity < 70
+
+-- Test 3: Function with explicit GIVEN plus implicit ASSUME
+-- Expected: API exposes `threshold` (GIVEN) and `temperature` (ASSUME)
+@export Does temperature exceed threshold?
+GIVEN threshold IS A NUMBER
+`exceeds threshold` threshold MEANS temperature > threshold
+
+-- Test 4: Function referencing function ASSUME (should NOT expose the function)
+-- The function ASSUME `is authorized` should be skipped
+@export Check authorization status
+`check auth` MEANS `is authorized` 42

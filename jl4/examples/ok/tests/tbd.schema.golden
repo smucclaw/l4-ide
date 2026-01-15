@@ -1,6 +1,13 @@
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "properties": {},
+    "properties": {
+        "TBD1": {
+            "type": "string"
+        }
+    },
+    "required": [
+        "TBD1"
+    ],
     "title": "x1",
     "type": "object"
 }

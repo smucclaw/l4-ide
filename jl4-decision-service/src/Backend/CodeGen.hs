@@ -32,15 +32,20 @@ data GeneratedCode = GeneratedCode
 -- evaluation (if the boolean isn't needed, the default doesn't matter).
 --
 -- For non-BOOLEAN parameters, NOTHING propagates as an omitted/unknown value.
+--
+-- ASSUME params are injected as LET bindings before the function call,
+-- shadowing any global ASSUME declarations with the provided values.
 generateEvalWrapper
   :: Text                         -- ^ Target function name
-  -> [(Text, Type' Resolved)]     -- ^ Parameter names and types from GIVEN clause
+  -> [(Text, Type' Resolved)]     -- ^ GIVEN parameter names and types (passed as function args)
+  -> [(Text, Type' Resolved)]     -- ^ ASSUME parameter names and types (injected as LET bindings)
   -> Aeson.Value                  -- ^ Input arguments as JSON object
   -> TraceLevel                   -- ^ Whether to generate EVAL or EVALTRACE
   -> Either Text GeneratedCode
-generateEvalWrapper funName params inputJson traceLevel = do
+generateEvalWrapper funName givenParams assumeParams inputJson traceLevel = do
+  let allParams = givenParams <> assumeParams
   -- Handle zero-parameter functions: no wrapper needed, just eval directly
-  if null params
+  if null allParams
     then Right GeneratedCode
       { generatedWrapper = Text.unlines
           [ ""
@@ -57,10 +62,13 @@ generateEvalWrapper funName params inputJson traceLevel = do
           isBooleanType :: Type' Resolved -> Bool
           isBooleanType (TyApp _ name []) = getUnique name == booleanUnique
           isBooleanType _ = False
-          -- Annotate params with their boolean status
-          paramInfo = map (\(name, ty) -> ((name, ty), isBooleanType ty)) params
+          -- Annotate GIVEN params with their boolean status and mark as GIVEN
+          givenParamInfo = map (\(name, ty) -> ((name, ty), isBooleanType ty, True)) givenParams
+          -- Annotate ASSUME params with their boolean status and mark as ASSUME
+          assumeParamInfo = map (\(name, ty) -> ((name, ty), isBooleanType ty, False)) assumeParams
+          allParamInfo = givenParamInfo <> assumeParamInfo
           -- We always need prelude for fromMaybe (all booleans use it)
-          hasBooleans = any snd paramInfo
+          hasBooleans = any (\(_, isB, _) -> isB) allParamInfo
       in Right GeneratedCode
       { generatedWrapper = Text.unlines $
           [ ""
@@ -69,13 +77,13 @@ generateEvalWrapper funName params inputJson traceLevel = do
           -- Import prelude for fromMaybe if we have any booleans
           (if hasBooleans then ["IMPORT prelude  -- for fromMaybe"] else []) ++
           [ ""
-          , generateInputRecordLifted params
+          , generateInputRecordLifted allParams
           , ""
           , generateDecoder
           , ""
           , generateJsonPayload inputJson
           , ""
-          , generateEvalDirectiveLifted funName paramInfo traceLevel
+          , generateEvalDirectiveLiftedWithAssumes funName givenParamInfo assumeParamInfo traceLevel
           ]
       , decodeFailedSentinel = "DECODE_FAILED"
       }
@@ -121,41 +129,64 @@ escapeAsL4String val =
       escaped = Text.replace "\"" "\\\"" jsonText
   in "\"" <> escaped <> "\""
 
--- | Generate EVAL or EVALTRACE with deep Maybe lifting
+-- | Generate EVAL or EVALTRACE with deep Maybe lifting, handling both GIVEN and ASSUME params.
 --
--- For BOOLEAN parameters: uses fromMaybe FALSE for short-circuit evaluation
--- For non-BOOLEAN parameters: uses pattern matching to unwrap JUST values
+-- GIVEN params are passed as function arguments.
+-- ASSUME params are injected as LET bindings before the function call.
 --
--- The approach:
--- 1. Decode JSON to InputArgs (all fields are MAYBE types)
--- 2. For booleans: fromMaybe FALSE enables short-circuit (if not needed, default doesn't matter)
--- 3. For non-booleans: nested CONSIDER unwraps JUST values; NOTHING returns NOTHING
---
--- Type signature: [((name, type), isBoolean)]
-generateEvalDirectiveLifted :: Text -> [((Text, Type' Resolved), Bool)] -> TraceLevel -> Text
-generateEvalDirectiveLifted funName paramInfo traceLevel =
+-- Type signature: [((name, type), isBoolean, isGiven)]
+generateEvalDirectiveLiftedWithAssumes
+  :: Text
+  -> [((Text, Type' Resolved), Bool, Bool)]  -- ^ GIVEN params: ((name, type), isBoolean, isGiven=True)
+  -> [((Text, Type' Resolved), Bool, Bool)]  -- ^ ASSUME params: ((name, type), isBoolean, isGiven=False)
+  -> TraceLevel
+  -> Text
+generateEvalDirectiveLiftedWithAssumes funName givenParamInfo assumeParamInfo traceLevel =
   let directive = case traceLevel of
         TraceNone -> "#EVAL"
         TraceFull -> "#EVALTRACE"
-      -- Separate boolean and non-boolean params
-      (_boolParams, nonBoolParams) = partition snd paramInfo
-      -- Generate argument expressions in original order
+
+      -- All params for unwrapping
+      allParams = givenParamInfo <> assumeParamInfo
+
+      -- Separate boolean and non-boolean params (for unwrapping logic)
+      nonBoolAllParams = filter (\(_, isB, _) -> not isB) allParams
+
+      -- Generate argument expressions for GIVEN params only (in original order)
       -- Booleans use fromMaybe FALSE directly
       -- Non-booleans reference unwrapped variable names
-      allArgExprs = map snd $ sortOn fst $
-        [(idx, expr) | (idx, (_, True)) <- zip [0..] paramInfo
-                     , let ((name, _), _) = paramInfo !! idx
-                           expr = "(fromMaybe FALSE (args's " <> name <> "))"] ++
-        [(idx, expr) | (idx, (_, False)) <- zip [0..] paramInfo
-                     , let ((name, _), _) = paramInfo !! idx
-                           expr = "unwrapped_" <> name]
-      functionCall = funName <> " " <> Text.unwords allArgExprs
-  in if null nonBoolParams
-     then -- All booleans: simple case, direct function call
+      givenArgExprs = map snd $ sortOn fst $
+        [(idx, expr) | (idx, ((name, _), True, _)) <- zip [0 :: Int ..] givenParamInfo
+                     , let expr = "(fromMaybe FALSE (args's " <> name <> "))"] ++
+        [(idx, expr) | (idx, ((name, _), False, _)) <- zip [0 :: Int ..] givenParamInfo
+                     , let expr = "unwrapped_" <> name]
+
+      -- Build function call with only GIVEN params as arguments
+      functionCall = if null givenArgExprs
+        then funName
+        else funName <> " " <> Text.unwords givenArgExprs
+
+      -- Wrap function call with LET bindings for ASSUME params
+      -- Boolean ASSUMEs use fromMaybe FALSE
+      -- Non-boolean ASSUMEs use unwrapped_ variables
+      wrapWithAssumes :: Text -> Text
+      wrapWithAssumes innerExpr = foldr wrapOne innerExpr assumeParamInfo
+        where
+          wrapOne ((name, _), isBoolean, _) expr =
+            let valueExpr = if isBoolean
+                  then "(fromMaybe FALSE (args's " <> name <> "))"
+                  else "unwrapped_" <> name
+            in "LET " <> name <> " = " <> valueExpr <> " IN " <> expr
+
+      -- The innermost expression (wrapped function call in JUST)
+      innerCall = "JUST (" <> wrapWithAssumes functionCall <> ")"
+
+  in if null nonBoolAllParams
+     then -- All booleans: simple case, no nested CONSIDER needed
        Text.unlines
          [ directive
          , "  CONSIDER decodeArgs inputJson"
-         , "    WHEN RIGHT args THEN JUST (" <> functionCall <> ")"
+         , "    WHEN RIGHT args THEN " <> innerCall
          , "    WHEN LEFT error THEN NOTHING"
          ]
      else -- Has non-booleans: need nested CONSIDER for unwrapping
@@ -164,20 +195,35 @@ generateEvalDirectiveLifted funName paramInfo traceLevel =
          , "  CONSIDER decodeArgs inputJson"
          , "    WHEN RIGHT args THEN"
          ] ++
-         generateNestedConsider nonBoolParams functionCall 3 ++
+         generateNestedConsiderWithAssumes nonBoolAllParams functionCall assumeParamInfo 3 ++
          [ "    WHEN LEFT error THEN NOTHING"
          ]
 
--- | Generate nested CONSIDER for unwrapping non-boolean MAYBE values
--- Each non-boolean param gets a CONSIDER that unwraps JUST or returns NOTHING
-generateNestedConsider :: [((Text, Type' Resolved), Bool)] -> Text -> Int -> [Text]
-generateNestedConsider [] functionCall indent =
-  [Text.replicate indent "  " <> "JUST (" <> functionCall <> ")"]
-generateNestedConsider (((name, _), _):rest) functionCall indent =
+-- | Generate nested CONSIDER for unwrapping non-boolean MAYBE values,
+-- with LET bindings for ASSUME params at the innermost level.
+generateNestedConsiderWithAssumes
+  :: [((Text, Type' Resolved), Bool, Bool)]  -- ^ Non-boolean params to unwrap
+  -> Text                                     -- ^ Function call (GIVEN args only)
+  -> [((Text, Type' Resolved), Bool, Bool)]  -- ^ ASSUME params for LET bindings
+  -> Int                                      -- ^ Indentation level
+  -> [Text]
+generateNestedConsiderWithAssumes [] functionCall assumeParamInfo indent =
+  let indentStr = Text.replicate indent "  "
+      -- Wrap function call with LET bindings for ASSUME params
+      wrapWithAssumes :: Text -> Text
+      wrapWithAssumes innerExpr = foldr wrapOne innerExpr assumeParamInfo
+        where
+          wrapOne ((name, _), isBoolean, _) expr =
+            let valueExpr = if isBoolean
+                  then "(fromMaybe FALSE (args's " <> name <> "))"
+                  else "unwrapped_" <> name
+            in "LET " <> name <> " = " <> valueExpr <> " IN " <> expr
+  in [indentStr <> "JUST (" <> wrapWithAssumes functionCall <> ")"]
+generateNestedConsiderWithAssumes (((name, _), _, _):rest) functionCall assumeParamInfo indent =
   let indentStr = Text.replicate indent "  "
   in [ indentStr <> "CONSIDER args's " <> name
      , indentStr <> "  WHEN JUST unwrapped_" <> name <> " THEN"
      ] ++
-     generateNestedConsider rest functionCall (indent + 2) ++
+     generateNestedConsiderWithAssumes rest functionCall assumeParamInfo (indent + 2) ++
      [ indentStr <> "  WHEN NOTHING THEN NOTHING"
      ]

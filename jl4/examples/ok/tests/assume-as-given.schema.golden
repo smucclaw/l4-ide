@@ -1,13 +1,14 @@
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "Is the temperature warm?",
     "properties": {
-        "foo": {
+        "temperature": {
             "$ref": "#/$defs/NUMBER"
         }
     },
     "required": [
-        "foo"
+        "temperature"
     ],
-    "title": "bar",
+    "title": "is warm",
     "type": "object"
 }

@@ -22,7 +22,7 @@ module Backend.DecisionQueryPlan (
 
 import Base
 import qualified Backend.BooleanDecisionQuery as BDQ
-import Backend.FunctionSchema (Parameter (..), Parameters (..), parametersFromDecide)
+import Backend.FunctionSchema (Parameter (..), Parameters (..), parametersFromDecideWithErrors)
 import Backend.Jl4 as Jl4
 import Control.Concurrent.STM
 import Data.Aeson (FromJSON, ToJSON, (.=), object)
@@ -232,7 +232,7 @@ buildDecisionQueryCache funName sources = do
   tcRes <- case mTcRes of
     Nothing -> throwError err500 {errBody = encodeTextLBS (Text.intercalate "; " errs)}
     Just r -> pure r
-  let Rules.TypeCheckResult{module' = resolvedModule, substitution = subst} = tcRes
+  let Rules.TypeCheckResult{module' = resolvedModule, substitution = subst, errors = tcErrors} = tcRes
 
   decide <- runExceptT (Jl4.getFunctionDefinition (NormalName funName) resolvedModule) >>= \case
     Left e -> throwError err500 {errBody = encodeTextLBS (Text.pack (show e))}
@@ -263,7 +263,7 @@ buildDecisionQueryCache funName sources = do
                   inputRefs
             , compiled
             }
-      , paramSchema = parametersFromDecide resolvedModule decide
+      , paramSchema = parametersFromDecideWithErrors resolvedModule decide tcErrors
       }
 
 encodeTextLBS :: Text -> LBS.ByteString

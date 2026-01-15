@@ -1,6 +1,25 @@
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "properties": {},
+    "properties": {
+        "m": {
+            "$ref": "#/$defs/NUMBER"
+        },
+        "n": {
+            "$ref": "#/$defs/NUMBER"
+        },
+        "x": {
+            "$ref": "#/$defs/BOOLEAN"
+        },
+        "y": {
+            "$ref": "#/$defs/BOOLEAN"
+        }
+    },
+    "required": [
+        "x",
+        "y",
+        "n",
+        "m"
+    ],
     "title": "test",
     "type": "object"
 }

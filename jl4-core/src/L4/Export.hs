@@ -8,6 +8,10 @@ module L4.Export (
   getExportedFunctions,
   getDefaultFunction,
   buildTypeDescMap,
+  assumesFromModule,
+  extractAssumeParamTypes,
+  extractImplicitAssumeParams,
+  hasTypeInferenceVars,
 ) where
 
 import Base
@@ -17,8 +21,10 @@ import qualified Base.Text as Text
 import Data.Char (isSpace)
 import qualified Data.List as List
 import qualified Data.Map.Strict as Map
+import qualified Data.Set as Set
 import L4.Annotation (getAnno)
 import L4.Syntax
+import L4.TypeCheck.Types (CheckErrorWithContext(..), CheckError(..))
 import Optics
 
 type TypeDescMap = Map.Map Unique Text
@@ -92,12 +98,13 @@ parseDescText txt =
 getExportedFunctions :: Module Resolved -> [ExportedFunction]
 getExportedFunctions mod'@(MkModule _ _ section) =
   let typeDescMap = buildTypeDescMap mod'
-      explicitExports = collectSection typeDescMap section
+      assumes = assumesFromModule mod'
+      explicitExports = collectSection typeDescMap assumes section
       allDecides = collectAllDecides section
   in case explicitExports of
     -- No explicit exports: export the topmost function as default
     [] -> case allDecides of
-      (firstDecide : _) -> maybeToList (buildImplicitDefaultFunction typeDescMap firstDecide)
+      (firstDecide : _) -> maybeToList (buildImplicitDefaultFunction typeDescMap assumes firstDecide)
       [] -> []
     -- Has explicit exports but no default: mark the topmost as default
     _ | not (any (\ef -> ef.exportIsDefault) explicitExports) ->
@@ -106,12 +113,12 @@ getExportedFunctions mod'@(MkModule _ _ section) =
     -- Has explicit exports with default: use as-is
     _ -> explicitExports
  where
-  collectSection tdm (MkSection _ _ _ decls) =
-    decls >>= collectDecl tdm
+  collectSection tdm assumes' (MkSection _ _ _ decls) =
+    decls >>= collectDecl tdm assumes'
 
-  collectDecl tdm = \ case
-    Decide _ dec -> maybeToList (buildExportedFunction tdm dec)
-    Section _ sub -> collectSection tdm sub
+  collectDecl tdm assumes' = \ case
+    Decide _ dec -> maybeToList (buildExportedFunction tdm assumes' dec)
+    Section _ sub -> collectSection tdm assumes' sub
     _ -> []
 
   -- Collect all Decide declarations in source order
@@ -122,14 +129,16 @@ getExportedFunctions mod'@(MkModule _ _ section) =
       _ -> []
 
   -- Build an implicit default export for a function without @export
-  buildImplicitDefaultFunction tdm decide@(MkDecide _ tySig appForm _) =
+  buildImplicitDefaultFunction tdm assumes' decide@(MkDecide _ tySig appForm _) =
     let desc = getAnno decide ^. annDesc
         description = maybe "" getDesc desc
+        givenParams = extractParams tdm tySig
+        assumedParams = extractAssumedDependencies tdm assumes' decide
     in Just ExportedFunction
         { exportName = resolvedToText (extractAppFormName appForm)
         , exportDescription = description
         , exportIsDefault = True
-        , exportParams = extractParams tdm tySig
+        , exportParams = givenParams <> assumedParams
         , exportReturnType = extractReturnType tySig
         , exportDecide = decide
         }
@@ -140,17 +149,23 @@ getDefaultFunction =
  where
   isDefaultExport ExportedFunction{exportIsDefault = flag} = flag
 
-buildExportedFunction :: TypeDescMap -> Decide Resolved -> Maybe ExportedFunction
-buildExportedFunction typeDescMap decide@(MkDecide _ tySig appForm _) = do
+buildExportedFunction
+  :: TypeDescMap
+  -> Map.Map Unique (Assume Resolved)
+  -> Decide Resolved
+  -> Maybe ExportedFunction
+buildExportedFunction typeDescMap assumes decide@(MkDecide _ tySig appForm _) = do
   desc <- getAnno decide ^. annDesc
   let parsed = parseDescText (getDesc desc)
   guard (parsed.flags.isExport)
+  let givenParams = extractParams typeDescMap tySig
+      assumedParams = extractAssumedDependencies typeDescMap assumes decide
   pure
     ExportedFunction
       { exportName = resolvedToText (extractAppFormName appForm)
       , exportDescription = parsed.description
       , exportIsDefault = parsed.flags.isDefault
-      , exportParams = extractParams typeDescMap tySig
+      , exportParams = givenParams <> assumedParams
       , exportReturnType = extractReturnType tySig
       , exportDecide = decide
       }
@@ -199,3 +214,153 @@ getTypeDesc :: TypeDescMap -> Type' Resolved -> Maybe Text
 getTypeDesc typeDescMap = \ case
   TyApp _ name _ -> Map.lookup (getUnique name) typeDescMap
   _ -> Nothing
+
+-- | Collect all non-function ASSUME declarations from a module.
+-- Function-typed ASSUMEs are filtered out per design decision.
+-- This includes types that expand to functions via type synonyms.
+assumesFromModule :: Module Resolved -> Map.Map Unique (Assume Resolved)
+assumesFromModule mod'@(MkModule _ _ section) =
+  Map.fromList (collectSection section)
+ where
+  synonyms = collectTypeSynonyms mod'
+
+  collectSection (MkSection _ _ _ decls) =
+    decls >>= collectDecl
+
+  collectDecl = \case
+    Assume _ assume@(MkAssume _ _ (MkAppForm _ name _ _) mType) ->
+      case mType of
+        Just ty | isFunctionTypeExpanded synonyms ty -> []  -- Skip function-typed ASSUMEs
+        _ -> [(getUnique name, assume)]
+    Section _ sub -> collectSection sub
+    _ -> []
+
+-- | Collect all type synonym declarations from a module.
+-- Returns a map from type name Unique to the underlying type.
+collectTypeSynonyms :: Module Resolved -> Map.Map Unique (Type' Resolved)
+collectTypeSynonyms (MkModule _ _ section) =
+  Map.fromList (goSection section)
+ where
+  goSection (MkSection _ _ _ decls) =
+    decls >>= goDecl
+
+  goDecl = \case
+    Declare _ (MkDeclare _ _ (MkAppForm _ name _ _) (SynonymDecl _ ty)) ->
+      [(getUnique name, ty)]
+    Section _ sub -> goSection sub
+    _ -> []
+
+-- | Check if a type is a function type, expanding type synonyms.
+-- This handles types like `DECLARE Pred IS A FUNCTION FROM NUMBER TO BOOLEAN`
+-- followed by `ASSUME p IS A Pred`.
+isFunctionTypeExpanded :: Map.Map Unique (Type' Resolved) -> Type' Resolved -> Bool
+isFunctionTypeExpanded synonyms = go Set.empty
+ where
+  go visited ty = case ty of
+    Fun {} -> True
+    Forall _ _ inner -> go visited inner
+    TyApp _ name [] ->
+      let u = getUnique name
+      in if Set.member u visited
+            then False  -- Prevent infinite recursion on cyclic synonyms
+            else case Map.lookup u synonyms of
+              Just expanded -> go (Set.insert u visited) expanded
+              Nothing -> False
+    _ -> False
+
+-- | Collect all free variable references (by Unique) from an expression.
+-- Uses cosmosOf gplate for recursive traversal of the expression AST.
+collectFreeRefs :: Expr Resolved -> Set.Set Unique
+collectFreeRefs =
+  foldMapOf (cosmosOf (gplate @(Expr Resolved))) $ \case
+    App _ (Ref _ uniq _) [] -> Set.singleton uniq
+    _ -> Set.empty
+
+-- | Extract ASSUME declarations that are referenced by a DECIDE body.
+-- Returns ExportedParams for each ASSUME that the function depends on.
+extractAssumedDependencies
+  :: TypeDescMap
+  -> Map.Map Unique (Assume Resolved)
+  -> Decide Resolved
+  -> [ExportedParam]
+extractAssumedDependencies typeDescMap assumes (MkDecide _ _ _ body) =
+  let
+    referencedUniques = collectFreeRefs body
+    matchingAssumes =
+      [ assume
+      | (uniq, assume) <- Map.toList assumes
+      , Set.member uniq referencedUniques
+      ]
+  in
+    map (assumeToParam typeDescMap) matchingAssumes
+
+-- | Convert an ASSUME declaration to an ExportedParam
+assumeToParam :: TypeDescMap -> Assume Resolved -> ExportedParam
+assumeToParam typeDescMap (MkAssume ann _ (MkAppForm _ name _ _) mType) =
+  let
+    paramDesc = fmap getDesc (ann ^. annDesc)
+    fallbackDesc = mType >>= getTypeDesc typeDescMap
+  in
+    ExportedParam
+      { paramName = resolvedToText name
+      , paramType = mType
+      , paramDescription = paramDesc <|> fallbackDesc
+      , paramRequired = True
+      }
+
+-- | Extract (name, type) pairs for ASSUME declarations referenced by a DECIDE body.
+-- Used by CodeGen to generate LET bindings for ASSUME values.
+extractAssumeParamTypes
+  :: Module Resolved
+  -> Decide Resolved
+  -> [(Text, Type' Resolved)]
+extractAssumeParamTypes mod' (MkDecide _ _ _ body) =
+  let
+    assumes = assumesFromModule mod'
+    referencedUniques = collectFreeRefs body
+    matchingAssumes =
+      [ assume
+      | (uniq, assume) <- Map.toList assumes
+      , Set.member uniq referencedUniques
+      ]
+  in
+    mapMaybe assumeToTypeInfo matchingAssumes
+ where
+  assumeToTypeInfo :: Assume Resolved -> Maybe (Text, Type' Resolved)
+  assumeToTypeInfo (MkAssume _ _ (MkAppForm _ name _ _) (Just ty)) =
+    Just (resolvedToText name, ty)
+  assumeToTypeInfo _ = Nothing
+
+-- | Check if a type contains any unresolved inference variables.
+-- Types with inference variables cannot be used for implicit ASSUMEs
+-- because their concrete type is not yet known.
+hasTypeInferenceVars :: Type' Resolved -> Bool
+hasTypeInferenceVars = \case
+  Type   _ -> False
+  TyApp  _ _n ns -> any hasTypeInferenceVars ns
+  Fun    _ opts ty -> any hasNamedTypeInferenceVars opts || hasTypeInferenceVars ty
+  Forall _ _ ty -> hasTypeInferenceVars ty
+  InfVar {} -> True
+ where
+  hasNamedTypeInferenceVars :: OptionallyNamedType Resolved -> Bool
+  hasNamedTypeInferenceVars (MkOptionallyNamedType _ _ ty) = hasTypeInferenceVars ty
+
+-- | Extract implicit ASSUME parameters from type check errors.
+-- When a variable is used without declaration, the type checker records an
+-- OutOfScopeError with the inferred type. If the type is fully resolved
+-- (no inference variables), we can treat this as an implicit ASSUME.
+--
+-- This enables programs to omit explicit ASSUME declarations when the type
+-- can be inferred from usage context.
+--
+-- Example: `temperature + 0` forces `temperature :: NUMBER`
+-- The OutOfScopeError for `temperature` will have type NUMBER, which we
+-- can extract as an implicit ASSUME.
+extractImplicitAssumeParams
+  :: [CheckErrorWithContext]
+  -> [(Text, Type' Resolved)]
+extractImplicitAssumeParams errors =
+  [ (nameToText name, ty)
+  | MkCheckErrorWithContext{kind = OutOfScopeError name ty} <- errors
+  , not (hasTypeInferenceVars ty)
+  ]
