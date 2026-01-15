@@ -39,6 +39,8 @@
   let client: DecisionServiceClient | null = $state(null)
   let functionDescription = $state('')
   let ladder: Ladder = $state(null)
+  // Map from atom unique ID to binding keys (for ladder diagram)
+  let atomToKeys: Map<number, string[]> = $state(new Map())
 
   // Track the current config to detect changes (non-reactive)
   let currentUrl = ''
@@ -123,6 +125,22 @@
 
       // Store the ladder for later use
       ladder = plan.ladder
+
+      // Build mapping from atom unique IDs to binding keys
+      // This allows the ladder diagram to look up bindings correctly
+      const newAtomToKeys = new Map<number, string[]>()
+      for (const ask of plan.asks) {
+        if (ask.key) {
+          for (const atom of ask.atoms) {
+            const existing = newAtomToKeys.get(atom.unique) ?? []
+            if (!existing.includes(ask.key)) {
+              existing.push(ask.key)
+            }
+            newAtomToKeys.set(atom.unique, existing)
+          }
+        }
+      }
+      atomToKeys = newAtomToKeys
 
       // Build set of parameters that are still needed based on asks
       // The asks array tells us which parameters we need to query
@@ -349,7 +367,12 @@
 
     <!-- Ladder Diagram -->
     <section class="mb-8">
-      <LadderDiagram {ladder} {bindings} onNodeClick={handleLadderNodeClick} />
+      <LadderDiagram
+        {ladder}
+        {bindings}
+        {atomToKeys}
+        onNodeClick={handleLadderNodeClick}
+      />
     </section>
 
     <!-- Parameter Grid -->
