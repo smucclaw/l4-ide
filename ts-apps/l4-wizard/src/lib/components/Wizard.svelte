@@ -64,6 +64,13 @@
       isLoading = true
       error = null
 
+      // Clear state when switching functions to avoid stale data
+      // (atom unique IDs are allocated per-module and can collide between functions)
+      atomToKeys = new Map()
+      bindings = {}
+      result = null
+      isDetermined = false
+
       client = createClient(url)
 
       // Fetch function metadata
