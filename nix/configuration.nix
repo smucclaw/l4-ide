@@ -39,6 +39,10 @@
     defaults.email = config.jl4-demo.acme-email;
   };
 
+  # Fix deployment timeout: nginx-config-reload must wait for nginx to finish
+  # starting/restarting before attempting a reload
+  systemd.services.nginx-config-reload.after = [ "nginx.service" ];
+
   security.sudo.wheelNeedsPassword = false;
 
   # ---------------------------------------------
