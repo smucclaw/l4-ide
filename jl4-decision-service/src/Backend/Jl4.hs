@@ -33,6 +33,7 @@ import System.FilePath ((<.>), takeFileName)
 import Backend.Api
 import Backend.CodeGen (generateEvalWrapper, GeneratedCode(..))
 import Backend.DirectiveFilter (filterIdeDirectives)
+import L4.Export (extractAssumeParamTypes)
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Aeson
 import qualified Data.Scientific as Scientific
@@ -274,13 +275,14 @@ evaluateWithWrapper
   -> ExceptT EvaluatorError IO ResponseWithReason
 evaluateWithWrapper filepath fnDecl compiled params traceLevel includeGraphViz = do
   -- Extract parameter types from the compiled function definition
-  let paramTypes = extractParamTypes compiled.compiledDecide
+  let givenParamTypes = extractParamTypes compiled.compiledDecide
+      assumeParamTypes = extractAssumeParamTypes compiled.compiledModule compiled.compiledDecide
 
   -- Convert input parameters to JSON
   inputJson <- paramsToJson params
 
   -- Generate wrapper code using existing code generation
-  genCode <- case generateEvalWrapper fnDecl.name paramTypes inputJson traceLevel of
+  genCode <- case generateEvalWrapper fnDecl.name givenParamTypes assumeParamTypes inputJson traceLevel of
     Left err -> throwError $ InterpreterError err
     Right gc -> pure gc
 
@@ -421,7 +423,8 @@ createFunction filepath fnDecl fnImpl moduleContext = do
 
                 -- 2. Get function definition and extract parameter types
                 funDecide <- getFunctionDefinition funRawName tcRes.module'
-                let paramTypes = extractParamTypes funDecide
+                let givenParamTypes = extractParamTypes funDecide
+                    assumeParamTypes = extractAssumeParamTypes tcRes.module' funDecide
 
                 -- 3. Filter IDE directives from the module
                 let filteredModule = filterIdeDirectives tcRes.module'
@@ -431,7 +434,7 @@ createFunction filepath fnDecl fnImpl moduleContext = do
                 inputJson <- paramsToJson params'
 
                 -- 5. Generate wrapper code
-                genCode <- case generateEvalWrapper fnDecl.name paramTypes inputJson traceLevel of
+                genCode <- case generateEvalWrapper fnDecl.name givenParamTypes assumeParamTypes inputJson traceLevel of
                   Left err -> throwError $ InterpreterError err
                   Right gc -> pure gc
 

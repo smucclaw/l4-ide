@@ -1,6 +1,37 @@
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "properties": {},
+    "properties": {
+        "the person engages in business for profit": {
+            "$ref": "#/$defs/BOOLEAN"
+        },
+        "the person has an alcohol banning order": {
+            "$ref": "#/$defs/BOOLEAN"
+        },
+        "the person has an unspent conviction for fraud": {
+            "$ref": "#/$defs/BOOLEAN"
+        },
+        "the person has an unspent conviction for providing misleading information in relation to an application for a licence under an enactment": {
+            "$ref": "#/$defs/BOOLEAN"
+        },
+        "the person is a body corporate": {
+            "$ref": "#/$defs/BOOLEAN"
+        },
+        "the person is a hotel": {
+            "$ref": "#/$defs/BOOLEAN"
+        },
+        "the person is a public house": {
+            "$ref": "#/$defs/BOOLEAN"
+        }
+    },
+    "required": [
+        "the person is a body corporate",
+        "the person engages in business for profit",
+        "the person is a public house",
+        "the person is a hotel",
+        "the person has an unspent conviction for fraud",
+        "the person has an unspent conviction for providing misleading information in relation to an application for a licence under an enactment",
+        "the person has an alcohol banning order"
+    ],
     "title": "the person must not sell alcohol",
     "type": "object"
 }

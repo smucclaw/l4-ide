@@ -7,6 +7,7 @@ module Backend.FunctionSchema (
   declaresFromModule,
   typeToParameter,
   parametersFromDecide,
+  parametersFromDecideWithErrors,
 ) where
 
 import Base
@@ -17,7 +18,9 @@ import qualified Data.Maybe as Maybe
 import qualified Data.Set as Set
 import qualified Data.Text as Text
 
+import L4.Export (extractAssumeParamTypes, extractImplicitAssumeParams)
 import L4.Syntax
+import L4.TypeCheck.Types (CheckErrorWithContext)
 import qualified Optics
 
 data Parameters = MkParameters
@@ -196,7 +199,20 @@ typeToParameter declares visited ty =
     addDesc (Just d) p = p {parameterDescription = d}
 
 parametersFromDecide :: Module Resolved -> Decide Resolved -> Parameters
-parametersFromDecide resolvedModule (MkDecide _ (MkTypeSig _ (MkGivenSig _ names) _) _ _) =
+parametersFromDecide resolvedModule decide =
+  parametersFromDecideWithErrors resolvedModule decide []
+
+-- | Extract parameters from a DECIDE, including implicit ASSUMEs from type errors.
+-- When a variable is used without an explicit ASSUME declaration, but its type
+-- can be inferred (e.g., from usage like `temperature + 0`), the type checker
+-- records an OutOfScopeError with the inferred type. If that type is fully
+-- resolved (no inference variables), we treat it as an implicit ASSUME.
+parametersFromDecideWithErrors
+  :: Module Resolved
+  -> Decide Resolved
+  -> [CheckErrorWithContext]
+  -> Parameters
+parametersFromDecideWithErrors resolvedModule decide@(MkDecide _ (MkTypeSig _ (MkGivenSig _ names) _) _ _) errors =
   let
     declares = declaresFromModule resolvedModule
     mkOne (MkOptionallyTypedName ann resolved mType) =
@@ -206,10 +222,27 @@ parametersFromDecide resolvedModule (MkDecide _ (MkTypeSig _ (MkGivenSig _ names
         desc = Maybe.fromMaybe "" (fmap getDesc (ann Optics.^. annDesc))
        in
         (resolvedNameText resolved, base {parameterDescription = desc, parameterAlias = Nothing})
+
+    -- Extract explicit ASSUME params that this function references
+    assumeParams = extractAssumeParamTypes resolvedModule decide
+
+    -- Extract implicit ASSUME params from OutOfScopeError with resolved types
+    implicitParams = extractImplicitAssumeParams errors
+
+    mkAssumeParam (name, ty) =
+      let base = typeToParameter declares Set.empty ty
+      in (name, base {parameterDescription = "", parameterAlias = Nothing})
+
+    givenParamList = map mkOne names
+    assumeParamList = map mkAssumeParam assumeParams
+    implicitParamList = map mkAssumeParam implicitParams
+
+    -- Combine all params, avoiding duplicates (explicit ASSUMEs take precedence)
+    allAssumeParams = assumeParamList <> filter (\(n, _) -> n `notElem` map fst assumeParamList) implicitParamList
    in
     MkParameters
-      { parameterMap = Map.fromList (map mkOne names)
-      , required = map (resolvedNameText . (\(MkOptionallyTypedName _ r _) -> r)) names
+      { parameterMap = Map.fromList (givenParamList <> allAssumeParams)
+      , required = map fst givenParamList <> map fst allAssumeParams
       }
  where
   emptyParam :: Text -> Parameter
