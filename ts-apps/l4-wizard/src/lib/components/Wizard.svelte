@@ -130,11 +130,13 @@
       // This allows the ladder diagram to look up bindings correctly
       const newAtomToKeys = new Map<number, string[]>()
       for (const ask of plan.asks) {
-        if (ask.key) {
+        // Use key if available, otherwise fall back to container (stripped of backticks)
+        const bindingKey = ask.key ?? stripBackticks(ask.container)
+        if (bindingKey) {
           for (const atom of ask.atoms) {
             const existing = newAtomToKeys.get(atom.unique) ?? []
-            if (!existing.includes(ask.key)) {
-              existing.push(ask.key)
+            if (!existing.includes(bindingKey)) {
+              existing.push(bindingKey)
             }
             newAtomToKeys.set(atom.unique, existing)
           }
