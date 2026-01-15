@@ -16,6 +16,9 @@ module L4.Parser (
   PState (..),
   MixfixHintRegistry,
   buildMixfixHintRegistry,
+  emptyMixfixHintRegistry,
+  hasMixfixHints,
+  showKeywords,
 
   -- * Debug combinators
   expr,

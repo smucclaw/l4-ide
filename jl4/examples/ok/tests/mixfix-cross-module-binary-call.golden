@@ -1,0 +1,7 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+mixfix-cross-module-binary-call.l4:10:1-18:
+  TRUE
+mixfix-cross-module-binary-call.l4:11:8-19:
+  BOOLEAN

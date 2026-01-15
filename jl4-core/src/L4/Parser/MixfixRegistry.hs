@@ -5,6 +5,7 @@ module L4.Parser.MixfixRegistry
   , buildMixfixHintRegistry
   , hasMixfixHints
   , isKnownMixfixKeyword
+  , showKeywords
   ) where
 
 import Base
@@ -17,7 +18,8 @@ data MixfixHintRegistry = MkMixfixHintRegistry
   { byFirstKeyword :: Map RawName [MixfixInfo]
   , keywordUniverse :: Set RawName
   }
-  deriving stock (Show, Eq)
+  deriving stock (Show, Eq, Generic)
+  deriving anyclass (NFData)
 
 instance Semigroup MixfixHintRegistry where
   MkMixfixHintRegistry m1 s1 <> MkMixfixHintRegistry m2 s2 =
@@ -47,6 +49,9 @@ hasMixfixHints hints = not (Set.null hints.keywordUniverse)
 isKnownMixfixKeyword :: RawName -> MixfixHintRegistry -> Bool
 isKnownMixfixKeyword kw hints =
   kw `Set.member` hints.keywordUniverse
+
+showKeywords :: MixfixHintRegistry -> [Text]
+showKeywords hints = map rawNameToText $ Set.toList hints.keywordUniverse
 
 buildMixfixHintRegistry :: Module Name -> MixfixHintRegistry
 buildMixfixHintRegistry =

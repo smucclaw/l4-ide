@@ -1,0 +1,12 @@
+-- Cross-module postfix mixfix test
+-- Tests that postfix mixfix operators work when imported
+
+IMPORT prelude
+IMPORT `mixfix-cross-module-postfix-def`
+
+-- Test postfix mixfix from imported module
+DECIDE cross_module_postfix_true IS `is even`
+DECIDE cross_module_postfix_false IS `is even`
+
+#CHECK cross_module_postfix_true
+#CHECK cross_module_postfix_false

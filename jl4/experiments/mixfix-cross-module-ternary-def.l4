@@ -1,0 +1,19 @@
+-- Module defining ternary mixfix for cross-module testing
+-- This file defines a ternary mixfix operator that can be imported and used
+-- by other modules (see BUG-mixfix-cross-module-ternary.l4)
+
+IMPORT prelude
+
+-- Ternary mixfix: a `added to` b `should equal` c
+-- Works both in same module and when imported
+GIVEN a IS A NUMBER
+      b IS A NUMBER
+      c IS A NUMBER
+GIVETH BOOLEAN
+a `added to` b `should equal` c MEANS (a + b) EQUALS c
+
+-- Same-module test (works)
+DECIDE same_module_test IS 1 `added to` 2 `should equal` 3
+
+#EVAL same_module_test
+#CHECK same_module_test

@@ -1,0 +1,21 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "a": {
+            "$ref": "#/$defs/NUMBER"
+        },
+        "b": {
+            "$ref": "#/$defs/NUMBER"
+        },
+        "c": {
+            "$ref": "#/$defs/NUMBER"
+        }
+    },
+    "required": [
+        "a",
+        "b",
+        "c"
+    ],
+    "title": "added to",
+    "type": "object"
+}
