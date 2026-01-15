@@ -39,6 +39,8 @@
   let client: DecisionServiceClient | null = $state(null)
   let functionDescription = $state('')
   let ladder: Ladder = $state(null)
+  // Map from atom unique ID to binding keys (for ladder diagram)
+  let atomToKeys: Map<number, string[]> = $state(new Map())
 
   // Track the current config to detect changes (non-reactive)
   let currentUrl = ''
@@ -123,6 +125,24 @@
 
       // Store the ladder for later use
       ladder = plan.ladder
+
+      // Build mapping from atom unique IDs to binding keys
+      // This allows the ladder diagram to look up bindings correctly
+      const newAtomToKeys = new Map<number, string[]>()
+      for (const ask of plan.asks) {
+        // Use key if available, otherwise fall back to container (stripped of backticks)
+        const bindingKey = ask.key ?? stripBackticks(ask.container)
+        if (bindingKey) {
+          for (const atom of ask.atoms) {
+            const existing = newAtomToKeys.get(atom.unique) ?? []
+            if (!existing.includes(bindingKey)) {
+              existing.push(bindingKey)
+            }
+            newAtomToKeys.set(atom.unique, existing)
+          }
+        }
+      }
+      atomToKeys = newAtomToKeys
 
       // Build set of parameters that are still needed based on asks
       // The asks array tells us which parameters we need to query
@@ -270,7 +290,14 @@
     }
   }
 
-  function handleLadderNodeClick(key: string, currentValue: unknown) {
+  async function handleLadderNodeClick(unique: number, currentValue: unknown) {
+    // Look up binding keys for this atom's unique ID
+    const keys = atomToKeys.get(unique)
+    if (!keys || keys.length === 0) {
+      console.warn(`No binding keys found for atom unique ${unique}`)
+      return
+    }
+
     // Cycle through: undefined → true → false → undefined
     let nextValue: unknown
     if (currentValue === undefined) {
@@ -280,7 +307,40 @@
     } else {
       nextValue = undefined
     }
-    handleParameterChange(key, nextValue)
+
+    // Batch update all associated binding keys
+    const newBindings = { ...bindings }
+    for (const key of keys) {
+      if (nextValue === undefined) {
+        delete newBindings[key]
+      } else {
+        newBindings[key] = nextValue
+      }
+
+      // Update parameter value in state
+      parameters = parameters.map((p) =>
+        p.key === key ? { ...p, value: nextValue } : p
+      )
+    }
+    bindings = newBindings
+
+    // Refresh query plan and evaluation once (not per key)
+    await updateQueryPlan(functionName, bindings)
+
+    // If we have bindings, try to evaluate
+    if (Object.keys(bindings).length > 0 && client) {
+      try {
+        const evalResult = await evaluateFunction(
+          client,
+          functionName,
+          bindings
+        )
+        result = evalResult.result
+        isDetermined = true
+      } catch (e) {
+        console.warn('Evaluation failed:', e instanceof Error ? e.message : e)
+      }
+    }
   }
 
   function handleReset() {
@@ -349,7 +409,12 @@
 
     <!-- Ladder Diagram -->
     <section class="mb-8">
-      <LadderDiagram {ladder} {bindings} onNodeClick={handleLadderNodeClick} />
+      <LadderDiagram
+        {ladder}
+        {bindings}
+        {atomToKeys}
+        onNodeClick={handleLadderNodeClick}
+      />
     </section>
 
     <!-- Parameter Grid -->
