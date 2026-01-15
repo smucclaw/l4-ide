@@ -335,20 +335,28 @@ for (const ask of queryPlan.asks) {
 ### Multi-Key Atoms (AND Semantics)
 
 An atom may depend on multiple inputs. For example, `"damage to contents AND caused by birds"` depends on:
+
 - `"Loss or Damage.to Contents"`
 - `"Loss or Damage.caused by birds"`
 
 When evaluating such atoms for display:
+
 - **False** if ANY binding key is false (short-circuit)
 - **True** if ALL binding keys are true
 - **Unknown** otherwise
 
 ```typescript
-function getAtomValue(unique: number, atomToKeys: Map<number, string[]>, bindings: Record<string, unknown>): boolean | undefined {
+function getAtomValue(
+  unique: number,
+  atomToKeys: Map<number, string[]>,
+  bindings: Record<string, unknown>,
+): boolean | undefined {
   const keys = atomToKeys.get(unique);
   if (!keys?.length) return undefined;
 
-  let hasTrue = false, hasFalse = false, hasUndefined = false;
+  let hasTrue = false,
+    hasFalse = false,
+    hasUndefined = false;
 
   for (const key of keys) {
     const value = bindings[key];
@@ -357,9 +365,9 @@ function getAtomValue(unique: number, atomToKeys: Map<number, string[]>, binding
     else hasUndefined = true;
   }
 
-  if (hasFalse) return false;      // Short-circuit: any false → false
-  if (hasTrue && !hasUndefined) return true;  // All true → true
-  return undefined;                 // Otherwise unknown
+  if (hasFalse) return false; // Short-circuit: any false → false
+  if (hasTrue && !hasUndefined) return true; // All true → true
+  return undefined; // Otherwise unknown
 }
 ```
 
@@ -376,7 +384,7 @@ function handleLadderNodeClick(unique: number, currentValue: unknown) {
   const keys = atomToKeys.get(unique);
   if (!keys?.length) return;
 
-  const nextValue = cycleValue(currentValue);  // undefined → true → false → undefined
+  const nextValue = cycleValue(currentValue); // undefined → true → false → undefined
 
   for (const key of keys) {
     bindings[key] = nextValue;
