@@ -297,6 +297,105 @@ Each parameter is rendered as a card with visual states. **All state transitions
 - `Escape`: Deactivate current parameter
 - `?`: Show help overlay
 
+## Data Flow Contract: Ladder Nodes ↔ Bindings
+
+### The Naming Problem
+
+L4 atoms can have **multiple names** that appear in different contexts:
+
+1. **Ladder node label** (`LadderNode.name.label`): The internal L4 identifier, e.g., `"damage to contents and caused by birds"`
+2. **Binding key** (`QueryAsk.key`): The schema property path, e.g., `"Loss or Damage.caused by birds"`
+3. **Container** (`QueryAsk.container`): The top-level parameter name (may have backticks), e.g., `` `Loss or Damage` ``
+4. **Unique ID** (`LadderNode.name.unique`): A stable numeric identifier for the atom
+
+These names can differ significantly. The wizard must map between them correctly.
+
+### Canonical Mapping: Unique ID → Binding Keys
+
+The **unique ID** is the canonical identifier that links ladder nodes to their corresponding asks:
+
+```typescript
+// Build mapping from atom unique IDs to binding keys
+const atomToKeys = new Map<number, string[]>();
+
+for (const ask of queryPlan.asks) {
+  // Use key if available, fall back to container (stripped of backticks)
+  const bindingKey = ask.key ?? stripBackticks(ask.container);
+
+  for (const atom of ask.atoms) {
+    const existing = atomToKeys.get(atom.unique) ?? [];
+    if (!existing.includes(bindingKey)) {
+      existing.push(bindingKey);
+    }
+    atomToKeys.set(atom.unique, existing);
+  }
+}
+```
+
+### Multi-Key Atoms (AND Semantics)
+
+An atom may depend on multiple inputs. For example, `"damage to contents AND caused by birds"` depends on:
+- `"Loss or Damage.to Contents"`
+- `"Loss or Damage.caused by birds"`
+
+When evaluating such atoms for display:
+- **False** if ANY binding key is false (short-circuit)
+- **True** if ALL binding keys are true
+- **Unknown** otherwise
+
+```typescript
+function getAtomValue(unique: number, atomToKeys: Map<number, string[]>, bindings: Record<string, unknown>): boolean | undefined {
+  const keys = atomToKeys.get(unique);
+  if (!keys?.length) return undefined;
+
+  let hasTrue = false, hasFalse = false, hasUndefined = false;
+
+  for (const key of keys) {
+    const value = bindings[key];
+    if (value === true) hasTrue = true;
+    else if (value === false) hasFalse = true;
+    else hasUndefined = true;
+  }
+
+  if (hasFalse) return false;      // Short-circuit: any false → false
+  if (hasTrue && !hasUndefined) return true;  // All true → true
+  return undefined;                 // Otherwise unknown
+}
+```
+
+### Ladder Click Handling
+
+When a user clicks a ladder node, the click handler must:
+
+1. Look up the node's binding keys via `atomToKeys.get(node.unique)`
+2. Set/cycle the value for ALL associated binding keys (not the label)
+3. Trigger query-plan refresh
+
+```typescript
+function handleLadderNodeClick(unique: number, currentValue: unknown) {
+  const keys = atomToKeys.get(unique);
+  if (!keys?.length) return;
+
+  const nextValue = cycleValue(currentValue);  // undefined → true → false → undefined
+
+  for (const key of keys) {
+    bindings[key] = nextValue;
+  }
+
+  await updateQueryPlan();
+}
+```
+
+### Key Fallback Logic
+
+When `QueryAsk.key` is `null` (happens for simple top-level atoms), fall back to the container:
+
+```typescript
+const bindingKey = ask.key ?? stripBackticks(ask.container);
+```
+
+This ensures atoms like `compute_qualifies` (which have `key: null`) still map correctly.
+
 ## API Integration
 
 ### Initialization

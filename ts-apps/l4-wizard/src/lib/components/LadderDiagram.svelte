@@ -5,7 +5,7 @@
     ladder: Ladder | null
     bindings?: Record<string, unknown>
     atomToKeys?: Map<number, string[]>
-    onNodeClick?: (key: string, currentValue: unknown) => void
+    onNodeClick?: (unique: number, currentValue: unknown) => void
   }
 
   let {
@@ -150,11 +150,12 @@
   function handleNodeClick(node: TreeNode) {
     if (
       (node.type === 'Var' || node.type === 'App') &&
-      node.paramKey &&
+      node.unique !== undefined &&
       onNodeClick
     ) {
-      const currentValue = bindings[node.paramKey]
-      onNodeClick(node.paramKey, currentValue)
+      // Use unique ID to get the combined value for this atom
+      const currentValue = getAtomValue(node.unique)
+      onNodeClick(node.unique, currentValue)
     }
   }
 

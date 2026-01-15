@@ -290,7 +290,14 @@
     }
   }
 
-  function handleLadderNodeClick(key: string, currentValue: unknown) {
+  async function handleLadderNodeClick(unique: number, currentValue: unknown) {
+    // Look up binding keys for this atom's unique ID
+    const keys = atomToKeys.get(unique)
+    if (!keys || keys.length === 0) {
+      console.warn(`No binding keys found for atom unique ${unique}`)
+      return
+    }
+
     // Cycle through: undefined → true → false → undefined
     let nextValue: unknown
     if (currentValue === undefined) {
@@ -300,7 +307,40 @@
     } else {
       nextValue = undefined
     }
-    handleParameterChange(key, nextValue)
+
+    // Batch update all associated binding keys
+    const newBindings = { ...bindings }
+    for (const key of keys) {
+      if (nextValue === undefined) {
+        delete newBindings[key]
+      } else {
+        newBindings[key] = nextValue
+      }
+
+      // Update parameter value in state
+      parameters = parameters.map((p) =>
+        p.key === key ? { ...p, value: nextValue } : p
+      )
+    }
+    bindings = newBindings
+
+    // Refresh query plan and evaluation once (not per key)
+    await updateQueryPlan(functionName, bindings)
+
+    // If we have bindings, try to evaluate
+    if (Object.keys(bindings).length > 0 && client) {
+      try {
+        const evalResult = await evaluateFunction(
+          client,
+          functionName,
+          bindings
+        )
+        result = evalResult.result
+        isDetermined = true
+      } catch (e) {
+        console.warn('Evaluation failed:', e instanceof Error ? e.message : e)
+      }
+    }
   }
 
   function handleReset() {
