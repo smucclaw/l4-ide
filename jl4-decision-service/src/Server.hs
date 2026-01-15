@@ -104,7 +104,7 @@ import qualified L4.CRUD as CRUD
 import Servant.Client.Generic (genericClient)
 import Network.HTTP.Client (Manager)
 import qualified Base.Text as T
-import L4.Export (ExportedFunction (..), ExportedParam (..), DescFlags (..), ParsedDesc (..), getExportedFunctions, parseDescText)
+import L4.Export (ExportedFunction (..), ExportedParam (..), DescFlags (..), ParsedDesc (..), getExportedFunctions, parseDescText, extractImplicitAssumeParams)
 import L4.Annotation (getAnno)
 import L4.Syntax
 import L4.Print (prettyLayout)
@@ -814,18 +814,33 @@ deriveFunctionFromSource existing source = do
       unless (null errs) $
         liftIO $ putStrLn $ "Failed to derive metadata from annotations: " <> Text.unpack (Text.intercalate "; " errs)
       pure Nothing
-    Just Rules.TypeCheckResult{module' = resolvedModule} -> do
+    Just Rules.TypeCheckResult{module' = resolvedModule, errors = tcErrors} -> do
       let exports = getExportedFunctions resolvedModule
       case selectExport existing exports of
         Nothing -> pure Nothing
         Just exported -> do
           let derived = exportToFunction resolvedModule exported
+              -- Extract implicit ASSUMEs from OutOfScopeError with resolved types
+              -- These are undeclared variables whose types can be inferred from usage
+              implicitParams = extractImplicitAssumeParams tcErrors
+              declares = declaresFromModule resolvedModule
+              -- Convert implicit params to Parameter objects
+              implicitParamMap = Map.fromList
+                [ (name, (typeToParameter declares Set.empty ty) {parameterDescription = "", parameterAlias = Nothing})
+                | (name, ty) <- implicitParams
+                , name `Map.notMember` derived.parameters.parameterMap  -- Don't override explicit params
+                ]
+              -- Merge implicit params into derived parameters
+              mergedParams = derived.parameters
+                { parameterMap = derived.parameters.parameterMap <> implicitParamMap
+                , required = derived.parameters.required <> Map.keys implicitParamMap
+                }
           pure $ Just Function
             { name = chooseField existing.name derived.name
             , description = chooseField existing.description derived.description
             , parameters =
                 if Map.null existing.parameters.parameterMap
-                  then derived.parameters
+                  then mergedParams
                   else existing.parameters
             , supportedEvalBackend = existing.supportedEvalBackend
             }
