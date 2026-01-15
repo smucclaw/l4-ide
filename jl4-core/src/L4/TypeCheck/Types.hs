@@ -348,15 +348,17 @@ runCheck' e s (MkCheck f) = f e s
 
 data CheckResult =
   MkCheckResult
-    { program      :: !(Module  Resolved)
-    , errors       :: ![CheckErrorWithContext]
-    , substitution :: !Substitution
-    , environment  :: !Environment
-    , entityInfo   :: !EntityInfo
-    , infoMap      :: !InfoMap
-    , nlgMap       :: !NlgMap
-    , scopeMap     :: !ScopeMap
-    , descMap      :: !DescMap
+    { program        :: !(Module  Resolved)
+    , errors         :: ![CheckErrorWithContext]
+    , substitution   :: !Substitution
+    , environment    :: !Environment
+    , entityInfo     :: !EntityInfo
+    , infoMap        :: !InfoMap
+    , nlgMap         :: !NlgMap
+    , scopeMap       :: !ScopeMap
+    , descMap        :: !DescMap
+    , mixfixRegistry :: !MixfixRegistry
+    -- ^ Registry of mixfix functions from this module (to be propagated to importers)
     }
 
 -- -------------------

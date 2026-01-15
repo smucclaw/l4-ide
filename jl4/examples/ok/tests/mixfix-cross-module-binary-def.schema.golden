@@ -1,0 +1,17 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "person": {
+            "$ref": "#/$defs/STRING"
+        },
+        "program": {
+            "$ref": "#/$defs/STRING"
+        }
+    },
+    "required": [
+        "person",
+        "program"
+    ],
+    "title": "is eligible for",
+    "type": "object"
+}

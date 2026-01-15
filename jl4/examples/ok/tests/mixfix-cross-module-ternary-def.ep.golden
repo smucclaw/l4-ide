@@ -1,0 +1,15 @@
+-- Module defining ternary mixfix for cross-module testing
+
+IMPORT prelude
+
+-- Ternary mixfix: a `added to` b `should equal` c
+GIVEN a IS A NUMBER
+      b IS A NUMBER
+      c IS A NUMBER
+GIVETH BOOLEAN
+a `added to` b `should equal` c MEANS (a + b) EQUALS c
+
+-- Same-module test
+DECIDE same_module_ternary IS `added to` `should equal` 1 2 `should equal` 3
+
+#CHECK same_module_ternary

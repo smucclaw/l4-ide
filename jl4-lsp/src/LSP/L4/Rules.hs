@@ -96,6 +96,11 @@ data GetImports = GetImports
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Hashable)
 
+type instance RuleResult GetMixfixRegistry = Parser.MixfixHintRegistry
+data GetMixfixRegistry = GetMixfixRegistry
+  deriving stock (Generic, Show, Eq)
+  deriving anyclass (NFData, Hashable)
+
 type instance RuleResult GetTypeCheckDependencies = [(ImportResult, TypeCheckResult)]
 data GetTypeCheckDependencies = GetTypeCheckDependencies
   deriving stock (Generic, Show, Eq)
@@ -127,6 +132,7 @@ data TypeCheckResult = TypeCheckResult
   , infos :: [TypeCheck.CheckErrorWithContext]
   , errors :: [TypeCheck.CheckErrorWithContext]  -- ^ Actual errors (OutOfScopeError etc.) for implicit ASSUME extraction
   , dependencies :: [TypeCheckResult]
+  , mixfixRegistry :: TypeCheck.MixfixRegistry
   }
   deriving stock (Generic)
 
@@ -145,6 +151,7 @@ instance NFData TypeCheckResult where
     `seq` rnf infos
     `seq` rnf errors
     `seq` rnf dependencies
+    `seq` rnf mixfixRegistry
 
 type instance RuleResult EvaluateLazy = [EvaluateLazy.EvalDirectiveResult]
 data EvaluateLazy = EvaluateLazy
@@ -273,23 +280,100 @@ jl4Rules evalConfig rootDirectory recorder = do
           Right ts ->
             pure ([], Just (ts, contents))
 
-  define shakeRecorder $ \GetParsedAst uri -> do
+  -- | GetMixfixRegistry collects mixfix hints from the current module AND all imports.
+  -- This enables cross-module mixfix resolution.
+  define shakeRecorder $ \GetMixfixRegistry uri -> do
     (tokens, contents) <- use_ GetLexTokens uri
     case Parser.execProgramParserForTokens uri contents tokens of
+      Left _errs ->
+        -- If we can't parse at all, return empty registry
+        pure ([], Just Parser.emptyMixfixHintRegistry)
+      Right (firstProg, _) -> do
+        -- Get local mixfix hints from this module
+        let localHints = Parser.buildMixfixHintRegistry firstProg
+
+        -- Extract imports from first-pass parse (import syntax doesn't need mixfix)
+        let extractImport :: TopDecl Name -> [Name]
+            extractImport = \case
+              Import _ (MkImport _ n _) -> [n]
+              _ -> []
+            importNames = foldTopDecls extractImport firstProg
+
+        -- Resolve import URIs using the same logic as GetImports
+        let resolveImportUri :: Name -> Action (Maybe NormalizedUri)
+            resolveImportUri n = do
+              let modName = takeBaseName $ Text.unpack $ rawNameToText $ rawName n
+
+              -- Generate candidate VFS URIs
+              let projectUri = toNormalizedUri $ Uri $ Text.pack $ "project:/" <> modName <.> "l4"
+                  relativeUri = do
+                    nfp <- uriToNormalizedFilePath uri
+                    let dir = takeDirectory $ fromNormalizedFilePath nfp
+                    pure $ toNormalizedUri $ filePathToUri $ dir </> modName <.> "l4"
+                  rootUri = toNormalizedUri $ filePathToUri $ rootDirectory </> modName <.> "l4"
+                  vfsUris = [projectUri] <> Maybe.maybeToList relativeUri <> [rootUri]
+
+              -- Check VFS first
+              let checkVfs candidateUri = do
+                    mContent <- use GetFileContents candidateUri
+                    pure $ case mContent of
+                      Just (_, Just _rope) -> Just candidateUri
+                      _ -> Nothing
+
+              vfsResult <- runMaybeT $ asum $ map (MaybeT . checkVfs) vfsUris
+
+              case vfsResult of
+                Just vfsUri -> pure $ Just vfsUri
+                Nothing -> do
+                  -- Fall back to filesystem
+                  let relPath = do
+                        dir <- takeDirectory . fromNormalizedFilePath <$> uriToNormalizedFilePath uri
+                        pure $ dir </> modName <.> "l4"
+                      rootPath = rootDirectory </> modName <.> "l4"
+
+                  builtinPaths <- liftIO $ do
+                    exePath <- getExecutablePath
+                    let exeDir = takeDirectory exePath
+                        extensionRoot = exeDir </> ".." </> ".."
+                        bundledPath = extensionRoot </> "libraries" </> modName <.> "l4"
+                    dataDir <- Paths_jl4_core.getDataDir
+                    let cabalPath = dataDir </> "libraries" </> modName <.> "l4"
+                    pure [bundledPath, cabalPath]
+
+                  let paths = catMaybes [Just rootPath, relPath] <> builtinPaths
+
+                  existingPath <- runMaybeT $ asum $
+                    flip map paths $ \pth -> do
+                      exists <- liftIO (doesFileExist pth)
+                      guard exists
+                      pure pth
+
+                  pure $ fmap (toNormalizedUri . filePathToUri) existingPath
+
+        -- Resolve all import URIs
+        resolvedUris <- catMaybes <$> traverse resolveImportUri importNames
+
+        -- Recursively get mixfix hints from imported modules
+        importedHints <- mconcat . catMaybes <$> uses GetMixfixRegistry resolvedUris
+
+        -- Combine local + imported hints
+        let combinedHints = localHints <> importedHints
+        pure ([], Just combinedHints)
+
+  define shakeRecorder $ \GetParsedAst uri -> do
+    (tokens, contents) <- use_ GetLexTokens uri
+    -- Get combined mixfix hints (local + all imports)
+    combinedHints <- use_ GetMixfixRegistry uri
+    -- Parse with full mixfix knowledge
+    case Parser.execProgramParserForTokensWithHints combinedHints uri contents tokens of
       Left errs -> do
         let diags = toList $ fmap mkParseErrorDiagnostic errs
         pure (fmap (mkSimpleFileDiagnostic uri) diags , Nothing)
-      Right (firstProg, _) -> do
-        let hints = Parser.buildMixfixHintRegistry firstProg
-        case Parser.execProgramParserForTokensWithHints hints uri contents tokens of
-          Left errs -> do
-            let diags = toList $ fmap mkParseErrorDiagnostic errs
-            pure (fmap (mkSimpleFileDiagnostic uri) diags , Nothing)
-          Right (finalProg, warns) -> do
-            let nlgDiags = fmap mkNlgWarning warns
-                lintDiags = fmap mkAndOrLintWarning $ Lint.checkAndOrDepth finalProg
-                allDiags = nlgDiags <> lintDiags
-            pure (fmap (mkSimpleFileDiagnostic uri) allDiags, Just finalProg)
+      Right (finalProg, warns) -> do
+        let nlgDiags = fmap mkNlgWarning warns
+            lintDiags = fmap mkAndOrLintWarning $ Lint.checkAndOrDepth finalProg
+            allDiags = nlgDiags <> lintDiags
+        pure (fmap (mkSimpleFileDiagnostic uri) allDiags, Just finalProg)
 
   define shakeRecorder $ \GetImports uri -> do
     let -- NOTE: we curently don't allow any relative or absolute file paths, just bare module names
@@ -464,7 +548,8 @@ jl4Rules evalConfig rootDirectory recorder = do
             , declTypeSigs = Map.empty
             , declareDeclarations = Map.empty
             , assumeDeclarations = Map.empty
-            , mixfixRegistry = Map.empty
+            , mixfixRegistry = Map.unionWith (<>) cEnv.mixfixRegistry tcRes.mixfixRegistry
+            -- ^ Merge mixfix registries from imported modules so cross-module mixfix calls work
             , sectionStack = []
             }
         -- NOTE: we don't want to leak the inference variables from the substitution
@@ -487,6 +572,7 @@ jl4Rules evalConfig rootDirectory recorder = do
         , scopeMap = result.scopeMap
         , descMap = result.descMap
         , dependencies = dependencies <> foldMap (.dependencies) dependencies
+        , mixfixRegistry = result.mixfixRegistry
         }
       )
 

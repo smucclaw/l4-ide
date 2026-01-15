@@ -1,0 +1,6 @@
+Parsing successful
+Typechecking successful
+mixfix-cross-module-postfix-call.l4:11:8-33:
+  BOOLEAN
+mixfix-cross-module-postfix-call.l4:12:8-34:
+  BOOLEAN

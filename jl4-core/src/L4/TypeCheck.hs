@@ -158,13 +158,16 @@ doCheckProgramWithDependencies checkState checkEnv program =
   case runCheckUnique (checkProgram program) checkEnv checkState of
     (w, s) ->
       let
-        (errs, (rprog, topEnv)) = runWith w
+        (errs, (rprog, topEnv, localMixfixRegistry)) = runWith w
       in
         -- might be nicer to be able to do this within the inferProgram call / at the end of it
         case runCheckUnique (traverse applySubst errs) checkEnv s of
           (w', s') ->
             let (moreErrs, substErrs) = runWith w'
                 env = extendEnv topEnv checkEnv
+                -- Combine mixfix registry from imports with this module's local definitions
+                -- so importing modules can use mixfix functions defined here
+                combinedMixfixRegistry = Map.union localMixfixRegistry env.mixfixRegistry
             in MkCheckResult
               { program = rprog
               , errors = substErrs ++ moreErrs
@@ -175,12 +178,18 @@ doCheckProgramWithDependencies checkState checkEnv program =
               , nlgMap = s'.nlgMap
               , scopeMap = s'.scopeMap
               , descMap = s'.descMap
+              , mixfixRegistry = combinedMixfixRegistry
               }
 
-checkProgram :: Module Name -> Check (Module Resolved, [CheckInfo])
+-- | Returns: (resolved module, top-level CheckInfo, mixfix registry from this module)
+checkProgram :: Module Name -> Check (Module Resolved, [CheckInfo], MixfixRegistry)
 checkProgram module' = do
-  withScanTypeAndSigEnvironment scanTyDeclModule inferTyDeclModule scanFunSigModule module' \_ -> do
-    inferProgram module'
+  withScanTypeAndSigEnvironment scanTyDeclModule inferTyDeclModule scanFunSigModule module' \rdecides -> do
+    (rprog, topEnv) <- inferProgram module'
+    -- Build the mixfix registry from THIS module's function signatures
+    -- so it can be propagated to importing modules
+    let localMixfixRegistry = buildMixfixRegistry rdecides
+    pure (rprog, topEnv, localMixfixRegistry)
 
 withDecides :: [FunTypeSig] -> Check a -> Check a
 withDecides rdecides =
@@ -193,7 +202,11 @@ withDecides rdecides =
 
 withExtraMixfix :: MixfixRegistry -> Check a -> Check a
 withExtraMixfix mixfixAdds =
-  local \s -> s { mixfixRegistry = Map.union mixfixAdds s.mixfixRegistry }
+  local (updateMixfix mixfixAdds)
+  where
+    updateMixfix :: MixfixRegistry -> CheckEnv -> CheckEnv
+    updateMixfix adds (MkCheckEnv a b c d e f g reg h i) =
+      MkCheckEnv a b c d e f g (Map.union adds reg) h i
 
 dedupCheckInfos :: [CheckInfo] -> [CheckInfo]
 dedupCheckInfos = go Set.empty []

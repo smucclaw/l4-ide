@@ -1,0 +1,11 @@
+-- Test cross-module binary mixfix (this works!)
+-- Binary mixfix works because the parser can handle it without mixfix hints
+
+IMPORT prelude
+IMPORT `mixfix-cross-module-binary-def`
+
+-- Binary mixfix call - works cross-module
+DECIDE test_binary IS `is eligible for` "Alice" "Welfare"
+
+#EVAL test_binary
+#CHECK test_binary
