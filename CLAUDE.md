@@ -24,6 +24,8 @@ L4 enables:
 
 ## Repository Structure
 
+**Typical setup:** Developers use git worktrees, so the working directory is typically one level below `src/smucclaw/l4-ide/` (e.g., `src/smucclaw/l4-ide/main/` for the main branch, `src/smucclaw/l4-ide/fix-deployment/` for a feature branch).
+
 This is a **dual-stack monorepo**:
 
 ### Haskell Stack (Cabal Multi-Package Project)
