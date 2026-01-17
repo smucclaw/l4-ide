@@ -1100,8 +1100,34 @@ withUUIDFunction uuidAndFun k err = case UUID.fromText muuid of
                     [] -> True  -- No explicit exports, implicit default counts
                     xs -> any (\e -> e.exportName == actualFunName) xs
 
+        -- Extract parameters including ASSUME params (not just GIVEN)
+        -- This mirrors deriveFunctionFromSource which properly handles all param types
+        let sessionParams = case mTcRes of
+              Nothing -> parametersOfDecideWithModule mResolvedModule decide  -- Fallback to GIVEN-only
+              Just Rules.TypeCheckResult{module' = resolvedModule, errors = tcErrors} ->
+                let exports = getExportedFunctions resolvedModule
+                    dummyFn = Function actualFunName "" MkParameters{parameterMap = Map.empty, required = []} []
+                in case selectExport dummyFn exports of
+                  Nothing -> parametersOfDecideWithModule mResolvedModule decide  -- Fallback
+                  Just exported ->
+                    let -- Base params from export (includes GIVEN + explicit ASSUME)
+                        baseParams = parametersFromExport resolvedModule exported.exportParams
+                        -- Extract implicit ASSUMEs from OutOfScopeError with resolved types
+                        implicitParams = extractImplicitAssumeParams tcErrors
+                        declares = declaresFromModule resolvedModule
+                        -- Convert implicit params to Parameter objects
+                        implicitParamMap = Map.fromList
+                          [ (name, (typeToParameter declares Set.empty ty) {parameterDescription = "", parameterAlias = Nothing})
+                          | (name, ty) <- implicitParams
+                          , name `Map.notMember` baseParams.parameterMap  -- Don't override explicit params
+                          ]
+                    in baseParams
+                      { parameterMap = baseParams.parameterMap <> implicitParamMap
+                      , required = baseParams.required <> Map.keys implicitParamMap
+                      }
+
         k ValidatedFunction
-          { fnImpl = fnImpl { parameters = parametersOfDecideWithModule mResolvedModule decide }
+          { fnImpl = fnImpl { parameters = sessionParams }
           , fnEvaluator = Map.singleton JL4 runFn
           , fnCompiled = mCompiled
           , fnSources = Map.singleton JL4 prog
