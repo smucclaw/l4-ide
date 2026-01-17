@@ -57,6 +57,74 @@ This is a **dual-stack monorepo**:
 
 **Package management:** Uses npm workspaces + Turborepo for incremental builds
 
+## Git Workflow & Branch Conventions
+
+### Feature Branch Worktrees
+
+**Standard convention:** Create feature branch worktrees under `l4-ide/`. For example:
+
+```
+src/smucclaw/l4-ide/
+├── main/                    # main branch worktree
+├── fix-deployment/          # feature branch worktree
+├── mengwong/gen-web-app/    # another feature branch
+└── ...
+```
+
+To create a new feature branch worktree:
+
+```bash
+cd src/smucclaw/l4-ide/main
+git worktree add ../my-feature -b my-feature
+cd ../my-feature
+```
+
+### Never Commit Directly to Main
+
+**IMPORTANT:** If you find yourself working on the `main` branch, do NOT commit directly or use admin privileges to bypass branch protection. Instead:
+
+1. Create a new branch: `git checkout -b feature-name`
+2. Make your commits on that branch
+3. Push and create a PR as usual
+
+This ensures all changes go through code review and CI.
+
+### Pre-Commit and Pre-PR Checklist
+
+**Before every commit**, run:
+
+```bash
+cabal test all && npm ci && npm run format
+```
+
+This ensures:
+
+- All Haskell tests pass
+- TypeScript dependencies are in sync
+- All TypeScript/frontend code is formatted (CI will reject unformatted code)
+
+### After Creating a PR
+
+1. Push your branch and create the PR
+2. **Wait ~10 minutes** for CI to complete
+3. Check the PR for:
+   - Reviewer comments
+   - CI status (green checks vs red failures)
+4. **If there are comments or CI failures:** Proceed to fix them immediately without waiting for user input. Address all feedback, push fixes, and verify CI passes.
+
+### PR Workflow Summary
+
+```
+1. Create feature branch worktree
+2. Make changes
+3. Run: cabal test all && npm ci && npm run format
+4. Commit and push
+5. Create PR
+6. Wait 10 min, check CI + comments
+7. Fix any issues immediately
+8. Merge when green and approved
+```
+
 ## Common Commands
 
 ### Initial Setup
