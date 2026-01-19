@@ -1,6 +1,6 @@
 module Base.Text (module X, textShow) where
 
-import Data.Text as X hiding (show)
+import Data.Text as X
 import Data.Text.IO as X
 
 -- | Convert a value to Text using its Show instance
