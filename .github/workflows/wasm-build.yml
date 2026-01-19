@@ -65,7 +65,8 @@ jobs:
       - name: Install GHC WASM toolchain
         if: steps.cache-ghc-wasm.outputs.cache-hit != 'true'
         run: |
-          curl https://gitlab.haskell.org/ghc/ghc-wasm-meta/-/raw/master/bootstrap.sh | FLAVOUR=${{ env.GHC_WASM_VERSION }} bash
+          # Use -L to follow redirects (GitLab moved the repo)
+          curl -L https://gitlab.haskell.org/haskell-wasm/ghc-wasm-meta/-/raw/master/bootstrap.sh | FLAVOUR=${{ env.GHC_WASM_VERSION }} bash
         shell: bash
 
       - name: Verify GHC WASM installation

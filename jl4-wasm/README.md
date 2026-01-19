@@ -10,7 +10,8 @@ browser or Node.js environment, enabling L4 language features without a server.
 Install the GHC WASM toolchain (takes ~30 minutes):
 
 ```bash
-curl https://gitlab.haskell.org/ghc/ghc-wasm-meta/-/raw/master/bootstrap.sh | FLAVOUR=9.10 bash
+# Note: Use -L to follow redirects
+curl -L https://gitlab.haskell.org/haskell-wasm/ghc-wasm-meta/-/raw/master/bootstrap.sh | FLAVOUR=9.10 bash
 ```
 
 Then source the environment before any WASM commands:
@@ -232,5 +233,5 @@ run `./scripts/optimize-wasm.sh -Oz` after building.
 ## Related Documentation
 
 - [GHC WASM User Guide](https://ghc.gitlab.haskell.org/ghc/doc/users_guide/wasm.html)
-- [GHC WASM Meta](https://gitlab.haskell.org/ghc/ghc-wasm-meta) - Toolchain bootstrap
+- [GHC WASM Meta](https://gitlab.haskell.org/haskell-wasm/ghc-wasm-meta) - Toolchain bootstrap
 - [TypeScript Bridge](../ts-apps/jl4-web/src/lib/wasm/README.md) - Browser integration
