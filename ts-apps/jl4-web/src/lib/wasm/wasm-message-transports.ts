@@ -309,9 +309,7 @@ export class WasmLspHandler {
 
     // Check if the WASM module supports visualization
     if (!this.bridge.supportsVisualization()) {
-      console.warn(
-        '[WASM LSP] Visualization not supported by this WASM module'
-      )
+      console.warn('[WASM LSP] Visualization not supported by this WASM module')
       return null
     }
 

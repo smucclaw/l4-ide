@@ -20,10 +20,10 @@ Upgrade the project from GHC 9.6.6 to GHC 9.10.x to unify the native and WASM to
 | Component         | Current GHC Version | Source                                                               |
 | ----------------- | ------------------- | -------------------------------------------------------------------- |
 | Native builds     | 9.6.6               | `tested-with` fields in cabal files                                  |
-| CI main workflow  | 9.10.2               | `.github/workflows/build.yml`                                        |
+| CI main workflow  | 9.10.2              | `.github/workflows/build.yml`                                        |
 | CI platform tests | 9.6.6               | `linux-test.yml`, `macos-test.yml`, `windows-test.yml`               |
 | WASM builds       | 9.10.x              | `.github/workflows/wasm-build.yml` (env: `GHC_WASM_VERSION: "9.10"`) |
-| Developer docs    | 9.10.2               | `doc/dev/setup.md`                                                   |
+| Developer docs    | 9.10.2              | `doc/dev/setup.md`                                                   |
 
 ### Files with `tested-with` Declarations
 
@@ -127,7 +127,7 @@ The following GitHub Actions workflows need updating:
 
 | Workflow     | File                                 | Current GHC | Action           |
 | ------------ | ------------------------------------ | ----------- | ---------------- |
-| CI (main)    | `.github/workflows/build.yml`        | 9.10.2       | Update to 9.10.x |
+| CI (main)    | `.github/workflows/build.yml`        | 9.10.2      | Update to 9.10.x |
 | Linux Test   | `.github/workflows/linux-test.yml`   | 9.6.6       | Update to 9.10.x |
 | macOS Test   | `.github/workflows/macos-test.yml`   | 9.6.6       | Update to 9.10.x |
 | Windows Test | `.github/workflows/windows-test.yml` | 9.6.6       | Update to 9.10.x |
