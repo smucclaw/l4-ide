@@ -30,7 +30,7 @@ on:
           - Os
           - Oz
           - O1
-        default: Os
+        default: Oz
 
 concurrency:
   group: wasm-build-${{ github.ref }}
@@ -115,7 +115,7 @@ jobs:
         if: ${{ github.event.inputs.run_wasm_opt == 'true' || github.event_name != 'workflow_dispatch' }}
         run: |
           WASM_PATH=$(find dist-newstyle -name 'jl4-wasm.wasm' -path '*/opt/build/*' | head -1)
-          OPT_LEVEL="${{ github.event.inputs.optimization_level || 'Os' }}"
+          OPT_LEVEL="${{ github.event.inputs.optimization_level || 'Oz' }}"
           echo "Running wasm-opt with -${OPT_LEVEL}..."
           
           # Backup original
