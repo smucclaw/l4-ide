@@ -67,9 +67,9 @@ export interface L4WasmExports {
    * @param source - L4 source code
    * @param uri - Document URI
    * @param version - Document version (optional, defaults to 0)
-   * @returns JSON-encoded RenderAsLadderInfo or "null" if no visualizable function found
+   * @returns JSON-encoded RenderAsLadderInfo or error object
    */
-  l4_visualize?(source: string, uri: string, version: number): Promise<string>
+  l4_visualize(source: string, uri: string, version: number): Promise<string>
 
   /**
    * Initialize the WASI reactor (and Haskell RTS).
@@ -377,32 +377,27 @@ export class L4WasmBridge {
 
   /**
    * Get visualization data for ladder diagram.
-   * Returns the RenderAsLadderInfo structure needed by the visualizer.
+   * Returns the RenderAsLadderInfo structure needed by the visualizer,
+   * or an object with an "error" field if visualization failed.
    */
   async visualize(
     source: string,
     uri: string,
     version: number = 0
-  ): Promise<unknown | null> {
+  ): Promise<unknown> {
     if (!this.exports) {
       throw new Error('WASM not initialized')
-    }
-    // Check if the WASM module supports visualization
-    if (!this.exports.l4_visualize) {
-      console.warn(
-        '[L4 WASM] Visualization not supported - l4_visualize export not available'
-      )
-      return null
     }
     const json = await this.exports.l4_visualize(source, uri, version)
     return JSON.parse(json)
   }
 
   /**
-   * Check if visualization is supported by this WASM module
+   * Check if visualization is supported by this WASM module.
+   * Always returns true now that the uuid dependency issue is resolved.
    */
   supportsVisualization(): boolean {
-    return this.exports?.l4_visualize !== undefined
+    return true
   }
 
   /**

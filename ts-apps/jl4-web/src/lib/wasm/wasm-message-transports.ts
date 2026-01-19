@@ -19,7 +19,11 @@ import type {
   PartialMessageInfo,
   Event,
 } from 'vscode-jsonrpc'
-import type { L4WasmBridge } from './wasm-bridge'
+import type {
+  L4WasmBridge,
+  Diagnostic,
+  EvalDirectiveResult,
+} from './wasm-bridge'
 
 /** LSP message types */
 interface LspRequest {
@@ -321,12 +325,55 @@ export class WasmLspHandler {
     content: string,
     version?: number
   ): Promise<void> {
-    const diagnostics = await this.bridge.check(content)
+    // Get parse and type check diagnostics
+    const checkDiagnostics = await this.bridge.check(content)
+
+    // Also run evaluation to get #EVAL results as diagnostics
+    // Only if there are no errors (matching real LSP behavior)
+    let evalDiagnostics: Diagnostic[] = []
+    const hasErrors = checkDiagnostics.some((d) => d.severity === 1)
+    if (!hasErrors) {
+      try {
+        const evalResult = await this.bridge.evaluate(content)
+        if (evalResult.success) {
+          evalDiagnostics = evalResult.results.map(
+            this.evalResultToDiagnostic.bind(this)
+          )
+        }
+      } catch (e) {
+        // Evaluation failed, just log and continue with check diagnostics only
+        console.warn('[WASM LSP] Evaluation failed:', e)
+      }
+    }
+
+    // Merge diagnostics: check errors + eval results
+    const diagnostics = [...checkDiagnostics, ...evalDiagnostics]
+
     this.send({
       jsonrpc: '2.0',
       method: 'textDocument/publishDiagnostics',
       params: { uri, version, diagnostics },
     } as LspNotification)
+  }
+
+  /**
+   * Convert an evaluation result to an LSP diagnostic.
+   * Matches the behavior of evalLazyResultToDiagnostic in jl4-lsp.
+   */
+  private evalResultToDiagnostic(evalResult: EvalDirectiveResult): Diagnostic {
+    // Severity: Error (1) for failed assertions, Information (3) otherwise
+    // This matches the real LSP server behavior in Rules.hs
+    const severity = evalResult.success === false ? 1 : 3
+
+    return {
+      range: evalResult.range ?? {
+        start: { line: 0, character: 0 },
+        end: { line: 0, character: 0 },
+      },
+      severity,
+      message: evalResult.result,
+      source: 'eval',
+    }
   }
 
   dispose(): void {

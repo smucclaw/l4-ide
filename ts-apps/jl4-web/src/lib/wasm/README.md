@@ -178,26 +178,19 @@ See https://ghc.gitlab.haskell.org/ghc/doc/users_guide/wasm.html for GHC WASM do
 
 ## Supported Features
 
-| Feature           | Status | Notes                         |
-| ----------------- | ------ | ----------------------------- |
-| Diagnostics       | ✅     | Full parse + typecheck errors |
-| Hover             | ✅     | Type info at cursor position  |
-| Completions       | ✅     | Basic L4 keywords             |
-| Semantic Tokens   | ✅     | Lexer-based highlighting      |
-| Evaluation        | ✅     | #EVAL directive execution     |
-| Visualization     | 🔄     | Ladder diagram (l4.visualize) |
-| Go-to-definition  | ❌     | Requires multi-file support   |
-| IMPORT resolution | ❌     | Requires virtual file system  |
+| Feature           | Status | Notes                                           |
+| ----------------- | ------ | ----------------------------------------------- |
+| Diagnostics       | ✅     | Full parse + typecheck errors                   |
+| Hover             | ✅     | Type info at cursor position                    |
+| Completions       | ✅     | Basic L4 keywords                               |
+| Semantic Tokens   | ✅     | Lexer-based highlighting                        |
+| Evaluation        | ✅     | #EVAL results shown as blue squiggly with hover |
+| Visualization     | ✅     | Ladder diagram generation (l4_visualize)        |
+| Go-to-definition  | ❌     | Requires multi-file support                     |
+| IMPORT resolution | ❌     | Requires virtual file system                    |
 
-✅ = Implemented (TypeScript + Haskell)
-🔄 = TypeScript ready, awaiting Haskell export (l4_visualize)
-❌ = Not planned for initial release
-
-## Next Steps
-
-1. **Build pipeline**: Set up CI to build jl4-core for wasm32-wasi target
-2. **Context-aware completions**: Use scope information for smarter completions
-3. **Binary size optimization**: Use `wasm-opt` and compression
+✅ = Implemented
+❌ = Not available in WASM mode
 
 ## Environment Variables
 
@@ -214,8 +207,3 @@ See https://ghc.gitlab.haskell.org/ghc/doc/users_guide/wasm.html for GHC WASM do
 | jl4-core.mjs  | ~5 KB  | JS FFI glue code               |
 
 The WASM file is large because it includes the entire Haskell runtime.
-Future optimizations could include:
-
-- `wasm-opt` optimization passes
-- Dead code elimination
-- Compression (gzip/brotli)
