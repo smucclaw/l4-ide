@@ -289,9 +289,9 @@ The `UNLESS` keyword provides a natural way to express exceptions. It means "AND
 ```l4
 -- "Employee qualifies via any path, unless they've been banned"
 DECIDE `employee qualifies` IF
-         `is full-time`
-    OR   `has special permit`
-    OR   `is contractor`
+           `is full-time`
+      OR   `has special permit`
+      OR   `is contractor`
     UNLESS `has been banned`
 ```
 
