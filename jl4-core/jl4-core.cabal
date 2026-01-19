@@ -4,6 +4,11 @@ version: 0.1
 build-type: Simple
 tested-with: GHC==9.6.6
 
+flag safe-mode
+  description: Disable FETCH/POST builtins (for WASM builds). When enabled, HTTP operations return errors.
+  default: False
+  manual: True
+
 data-files: libraries/*.l4
 
 common defaults
@@ -42,7 +47,6 @@ library
     filepath,
     generics-sop,
     graphviz,
-    hw-fingertree,
     logict,
     lsp-types,
     megaparsec,
@@ -58,7 +62,10 @@ library
     tree-diff,
     vector,
     template-haskell,
-    req,
+
+  if !flag(safe-mode)
+    build-depends: req >= 3.0
+    cpp-options: -DHTTP_ENABLED
 
   autogen-modules:
     Paths_jl4_core

@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -35,10 +36,13 @@ import qualified Base.Map as Map
 import qualified Base.Set as Set
 import Control.Concurrent
 import System.Environment (lookupEnv)
+import qualified Data.ByteString as BS
+import qualified Data.Text.Encoding as TE
+#ifdef HTTP_ENABLED
 import           Network.HTTP.Req ((=:))
 import qualified Network.HTTP.Req as Req
-import qualified Data.Text.Encoding as TE
 import qualified Data.ByteString.Lazy.Char8 as LBS
+#endif
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -1088,17 +1092,17 @@ runLit (StringLit _ann str)  = pure (ValString str)
 expect1 :: [a] -> Machine a
 expect1 = \ case
   [x] -> pure x
-  xs -> InternalException (RuntimeTypeError $ "Expected 1 argument, but got " <> Text.show (length xs))
+  xs -> InternalException (RuntimeTypeError $ "Expected 1 argument, but got " <> Text.textShow (length xs))
 
 expect2 :: [a] -> Machine (a, a)
 expect2 = \ case
   [x, y] -> pure (x, y)
-  xs -> InternalException (RuntimeTypeError $ "Expected 2 arguments, but got " <> Text.show (length xs))
+  xs -> InternalException (RuntimeTypeError $ "Expected 2 arguments, but got " <> Text.textShow (length xs))
 
 expect3 :: [a] -> Machine (a, a, a)
 expect3 = \ case
   [x, y, z] -> pure (x, y, z)
-  xs -> InternalException (RuntimeTypeError $ "Expected 3 arguments, but got " <> Text.show (length xs))
+  xs -> InternalException (RuntimeTypeError $ "Expected 3 arguments, but got " <> Text.textShow (length xs))
 
 expectNumber :: WHNF -> Machine Rational
 expectNumber = \ case
@@ -1216,7 +1220,9 @@ encodeValueToJson = \case
 -- | Type-directed JSON decoding - uses type information to construct proper records
 decodeJsonToValueTyped :: Text -> Type' Resolved -> Machine WHNF
 decodeJsonToValueTyped jsonStr ty = do
-  case Aeson.eitherDecodeStrict' (TE.encodeUtf8 jsonStr) of
+  let jsonBytes :: BS.ByteString
+      jsonBytes = TE.encodeUtf8 jsonStr
+  case Aeson.eitherDecodeStrict' jsonBytes of
     Left err -> do
       -- Parse error: return LEFT errorMsg
       errorRef <- AllocateValue (ValString (Text.pack err))
@@ -1410,6 +1416,7 @@ textListToWHNF (x:xs) = do
   tailRef <- AllocateValue tailVal
   pure $ ValCons headRef tailRef
 
+#ifdef HTTP_ENABLED
 runPost :: WHNF -> WHNF -> WHNF -> Machine Config
 runPost urlVal headersVal bodyVal = do
   safe <- GetSafeMode
@@ -1446,6 +1453,10 @@ runPost urlVal headersVal bodyVal = do
             Req.req Req.POST reqWithPath (Req.ReqBodyLbs $ LBS.fromStrict $ TE.encodeUtf8 body) Req.lbsResponse req_options
           Backward $ ValString (TE.decodeUtf8 . LBS.toStrict $ Req.responseBody res)
         _ -> InternalException (RuntimeTypeError "POST only supports https")
+#else
+runPost :: WHNF -> WHNF -> WHNF -> Machine Config
+runPost _ _ _ = InternalException (RuntimeTypeError "POST is not available (HTTP support disabled at compile time)")
+#endif
 
 runConcat :: [WHNF] -> Machine Config
 runConcat vals = do
@@ -1511,7 +1522,7 @@ formatDateParts year month day =
   pad 4 year <> "-" <> pad 2 month <> "-" <> pad 2 day
   where
     pad width v =
-      let raw = Text.show v
+      let raw = Text.textShow v
       in if Text.length raw >= width
            then raw
            else Text.replicate (width - Text.length raw) "0" <> raw
@@ -1597,6 +1608,7 @@ runBuiltin es op mTy = do
         Nothing ->
           decodeJsonToValue jsonStr
       Backward result
+#ifdef HTTP_ENABLED
     UnaryFetch -> do
       safe <- GetSafeMode
       if safe
@@ -1618,6 +1630,10 @@ runBuiltin es op mTy = do
                 Req.req Req.GET reqWithPath Req.NoReqBody Req.lbsResponse req_options
               Backward $ ValString (TE.decodeUtf8 . LBS.toStrict $ Req.responseBody res)
             _ -> InternalException (RuntimeTypeError "FETCH only supports https")
+#else
+    UnaryFetch -> do
+      InternalException (RuntimeTypeError "FETCH is not available (HTTP support disabled at compile time)")
+#endif
     UnaryEnv -> do
       varName <- expectString es
       maybeValue <- liftIO $ lookupEnv (Text.unpack varName)
@@ -2362,7 +2378,7 @@ prettyUserEvalException = \ case
     <> [ "has no corresponding pattern." ]
   StackOverflow ->
     [ "Stack overflow: "
-    , "Recursion depth of " <> Text.show maximumStackSize
+    , "Recursion depth of " <> Text.textShow maximumStackSize
     , "exceeded." ]
   DivisionByZero op ->
     [ "Division by zero in the operation:"

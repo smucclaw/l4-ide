@@ -2982,7 +2982,7 @@ prettyCheckError (OutOfScopeError n t)                     =
   ]
 prettyCheckError (KindError k ts)                          =
   [ "The arities of the types do not match."
-  , "I expected " <> Text.show k <> " arguments, but I found " <> Text.show (length ts) <> "."
+  , "I expected " <> Text.textShow k <> " arguments, but I found " <> Text.textShow (length ts) <> "."
   ]
 prettyCheckError (TypeMismatch ec expected given)          =
   prettyTypeMismatch ec expected given
@@ -3108,7 +3108,7 @@ prettyCheckError (DesugarAnnoRewritingError context errorInfo) =
   , ""
   , "We ran into the error:"
   , "The source annotation are not matching the expected number of arguments."
-  , "Expected " <> Text.show (errorInfo.expected) <> " holes but got: " <> Text.show (errorInfo.got)
+  , "Expected " <> Text.textShow (errorInfo.expected) <> " holes but got: " <> Text.textShow (errorInfo.got)
   ]
 prettyCheckError (CheckWarning warning) = prettyCheckWarning warning
 prettyCheckError (MixfixMatchErrorCheck funcName err) =
@@ -3139,7 +3139,7 @@ prettyMixfixMatchError funcName = \case
     ]
   ArityMismatch expected actual ->
     [ "Wrong number of arguments in mixfix expression"
-    , "Expected " <> Text.show expected <> " arguments but got " <> Text.show actual
+    , "Expected " <> Text.textShow expected <> " arguments but got " <> Text.textShow actual
     , "In expression involving: " <> prettyLayout funcName
     ]
   where

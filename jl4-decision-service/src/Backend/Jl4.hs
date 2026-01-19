@@ -93,9 +93,9 @@ precompileModule filepath source moduleContext funName = runExceptT $ do
  where
   evalErrorToText :: EvaluatorError -> Text
   evalErrorToText (InterpreterError t) = t
-  evalErrorToText (RequiredParameterMissing pm) = "Required parameter missing: expected " <> Text.show pm.expected <> ", got " <> Text.show pm.actual
+  evalErrorToText (RequiredParameterMissing pm) = "Required parameter missing: expected " <> Text.textShow pm.expected <> ", got " <> Text.textShow pm.actual
   evalErrorToText (UnknownArguments args) = "Unknown arguments: " <> Text.intercalate ", " args
-  evalErrorToText (CannotHandleParameterType lit) = "Cannot handle parameter type: " <> Text.show lit
+  evalErrorToText (CannotHandleParameterType lit) = "Cannot handle parameter type: " <> Text.textShow lit
   evalErrorToText CannotHandleUnknownVars = "Cannot handle unknown variables"
 
 -- ----------------------------------------------------------------------------
@@ -240,7 +240,7 @@ handleEvalResultDirect
   -> ExceptT EvaluatorError IO ResponseWithReason
 handleEvalResultDirect result trace traceLevel includeGraphViz mModule = case result of
   Eval.Assertion _ -> throwError $ InterpreterError "L4: Got an assertion instead of a normal result."
-  Eval.Reduction (Left evalExc) -> throwError $ InterpreterError $ Text.show evalExc
+  Eval.Reduction (Left evalExc) -> throwError $ InterpreterError $ Text.textShow evalExc
   Eval.Reduction (Right val) -> do
     r <- nfToFnLiteral val
     pure $ ResponseWithReason
@@ -348,7 +348,7 @@ handleEvalResult
   -> ExceptT EvaluatorError IO ResponseWithReason
 handleEvalResult result trace _sentinel traceLevel includeGraphViz mModule = case result of
   Eval.Assertion _ -> throwError $ InterpreterError "L4: Got an assertion instead of a normal result."
-  Eval.Reduction (Left evalExc) -> throwError $ InterpreterError $ Text.show evalExc
+  Eval.Reduction (Left evalExc) -> throwError $ InterpreterError $ Text.textShow evalExc
   Eval.Reduction (Right val) -> do
     r <- nfToFnLiteral val
     -- Check if the result is NOTHING (decode failure from LEFT error) or JUST value
@@ -506,7 +506,7 @@ valueToFnLiteral = \case
       Just int -> FnLitInt int
       Nothing -> FnLitDouble $ fromRational i
   Eval.ValDate day ->
-    pure $ FnLitString (Text.show day)
+    pure $ FnLitString (Text.textShow day)
   Eval.ValString t -> pure $ FnLitString t
   Eval.ValNil -> pure $ FnArray []
   Eval.ValCons v1 v2 -> nfToFnLiteral v1 >>= \ l1 -> listToFnLiteral (DList.singleton l1) v2

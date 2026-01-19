@@ -810,3 +810,138 @@ Once jl4-core compiles, create the FFI wrapper.
 - Track TemporalGit removal in a GitHub issue
 - Track Citations simplification in a GitHub issue
 - Track safe mode implementation in a GitHub issue
+
+
+# Remaining Work for WASM LSP
+
+✅ Already Done
+Language cleanup - Removed git-based temporals, CSV loading, pcre2 regex
+Safe mode - HTTP operations (FETCH/POST) can be disabled
+Connection factory - TypeScript infrastructure for WebSocket/WASM switching
+Environment variables - Configuration for WASM URL, version, etc.
+🔴 Still Needed
+1. Compile jl4-core to WASM (Largest task - 1-2 weeks)
+Potentially dangerous command
+Bash
+Run
+# Need GHC WASM backend (ghc-wasm)
+# Install via ghcup or use tweag/ghc-wasm Docker image
+
+# Test if jl4-core can compile with WASM target
+wasm32-wasi-ghc -c jl4-core/src/L4/Lexer.hs
+Blockers to check:
+
+Does req (HTTP library) have a WASM-compatible build? Likely not - need conditional compilation
+Does shake/hls-graph work? Likely not - need to bypass for WASM
+Template Haskell usage? May need adjustment
+2. Create FFI Export Layer (~3-5 days)
+Haskell
+
+Apply
+-- l4-wasm-core/src/L4Wasm/Api.hs
+module L4Wasm.Api where
+
+import Foreign.C
+
+-- Minimal API surface for LSP-like features
+foreign export ccall l4_parse_and_check :: CString -> CInt -> IO CString
+foreign export ccall l4_hover :: CString -> CInt -> CInt -> CInt -> IO CString  
+foreign export ccall l4_completions :: CString -> CInt -> CInt -> IO CString
+foreign export ccall l4_semantic_tokens :: CString -> CInt -> IO CString
+foreign export ccall l4_free :: CString -> IO ()
+3. WASM Bridge in TypeScript (~3-5 days)
+Complete the stub in lsp-connection-factory.ts:
+
+Typescript
+
+Apply
+// ts-apps/jl4-web/src/lib/wasm-lsp-bridge.ts
+export class L4WasmBridge {
+  private wasm: WebAssembly.Instance
+  private memory: WebAssembly.Memory
+  
+  constructor(module: WebAssembly.Module) {
+    // Instantiate with WASI polyfill
+  }
+  
+  parseAndCheck(source: string): Diagnostic[] {
+    // Encode string -> call WASM -> decode result
+  }
+  
+  hover(source: string, line: number, col: number): Hover | null {
+    // ...
+  }
+  
+  // ... other LSP methods
+}
+4. Message Transport Adapter (~2-3 days)
+Create LSP MessageReader/MessageWriter that route to WASM:
+
+Typescript
+
+Apply
+// ts-apps/jl4-web/src/lib/wasm-message-transports.ts
+export function createWasmTransports(bridge: L4WasmBridge): MessageTransports {
+  // Implement MessageReader that responds to LSP requests
+  // by calling the WASM bridge methods
+}
+5. Virtual File System for IMPORT (~2-3 days)
+Handle IMPORT statements without real file system:
+
+Typescript
+
+Apply
+// ts-apps/jl4-web/src/lib/virtual-fs.ts
+export class L4VirtualFileSystem {
+  private files: Map<string, string> = new Map()
+  
+  // Pre-load standard library
+  async loadPrelude(): Promise<void> {
+    const prelude = await fetch('/l4/prelude.l4')
+    this.files.set('prelude', await prelude.text())
+  }
+  
+  resolve(importPath: string): string | null {
+    return this.files.get(importPath) ?? null
+  }
+}
+6. Build Pipeline (~1-2 days)
+Yaml
+
+Apply
+# .github/workflows/wasm-build.yml
+- name: Build WASM
+  run: |
+    nix develop .#wasm -c cabal build l4-wasm-core
+    cp result/l4-core.wasm static/wasm/
+📊 Effort Estimate
+Task	Effort	Risk
+GHC WASM compilation	1-2 weeks	High (unknown blockers)
+FFI export layer	3-5 days	Medium
+TypeScript WASM bridge	3-5 days	Low
+Message transport adapter	2-3 days	Low
+Virtual file system	2-3 days	Low
+Build pipeline & CI	1-2 days	Low
+Testing & debugging	1 week	Medium
+Total: ~4-6 weeks
+
+🚀 Recommended Next Step
+Test WASM compilation before investing more TypeScript work:
+
+Potentially dangerous command
+Bash
+Run
+# 1. Get GHC WASM compiler
+# Option A: ghcup (if available for your platform)
+ghcup install ghc wasm32-wasi-9.10
+
+# Option B: Docker
+docker run -it ghcr.io/tweag/ghc-wasm:latest
+
+# 2. Try compiling a simple module
+cd jl4-core
+wasm32-wasi-ghc -c src/L4/Lexer.hs -package megaparsec
+
+# 3. If that works, try the full build with safe mode
+cabal build jl4-core --with-ghc=wasm32-wasi-ghc -f safe-mode
+This will reveal what dependencies are blocking WASM compilation.

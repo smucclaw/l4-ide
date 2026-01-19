@@ -274,7 +274,7 @@ handlers evalConfig recorder =
               Left $
                 TResponseError
                   { _code = InL LSPErrorCodes_RequestFailed
-                  , _message = "Internal error, failed to produce semantic tokens for " <> Text.show uri.getUri
+                  , _message = "Internal error, failed to produce semantic tokens for " <> Text.textShow uri.getUri
                   , _xdata = Nothing
                   }
 
@@ -366,7 +366,7 @@ handlers evalConfig recorder =
                 result <- MkVizHandler $ evalApp evalConfig tcRes.entityInfo (evalEnv, tcRes.module') evalParams recentViz
                 logWith recorder Debug $
                   LogHandlingCustomRequest evalParams.verDocId._uri
-                  ("Eval result: " <> Text.show result)
+                  ("Eval result: " <> Text.textShow result)
                 pure result
 
     , requestHandler (SMethod_CustomMethod (Proxy @Ladder.InlineExprsMethodName)) $ \ide params ->
@@ -570,7 +570,7 @@ withVizRequestContext recorder method params ide handlerKont = do
   case (mtcRes, mRecentViz) of
     (Nothing, _) -> throwError $ TResponseError
       { _code = InR ErrorCodes_InvalidRequest
-      , _message = "Failed to get type check for " <> Text.show verDocId._uri
+      , _message = "Failed to get type check for " <> Text.textShow verDocId._uri
       , _xdata = Nothing
       }
     (_, Nothing) -> throwError $ TResponseError
@@ -602,8 +602,8 @@ checkVizVersion reqParams recentViz = do
     then pure ()
     else throwError $ TResponseError
       { _code = InL LSPErrorCodes_ContentModified
-      , _message = "Document version mismatch. Visualizer version: " <> Text.show (reqParams.verDocId)._version <>
-          ", whereas server's version is: " <> Text.show vizConfig.verTxtDocId._version
+      , _message = "Document version mismatch. Visualizer version: " <> Text.textShow (reqParams.verDocId)._version <>
+          ", whereas server's version is: " <> Text.textShow vizConfig.verTxtDocId._version
       , _xdata = Nothing
       }
       -- TODO: Have the client update accordingly when it gets this error code,

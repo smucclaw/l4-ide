@@ -1,0 +1,17 @@
+-- WASM-specific cabal project file
+-- Only builds jl4-core for WASM target
+
+packages: jl4-core
+
+-- Ignore all other packages in the repo
+-- (jl4-lsp, jl4-cli, jl4-decision-service have non-WASM deps)
+
+-- Enable safe-mode to disable HTTP (req library doesn't support WASM)
+package jl4-core
+  flags: +safe-mode
+
+-- Allow newer versions of dependencies
+allow-newer: all
+
+-- Optimization for smaller WASM output
+optimization: 2
