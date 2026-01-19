@@ -7,11 +7,11 @@
 
 When multiple boolean operators appear in an expression, L4 follows a standard precedence hierarchy (higher precedence binds tighter):
 
-| Precedence | Operators | Description |
-|------------|-----------|-------------|
-| 3 (highest) | `AND`, `...` | Conjunction (and asyndetic conjunction) |
-| 2 | `OR`, `..` | Disjunction (and asyndetic disjunction) |
-| 1 (lowest) | `IMPLIES`, `UNLESS` | Implication and exception |
+| Precedence  | Operators           | Description                             |
+| ----------- | ------------------- | --------------------------------------- |
+| 3 (highest) | `AND`, `...`        | Conjunction (and asyndetic conjunction) |
+| 2           | `OR`, `..`          | Disjunction (and asyndetic disjunction) |
+| 1 (lowest)  | `IMPLIES`, `UNLESS` | Implication and exception               |
 
 This means `A OR B AND C` is parsed as `A OR (B AND C)`, following standard mathematical convention.
 

@@ -312,11 +312,11 @@ DECIDE `employee qualifies` IF
 
 When multiple boolean operators appear together, L4 follows standard precedence (higher binds tighter):
 
-| Precedence | Operators        |
-| ---------- | ---------------- |
-| 3 (highest)| `AND`, `...`     |
-| 2          | `OR`, `..`       |
-| 1 (lowest) | `IMPLIES`, `UNLESS` |
+| Precedence  | Operators           |
+| ----------- | ------------------- |
+| 3 (highest) | `AND`, `...`        |
+| 2           | `OR`, `..`          |
+| 1 (lowest)  | `IMPLIES`, `UNLESS` |
 
 This means `A OR B AND C` is parsed as `A OR (B AND C)`.
 
