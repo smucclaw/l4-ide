@@ -2,7 +2,7 @@ cabal-version: 3.0
 name: jl4-repl
 version: 0.1
 build-type: Simple
-tested-with: GHC==9.6.6
+tested-with: GHC==9.10.2
 synopsis: Interactive REPL for the L4 language
 description:
   A Read-Eval-Print Loop for L4, providing fast iteration on expressions

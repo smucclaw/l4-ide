@@ -36,7 +36,7 @@ If `npm ci` fails with sync errors, investigate before running `npm install` - s
 
 - Haskell
   - [GHCup](https://www.haskell.org/ghcup/)
-  - ghc 9.8.4
+  - ghc 9.10.2
   - cabal 3.10 (or newer)
 - npm >= 10.9.2
   - installed via `corepack` or `nvm` or your package manager
@@ -51,7 +51,7 @@ If `npm ci` fails with sync errors, investigate before running `npm install` - s
   - pkgconfig
   - xz (or liblzma dev libraries)
 
-After ghcup is installed, run `ghcup tui` and set `ghc` to version `9.8.4`; press `i` to install and then `s` to set that as the default.
+After ghcup is installed, run `ghcup tui` and set `ghc` to version `9.10.2`; press `i` to install and then `s` to set that as the default.
 
 If you run into difficulty later with `npm`, you may benefit from first running
 

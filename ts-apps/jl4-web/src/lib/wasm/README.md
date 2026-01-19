@@ -58,7 +58,7 @@ special handling needed in the application code.
 - **wasm-bridge.ts** - Low-level WASM interface with typed exports
 - **wasm-message-transports.ts** - LSP message handling:
   - `WasmLspHandler` - Routes LSP methods to WASM bridge
-  - `WasmMessageReader` - Receives LSP responses/notifications  
+  - `WasmMessageReader` - Receives LSP responses/notifications
   - `WasmMessageWriter` - Sends LSP requests/notifications
   - `createWasmMessageTransports()` - Creates `MessageTransports` for Monaco
 
@@ -100,6 +100,7 @@ The WASM module is built from `jl4-wasm` using GHC's WASM backend with JS FFI.
 ### Prerequisites
 
 1. Install the GHC WASM toolchain (~30 min):
+
    ```bash
    curl https://gitlab.haskell.org/ghc/ghc-wasm-meta/-/raw/master/bootstrap.sh | FLAVOUR=9.10 bash
    ```
@@ -153,6 +154,7 @@ l4CheckJS source = do
 ```
 
 The WASI reactor pattern is used (no main function), requiring:
+
 1. Call `_initialize()` once after instantiation to set up the RTS
 2. Then call exported functions as needed
 
@@ -176,24 +178,19 @@ See https://ghc.gitlab.haskell.org/ghc/doc/users_guide/wasm.html for GHC WASM do
 
 ## Supported Features
 
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Diagnostics | ✅ | Full parse + typecheck errors |
-| Hover | ✅ | Type info at cursor position |
-| Completions | ✅ | Basic L4 keywords |
-| Semantic Tokens | ✅ | Lexer-based highlighting |
-| Evaluation | ✅ | #EVAL directive execution |
-| Go-to-definition | ❌ | Requires multi-file support |
-| IMPORT resolution | ❌ | Requires virtual file system |
+| Feature           | Status | Notes                                           |
+| ----------------- | ------ | ----------------------------------------------- |
+| Diagnostics       | ✅     | Full parse + typecheck errors                   |
+| Hover             | ✅     | Type info at cursor position                    |
+| Completions       | ✅     | Basic L4 keywords                               |
+| Semantic Tokens   | ✅     | Lexer-based highlighting                        |
+| Evaluation        | ✅     | #EVAL results shown as blue squiggly with hover |
+| Visualization     | ✅     | Ladder diagram generation (l4_visualize)        |
+| Go-to-definition  | ❌     | Requires multi-file support                     |
+| IMPORT resolution | ❌     | Requires virtual file system                    |
 
-✅ = Implemented (TypeScript + Haskell)
-❌ = Not planned for initial release
-
-## Next Steps
-
-1. **Build pipeline**: Set up CI to build jl4-core for wasm32-wasi target
-2. **Context-aware completions**: Use scope information for smarter completions
-3. **Binary size optimization**: Use `wasm-opt` and compression
+✅ = Implemented
+❌ = Not available in WASM mode
 
 ## Environment Variables
 
@@ -204,13 +201,9 @@ See https://ghc.gitlab.haskell.org/ghc/doc/users_guide/wasm.html for GHC WASM do
 
 ## File Sizes
 
-| File | Size | Notes |
-|------|------|-------|
+| File          | Size   | Notes                          |
+| ------------- | ------ | ------------------------------ |
 | jl4-core.wasm | ~42 MB | Unoptimized, includes full RTS |
-| jl4-core.mjs | ~5 KB | JS FFI glue code |
+| jl4-core.mjs  | ~5 KB  | JS FFI glue code               |
 
 The WASM file is large because it includes the entire Haskell runtime.
-Future optimizations could include:
-- `wasm-opt` optimization passes
-- Dead code elimination
-- Compression (gzip/brotli)

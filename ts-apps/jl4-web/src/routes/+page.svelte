@@ -36,6 +36,7 @@
     type FunDeclLirNode,
     LadderEnv,
     VizDeclLirSource,
+    elicitationOverrideFromQueryPlan,
   } from 'l4-ladder-visualizer'
   import {
     makeVizInfoDecoder,
@@ -472,13 +473,18 @@
       config: ReturnType<typeof getDefaultConfig>
     ): Promise<void> => {
       try {
-        logger.info(`[L4 LSP] Connecting with preferred type: ${config.preferredType}`)
+        logger.info(
+          `[L4 LSP] Connecting with preferred type: ${config.preferredType}`
+        )
 
         lspConnection = await createLspConnection(config)
 
         logger.info(`[L4 LSP] Connected via ${lspConnection.type}`)
 
-        const languageClient = createLanguageClient(logger, lspConnection.transports)
+        const languageClient = createLanguageClient(
+          logger,
+          lspConnection.transports
+        )
         await languageClient.start()
 
         // Handle connection close

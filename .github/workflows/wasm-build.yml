@@ -4,25 +4,25 @@ on:
   push:
     branches: [main]
     paths:
-      - 'jl4-core/**'
-      - 'jl4-wasm/**'
-      - 'cabal-wasm.project'
-      - '.github/workflows/wasm-build.yml'
+      - "jl4-core/**"
+      - "jl4-wasm/**"
+      - "cabal-wasm.project"
+      - ".github/workflows/wasm-build.yml"
   pull_request:
     branches: [main]
     paths:
-      - 'jl4-core/**'
-      - 'jl4-wasm/**'
-      - 'cabal-wasm.project'
-      - '.github/workflows/wasm-build.yml'
+      - "jl4-core/**"
+      - "jl4-wasm/**"
+      - "cabal-wasm.project"
+      - ".github/workflows/wasm-build.yml"
   workflow_dispatch:
     inputs:
       run_wasm_opt:
-        description: 'Run wasm-opt optimization'
+        description: "Run wasm-opt optimization"
         type: boolean
         default: true
       optimization_level:
-        description: 'wasm-opt optimization level (O1, O2, O3, Os, Oz)'
+        description: "wasm-opt optimization level (O1, O2, O3, Os, Oz)"
         type: choice
         options:
           - O2
@@ -45,6 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.prepare-artifacts.outputs.version }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -119,17 +120,17 @@ jobs:
           WASM_PATH=$(find dist-newstyle -name 'jl4-wasm.wasm' -path '*/opt/build/*' | head -1)
           OPT_LEVEL="${{ github.event.inputs.optimization_level || 'Oz' }}"
           echo "Running wasm-opt with -${OPT_LEVEL}..."
-          
+
           # Backup original
           cp "$WASM_PATH" "$WASM_PATH.unoptimized"
-          
+
           # Run wasm-opt (in-place)
           wasm-opt -${OPT_LEVEL} "$WASM_PATH" -o "$WASM_PATH.opt"
           mv "$WASM_PATH.opt" "$WASM_PATH"
-          
+
           echo "WASM binary size (after wasm-opt -${OPT_LEVEL}):"
           ls -lh "$WASM_PATH"
-          
+
           WASM_SIZE_AFTER=$(stat --format=%s "$WASM_PATH")
           echo "wasm_size_after=$WASM_SIZE_AFTER" >> $GITHUB_ENV
 
@@ -137,17 +138,17 @@ jobs:
         id: prepare-artifacts
         run: |
           mkdir -p wasm-artifacts
-          
+
           WASM_PATH=$(find dist-newstyle -name 'jl4-wasm.wasm' -path '*/opt/build/*' | head -1)
           cp "$WASM_PATH" wasm-artifacts/jl4-core.wasm
           cp dist-newstyle/jl4-wasm.mjs wasm-artifacts/jl4-core.mjs
-          
+
           # Generate metadata
           COMMIT_SHA="${{ github.sha }}"
           SHORT_SHA="${COMMIT_SHA:0:8}"
           DATE=$(date -u +%Y%m%d)
           VERSION="${DATE}-${SHORT_SHA}"
-          
+
           echo "$VERSION" > wasm-artifacts/version.txt
           echo "version=$VERSION" >> $GITHUB_ENV
 
@@ -165,7 +166,7 @@ jobs:
         run: |
           source ~/.ghc-wasm/env
           cd wasm-artifacts
-          
+
           # Use GHC WASM's Node.js for testing
           ~/.ghc-wasm/nodejs/bin/node -e "
             const fs = require('fs');
@@ -209,19 +210,19 @@ jobs:
           echo "- **Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "- **GHC WASM:** ${{ env.GHC_WASM_VERSION }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           WASM_SIZE_MB=$(echo "scale=2; ${{ env.wasm_size_before }} / 1048576" | bc)
           echo "### Binary Sizes" >> $GITHUB_STEP_SUMMARY
           echo "| File | Size |" >> $GITHUB_STEP_SUMMARY
           echo "|------|------|" >> $GITHUB_STEP_SUMMARY
           echo "| jl4-core.wasm (unoptimized) | ${WASM_SIZE_MB} MB |" >> $GITHUB_STEP_SUMMARY
-          
+
           if [ -n "${{ env.wasm_size_after }}" ]; then
             WASM_SIZE_OPT_MB=$(echo "scale=2; ${{ env.wasm_size_after }} / 1048576" | bc)
             REDUCTION=$(echo "scale=1; (1 - ${{ env.wasm_size_after }} / ${{ env.wasm_size_before }}) * 100" | bc)
             echo "| jl4-core.wasm (optimized) | ${WASM_SIZE_OPT_MB} MB (-${REDUCTION}%) |" >> $GITHUB_STEP_SUMMARY
           fi
-          
+
           echo "| jl4-core.mjs | $(ls -lh wasm-artifacts/jl4-core.mjs | awk '{print $5}') |" >> $GITHUB_STEP_SUMMARY
 
   # Optional: Update static assets on main branch
@@ -230,7 +231,7 @@ jobs:
     needs: build-wasm
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -247,7 +248,7 @@ jobs:
           cp wasm-artifacts/jl4-core.wasm ts-apps/jl4-web/static/wasm/
           cp wasm-artifacts/jl4-core.mjs ts-apps/jl4-web/static/wasm/
           cp wasm-artifacts/version.txt ts-apps/jl4-web/static/wasm/
-          
+
           echo "Updated files:"
           ls -la ts-apps/jl4-web/static/wasm/
 
@@ -270,9 +271,9 @@ jobs:
           title: "chore: update WASM binaries"
           body: |
             Automated update of WASM binaries from the latest build.
-            
+
             Built from commit: ${{ github.sha }}
-            
+
             ## Changes
             - Updated `jl4-core.wasm`
             - Updated `jl4-core.mjs`

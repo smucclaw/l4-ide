@@ -1328,7 +1328,7 @@ data GraphOutputFormat = DOT | PNG | SVG | PDF | PS
 
 - Mature package (15+ years of development)
 - Latest stable: 2999.20.2.0
-- GHC 9.8.4 compatible
+- GHC 9.10.2 compatible
 - Dependencies: `fgl`, `containers`, `text`, `bytestring`, `process`
 - All transitive dependencies already in L4 project
 
