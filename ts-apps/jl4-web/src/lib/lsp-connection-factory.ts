@@ -13,6 +13,7 @@
 
 import type { MessageTransports } from 'vscode-languageclient'
 import type { L4LanguageClient } from 'jl4-client-rpc'
+import type { WasmLspHandler } from './wasm/wasm-message-transports'
 
 /** Connection type enumeration */
 export type LspConnectionType = 'websocket' | 'wasm'
@@ -35,8 +36,10 @@ export interface LspConnectionConfig {
 export interface LspConnectionResult {
   /** The actual connection type used */
   type: LspConnectionType
-  /** Message transports for the language client */
-  transports: MessageTransports
+  /** Message transports for the language client (WebSocket mode) */
+  transports: MessageTransports | null
+  /** WASM LSP handler (WASM mode only) */
+  wasmHandler?: WasmLspHandler
   /** Cleanup function */
   dispose: () => Promise<void>
 }
@@ -158,10 +161,13 @@ export async function createWebSocketConnection(
 }
 
 /**
- * Create a WASM-based LSP connection (stub for future implementation)
+ * Create a WASM-based LSP connection
  *
- * This will be implemented when the L4 core is compiled to WASM.
- * For now, it throws an error indicating WASM is not yet available.
+ * This uses the L4 WASM module to provide language features
+ * directly in the browser without a server connection.
+ *
+ * Note: This returns a WasmLspHandler instead of MessageTransports.
+ * The caller needs to handle messages differently for WASM mode.
  */
 export async function createWasmConnection(
   wasmUrl: string,
@@ -171,18 +177,31 @@ export async function createWasmConnection(
     throw new Error('WebAssembly is not supported in this browser')
   }
 
-  // Load the WASM module with caching
-  const _module = await loadWasmCached(wasmUrl, version)
+  // Import WASM bridge modules
+  const { L4WasmBridge, createWasmLspHandler } = await import('./wasm/index')
 
-  // TODO: Implement WASM-based LSP bridge
-  // This requires:
-  // 1. l4-wasm-core Haskell package compiled to WASM
-  // 2. JS bridge that implements MessageReader/MessageWriter
-  // 3. LSP message routing to WASM exports
+  // Create and initialize the WASM bridge
+  const bridge = new L4WasmBridge(wasmUrl, version)
+  await bridge.initialize()
 
-  throw new Error(
-    'WASM LSP is not yet implemented. See doc/dev/specs/todo/WASM-LSP-SPEC.md'
-  )
+  // Create LSP handler that routes to the WASM bridge
+  const handler = createWasmLspHandler(bridge)
+
+  console.log('[L4 LSP] WASM connection established')
+
+  // For WASM mode, we don't have traditional MessageTransports.
+  // The handler processes messages directly.
+  // This is a simplified integration - a full implementation would
+  // need to wire this into Monaco's language client differently.
+  return {
+    type: 'wasm',
+    transports: null, // WASM uses handler instead of transports
+    wasmHandler: handler,
+    dispose: async () => {
+      handler.dispose()
+      bridge.dispose()
+    },
+  }
 }
 
 /**
