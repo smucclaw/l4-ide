@@ -605,7 +605,7 @@ The `lhs` host has the NixOS build environment. The `--target-host` flag deploys
 
 ## Requirements
 
-- **Haskell:** GHC 9.8.4, Cabal 3.10+ (via GHCup)
+- **Haskell:** GHC 9.10.2, Cabal 3.10+ (via GHCup)
 - **Node.js:** >= 20 (via nvm or corepack)
 - **GraphViz:** `dot` + `xdot` for trace visualization
 - **System libs:** pkg-config, liblzma-dev, libgmp-dev

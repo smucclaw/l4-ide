@@ -60,9 +60,12 @@ library
     split,
     text >= 2 && < 2.1.2,
     tree-diff,
-    uuid,
     vector,
     template-haskell,
+
+  -- uuid depends on entropy which requires system libraries not available in WASM
+  if !arch(wasm32)
+    build-depends: uuid
 
   if !flag(safe-mode)
     build-depends: req >= 3.0
@@ -126,9 +129,13 @@ library
     L4.Utils.IntervalMap
     L4.Utils.RevList
     L4.Utils.Ratio
-    L4.Viz.Ladder
     L4.Viz.VizExpr
     L4.Wasm
+
+  -- Ladder visualization uses uuid which is not WASM-compatible
+  if !arch(wasm32)
+    exposed-modules:
+      L4.Viz.Ladder
 
 test-suite jl4-core-test
   import: defaults

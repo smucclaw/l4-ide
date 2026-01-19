@@ -15,7 +15,7 @@ This document describes how to build L4 IDE on Windows and how the Windows relea
 
 **What it does:**
 
-1. Sets up a Windows runner with GHC 9.8.4
+1. Sets up a Windows runner with GHC 9.10.2
 2. Builds all Haskell packages using Cabal
 3. Runs the test suite
 4. Collects all `.exe` files from the build output
@@ -58,9 +58,9 @@ This document describes how to build L4 IDE on Windows and how the Windows relea
 2. **Install GHC and Cabal via GHCup**
 
    ```powershell
-   ghcup install ghc 9.8.4
+   ghcup install ghc 9.10.2
    ghcup install cabal latest
-   ghcup set ghc 9.8.4
+   ghcup set ghc 9.10.2
    ```
 
 3. **Install Git** (if not already installed)
@@ -95,13 +95,13 @@ cabal install all --overwrite-policy=always
 After building, executables are located in:
 
 ```
-dist-newstyle/build/x86_64-windows/ghc-9.8.4/<package>/x/<exe-name>/build/<exe-name>/
+dist-newstyle/build/x86_64-windows/ghc-9.10.2/<package>/x/<exe-name>/build/<exe-name>/
 ```
 
 For example:
 
 ```
-dist-newstyle/build/x86_64-windows/ghc-9.8.4/jl4-0.1/x/jl4-cli/build/jl4-cli/jl4-cli.exe
+dist-newstyle/build/x86_64-windows/ghc-9.10.2/jl4-0.1/x/jl4-cli/build/jl4-cli/jl4-cli.exe
 ```
 
 Or use `cabal install` to copy them to `~/.cabal/bin/`:
