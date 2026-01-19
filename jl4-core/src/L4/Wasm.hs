@@ -45,11 +45,7 @@ import L4.EvaluateLazy.Machine (prettyEvalException)
 
 import L4.TracePolicy (lspDefaultPolicy)
 import L4.EvaluateLazy.GraphVizOptions (defaultGraphVizOptions)
-
--- Ladder visualization is not available on WASM (uuid dependency issues)
-#if !defined(wasm32_HOST_ARCH)
 import qualified L4.Viz.Ladder as Ladder
-#endif
 
 
 #if defined(wasm32_HOST_ARCH)
@@ -267,6 +263,14 @@ js_l4_eval source = do
   result <- l4Eval $ Text.pack $ fromJSString source
   pure $ toJSString $ Text.unpack result
 
+-- | Generate ladder diagram visualization.
+foreign export javascript "l4_visualize"
+  js_l4_visualize :: JSString -> JSString -> Int -> IO JSString
+
+js_l4_visualize :: JSString -> JSString -> Int -> IO JSString
+js_l4_visualize source uri version = pure $ toJSString $ Text.unpack $
+  l4Visualize (Text.pack $ fromJSString source) (Text.pack $ fromJSString uri) version
+
 #endif
 
 -- ----------------------------------------------------------------------------
@@ -418,9 +422,6 @@ prettyEvalResult (EL.Reduction (Right v))  = prettyLayout v
 --   "error": "Error message"
 -- }
 -- @
---
--- Note: This function is not available in WASM builds due to uuid dependency.
-#if !defined(wasm32_HOST_ARCH)
 l4Visualize :: Text -> Text -> Int -> Text
 l4Visualize source uriText version =
   let uri = toNormalizedUri (Uri uriText)
@@ -444,14 +445,6 @@ l4Visualize source uriText version =
                 ]
             Right ladderInfo ->
               encodeJson ladderInfo
-#else
--- WASM stub - visualization not available
-l4Visualize :: Text -> Text -> Int -> Text
-l4Visualize _source _uriText _version =
-  encodeJson $ Aeson.object
-    [ "error" .= ("Visualization not available in WASM mode" :: Text)
-    ]
-#endif
 
 -- | Encode lexer tokens as LSP semantic tokens.
 --

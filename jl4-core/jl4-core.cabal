@@ -63,10 +63,6 @@ library
     vector,
     template-haskell,
 
-  -- uuid depends on entropy which requires system libraries not available in WASM
-  if !arch(wasm32)
-    build-depends: uuid
-
   if !flag(safe-mode)
     build-depends: req >= 3.0
     cpp-options: -DHTTP_ENABLED
@@ -129,13 +125,11 @@ library
     L4.Utils.IntervalMap
     L4.Utils.RevList
     L4.Utils.Ratio
+    L4.Crypto.SHA1
+    L4.Crypto.UUID5
+    L4.Viz.Ladder
     L4.Viz.VizExpr
     L4.Wasm
-
-  -- Ladder visualization uses uuid which is not WASM-compatible
-  if !arch(wasm32)
-    exposed-modules:
-      L4.Viz.Ladder
 
 test-suite jl4-core-test
   import: defaults
@@ -146,10 +140,12 @@ test-suite jl4-core-test
     Paths_jl4_core
     TemporalContextSpec
     MixfixParserSpec
+    UUID5Spec
   build-tool-depends:
     hspec-discover:hspec-discover
   build-depends:
     base,
+    bytestring,
     hspec,
     jl4-core,
     text,

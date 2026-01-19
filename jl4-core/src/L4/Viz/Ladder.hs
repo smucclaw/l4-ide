@@ -24,10 +24,9 @@ import qualified Data.List as List
 import Optics.State.Operators ((<%=), (%=))
 import Optics
 import Control.Monad.Extra (unlessM)
-import qualified Data.UUID as UUID
-import qualified Data.UUID.V5 as UUIDV5
-import qualified Data.ByteString as BS
 import qualified Data.Text.Encoding as TextEncoding
+
+import qualified L4.Crypto.UUID5 as UUID5
 
 import qualified L4.TypeCheck as TC
 import L4.Annotation
@@ -400,7 +399,7 @@ generateAtomId functionName label refs =
         ( [functionName, label]
           <> ["refs=" <> Text.intercalate ";" sortedRefs | not (null sortedRefs)]
         )
-  in UUID.toText (UUIDV5.generateNamed UUIDV5.namespaceURL (BS.unpack (TextEncoding.encodeUtf8 canonical)))
+  in UUID5.toText (UUID5.generateNamed UUID5.namespaceURL (TextEncoding.encodeUtf8 canonical))
 
 ------------------------------------------------------
 -- Boolean type checking
