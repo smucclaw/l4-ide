@@ -56,47 +56,6 @@ export function isWasmAvailable(): boolean {
 }
 
 /**
- * Load WASM module with versioned caching
- */
-async function loadWasmCached(
-  url: string,
-  version: string
-): Promise<WebAssembly.Module> {
-  const cacheKey = `l4-wasm-${version}`
-
-  // Try to open the cache
-  const cache = await caches.open(WASM_CACHE_NAME)
-
-  // Check for cached version
-  const cachedResponse = await cache.match(cacheKey)
-  if (cachedResponse) {
-    console.log(`[L4 WASM] Loading from cache: ${cacheKey}`)
-    const buffer = await cachedResponse.arrayBuffer()
-    return WebAssembly.compile(buffer)
-  }
-
-  // Fetch fresh
-  console.log(`[L4 WASM] Fetching: ${url}`)
-  const response = await fetch(url)
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch WASM: ${response.status} ${response.statusText}`)
-  }
-
-  // Clone for caching (response body can only be consumed once)
-  const responseForCache = response.clone()
-
-  // Compile the module
-  const module = await WebAssembly.compileStreaming(response)
-
-  // Cache for future use
-  await cache.put(cacheKey, responseForCache)
-  console.log(`[L4 WASM] Cached: ${cacheKey}`)
-
-  return module
-}
-
-/**
  * Clear old WASM versions from cache
  */
 export async function clearOldWasmCache(currentVersion: string): Promise<void> {
@@ -178,7 +137,9 @@ export async function createWasmConnection(
   }
 
   // Import WASM bridge modules
-  const { L4WasmBridge, createWasmMessageTransports } = await import('./wasm/index')
+  const { L4WasmBridge, createWasmMessageTransports } = await import(
+    './wasm/index'
+  )
 
   // Create and initialize the WASM bridge
   const bridge = new L4WasmBridge(wasmUrl, jsUrl, version)
@@ -211,11 +172,17 @@ export async function createLspConnection(
 
   if (preferredType === 'wasm') {
     if (!config.wasmUrl || !config.wasmJsUrl || !config.wasmVersion) {
-      throw new Error('WASM URL, JS URL, and version are required for WASM mode')
+      throw new Error(
+        'WASM URL, JS URL, and version are required for WASM mode'
+      )
     }
 
     try {
-      return await createWasmConnection(config.wasmUrl, config.wasmJsUrl, config.wasmVersion)
+      return await createWasmConnection(
+        config.wasmUrl,
+        config.wasmJsUrl,
+        config.wasmVersion
+      )
     } catch (error) {
       console.warn('[L4 LSP] WASM connection failed:', error)
 
@@ -234,9 +201,18 @@ export async function createLspConnection(
   } catch (error) {
     console.warn('[L4 LSP] WebSocket connection failed:', error)
 
-    if (enableFallback && config.wasmUrl && config.wasmJsUrl && config.wasmVersion) {
+    if (
+      enableFallback &&
+      config.wasmUrl &&
+      config.wasmJsUrl &&
+      config.wasmVersion
+    ) {
       console.log('[L4 LSP] Falling back to WASM')
-      return await createWasmConnection(config.wasmUrl, config.wasmJsUrl, config.wasmVersion)
+      return await createWasmConnection(
+        config.wasmUrl,
+        config.wasmJsUrl,
+        config.wasmVersion
+      )
     }
 
     throw error

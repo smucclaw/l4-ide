@@ -2,7 +2,7 @@ cabal-version: 3.0
 name: jl4-query-plan
 version: 0.1.0.0
 build-type: Simple
-tested-with: ghc ==9.6.6
+tested-with: GHC==9.10.2
 
 source-repository head
   type: git

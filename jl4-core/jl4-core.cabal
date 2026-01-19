@@ -2,7 +2,7 @@ cabal-version: 3.0
 name: jl4-core
 version: 0.1
 build-type: Simple
-tested-with: GHC==9.6.6
+tested-with: GHC==9.10.2
 
 flag safe-mode
   description: Disable FETCH/POST builtins (for WASM builds). When enabled, HTTP operations return errors.
@@ -60,6 +60,7 @@ library
     split,
     text >= 2 && < 2.1.2,
     tree-diff,
+    uuid,
     vector,
     template-haskell,
 
@@ -125,6 +126,8 @@ library
     L4.Utils.IntervalMap
     L4.Utils.RevList
     L4.Utils.Ratio
+    L4.Viz.Ladder
+    L4.Viz.VizExpr
     L4.Wasm
 
 test-suite jl4-core-test

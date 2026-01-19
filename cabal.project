@@ -8,3 +8,5 @@ packages:
   ./jl4-websessions
 
 index-state: 2025-03-31T10:46:26Z
+
+allow-newer: all

@@ -1,6 +1,6 @@
 /**
  * WASM module exports
- * 
+ *
  * This module provides WebAssembly-based L4 language features
  * for running in the browser without a server connection.
  */

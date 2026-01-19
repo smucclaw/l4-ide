@@ -19,6 +19,7 @@ module L4.Wasm
   , l4Completions
   , l4SemanticTokens
   , l4Eval
+  , l4Visualize
   ) where
 
 import Base
@@ -44,6 +45,7 @@ import L4.EvaluateLazy.Machine (prettyEvalException)
 
 import L4.TracePolicy (lspDefaultPolicy)
 import L4.EvaluateLazy.GraphVizOptions (defaultGraphVizOptions)
+import qualified L4.Viz.Ladder as Ladder
 
 
 #if defined(wasm32_HOST_ARCH)
@@ -261,6 +263,14 @@ js_l4_eval source = do
   result <- l4Eval $ Text.pack $ fromJSString source
   pure $ toJSString $ Text.unpack result
 
+-- | Get visualization data for a DECIDE rule.
+foreign export javascript "l4_visualize"
+  js_l4_visualize :: JSString -> JSString -> Int -> IO JSString
+
+js_l4_visualize :: JSString -> JSString -> Int -> IO JSString
+js_l4_visualize source uri version =
+  pure $ toJSString $ Text.unpack $ l4Visualize (Text.pack $ fromJSString source) (Text.pack $ fromJSString uri) version
+
 #endif
 
 -- ----------------------------------------------------------------------------
@@ -392,6 +402,49 @@ prettyEvalResult (EL.Assertion True)       = "assertion satisfied"
 prettyEvalResult (EL.Assertion False)      = "assertion failed"
 prettyEvalResult (EL.Reduction (Left exc)) = Text.unlines (prettyEvalException exc)
 prettyEvalResult (EL.Reduction (Right v))  = prettyLayout v
+
+-- | Generate ladder diagram visualization data for a DECIDE rule.
+--
+-- Parses, type-checks, and visualizes the first visualizable DECIDE rule
+-- (one with a Boolean return type) in the source code.
+--
+-- Returns JSON-encoded @RenderAsLadderInfo@ or an error object:
+--
+-- @
+-- // Success:
+-- {
+--   "verDocId": { "uri": "...", "version": 0 },
+--   "funDecl": { ... }
+-- }
+--
+-- // Error:
+-- {
+--   "error": "Error message"
+-- }
+-- @
+l4Visualize :: Text -> Text -> Int -> Text
+l4Visualize source uriText version =
+  let uri = toNormalizedUri (Uri uriText)
+  in case execProgramParserWithHintPass uri source of
+    Left _parseErrors ->
+      encodeJson $ Aeson.object
+        [ "error" .= ("Parse error" :: Text)
+        ]
+    Right (parsed, _hints, _parseWarnings) ->
+      let checkResult = doCheckProgram uri parsed
+      in if not (null checkResult.errors)
+        then
+          encodeJson $ Aeson.object
+            [ "error" .= ("Type check error" :: Text)
+            ]
+        else
+          case Ladder.visualize uri uriText version checkResult.program checkResult.substitution True of
+            Left vizError ->
+              encodeJson $ Aeson.object
+                [ "error" .= Ladder.prettyPrintVizError vizError
+                ]
+            Right ladderInfo ->
+              encodeJson ladderInfo
 
 -- | Encode lexer tokens as LSP semantic tokens.
 --
