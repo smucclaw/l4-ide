@@ -1,0 +1,281 @@
+name: WASM Build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'jl4-core/**'
+      - 'jl4-wasm/**'
+      - 'cabal-wasm.project'
+      - '.github/workflows/wasm-build.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'jl4-core/**'
+      - 'jl4-wasm/**'
+      - 'cabal-wasm.project'
+      - '.github/workflows/wasm-build.yml'
+  workflow_dispatch:
+    inputs:
+      run_wasm_opt:
+        description: 'Run wasm-opt optimization'
+        type: boolean
+        default: true
+      optimization_level:
+        description: 'wasm-opt optimization level (O1, O2, O3, Os, Oz)'
+        type: choice
+        options:
+          - O2
+          - O3
+          - Os
+          - Oz
+          - O1
+        default: Os
+
+concurrency:
+  group: wasm-build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GHC_WASM_VERSION: "9.10"
+
+jobs:
+  build-wasm:
+    name: Build WASM Binary
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl xz-utils
+
+      - name: Cache GHC WASM toolchain
+        id: cache-ghc-wasm
+        uses: actions/cache@v4
+        with:
+          path: ~/.ghc-wasm
+          key: ghc-wasm-${{ env.GHC_WASM_VERSION }}-${{ runner.os }}
+
+      - name: Install GHC WASM toolchain
+        if: steps.cache-ghc-wasm.outputs.cache-hit != 'true'
+        run: |
+          curl https://gitlab.haskell.org/ghc/ghc-wasm-meta/-/raw/master/bootstrap.sh | FLAVOUR=${{ env.GHC_WASM_VERSION }} bash
+        shell: bash
+
+      - name: Verify GHC WASM installation
+        run: |
+          source ~/.ghc-wasm/env
+          wasm32-wasi-ghc --version
+          wasm32-wasi-cabal --version
+
+      - name: Cache WASM dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.ghc-wasm/.cabal/store
+            dist-newstyle
+          key: wasm-deps-${{ env.GHC_WASM_VERSION }}-${{ hashFiles('cabal-wasm.project', 'jl4-core/jl4-core.cabal', 'jl4-wasm/jl4-wasm.cabal') }}
+          restore-keys: |
+            wasm-deps-${{ env.GHC_WASM_VERSION }}-
+
+      - name: Build WASM binary
+        run: |
+          source ~/.ghc-wasm/env
+          wasm32-wasi-cabal update
+          wasm32-wasi-cabal build jl4-wasm --project-file=cabal-wasm.project
+
+      - name: Generate JS FFI glue code
+        run: |
+          source ~/.ghc-wasm/env
+          WASM_PATH=$(find dist-newstyle -name 'jl4-wasm.wasm' -path '*/opt/build/*' | head -1)
+          echo "Found WASM at: $WASM_PATH"
+          $(wasm32-wasi-ghc --print-libdir)/post-link.mjs -i "$WASM_PATH" -o dist-newstyle/jl4-wasm.mjs
+
+      - name: Get file sizes (before optimization)
+        run: |
+          WASM_PATH=$(find dist-newstyle -name 'jl4-wasm.wasm' -path '*/opt/build/*' | head -1)
+          echo "WASM binary size (unoptimized):"
+          ls -lh "$WASM_PATH"
+          WASM_SIZE=$(stat --format=%s "$WASM_PATH")
+          echo "wasm_size_before=$WASM_SIZE" >> $GITHUB_ENV
+
+      - name: Install binaryen (wasm-opt)
+        if: ${{ github.event.inputs.run_wasm_opt == 'true' || github.event_name != 'workflow_dispatch' }}
+        run: |
+          sudo apt-get install -y binaryen
+          wasm-opt --version
+
+      - name: Optimize WASM binary
+        if: ${{ github.event.inputs.run_wasm_opt == 'true' || github.event_name != 'workflow_dispatch' }}
+        run: |
+          WASM_PATH=$(find dist-newstyle -name 'jl4-wasm.wasm' -path '*/opt/build/*' | head -1)
+          OPT_LEVEL="${{ github.event.inputs.optimization_level || 'Os' }}"
+          echo "Running wasm-opt with -${OPT_LEVEL}..."
+          
+          # Backup original
+          cp "$WASM_PATH" "$WASM_PATH.unoptimized"
+          
+          # Run wasm-opt (in-place)
+          wasm-opt -${OPT_LEVEL} "$WASM_PATH" -o "$WASM_PATH.opt"
+          mv "$WASM_PATH.opt" "$WASM_PATH"
+          
+          echo "WASM binary size (after wasm-opt -${OPT_LEVEL}):"
+          ls -lh "$WASM_PATH"
+          
+          WASM_SIZE_AFTER=$(stat --format=%s "$WASM_PATH")
+          echo "wasm_size_after=$WASM_SIZE_AFTER" >> $GITHUB_ENV
+
+      - name: Prepare artifacts
+        run: |
+          mkdir -p wasm-artifacts
+          
+          WASM_PATH=$(find dist-newstyle -name 'jl4-wasm.wasm' -path '*/opt/build/*' | head -1)
+          cp "$WASM_PATH" wasm-artifacts/jl4-core.wasm
+          cp dist-newstyle/jl4-wasm.mjs wasm-artifacts/jl4-core.mjs
+          
+          # Generate metadata
+          COMMIT_SHA="${{ github.sha }}"
+          SHORT_SHA="${COMMIT_SHA:0:8}"
+          DATE=$(date -u +%Y%m%d)
+          VERSION="${DATE}-${SHORT_SHA}"
+          
+          echo "$VERSION" > wasm-artifacts/version.txt
+          echo "version=$VERSION" >> $GITHUB_ENV
+          
+          # File sizes
+          echo "=== WASM Build Artifacts ===" >> wasm-artifacts/README.txt
+          echo "Version: $VERSION" >> wasm-artifacts/README.txt
+          echo "Commit: ${{ github.sha }}" >> wasm-artifacts/README.txt
+          echo "Built: $(date -u)" >> wasm-artifacts/README.txt
+          echo "" >> wasm-artifacts/README.txt
+          ls -la wasm-artifacts/ >> wasm-artifacts/README.txt
+
+      - name: Test WASM binary loads
+        run: |
+          source ~/.ghc-wasm/env
+          cd wasm-artifacts
+          
+          # Use GHC WASM's Node.js for testing
+          ~/.ghc-wasm/nodejs/bin/node -e "
+            const fs = require('fs');
+            
+            async function test() {
+              console.log('Loading WASM module...');
+              const wasmBuffer = fs.readFileSync('./jl4-core.wasm');
+              const module = await WebAssembly.compile(wasmBuffer);
+              
+              console.log('Module compiled successfully');
+              console.log('Exports:', WebAssembly.Module.exports(module).map(e => e.name).slice(0, 10), '...');
+              
+              // Check for our expected exports
+              const exports = WebAssembly.Module.exports(module).map(e => e.name);
+              const required = ['l4_check', 'l4_hover', 'l4_completions', 'l4_semantic_tokens', 'l4_eval'];
+              const missing = required.filter(r => !exports.includes(r));
+              
+              if (missing.length > 0) {
+                console.error('Missing exports:', missing);
+                process.exit(1);
+              }
+              
+              console.log('All required exports present!');
+            }
+            
+            test().catch(e => { console.error(e); process.exit(1); });
+          "
+
+      - name: Upload WASM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: jl4-wasm-${{ env.version }}
+          path: wasm-artifacts/
+          retention-days: 30
+
+      - name: Build summary
+        run: |
+          echo "## WASM Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version:** ${{ env.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **GHC WASM:** ${{ env.GHC_WASM_VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          WASM_SIZE_MB=$(echo "scale=2; ${{ env.wasm_size_before }} / 1048576" | bc)
+          echo "### Binary Sizes" >> $GITHUB_STEP_SUMMARY
+          echo "| File | Size |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|------|" >> $GITHUB_STEP_SUMMARY
+          echo "| jl4-core.wasm (unoptimized) | ${WASM_SIZE_MB} MB |" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -n "${{ env.wasm_size_after }}" ]; then
+            WASM_SIZE_OPT_MB=$(echo "scale=2; ${{ env.wasm_size_after }} / 1048576" | bc)
+            REDUCTION=$(echo "scale=1; (1 - ${{ env.wasm_size_after }} / ${{ env.wasm_size_before }}) * 100" | bc)
+            echo "| jl4-core.wasm (optimized) | ${WASM_SIZE_OPT_MB} MB (-${REDUCTION}%) |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "| jl4-core.mjs | $(ls -lh wasm-artifacts/jl4-core.mjs | awk '{print $5}') |" >> $GITHUB_STEP_SUMMARY
+
+  # Optional: Update static assets on main branch
+  update-static-assets:
+    name: Update Static Assets
+    needs: build-wasm
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download WASM artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: jl4-wasm-${{ needs.build-wasm.outputs.version || 'latest' }}
+          path: wasm-artifacts/
+          pattern: jl4-wasm-*
+          merge-multiple: true
+
+      - name: Update static/wasm directory
+        run: |
+          mkdir -p ts-apps/jl4-web/static/wasm
+          cp wasm-artifacts/jl4-core.wasm ts-apps/jl4-web/static/wasm/
+          cp wasm-artifacts/jl4-core.mjs ts-apps/jl4-web/static/wasm/
+          cp wasm-artifacts/version.txt ts-apps/jl4-web/static/wasm/
+          
+          echo "Updated files:"
+          ls -la ts-apps/jl4-web/static/wasm/
+
+      - name: Check for changes
+        id: check-changes
+        run: |
+          if git diff --quiet ts-apps/jl4-web/static/wasm/; then
+            echo "No changes to WASM files"
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "WASM files have changed"
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Pull Request
+        if: steps.check-changes.outputs.has_changes == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "chore: update WASM binaries"
+          title: "chore: update WASM binaries"
+          body: |
+            Automated update of WASM binaries from the latest build.
+            
+            Built from commit: ${{ github.sha }}
+            
+            ## Changes
+            - Updated `jl4-core.wasm`
+            - Updated `jl4-core.mjs`
+            - Updated `version.txt`
+          branch: update-wasm-binaries
+          delete-branch: true
+          labels: |
+            automated
+            wasm

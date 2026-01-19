@@ -12,8 +12,6 @@
  */
 
 import type { MessageTransports } from 'vscode-languageclient'
-import type { L4LanguageClient } from 'jl4-client-rpc'
-import type { WasmLspHandler } from './wasm/wasm-message-transports'
 
 /** Connection type enumeration */
 export type LspConnectionType = 'websocket' | 'wasm'
@@ -26,6 +24,8 @@ export interface LspConnectionConfig {
   websocketUrl: string
   /** URL to fetch WASM binary (if using WASM mode) */
   wasmUrl?: string
+  /** URL to fetch WASM JS FFI glue code (if using WASM mode) */
+  wasmJsUrl?: string
   /** Version string for WASM caching */
   wasmVersion?: string
   /** Whether to fall back to alternative connection if preferred fails */
@@ -36,10 +36,8 @@ export interface LspConnectionConfig {
 export interface LspConnectionResult {
   /** The actual connection type used */
   type: LspConnectionType
-  /** Message transports for the language client (WebSocket mode) */
-  transports: MessageTransports | null
-  /** WASM LSP handler (WASM mode only) */
-  wasmHandler?: WasmLspHandler
+  /** Message transports for the language client */
+  transports: MessageTransports
   /** Cleanup function */
   dispose: () => Promise<void>
 }
@@ -166,11 +164,13 @@ export async function createWebSocketConnection(
  * This uses the L4 WASM module to provide language features
  * directly in the browser without a server connection.
  *
- * Note: This returns a WasmLspHandler instead of MessageTransports.
- * The caller needs to handle messages differently for WASM mode.
+ * Returns MessageTransports that are compatible with MonacoLanguageClient,
+ * allowing WASM mode to work identically to WebSocket mode from the
+ * language client's perspective.
  */
 export async function createWasmConnection(
   wasmUrl: string,
+  jsUrl: string,
   version: string
 ): Promise<LspConnectionResult> {
   if (!isWasmAvailable()) {
@@ -178,27 +178,24 @@ export async function createWasmConnection(
   }
 
   // Import WASM bridge modules
-  const { L4WasmBridge, createWasmLspHandler } = await import('./wasm/index')
+  const { L4WasmBridge, createWasmMessageTransports } = await import('./wasm/index')
 
   // Create and initialize the WASM bridge
-  const bridge = new L4WasmBridge(wasmUrl, version)
+  const bridge = new L4WasmBridge(wasmUrl, jsUrl, version)
   await bridge.initialize()
 
-  // Create LSP handler that routes to the WASM bridge
-  const handler = createWasmLspHandler(bridge)
+  // Create MessageTransports that route to the WASM bridge
+  // This allows WASM mode to work with MonacoLanguageClient
+  const transports = createWasmMessageTransports(bridge)
 
   console.log('[L4 LSP] WASM connection established')
 
-  // For WASM mode, we don't have traditional MessageTransports.
-  // The handler processes messages directly.
-  // This is a simplified integration - a full implementation would
-  // need to wire this into Monaco's language client differently.
   return {
     type: 'wasm',
-    transports: null, // WASM uses handler instead of transports
-    wasmHandler: handler,
+    transports,
     dispose: async () => {
-      handler.dispose()
+      transports.reader.dispose()
+      transports.writer.dispose()
       bridge.dispose()
     },
   }
@@ -213,12 +210,12 @@ export async function createLspConnection(
   const { preferredType, enableFallback } = config
 
   if (preferredType === 'wasm') {
-    if (!config.wasmUrl || !config.wasmVersion) {
-      throw new Error('WASM URL and version are required for WASM mode')
+    if (!config.wasmUrl || !config.wasmJsUrl || !config.wasmVersion) {
+      throw new Error('WASM URL, JS URL, and version are required for WASM mode')
     }
 
     try {
-      return await createWasmConnection(config.wasmUrl, config.wasmVersion)
+      return await createWasmConnection(config.wasmUrl, config.wasmJsUrl, config.wasmVersion)
     } catch (error) {
       console.warn('[L4 LSP] WASM connection failed:', error)
 
@@ -237,9 +234,9 @@ export async function createLspConnection(
   } catch (error) {
     console.warn('[L4 LSP] WebSocket connection failed:', error)
 
-    if (enableFallback && config.wasmUrl && config.wasmVersion) {
+    if (enableFallback && config.wasmUrl && config.wasmJsUrl && config.wasmVersion) {
       console.log('[L4 LSP] Falling back to WASM')
-      return await createWasmConnection(config.wasmUrl, config.wasmVersion)
+      return await createWasmConnection(config.wasmUrl, config.wasmJsUrl, config.wasmVersion)
     }
 
     throw error
@@ -251,14 +248,16 @@ export async function createLspConnection(
  */
 export function getDefaultConfig(): LspConnectionConfig {
   const websocketUrl = import.meta.env.VITE_SOCKET_URL || 'ws://localhost:5007'
-  const wasmUrl = import.meta.env.VITE_WASM_URL || undefined
-  const wasmVersion = import.meta.env.VITE_WASM_VERSION || undefined
+  const wasmUrl = import.meta.env.VITE_WASM_URL || '/wasm/jl4-core.wasm'
+  const wasmJsUrl = import.meta.env.VITE_WASM_JS_URL || '/wasm/jl4-core.mjs'
+  const wasmVersion = import.meta.env.VITE_WASM_VERSION || 'dev'
   const preferWasm = import.meta.env.VITE_PREFER_WASM === 'true'
 
   return {
-    preferredType: preferWasm && wasmUrl ? 'wasm' : 'websocket',
+    preferredType: preferWasm ? 'wasm' : 'websocket',
     websocketUrl,
     wasmUrl,
+    wasmJsUrl,
     wasmVersion,
     enableFallback: true,
   }

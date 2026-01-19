@@ -67,6 +67,10 @@ library
     build-depends: req >= 3.0
     cpp-options: -DHTTP_ENABLED
 
+  -- For WASM JavaScript FFI exports
+  if arch(wasm32)
+    build-depends: ghc-experimental
+
   autogen-modules:
     Paths_jl4_core
 

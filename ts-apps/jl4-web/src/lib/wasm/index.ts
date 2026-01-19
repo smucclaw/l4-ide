@@ -16,4 +16,9 @@ export type {
   Range,
 } from './wasm-bridge'
 
-export { WasmLspHandler, createWasmLspHandler } from './wasm-message-transports'
+export {
+  WasmLspHandler,
+  createWasmLspHandler,
+  createWasmMessageTransports,
+  createWasmMessageTransportsFromHandler,
+} from './wasm-message-transports'

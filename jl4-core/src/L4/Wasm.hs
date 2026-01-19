@@ -11,19 +11,14 @@
 -- @since 0.1
 module L4.Wasm
   (
-#ifdef ghcjs_HOST_OS
-    -- * FFI Exports (WASM/JS only)
-    -- These are exported via @foreign export javascript@ and callable from JS.
-    -- They are not visible to Haskell code on native platforms.
-#else
     -- * API Functions
-    -- On native platforms, these functions are available for testing.
+    -- These functions are available for testing on all platforms.
+    -- On WASM, they are also exported via JavaScript FFI.
     l4Check
   , l4Hover
   , l4Completions
   , l4SemanticTokens
   , l4Eval
-#endif
   ) where
 
 import Base
@@ -51,8 +46,8 @@ import L4.TracePolicy (lspDefaultPolicy)
 import L4.EvaluateLazy.GraphVizOptions (defaultGraphVizOptions)
 
 
-#ifdef ghcjs_HOST_OS
-import GHC.JS.Prim (JSVal, fromJSString, toJSString)
+#if defined(wasm32_HOST_ARCH)
+import GHC.Wasm.Prim (JSString(..), fromJSString, toJSString)
 #endif
 
 -- ----------------------------------------------------------------------------
@@ -224,55 +219,46 @@ l4Eval source = do
             ]
 
 -- ----------------------------------------------------------------------------
--- JavaScript FFI Exports (WASM/JS backend only)
+-- JavaScript FFI Exports (WASM backend only)
 -- ----------------------------------------------------------------------------
 
-#ifdef ghcjs_HOST_OS
+#if defined(wasm32_HOST_ARCH)
 
 -- | Parse and type-check L4 source code.
 foreign export javascript "l4_check"
-  js_l4_check :: JSVal -> IO JSVal
+  js_l4_check :: JSString -> IO JSString
 
-js_l4_check :: JSVal -> IO JSVal
-js_l4_check sourceVal = do
-  let source = Text.pack $ fromJSString sourceVal
-  pure $ toJSString $ Text.unpack $ l4Check source
+js_l4_check :: JSString -> IO JSString
+js_l4_check source = pure $ toJSString $ Text.unpack $ l4Check $ Text.pack $ fromJSString source
 
 -- | Get hover information at a position.
 foreign export javascript "l4_hover"
-  js_l4_hover :: JSVal -> Int -> Int -> IO JSVal
+  js_l4_hover :: JSString -> Int -> Int -> IO JSString
 
-js_l4_hover :: JSVal -> Int -> Int -> IO JSVal
-js_l4_hover sourceVal line col = do
-  let source = Text.pack $ fromJSString sourceVal
-  pure $ toJSString $ Text.unpack $ l4Hover source line col
+js_l4_hover :: JSString -> Int -> Int -> IO JSString
+js_l4_hover source line col = pure $ toJSString $ Text.unpack $ l4Hover (Text.pack $ fromJSString source) line col
 
 -- | Get completion suggestions at a position.
 foreign export javascript "l4_completions"
-  js_l4_completions :: JSVal -> Int -> Int -> IO JSVal
+  js_l4_completions :: JSString -> Int -> Int -> IO JSString
 
-js_l4_completions :: JSVal -> Int -> Int -> IO JSVal
-js_l4_completions sourceVal line col = do
-  let source = Text.pack $ fromJSString sourceVal
-  pure $ toJSString $ Text.unpack $ l4Completions source line col
+js_l4_completions :: JSString -> Int -> Int -> IO JSString
+js_l4_completions source line col = pure $ toJSString $ Text.unpack $ l4Completions (Text.pack $ fromJSString source) line col
 
 -- | Get semantic tokens for syntax highlighting.
 foreign export javascript "l4_semantic_tokens"
-  js_l4_semantic_tokens :: JSVal -> IO JSVal
+  js_l4_semantic_tokens :: JSString -> IO JSString
 
-js_l4_semantic_tokens :: JSVal -> IO JSVal
-js_l4_semantic_tokens sourceVal = do
-  let source = Text.pack $ fromJSString sourceVal
-  pure $ toJSString $ Text.unpack $ l4SemanticTokens source
+js_l4_semantic_tokens :: JSString -> IO JSString
+js_l4_semantic_tokens source = pure $ toJSString $ Text.unpack $ l4SemanticTokens $ Text.pack $ fromJSString source
 
 -- | Evaluate L4 source code.
 foreign export javascript "l4_eval"
-  js_l4_eval :: JSVal -> IO JSVal
+  js_l4_eval :: JSString -> IO JSString
 
-js_l4_eval :: JSVal -> IO JSVal
-js_l4_eval sourceVal = do
-  let source = Text.pack $ fromJSString sourceVal
-  result <- l4Eval source
+js_l4_eval :: JSString -> IO JSString
+js_l4_eval source = do
+  result <- l4Eval $ Text.pack $ fromJSString source
   pure $ toJSString $ Text.unpack result
 
 #endif

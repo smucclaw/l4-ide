@@ -1,17 +1,24 @@
 /**
  * WASM Message Transports
  *
- * Provides an LSP-like message handler that routes requests
+ * Provides MessageTransports-compatible adapters that route LSP requests
  * to the WASM bridge instead of a network connection.
  *
  * This enables running L4 language features in the browser
- * without a server connection.
- *
- * Note: This doesn't implement the full vscode-languageclient
- * MessageTransports interface. Instead, it's designed to work
- * with a custom WASM-aware language client setup.
+ * without a server connection, while remaining compatible with
+ * the standard vscode-languageclient MessageTransports interface.
  */
 
+import type { MessageTransports } from 'vscode-languageclient'
+import type {
+  MessageReader,
+  MessageWriter,
+  Message,
+  DataCallback,
+  Disposable,
+  PartialMessageInfo,
+  Event,
+} from 'vscode-jsonrpc'
 import type { L4WasmBridge } from './wasm-bridge'
 
 /** LSP message types */
@@ -215,7 +222,7 @@ export class WasmLspHandler {
     }
   }
 
-  private handleHover(params: unknown): unknown {
+  private async handleHover(params: unknown): Promise<unknown> {
     const p = params as {
       textDocument: { uri: string }
       position: { line: number; character: number }
@@ -226,7 +233,7 @@ export class WasmLspHandler {
     return this.bridge.hover(content, p.position.line, p.position.character)
   }
 
-  private handleCompletion(params: unknown): unknown {
+  private async handleCompletion(params: unknown): Promise<unknown> {
     const p = params as {
       textDocument: { uri: string }
       position: { line: number; character: number }
@@ -234,7 +241,7 @@ export class WasmLspHandler {
     const content = this.documentContents.get(p.textDocument.uri)
     if (!content) return { items: [] }
     
-    const items = this.bridge.completions(
+    const items = await this.bridge.completions(
       content,
       p.position.line,
       p.position.character
@@ -242,7 +249,7 @@ export class WasmLspHandler {
     return { items }
   }
 
-  private handleSemanticTokens(params: unknown): unknown {
+  private async handleSemanticTokens(params: unknown): Promise<unknown> {
     const p = params as { textDocument: { uri: string } }
     const content = this.documentContents.get(p.textDocument.uri)
     if (!content) return { data: [] }
@@ -250,12 +257,12 @@ export class WasmLspHandler {
     return this.bridge.semanticTokens(content)
   }
 
-  private checkAndPublishDiagnostics(
+  private async checkAndPublishDiagnostics(
     uri: string,
     content: string,
     version?: number
-  ): void {
-    const diagnostics = this.bridge.check(content)
+  ): Promise<void> {
+    const diagnostics = await this.bridge.check(content)
     this.send({
       jsonrpc: '2.0',
       method: 'textDocument/publishDiagnostics',
@@ -275,4 +282,181 @@ export class WasmLspHandler {
  */
 export function createWasmLspHandler(bridge: L4WasmBridge): WasmLspHandler {
   return new WasmLspHandler(bridge)
+}
+
+/**
+ * A MessageReader that receives messages from the WasmLspHandler.
+ * 
+ * This adapter allows the WasmLspHandler to push messages (responses and
+ * notifications) that the language client will receive as if they came
+ * from a real LSP server.
+ */
+class WasmMessageReader implements MessageReader {
+  private callback: DataCallback | null = null
+  private errorListener: ((error: Error) => void) | null = null
+  private closeListener: (() => void) | null = null
+  private partialMessageListener: ((info: PartialMessageInfo) => void) | null = null
+  private disposed = false
+
+  /**
+   * Push a message to the reader (called by WasmLspHandler)
+   */
+  pushMessage(message: Message): void {
+    if (this.disposed) return
+    if (this.callback) {
+      this.callback(message)
+    }
+  }
+
+  listen(callback: DataCallback): Disposable {
+    this.callback = callback
+    return {
+      dispose: () => {
+        this.callback = null
+      },
+    }
+  }
+
+  /**
+   * Event emitter for errors.
+   * Implements the vscode-jsonrpc Event<T> interface.
+   */
+  readonly onError: Event<Error> = (listener: (e: Error) => void): Disposable => {
+    this.errorListener = listener
+    return { dispose: () => { this.errorListener = null } }
+  }
+
+  /**
+   * Event emitter for close.
+   * Implements the vscode-jsonrpc Event<T> interface.
+   */
+  readonly onClose: Event<void> = (listener: () => void): Disposable => {
+    this.closeListener = listener
+    return { dispose: () => { this.closeListener = null } }
+  }
+
+  /**
+   * Event emitter for partial messages.
+   * Implements the vscode-jsonrpc Event<T> interface.
+   */
+  readonly onPartialMessage: Event<PartialMessageInfo> = (
+    listener: (info: PartialMessageInfo) => void
+  ): Disposable => {
+    this.partialMessageListener = listener
+    return { dispose: () => { this.partialMessageListener = null } }
+  }
+
+  /**
+   * Emit a close event
+   */
+  emitClose(): void {
+    if (this.closeListener) {
+      this.closeListener()
+    }
+  }
+
+  dispose(): void {
+    this.disposed = true
+    this.callback = null
+    this.errorListener = null
+    this.closeListener = null
+    this.partialMessageListener = null
+  }
+}
+
+/**
+ * A MessageWriter that sends messages to the WasmLspHandler.
+ * 
+ * This adapter allows the language client to send messages (requests and
+ * notifications) that will be processed by the WASM module.
+ */
+class WasmMessageWriter implements MessageWriter {
+  private errorListener: ((error: [Error, Message | undefined, number | undefined]) => void) | null = null
+  private closeListener: (() => void) | null = null
+  private disposed = false
+
+  constructor(private handler: WasmLspHandler) {}
+
+  async write(msg: Message): Promise<void> {
+    if (this.disposed) return
+    await this.handler.handleMessage(msg as LspMessage)
+  }
+
+  end(): void {
+    // No-op for WASM
+  }
+
+  /**
+   * Event emitter for errors.
+   * Implements the vscode-jsonrpc Event<T> interface.
+   */
+  readonly onError: Event<[Error, Message | undefined, number | undefined]> = (
+    listener: (error: [Error, Message | undefined, number | undefined]) => void
+  ): Disposable => {
+    this.errorListener = listener
+    return { dispose: () => { this.errorListener = null } }
+  }
+
+  /**
+   * Event emitter for close.
+   * Implements the vscode-jsonrpc Event<T> interface.
+   */
+  readonly onClose: Event<void> = (listener: () => void): Disposable => {
+    this.closeListener = listener
+    return { dispose: () => { this.closeListener = null } }
+  }
+
+  dispose(): void {
+    this.disposed = true
+    this.errorListener = null
+    this.closeListener = null
+  }
+}
+
+/**
+ * Create MessageTransports that route messages through the WASM bridge.
+ * 
+ * This allows the WASM LSP handler to be used with MonacoLanguageClient
+ * just like a WebSocket connection.
+ * 
+ * @param bridge - The initialized L4WasmBridge
+ * @returns MessageTransports compatible with vscode-languageclient
+ */
+export function createWasmMessageTransports(bridge: L4WasmBridge): MessageTransports {
+  const handler = createWasmLspHandler(bridge)
+  const reader = new WasmMessageReader()
+  const writer = new WasmMessageWriter(handler)
+
+  // Connect handler's outgoing messages to the reader
+  handler.onMessage((message) => {
+    reader.pushMessage(message as Message)
+  })
+
+  return { reader, writer }
+}
+
+/**
+ * Create MessageTransports from an existing WasmLspHandler.
+ * 
+ * Use this if you need access to both the handler and the transports.
+ * 
+ * @param handler - An existing WasmLspHandler
+ * @returns Object containing reader, writer, and a dispose function
+ */
+export function createWasmMessageTransportsFromHandler(
+  handler: WasmLspHandler
+): MessageTransports & { disposeHandler: () => void } {
+  const reader = new WasmMessageReader()
+  const writer = new WasmMessageWriter(handler)
+
+  // Connect handler's outgoing messages to the reader
+  handler.onMessage((message) => {
+    reader.pushMessage(message as Message)
+  })
+
+  return {
+    reader,
+    writer,
+    disposeHandler: () => handler.dispose(),
+  }
 }

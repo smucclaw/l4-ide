@@ -3,6 +3,7 @@
 
 packages:
   jl4-core
+  jl4-wasm
 
 -- Ignore all other packages in the repo
 -- (jl4-lsp, jl4-cli, jl4-decision-service have non-WASM deps)
@@ -16,3 +17,6 @@ allow-newer: all
 
 -- Optimization for smaller WASM output
 optimization: 2
+
+-- Note: We rely on the manual GHC command with -static flag
+-- for producing monolithic WASM. See jl4-wasm/README.md.

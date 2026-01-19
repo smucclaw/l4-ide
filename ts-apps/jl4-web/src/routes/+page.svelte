@@ -35,7 +35,6 @@
     LirRegistry,
     type FunDeclLirNode,
     LadderEnv,
-    elicitationOverrideFromQueryPlan,
     VizDeclLirSource,
   } from 'l4-ladder-visualizer'
   import {
