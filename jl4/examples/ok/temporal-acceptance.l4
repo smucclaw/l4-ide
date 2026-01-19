@@ -1,6 +1,12 @@
 IMPORT prelude
 IMPORT daydate
-IMPORT `temporal-prelude`
+
+-- Helper function for date arithmetic (previously from temporal-prelude)
+GIVEN base IS A DATE
+      days IS A NUMBER
+GIVETH A DATE
+`add days` base days MEANS
+  DATE_FROM_SERIAL (DATE_SERIAL base PLUS days)
 
 `weekend?` date MEANS `is weekend` (DATE_SERIAL date)
 
@@ -10,4 +16,3 @@ IMPORT `temporal-prelude`
 #EVAL `WHEN LAST` (Date 10 1 2024) `weekend?`
 #EVAL `WHEN NEXT` (Date 10 1 2024) `weekend?`
 #EVAL `VALUE AT` (Date 4 7 1776) (GIVEN d YIELD d)
-#EVAL `EVAL RETROACTIVE TO` (DATE_SERIAL (Date 25 12 2000)) TODAY

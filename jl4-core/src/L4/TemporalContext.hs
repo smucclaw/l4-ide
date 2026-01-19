@@ -31,9 +31,7 @@ data EvalClause
   = UnderValidTime Day
   | AsOfSystemTime UTCTime
   | UnderRulesEffectiveAt Day
-  | UnderCommit Text.Text
   | UnderRulesEncodedAt UTCTime
-  | RetroactiveTo Day
   deriving stock (Eq, Show, Generic)
 
 -- | Seed an initial temporal context using the wall-clock time for
@@ -73,11 +71,5 @@ applyEvalClauses clauses ctx0 =
         where
           -- default encoding snapshot to the target day when unspecified
           coerceDay day = UTCTime day (secondsToDiffTime 0)
-      UnderCommit _commit ->
-        ctx { tcRuleCommit = Just _commit }
       UnderRulesEncodedAt t ->
         ctx { tcRuleEncodingTime = Just t }
-      RetroactiveTo d ->
-        applyClause
-          (applyClause ctx (UnderRulesEffectiveAt d))
-          (AsOfSystemTime (UTCTime d (secondsToDiffTime 0)))

@@ -57,13 +57,68 @@ DECIDE
 
 ### Annotation Variants
 
-The lexer recognizes three `@ref` variants:
+The lexer recognizes the following `@ref` variants:
 
-| Syntax              | Token                | Purpose                           |
-| ------------------- | -------------------- | --------------------------------- |
-| `@ref <url> [type]` | `TRef Text AnnoType` | Reference link with optional type |
-| `@ref-src <text>`   | `TRefSrc Text`       | Source reference                  |
-| `@ref-map <text>`   | `TRefMap Text`       | Reference mapping                 |
+| Syntax              | Token                | Purpose                           | Status |
+| ------------------- | -------------------- | --------------------------------- | ------ |
+| `@ref <url> [type]` | `TRef Text AnnoType` | Reference link with optional type | ✅ Keep |
+| `@ref <filename>`   | `TRef Text AnnoType` | Clickable file link (Ctrl+click)  | ✅ Keep |
+| `@ref-map <text>`   | `TRefMap Text`       | Inline reference mapping          | ✅ Keep |
+| `@ref-src <file>`   | `TRefSrc Text`       | CSV file loading                  | ❌ **REMOVED** |
+
+### Removed: `@ref-src` (CSV Loading)
+
+**Decision**: The `@ref-src` annotation for loading reference mappings from CSV files has been removed from the language.
+
+**Rationale**: 
+- No file IO in the language core (required for WASM compatibility)
+- CSV parsing added complexity with limited benefit
+- Inline `@ref-map` provides equivalent functionality without file dependencies
+
+**Migration**: Convert CSV entries to inline `@ref-map` annotations:
+
+```l4
+-- BEFORE (removed):
+@ref-src citations.csv
+
+-- AFTER (use inline mappings):
+@ref-map "1981/61 sec. 2" https://www.legislation.gov.uk/ukpga/1981/61/section/2
+@ref-map "1981/61 sec. 3" https://www.legislation.gov.uk/ukpga/1981/61/section/3
+```
+
+### Removed: Regex Patterns in References
+
+**Decision**: Regex patterns (e.g., `regex:sg-c-(\d{4})-([a-z]+)-(\d+)`) are no longer supported.
+
+**Rationale**:
+- Required `pcre2` C library (not WASM-compatible)
+- Only one regex pattern was used in practice
+- Verbatim matching is simpler and sufficient for most use cases
+
+**Migration**: Use explicit `@ref-map` entries for each reference:
+
+```l4
+-- BEFORE (removed):
+@ref-map "regex:sg-c-(\d{4})-([a-z]+)-(\d+)" https://www.elitigation.sg/gd/s/$1_$2_$3
+
+-- AFTER (explicit entries):
+@ref-map "sg-c-2025-sghcf-14" https://www.elitigation.sg/gd/s/2025_sghcf_14
+@ref-map "sg-c-2024-sghc-123" https://www.elitigation.sg/gd/s/2024_sghc_123
+```
+
+### New: File Reference Links
+
+`@ref` with a filename (not a URL) creates a **clickable file link** in the IDE:
+
+```l4
+-- Ctrl+click opens the file if found in IMPORT search paths
+DECIDE foo IS TRUE @ref legal-opinion.pdf
+DECIDE bar IS FALSE @ref ../docs/regulation-summary.md
+```
+
+The IDE will search for the file in:
+1. Current directory (same as the L4 file)
+2. Directories specified in IMPORT search paths
 
 ## Implementation
 
@@ -164,4 +219,5 @@ Add test files:
 
 - `jl4-core/src/L4/Parser/ResolveAnnotation.hs` — existing `@nlg` attachment pattern
 - `doc/dev/specs/todo/EXPORT-SYNTAX-SPEC.md` — `@desc` attachment specification
+- `doc/dev/specs/todo/WASM-LSP-SPEC.md` — WASM compatibility (reason for `@ref-src` removal: No file-io)
 - Issue #635 — decision service improvements (related)

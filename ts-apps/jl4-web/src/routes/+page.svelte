@@ -12,6 +12,11 @@
   import { monacoModuleWrapperForErrorLens } from '$lib/monaco-error-lens-helpers'
 
   import { MonacoL4LanguageClient } from '$lib/monaco-l4-language-client'
+  import {
+    createLspConnection,
+    getDefaultConfig,
+    type LspConnectionResult,
+  } from '$lib/lsp-connection-factory'
   import type { LadderBackendApi } from 'jl4-client-rpc'
   import { LadderApiForMonaco } from '$lib/ladder-api-for-monaco'
   import { MonacoErrorLens } from '@ym-han/monaco-error-lens'
@@ -168,6 +173,7 @@
   let editor: monaco.editor.IStandaloneCodeEditor | undefined
   let monacoL4LangClient: MonacoL4LanguageClient | undefined
   let monacoErrorLens: MonacoErrorLens | undefined
+  let lspConnection: LspConnectionResult | undefined
 
   function bindingsKey(bindings: Record<string, boolean>) {
     const entries = Object.entries(bindings).sort(([a], [b]) =>
@@ -253,15 +259,13 @@
       'vscode-languageclient/browser.js'
     )
     const { MonacoLanguageClient } = await import('monaco-languageclient')
-    const { WebSocketMessageReader, WebSocketMessageWriter, toSocket } =
-      await import('vscode-ws-jsonrpc')
     const { configureDefaultWorkerFactory } = await import(
       'monaco-editor-wrapper/workers/workerLoaders'
     )
     const { ConsoleLogger } = await import('monaco-languageclient/tools')
 
-    const websocketUrl =
-      import.meta.env.VITE_SOCKET_URL || 'ws://localhost:5007'
+    // Get LSP connection configuration (supports WebSocket or WASM)
+    const lspConfig = getDefaultConfig()
 
     const runClient = async () => {
       console.log('🚀 runClient() STARTING - LSP client initialization')
@@ -455,29 +459,38 @@
         }
       }
 
-      initWebSocketAndStartClient(websocketUrl, logger)
+      // Initialize LSP connection using the factory
+      // This abstracts over WebSocket vs WASM connection types
+      await initLspConnection(logger, lspConfig)
     }
 
-    /** parameterized version , support all languageId */
-    const initWebSocketAndStartClient = (
-      url: string,
-      logger: ConsoleLogger
-    ): WebSocket => {
-      const webSocket = new WebSocket(url)
-      webSocket.onopen = async () => {
-        const socket = toSocket(webSocket)
-        const reader = new WebSocketMessageReader(socket)
-        const writer = new WebSocketMessageWriter(socket)
-        const languageClient = createLanguageClient(logger, {
-          reader,
-          writer,
-        })
+    /**
+     * Initialize LSP connection using the connection factory.
+     * Supports both WebSocket (current) and WASM (future) connection types.
+     */
+    const initLspConnection = async (
+      logger: ConsoleLogger,
+      config: ReturnType<typeof getDefaultConfig>
+    ): Promise<void> => {
+      try {
+        logger.info(`[L4 LSP] Connecting with preferred type: ${config.preferredType}`)
+
+        lspConnection = await createLspConnection(config)
+
+        logger.info(`[L4 LSP] Connected via ${lspConnection.type}`)
+
+        const languageClient = createLanguageClient(logger, lspConnection.transports)
         await languageClient.start()
-        reader.onClose(() => {
+
+        // Handle connection close
+        lspConnection.transports.reader.onClose(() => {
+          logger.info('[L4 LSP] Connection closed')
           languageClient.dispose()
         })
+      } catch (error) {
+        logger.error(`[L4 LSP] Failed to connect: ${error}`)
+        throw error
       }
-      return webSocket
     }
 
     /**********************************
@@ -653,6 +666,12 @@
     if (monacoL4LangClient) {
       monacoL4LangClient.dispose?.()
       monacoL4LangClient = undefined
+    }
+
+    // Dispose LSP connection
+    if (lspConnection) {
+      lspConnection.dispose()
+      lspConnection = undefined
     }
   })
 

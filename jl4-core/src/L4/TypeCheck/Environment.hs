@@ -76,8 +76,6 @@ mkBuiltins
   , "evalUnderValidTime" `rename` "EVAL UNDER VALID TIME"
   , "evalUnderRulesEffectiveAt" `rename` "EVAL UNDER RULES EFFECTIVE AT"
   , "evalUnderRulesEncodedAt" `rename` "EVAL UNDER RULES ENCODED AT"
-  , "evalUnderCommit" `rename` "EVAL UNDER COMMIT"
-  , "evalRetroactiveTo" `rename` "EVAL RETROACTIVE TO"
   , "a'" `rename` "a", "b'" `rename` "b"
   , "plus" `rename` "__PLUS__"
   , "minus" `rename` "__MINUS__"
@@ -289,18 +287,6 @@ evalUnderRulesEffectiveAtBuiltin =
 -- EVAL under rules encoded date. Type: DATE SERIAL -> a -> a
 evalUnderRulesEncodedAtBuiltin :: Type' Resolved
 evalUnderRulesEncodedAtBuiltin =
-  forall' [aDef] $
-    fun_ [number, app aRef []] (app aRef [])
-
--- EVAL under commit hash. Type: STRING -> a -> a
-evalUnderCommitBuiltin :: Type' Resolved
-evalUnderCommitBuiltin =
-  forall' [aDef] $
-    fun_ [string, app aRef []] (app aRef [])
-
--- EVAL retroactive convenience (sets rules and system time). Type: NUMBER -> a -> a
-evalRetroactiveToBuiltin :: Type' Resolved
-evalRetroactiveToBuiltin =
   forall' [aDef] $
     fun_ [number, app aRef []] (app aRef [])
 
@@ -626,12 +612,6 @@ evalUnderRulesEffectiveAtInfo = KnownTerm evalUnderRulesEffectiveAtBuiltin Compu
 evalUnderRulesEncodedAtInfo :: CheckEntity
 evalUnderRulesEncodedAtInfo = KnownTerm evalUnderRulesEncodedAtBuiltin Computable
 
-evalUnderCommitInfo :: CheckEntity
-evalUnderCommitInfo = KnownTerm evalUnderCommitBuiltin Computable
-
-evalRetroactiveToInfo :: CheckEntity
-evalRetroactiveToInfo = KnownTerm evalRetroactiveToBuiltin Computable
-
 -- Basic Arithmetic
 
 plusInfo :: CheckEntity
@@ -833,8 +813,6 @@ initialEnvironment =
     , (rawName evalUnderValidTimeName, [evalUnderValidTimeUnique])
     , (rawName evalUnderRulesEffectiveAtName, [evalUnderRulesEffectiveAtUnique])
     , (rawName evalUnderRulesEncodedAtName, [evalUnderRulesEncodedAtUnique])
-    , (rawName evalUnderCommitName, [evalUnderCommitUnique])
-    , (rawName evalRetroactiveToName, [evalRetroactiveToUnique])
     , (rawName plusName,         [plusUnique      ])
     , (rawName minusName,        [minusUnique     ])
     , (rawName timesName,        [timesUnique     ])
@@ -931,8 +909,6 @@ initialEntityInfo =
     , (evalUnderValidTimeUnique, (evalUnderValidTimeName, evalUnderValidTimeInfo))
     , (evalUnderRulesEffectiveAtUnique, (evalUnderRulesEffectiveAtName, evalUnderRulesEffectiveAtInfo))
     , (evalUnderRulesEncodedAtUnique, (evalUnderRulesEncodedAtName, evalUnderRulesEncodedAtInfo))
-    , (evalUnderCommitUnique, (evalUnderCommitName, evalUnderCommitInfo))
-    , (evalRetroactiveToUnique, (evalRetroactiveToName, evalRetroactiveToInfo))
     , (plusUnique,         (plusName,         plusInfo        ))
     , (minusUnique,        (minusName,        minusInfo       ))
     , (timesUnique,        (timesName,        timesInfo       ))

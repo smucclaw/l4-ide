@@ -46,7 +46,7 @@ import LSP.Logger
 import LSP.SemanticTokens
 import Language.LSP.Protocol.Types
 import qualified Language.LSP.Protocol.Types as LSP
-import Data.Either (partitionEithers)
+
 import qualified Data.List as List
 import System.Directory
 import System.Environment (getExecutablePath)
@@ -671,61 +671,18 @@ jl4Rules evalConfig rootDirectory recorder = do
         pure ([], Nothing)
       Right relSemTokens ->
           pure ([], Just relSemTokens)
-  define shakeRecorder $ \ResolveReferenceAnnotations uri -> case uriToNormalizedFilePath uri of
-    -- TODO: this should load citations from a "central place" as long as we don't
-    -- support citations directly in the file
-    Nothing -> pure ([], Nothing)
-    Just f -> do
-      ownPath <- normalizedFilePathToOsPath f
+  define shakeRecorder $ \ResolveReferenceAnnotations uri -> do
       (tokens, _) <- use_ GetLexTokens uri
 
-      -- obtain a valid relative file path from the ref-src annos and
-      -- parse the file contents from csv into intervalmaps from the sources of
-      -- the annos to the reference they represent
-      refSrcs <- liftIO
-        $ traverse
-          (\n -> runExceptT do
-             refSrc <- withRefSrc ownPath n
-             let refMap = withRefMap n
-             pure (refSrc <> refMap)
-          )
-          tokens
+      -- Collect @ref-map annotations from tokens
+      -- Note: @ref-src (CSV file loading) has been removed for WASM compatibility
+      let references = foldMap withRefMap tokens
 
-      -- report any errors encountered while parsing any of the ref-src annos,
-      -- annotate them on the ref-src annos they originated from and finally
-      -- union all interval maps
-      let (errs, references) = partitionEithers refSrcs
+          mps = if null references
+            then Nothing
+            else Just $ mkReferences tokens references
 
-          mkReferencesFromNonempty v
-            | null v = Nothing
-            | otherwise = Just $ mkReferences tokens v
-
-          mps = case Maybe.mapMaybe mkReferencesFromNonempty references of
-            [] -> Nothing
-            xs -> Just $ mconcat xs
-
-          diags = map (uncurry mkDiagnostic) errs
-
-          mkDiagnostic loc err =
-            FileDiagnostic
-              { fdLspDiagnostic =
-                Diagnostic
-                  { _source = Just "jl4"
-                  , _severity = Just DiagnosticSeverity_Warning
-                  , _range = srcRangeToLspRange $ Just loc
-                  , _message = Text.pack err
-                  , _relatedInformation = Nothing
-                  , _data_ = Nothing
-                  , _codeDescription = Nothing
-                  , _tags = Nothing
-                  , _code = Nothing
-                  }
-              , fdFilePath = uri
-              , fdShouldShowDiagnostic = ShowDiag
-              , fdOriginalSource = NoMessage
-              }
-
-      pure (diags, mps)
+      pure ([], mps)
 
   define shakeRecorder $ \GetReferences uri -> do
     tcRes <- use_ TypeCheck uri

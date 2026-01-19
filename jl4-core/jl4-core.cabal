@@ -33,15 +33,12 @@ library
     aeson,
     bytestring,
     placeholder,
-    cassava,
-    process,
     containers,
     data-default,
     deepseq,
     dlist,
     extra,
     fgl,
-    file-io,
     filepath,
     generics-sop,
     graphviz,
@@ -52,11 +49,9 @@ library
     mtl,
     optics,
     optics-core,
-    pcre2,
     pretty-simple,
     prettyprinter,
     time,
-    safe-exceptions,
     scientific,
     split,
     text >= 2 && < 2.1.2,
@@ -107,7 +102,6 @@ library
     L4.Print
     L4.Syntax
     L4.TemporalContext
-    L4.TemporalGit
     L4.TracePolicy
     L4.Transform
     L4.TypeCheck
