@@ -59,18 +59,19 @@ DECIDE
 
 The lexer recognizes the following `@ref` variants:
 
-| Syntax              | Token                | Purpose                           | Status |
-| ------------------- | -------------------- | --------------------------------- | ------ |
-| `@ref <url> [type]` | `TRef Text AnnoType` | Reference link with optional type | ✅ Keep |
-| `@ref <filename>`   | `TRef Text AnnoType` | Clickable file link (Ctrl+click)  | ✅ Keep |
-| `@ref-map <text>`   | `TRefMap Text`       | Inline reference mapping          | ✅ Keep |
+| Syntax              | Token                | Purpose                           | Status         |
+| ------------------- | -------------------- | --------------------------------- | -------------- |
+| `@ref <url> [type]` | `TRef Text AnnoType` | Reference link with optional type | ✅ Keep        |
+| `@ref <filename>`   | `TRef Text AnnoType` | Clickable file link (Ctrl+click)  | ✅ Keep        |
+| `@ref-map <text>`   | `TRefMap Text`       | Inline reference mapping          | ✅ Keep        |
 | `@ref-src <file>`   | `TRefSrc Text`       | CSV file loading                  | ❌ **REMOVED** |
 
 ### Removed: `@ref-src` (CSV Loading)
 
 **Decision**: The `@ref-src` annotation for loading reference mappings from CSV files has been removed from the language.
 
-**Rationale**: 
+**Rationale**:
+
 - No file IO in the language core (required for WASM compatibility)
 - CSV parsing added complexity with limited benefit
 - Inline `@ref-map` provides equivalent functionality without file dependencies
@@ -91,6 +92,7 @@ The lexer recognizes the following `@ref` variants:
 **Decision**: Regex patterns (e.g., `regex:sg-c-(\d{4})-([a-z]+)-(\d+)`) are no longer supported.
 
 **Rationale**:
+
 - Required `pcre2` C library (not WASM-compatible)
 - Only one regex pattern was used in practice
 - Verbatim matching is simpler and sufficient for most use cases
@@ -117,6 +119,7 @@ DECIDE bar IS FALSE @ref ../docs/regulation-summary.md
 ```
 
 The IDE will search for the file in:
+
 1. Current directory (same as the L4 file)
 2. Directories specified in IMPORT search paths
 

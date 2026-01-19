@@ -10,7 +10,8 @@ browser or Node.js environment, enabling L4 language features without a server.
 Install the GHC WASM toolchain (takes ~30 minutes):
 
 ```bash
-curl https://gitlab.haskell.org/ghc/ghc-wasm-meta/-/raw/master/bootstrap.sh | FLAVOUR=9.10 bash
+# Note: Use -L to follow redirects
+curl -L https://gitlab.haskell.org/haskell-wasm/ghc-wasm-meta/-/raw/master/bootstrap.sh | FLAVOUR=9.10 bash
 ```
 
 Then source the environment before any WASM commands:
@@ -43,6 +44,7 @@ cp dist-newstyle/jl4-wasm.mjs ts-apps/jl4-web/static/wasm/jl4-core.mjs
 ```
 
 The build produces:
+
 - `jl4-wasm.wasm` (~42 MB unoptimized) - The WebAssembly binary
 - `jl4-wasm.mjs` (~5 KB) - JavaScript FFI glue code
 
@@ -61,11 +63,11 @@ The raw WASM binary is large (~42 MB) but can be significantly reduced using `wa
 
 Optimization results:
 
-| Level | Size | Reduction | Notes |
-|-------|------|-----------|-------|
-| Unoptimized | 42 MB | - | Raw GHC output |
-| `-Os` | 22 MB | 47% | Size-optimized |
-| `-Oz` | 10 MB | 76% | Aggressive size optimization (recommended) |
+| Level       | Size  | Reduction | Notes                                      |
+| ----------- | ----- | --------- | ------------------------------------------ |
+| Unoptimized | 42 MB | -         | Raw GHC output                             |
+| `-Os`       | 22 MB | 47%       | Size-optimized                             |
+| `-Oz`       | 10 MB | 76%       | Aggressive size optimization (recommended) |
 
 The `-Oz` level reduces the binary from 42 MB to ~10 MB. With HTTP compression (gzip/brotli), the transfer size is typically 3-4 MB.
 
@@ -73,13 +75,13 @@ The `-Oz` level reduces the binary from 42 MB to ~10 MB. With HTTP compression (
 
 The following functions are exported via GHC's JavaScript FFI:
 
-| Function | Signature | Description |
-|----------|-----------|-------------|
-| `l4_check` | `(source: string) => Promise<string>` | Parse and type-check, returns JSON diagnostics |
-| `l4_hover` | `(source: string, line: number, col: number) => Promise<string>` | Get hover info at position |
-| `l4_completions` | `(source: string, line: number, col: number) => Promise<string>` | Get completion suggestions |
-| `l4_semantic_tokens` | `(source: string) => Promise<string>` | Get semantic tokens for highlighting |
-| `l4_eval` | `(source: string) => Promise<string>` | Evaluate #EVAL directives |
+| Function             | Signature                                                        | Description                                    |
+| -------------------- | ---------------------------------------------------------------- | ---------------------------------------------- |
+| `l4_check`           | `(source: string) => Promise<string>`                            | Parse and type-check, returns JSON diagnostics |
+| `l4_hover`           | `(source: string, line: number, col: number) => Promise<string>` | Get hover info at position                     |
+| `l4_completions`     | `(source: string, line: number, col: number) => Promise<string>` | Get completion suggestions                     |
+| `l4_semantic_tokens` | `(source: string) => Promise<string>`                            | Get semantic tokens for highlighting           |
+| `l4_eval`            | `(source: string) => Promise<string>`                            | Evaluate #EVAL directives                      |
 
 All functions return JSON-encoded results as strings.
 
@@ -87,13 +89,13 @@ All functions return JSON-encoded results as strings.
 
 GHC WASM uses a two-phase loading process:
 
-```javascript
+````javascript
 // 1. Load the JS FFI glue code
-const jsModule = await import('./jl4-core.mjs');
+const jsModule = await import("./jl4-core.mjs");
 const generateImports = jsModule.default;
 
 // 2. Load and compile the WASM module
-const wasmBuffer = await fetch('./jl4-core.wasm').then(r => r.arrayBuffer());
+const wasmBuffer = await fetch("./jl4-core.wasm").then((r) => r.arrayBuffer());
 const wasmModule = await WebAssembly.compile(wasmBuffer);
 
 // 3. Create exports proxy (needed for FFI callbacks)
@@ -121,7 +123,7 @@ const wasiImports = {
   path_filestat_get: () => 63,
   path_open: () => 63,
   poll_oneoff: () => 0,
-  proc_exit: (code) => console.warn('proc_exit:', code),
+  proc_exit: (code) => console.warn("proc_exit:", code),
   args_sizes_get: (argc, argvBufSize) => {
     const view = new DataView(exportsProxy.memory.buffer);
     view.setUint32(argc, 0, true);
@@ -151,12 +153,12 @@ Object.assign(exportsProxy, instance.exports);
 instance.exports._initialize();
 
 // 8. Now you can call L4 functions!
-const diagnostics = await instance.exports.l4_check('DECIDE x IS 1 + 2');
+const diagnostics = await instance.exports.l4_check("DECIDE x IS 1 + 2");
 console.log(JSON.parse(diagnostics)); // []
 
-const hover = await instance.exports.l4_hover('DECIDE x IS 42', 0, 7);
+const hover = await instance.exports.l4_hover("DECIDE x IS 42", 0, 7);
 console.log(JSON.parse(hover)); // { contents: { kind: "markdown", value: "```\nNUMBER\n```" }, ... }
-```
+````
 
 ## Testing
 
@@ -182,23 +184,23 @@ const fs = require('fs');
 async function main() {
   const jsModule = await import('./jl4-core.mjs');
   const generateImports = jsModule.default;
-  
+
   const wasmBuffer = fs.readFileSync('./jl4-core.wasm');
   const wasmModule = await WebAssembly.compile(wasmBuffer);
-  
+
   const exportsProxy = {};
   const jsFFIImports = generateImports(exportsProxy);
-  
+
   // ... (WASI imports as above) ...
-  
+
   const instance = await WebAssembly.instantiate(wasmModule, {
     wasi_snapshot_preview1: wasiImports,
     ghc_wasm_jsffi: jsFFIImports,
   });
-  
+
   Object.assign(exportsProxy, instance.exports);
   instance.exports._initialize();
-  
+
   const result = await instance.exports.l4_check('DECIDE x IS 42');
   console.log('Diagnostics:', result); // []
 }
@@ -210,21 +212,23 @@ main();
 ## Architecture
 
 This package is a thin wrapper that:
-1. Re-exports `L4.Wasm` from `jl4-core` 
+
+1. Re-exports `L4.Wasm` from `jl4-core`
 2. Provides a `Main.hs` that's empty (reactor mode has no main)
 3. Configures the build for WASI reactor mode
 
 The actual implementation is in `jl4-core/src/L4/Wasm.hs`, which:
+
 - Provides pure Haskell functions for all L4 features
 - Exports JavaScript FFI wrappers when compiled for `wasm32` architecture
 - Uses `foreign export javascript` syntax from GHC's JS FFI
 
 ## File Sizes
 
-| File | Unoptimized | Optimized (-Oz) | Compressed |
-|------|-------------|-----------------|------------|
-| jl4-core.wasm | ~42 MB | ~10 MB | ~3-4 MB (gzip) |
-| jl4-core.mjs | ~5 KB | ~5 KB | ~2 KB (gzip) |
+| File          | Unoptimized | Optimized (-Oz) | Compressed     |
+| ------------- | ----------- | --------------- | -------------- |
+| jl4-core.wasm | ~42 MB      | ~10 MB          | ~3-4 MB (gzip) |
+| jl4-core.mjs  | ~5 KB       | ~5 KB           | ~2 KB (gzip)   |
 
 The CI pipeline automatically runs `wasm-opt -Oz` on all builds. For local development,
 run `./scripts/optimize-wasm.sh -Oz` after building.
@@ -232,5 +236,5 @@ run `./scripts/optimize-wasm.sh -Oz` after building.
 ## Related Documentation
 
 - [GHC WASM User Guide](https://ghc.gitlab.haskell.org/ghc/doc/users_guide/wasm.html)
-- [GHC WASM Meta](https://gitlab.haskell.org/ghc/ghc-wasm-meta) - Toolchain bootstrap
+- [GHC WASM Meta](https://gitlab.haskell.org/haskell-wasm/ghc-wasm-meta) - Toolchain bootstrap
 - [TypeScript Bridge](../ts-apps/jl4-web/src/lib/wasm/README.md) - Browser integration

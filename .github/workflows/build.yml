@@ -22,7 +22,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        ghc-version: ["9.8.4"]
+        ghc-version: ["9.10.2"]
     env:
       LC_ALL: C.UTF-8
       LANG: C.UTF-8

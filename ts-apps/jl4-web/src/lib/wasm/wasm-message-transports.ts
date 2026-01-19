@@ -112,9 +112,11 @@ export class WasmLspHandler {
     }
   }
 
-  private async handleNotification(notification: LspNotification): Promise<void> {
+  private async handleNotification(
+    notification: LspNotification
+  ): Promise<void> {
     const { method, params } = notification
-    
+
     switch (method) {
       case 'textDocument/didOpen': {
         const p = params as {
@@ -128,7 +130,7 @@ export class WasmLspHandler {
         )
         break
       }
-      
+
       case 'textDocument/didChange': {
         const p = params as {
           textDocument: { uri: string; version: number }
@@ -145,17 +147,17 @@ export class WasmLspHandler {
         }
         break
       }
-      
+
       case 'textDocument/didClose': {
         const p = params as { textDocument: { uri: string } }
         this.documentContents.delete(p.textDocument.uri)
         break
       }
-      
+
       case 'initialized':
       case 'exit':
         break
-        
+
       default:
         console.log('[WASM LSP] Ignoring notification:', method)
     }
@@ -171,16 +173,19 @@ export class WasmLspHandler {
 
       case 'shutdown':
         return null
-        
+
       case 'textDocument/hover':
         return this.handleHover(params)
-        
+
       case 'textDocument/completion':
         return this.handleCompletion(params)
-        
+
       case 'textDocument/semanticTokens/full':
         return this.handleSemanticTokens(params)
-        
+
+      case 'workspace/executeCommand':
+        return this.handleExecuteCommand(params)
+
       default:
         console.warn('[WASM LSP] Unhandled method:', method)
         return null
@@ -213,6 +218,10 @@ export class WasmLspHandler {
           },
           full: true,
         },
+        // Execute command for visualization
+        executeCommandProvider: {
+          commands: ['l4.visualize'],
+        },
         // Not implemented in WASM mode
         definitionProvider: false,
         referencesProvider: false,
@@ -240,7 +249,7 @@ export class WasmLspHandler {
     }
     const content = this.documentContents.get(p.textDocument.uri)
     if (!content) return { items: [] }
-    
+
     const items = await this.bridge.completions(
       content,
       p.position.line,
@@ -253,8 +262,58 @@ export class WasmLspHandler {
     const p = params as { textDocument: { uri: string } }
     const content = this.documentContents.get(p.textDocument.uri)
     if (!content) return { data: [] }
-    
+
     return this.bridge.semanticTokens(content)
+  }
+
+  /**
+   * Handle workspace/executeCommand requests.
+   * Currently supports the l4.visualize command for ladder visualization.
+   */
+  private async handleExecuteCommand(params: unknown): Promise<unknown> {
+    const p = params as {
+      command: string
+      arguments?: unknown[]
+    }
+
+    switch (p.command) {
+      case 'l4.visualize':
+        return this.handleVisualize(p.arguments)
+
+      default:
+        console.warn('[WASM LSP] Unknown command:', p.command)
+        return null
+    }
+  }
+
+  /**
+   * Handle the l4.visualize command.
+   * Generates visualization data for the ladder diagram.
+   */
+  private async handleVisualize(args?: unknown[]): Promise<unknown> {
+    if (!args || args.length === 0) {
+      console.warn('[WASM LSP] l4.visualize called without arguments')
+      return null
+    }
+
+    // The argument is a VersionedTextDocumentIdentifier
+    const verDocId = args[0] as { uri: string; version?: number }
+    const uri = verDocId.uri
+    const version = verDocId.version ?? 0
+
+    const content = this.documentContents.get(uri)
+    if (!content) {
+      console.warn('[WASM LSP] No content for URI:', uri)
+      return null
+    }
+
+    // Check if the WASM module supports visualization
+    if (!this.bridge.supportsVisualization()) {
+      console.warn('[WASM LSP] Visualization not supported by this WASM module')
+      return null
+    }
+
+    return this.bridge.visualize(content, uri, version)
   }
 
   private async checkAndPublishDiagnostics(
@@ -286,7 +345,7 @@ export function createWasmLspHandler(bridge: L4WasmBridge): WasmLspHandler {
 
 /**
  * A MessageReader that receives messages from the WasmLspHandler.
- * 
+ *
  * This adapter allows the WasmLspHandler to push messages (responses and
  * notifications) that the language client will receive as if they came
  * from a real LSP server.
@@ -295,7 +354,8 @@ class WasmMessageReader implements MessageReader {
   private callback: DataCallback | null = null
   private errorListener: ((error: Error) => void) | null = null
   private closeListener: (() => void) | null = null
-  private partialMessageListener: ((info: PartialMessageInfo) => void) | null = null
+  private partialMessageListener: ((info: PartialMessageInfo) => void) | null =
+    null
   private disposed = false
 
   /**
@@ -321,9 +381,15 @@ class WasmMessageReader implements MessageReader {
    * Event emitter for errors.
    * Implements the vscode-jsonrpc Event<T> interface.
    */
-  readonly onError: Event<Error> = (listener: (e: Error) => void): Disposable => {
+  readonly onError: Event<Error> = (
+    listener: (e: Error) => void
+  ): Disposable => {
     this.errorListener = listener
-    return { dispose: () => { this.errorListener = null } }
+    return {
+      dispose: () => {
+        this.errorListener = null
+      },
+    }
   }
 
   /**
@@ -332,7 +398,11 @@ class WasmMessageReader implements MessageReader {
    */
   readonly onClose: Event<void> = (listener: () => void): Disposable => {
     this.closeListener = listener
-    return { dispose: () => { this.closeListener = null } }
+    return {
+      dispose: () => {
+        this.closeListener = null
+      },
+    }
   }
 
   /**
@@ -343,7 +413,11 @@ class WasmMessageReader implements MessageReader {
     listener: (info: PartialMessageInfo) => void
   ): Disposable => {
     this.partialMessageListener = listener
-    return { dispose: () => { this.partialMessageListener = null } }
+    return {
+      dispose: () => {
+        this.partialMessageListener = null
+      },
+    }
   }
 
   /**
@@ -366,12 +440,14 @@ class WasmMessageReader implements MessageReader {
 
 /**
  * A MessageWriter that sends messages to the WasmLspHandler.
- * 
+ *
  * This adapter allows the language client to send messages (requests and
  * notifications) that will be processed by the WASM module.
  */
 class WasmMessageWriter implements MessageWriter {
-  private errorListener: ((error: [Error, Message | undefined, number | undefined]) => void) | null = null
+  private errorListener:
+    | ((error: [Error, Message | undefined, number | undefined]) => void)
+    | null = null
   private closeListener: (() => void) | null = null
   private disposed = false
 
@@ -394,7 +470,11 @@ class WasmMessageWriter implements MessageWriter {
     listener: (error: [Error, Message | undefined, number | undefined]) => void
   ): Disposable => {
     this.errorListener = listener
-    return { dispose: () => { this.errorListener = null } }
+    return {
+      dispose: () => {
+        this.errorListener = null
+      },
+    }
   }
 
   /**
@@ -403,7 +483,11 @@ class WasmMessageWriter implements MessageWriter {
    */
   readonly onClose: Event<void> = (listener: () => void): Disposable => {
     this.closeListener = listener
-    return { dispose: () => { this.closeListener = null } }
+    return {
+      dispose: () => {
+        this.closeListener = null
+      },
+    }
   }
 
   dispose(): void {
@@ -415,14 +499,16 @@ class WasmMessageWriter implements MessageWriter {
 
 /**
  * Create MessageTransports that route messages through the WASM bridge.
- * 
+ *
  * This allows the WASM LSP handler to be used with MonacoLanguageClient
  * just like a WebSocket connection.
- * 
+ *
  * @param bridge - The initialized L4WasmBridge
  * @returns MessageTransports compatible with vscode-languageclient
  */
-export function createWasmMessageTransports(bridge: L4WasmBridge): MessageTransports {
+export function createWasmMessageTransports(
+  bridge: L4WasmBridge
+): MessageTransports {
   const handler = createWasmLspHandler(bridge)
   const reader = new WasmMessageReader()
   const writer = new WasmMessageWriter(handler)
@@ -437,9 +523,9 @@ export function createWasmMessageTransports(bridge: L4WasmBridge): MessageTransp
 
 /**
  * Create MessageTransports from an existing WasmLspHandler.
- * 
+ *
  * Use this if you need access to both the handler and the transports.
- * 
+ *
  * @param handler - An existing WasmLspHandler
  * @returns Object containing reader, writer, and a dispose function
  */

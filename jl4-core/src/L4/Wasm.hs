@@ -19,6 +19,7 @@ module L4.Wasm
   , l4Completions
   , l4SemanticTokens
   , l4Eval
+  , l4Visualize
   ) where
 
 import Base
@@ -44,6 +45,11 @@ import L4.EvaluateLazy.Machine (prettyEvalException)
 
 import L4.TracePolicy (lspDefaultPolicy)
 import L4.EvaluateLazy.GraphVizOptions (defaultGraphVizOptions)
+
+-- Ladder visualization is not available on WASM (uuid dependency issues)
+#if !defined(wasm32_HOST_ARCH)
+import qualified L4.Viz.Ladder as Ladder
+#endif
 
 
 #if defined(wasm32_HOST_ARCH)
@@ -392,6 +398,60 @@ prettyEvalResult (EL.Assertion True)       = "assertion satisfied"
 prettyEvalResult (EL.Assertion False)      = "assertion failed"
 prettyEvalResult (EL.Reduction (Left exc)) = Text.unlines (prettyEvalException exc)
 prettyEvalResult (EL.Reduction (Right v))  = prettyLayout v
+
+-- | Generate ladder diagram visualization data for a DECIDE rule.
+--
+-- Parses, type-checks, and visualizes the first visualizable DECIDE rule
+-- (one with a Boolean return type) in the source code.
+--
+-- Returns JSON-encoded @RenderAsLadderInfo@ or an error object:
+--
+-- @
+-- // Success:
+-- {
+--   "verDocId": { "uri": "...", "version": 0 },
+--   "funDecl": { ... }
+-- }
+--
+-- // Error:
+-- {
+--   "error": "Error message"
+-- }
+-- @
+--
+-- Note: This function is not available in WASM builds due to uuid dependency.
+#if !defined(wasm32_HOST_ARCH)
+l4Visualize :: Text -> Text -> Int -> Text
+l4Visualize source uriText version =
+  let uri = toNormalizedUri (Uri uriText)
+  in case execProgramParserWithHintPass uri source of
+    Left _parseErrors ->
+      encodeJson $ Aeson.object
+        [ "error" .= ("Parse error" :: Text)
+        ]
+    Right (parsed, _hints, _parseWarnings) ->
+      let checkResult = doCheckProgram uri parsed
+      in if not (null checkResult.errors)
+        then
+          encodeJson $ Aeson.object
+            [ "error" .= ("Type check error" :: Text)
+            ]
+        else
+          case Ladder.visualize uri uriText version checkResult.program checkResult.substitution True of
+            Left vizError ->
+              encodeJson $ Aeson.object
+                [ "error" .= Ladder.prettyPrintVizError vizError
+                ]
+            Right ladderInfo ->
+              encodeJson ladderInfo
+#else
+-- WASM stub - visualization not available
+l4Visualize :: Text -> Text -> Int -> Text
+l4Visualize _source _uriText _version =
+  encodeJson $ Aeson.object
+    [ "error" .= ("Visualization not available in WASM mode" :: Text)
+    ]
+#endif
 
 -- | Encode lexer tokens as LSP semantic tokens.
 --

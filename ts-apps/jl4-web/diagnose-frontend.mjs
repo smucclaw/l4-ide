@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 import { chromium } from 'playwright'
 
+// These env vars are for CLI usage, not turbo build dependencies
+// eslint-disable-next-line turbo/no-undeclared-env-vars
 const url = process.env.URL || 'http://localhost:5173/'
+// eslint-disable-next-line turbo/no-undeclared-env-vars
 const timeout = parseInt(process.env.TIMEOUT || '10000')
 
 console.log(`\n🔍 Diagnosing frontend at: ${url}\n`)
