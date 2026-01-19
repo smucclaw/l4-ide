@@ -1,7 +1,123 @@
 # Boolean Logic
 
 `TRUE` and `FALSE` values are combined using the operators `AND`, `OR`,
-`NOT`, and `IMPLIES`.
+`NOT`, `UNLESS`, and `IMPLIES`.
+
+## Operator Precedence
+
+When multiple boolean operators appear in an expression, L4 follows a standard precedence hierarchy (higher precedence binds tighter):
+
+| Precedence | Operators | Description |
+|------------|-----------|-------------|
+| 3 (highest) | `AND`, `...` | Conjunction (and asyndetic conjunction) |
+| 2 | `OR`, `..` | Disjunction (and asyndetic disjunction) |
+| 1 (lowest) | `IMPLIES`, `UNLESS` | Implication and exception |
+
+This means `A OR B AND C` is parsed as `A OR (B AND C)`, following standard mathematical convention.
+
+### Layout-Sensitive Precedence
+
+L4's indentation-based syntax provides an alternative to parentheses for grouping. Operators that are more deeply indented bind more tightly:
+
+```l4
+-- This evaluates to TRUE because the AND binds tighter (more indented)
+DECIDE example1 IF
+    FALSE
+OR     TRUE
+   AND TRUE
+```
+
+```l4
+-- This evaluates to FALSE because the OR binds tighter (more indented)
+DECIDE example2 IF
+       FALSE
+   AND TRUE
+    OR TRUE
+```
+
+When operators appear at the **same indentation level**, standard precedence rules apply. The IDE will show a **yellow warning** if `AND` and `OR` appear at the same column on different lines, as this often indicates a precedence mistake:
+
+```l4
+-- WARNING: AND and OR at same indentation level
+DECIDE ambiguous IF
+       TRUE
+  OR   FALSE
+  AND  FALSE    -- Linter warns here
+```
+
+To resolve the warning, use different indentation levels to make your intent explicit:
+
+```l4
+-- Clear: AND binds to FALSE only
+DECIDE clear_version IF
+    TRUE
+OR     FALSE
+   AND FALSE
+```
+
+## UNLESS: Exception Clauses
+
+The `UNLESS` keyword provides a natural way to express exceptions. It is syntactic sugar for `AND NOT`, but with **lower precedence than OR**, ensuring it applies to the entire preceding expression:
+
+```l4
+A AND B AND C UNLESS D    -- means: (A AND B AND C) AND NOT D
+A OR B OR C UNLESS D      -- means: (A OR B OR C) AND NOT D
+```
+
+### Motivation
+
+In natural language, "unless" typically acts as an exception to everything that precedes it:
+
+- "You may enter if you're an employee OR have a badge OR are a contractor UNLESS you've been banned."
+
+With standard AND/NOT, expressing this requires explicit parentheses:
+
+```l4
+-- Without UNLESS: parentheses required
+DECIDE `may enter` IF
+    (    `is employee`
+      OR `has badge`
+      OR `is contractor`
+    )
+    AND NOT `has been banned`
+```
+
+With UNLESS, the intent is clearer:
+
+```l4
+-- With UNLESS: natural exception syntax
+DECIDE `may enter` IF
+         `is employee`
+    OR   `has badge`
+    OR   `is contractor`
+    UNLESS `has been banned`
+```
+
+### UNLESS with AND vs OR
+
+When `UNLESS` appears with `AND` operators at the same indentation level, it behaves as another conjunct and the linter remains silent:
+
+```l4
+-- UNLESS with ANDs: no warning
+DECIDE `must comply` IF
+         `condition one`
+  AND    `condition two`
+  AND    `condition three`
+  UNLESS `is exempt`
+```
+
+When `UNLESS` appears with `OR` operators at the same indentation level, the IDE shows a warning because the binding might be surprising:
+
+```l4
+-- UNLESS with ORs: warning shown
+DECIDE `qualifies` IF
+         `path one`
+  OR     `path two`
+  OR     `path three`
+  UNLESS `is disqualified`   -- Warning: AND and OR at same level
+```
+
+The warning reminds you that `UNLESS` (which desugars to `AND NOT`) binds to the **entire disjunction**, not just the last alternative. This is usually the intended behavior for exception clauses, but the warning ensures you've considered the semantics.
 
 ## Example: XOR Function
 
