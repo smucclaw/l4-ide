@@ -272,6 +272,7 @@ L4 provides natural language operators:
 | `AND`             | Conjunction | `&&`        |
 | `OR`              | Disjunction | `\|\|`      |
 | `NOT`             | Negation    | `!`         |
+| `UNLESS`          | Exception   | `&& !`      |
 | `IMPLIES` or `=>` | Implication | `!a \|\| b` |
 
 ```l4
@@ -279,6 +280,54 @@ DECIDE eligible IF
         `meets age requirement` employee
     AND `meets education requirement` employee
     AND NOT `has disqualifying record` employee
+```
+
+### UNLESS: Natural Exception Clauses
+
+The `UNLESS` keyword provides a natural way to express exceptions. It means "AND NOT" but with lower precedence than OR, so it applies to the entire preceding expression:
+
+```l4
+-- "Employee qualifies via any path, unless they've been banned"
+DECIDE `employee qualifies` IF
+           `is full-time`
+      OR   `has special permit`
+      OR   `is contractor`
+    UNLESS `has been banned`
+```
+
+This is equivalent to: `(is full-time OR has special permit OR is contractor) AND NOT has been banned`
+
+Without UNLESS, you'd need explicit parentheses:
+
+```l4
+DECIDE `employee qualifies` IF
+    (    `is full-time`
+      OR `has special permit`
+      OR `is contractor`
+    )
+    AND NOT `has been banned`
+```
+
+### Operator Precedence
+
+When multiple boolean operators appear together, L4 follows standard precedence (higher binds tighter):
+
+| Precedence  | Operators           |
+| ----------- | ------------------- |
+| 3 (highest) | `AND`, `...`        |
+| 2           | `OR`, `..`          |
+| 1 (lowest)  | `IMPLIES`, `UNLESS` |
+
+This means `A OR B AND C` is parsed as `A OR (B AND C)`.
+
+**IDE Warning**: If you mix `AND` and `OR` at the same indentation column on different lines, the IDE shows a yellow warning. Use different indentation levels to clarify your intent:
+
+```l4
+-- Clear: OR binds the two main alternatives, AND is nested
+DECIDE `passes check` IF
+        `condition A`
+    AND `condition B`
+OR  `condition C`
 ```
 
 ### Inert Elements: Grammatical Scaffolding

@@ -210,6 +210,7 @@ data TKeywords
   | TKIn
   | TKBe
   | TKMean
+  | TKUnless
   deriving stock (Eq, Generic, Ord, Show)
   deriving anyclass (ToExpr, NFData)
 
@@ -292,6 +293,7 @@ keywords = Map.fromList
   , ("IN"         , TKIn         )
   , ("BE"         , TKBe         )
   , ("MEAN"       , TKMean       )
+  , ("UNLESS"     , TKUnless     )
   ]
 
 data TOperators
