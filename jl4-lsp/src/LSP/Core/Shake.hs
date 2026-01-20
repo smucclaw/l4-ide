@@ -97,7 +97,7 @@ import Data.Default
 import Data.Dynamic
 import Data.EnumMap.Strict (EnumMap)
 import qualified Data.EnumMap.Strict as EM
-import Data.Foldable (for_, foldl')
+import Data.Foldable (for_)
 import Data.Functor ((<&>))
 import Data.Functor.Identity
 import qualified Data.HashMap.Strict as HMap
