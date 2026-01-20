@@ -664,7 +664,11 @@ jl4Rules evalConfig rootDirectory recorder = do
 
   define shakeRecorder $ \GetRelSemanticTokens f -> do
     tokens <- use_ GetSemanticTokens f
-    let semanticTokens = relativizeTokens $ fmap toSemanticTokenAbsolute tokens
+    -- Sort tokens by position before relativizing. The type-checked semantic tokens
+    -- may be returned in a different order than their source positions, which breaks
+    -- relativizeTokens (it computes relative positions assuming sorted input).
+    let sortedTokens = List.sortOn (.start) tokens
+    let semanticTokens = relativizeTokens $ fmap toSemanticTokenAbsolute sortedTokens
     case encodeTokens defaultSemanticTokensLegend semanticTokens of
       Left err -> do
         logWith recorder Error $ LogRelSemanticTokenError err

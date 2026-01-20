@@ -52,6 +52,19 @@
   security.sudo.wheelNeedsPassword = false;
 
   # ---------------------------------------------
+  # nix garbage collection
+  # ---------------------------------------------
+
+  nix.gc = {
+    automatic = true;
+    dates = "weekly";
+    options = "--delete-older-than 7d";
+  };
+
+  # Also optimize the store periodically to save disk space
+  nix.optimise.automatic = true;
+
+  # ---------------------------------------------
   # ssh
   # ---------------------------------------------
 

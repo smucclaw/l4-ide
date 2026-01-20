@@ -16,6 +16,7 @@ module L4.Crypto.SHA1
   ) where
 
 import Data.Bits
+import Data.List (foldl')
 import Data.Word
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
