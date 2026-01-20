@@ -1,0 +1,128 @@
+-- Test UNLESS keyword functionality (issue #788)
+--
+-- UNLESS is syntactic sugar for AND NOT, with precedence lower than OR.
+-- This ensures UNLESS acts as an exception to the entire preceding expression:
+--   - A AND B AND C UNLESS D  =>  (A AND B AND C) AND NOT D
+--   - A OR B OR C UNLESS D    =>  (A OR B OR C) AND NOT D
+
+--------------------------------------------------------------------------------
+-- BASIC UNLESS TESTS
+--------------------------------------------------------------------------------
+
+-- TRUE UNLESS TRUE = TRUE AND NOT TRUE = TRUE AND FALSE = FALSE
+DECIDE basic_unless_true IF TRUE UNLESS UNLESS TRUE
+#ASSERT NOT basic_unless_true
+
+-- TRUE UNLESS FALSE = TRUE AND NOT FALSE = TRUE AND TRUE = TRUE
+DECIDE basic_unless_false IF TRUE UNLESS UNLESS FALSE
+#ASSERT basic_unless_false
+
+-- FALSE UNLESS TRUE = FALSE AND NOT TRUE = FALSE AND FALSE = FALSE
+DECIDE false_unless_true IF FALSE UNLESS UNLESS TRUE
+#ASSERT NOT false_unless_true
+
+-- FALSE UNLESS FALSE = FALSE AND NOT FALSE = FALSE AND TRUE = FALSE
+DECIDE false_unless_false IF FALSE UNLESS UNLESS FALSE
+#ASSERT NOT false_unless_false
+
+--------------------------------------------------------------------------------
+-- AND UNLESS (from issue #788 example)
+--------------------------------------------------------------------------------
+
+-- Multi-line: TRUE AND TRUE AND TRUE UNLESS TRUE = FALSE
+DECIDE and_unless_test1 IF
+         TRUE
+  AND    TRUE
+  AND    TRUE
+  UNLESS UNLESS TRUE
+
+#ASSERT NOT and_unless_test1
+
+-- Multi-line: TRUE AND TRUE AND TRUE UNLESS FALSE = TRUE
+DECIDE and_unless_test2 IF
+         TRUE
+  AND    TRUE
+  AND    TRUE
+  UNLESS UNLESS FALSE
+
+#ASSERT and_unless_test2
+
+--------------------------------------------------------------------------------
+-- OR UNLESS (from issue #788 example)
+--------------------------------------------------------------------------------
+
+-- Multi-line: FALSE OR TRUE OR TRUE UNLESS TRUE
+-- Should be: (FALSE OR TRUE OR TRUE) AND NOT TRUE = TRUE AND FALSE = FALSE
+DECIDE or_unless_test IF
+         FALSE
+  OR     TRUE
+  OR     TRUE
+  UNLESS UNLESS TRUE
+
+#ASSERT NOT or_unless_test
+
+-- Multi-line: FALSE OR FALSE OR FALSE UNLESS FALSE
+-- Should be: (FALSE OR FALSE OR FALSE) AND NOT FALSE = FALSE AND TRUE = FALSE
+DECIDE or_unless_test2 IF
+         FALSE
+  OR     FALSE
+  OR     FALSE
+  UNLESS UNLESS FALSE
+
+#ASSERT NOT or_unless_test2
+
+-- Multi-line: FALSE OR TRUE UNLESS FALSE
+-- Should be: (FALSE OR TRUE) AND NOT FALSE = TRUE AND TRUE = TRUE
+DECIDE or_unless_test3 IF
+         FALSE
+  OR     TRUE
+  UNLESS UNLESS FALSE
+
+#ASSERT or_unless_test3
+
+--------------------------------------------------------------------------------
+-- SINGLE-LINE VARIANTS
+--------------------------------------------------------------------------------
+
+DECIDE single_and_unless_1 IF TRUE AND TRUE AND TRUE UNLESS UNLESS TRUE
+DECIDE single_and_unless_2 IF TRUE AND TRUE AND TRUE UNLESS UNLESS FALSE
+DECIDE single_or_unless_1 IF FALSE OR TRUE OR TRUE UNLESS UNLESS TRUE
+DECIDE single_or_unless_2 IF FALSE OR TRUE UNLESS UNLESS FALSE
+
+#ASSERT NOT single_and_unless_1
+#ASSERT single_and_unless_2
+#ASSERT NOT single_or_unless_1
+#ASSERT single_or_unless_2
+
+--------------------------------------------------------------------------------
+-- CROSS-CHECKS: Multi-line and single-line should be equivalent
+--------------------------------------------------------------------------------
+
+#ASSERT and_unless_test1 = single_and_unless_1
+#ASSERT and_unless_test2 = single_and_unless_2
+#ASSERT or_unless_test = single_or_unless_1
+#ASSERT or_unless_test3 = single_or_unless_2
+
+--------------------------------------------------------------------------------
+-- UNLESS PRECEDENCE VERIFICATION
+--------------------------------------------------------------------------------
+
+-- Verify UNLESS binds looser than OR:
+-- If UNLESS bound tighter than OR, `A OR B UNLESS C` would be `A OR (B AND NOT C)`
+-- But with correct precedence, it's `(A OR B) AND NOT C`
+
+-- Test: TRUE OR FALSE UNLESS TRUE
+-- Correct (UNLESS binds loose): (TRUE OR FALSE) AND NOT TRUE = TRUE AND FALSE = FALSE
+-- Wrong (UNLESS binds tight):   TRUE OR (FALSE AND NOT TRUE) = TRUE OR FALSE = TRUE
+DECIDE precedence_test IF TRUE OR FALSE UNLESS UNLESS TRUE
+#ASSERT NOT precedence_test  -- Proves UNLESS binds looser than OR
+
+-- Test: FALSE OR TRUE UNLESS TRUE
+-- Correct: (FALSE OR TRUE) AND NOT TRUE = TRUE AND FALSE = FALSE
+-- Wrong:   FALSE OR (TRUE AND NOT TRUE) = FALSE OR FALSE = FALSE (same result, not discriminating)
+
+-- Test: TRUE OR TRUE UNLESS TRUE
+-- Correct: (TRUE OR TRUE) AND NOT TRUE = TRUE AND FALSE = FALSE
+-- Wrong:   TRUE OR (TRUE AND NOT TRUE) = TRUE OR FALSE = TRUE
+DECIDE precedence_test2 IF TRUE OR TRUE UNLESS UNLESS TRUE
+#ASSERT NOT precedence_test2  -- Another proof UNLESS binds looser than OR

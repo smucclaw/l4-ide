@@ -1,0 +1,87 @@
+-- Experiment: Determine AND vs OR binding precedence at same indentation level
+--
+-- If AND binds tighter than OR:  A OR B AND C  =  A OR (B AND C)
+-- If OR binds tighter than AND:  A OR B AND C  =  (A OR B) AND C
+--
+-- We test with values where these interpretations differ.
+-- Result: L4 follows standard precedence - AND binds tighter than OR.
+
+--------------------------------------------------------------------------------
+-- MULTI-LINE TESTS (operators at same indentation column)
+--------------------------------------------------------------------------------
+
+-- Discriminating case 1: A=TRUE, B=FALSE, C=FALSE
+-- AND tighter: TRUE OR (FALSE AND FALSE) = TRUE OR FALSE = TRUE
+-- OR tighter:  (TRUE OR FALSE) AND FALSE = TRUE AND FALSE = FALSE
+
+DECIDE case1_multiline_ambiguous IF
+       TRUE
+  OR   FALSE
+  AND  FALSE
+
+DECIDE case1_multiline_and_tighter IF
+       TRUE
+  OR   (FALSE AND FALSE)
+
+DECIDE case1_multiline_or_tighter IF
+       (TRUE OR FALSE)
+  AND  FALSE
+
+-- Discriminating case 2: A=TRUE, B=TRUE, C=FALSE
+-- AND tighter: TRUE OR (TRUE AND FALSE) = TRUE OR FALSE = TRUE
+-- OR tighter:  (TRUE OR TRUE) AND FALSE = TRUE AND FALSE = FALSE
+
+DECIDE case2_multiline_ambiguous IF
+       TRUE
+  OR   TRUE
+  AND  FALSE
+
+DECIDE case2_multiline_and_tighter IF
+       TRUE
+  OR   (TRUE AND FALSE)
+
+DECIDE case2_multiline_or_tighter IF
+       (TRUE OR TRUE)
+  AND  FALSE
+
+--------------------------------------------------------------------------------
+-- SINGLE-LINE TESTS (all operators on same line)
+--------------------------------------------------------------------------------
+
+-- Same discriminating cases, but expressed on a single line
+
+-- Case 1: A=TRUE, B=FALSE, C=FALSE
+DECIDE case1_singleline_ambiguous IF TRUE OR FALSE AND FALSE
+DECIDE case1_singleline_and_tighter IF TRUE OR (FALSE AND FALSE)
+DECIDE case1_singleline_or_tighter IF (TRUE OR FALSE) AND FALSE
+
+-- Case 2: A=TRUE, B=TRUE, C=FALSE
+DECIDE case2_singleline_ambiguous IF TRUE OR TRUE AND FALSE
+DECIDE case2_singleline_and_tighter IF TRUE OR (TRUE AND FALSE)
+DECIDE case2_singleline_or_tighter IF (TRUE OR TRUE) AND FALSE
+
+--------------------------------------------------------------------------------
+-- ASSERTIONS: Verify AND binds tighter than OR in both layouts
+--------------------------------------------------------------------------------
+
+-- Multi-line: ambiguous should match AND-tighter interpretation
+#ASSERT case1_multiline_ambiguous
+#ASSERT case1_multiline_and_tighter
+#ASSERT NOT case1_multiline_or_tighter
+
+#ASSERT case2_multiline_ambiguous
+#ASSERT case2_multiline_and_tighter
+#ASSERT NOT case2_multiline_or_tighter
+
+-- Single-line: should behave identically to multi-line
+#ASSERT case1_singleline_ambiguous
+#ASSERT case1_singleline_and_tighter
+#ASSERT NOT case1_singleline_or_tighter
+
+#ASSERT case2_singleline_ambiguous
+#ASSERT case2_singleline_and_tighter
+#ASSERT NOT case2_singleline_or_tighter
+
+-- Cross-check: multi-line and single-line ambiguous cases should be equal
+#ASSERT case1_multiline_ambiguous = case1_singleline_ambiguous
+#ASSERT case2_multiline_ambiguous = case2_singleline_ambiguous
