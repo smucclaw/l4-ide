@@ -102,7 +102,7 @@ import Data.Functor ((<&>))
 import Data.Functor.Identity
 import qualified Data.HashMap.Strict as HMap
 import qualified Data.HashSet as HSet
-import Data.List.Extra (foldl', partition, takeEnd)
+import Data.List.Extra (partition, takeEnd)
 import qualified Data.Map.Strict as Map
 import Data.Maybe
 import qualified Data.SortedList as SL

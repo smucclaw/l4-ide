@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -35,10 +36,13 @@ import qualified Base.Map as Map
 import qualified Base.Set as Set
 import Control.Concurrent
 import System.Environment (lookupEnv)
+import qualified Data.ByteString as BS
+import qualified Data.Text.Encoding as TE
+#ifdef HTTP_ENABLED
 import           Network.HTTP.Req ((=:))
 import qualified Network.HTTP.Req as Req
-import qualified Data.Text.Encoding as TE
 import qualified Data.ByteString.Lazy.Char8 as LBS
+#endif
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -53,8 +57,6 @@ import L4.Annotation
 import L4.Evaluate.Operators
 import L4.Evaluate.ValueLazy
 import L4.TemporalContext (EvalClause (..), TemporalContext (..), applyEvalClauses)
-import L4.TemporalGit
-import Language.LSP.Protocol.Types (uriToFilePath)
 import L4.Parser.SrcSpan (SrcRange)
 import L4.Print
 import L4.Syntax
@@ -107,12 +109,6 @@ data Frame =
   -- Temporal context scoping for rules encoded time
   | EvalUnderRulesEncodedAt1 Reference Environment
   | EvalUnderRulesEncodedAt2 TemporalContext
-  -- Temporal context scoping for commit override
-  | EvalUnderCommit1 Reference Environment
-  | EvalUnderCommit2 TemporalContext
-  -- Temporal context scoping for retroactive shorthand
-  | EvalRetroactiveTo1 Reference Environment
-  | EvalRetroactiveTo2 TemporalContext
   -- Temporal iteration frames
   | EverBetweenFrame TemporalContext WHNF Time.Day Time.Day Integer
   | AlwaysBetweenFrame TemporalContext WHNF Time.Day Time.Day Integer
@@ -170,6 +166,7 @@ data Machine a where
   PutTemporalContext :: TemporalContext -> Machine ()
   GetModuleUri :: Machine NormalizedUri
   GetTracePolicy :: Machine TracePolicy
+  GetSafeMode :: Machine Bool  -- ^ Returns True when HTTP operations should be disabled
   PokeThunk :: Reference
     -> (ThreadId -> Thunk -> (Thunk, a))
     -> Machine a
@@ -319,16 +316,6 @@ forwardExpr env = \ case
            , [dateExpr, thunkExpr] <- es -> do
                thunkRef <- allocate_ thunkExpr env
                PushFrame (EvalUnderRulesEncodedAt1 thunkRef env)
-               ForwardExpr env dateExpr
-      uniq | uniq == TypeCheck.evalUnderCommitUnique
-           , [commitExpr, thunkExpr] <- es -> do
-               thunkRef <- allocate_ thunkExpr env
-               PushFrame (EvalUnderCommit1 thunkRef env)
-               ForwardExpr env commitExpr
-      uniq | uniq == TypeCheck.evalRetroactiveToUnique
-           , [dateExpr, thunkExpr] <- es -> do
-               thunkRef <- allocate_ thunkExpr env
-               PushFrame (EvalRetroactiveTo1 thunkRef env)
                ForwardExpr env dateExpr
       _ -> do
         let expectedType = case getAnno ann of
@@ -507,7 +494,7 @@ backward val = WithPoppedFrame $ \ case
     serial <- expectNumber val
     originalCtx <- GetTemporalContext
     let retroDay = Time.utctDay (serialToUTCTime serial)
-    newCtx <- resolveRulesEffectiveContext originalCtx retroDay
+        newCtx = applyEvalClauses [UnderRulesEffectiveAt retroDay] originalCtx
     PutTemporalContext newCtx
     PushFrame (EvalUnderRulesEffectiveAt2 originalCtx)
     EvalRef thunkRef
@@ -517,22 +504,6 @@ backward val = WithPoppedFrame $ \ case
     let newCtx = applyEvalClauses [UnderRulesEncodedAt (serialToUTCTime serial)] originalCtx
     PutTemporalContext newCtx
     PushFrame (EvalUnderRulesEncodedAt2 originalCtx)
-    EvalRef thunkRef
-  Just (EvalUnderCommit1 thunkRef _env) -> do
-    commitTxt <- expectString val
-    originalCtx <- GetTemporalContext
-    newCtx <- resolveCommitContext originalCtx commitTxt
-    PutTemporalContext newCtx
-    PushFrame (EvalUnderCommit2 originalCtx)
-    EvalRef thunkRef
-  Just (EvalRetroactiveTo1 thunkRef _env) -> do
-    serial <- expectNumber val
-    originalCtx <- GetTemporalContext
-    let retroDay = Time.utctDay (serialToUTCTime serial)
-    retroCtx <- resolveRulesEffectiveContext originalCtx retroDay
-    let newCtx = applyEvalClauses [AsOfSystemTime (Time.UTCTime retroDay (Time.secondsToDiffTime 0))] retroCtx
-    PutTemporalContext newCtx
-    PushFrame (EvalRetroactiveTo2 originalCtx)
     EvalRef thunkRef
   Just (IfThenElse1 e2 e3 env) ->
     case val of
@@ -659,12 +630,6 @@ backward val = WithPoppedFrame $ \ case
     PutTemporalContext originalCtx
     Backward val
   Just (EvalUnderRulesEncodedAt2 originalCtx) -> do
-    PutTemporalContext originalCtx
-    Backward val
-  Just (EvalUnderCommit2 originalCtx) -> do
-    PutTemporalContext originalCtx
-    Backward val
-  Just (EvalRetroactiveTo2 originalCtx) -> do
     PutTemporalContext originalCtx
     Backward val
   Just (EverBetweenFrame originalCtx predicate endDay currentDay step) -> do
@@ -1127,17 +1092,17 @@ runLit (StringLit _ann str)  = pure (ValString str)
 expect1 :: [a] -> Machine a
 expect1 = \ case
   [x] -> pure x
-  xs -> InternalException (RuntimeTypeError $ "Expected 1 argument, but got " <> Text.show (length xs))
+  xs -> InternalException (RuntimeTypeError $ "Expected 1 argument, but got " <> Text.textShow (length xs))
 
 expect2 :: [a] -> Machine (a, a)
 expect2 = \ case
   [x, y] -> pure (x, y)
-  xs -> InternalException (RuntimeTypeError $ "Expected 2 arguments, but got " <> Text.show (length xs))
+  xs -> InternalException (RuntimeTypeError $ "Expected 2 arguments, but got " <> Text.textShow (length xs))
 
 expect3 :: [a] -> Machine (a, a, a)
 expect3 = \ case
   [x, y, z] -> pure (x, y, z)
-  xs -> InternalException (RuntimeTypeError $ "Expected 3 arguments, but got " <> Text.show (length xs))
+  xs -> InternalException (RuntimeTypeError $ "Expected 3 arguments, but got " <> Text.textShow (length xs))
 
 expectNumber :: WHNF -> Machine Rational
 expectNumber = \ case
@@ -1255,7 +1220,9 @@ encodeValueToJson = \case
 -- | Type-directed JSON decoding - uses type information to construct proper records
 decodeJsonToValueTyped :: Text -> Type' Resolved -> Machine WHNF
 decodeJsonToValueTyped jsonStr ty = do
-  case Aeson.eitherDecodeStrict' (TE.encodeUtf8 jsonStr) of
+  let jsonBytes :: BS.ByteString
+      jsonBytes = TE.encodeUtf8 jsonStr
+  case Aeson.eitherDecodeStrict' jsonBytes of
     Left err -> do
       -- Parse error: return LEFT errorMsg
       errorRef <- AllocateValue (ValString (Text.pack err))
@@ -1449,38 +1416,47 @@ textListToWHNF (x:xs) = do
   tailRef <- AllocateValue tailVal
   pure $ ValCons headRef tailRef
 
+#ifdef HTTP_ENABLED
 runPost :: WHNF -> WHNF -> WHNF -> Machine Config
 runPost urlVal headersVal bodyVal = do
-  url <- expectString urlVal
-  headersStr <- expectString headersVal
-  body <- expectString bodyVal
-  let (url', options) = Text.breakOn "?" url
-      (protocol, _) = Text.breakOn "://" url'
-  case protocol of
-    "https" -> do
-      let (hostname, path) = Text.breakOn "/" (Text.drop (Text.length "https://") url')
-          pathSegments = filter (not . Text.null) $ Text.splitOn "/" path
-          reqBase = Req.https hostname
-          reqWithPath = foldl (Req./:) reqBase pathSegments
-          params = if Text.null options then [] else Text.splitOn "&" (Text.drop 1 options)
+  safe <- GetSafeMode
+  if safe
+    then InternalException (RuntimeTypeError "POST is disabled in safe mode (no HTTP requests allowed)")
+    else do
+      url <- expectString urlVal
+      headersStr <- expectString headersVal
+      body <- expectString bodyVal
+      let (url', options) = Text.breakOn "?" url
+          (protocol, _) = Text.breakOn "://" url'
+      case protocol of
+        "https" -> do
+          let (hostname, path) = Text.breakOn "/" (Text.drop (Text.length "https://") url')
+              pathSegments = filter (not . Text.null) $ Text.splitOn "/" path
+              reqBase = Req.https hostname
+              reqWithPath = foldl (Req./:) reqBase pathSegments
+              params = if Text.null options then [] else Text.splitOn "&" (Text.drop 1 options)
 
-          -- Parse headers from newline-separated format: "Header-Name: value\nAnother-Header: value"
-          headerLines = filter (not . Text.null) $ Text.splitOn "\n" headersStr
-          parseHeader line =
-            let (name, rest) = Text.breakOn ":" line
-                value = Text.strip $ Text.drop 1 rest  -- drop the colon and strip whitespace
-            in if Text.null rest
-               then Nothing  -- invalid header format
-               else Just (Req.header (TE.encodeUtf8 name) (TE.encodeUtf8 value))
-          headerOptions = mapMaybe parseHeader headerLines
+              -- Parse headers from newline-separated format: "Header-Name: value\nAnother-Header: value"
+              headerLines = filter (not . Text.null) $ Text.splitOn "\n" headersStr
+              parseHeader line =
+                let (name, rest) = Text.breakOn ":" line
+                    value = Text.strip $ Text.drop 1 rest  -- drop the colon and strip whitespace
+                in if Text.null rest
+                   then Nothing  -- invalid header format
+                   else Just (Req.header (TE.encodeUtf8 name) (TE.encodeUtf8 value))
+              headerOptions = mapMaybe parseHeader headerLines
 
-          queryOptions = map (\p -> let (k,v) = Text.breakOn "=" p in k =: Text.drop 1 v) params
-          req_options = mconcat (headerOptions <> queryOptions)
+              queryOptions = map (\p -> let (k,v) = Text.breakOn "=" p in k =: Text.drop 1 v) params
+              req_options = mconcat (headerOptions <> queryOptions)
 
-      res <- liftIO $ Req.runReq Req.defaultHttpConfig $ do
-        Req.req Req.POST reqWithPath (Req.ReqBodyLbs $ LBS.fromStrict $ TE.encodeUtf8 body) Req.lbsResponse req_options
-      Backward $ ValString (TE.decodeUtf8 . LBS.toStrict $ Req.responseBody res)
-    _ -> InternalException (RuntimeTypeError "POST only supports https")
+          res <- liftIO $ Req.runReq Req.defaultHttpConfig $ do
+            Req.req Req.POST reqWithPath (Req.ReqBodyLbs $ LBS.fromStrict $ TE.encodeUtf8 body) Req.lbsResponse req_options
+          Backward $ ValString (TE.decodeUtf8 . LBS.toStrict $ Req.responseBody res)
+        _ -> InternalException (RuntimeTypeError "POST only supports https")
+#else
+runPost :: WHNF -> WHNF -> WHNF -> Machine Config
+runPost _ _ _ = InternalException (RuntimeTypeError "POST is not available (HTTP support disabled at compile time)")
+#endif
 
 runConcat :: [WHNF] -> Machine Config
 runConcat vals = do
@@ -1546,7 +1522,7 @@ formatDateParts year month day =
   pad 4 year <> "-" <> pad 2 month <> "-" <> pad 2 day
   where
     pad width v =
-      let raw = Text.show v
+      let raw = Text.textShow v
       in if Text.length raw >= width
            then raw
            else Text.replicate (width - Text.length raw) "0" <> raw
@@ -1632,23 +1608,32 @@ runBuiltin es op mTy = do
         Nothing ->
           decodeJsonToValue jsonStr
       Backward result
+#ifdef HTTP_ENABLED
     UnaryFetch -> do
-      url <- expectString es
-      let (url', options) = Text.breakOn "?" url
-          (protocol, _) = Text.breakOn "://" url'
-      case protocol of
-        "https" -> do
-          let (hostname, path) = Text.breakOn "/" (Text.drop (Text.length "https://") url')
-              pathSegments = filter (not . Text.null) $ Text.splitOn "/" path
-              reqBase = Req.https hostname
-              reqWithPath = foldl (Req./:) reqBase pathSegments
-              params = if Text.null options then [] else Text.splitOn "&" (Text.drop 1 options)
-              req_options =
-                mconcat (map (\p -> let (k,v) = Text.breakOn "=" p in k =: Text.drop 1 v) params)
-          res <- liftIO $ Req.runReq Req.defaultHttpConfig $ do
-            Req.req Req.GET reqWithPath Req.NoReqBody Req.lbsResponse req_options
-          Backward $ ValString (TE.decodeUtf8 . LBS.toStrict $ Req.responseBody res)
-        _ -> InternalException (RuntimeTypeError "FETCH only supports https")
+      safe <- GetSafeMode
+      if safe
+        then InternalException (RuntimeTypeError "FETCH is disabled in safe mode (no HTTP requests allowed)")
+        else do
+          url <- expectString es
+          let (url', options) = Text.breakOn "?" url
+              (protocol, _) = Text.breakOn "://" url'
+          case protocol of
+            "https" -> do
+              let (hostname, path) = Text.breakOn "/" (Text.drop (Text.length "https://") url')
+                  pathSegments = filter (not . Text.null) $ Text.splitOn "/" path
+                  reqBase = Req.https hostname
+                  reqWithPath = foldl (Req./:) reqBase pathSegments
+                  params = if Text.null options then [] else Text.splitOn "&" (Text.drop 1 options)
+                  req_options =
+                    mconcat (map (\p -> let (k,v) = Text.breakOn "=" p in k =: Text.drop 1 v) params)
+              res <- liftIO $ Req.runReq Req.defaultHttpConfig $ do
+                Req.req Req.GET reqWithPath Req.NoReqBody Req.lbsResponse req_options
+              Backward $ ValString (TE.decodeUtf8 . LBS.toStrict $ Req.responseBody res)
+            _ -> InternalException (RuntimeTypeError "FETCH only supports https")
+#else
+    UnaryFetch -> do
+      InternalException (RuntimeTypeError "FETCH is not available (HTTP support disabled at compile time)")
+#endif
     UnaryEnv -> do
       varName <- expectString es
       maybeValue <- liftIO $ lookupEnv (Text.unpack varName)
@@ -2393,7 +2378,7 @@ prettyUserEvalException = \ case
     <> [ "has no corresponding pattern." ]
   StackOverflow ->
     [ "Stack overflow: "
-    , "Recursion depth of " <> Text.show maximumStackSize
+    , "Recursion depth of " <> Text.textShow maximumStackSize
     , "exceeded." ]
   DivisionByZero op ->
     [ "Division by zero in the operation:"
@@ -2471,8 +2456,6 @@ initialEnvironment = do
   evalUnderValidTimeRef <- AllocateValue (ValAssumed TypeCheck.evalUnderValidTimeRef)
   evalUnderRulesEffectiveAtRef <- AllocateValue (ValAssumed TypeCheck.evalUnderRulesEffectiveAtRef)
   evalUnderRulesEncodedAtRef <- AllocateValue (ValAssumed TypeCheck.evalUnderRulesEncodedAtRef)
-  evalUnderCommitRef <- AllocateValue (ValAssumed TypeCheck.evalUnderCommitRef)
-  evalRetroactiveToRef <- AllocateValue (ValAssumed TypeCheck.evalRetroactiveToRef)
   fulfilRef <- AllocateValue ValFulfilled
   neverMatchesPartyRef <- AllocateValue ValNeverMatchesParty
   neverMatchesActRef <- AllocateValue ValNeverMatchesAct
@@ -2535,8 +2518,6 @@ initialEnvironment = do
       , (TypeCheck.evalUnderValidTimeUnique, evalUnderValidTimeRef)
       , (TypeCheck.evalUnderRulesEffectiveAtUnique, evalUnderRulesEffectiveAtRef)
       , (TypeCheck.evalUnderRulesEncodedAtUnique, evalUnderRulesEncodedAtRef)
-      , (TypeCheck.evalUnderCommitUnique, evalUnderCommitRef)
-      , (TypeCheck.evalRetroactiveToUnique, evalRetroactiveToRef)
       , (TypeCheck.waitUntilUnique, waitUntilRef)
       , (TypeCheck.andUnique, andRef)
       , (TypeCheck.orUnique, orRef)
@@ -2631,47 +2612,6 @@ serialToUTCTime serial =
       seconds :: Pico
       seconds = realToFrac (fraction * secondsPerDay)
   in Time.UTCTime day (realToFrac seconds)
-
-requireModulePath :: Machine FilePath
-requireModulePath = do
-  uri <- GetModuleUri
-  case uriToFilePath (fromNormalizedUri uri) of
-    Nothing -> InternalException $ RuntimeTypeError "Temporal evaluation requires a file-backed module"
-    Just fp -> pure fp
-
-liftEitherIO :: IO (Either Text a) -> Machine a
-liftEitherIO action = do
-  res <- liftIO action
-  case res of
-    Left err -> InternalException $ RuntimeTypeError err
-    Right v -> pure v
-
-resolveCommitContext :: TemporalContext -> Text -> Machine TemporalContext
-resolveCommitContext originalCtx commitTxt = do
-  modulePath <- requireModulePath
-  repoRoot <- liftEitherIO (resolveRepoRoot modulePath)
-  commitInfo <- liftEitherIO (resolveCommitHash repoRoot commitTxt)
-  let withCommit = applyEvalClauses [UnderCommit commitInfo.commitHash] originalCtx
-      commitDay = Time.utctDay commitInfo.commitTime
-  pure
-    withCommit
-      { tcRuleEncodingTime = Just commitInfo.commitTime
-      , tcRuleVersionTime = case withCommit.tcRuleVersionTime of
-          Nothing -> Just commitDay
-          justDay -> justDay
-      }
-
-resolveRulesEffectiveContext :: TemporalContext -> Time.Day -> Machine TemporalContext
-resolveRulesEffectiveContext originalCtx day = do
-  modulePath <- requireModulePath
-  repoRoot <- liftEitherIO (resolveRepoRoot modulePath)
-  commitInfo <- liftEitherIO (resolveRulesCommitByDate repoRoot modulePath day)
-  let baseCtx = applyEvalClauses [UnderRulesEffectiveAt day] originalCtx
-  pure
-    baseCtx
-      { tcRuleCommit = Just commitInfo.commitHash
-      , tcRuleEncodingTime = Just commitInfo.commitTime
-      }
 
 dateFormats :: [String]
 dateFormats =

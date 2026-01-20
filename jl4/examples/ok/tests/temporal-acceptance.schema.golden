@@ -1,13 +1,17 @@
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "properties": {
-        "date": {
-            "type": "string"
+        "base": {
+            "$ref": "#/$defs/DATE"
+        },
+        "days": {
+            "$ref": "#/$defs/NUMBER"
         }
     },
     "required": [
-        "date"
+        "base",
+        "days"
     ],
-    "title": "weekend?",
+    "title": "add days",
     "type": "object"
 }

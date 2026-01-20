@@ -34,7 +34,6 @@ import           Control.Lens                ((^.))
 import           Control.Monad
 import           Data.Algorithm.Diff
 import           Data.Bifunctor
-import           Data.List
 import qualified Data.Text                   as T
 import qualified Data.Vector.Unboxed         as V
 import qualified Language.LSP.Protocol.Lens  as L

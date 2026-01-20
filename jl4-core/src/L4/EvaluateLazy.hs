@@ -2,6 +2,7 @@
 module L4.EvaluateLazy
 ( EvalConfig(..)
 , resolveEvalConfig
+, resolveEvalConfigWithSafeMode
 , parseFixedNow
 , readFixedNowEnv
 , EvalDirectiveResult (..)
@@ -53,19 +54,24 @@ data EvalState =
     , evalTime   :: !UTCTime
     , temporalContext :: !(IORef TemporalContext)
     , tracePolicy :: !TracePolicy  -- controls trace collection and output
+    , safeMode   :: !Bool          -- when True, HTTP operations return errors
     }
 
 data EvalConfig = EvalConfig
   { evalTime :: !UTCTime
   , tracePolicy :: !TracePolicy
+  , safeMode :: !Bool  -- ^ When True, HTTP operations (FETCH/POST) return errors instead of making requests
   }
 
 resolveEvalConfig :: Maybe UTCTime -> TracePolicy -> IO EvalConfig
-resolveEvalConfig mTime tracePolicy = case mTime of
+resolveEvalConfig mTime tracePolicy = resolveEvalConfigWithSafeMode mTime tracePolicy False
+
+resolveEvalConfigWithSafeMode :: Maybe UTCTime -> TracePolicy -> Bool -> IO EvalConfig
+resolveEvalConfigWithSafeMode mTime tracePolicy safe = case mTime of
   Nothing -> do
     time <- getCurrentTime
-    pure (EvalConfig time tracePolicy)
-  Just time -> pure (EvalConfig time tracePolicy)
+    pure (EvalConfig time tracePolicy safe)
+  Just time -> pure (EvalConfig time tracePolicy safe)
 
 parseFixedNow :: Text -> Maybe UTCTime
 parseFixedNow = ISO8601.iso8601ParseM . Text.unpack
@@ -222,6 +228,8 @@ interpMachine = \ case
     asks (.evalTime)
   GetTracePolicy ->
     asks (.tracePolicy)
+  GetSafeMode ->
+    asks (.safeMode)
   Bind act k -> interpMachine act >>= interpMachine . k
   LiftIO m -> liftIO m >>= interpMachine . pure
   PushFrame f -> do
@@ -429,7 +437,7 @@ execEvalModuleWithEnv evalConfig entityInfo env m@(MkModule _ moduleUri _) = do
       let temporalCtx = initialTemporalContext evalConfig.evalTime
       temporalContext <- newIORef temporalCtx
       let evalTrace = Nothing
-      r <- f MkEvalState {moduleUri, stack, supply, evalTrace, entityInfo, evalTime = evalConfig.evalTime, temporalContext, tracePolicy = evalConfig.tracePolicy}
+      r <- f MkEvalState {moduleUri, stack, supply, evalTrace, entityInfo, evalTime = evalConfig.evalTime, temporalContext, tracePolicy = evalConfig.tracePolicy, safeMode = evalConfig.safeMode}
       case r of
         Left exc -> do
           hPutStrLn stderr $ "Eval failure in module: " <> show moduleUri
@@ -478,7 +486,7 @@ execEvalModuleWithJSON evalConfig entityInfo json m@(MkModule _ moduleUri _) = d
       let temporalCtx = initialTemporalContext evalConfig.evalTime
       temporalContext <- newIORef temporalCtx
       let evalTrace = Nothing
-      r <- f MkEvalState {moduleUri, stack, supply, evalTrace, entityInfo, evalTime = evalConfig.evalTime, temporalContext, tracePolicy = evalConfig.tracePolicy}
+      r <- f MkEvalState {moduleUri, stack, supply, evalTrace, entityInfo, evalTime = evalConfig.evalTime, temporalContext, tracePolicy = evalConfig.tracePolicy, safeMode = evalConfig.safeMode}
       case r of
         Left exc -> do
           hPutStrLn stderr $ "Eval failure in module: " <> show moduleUri
