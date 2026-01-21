@@ -173,6 +173,150 @@ const tests = [
     if (!evalResult || typeof evalResult !== 'object')
       throw new Error('Expected object')
   }),
+
+  // === Import Resolution Tests ===
+
+  test('IMPORT prelude resolves successfully', async () => {
+    const code = `IMPORT prelude
+DECIDE x IS sum (LIST 1, 2, 3)`
+    const result = await exports.l4_check(code)
+    const diagnostics = JSON.parse(result)
+    if (!Array.isArray(diagnostics)) throw new Error('Expected array')
+    // Should resolve without errors (prelude defines 'sum')
+    const errors = diagnostics.filter((d) => d.severity === 1)
+    if (errors.length > 0) {
+      throw new Error(
+        `Expected no errors, got: ${errors.map((e) => e.message).join(', ')}`
+      )
+    }
+  }),
+
+  test('IMPORT math resolves successfully (transitive prelude)', async () => {
+    const code = `IMPORT math
+DECIDE x IS exp 1`
+    const result = await exports.l4_check(code)
+    const diagnostics = JSON.parse(result)
+    if (!Array.isArray(diagnostics)) throw new Error('Expected array')
+    // Should resolve without errors (math defines 'exp')
+    const errors = diagnostics.filter((d) => d.severity === 1)
+    if (errors.length > 0) {
+      throw new Error(
+        `Expected no errors, got: ${errors.map((e) => e.message).join(', ')}`
+      )
+    }
+  }),
+
+  test('IMPORT nonexistent module returns error', async () => {
+    const code = `IMPORT nonexistent_module_xyz
+DECIDE x IS 42`
+    const result = await exports.l4_check(code)
+    const diagnostics = JSON.parse(result)
+    if (!Array.isArray(diagnostics)) throw new Error('Expected array')
+    // Should have an error about the missing module
+    if (diagnostics.length === 0) {
+      throw new Error('Expected error for nonexistent import')
+    }
+    const hasImportError = diagnostics.some(
+      (d) =>
+        d.message.toLowerCase().includes('import') ||
+        d.message.toLowerCase().includes('module') ||
+        d.message.toLowerCase().includes('not found')
+    )
+    if (!hasImportError) {
+      throw new Error(
+        `Expected import error, got: ${diagnostics.map((e) => e.message).join(', ')}`
+      )
+    }
+  }),
+
+  test('IMPORT prelude provides prelude functions for eval', async () => {
+    const code = `IMPORT prelude
+#EVAL sum (LIST 1, 2, 3, 4, 5)`
+    const result = await exports.l4_eval(code)
+    const evalResult = JSON.parse(result)
+    if (!evalResult || typeof evalResult !== 'object')
+      throw new Error('Expected object')
+    // Should successfully evaluate to 15
+    if (evalResult.success) {
+      const results = evalResult.results
+      if (!results || results.length === 0) {
+        throw new Error('Expected evaluation results')
+      }
+      // Check if the result contains '15'
+      const resultStr = results[0].result
+      if (!resultStr.includes('15')) {
+        throw new Error(`Expected result to be 15, got: ${resultStr}`)
+      }
+    }
+  }),
+
+  test('Multiple embedded libraries are available', async () => {
+    // Test that several libraries can be imported
+    const libraries = ['prelude', 'math', 'currency']
+    for (const lib of libraries) {
+      const code = `IMPORT ${lib}
+DECIDE x IS 42`
+      const result = await exports.l4_check(code)
+      const diagnostics = JSON.parse(result)
+      // Filter out non-error diagnostics
+      const errors = diagnostics.filter((d) => d.severity === 1)
+      // Should not have "module not found" type errors
+      const importErrors = errors.filter(
+        (d) =>
+          d.message.toLowerCase().includes('import') ||
+          d.message.toLowerCase().includes('not found')
+      )
+      if (importErrors.length > 0) {
+        throw new Error(
+          `Library '${lib}' failed to import: ${importErrors.map((e) => e.message).join(', ')}`
+        )
+      }
+    }
+  }),
+
+  test('IMPORT daydate resolves and provides date functions', async () => {
+    // Test daydate library - it defines date constants and functions
+    const code = `IMPORT daydate
+DECIDE myDay IS Monday
+DECIDE daysInWeek IS \`Days in a week\``
+    const result = await exports.l4_check(code)
+    const diagnostics = JSON.parse(result)
+    if (!Array.isArray(diagnostics)) throw new Error('Expected array')
+    // Should resolve without errors
+    const errors = diagnostics.filter((d) => d.severity === 1)
+    if (errors.length > 0) {
+      throw new Error(
+        `Expected no errors, got: ${errors.map((e) => e.message).join(', ')}`
+      )
+    }
+  }),
+
+  test('IMPORT daydate eval works with date constants', async () => {
+    // Test that daydate constants can be evaluated
+    const code = `IMPORT daydate
+#EVAL \`Days in a week\``
+    const result = await exports.l4_eval(code)
+    const evalResult = JSON.parse(result)
+    if (!evalResult || typeof evalResult !== 'object')
+      throw new Error('Expected object')
+    if (evalResult.success) {
+      const results = evalResult.results
+      if (!results || results.length === 0) {
+        throw new Error('Expected evaluation results')
+      }
+      // Days in a week should be 7
+      const resultStr = results[0].result
+      if (!resultStr.includes('7')) {
+        throw new Error(`Expected result to contain 7, got: ${resultStr}`)
+      }
+    } else {
+      // If not successful, show the diagnostics
+      const diagMsgs = (evalResult.diagnostics || [])
+        .map((d) => d.message)
+        .join(', ')
+      throw new Error(`Evaluation failed: ${diagMsgs}`)
+    }
+  }),
 ]
 
 let passed = 0

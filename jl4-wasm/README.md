@@ -22,7 +22,34 @@ source ~/.ghc-wasm/env
 
 ## Building
 
-### Quick Build (Recommended)
+### Using the Build Script (Recommended)
+
+```bash
+# From jl4-wasm directory
+cd jl4-wasm
+
+# Build only
+./scripts/build-wasm.sh
+
+# Build and optimize (reduces ~42 MB to ~10 MB)
+./scripts/build-wasm.sh --optimize
+
+# Build, optimize, and run tests
+./scripts/build-wasm.sh --all
+```
+
+The script handles:
+
+1. Sourcing the GHC WASM environment
+2. Building with `wasm32-wasi-cabal`
+3. Generating JS FFI glue code
+4. Deploying to `ts-apps/jl4-web/static/wasm/`
+5. Optionally optimizing with `wasm-opt`
+6. Optionally running integration tests
+
+### Manual Build
+
+If you prefer to run the commands manually:
 
 ```bash
 # From project root
@@ -57,7 +84,10 @@ The raw WASM binary is large (~42 MB) but can be significantly reduced using `wa
 # macOS: brew install binaryen
 # Ubuntu: sudo apt install binaryen
 
-# Run the optimization script (from jl4-wasm directory)
+# Option 1: Use the build script with --optimize
+./scripts/build-wasm.sh --optimize
+
+# Option 2: Run optimization separately (after building)
 ./scripts/optimize-wasm.sh -Oz --test
 ```
 

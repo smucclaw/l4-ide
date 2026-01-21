@@ -41,6 +41,7 @@ library
     containers,
     data-default,
     deepseq,
+    directory,
     dlist,
     extra,
     fgl,
@@ -129,7 +130,11 @@ library
     L4.Crypto.UUID5
     L4.Viz.Ladder
     L4.Viz.VizExpr
+    L4.Import.Resolution
     L4.Wasm
+    L4.Wasm.EmbeddedLibraries
+    L4.Wasm.EmbeddedLibraries.TH
+    L4.Wasm.Import
 
 test-suite jl4-core-test
   import: defaults
@@ -138,6 +143,7 @@ test-suite jl4-core-test
   main-is: Spec.hs
   other-modules:
     Paths_jl4_core
+    ImportResolutionSpec
     TemporalContextSpec
     MixfixParserSpec
     UUID5Spec
@@ -146,6 +152,7 @@ test-suite jl4-core-test
   build-depends:
     base,
     bytestring,
+    containers,
     hspec,
     jl4-core,
     text,

@@ -30,11 +30,11 @@ import qualified Data.Text.Lazy as LazyText
 import qualified Data.Text.Lazy.Encoding as LazyText
 import qualified Data.Vector as Vector
 
-import L4.Lexer (execLexer, PosToken(..), TokenType(..), TLiterals(..), TSpaces(..), TIdentifiers(..), PError(..))
-import L4.Parser (execProgramParserWithHintPass)
+import L4.Lexer (execLexer, PosToken(..), TokenType(..), TLiterals(..), TSpaces(..), TIdentifiers(..))
+
 import L4.Annotation (HasSrcRange(..))
-import L4.Parser.SrcSpan (SrcRange(..), SrcSpan(..), SrcPos(..))
-import L4.TypeCheck (doCheckProgram, severity, prettyCheckErrorWithContext, applyFinalSubstitution)
+import L4.Parser.SrcSpan (SrcRange(..), SrcPos(..))
+import L4.TypeCheck (severity, prettyCheckErrorWithContext, applyFinalSubstitution)
 import L4.TypeCheck.Types (CheckResult(..), CheckErrorWithContext(..), Severity(..), Substitution)
 import L4.Print (prettyLayout)
 import L4.Syntax (Info(..), Type'(..), Resolved, OptionallyNamedType(..))
@@ -47,6 +47,10 @@ import L4.TracePolicy (lspDefaultPolicy)
 import L4.EvaluateLazy.GraphVizOptions (defaultGraphVizOptions)
 import qualified L4.Viz.Ladder as Ladder
 
+-- Import resolution for WASM (embedded libs + VFS)
+import L4.Wasm.Import (checkWithImports, emptyVFS, TypeCheckWithDepsResult(..), ResolvedImport(..))
+import qualified L4.Evaluate.ValueLazy as ValLazy
+
 
 #if defined(wasm32_HOST_ARCH)
 import GHC.Wasm.Prim (JSString(..), fromJSString, toJSString)
@@ -56,7 +60,7 @@ import GHC.Wasm.Prim (JSString(..), fromJSString, toJSString)
 -- Core API Functions
 -- ----------------------------------------------------------------------------
 
--- | Parse and type-check L4 source code.
+-- | Parse and type-check L4 source code with import resolution.
 --
 -- Returns a JSON array of diagnostics in LSP format:
 --
@@ -72,17 +76,20 @@ import GHC.Wasm.Prim (JSString(..), fromJSString, toJSString)
 -- @
 --
 -- Severity values: 1=Error, 2=Warning, 3=Info, 4=Hint
+--
+-- This uses the shared import resolution from 'L4.Import.Resolution':
+-- - Embedded core libraries (prelude, math, etc.) are available
+-- - User-provided files can be added via VFS (future enhancement)
 l4Check :: Text -> Text
 l4Check source =
-  let uri = toNormalizedUri (Uri "file:///wasm-input.l4")
-  in case execProgramParserWithHintPass uri source of
-    Left parseErrors ->
-      -- Convert parse errors to diagnostics
-      encodeJson $ Vector.fromList $ map parseErrorToDiagnostic (toList parseErrors)
-    Right (parsed, _hints, _parseWarnings) ->
-      -- Type check the parsed module
-      let checkResult = doCheckProgram uri parsed
-          diagnostics = map checkErrorToDiagnostic checkResult.errors
+  -- Use checkWithImports for full import resolution support
+  case checkWithImports emptyVFS source of
+    Left errors ->
+      -- Import/parse errors
+      encodeJson $ Vector.fromList $ map importErrorToDiagnostic errors
+    Right result ->
+      -- Type check errors (if any)
+      let diagnostics = map checkErrorToDiagnostic result.tcdErrors
       in encodeJson $ Vector.fromList diagnostics
 
 -- | Get hover information at a position.
@@ -97,13 +104,25 @@ l4Check source =
 -- @
 l4Hover :: Text -> Int -> Int -> Text
 l4Hover source line col =
-  let uri = toNormalizedUri (Uri "file:///wasm-input.l4")
+  let uri = toNormalizedUri (Uri "project:/main.l4")
       pos = MkSrcPos { line = line + 1, column = col + 1 }  -- Convert 0-indexed to 1-indexed
-  in case execProgramParserWithHintPass uri source of
-    Left _parseErrors ->
+  in case checkWithImports emptyVFS source of
+    Left _errors ->
       "null"
-    Right (parsed, _hints, _) ->
-      let checkResult = doCheckProgram uri parsed
+    Right result ->
+      -- Create a CheckResult structure for the lookup function
+      let checkResult = MkCheckResult
+            { program = result.tcdModule
+            , errors = result.tcdErrors
+            , substitution = result.tcdSubstitution
+            , environment = result.tcdEnvironment
+            , entityInfo = result.tcdEntityInfo
+            , mixfixRegistry = result.tcdMixfixRegistry
+            , infoMap = result.tcdInfoMap
+            , scopeMap = result.tcdScopeMap
+            , nlgMap = result.tcdNlgMap
+            , descMap = result.tcdDescMap
+            }
       in case lookupInfoAtPos uri pos checkResult of
         Nothing -> "null"
         Just hover -> encodeJson hover
@@ -193,32 +212,50 @@ l4SemanticTokens source =
 --
 -- If there are parse or type errors, returns diagnostics instead.
 l4Eval :: Text -> IO Text
-l4Eval source = do
-  let uri = toNormalizedUri (Uri "file:///wasm-input.l4")
-  case execProgramParserWithHintPass uri source of
-    Left parseErrors ->
-      -- Return parse errors as diagnostics
+l4Eval source =
+  case checkWithImports emptyVFS source of
+    Left errors ->
+      -- Return import/parse errors as diagnostics
       pure $ encodeJson $ Aeson.object
         [ "success" .= False
-        , "diagnostics" .= Vector.fromList (map parseErrorToDiagnostic (toList parseErrors))
+        , "diagnostics" .= Vector.fromList (map importErrorToDiagnostic errors)
         ]
-    Right (parsed, _hints, _parseWarnings) ->
-      let checkResult = doCheckProgram uri parsed
-      in if not (null checkResult.errors)
+    Right result ->
+      if not (null result.tcdErrors)
         then
           -- Return type check errors as diagnostics
           pure $ encodeJson $ Aeson.object
             [ "success" .= False
-            , "diagnostics" .= Vector.fromList (map checkErrorToDiagnostic checkResult.errors)
+            , "diagnostics" .= Vector.fromList (map checkErrorToDiagnostic result.tcdErrors)
             ]
         else do
-          -- Evaluate the module
+          -- First, evaluate all imported modules to build up the evaluation environment
           evalConfig <- EL.resolveEvalConfigWithSafeMode Nothing (lspDefaultPolicy defaultGraphVizOptions) True  -- safe mode = True
-          (_env, results) <- EL.execEvalModuleWithEnv evalConfig checkResult.entityInfo mempty checkResult.program
+          
+          -- Evaluate each import and collect their environments
+          -- We evaluate in order (dependencies first)
+          importEnv <- evaluateImports evalConfig result.tcdResolvedImports
+          
+          -- Now evaluate the main module with the combined import environment
+          (_env, results) <- EL.execEvalModuleWithEnv evalConfig result.tcdEntityInfo importEnv result.tcdModule
           pure $ encodeJson $ Aeson.object
             [ "success" .= True
             , "results" .= Vector.fromList (map evalResultToJson results)
             ]
+
+-- | Evaluate a list of resolved imports and combine their environments.
+-- Returns the combined evaluation environment.
+evaluateImports :: EL.EvalConfig -> [ResolvedImport] -> IO ValLazy.Environment
+evaluateImports _evalConfig [] = pure mempty
+evaluateImports evalConfig imports = do
+  -- Evaluate each import and collect environments
+  envs <- forM imports $ \ri -> do
+    let tcResult = ri.riTypeChecked
+    -- Evaluate this imported module (without any #EVAL directives of its own)
+    (env, _) <- EL.execEvalModuleWithEnv evalConfig tcResult.entityInfo mempty tcResult.program
+    pure env
+  -- Combine all environments (left-biased - later imports override earlier)
+  pure $ mconcat envs
 
 -- ----------------------------------------------------------------------------
 -- JavaScript FFI Exports (WASM backend only)
@@ -281,22 +318,20 @@ js_l4_visualize source uri version = pure $ toJSString $ Text.unpack $
 encodeJson :: Aeson.ToJSON a => a -> Text
 encodeJson = LazyText.toStrict . LazyText.decodeUtf8 . Aeson.encode
 
--- | Convert a parse error to an LSP diagnostic.
-parseErrorToDiagnostic :: PError -> Aeson.Value
-parseErrorToDiagnostic err =
+-- | Convert an import/resolution error to an LSP diagnostic.
+importErrorToDiagnostic :: Text -> Aeson.Value
+importErrorToDiagnostic errMsg =
   Aeson.object
-    [ "range" .= spanToJson err.range
+    [ "range" .= defaultRangeJson
     , "severity" .= (1 :: Int)  -- Error
-    , "message" .= err.message
+    , "message" .= errMsg
     , "source" .= ("l4" :: Text)
     ]
-
--- | Convert a SrcSpan to JSON (LSP Range format, 0-indexed).
-spanToJson :: SrcSpan -> Aeson.Value
-spanToJson srcSpan = Aeson.object
-  [ "start" .= posToJson srcSpan.start
-  , "end" .= posToJson srcSpan.end
-  ]
+  where
+    defaultRangeJson = Aeson.object
+      [ "start" .= Aeson.object ["line" .= (0 :: Int), "character" .= (0 :: Int)]
+      , "end" .= Aeson.object ["line" .= (0 :: Int), "character" .= (0 :: Int)]
+      ]
 
 -- | Convert a type check error to an LSP diagnostic.
 checkErrorToDiagnostic :: CheckErrorWithContext -> Aeson.Value
@@ -349,7 +384,7 @@ lookupInfoAtPos nuri pos result =
       Just $ infoToHover nuri result.substitution srcRange info
 
 -- | Convert type info to LSP hover format.
-infoToHover :: NormalizedUri -> L4.TypeCheck.Types.Substitution -> SrcRange -> Info -> Aeson.Value
+infoToHover :: NormalizedUri -> Substitution -> SrcRange -> Info -> Aeson.Value
 infoToHover nuri subst srcRange info = Aeson.object
   [ "contents" .= Aeson.object
       [ "kind" .= ("markdown" :: Text)
@@ -359,7 +394,7 @@ infoToHover nuri subst srcRange info = Aeson.object
   ]
 
 -- | Convert Info to display text.
-infoToText :: NormalizedUri -> L4.TypeCheck.Types.Substitution -> Info -> Text
+infoToText :: NormalizedUri -> Substitution -> Info -> Text
 infoToText nuri subst = \case
   TypeInfo ty _mTermKind ->
     prettyLayout (applyFinalSubstitution subst nuri ty)
@@ -425,20 +460,19 @@ prettyEvalResult (EL.Reduction (Right v))  = prettyLayout v
 l4Visualize :: Text -> Text -> Int -> Text
 l4Visualize source uriText version =
   let uri = toNormalizedUri (Uri uriText)
-  in case execProgramParserWithHintPass uri source of
-    Left _parseErrors ->
+  in case checkWithImports emptyVFS source of
+    Left errors ->
       encodeJson $ Aeson.object
-        [ "error" .= ("Parse error" :: Text)
+        [ "error" .= Text.intercalate "; " errors
         ]
-    Right (parsed, _hints, _parseWarnings) ->
-      let checkResult = doCheckProgram uri parsed
-      in if not (null checkResult.errors)
+    Right result ->
+      if not (null result.tcdErrors)
         then
           encodeJson $ Aeson.object
             [ "error" .= ("Type check error" :: Text)
             ]
         else
-          case Ladder.visualize uri uriText version checkResult.program checkResult.substitution True of
+          case Ladder.visualize uri uriText version result.tcdModule result.tcdSubstitution True of
             Left vizError ->
               encodeJson $ Aeson.object
                 [ "error" .= Ladder.prettyPrintVizError vizError
