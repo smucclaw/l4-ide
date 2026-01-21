@@ -91,24 +91,59 @@ const setImmediate = await (async () => {
 })();
 
 export default (__exports) => {
-const __ghc_wasm_jsffi_jsval_manager = new JSValManager();
-const __ghc_wasm_jsffi_finalization_registry = globalThis.FinalizationRegistry ? new FinalizationRegistry(sp => __exports.rts_freeStablePtr(sp)) : { register: () => {}, unregister: () => true };
-return {
-newJSVal: (v) => __ghc_wasm_jsffi_jsval_manager.newJSVal(v),
-getJSVal: (k) => __ghc_wasm_jsffi_jsval_manager.getJSVal(k),
-freeJSVal: (k) => __ghc_wasm_jsffi_jsval_manager.freeJSVal(k),
-scheduleWork: () => setImmediate(__exports.rts_schedulerLoop),
-ZC0ZCghczminternalZCGHCziInternalziWasmziPrimziExportsZC: ($1,$2) => ($1.reject(new WebAssembly.RuntimeError($2))),
-ZC18ZCghczminternalZCGHCziInternalziWasmziPrimziExportsZC: ($1,$2) => ($1.resolve($2)),
-ZC20ZCghczminternalZCGHCziInternalziWasmziPrimziExportsZC: ($1) => {$1.throwTo = () => {};},
-ZC21ZCghczminternalZCGHCziInternalziWasmziPrimziExportsZC: ($1,$2) => {$1.throwTo = (err) => __exports.rts_promiseThrowTo($2, err);},
-ZC22ZCghczminternalZCGHCziInternalziWasmziPrimziExportsZC: () => {let res, rej; const p = new Promise((resolve, reject) => { res = resolve; rej = reject; }); p.resolve = res; p.reject = rej; return p;},
-ZC0ZCghczminternalZCGHCziInternalziWasmziPrimziTypesZC: ($1) => (`${$1.stack ? $1.stack : $1}`),
-ZC1ZCghczminternalZCGHCziInternalziWasmziPrimziTypesZC: ($1,$2) => ((new TextDecoder('utf-8', {fatal: true})).decode(new Uint8Array(__exports.memory.buffer, $1, $2))),
-ZC2ZCghczminternalZCGHCziInternalziWasmziPrimziTypesZC: ($1,$2,$3) => ((new TextEncoder()).encodeInto($1, new Uint8Array(__exports.memory.buffer, $2, $3)).written),
-ZC3ZCghczminternalZCGHCziInternalziWasmziPrimziTypesZC: ($1) => ($1.length),
-ZC4ZCghczminternalZCGHCziInternalziWasmziPrimziTypesZC: ($1) => {try { __ghc_wasm_jsffi_finalization_registry.unregister($1); } catch {}},
-ZC18ZCghczminternalZCGHCziInternalziWasmziPrimziImportsZC: ($1,$2) => ($1.then(() => __exports.rts_promiseResolveUnit($2), err => __exports.rts_promiseReject($2, err))),
-ZC0ZCghczminternalZCGHCziInternalziWasmziPrimziConcziInternalZC: async ($1) => (new Promise(res => setTimeout(res, $1 / 1000))),
-};
+  const __ghc_wasm_jsffi_jsval_manager = new JSValManager();
+  const __ghc_wasm_jsffi_finalization_registry = globalThis.FinalizationRegistry
+    ? new FinalizationRegistry((sp) => __exports.rts_freeStablePtr(sp))
+    : { register: () => {}, unregister: () => true };
+  return {
+    newJSVal: (v) => __ghc_wasm_jsffi_jsval_manager.newJSVal(v),
+    getJSVal: (k) => __ghc_wasm_jsffi_jsval_manager.getJSVal(k),
+    freeJSVal: (k) => __ghc_wasm_jsffi_jsval_manager.freeJSVal(k),
+    scheduleWork: () => setImmediate(__exports.rts_schedulerLoop),
+    ZC0ZCghczminternalZCGHCziInternalziWasmziPrimziExportsZC: ($1, $2) =>
+      $1.reject(new WebAssembly.RuntimeError($2)),
+    ZC18ZCghczminternalZCGHCziInternalziWasmziPrimziExportsZC: ($1, $2) =>
+      $1.resolve($2),
+    ZC20ZCghczminternalZCGHCziInternalziWasmziPrimziExportsZC: ($1) => {
+      $1.throwTo = () => {};
+    },
+    ZC21ZCghczminternalZCGHCziInternalziWasmziPrimziExportsZC: ($1, $2) => {
+      $1.throwTo = (err) => __exports.rts_promiseThrowTo($2, err);
+    },
+    ZC22ZCghczminternalZCGHCziInternalziWasmziPrimziExportsZC: () => {
+      let res, rej;
+      const p = new Promise((resolve, reject) => {
+        res = resolve;
+        rej = reject;
+      });
+      p.resolve = res;
+      p.reject = rej;
+      return p;
+    },
+    ZC0ZCghczminternalZCGHCziInternalziWasmziPrimziTypesZC: ($1) =>
+      `${$1.stack ? $1.stack : $1}`,
+    ZC1ZCghczminternalZCGHCziInternalziWasmziPrimziTypesZC: ($1, $2) =>
+      new TextDecoder("utf-8", { fatal: true }).decode(
+        new Uint8Array(__exports.memory.buffer, $1, $2),
+      ),
+    ZC2ZCghczminternalZCGHCziInternalziWasmziPrimziTypesZC: ($1, $2, $3) =>
+      new TextEncoder().encodeInto(
+        $1,
+        new Uint8Array(__exports.memory.buffer, $2, $3),
+      ).written,
+    ZC3ZCghczminternalZCGHCziInternalziWasmziPrimziTypesZC: ($1) => $1.length,
+    ZC4ZCghczminternalZCGHCziInternalziWasmziPrimziTypesZC: ($1) => {
+      try {
+        __ghc_wasm_jsffi_finalization_registry.unregister($1);
+      } catch {}
+    },
+    ZC18ZCghczminternalZCGHCziInternalziWasmziPrimziImportsZC: ($1, $2) =>
+      $1.then(
+        () => __exports.rts_promiseResolveUnit($2),
+        (err) => __exports.rts_promiseReject($2, err),
+      ),
+    ZC0ZCghczminternalZCGHCziInternalziWasmziPrimziConcziInternalZC: async (
+      $1,
+    ) => new Promise((res) => setTimeout(res, $1 / 1000)),
+  };
 };
