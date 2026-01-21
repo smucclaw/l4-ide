@@ -182,6 +182,37 @@ deploy_to_webapp() {
     ls -lh "$WEB_APP_WASM_DIR"
 }
 
+# Compress the WASM binary with gzip for serving
+compress_wasm() {
+    section "Compressing WASM binary"
+    
+    local WASM_TARGET="$WEB_APP_WASM_DIR/jl4-core.wasm"
+    local GZIP_TARGET="$WEB_APP_WASM_DIR/jl4-core.wasm.gz"
+    
+    # Get original size
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        local ORIG_SIZE=$(stat -f%z "$WASM_TARGET")
+    else
+        local ORIG_SIZE=$(stat --format=%s "$WASM_TARGET")
+    fi
+    local ORIG_SIZE_MB=$(echo "scale=1; $ORIG_SIZE / 1048576" | bc)
+    
+    # Compress with gzip (max compression)
+    echo "  Compressing with gzip -9..."
+    gzip -9 -k -f "$WASM_TARGET"
+    
+    # Get compressed size
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        local COMP_SIZE=$(stat -f%z "$GZIP_TARGET")
+    else
+        local COMP_SIZE=$(stat --format=%s "$GZIP_TARGET")
+    fi
+    local COMP_SIZE_MB=$(echo "scale=1; $COMP_SIZE / 1048576" | bc)
+    local REDUCTION=$(echo "scale=0; 100 - ($COMP_SIZE * 100 / $ORIG_SIZE)" | bc)
+    
+    success "Compressed: ${ORIG_SIZE_MB} MB → ${COMP_SIZE_MB} MB (${REDUCTION}% reduction)"
+}
+
 # Optimize the WASM binary
 optimize_wasm() {
     section "Optimizing WASM binary"
@@ -251,10 +282,24 @@ print_summary() {
     fi
     local FINAL_SIZE_MB=$(echo "scale=1; $FINAL_SIZE / 1048576" | bc)
     
+    # Get gzip size
+    local GZIP_TARGET="$WEB_APP_WASM_DIR/jl4-core.wasm.gz"
+    if [ -f "$GZIP_TARGET" ]; then
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            local GZIP_SIZE=$(stat -f%z "$GZIP_TARGET")
+        else
+            local GZIP_SIZE=$(stat --format=%s "$GZIP_TARGET")
+        fi
+        local GZIP_SIZE_MB=$(echo "scale=1; $GZIP_SIZE / 1048576" | bc)
+    fi
+    
     echo ""
     echo "  Output files:"
-    echo "    WASM: $WASM_TARGET (${FINAL_SIZE_MB} MB)"
-    echo "    JS:   $JS_TARGET"
+    echo "    WASM:    $WASM_TARGET (${FINAL_SIZE_MB} MB)"
+    if [ -f "$GZIP_TARGET" ]; then
+        echo "    WASM.gz: $GZIP_TARGET (${GZIP_SIZE_MB} MB)"
+    fi
+    echo "    JS:      $JS_TARGET"
     echo ""
     
     if $DO_OPTIMIZE; then
@@ -349,6 +394,8 @@ main() {
     if $DO_OPTIMIZE; then
         optimize_wasm
     fi
+    
+    compress_wasm
     
     if $DO_TEST; then
         run_tests
