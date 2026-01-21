@@ -43,6 +43,8 @@ jobs:
   build-wasm:
     name: Build WASM Binary
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.prepare-artifacts.outputs.version }}
 
     steps:
       - name: Checkout code
@@ -133,6 +135,7 @@ jobs:
           echo "wasm_size_after=$WASM_SIZE_AFTER" >> $GITHUB_ENV
 
       - name: Prepare artifacts
+        id: prepare-artifacts
         run: |
           mkdir -p wasm-artifacts
 
@@ -148,6 +151,8 @@ jobs:
 
           echo "$VERSION" > wasm-artifacts/version.txt
           echo "version=$VERSION" >> $GITHUB_ENV
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
           # File sizes
           echo "=== WASM Build Artifacts ===" >> wasm-artifacts/README.txt
@@ -234,10 +239,8 @@ jobs:
       - name: Download WASM artifacts
         uses: actions/download-artifact@v4
         with:
-          name: jl4-wasm-${{ needs.build-wasm.outputs.version || 'latest' }}
+          name: jl4-wasm-${{ needs.build-wasm.outputs.version }}
           path: wasm-artifacts/
-          pattern: jl4-wasm-*
-          merge-multiple: true
 
       - name: Update static/wasm directory
         run: |

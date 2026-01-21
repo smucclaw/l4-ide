@@ -1172,6 +1172,7 @@ data Assoc = AssocLeft | AssocRight
 operator :: Parser (Prio, Assoc, Expr Name -> Expr Name -> Expr Name)
 operator =
       (\ op -> (1, AssocRight, infix2  Implies   op)) <$> (spacedKeyword_ TKImplies <|> spacedTokenOp_ TImplies )
+  <|> (\ op -> (1, AssocRight, infixUnless       op)) <$> spacedKeyword_ TKUnless
   <|> (\ op -> (2, AssocRight, infix2  Or        op)) <$> (spacedKeyword_ TKOr      <|> spacedTokenOp_ TOr      <|> spacedSymbol_ TEllipsisOr)
   <|> (\ op -> (3, AssocRight, infix2  And       op)) <$> (spacedKeyword_ TKAnd     <|> spacedTokenOp_ TAnd     <|> spacedSymbol_ TEllipsis)
   <|> (\ op -> (2, AssocRight, infix2  ROr       op)) <$> spacedKeyword_ TKROr
@@ -1266,6 +1267,21 @@ infix2 f op l r =
 infix2' :: HasSrcRange (a n) => (Anno -> a n -> a n -> a n) -> Anno -> a n -> a n -> a n
 infix2' f op l r =
   f (fixAnnoSrcRange $ mkHoleAnnoFor l <> op <> mkHoleAnnoFor r) l r
+
+-- | UNLESS is syntactic sugar for AND NOT.
+-- `l UNLESS r` desugars to `l AND (NOT r)`
+-- UNLESS has precedence 1 (lower than OR at 2), so it binds to entire expressions:
+--   `A OR B OR C UNLESS D` becomes `(A OR B OR C) AND (NOT D)`
+--   `A AND B AND C UNLESS D` becomes `(A AND B AND C) AND (NOT D)`
+infixUnless :: Lexeme PosToken -> Expr Name -> Expr Name -> Expr Name
+infixUnless op l r =
+  let opAnno = mkSimpleEpaAnno (lexToEpa op)
+      -- Construct NOT r with annotation derived from UNLESS and r
+      notAnno = fixAnnoSrcRange $ opAnno <> mkHoleAnnoFor r
+      notR = Not notAnno r
+      -- Construct l AND (NOT r) with annotation spanning the whole expression
+      andAnno = fixAnnoSrcRange $ mkHoleAnnoFor l <> opAnno <> mkHoleAnnoFor r
+  in And andAnno l notR
 
 postfix :: HasSrcRange (a n) => (Anno -> a n -> a n) -> Lexeme PosToken -> a n -> a n
 postfix f op l =
