@@ -31,7 +31,7 @@ These workflows run automatically on pull requests to verify builds work:
 
 **What they do:**
 
-1. Set up Haskell toolchain (GHC 9.6.6 + Cabal 3.16.1.0)
+1. Set up Haskell toolchain (GHC 9.10.2 + Cabal 3.10+)
 2. Configure build with tests enabled
 3. Restore/save dependency cache for faster subsequent runs
 4. Build all packages
@@ -182,7 +182,7 @@ xattr -dr com.apple.quarantine bin/*
 
 **Build Configuration:**
 
-- Uses GHC 9.6.6 (officially supported on Windows)
+- Uses GHC 9.10.2
 - Builds take ~45-60 minutes on first run
 - Cache reduces to ~20-30 minutes
 - Uses Git Bash for shell commands
@@ -295,9 +295,9 @@ You can't run GitHub Actions locally, but you can simulate the build:
 
 ```bash
 # Install GHC and Cabal
-ghcup install ghc 9.6.6
+ghcup install ghc 9.10.2
 ghcup install cabal latest
-ghcup set ghc 9.6.6
+ghcup set ghc 9.10.2
 
 # Build and test
 cabal update
