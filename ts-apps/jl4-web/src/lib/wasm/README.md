@@ -97,6 +97,32 @@ To enable WASM mode, set `VITE_PREFER_WASM=true` in your environment.
 
 The WASM module is built from `jl4-wasm` using GHC's WASM backend with JS FFI.
 
+### Automatic Build
+
+When `VITE_PREFER_WASM=true` is set in your environment, the WASM module is
+automatically built when you run `npm run dev` or `npm run build`. The build
+script checks if the WASM files exist and only rebuilds if necessary.
+
+```bash
+# Enable WASM mode in .env.local
+echo "VITE_PREFER_WASM=true" >> .env.local
+
+# Run dev server - WASM will be built automatically if needed
+npm run dev
+```
+
+To force a rebuild, delete the `static/wasm/` directory and run again.
+
+### Manual Build
+
+You can also build manually using the build script:
+
+```bash
+# From project root
+cd jl4-wasm
+./scripts/build-wasm.sh --all   # Build, optimize, and test
+```
+
 ### Prerequisites
 
 1. Install the GHC WASM toolchain (~30 min):
@@ -105,30 +131,15 @@ The WASM module is built from `jl4-wasm` using GHC's WASM backend with JS FFI.
    curl https://gitlab.haskell.org/ghc/ghc-wasm-meta/-/raw/master/bootstrap.sh | FLAVOUR=9.10 bash
    ```
 
-2. Source the environment:
-   ```bash
-   source ~/.ghc-wasm/env
-   ```
+2. The build script automatically sources the environment from `~/.ghc-wasm/env`.
 
-### Build Steps
+### Build Script Options
 
 ```bash
-# From project root
-source ~/.ghc-wasm/env
-
-# Build the WASM module
-wasm32-wasi-cabal build jl4-wasm --project-file=cabal-wasm.project
-
-# Generate JS FFI glue code
-node ~/.ghc-wasm/wasm32-wasi-ghc/lib/post-link.mjs \
-  -i dist-newstyle/build/wasm32-wasi/ghc-*/jl4-wasm-*/x/jl4-wasm/opt/build/jl4-wasm/jl4-wasm.wasm \
-  -o dist-newstyle/jl4-wasm.mjs
-
-# Copy to static assets
-mkdir -p ts-apps/jl4-web/static/wasm
-cp dist-newstyle/build/wasm32-wasi/ghc-*/jl4-wasm-*/x/jl4-wasm/opt/build/jl4-wasm/jl4-wasm.wasm \
-   ts-apps/jl4-web/static/wasm/jl4-core.wasm
-cp dist-newstyle/jl4-wasm.mjs ts-apps/jl4-web/static/wasm/jl4-core.mjs
+./scripts/build-wasm.sh              # Build only
+./scripts/build-wasm.sh --optimize   # Build and optimize (-Oz)
+./scripts/build-wasm.sh --test       # Build and run tests
+./scripts/build-wasm.sh --all        # Build, optimize, and test
 ```
 
 ### Architecture
@@ -185,9 +196,45 @@ See https://ghc.gitlab.haskell.org/ghc/doc/users_guide/wasm.html for GHC WASM do
 | Completions       | ✅     | Basic L4 keywords                               |
 | Semantic Tokens   | ✅     | Lexer-based highlighting                        |
 | Evaluation        | ✅     | #EVAL results shown as blue squiggly with hover |
-| Visualization     | ✅     | Ladder diagram generation (l4_visualize)        |
-| Go-to-definition  | ❌     | Requires multi-file support                     |
-| IMPORT resolution | ❌     | Requires virtual file system                    |
+| Visualization     | ✅     | Ladder diagram generation with code lenses      |
+| Code Lenses       | ✅     | "Visualize" / "Simplify and visualize" actions  |
+| IMPORT resolution | ✅     | Core libraries embedded; VFS for user files     |
+| Go-to-definition  | ✅     | Single-file only (same as find references)      |
+| Find references   | ✅     | Single-file only                                |
+
+### Visualization Features
+
+The WASM module supports ladder diagram visualization with the following capabilities:
+
+- **Code Lenses**: "Visualize" and "Simplify and visualize" actions appear above
+  each DECIDE rule that returns a BOOLEAN type.
+- **User Selection**: Clicking a code lens visualizes that specific function and
+  sets it as the current selection.
+- **Auto-Refresh**: When the document changes, the currently selected function is
+  automatically re-visualized. If the function no longer exists (e.g., was deleted
+  or renamed), the visualization is cleared.
+
+This behavior matches the native LSP - users must explicitly click a code lens to
+start visualization.
+
+### Import Resolution
+
+The WASM module supports L4's `IMPORT` statement with the following capabilities:
+
+- **Embedded Core Libraries**: The standard library (`prelude`), `math`, `jurisdiction`,
+  `currency`, and other core modules are bundled into the WASM binary at compile time.
+  No network requests are needed to use these.
+- **Virtual File System (VFS)**: User files can be provided via VFS for multi-file
+  projects. The TypeScript bridge supports adding files to the VFS before type-checking.
+- **Resolution Order**: Embedded libraries are checked first, then VFS.
+
+Example usage in L4:
+
+```l4
+IMPORT prelude     -- Uses embedded library
+IMPORT math        -- Uses embedded library
+IMPORT helper      -- Would look in VFS
+```
 
 ✅ = Implemented
 ❌ = Not available in WASM mode

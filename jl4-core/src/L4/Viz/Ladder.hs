@@ -9,6 +9,9 @@
 module L4.Viz.Ladder
   ( -- * Main entry points
     visualize
+  , visualizeByName
+  , findAllVisualizableDecides
+  , VisualizableDecide(..)
   , VizError(..)
   , prettyPrintVizError
   ) where
@@ -30,6 +33,7 @@ import qualified L4.Crypto.UUID5 as UUID5
 
 import qualified L4.TypeCheck as TC
 import L4.Annotation
+import L4.Parser.SrcSpan (SrcRange(..), SrcPos(..))
 import L4.Syntax
 import L4.Print (prettyLayout)
 import qualified L4.Transform as Transform (simplify)
@@ -159,18 +163,68 @@ hasDefForInlining (MkUnique _ uniq uniqUri) = do
 -- Main entry point
 ------------------------------------------------------
 
+-- | Information about a visualizable DECIDE rule.
+data VisualizableDecide = MkVisualizableDecide
+  { vdName     :: !Text       -- ^ The function name
+  , vdStartLine :: !Int       -- ^ 1-indexed start line
+  , vdStartCol  :: !Int       -- ^ 1-indexed start column
+  }
+  deriving stock (Eq, Show, Generic)
+
 -- | Visualize a module by finding the first visualizable DECIDE.
 -- Returns the RenderAsLadderInfo or an error.
 visualize :: NormalizedUri -> Text -> Int -> Module Resolved -> TC.Substitution -> Bool -> Either VizError RenderAsLadderInfo
 visualize uri uriText version mod' subst simplify =
   case findVisualizableDecide mod' of
     Nothing -> Left InvalidProgramNoDecidesFound
-    Just decide ->
+    Just decide -> visualizeDecide uri uriText version mod' subst simplify decide
+
+-- | Visualize a specific DECIDE by function name.
+-- Returns Nothing if the function is not found or not visualizable.
+visualizeByName :: NormalizedUri -> Text -> Int -> Module Resolved -> TC.Substitution -> Bool -> Text -> Either VizError RenderAsLadderInfo
+visualizeByName uri uriText version mod' subst simplify targetName =
+  case findDecideByName mod' targetName of
+    Nothing -> Left InvalidProgramNoDecidesFound
+    Just decide -> visualizeDecide uri uriText version mod' subst simplify decide
+
+-- | Internal: visualize a specific Decide
+visualizeDecide :: NormalizedUri -> Text -> Int -> Module Resolved -> TC.Substitution -> Bool -> Decide Resolved -> Either VizError RenderAsLadderInfo
+visualizeDecide uri uriText version mod' subst simplify decide =
+  let initialEnv = MkVizEnv { localDecls = [] }
+      initialState = mkInitialState uri mod' subst simplify
+      verDocId = MkVersionedDocId uriText version
+      (result, _) = (vizProgram verDocId decide).getViz initialEnv initialState
+  in result
+
+-- | Find all DECIDE rules that can be visualized.
+-- Rather than just checking types, we try to visualize each DECIDE
+-- and only include those that succeed. This matches the native LSP behavior
+-- and is more robust for edge cases.
+findAllVisualizableDecides :: NormalizedUri -> Module Resolved -> TC.Substitution -> [VisualizableDecide]
+findAllVisualizableDecides uri mod' subst =
+  foldTopLevelDecides (tryVisualize uri subst) mod'
+  where
+    tryVisualize :: NormalizedUri -> TC.Substitution -> Decide Resolved -> [VisualizableDecide]
+    tryVisualize nuri sub d@(MkDecide _ _ (MkAppForm _ funResolved _ _) _body) =
+      -- Try to actually visualize the decide - if it succeeds, it's visualizable
       let initialEnv = MkVizEnv { localDecls = [] }
-          initialState = mkInitialState uri mod' subst simplify
-          verDocId = MkVersionedDocId uriText version
-          (result, _) = (vizProgram verDocId decide).getViz initialEnv initialState
-      in result
+          initialState = mkInitialState nuri mod' sub False  -- simplify=False for checking
+          dummyVerDocId = MkVersionedDocId "" 0  -- Doesn't matter for checking
+          (result, _) = (vizProgram dummyVerDocId d).getViz initialEnv initialState
+      in case result of
+        Right _ ->
+          -- Visualization succeeded - include this decide
+          case rangeOf d of
+            Just (MkSrcRange (MkSrcPos startLine startCol) _ _ _) ->
+              [MkVisualizableDecide
+                { vdName = prettyLayout (getActual funResolved)
+                , vdStartLine = startLine
+                , vdStartCol = startCol
+                }]
+            Nothing -> []
+        Left _ ->
+          -- Visualization failed (e.g., non-boolean type) - skip
+          []
 
 -- | Find the first DECIDE with a boolean return type.
 findVisualizableDecide :: Module Resolved -> Maybe (Decide Resolved)
@@ -180,12 +234,24 @@ findVisualizableDecide mod' =
     selectBoolDecide :: Decide Resolved -> [Decide Resolved]
     selectBoolDecide d@(MkDecide anno _ _ _body) =
       case anno.extra.resolvedInfo of
-        Just (TypeInfo ty _) | isBoolType ty -> [d]
+        Just (TypeInfo ty _) | isBoolTypeSimple ty -> [d]
         _ -> []
 
-    isBoolType :: Type' Resolved -> Bool
-    isBoolType (TyApp _ (Ref _ uniq _) []) = uniq == TC.booleanUnique
-    isBoolType _ = False
+    isBoolTypeSimple :: Type' Resolved -> Bool
+    isBoolTypeSimple (TyApp _ (Ref _ uniq _) []) = uniq == TC.booleanUnique
+    isBoolTypeSimple _ = False
+
+-- | Find a DECIDE by its function name.
+-- Note: Does not filter by type - the visualization will validate
+-- that the return type is boolean and fail with an appropriate error if not.
+findDecideByName :: Module Resolved -> Text -> Maybe (Decide Resolved)
+findDecideByName mod' targetName =
+  listToMaybe $ foldTopLevelDecides matchByName mod'
+  where
+    matchByName :: Decide Resolved -> [Decide Resolved]
+    matchByName d@(MkDecide _ _ (MkAppForm _ funResolved _ _) _body) =
+      let funName = prettyLayout (getActual funResolved)
+      in [d | funName == targetName]
 
 ------------------------------------------------------
 -- Visualization

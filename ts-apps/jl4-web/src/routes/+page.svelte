@@ -279,6 +279,7 @@
               'editor.semanticHighlighting.enabled': true,
               'editor.experimental.asyncTokenization': true,
               'editor.lightbulb.enabled': 'on',
+              'editor.codeLens': true, // Enable code lenses for visualization actions
             }),
           },
           serviceOverrides: {},
@@ -321,6 +322,7 @@
         theme: 'jl4Theme',
         'semanticHighlighting.enabled': true,
         glyphMargin: true, // Required for gutter icons
+        codeLens: true, // Enable code lenses for visualization actions
       })
 
       // Add comment/uncomment action to context menu
@@ -600,6 +602,23 @@
           )
           if (responseFromLangServer === null) {
             logger.info('language server returned `null`, so doing nothing')
+            return
+          }
+
+          // Handle the "cleared" response when a function is deleted during auto-refresh
+          const maybeClearedResponse = responseFromLangServer as {
+            cleared?: boolean
+            reason?: string
+          }
+          if (maybeClearedResponse.cleared) {
+            logger.info(
+              `Visualization cleared: ${maybeClearedResponse.reason || 'unknown reason'}`
+            )
+            // Reset to placeholder state - ladder will show empty/loading
+            renderLadderPromise = placeholderAlwaysPendingPromise
+            showVisualizer = false
+            currentDecisionServiceFunctionName = null
+            currentLadderGraphId = null
             return
           }
 

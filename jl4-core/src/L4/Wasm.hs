@@ -19,7 +19,10 @@ module L4.Wasm
   , l4Completions
   , l4SemanticTokens
   , l4Eval
-  , l4Visualize
+  , l4VisualizeByName
+  , l4CodeLenses
+  , l4Definition
+  , l4References
   ) where
 
 import Base
@@ -46,6 +49,8 @@ import L4.EvaluateLazy.Machine (prettyEvalException)
 import L4.TracePolicy (lspDefaultPolicy)
 import L4.EvaluateLazy.GraphVizOptions (defaultGraphVizOptions)
 import qualified L4.Viz.Ladder as Ladder
+import L4.FindDefinition (findDefinition)
+import L4.FindReferences (findReferences)
 
 -- Import resolution for WASM (embedded libs + VFS)
 import L4.Wasm.Import (checkWithImports, emptyVFS, TypeCheckWithDepsResult(..), ResolvedImport(..))
@@ -104,8 +109,7 @@ l4Check source =
 -- @
 l4Hover :: Text -> Int -> Int -> Text
 l4Hover source line col =
-  let uri = toNormalizedUri (Uri "project:/main.l4")
-      pos = MkSrcPos { line = line + 1, column = col + 1 }  -- Convert 0-indexed to 1-indexed
+  let pos = MkSrcPos { line = line + 1, column = col + 1 }  -- Convert 0-indexed to 1-indexed
   in case checkWithImports emptyVFS source of
     Left _errors ->
       "null"
@@ -123,7 +127,8 @@ l4Hover source line col =
             , nlgMap = result.tcdNlgMap
             , descMap = result.tcdDescMap
             }
-      in case lookupInfoAtPos uri pos checkResult of
+      -- Use the URI from type checking result to ensure infoMap lookup works
+      in case lookupInfoAtPos result.tcdUri pos checkResult of
         Nothing -> "null"
         Just hover -> encodeJson hover
 
@@ -300,13 +305,37 @@ js_l4_eval source = do
   result <- l4Eval $ Text.pack $ fromJSString source
   pure $ toJSString $ Text.unpack result
 
--- | Generate ladder diagram visualization.
-foreign export javascript "l4_visualize"
-  js_l4_visualize :: JSString -> JSString -> Int -> IO JSString
+-- | Generate ladder diagram visualization for a specific function by name.
+foreign export javascript "l4_visualize_by_name"
+  js_l4_visualize_by_name :: JSString -> JSString -> Int -> JSString -> Bool -> IO JSString
 
-js_l4_visualize :: JSString -> JSString -> Int -> IO JSString
-js_l4_visualize source uri version = pure $ toJSString $ Text.unpack $
-  l4Visualize (Text.pack $ fromJSString source) (Text.pack $ fromJSString uri) version
+js_l4_visualize_by_name :: JSString -> JSString -> Int -> JSString -> Bool -> IO JSString
+js_l4_visualize_by_name source uri version functionName simplify = pure $ toJSString $ Text.unpack $
+  l4VisualizeByName (Text.pack $ fromJSString source) (Text.pack $ fromJSString uri) version (Text.pack $ fromJSString functionName) simplify
+
+-- | Get code lenses for all visualizable DECIDE rules.
+foreign export javascript "l4_code_lenses"
+  js_l4_code_lenses :: JSString -> JSString -> Int -> IO JSString
+
+js_l4_code_lenses :: JSString -> JSString -> Int -> IO JSString
+js_l4_code_lenses source uri version = pure $ toJSString $ Text.unpack $
+  l4CodeLenses (Text.pack $ fromJSString source) (Text.pack $ fromJSString uri) version
+
+-- | Go to definition at a position.
+foreign export javascript "l4_definition"
+  js_l4_definition :: JSString -> Int -> Int -> IO JSString
+
+js_l4_definition :: JSString -> Int -> Int -> IO JSString
+js_l4_definition source line col = pure $ toJSString $ Text.unpack $
+  l4Definition (Text.pack $ fromJSString source) line col
+
+-- | Find all references at a position.
+foreign export javascript "l4_references"
+  js_l4_references :: JSString -> Int -> Int -> IO JSString
+
+js_l4_references :: JSString -> Int -> Int -> IO JSString
+js_l4_references source line col = pure $ toJSString $ Text.unpack $
+  l4References (Text.pack $ fromJSString source) line col
 
 #endif
 
@@ -438,12 +467,10 @@ prettyEvalResult (EL.Assertion False)      = "assertion failed"
 prettyEvalResult (EL.Reduction (Left exc)) = Text.unlines (prettyEvalException exc)
 prettyEvalResult (EL.Reduction (Right v))  = prettyLayout v
 
--- | Generate ladder diagram visualization data for a DECIDE rule.
+-- | Generate ladder diagram visualization data for a specific DECIDE rule by name.
 --
--- Parses, type-checks, and visualizes the first visualizable DECIDE rule
--- (one with a Boolean return type) in the source code.
---
--- Returns JSON-encoded @RenderAsLadderInfo@ or an error object:
+-- Same as 'l4Visualize' but targets a specific function by name.
+-- Used for auto-refresh to update the currently selected function.
 --
 -- @
 -- // Success:
@@ -452,15 +479,15 @@ prettyEvalResult (EL.Reduction (Right v))  = prettyLayout v
 --   "funDecl": { ... }
 -- }
 --
--- // Error:
+-- // Error (function not found or not visualizable):
 -- {
---   "error": "Error message"
+--   "error": "...",
+--   "notFound": true  // indicates function no longer exists
 -- }
 -- @
-l4Visualize :: Text -> Text -> Int -> Text
-l4Visualize source uriText version =
-  let uri = toNormalizedUri (Uri uriText)
-  in case checkWithImports emptyVFS source of
+l4VisualizeByName :: Text -> Text -> Int -> Text -> Bool -> Text
+l4VisualizeByName source uriText version functionName simplify =
+  case checkWithImports emptyVFS source of
     Left errors ->
       encodeJson $ Aeson.object
         [ "error" .= Text.intercalate "; " errors
@@ -472,13 +499,145 @@ l4Visualize source uriText version =
             [ "error" .= ("Type check error" :: Text)
             ]
         else
-          case Ladder.visualize uri uriText version result.tcdModule result.tcdSubstitution True of
+          -- Use the URI from type checking result to ensure substitution lookup works correctly
+          case Ladder.visualizeByName result.tcdUri uriText version result.tcdModule result.tcdSubstitution simplify functionName of
+            Left Ladder.InvalidProgramNoDecidesFound ->
+              encodeJson $ Aeson.object
+                [ "error" .= ("Function '" <> functionName <> "' not found or not visualizable" :: Text)
+                , "notFound" .= True
+                ]
             Left vizError ->
               encodeJson $ Aeson.object
                 [ "error" .= Ladder.prettyPrintVizError vizError
                 ]
             Right ladderInfo ->
               encodeJson ladderInfo
+
+-- | Get code lenses for all visualizable DECIDE rules.
+--
+-- Returns JSON array of code lens objects for Monaco:
+--
+-- @
+-- [
+--   {
+--     "range": { "startLineNumber": 1, "startColumn": 1, "endLineNumber": 1, "endColumn": 1 },
+--     "command": {
+--       "id": "l4.visualize",
+--       "title": "Visualize",
+--       "arguments": [{ "uri": "...", "version": 0 }, "functionName", false]
+--     }
+--   }
+-- ]
+-- @
+l4CodeLenses :: Text -> Text -> Int -> Text
+l4CodeLenses source uriText version =
+  case checkWithImports emptyVFS source of
+    Left _errors ->
+      -- Parse/import errors - return empty array (diagnostics shown separately)
+      encodeJson ([] :: [Aeson.Value])
+    Right result ->
+      if not (null result.tcdErrors)
+        then
+          -- Type check errors - return empty array (diagnostics shown separately)
+          encodeJson ([] :: [Aeson.Value])
+        else
+          -- Use the URI from type checking result to ensure substitution lookup works correctly
+          let decides = Ladder.findAllVisualizableDecides result.tcdUri result.tcdModule result.tcdSubstitution
+              lenses = concatMap (mkCodeLenses uriText version) decides
+          in encodeJson lenses
+  where
+    mkCodeLenses :: Text -> Int -> Ladder.VisualizableDecide -> [Aeson.Value]
+    mkCodeLenses uriTxt ver vd =
+      -- Generate two code lenses: "Visualize" and "Simplify and visualize"
+      [ mkCodeLens uriTxt ver vd False
+      , mkCodeLens uriTxt ver vd True
+      ]
+
+    mkCodeLens :: Text -> Int -> Ladder.VisualizableDecide -> Bool -> Aeson.Value
+    mkCodeLens uriTxt ver vd simplify = Aeson.object
+      [ "range" .= Aeson.object
+          -- Monaco uses 1-indexed positions
+          [ "startLineNumber" .= vd.vdStartLine
+          , "startColumn" .= vd.vdStartCol
+          , "endLineNumber" .= vd.vdStartLine
+          , "endColumn" .= vd.vdStartCol
+          ]
+      , "command" .= Aeson.object
+          [ "id" .= ("l4.visualize" :: Text)
+          , "title" .= if simplify then ("Simplify and visualize" :: Text) else ("Visualize" :: Text)
+          , "arguments" .= 
+              [ Aeson.object [ "uri" .= uriTxt, "version" .= ver ]
+              , Aeson.String vd.vdName
+              , Aeson.Bool simplify
+              ]
+          ]
+      ]
+
+-- | Go to definition at a position.
+--
+-- Returns JSON-encoded location or null:
+--
+-- @
+-- // Found:
+-- {
+--   "range": {
+--     "start": { "line": 0, "character": 0 },
+--     "end": { "line": 0, "character": 10 }
+--   }
+-- }
+--
+-- // Not found:
+-- null
+-- @
+l4Definition :: Text -> Int -> Int -> Text
+l4Definition source line col =
+  let pos = MkSrcPos line col
+  in case checkWithImports emptyVFS source of
+    Left _errors -> "null"
+    Right result ->
+      case findDefinition pos result.tcdModule of
+        Nothing -> "null"
+        Just range -> encodeJson $ srcRangeToLspRange range
+
+-- | Find all references at a position.
+--
+-- Returns JSON-encoded array of locations:
+--
+-- @
+-- [
+--   {
+--     "range": {
+--       "start": { "line": 0, "character": 0 },
+--       "end": { "line": 0, "character": 10 }
+--     }
+--   }
+-- ]
+-- @
+l4References :: Text -> Int -> Int -> Text
+l4References source line col =
+  let pos = MkSrcPos line col
+  in case checkWithImports emptyVFS source of
+    Left _errors -> encodeJson ([] :: [Aeson.Value])
+    Right result ->
+      let ranges = findReferences pos result.tcdModule
+          locs = map srcRangeToLspRange ranges
+      in encodeJson locs
+
+-- | Convert a SrcRange to LSP range format (0-indexed).
+srcRangeToLspRange :: SrcRange -> Aeson.Value
+srcRangeToLspRange (MkSrcRange (MkSrcPos startLine startCol) (MkSrcPos endLine endCol) _ _) =
+  Aeson.object
+    [ "range" .= Aeson.object
+        [ "start" .= Aeson.object
+            [ "line" .= (startLine - 1)  -- Convert to 0-indexed
+            , "character" .= (startCol - 1)
+            ]
+        , "end" .= Aeson.object
+            [ "line" .= (endLine - 1)
+            , "character" .= (endCol - 1)
+            ]
+        ]
+    ]
 
 -- | Encode lexer tokens as LSP semantic tokens.
 --

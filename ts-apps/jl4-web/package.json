@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "prepare-examples": "node --loader ts-node/esm scripts/copy-examples.ts",
-    "dev": "npm run prepare-examples && svelte-kit sync && vite dev",
-    "build": "npm run prepare-examples && npm run clean && svelte-kit sync && vite build",
+    "maybe-build-wasm": "bash scripts/maybe-build-wasm.sh || echo 'WASM build skipped'",
+    "dev": "npm run prepare-examples && npm run maybe-build-wasm && svelte-kit sync && vite dev",
+    "build": "npm run prepare-examples && npm run maybe-build-wasm && npm run clean && svelte-kit sync && vite build",
     "preview": "vite preview",
     "prepare": "svelte-kit sync || echo ''",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",

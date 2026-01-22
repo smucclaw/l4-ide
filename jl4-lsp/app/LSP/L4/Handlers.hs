@@ -33,6 +33,7 @@ import GHC.Generics
 import GHC.TypeLits (Symbol)
 import Data.Proxy (Proxy (..))
 import System.FilePath (takeExtension)
+import L4.FindReferences (lookupReference)
 import LSP.L4.Base
 import LSP.L4.Config
 import LSP.L4.Rules hiding (Log (..))

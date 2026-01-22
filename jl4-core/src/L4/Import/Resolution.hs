@@ -265,6 +265,7 @@ data TypeCheckWithDepsResult = TypeCheckWithDepsResult
   , tcdDescMap :: DescMap
   , tcdSuccess :: Bool
   , tcdResolvedImports :: [ResolvedImport]
+  , tcdUri :: NormalizedUri  -- ^ URI of the main module
   }
   deriving stock (Generic)
 
@@ -316,6 +317,7 @@ typecheckWithDependencies lookupModule uri source = do
             , tcdDescMap = result.descMap
             , tcdSuccess = null result.errors
             , tcdResolvedImports = resolvedImports
+            , tcdUri = uri
             }
 
 -- ----------------------------------------------------------------------------

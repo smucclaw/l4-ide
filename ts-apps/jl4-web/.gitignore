@@ -1,0 +1,3 @@
+# WASM build artifacts - built on demand when VITE_PREFER_WASM=true
+static/wasm/*
+!static/wasm/.gitkeep

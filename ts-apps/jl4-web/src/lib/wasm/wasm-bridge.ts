@@ -63,13 +63,48 @@ export interface L4WasmExports {
   l4_eval(source: string): Promise<string>
 
   /**
-   * Get visualization data for a function declaration.
+   * Get visualization data for a specific function by name.
    * @param source - L4 source code
    * @param uri - Document URI
-   * @param version - Document version (optional, defaults to 0)
-   * @returns JSON-encoded RenderAsLadderInfo or error object
+   * @param version - Document version
+   * @param functionName - Name of the function to visualize
+   * @param simplify - Whether to simplify the boolean expression
+   * @returns JSON-encoded RenderAsLadderInfo or error object with notFound flag
    */
-  l4_visualize(source: string, uri: string, version: number): Promise<string>
+  l4_visualize_by_name(
+    source: string,
+    uri: string,
+    version: number,
+    functionName: string,
+    simplify: boolean
+  ): Promise<string>
+
+  /**
+   * Get code lenses for all visualizable DECIDE rules.
+   * @param source - L4 source code
+   * @param uri - Document URI
+   * @param version - Document version
+   * @returns JSON-encoded array of code lens objects
+   */
+  l4_code_lenses(source: string, uri: string, version: number): Promise<string>
+
+  /**
+   * Go to definition at a position.
+   * @param source - L4 source code
+   * @param line - 1-indexed line number
+   * @param col - 1-indexed column number
+   * @returns JSON-encoded location or "null"
+   */
+  l4_definition(source: string, line: number, col: number): Promise<string>
+
+  /**
+   * Find all references at a position.
+   * @param source - L4 source code
+   * @param line - 1-indexed line number
+   * @param col - 1-indexed column number
+   * @returns JSON-encoded array of locations
+   */
+  l4_references(source: string, line: number, col: number): Promise<string>
 
   /**
    * Initialize the WASI reactor (and Haskell RTS).
@@ -117,9 +152,7 @@ export class L4WasmBridge {
 
     // Initialize the WASI reactor (and Haskell RTS)
     // This must be called before any other exported functions
-    console.log('[L4 WASM] Initializing RTS...')
     this.exports._initialize()
-    console.log('[L4 WASM] Module initialized')
   }
 
   /**
@@ -133,7 +166,6 @@ export class L4WasmBridge {
     const cacheKey = `l4-wasm-${this.version}`
 
     // Load the JS FFI glue code
-    console.log(`[L4 WASM] Loading JS FFI: ${this.jsUrl}`)
     const jsModule = await import(/* @vite-ignore */ this.jsUrl)
     const generateImports: JsFFIImportsGenerator = jsModule.default
 
@@ -144,16 +176,14 @@ export class L4WasmBridge {
       const cached = await cache.match(cacheKey)
 
       if (cached) {
-        console.log(`[L4 WASM] Loading from cache: ${cacheKey}`)
         wasmBuffer = await cached.arrayBuffer()
       }
-    } catch (e) {
-      console.warn('[L4 WASM] Cache not available:', e)
+    } catch (_e) {
+      // Cache not available, will fetch
     }
 
     // Fetch fresh if not cached
     if (!wasmBuffer) {
-      console.log(`[L4 WASM] Fetching: ${this.wasmUrl}`)
       const response = await fetch(this.wasmUrl)
 
       if (!response.ok) {
@@ -168,9 +198,8 @@ export class L4WasmBridge {
       try {
         const cache = await caches.open('l4-wasm-cache-v1')
         await cache.put(cacheKey, new Response(wasmBuffer.slice(0)))
-        console.log(`[L4 WASM] Cached: ${cacheKey}`)
-      } catch (e) {
-        console.warn('[L4 WASM] Failed to cache:', e)
+      } catch (_e) {
+        // Failed to cache, continue anyway
       }
     }
 
@@ -241,9 +270,9 @@ export class L4WasmBridge {
           const len = view.getUint32(iovs + i * 8 + 4, true)
           const bytes = new Uint8Array(memory.buffer, ptr, len)
           const text = new TextDecoder().decode(bytes)
-          if (text.trim()) {
-            if (fd === 1) console.log('[WASM stdout]', text)
-            else console.error('[WASM stderr]', text)
+          if (text.trim() && fd === 2) {
+            // Only output stderr errors to console
+            console.error('[WASM stderr]', text)
           }
           totalWritten += len
         }
@@ -252,8 +281,8 @@ export class L4WasmBridge {
       return 0
     }
 
-    const proc_exit = (code: number): void => {
-      console.warn('[WASM] proc_exit called with code:', code)
+    const proc_exit = (_code: number): void => {
+      // Process exit - no action needed in browser
     }
 
     const args_sizes_get = (argc: number, argvBufSize: number): number => {
@@ -376,19 +405,83 @@ export class L4WasmBridge {
   }
 
   /**
-   * Get visualization data for ladder diagram.
+   * Get visualization data for a specific function by name.
    * Returns the RenderAsLadderInfo structure needed by the visualizer,
-   * or an object with an "error" field if visualization failed.
+   * or an object with "error" and optionally "notFound: true" if the function
+   * is no longer available.
    */
-  async visualize(
+  async visualizeByName(
     source: string,
     uri: string,
-    version: number = 0
-  ): Promise<unknown> {
+    version: number,
+    functionName: string,
+    simplify: boolean
+  ): Promise<VisualizeResult> {
     if (!this.exports) {
       throw new Error('WASM not initialized')
     }
-    const json = await this.exports.l4_visualize(source, uri, version)
+    const json = await this.exports.l4_visualize_by_name(
+      source,
+      uri,
+      version,
+      functionName,
+      simplify
+    )
+    return JSON.parse(json)
+  }
+
+  /**
+   * Get code lenses for all visualizable DECIDE rules.
+   * Returns an array of code lens objects compatible with Monaco.
+   */
+  async codeLenses(
+    source: string,
+    uri: string,
+    version: number
+  ): Promise<CodeLens[]> {
+    if (!this.exports) {
+      throw new Error('WASM not initialized')
+    }
+    const json = await this.exports.l4_code_lenses(source, uri, version)
+    return JSON.parse(json)
+  }
+
+  /**
+   * Go to definition at a position.
+   * Returns the location of the definition, or null if not found.
+   * @param source - L4 source code
+   * @param line - 1-indexed line number
+   * @param col - 1-indexed column number
+   */
+  async definition(
+    source: string,
+    line: number,
+    col: number
+  ): Promise<Location | null> {
+    if (!this.exports) {
+      throw new Error('WASM not initialized')
+    }
+    const json = await this.exports.l4_definition(source, line, col)
+    const result = JSON.parse(json)
+    return result === null ? null : result
+  }
+
+  /**
+   * Find all references at a position.
+   * Returns an array of locations where the symbol is used.
+   * @param source - L4 source code
+   * @param line - 1-indexed line number
+   * @param col - 1-indexed column number
+   */
+  async references(
+    source: string,
+    line: number,
+    col: number
+  ): Promise<Location[]> {
+    if (!this.exports) {
+      throw new Error('WASM not initialized')
+    }
+    const json = await this.exports.l4_references(source, line, col)
     return JSON.parse(json)
   }
 
@@ -420,6 +513,11 @@ export interface Range {
   end: Position
 }
 
+export interface Location {
+  range: Range
+  uri?: string
+}
+
 export interface Diagnostic {
   range: Range
   severity: number // 1=Error, 2=Warning, 3=Info, 4=Hint
@@ -445,6 +543,27 @@ export interface CompletionItem {
 
 export interface SemanticTokens {
   data: number[] // Delta-encoded token data
+}
+
+export interface CodeLens {
+  range: {
+    startLineNumber: number
+    startColumn: number
+    endLineNumber: number
+    endColumn: number
+  }
+  command: {
+    id: string
+    title: string
+    arguments?: unknown[]
+  }
+}
+
+export interface VisualizeResult {
+  verDocId?: { uri: string; version: number }
+  funDecl?: unknown
+  error?: string
+  notFound?: boolean
 }
 
 export interface EvalResultSuccess {
