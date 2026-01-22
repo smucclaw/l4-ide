@@ -178,7 +178,7 @@ export class L4WasmBridge {
       if (cached) {
         wasmBuffer = await cached.arrayBuffer()
       }
-    } catch (_e) {
+    } catch {
       // Cache not available, will fetch
     }
 
@@ -198,7 +198,7 @@ export class L4WasmBridge {
       try {
         const cache = await caches.open('l4-wasm-cache-v1')
         await cache.put(cacheKey, new Response(wasmBuffer.slice(0)))
-      } catch (_e) {
+      } catch {
         // Failed to cache, continue anyway
       }
     }
@@ -281,7 +281,7 @@ export class L4WasmBridge {
       return 0
     }
 
-    const proc_exit = (_code: number): void => {
+    const proc_exit = (): void => {
       // Process exit - no action needed in browser
     }
 

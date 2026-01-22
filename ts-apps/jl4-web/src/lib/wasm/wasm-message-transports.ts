@@ -342,7 +342,7 @@ export class WasmLspHandler {
           arguments: lens.command.arguments,
         },
       }))
-    } catch (_e) {
+    } catch {
       return []
     }
   }
@@ -373,7 +373,7 @@ export class WasmLspHandler {
         uri: uri,
         range: result.range,
       }
-    } catch (_e) {
+    } catch {
       return null
     }
   }
@@ -403,7 +403,7 @@ export class WasmLspHandler {
         uri: uri,
         range: loc.range,
       }))
-    } catch (_e) {
+    } catch {
       return []
     }
   }
@@ -553,7 +553,7 @@ export class WasmLspHandler {
             this.evalResultToDiagnostic.bind(this)
           )
         }
-      } catch (_e) {
+      } catch {
         // Evaluation failed, continue with check diagnostics only
       }
     }
