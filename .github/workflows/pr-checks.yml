@@ -1,0 +1,265 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches: [main]
+
+# Only run one check per PR to save resources
+concurrency:
+  group: pr-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ============================================
+  # Lint Check (TypeScript)
+  # ============================================
+  lint:
+    name: Lint & Format Check
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:24.04
+    steps:
+      - name: Update repositories
+        run: apt update
+      - name: Install deps
+        run: apt install -y git sudo software-properties-common curl
+      - name: Update git config
+        run: git config --global --add safe.directory $GITHUB_WORKSPACE
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          cache-dependency-path: package-lock.json
+          node-version: "20.x"
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run check
+
+  # ============================================
+  # Ubuntu Build & Tests (Haskell)
+  # ============================================
+  build-and-test:
+    name: Build & Test (Ubuntu)
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:24.04
+    env:
+      LC_ALL: C.UTF-8
+      LANG: C.UTF-8
+
+    steps:
+      - name: Update repositories
+        run: apt update
+      - name: Install deps
+        run: >
+          apt install -y
+          git
+          sudo
+          software-properties-common
+          build-essential
+          curl
+          libffi-dev
+          libffi8
+          libgmp-dev
+          libgmp10
+          libncurses-dev
+          pkg-config
+          zlib1g-dev
+          liblzma-dev
+          xz-utils
+      - name: Update git config
+        run: git config --global --add safe.directory $GITHUB_WORKSPACE
+      - uses: actions/checkout@v4
+
+      - name: Update git submodules
+        run: git submodule update --init
+
+      - name: Set up GHC
+        uses: haskell-actions/setup@v2
+        id: setup
+        with:
+          ghc-version: "9.10.2"
+          cabal-version: "latest"
+          cabal-update: true
+
+      - name: Configure the build
+        run: |
+          cabal update
+          cabal configure --enable-tests --enable-benchmarks --disable-documentation
+          cabal build all --dry-run
+
+      - name: Restore cached dependencies
+        uses: actions/cache/restore@v4
+        id: cache
+        env:
+          key: ${{ runner.os }}-ghc-${{ steps.setup.outputs.ghc-version }}-cabal-${{ steps.setup.outputs.cabal-version }}
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: ${{ env.key }}-plan-${{ hashFiles('**/plan.json') }}
+          restore-keys: ${{ env.key }}-
+
+      - name: Install dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: cabal build all --only-dependencies
+
+      - name: Save cached dependencies
+        uses: actions/cache/save@v4
+        if: steps.cache.outputs.cache-hit != 'true'
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: ${{ steps.cache.outputs.cache-primary-key }}
+
+      - name: Build
+        run: cabal build all
+
+      - name: Run tests
+        run: cabal test all
+
+  # ============================================
+  # TypeScript Tests
+  # ============================================
+  ts-tests:
+    name: TypeScript Tests
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:24.04
+
+    steps:
+      - name: Update repositories
+        run: apt update
+      - name: Install deps
+        run: apt install -y git sudo software-properties-common curl xvfb
+      - name: Update git config
+        run: git config --global --add safe.directory $GITHUB_WORKSPACE
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          cache-dependency-path: package-lock.json
+          node-version: "20.x"
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+      - run: xvfb-run -a npm run test
+
+  # ============================================
+  # WASM Build & Test
+  # ============================================
+  wasm-build:
+    name: WASM Build & Test
+    runs-on: ubuntu-latest
+    env:
+      GHC_WASM_VERSION: "9.10"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl xz-utils binaryen
+
+      - name: Cache GHC WASM toolchain
+        id: cache-ghc-wasm
+        uses: actions/cache@v4
+        with:
+          path: ~/.ghc-wasm
+          key: ghc-wasm-${{ env.GHC_WASM_VERSION }}-${{ runner.os }}
+
+      - name: Install GHC WASM toolchain
+        if: steps.cache-ghc-wasm.outputs.cache-hit != 'true'
+        run: |
+          curl -L https://gitlab.haskell.org/haskell-wasm/ghc-wasm-meta/-/raw/master/bootstrap.sh | FLAVOUR=${{ env.GHC_WASM_VERSION }} bash
+        shell: bash
+
+      - name: Verify GHC WASM installation
+        run: |
+          source ~/.ghc-wasm/env
+          wasm32-wasi-ghc --version
+          wasm32-wasi-cabal --version
+
+      - name: Cache WASM dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.ghc-wasm/.cabal/store
+            dist-newstyle
+          key: wasm-deps-${{ env.GHC_WASM_VERSION }}-${{ hashFiles('cabal-wasm.project', 'jl4-core/jl4-core.cabal', 'jl4-wasm/jl4-wasm.cabal') }}
+          restore-keys: |
+            wasm-deps-${{ env.GHC_WASM_VERSION }}-
+
+      - name: Build WASM binary
+        run: |
+          source ~/.ghc-wasm/env
+          wasm32-wasi-cabal update
+          wasm32-wasi-cabal build jl4-wasm --project-file=cabal-wasm.project
+
+      - name: Generate JS FFI glue code
+        run: |
+          source ~/.ghc-wasm/env
+          WASM_PATH=$(find dist-newstyle -name 'jl4-wasm.wasm' -path '*/opt/build/*' | head -1)
+          echo "Found WASM at: $WASM_PATH"
+          $(wasm32-wasi-ghc --print-libdir)/post-link.mjs -i "$WASM_PATH" -o dist-newstyle/jl4-wasm.mjs
+
+      - name: Optimize WASM binary
+        run: |
+          WASM_PATH=$(find dist-newstyle -name 'jl4-wasm.wasm' -path '*/opt/build/*' | head -1)
+          echo "Running wasm-opt with -Oz..."
+          wasm-opt -Oz "$WASM_PATH" -o "$WASM_PATH.opt"
+          mv "$WASM_PATH.opt" "$WASM_PATH"
+          echo "WASM binary size (after wasm-opt):"
+          ls -lh "$WASM_PATH"
+
+      - name: Test WASM binary loads
+        run: |
+          source ~/.ghc-wasm/env
+          WASM_PATH=$(find dist-newstyle -name 'jl4-wasm.wasm' -path '*/opt/build/*' | head -1)
+
+          ~/.ghc-wasm/nodejs/bin/node -e "
+            const fs = require('fs');
+            
+            async function test() {
+              console.log('Loading WASM module...');
+              const wasmBuffer = fs.readFileSync('$WASM_PATH');
+              const module = await WebAssembly.compile(wasmBuffer);
+              
+              console.log('Module compiled successfully');
+              console.log('Exports:', WebAssembly.Module.exports(module).map(e => e.name).slice(0, 10), '...');
+              
+              // Check for our expected exports
+              const exports = WebAssembly.Module.exports(module).map(e => e.name);
+              const required = ['l4_check', 'l4_hover', 'l4_completions', 'l4_semantic_tokens', 'l4_eval'];
+              const missing = required.filter(r => !exports.includes(r));
+              
+              if (missing.length > 0) {
+                console.error('Missing exports:', missing);
+                process.exit(1);
+              }
+              
+              console.log('All required exports present!');
+            }
+            
+            test().catch(e => { console.error(e); process.exit(1); });
+          "
+
+      - name: Build summary
+        run: |
+          WASM_PATH=$(find dist-newstyle -name 'jl4-wasm.wasm' -path '*/opt/build/*' | head -1)
+          WASM_SIZE=$(stat --format=%s "$WASM_PATH")
+          WASM_SIZE_MB=$(echo "scale=2; $WASM_SIZE / 1048576" | bc)
+
+          echo "## WASM Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **GHC WASM:** ${{ env.GHC_WASM_VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Binary Size:** ${WASM_SIZE_MB} MB" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status:** All tests passed" >> $GITHUB_STEP_SUMMARY

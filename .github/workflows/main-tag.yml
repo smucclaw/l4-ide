@@ -1,36 +1,18 @@
-name: VSCode Extension Release (with bundled binaries)
+name: Main Branch Tag
 
 on:
   push:
-    branches:
-      - main
-    tags:
-      - "v*"
-    paths:
-      # Haskell source code (for LSP binary)
-      - "jl4-core/**"
-      - "jl4/**"
-      - "jl4-lsp/**"
-      - "jl4-query-plan/**"
-      # TypeScript/VSCode extension source
-      - "ts-apps/vscode/**"
-      - "ts-shared/**"
-      - "package.json"
-      - "package-lock.json"
-      # Build configuration
-      - "*.cabal"
-      - "cabal.project"
-      - "cabal.project.freeze"
-      # This workflow
-      - ".github/workflows/vscode-extension-release.yml"
-  workflow_dispatch:
-    inputs:
-      create_release:
-        description: "Create a GitHub release"
-        required: false
-        default: "false"
+    branches: [main]
 
-# Build binaries for each platform, then package VSCode extensions
+# Only run one release build at a time
+concurrency:
+  group: main-release
+  cancel-in-progress: false
+
+env:
+  GHC_VERSION: "9.10.2"
+  GHC_WASM_VERSION: "9.10"
+
 jobs:
   # ============================================
   # Build LSP binaries for each platform
@@ -48,7 +30,7 @@ jobs:
         uses: haskell-actions/setup@v2
         id: setup
         with:
-          ghc-version: "9.10.2"
+          ghc-version: ${{ env.GHC_VERSION }}
           cabal-version: "latest"
           cabal-update: true
 
@@ -96,11 +78,7 @@ jobs:
         with:
           name: jl4-lsp-darwin-arm64
           path: bin/darwin-arm64/jl4-lsp
-          retention-days: 1
-
-  # NOTE: macOS x64 (macos-13) has been retired by GitHub Actions.
-  # Intel Mac users should use the universal extension and install jl4-lsp manually,
-  # or use Rosetta 2 to run the ARM64 binary.
+          retention-days: 90
 
   build-lsp-windows:
     name: Build jl4-lsp - Windows x64
@@ -114,7 +92,7 @@ jobs:
         uses: haskell-actions/setup@v2
         id: setup
         with:
-          ghc-version: "9.10.2"
+          ghc-version: ${{ env.GHC_VERSION }}
           cabal-version: "latest"
           cabal-update: true
 
@@ -163,7 +141,7 @@ jobs:
         with:
           name: jl4-lsp-win32-x64
           path: bin/win32-x64/jl4-lsp.exe
-          retention-days: 1
+          retention-days: 90
 
   build-lsp-linux-x64:
     name: Build jl4-lsp - Linux x64
@@ -175,7 +153,6 @@ jobs:
 
       - name: Install system dependencies
         run: |
-          # Retry apt-get update to handle transient mirror sync issues
           for i in 1 2 3; do
             sudo apt-get update && break
             echo "Retry $i: apt-get update failed, waiting 10s..."
@@ -187,7 +164,7 @@ jobs:
         uses: haskell-actions/setup@v2
         id: setup
         with:
-          ghc-version: "9.10.2"
+          ghc-version: ${{ env.GHC_VERSION }}
           cabal-version: "latest"
           cabal-update: true
 
@@ -234,7 +211,7 @@ jobs:
         with:
           name: jl4-lsp-linux-x64
           path: bin/linux-x64/jl4-lsp
-          retention-days: 1
+          retention-days: 90
 
   build-lsp-linux-arm64:
     name: Build jl4-lsp - Linux ARM64
@@ -246,7 +223,6 @@ jobs:
 
       - name: Install system dependencies
         run: |
-          # Retry apt-get update to handle transient mirror sync issues
           for i in 1 2 3; do
             sudo apt-get update && break
             echo "Retry $i: apt-get update failed, waiting 10s..."
@@ -258,7 +234,7 @@ jobs:
         uses: haskell-actions/setup@v2
         id: setup
         with:
-          ghc-version: "9.10.2"
+          ghc-version: ${{ env.GHC_VERSION }}
           cabal-version: "latest"
           cabal-update: true
 
@@ -305,7 +281,91 @@ jobs:
         with:
           name: jl4-lsp-linux-arm64
           path: bin/linux-arm64/jl4-lsp
-          retention-days: 1
+          retention-days: 90
+
+  # ============================================
+  # Build WASM
+  # ============================================
+
+  build-wasm:
+    name: Build WASM
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.prepare-artifacts.outputs.version }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl xz-utils binaryen
+
+      - name: Cache GHC WASM toolchain
+        id: cache-ghc-wasm
+        uses: actions/cache@v4
+        with:
+          path: ~/.ghc-wasm
+          key: ghc-wasm-${{ env.GHC_WASM_VERSION }}-${{ runner.os }}
+
+      - name: Install GHC WASM toolchain
+        if: steps.cache-ghc-wasm.outputs.cache-hit != 'true'
+        run: |
+          curl -L https://gitlab.haskell.org/haskell-wasm/ghc-wasm-meta/-/raw/master/bootstrap.sh | FLAVOUR=${{ env.GHC_WASM_VERSION }} bash
+        shell: bash
+
+      - name: Cache WASM dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.ghc-wasm/.cabal/store
+            dist-newstyle
+          key: wasm-deps-${{ env.GHC_WASM_VERSION }}-${{ hashFiles('cabal-wasm.project', 'jl4-core/jl4-core.cabal', 'jl4-wasm/jl4-wasm.cabal') }}
+          restore-keys: |
+            wasm-deps-${{ env.GHC_WASM_VERSION }}-
+
+      - name: Build WASM binary
+        run: |
+          source ~/.ghc-wasm/env
+          wasm32-wasi-cabal update
+          wasm32-wasi-cabal build jl4-wasm --project-file=cabal-wasm.project
+
+      - name: Generate JS FFI glue code
+        run: |
+          source ~/.ghc-wasm/env
+          WASM_PATH=$(find dist-newstyle -name 'jl4-wasm.wasm' -path '*/opt/build/*' | head -1)
+          $(wasm32-wasi-ghc --print-libdir)/post-link.mjs -i "$WASM_PATH" -o dist-newstyle/jl4-wasm.mjs
+
+      - name: Optimize WASM binary
+        run: |
+          WASM_PATH=$(find dist-newstyle -name 'jl4-wasm.wasm' -path '*/opt/build/*' | head -1)
+          wasm-opt -Oz "$WASM_PATH" -o "$WASM_PATH.opt"
+          mv "$WASM_PATH.opt" "$WASM_PATH"
+
+      - name: Prepare artifacts
+        id: prepare-artifacts
+        run: |
+          mkdir -p wasm-artifacts
+          WASM_PATH=$(find dist-newstyle -name 'jl4-wasm.wasm' -path '*/opt/build/*' | head -1)
+          cp "$WASM_PATH" wasm-artifacts/jl4-core.wasm
+          cp dist-newstyle/jl4-wasm.mjs wasm-artifacts/jl4-core.mjs
+
+          COMMIT_SHA="${{ github.sha }}"
+          SHORT_SHA="${COMMIT_SHA:0:8}"
+          DATE=$(date -u +%Y%m%d)
+          VERSION="${DATE}-${SHORT_SHA}"
+          echo "$VERSION" > wasm-artifacts/version.txt
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Upload WASM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: jl4-wasm-${{ steps.prepare-artifacts.outputs.version }}
+          path: wasm-artifacts/
+          retention-days: 90
 
   # ============================================
   # Package platform-specific VSCode extensions
@@ -352,12 +412,10 @@ jobs:
       - name: Update package.json version with build number
         working-directory: ts-apps/vscode
         run: |
-          # Extract current version and replace patch number with GitHub run number
           CURRENT_VERSION=$(node -p "require('./package.json').version")
           MAJOR_MINOR=$(echo $CURRENT_VERSION | sed 's/\.[^.]*$//')
           NEW_VERSION="${MAJOR_MINOR}.${{ github.run_number }}"
           echo "Updating version: $CURRENT_VERSION -> $NEW_VERSION"
-          # Update package.json using node to preserve formatting
           node -e "const fs = require('fs'); const pkg = JSON.parse(fs.readFileSync('package.json')); pkg.version = '$NEW_VERSION'; fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');"
           echo "PACKAGE_VERSION=$NEW_VERSION" >> $GITHUB_ENV
 
@@ -378,13 +436,6 @@ jobs:
         run: |
           mkdir -p ts-apps/vscode/libraries
           cp jl4-core/libraries/*.l4 ts-apps/vscode/libraries/
-          echo "L4 libraries:"
-          ls -lh ts-apps/vscode/libraries/
-
-      - name: Verify binary
-        run: |
-          echo "Binary location:"
-          ls -lh ts-apps/vscode/bin/${{ matrix.target }}/
 
       - name: Package platform-specific extension
         working-directory: ts-apps/vscode
@@ -396,10 +447,10 @@ jobs:
         with:
           name: l4-vscode-${{ matrix.target }}-${{ env.PACKAGE_VERSION }}
           path: ts-apps/vscode/*.vsix
-          retention-days: 30
+          retention-days: 90
 
   # ============================================
-  # Package all-platforms extension (all binaries bundled)
+  # Package all-platforms extension
   # ============================================
 
   package-vscode-all-platforms:
@@ -426,12 +477,9 @@ jobs:
       - name: Update package.json version with build number
         working-directory: ts-apps/vscode
         run: |
-          # Extract current version and replace patch number with GitHub run number
           CURRENT_VERSION=$(node -p "require('./package.json').version")
           MAJOR_MINOR=$(echo $CURRENT_VERSION | sed 's/\.[^.]*$//')
           NEW_VERSION="${MAJOR_MINOR}.${{ github.run_number }}"
-          echo "Updating version: $CURRENT_VERSION -> $NEW_VERSION"
-          # Update package.json using node to preserve formatting
           node -e "const fs = require('fs'); const pkg = JSON.parse(fs.readFileSync('package.json')); pkg.version = '$NEW_VERSION'; fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');"
           echo "PACKAGE_VERSION=$NEW_VERSION" >> $GITHUB_ENV
 
@@ -447,25 +495,18 @@ jobs:
       - name: Organize binaries into correct structure
         run: |
           cd ts-apps/vscode/bin
-          # Artifacts are downloaded as jl4-lsp-<platform>/<binary>
-          # We need them as <platform>/<binary>
           mv jl4-lsp-darwin-arm64 darwin-arm64
           mv jl4-lsp-win32-x64 win32-x64
           mv jl4-lsp-linux-x64 linux-x64
           mv jl4-lsp-linux-arm64 linux-arm64
-          # Make Unix binaries executable
           chmod +x darwin-arm64/jl4-lsp
           chmod +x linux-x64/jl4-lsp
           chmod +x linux-arm64/jl4-lsp
-          echo "All binaries:"
-          find . -type f -ls
 
       - name: Copy L4 libraries
         run: |
           mkdir -p ts-apps/vscode/libraries
           cp jl4-core/libraries/*.l4 ts-apps/vscode/libraries/
-          echo "L4 libraries:"
-          ls -lh ts-apps/vscode/libraries/
 
       - name: Package all-platforms extension
         working-directory: ts-apps/vscode
@@ -477,7 +518,7 @@ jobs:
         with:
           name: l4-vscode-all-platforms-${{ env.PACKAGE_VERSION }}
           path: ts-apps/vscode/*.vsix
-          retention-days: 30
+          retention-days: 90
 
   # ============================================
   # Package universal extension (no bundled binary)
@@ -502,12 +543,9 @@ jobs:
       - name: Update package.json version with build number
         working-directory: ts-apps/vscode
         run: |
-          # Extract current version and replace patch number with GitHub run number
           CURRENT_VERSION=$(node -p "require('./package.json').version")
           MAJOR_MINOR=$(echo $CURRENT_VERSION | sed 's/\.[^.]*$//')
           NEW_VERSION="${MAJOR_MINOR}.${{ github.run_number }}"
-          echo "Updating version: $CURRENT_VERSION -> $NEW_VERSION"
-          # Update package.json using node to preserve formatting
           node -e "const fs = require('fs'); const pkg = JSON.parse(fs.readFileSync('package.json')); pkg.version = '$NEW_VERSION'; fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');"
           echo "PACKAGE_VERSION=$NEW_VERSION" >> $GITHUB_ENV
 
@@ -524,101 +562,117 @@ jobs:
         with:
           name: l4-vscode-universal-${{ env.PACKAGE_VERSION }}
           path: ts-apps/vscode/*.vsix
-          retention-days: 30
+          retention-days: 90
 
   # ============================================
-  # Create GitHub Release
+  # Create Git Tag with Artifacts
   # ============================================
 
-  create-release:
-    name: Create GitHub Release
+  create-tag:
+    name: Create Git Tag
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.event.inputs.create_release == 'true'
     needs:
       - package-vscode-extension
       - package-vscode-all-platforms
       - package-vscode-universal
+      - build-wasm
     steps:
-      - name: Download all VSIX artifacts
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: l4-vscode-*
-          path: vsix-files
-          merge-multiple: true
+          path: artifacts
+          merge-multiple: false
 
-      - name: List downloaded files
+      - name: Organize artifacts for tag
         run: |
-          echo "Downloaded VSIX files:"
-          find vsix-files -name "*.vsix" -ls
+          mkdir -p release-artifacts
+
+          # Collect VSIX files
+          find artifacts -name "*.vsix" -exec cp {} release-artifacts/ \;
+
+          # Collect WASM files
+          find artifacts -name "jl4-core.wasm" -exec cp {} release-artifacts/ \;
+          find artifacts -name "jl4-core.mjs" -exec cp {} release-artifacts/ \;
+          find artifacts -name "version.txt" -exec cp {} release-artifacts/wasm-version.txt \;
+
+          echo "Release artifacts:"
+          ls -la release-artifacts/
 
       - name: Get build date
         id: build-date
-        run: echo "date=$(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_OUTPUT
+        run: |
+          echo "date=$(date -u '+%Y-%m-%d')" >> $GITHUB_OUTPUT
+          echo "datetime=$(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_OUTPUT
 
-      - name: Create GitHub Release
+      - name: Create tag name
+        id: tag-name
+        run: |
+          TAG_NAME="build-${{ github.run_number }}-${{ steps.build-date.outputs.date }}"
+          echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
+
+      - name: Create Git Tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ steps.tag-name.outputs.tag }}" -m "Automated build ${{ github.run_number }}
+
+          Commit: ${{ github.sha }}
+          Built: ${{ steps.build-date.outputs.datetime }}
+
+          Artifacts included:
+          - VSCode extensions (platform-specific, all-platforms, universal)
+          - WASM binaries (jl4-core.wasm, jl4-core.mjs)"
+          git push origin "${{ steps.tag-name.outputs.tag }}"
+
+      - name: Upload artifacts to tag
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: vscode-build-${{ github.run_number }}
-          name: L4 VSCode Extension (Build ${{ github.run_number }})
+          tag_name: ${{ steps.tag-name.outputs.tag }}
+          name: Build ${{ github.run_number }} (${{ steps.build-date.outputs.date }})
           body: |
-            ## L4 VSCode Extension Release
+            ## Build Artifacts
 
-            This release includes the L4 VSCode extension with bundled `jl4-lsp` language server.
+            **Commit:** ${{ github.sha }}
+            **Built:** ${{ steps.build-date.outputs.datetime }}
 
-            ### Platform-Specific Extensions (Recommended)
+            ### VSCode Extensions
 
-            These extensions include the bundled language server - no separate installation required:
+            | Platform | Description |
+            |----------|-------------|
+            | `darwin-arm64` | macOS Apple Silicon (also works on Intel via Rosetta 2) |
+            | `win32-x64` | Windows x64 |
+            | `linux-x64` | Linux x64 |
+            | `linux-arm64` | Linux ARM64 |
+            | `all-platforms` | Single VSIX with all platform binaries |
+            | `universal` | No bundled binary (requires jl4-lsp on PATH) |
 
-            | Platform | File |
-            |----------|------|
-            | macOS (Apple Silicon & Intel via Rosetta) | `l4-vscode-darwin-arm64-*.vsix` |
-            | Windows x64 | `l4-vscode-win32-x64-*.vsix` |
-            | Linux x64 | `l4-vscode-linux-x64-*.vsix` |
-            | Linux ARM64 | `l4-vscode-linux-arm64-*.vsix` |
+            ### WASM Binaries
 
-            ### All-Platforms Extension
-
-            A single extension that works on all supported platforms (larger download):
-            - `l4-vscode-all-platforms-*.vsix`
-
-            ### Universal Extension
-
-            For other platforms or if you prefer to install the language server separately:
-            - `l4-vscode-universal-*.vsix`
-
-            Requires `jl4-lsp` to be installed separately and available on PATH.
+            | File | Description |
+            |------|-------------|
+            | `jl4-core.wasm` | L4 core WASM module |
+            | `jl4-core.mjs` | JavaScript FFI glue code |
 
             ### Installation
 
-            1. Download the appropriate `.vsix` file for your platform
-            2. In VSCode: Extensions → ⋯ → Install from VSIX...
-            3. Select the downloaded file
-
-            Or via command line:
+            **VSCode Extension:**
             ```bash
             code --install-extension l4-vscode-<platform>-*.vsix
             ```
 
-            ### macOS Security Note
-
-            On first run, macOS may block the bundled binary. To allow it:
+            **macOS Security Note:**
             ```bash
             xattr -dr com.apple.quarantine ~/.vscode/extensions/legalese.l4-vscode-*/bin/darwin-*/jl4-lsp
             ```
-
-            ### Build Information
-
-            - **Commit:** ${{ github.sha }}
-            - **Build Date:** ${{ steps.build-date.outputs.date }}
-
-            ### Documentation
-
-            - [Repository](https://github.com/smucclaw/l4-ide)
-            - [VSCode Extension README](https://github.com/smucclaw/l4-ide/tree/main/ts-apps/vscode)
           files: |
-            vsix-files/*.vsix
+            release-artifacts/*
           draft: false
           prerelease: false
+          make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -633,22 +687,23 @@ jobs:
       - package-vscode-extension
       - package-vscode-all-platforms
       - package-vscode-universal
+      - build-wasm
+      - create-tag
     if: always()
     steps:
       - name: Summary
         run: |
-          echo "## VSCode Extension Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## Main Branch Build Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Build Number:** ${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
           echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Platform-Specific Extensions" >> $GITHUB_STEP_SUMMARY
+          echo "### Build Status" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Platform | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| macOS ARM64 | ${{ needs.package-vscode-extension.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Windows x64 | ${{ needs.package-vscode-extension.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Linux x64 | ${{ needs.package-vscode-extension.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Linux ARM64 | ${{ needs.package-vscode-extension.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| VSCode Extensions | ${{ needs.package-vscode-extension.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| All Platforms | ${{ needs.package-vscode-all-platforms.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Universal | ${{ needs.package-vscode-universal.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| WASM Build | ${{ needs.build-wasm.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Git Tag | ${{ needs.create-tag.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
