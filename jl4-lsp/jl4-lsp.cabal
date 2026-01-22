@@ -48,7 +48,6 @@ library
     lsp,
     lsp-types,
     mtl,
-    monoidal-containers,
     optics,
     prettyprinter,
     safe-exceptions,

@@ -54,6 +54,15 @@ type LspMessage = LspRequest | LspNotification | LspResponse
 type MessageCallback = (message: LspMessage) => void
 
 /**
+ * State tracking for the currently selected visualization.
+ */
+interface VisualizationState {
+  functionName: string
+  simplify: boolean
+  uri: string
+}
+
+/**
  * WASM-based LSP message handler
  *
  * Processes LSP messages by routing them to the WASM bridge.
@@ -61,8 +70,15 @@ type MessageCallback = (message: LspMessage) => void
  */
 export class WasmLspHandler {
   private documentContents = new Map<string, string>()
+  private documentVersions = new Map<string, number>()
   private messageCallback: MessageCallback | null = null
   private disposed = false
+
+  /**
+   * Currently selected visualization state.
+   * When set, auto-refresh will update this function on document changes.
+   */
+  private currentVisualization: VisualizationState | null = null
 
   constructor(private bridge: L4WasmBridge) {}
 
@@ -127,6 +143,7 @@ export class WasmLspHandler {
           textDocument: { uri: string; text: string; version: number }
         }
         this.documentContents.set(p.textDocument.uri, p.textDocument.text)
+        this.documentVersions.set(p.textDocument.uri, p.textDocument.version)
         this.checkAndPublishDiagnostics(
           p.textDocument.uri,
           p.textDocument.text,
@@ -143,6 +160,7 @@ export class WasmLspHandler {
         const newContent = p.contentChanges[0]?.text
         if (newContent !== undefined) {
           this.documentContents.set(p.textDocument.uri, newContent)
+          this.documentVersions.set(p.textDocument.uri, p.textDocument.version)
           this.checkAndPublishDiagnostics(
             p.textDocument.uri,
             newContent,
@@ -155,6 +173,11 @@ export class WasmLspHandler {
       case 'textDocument/didClose': {
         const p = params as { textDocument: { uri: string } }
         this.documentContents.delete(p.textDocument.uri)
+        this.documentVersions.delete(p.textDocument.uri)
+        // Clear visualization if closing the visualized document
+        if (this.currentVisualization?.uri === p.textDocument.uri) {
+          this.currentVisualization = null
+        }
         break
       }
 
@@ -163,7 +186,8 @@ export class WasmLspHandler {
         break
 
       default:
-        console.log('[WASM LSP] Ignoring notification:', method)
+        // Silently ignore unknown notifications
+        break
     }
   }
 
@@ -187,11 +211,20 @@ export class WasmLspHandler {
       case 'textDocument/semanticTokens/full':
         return this.handleSemanticTokens(params)
 
+      case 'textDocument/codeLens':
+        return this.handleCodeLens(params)
+
+      case 'textDocument/definition':
+        return this.handleDefinition(params)
+
+      case 'textDocument/references':
+        return this.handleReferences(params)
+
       case 'workspace/executeCommand':
         return this.handleExecuteCommand(params)
 
       default:
-        console.warn('[WASM LSP] Unhandled method:', method)
+        // Unhandled method
         return null
     }
   }
@@ -222,13 +255,18 @@ export class WasmLspHandler {
           },
           full: true,
         },
+        // Code lens for visualization actions
+        codeLensProvider: {
+          resolveProvider: false,
+        },
         // Execute command for visualization
         executeCommandProvider: {
-          commands: ['l4.visualize'],
+          commands: ['l4.visualize', 'l4.resetvisualization'],
         },
+        // Go-to-definition and find-references (single-file only)
+        definitionProvider: true,
+        referencesProvider: true,
         // Not implemented in WASM mode
-        definitionProvider: false,
-        referencesProvider: false,
         codeActionProvider: false,
       },
       serverInfo: { name: 'l4-wasm', version: '0.1.0' },
@@ -271,8 +309,108 @@ export class WasmLspHandler {
   }
 
   /**
+   * Handle textDocument/codeLens request.
+   * Returns code lenses for all visualizable DECIDE rules.
+   */
+  private async handleCodeLens(params: unknown): Promise<unknown> {
+    const p = params as { textDocument: { uri: string } }
+    const uri = p.textDocument.uri
+    const content = this.documentContents.get(uri)
+    if (!content) {
+      return []
+    }
+
+    const version = this.documentVersions.get(uri) ?? 0
+
+    try {
+      const lenses = await this.bridge.codeLenses(content, uri, version)
+      // Transform to LSP CodeLens format
+      return lenses.map((lens) => ({
+        range: {
+          start: {
+            line: lens.range.startLineNumber - 1, // Convert to 0-indexed
+            character: lens.range.startColumn - 1,
+          },
+          end: {
+            line: lens.range.endLineNumber - 1,
+            character: lens.range.endColumn - 1,
+          },
+        },
+        command: {
+          title: lens.command.title,
+          command: lens.command.id,
+          arguments: lens.command.arguments,
+        },
+      }))
+    } catch {
+      return []
+    }
+  }
+
+  /**
+   * Handle textDocument/definition request.
+   * Returns the location of the definition for the symbol at the given position.
+   */
+  private async handleDefinition(params: unknown): Promise<unknown> {
+    const p = params as {
+      textDocument: { uri: string }
+      position: { line: number; character: number }
+    }
+    const uri = p.textDocument.uri
+    const content = this.documentContents.get(uri)
+    if (!content) return null
+
+    // Convert from 0-indexed (LSP) to 1-indexed (L4)
+    const line = p.position.line + 1
+    const col = p.position.character + 1
+
+    try {
+      const result = await this.bridge.definition(content, line, col)
+      if (!result) return null
+
+      // Return as LSP Location with the document URI
+      return {
+        uri: uri,
+        range: result.range,
+      }
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * Handle textDocument/references request.
+   * Returns all locations where the symbol at the given position is used.
+   */
+  private async handleReferences(params: unknown): Promise<unknown> {
+    const p = params as {
+      textDocument: { uri: string }
+      position: { line: number; character: number }
+      context: { includeDeclaration: boolean }
+    }
+    const uri = p.textDocument.uri
+    const content = this.documentContents.get(uri)
+    if (!content) return []
+
+    // Convert from 0-indexed (LSP) to 1-indexed (L4)
+    const line = p.position.line + 1
+    const col = p.position.character + 1
+
+    try {
+      const results = await this.bridge.references(content, line, col)
+      // Add the document URI to each location
+      return results.map((loc) => ({
+        uri: uri,
+        range: loc.range,
+      }))
+    } catch {
+      return []
+    }
+  }
+
+  /**
    * Handle workspace/executeCommand requests.
-   * Currently supports the l4.visualize command for ladder visualization.
+   * Supports l4.visualize and l4.resetvisualization commands.
    */
   private async handleExecuteCommand(params: unknown): Promise<unknown> {
     const p = params as {
@@ -284,40 +422,115 @@ export class WasmLspHandler {
       case 'l4.visualize':
         return this.handleVisualize(p.arguments)
 
+      case 'l4.resetvisualization':
+        this.currentVisualization = null
+        return null
+
       default:
-        console.warn('[WASM LSP] Unknown command:', p.command)
+        // Unknown command
         return null
     }
   }
 
   /**
    * Handle the l4.visualize command.
-   * Generates visualization data for the ladder diagram.
+   *
+   * Supports two calling conventions:
+   * 1. Code lens click: [verDocId, functionName, simplify]
+   *    - Visualizes the specific function and sets it as current
+   * 2. Auto-refresh: [verDocId]
+   *    - If a function is currently selected, refreshes it
+   *    - If function no longer exists, clears the visualization
+   *    - If no function selected, visualizes the first available
    */
   private async handleVisualize(args?: unknown[]): Promise<unknown> {
     if (!args || args.length === 0) {
-      console.warn('[WASM LSP] l4.visualize called without arguments')
       return null
     }
 
-    // The argument is a VersionedTextDocumentIdentifier
     const verDocId = args[0] as { uri: string; version?: number }
     const uri = verDocId.uri
-    const version = verDocId.version ?? 0
+    const version = verDocId.version ?? this.documentVersions.get(uri) ?? 0
 
     const content = this.documentContents.get(uri)
     if (!content) {
-      console.warn('[WASM LSP] No content for URI:', uri)
       return null
     }
 
-    // Check if the WASM module supports visualization
     if (!this.bridge.supportsVisualization()) {
-      console.warn('[WASM LSP] Visualization not supported by this WASM module')
       return null
     }
 
-    return this.bridge.visualize(content, uri, version)
+    // Check if this is a code lens click (has function name and simplify flag)
+    if (args.length >= 3) {
+      const functionName = args[1] as string
+      const simplify = args[2] as boolean
+
+      // Update current visualization state
+      this.currentVisualization = { functionName, simplify, uri }
+
+      // Visualize the specific function
+      const result = await this.bridge.visualizeByName(
+        content,
+        uri,
+        version,
+        functionName,
+        simplify
+      )
+
+      if (result.error) {
+        if (result.notFound) {
+          this.currentVisualization = null
+        }
+        return null
+      }
+
+      return result
+    }
+
+    // Auto-refresh: check if we have a current visualization for this document
+    if (this.currentVisualization && this.currentVisualization.uri === uri) {
+      const { functionName, simplify } = this.currentVisualization
+
+      const result = await this.bridge.visualizeByName(
+        content,
+        uri,
+        version,
+        functionName,
+        simplify
+      )
+
+      if (result.error) {
+        if (result.notFound) {
+          // Function no longer exists - clear the visualization
+          this.currentVisualization = null
+          return { cleared: true, reason: 'function_not_found' }
+        }
+        // Other error - still return null but keep the state
+        return null
+      }
+
+      return result
+    }
+
+    // No current visualization selected - do nothing
+    // User must click a code lens to start visualization
+    return null
+  }
+
+  /**
+   * Get the currently selected visualization state.
+   * Useful for debugging and UI state sync.
+   */
+  getCurrentVisualization(): VisualizationState | null {
+    return this.currentVisualization
+  }
+
+  /**
+   * Clear the current visualization selection.
+   */
+  clearVisualization(): void {
+    this.currentVisualization = null
   }
 
   private async checkAndPublishDiagnostics(
@@ -340,9 +553,8 @@ export class WasmLspHandler {
             this.evalResultToDiagnostic.bind(this)
           )
         }
-      } catch (e) {
-        // Evaluation failed, just log and continue with check diagnostics only
-        console.warn('[WASM LSP] Evaluation failed:', e)
+      } catch {
+        // Evaluation failed, continue with check diagnostics only
       }
     }
 
@@ -379,7 +591,9 @@ export class WasmLspHandler {
   dispose(): void {
     this.disposed = true
     this.documentContents.clear()
+    this.documentVersions.clear()
     this.messageCallback = null
+    this.currentVisualization = null
   }
 }
 

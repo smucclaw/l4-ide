@@ -10,6 +10,7 @@ import L4.Citations
 import qualified L4.Evaluate.ValueLazy as EvaluateLazy
 import qualified L4.EvaluateLazy as EvaluateLazy
 import qualified L4.ExactPrint as ExactPrint
+import L4.FindReferences (ReferenceMapping(..), singletonReferenceMapping)
 import L4.Lexer (PError, PosToken)
 import qualified L4.Lexer as Lexer
 import qualified L4.Parser as Parser
@@ -26,16 +27,12 @@ import Control.Monad.Trans.Maybe
 import Data.Hashable (Hashable)
 import Data.Monoid (Ap (..))
 import qualified Data.Map.Strict as Map
-import Data.Map.Monoidal (MonoidalMap)
-import qualified Data.Map.Monoidal as MonoidalMap
 import qualified Data.Maybe as Maybe
 import qualified Base.Text as Text
 import qualified Data.Text.Mixed.Rope as Rope
 import System.FilePath
 import L4.Utils.IntervalMap (IntervalMap)
-import qualified L4.Utils.IntervalMap as IVMap
 import Development.IDE.Graph
-import GHC.Generics (Generically (..))
 import LSP.Core.PositionMapping
 import LSP.Core.RuleTypes
 import LSP.Core.Shake hiding (Log)
@@ -210,28 +207,8 @@ data ExactPrint = ExactPrint
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Hashable)
 
-data ReferenceMapping =
-  ReferenceMapping
-  { actualToOriginal :: IntervalMap SrcPos Unique
-  -- ^ getting the original occurence of a name, based on its reference's source range
-  , originalToActual :: MonoidalMap Unique [SrcRange]
-  -- ^ getting the source range of all references of an original definition
-  }
-  deriving stock Generic
-  deriving anyclass NFData
-  deriving (Semigroup, Monoid) via Generically ReferenceMapping
-
-singletonReferenceMapping :: Unique -> SrcRange -> ReferenceMapping
-singletonReferenceMapping originalName actualRange
-  = ReferenceMapping
-  { actualToOriginal = IV.singleton (IV.srcRangeToInterval actualRange) originalName
-  , originalToActual = MonoidalMap.singleton originalName [actualRange]
-  }
-
-lookupReference :: SrcPos -> ReferenceMapping -> [SrcRange]
-lookupReference pos mapping = do
-  (_, n) <- IVMap.search pos mapping.actualToOriginal
-  Maybe.fromMaybe [] $ MonoidalMap.lookup n mapping.originalToActual
+-- Note: ReferenceMapping, singletonReferenceMapping, and lookupReference
+-- are imported from L4.FindReferences (shared with WASM mode)
 
 data Log
   = ShakeLog Shake.Log

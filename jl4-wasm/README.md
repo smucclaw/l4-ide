@@ -243,11 +243,11 @@ main();
 
 This package is a thin wrapper that:
 
-1. Re-exports `L4.Wasm` from `jl4-core`
-2. Provides a `Main.hs` that's empty (reactor mode has no main)
+1. Re-exports `L4.API` from `jl4-core`
+2. Provides a `Main.hs` that references the API (reactor mode has no main)
 3. Configures the build for WASI reactor mode
 
-The actual implementation is in `jl4-core/src/L4/Wasm.hs`, which:
+The actual implementation is in `jl4-core/src/L4/API.hs`, which:
 
 - Provides pure Haskell functions for all L4 features
 - Exports JavaScript FFI wrappers when compiled for `wasm32` architecture

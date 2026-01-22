@@ -585,11 +585,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-          merge-multiple: false
 
       - name: Organize artifacts for tag
         run: |
           mkdir -p release-artifacts
+
+          echo "Downloaded artifacts structure:"
+          find artifacts -type f
 
           # Collect VSIX files
           find artifacts -name "*.vsix" -exec cp {} release-artifacts/ \;
@@ -597,10 +599,16 @@ jobs:
           # Collect WASM files
           find artifacts -name "jl4-core.wasm" -exec cp {} release-artifacts/ \;
           find artifacts -name "jl4-core.mjs" -exec cp {} release-artifacts/ \;
-          find artifacts -name "version.txt" -exec cp {} release-artifacts/wasm-version.txt \;
+          find artifacts -name "version.txt" -exec cp {} release-artifacts/wasm-version.txt \; 2>/dev/null || true
 
           echo "Release artifacts:"
           ls -la release-artifacts/
+
+          # Fail if no artifacts found
+          if [ -z "$(ls -A release-artifacts/)" ]; then
+            echo "ERROR: No artifacts found!"
+            exit 1
+          fi
 
       - name: Get build date
         id: build-date
@@ -611,7 +619,7 @@ jobs:
       - name: Create tag name
         id: tag-name
         run: |
-          TAG_NAME="build-${{ github.run_number }}-${{ steps.build-date.outputs.date }}"
+          TAG_NAME="vscode-wasm-build-${{ github.run_number }}"
           echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
 
       - name: Create Git Tag
@@ -632,7 +640,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.tag-name.outputs.tag }}
-          name: Build ${{ github.run_number }} (${{ steps.build-date.outputs.date }})
+          name: L4 VSCode Extension & WASM (Build ${{ github.run_number }})
           body: |
             ## Build Artifacts
 
