@@ -1,24 +1,23 @@
 {-# LANGUAGE OverloadedStrings #-}
--- | Import resolution for WASM builds.
+-- | Virtual File System and import resolution for the L4 API.
 --
--- This module provides import resolution for the WASM backend using the
--- shared resolution logic from 'L4.Import.Resolution'. It uses:
+-- This module provides import resolution using:
 --
 -- * Embedded core libraries (bundled at compile time from @libraries/*.l4@)
--- * VFS (Virtual File System) provided by JavaScript via FFI
+-- * VFS (Virtual File System) provided by the caller
 --
 -- The resolution order is: embedded libraries first, then VFS.
 --
 -- == Usage
 --
 -- @
--- -- JavaScript provides files via VFS
+-- -- Provide files via VFS
 -- let vfs = vfsFromList [("helper", helperSource)]
 -- result <- checkWithImports vfs mainSource
 -- @
 --
 -- @since 0.1
-module L4.Wasm.Import
+module L4.API.VirtualFS
   ( -- * Virtual File System
     VFS
   , emptyVFS
@@ -46,7 +45,7 @@ import qualified Data.Map.Strict as Map
 import Control.Applicative ((<|>))
 
 -- Re-export embedded libraries
-import L4.Wasm.EmbeddedLibraries (embeddedLibraries, embeddedLibraryNames, lookupEmbeddedLibrary)
+import L4.API.EmbeddedLibraries (embeddedLibraries, embeddedLibraryNames, lookupEmbeddedLibrary)
 
 -- Use shared resolution logic
 import L4.Import.Resolution
@@ -92,13 +91,13 @@ vfsKeys :: VFS -> [Text]
 vfsKeys (VFS m) = Map.keys m
 
 -- ----------------------------------------------------------------------------
--- Module Lookup for WASM
+-- Module Lookup for API
 -- ----------------------------------------------------------------------------
 
--- | Create a module lookup function for WASM.
+-- | Create a module lookup function.
 -- Checks embedded libraries first, then VFS.
-wasmModuleLookup :: VFS -> ModuleLookup Identity
-wasmModuleLookup vfs modName = Identity $
+apiModuleLookup :: VFS -> ModuleLookup Identity
+apiModuleLookup vfs modName = Identity $
   lookupEmbeddedLibrary modName `mplus` vfsLookup modName vfs
 
 -- ----------------------------------------------------------------------------
@@ -123,6 +122,6 @@ checkWithImports vfs source =
 checkWithImportsAndUri :: VFS -> Text -> Text -> Either [Text] TypeCheckWithDepsResult
 checkWithImportsAndUri vfs moduleName source =
   let uri = moduleNameToProjectUri moduleName
-      lookup' = wasmModuleLookup vfs
+      lookup' = apiModuleLookup vfs
       Identity result = typecheckWithDependencies lookup' uri source
   in result

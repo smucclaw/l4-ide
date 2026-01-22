@@ -1,16 +1,16 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
--- | Embedded L4 core libraries for WASM builds.
+-- | Embedded L4 core libraries.
 --
 -- This module uses Template Haskell to embed the contents of L4 library files
--- at compile time. This allows the WASM module to resolve IMPORT statements
+-- at compile time. This allows the API to resolve IMPORT statements
 -- for core libraries without needing filesystem access.
 --
 -- The libraries are read from the @data-files@ specified in @jl4-core.cabal@
 -- (i.e., @libraries/*.l4@) during compilation.
 --
 -- @since 0.1
-module L4.Wasm.EmbeddedLibraries
+module L4.API.EmbeddedLibraries
   ( embeddedLibraries
   , embeddedLibraryNames
   , lookupEmbeddedLibrary
@@ -27,7 +27,7 @@ import Language.Haskell.TH.Syntax (runIO)
 import qualified Paths_jl4_core
 
 -- Import TH helpers from separate module (GHC stage restriction)
-import L4.Wasm.EmbeddedLibraries.TH (embedLibrariesFromDir)
+import L4.API.EmbeddedLibraries.TH (embedLibrariesFromDir)
 
 -- | List of embedded library names (without .l4 extension).
 embeddedLibraryNames :: [Text]

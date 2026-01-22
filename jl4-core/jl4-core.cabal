@@ -133,10 +133,10 @@ library
     L4.Viz.Ladder
     L4.Viz.VizExpr
     L4.Import.Resolution
-    L4.Wasm
-    L4.Wasm.EmbeddedLibraries
-    L4.Wasm.EmbeddedLibraries.TH
-    L4.Wasm.Import
+    L4.API
+    L4.API.VirtualFS
+    L4.API.EmbeddedLibraries
+    L4.API.EmbeddedLibraries.TH
 
 test-suite jl4-core-test
   import: defaults

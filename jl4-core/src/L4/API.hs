@@ -1,293 +1,15 @@
-{-# LINE 1 "jl4-core/src/L4/Wasm.hs" #-}
-# 1 "jl4-core/src/L4/Wasm.hs"
-# 1 "<built-in>" 1
-# 1 "<built-in>" 3
-
-
-
-
-
-
-
-
-# 1 "<command line>" 1
-# 1 "<built-in>" 2
-# 1 "/Users/tgorissen/.ghc-wasm/wasm32-wasi-ghc/lib/../lib/wasm32-wasi-ghc-9.10.3.20251220/rts-1.0.2/include/ghcversion.h" 1
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# 2 "<built-in>" 2
-# 1 "/var/folders/41/tlwhw2zs0_5c70nsmgyxys580000gn/T/ghc267_0/ghc_2.h" 1
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# 3 "<built-in>" 2
-# 1 "jl4-core/src/L4/Wasm.hs" 2
 {-# LANGUAGE CPP #-}
--- | WASM/JavaScript FFI exports for browser-based L4 language features.
+-- | Pure L4 API layer with optional JavaScript FFI exports.
 --
--- This module provides the interface between the L4 language implementation
--- and the browser via GHC's JavaScript FFI. The exports are only compiled
--- when targeting the JavaScript/WASM backend.
+-- This module provides pure Haskell functions for all L4 language features.
+-- These functions are available for testing on all platforms.
+-- When compiled for the WASM backend, they are also exported via JavaScript FFI.
 --
 -- The TypeScript bridge in @ts-apps/jl4-web/src/lib/wasm/wasm-bridge.ts@
 -- calls these functions and expects JSON-encoded responses.
 --
 -- @since 0.1
-module L4.Wasm
+module L4.API
   (
     -- * API Functions
     -- These functions are available for testing on all platforms.
@@ -297,6 +19,10 @@ module L4.Wasm
   , l4Completions
   , l4SemanticTokens
   , l4Eval
+  , l4VisualizeByName
+  , l4CodeLenses
+  , l4Definition
+  , l4References
   ) where
 
 import Base
@@ -307,11 +33,11 @@ import qualified Data.Text.Lazy as LazyText
 import qualified Data.Text.Lazy.Encoding as LazyText
 import qualified Data.Vector as Vector
 
-import L4.Lexer (execLexer, PosToken(..), TokenType(..), TLiterals(..), TSpaces(..), TIdentifiers(..), PError(..))
-import L4.Parser (execProgramParserWithHintPass)
+import L4.Lexer (execLexer, PosToken(..), TokenType(..), TLiterals(..), TSpaces(..), TIdentifiers(..))
+
 import L4.Annotation (HasSrcRange(..))
-import L4.Parser.SrcSpan (SrcRange(..), SrcSpan(..), SrcPos(..))
-import L4.TypeCheck (doCheckProgram, severity, prettyCheckErrorWithContext, applyFinalSubstitution)
+import L4.Parser.SrcSpan (SrcRange(..), SrcPos(..))
+import L4.TypeCheck (severity, prettyCheckErrorWithContext, applyFinalSubstitution)
 import L4.TypeCheck.Types (CheckResult(..), CheckErrorWithContext(..), Severity(..), Substitution)
 import L4.Print (prettyLayout)
 import L4.Syntax (Info(..), Type'(..), Resolved, OptionallyNamedType(..))
@@ -322,17 +48,24 @@ import L4.EvaluateLazy.Machine (prettyEvalException)
 
 import L4.TracePolicy (lspDefaultPolicy)
 import L4.EvaluateLazy.GraphVizOptions (defaultGraphVizOptions)
+import qualified L4.Viz.Ladder as Ladder
+import L4.FindDefinition (findDefinition)
+import L4.FindReferences (findReferences)
+
+-- Import resolution (VFS + embedded libs)
+import L4.API.VirtualFS (checkWithImports, emptyVFS, TypeCheckWithDepsResult(..), ResolvedImport(..))
+import qualified L4.Evaluate.ValueLazy as ValLazy
 
 
-
+#if defined(wasm32_HOST_ARCH)
 import GHC.Wasm.Prim (JSString(..), fromJSString, toJSString)
-
+#endif
 
 -- ----------------------------------------------------------------------------
 -- Core API Functions
 -- ----------------------------------------------------------------------------
 
--- | Parse and type-check L4 source code.
+-- | Parse and type-check L4 source code with import resolution.
 --
 -- Returns a JSON array of diagnostics in LSP format:
 --
@@ -348,17 +81,20 @@ import GHC.Wasm.Prim (JSString(..), fromJSString, toJSString)
 -- @
 --
 -- Severity values: 1=Error, 2=Warning, 3=Info, 4=Hint
+--
+-- This uses the shared import resolution from 'L4.Import.Resolution':
+-- - Embedded core libraries (prelude, math, etc.) are available
+-- - User-provided files can be added via VFS (future enhancement)
 l4Check :: Text -> Text
 l4Check source =
-  let uri = toNormalizedUri (Uri "file:///wasm-input.l4")
-  in case execProgramParserWithHintPass uri source of
-    Left parseErrors ->
-      -- Convert parse errors to diagnostics
-      encodeJson $ Vector.fromList $ map parseErrorToDiagnostic (toList parseErrors)
-    Right (parsed, _hints, _parseWarnings) ->
-      -- Type check the parsed module
-      let checkResult = doCheckProgram uri parsed
-          diagnostics = map checkErrorToDiagnostic checkResult.errors
+  -- Use checkWithImports for full import resolution support
+  case checkWithImports emptyVFS source of
+    Left errors ->
+      -- Import/parse errors
+      encodeJson $ Vector.fromList $ map importErrorToDiagnostic errors
+    Right result ->
+      -- Type check errors (if any)
+      let diagnostics = map checkErrorToDiagnostic result.tcdErrors
       in encodeJson $ Vector.fromList diagnostics
 
 -- | Get hover information at a position.
@@ -373,14 +109,26 @@ l4Check source =
 -- @
 l4Hover :: Text -> Int -> Int -> Text
 l4Hover source line col =
-  let uri = toNormalizedUri (Uri "file:///wasm-input.l4")
-      pos = MkSrcPos { line = line + 1, column = col + 1 }  -- Convert 0-indexed to 1-indexed
-  in case execProgramParserWithHintPass uri source of
-    Left _parseErrors ->
+  let pos = MkSrcPos { line = line + 1, column = col + 1 }  -- Convert 0-indexed to 1-indexed
+  in case checkWithImports emptyVFS source of
+    Left _errors ->
       "null"
-    Right (parsed, _hints, _) ->
-      let checkResult = doCheckProgram uri parsed
-      in case lookupInfoAtPos uri pos checkResult of
+    Right result ->
+      -- Create a CheckResult structure for the lookup function
+      let checkResult = MkCheckResult
+            { program = result.tcdModule
+            , errors = result.tcdErrors
+            , substitution = result.tcdSubstitution
+            , environment = result.tcdEnvironment
+            , entityInfo = result.tcdEntityInfo
+            , mixfixRegistry = result.tcdMixfixRegistry
+            , infoMap = result.tcdInfoMap
+            , scopeMap = result.tcdScopeMap
+            , nlgMap = result.tcdNlgMap
+            , descMap = result.tcdDescMap
+            }
+      -- Use the URI from type checking result to ensure infoMap lookup works
+      in case lookupInfoAtPos result.tcdUri pos checkResult of
         Nothing -> "null"
         Just hover -> encodeJson hover
 
@@ -469,38 +217,56 @@ l4SemanticTokens source =
 --
 -- If there are parse or type errors, returns diagnostics instead.
 l4Eval :: Text -> IO Text
-l4Eval source = do
-  let uri = toNormalizedUri (Uri "file:///wasm-input.l4")
-  case execProgramParserWithHintPass uri source of
-    Left parseErrors ->
-      -- Return parse errors as diagnostics
+l4Eval source =
+  case checkWithImports emptyVFS source of
+    Left errors ->
+      -- Return import/parse errors as diagnostics
       pure $ encodeJson $ Aeson.object
         [ "success" .= False
-        , "diagnostics" .= Vector.fromList (map parseErrorToDiagnostic (toList parseErrors))
+        , "diagnostics" .= Vector.fromList (map importErrorToDiagnostic errors)
         ]
-    Right (parsed, _hints, _parseWarnings) ->
-      let checkResult = doCheckProgram uri parsed
-      in if not (null checkResult.errors)
+    Right result ->
+      if not (null result.tcdErrors)
         then
           -- Return type check errors as diagnostics
           pure $ encodeJson $ Aeson.object
             [ "success" .= False
-            , "diagnostics" .= Vector.fromList (map checkErrorToDiagnostic checkResult.errors)
+            , "diagnostics" .= Vector.fromList (map checkErrorToDiagnostic result.tcdErrors)
             ]
         else do
-          -- Evaluate the module
+          -- First, evaluate all imported modules to build up the evaluation environment
           evalConfig <- EL.resolveEvalConfigWithSafeMode Nothing (lspDefaultPolicy defaultGraphVizOptions) True  -- safe mode = True
-          (_env, results) <- EL.execEvalModuleWithEnv evalConfig checkResult.entityInfo mempty checkResult.program
+          
+          -- Evaluate each import and collect their environments
+          -- We evaluate in order (dependencies first)
+          importEnv <- evaluateImports evalConfig result.tcdResolvedImports
+          
+          -- Now evaluate the main module with the combined import environment
+          (_env, results) <- EL.execEvalModuleWithEnv evalConfig result.tcdEntityInfo importEnv result.tcdModule
           pure $ encodeJson $ Aeson.object
             [ "success" .= True
             , "results" .= Vector.fromList (map evalResultToJson results)
             ]
 
+-- | Evaluate a list of resolved imports and combine their environments.
+-- Returns the combined evaluation environment.
+evaluateImports :: EL.EvalConfig -> [ResolvedImport] -> IO ValLazy.Environment
+evaluateImports _evalConfig [] = pure mempty
+evaluateImports evalConfig imports = do
+  -- Evaluate each import and collect environments
+  envs <- forM imports $ \ri -> do
+    let tcResult = ri.riTypeChecked
+    -- Evaluate this imported module (without any #EVAL directives of its own)
+    (env, _) <- EL.execEvalModuleWithEnv evalConfig tcResult.entityInfo mempty tcResult.program
+    pure env
+  -- Combine all environments (left-biased - later imports override earlier)
+  pure $ mconcat envs
+
 -- ----------------------------------------------------------------------------
 -- JavaScript FFI Exports (WASM backend only)
 -- ----------------------------------------------------------------------------
 
-
+#if defined(wasm32_HOST_ARCH)
 
 -- | Parse and type-check L4 source code.
 foreign export javascript "l4_check"
@@ -539,7 +305,39 @@ js_l4_eval source = do
   result <- l4Eval $ Text.pack $ fromJSString source
   pure $ toJSString $ Text.unpack result
 
+-- | Generate ladder diagram visualization for a specific function by name.
+foreign export javascript "l4_visualize_by_name"
+  js_l4_visualize_by_name :: JSString -> JSString -> Int -> JSString -> Bool -> IO JSString
 
+js_l4_visualize_by_name :: JSString -> JSString -> Int -> JSString -> Bool -> IO JSString
+js_l4_visualize_by_name source uri version functionName simplify = pure $ toJSString $ Text.unpack $
+  l4VisualizeByName (Text.pack $ fromJSString source) (Text.pack $ fromJSString uri) version (Text.pack $ fromJSString functionName) simplify
+
+-- | Get code lenses for all visualizable DECIDE rules.
+foreign export javascript "l4_code_lenses"
+  js_l4_code_lenses :: JSString -> JSString -> Int -> IO JSString
+
+js_l4_code_lenses :: JSString -> JSString -> Int -> IO JSString
+js_l4_code_lenses source uri version = pure $ toJSString $ Text.unpack $
+  l4CodeLenses (Text.pack $ fromJSString source) (Text.pack $ fromJSString uri) version
+
+-- | Go to definition at a position.
+foreign export javascript "l4_definition"
+  js_l4_definition :: JSString -> Int -> Int -> IO JSString
+
+js_l4_definition :: JSString -> Int -> Int -> IO JSString
+js_l4_definition source line col = pure $ toJSString $ Text.unpack $
+  l4Definition (Text.pack $ fromJSString source) line col
+
+-- | Find all references at a position.
+foreign export javascript "l4_references"
+  js_l4_references :: JSString -> Int -> Int -> IO JSString
+
+js_l4_references :: JSString -> Int -> Int -> IO JSString
+js_l4_references source line col = pure $ toJSString $ Text.unpack $
+  l4References (Text.pack $ fromJSString source) line col
+
+#endif
 
 -- ----------------------------------------------------------------------------
 -- Helper Functions
@@ -549,22 +347,20 @@ js_l4_eval source = do
 encodeJson :: Aeson.ToJSON a => a -> Text
 encodeJson = LazyText.toStrict . LazyText.decodeUtf8 . Aeson.encode
 
--- | Convert a parse error to an LSP diagnostic.
-parseErrorToDiagnostic :: PError -> Aeson.Value
-parseErrorToDiagnostic err =
+-- | Convert an import/resolution error to an LSP diagnostic.
+importErrorToDiagnostic :: Text -> Aeson.Value
+importErrorToDiagnostic errMsg =
   Aeson.object
-    [ "range" .= spanToJson err.range
+    [ "range" .= defaultRangeJson
     , "severity" .= (1 :: Int)  -- Error
-    , "message" .= err.message
+    , "message" .= errMsg
     , "source" .= ("l4" :: Text)
     ]
-
--- | Convert a SrcSpan to JSON (LSP Range format, 0-indexed).
-spanToJson :: SrcSpan -> Aeson.Value
-spanToJson srcSpan = Aeson.object
-  [ "start" .= posToJson srcSpan.start
-  , "end" .= posToJson srcSpan.end
-  ]
+  where
+    defaultRangeJson = Aeson.object
+      [ "start" .= Aeson.object ["line" .= (0 :: Int), "character" .= (0 :: Int)]
+      , "end" .= Aeson.object ["line" .= (0 :: Int), "character" .= (0 :: Int)]
+      ]
 
 -- | Convert a type check error to an LSP diagnostic.
 checkErrorToDiagnostic :: CheckErrorWithContext -> Aeson.Value
@@ -617,7 +413,7 @@ lookupInfoAtPos nuri pos result =
       Just $ infoToHover nuri result.substitution srcRange info
 
 -- | Convert type info to LSP hover format.
-infoToHover :: NormalizedUri -> L4.TypeCheck.Types.Substitution -> SrcRange -> Info -> Aeson.Value
+infoToHover :: NormalizedUri -> Substitution -> SrcRange -> Info -> Aeson.Value
 infoToHover nuri subst srcRange info = Aeson.object
   [ "contents" .= Aeson.object
       [ "kind" .= ("markdown" :: Text)
@@ -627,7 +423,7 @@ infoToHover nuri subst srcRange info = Aeson.object
   ]
 
 -- | Convert Info to display text.
-infoToText :: NormalizedUri -> L4.TypeCheck.Types.Substitution -> Info -> Text
+infoToText :: NormalizedUri -> Substitution -> Info -> Text
 infoToText nuri subst = \case
   TypeInfo ty _mTermKind ->
     prettyLayout (applyFinalSubstitution subst nuri ty)
@@ -670,6 +466,178 @@ prettyEvalResult (EL.Assertion True)       = "assertion satisfied"
 prettyEvalResult (EL.Assertion False)      = "assertion failed"
 prettyEvalResult (EL.Reduction (Left exc)) = Text.unlines (prettyEvalException exc)
 prettyEvalResult (EL.Reduction (Right v))  = prettyLayout v
+
+-- | Generate ladder diagram visualization data for a specific DECIDE rule by name.
+--
+-- Same as 'l4Visualize' but targets a specific function by name.
+-- Used for auto-refresh to update the currently selected function.
+--
+-- @
+-- // Success:
+-- {
+--   "verDocId": { "uri": "...", "version": 0 },
+--   "funDecl": { ... }
+-- }
+--
+-- // Error (function not found or not visualizable):
+-- {
+--   "error": "...",
+--   "notFound": true  // indicates function no longer exists
+-- }
+-- @
+l4VisualizeByName :: Text -> Text -> Int -> Text -> Bool -> Text
+l4VisualizeByName source uriText version functionName simplify =
+  case checkWithImports emptyVFS source of
+    Left errors ->
+      encodeJson $ Aeson.object
+        [ "error" .= Text.intercalate "; " errors
+        ]
+    Right result ->
+      if not (null result.tcdErrors)
+        then
+          encodeJson $ Aeson.object
+            [ "error" .= ("Type check error" :: Text)
+            ]
+        else
+          -- Use the URI from type checking result to ensure substitution lookup works correctly
+          case Ladder.visualizeByName result.tcdUri uriText version result.tcdModule result.tcdSubstitution simplify functionName of
+            Left Ladder.InvalidProgramNoDecidesFound ->
+              encodeJson $ Aeson.object
+                [ "error" .= ("Function '" <> functionName <> "' not found or not visualizable" :: Text)
+                , "notFound" .= True
+                ]
+            Left vizError ->
+              encodeJson $ Aeson.object
+                [ "error" .= Ladder.prettyPrintVizError vizError
+                ]
+            Right ladderInfo ->
+              encodeJson ladderInfo
+
+-- | Get code lenses for all visualizable DECIDE rules.
+--
+-- Returns JSON array of code lens objects for Monaco:
+--
+-- @
+-- [
+--   {
+--     "range": { "startLineNumber": 1, "startColumn": 1, "endLineNumber": 1, "endColumn": 1 },
+--     "command": {
+--       "id": "l4.visualize",
+--       "title": "Visualize",
+--       "arguments": [{ "uri": "...", "version": 0 }, "functionName", false]
+--     }
+--   }
+-- ]
+-- @
+l4CodeLenses :: Text -> Text -> Int -> Text
+l4CodeLenses source uriText version =
+  case checkWithImports emptyVFS source of
+    Left _errors ->
+      -- Parse/import errors - return empty array (diagnostics shown separately)
+      encodeJson ([] :: [Aeson.Value])
+    Right result ->
+      if not (null result.tcdErrors)
+        then
+          -- Type check errors - return empty array (diagnostics shown separately)
+          encodeJson ([] :: [Aeson.Value])
+        else
+          -- Use the URI from type checking result to ensure substitution lookup works correctly
+          let decides = Ladder.findAllVisualizableDecides result.tcdUri result.tcdModule result.tcdSubstitution
+              lenses = concatMap (mkCodeLenses uriText version) decides
+          in encodeJson lenses
+  where
+    mkCodeLenses :: Text -> Int -> Ladder.VisualizableDecide -> [Aeson.Value]
+    mkCodeLenses uriTxt ver vd =
+      -- Generate two code lenses: "Visualize" and "Simplify and visualize"
+      [ mkCodeLens uriTxt ver vd False
+      , mkCodeLens uriTxt ver vd True
+      ]
+
+    mkCodeLens :: Text -> Int -> Ladder.VisualizableDecide -> Bool -> Aeson.Value
+    mkCodeLens uriTxt ver vd simplify = Aeson.object
+      [ "range" .= Aeson.object
+          -- Monaco uses 1-indexed positions
+          [ "startLineNumber" .= vd.vdStartLine
+          , "startColumn" .= vd.vdStartCol
+          , "endLineNumber" .= vd.vdStartLine
+          , "endColumn" .= vd.vdStartCol
+          ]
+      , "command" .= Aeson.object
+          [ "id" .= ("l4.visualize" :: Text)
+          , "title" .= if simplify then ("Simplify and visualize" :: Text) else ("Visualize" :: Text)
+          , "arguments" .= 
+              [ Aeson.object [ "uri" .= uriTxt, "version" .= ver ]
+              , Aeson.String vd.vdName
+              , Aeson.Bool simplify
+              ]
+          ]
+      ]
+
+-- | Go to definition at a position.
+--
+-- Returns JSON-encoded location or null:
+--
+-- @
+-- // Found:
+-- {
+--   "range": {
+--     "start": { "line": 0, "character": 0 },
+--     "end": { "line": 0, "character": 10 }
+--   }
+-- }
+--
+-- // Not found:
+-- null
+-- @
+l4Definition :: Text -> Int -> Int -> Text
+l4Definition source line col =
+  let pos = MkSrcPos line col
+  in case checkWithImports emptyVFS source of
+    Left _errors -> "null"
+    Right result ->
+      case findDefinition pos result.tcdModule of
+        Nothing -> "null"
+        Just range -> encodeJson $ srcRangeToLspRange range
+
+-- | Find all references at a position.
+--
+-- Returns JSON-encoded array of locations:
+--
+-- @
+-- [
+--   {
+--     "range": {
+--       "start": { "line": 0, "character": 0 },
+--       "end": { "line": 0, "character": 10 }
+--     }
+--   }
+-- ]
+-- @
+l4References :: Text -> Int -> Int -> Text
+l4References source line col =
+  let pos = MkSrcPos line col
+  in case checkWithImports emptyVFS source of
+    Left _errors -> encodeJson ([] :: [Aeson.Value])
+    Right result ->
+      let ranges = findReferences pos result.tcdModule
+          locs = map srcRangeToLspRange ranges
+      in encodeJson locs
+
+-- | Convert a SrcRange to LSP range format (0-indexed).
+srcRangeToLspRange :: SrcRange -> Aeson.Value
+srcRangeToLspRange (MkSrcRange (MkSrcPos startLine startCol) (MkSrcPos endLine endCol) _ _) =
+  Aeson.object
+    [ "range" .= Aeson.object
+        [ "start" .= Aeson.object
+            [ "line" .= (startLine - 1)  -- Convert to 0-indexed
+            , "character" .= (startCol - 1)
+            ]
+        , "end" .= Aeson.object
+            [ "line" .= (endLine - 1)
+            , "character" .= (endCol - 1)
+            ]
+        ]
+    ]
 
 -- | Encode lexer tokens as LSP semantic tokens.
 --
@@ -726,4 +694,3 @@ tokenToSemanticType tok = case tok.payload of
   TSpaces _ -> Nothing
   TSymbols _ -> Nothing
   TDirectives _ -> Nothing
-

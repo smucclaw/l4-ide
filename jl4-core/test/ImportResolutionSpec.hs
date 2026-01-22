@@ -5,7 +5,7 @@ module ImportResolutionSpec (spec) where
 import Test.Hspec
 import Data.Text (Text)
 import qualified Data.Text as Text
-import L4.Wasm.Import
+import L4.API.VirtualFS
 import qualified Data.Map.Strict as Map
 
 spec :: Spec

@@ -1,12 +1,12 @@
 {-# LANGUAGE TemplateHaskell #-}
 -- | Template Haskell helpers for embedding L4 libraries.
 --
--- This module is separate from 'L4.Wasm.EmbeddedLibraries' to satisfy
+-- This module is separate from 'L4.API.EmbeddedLibraries' to satisfy
 -- GHC's stage restriction (TH helpers must be defined in a separate module
 -- from where they're used in splices).
 --
 -- @since 0.1
-module L4.Wasm.EmbeddedLibraries.TH
+module L4.API.EmbeddedLibraries.TH
   ( embedLibrariesFromDir
   , embedOneLibrary
   ) where
