@@ -29,6 +29,113 @@ EVERY Person p
 
 This mirrors how legal rules are actually written: "Every person who..." or "Any driver who..." rather than "Given a person p, the party p, if p has some property..."
 
+## Legislative Mode vs Contract Mode
+
+L4 supports two distinct styles of regulative rules, corresponding to two different legal paradigms:
+
+### Contract Mode: Explicit State Machines
+
+Contracts are bilateral or multilateral agreements between **named parties**. The obligations form an explicit state machine connected by `HENCE` and `LEST`:
+
+```l4
+§ `Sale Agreement`
+PARTY buyer
+ MUST `pay` purchasePrice
+WITHIN 30 days
+HENCE PARTY seller
+       MUST `deliver` goods
+      WITHIN 14 days
+      HENCE FULFILLED
+      LEST  PARTY buyer MAY `claim refund`
+LEST  BREACH
+```
+
+**Characteristics:**
+- Parties are named and finite (Alice, Bob, Acme Corp)
+- Rules are connected via explicit `HENCE`/`LEST` transitions
+- Execution follows the state machine: "What happens next?"
+- The contract has a lifecycle (pending → active → fulfilled/breached)
+
+### Legislative Mode: Predicate-Based Applicability
+
+Legislation and regulations apply to **open classes of entities** who satisfy predicates. Rules are typically independent - they don't chain to each other via `HENCE`/`LEST`:
+
+```l4
+§ `Income Tax Act s.10`
+EVERY Person p
+  WHO p's annualIncome > 50000
+ MUST `file tax return`
+WITHIN `April 15 of following year`
+
+§ `Road Traffic Act s.63`
+EVERY Driver d
+  WHO `exceeds speed limit` d
+ MUST `pay fine` (speedingFine d)
+WITHIN 30 days
+LEST `license suspended`
+
+§ `Education Act s.4`
+EVERY Person p
+  WHO p's age >= 6 AND p's age <= 16
+ MUST `attend school`
+```
+
+**Characteristics:**
+- Subjects are open classes (any person, any driver, any business)
+- Rules fire independently based on predicate satisfaction
+- No explicit state machine connecting rules
+- Query direction: "What rules apply to me?"
+- Rules may have individual `LEST` consequences but rarely chain via `HENCE`
+
+### Comparison
+
+| Aspect | Contract Mode | Legislative Mode |
+|--------|---------------|------------------|
+| **Parties** | Named, finite | Open class, potentially infinite |
+| **Activation** | UPON events, HENCE chains | Predicate satisfaction |
+| **State machine** | Explicit transitions | Implicit (rules fire when applicable) |
+| **Query direction** | "What happens next?" | "What rules apply to entity X?" |
+| **HENCE/LEST** | Connect rules to each other | Usually terminal (BREACH, penalty) |
+| **Typical keyword** | `PARTY alice` | `EVERY Person p WHO ...` |
+
+### Mixed Mode
+
+Real-world legal instruments often mix both modes. A regulation might define class-based obligations that, when triggered, create contract-like state machines:
+
+```l4
+-- Legislative: applies to a class
+§ `Tax Assessment`
+EVERY Person p
+  WHO `owes back taxes` p
+ MUST `pay assessment`
+WITHIN 60 days
+-- Contract-like continuation for this specific person
+HENCE PARTY p
+       MAY `request payment plan`
+      WITHIN 30 days
+      HENCE `payment plan for` p
+      LEST  `full payment required`
+LEST  `enforcement action against` p
+```
+
+The `EVERY...WHO` syntax is primarily designed for legislative mode, but as shown above, it can introduce a named party `p` that then participates in contract-mode `HENCE`/`LEST` chains.
+
+### Execution Semantics
+
+**Contract mode** execution:
+1. Start at initial state
+2. Wait for events / party actions
+3. Evaluate guards, transition via HENCE/LEST
+4. Repeat until terminal state (FULFILLED/BREACH)
+
+**Legislative mode** execution:
+1. Given an entity X, find all `EVERY` rules where X matches the type
+2. Evaluate each rule's `WHO` predicate for X
+3. Return list of applicable obligations/permissions/prohibitions
+4. No automatic chaining between rules
+
+The evaluator needs to support both modes. Contract mode is trace-based (following a history of events). Legislative mode is query-based (given facts, what applies?).
+
 ## Syntax
 
 ### Grammar
