@@ -28,7 +28,7 @@ This single sentence requires L4 to express:
 4. **Netting arithmetic** - the new obligation amount is computed from canceled obligations
 5. **All happening simultaneously** - no intermediate states
 
-Current L4 regulative syntax can express individual obligations, but cannot express these *operations on* obligations because:
+Current L4 regulative syntax can express individual obligations, but cannot express these _operations on_ obligations because:
 
 - Obligations exist only as **static syntax** (AST nodes like `PARTY p MUST action`), not as **runtime values** that can be inspected, filtered, or transformed
 - There is no mechanism to refer to "all obligations matching criteria X"
@@ -275,7 +275,7 @@ Common legal formulations:
 
 **This requirement is optional for initial implementation but represents the full vision of homoiconicity.**
 
-Beyond treating obligations as runtime values, full homoiconicity would allow introspection and manipulation of the *regulative rule graph itself* - the HENCE/LEST state machine structure:
+Beyond treating obligations as runtime values, full homoiconicity would allow introspection and manipulation of the _regulative rule graph itself_ - the HENCE/LEST state machine structure:
 
 ```
 rules : RuleGraph
@@ -310,7 +310,7 @@ PARTY Commissioner
       MODIFY rule's deadline BY extensionDays
 ```
 
-This is a deeper level of reflection than the obligation registry (R2) - it operates on the *structure of the contract* rather than just the *active obligations* created by executing that structure.
+This is a deeper level of reflection than the obligation registry (R2) - it operates on the _structure of the contract_ rather than just the _active obligations_ created by executing that structure.
 
 ## Proposed Syntax
 
