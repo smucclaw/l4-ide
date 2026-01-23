@@ -63,6 +63,8 @@ Contracts compose via:
 - **Conjunction** (AND) — Both sub-contracts must be fulfilled
 - **Disjunction** (OR) — At least one sub-contract must be fulfilled
 
+The elementary unit of a sub-contract is a _deonton_. (We made up this word, based on "deontic" logic.)
+
 ### 1.3 From CSL to L4
 
 L4 implements CSL's semantics with more readable syntax:
@@ -79,13 +81,13 @@ L4 implements CSL's semantics with more readable syntax:
 
 ---
 
-## 2. Regulative Rules (Deontics)
+## 2. Regulative Rules (Deontons)
 
-Regulative rules express what parties **must**, **must not**, or **may** do. In deontic logic, these correspond to obligations, prohibitions, and permissions. L4 calls these rules _deontics_ (from Greek _deon_ = duty).
+Regulative rules express what parties **must**, **must not**, or **may** do. In deontic logic, these correspond to obligations, prohibitions, and permissions. Each such rule is a _deonton_ (plural: _deontons_).
 
 ### 2.1 Obligations with MUST
 
-The most common deontic is an **obligation** — something a party must do. An L4 obligation has this structure:
+The most common deonton is an **obligation** — something a party must do. An L4 obligation has this structure:
 
 ```l4
 PARTY   <who>
@@ -148,13 +150,13 @@ MUST `pay amount`
 
 ### 2.4 Termination States
 
-Every deontic chain must eventually terminate in one of:
+Every deonton chain must eventually terminate in one of:
 
 - **FULFILLED** — The contract completed successfully
 - **Another obligation** — The chain continues
 - **Implicit breach** — If LEST is omitted and the deadline passes, the contract breaches
 
-### 2.5 Recursive Deontics
+### 2.5 Recursive Deontons
 
 For repeating obligations (like monthly payments), use recursion:
 
