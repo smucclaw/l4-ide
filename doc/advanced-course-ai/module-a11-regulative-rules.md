@@ -150,13 +150,13 @@ MUST `pay amount`
 
 ### 2.4 Termination States
 
-Every deonton chain must eventually terminate in one of:
+Every deontic chain must eventually terminate in one of:
 
 - **FULFILLED** — The contract completed successfully
 - **Another obligation** — The chain continues
 - **Implicit breach** — If LEST is omitted and the deadline passes, the contract breaches
 
-### 2.5 Recursive Deontons
+### 2.5 Recursive Deontics
 
 For repeating obligations (like monthly payments), use recursion:
 
