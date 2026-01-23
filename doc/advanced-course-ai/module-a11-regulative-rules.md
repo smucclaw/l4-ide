@@ -79,11 +79,13 @@ L4 implements CSL's semantics with more readable syntax:
 
 ---
 
-## 2. The Obligation Pattern
+## 2. Regulative Rules (Deontics)
 
-### 2.1 Basic Structure
+Regulative rules express what parties **must**, **must not**, or **may** do. In deontic logic, these correspond to obligations, prohibitions, and permissions. L4 calls these rules _deontics_ (from Greek _deon_ = duty).
 
-An L4 obligation has this structure:
+### 2.1 Obligations with MUST
+
+The most common deontic is an **obligation** — something a party must do. An L4 obligation has this structure:
 
 ```l4
 PARTY   <who>
@@ -101,7 +103,32 @@ Each component:
 - **HENCE** — The continuation clause. What obligations arise after fulfillment?
 - **LEST** — The reparation clause. What happens if the deadline is missed?
 
-### 2.2 Action Constraints
+### 2.2 The DEONTIC Landscape
+
+L4 supports three deontic modalities:
+
+| Keyword     | Meaning     | HENCE triggers when...       | LEST triggers when...           |
+| ----------- | ----------- | ---------------------------- | ------------------------------- |
+| `MUST`      | Obligation  | action is taken on time      | deadline passes without action  |
+| `MUST NOT`  | Prohibition | deadline passes (respected)  | forbidden action is taken       |
+| `SHANT`     | Prohibition | deadline passes (respected)  | forbidden action is taken       |
+| `MAY`       | Permission  | action is taken (optional)   | deadline passes (no penalty)    |
+
+**Note:** `SHANT` is a synonym for `MUST NOT`, offering a more traditional legal drafting style.
+
+The key insight: for prohibitions (`MUST NOT`/`SHANT`), the polarity is flipped compared to obligations. This matches natural English:
+
+```l4
+-- Obligation: "You must pay, lest you face penalties"
+PARTY Borrower MUST pay WITHIN 30 LEST ...penalty...
+
+-- Prohibition: "Don't smoke, lest you face consequences"
+PARTY Employee SHANT smoke WITHIN 365 LEST ...consequence...
+```
+
+For detailed coverage of prohibitions, see [Section 7](#7-prohibitions-with-must-not--shant).
+
+### 2.3 Action Constraints
 
 Actions can be constrained in two ways:
 
@@ -119,15 +146,15 @@ MUST `pay amount`
          `Amount Transferred` AT LEAST `Minimum Payment`
 ```
 
-### 2.3 Termination States
+### 2.4 Termination States
 
-Every obligation chain must eventually terminate in one of:
+Every deontic chain must eventually terminate in one of:
 
 - **FULFILLED** — The contract completed successfully
 - **Another obligation** — The chain continues
 - **Implicit breach** — If LEST is omitted and the deadline passes, the contract breaches
 
-### 2.4 Recursive Obligations
+### 2.5 Recursive Deontics
 
 For repeating obligations (like monthly payments), use recursion:
 
