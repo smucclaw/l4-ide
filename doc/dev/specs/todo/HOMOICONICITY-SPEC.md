@@ -271,6 +271,47 @@ Common legal formulations:
 - "Party A shall cause [Subsidiary] to perform Y"
 - "Party A undertakes to ensure that [Affiliate] complies with Z"
 
+### R10: Rule Graph Introspection (Stretch Goal)
+
+**This requirement is optional for initial implementation but represents the full vision of homoiconicity.**
+
+Beyond treating obligations as runtime values, full homoiconicity would allow introspection and manipulation of the *regulative rule graph itself* - the HENCE/LEST state machine structure:
+
+```
+rules : RuleGraph
+queryRules : (Rule -> Boolean) -> RuleGraph -> LIST OF Rule
+transitions : Rule -> LIST OF (Condition, Rule)  -- HENCE/LEST edges
+```
+
+This would enable:
+
+- **Rule queries:** "Find all rules that could create obligations of type X"
+- **Graph traversal:** "What states are reachable from this rule via HENCE transitions?"
+- **Meta-rules:** Rules that inspect or modify other rules (like the Commissioner deadline extension example)
+- **Impact analysis:** "Which rules would be affected if this obligation type changes?"
+
+Example use cases:
+
+```l4
+-- Find all rules that could lead to breach
+GIVEN ruleGraph IS A RuleGraph
+GIVETH A LIST OF Rule
+`rules leading to breach` MEANS
+    FILTER ruleGraph's rules BY
+        EXISTS transition IN rule's transitions
+        WHERE transition's target EQUALS BREACH
+
+-- The Commissioner example from regulative.md, fully homoiconic
+§ `Commissioner Deadline Extension`
+PARTY Commissioner
+  MAY POWER
+    WHEN `application for extension` applicant
+    FOR EACH rule IN `rules with tight deadlines` applicant ruleGraph
+      MODIFY rule's deadline BY extensionDays
+```
+
+This is a deeper level of reflection than the obligation registry (R2) - it operates on the *structure of the contract* rather than just the *active obligations* created by executing that structure.
+
 ## Proposed Syntax
 
 ### Obligation Type Declaration
