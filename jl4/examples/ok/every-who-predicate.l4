@@ -1,0 +1,14 @@
+-- Test: EVERY with WHO clause using predicate form
+-- The predicate is automatically applied to the bound variable
+
+IMPORT prelude
+
+DECLARE Person HAS
+    age IS A NUMBER
+
+GIVEN `is adult` IS A FUNCTION FROM Person TO BOOLEAN
+DECIDE `is adult` p MEANS p's age >= 18
+
+EVERY Person p
+  WHO `is adult`
+ MUST `pay taxes`

@@ -1,0 +1,11 @@
+-- Test: EVERY combined with GIVEN for additional parameters
+
+IMPORT prelude
+
+DECLARE Person HAS
+    balance IS A NUMBER
+
+GIVEN amount IS A NUMBER
+EVERY Person p
+  WHO p's balance >= amount
+  MAY `withdraw` amount

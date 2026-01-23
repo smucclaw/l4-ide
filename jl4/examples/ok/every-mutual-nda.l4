@@ -1,0 +1,19 @@
+-- Test: EVERY for symmetric mutual obligations (Mutual NDA pattern)
+
+IMPORT prelude
+
+DECLARE SigningParty IS ONE OF PartyA, PartyB
+
+DECLARE ConfidentialInfo
+
+GIVEN `confidential info of` IS A FUNCTION FROM SigningParty TO ConfidentialInfo
+      `other party` IS A FUNCTION FROM SigningParty TO SigningParty
+
+DECIDE `other party` p MEANS
+  CONSIDER p
+    WHEN PartyA THEN PartyB
+    WHEN PartyB THEN PartyA
+
+EVERY SigningParty p
+ MUST `keep confidential` (`confidential info of` (`other party` p))
+LEST BREACH

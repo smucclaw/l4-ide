@@ -1,0 +1,13 @@
+-- Test: EVERY with HENCE and LEST continuations
+-- The bound variable should be in scope for continuations
+
+IMPORT prelude
+
+DECLARE Person HAS
+    age IS A NUMBER
+
+EVERY Person p
+  WHO p's age >= 18
+ MUST `file tax return`
+HENCE `taxes filed for` p
+LEST  `penalty for` p

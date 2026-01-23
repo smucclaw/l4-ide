@@ -1,0 +1,11 @@
+-- Test: WHO clause with non-boolean expression (should fail)
+-- Error: WHO clause must have type BOOLEAN
+
+IMPORT prelude
+
+DECLARE Person HAS
+    name IS A STRING
+
+EVERY Person p
+  WHO p's name   -- STRING, not BOOLEAN
+ MUST `exist`
