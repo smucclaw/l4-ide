@@ -160,15 +160,17 @@ This example demonstrates why L4 needs to support arbitrarily nested powers: rea
 
 ## Requirements
 
-### R1: Obligations as Values
+### R1: Deontic Positions as Values
 
-Obligations must be representable as L4 values with a concrete type:
+Deontic positions (obligations, permissions, prohibitions) must be representable as L4 values with a concrete type:
 
 ```
-Obligation : Type
+DEONTIC : Type
 ```
 
-An obligation value should capture:
+> **Implementation note:** Internally, this is represented by the Haskell type `Deonton` (from Greek δέον "duty" + -on suffix, analogous to "electron" or "photon" as an atomic unit of normative content). The surface type `PROVISION` remains as a deprecated alias for backward compatibility.
+
+A deontic value should capture:
 
 - The obligor (who must perform)
 - The obligee (who is owed performance)
@@ -177,54 +179,54 @@ An obligation value should capture:
 - The current state (pending, performed, breached, discharged)
 - Provenance (which rule or transaction created it)
 
-### R2: Collections of Obligations
+### R2: Collections of Deontic Positions
 
 L4 must support:
 
-- `LIST OF Obligation` - ordered collections
-- Filtering: select obligations matching criteria
-- Aggregation: sum amounts, count obligations
+- `LIST OF DEONTIC` - ordered collections
+- Filtering: select deontic positions matching criteria
+- Aggregation: sum amounts, count entries
 - Grouping: group by currency, value date, counterparty
 
-### R3: Obligation Creation
+### R3: Deontic Position Creation
 
-L4 must support creating new obligations programmatically:
+L4 must support creating new deontic positions programmatically:
 
 ```
-createObligation : Party -> Party -> Action -> Deadline -> Obligation
+createDeontic : Party -> Party -> Action -> Deadline -> DEONTIC
 ```
 
 This is the "reification" direction: turning rule specifications into runtime values.
 
-### R4: Obligation Cancellation/Discharge
+### R4: Deontic Position Cancellation/Discharge
 
-L4 must support marking obligations as discharged:
-
-```
-discharge : Obligation -> DischargeReason -> DischargedObligation
-cancel : Obligation -> CancellationReason -> CancelledObligation
-```
-
-### R5: Obligation Introspection
-
-L4 must support inspecting obligation properties:
+L4 must support marking deontic positions as discharged:
 
 ```
-obligor : Obligation -> Party
-obligee : Obligation -> Party
-amount : Obligation -> Number  (where applicable)
-deadline : Obligation -> Date
-status : Obligation -> ObligationStatus
+discharge : DEONTIC -> DischargeReason -> DischargedDeontic
+cancel : DEONTIC -> CancellationReason -> CancelledDeontic
 ```
 
-### R6: Obligation Composition
+### R5: Deontic Position Introspection
 
-L4 must support combining obligations:
+L4 must support inspecting deontic position properties:
 
 ```
-net : Obligation -> Obligation -> NettingResult
-combine : LIST OF Obligation -> Obligation
-split : Obligation -> Number -> (Obligation, Obligation)
+obligor : DEONTIC -> Party
+obligee : DEONTIC -> Party
+amount : DEONTIC -> Number  (where applicable)
+deadline : DEONTIC -> Date
+status : DEONTIC -> DeonticStatus
+```
+
+### R6: Deontic Position Composition
+
+L4 must support combining deontic positions:
+
+```
+net : DEONTIC -> DEONTIC -> NettingResult
+combine : LIST OF DEONTIC -> DEONTIC
+split : DEONTIC -> Number -> (DEONTIC, DEONTIC)
 ```
 
 ### R7: Automatic Effects
@@ -314,11 +316,11 @@ This is a deeper level of reflection than the obligation registry (R2) - it oper
 
 ## Proposed Syntax
 
-### Obligation Type Declaration
+### Deontic Type Declaration
 
 ```l4
--- Obligations become a built-in or declarable type
-DECLARE Obligation OF ActionType HAS
+-- Deontic positions become a built-in type (internal Haskell type: Deonton)
+DECLARE DEONTIC OF ActionType HAS
     obligor  IS A Party
     obligee  IS A Party
     action   IS AN ActionType
@@ -333,11 +335,11 @@ DECLARE ObligationStatus IS ONE OF
     Cancelled  HAS reason IS A CancellationReason
 ```
 
-### Obligation Literals / Constructors
+### Deontic Literals / Constructors
 
 ```l4
--- Creating an obligation value (reification)
-OBLIGATION
+-- Creating a deontic value (reification)
+DEONTIC
     FROM partyA
     TO partyB
     DO DeliverCurrency USD 1000000
@@ -347,7 +349,7 @@ OBLIGATION
 Or equivalently using record syntax:
 
 ```l4
-Obligation WITH
+DEONTIC WITH
     obligor IS partyA
     obligee IS partyB
     action IS DeliverCurrency USD 1000000
@@ -754,33 +756,33 @@ PARTY contract TERMINATES
 
 ### Evaluation Model Changes
 
-#### From Static to Dynamic Obligation Tracking
+#### From Static to Dynamic Deontic Tracking
 
-Current L4 treats regulative rules as a static labeled transition system compiled from source. The proposed extension requires a **runtime obligation registry**:
+Current L4 treats regulative rules as a static labeled transition system compiled from source. The proposed extension requires a **runtime deontic registry**:
 
-```
-type ObligationRegistry = Map ObligationId Obligation
+```haskell
+type DeontRegistry = Map DeontId Deonton
 
 data EvalState = MkEvalState
-  { esObligations :: ObligationRegistry
+  { esDeonts :: DeontRegistry
   , esTrace :: [Event]
   , esTime :: Time
   }
 ```
 
-Obligations are created, modified, and removed during evaluation:
+Deontic positions are created, modified, and removed during evaluation:
 
 ```haskell
-createObligation :: Obligation -> EvalM ObligationId
-createObligation obl = do
+createDeont :: Deonton -> EvalM DeontId
+createDeont deont = do
   id <- freshId
-  modify (\s -> s { esObligations = Map.insert id obl (esObligations s) })
+  modify (\s -> s { esDeonts = Map.insert id deont (esDeonts s) })
   return id
 
-cancelObligation :: ObligationId -> CancellationReason -> EvalM ()
-cancelObligation id reason = do
-  modify (\s -> s { esObligations =
-    Map.adjust (\o -> o { status = Cancelled reason }) id (esObligations s) })
+cancelDeont :: DeontId -> CancellationReason -> EvalM ()
+cancelDeont id reason = do
+  modify (\s -> s { esDeonts =
+    Map.adjust (\d -> d { status = Cancelled reason }) id (esDeonts s) })
 ```
 
 #### Automatic Effect Evaluation
@@ -815,29 +817,29 @@ WHEN EXISTS obl IN currentObligations
 
 ### Type System Implications
 
-#### Obligation as a Parameterized Type
+#### DEONTIC as a Parameterized Type
 
-Obligations should be parameterized by their action type for type safety:
+Deontic positions should be parameterized by their action type for type safety:
 
 ```l4
-Obligation : ActionType -> Type
+DEONTIC : ActionType -> Type
 
 -- Type-safe: currency obligations can only net with currency obligations
-netCurrencyObligations :
-    Obligation DeliverCurrency ->
-    Obligation DeliverCurrency ->
+netCurrencyDeontics :
+    DEONTIC DeliverCurrency ->
+    DEONTIC DeliverCurrency ->
     NettingResult DeliverCurrency
 ```
 
 #### Effect Typing
 
-Effects that create/cancel obligations need effect typing to track what changes:
+Effects that create/cancel deontic positions need effect typing to track what changes:
 
 ```haskell
 data Effect
-  = CreateObligation Obligation
-  | CancelObligation ObligationId CancellationReason
-  | ModifyObligation ObligationId (Obligation -> Obligation)
+  = CreateDeont Deonton
+  | CancelDeont DeontId CancellationReason
+  | ModifyDeont DeontId (Deonton -> Deonton)
 
 -- A rule's effect type signature
 type AutoRule = Condition -> [Effect]
@@ -912,36 +914,36 @@ MAY POWER
 
 ## Implementation Considerations
 
-### Phase 1: Obligation Values (Foundation)
+### Phase 1: Deontic Values (Foundation)
 
-1. **Add `Obligation` type to type system**
+1. **Add `DEONTIC` type to type system** (internal Haskell: `Deonton`)
 
    - Parameterized by action type
    - Include all required fields (obligor, obligee, action, deadline, status)
 
-2. **Add obligation literals/constructors**
+2. **Add deontic literals/constructors**
 
-   - Parser support for `OBLIGATION FROM ... TO ... DO ... BY ...`
-   - Type checking for obligation construction
+   - Parser support for `DEONTIC FROM ... TO ... DO ... BY ...`
+   - Type checking for deontic construction
 
-3. **Add obligation introspection**
+3. **Add deontic introspection**
    - Field accessors (`obl's obligor`, etc.)
    - Status checks (`obl IS Pending`, etc.)
 
 **Estimated effort:** ~500 LOC parser, ~300 LOC type checker, ~200 LOC evaluator
 
-### Phase 2: Obligation Collections
+### Phase 2: Deontic Collections
 
 1. **Collection operations**
 
-   - `FILTER obligations BY condition`
-   - `MAP function obligations`
+   - `FILTER deontics BY condition`
+   - `MAP function deontics`
    - `SUM/COUNT` aggregations
    - `GROUP BY` operations
 
-2. **Obligation registry in runtime state**
-   - Track active obligations
-   - Query obligations by criteria
+2. **Deontic registry in runtime state**
+   - Track active deontic positions
+   - Query deontics by criteria
 
 **Estimated effort:** ~400 LOC
 
@@ -977,7 +979,7 @@ MAY POWER
 
 **Estimated effort:** ~600 LOC
 
-### Phase 5: Procure Obligations
+### Phase 5: Procure Deontics
 
 1. **Procure syntax and parsing**
 
@@ -985,10 +987,10 @@ MAY POWER
    - Effort level modifiers `STRICT`, `BEST EFFORTS`, `REASONABLE EFFORTS`
    - Nested procure for multi-tier scenarios
 
-2. **Procure obligation type**
+2. **Procure deontic type**
 
-   - `ProcureObligation` as specialized `Obligation` subtype
-   - Link to underlying obligation
+   - `ProcureDeonton` as specialized `Deonton` subtype
+   - Link to underlying deontic position
    - Effort level tracking
 
 3. **Procure-specific HENCE/LEST semantics**

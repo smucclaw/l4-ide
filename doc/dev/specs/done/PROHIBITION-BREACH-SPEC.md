@@ -383,7 +383,7 @@ data DeonticModal = Must | May | MustNot
 data Clause n
   = Fulfilled
   | Breach (BreachInfo n)  -- NEW
-  | Obligation ...
+  | Deonton ...
   | ...
 
 data BreachInfo n = MkBreachInfo
@@ -401,8 +401,8 @@ data BreachInfo n = MkBreachInfo
 Transform `MUST NOT` to the equivalent external choice:
 
 ```haskell
-desugarMustNot :: Obligation n -> Clause n
-desugarMustNot obl@MkObligation{..} =
+desugarMustNot :: Deonton n -> Clause n
+desugarMustNot obl@MkDeonton{..} =
   ExternalChoice
     { ecAction    = oblAction
     , ecCondition = oblCondition
@@ -474,11 +474,11 @@ evalClause (Breach bi) = do
 describe "MUST NOT parsing" $ do
   it "parses MUST NOT with two tokens" $ do
     parse "PARTY p MUST NOT action WITHIN 30"
-      `shouldParseTo` Obligation { oblModal = MustNot, ... }
+      `shouldParseTo` Deonton { deonModal = MustNot, ... }
 
   it "parses SHANT as equivalent" $ do
     parse "PARTY p SHANT action WITHIN 30"
-      `shouldParseTo` Obligation { oblModal = MustNot, ... }
+      `shouldParseTo` Deonton { deonModal = MustNot, ... }
 
   it "parses BREACH as terminal" $ do
     parse "LEST BREACH"
@@ -526,7 +526,7 @@ describe "MUST NOT semantics" $ do
       |]
     -- Disclosure triggers penalty obligation
     let result = evaluate contract [(Day 15, Disclose)]
-    result `shouldSatisfy` isObligation "pay penalty"
+    result `shouldSatisfy` isDeonton "pay penalty"
 ```
 
 ### Integration with #TRACE

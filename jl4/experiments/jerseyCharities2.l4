@@ -44,7 +44,7 @@ DECLARE AppellantType IS ONE OF
   CharityAppellant
   ThirdPartyAppellant
 
--- Actor and Action types for PROVISION syntax
+-- Actor and Action types for DEONTIC syntax
 DECLARE Actor IS ONE OF
    Charity HAS entry IS A RegisterEntry
    CommissionerActor
@@ -786,9 +786,9 @@ GIVETH A BOOLEAN
     `days between dates` (appeal's appealDeadline) (appeal's submissionDate) < 14
 
 -- ======================================================================
--- SECTION B3: PROVISION-BASED TEMPORAL PROCESSES
+-- SECTION B3: DEONTIC-BASED TEMPORAL PROCESSES
 -- ======================================================================
--- These PROVISION implementations provide better temporal modeling than
+-- These DEONTIC implementations provide better temporal modeling than
 -- boolean-based deontic rules for multi-step processes with deadlines
 
 -- ALTERNATIVES TO DUMMY REGISTERENTRY OBJECTS:
@@ -822,7 +822,7 @@ GIVETH A BOOLEAN
 
 -- Appeal Process Contract (Arts 35-37, Law 2014 + R&O 102/2020) - OPTION 2 IMPLEMENTATION
 GIVEN appeal IS A Appeal
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 `tribunal must consider appeal` MEANS
   PARTY Tribunal
   -- OPTION 2: Using ProcessAppeal - no dummy RegisterEntry needed
@@ -831,7 +831,7 @@ GIVETH A PROVISION Actor Action
   HENCE `appeal decision served` appeal
 
 GIVEN appeal IS A Appeal
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 `appeal decision served` MEANS
   PARTY Tribunal
   -- OPTION 2: Using ProcessTribunalDecision for decision notification
@@ -840,7 +840,7 @@ GIVETH A PROVISION Actor Action
   HENCE `appeal process concluded` appeal
 
 GIVEN appeal IS A Appeal
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 `appeal process concluded` MEANS
   PARTY Tribunal
   -- OPTION 2: Final appeal processing using ProcessAppeal
@@ -851,7 +851,7 @@ GIVETH A PROVISION Actor Action
 -- Required Steps Notice Process (Art 27, Law 2014)
 GIVEN charity IS A RegisterEntry
       grounds IS A LIST OF STRING
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 `required steps notice process` MEANS
   PARTY CommissionerActor
   MUST IssueRequiredStepsNotice charity
@@ -861,7 +861,7 @@ GIVETH A PROVISION Actor Action
 
 GIVEN charity IS A RegisterEntry
       grounds IS A LIST OF STRING
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 `charity must respond to required steps` MEANS
   PARTY Charity charity
   MUST ComplyWithNotice charity TRUE
@@ -871,7 +871,7 @@ GIVETH A PROVISION Actor Action
         ELSE `commissioner may deregister` charity
 
 GIVEN charity IS A RegisterEntry
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 `commissioner may deregister` MEANS
   IF TRUE  -- condition for deregistration
   THEN PARTY CommissionerActor
@@ -884,7 +884,7 @@ GIVETH A PROVISION Actor Action
 GIVEN governor IS A Person
       charity IS A RegisterEntry
       misconductType IS A STRING
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 `governor misconduct process` MEANS
   PARTY CommissionerActor
   MUST ProcessApplication charity "INVESTIGATE_MISCONDUCT"
@@ -896,7 +896,7 @@ GIVETH A PROVISION Actor Action
 GIVEN governor IS A Person
       charity IS A RegisterEntry
       misconductType IS A STRING
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 `suspend governor process` MEANS
   PARTY CommissionerActor
   MUST SuspendGovernor governor charity misconductType
@@ -905,7 +905,7 @@ GIVETH A PROVISION Actor Action
 
 GIVEN governor IS A Person
       charity IS A RegisterEntry
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 `suspension notice served` MEANS
   PARTY CommissionerActor
   MUST ServeNotice (Governor governor)
@@ -915,7 +915,7 @@ GIVETH A PROVISION Actor Action
   HENCE `governor may appeal suspension` governor
 
 GIVEN governor IS A Person
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 `governor may appeal suspension` MEANS
   PARTY Governor governor
   MUST FileAppeal (Appeal "GOV001" CharityAppellant commencement commencement (addDays commencement 28) FALSE FALSE)
@@ -924,7 +924,7 @@ GIVETH A PROVISION Actor Action
 
 -- Supporting Contract Functions
 GIVEN charity IS A RegisterEntry
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 `registration approved` MEANS
   PARTY CommissionerActor
   MUST ProcessApplication charity "APPROVE"
@@ -932,7 +932,7 @@ GIVETH A PROVISION Actor Action
   HENCE `charity registered successfully` charity
 
 GIVEN charity IS A RegisterEntry
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 `return processed successfully` MEANS
   PARTY CommissionerActor
   MUST ProcessApplication charity "RETURN_PROCESSED"
@@ -940,7 +940,7 @@ GIVETH A PROVISION Actor Action
   HENCE `annual return cycle complete` charity
 
 GIVEN charity IS A RegisterEntry
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 `compliance achieved` MEANS
   PARTY CommissionerActor
   MUST ProcessApplication charity "COMPLIANCE_NOTED"
@@ -948,7 +948,7 @@ GIVETH A PROVISION Actor Action
   HENCE `compliance cycle complete` charity
 
 GIVEN charity IS A RegisterEntry
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 `required steps satisfied` MEANS
   PARTY CommissionerActor
   MUST ProcessApplication charity "STEPS_SATISFIED"
@@ -956,7 +956,7 @@ GIVETH A PROVISION Actor Action
   HENCE `required steps process complete` charity
 
 GIVEN charity IS A RegisterEntry
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 `deregistration notice served` MEANS
   PARTY CommissionerActor
   MUST ServeNotice (Charity charity)
@@ -966,7 +966,7 @@ GIVETH A PROVISION Actor Action
   HENCE `deregistration appeals period` charity
 
 GIVEN governor IS A Person
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 `investigation concluded no action` MEANS
   PARTY CommissionerActor
   -- OPTION 2: Using ProcessInvestigation - no dummy RegisterEntry needed
@@ -975,7 +975,7 @@ GIVETH A PROVISION Actor Action
   HENCE `misconduct investigation complete` governor
 
 GIVEN governor IS A Person
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 `tribunal considers governor appeal` MEANS
   PARTY Tribunal
   -- OPTION 2: Using ProcessTribunalDecision for governor appeals (simplified string)
@@ -985,7 +985,7 @@ GIVETH A PROVISION Actor Action
 
 -- Terminal states (no further obligations)
 GIVEN charity IS A RegisterEntry
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 `charity registered successfully` MEANS
   PARTY CommissionerActor
   MUST Other "Registration complete - charity added to register"
@@ -993,7 +993,7 @@ GIVETH A PROVISION Actor Action
   HENCE `registration process complete` charity
 
 GIVEN charity IS A RegisterEntry
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 `annual return cycle complete` MEANS
   PARTY Charity charity
   MUST Other "Annual return cycle completed successfully"
@@ -1001,7 +1001,7 @@ GIVETH A PROVISION Actor Action
   HENCE `next annual return due` charity
 
 GIVEN charity IS A RegisterEntry
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 `compliance cycle complete` MEANS
   PARTY Charity charity
   MUST Other "Compliance requirements satisfied"
@@ -1009,7 +1009,7 @@ GIVETH A PROVISION Actor Action
   HENCE `compliance monitoring continues` charity
 
 GIVEN charity IS A RegisterEntry
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 `required steps process complete` MEANS
   PARTY CommissionerActor
   MUST Other "Required steps process completed"
@@ -1017,7 +1017,7 @@ GIVETH A PROVISION Actor Action
   HENCE `normal oversight resumes` charity
 
 GIVEN appeal IS A Appeal
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 `appeal cycle complete` MEANS
   PARTY Tribunal
   MUST Other "Appeal process concluded"
@@ -1025,7 +1025,7 @@ GIVETH A PROVISION Actor Action
   HENCE `decision final` appeal
 
 GIVEN charity IS A RegisterEntry
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 `deregistration appeals period` MEANS
   PARTY Charity charity
   MUST FileAppeal (Appeal "DEREG001" CharityAppellant commencement commencement (addDays commencement 28) FALSE FALSE)
@@ -1033,7 +1033,7 @@ GIVETH A PROVISION Actor Action
   HENCE `deregistration final` charity
 
 GIVEN governor IS A Person
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 `misconduct investigation complete` MEANS
   PARTY CommissionerActor
   MUST Other "Governor misconduct investigation concluded - no action"
@@ -1041,7 +1041,7 @@ GIVETH A PROVISION Actor Action
   HENCE `governor monitoring continues` governor
 
 GIVEN governor IS A Person
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 `governor suspension active` MEANS
   PARTY Governor governor
   MUST Other "Governor suspension in effect - must not act as governor"
@@ -1049,7 +1049,7 @@ GIVETH A PROVISION Actor Action
   HENCE `suspension period monitoring` governor
 
 GIVEN governor IS A Person
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 `governor appeal concluded` MEANS
   PARTY Tribunal
   MUST Other "Governor appeal decision rendered"
@@ -1124,7 +1124,7 @@ GIVETH A RegisterAction
 `process compulsory deregistration` MEANS
     CompulsoryDeregistration charityId deregistrationDate grounds retrospective
 
--- Governor misconduct processing (using RegisterAction, not PROVISION)
+-- Governor misconduct processing (using RegisterAction, not DEONTIC)
 GIVEN governorId IS A STRING
       charityId IS A STRING
       misconductType IS A STRING
@@ -1249,39 +1249,39 @@ GIVETH A BOOLEAN
 `charity has recent issues` MEANS
     `days since return deadline` charity currentDate > 30
 
--- Terminal PROVISION states
+-- Terminal DEONTIC states
 GIVEN charity IS A RegisterEntry
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 `registration process complete` MEANS FULFILLED
 
 GIVEN charity IS A RegisterEntry
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 `next annual return due` MEANS FULFILLED
 
 GIVEN charity IS A RegisterEntry
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 `compliance monitoring continues` MEANS FULFILLED
 
 GIVEN charity IS A RegisterEntry
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 `normal oversight resumes` MEANS FULFILLED
 
 GIVEN appeal IS A Appeal
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 `decision final` MEANS FULFILLED
 
 GIVEN charity IS A RegisterEntry
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 `deregistration final` MEANS FULFILLED
 
 GIVEN governor IS A Person
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 `governor monitoring continues` MEANS FULFILLED
 
 GIVEN governor IS A Person
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 `suspension period monitoring` MEANS FULFILLED
 
 GIVEN governor IS A Person
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 `suspension decision final` MEANS FULFILLED

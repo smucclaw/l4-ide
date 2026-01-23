@@ -91,7 +91,7 @@ DECLARE FinancialYearRecord
       financialExpenses IS A Money
 
 -- ======================================================================
--- SECTION 5: PROVISION TYPES AND PATTERNS (NEW)
+-- SECTION 5: DEONTIC TYPES AND PATTERNS (NEW)
 -- ======================================================================
 
 -- Pattern: Actor types for contracts
@@ -145,13 +145,13 @@ entityType MEANS
   WHEN Partnership ps THEN cat "Partnership with " "multiple partners"
 
 -- ======================================================================
--- SECTION 7: PROVISION FUNCTION PATTERNS (NEW)
+-- SECTION 7: DEONTIC FUNCTION PATTERNS (NEW)
 -- ======================================================================
 
 -- Pattern: Simple contract obligation
 GIVEN debtor IS AN Actor
       amount IS A Money
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 simplePayment MEANS
   PARTY debtor
   MUST PayMoney amount (PersonActor (Person "Creditor" 30 TRUE))
@@ -163,7 +163,7 @@ GIVEN buyer IS AN Actor
       seller IS AN Actor
       goods IS A STRING
       condition IS A BOOLEAN
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 conditionalSale MEANS
   IF condition
   THEN PARTY seller
@@ -176,7 +176,7 @@ conditionalSale MEANS
 GIVEN serviceProvider IS AN Actor
       client IS AN Actor
       serviceType IS A STRING
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 serviceContract MEANS
   PARTY serviceProvider
   MUST ProvideService serviceType 30
@@ -185,7 +185,7 @@ serviceContract MEANS
 
 GIVEN provider IS AN Actor
       client IS AN Actor
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 paymentDue MEANS
   PARTY client
   MUST PayMoney (Money 1000 "USD") provider
@@ -587,7 +587,7 @@ isReadyForApproval MEANS
 GIVEN borrower IS AN Actor
       lender IS AN Actor
       loanAmount IS A Money
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 loanAgreement MEANS
   PARTY borrower
   MUST PayMoney loanAmount lender

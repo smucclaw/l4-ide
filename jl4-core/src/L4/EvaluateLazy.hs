@@ -330,7 +330,7 @@ postprocessTrace actions =
 
 data EvalDirectiveResult =
   MkEvalDirectiveResult
-    { range  :: Maybe SrcRange -- ^ of the (L)EVAL / PROVISION directive
+    { range  :: Maybe SrcRange -- ^ of the (L)EVAL / DEONTIC directive
     , result :: EvalDirectiveValue
     , trace  :: Maybe EvalTrace
     }

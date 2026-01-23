@@ -47,7 +47,7 @@ import L4.Syntax
   , Section(..)
   , TopDecl(..)
   , Decide(..)
-  , Obligation(..)
+  , Deonton(..)
   , RAction(..)
   , DeonticModal(..)
   , Pattern(..)
@@ -235,7 +235,7 @@ runExtraction name expr =
 -- The Maybe StateId is the "current" state we're transitioning from
 extractExpr :: Maybe StateId -> Expr Resolved -> ExtractM ()
 extractExpr mFromState expr = case expr of
-  Regulative _ obl -> extractObligation mFromState obl
+  Regulative _ obl -> extractDeonton mFromState obl
 
   RAnd _ e1 e2 -> do
     -- Parallel composition: both obligations must be fulfilled
@@ -266,8 +266,8 @@ isFulfilled :: Resolved -> Bool
 isFulfilled name = resolvedToText name == "Fulfilled"
 
 -- | Extract an obligation as a state transition
-extractObligation :: Maybe StateId -> Obligation Resolved -> ExtractM ()
-extractObligation mFromState MkObligation{..} = do
+extractDeonton :: Maybe StateId -> Deonton Resolved -> ExtractM ()
+extractDeonton mFromState MkDeonton{..} = do
   -- Create or get the source state
   fromState <- case mFromState of
     Just sid -> pure sid
@@ -300,13 +300,13 @@ extractObligation mFromState MkObligation{..} = do
           breachId <- getTerminalState "Breach" TerminalBreach
           addTransition fromState breachId label HenceTransition
 
-        TargetObligation nextObl -> do
+        TargetDeonton nextObl -> do
           -- Create intermediate state for the next obligation
-          let nextStateName = describeObligation nextObl
+          let nextStateName = describeDeonton nextObl
           nextStateId <- newState nextStateName IntermediateState
           addTransition fromState nextStateId label HenceTransition
           -- Recursively extract the next obligation
-          extractObligation (Just nextStateId) nextObl
+          extractDeonton (Just nextStateId) nextObl
 
         TargetOther -> do
           -- Unknown target - create generic next state
@@ -340,12 +340,12 @@ extractObligation mFromState MkObligation{..} = do
           let timeoutLabel = TransitionLabel Nothing Nothing "timeout" Nothing Nothing
           addTransition fromState breachId timeoutLabel LestTransition
 
-        TargetObligation nextObl -> do
-          let nextStateName = describeObligation nextObl
+        TargetDeonton nextObl -> do
+          let nextStateName = describeDeonton nextObl
           nextStateId <- newState nextStateName IntermediateState
           let timeoutLabel = TransitionLabel Nothing Nothing "timeout" Nothing Nothing
           addTransition fromState nextStateId timeoutLabel LestTransition
-          extractObligation (Just nextStateId) nextObl
+          extractDeonton (Just nextStateId) nextObl
 
         TargetOther -> do
           nextStateId <- newState "failure" IntermediateState
@@ -373,7 +373,7 @@ extractObligation mFromState MkObligation{..} = do
 data Target
   = TargetFulfilled
   | TargetBreach
-  | TargetObligation (Obligation Resolved)
+  | TargetDeonton (Deonton Resolved)
   | TargetOther
 
 -- | Classify what a HENCE/LEST expression points to
@@ -381,14 +381,14 @@ classifyTarget :: Expr Resolved -> Target
 classifyTarget = \case
   App _ name [] | resolvedToText name == "Fulfilled" -> TargetFulfilled
   Breach{} -> TargetBreach
-  Regulative _ obl -> TargetObligation obl
+  Regulative _ obl -> TargetDeonton obl
   Where _ e _ -> classifyTarget e
   LetIn _ _ e -> classifyTarget e
   _ -> TargetOther
 
 -- | Generate a descriptive name for an obligation (for intermediate states)
-describeObligation :: Obligation Resolved -> Text
-describeObligation MkObligation{..} =
+describeDeonton :: Deonton Resolved -> Text
+describeDeonton MkDeonton{..} =
   let partyT = prettyLayout party
       modalT = case action.modal of
         DMust    -> "must"
