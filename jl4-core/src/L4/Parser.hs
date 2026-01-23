@@ -714,7 +714,7 @@ giveth = do
   current <- Lexer.indentLevel
   attachAnno $
     MkGivethSig emptyAnno
-      <$  annoLexeme (spacedKeyword_ TKGiveth)
+      <$  annoLexeme (spacedKeyword_ TKGiveth <|> spacedKeyword_ TKGives)
 --      <*  optional article
       <*> annoHole (indented type' current)
 
