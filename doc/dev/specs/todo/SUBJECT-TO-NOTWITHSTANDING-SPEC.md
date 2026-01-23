@@ -27,11 +27,11 @@ Without formal treatment, these constructs remain as informal comments in L4 cod
 
 The fundamental distinction between these keywords is **directionality** in document structure:
 
-| Keyword | Appears In | Points To | Effect |
-|---------|-----------|-----------|--------|
-| `SUBJECT TO` | Main/subordinate clause | Exception clause | "I yield to that provision" |
-| `NOTWITHSTANDING` | Exception/prevailing clause | Main clause | "I override that provision" |
-| `DESPITE` | Exception/prevailing clause | Main clause | Same as NOTWITHSTANDING |
+| Keyword           | Appears In                  | Points To        | Effect                      |
+| ----------------- | --------------------------- | ---------------- | --------------------------- |
+| `SUBJECT TO`      | Main/subordinate clause     | Exception clause | "I yield to that provision" |
+| `NOTWITHSTANDING` | Exception/prevailing clause | Main clause      | "I override that provision" |
+| `DESPITE`         | Exception/prevailing clause | Main clause      | Same as NOTWITHSTANDING     |
 
 As noted in drafting literature: "notwithstanding looks back whilst subject to looks forward."
 
@@ -60,13 +60,15 @@ Based on extensive analysis of legal texts, we identify **seven distinct semanti
 **Semantics:** When provisions A and B both apply to the same facts and yield conflicting conclusions, the priority declaration determines which conclusion holds.
 
 **Computational model:**
+
 ```
 priority(A, B) = B  -- "A SUBJECT TO B" means B wins conflicts
 priority(A, B) = A  -- "A NOTWITHSTANDING B" means A wins conflicts
 ```
 
 **Legal sources:**
-- U.S. Supreme Court in *Cisneros v. Alpine Ridge Group* (1993): "a 'notwithstanding' clause signals the drafter's intention that the provisions of the 'notwithstanding' section override conflicting provisions."
+
+- U.S. Supreme Court in _Cisneros v. Alpine Ridge Group_ (1993): "a 'notwithstanding' clause signals the drafter's intention that the provisions of the 'notwithstanding' section override conflicting provisions."
 - Indian courts: Non obstante clauses "perform the function of removing impediments created by other provisions."
 
 ### 2.2 Exception/Carve-Out (Scope Limitation)
@@ -87,6 +89,7 @@ priority(A, B) = A  -- "A NOTWITHSTANDING B" means A wins conflicts
 **Semantics:** The exception clause defines a subset of inputs for which the main rule does not apply (or applies differently).
 
 **Computational model:**
+
 ```haskell
 -- Main rule with exception
 rule(x) =
@@ -114,6 +117,7 @@ rule(x) =
 **Semantics:** The main obligation only arises if the condition is met. This is not an exception but a prerequisite.
 
 **Computational model:**
+
 ```haskell
 -- Condition precedent
 obligation_exists(x) =
@@ -141,6 +145,7 @@ obligation_exists(x) =
 **Semantics:** The rule applies and produces a base result, which is then modified by the qualifying clause.
 
 **Computational model:**
+
 ```haskell
 -- Output modification
 final_result(x) = modify(base_result(x), qualification(x))
@@ -171,6 +176,7 @@ may_improve(tenant) = Permission {
 **Semantics:** An explicit declaration of non-conflict, preserving co-existence of provisions.
 
 **Computational model:**
+
 ```haskell
 -- Preservation: both provisions remain in force
 -- No priority determination needed; they don't conflict
@@ -199,6 +205,7 @@ applies(section_8, x) = ...  -- also unchanged
 **Semantics:** The rule's input domain is filtered before evaluation.
 
 **Computational model:**
+
 ```haskell
 -- Domain restriction
 rule_applies_to(x) = in_base_domain(x) && not(excluded(x))
@@ -227,6 +234,7 @@ applicable_inputs = filter (not . excluded) base_domain
 **Semantics:** The conclusion holds by default but can be overridden by defeating conditions discovered later.
 
 **Computational model:**
+
 ```haskell
 -- Defeasible rule
 conclusion(x) =
@@ -262,6 +270,7 @@ This is an implicit priority relation. `NOTWITHSTANDING` makes it explicit.
 ### 3.2 Lex Posterior Derogat Priori
 
 Later law overrides earlier law. Relevant when:
+
 - Amendment acts modify existing statutes
 - Contract amendments override original terms
 
@@ -278,11 +287,11 @@ The Latin term "non obstante" (notwithstanding) has a rich history in statutory 
 
 Legal drafting distinguishes:
 
-| Construct | Function | Position |
-|-----------|----------|----------|
-| **Proviso** | Qualifies the main provision | Introduced by "provided that" |
-| **Exception** | Carves out cases from scope | Can appear anywhere |
-| **Saving clause** | Preserves existing rights | Usually at end |
+| Construct         | Function                     | Position                      |
+| ----------------- | ---------------------------- | ----------------------------- |
+| **Proviso**       | Qualifies the main provision | Introduced by "provided that" |
+| **Exception**     | Carves out cases from scope  | Can appear anywhere           |
+| **Saving clause** | Preserves existing rights    | Usually at end                |
 
 A proviso "must be read and understood in conjunction with the main provision" while an exception "operates independently."
 
@@ -331,6 +340,7 @@ Sometimes override is implied by document structure (later provision implicitly 
 ### 4.5 The "Despite" Alternative
 
 "Despite" is semantically equivalent to "notwithstanding" but:
+
 - Less formal/legalistic
 - Fewer ambiguity issues (not confused with "subject to")
 - Preferred by plain language advocates
@@ -357,6 +367,7 @@ Exceptions are tied to specific definitions, with explicit conditions.
 ### 5.2 Defeasible Logic
 
 Formal defeasible logic systems (Prakken, Sartor) use:
+
 - Strict rules: `A -> B` (cannot be defeated)
 - Defeasible rules: `A => B` (can be defeated)
 - Defeaters: `A ~> ~B` (attacks but doesn't establish)
@@ -365,6 +376,7 @@ Formal defeasible logic systems (Prakken, Sartor) use:
 ### 5.3 Answer Set Programming
 
 ASP handles exceptions through negation as failure:
+
 ```prolog
 flies(X) :- bird(X), not abnormal(X).
 abnormal(X) :- penguin(X).
@@ -382,19 +394,20 @@ Contract specification languages like CSL use temporal operators and explicit br
 
 The seven semantic functions identified suggest L4 needs multiple distinct constructs, not a single overloaded keyword:
 
-| Function | Suggested L4 Construct |
-|----------|----------------------|
+| Function             | Suggested L4 Construct                                |
+| -------------------- | ----------------------------------------------------- |
 | Priority declaration | `SUBJECT TO` / `NOTWITHSTANDING` as explicit priority |
-| Exception carve-out | `EXCEPT WHEN` clause |
-| Condition precedent | `REQUIRES` or `GIVEN THAT` |
-| Output modification | `QUALIFIED BY` or modifier syntax |
-| Preservation | `WITHOUT AFFECTING` |
-| Domain restriction | Input type constraints |
-| Defeasibility | `UNLESS` with defeater semantics |
+| Exception carve-out  | `EXCEPT WHEN` clause                                  |
+| Condition precedent  | `REQUIRES` or `GIVEN THAT`                            |
+| Output modification  | `QUALIFIED BY` or modifier syntax                     |
+| Preservation         | `WITHOUT AFFECTING`                                   |
+| Domain restriction   | Input type constraints                                |
+| Defeasibility        | `UNLESS` with defeater semantics                      |
 
 ### 6.2 Reader-Friendliness
 
 Following drafting best practices:
+
 - Prefer `SUBJECT TO` in the subordinate clause (alerts reader to exception)
 - Use explicit section references, not "anything to the contrary"
 - Consider whether exception or condition precedent is the right model
@@ -402,6 +415,7 @@ Following drafting best practices:
 ### 6.3 Composition with Existing L4 Features
 
 L4 already has:
+
 - `CONSIDER` / `WHEN` for conditional logic
 - `MEANS` / `DECIDE` for definitions
 - Optional/Maybe types for missing information
@@ -412,6 +426,7 @@ New constructs should compose naturally with these.
 ### 6.4 Type-Level Considerations
 
 Override semantics may need type-level representation:
+
 - A "defeasible Boolean" that can be defeated
 - A "provisional result" that may be superseded
 - Priority annotations on rules
@@ -463,7 +478,7 @@ Override semantics may need type-level representation:
 ### Defeasibility and Formal Methods
 
 - Stanford Encyclopedia of Philosophy. "Defeasible Reasoning." [Link](https://plato.stanford.edu/entries/reasoning-defeasible/)
-- Prakken, H. "The Three Faces of Defeasibility in the Law." *Ratio Juris* (2004). [Link](https://onlinelibrary.wiley.com/doi/abs/10.1111/j.0952-1917.2004.00259.x)
+- Prakken, H. "The Three Faces of Defeasibility in the Law." _Ratio Juris_ (2004). [Link](https://onlinelibrary.wiley.com/doi/abs/10.1111/j.0952-1917.2004.00259.x)
 - NDPR. "Allowing for Exceptions: A Theory of Defences and Defeasibility in Law." [Link](https://ndpr.nd.edu/reviews/allowing-for-exceptions-a-theory-of-defences-and-defeasibility-in-law/)
 - Schauer, F. "Is Defeasibility an Essential Property of Law?" [PDF](http://www.horty.umiacs.io/courses/readings/schauer-defeasibility.pdf)
 
