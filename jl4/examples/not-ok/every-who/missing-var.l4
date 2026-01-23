@@ -1,0 +1,9 @@
+-- Test: EVERY with type but no variable name (should fail)
+-- Error: expected variable name after type
+
+IMPORT prelude
+
+DECLARE Person
+
+EVERY Person    -- Missing variable name
+ MUST `exist`
