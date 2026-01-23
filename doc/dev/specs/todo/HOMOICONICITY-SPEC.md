@@ -6,7 +6,9 @@
 
 ## Executive Summary
 
-This specification proposes extending L4's regulative rule syntax to support **obligations as first-class values**. This enables legal patterns like novation netting (IFEMA Section 3.3), where obligations can be dynamically created, canceled, combined, and transformed - operations that current L4 cannot express because obligations are treated as static state machine nodes rather than manipulable data.
+L4 already has rich syntax for expressing obligations (`PARTY p MUST action BY deadline HENCE ... LEST ...`), but these are currently **static declarations** - you write them in source code, and they define state machine transitions. This specification proposes **reifying** that existing syntax so obligations can also be treated as **runtime values** that can be queried, filtered, transformed, and dynamically created or canceled.
+
+This enables legal patterns like novation netting (IFEMA Section 3.3), where obligations must be dynamically matched by criteria, canceled, and replaced with new computed obligations - operations that require treating obligations as manipulable data, not just static declarations.
 
 The core insight is that legal instruments frequently treat obligations themselves as objects of discourse: they can be assigned, transferred, netted, novated, discharged, or converted. A language for computational law must support this level of abstraction.
 
@@ -26,9 +28,9 @@ This single sentence requires L4 to express:
 4. **Netting arithmetic** - the new obligation amount is computed from canceled obligations
 5. **All happening simultaneously** - no intermediate states
 
-Current L4 regulative syntax cannot express this because:
+Current L4 regulative syntax can express individual obligations, but cannot express these *operations on* obligations because:
 
-- Obligations are **syntax** (AST nodes in `PARTY p MUST action`), not **values** that can be inspected, filtered, or transformed
+- Obligations exist only as **static syntax** (AST nodes like `PARTY p MUST action`), not as **runtime values** that can be inspected, filtered, or transformed
 - There is no mechanism to refer to "all obligations matching criteria X"
 - There is no mechanism to "cancel" an obligation programmatically
 - There is no mechanism to "create" an obligation as the result of a function
