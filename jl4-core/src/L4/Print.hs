@@ -303,7 +303,7 @@ instance LayoutPrinterWithName a => LayoutPrinter (Expr a) where
         [ "BRANCH" ]
         <> map (\(MkGuardedExpr _ a b) -> "IF" <+> printWithLayout a <+> "THEN" <+> printWithLayout b) conds
         <> [ "OTHERWISE" <+> printWithLayout o ]
-    Regulative _ (MkObligation _ p a t f l) -> prettyObligation p a t f l
+    Regulative _ (MkDeonton _ p a t f l) -> prettyObligation p a t f l
     Consider   _ expr branches ->
       "CONSIDER" <+> printWithLayout expr <+> hang 2 (vsep $ punctuate comma (fmap printWithLayout branches))
 
@@ -470,7 +470,7 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
       vals@(_:_) -> space <> "OF" <+> hsep (punctuate comma (fmap parensIfNeeded vals))
     Lazy.ValEnvironment _env       -> "<environment>"
     Lazy.ValBreached reason        -> vcat
-      [ "PROVISION BREACHED:"
+      [ "DEONTIC BREACHED:"
       , indent 2 $ printWithLayout reason
       ]
     Lazy.ValObligation _env p a t f l -> case t of

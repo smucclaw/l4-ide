@@ -32,7 +32,7 @@ mkBuiltins
   , "either" `rename` "EITHER"
   , "left" `rename` "LEFT"
   , "right" `rename` "RIGHT"
-  , "contract" `rename` "PROVISION"
+  , "contract" `rename` "DEONTIC"
   , "fulfil" `rename` "FULFILLED"
   , "evalContract" `rename` "EVALTRACE"
   , "event"
@@ -156,7 +156,7 @@ maybeType a = app maybeRef [a]
 eitherType :: Type' Resolved -> Type' Resolved -> Type' Resolved
 eitherType a b = app eitherRef [a, b]
 
--- PROVISION
+-- DEONTIC
 
 contract :: Type' Resolved -> Type' Resolved -> Type' Resolved
 contract party action = TyApp emptyAnno contractRef [party, action]
@@ -724,7 +724,7 @@ contractInfo :: CheckEntity
 contractInfo =
   KnownType 2 [] Nothing
 
--- forall a b. PROVISION a b
+-- forall a b. DEONTIC a b
 fulfilInfo :: CheckEntity
 fulfilInfo = KnownTerm (Forall emptyAnno [hDef, iDef] (TyApp emptyAnno contractRef [TyApp emptyAnno hRef [], TyApp emptyAnno iRef []])) Constructor
 
@@ -740,7 +740,7 @@ eventCInfo = KnownTerm (Forall emptyAnno [dDef, gDef] (Fun emptyAnno [mkOnt part
   mkTyVar x = TyApp emptyAnno x []
   mkOnt = MkOptionallyNamedType emptyAnno Nothing
 
--- forall a b. PROVISION a b -> NUMBER -> [Event a b] -> PROVISION a b
+-- forall a b. DEONTIC a b -> NUMBER -> [Event a b] -> DEONTIC a b
 evalContractInfo :: CheckEntity
 evalContractInfo = KnownTerm (Forall emptyAnno [bDef, cDef] (Fun emptyAnno [mkOnt ctrct, mkOnt number, mkOnt (list eventTy)] ctrct)) Computable
   where
@@ -772,6 +772,7 @@ initialEnvironment =
     , (rawName leftName,         [leftUnique        ])
     , (rawName rightName,        [rightUnique       ])
     , (rawName contractName,     [contractUnique    ])
+    , (NormalName "PROVISION",   [contractUnique    ])  -- Deprecated alias for DEONTIC
     , (rawName eventName,        [eventUnique       ])
     , (rawName eventCName,       [eventCUnique      ])
     , (rawName evalContractName, [evalContractUnique])

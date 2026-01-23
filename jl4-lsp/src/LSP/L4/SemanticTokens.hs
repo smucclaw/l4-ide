@@ -196,7 +196,7 @@ instance ToSemTokens Context PosToken (Event Name) where
 
 instance ToSemTokens Context PosToken (Expr Name) where
 instance ToSemTokens Context PosToken (GuardedExpr Name) where
-instance ToSemTokens Context PosToken (Obligation Name) where
+instance ToSemTokens Context PosToken (Deonton Name) where
 -- DeonticModal has no tokens to highlight
 instance ToSemTokens Context PosToken DeonticModal where
   toSemTokens _ = pure []
@@ -298,7 +298,7 @@ instance ToSemTokens () PosToken (Type' Resolved) where
 
 instance ToSemTokens () PosToken (AppForm Resolved) where
 
-instance ToSemTokens () PosToken (Obligation Resolved) where
+instance ToSemTokens () PosToken (Deonton Resolved) where
 -- DeonticModal has no tokens to highlight
 instance ToSemTokens () PosToken DeonticModal where
   toSemTokens _ = pure []

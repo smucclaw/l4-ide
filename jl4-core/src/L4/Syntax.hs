@@ -219,7 +219,7 @@ data Expr n =
   | AppNamed   Anno n [NamedExpr n] (Maybe [Int]) -- we store the order of arguments during type checking
   | IfThenElse Anno (Expr n) (Expr n) (Expr n)
   | MultiWayIf Anno [GuardedExpr n] (Expr n)
-  | Regulative Anno (Obligation n)
+  | Regulative Anno (Deonton n)
   | Consider   Anno (Expr n) [Branch n]
   -- | ParenExpr  Anno (Expr n) -- temporary
   | Lit        Anno Lit
@@ -255,10 +255,14 @@ data GuardedExpr n =
   deriving stock (GHC.Generic, Eq, Ord, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
--- | obligations ala CSL; this represents an obligation with the following form:
--- <party> action(params) due <maybe time> (fromMaybe 0) <maybe then> (fromMaybe fulfilment)
-data Obligation n
-  = MkObligation
+-- | A Deonton (from Greek δέον "duty" + -on) is the atomic unit of normative content.
+-- It represents a deontic position: what a party must, may, or must not do.
+-- The name parallels physics terminology (electron, photon) to suggest a fundamental particle
+-- of deontic logic. Encompasses obligations, permissions, and prohibitions.
+--
+-- Structure: PARTY ... MUST/MAY/SHANT ... BEFORE ... HENCE ... LEST
+data Deonton n
+  = MkDeonton
   { anno :: Anno
   , party :: Expr n
   , action :: RAction n
@@ -515,8 +519,8 @@ deriving via L4Syntax (Expr n)
   instance HasAnno (Expr n)
 deriving via L4Syntax (GuardedExpr n)
   instance HasAnno (GuardedExpr n)
-deriving via L4Syntax (Obligation n)
-  instance HasAnno (Obligation n)
+deriving via L4Syntax (Deonton n)
+  instance HasAnno (Deonton n)
 deriving via L4Syntax (RAction n)
   instance HasAnno (RAction n)
 deriving via L4Syntax (Event n)
@@ -560,7 +564,7 @@ deriving anyclass instance ToConcreteNodes PosToken (AppForm Name)
 deriving anyclass instance ToConcreteNodes PosToken (Aka Name)
 deriving anyclass instance ToConcreteNodes PosToken (Expr Name)
 deriving anyclass instance ToConcreteNodes PosToken (GuardedExpr Name)
-deriving anyclass instance ToConcreteNodes PosToken (Obligation Name)
+deriving anyclass instance ToConcreteNodes PosToken (Deonton Name)
 -- DeonticModal has no source tokens, so return empty list
 instance ToConcreteNodes PosToken DeonticModal where
   toNodes _ = pure []
@@ -610,7 +614,7 @@ deriving anyclass instance ToConcreteNodes PosToken (AppForm Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (Aka Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (Expr Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (GuardedExpr Resolved)
-deriving anyclass instance ToConcreteNodes PosToken (Obligation Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (Deonton Resolved)
 -- Manual instance for RAction to skip the modal field (which has no source tokens)
 instance ToConcreteNodes PosToken (RAction Resolved) where
   toNodes (MkAction ann _modal action provided) =
@@ -761,7 +765,7 @@ deriving anyclass instance HasSrcRange (AppForm a)
 deriving anyclass instance HasSrcRange (Aka a)
 deriving anyclass instance HasSrcRange (Expr a)
 deriving anyclass instance HasSrcRange (GuardedExpr a)
-deriving anyclass instance HasSrcRange (Obligation a)
+deriving anyclass instance HasSrcRange (Deonton a)
 deriving anyclass instance HasSrcRange (LocalDecl a)
 deriving anyclass instance HasSrcRange (NamedExpr a)
 deriving anyclass instance HasSrcRange (Branch a)

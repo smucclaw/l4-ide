@@ -344,14 +344,14 @@ GIVETH A BOOLEAN
     WHERE
         `holding period end` MEANS `years after` 5 `earn date`
 
-§§ `Regulative Provisions`
+§§ `Regulative Deontics`
 
 `Elon Musk` MEANS `Award Participant` WITH
                     `Name` IS "Elon Reeve Musk"
                     `Birthdate` IS Date 28 6 1971
 
 GIVEN `award state` IS A `CEO Award State`
-GIVETH A PROVISION OF `Award Participant`, `Award Action`
+GIVETH A DEONTIC OF `Award Participant`, `Award Action`
 `Eligible Service Requirement` MEANS
     IF      `Forfeiture Applies` `award state`
     THEN    PARTY   `Elon Musk`
@@ -372,7 +372,7 @@ GIVETH A PROVISION OF `Award Participant`, `Award Action`
 
 GIVEN `tranche` IS A NUMBER
       `award state` IS A `CEO Award State`
-GIVETH A PROVISION OF `Award Participant`, `Award Action`
+GIVETH A DEONTIC OF `Award Participant`, `Award Action`
 `Milestone Achievement Requirement` MEANS
     IF      `Tranche Can Be Earned` `tranche` `award state`
     THEN    PARTY   `Elon Musk`
@@ -400,7 +400,7 @@ GIVETH A PROVISION OF `Award Participant`, `Award Action`
 
 GIVEN `tranche` IS A NUMBER
       `award state` IS A `CEO Award State`
-GIVETH A PROVISION OF `Award Participant`, `Award Action`
+GIVETH A DEONTIC OF `Award Participant`, `Award Action`
 `Vesting Requirement` MEANS
     IF      `Tranche Is Earned` `tranche` `award state`
             AND `award state`'s `Current Date` AT LEAST `vesting date`

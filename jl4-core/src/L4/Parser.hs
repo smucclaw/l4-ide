@@ -1695,11 +1695,11 @@ breach = do
 optionalWithHole :: HasSrcRange a => AnnoParser a -> AnnoParser (Maybe a)
 optionalWithHole p = Just <$> p <|> annoHole (pure Nothing)
 
-obligation :: Parser (Obligation Name)
+obligation :: Parser (Deonton Name)
 obligation = do
   current <- Lexer.indentLevel
   attachAnno $
-    MkObligation emptyAnno
+    MkDeonton emptyAnno
       <$  annoLexeme (spacedKeyword_ TKParty)
       <*> annoHole (indentedExpr current)
       <*> annoHole (must current)

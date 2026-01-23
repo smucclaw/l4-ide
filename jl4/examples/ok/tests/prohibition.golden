@@ -7,7 +7,7 @@ prohibition.l4:93:1-27:
   WITHIN 30
   HENCE FULFILLED
 prohibition.l4:98:1-99:31:
-  PROVISION BREACHED:
+  DEONTIC BREACHED:
     party
       Alice
     who did action
@@ -26,7 +26,7 @@ prohibition.l4:104:1-28:
   WITHIN 30
   HENCE FULFILLED
 prohibition.l4:109:1-110:29:
-  PROVISION BREACHED:
+  DEONTIC BREACHED:
     party
       Bob
     who did action

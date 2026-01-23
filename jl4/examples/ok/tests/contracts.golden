@@ -30,7 +30,7 @@ contracts.l4:89:1-91:31:
 contracts.l4:93:1-95:31:
   FULFILLED
 contracts.l4:102:1-104:30:
-  PROVISION BREACHED:
+  DEONTIC BREACHED:
     party
       B
     who did action
@@ -44,7 +44,7 @@ contracts.l4:102:1-104:30:
     before their deadline, which was at
       2
 contracts.l4:106:1-108:30:
-  PROVISION BREACHED:
+  DEONTIC BREACHED:
     party
       S
     who did action

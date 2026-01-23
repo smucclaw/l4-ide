@@ -41,7 +41,7 @@ IMPORT daydate
 -- CAREFUL: Month names used as first argument are treated as numbers!
 #EVAL Date Apr 1 2025         -- Returns Date 4 1 2025 (4th of January 2025) because Apr = 4
 
--- When using dates in PROVISION statements behind the AT or WITHIN keywords, use the Day function to convert DATE objects to NUMBER (Days since 1st January 0000)
+-- When using dates in DEONTIC statements (regulative rules) behind the AT or WITHIN keywords, use the Day function to convert DATE objects to NUMBER (Days since 1st January 0000)
 `A provision` MEANS
     PARTY   `The party`
     MUST    `act`

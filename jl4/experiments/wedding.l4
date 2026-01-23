@@ -123,7 +123,7 @@ DECLARE Action IS ONE OF
 --------------------------------------------------------------------------------
 
 -- The full marriage as parallel obligations (using RAND for regulative AND)
-GIVETH PROVISION Person Action
+GIVETH DEONTIC Person Action
 `marriage contract` MEANS
       (PARTY Spouse1 MUST `love and cherish` HENCE FULFILLED LEST BREACH)
   RAND (PARTY Spouse1 MUST `have and hold` HENCE FULFILLED LEST BREACH)
