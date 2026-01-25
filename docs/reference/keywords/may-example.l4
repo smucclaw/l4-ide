@@ -1,0 +1,223 @@
+-- =============================================================================
+-- MAY Keyword Examples - Permissions and Options in Contracts
+-- =============================================================================
+--
+-- The MAY keyword expresses permissions, rights, and options - actions that a
+-- party is permitted (but not required) to perform. Unlike MUST (obligation),
+-- MAY creates no duty, and failure to exercise a MAY right is not a breach.
+--
+-- Key Concepts:
+--   • MAY creates a permission or option to perform an action
+--   • WITHIN specifies the time period during which the option can be exercised
+--   • HENCE specifies what happens if the option IS exercised
+--   • LEST specifies what happens if the option is NOT exercised
+--   • Unlike MUST, not exercising a MAY option is never a breach
+--
+-- Common Legal Uses:
+--   • Early termination rights (lease agreements, employment contracts)
+--   • Extension options (option to renew, extend deadlines)
+--   • Prepayment rights (loan agreements)
+--   • Redemption rights (securities, convertible notes)
+--   • Put/call options (shareholder agreements)
+--   • Rights of first refusal
+--
+-- This file demonstrates typical permission patterns found in:
+--   • Commercial contracts
+--   • Lease agreements
+--   • Loan agreements
+--   • Employment contracts
+--   • Shareholder agreements
+--
+-- =============================================================================
+
+-- =============================================================================
+-- Type Declarations
+-- =============================================================================
+
+DECLARE `Contract Party` IS ONE OF
+  `The Lender`
+  `The Borrower`
+  `The Tenant`
+  `The Landlord`
+  `The Investor`
+  `The Company`
+  `The Buyer`
+  `The Seller`
+
+DECLARE `Contract Action` IS ONE OF
+  `prepay loan` HAS `prepayment amount` IS A NUMBER
+  `extend lease` HAS `extension months` IS A NUMBER
+  `claim warranty benefit` HAS `benefit description` IS A STRING
+  `convert to equity` HAS `conversion amount` IS A NUMBER
+  `exercise put option` HAS `share quantity` IS A NUMBER
+  `terminate early`
+  `demand acceleration`
+  `make payment` HAS `payment amount` IS A NUMBER
+
+-- =============================================================================
+-- Basic Permission (Prepayment Right)
+-- =============================================================================
+
+-- Simple prepayment right in a loan agreement
+-- The Borrower may prepay the loan in full within the first year without penalty
+`prepayment option` MEANS
+  PARTY `The Borrower`
+  MAY `prepay loan` 100000
+  WITHIN 365
+
+-- =============================================================================
+-- Permission After Obligation (Warranty Claim)
+-- =============================================================================
+
+-- Purchase contract: After payment, buyer may claim warranty benefits
+-- This is common in consumer protection and sale of goods contracts
+`purchase with warranty` MEANS
+  PARTY `The Buyer`
+  MUST `make payment` 5000
+  WITHIN 7
+  HENCE
+    PARTY `The Buyer`
+    MAY `claim warranty benefit` "extended warranty coverage"
+    WITHIN 365
+
+-- =============================================================================
+-- Renewable Option (Lease Extension)
+-- =============================================================================
+
+-- Lease renewal option: If tenant extends once, they get another option
+-- Common in commercial real estate leases
+`first renewal option` MEANS
+  PARTY `The Tenant`
+  MAY `extend lease` 12  -- First 12-month extension
+  WITHIN 60  -- Must notify 60 days before expiry
+  HENCE
+    PARTY `The Tenant`
+    MAY `extend lease` 12  -- Second 12-month extension available
+    WITHIN 60
+
+-- =============================================================================
+-- Remedial Permission (Acceleration Clause)
+-- =============================================================================
+
+-- If borrower breaches, lender may demand full repayment immediately
+-- Standard clause in loan agreements to protect lender
+`payment with acceleration right` MEANS
+  PARTY `The Borrower`
+  MUST `make payment` 10000
+  WITHIN 30
+  LEST
+    PARTY `The Lender`
+    MAY `demand acceleration`  -- Full loan becomes due immediately
+    WITHIN 14
+
+-- =============================================================================
+-- Convertible Note Option
+-- =============================================================================
+
+-- Investor may convert their note to equity at any time
+-- Common in startup financing and convertible instruments
+`conversion option` MEANS
+  PARTY `The Investor`
+  MAY `convert to equity` 500000
+  WITHIN 730  -- 2-year window
+
+-- =============================================================================
+-- Put Option (Shareholder Agreement)
+-- =============================================================================
+
+-- Shareholder may require the company to buy back shares
+-- Common in private company shareholder agreements
+`shareholder put option` MEANS
+  PARTY `The Investor`
+  MAY `exercise put option` 100000  -- 100,000 shares
+  WITHIN 1825  -- 5-year window
+
+-- =============================================================================
+-- Early Termination Right
+-- =============================================================================
+
+-- Tenant may terminate lease early with notice
+-- Common in residential and commercial leases
+`early termination clause` MEANS
+  PARTY `The Tenant`
+  MAY `terminate early`
+  WITHIN 180  -- Can terminate within first 6 months
+  HENCE FULFILLED
+  LEST FULFILLED  -- If not exercised, lease continues normally
+
+-- =============================================================================
+-- Chained Permissions
+-- =============================================================================
+
+-- After payment, buyer may claim warranty; if claimed, seller must service
+-- Demonstrates how permissions can trigger subsequent obligations
+`warranty claim process` MEANS
+  PARTY `The Buyer`
+  MUST `make payment` 25000
+  WITHIN 14
+  HENCE
+    PARTY `The Buyer`
+    MAY `claim warranty benefit` "defect repair"
+    WITHIN 730  -- 2-year warranty period
+    HENCE
+      PARTY `The Seller`
+      MUST `make payment` 5000  -- Seller must cover repair costs
+      WITHIN 30
+
+-- =============================================================================
+-- Testing Permissions
+-- =============================================================================
+
+-- Test 1: Prepayment option exercised
+#TRACE `prepayment option` AT 0 WITH
+  PARTY `The Borrower` DOES `prepay loan` 100000 AT 180
+
+-- Test 2: Prepayment option not exercised (valid - no breach)
+#TRACE `prepayment option` AT 0 WITH
+
+-- Test 3: Purchase with warranty - full path
+#TRACE `purchase with warranty` AT 0 WITH
+  PARTY `The Buyer` DOES `make payment` 5000 AT 5
+  PARTY `The Buyer` DOES `claim warranty benefit` "extended warranty coverage" AT 100
+
+-- Test 4: Purchase with warranty - payment but no claim
+#TRACE `purchase with warranty` AT 0 WITH
+  PARTY `The Buyer` DOES `make payment` 5000 AT 5
+
+-- Test 5: Lease renewal - first extension exercised
+#TRACE `first renewal option` AT 0 WITH
+  PARTY `The Tenant` DOES `extend lease` 12 AT 30
+
+-- Test 6: Lease renewal - both extensions exercised
+#TRACE `first renewal option` AT 0 WITH
+  PARTY `The Tenant` DOES `extend lease` 12 AT 30
+  PARTY `The Tenant` DOES `extend lease` 12 AT 90
+
+-- Test 7: Acceleration right triggered by breach
+#TRACE `payment with acceleration right` AT 0 WITH
+  PARTY `The Lender` DOES `demand acceleration` AT 35
+
+-- Test 8: Acceleration right not needed (payment made)
+#TRACE `payment with acceleration right` AT 0 WITH
+  PARTY `The Borrower` DOES `make payment` 10000 AT 20
+
+-- Test 9: Conversion option exercised
+#TRACE `conversion option` AT 0 WITH
+  PARTY `The Investor` DOES `convert to equity` 500000 AT 365
+
+-- Test 10: Put option exercised
+#TRACE `shareholder put option` AT 0 WITH
+  PARTY `The Investor` DOES `exercise put option` 100000 AT 1000
+
+-- Test 11: Early termination exercised
+#TRACE `early termination clause` AT 0 WITH
+  PARTY `The Tenant` DOES `terminate early` AT 90
+
+-- Test 12: Early termination not exercised
+#TRACE `early termination clause` AT 0 WITH
+
+-- Test 13: Warranty claim process - complete workflow
+#TRACE `warranty claim process` AT 0 WITH
+  PARTY `The Buyer` DOES `make payment` 25000 AT 7
+  PARTY `The Buyer` DOES `claim warranty benefit` "defect repair" AT 200
+  PARTY `The Seller` DOES `make payment` 5000 AT 220

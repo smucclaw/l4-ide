@@ -1,0 +1,231 @@
+-- =============================================================================
+-- MUST Keyword Examples - Legal Obligations
+-- =============================================================================
+--
+-- The MUST keyword expresses legal obligations - actions that a party is
+-- required to perform. If not fulfilled within the deadline, consequences
+-- (LEST) may apply.
+--
+-- Key Concepts:
+--   • MUST creates a duty to perform an action
+--   • WITHIN specifies the deadline for performance
+--   • HENCE specifies what happens upon fulfillment
+--   • LEST specifies consequences of breach
+--   • MUST NOT is equivalent to SHANT (prohibition)
+--
+-- Common Legal Uses:
+--   • Payment obligations (loan agreements, purchase contracts)
+--   • Delivery obligations (sale of goods, services contracts)
+--   • Performance obligations (construction, consulting)
+--   • Notice requirements (lease agreements, employment contracts)
+--
+-- This file demonstrates typical obligation patterns found in:
+--   • Commercial contracts
+--   • Loan agreements
+--   • Sale and purchase agreements
+--   • Employment contracts
+--   • Lease agreements
+--
+-- =============================================================================
+
+-- =============================================================================
+-- Type Declarations
+-- =============================================================================
+
+DECLARE `Contract Party` IS ONE OF
+  `The Borrower`
+  `The Lender`
+  `The Buyer`
+  `The Seller`
+  `The Contractor`
+  `The Client`
+  `The Tenant`
+  `The Landlord`
+
+DECLARE `Contract Action` IS ONE OF
+  `make payment` HAS `payment amount` IS A NUMBER
+  `deliver goods` HAS `goods description` IS A STRING
+  `provide services` HAS `service description` IS A STRING
+  `sign contract`
+  `provide notice` HAS `notice content` IS A STRING
+  `complete repairs` HAS `repair description` IS A STRING
+  `pay penalty` HAS `penalty amount` IS A NUMBER
+  `return security deposit` HAS `deposit amount` IS A NUMBER
+
+-- =============================================================================
+-- Basic Payment Obligation
+-- =============================================================================
+
+-- Simple payment obligation with a deadline
+-- The Borrower must make a payment of $10,000 within 30 days
+`monthly loan payment` MEANS
+  PARTY `The Borrower`
+  MUST `make payment` 10000
+  WITHIN 30
+
+-- =============================================================================
+-- With HENCE (Consequence on Fulfillment)
+-- =============================================================================
+
+-- Purchase contract: If The Buyer pays, then The Seller must deliver
+-- This creates a conditional chain of obligations
+`purchase and delivery agreement` MEANS
+  PARTY `The Buyer`
+  MUST `make payment` 25000
+  WITHIN 7
+  HENCE
+    PARTY `The Seller`
+    MUST `deliver goods` "industrial machinery"
+    WITHIN 14
+
+-- Service contract: After payment, contractor provides services,
+-- then client pays the remaining balance
+`staged service contract` MEANS
+  PARTY `The Client`
+  MUST `make payment` 5000  -- Initial deposit
+  WITHIN 3
+  HENCE
+    PARTY `The Contractor`
+    MUST `provide services` "website development"
+    WITHIN 30
+    HENCE
+      PARTY `The Client`
+      MUST `make payment` 15000  -- Final payment
+      WITHIN 7
+
+-- =============================================================================
+-- With LEST (Consequence on Breach)
+-- =============================================================================
+
+-- Simple breach: If The Borrower doesn't pay, the contract is breached
+`payment or breach` MEANS
+  PARTY `The Borrower`
+  MUST `make payment` 5000
+  WITHIN 30
+  LEST BREACH
+
+-- Penalty clause: If payment not made on time, a late fee applies
+-- with a grace period before final breach
+`payment with late fee` MEANS
+  PARTY `The Borrower`
+  MUST `make payment` 10000
+  WITHIN 30
+  LEST
+    PARTY `The Borrower`
+    MUST `make payment` 12000  -- Original amount plus 20% late fee
+    WITHIN 45  -- 15-day grace period
+    LEST BREACH
+
+-- Landlord repair obligation: Must repair within deadline,
+-- or tenant can deduct repair costs from rent
+`landlord repair obligation` MEANS
+  PARTY `The Landlord`
+  MUST `complete repairs` "fix leaking roof"
+  WITHIN 14
+  LEST
+    PARTY `The Tenant`
+    MUST `provide notice` "tenant will arrange repairs and deduct cost"
+    WITHIN 3
+
+-- =============================================================================
+-- MUST NOT (Prohibition)
+-- =============================================================================
+
+-- MUST NOT is equivalent to SHANT - expresses a prohibition
+-- The Contractor must not disclose confidential information
+-- for 2 years (730 days)
+`confidentiality obligation` MEANS
+  PARTY `The Contractor`
+  MUST NOT `provide notice` "confidential information disclosure"
+  WITHIN 730
+
+-- =============================================================================
+-- Chained Obligations
+-- =============================================================================
+
+-- Complex contract with multiple sequential obligations
+-- Demonstrates a complete contract lifecycle
+`construction contract workflow` MEANS
+  PARTY `The Contractor`
+  MUST `sign contract`
+  WITHIN 7
+  HENCE
+    PARTY `The Client`
+    MUST `make payment` 50000  -- Down payment
+    WITHIN 14
+    HENCE
+      PARTY `The Contractor`
+      MUST `provide services` "foundation work"
+      WITHIN 30
+      HENCE
+        PARTY `The Client`
+        MUST `make payment` 150000  -- Final payment
+        WITHIN 7
+
+-- Lease agreement with security deposit return
+`lease termination and deposit return` MEANS
+  PARTY `The Tenant`
+  MUST `provide notice` "60-day notice of non-renewal"
+  WITHIN 60
+  HENCE
+    PARTY `The Tenant`
+    MUST `complete repairs` "restore premises to original condition"
+    WITHIN 30
+    HENCE
+      PARTY `The Landlord`
+      MUST `return security deposit` 3000
+      WITHIN 14
+      LEST
+        PARTY `The Landlord`
+        MUST `return security deposit` 3090  -- With 3% interest penalty
+        WITHIN 30
+        LEST BREACH
+
+-- =============================================================================
+-- Testing Obligations
+-- =============================================================================
+
+-- Test 1: Basic obligation fulfilled on time
+#TRACE `monthly loan payment` AT 0 WITH
+  PARTY `The Borrower` DOES `make payment` 10000 AT 20
+
+-- Test 2: Basic obligation breached (no payment made)
+#TRACE `monthly loan payment` AT 0 WITH
+
+-- Test 3: Conditional obligation - full chain executed
+#TRACE `purchase and delivery agreement` AT 0 WITH
+  PARTY `The Buyer` DOES `make payment` 25000 AT 5
+  PARTY `The Seller` DOES `deliver goods` "industrial machinery" AT 15
+
+-- Test 4: Payment with late fee - paid during grace period
+#TRACE `payment with late fee` AT 0 WITH
+  PARTY `The Borrower` DOES `make payment` 12000 AT 40
+
+-- Test 5: Payment with late fee - breached (no payment at all)
+#TRACE `payment with late fee` AT 0 WITH
+
+-- Test 6: Staged service contract - complete workflow
+#TRACE `staged service contract` AT 0 WITH
+  PARTY `The Client` DOES `make payment` 5000 AT 2
+  PARTY `The Contractor` DOES `provide services` "website development" AT 25
+  PARTY `The Client` DOES `make payment` 15000 AT 30
+
+-- Test 7: Construction workflow - happy path
+#TRACE `construction contract workflow` AT 0 WITH
+  PARTY `The Contractor` DOES `sign contract` AT 5
+  PARTY `The Client` DOES `make payment` 50000 AT 15
+  PARTY `The Contractor` DOES `provide services` "foundation work" AT 40
+  PARTY `The Client` DOES `make payment` 150000 AT 45
+
+-- Test 8: Lease termination with deposit return
+#TRACE `lease termination and deposit return` AT 0 WITH
+  PARTY `The Tenant` DOES `provide notice` "60-day notice of non-renewal" AT 30
+  PARTY `The Tenant` DOES `complete repairs` "restore premises to original condition" AT 55
+  PARTY `The Landlord` DOES `return security deposit` 3000 AT 65
+
+-- Test 9: Landlord repair obligation - landlord complies
+#TRACE `landlord repair obligation` AT 0 WITH
+  PARTY `The Landlord` DOES `complete repairs` "fix leaking roof" AT 10
+
+-- Test 10: Landlord repair obligation - tenant must notify
+#TRACE `landlord repair obligation` AT 0 WITH

@@ -1,0 +1,152 @@
+-- PARTY keyword examples (regulative rules for legal contracts)
+--
+-- This file demonstrates L4's regulative features for legal drafting,
+-- showing how to express obligations, permissions, and prohibitions that
+-- are commonly found in contracts, legislation, and regulations.
+
+-- =============================================================================
+-- Type Declarations
+-- =============================================================================
+
+DECLARE `Legal Entity` IS ONE OF
+  `The Borrower`
+  `The Lender`
+  `The Seller`
+  `The Buyer`
+  `The Employee`
+  `The Employer`
+  `The Tenant`
+  `The Landlord`
+
+DECLARE `Contract Action` IS ONE OF
+  `make payment` HAS amount IS A NUMBER
+  `deliver goods` HAS description IS A STRING
+  `provide services`
+  `sign document` HAS `document name` IS A STRING
+  `disclose confidential information`
+  `vacate premises`
+  `pay damages` HAS amount IS A NUMBER
+
+-- =============================================================================
+-- Basic Obligation (MUST)
+-- =============================================================================
+
+-- Simple payment obligation with a deadline
+-- The Borrower must make a payment within 30 days
+`payment obligation` MEANS
+  PARTY `The Borrower`
+  MUST `make payment` 5000
+  WITHIN 30
+
+-- =============================================================================
+-- Permission (MAY)
+-- =============================================================================
+
+-- Early termination right
+-- The Tenant may vacate the premises early without penalty
+`early termination right` MEANS
+  PARTY `The Tenant`
+  MAY `vacate premises`
+  WITHIN 60
+
+-- =============================================================================
+-- Prohibition (SHANT)
+-- =============================================================================
+
+-- Non-disclosure obligation (confidentiality clause)
+-- The Employee shall not disclose confidential information for 2 years
+`confidentiality obligation` MEANS
+  PARTY `The Employee`
+  SHANT `disclose confidential information`
+  WITHIN 730  -- 2 years in days
+
+-- Alternative syntax: MUST NOT
+-- Same prohibition expressed differently
+`confidentiality obligation alternative` MEANS
+  PARTY `The Employee`
+  MUST NOT `disclose confidential information`
+  WITHIN 730
+
+-- =============================================================================
+-- With Consequences (HENCE/LEST)
+-- =============================================================================
+
+-- Payment with grace period and penalty
+-- If The Borrower pays on time, the contract is fulfilled.
+-- If not, they must pay with a penalty within a grace period.
+`payment with penalty clause` MEANS
+  PARTY `The Borrower`
+  MUST `make payment` 1000
+  WITHIN 30
+  HENCE FULFILLED
+  LEST (
+    PARTY `The Borrower`
+    MUST `make payment` 1100  -- 10% penalty
+    WITHIN 45  -- 15-day grace period
+    LEST BREACH
+  )
+
+-- =============================================================================
+-- Chained Obligations
+-- =============================================================================
+
+-- Purchase and delivery contract
+-- The Buyer pays, then The Seller must deliver goods
+`purchase and delivery contract` MEANS
+  PARTY `The Buyer`
+  MUST `make payment` 5000
+  WITHIN 7
+  HENCE
+    PARTY `The Seller`
+    MUST `deliver goods` "electronic equipment"
+    WITHIN 14
+    HENCE FULFILLED
+
+-- Service contract with multiple steps
+-- Sign document, then provide services, then receive payment
+`service agreement` MEANS
+  PARTY `The Employee`
+  MUST `sign document` "employment contract"
+  WITHIN 7
+  HENCE
+    PARTY `The Employee`
+    MUST `provide services`
+    WITHIN 90
+    HENCE
+      PARTY `The Employer`
+      MUST `make payment` 3000
+      WITHIN 7
+      HENCE FULFILLED
+
+-- =============================================================================
+-- Testing with #TRACE
+-- =============================================================================
+
+-- Test 1: Payment obligation fulfilled on time
+#TRACE `payment obligation` AT 0 WITH
+  PARTY `The Borrower` DOES `make payment` 5000 AT 20
+
+-- Test 2: Payment obligation breached (no payment)
+#TRACE `payment obligation` AT 0 WITH
+
+-- Test 3: Early termination right exercised
+#TRACE `early termination right` AT 0 WITH
+  PARTY `The Tenant` DOES `vacate premises` AT 30
+
+-- Test 4: Confidentiality maintained (no breach)
+#TRACE `confidentiality obligation` AT 0 WITH
+
+-- Test 5: Payment with penalty - paid in grace period
+#TRACE `payment with penalty clause` AT 0 WITH
+  PARTY `The Borrower` DOES `make payment` 1100 AT 40
+
+-- Test 6: Purchase and delivery - happy path
+#TRACE `purchase and delivery contract` AT 0 WITH
+  PARTY `The Buyer` DOES `make payment` 5000 AT 5
+  PARTY `The Seller` DOES `deliver goods` "electronic equipment" AT 15
+
+-- Test 7: Service agreement - complete workflow
+#TRACE `service agreement` AT 0 WITH
+  PARTY `The Employee` DOES `sign document` "employment contract" AT 3
+  PARTY `The Employee` DOES `provide services` AT 50
+  PARTY `The Employer` DOES `make payment` 3000 AT 100

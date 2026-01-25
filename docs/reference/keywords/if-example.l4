@@ -1,0 +1,109 @@
+-- IF keyword examples
+
+-- =============================================================================
+-- Basic If-Then-Else
+-- =============================================================================
+
+-- Simple conditional
+DECIDE `basic if example` IS IF TRUE THEN "yes" ELSE "no"
+
+-- With variable
+GIVEN x IS A NUMBER
+`check if positive` x MEANS IF x > 0 THEN "positive" ELSE "not positive"
+
+#EVAL `basic if example`
+#EVAL `check if positive` 5
+#EVAL `check if positive` -3
+
+-- =============================================================================
+-- Multi-line Format
+-- =============================================================================
+
+GIVEN n IS A NUMBER
+`absolute value of` n MEANS
+  IF n >= 0
+  THEN n
+  ELSE 0 MINUS n
+
+#EVAL `absolute value of` 5
+#EVAL `absolute value of` -5
+
+-- =============================================================================
+-- Nested If-Else (Chained Conditions)
+-- =============================================================================
+
+GIVEN score IS A NUMBER
+`letter grade for` score MEANS
+  IF score >= 90 THEN "A"
+  ELSE IF score >= 80 THEN "B"
+       ELSE IF score >= 70 THEN "C"
+            ELSE IF score >= 60 THEN "D"
+                 ELSE "F"
+
+#EVAL `letter grade for` 95
+#EVAL `letter grade for` 75
+#EVAL `letter grade for` 50
+
+-- =============================================================================
+-- Complex Conditions
+-- =============================================================================
+
+GIVEN age IS A NUMBER
+      `has valid ID` IS A BOOLEAN
+      `is member` IS A BOOLEAN
+`can enter venue` age `has valid ID` `is member` MEANS
+  IF (age >= 21 AND `has valid ID`) OR `is member`
+  THEN "Welcome"
+  ELSE "Access denied"
+
+#EVAL `can enter venue` 25 TRUE FALSE
+#EVAL `can enter venue` 18 TRUE FALSE
+#EVAL `can enter venue` 18 FALSE TRUE
+
+-- =============================================================================
+-- DECIDE ... IF Form (Boolean Functions)
+-- =============================================================================
+
+-- Shorthand for boolean-returning functions
+GIVEN `person age` IS A NUMBER
+DECIDE `is adult` IF `person age` >= 18
+
+-- Equivalent long form:
+GIVEN `person age 2` IS A NUMBER
+DECIDE `is adult 2` IS IF `person age 2` >= 18 THEN TRUE ELSE FALSE
+
+-- Both work the same way (using #CHECK since they use ASSUME-like params)
+#CHECK `is adult` WITH `person age` IS 21
+#CHECK `is adult 2` WITH `person age 2` IS 15
+
+-- =============================================================================
+-- Returning Different Types
+-- =============================================================================
+
+-- Returning numbers
+GIVEN a IS A NUMBER, b IS A NUMBER
+`maximum number` a b MEANS IF a > b THEN a ELSE b
+
+-- Returning lists
+GIVEN condition IS A BOOLEAN
+`list if true otherwise empty` condition MEANS
+  IF condition
+  THEN LIST 1, 2, 3
+  ELSE EMPTY
+
+#EVAL `maximum number` 10 25
+#EVAL `list if true otherwise empty` TRUE
+#EVAL `list if true otherwise empty` FALSE
+
+-- =============================================================================
+-- If in Complex Expressions
+-- =============================================================================
+
+GIVEN n IS A NUMBER
+GIVETH A NUMBER
+`fibonacci number` n MEANS
+  IF n <= 1
+  THEN n
+  ELSE `fibonacci number` (n MINUS 1) PLUS `fibonacci number` (n MINUS 2)
+
+#EVAL `fibonacci number` 10

@@ -1,0 +1,112 @@
+-- Arithmetic keyword examples
+
+-- =============================================================================
+-- PLUS (Addition)
+-- =============================================================================
+
+#EVAL 5 PLUS 3
+#EVAL 5 + 3
+#EVAL 10.5 + 2.5
+#EVAL (-3) + 8
+
+-- =============================================================================
+-- MINUS (Subtraction)
+-- =============================================================================
+
+#EVAL 10 MINUS 4
+#EVAL 10 - 4
+#EVAL 5 - 8
+#EVAL 0 - 5
+
+-- =============================================================================
+-- TIMES (Multiplication)
+-- =============================================================================
+
+#EVAL 6 TIMES 7
+#EVAL 6 * 7
+#EVAL 3.14 * 2
+#EVAL (-3) * 4
+
+-- =============================================================================
+-- DIVIDED BY (Division)
+-- =============================================================================
+
+#EVAL 15 DIVIDED BY 3
+#EVAL 15 / 3
+#EVAL 10 / 4
+#EVAL 7 / 2
+
+-- =============================================================================
+-- MODULO (Remainder)
+-- =============================================================================
+
+#EVAL 17 MODULO 5
+#EVAL 10 MODULO 3
+#EVAL 8 MODULO 2
+
+-- =============================================================================
+-- Operator Precedence
+-- =============================================================================
+
+-- Multiplication before addition
+#EVAL 2 + 3 * 4
+
+-- Parentheses override precedence
+#EVAL (2 + 3) * 4
+
+-- Division before subtraction
+#EVAL 10 - 4 / 2
+
+-- With parentheses
+#EVAL (10 - 4) / 2
+
+-- =============================================================================
+-- Complex Expressions
+-- =============================================================================
+
+-- Circle area: pi * r^2
+GIVEN r IS A NUMBER
+circleArea r MEANS 3.14159 TIMES r TIMES r
+
+#EVAL circleArea 5
+
+-- Quadratic formula discriminant: b^2 - 4ac
+GIVEN a IS A NUMBER
+      b IS A NUMBER
+      c IS A NUMBER
+discriminant a b c MEANS
+  b TIMES b MINUS 4 TIMES a TIMES c
+
+#EVAL discriminant 1 5 6
+
+-- =============================================================================
+-- Practical Examples
+-- =============================================================================
+
+-- Calculate tax
+GIVEN price IS A NUMBER
+      taxRate IS A NUMBER
+calculateTax price taxRate MEANS
+  price TIMES taxRate / 100
+
+#EVAL calculateTax 100 8.5
+
+-- Calculate discount
+GIVEN originalPrice IS A NUMBER
+      discountPercent IS A NUMBER
+applyDiscount originalPrice discountPercent MEANS
+  originalPrice MINUS (originalPrice TIMES discountPercent / 100)
+
+#EVAL applyDiscount 200 25
+
+-- =============================================================================
+-- Combining with Comparisons
+-- =============================================================================
+
+ASSUME income IS A NUMBER
+ASSUME expenses IS A NUMBER
+
+DECIDE profit IS income MINUS expenses
+DECIDE isProfitable IS profit GREATER THAN 0
+
+#CHECK isProfitable

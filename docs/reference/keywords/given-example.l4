@@ -1,0 +1,92 @@
+-- GIVEN keyword examples
+
+-- =============================================================================
+-- Single Parameter Functions
+-- =============================================================================
+
+GIVEN x IS A NUMBER
+`double the value` x MEANS x TIMES 2
+
+GIVEN `person name` IS A STRING
+`greet the person` `person name` MEANS CONCAT "Hello, ", `person name`
+
+#EVAL `double the value` 21
+#EVAL `greet the person` "World"
+
+-- =============================================================================
+-- Multiple Parameters (Same Line)
+-- =============================================================================
+
+GIVEN a IS A NUMBER, b IS A NUMBER
+`add two numbers` a b MEANS a PLUS b
+
+GIVEN x IS A NUMBER, y IS A NUMBER
+`multiply two numbers` x y MEANS x TIMES y
+
+#EVAL `add two numbers` 10 32
+#EVAL `multiply two numbers` 6 7
+
+-- =============================================================================
+-- Multiple Parameters (Continuation with Indentation)
+-- =============================================================================
+
+GIVEN x1 IS A NUMBER
+      y1 IS A NUMBER
+      z1 IS A NUMBER
+`sum of three numbers` x1 y1 z1 MEANS x1 PLUS y1 PLUS z1
+
+#EVAL `sum of three numbers` 1 2 3
+
+-- =============================================================================
+-- Parameters with Complex Types
+-- =============================================================================
+
+DECLARE Point HAS x IS A NUMBER, y IS A NUMBER
+
+GIVEN p IS A Point
+`get x coordinate` p MEANS p's x
+
+GIVEN p1 IS A Point
+      p2 IS A Point
+`distance squared between points` p1 p2 MEANS
+  LET `delta x` IS p2's x MINUS p1's x
+      `delta y` IS p2's y MINUS p1's y
+  IN (`delta x` TIMES `delta x`) PLUS (`delta y` TIMES `delta y`)
+
+DECIDE `the origin` IS Point WITH x IS 0, y IS 0
+DECIDE `point one` IS Point WITH x IS 3, y IS 4
+
+#EVAL `get x coordinate` `point one`
+#EVAL `distance squared between points` `the origin` `point one`
+
+-- =============================================================================
+-- Type Parameters
+-- =============================================================================
+
+GIVEN a IS A TYPE, xs IS A LIST OF a
+GIVETH A NUMBER
+`length of list` xs MEANS
+  CONSIDER xs
+  WHEN EMPTY THEN 0
+  WHEN hd FOLLOWED BY tail THEN 1 PLUS `length of list` tail
+
+#EVAL `length of list` (LIST 1, 2, 3, 4, 5)
+#EVAL `length of list` (LIST "a", "b", "c")
+
+-- =============================================================================
+-- Combined with GIVETH
+-- =============================================================================
+
+GIVEN n IS A NUMBER
+GIVETH A BOOLEAN
+`is positive number` n MEANS n > 0
+
+GIVEN num IS A NUMBER
+GIVETH A STRING
+`sign of number` num MEANS
+  IF num > 0 THEN "positive"
+  ELSE IF num < 0 THEN "negative"
+       ELSE "zero"
+
+#EVAL `is positive number` 5
+#EVAL `sign of number` (-3)

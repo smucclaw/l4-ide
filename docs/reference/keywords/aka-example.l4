@@ -1,0 +1,93 @@
+-- AKA keyword examples
+
+-- =============================================================================
+-- Value Aliases
+-- =============================================================================
+
+-- Define a value with multiple names
+x AKA y, z MEANS TRUE
+
+-- All names evaluate to the same value
+#EVAL x
+#EVAL y
+#EVAL z
+
+-- =============================================================================
+-- Type Aliases
+-- =============================================================================
+
+-- Create an alias for BOOLEAN
+DECLARE B AKA YesNo IS BOOLEAN
+
+-- Use either name in type signatures
+GIVETH B
+example1 MEANS TRUE
+
+GIVETH YesNo
+example2 MEANS FALSE
+
+#EVAL example1
+#EVAL example2
+
+-- =============================================================================
+-- Record Type with Alias
+-- =============================================================================
+
+GIVEN a IS A TYPE
+      b IS A TYPE
+DECLARE Pair OF a, b AKA `2-tuple`
+  HAS
+    px IS AN a
+    py IS A b
+
+-- Use the primary name
+GIVETH Pair OF NUMBER, NUMBER
+testPair1 MEANS Pair WITH px IS 3, py IS 5
+
+-- Use the alias
+GIVETH `2-tuple` OF NUMBER, NUMBER
+testPair2 MEANS Pair WITH px IS 10, py IS 20
+
+#EVAL testPair1
+#EVAL testPair2
+
+-- =============================================================================
+-- Legal Terminology Example
+-- =============================================================================
+
+-- Primary legal term with common alias
+DECLARE `Authorized Representative` AKA Agent
+  HAS
+    name IS A STRING
+    licenseId IS A STRING
+
+-- Can construct using either name
+DECIDE myAgent IS `Authorized Representative` WITH
+  name IS "John Smith",
+  licenseId IS "A12345"
+
+-- Access works with both names
+#EVAL myAgent's name
+
+-- =============================================================================
+-- Function with Alias
+-- =============================================================================
+
+GIVEN n IS A NUMBER
+double AKA twice MEANS n TIMES 2
+
+-- Both names work
+#EVAL double 5
+#EVAL twice 5
+
+-- =============================================================================
+-- Multiple Aliases
+-- =============================================================================
+
+GIVEN amount IS A NUMBER
+tax AKA VAT, `sales tax`, GST MEANS amount TIMES 0.1
+
+#EVAL tax 100
+#EVAL VAT 100
+#EVAL `sales tax` 100
+#EVAL GST 100

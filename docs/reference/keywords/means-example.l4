@@ -1,0 +1,84 @@
+-- MEANS keyword examples
+
+-- =============================================================================
+-- Basic MEANS Usage
+-- =============================================================================
+
+-- Simple value definition
+greeting MEANS "Hello, World!"
+answer MEANS 42
+
+#EVAL greeting
+#EVAL answer
+
+-- =============================================================================
+-- Functions with MEANS
+-- =============================================================================
+
+GIVEN x IS A NUMBER
+double x MEANS x TIMES 2
+
+GIVEN a IS A NUMBER, b IS A NUMBER
+add a b MEANS a PLUS b
+
+#EVAL double 21
+#EVAL add 10 32
+
+-- =============================================================================
+-- Multi-line Function Bodies
+-- =============================================================================
+
+GIVEN n IS A NUMBER
+GIVETH A NUMBER
+factorial n MEANS
+  IF n EQUALS 0
+  THEN 1
+  ELSE n TIMES factorial (n MINUS 1)
+
+#EVAL factorial 6
+
+-- =============================================================================
+-- MEANS with WHERE Clauses
+-- =============================================================================
+
+GIVEN radius IS A NUMBER
+circumference radius MEANS
+  2 TIMES pi TIMES radius
+  WHERE
+    pi MEANS 3.14159
+
+#EVAL circumference 10
+
+-- Nested WHERE
+outerFunction MEANS
+  innerResult TIMES 2
+  WHERE
+    innerResult MEANS
+      baseValue PLUS 10
+      WHERE
+        baseValue MEANS 5
+
+#EVAL outerFunction
+
+-- =============================================================================
+-- MEANS vs IS Comparison
+-- =============================================================================
+
+-- Using MEANS for definitions
+valueWithMeans MEANS 100
+valueWithMeans2 MEANS 200
+
+#EVAL valueWithMeans
+#EVAL valueWithMeans2
+
+-- =============================================================================
+-- MEANS in Complex Expressions
+-- =============================================================================
+
+GIVEN items IS A LIST OF NUMBER
+sumItems items MEANS
+  CONSIDER items
+  WHEN EMPTY THEN 0
+  WHEN head FOLLOWED BY tail THEN head PLUS sumItems tail
+
+#EVAL sumItems (LIST 1, 2, 3, 4, 5)

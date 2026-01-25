@@ -1,0 +1,128 @@
+-- CONSIDER keyword examples (pattern matching)
+
+-- =============================================================================
+-- Matching Simple Enums
+-- =============================================================================
+
+DECLARE Colour IS ONE OF red, green, blue
+
+GIVEN c IS A Colour
+`name of colour` c MEANS
+  CONSIDER c
+  WHEN red THEN "Red"
+  WHEN green THEN "Green"
+  WHEN blue THEN "Blue"
+
+#EVAL `name of colour` red
+#EVAL `name of colour` blue
+
+-- =============================================================================
+-- Matching Lists
+-- =============================================================================
+
+-- Sum all elements
+GIVEN xs IS A LIST OF NUMBER
+GIVETH A NUMBER
+`sum of list` xs MEANS
+  CONSIDER xs
+  WHEN EMPTY THEN 0
+  WHEN head FOLLOWED BY tail THEN head PLUS `sum of list` tail
+
+#EVAL `sum of list` (LIST 1, 2, 3, 4, 5)
+
+-- Get first element
+GIVEN ys IS A LIST OF NUMBER
+GIVETH A NUMBER
+`first element or zero` ys MEANS
+  CONSIDER ys
+  WHEN EMPTY THEN 0
+  WHEN head FOLLOWED BY rest THEN head
+
+#EVAL `first element or zero` (LIST 10, 20, 30)
+#EVAL `first element or zero` EMPTY
+
+-- Count elements
+GIVEN a IS A TYPE, zs IS A LIST OF a
+GIVETH A NUMBER
+`length of list` zs MEANS
+  CONSIDER zs
+  WHEN EMPTY THEN 0
+  WHEN hd FOLLOWED BY rest THEN 1 PLUS `length of list` rest
+
+#EVAL `length of list` (LIST "a", "b", "c")
+
+-- =============================================================================
+-- Matching MAYBE Values
+-- =============================================================================
+
+GIVEN mx IS A MAYBE NUMBER
+`get value or default to zero` mx MEANS
+  CONSIDER mx
+  WHEN NOTHING THEN 0
+  WHEN JUST x THEN x
+
+#EVAL `get value or default to zero` (JUST 42)
+#EVAL `get value or default to zero` NOTHING
+
+-- =============================================================================
+-- Matching Enums with Fields
+-- =============================================================================
+
+DECLARE Shape IS ONE OF
+  Circle HAS radius IS A NUMBER
+  Rectangle HAS width IS A NUMBER, height IS A NUMBER
+  Point
+
+GIVEN s IS A Shape
+`area of shape` s MEANS
+  CONSIDER s
+  WHEN Circle r THEN 3.14159 TIMES r TIMES r
+  WHEN Rectangle w h THEN w TIMES h
+  WHEN Point THEN 0
+
+DECIDE `my circle` IS Circle WITH radius IS 5
+DECIDE `my rectangle` IS Rectangle WITH width IS 4, height IS 6
+
+#EVAL `area of shape` `my circle`
+#EVAL `area of shape` `my rectangle`
+#EVAL `area of shape` Point
+
+-- =============================================================================
+-- Matching EITHER Values
+-- =============================================================================
+
+GIVEN result IS AN EITHER STRING NUMBER
+`handle either result` result MEANS
+  CONSIDER result
+  WHEN LEFT err THEN CONCAT "Error: ", err
+  WHEN RIGHT val THEN CONCAT "Value: ", TOSTRING val
+
+#EVAL `handle either result` (LEFT "not found")
+#EVAL `handle either result` (RIGHT 42)
+
+-- =============================================================================
+-- Matching Pairs/Tuples
+-- =============================================================================
+
+DECLARE PairNum HAS first IS A NUMBER, second IS A NUMBER
+
+GIVEN p IS A PairNum
+`add pair values` p MEANS
+  CONSIDER p
+  WHEN PairNum a b THEN a PLUS b
+
+DECIDE `first pair` IS PairNum WITH first IS 10, second IS 20
+#EVAL `add pair values` `first pair`
+
+-- =============================================================================
+-- Nested Pattern Matching
+-- =============================================================================
+
+GIVEN maybeList IS A MAYBE (LIST OF NUMBER)
+`sum of maybe list` maybeList MEANS
+  CONSIDER maybeList
+  WHEN NOTHING THEN 0
+  WHEN JUST xs THEN `sum of list` xs
+
+#EVAL `sum of maybe list` (JUST (LIST 1, 2, 3))
+#EVAL `sum of maybe list` NOTHING

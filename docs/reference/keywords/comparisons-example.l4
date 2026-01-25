@@ -1,0 +1,105 @@
+-- Comparison keyword examples
+
+-- =============================================================================
+-- EQUALS
+-- =============================================================================
+
+-- Numeric equality
+#EVAL 5 EQUALS 5
+#EVAL 5 = 5
+
+-- String equality
+#EVAL "hello" EQUALS "hello"
+#EVAL "hello" = "world"
+
+-- Boolean equality
+#EVAL TRUE EQUALS TRUE
+#EVAL FALSE = FALSE
+
+-- =============================================================================
+-- GREATER THAN / ABOVE
+-- =============================================================================
+
+-- Numeric greater than
+#EVAL 10 GREATER THAN 5
+#EVAL 10 > 5
+#EVAL 10 ABOVE 5
+
+-- String comparison (lexicographic)
+#EVAL "b" GREATER THAN "a"
+#EVAL "zebra" > "apple"
+
+-- =============================================================================
+-- LESS THAN / BELOW
+-- =============================================================================
+
+-- Numeric less than
+#EVAL 3 LESS THAN 7
+#EVAL 3 < 7
+#EVAL 3 BELOW 7
+
+-- =============================================================================
+-- AT LEAST (>=)
+-- =============================================================================
+
+#EVAL 5 AT LEAST 5
+#EVAL 6 AT LEAST 5
+#EVAL 4 AT LEAST 5
+
+#EVAL 5 >= 5
+#EVAL 6 >= 5
+
+-- =============================================================================
+-- AT MOST (<=)
+-- =============================================================================
+
+#EVAL 4 AT MOST 10
+#EVAL 10 AT MOST 10
+#EVAL 11 AT MOST 10
+
+#EVAL 4 <= 10
+#EVAL 10 <= 10
+
+-- =============================================================================
+-- Combined Comparisons
+-- =============================================================================
+
+ASSUME age IS A NUMBER
+
+DECIDE isWorkingAge IS
+      age AT LEAST 18
+  AND age AT MOST 65
+
+#CHECK isWorkingAge
+
+-- =============================================================================
+-- Comparison in Functions
+-- =============================================================================
+
+GIVEN n IS A NUMBER
+GIVETH A STRING
+classifyNumber n MEANS
+  IF n LESS THAN 0
+    THEN "negative"
+    ELSE IF n EQUALS 0
+           THEN "zero"
+           ELSE "positive"
+
+#EVAL classifyNumber (-5)
+#EVAL classifyNumber 0
+#EVAL classifyNumber 42
+
+-- =============================================================================
+-- Range Check Pattern
+-- =============================================================================
+
+GIVEN val IS A NUMBER
+      minVal IS A NUMBER
+      maxVal IS A NUMBER
+GIVETH A BOOLEAN
+inRange val minVal maxVal MEANS
+  val AT LEAST minVal AND val AT MOST maxVal
+
+#EVAL inRange 5 1 10
+#EVAL inRange 15 1 10
+#EVAL inRange 1 1 10

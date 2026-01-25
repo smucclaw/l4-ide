@@ -136,12 +136,36 @@ cabal install exe:jl4-lsp --overwrite-policy=always
 
 ### Specifications
 
-Task specifications and feature designs are organized in the `doc/dev/specs/` directory:
+Technical specifications are maintained in the `/specs` directory (separate from user documentation):
 
-- **`doc/dev/specs/todo/`** - Specifications for planned features and tasks in progress (e.g., `EXPORT-SYNTAX-SPEC.md`, `BOOLEAN-MINIMIZATION-SPEC.md`)
-- **`doc/dev/specs/done/`** - Completed specifications for reference (e.g., `BIDIRECTIONAL-TYPE-CHECKING-SPEC.md`, `STRING-CONCAT-SPEC.md`)
+- **`/specs/todo/`** - Specifications for planned features and tasks in progress
+- **`/specs/done/`** - Completed specifications for reference
+- **`/specs/proposals/`** - Design proposals and RFCs awaiting approval
+- **`/specs/roadmap/`** - Future/aspirational features and long-term plans
 
-When working on a feature, check if there's an existing spec in `doc/dev/specs/todo/` that describes the requirements.
+**Workflow:**
+
+1. New features start as a proposal in `proposals/`
+2. Approved proposals become specs in `todo/`
+3. Completed implementations move specs to `done/`
+
+When working on a feature, check if there's an existing spec in `/specs/todo/` that describes the requirements.
+
+### User Documentation
+
+User-facing documentation lives in `/docs` (separate from development specs):
+
+- **`/docs/reference/`** - Language reference (keywords, types, operators, syntax, libraries, CLI)
+- **`/docs/courses/`** - Structured learning paths (foundation course, advanced course)
+- **`/docs/tutorials/`** - Task-oriented how-to guides for specific goals
+- **`/docs/concepts/`** - Conceptual explanations and background material
+
+**Key Rules:**
+
+- All L4 code examples go into the relevant folders as separate `.l4` files
+- Link to example files rather than embedding code in Markdown
+- This enables automated verification that all examples work with each build
+- No Haskell or JavaScript code in user docs (unless tutorial specifically targets that audience)
 
 ### GitHub Issues
 
@@ -163,9 +187,9 @@ Reviewing merged PRs helps understand what work has been done recently, ongoing 
 
 **Always update documentation alongside code changes.** When completing work:
 
-1. **Update the relevant spec** in `doc/dev/specs/todo/` to reflect what was implemented, any deviations from the original plan, and remaining work
-2. **Move completed specs** from `doc/dev/specs/todo/` to `doc/dev/specs/done/` when a feature is fully implemented
-3. **Update related docs** (e.g., `doc/README.md`, tutorials) if the change affects user-facing behavior
+1. **Update the relevant spec** in `/specs/todo/` to reflect what was implemented, any deviations from the original plan, and remaining work
+2. **Move completed specs** from `/specs/todo/` to `/specs/done/` when a feature is fully implemented
+3. **Update user docs** in `/docs/` if the change affects user-facing behavior
 4. **Note any new limitations or known issues** discovered during implementation
 
 Documentation is a first-class deliverable, not an afterthought.
