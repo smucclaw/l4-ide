@@ -135,6 +135,7 @@ symbols = Map.fromList
 data TKeywords
   = TKGiven
   | TKGiveth
+  | TKGives   -- Synonym for TKGiveth
   | TKDecide
   | TKExact
   | TKMeans
@@ -218,6 +219,7 @@ keywords :: Map Text TKeywords
 keywords = Map.fromList
   [ ("GIVEN"      , TKGiven      )
   , ("GIVETH"     , TKGiveth     )
+  , ("GIVES"      , TKGives      )
   , ("DECIDE"     , TKDecide     )
   , ("EXACTLY"    , TKExact      )
   , ("MEANS"      , TKMeans      )

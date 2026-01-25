@@ -183,7 +183,7 @@ GIVETH A `Final EIS Issuance`
               WHEN NOTHING    THEN `Issued within 45 days of the close of the record` 
               WHEN JUST cause THEN `Issued extended beyond 45 days of the close of the record`
 
--- Below I implemented the clause in such a way that it can be used with the WITHIN keyword as part of a PROVISION definition in the future.
+-- Below I implemented the clause in such a way that it can be used with the WITHIN keyword as part of a DEONTIC definition in the future.
 -- In order to do that the function below returns a number of days. This is just as an example.
 
 GIVEN `The decision`          IS A `Tentative or recommended decision`

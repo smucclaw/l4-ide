@@ -714,7 +714,7 @@ giveth = do
   current <- Lexer.indentLevel
   attachAnno $
     MkGivethSig emptyAnno
-      <$  annoLexeme (spacedKeyword_ TKGiveth)
+      <$  annoLexeme (spacedKeyword_ TKGiveth <|> spacedKeyword_ TKGives)
 --      <*  optional article
       <*> annoHole (indented type' current)
 
@@ -1695,11 +1695,11 @@ breach = do
 optionalWithHole :: HasSrcRange a => AnnoParser a -> AnnoParser (Maybe a)
 optionalWithHole p = Just <$> p <|> annoHole (pure Nothing)
 
-obligation :: Parser (Obligation Name)
+obligation :: Parser (Deonton Name)
 obligation = do
   current <- Lexer.indentLevel
   attachAnno $
-    MkObligation emptyAnno
+    MkDeonton emptyAnno
       <$  annoLexeme (spacedKeyword_ TKParty)
       <*> annoHole (indentedExpr current)
       <*> annoHole (must current)
