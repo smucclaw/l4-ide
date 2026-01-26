@@ -42,13 +42,48 @@ L4's quantifiers should maintain this CSP lineage while adding legal-domain exte
 
 ### 2.1 Basic Quantified Obligation
 
+Since deontic expressions are already typed via `GIVETH DEONTIC PartyType ActionType`, the quantifier variable's type is inferred from context:
+
 ```l4
-EVERY party IN parties WHO predicate
-    MUST action
-    WITHIN deadline
-    HENCE success_continuation
-    LEST failure_continuation
+DECLARE Person
+    HAS name IS A STRING
+
+DECLARE Action IS ONE OF
+    sign
+    approve
+    pay HAS amount IS A NUMBER
+
+GIVETH DEONTIC Person Action
+example MEANS
+    EVERY p                         -- p has type Person (from DEONTIC)
+        WHO    predicate
+        MUST   action
+        WITHIN deadline
+        HENCE  success_continuation
+        LEST   failure_continuation
 ```
+
+The `WHO` predicate refines the universe. If you need to constrain to an explicit set, use set membership in the predicate:
+
+```l4
+GIVEN signatories IS A LIST OF Person
+
+GIVETH DEONTIC Person Action
+sign_all MEANS
+    EVERY p
+        WHO    p IN signatories     -- explicit set via predicate
+        MUST   sign
+        WITHIN 30 days
+        HENCE  closing_complete
+        LEST   deal_falls_through
+```
+
+This design is more expressive than explicit set binding because:
+
+1. **Type inference**: No redundant type annotation; `p`'s type comes from the deontic context
+2. **Predicate subsumes sets**: `WHO p IN some_list` achieves explicit set binding
+3. **Richer constraints**: `WHO age >= 18 AND is_shareholder AND NOT is_conflicted`
+4. **Composable**: Predicates can reference contract state, other parties, temporal conditions
 
 ### 2.2 Distributive vs Collective: Real-World Legal Patterns
 
@@ -205,12 +240,17 @@ The analysis above reveals that current L4 primitives are:
 
 ```l4
 -- Pattern A: Distributive (no HENCE/LEST barrier)
-EACH party MUST maintain_confidentiality WITHIN contract_term
+EACH p
+    MUST   maintain_confidentiality
+    WITHIN contract_term
 
 -- Pattern B: Barrier (with HENCE/LEST)
-EVERY director MUST approve WITHIN 14 days
-    HENCE resolution_takes_effect
-    LEST resolution_fails
+EVERY d
+    WHO    d IN directors
+    MUST   approve
+    WITHIN 14 days
+    HENCE  resolution_takes_effect
+    LEST   resolution_fails
 ```
 
 **Benefits:**
@@ -226,7 +266,7 @@ Given the above, we define:
 Both `EVERY` and `EACH` are **distributive quantifiers** with identical semantics:
 
 ```l4
-EVERY party MUST sign    ≡    EACH party MUST sign
+EVERY p MUST sign    ≡    EACH p MUST sign
 ```
 
 The choice between them is stylistic, preserving isomorphism with source text that may use either word.
@@ -249,10 +289,12 @@ These collective patterns are deferred to a future specification. For now, EVERY
 ### 2.3 Cross-Party References
 
 ```l4
-EACH party p_x MAY terminate
-    HENCE EVERY party p_y WHO is not p_x
-        MUST settle_outstanding_accounts_with p_x
-        WITHIN 30 days
+EACH p_x
+    MAY    terminate
+    HENCE  EVERY p_y
+               WHO  is not p_x
+               MUST settle_outstanding_accounts_with p_x
+               WITHIN 30 days
 ```
 
 The `WHO is not p_x` clause filters the inner quantifier's domain relative to the outer binding.
@@ -261,7 +303,7 @@ The `WHO is not p_x` clause filters the inner quantifier's domain relative to th
 
 ```
 QuantifiedDeonton ::=
-    Quantifier Variable 'IN' Set [Filter]
+    Quantifier Variable [Filter]
         DeonticModal Action
         [TemporalConstraint]
         [HenceClause]
@@ -365,10 +407,13 @@ data BarrierStatus
 
 ### 4.2 Denotational Semantics
 
+The party type `P` is determined by the deontic context (`GIVETH DEONTIC P A`):
+
 ```haskell
-⟦EVERY v IN S WHO pred MUST act WITHIN δ HENCE h LEST l⟧ :: Trace -> Time -> Verdict
+⟦EVERY v WHO pred MUST act WITHIN δ HENCE h LEST l⟧ :: Trace -> Time -> Verdict
+-- where v has type P from the enclosing DEONTIC context
 ⟦...⟧ tr t =
-    let parties   = { p | p ∈ S, pred(p) }
+    let parties   = { p | p ∈ P, pred(p) }    -- P is the party type from context
         completed = { p | p ∈ parties, (p, act(p), t') ∈ tr, t' ≤ δ }
         pending   = parties \ completed
 
@@ -434,8 +479,10 @@ data BarrierStatus
 When HENCE fires, continuation deadlines are relative to **last completion time**:
 
 ```
-EVERY party MUST sign WITHIN 30
-    HENCE escrow_agent MUST release_funds WITHIN 5
+EVERY p
+    MUST   sign
+    WITHIN 30
+    HENCE  escrow_agent MUST release_funds WITHIN 5
 
 Timeline:
 t=0:  Obligation entered
@@ -458,9 +505,12 @@ When LEST fires, continuation deadlines are relative to **failure time**:
 When a party exercises a MAY, the HENCE obligations activate relative to exercise time:
 
 ```l4
-EACH party p_x MAY terminate
-    HENCE EVERY party p_y WHO is not p_x
-        MUST settle_with p_x WITHIN 30
+EACH p_x
+    MAY   terminate
+    HENCE EVERY p_y
+              WHO    is not p_x
+              MUST   settle_with p_x
+              WITHIN 30
 ```
 
 If A terminates at t=10 and B terminates at t=15:
@@ -507,7 +557,7 @@ data BlameAttribution = BlameAttribution
 
 ### 6.3 Indexed Blame for Distributive Obligations
 
-For `EACH party MUST X` (no shared HENCE/LEST), each obligation has independent blame:
+For `EACH p MUST X` (no shared HENCE/LEST), each obligation has independent blame:
 
 ```haskell
 data Verdict
@@ -525,9 +575,11 @@ A contractual MAY is meaningful precisely because it imposes obligations on coun
 ### 7.2 Correlative Structure
 
 ```l4
-EACH party p_x MAY terminate
-    HENCE EVERY party p_y WHO is not p_x
-        MUST settle_outstanding_accounts_with p_x
+EACH p_x
+    MAY   terminate
+    HENCE EVERY p_y
+              WHO  is not p_x
+              MUST settle_outstanding_accounts_with p_x
 ```
 
 The HENCE clause explicitly captures the correlative obligation. This is preferable to implicit correlatives because:
@@ -565,9 +617,9 @@ The inner barrier spawns when the outer barrier achieves, with:
 
 ```l4
 IF condition THEN
-    EVERY party MUST X
+    EVERY p MUST X
 ELSE
-    EVERY party MUST Y
+    EVERY p MUST Y
 ```
 
 Standard conditional; the quantified deontons are in the branches.
@@ -695,21 +747,24 @@ resolve v scope = case Map.lookup v (scopeBindings scope) of
 ### 12.1 Mutual NDA
 
 ```l4
-GIVEN parties IS A SET OF Party
-      confidential_info IS A SET OF Information
+GIVEN confidential_info IS A SET OF Information
 
-EVERY party p MUST keep_confidential confidential_info
+EVERY p
+    WHO    p IN parties
+    MUST   keep_confidential confidential_info
     WITHIN contract_duration
-    LEST PARTY p MUST pay_damages
+    LEST   PARTY p MUST pay_damages
 ```
 
 ### 12.2 Document Signing with Barrier
 
 ```l4
-EVERY director MUST sign_resolution
+EVERY d
+    WHO    d IN directors
+    MUST   sign_resolution
     WITHIN 14 days
-    HENCE company MUST file_with_registrar WITHIN 7 days
-    LEST resolution_fails
+    HENCE  company MUST file_with_registrar WITHIN 7 days
+    LEST   resolution_fails
 ```
 
 The filing obligation only triggers when ALL directors have signed.
@@ -717,12 +772,14 @@ The filing obligation only triggers when ALL directors have signed.
 ### 12.3 Termination with Settlement
 
 ```l4
-EACH party p_x MAY terminate upon 30 days notice
-    HENCE EVERY party p_y WHO is not p_x
-        MUST settle_outstanding_accounts_with p_x
-        WITHIN 30 days
-        HENCE FULFILLED
-        LEST PARTY p_y MUST pay_penalty_to p_x
+EACH p_x
+    MAY    terminate upon 30 days notice
+    HENCE  EVERY p_y
+               WHO    is not p_x
+               MUST   settle_outstanding_accounts_with p_x
+               WITHIN 30 days
+               HENCE  FULFILLED
+               LEST   PARTY p_y MUST pay_penalty_to p_x
 ```
 
 ### 12.4 Sequential Signing by Seniority
@@ -767,8 +824,9 @@ IF (count_completed parties action) >= quorum THEN ...
 For complex coordination, consider explicit sync:
 
 ```l4
-EVERY party MUST X
-    HENCE ...
+EVERY p
+    MUST   X
+    HENCE  ...
     COORDINATED WITH other_barrier
     SYNCHRONIZES ON final_settlement
 ```
