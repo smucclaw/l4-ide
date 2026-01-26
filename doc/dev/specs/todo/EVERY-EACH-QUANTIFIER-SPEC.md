@@ -50,7 +50,178 @@ EVERY party IN parties WHO predicate
     LEST failure_continuation
 ```
 
-### 2.2 EVERY and EACH as Synonyms
+### 2.2 Distributive vs Collective: Real-World Legal Patterns
+
+Before defining syntax, we must understand how quantified obligations appear in real legal texts and how they are interpreted.
+
+#### 2.2.1 Common Legal Patterns and Their Interpretations
+
+**Pattern A: Distributive Obligation (Most Common)**
+
+> "Each party shall maintain the confidentiality of all Confidential Information."
+
+**Lawyer's interpretation:** Every individual party has their own separate obligation. If Alice breaches, Alice is liable; Bob and Carol's obligations are unaffected.
+
+**Layperson's interpretation:** Same - "each of us has to keep secrets."
+
+**CSP formalization:**
+```
+CONF(Alice) ||| CONF(Bob) ||| CONF(Carol)
+-- where CONF(p) = (maintain_confidentiality.p → CONF(p)) □ (breach.p → STOP)
+```
+
+Pure interleaving - each party's obligation is independent.
+
+**Pattern B: Collective Obligation with Shared Outcome**
+
+> "All directors must approve the resolution before it takes effect."
+
+**Lawyer's interpretation:** The resolution requires unanimous approval. No single director's approval is sufficient; the collective body must achieve full approval.
+
+**Layperson's interpretation:** "Everyone needs to say yes for this to go through."
+
+**CSP formalization:**
+```
+(APPROVE(d1) ||| APPROVE(d2) ||| APPROVE(d3)) ; resolution_takes_effect
+-- Sequential composition: all must complete before continuation
+```
+
+This is a **barrier** - the continuation only fires when all have approved.
+
+**Pattern C: Joint and Several Liability**
+
+> "The Guarantors shall be jointly and severally liable for the Debt."
+
+**Lawyer's interpretation:** The creditor can pursue any guarantor for the full amount, or all of them proportionally. Each guarantor is individually liable for 100%, but the creditor can only collect 100% total.
+
+**Layperson's interpretation:** "Any of us can be made to pay the whole thing."
+
+**CSP formalization:** This requires tracking a shared resource (the debt amount):
+```
+GUARANTEE(debt) =
+    (pay.g1?amount → GUARANTEE(debt - amount))
+    □ (pay.g2?amount → GUARANTEE(debt - amount))
+    □ (pay.g3?amount → GUARANTEE(debt - amount))
+    □ ([debt <= 0] → SKIP)
+```
+
+**Pattern D: Collective Action (Truly Joint)**
+
+> "The parties shall jointly execute the Closing Documents."
+
+**Lawyer's interpretation:** All parties must participate in a single, coordinated act. This is not multiple independent signings; it's one event requiring all participants.
+
+**Layperson's interpretation:** "We all sign together at the closing."
+
+**CSP formalization:**
+```
+joint_execution.{Alice, Bob, Carol} → closing_complete
+-- A single synchronized event requiring all parties
+```
+
+#### 2.2.2 Representing These Patterns in Current L4
+
+**Pattern A (Distributive)** - Expressible but verbose:
+
+```l4
+-- Manual expansion for 3 parties:
+(PARTY Alice MUST maintain_confidentiality WITHIN contract_term)
+RAND
+(PARTY Bob MUST maintain_confidentiality WITHIN contract_term)
+RAND
+(PARTY Carol MUST maintain_confidentiality WITHIN contract_term)
+```
+
+**Problems:**
+- Verbose: O(n) clauses for n parties
+- Error-prone: easy to miss a party or introduce inconsistencies
+- Not isomorphic: source text says "each party" once; L4 repeats it n times
+- Maintenance burden: adding a party requires adding another clause
+
+**Pattern B (Barrier)** - Expressible but very verbose:
+
+```l4
+-- Using recursion over a list:
+GIVEN directors IS A LIST OF Director
+`all must approve` MEANS
+    CONSIDER directors
+        WHEN []          THEN resolution_takes_effect
+        WHEN (d :: rest) THEN
+            PARTY d MUST approve WITHIN 14 days
+            HENCE `all must approve` rest
+            LEST resolution_fails
+```
+
+**Problems:**
+- Imposes artificial sequencing (d1 must approve before d2 can)
+- The legal text implies parallel, independent approvals converging at a barrier
+- HENCE chains don't naturally express "all complete, then continue"
+- Blame attribution is per-step, not "who among the set failed"
+
+**Pattern C (Joint and Several)** - Difficult to express:
+
+```l4
+-- Would need explicit state tracking:
+GIVEN debt IS A NUMBER
+      guarantors IS A SET OF Party
+`guarantee` MEANS
+    IF debt > 0 THEN
+        -- But how to express "any of them may pay any amount"?
+        -- And track cumulative payments?
+        -- This requires external state management
+```
+
+**Problems:**
+- L4's deontic model doesn't naturally handle shared mutable state
+- "Any may satisfy" is disjunctive permission with cumulative effects
+- Current primitives don't compose well for this pattern
+
+**Pattern D (Truly Joint Action)** - Not directly expressible:
+
+```l4
+-- No way to express "single synchronized action by all parties"
+-- Would need to model as:
+PARTY (parties_as_collective_entity) MUST execute_closing
+-- But L4's PARTY expects an individual, not a set
+```
+
+**Problems:**
+- L4's PARTY construct takes a single entity
+- No primitive for "synchronized multi-party action"
+- Would require defining a synthetic collective entity
+
+#### 2.2.3 Why New Syntax is Needed
+
+The analysis above reveals that current L4 primitives are:
+
+| Pattern | Expressible? | Ergonomic? | Isomorphic? |
+|---------|--------------|------------|-------------|
+| A: Distributive | Yes | No (verbose) | No |
+| B: Barrier | Partially | No (forces sequencing) | No |
+| C: Joint & Several | With difficulty | No | No |
+| D: Truly Joint | No | N/A | N/A |
+
+**The EVERY/EACH syntax addresses patterns A and B directly:**
+
+```l4
+-- Pattern A: Distributive (no HENCE/LEST barrier)
+EACH party MUST maintain_confidentiality WITHIN contract_term
+
+-- Pattern B: Barrier (with HENCE/LEST)
+EVERY director MUST approve WITHIN 14 days
+    HENCE resolution_takes_effect
+    LEST resolution_fails
+```
+
+**Benefits:**
+- **Concise:** One clause regardless of party count
+- **Isomorphic:** Mirrors source legal text structure
+- **Correct semantics:** Barrier behavior for Pattern B is built-in
+- **Proper blame:** Non-completers identified automatically
+
+#### 2.2.4 EVERY and EACH as Synonyms
+
+Given the above, we define:
 
 Both `EVERY` and `EACH` are **distributive quantifiers** with identical semantics:
 
@@ -58,12 +229,22 @@ Both `EVERY` and `EACH` are **distributive quantifiers** with identical semantic
 EVERY party MUST sign    ≡    EACH party MUST sign
 ```
 
-For collective semantics, use explicit markers:
+The choice between them is stylistic, preserving isomorphism with source text that may use either word.
+
+#### 2.2.5 Collective Semantics (Future Work)
+
+Patterns C and D require additional constructs beyond EVERY/EACH:
 
 ```l4
-ALL parties MUST JOINTLY sign           -- collective
-ALL parties MUST COLLECTIVELY approve   -- collective
+-- Pattern C: Joint and Several (proposed future syntax)
+JOINTLY AND SEVERALLY guarantors MUST pay debt
+    UNTIL debt_satisfied
+
+-- Pattern D: Truly Joint (proposed future syntax)
+ALL parties MUST JOINTLY execute closing_documents
 ```
+
+These collective patterns are deferred to a future specification. For now, EVERY/EACH addresses the most common patterns (A and B) which cover the majority of real-world quantified obligations.
 
 ### 2.3 Cross-Party References
 
