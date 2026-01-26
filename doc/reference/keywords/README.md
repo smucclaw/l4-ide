@@ -4,7 +4,7 @@ Keywords are reserved words in L4 that have special meaning and cannot be used a
 
 ## Overview
 
-L4 has **80 keywords** confirmed in the [Lexer](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/src/L4/Lexer.hs):
+L4 has keywords for
 
 - Declarations and definitions
 - Functions and parameters  
@@ -28,7 +28,7 @@ Used to declare types, variables, and functions.
 - **[AKA](AKA.md)** - Provide alternate names
 - **[IMPORT](IMPORT.md)** - Import from another file
 
----
+--- 
 
 ## Function Keywords
 
@@ -163,52 +163,6 @@ Miscellaneous functionality.
 - **[CONCAT](../operators/README.md)** - String concatenation
 - **[AS](TYPE-KEYWORDS.md)** - Type annotation/alias
 - **[BE](TYPE-KEYWORDS.md)** / **[MEAN](TYPE-KEYWORDS.md)** - Alternative binding forms (reserved)
-
----
-
-## Complete Keyword List (Lexer-Confirmed)
-
-All 80 keywords confirmed in `jl4-core/src/L4/Lexer.hs`:
-
-```
-A, AKA, ALL, AN, AND, AS, ASSUME, AT, ABOVE, BELOW,
-BE, BECAUSE, BRANCH, BREACH, BY,
-CONCAT, CONSIDER,
-DECIDE, DECLARE, DIVIDED, DO, DOES,
-ELSE, ENV, EQUALS, EXACTLY,
-FETCH, FOLLOWED, FOR, FROM, FUNCTION,
-GIVEN, GIVETH, GIVES, GREATER,
-HAS, HENCE,
-IF, IMPLIES, IMPORT, IN, IS,
-LEAST, LESS, LEST, LET, LIST,
-MAY, MEAN, MEANS, MINUS, MODULO, MOST, MUST,
-NOT,
-OF, ONE, OR, OTHERWISE,
-PARTY, PLUS, POST, PROVIDED,
-RAND, ROR,
-SHANT, STARTING,
-THAN, THE, THEN, TIMES, TO, TYPE,
-UNLESS,
-WHEN, WHERE, WITH, WITHIN,
-YIELD
-```
-
----
-
-## Keyword Categories Summary
-
-| Category | Count | Purpose |
-|----------|-------|---------|
-| Declarations | 6 | Define types and values |
-| Functions | 8 | Function definitions |
-| Control Flow | 7 | Conditionals and matching |
-| Logical | 6 | Boolean operations |
-| Type System | 14 | Type expressions |
-| Regulative | 18 | Legal rules |
-| Comparison | 9 | Value comparison |
-| Arithmetic | 6 | Math operations |
-| Other | 6 | Utilities and I/O |
-| **Total** | **80** | |
 
 ---
 
