@@ -77,7 +77,7 @@ Three carets together will mean "repeat everything above to the end of the line"
 
 Syntax and semantics for regulative rules.
 
-Syntax and semantics for property assertions and bounded deontics. Transpilation to verification reasoner backends: UPPAAL, NuSMV, SPIN, Maude, Isabelle/HOL, Lean.
+Syntax and semantics for property assertions and bounded deontics. Transpilation to verification reasoner backends: UPPAAL, NuSMV, SPIN, Maude, Isabelle/HOL, Lean. See [BOUNDED-DEONTICS-SPEC](dev/specs/todo/BOUNDED-DEONTICS-SPEC.md).
 
 Transpilation to automatic web app generation.
 

@@ -1,5 +1,7 @@
 # Meng's thoughts on L4's syntax and semantics for regulative rules
 
+> **See also:** [BOUNDED-DEONTICS-SPEC](dev/specs/todo/BOUNDED-DEONTICS-SPEC.md) for the formal specification of bounded deontics, constitutive vs regulative rules, and the two-level object/assertion architecture.
+
 Unlike constitutive rules which create institutional facts, and have
 the pattern "for the purposes of P, X counts as a Y if conditions C are met",
 

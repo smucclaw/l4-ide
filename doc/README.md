@@ -130,7 +130,7 @@ Legal writers frequently disagree about the use of "shall". L4
 resolves these difficulties by introducing the notion of
 **property-level specification**, from the world of formal verification
 and temporal logic, and the notion of "bounded deontics" which makes
-explicit the idea of "or else what?" (See: deontics over regulatives)
+explicit the idea of "or else what?" See [BOUNDED-DEONTICS-SPEC](dev/specs/todo/BOUNDED-DEONTICS-SPEC.md).
 
 The temporal logics involved in model checking are different from the
 version-oriented temporal logics of databases introduced above.
