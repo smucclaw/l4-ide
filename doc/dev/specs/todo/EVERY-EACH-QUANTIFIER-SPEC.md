@@ -56,14 +56,16 @@ DECLARE Action IS ONE OF
 GIVETH DEONTIC Person Action
 example MEANS
     EVERY p                         -- p has type Person (from DEONTIC)
-        WHO    predicate
+        WHO    predicate            -- predicate : Person -> Boolean
         MUST   action
         WITHIN deadline
         HENCE  success_continuation
         LEST   failure_continuation
 ```
 
-The `WHO` predicate refines the universe. If you need to constrain to an explicit set, use set membership in the predicate:
+The `WHO` clause takes a predicate of type `PartyType -> Boolean`. The bound variable `p` is implicitly passed to this predicate. This follows standard functional programming idiom where the quantified variable is the implicit argument.
+
+For set membership, use `member_of` (analogous to Haskell's `elem`):
 
 ```l4
 GIVEN signatories IS A LIST OF Person
@@ -71,19 +73,22 @@ GIVEN signatories IS A LIST OF Person
 GIVETH DEONTIC Person Action
 sign_all MEANS
     EVERY p
-        WHO    p IN signatories     -- explicit set via predicate
+        WHO    member_of signatories    -- member_of : List a -> a -> Boolean (flipped elem)
         MUST   sign
         WITHIN 30 days
         HENCE  closing_complete
         LEST   deal_falls_through
 ```
 
+The predicate `member_of signatories` is partially applied; when the quantifier binds `p`, it evaluates `member_of signatories p` which returns `True` if `p` is a member of `signatories`.
+
 This design is more expressive than explicit set binding because:
 
 1. **Type inference**: No redundant type annotation; `p`'s type comes from the deontic context
-2. **Predicate subsumes sets**: `WHO p IN some_list` achieves explicit set binding
-3. **Richer constraints**: `WHO age >= 18 AND is_shareholder AND NOT is_conflicted`
-4. **Composable**: Predicates can reference contract state, other parties, temporal conditions
+2. **Predicate is first-class**: Any `PartyType -> Boolean` function works
+3. **Predicate subsumes sets**: `WHO member_of some_list` achieves explicit set binding
+4. **Richer constraints**: `WHO is_adult AND is_shareholder AND NOT is_conflicted`
+5. **Composable**: Predicates can be combined with AND/OR/NOT
 
 ### 2.2 Distributive vs Collective: Real-World Legal Patterns
 
@@ -246,7 +251,7 @@ EACH p
 
 -- Pattern B: Barrier (with HENCE/LEST)
 EVERY d
-    WHO    d IN directors
+    WHO    member_of directors
     MUST   approve
     WITHIN 14 days
     HENCE  resolution_takes_effect
@@ -292,12 +297,14 @@ These collective patterns are deferred to a future specification. For now, EVERY
 EACH p_x
     MAY    terminate
     HENCE  EVERY p_y
-               WHO  is not p_x
+               WHO  differs_from p_x   -- differs_from : a -> a -> Boolean
                MUST settle_outstanding_accounts_with p_x
                WITHIN 30 days
 ```
 
-The `WHO is not p_x` clause filters the inner quantifier's domain relative to the outer binding.
+The predicate `differs_from p_x` is partially applied; when the inner quantifier binds `p_y`, it evaluates `differs_from p_x p_y` (i.e., `p_y /= p_x`). This filters the inner quantifier's domain to exclude the outer-bound variable.
+
+Note: `differs_from` could be written as `(/=)` in more terse functional style, or as `is not` for legal readability. The key point is that it's a function `PartyType -> PartyType -> Boolean` with the outer variable partially applied.
 
 ### 2.4 Full Grammar
 
@@ -508,7 +515,7 @@ When a party exercises a MAY, the HENCE obligations activate relative to exercis
 EACH p_x
     MAY   terminate
     HENCE EVERY p_y
-              WHO    is not p_x
+              WHO    differs_from p_x
               MUST   settle_with p_x
               WITHIN 30
 ```
@@ -578,7 +585,7 @@ A contractual MAY is meaningful precisely because it imposes obligations on coun
 EACH p_x
     MAY   terminate
     HENCE EVERY p_y
-              WHO  is not p_x
+              WHO  differs_from p_x
               MUST settle_outstanding_accounts_with p_x
 ```
 
@@ -750,7 +757,7 @@ resolve v scope = case Map.lookup v (scopeBindings scope) of
 GIVEN confidential_info IS A SET OF Information
 
 EVERY p
-    WHO    p IN parties
+    WHO    member_of parties
     MUST   keep_confidential confidential_info
     WITHIN contract_duration
     LEST   PARTY p MUST pay_damages
@@ -760,7 +767,7 @@ EVERY p
 
 ```l4
 EVERY d
-    WHO    d IN directors
+    WHO    member_of directors
     MUST   sign_resolution
     WITHIN 14 days
     HENCE  company MUST file_with_registrar WITHIN 7 days
@@ -775,7 +782,7 @@ The filing obligation only triggers when ALL directors have signed.
 EACH p_x
     MAY    terminate upon 30 days notice
     HENCE  EVERY p_y
-               WHO    is not p_x
+               WHO    differs_from p_x
                MUST   settle_outstanding_accounts_with p_x
                WITHIN 30 days
                HENCE  FULFILLED
