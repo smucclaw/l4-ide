@@ -130,6 +130,8 @@ Pure interleaving - each party's obligation is independent.
 - **Constitutive:** Defines what counts as X (e.g., "a goal must cross the line to count")
 - **Regulative:** Imposes obligation to do X (e.g., "players must not handle the ball")
 
+See [BOUNDED-DEONTICS-SPEC](BOUNDED-DEONTICS-SPEC.md) for a full treatment of this distinction, including how L4's two-level architecture (object-level contracts vs LTL/CTL assertions) allows constitutive rules to be phrased in regulative syntax when that fits human intuition.
+
 To cast this constitutive notion into regulative form using permissions:
 
 ```l4
