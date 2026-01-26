@@ -113,26 +113,43 @@ We analyze patterns for each modality.
 **CSP formalization:**
 ```
 CONF(Alice) ||| CONF(Bob) ||| CONF(Carol)
--- where CONF(p) = (maintain_confidentiality.p → CONF(p)) □ (breach.p → STOP)
+-- where CONF(p) = ((maintain_confidentiality.p → CONF(p)) □ (breach.p → STOP))
 ```
 
 Pure interleaving - each party's obligation is independent.
 
-**Pattern B: Collective Obligation with Shared Outcome**
+**Pattern B: Constitutive Rule Masquerading as Obligation**
 
 > "All directors must approve the resolution before it takes effect."
 
-**Lawyer's interpretation:** The resolution requires unanimous approval. No single director's approval is sufficient; the collective body must achieve full approval.
+**Lawyer's interpretation:** This is actually a **constitutive** rule ("must be"), not a **regulative** rule ("must do"). Directors bear no penalty for not approving—the resolution simply doesn't pass. The "must" here defines what counts as a valid resolution, not what directors are obligated to do.
 
-**Layperson's interpretation:** "Everyone needs to say yes for this to go through."
+**Layperson's interpretation:** "For this to be official, everyone needs to say yes."
 
-**CSP formalization:**
+**Constitutive vs Regulative distinction:**
+- **Constitutive:** Defines what counts as X (e.g., "a goal must cross the line to count")
+- **Regulative:** Imposes obligation to do X (e.g., "players must not handle the ball")
+
+To cast this constitutive notion into regulative form using permissions:
+
+```l4
+EVERY director
+    MAY    approve the_resolution
+    HENCE  the_resolution passes
 ```
-(APPROVE(d1) ||| APPROVE(d2) ||| APPROVE(d3)) ; resolution_takes_effect
--- Sequential composition: all must complete before continuation
+
+This uses **barrier/join semantics**: all approvals must be collected before HENCE fires once. No director is *obligated* to approve; each *may* approve. Only when all have done so does the resolution pass.
+
+**Contrast with fork semantics (EACH):**
+
+```l4
+EACH director
+    MAY    approve the_resolution
+    HENCE  company MUST notify all_other_directors that someone has approved
+           WITHIN 24 hours
 ```
 
-This is a **barrier** - the continuation only fires when all have approved.
+Here, **each approval triggers its own HENCE independently**—if 5 directors approve, the company sends 5 notifications. This is fork semantics, not barrier semantics.
 
 **Pattern C: Joint and Several Liability**
 
@@ -346,17 +363,43 @@ EVERY d
 - **Correct semantics:** Barrier behavior for Pattern B is built-in
 - **Proper blame:** Non-completers identified automatically
 
-#### 2.2.6 EVERY and EACH as Synonyms
+#### 2.2.6 EVERY vs EACH: Barrier vs Fork Semantics
 
-Given the above, we define:
+`EVERY` and `EACH` are **not synonyms**—they have distinct continuation semantics:
 
-Both `EVERY` and `EACH` are **distributive quantifiers** with identical semantics:
+| Quantifier | Semantics | HENCE behavior |
+|------------|-----------|----------------|
+| `EVERY` | Barrier/Join | Collects all completions, fires HENCE **once** when all done |
+| `EACH` | Fork/Distributive | Fires HENCE **for each** completion independently |
 
+**EVERY (barrier):**
 ```l4
-EVERY p MUST sign    ≡    EACH p MUST sign
+EVERY director
+    MAY    approve
+    HENCE  resolution passes    -- fires once when ALL have approved
 ```
 
-The choice between them is stylistic, preserving isomorphism with source text that may use either word.
+If 5 directors approve, the resolution passes once.
+
+**EACH (fork):**
+```l4
+EACH director
+    MAY    approve
+    HENCE  company MUST notify others WITHIN 24 hours  -- fires for EACH approval
+```
+
+If 5 directors approve, company must send 5 notifications.
+
+**Formal distinction:**
+- `EVERY p ... HENCE h` ≈ `(P1 ||| P2 ||| P3) ; h` (CSP sequential composition after interleaving)
+- `EACH p ... HENCE h` ≈ `(P1 ; h) ||| (P2 ; h) ||| (P3 ; h)` (CSP interleaving of each with its continuation)
+
+**Without HENCE/LEST, both behave identically** (pure distributive):
+```l4
+EVERY p MUST sign    ≡    EACH p MUST sign    -- when no HENCE/LEST
+```
+
+The semantic difference only manifests when continuations are present.
 
 #### 2.2.7 Collective Semantics (Future Work)
 
@@ -421,24 +464,19 @@ Continuation ::= Deonton
 
 ## 3. Semantics Overview
 
-### 3.1 The Barrier Model
+### 3.1 EVERY: The Barrier Model
 
-Quantified deontons with HENCE/LEST have **barrier semantics**:
+`EVERY` with HENCE/LEST has **barrier semantics**:
 
 - **HENCE fires** when ALL parties complete (join point)
 - **LEST fires** when the barrier becomes unachievable (deadline or early failure)
 
-This is NOT equivalent to simple conjunction expansion:
-
 ```l4
--- Simple conjunction (WRONG - each has independent continuation):
-(p1 MUST X HENCE h1 LEST l1) AND (p2 MUST X HENCE h2 LEST l2)
-
--- Quantified with barrier (CORRECT - shared continuations):
 EVERY p MUST X HENCE shared_h LEST shared_l
+-- Desugars to barrier structure, NOT simple conjunction
 ```
 
-### 3.2 Process Algebra Correspondence
+**Process algebra correspondence for EVERY:**
 
 | Model | Representation |
 |-------|----------------|
@@ -446,7 +484,36 @@ EVERY p MUST X HENCE shared_h LEST shared_l
 | **CSP** | `(P1 ||| P2 ||| P3) ; HENCE` — interleaving with sequential composition |
 | **Counting** | Semaphore initialized to n; HENCE fires when count reaches 0 |
 
-### 3.3 State Transitions
+### 3.2 EACH: The Fork Model
+
+`EACH` with HENCE/LEST has **fork semantics**:
+
+- **HENCE fires** independently for each party that completes
+- **LEST fires** independently for each party that fails
+
+```l4
+EACH p MUST X HENCE h(p) LEST l(p)
+-- Desugars to: (p1 MUST X HENCE h(p1) LEST l(p1)) ||| (p2 MUST X HENCE h(p2) LEST l(p2)) ||| ...
+```
+
+**Process algebra correspondence for EACH:**
+
+| Model | Representation |
+|-------|----------------|
+| **Petri Net** | Parallel independent transitions, no join |
+| **CSP** | `(P1 ; h1) ||| (P2 ; h2) ||| (P3 ; h3)` — each process has its own continuation |
+| **Counting** | No shared counter; each completion is independent |
+
+### 3.3 Without HENCE/LEST: Both Equivalent
+
+When there is no continuation clause, EVERY and EACH are semantically equivalent—both produce distributive obligations:
+
+```l4
+EVERY p MUST X    ≡    EACH p MUST X    -- when no HENCE/LEST
+-- Both desugar to: (p1 MUST X) ||| (p2 MUST X) ||| ...
+```
+
+### 3.4 State Transitions (EVERY Barrier)
 
 ```
                     Pending
@@ -736,36 +803,53 @@ GIVEN parties IS A LIST OF Party
 
 Recursion over lists to build sequential HENCE chains. This is already expressible in L4 without new syntax.
 
-## 9. Comparison: Barrier vs Simple Expansion
+## 9. Comparison: EVERY (Barrier) vs EACH (Fork)
 
-### 9.1 Simple Expansion (No Barrier)
-
-```l4
--- Desugars each obligation independently:
-(p1 MUST X HENCE h1 LEST l1) AND (p2 MUST X HENCE h2 LEST l2) AND ...
-```
-
-- Each obligation has its own HENCE/LEST
-- No synchronization
-- Blame per-obligation
-
-### 9.2 Barrier Expansion (Shared HENCE/LEST)
+### 9.1 EACH: Fork Expansion
 
 ```l4
-EVERY p MUST X HENCE h LEST l
+EACH p MUST X HENCE h(p) LEST l(p)
+-- Desugars to:
+(p1 MUST X HENCE h(p1) LEST l(p1)) ||| (p2 MUST X HENCE h(p2) LEST l(p2)) ||| ...
 ```
 
-- Single shared HENCE (fires when all complete)
-- Single shared LEST (fires when any fails by deadline)
-- Blame is the set of non-completers
+- Each party has its own independent HENCE/LEST
+- No synchronization between parties
+- Blame per-party (individual accountability)
+- HENCE fires as each party completes
+
+### 9.2 EVERY: Barrier Expansion
+
+```l4
+EVERY p MUST X HENCE shared_h LEST shared_l
+-- Desugars to barrier structure:
+BARRIER { p1, p2, ... } MUST X HENCE shared_h LEST shared_l
+```
+
+- Single shared HENCE (fires once when ALL complete)
+- Single shared LEST (fires once when barrier fails)
+- Blame is the set of non-completers (collective accountability)
+- Reference time for HENCE is max completion time
 
 ### 9.3 When to Use Which
 
-| Pattern | Semantics | Use Case |
-|---------|-----------|----------|
-| `EACH p MUST X` (no HENCE/LEST) | Independent obligations | Independent compliance |
-| `EVERY p MUST X HENCE h LEST l` | Barrier with join | All-or-nothing transactions |
-| `EACH p MUST X HENCE h(p)` | Per-party continuations | Individualized consequences |
+| Keyword | Semantics | HENCE/LEST behavior | Use Case |
+|---------|-----------|---------------------|----------|
+| `EACH` | Fork | Fires for each independently | Individualized consequences |
+| `EVERY` | Barrier | Fires once when all complete | All-or-nothing transactions |
+| Either (no HENCE) | Distributive | N/A | Independent compliance |
+
+**Examples:**
+
+```l4
+-- Notifications for each approval (fork)
+EACH director MAY approve
+    HENCE company MUST notify_board WITHIN 1 day
+
+-- Resolution passes only when all approve (barrier)
+EVERY director MAY approve
+    HENCE resolution passes
+```
 
 ## 10. Verification
 
