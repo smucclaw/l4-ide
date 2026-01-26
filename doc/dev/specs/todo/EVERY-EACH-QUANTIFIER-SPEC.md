@@ -63,9 +63,9 @@ example MEANS
         LEST   failure_continuation
 ```
 
-The `WHO` clause takes a predicate of type `PartyType -> Boolean`. The bound variable `p` is implicitly passed to this predicate. This follows standard functional programming idiom where the quantified variable is the implicit argument.
+The `WHO` clause takes a predicate expression. The bound variable `p` is implicitly inserted as the **first** argument to this predicate. This follows natural English where the person is the subject of the predicate.
 
-For set membership, use `member_of` (analogous to Haskell's `elem`):
+For set membership, use `member_of` (Haskell's `elem`):
 
 ```l4
 GIVEN signatories IS A LIST OF Person
@@ -73,14 +73,14 @@ GIVEN signatories IS A LIST OF Person
 GIVETH DEONTIC Person Action
 sign_all MEANS
     EVERY p
-        WHO    member_of signatories    -- member_of : List a -> a -> Boolean (flipped elem)
+        WHO    member_of signatories    -- expands to: member_of p signatories
         MUST   sign
         WITHIN 30 days
         HENCE  closing_complete
         LEST   deal_falls_through
 ```
 
-The predicate `member_of signatories` is partially applied; when the quantifier binds `p`, it evaluates `member_of signatories p` which returns `True` if `p` is a member of `signatories`.
+The predicate `member_of signatories` expands to `member_of p signatories` where `member_of : a -> List a -> Boolean` (exactly Haskell's `elem`). This reads naturally as "is p a member of signatories?"
 
 This design is more expressive than explicit set binding because:
 
@@ -302,9 +302,9 @@ EACH p_x
                WITHIN 30 days
 ```
 
-The predicate `differs_from p_x` is partially applied; when the inner quantifier binds `p_y`, it evaluates `differs_from p_x p_y` (i.e., `p_y /= p_x`). This filters the inner quantifier's domain to exclude the outer-bound variable.
+The predicate `differs_from p_x` expands to `differs_from p_y p_x` (i.e., `p_y /= p_x`), reading as "does p_y differ from p_x?" This filters the inner quantifier's domain to exclude the outer-bound variable.
 
-Note: `differs_from` could be written as `(/=)` in more terse functional style, or as `is not` for legal readability. The key point is that it's a function `PartyType -> PartyType -> Boolean` with the outer variable partially applied.
+Note: Since `/=` is symmetric, the argument order doesn't affect the result. The key point is that `differs_from : a -> a -> Boolean` with `p_y` inserted as the first argument and `p_x` as the second.
 
 ### 2.4 Full Grammar
 
