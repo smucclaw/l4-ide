@@ -92,9 +92,15 @@ This design is more expressive than explicit set binding because:
 
 ### 2.2 Distributive vs Collective: Real-World Legal Patterns
 
-Before defining syntax, we must understand how quantified obligations appear in real legal texts and how they are interpreted.
+Before defining syntax, we must understand how quantified deontics appear in real legal texts. Legal language uses quantifiers with all three deontic modalities:
 
-#### 2.2.1 Common Legal Patterns and Their Interpretations
+- **MUST** (obligation): "Each party shall maintain confidentiality..."
+- **MAY** (permission): "Any party may terminate upon notice..."
+- **SHANT** (prohibition): "No party shall disclose..."
+
+We analyze patterns for each modality.
+
+#### 2.2.1 Obligation Patterns (MUST)
 
 **Pattern A: Distributive Obligation (Most Common)**
 
@@ -159,7 +165,83 @@ joint_execution.{Alice, Bob, Carol} → closing_complete
 -- A single synchronized event requiring all parties
 ```
 
-#### 2.2.2 Representing These Patterns in Current L4
+#### 2.2.2 Permission Patterns (MAY)
+
+**Pattern E: Distributive Permission**
+
+> "Each party may assign its rights under this Agreement with prior written consent."
+
+**Lawyer's interpretation:** Every party individually has the permission to assign. Alice's decision to assign doesn't affect Bob's permission.
+
+**Layperson's interpretation:** "Any of us can assign if we get consent."
+
+**Key insight (Hvitved):** A MAY is meaningful because it creates correlative obligations on counterparties. "A may assign" implies "B and C must not prevent A's assignment" and "B and C must recognize the assignment as valid."
+
+**Pattern F: First-to-Act Permission**
+
+> "Any party may terminate this Agreement upon 30 days' written notice."
+
+**Lawyer's interpretation:** Each party has permission to terminate. Once one party exercises it, the termination affects all parties.
+
+**Layperson's interpretation:** "Whoever wants out first can end it for everyone."
+
+**CSP formalization:**
+```
+TERMINABLE = (terminate.Alice → TERMINATED)
+           □ (terminate.Bob → TERMINATED)
+           □ (terminate.Carol → TERMINATED)
+```
+
+External choice - first event determines the outcome.
+
+**Pattern G: Exhaustible Permission**
+
+> "The Licensee may make up to three copies of the Software."
+
+**Lawyer's interpretation:** Permission with a quota. Each exercise consumes one unit of the permission until exhausted.
+
+**Layperson's interpretation:** "We can copy it, but only three times total."
+
+#### 2.2.3 Prohibition Patterns (SHANT)
+
+**Pattern H: Distributive Prohibition**
+
+> "No party shall disclose Confidential Information to any third party."
+
+**Lawyer's interpretation:** Each party is individually prohibited. This is logically equivalent to "Each party shall not disclose..."
+
+**Layperson's interpretation:** "None of us can tell outsiders."
+
+**CSP formalization:**
+```
+-- For each party p, the action disclose.p is not in the allowed alphabet
+CONF(p) = (work.p → CONF(p))  -- disclose.p is simply not offered
+```
+
+**Pattern I: Collective Prohibition**
+
+> "The parties shall not collectively hold more than 49% of the voting shares."
+
+**Lawyer's interpretation:** The prohibition applies to the aggregate. Individual holdings are fine as long as the sum stays under the threshold.
+
+**Layperson's interpretation:** "Together we can't own too much."
+
+**Pattern J: Cross-Party Prohibition**
+
+> "No party shall solicit the employees of any other party."
+
+**Lawyer's interpretation:** Each party is prohibited from soliciting employees of each other party. Creates n × (n-1) prohibition instances.
+
+**Layperson's interpretation:** "Don't poach each other's staff."
+
+**L4 formalization:**
+```l4
+EACH p_x
+    SHANT  solicit_employees_of p_y
+    WHERE  differs_from p_x p_y
+```
+
+#### 2.2.4 Representing These Patterns in Current L4
 
 **Pattern A (Distributive)** - Expressible but verbose:
 
@@ -230,7 +312,7 @@ PARTY (parties_as_collective_entity) MUST execute_closing
 - No primitive for "synchronized multi-party action"
 - Would require defining a synthetic collective entity
 
-#### 2.2.3 Why New Syntax is Needed
+#### 2.2.5 Why New Syntax is Needed
 
 The analysis above reveals that current L4 primitives are:
 
@@ -264,7 +346,7 @@ EVERY d
 - **Correct semantics:** Barrier behavior for Pattern B is built-in
 - **Proper blame:** Non-completers identified automatically
 
-#### 2.2.4 EVERY and EACH as Synonyms
+#### 2.2.6 EVERY and EACH as Synonyms
 
 Given the above, we define:
 
@@ -276,7 +358,7 @@ EVERY p MUST sign    ≡    EACH p MUST sign
 
 The choice between them is stylistic, preserving isomorphism with source text that may use either word.
 
-#### 2.2.5 Collective Semantics (Future Work)
+#### 2.2.7 Collective Semantics (Future Work)
 
 Patterns C and D require additional constructs beyond EVERY/EACH:
 
