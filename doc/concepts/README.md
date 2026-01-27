@@ -72,57 +72,8 @@ _More topics planned: Maybe and Nothing, Type Inference_
 
 ---
 
-## Relationship to Other Documentation
-
-```
-┌─────────────┐
-│  CONCEPTS   │  Why does it work this way?
-│  (explain)  │  What are the principles?
-└──────┬──────┘
-       │
-       ├─────────┐
-       │         │
-┌──────▼──────┐ ┌▼──────────┐
-│  REFERENCE  │ │  COURSES  │
-│  (lookup)   │ │  (learn)  │
-└──────┬──────┘ └┬──────────┘
-       │         │
-       └────┬────┘
-            │
-      ┌─────▼──────┐
-      │ TUTORIALS  │  How do I do X?
-      │   (tasks)  │
-      └────────────┘
-```
-
-- **Start with [Courses](../courses/README.md)** to learn L4 systematically
-- **Use [Tutorials](../tutorials/README.md)** to accomplish specific tasks
-- **Consult [Reference](../reference/README.md)** to look up specific features
-- **Read Concepts** to understand the deeper principles
-
----
-
-## Contributing
-
-Found an error or want to add a concept explanation?
-
-- Report issues via [GitHub Issues](https://github.com/smucclaw/l4-ide/issues)
-- Suggest new concept topics in the issue tracker
-- Contributions welcome via GitHub pull requests
-
----
-
 ## Further Reading
 
 ### Academic Papers
 
 - Coming soon: Links to papers on L4's theoretical foundations
-
-### Design Documents
-
-- See [/specs/proposals/](../../specs/proposals/) for design proposals
-- See [/specs/roadmap/](../../specs/roadmap/) for future directions
-
-### Related Languages
-
-- Comparison to other legal programming languages (coming soon)
