@@ -1,8 +1,6 @@
 # Concepts - Summary
 
-## Overview
-
-- [Concepts Overview](README.md)
+- [Concepts Home](README.md)
 
 ## Language Design
 

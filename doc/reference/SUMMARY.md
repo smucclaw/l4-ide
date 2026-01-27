@@ -1,8 +1,6 @@
 # Reference - Summary
 
-## Overview
-
-- [Reference Overview](README.md)
+- [Reference Home](README.md)
 - [Language Glossary](GLOSSARY.md)
 
 ## Keywords

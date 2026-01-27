@@ -1,8 +1,6 @@
 # Tutorials - Summary
 
-## Overview
-
-- [Tutorials Overview](README.md)
+- [Tutorials Home](README.md)
 - [Tutorial Suggestions](tutorial-suggestions.md)
 
 ## Getting Started

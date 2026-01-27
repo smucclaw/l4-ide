@@ -1,8 +1,6 @@
 # Courses - Summary
 
-## Overview
-
-- [Courses Overview](README.md)
+- [Courses Home](README.md)
 
 ## Foundation Course
 
