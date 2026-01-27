@@ -276,24 +276,6 @@ Example: `{- Block comment -}`
 
 ---
 
-## Grammar Summary
-
-Simplified L4 grammar:
-
-```
-program     ::= section*
-section     ::= '§'+ name? declaration*
-declaration ::= declare | decide | assume | import
-declare     ::= typesig "DECLARE" name typedecl
-decide      ::= typesig "DECIDE" name "MEANS" expr
-assume      ::= typesig "ASSUME" name ("IS" type)?
-expr        ::= literal | name | app | if | consider | where | ...
-```
-
-**See [GRAMMAR.md](https://github.com/smucclaw/l4-ide/blob/main/jl4/GRAMMAR.md) for complete grammar.**
-
----
-
 ## Style Guide
 
 ### Readability
@@ -336,24 +318,4 @@ expr        ::= literal | name | app | if | consider | where | ...
 
 - **[GLOSSARY](../GLOSSARY.md)** - Complete feature index
 - **[Keywords](../keywords/README.md)** - Language keywords
-- **[GRAMMAR.md](../../../jl4/GRAMMAR.md)** - Formal grammar
 - **[Specifications](https://github.com/smucclaw/l4-ide/tree/main/specs)** - Technical specifications
-
----
-
-## Examples
-
-Syntax examples are included in this directory as `.l4` files.
-
----
-
-## Contributing
-
-To improve syntax documentation:
-
-1. Check [Lexer.hs](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/src/L4/Lexer.hs) and [Parser.hs](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/src/L4/Parser.hs)
-2. Add examples as `.l4` files
-3. Test examples work
-4. Submit pull request
-
-See [contributing guidelines](https://github.com/smucclaw/l4-ide/blob/main/CONTRIBUTING.md).
