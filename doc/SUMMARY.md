@@ -12,7 +12,6 @@
 - [Syntax](reference/syntax/README.md)
 - [Libraries](reference/libraries/README.md)
 
-
 ## Courses
 
 - [Courses Overview](courses/README.md)
@@ -34,4 +33,3 @@
 - [Logic](concepts/logic/)
 - [Legal Modeling](concepts/legal-modeling/)
 - [Type System](concepts/type-system/)
-

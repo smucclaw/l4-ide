@@ -167,12 +167,12 @@ rg foo `bar`       # BAD - executes bar command
 
 The `doc/` folder has four distinct sections with different purposes:
 
-| Folder | Purpose | Audience |
-|--------|---------|----------|
-| `doc/reference/` | Precise technical specs for keywords, types, operators, syntax | Developers needing exact details |
-| `doc/courses/` | Structured learning paths with modules | Learners studying L4 systematically |
-| `doc/tutorials/` | Task-oriented guides ("How do I do X?") | Users with specific goals |
-| `doc/concepts/` | Explanations of ideas and design decisions | Anyone wanting to understand "why" |
+| Folder           | Purpose                                                        | Audience                            |
+| ---------------- | -------------------------------------------------------------- | ----------------------------------- |
+| `doc/reference/` | Precise technical specs for keywords, types, operators, syntax | Developers needing exact details    |
+| `doc/courses/`   | Structured learning paths with modules                         | Learners studying L4 systematically |
+| `doc/tutorials/` | Task-oriented guides ("How do I do X?")                        | Users with specific goals           |
+| `doc/concepts/`  | Explanations of ideas and design decisions                     | Anyone wanting to understand "why"  |
 
 ### Important Index Files
 
@@ -187,21 +187,25 @@ Always keep these files accurate and up-to-date:
 
 **Prefer separate `.l4` files over inline code blocks:**
 
-```markdown
+````markdown
 <!-- ✅ Good: Link to validated file -->
+
 **Example:** [eligibility-example.l4](eligibility-example.l4)
 
 <!-- ❌ Avoid: Inline code that can't be validated -->
+
 ```l4
 DECIDE `is eligible` IF ...
-``` 
 ```
+````
+
+````
 
 **All L4 code must be valid.** Use the MCP validator or CLI:
 
 ```bash
 cabal run jl4-cli -- path/to/file.l4
-```
+````
 
 ### Writing L4 for Legal Audiences
 
@@ -218,7 +222,7 @@ DECIDE `the person is eligible for benefits` IF
 
 -- ❌ Poor: Reads like programmer code
 GIVEN p IS A Person
-GIVETH A BOOLEAN  
+GIVETH A BOOLEAN
 isEligible p MEANS p's citizen && p's years >= 5 && !p's disqualified
 ```
 
@@ -237,11 +241,13 @@ isEligible p MEANS p's citizen && p's years >= 5 && !p's disqualified
 ```
 
 This script:
+
 1. Checks all markdown links are valid (no broken references)
 2. Validates all `.l4` files in `doc/` compile without errors
 3. Detects orphaned files (`.md` and `.l4` files not linked from anywhere)
 
 **Fix all errors before committing.** Common issues:
+
 - Links to non-existent files (check paths carefully)
 - Links to planned-but-not-written pages (use "Coming soon" text instead)
 - Invalid L4 syntax in example files
