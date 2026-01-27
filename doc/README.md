@@ -1,3 +1,5 @@
+![L4 Logo](./l4.png)
+
 # L4 Language Documentation
 
 Welcome to the L4 language documentation. L4 is a domain-specific language for law that enables computer-readable formalizations of contracts, legislation, and regulations.
@@ -100,44 +102,6 @@ Understand the "why" behind L4:
 - **[Algebraic Types](concepts/type-system/algebraic-types.md)** - L4's type system
 
 [View all concepts →](concepts/README.md)
-
----
-
-## Quick Examples
-
-### Eligibility Rule
-
-```l4
-GIVEN person IS A Person
-GIVETH A BOOLEAN
-DECIDE `is eligible` IF
-    person's age >= 18
-    AND person's hasValidID
-```
-
-### Contract Obligation
-
-```l4
-GIVETH DEONTIC Party Action
-`delivery obligation` MEANS
-    PARTY Seller
-    MUST `deliver goods`
-    WITHIN 14
-    HENCE FULFILLED
-    LEST BREACH BY Seller
-```
-
-### Pattern Matching
-
-```l4
-GIVEN status IS A Status
-GIVETH A STRING
-`describe status` MEANS
-    CONSIDER status
-    WHEN Active THEN "Currently active"
-    WHEN Suspended THEN "Temporarily suspended"
-    WHEN Terminated THEN "No longer active"
-```
 
 ---
 
