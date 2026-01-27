@@ -17,7 +17,7 @@ Unlike reference docs (which tell you **what** things are) or tutorials (which s
 
 ## Topics
 
-### 🎨 [Language Design](language-design/)
+### 🎨 Language Design
 
 The philosophy and principles behind L4's design
 
@@ -29,7 +29,7 @@ _More topics planned: Layout Sensitivity, Legal Isomorphism, Scope_
 
 ---
 
-### ⚖️ [Legal Modeling](legal-modeling/)
+### ⚖️ Legal Modeling
 
 Representing legal concepts in code
 
@@ -41,7 +41,7 @@ _More topics planned: Deontic Logic, Contract Composition, Constitutive vs Regul
 
 ---
 
-### 🏗️ [Type System](type-system/)
+### 🏗️ Type System
 
 How L4's type system works
 
