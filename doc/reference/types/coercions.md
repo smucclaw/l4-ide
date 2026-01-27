@@ -1,4 +1,4 @@
-# Type Coercion Builtins
+# Type Coercion
 
 L4 provides built-in type coercion functions that are always available without importing any library. These are implemented in the compiler core for performance and consistency.
 
