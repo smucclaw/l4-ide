@@ -1,8 +1,6 @@
 # L4 - Rules as Code - Summary
 
-## Introduction
-
-- [Overview](README.md)
+- [Home](README.md)
 - [Glossary](reference/GLOSSARY.md)
 
 ## Reference
