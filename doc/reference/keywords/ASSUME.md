@@ -80,4 +80,3 @@ DECIDE isAdult IS age >= 18
 ## See Also
 
 - **[Types Reference](../types/README.md)** - Type syntax
-- **[Syntax: Directives](../syntax/directive-example.l4)** - Using #CHECK WITH

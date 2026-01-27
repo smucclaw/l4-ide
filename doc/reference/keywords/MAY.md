@@ -31,7 +31,3 @@ MAY expresses a legal permission - something a party is allowed to do. Unlike ob
 - **[DO](DO.md)** - Action verb
 - **[WITHIN](WITHIN.md)** - Deadline
 - **[PROVIDED](PROVIDED.md)** - Condition for permission
-
-## See Also
-
-- **[PARTY examples](party-example.l4)** - Complete regulative rule examples

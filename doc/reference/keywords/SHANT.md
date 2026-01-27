@@ -75,6 +75,3 @@ rule2 MEANS PARTY Alice MUST NOT smoke WITHIN 30
 - **[LEST](LEST.md)** - Consequence on breach
 - **[BREACH](BREACH.md)** - Violation
 
-## See Also
-
-- **[PARTY examples](party-example.l4)** - Complete regulative rule examples

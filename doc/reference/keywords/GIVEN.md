@@ -85,6 +85,4 @@ processPayment customer amount MEANS ...
 - **[IS](IS.md)** - Type assertion
 
 ## See Also
-
-- **[Function Types](../types/function-type-example.l4)** - Function type examples
 - **[Types Reference](../types/README.md)** - Available types

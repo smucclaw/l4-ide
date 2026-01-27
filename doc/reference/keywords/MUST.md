@@ -33,7 +33,3 @@ MUST expresses a legal obligation - something that a party is required to do. If
 - **[WITHIN](WITHIN.md)** - Deadline
 - **[HENCE](HENCE.md)** - Consequence on fulfillment
 - **[LEST](LEST.md)** - Consequence on breach
-
-## See Also
-
-- **[PARTY examples](party-example.l4)** - Complete regulative rule examples

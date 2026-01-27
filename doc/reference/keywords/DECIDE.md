@@ -100,5 +100,4 @@ DECIDE isEligible IF
 
 ## See Also
 
-- **[Function Types](../types/function-type-example.l4)** - Function examples
 - **[Keywords Reference](README.md)** - All keywords

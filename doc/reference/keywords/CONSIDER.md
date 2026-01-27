@@ -98,8 +98,3 @@ describe n MEANS
 - **[OTHERWISE](OTHERWISE.md)** - Default case
 - **[BRANCH](BRANCH.md)** - Alternative syntax
 - **[IF](IF.md)** - Simple conditional alternative
-
-## See Also
-
-- **[Enums](../types/enum-example.l4)** - Enum pattern matching
-- **[Lists](../types/list-example.l4)** - List pattern matching

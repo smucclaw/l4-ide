@@ -81,7 +81,3 @@ LET y MEAN 10 IN y PLUS 1
 - **[IS](IS.md)** - Alternative for simple definitions
 - **[WHERE](WHERE.md)** - Local definitions
 - **[BE](BE.md)** - Alternative form
-
-## See Also
-
-- **[Function Types](../types/function-type-example.l4)** - Function examples

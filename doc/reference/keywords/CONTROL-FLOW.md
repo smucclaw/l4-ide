@@ -137,4 +137,3 @@ CONSIDER status
 ## See Also
 
 - **[Foundation Course: Control Flow](../../courses/foundation/module-3-control-flow.md)** - Tutorial with examples
-- **[Types: Enums](../types/enum-example.l4)** - Pattern matching with enums

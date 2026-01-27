@@ -89,4 +89,3 @@ double x MEANS x TIMES 2
 ## See Also
 
 - **[Types Reference](../types/README.md)** - Available types
-- **[Function Types](../types/function-type-example.l4)** - Function examples

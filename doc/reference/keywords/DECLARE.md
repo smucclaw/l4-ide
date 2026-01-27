@@ -98,5 +98,3 @@ DECLARE Person3 HAS name: A STRING
 ## See Also
 
 - **[Types Reference](../types/README.md)** - Complete type system documentation
-- **[Records](../types/record-example.l4)** - Record examples
-- **[Enums](../types/enum-example.l4)** - Enum examples
