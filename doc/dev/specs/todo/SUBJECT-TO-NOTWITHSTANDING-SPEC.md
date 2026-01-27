@@ -878,7 +878,453 @@ The proposed syntax enables:
 
 ---
 
-## 12. References
+## 12. Constitutive vs Regulative: A 5×2 Matrix
+
+The five semantic roles interact differently with **constitutive rules** (DECIDE/MEANS - what something IS) versus **regulative rules** (MUST/MAY/MUST NOT - what actors SHALL do). This section explores each combination.
+
+### 12.1 The Matrix
+
+| Role | Constitutive (IS) | Regulative (MUST/MAY) |
+|------|-------------------|----------------------|
+| **Guard** | Classification requires precondition | Action requires precondition |
+| **Filter** | Definition has restricted domain | Duty applies to subset |
+| **Transformer** | Redefines classification | Redefines trigger conditions |
+| **Modifier** | Adjusts computed value | Adjusts the duty/remedy |
+| **Priority** | Definitional conflict resolution | Deontic conflict resolution |
+
+---
+
+### 12.2 Guards × Constitutive/Regulative
+
+#### Guard + Constitutive
+The classification itself depends on a precondition being satisfied.
+
+**Real-world examples:**
+
+| Source | Text | Analysis |
+|--------|------|----------|
+| US Voter Registration | "A person IS a qualified voter SUBJECT TO having registered with the Electoral Commission" | Citizenship + age define the class; registration is the guard |
+| Securities Act | "A security IS exempt under Regulation D SUBJECT TO the issuer having filed Form D" | The exemption classification requires the filing precondition |
+| Professional Licensing | "A person IS a licensed attorney SUBJECT TO having passed the bar examination and character review" | The classification depends on multiple guards |
+| UK Charities Act | "An organization IS a registered charity SUBJECT TO registration with the Charity Commission" | Registration is guard on the constitutive status |
+
+**L4 Syntax:**
+```l4
+GIVEN person IS A Person
+DECIDE `is qualified voter` person
+  SUBJECT TO `is registered with electoral commission` person
+  IS `meets age requirement` person AND `is citizen` person
+```
+
+**Semantics:** The constitutive rule only produces a result if the guard is satisfied. Otherwise, the classification is undefined/UNKNOWN (not FALSE).
+
+#### Guard + Regulative
+The action/duty is only available if precondition is met.
+
+**Real-world examples:**
+
+| Source | Text | Analysis |
+|--------|------|----------|
+| Standard Lease | "Tenant MAY assign this lease SUBJECT TO the landlord's prior written consent" | Consent is guard on the permission |
+| Building Code | "Owner MAY demolish a listed structure SUBJECT TO approval from the Heritage Commission" | Approval guards the permission |
+| Singapore Companies Act s.403 | "A company MAY declare dividends SUBJECT TO the solvency test being satisfied" | Solvency is guard on the corporate power |
+| Employment Contract | "Employee MAY work remotely SUBJECT TO manager approval for each instance" | Approval guards each exercise of permission |
+
+**L4 Syntax:**
+```l4
+GIVEN tenant IS A Tenant, lease IS A Lease
+tenant MAY `assign` lease
+  SUBJECT TO `landlord written consent obtained` tenant lease
+```
+
+**Semantics:** The permission is not exercisable until the guard is satisfied. The permission exists in principle, but is "locked" without the precondition.
+
+**Key Difference:** For constitutive rules, a failed guard means the classification is undefined. For regulative rules, a failed guard means the action is unavailable but the rule is still "there."
+
+#### Why Guards Aren't Just Conjuncts
+
+A natural question: why not flatten `X SUBJECT TO Y` into `X AND Y`? In software, separating these might be "overengineering." But there are real semantic and pragmatic differences:
+
+| Dimension | Inlined Conjunct (`X AND Y`) | Lifted Guard (`X SUBJECT TO Y`) |
+|-----------|------------------------------|--------------------------------|
+| **Epistemic status** | `Y = false` → result is FALSE | `Y = false` → result is UNKNOWN |
+| **Evaluation order** | Unspecified (short-circuit) | Y must be checked first |
+| **Explanation** | "Criteria not met" | "Precondition not satisfied" |
+| **Remediation** | You're ineligible | Go obtain Y, then try again |
+| **Responsibility** | Same actor evaluates all | Different actors may handle guard vs. substance |
+| **Temporal structure** | Simultaneous | Sequential (Y before X) |
+
+**Example:** "May assign lease subject to landlord consent"
+- **As conjunct:** `can_assign = landlord_consented AND meets_lease_terms AND ...`
+  - Consent is just another checkbox; if FALSE, tenant is "not permitted"
+- **As guard:** `SUBJECT TO landlord_consent THEN (meets_lease_terms AND ...)`
+  - Consent is a gating step; if not obtained, assignment is "not yet available"
+  - Different next step: get consent vs. give up
+
+**Legal drafters lift guards because:**
+1. **Cognitive chunking**: Humans process "preconditions" separately from "substance" (Miller's 7±2)
+2. **Document structure**: Preconditions often come from different sections/schedules
+3. **Actor separation**: Procurement gets quotes; Legal checks terms; Board approves
+4. **Audit trails**: "Blocked at consent stage" vs "failed eligibility check" are different findings
+5. **Defeasibility**: Guards can be "obtained" or "waived"; criteria are fixed
+
+**For L4:** We preserve the guard/conjunct distinction because it enables richer:
+- Evaluation traces (which stage failed?)
+- Query planning (what do we need to unlock this action?)
+- Explanation generation (why is this unavailable vs. why is this false?)
+
+---
+
+### 12.3 Filters × Constitutive/Regulative
+
+#### Filter + Constitutive
+The definition applies only within a restricted domain.
+
+**Real-world examples:**
+
+| Source | Text | Analysis |
+|--------|------|----------|
+| UK Employment Rights Act | "'Employee' MEANS an individual who has entered into or works under a contract of employment... This Act does not apply to share fishermen or the police service" | Definition filtered by exclusions |
+| IRC §401(k) | "'Highly compensated employee' MEANS any employee who... EXCEPT that the term does not include any employee described in subparagraph (B)" | Tax classification with carve-outs |
+| GDPR Art.2 | "'Personal data' MEANS any information relating to an identified person... This Regulation does not apply to processing by natural persons in purely personal activities" | Definition scoped by domain filter |
+| Singapore PDPA | "'Personal data' MEANS data about an individual... EXCEPT business contact information" | Definition with explicit exclusion |
+
+**L4 Syntax:**
+```l4
+§ `Part 3: Employment Definitions`
+  SCOPE NOT `excluded under Schedule 2` person
+
+GIVEN person IS A Person
+DECIDE `is employee` person IS
+  `engaged under contract of service` person
+```
+
+**Semantics:** Outside the filtered domain, the definition simply doesn't apply (neither true nor false for those cases).
+
+#### Filter + Regulative
+The duty applies only to entities within the filtered domain.
+
+**Real-world examples:**
+
+| Source | Text | Analysis |
+|--------|------|----------|
+| US FMLA 29 USC §2611 | "Employer MUST provide 12 weeks unpaid leave... This title applies only to employers with 50 or more employees for at least 20 workweeks" | Duty filtered by employer size |
+| Title VII | "Employer MUST NOT discriminate... This title does not apply to employers with fewer than 15 employees" | Prohibition filtered by threshold |
+| ADA Title I | "Employer MUST provide reasonable accommodations... applies to employers with 15 or more employees" | Duty filtered by size |
+| Singapore Employment Act | "Employer MUST pay overtime at 1.5x... This Part applies only to workmen earning ≤$4,500/month" | Duty filtered by salary cap |
+| EU Working Time Directive | "Employer MUST limit work to 48 hours/week... Member States may derogate for managing executives" | Duty filtered by role |
+
+**L4 Syntax:**
+```l4
+§ `Section 5: Annual Leave`
+  SCOPE `employer with 50 or more employees` employer
+
+GIVEN employer IS AN Employer, employee IS AN Employee
+employer MUST `provide annual leave of` 20 `days to` employee
+```
+
+**Semantics:** Small employers are not bound by the obligation at all - it's not that they're permitted to violate it, but that the obligation never attaches to them.
+
+**Key Difference:** Filter + Constitutive affects what IS; Filter + Regulative affects who is BOUND.
+
+---
+
+### 12.4 Transformers × Constitutive/Regulative
+
+#### Transformer + Constitutive
+Temporarily redefines what satisfies a classification.
+
+**Real-world examples:**
+
+| Source | Text | Analysis |
+|--------|------|----------|
+| IRC §121(d)(3) | "For purposes of this section, the destruction, theft, seizure, requisition, or condemnation of property SHALL BE TREATED AS the sale of such property" | Involuntary conversion treated as sale for gain exclusion |
+| IRC §121(d)(3)(B) | "Solely for purposes of this section, an individual SHALL BE TREATED AS using property as principal residence during any period while spouse is granted use under divorce instrument" | Constructive use via spouse for tax purposes |
+| UK VAT Act | "For purposes of zero-rating, children's clothing up to specified sizes SHALL BE TREATED AS exempt goods" | Reclassification for tax treatment |
+| Singapore GST (Holiday) | "For purposes of GST during the specified period, prepared beverages SHALL BE TREATED AS food items" | Temporary category shift |
+| Transition Provisions | "References to the repealed Act SHALL BE CONSTRUED AS references to the corresponding provisions of this Act" | Interpretive transformer across statutes |
+
+**L4 Syntax:**
+```l4
+§ `Holiday Tax Exception`
+  TREATING `is beverage` AS `is food`
+  DURING `december 25` TO `january 1`
+
+-- The constitutive rule is unchanged:
+GIVEN item IS AN Item
+DECIDE `is food` item IS item.category == Food
+```
+
+**Semantics:** The classification predicate is temporarily extended. Beverages now satisfy `is food` during the specified period.
+
+#### Transformer + Regulative
+Temporarily redefines what triggers an obligation.
+
+**Real-world examples:**
+
+| Source | Text | Analysis |
+|--------|------|----------|
+| COVID-19 Regulations (2020) | "For purposes of meeting attendance requirements, participation by video conference SHALL BE TREATED AS attendance in person" | Transforms trigger condition for attendance duties |
+| UK Sunday Trading Act | "For purposes of closing hour restrictions, Christmas Day SHALL BE TREATED AS a Sunday" | Holiday treated as Sunday for closing duties |
+| Emergency Powers | "For purposes of procurement rules during a declared emergency, competitive bidding requirements SHALL BE TREATED AS satisfied by three informal quotes" | Relaxes what satisfies the duty trigger |
+| Singapore COVID Regulations | "For purposes of safe distancing measures, outdoor spaces SHALL BE TREATED AS indoor spaces during the specified period" | Extends scope of distancing duties |
+| Force Majeure Clauses | "For purposes of delivery obligations, the period of force majeure SHALL BE TREATED AS excluded from the delivery timeline" | Transforms what triggers breach |
+
+**L4 Syntax:**
+```l4
+§ `Holiday Closing Hours`
+  TREATING `is public holiday` AS `is Sunday`
+
+GIVEN shop IS A Shop, day IS A Day
+shop MUST `close by 10pm on` day
+  IF `is Sunday` day
+```
+
+**Semantics:** The trigger condition for the duty is temporarily expanded. The obligation now applies on public holidays too.
+
+**Key Difference:** Constitutive transformers change what things ARE; regulative transformers change when duties ARISE.
+
+---
+
+### 12.5 Modifiers × Constitutive/Regulative
+
+#### Modifier + Constitutive
+Adjusts the computed value of a constitutive rule.
+
+**Real-world examples:**
+
+| Source | Text | Analysis |
+|--------|------|----------|
+| Parking Regulations | "The parking fee IS $6/hour on weekdays, $4/hour on weekends, REDUCED BY 50% on public holidays" | Base rate modified by holiday discount |
+| IRC §165(i) | "Disaster losses MAY BE TREATED AS occurring in the preceding taxable year" | Timing modifier on when the loss "is" recognized |
+| Insurance Policy | "The deductible IS $500, REDUCED TO $250 for policyholders with no claims in 3 years" | Value modified by claims history |
+| Rent Control | "Maximum rent increase IS 5% annually, CAPPED AT 3% for senior tenants" | Rate modified by tenant status |
+| Interest Calculation | "Interest IS calculated at prime + 2%, SUBJECT TO a floor of 4% and ceiling of 12%" | Value bounded by modifiers |
+
+**L4 Syntax:**
+```l4
+GIVEN item IS AN Item, day IS A Day
+DECIDE `tax rate` item day IS
+  LET base = 0.10
+  IN IF `is public holiday` day THEN base * 0.5 ELSE base
+```
+
+**Semantics:** The constitutive rule produces a base value; the modifier transforms it.
+
+#### Modifier + Regulative
+Adjusts the content of the duty or its remedy.
+
+**Real-world examples:**
+
+| Source | Text | Analysis |
+|--------|------|----------|
+| Termination Clause | "Landlord MUST provide 30 days notice to terminate, REDUCED TO 7 days for non-payment of rent" | Notice period (duty content) modified by circumstance |
+| Traffic Code | "Speeding fine IS $100, REDUCED TO $50 for first-time offenders" | Penalty (remedy) modified by offender history |
+| Employment Law | "Employer MUST provide 2 weeks severance per year of service, INCREASED TO 3 weeks for employees over 50" | Duty quantum modified by employee status |
+| Limitation Periods | "Claimant MUST file within 2 years, EXTENDED TO 3 years if defendant was outside jurisdiction" | Time limit (duty parameter) modified by circumstance |
+| Contract Damages | "Breaching party MUST pay liquidated damages of $10,000, REDUCED proportionally if partial performance rendered" | Remedy modified by mitigation |
+
+**L4 Syntax:**
+```l4
+GIVEN landlord IS A Landlord, tenant IS A Tenant
+landlord MUST `provide notice of`
+  (IF `tenant in arrears` tenant THEN 7 ELSE 30) `days`
+```
+
+Or for remedy modification:
+```l4
+GIVEN violator IS A Person
+DECIDE `parking fine` violator IS
+  IF `is first offense` violator THEN 50 ELSE 100
+```
+
+**Semantics:** The duty's parameters or the remedy's magnitude are adjusted.
+
+**Key Difference:** Constitutive modifiers change computed VALUES; regulative modifiers change duty PARAMETERS or REMEDIES.
+
+---
+
+### 12.6 Priority × Constitutive/Regulative
+
+This is where the distinction becomes most interesting.
+
+#### Priority + Constitutive
+One definition prevails over another.
+
+**Real-world examples:**
+
+| Source | Text | Analysis |
+|--------|------|----------|
+| IRC §162 vs §280A | "Business expenses are deductible... NOTWITHSTANDING §162, home office expenses are limited per §280A" | Special definition overrides general |
+| California Civil Code §1646 | "NOTWITHSTANDING Section 1646, parties to contracts ≥$250,000 MAY agree California law governs" | Override of default choice-of-law rule |
+| GDPR Art.9 vs Art.6 | "NOTWITHSTANDING Article 6, special categories of data require explicit consent" | Stricter definition prevails |
+| Interpretation Acts | "NOTWITHSTANDING any definition in other legislation, 'person' in this Act includes corporations" | Act-specific definition overrides general |
+| Tax Treaty Override | "NOTWITHSTANDING the domestic definition of 'resident', the treaty definition shall apply" | International definition prevails |
+
+**L4 Syntax:**
+```l4
+§ `Section 2: General Definition`
+DECIDE `income` taxpayer IS `gross receipts` taxpayer
+
+§ `Part 5: Special Provisions`
+  NOTWITHSTANDING `Section 2`
+
+DECIDE `income` taxpayer IS
+  `gross receipts` taxpayer - `allowable deductions` taxpayer
+```
+
+**Semantics:** When both definitions could apply, the Part 5 definition prevails. This is pure definitional override.
+
+#### Priority + Regulative (Deontic Conflicts)
+
+This is more complex because obligations, permissions, and prohibitions can conflict in different ways.
+
+**Real-world examples:**
+
+| Source | Text | Deontic Pattern | Analysis |
+|--------|------|-----------------|----------|
+| Singapore Companies Act s.152 | "Public company MAY remove director by ordinary resolution, NOTWITHSTANDING anything in its constitution or any agreement" | MAY overrides MUST NOT | Statutory permission overrides contractual prohibition |
+| Standard Lease | "Tenant MUST NOT sublease. NOTWITHSTANDING the foregoing, tenant MAY sublease to immediate family" | MAY overrides MUST NOT | Exception carves out from prohibition |
+| Canadian Charter s.33 | "Parliament MAY declare Act operates NOTWITHSTANDING sections 2 or 7-15" | MAY overrides MUST NOT | Legislature overrides Charter rights |
+| UK Companies Act s.168 | "Company MAY remove director NOTWITHSTANDING any provision in articles or agreement" | MAY overrides MUST NOT | Statutory power overrides contract |
+| Employment Contract | "Employee MAY take lunch anytime. NOTWITHSTANDING this, during peak season employee MUST take lunch 12-2pm" | MUST overrides MAY | Obligation restricts permission |
+| Traffic Law | "Driver MUST yield to pedestrians. NOTWITHSTANDING this, driver MUST NOT yield when police directs otherwise" | MUST NOT overrides MUST | Prohibition creates exception to duty |
+
+**Case A: Permission overrides Prohibition (MAY > MUST NOT)**
+```l4
+§ `Section 5: Sublease Prohibition`
+GIVEN tenant IS A Tenant, sublessee IS A Person
+tenant MUST NOT `sublease to` sublessee
+
+§ `Section 6: Family Exception`
+  NOTWITHSTANDING `Section 5`
+
+GIVEN tenant IS A Tenant, sublessee IS A Person
+tenant MAY `sublease to` sublessee
+  IF `is immediate family of` sublessee tenant
+```
+
+**Case B: Obligation overrides Permission (MUST > MAY)**
+```l4
+§ `Section 3: Flexible Lunch`
+employee MAY `take lunch at` any_time
+
+§ `Section 4: Peak Season`
+  NOTWITHSTANDING `Section 3`
+
+employee MUST `take lunch at` time
+  IF `is peak season` date AND time >= 12:00 AND time <= 14:00
+```
+
+**Case C: Prohibition overrides Obligation (MUST NOT > MUST)**
+```l4
+§ `Section 7: Yield Rule`
+driver MUST `yield to pedestrians at` crossing
+
+§ `Section 8: Police Override`
+  NOTWITHSTANDING `Section 7`
+
+driver MUST NOT `yield at` crossing
+  IF `police officer directing otherwise` crossing
+```
+
+**Semantics:** Deontic priority requires careful handling:
+- MAY can override MUST NOT (create an exception to prohibition)
+- MUST can override MAY (restrict a permission to a duty)
+- MUST NOT can override MUST (create an exception to duty)
+
+**Key Difference:** Constitutive priority is about which definition wins. Regulative priority involves deontic logic - the interaction of obligation, permission, and prohibition modalities.
+
+---
+
+### 12.7 Evaluation Pipeline Implications
+
+The constitutive/regulative distinction affects the evaluation pipeline:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  For CONSTITUTIVE rules:                                        │
+│                                                                 │
+│  1. Transform (rewrite classifications)                         │
+│  2. Filter (check domain applicability)                         │
+│  3. Guard (check preconditions → undefined if fails)            │
+│  4. Evaluate (compute value/classification)                     │
+│  5. Modify (transform result)                                   │
+│  6. Detect conflicts (multiple definitions)                     │
+│  7. Resolve priority (definitional override)                    │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│  For REGULATIVE rules:                                          │
+│                                                                 │
+│  1. Transform (rewrite trigger conditions)                      │
+│  2. Filter (check if actor/situation is bound)                  │
+│  3. Guard (check if action is available)                        │
+│  4. Evaluate (determine if duty/permission active)              │
+│  5. Modify (adjust duty parameters/remedies)                    │
+│  6. Detect deontic conflicts (O/P/F clash)                      │
+│  7. Resolve priority (deontic override, modal hierarchy)        │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+Stage 6 and 7 differ significantly:
+- Constitutive conflicts: Same predicate, different values
+- Regulative conflicts: Same action, different modalities (must vs may vs must-not)
+
+---
+
+### 12.8 L4 Syntax Implications
+
+**For constitutive rules**, the existing proposals work:
+```l4
+GIVEN x IS A Type
+DECIDE `predicate` x
+  SUBJECT TO guard
+  IS expression
+```
+
+**For regulative rules**, we need modal-aware syntax:
+```l4
+GIVEN actor IS A Type, action IS A Type
+actor MUST|MAY|MUST NOT action
+  SUBJECT TO guard
+  EXCEPT WHEN filter
+  NOTWITHSTANDING `other section`
+```
+
+**Deontic override rules:**
+```l4
+§ `Priority Declarations`
+
+-- Permission overrides prohibition
+`Section 6` (MAY) NOTWITHSTANDING `Section 5` (MUST NOT)
+
+-- Or implicit: MAY always overrides MUST NOT when declared
+-- Or: require explicit override strength declaration
+```
+
+---
+
+### 12.9 Open Questions
+
+1. **Deontic conflict semantics**: When a permission and prohibition both apply (without explicit priority), what's the default?
+   - Option A: Prohibition wins (conservative)
+   - Option B: Permission wins (liberal)
+   - Option C: Error - require explicit resolution
+
+2. **Guard failure semantics**:
+   - Constitutive: classification is UNKNOWN vs FALSE?
+   - Regulative: action unavailable vs forbidden?
+
+3. **Modifier on regulative**: Does modifying the content of a duty (e.g., notice period) change the duty itself, or create a new duty?
+
+4. **Transformer scope for regulative**: If we "treat Sunday as Saturday", does this affect all duties that reference days, or only specific ones?
+
+5. **Cross-type priority**: Can a constitutive rule have priority over a regulative rule or vice versa? (e.g., "NOTWITHSTANDING the definition of 'employee', all workers MUST receive minimum wage")
+
+---
+
+## 13. References
 
 ### Legal Drafting
 - [Weagree: Notwithstanding in Contracts](https://weagree.com/clm/contracts/contract-wording/notwithstanding/)
