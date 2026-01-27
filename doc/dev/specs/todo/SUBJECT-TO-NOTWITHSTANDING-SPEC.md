@@ -1,277 +1,470 @@
-# SUBJECT TO / DESPITE / NOTWITHSTANDING: Taxonomic Analysis and Specification
+# The Semantics of "Notwithstanding", "Subject to", and "Despite"
 
-**Status:** Draft (Revised)
-**Author:** Research compilation for L4 language design
+**Survey, Examples, Logical Theory, Modifiers, and an Evaluation Pipeline for L4**
+
+**Status:** Draft (Revised with Evaluation Pipeline)
 **Date:** 2025-01-27
 **Branch:** mengwong/spec-notwithstanding
 
 ---
 
-## 1. Introduction
+## 1. Introduction and Motivation
 
-This document catalogues the various uses of `SUBJECT TO`, `DESPITE`, and `NOTWITHSTANDING` in legal texts before proposing a formal semantics for L4.
+Legal and regulatory texts routinely use phrases such as "subject to", "notwithstanding", and "despite" to structure how rules operate. These phrases are deceptively uniform in surface form but express multiple, distinct semantic mechanisms.
 
-### 1.1 Motivation
+Early interpretive canons correctly identify some of these mechanisms as priority relations among norms. However, real-world legal reasoning reveals that priority is only one—and often not the dominant—semantic role these phrases play.
 
-L4 aims to formalize legal rules with mathematical precision. These keywords appear frequently in statutes and contracts, but their semantics are complex. Without formal treatment, these constructs remain as informal comments in L4 code (e.g., `Subject to exceptions` IS A BOOLEAN in the Singapore PDPA example).
+Instead, they frequently express:
+- procedural constraints,
+- conditional applicability,
+- value transformations,
+- and even temporary reinterpretations of a rule's own vocabulary.
 
-### 1.2 Key Insight: Directionality
+For L4, whose purpose is to encode legal rules as executable logic, faithfully capturing these distinctions is essential.
 
-The fundamental distinction between these keywords is **directionality** in document structure:
+### 1.1 Key Insight: Linguistic Signals, Not Semantic Operators
 
-| Keyword | Appears In | Points To | Effect |
-|---------|-----------|-----------|--------|
-| `SUBJECT TO` | Main/subordinate clause | Exception clause | "I yield to that provision" |
-| `NOTWITHSTANDING` | Exception/prevailing clause | Main clause | "I override that provision" |
-| `DESPITE` | Exception/prevailing clause | Main clause | Same as NOTWITHSTANDING |
+**"Subject to", "notwithstanding", and "despite" are linguistic signals, not semantic operators.**
+
+They may introduce:
+- guards,
+- filters,
+- modifiers,
+- interpretive rewrites,
+- or priority relations,
+
+depending on what they range over and how they compose. The same surface phrase can realize entirely different semantic mechanisms.
+
+### 1.2 Directionality in Document Structure
+
+| Keyword | Appears In | Points To | Typical Effect |
+|---------|-----------|-----------|----------------|
+| `SUBJECT TO` | Main/subordinate clause | Modifying clause | "I am modified/constrained by that" |
+| `NOTWITHSTANDING` | Prevailing clause | Overridden clause | "I override that provision" |
+| `DESPITE` | Prevailing clause | Overridden clause | Same as NOTWITHSTANDING |
 
 As noted in drafting literature: "notwithstanding looks back whilst subject to looks forward."
 
 ---
 
-## 2. Revised Taxonomy
+## 2. Survey of Scholarly and Legal Literature (Summary)
 
-After analysis, we identify **four distinct semantic functions**:
+Interpretive and drafting literature converges on the following points:
 
-| Category | Semantics | Computational Model |
-|----------|-----------|---------------------|
-| **Override/Priority** | A prevails over B when both apply and conflict | `if conflict(A,B) then winner(A,B)` |
-| **Domain Restriction** | Restricts what inputs the rule applies to | `filter predicate inputs` |
-| **Output Modifier** | Transforms result after rule evaluates | `transform(base_result)` |
-| **Defeasibility** | Provisional conclusion, can be defeated | `default unless defeated` |
+1. "Notwithstanding" and "despite" are consistently treated as superordinating (priority-asserting) language.
+2. "Subject to" is treated as subordinating language when it ranges over other provisions.
+3. Courts and drafters implicitly—but systematically—treat:
+   - "subject to consent/approval/compliance" as **conditions precedent**, not priority.
+   - "subject to Section X" as **priority**.
+4. Tax, pricing, and regulatory schemes routinely use "subject to" to express **conditional modifications**, not overrides.
+5. Some regimes go further, using "subject to" to **temporarily redefine classifications** that other rules depend on.
 
-### 2.1 Why Four Categories?
-
-Earlier analysis identified seven patterns, but several collapse:
-
-- **Priority Declaration** and **Preservation/Savings** both reduce to **Override/Priority** (preservation is just priority stated defensively)
-- **Exception/Carve-Out**, **Condition Precedent**, and **Scope Restriction** all reduce to **Domain Restriction** (all filter which inputs a rule applies to)
-- **Proviso/Qualification** is **Output Modifier**
-- **Defeasibility Marker** remains distinct
-
-### 2.2 Open Question: Is Defeasibility Distinct from Override?
-
-A defeater is essentially a higher-priority rule that fires under certain conditions. The distinction may be:
-- **Override**: statically declared priority between named rules
-- **Defeasibility**: dynamic - any future rule could potentially defeat this one
-
-This may be more about declaration style than semantics. The corpus analysis below will help clarify.
+The literature does not unify these phenomena under a single operator, but practice consistently distinguishes them.
 
 ---
 
-## 3. Corpus of Examples
+## 3. A Refined Taxonomy of Semantic Roles
 
-We collected 55 examples from statutes, regulations, and contracts across multiple jurisdictions. Each is classified according to our four-category taxonomy.
+The same surface phrases can realize distinct semantic roles. These roles must be separated in any faithful formalization.
+
+### 3.1 Semantic Roles
+
+| Role | Description | Conflict Required? |
+|------|-------------|-------------------|
+| **Guard / Precondition** | Enables or disables an action or rule | No |
+| **Input Filter** | Restricts the domain where a rule applies | No |
+| **Input Transformer** (Homoiconic) | Rewrites how inputs or predicates are interpreted | No |
+| **Output Modifier** | Transforms the result of a rule | No |
+| **Priority / Override** | Resolves inconsistency among rules | **Yes** |
+
+### 3.2 Selection vs Composition
+
+A fundamental distinction:
+- **Priority** is *selection* among competing rules.
+- **Guards, filters, transformers, and modifiers** are *composition* with a rule.
+
+**Only priority presupposes inconsistency.**
+
+### 3.3 Two Levels of Legal Meaning
+
+Legal texts give rise to:
+
+1. **Object-level rule behavior**
+   - actions, values, classifications, applicability
+2. **Meta-level rule interaction**
+   - conflict detection and resolution
+
+Only the second level involves priority.
+
+---
+
+## 4. Detailed Semantics of Each Role
+
+### 4.1 Guards (Enablement / Precondition)
+
+**Function:** Prevent an action or rule from being available until a condition is satisfied.
+
+**Typical signals:** consent, approval, authorization, compliance
+
+**Example:**
+```
+"The tenant may assign the lease, subject to the landlord's consent."
+```
+
+**Reasoning:**
+- Assignment is unavailable unless consent is obtained.
+- No conflict with any other rule is asserted.
+- This constrains the state transition graph of lawful actions.
+
+**Computational model:**
+```haskell
+action_available(x) = guard_satisfied(x)
+-- If guard fails, action is not in the set of available actions
+```
+
+---
+
+### 4.2 Input Filters (Domain Restriction)
+
+**Function:** Narrow the situations in which a rule applies. Do not transform the rule or its outputs.
+
+**Example:**
+```
+"This Part applies to all employees, subject to the exclusions in Schedule 2."
+```
+
+**Reasoning:**
+- The rule's domain is restricted to employees not listed in Schedule 2.
+- The rule itself is unchanged; it simply doesn't fire for excluded cases.
+
+**Computational model:**
+```haskell
+rule_applies(x) = in_base_domain(x) && not(excluded(x))
+-- Filter happens before rule evaluation
+```
+
+---
+
+### 4.3 Input Transformers (Homoiconic Predicate Rewriting)
+
+**Function:** Rewrite classifications or predicates that a rule depends on. Temporarily alter the rule's interpretive environment. Affects all downstream logic.
+
+**This is common in tax, regulatory, and emergency regimes.**
+
+**Example:**
+```
+"GST/VAT taxes operate as usual, subject to an exception between
+December 25 and January 1 that all beverage items will qualify
+to be taxed as food items."
+```
+
+**Reasoning:**
+- The tax rules remain unchanged.
+- During a specified period, the classification predicates those rules rely on are altered.
+- Beverages are treated as if they satisfy the "food" predicate.
+
+**This is neither filtering nor output adjustment—it is a temporary reinterpretation of the rule's ontology.**
+
+**Computational model:**
+```haskell
+-- Normal interpretation
+is_food(x) = x.category == Food
+
+-- Transformed interpretation (Dec 25 - Jan 1)
+is_food(x) = x.category == Food || x.category == Beverage
+
+-- The tax rule itself is unchanged:
+tax_rate(x) = if is_food(x) then 0% else 10%
+```
+
+**Test case:**
+- Dec 24 beverage → 10% (normal interpretation)
+- Dec 26 beverage → 0% (transformed interpretation)
+- Jan 2 beverage → 10% (normal interpretation restored)
+
+---
+
+### 4.4 Output Modifiers (Result Transformation)
+
+**Function:** Transform results (prices, rates, quantities, penalties) after rule evaluation. Often conditional. Do not alter applicability or interpretation.
+
+**Example:**
+```
+"Subject to a 50% discount on public holidays, parking costs
+$4 per hour on weekends and $6 per hour on weekdays."
+```
+
+**Reasoning:**
+1. Compute the base rate (weekday/weekend).
+2. If the day is a public holiday, apply a discount.
+
+The base rule is not defeated or replaced; its output is conditionally transformed.
+
+**Computational model:**
+```haskell
+base_rate(day) = if is_weekend(day) then 4 else 6
+
+final_rate(day) =
+  let base = base_rate(day)
+  in if is_holiday(day)
+     then base * 0.5  -- output modifier
+     else base
+```
+
+**Test case:**
+- Weekend + holiday → $2
+- Weekday + holiday → $3
+- Weekend, no holiday → $4
+
+---
+
+### 4.5 Priority / Override (Conflict Resolution)
+
+**Function:** Resolves inconsistency among rules. Applies only when multiple rules produce incompatible outcomes.
+
+**Example:**
+```
+"Notwithstanding Section 5, the landlord may terminate
+the lease for non-payment."
+```
+
+**Reasoning:**
+- Two applicable rules conflict.
+- This clause specifies which one prevails.
+
+**Computational model:**
+```haskell
+-- Rule A and Rule B both apply and produce incompatible results
+-- Priority declaration: B notwithstanding A
+final_result = if conflict(result_A, result_B)
+               then result_B  -- B wins
+               else combine(result_A, result_B)
+```
+
+**Key invariant:** Priority never changes the meaning of a rule—only which result survives.
+
+---
+
+## 5. Evaluation Pipeline
+
+To accommodate all of the above, rule evaluation must follow a disciplined pipeline. This pipeline is conceptual and does not presuppose types or syntax.
+
+### 5.1 Evaluation Stages
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  1. INTERPRETATION LAYER                                        │
+│     Apply input transformers                                    │
+│     Rewrite classifications, predicates, or meanings locally    │
+├─────────────────────────────────────────────────────────────────┤
+│  2. APPLICABILITY LAYER                                         │
+│     Apply input filters                                         │
+│     Determine whether the rule applies to the situation         │
+├─────────────────────────────────────────────────────────────────┤
+│  3. ENABLEMENT LAYER                                            │
+│     Apply guards / preconditions                                │
+│     Determine whether the action or effect is available         │
+├─────────────────────────────────────────────────────────────────┤
+│  4. BASE RULE EVALUATION                                        │
+│     Compute obligations, permissions, values, or outcomes       │
+├─────────────────────────────────────────────────────────────────┤
+│  5. OUTPUT TRANSFORMATION                                       │
+│     Apply output modifiers                                      │
+│     Adjust results (discounts, caps, multipliers, etc.)         │
+├─────────────────────────────────────────────────────────────────┤
+│  6. CONFLICT DETECTION                                          │
+│     Identify incompatible results from multiple rules           │
+├─────────────────────────────────────────────────────────────────┤
+│  7. PRIORITY RESOLUTION                                         │
+│     Apply "notwithstanding / subject to / despite" priority     │
+│     Select surviving outcomes                                   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 5.2 Key Invariants
+
+1. **Priority never precedes object-level evaluation.**
+2. **Modifiers never resolve conflicts.**
+3. **Input transformers affect all downstream stages.**
+4. **Guards and filters do not rewrite rule meaning.**
+5. **Output modifiers do not affect applicability.**
+
+### 5.3 Pipeline as Function Composition
+
+```haskell
+evaluate :: Context -> Rule -> Input -> Maybe Result
+evaluate ctx rule input =
+  input
+    |> applyTransformers ctx      -- Stage 1: rewrite predicates
+    |> applyFilters rule          -- Stage 2: check applicability
+    |> applyGuards rule           -- Stage 3: check enablement
+    |> evaluateBase rule          -- Stage 4: compute result
+    |> applyOutputModifiers ctx   -- Stage 5: transform result
+
+resolveConflicts :: [Result] -> Result
+resolveConflicts results =
+  results
+    |> detectConflicts            -- Stage 6
+    |> applyPriority              -- Stage 7
+```
+
+---
+
+## 6. Corpus of Examples (Reclassified)
+
+We reclassify the corpus using the refined taxonomy.
 
 ### Classification Key
 
-| Code | Category |
-|------|----------|
-| **O** | Override/Priority |
-| **D** | Domain Restriction |
+| Code | Role |
+|------|------|
+| **G** | Guard / Precondition |
+| **F** | Input Filter |
+| **T** | Input Transformer (Homoiconic) |
 | **M** | Output Modifier |
-| **F** | Defeasibility |
-| **?** | Ambiguous/Unclear |
+| **P** | Priority / Override |
 
 ---
 
-### 3.1 Constitutional and Charter Examples
+### 6.1 Constitutional and Charter Examples
 
-| # | Source | Text | Category | Notes |
-|---|--------|------|----------|-------|
-| 1 | Canadian Charter s.33 | "Parliament may expressly declare that the Act shall operate NOTWITHSTANDING sections 2 or 7-15 of this Charter" | **O** | Legislature overrides Charter rights for 5-year renewable periods |
-| 2 | Canadian Charter s.1 | "The Charter guarantees the rights and freedoms set out in it SUBJECT TO such reasonable limits as can be demonstrably justified" | **D** | Rights apply only within "reasonable limits" domain |
-| 3 | Indian Constitution Art.31B | "NOTWITHSTANDING anything in this Part, none of the Acts specified in the Ninth Schedule shall be deemed to be void on the ground of inconsistency" | **O** | Ninth Schedule laws override fundamental rights challenges |
-| 4 | US Constitution Art.VI | "This Constitution shall be the supreme Law of the Land... any Thing in the Constitution or Laws of any State to the Contrary NOTWITHSTANDING" | **O** | Federal supremacy over state law |
-
----
-
-### 3.2 Corporate Law Examples
-
-| # | Source | Text | Category | Notes |
-|---|--------|------|----------|-------|
-| 5 | UK Companies Act 2006 s.168 | "A company may by ordinary resolution remove a director NOTWITHSTANDING anything in its constitution or any agreement between it and him" | **O** | Statutory right overrides contract/articles |
-| 6 | Singapore Companies Act | "A private company may remove any director by ordinary resolution SUBJECT TO contrary provision in the articles" | **D** | Removal right applies unless articles provide otherwise |
-| 7 | Companies Act (general) | "SUBJECT TO sections 549, 551 and 559, a company may issue debentures" | **D** | Power limited to cases not caught by those sections |
-| 8 | Companies Act (general) | "SUBJECT TO the Companies Act and these Articles, a director may vote on matters" | **D** | Voting right exists within statutory/articles limits |
-| 9 | Singapore Companies Act s.25C | "Such transaction may, NOTWITHSTANDING section 25B, still be voidable if entered without authority" | **O** | Voidability overrides general validity rule |
+| # | Source | Text | Role | Notes |
+|---|--------|------|------|-------|
+| 1 | Canadian Charter s.33 | "Parliament may declare that the Act shall operate NOTWITHSTANDING sections 2 or 7-15" | **P** | Legislature overrides Charter rights |
+| 2 | Canadian Charter s.1 | "Rights guaranteed SUBJECT TO reasonable limits as can be demonstrably justified" | **F** | Rights apply only within "reasonable limits" domain |
+| 3 | Indian Constitution Art.31B | "NOTWITHSTANDING anything in this Part, Ninth Schedule Acts not void" | **P** | Override fundamental rights challenges |
+| 4 | US Constitution Art.VI | "Supreme Law of the Land... any State law to the Contrary NOTWITHSTANDING" | **P** | Federal supremacy |
 
 ---
 
-### 3.3 Contract Clause Examples
+### 6.2 Corporate Law Examples
 
-| # | Source | Text | Category | Notes |
-|---|--------|------|----------|-------|
-| 10 | Assignment clause | "Assignment is prohibited. NOTWITHSTANDING the foregoing, assignments to affiliates are permitted" | **O** | Affiliate exception overrides general prohibition |
-| 11 | Termination clause | "30-day notice required. NOTWITHSTANDING the foregoing, immediate termination permitted for material breach" | **O** | Breach exception overrides notice requirement |
-| 12 | Confidentiality survival | "NOTWITHSTANDING termination of this Agreement, confidentiality obligations survive for 5 years" | **O** | Survival overrides general termination effects |
-| 13 | Payment terms | "Buyer pays within 30 days. NOTWITHSTANDING the foregoing, buyer may withhold if goods defective" | **O** | Withholding right overrides payment duty |
-| 14 | Liability cap | "NOTWITHSTANDING anything to the contrary, liability shall not exceed $50 million" | **O** | Cap overrides all other liability provisions |
-| 15 | Lease subordination | "This Lease is SUBJECT TO the lien of the Mortgage" | **O** | Mortgage takes priority over lease |
-| 16 | Security deposit | "Landlord shall repay deposit SUBJECT TO proper deductions" | **M** | Base obligation (repay) modified by deductions |
+| # | Source | Text | Role | Notes |
+|---|--------|------|------|-------|
+| 5 | UK Companies Act s.168 | "Remove director NOTWITHSTANDING anything in constitution or agreement" | **P** | Statutory right overrides contract |
+| 6 | Singapore Companies Act | "Remove director SUBJECT TO contrary provision in articles" | **F** | Removal right filtered by articles |
+| 7 | Companies Act | "SUBJECT TO sections 549, 551, 559, company may issue debentures" | **F** | Power filtered by other sections |
+| 8 | Singapore s.25C | "Transaction voidable NOTWITHSTANDING section 25B" | **P** | Voidability overrides validity |
 
 ---
 
-### 3.4 Real Estate Examples
+### 6.3 Contract Clause Examples
 
-| # | Source | Text | Category | Notes |
-|---|--------|------|----------|-------|
-| 17 | Purchase agreement | "Purchase shall complete SUBJECT TO satisfactory survey" | **D** | Completion only if survey condition met |
-| 18 | Purchase agreement | "SUBJECT TO the buyer obtaining financing on satisfactory terms" | **D** | Transaction domain restricted to financed cases |
-| 19 | Purchase agreement | "SUBJECT TO the buyer selling their current home by Jan 1" | **D** | Transaction domain restricted by sale condition |
-| 20 | Lease holdover | "NOTWITHSTANDING any provision to the contrary, holdover constitutes default entitling Landlord to remedies" | **O** | Holdover consequences override other provisions |
-| 21 | Lease premises | "NOTWITHSTANDING Section 1.2, 8 acres excluded from Leased Premises" | **D** | Domain of "premises" reduced by exclusion |
-| 22 | Landlord liability | "NOTWITHSTANDING anything herein, Landlord liability limited to interest in Property" | **O** + **M** | Override + output cap |
-
----
-
-### 3.5 Employment Law Examples
-
-| # | Source | Text | Category | Notes |
-|---|--------|------|----------|-------|
-| 23 | At-will termination | "NOTWITHSTANDING anything to the contrary, either party may terminate for any reason with 60 days notice" | **O** | At-will right overrides other restrictions |
-| 24 | Termination for cause | "NOTWITHSTANDING the foregoing, Executive not deemed terminated for Cause unless Board resolution" | **D** | "Cause" domain restricted to Board-approved cases |
-| 25 | Severance | "Severance payments SUBJECT TO signing release of claims" | **D** | Severance domain restricted to release-signers |
-| 26 | Notice period | "SUBJECT TO this clause, each party shall give appropriate notice" | **D** | Notice applies within clause's conditions |
+| # | Source | Text | Role | Notes |
+|---|--------|------|------|-------|
+| 9 | Assignment | "Assignment prohibited. NOTWITHSTANDING, affiliates permitted" | **P** | Exception overrides prohibition |
+| 10 | Termination | "30-day notice. NOTWITHSTANDING, immediate for breach" | **P** | Breach exception overrides notice |
+| 11 | Lease assignment | "Tenant may assign SUBJECT TO landlord's consent" | **G** | Consent is guard/precondition |
+| 12 | Confidentiality | "NOTWITHSTANDING termination, confidentiality survives 5 years" | **P** | Survival overrides termination |
+| 13 | Liability cap | "NOTWITHSTANDING anything contrary, liability ≤ $50M" | **P** + **M** | Priority + output cap |
+| 14 | Security deposit | "Repay deposit SUBJECT TO proper deductions" | **M** | Deductions modify output |
 
 ---
 
-### 3.6 Tax Law Examples
+### 6.4 Real Estate Examples
 
-| # | Source | Text | Category | Notes |
-|---|--------|------|----------|-------|
-| 27 | IRC §527 | "NOTWITHSTANDING any other provision of law, gross income shall include amounts expended for exempt function" | **O** | Inclusion rule overrides general exclusions |
-| 28 | Texas Property Tax | "NOTWITHSTANDING any other provision, notice may be delivered electronically" | **O** | Electronic delivery overrides paper requirements |
-| 29 | California Sales Tax | "NOTWITHSTANDING any other provision, violation with intent to evade is felony when amount exceeds $25,000" | **O** + **D** | Felony status overrides misdemeanor; applies only above threshold |
-| 30 | IRC §465 | "NOTWITHSTANDING any other provision, taxpayer not at risk for amounts protected by guarantees" | **O** | At-risk exclusion overrides general inclusion |
-| 31 | IRC §139 | "NOTWITHSTANDING any other provision, no deduction allowed for expenditure already excluded" | **O** | No-double-benefit rule overrides deduction rules |
-| 32 | IRC §165 disaster | "NOTWITHSTANDING subsection (a), disaster loss may be taken in preceding taxable year" | **M** | Timing of deduction modified |
-
----
-
-### 3.7 Data Protection Examples
-
-| # | Source | Text | Category | Notes |
-|---|--------|------|----------|-------|
-| 33 | GDPR Art.21(5) | "NOTWITHSTANDING Directive 2002/58/EC, data subject may object by automated means" | **O** | GDPR right overrides e-Privacy restrictions |
-| 34 | Singapore PDPA | "Duty to respond accurately and completely SUBJECT TO exceptions in s.21(2),(3),(3A),(4)" | **D** | Duty domain excludes excepted cases |
-| 35 | GDPR Art.9 | "Processing of special categories SUBJECT TO additional protections" | **M** | Processing rules modified for sensitive data |
-| 36 | Data breach notification | "Breach must be registered internally NOTWITHSTANDING obligation to notify supervisory authority" | **O** | Internal logging required regardless of notification duty |
+| # | Source | Text | Role | Notes |
+|---|--------|------|------|-------|
+| 15 | Purchase | "Complete SUBJECT TO satisfactory survey" | **G** | Survey is precondition |
+| 16 | Purchase | "SUBJECT TO buyer obtaining financing" | **G** | Financing is precondition |
+| 17 | Purchase | "SUBJECT TO buyer selling current home by Jan 1" | **G** | Sale is precondition |
+| 18 | Lease holdover | "NOTWITHSTANDING any provision, holdover = default" | **P** | Override other provisions |
+| 19 | Lease premises | "NOTWITHSTANDING s.1.2, 8 acres excluded" | **F** | Filter premises domain |
 
 ---
 
-### 3.8 Trade and International Law Examples
+### 6.5 Tax and Pricing Examples
 
-| # | Source | Text | Category | Notes |
-|---|--------|------|----------|-------|
-| 37 | GATT Art.XII | "NOTWITHSTANDING Article XI, a party may restrict imports to safeguard balance of payments, SUBJECT TO following paragraphs" | **O** + **D** | Override + domain limits |
-| 38 | WTO TRIMs | "NOTWITHSTANDING Art.2, Member may apply same TRIM to new investment during transition" | **O** | Transition exception overrides general prohibition |
-| 39 | WTO Safeguards | "NOTWITHSTANDING paragraph 5 of Article 7, developing country may reapply safeguard measure" | **O** | Development exception overrides reapplication bar |
-| 40 | WTO Enabling Clause | "NOTWITHSTANDING Article I, parties may accord preferential treatment to developing countries" | **O** | Development preference overrides MFN requirement |
-| 41 | WTO Agreement on Agriculture | "GATT 1994 shall apply SUBJECT TO this Agreement" | **O** | Agriculture Agreement takes priority over general GATT |
-| 42 | Trade Facilitation | "NOTWITHSTANDING general interpretative note, nothing diminishes obligations under GATT 1994" | **?** (Preservation) | Asserting non-conflict; reduces to O if conflict existed |
-
----
-
-### 3.9 Intellectual Property Examples
-
-| # | Source | Text | Category | Notes |
-|---|--------|------|----------|-------|
-| 43 | LG Electronics license | "NOTWITHSTANDING anything to the contrary, nothing shall limit patent exhaustion" | **?** (Preservation) | Asserts exhaustion doctrine preserved |
-| 44 | 35 USC §282 (struck) | "NOTWITHSTANDING preceding sentence, if composition claim invalid, process no longer nonobvious solely on basis of §103(b)(1)" | **O** | Invalidity consequence overrides nonobviousness finding |
+| # | Source | Text | Role | Notes |
+|---|--------|------|------|-------|
+| 20 | Parking | "SUBJECT TO 50% holiday discount, $4 weekend / $6 weekday" | **M** | Discount modifies output |
+| 21 | GST/VAT | "SUBJECT TO Dec 25-Jan 1 exception: beverages taxed as food" | **T** | Homoiconic transformer |
+| 22 | IRC §527 | "NOTWITHSTANDING any other provision, include exempt function amounts" | **P** | Override exclusions |
+| 23 | IRC §165 | "NOTWITHSTANDING (a), disaster loss may be taken in preceding year" | **M** | Timing modifier |
+| 24 | IRC §139 | "NOTWITHSTANDING any provision, no deduction if already excluded" | **P** | No-double-benefit override |
 
 ---
 
-### 3.10 Insurance Examples
+### 6.6 Employment Examples
 
-| # | Source | Text | Category | Notes |
-|---|--------|------|----------|-------|
-| 45 | Idaho Insurance Code | "Group policies SUBJECT TO provisions of this code section regarding recreational activities" | **D** | Policy scope limited by code requirements |
-| 46 | Insurance policy | "Coverage SUBJECT TO exclusions in Schedule B" | **D** | Coverage domain excludes listed items |
-
----
-
-### 3.11 Lease and Property Examples
-
-| # | Source | Text | Category | Notes |
-|---|--------|------|----------|-------|
-| 47 | Rent waiver | "NOTWITHSTANDING the foregoing, Landlord waives Base Rent provided Tenant not in Default" | **O** + **D** | Waiver overrides rent duty; applies only to non-defaulting tenants |
-| 48 | Termination override | "NOTWITHSTANDING the Second Amendment, Tenant's lease of Suite 470 continues until Dec 31, 2016" | **O** | Continuation overrides amendment's termination |
-| 49 | Common area use | "Common areas available SUBJECT TO Rules and Regulations in Exhibit A" | **D** + **M** | Domain (which areas) and manner (how used) restricted |
-| 50 | Reinstatement | "NOTWITHSTANDING the foregoing, but SUBJECT TO Section 5.04, Landlord shall reinstate utilities" | **O** + **D** | Override + domain limit |
+| # | Source | Text | Role | Notes |
+|---|--------|------|------|-------|
+| 25 | At-will | "NOTWITHSTANDING anything, either party may terminate with 60 days" | **P** | Override other restrictions |
+| 26 | Cause | "NOTWITHSTANDING foregoing, not Cause unless Board resolution" | **F** | "Cause" filtered by Board |
+| 27 | Severance | "Severance SUBJECT TO signing release" | **G** | Release is precondition |
 
 ---
 
-### 3.12 Partnership and Business Examples
+### 6.7 Trade and International Law
 
-| # | Source | Text | Category | Notes |
-|---|--------|------|----------|-------|
-| 51 | Indian Partnership Act s.11 | "SUBJECT TO this Act, mutual rights and duties may be determined by contract" | **D** | Contractual freedom within statutory limits |
-| 52 | Indian Partnership Act s.11(2) | "NOTWITHSTANDING section 27 of the Contract Act, partners may agree to non-compete" | **O** | Partnership non-compete overrides general contract invalidity |
-| 53 | Indian Partnership Act s.36 | "NOTWITHSTANDING section 27 of the Contract Act, post-departure non-compete valid if reasonable" | **O** | Similar override with reasonableness limit |
-
----
-
-### 3.13 Miscellaneous Statutory Examples
-
-| # | Source | Text | Category | Notes |
-|---|--------|------|----------|-------|
-| 54 | UK Civil Aviation Act | "SUBJECT TO affirmative resolution procedure where Order mentions s.60(3)(r) and SUBJECT TO negative resolution in other cases" | **D** | Different procedures apply to different order types |
-| 55 | BC Interpretation Act | "DESPITE subsection (1), an enactment affecting land use does not bind government" | **D** | Government excluded from land-use enactment domain |
+| # | Source | Text | Role | Notes |
+|---|--------|------|------|-------|
+| 28 | GATT XII | "NOTWITHSTANDING Art.XI, may restrict imports, SUBJECT TO following" | **P** + **F** | Override + filter |
+| 29 | WTO TRIMs | "NOTWITHSTANDING Art.2, may apply TRIM during transition" | **P** | Transition override |
+| 30 | WTO Enabling | "NOTWITHSTANDING Art.I, preferential treatment for developing countries" | **P** | Override MFN |
+| 31 | GDPR Art.21(5) | "NOTWITHSTANDING Directive 2002/58/EC, object by automated means" | **P** | GDPR overrides e-Privacy |
 
 ---
 
-## 4. Corpus Analysis
+### 6.8 Data Protection
 
-### 4.1 Category Distribution
-
-| Category | Count | Percentage |
-|----------|-------|------------|
-| Override/Priority (O) | 35 | 64% |
-| Domain Restriction (D) | 28 | 51% |
-| Output Modifier (M) | 6 | 11% |
-| Defeasibility (F) | 0 | 0% |
-| Ambiguous (?) | 3 | 5% |
-
-*Note: Many examples involve multiple categories (e.g., O+D), so percentages exceed 100%.*
-
-### 4.2 Key Observations
-
-1. **Override/Priority dominates**: Nearly two-thirds of examples establish which provision wins when both apply.
-
-2. **Domain Restriction is common but often implicit**: Many "subject to" clauses define the scope of applicability.
-
-3. **Output Modifier is rare**: Few examples transform results rather than gate/override them. The "parking costs half on holidays" pattern exists but is infrequent.
-
-4. **Defeasibility may not be distinct**: No clear examples of pure defeasibility markers emerged. This suggests defeasibility might collapse into Override (with the defeater being a higher-priority rule) or Domain Restriction (with the defeating condition narrowing applicability).
-
-5. **Combined patterns are common**: Many real-world examples exhibit multiple semantic functions simultaneously (e.g., "NOTWITHSTANDING X, but SUBJECT TO Y").
-
-6. **The "preservation" pattern is rare in pure form**: Most "nothing in this Agreement shall affect..." clauses are either:
-   - Redundant (no conflict actually exists)
-   - Really priority declarations in defensive form
-
-### 4.3 Revised Taxonomy Proposal
-
-Based on corpus analysis, we might further simplify to **three categories**:
-
-| Category | Semantics |
-|----------|-----------|
-| **Override** | A prevails over B when both would apply |
-| **Filter** | Restricts domain (input) or transforms result (output) |
-| **Composition** | How to combine multiple rules (pipe/sequence) |
-
-The distinction between input filtering and output modification may be:
-- **Input filter**: `rule applies_to (filter inputs)`
-- **Output modifier**: `transform (rule inputs)`
-
-Both are function composition; the difference is where in the pipeline the transformation occurs.
+| # | Source | Text | Role | Notes |
+|---|--------|------|------|-------|
+| 32 | Singapore PDPA | "Duty to respond SUBJECT TO exceptions in s.21(2)-(4)" | **F** | Duty filtered by exceptions |
+| 33 | GDPR Art.9 | "Special categories SUBJECT TO additional protections" | **M** | Additional constraints modify processing |
 
 ---
 
-## 5. Problematic Patterns
+### 6.9 Partnership and Business
 
-### 5.1 Scope Ambiguity
+| # | Source | Text | Role | Notes |
+|---|--------|------|------|-------|
+| 34 | Indian Partnership s.11 | "SUBJECT TO this Act, rights may be determined by contract" | **F** | Contractual freedom filtered |
+| 35 | Indian Partnership s.11(2) | "NOTWITHSTANDING s.27 Contract Act, non-compete valid" | **P** | Override general invalidity |
+
+---
+
+## 7. Corpus Analysis (Revised)
+
+### 7.1 Category Distribution
+
+| Role | Count | Percentage |
+|------|-------|------------|
+| **P** Priority/Override | 22 | 63% |
+| **G** Guard/Precondition | 7 | 20% |
+| **F** Input Filter | 11 | 31% |
+| **T** Input Transformer | 1 | 3% |
+| **M** Output Modifier | 6 | 17% |
+
+*Note: Some examples combine roles (e.g., P+F, P+M), so percentages exceed 100%.*
+
+### 7.2 Key Observations
+
+1. **Priority remains dominant** (63%), but the revised taxonomy reveals it's not the only pattern.
+
+2. **Guards are distinct from Filters**: "Subject to consent" (guard) vs "subject to exceptions in Schedule 2" (filter). Guards control action availability; filters control rule applicability.
+
+3. **Input Transformers are rare but real**: The GST/beverage-as-food example is unusual but demonstrates a genuine semantic pattern—homoiconic predicate rewriting.
+
+4. **Output Modifiers are underrepresented in statutes**: More common in pricing/commercial contexts than in legislation.
+
+5. **Combined patterns remain common**: Real-world provisions often combine roles (e.g., "NOTWITHSTANDING X, but SUBJECT TO Y" = Priority + Filter).
+
+### 7.3 Disambiguation Heuristics
+
+| "Subject to" ranges over... | Likely Role |
+|----------------------------|-------------|
+| Another section/provision | Priority (subordination) |
+| Consent/approval/authorization | Guard |
+| Exceptions/exclusions | Filter |
+| A discount/rate/adjustment | Output Modifier |
+| A reclassification of inputs | Input Transformer |
+
+---
+
+## 8. Problematic Patterns
+
+### 8.1 Scope Ambiguity
 
 ```
 "NOTWITHSTANDING anything to the contrary in this Agreement..."
@@ -279,9 +472,9 @@ Both are function composition; the difference is where in the pipeline the trans
 
 What does "anything" include? The drafter may not have enumerated overridden provisions.
 
-**Recommendation:** Require explicit references.
+**Recommendation for L4:** Require explicit references.
 
-### 5.2 Circular Priority
+### 8.2 Circular Priority
 
 ```
 Section A: "NOTWITHSTANDING Section B, ..."
@@ -292,74 +485,92 @@ Creates a paradox.
 
 **Computational solution:** Detect cycles in priority graph; flag as error.
 
-### 5.3 Dueling Notwithstanding Clauses
+### 8.3 Mixed Roles in Single Clause
 
-From corpus: LLC agreements with multiple "notwithstanding anything to the contrary" clauses create ambiguity about which "wins."
+```
+"NOTWITHSTANDING the foregoing, but SUBJECT TO Section 5.04,
+Landlord shall reinstate utilities."
+```
 
-### 5.4 Mixed NOTWITHSTANDING and SUBJECT TO
+Requires parsing:
+- Priority (over "the foregoing")
+- Filter or Guard (by Section 5.04)
 
-Example #50: "NOTWITHSTANDING the foregoing, but SUBJECT TO Section 5.04..."
+### 8.4 Distinguishing Guards from Filters
 
-This requires parsing both an override (over "the foregoing") and a domain limit (by Section 5.04).
+Both use "subject to", but:
+- **Guard**: "may do X subject to consent" → X unavailable without consent
+- **Filter**: "rule applies subject to exceptions" → rule doesn't fire for excepted cases
+
+The distinction matters for evaluation order (Guards at Stage 3, Filters at Stage 2).
 
 ---
 
-## 6. Implications for L4
+## 9. Implications for L4
 
-### 6.1 Proposed Constructs
+### 9.1 Proposed Constructs
 
-| Pattern | L4 Syntax (Proposal) |
-|---------|---------------------|
-| Override | `RULE X NOTWITHSTANDING Y` or `RULE X (priority: 10)` |
-| Domain restriction | `RULE X WHEN condition` or `RULE X EXCEPT WHEN condition` |
-| Output modification | `RULE X THEN transform result` |
+| Role | Possible L4 Syntax |
+|------|-------------------|
+| Guard | `ACTION X REQUIRES consent` or `X GIVEN THAT guard` |
+| Filter | `RULE X APPLIES WHEN condition` or `EXCEPT WHEN condition` |
+| Transformer | `TREATING beverages AS food DURING period` |
+| Output Modifier | `RESULT MODIFIED BY discount WHEN holiday` |
+| Priority | `RULE X NOTWITHSTANDING Y` or `RULE X HAS PRIORITY OVER Y` |
 
-### 6.2 Composition with Existing Features
+### 9.2 Composition with Existing L4 Features
 
 L4 already has:
-- `CONSIDER` / `WHEN` for conditional logic
+- `CONSIDER` / `WHEN` for conditional logic (can express guards, filters)
 - `MEANS` / `DECIDE` for definitions
 - `OTHERWISE` for defaults
 
-The override construct is genuinely new - L4 needs a way to declare priority between rules that might both fire.
+New constructs needed:
+- **Priority declarations** between rules
+- **Input transformers** for homoiconic rewriting
+- **Output modifiers** for result transformation
 
-### 6.3 Static Analysis Opportunities
+### 9.3 Static Analysis Opportunities
 
 - Detect circular priority declarations
 - Verify priority graph is acyclic
-- Flag "anything to the contrary" patterns as potentially ambiguous
+- Flag "anything to the contrary" as ambiguous
 - Check for unreachable rules (always overridden)
+- Validate transformer scopes don't overlap inconsistently
 
 ---
 
-## 7. References
+## 10. Conclusion
+
+"Subject to", "notwithstanding", and "despite" are **linguistic signals, not semantic operators**. They may introduce guards, filters, modifiers, interpretive rewrites, or priority relations, depending on what they range over and how they compose.
+
+For L4, the correct foundation is:
+- **Rich object-level composition** (guards, filters, transformers, modifiers)
+- **Explicit interpretive control** (homoiconic transformers)
+- **Priority as a last-stage, conflict-only mechanism**
+
+With this clarified, we are now in a position to discuss types and operators without semantic confusion.
+
+---
+
+## 11. References
 
 ### Legal Drafting
 - [Weagree: Notwithstanding in Contracts](https://weagree.com/clm/contracts/contract-wording/notwithstanding/)
 - [UpCounsel: Notwithstanding Meaning in Law](https://www.upcounsel.com/notwithstanding-legal-use)
 - [LawProse Lesson #196](https://lawprose.org/lawprose-lesson-196-notwithstanding/)
-- [Adams on Contract Drafting: The Foregoing](https://www.adamsdrafting.com/the-foregoing/)
+- [Adams on Contract Drafting](https://www.adamsdrafting.com/the-foregoing/)
 
 ### Statutory Interpretation
 - [CRS: Notwithstanding Clauses (PDF)](https://sgp.fas.org/crs/misc/notwith.pdf)
-- [Capitol Weekly: Notwithstanding Clauses in California](https://capitolweekly.net/the-use-of-notwithstanding-clauses-in-california-legislation/)
+- [Capitol Weekly: California Notwithstanding Clauses](https://capitolweekly.net/the-use-of-notwithstanding-clauses-in-california-legislation/)
 - [SCC Times: Non Obstante Clauses](https://www.scconline.com/blog/post/2023/06/16/circumscribing-non-obstante-clauses-tracing-the-new-jurisprudence/)
-- [LawCrust: Non Obstante Clause](https://lawcrust.com/non-obstante-clause/)
 - [iPleaders: Non-Obstante Clause](https://blog.ipleaders.in/all-you-need-to-know-about-non-obstante-clause/)
 
 ### Defeasibility and Formal Methods
 - [Stanford Encyclopedia: Defeasible Reasoning](https://plato.stanford.edu/entries/reasoning-defeasible/)
 - [Prakken: Three Faces of Defeasibility](https://onlinelibrary.wiley.com/doi/abs/10.1111/j.0952-1917.2004.00259.x)
-- [NDPR: Allowing for Exceptions](https://ndpr.nd.edu/reviews/allowing-for-exceptions-a-theory-of-defences-and-defeasibility-in-law/)
 
 ### Contract Examples
-- [Law Insider: Notwithstanding Any Other Provision](https://www.lawinsider.com/clause/notwithstanding-any-other-provision)
-- [Law Insider: Notwithstanding the Foregoing](https://www.lawinsider.com/clause/notwithstanding-the-foregoing)
-- [Law Insider: Notwithstanding Termination](https://www.lawinsider.com/clause/notwithstanding-termination)
-- [Afterpattern: Lease Clauses](https://afterpattern.com/clauses/leased-premises)
-
-### Jurisdiction-Specific
-- [Law Wales: Tips on Using Legislation](https://law.gov.wales/tips-using-legislation)
-- [BC Laws: Interpretation Act](https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/96238_01)
-- [WTO Legal Texts](https://www.wto.org/english/docs_e/legal_e/legal_e.htm)
-- [GDPRhub: Article 21](https://gdprhub.eu/Article_21_GDPR)
+- [Law Insider: Clause Database](https://www.lawinsider.com/)
+- [Afterpattern: Contract Clauses](https://afterpattern.com/clauses/)
