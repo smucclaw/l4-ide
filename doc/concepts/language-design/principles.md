@@ -43,10 +43,10 @@ DECLARE Person HAS
 
 GIVEN person IS A Person
 `Alcohol prohibition rule` MEANS
-IF   NOT person's age AT LEAST 18
-     PARTY  person
-     MUSTNT `buy alcohol`
-ELSE FULFILLED
+    IF      NOT person's age AT LEAST 18
+    THEN    PARTY  person
+            SHANT `buy alcohol`
+    ELSE    FULFILLED
 ```
 
 Notice how the wording in L4 can match the original legal text.
