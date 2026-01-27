@@ -21,15 +21,12 @@
 ## Tutorials
 
 - [Tutorials Home](tutorials/README.md)
-- [Getting Started](tutorials/getting-started/)
-- [LLM Integration](tutorials/llm-integration/)
-- [Web Apps](tutorials/web-apps/)
-- [Migration Guides](tutorials/migration/)
+- [Getting Started](tutorials/getting-started/first-l4-file.md)
+- [LLM Integration](tutorials/llm-integration/llm-getting-started.md)
 
 ## Concepts
 
 - [Concepts Home](concepts/README.md)
-- [Language Design](concepts/language-design/)
-- [Logic](concepts/logic/)
-- [Legal Modeling](concepts/legal-modeling/)
-- [Type System](concepts/type-system/)
+- [Language Design](concepts/language-design/principles.md)
+- [Legal Modeling](concepts/legal-modeling/regulative-rules.md)
+- [Type System](concepts/type-system/algebraic-types.md)

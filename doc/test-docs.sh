@@ -66,6 +66,7 @@ CHECKS:
        - Checks that all relative links point to existing files
        - Checks that anchor links reference valid headings
        - Reports external links (not validated)
+       - Errors on links pointing to folders instead of files
 
     2. L4 file validation
        - Validates all .l4 files in the doc/ folder
@@ -170,6 +171,15 @@ check_link() {
         return 1
     fi
     
+    # Check if it's a directory (error if so)
+    if [[ -d "$resolved_path" ]]; then
+        log_error "Link to folder in $source_file"
+        echo "       Link: $link"
+        echo "       Resolved to folder: $resolved_path"
+        ((LINK_ERRORS++))
+        return 1
+    fi
+    
     ((LINK_OK++))
     log_verbose "  [OK] $link"
     return 0
@@ -200,7 +210,7 @@ echo ""
 if [[ $LINK_ERRORS -eq 0 ]]; then
     log_success "All $LINK_OK markdown links are valid"
 else
-    log_error "$LINK_ERRORS broken links found ($LINK_OK valid)"
+    log_error "$LINK_ERRORS broken or folder links found ($LINK_OK valid)"
 fi
 
 # =============================================================================
