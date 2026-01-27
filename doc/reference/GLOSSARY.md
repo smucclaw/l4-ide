@@ -303,7 +303,7 @@ These are built into the compiler (not a library):
 | **TODATE**   | Convert to DATE   |
 | **TRUNC**    | Truncate number   |
 
-See [coercions documentation](libraries/coercions.md) for details.
+See [coercions documentation](types/coercions.md) for details.
 
 ---
 

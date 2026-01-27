@@ -202,7 +202,7 @@ Built-in conversion functions:
 - **TODATE** - Convert to DATE
 - **TRUNC** - Truncate to integer
 
-See [coercions library](../libraries/coercions.md) for details.
+See [Built-ins](../builtins/README.md) and [coercions](coercions.md) for details.
 
 ### Comparison
 

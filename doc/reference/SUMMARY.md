@@ -33,19 +33,15 @@
 - [TYPE-KEYWORDS](keywords/TYPE-KEYWORDS.md)
 - [WHERE](keywords/WHERE.md)
 
-## Types
+## Language
 
-- [Types Overview](types/README.md)
-
-## Operators
-
-- [Operators Overview](operators/README.md)
-
-## Syntax
-
-- [Syntax Overview](syntax/README.md)
+- [Types](types/README.md)
+- [Coercions](types/coercions.md)
+- [Operators](operators/README.md)
+- [Syntax](syntax/README.md)
+- [Built-ins](builtins/README.md)
 
 ## Libraries
 
 - [Libraries Overview](libraries/README.md)
-- [Coercions](libraries/coercions.md)
+
