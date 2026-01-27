@@ -5,7 +5,7 @@
 
 ## Reference
 
-- [Reference Overview](reference/README.md)
+- [Reference Home](reference/README.md)
 - [Keywords](reference/keywords/README.md)
 - [Types](reference/types/README.md)
 - [Operators](reference/operators/README.md)
@@ -14,13 +14,13 @@
 
 ## Courses
 
-- [Courses Overview](courses/README.md)
+- [Courses Home](courses/README.md)
 - [Foundation Course](courses/foundation/README.md)
 - [Advanced Course](courses/advanced/README.md)
 
 ## Tutorials
 
-- [Tutorials Overview](tutorials/README.md)
+- [Tutorials Home](tutorials/README.md)
 - [Getting Started](tutorials/getting-started/)
 - [LLM Integration](tutorials/llm-integration/)
 - [Web Apps](tutorials/web-apps/)
@@ -28,7 +28,7 @@
 
 ## Concepts
 
-- [Concepts Overview](concepts/README.md)
+- [Concepts Home](concepts/README.md)
 - [Language Design](concepts/language-design/)
 - [Logic](concepts/logic/)
 - [Legal Modeling](concepts/legal-modeling/)
