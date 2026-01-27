@@ -307,5 +307,5 @@ sampleProfessionalism MEANS LLMJudgment
 ## Next Steps
 
 - [Legislative Ingestion](legislative-ingestion.md) - Use LLM to help encode legislation
-- [LLM Integration Spec](../../../specs/done/LLM-INTEGRATION-SPEC.md) - Technical details
+- [LLM Integration Spec](https://github.com/smucclaw/l4-ide/tree/main/specs/done/LLM-INTEGRATION-SPEC.md) - Technical details
 - [Foundation Course](../../courses/foundation/README.md) - Learn L4 fundamentals

@@ -25,24 +25,6 @@ Working with AI and language models in L4:
 
 ---
 
-### Web Applications
-
-_Coming soon:_ Building APIs and web services with L4.
-
-**Audience:** Web developers, backend engineers  
-**Prerequisites:** HTTP/REST knowledge, basic L4
-
----
-
-### Migration Guides
-
-_Coming soon:_ Moving from other systems to L4.
-
-**Audience:** Users of other legal modeling tools  
-**Prerequisites:** Familiarity with source system
-
----
-
 ## By Audience
 
 ### For Legal Professionals
