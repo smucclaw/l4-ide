@@ -71,7 +71,4 @@ rule2 MEANS PARTY Alice MUST NOT smoke WITHIN 30
 - **[PARTY](PARTY.md)** - Identifies who has the prohibition
 - **[MUST](MUST.md)** - Obligation (required action)
 - **[MAY](MAY.md)** - Permission (optional action)
-- **[WITHIN](WITHIN.md)** - Deadline
-- **[LEST](LEST.md)** - Consequence on breach
-- **[BREACH](BREACH.md)** - Violation
-
+- **[REGULATIVE](REGULATIVE.md)** - Full regulative rule reference

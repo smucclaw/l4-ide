@@ -5,6 +5,7 @@ Understanding-oriented explanations of the principles, theories, and design deci
 ## Purpose
 
 Concepts documentation helps you understand:
+
 - **Why** L4 works the way it does
 - **How** different features relate to each other
 - **When** to use particular patterns or approaches
@@ -17,72 +18,55 @@ Unlike reference docs (which tell you **what** things are) or tutorials (which s
 ## Topics
 
 ### 🎨 [Language Design](language-design/)
+
 The philosophy and principles behind L4's design
 
 - **[Principles](language-design/principles.md)** - Core design principles of L4
-- **[Layout Sensitivity](language-design/layout-sensitivity.md)** - Why L4 uses indentation
-- **[Legal Isomorphism](language-design/legal-isomorphism.md)** - Matching legal text structure
-- **[Scope](language-design/scope.md)** - How variable scope works in L4
 
 **Key Ideas:** Human-readable code, legal text fidelity, accessibility for non-programmers
 
----
-
-### 🧮 [Logic](logic/)
-Logical foundations and reasoning systems
-
-- **[Default Logic](logic/default-logic.md)** - Reasoning with defaults and exceptions
-- **[ASSUME Semantics](logic/assume-semantics.md)** - How ASSUME statements work
-- **[Boolean Reasoning](logic/boolean-reasoning.md)** - Truth values and logic gates
-- **[Temporal Reasoning](logic/temporal-reasoning.md)** - Time-based logic and multi-temporals
-
-**Key Ideas:** Non-monotonic reasoning, rebuttable presumptions, temporal logic
+_More topics planned: Layout Sensitivity, Legal Isomorphism, Scope_
 
 ---
 
 ### ⚖️ [Legal Modeling](legal-modeling/)
+
 Representing legal concepts in code
 
 - **[Regulative Rules](legal-modeling/regulative-rules.md)** - Obligations, permissions, prohibitions
-- **[Deontic Logic](legal-modeling/deontic-logic.md)** - Must, may, and shall not
-- **[Contract Composition](legal-modeling/contract-composition.md)** - Building complex agreements
-- **[Constitutive vs Regulative](legal-modeling/constitutive-vs-regulative.md)** - Two types of legal rules
 
 **Key Ideas:** Deontic modalities, legal rules as code, contract patterns
+
+_More topics planned: Deontic Logic, Contract Composition, Constitutive vs Regulative_
 
 ---
 
 ### 🏗️ [Type System](type-system/)
+
 How L4's type system works
 
 - **[Algebraic Types](type-system/algebraic-types.md)** - Sum types and product types
-- **[Maybe and Nothing](type-system/maybe-nothing.md)** - Handling optional values
-- **[Type Inference](type-system/type-inference.md)** - How L4 figures out types
 
 **Key Ideas:** Type safety, algebraic data types, functional programming influence
 
----
-
-### 🤖 [AI Integration](ai-integration/)
-Hybrid human-AI reasoning systems
-
-- **[Hybrid Reasoning](ai-integration/hybrid-reasoning.md)** - Combining symbolic and neural AI
-
-**Key Ideas:** Explainability, LLM integration, human-in-the-loop
+_More topics planned: Maybe and Nothing, Type Inference_
 
 ---
 
 ## How to Use Concepts
 
 ### During Learning
+
 - Read concept docs **after** you've tried the feature in practice
 - Concepts build on knowledge from [courses](../courses/README.md) and [tutorials](../tutorials/README.md)
 
 ### For Deeper Understanding
+
 - Concepts explain the "why" behind language features
 - Use concepts to inform design decisions in your L4 programs
 
 ### For Discussion
+
 - Concepts provide vocabulary for discussing L4 design
 - Reference concepts when proposing changes or new features
 
@@ -124,18 +108,21 @@ Found an error or want to add a concept explanation?
 
 - Report issues via [GitHub Issues](https://github.com/smucclaw/l4-ide/issues)
 - Suggest new concept topics in the issue tracker
-- See [contributing guidelines](../../CONTRIBUTING.md) for how to submit changes
+- Contributions welcome via GitHub pull requests
 
 ---
 
 ## Further Reading
 
 ### Academic Papers
+
 - Coming soon: Links to papers on L4's theoretical foundations
 
 ### Design Documents
+
 - See [/specs/proposals/](../../specs/proposals/) for design proposals
 - See [/specs/roadmap/](../../specs/roadmap/) for future directions
 
 ### Related Languages
+
 - Comparison to other legal programming languages (coming soon)

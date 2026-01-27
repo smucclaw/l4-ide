@@ -12,6 +12,7 @@ DECLARE TypeName AKA AliasName IS ...
 ## Purpose
 
 AKA ("also known as") enables:
+
 1. Creating synonyms for legal terminology
 2. Supporting multiple naming conventions
 3. Providing human-readable alternatives
@@ -26,7 +27,7 @@ AKA ("also known as") enables:
 x AKA y, z MEANS TRUE
 
 #EVAL x   -- TRUE
-#EVAL y   -- TRUE  
+#EVAL y   -- TRUE
 #EVAL z   -- TRUE
 ```
 

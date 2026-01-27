@@ -82,15 +82,19 @@ Move all development-related specifications out of `doc/` to a top-level `/specs
 ### Files to Move
 
 From `doc/dev/specs/todo/` → `/specs/todo/`:
+
 - All existing spec files (BATCH-PROCESSING-SPEC.md, etc.)
 
 From `doc/dev/specs/done/` → `/specs/done/`:
+
 - All completed spec files
 
 From `doc/` → `/specs/proposals/`:
+
 - `proposal-jl4-nl-query-mar-24-2025.md`
 
 From `doc/` → `/specs/roadmap/`:
+
 - `future-features.md`
 
 ### `/specs/README.md` Content
@@ -262,29 +266,33 @@ The new documentation follows the Diátaxis framework with four pillars:
 The `GLOSSARY.md` serves as the master index, linking to detailed reference pages.
 
 **Format for GLOSSARY.md:**
+
 ```markdown
 # L4 Language Glossary
 
 ## Keywords
 
-| Keyword | Category | Description | Link |
-|---------|----------|-------------|------|
-| ASSUME | Declaration | Declares a variable with type | [→](keywords/ASSUME.md) |
-| DECIDE | Function | Defines a decision function | [→](keywords/DECIDE.md) |
+| Keyword | Category    | Description                   | Link                    |
+| ------- | ----------- | ----------------------------- | ----------------------- |
+| ASSUME  | Declaration | Declares a variable with type | [→](keywords/ASSUME.md) |
+| DECIDE  | Function    | Defines a decision function   | [→](keywords/DECIDE.md) |
+
 ...
 
 ## Types
 
-| Type | Description | Link |
-|------|-------------|------|
+| Type    | Description       | Link                  |
+| ------- | ----------------- | --------------------- |
 | BOOLEAN | True/false values | [→](types/BOOLEAN.md) |
+
 ...
 
 ## Operators
 
-| Operator | Category | Description | Link |
-|----------|----------|-------------|------|
-| PLUS / + | Arithmetic | Addition | [→](operators/arithmetic.md#plus) |
+| Operator | Category   | Description | Link                              |
+| -------- | ---------- | ----------- | --------------------------------- |
+| PLUS / + | Arithmetic | Addition    | [→](operators/arithmetic.md#plus) |
+
 ...
 ```
 
@@ -309,6 +317,7 @@ One-sentence description of what this does.
 ## Description
 
 Clear explanation of:
+
 - What it does
 - Role in the L4 language
 - What it enables
@@ -341,35 +350,45 @@ Any additional information, edge cases, or gotchas.
 ### 3.3 Keywords to Document (from Lexer.hs)
 
 **Declaration Keywords:**
+
 - DECLARE, ASSUME, DECIDE, MEANS, AKA
 
 **Function Keywords:**
+
 - GIVEN, GIVETH, GIVES, YIELD, WHERE, LET, IN
 
 **Control Flow Keywords:**
+
 - IF, THEN, ELSE, OTHERWISE, CONSIDER, WHEN, BRANCH
 
 **Logical Keywords:**
+
 - AND, OR, NOT, IMPLIES, RAND, ROR
 
 **Type Keywords:**
+
 - IS, HAS, ONE, OF, WITH, A, AN, THE, LIST, TYPE
 
 **Regulative Keywords:**
+
 - PARTY, MUST, MAY, SHANT, DO, DOES, WITHIN, HENCE, LEST, BREACH, BECAUSE, PROVIDED, STARTING, FOLLOWED, AT, FOR
 
 **Comparison Keywords:**
+
 - EQUALS, GREATER, LESS, THAN, ABOVE, BELOW, LEAST, MOST, EXACTLY
 
 **Arithmetic Keywords:**
+
 - PLUS, MINUS, TIMES, DIVIDED, BY, MODULO
 
 **Other Keywords:**
+
 - IMPORT, FETCH, POST, ENV, CONCAT, AS, ALL, BE, MEAN, UNLESS, FROM, TO, FUNCTION
 
 ### 3.4 Operators to Document (from Lexer.hs)
 
 **Symbolic Operators:**
+
 - `*` (TIMES), `+` (PLUS), `-` (MINUS)
 - `>=`, `<=`, `>`, `<`
 - `=`, `==` (equality)
@@ -377,6 +396,7 @@ Any additional information, edge cases, or gotchas.
 - `=>` (IMPLIES), `/` (DIVIDED BY)
 
 **Symbols:**
+
 - `^` (ditto/copy), `...` (asyndetic AND), `..` (asyndetic OR)
 - `'s` (genitive/possessive)
 - `%` (percent), `:` (colon)
@@ -391,10 +411,11 @@ Refine existing library docs to follow the reference template. Each library refe
 2. **Import Statement** - How to import it
 3. **Types** - Types defined by the library
 4. **Functions** - Complete function reference with signatures
-5. **Examples** - Working L4 code examples (linked, not embedded with ```l4 ```)
+5. **Examples** - Working L4 code examples (linked, not embedded with `l4 `)
 6. **See Also** - Related libraries and concepts
 
 The existing `daydate.md` is a good model but needs:
+
 - Examples moved to separate `.l4` files
 - Cross-links to related reference items
 
@@ -428,10 +449,10 @@ The existing `daydate.md` is a good model but needs:
 
 Move and reorganize tutorials:
 
-| Source | Destination |
-|--------|-------------|
-| `doc/tutorial/llm-getting-started.md` | `/docs/tutorials/llm-integration/llm-getting-started.md` |
-| `doc/how-to/llm-querying.md` | `/docs/tutorials/llm-integration/llm-advanced-patterns.md` |
+| Source                                | Destination                                                |
+| ------------------------------------- | ---------------------------------------------------------- |
+| `doc/tutorial/llm-getting-started.md` | `/docs/tutorials/llm-integration/llm-getting-started.md`   |
+| `doc/how-to/llm-querying.md`          | `/docs/tutorials/llm-integration/llm-advanced-patterns.md` |
 
 ### 5.2 Tutorial Audience Specification
 
@@ -454,28 +475,33 @@ Create `/docs/tutorials/tutorial-suggestions.md`:
 # Tutorial Ideas
 
 ## For Legal Professionals
+
 - [ ] Modeling a Simple Contract from Scratch
 - [ ] Encoding Regulatory Compliance Rules
 - [ ] Creating Decision Tables for Eligibility Criteria
 - [ ] Working with Date-Based Deadlines
 
 ## For Developers
+
 - [ ] Integrating L4 Decision Services with REST APIs
 - [ ] Building Web Forms from L4 Schemas
 - [ ] Batch Processing L4 Evaluations
 - [ ] Setting Up CI/CD for L4 Projects
 
 ## For Legal Engineers
+
 - [ ] Translating Legislation to L4 (Deep Dive)
 - [ ] Handling Ambiguity in Legal Text
 - [ ] Multi-Temporal Rule Modeling
 - [ ] Contract State Machine Patterns
 
 ## For Data Scientists
+
 - [ ] Using L4 for Explainable AI in Legal Decisions
 - [ ] Integrating L4 with Python Data Pipelines
 
 ## Cross-Functional
+
 - [ ] L4 for Policy Makers: From Rules to Code
 - [ ] L4 for Insurance: Claims Processing Rules
 - [ ] L4 for Banking: KYC/AML Compliance
@@ -487,16 +513,16 @@ Create `/docs/tutorials/tutorial-suggestions.md`:
 
 ### 6.1 Content to Move
 
-| Source | Destination |
-|--------|-------------|
-| `doc/principles.md` | `/docs/concepts/language-design/principles.md` |
-| `doc/default-logic.md` | `/docs/concepts/logic/default-logic.md` |
-| `doc/regulative.md` | `/docs/concepts/legal-modeling/regulative-rules.md` |
+| Source                                | Destination                                         |
+| ------------------------------------- | --------------------------------------------------- |
+| `doc/principles.md`                   | `/docs/concepts/language-design/principles.md`      |
+| `doc/default-logic.md`                | `/docs/concepts/logic/default-logic.md`             |
+| `doc/regulative.md`                   | `/docs/concepts/legal-modeling/regulative-rules.md` |
 | `doc/explanation/hybrid-reasoning.md` | `/docs/concepts/ai-integration/hybrid-reasoning.md` |
-| `doc/multitemporals.md` | `/docs/concepts/logic/temporal-reasoning.md` |
-| `doc/ASSUME-SEMANTICS.md` | `/docs/concepts/logic/assume-semantics.md` |
-| `doc/30-algebraic-types.md` | `/docs/concepts/type-system/algebraic-types.md` |
-| `doc/scope.md` | `/docs/concepts/language-design/scope.md` |
+| `doc/multitemporals.md`               | `/docs/concepts/logic/temporal-reasoning.md`        |
+| `doc/ASSUME-SEMANTICS.md`             | `/docs/concepts/logic/assume-semantics.md`          |
+| `doc/30-algebraic-types.md`           | `/docs/concepts/type-system/algebraic-types.md`     |
+| `doc/scope.md`                        | `/docs/concepts/language-design/scope.md`           |
 
 ### 6.2 Concept Page Format
 
@@ -514,6 +540,7 @@ Explain the practical importance.
 ## Deep Dive
 
 Detailed explanation with:
+
 - Background/motivation
 - How L4 implements this
 - Comparison to other approaches (if relevant)
@@ -604,6 +631,7 @@ Technical specifications are maintained in the `/specs` directory:
 - **`/specs/roadmap/`** - Future/aspirational features
 
 When working on a feature:
+
 1. Check if there's an existing spec in `/specs/todo/`
 2. If creating a new feature, write a spec first
 3. Move completed specs to `/specs/done/`
@@ -618,6 +646,7 @@ User-facing documentation lives in `/docs`:
 - **`/docs/concepts/`** - Conceptual explanations and background
 
 When updating documentation:
+
 1. All L4 code examples go in `/docs/examples/` as separate files
 2. Link to example files rather than embedding code in Markdown
 3. Run `./verify-doc-examples.sh` before committing
@@ -637,6 +666,7 @@ mv doc old-doc
 ### 9.2 Update .gitignore
 
 Add to `.gitignore`:
+
 ```
 old-doc/
 ```
@@ -671,18 +701,21 @@ Keep in `old-doc/` for historical reference but don't migrate:
 ### 10.1 Documentation Standards
 
 **Language:**
+
 - Use clear, concise language
 - Define terms before using them
 - Avoid jargon without explanation
 - Use active voice
 
 **Code Examples:**
+
 - No Haskell code in user docs (reference implementation is OK in concepts)
 - No JavaScript code unless tutorial specifically targets JS developers
 - Mark any non-L4 code clearly with language identifier
 - All L4 code must be verified working
 
 **Structure:**
+
 - Every folder has a README.md
 - Every page has clear navigation (breadcrumbs or links)
 - Cross-link liberally between related content
@@ -716,6 +749,7 @@ For RAG indexing:
 ## Implementation Order
 
 ### Sprint 1: Infrastructure
+
 1. ✅ Create `/specs` directory structure
 2. ✅ Move all spec files
 3. ✅ Create `/docs` directory structure
@@ -723,6 +757,7 @@ For RAG indexing:
 5. ✅ Update AGENTS.md (already contains correct structure, verified)
 
 ### Sprint 2: Reference Documentation ✅ COMPLETED (Framework)
+
 1. ✅ Create GLOSSARY.md framework - Complete with all ~90 keywords indexed
 2. ⏳ Generate keyword reference pages (from Lexer.hs) - Framework and README created
 3. ✅ Create type reference pages - README with complete type system overview
@@ -733,6 +768,7 @@ For RAG indexing:
 **Note:** Individual reference pages for each keyword/type/operator remain to be created. The GLOSSARY and README files provide the complete framework based on analysis of Lexer.hs and prelude.l4.
 
 ### Sprint 3: Courses
+
 1. Migrate foundation course
 2. Extract and verify all foundation examples
 3. Migrate advanced course
@@ -740,12 +776,14 @@ For RAG indexing:
 5. Cross-reference with reference docs
 
 ### Sprint 4: Tutorials & Concepts
+
 1. Migrate and organize tutorials
 2. Create tutorial-suggestions.md
 3. Migrate concept documentation
 4. Add cross-links throughout
 
 ### Sprint 5: Quality & Cleanup
+
 1. Run verification script on all examples
 2. Complete review checklist
 3. Rename doc → old-doc
@@ -767,6 +805,7 @@ For RAG indexing:
 - [ ] Old doc archived and gitignored
 
 **Progress Update (2025-01-17):**
+
 - ✅ **Sprint 1 Complete:** All infrastructure in place
 - ✅ **Sprint 2 Framework Complete:** GLOSSARY.md and all section READMEs created based on Lexer.hs analysis
   - Documented ~90 keywords from Lexer.hs
@@ -777,11 +816,20 @@ For RAG indexing:
 - ⏳ **Sprint 2 Detail Work:** Individual reference pages for each feature to be created
 - ⏳ **Sprints 3-5:** Course migration, tutorials, concepts, cleanup remain
 
+**Progress Update (2025-01-18):**
+
+- ✅ **CLAUDE.md Updated:** Fixed outdated references to `doc/` paths
+  - Updated spec file references from `doc/todo/` to `specs/done/`
+  - Rewrote Documentation section to reflect new `doc/` (language docs) and `specs/` (dev specs) structure
+  - Updated "Adding a New Language Feature" workflow to use `specs/` paths
+  - Noted component-specific READMEs as the source for getting started with each component
+
 ---
 
 ## Notes
 
 This reorganization creates a foundation for:
+
 - Automated documentation testing in CI
 - AI training data generation
 - Professional technical writing standards

@@ -20,6 +20,4 @@ This directory contains technical specifications for L4 language features and to
 - Use UPPERCASE-KEBAB-CASE for spec files: `FEATURE-NAME-SPEC.md`
 - Include status, dates, and scope at the top of each spec
 
-
-
 See `/docs` for user-facing documentation.

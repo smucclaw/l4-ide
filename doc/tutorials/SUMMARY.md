@@ -7,16 +7,12 @@
 
 ## Getting Started
 
-- [Getting Started](getting-started/README.md)
+- [Your First L4 File](getting-started/first-l4-file.md)
+- [Encoding Legislation](getting-started/encoding-legislation.md)
+- [Wedding Vows](getting-started/wedding-vows.md)
+- [Common Patterns](getting-started/common-patterns.md)
 
 ## LLM Integration
 
-- [LLM Integration](llm-integration/README.md)
-
-## Web Apps
-
-- [Web Apps](web-apps/README.md)
-
-## Migration Guides
-
-- [Migration Guides](migration/README.md)
+- [Getting Started with LLM](llm-integration/llm-getting-started.md)
+- [Legislative Ingestion](llm-integration/legislative-ingestion.md)

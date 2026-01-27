@@ -7,16 +7,18 @@ Task-oriented guides to help you accomplish specific goals with L4. Each tutoria
 New to L4? Start here:
 
 - **[Your First L4 File](getting-started/first-l4-file.md)** - Create and run a simple L4 program
-- **[Running L4 Code](getting-started/running-code.md)** - Different ways to execute L4
-- **[IDE Setup](getting-started/ide-setup.md)** - Configure your development environment
+- **[Encoding Legislation](getting-started/encoding-legislation.md)** - Turn legal text into L4
+- **[Wedding Vows](getting-started/wedding-vows.md)** - Fun intro to regulative rules
+- **[Common Patterns](getting-started/common-patterns.md)** - Quick reference patterns
 
 ## By Topic
 
 ### LLM Integration
+
 Working with AI and language models in L4:
 
 - **[LLM Getting Started](llm-integration/llm-getting-started.md)** - Basics of LLM integration
-- **[LLM Advanced Patterns](llm-integration/llm-advanced-patterns.md)** - Complex LLM queries and workflows
+- **[Legislative Ingestion](llm-integration/legislative-ingestion.md)** - LLM-assisted encoding
 
 **Audience:** Developers, AI/ML practitioners  
 **Prerequisites:** Basic L4 knowledge
@@ -24,9 +26,8 @@ Working with AI and language models in L4:
 ---
 
 ### Web Applications
-Building APIs and web services:
 
-- **[Decision Service API](web-apps/decision-service-api.md)** - Create RESTful decision APIs
+_Coming soon:_ Building APIs and web services with L4.
 
 **Audience:** Web developers, backend engineers  
 **Prerequisites:** HTTP/REST knowledge, basic L4
@@ -34,9 +35,8 @@ Building APIs and web services:
 ---
 
 ### Migration Guides
-Moving from other systems to L4:
 
-- **[OPM to L4](migration/opm-to-l4.md)** - Migrating from Object-Process Methodology
+_Coming soon:_ Moving from other systems to L4.
 
 **Audience:** Users of other legal modeling tools  
 **Prerequisites:** Familiarity with source system
@@ -46,23 +46,25 @@ Moving from other systems to L4:
 ## By Audience
 
 ### For Legal Professionals
+
 - [Your First L4 File](getting-started/first-l4-file.md)
+- [Encoding Legislation](getting-started/encoding-legislation.md)
 - Coming soon: Modeling a Simple Contract
-- Coming soon: Working with Date-Based Deadlines
 
 ### For Developers
-- [Decision Service API](web-apps/decision-service-api.md)
+
 - [LLM Integration](llm-integration/llm-getting-started.md)
+- Coming soon: Decision Service API
 - Coming soon: Integrating with REST APIs
-- Coming soon: Setting Up CI/CD
 
 ### For Legal Engineers
-- [LLM Advanced Patterns](llm-integration/llm-advanced-patterns.md)
-- [OPM to L4 Migration](migration/opm-to-l4.md)
+
+- [Legislative Ingestion](llm-integration/legislative-ingestion.md)
 - Coming soon: Multi-Temporal Rule Modeling
 - Coming soon: Handling Legal Ambiguity
 
 ### For Data Scientists
+
 - Coming soon: L4 for Explainable AI
 - Coming soon: Integrating with Python Pipelines
 
@@ -94,6 +96,7 @@ Each tutorial includes:
 - **Courses** are learning-focused: "Teach me about Y"
 
 **Example:**
+
 - Tutorial: "How to build a decision service API" (task)
 - Course: "Module 4: Understanding Decision Services" (learning)
 
@@ -109,7 +112,7 @@ Have an idea for a tutorial? Want to improve existing ones?
 2. Open an issue to discuss new tutorial ideas
 3. Submit a pull request with your tutorial
 
-See [contributing guidelines](../../CONTRIBUTING.md) for details.
+Contributions welcome via GitHub pull requests.
 
 ---
 

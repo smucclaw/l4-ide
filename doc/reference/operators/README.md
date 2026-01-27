@@ -20,24 +20,28 @@ L4 operators are organized into categories:
 Mathematical operations on numbers.
 
 ### Addition
+
 - **Keyword:** PLUS
 - **Symbol:** `+`
 - **Type:** `NUMBER -> NUMBER -> NUMBER`
 - **Example:** `5 PLUS 3` or `5 + 3` → `8`
 
 ### Subtraction
+
 - **Keyword:** MINUS
 - **Symbol:** `-`
 - **Type:** `NUMBER -> NUMBER -> NUMBER`
 - **Example:** `10 MINUS 4` or `10 - 4` → `6`
 
 ### Multiplication
+
 - **Keyword:** TIMES
 - **Symbol:** `*`
 - **Type:** `NUMBER -> NUMBER -> NUMBER`
 - **Example:** `6 TIMES 7` or `6 * 7` → `42`
 
 ### Division
+
 - **Keywords:** DIVIDED BY
 - **Symbol:** `/`
 - **Type:** `NUMBER -> NUMBER -> NUMBER`
@@ -45,13 +49,12 @@ Mathematical operations on numbers.
 - **Note:** Returns rational numbers for non-integer results
 
 ### Modulo
+
 - **Keyword:** MODULO
 - **Symbol:** `%` (reserved)
 - **Type:** `NUMBER -> NUMBER -> NUMBER`
 - **Example:** `17 MODULO 5` → `2`
 - **Note:** Remainder after division
-
-
 
 ---
 
@@ -60,40 +63,44 @@ Mathematical operations on numbers.
 Compare values and return BOOLEAN results.
 
 ### Equality
+
 - **Keyword:** EQUALS
 - **Symbol:** `=`
 - **Type:** `a -> a -> BOOLEAN`
 - **Example:** `5 EQUALS 5` or `5 = 5` → `TRUE`
 
 ### Greater Than
+
 - **Keywords:** GREATER THAN, ABOVE
 - **Symbol:** `>`
 - **Type:** `NUMBER -> NUMBER -> BOOLEAN`
 - **Example:** `10 GREATER THAN 5` or `10 > 5` → `TRUE`
 
 ### Less Than
+
 - **Keywords:** LESS THAN, BELOW
 - **Symbol:** `<`
 - **Type:** `NUMBER -> NUMBER -> BOOLEAN`
 - **Example:** `3 LESS THAN 7` or `3 < 7` → `TRUE`
 
 ### Greater or Equal
+
 - **Keywords:** AT LEAST
 - **Symbol:** `>=`
 - **Type:** `NUMBER -> NUMBER -> BOOLEAN`
 - **Example:** `5 AT LEAST 5` or `5 >= 5` → `TRUE`
 
 ### Less or Equal
+
 - **Keywords:** AT MOST
 - **Symbol:** `<=`
 - **Type:** `NUMBER -> NUMBER -> BOOLEAN`
 - **Example:** `4 AT MOST 10` or `4 <= 10` → `TRUE`
 
 ### Inequality
+
 - **Expression:** `NOT (x EQUALS y)`
 - **Example:** `NOT (5 EQUALS 3)` → `TRUE`
-
-
 
 ---
 
@@ -102,6 +109,7 @@ Compare values and return BOOLEAN results.
 Boolean operations for conditions and logic.
 
 ### Conjunction
+
 - **Keyword:** AND
 - **Symbol:** `&&`
 - **Type:** `BOOLEAN -> BOOLEAN -> BOOLEAN`
@@ -113,6 +121,7 @@ Boolean operations for conditions and logic.
   - `FALSE AND FALSE` → `FALSE`
 
 ### Disjunction
+
 - **Keyword:** OR
 - **Symbol:** `||`
 - **Type:** `BOOLEAN -> BOOLEAN -> BOOLEAN`
@@ -124,18 +133,18 @@ Boolean operations for conditions and logic.
   - `FALSE OR FALSE` → `FALSE`
 
 ### Negation
+
 - **Keyword:** NOT
 - **Type:** `BOOLEAN -> BOOLEAN`
 - **Example:** `NOT TRUE` → `FALSE`
 
 ### Implication
+
 - **Keyword:** IMPLIES
 - **Symbol:** `=>`
 - **Type:** `BOOLEAN -> BOOLEAN -> BOOLEAN`
 - **Example:** `FALSE IMPLIES TRUE` → `TRUE`
 - **Note:** `p IMPLIES q` is equivalent to `NOT p OR q`
-
-
 
 ---
 
@@ -144,17 +153,17 @@ Boolean operations for conditions and logic.
 Operations on text strings.
 
 ### Concatenation
+
 - **Keyword:** CONCAT
 - **Type:** `STRING -> STRING -> STRING`
 - **Example:** `CONCAT "hello", " world"` → `"hello world"`
 
 ### Append
+
 - **Keyword:** APPEND
 - **Type:** `STRING -> STRING -> STRING`
 - **Example:** `"hello" APPEND " world"` → `"hello world"`
 - **Note:** Infix wrapper for CONCAT
-
-
 
 ---
 
@@ -163,18 +172,18 @@ Operations on text strings.
 Construct and manipulate lists.
 
 ### Cons
+
 - **Keywords:** FOLLOWED BY
 - **Type:** `a -> LIST OF a -> LIST OF a`
 - **Example:** `1 FOLLOWED BY LIST 2, 3` → `LIST 1, 2, 3`
 - **Note:** Prepends element to list
 
 ### Empty List
+
 - **Keyword:** EMPTY
 - **Type:** `LIST OF a`
 - **Example:** `EMPTY` → Empty list
 - **Note:** Used in pattern matching
-
-
 
 ---
 
@@ -183,30 +192,32 @@ Construct and manipulate lists.
 Time-based operations for dates and deadlines.
 
 ### At
+
 - **Keyword:** AT
 - **Type:** Varies by context
 - **Example:** `event AT date`
 - **Note:** Specifies point in time
 
 ### Within
+
 - **Keyword:** WITHIN
 - **Type:** Time duration constraint
 - **Example:** `PARTY MUST DO action WITHIN 30 DAYS`
 - **Note:** Temporal deadline
 
 ### Starting
+
 - **Keyword:** STARTING
 - **Type:** Time reference
 - **Example:** `STARTING FROM date`
 - **Note:** Beginning of time period
 
 ### Followed
+
 - **Keywords:** FOLLOWED (temporal sequence)
 - **Type:** Event sequencing
 - **Example:** `event1 FOLLOWED event2`
 - **Note:** Different from list cons FOLLOWED BY
-
-
 
 ---
 
@@ -252,6 +263,7 @@ Some operators work on multiple types:
 ### EQUALS
 
 Works on most types:
+
 - `5 EQUALS 5` (NUMBER)
 - `"hello" EQUALS "hello"` (STRING)
 - `TRUE EQUALS TRUE` (BOOLEAN)
@@ -259,6 +271,7 @@ Works on most types:
 ### Comparison Operators
 
 Work on ordered types:
+
 - NUMBER: `5 > 3`
 - STRING: `"b" > "a"` (lexicographic)
 - DATE: `date1 > date2` (chronological)
@@ -266,6 +279,7 @@ Work on ordered types:
 ### PLUS
 
 Overloaded for different contexts:
+
 - Arithmetic: `5 + 3`
 - Can be extended via libraries
 
@@ -323,7 +337,7 @@ Both are equivalent and can be mixed.
 
 ## Examples
 
-All operator examples in [/docs/examples/reference/operators/](../../examples/reference/operators/).
+Operator examples are included as `.l4` files in this directory.
 
 ---
 
@@ -336,5 +350,3 @@ To add operator documentation:
 3. Document textual and symbolic forms
 4. Include type signatures
 5. Submit pull request
-
-See [contributing guidelines](https://github.com/smucclaw/l4-ide/blob/main/CONTRIBUTING.md).

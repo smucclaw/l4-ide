@@ -7,7 +7,7 @@ Keywords are reserved words in L4 that have special meaning and cannot be used a
 L4 has keywords for
 
 - Declarations and definitions
-- Functions and parameters  
+- Functions and parameters
 - Control flow and pattern matching
 - Logic and Boolean operations
 - Type system constructs
@@ -28,7 +28,7 @@ Used to declare types, variables, and functions.
 - **[AKA](AKA.md)** - Provide alternate names
 - **[IMPORT](IMPORT.md)** - Import from another file
 
---- 
+---
 
 ## Function Keywords
 
@@ -100,12 +100,14 @@ For expressing legal rules, obligations, and permissions.
 **See [Regulative Rules](REGULATIVE.md) for comprehensive documentation.**
 
 ### Deontic Modalities
+
 - **[PARTY](PARTY.md)** - Legal party
 - **[MUST](MUST.md)** - Obligation
 - **[MAY](MAY.md)** - Permission
 - **[SHANT](SHANT.md)** - Prohibition
 
 ### Rule Structure
+
 - **[WITHIN](REGULATIVE.md)** - Temporal deadline
 - **[HENCE](REGULATIVE.md)** - Consequence on fulfillment
 - **[LEST](REGULATIVE.md)** - Consequence on breach
@@ -115,6 +117,7 @@ For expressing legal rules, obligations, and permissions.
 - **[UNLESS](REGULATIVE.md)** - Negative condition
 
 ### Testing & Simulation
+
 - **[DO](REGULATIVE.md)** / **[DOES](REGULATIVE.md)** - Action verb (in #TRACE)
 - **[AT](REGULATIVE.md)** - Time specification
 - **[STARTING](REGULATIVE.md)** - Start time for deadlines
@@ -202,27 +205,29 @@ Check individual reference pages for implementation status and examples.
 
 Many keywords have symbolic alternatives:
 
-| Keyword | Symbol |
-|---------|--------|
-| AND | && |
-| OR | \|\| |
-| IMPLIES | => |
-| PLUS | + |
-| MINUS | - |
-| TIMES | * |
-| DIVIDED BY | / |
-| EQUALS | = |
-| GREATER THAN | > |
-| LESS THAN | < |
-| AT LEAST | >= |
-| AT MOST | <= |
+| Keyword      | Symbol |
+| ------------ | ------ |
+| AND          | &&     |
+| OR           | \|\|   |
+| IMPLIES      | =>     |
+| PLUS         | +      |
+| MINUS        | -      |
+| TIMES        | \*     |
+| DIVIDED BY   | /      |
+| EQUALS       | =      |
+| GREATER THAN | >      |
+| LESS THAN    | <      |
+| AT LEAST     | >=     |
+| AT MOST      | <=     |
 
 ---
 
 ## Learning Path
 
 ### Beginners
+
 Start with these essential keywords:
+
 1. **[ASSUME](ASSUME.md)** - Declare variables
 2. **[DECIDE](DECIDE.md)** / **[MEANS](MEANS.md)** - Define functions
 3. **[IF](IF.md)** / **[THEN](CONTROL-FLOW.md)** / **[ELSE](CONTROL-FLOW.md)** - Conditionals
@@ -230,14 +235,18 @@ Start with these essential keywords:
 5. **[DECLARE](DECLARE.md)** / **[IS](TYPE-KEYWORDS.md)** / **[HAS](TYPE-KEYWORDS.md)** - Types
 
 ### Intermediate
+
 Build on basics with:
+
 - **[GIVEN](GIVEN.md)** / **[GIVETH](GIVETH.md)** - Function signatures
 - **[CONSIDER](CONSIDER.md)** / **[WHEN](CONSIDER.md)** - Pattern matching
 - **[WHERE](WHERE.md)** / **[LET](LET.md)** / **[IN](LET.md)** - Local scope
 - **[LIST](TYPE-KEYWORDS.md)** - Polymorphic types
 
 ### Advanced
+
 Master these for complex programs:
+
 - **[PARTY](PARTY.md)** / **[MUST](MUST.md)** / **[MAY](MAY.md)** - Regulative rules
 - **[WITHIN](REGULATIVE.md)** / **[AT](REGULATIVE.md)** / **[STARTING](REGULATIVE.md)** - Temporal logic
 - **[FETCH](../libraries/README.md)** / **[POST](../libraries/README.md)** / **[ENV](../libraries/README.md)** - External I/O
@@ -263,6 +272,7 @@ Found an error or want to add a keyword reference page?
 3. Submit a pull request
 
 All keyword reference pages should include:
+
 - Clear explanation
 - Role in the language
 - 2-3 working examples

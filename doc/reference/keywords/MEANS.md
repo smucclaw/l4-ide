@@ -78,6 +78,6 @@ LET y MEAN 10 IN y PLUS 1
 ## Related Keywords
 
 - **[DECIDE](DECIDE.md)** - Declares a decision
-- **[IS](IS.md)** - Alternative for simple definitions
 - **[WHERE](WHERE.md)** - Local definitions
-- **[BE](BE.md)** - Alternative form
+
+> Note: IS and BE are alternative forms with the same meaning as MEANS.

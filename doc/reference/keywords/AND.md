@@ -11,12 +11,12 @@ expression1 && expression2
 
 ## Truth Table
 
-| A | B | A AND B |
-|---|---|---------|
-| TRUE | TRUE | TRUE |
-| TRUE | FALSE | FALSE |
-| FALSE | TRUE | FALSE |
-| FALSE | FALSE | FALSE |
+| A     | B     | A AND B |
+| ----- | ----- | ------- |
+| TRUE  | TRUE  | TRUE    |
+| TRUE  | FALSE | FALSE   |
+| FALSE | TRUE  | FALSE   |
+| FALSE | FALSE | FALSE   |
 
 ## Examples
 

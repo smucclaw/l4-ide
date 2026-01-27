@@ -77,11 +77,12 @@ DECIDE isEligible IS IF age >= 18 THEN TRUE ELSE FALSE
 
 ## Related Keywords
 
-- **[THEN](THEN.md)** - Consequent branch
-- **[ELSE](ELSE.md)** - Alternative branch
 - **[AND](AND.md)** - Logical conjunction in conditions
 - **[OR](OR.md)** - Logical disjunction in conditions
 - **[CONSIDER](CONSIDER.md)** - Pattern matching alternative
+- **[CONTROL-FLOW](CONTROL-FLOW.md)** - All control flow keywords
+
+> Note: THEN and ELSE are part of the IF syntax, not separate keyword pages.
 
 ## See Also
 

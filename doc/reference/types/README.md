@@ -17,6 +17,7 @@ L4's type system is inspired by functional programming languages like Haskell an
 ## Primitive Types
 
 ### NUMBER
+
 Numeric values including integers and rationals.
 
 - Integers: `42`, `-17`, `0`
@@ -25,6 +26,7 @@ Numeric values including integers and rationals.
 - **Examples:** Age calculations, financial amounts, quantities
 
 ### STRING
+
 Text strings enclosed in double quotes.
 
 - Unicode support
@@ -33,6 +35,7 @@ Text strings enclosed in double quotes.
 - **Examples:** Names, descriptions, legal text
 
 ### BOOLEAN
+
 Truth values for logical operations.
 
 - Values: `TRUE`, `FALSE`
@@ -41,6 +44,7 @@ Truth values for logical operations.
 - **Examples:** Eligibility checks, conditions, yes/no answers
 
 ### DATE
+
 Calendar dates for temporal reasoning.
 
 - ISO 8601 format: `YYYY-MM-DD`
@@ -53,6 +57,7 @@ Calendar dates for temporal reasoning.
 ## Algebraic Types
 
 ### Records
+
 Product types with named fields.
 
 **Example:** [record-example.l4](record-example.l4)
@@ -63,6 +68,7 @@ Product types with named fields.
 - **Examples:** Structured data, entities, configurations
 
 ### Enums
+
 Sum types with named constructors.
 
 **Example:** [enum-example.l4](enum-example.l4)
@@ -73,6 +79,7 @@ Sum types with named constructors.
 - **Examples:** Status values, categories, variants
 
 ### PAIR
+
 Two-element product type from prelude.
 
 **Note:** PAIR is defined in the prelude library. See [prelude.l4](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/libraries/prelude.l4) for implementation.
@@ -87,6 +94,7 @@ Two-element product type from prelude.
 ## Polymorphic Types
 
 ### LIST
+
 Ordered collection of elements of the same type.
 
 **Example:** [list-example.l4](list-example.l4)
@@ -97,6 +105,7 @@ Ordered collection of elements of the same type.
 - **Examples:** Collections, sequences, ordered data
 
 ### MAYBE
+
 Optional values that may be present or absent.
 
 **Example:** [maybe-example.l4](maybe-example.l4)
@@ -107,6 +116,7 @@ Optional values that may be present or absent.
 - **Examples:** Optional fields, lookup results, partial functions
 
 ### EITHER
+
 Choice between two alternative values.
 
 **Example:** [either-example.l4](either-example.l4)
@@ -117,6 +127,7 @@ Choice between two alternative values.
 - **Examples:** Success/failure, validation, branching logic
 
 ### Dictionary
+
 Associative map from keys to values (from prelude).
 
 **Note:** Dictionary is defined in the prelude library. See [prelude.l4](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/libraries/prelude.l4) for implementation.
@@ -131,6 +142,7 @@ Associative map from keys to values (from prelude).
 ## Type Constructors
 
 ### TYPE
+
 The kind of types (a type of types).
 
 - Used in type signatures
@@ -139,6 +151,7 @@ The kind of types (a type of types).
 - **Examples:** Generic functions, type parameters
 
 ### FUNCTION
+
 Function types.
 
 **Example:** [function-type-example.l4](function-type-example.l4)
@@ -253,16 +266,19 @@ TYPE
 ## Learning Path
 
 ### Beginners
+
 1. Start with primitive types: NUMBER, STRING, BOOLEAN
 2. Learn records for structured data
 3. Understand LIST for collections
 
 ### Intermediate
+
 1. Master MAYBE for optional values
 2. Use enums for variants
 3. Explore EITHER for error handling
 
 ### Advanced
+
 1. Write polymorphic functions with type parameters
 2. Use Dictionary for complex data structures
 3. Master higher-order functions
@@ -275,22 +291,3 @@ TYPE
 - **[Keywords](../keywords/README.md)** - Type-related keywords
 - **[Operators](../operators/README.md)** - Operations on types
 - **[Specifications](https://github.com/smucclaw/l4-ide/tree/main/specs)** - Technical specifications
-
----
-
-## Examples
-
-Type examples are included in this directory as `.l4` files.
-
----
-
-## Contributing
-
-To add or improve type documentation:
-
-1. Check implementation in [jl4-core/](https://github.com/smucclaw/l4-ide/tree/main/jl4-core)
-2. Add working examples as `.l4` files
-3. Link from glossary and related pages
-4. Submit pull request
-
-See [contributing guidelines](https://github.com/smucclaw/l4-ide/blob/main/CONTRIBUTING.md) for details.

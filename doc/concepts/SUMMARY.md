@@ -6,20 +6,12 @@
 
 ## Language Design
 
-- [Language Design](language-design/README.md)
-
-## Logic
-
-- [Logic](logic/README.md)
+- [Design Principles](language-design/principles.md)
 
 ## Legal Modeling
 
-- [Legal Modeling](legal-modeling/README.md)
+- [Regulative Rules](legal-modeling/regulative-rules.md)
 
 ## Type System
 
-- [Type System](type-system/README.md)
-
-## AI Integration
-
-- [AI Integration](ai-integration/README.md)
+- [Algebraic Types](type-system/algebraic-types.md)

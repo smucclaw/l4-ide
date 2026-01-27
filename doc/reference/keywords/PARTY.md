@@ -14,6 +14,7 @@ PARTY partyName SHANT ...
 ## Purpose
 
 PARTY is the starting point for regulative rules, specifying WHO is subject to the rule. It introduces:
+
 - Obligations (MUST)
 - Permissions (MAY)
 - Prohibitions (SHANT)
@@ -80,10 +81,8 @@ ruleName MEANS
 - **[MUST](MUST.md)** - Obligation
 - **[MAY](MAY.md)** - Permission
 - **[SHANT](SHANT.md)** - Prohibition
-- **[WITHIN](WITHIN.md)** - Deadline
-- **[HENCE](HENCE.md)** - Consequence
-- **[LEST](LEST.md)** - Violation consequence
+- **[REGULATIVE](REGULATIVE.md)** - Full regulative rule reference
 
 ## See Also
 
-- **[Regulative Rules](../../concepts/legal-modeling/)** - Modeling obligations
+- **[Regulative Rules](../../concepts/legal-modeling/regulative-rules.md)** - Modeling obligations

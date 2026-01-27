@@ -11,12 +11,12 @@ expression1 => expression2
 
 ## Truth Table
 
-| A | B | A IMPLIES B |
-|---|---|-------------|
-| TRUE | TRUE | TRUE |
-| TRUE | FALSE | FALSE |
-| FALSE | TRUE | TRUE |
-| FALSE | FALSE | TRUE |
+| A     | B     | A IMPLIES B |
+| ----- | ----- | ----------- |
+| TRUE  | TRUE  | TRUE        |
+| TRUE  | FALSE | FALSE       |
+| FALSE | TRUE  | TRUE        |
+| FALSE | FALSE | TRUE        |
 
 ## Semantics
 

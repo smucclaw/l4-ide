@@ -4,16 +4,16 @@ Comparison keywords are used to compare values and return BOOLEAN results. Most 
 
 ## Keywords
 
-| Keyword | Symbol | Meaning |
-|---------|--------|---------|
-| EQUALS | `=` | Equality |
-| GREATER THAN | `>` | Greater than |
-| LESS THAN | `<` | Less than |
-| AT LEAST | `>=` | Greater or equal |
-| AT MOST | `<=` | Less or equal |
-| ABOVE | `>` | Synonym for GREATER THAN |
-| BELOW | `<` | Synonym for LESS THAN |
-| EXACTLY | - | Exact match in patterns |
+| Keyword      | Symbol | Meaning                  |
+| ------------ | ------ | ------------------------ |
+| EQUALS       | `=`    | Equality                 |
+| GREATER THAN | `>`    | Greater than             |
+| LESS THAN    | `<`    | Less than                |
+| AT LEAST     | `>=`   | Greater or equal         |
+| AT MOST      | `<=`   | Less or equal            |
+| ABOVE        | `>`    | Synonym for GREATER THAN |
+| BELOW        | `<`    | Synonym for LESS THAN    |
+| EXACTLY      | -      | Exact match in patterns  |
 
 ## Equality: EQUALS
 

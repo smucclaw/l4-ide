@@ -5,29 +5,32 @@ Regulative keywords express legal obligations, permissions, prohibitions, and th
 ## Overview
 
 ### Deontic Modalities
-| Keyword | Meaning |
-|---------|---------|
-| **[MUST](MUST.md)** | Obligation (required) |
-| **[MAY](MAY.md)** | Permission (allowed) |
-| **[SHANT](SHANT.md)** | Prohibition (forbidden) |
-| **MUST NOT** | Prohibition (alternative) |
+
+| Keyword               | Meaning                   |
+| --------------------- | ------------------------- |
+| **[MUST](MUST.md)**   | Obligation (required)     |
+| **[MAY](MAY.md)**     | Permission (allowed)      |
+| **[SHANT](SHANT.md)** | Prohibition (forbidden)   |
+| **MUST NOT**          | Prohibition (alternative) |
 
 ### Rule Structure
-| Keyword | Purpose |
-|---------|---------|
+
+| Keyword               | Purpose                           |
+| --------------------- | --------------------------------- |
 | **[PARTY](PARTY.md)** | Who has the obligation/permission |
-| **WITHIN** | Temporal deadline |
-| **HENCE** | Consequence on fulfillment |
-| **LEST** | Consequence on breach |
-| **PROVIDED** | Guard condition |
-| **BREACH** | Explicit violation marker |
+| **WITHIN**            | Temporal deadline                 |
+| **HENCE**             | Consequence on fulfillment        |
+| **LEST**              | Consequence on breach             |
+| **PROVIDED**          | Guard condition                   |
+| **BREACH**            | Explicit violation marker         |
 
 ### Combining Rules
-| Keyword | Purpose |
-|---------|---------|
-| **RAND** | Sequential AND of contracts |
-| **ROR** | Choice OR of contracts |
-| **FULFILLED** | Successfully completed |
+
+| Keyword       | Purpose                     |
+| ------------- | --------------------------- |
+| **RAND**      | Sequential AND of contracts |
+| **ROR**       | Choice OR of contracts      |
+| **FULFILLED** | Successfully completed      |
 
 ## Basic Rule Structure
 
@@ -251,4 +254,4 @@ saleContract MEANS
 ## See Also
 
 - **[Foundation Course: Regulative Rules](../../courses/foundation/module-5-regulative.md)** - Tutorial
-- **[Advanced Course: Contract Modeling](../../courses/advanced/module-a11-regulative-rules.md)** - Advanced patterns
+- **[Regulative Rules Concept](../../concepts/legal-modeling/regulative-rules.md)** - Conceptual overview

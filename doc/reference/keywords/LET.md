@@ -16,6 +16,7 @@ IN body
 ## Purpose
 
 LET allows you to:
+
 1. Name intermediate values before using them
 2. Break complex expressions into readable parts
 3. Create local scope for temporary variables
@@ -93,11 +94,10 @@ result2 MEANS x PLUS y WHERE x MEANS 1, y MEANS 2
 
 ## Related Keywords
 
-- **[IN](IN.md)** - Introduces the body of a LET expression
 - **[WHERE](WHERE.md)** - Alternative local binding syntax
-- **[IS](IS.md)** - Assignment in LET
-- **[BE](BE.md)** - Alternative assignment keyword
 - **[MEANS](MEANS.md)** - Alternative assignment keyword
+
+> Note: IN, IS, and BE are part of the LET syntax, not separate keyword pages.
 
 ## See Also
 

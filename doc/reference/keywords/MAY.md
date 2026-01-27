@@ -28,6 +28,4 @@ MAY expresses a legal permission - something a party is allowed to do. Unlike ob
 - **[PARTY](PARTY.md)** - Identifies who has the permission
 - **[MUST](MUST.md)** - Obligation (required action)
 - **[SHANT](SHANT.md)** - Prohibition (forbidden action)
-- **[DO](DO.md)** - Action verb
-- **[WITHIN](WITHIN.md)** - Deadline
-- **[PROVIDED](PROVIDED.md)** - Condition for permission
+- **[REGULATIVE](REGULATIVE.md)** - Full regulative rule reference

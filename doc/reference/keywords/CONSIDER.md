@@ -94,7 +94,7 @@ describe n MEANS
 
 ## Related Keywords
 
-- **[WHEN](WHEN.md)** - Pattern match case
-- **[OTHERWISE](OTHERWISE.md)** - Default case
-- **[BRANCH](BRANCH.md)** - Alternative syntax
 - **[IF](IF.md)** - Simple conditional alternative
+- **[CONTROL-FLOW](CONTROL-FLOW.md)** - All control flow keywords
+
+> Note: WHEN, OTHERWISE, and BRANCH are part of the CONSIDER syntax.

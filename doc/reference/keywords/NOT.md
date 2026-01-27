@@ -10,10 +10,10 @@ NOT expression
 
 ## Truth Table
 
-| A | NOT A |
-|---|-------|
-| TRUE | FALSE |
-| FALSE | TRUE |
+| A     | NOT A |
+| ----- | ----- |
+| TRUE  | FALSE |
+| FALSE | TRUE  |
 
 ## Examples
 

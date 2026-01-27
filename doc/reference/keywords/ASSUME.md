@@ -12,6 +12,7 @@ ASSUME name IS A FUNCTION FROM Type1 TO Type2
 ## Purpose
 
 ASSUME is used to:
+
 1. Declare input variables for decision logic
 2. Declare external functions whose implementation is provided elsewhere
 3. State assumptions about values that will be provided at runtime
@@ -74,8 +75,7 @@ DECIDE isAdult IS age >= 18
 
 - **[DECIDE](DECIDE.md)** - Define a value or function with a body
 - **[GIVEN](GIVEN.md)** - Introduce function parameters
-- **[IS](IS.md)** - Type assertion
-- **[FUNCTION](FUNCTION.md)** - Function types
+- **[TYPE-KEYWORDS](TYPE-KEYWORDS.md)** - Type syntax (IS, FUNCTION, etc.)
 
 ## See Also
 

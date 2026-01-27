@@ -14,6 +14,7 @@ WHERE
 ## Purpose
 
 WHERE clauses let you:
+
 1. Break complex expressions into named parts
 2. Avoid repetition by naming common subexpressions
 3. Create helper functions local to a definition
@@ -78,7 +79,6 @@ result2 MEANS LET x IS 1, y IS 2 IN x PLUS y
 ## Related Keywords
 
 - **[LET](LET.md)** - Alternative local binding syntax
-- **[IN](IN.md)** - Scope delimiter for LET
 - **[MEANS](MEANS.md)** - Defines the binding
 
 ## See Also

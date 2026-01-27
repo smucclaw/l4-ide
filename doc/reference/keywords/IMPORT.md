@@ -45,15 +45,15 @@ IMPORT utils
 
 L4 includes several standard libraries:
 
-| Library | Description |
-|---------|-------------|
-| `prelude` | Core functions (auto-imported) |
-| `math` | Mathematical functions |
-| `daydate` | Date calculations |
-| `excel-date` | Excel date compatibility |
-| `currency` | Currency handling |
-| `legal-persons` | Legal entity types |
-| `coercion` | Type conversions |
+| Library         | Description                    |
+| --------------- | ------------------------------ |
+| `prelude`       | Core functions (auto-imported) |
+| `math`          | Mathematical functions         |
+| `daydate`       | Date calculations              |
+| `excel-date`    | Excel date compatibility       |
+| `currency`      | Currency handling              |
+| `legal-persons` | Legal entity types             |
+| `coercion`      | Type conversions               |
 
 ## Import Resolution
 

@@ -4,15 +4,15 @@ Control flow keywords direct program execution based on conditions and patterns.
 
 ## Overview
 
-| Keyword | Used With | Purpose |
-|---------|-----------|---------|
-| IF | THEN, ELSE | Conditional expression |
-| THEN | IF, WHEN | Consequent result |
-| ELSE | IF | Alternative result |
-| CONSIDER | WHEN | Pattern matching |
-| WHEN | CONSIDER | Pattern case |
-| OTHERWISE | CONSIDER | Default case |
-| BRANCH | IF | Multi-way conditional |
+| Keyword   | Used With  | Purpose                |
+| --------- | ---------- | ---------------------- |
+| IF        | THEN, ELSE | Conditional expression |
+| THEN      | IF, WHEN   | Consequent result      |
+| ELSE      | IF         | Alternative result     |
+| CONSIDER  | WHEN       | Pattern matching       |
+| WHEN      | CONSIDER   | Pattern case           |
+| OTHERWISE | CONSIDER   | Default case           |
+| BRANCH    | IF         | Multi-way conditional  |
 
 ## IF / THEN / ELSE
 
@@ -90,12 +90,12 @@ priceFor cat MEANS
 
 ### BRANCH vs CONSIDER vs IF
 
-| Use Case | Best Choice |
-|----------|-------------|
-| Binary decision | IF...THEN...ELSE |
-| Multiple equality checks | BRANCH |
-| Pattern matching / destructuring | CONSIDER |
-| Nested conditions | Nested IF or CONSIDER |
+| Use Case                         | Best Choice           |
+| -------------------------------- | --------------------- |
+| Binary decision                  | IF...THEN...ELSE      |
+| Multiple equality checks         | BRANCH                |
+| Pattern matching / destructuring | CONSIDER              |
+| Nested conditions                | Nested IF or CONSIDER |
 
 ## THEN
 

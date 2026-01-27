@@ -72,4 +72,3 @@ See [Syntax: Genitive](../syntax/genitive-example.l4) for details.
 ## See Also
 
 - **[Types Reference](../types/README.md)** - Type system documentation
-

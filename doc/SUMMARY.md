@@ -13,7 +13,7 @@
 - [Operators](reference/operators/README.md)
 - [Syntax](reference/syntax/README.md)
 - [Libraries](reference/libraries/README.md)
-- [CLI](reference/cli/README.md)
+
 
 ## Courses
 
@@ -36,4 +36,4 @@
 - [Logic](concepts/logic/)
 - [Legal Modeling](concepts/legal-modeling/)
 - [Type System](concepts/type-system/)
-- [AI Integration](concepts/ai-integration/)
+

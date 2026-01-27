@@ -4,13 +4,13 @@ Arithmetic keywords perform mathematical operations on numbers. Each has both a 
 
 ## Keywords
 
-| Keyword | Symbol | Operation |
-|---------|--------|-----------|
-| PLUS | `+` | Addition |
-| MINUS | `-` | Subtraction |
-| TIMES | `*` | Multiplication |
-| DIVIDED BY | `/` | Division |
-| MODULO | `%` | Remainder |
+| Keyword    | Symbol | Operation      |
+| ---------- | ------ | -------------- |
+| PLUS       | `+`    | Addition       |
+| MINUS      | `-`    | Subtraction    |
+| TIMES      | `*`    | Multiplication |
+| DIVIDED BY | `/`    | Division       |
+| MODULO     | `%`    | Remainder      |
 
 ## PLUS
 

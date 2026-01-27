@@ -4,17 +4,17 @@ These keywords are used in type declarations and type expressions.
 
 ## Overview
 
-| Keyword | Purpose |
-|---------|---------|
-| **IS** | Type assertion / definition |
-| **HAS** | Record field declaration |
-| **ONE OF** | Enum variant declaration |
-| **OF** | Type application |
-| **WITH** | Record construction |
-| **LIST** | List type / literal |
-| **FUNCTION FROM TO** | Function type |
-| **FOR ALL** | Universal quantification |
-| **TYPE** | Kind of types |
+| Keyword              | Purpose                     |
+| -------------------- | --------------------------- |
+| **IS**               | Type assertion / definition |
+| **HAS**              | Record field declaration    |
+| **ONE OF**           | Enum variant declaration    |
+| **OF**               | Type application            |
+| **WITH**             | Record construction         |
+| **LIST**             | List type / literal         |
+| **FUNCTION FROM TO** | Function type               |
+| **FOR ALL**          | Universal quantification    |
+| **TYPE**             | Kind of types               |
 
 ## IS
 

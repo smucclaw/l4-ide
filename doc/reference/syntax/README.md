@@ -17,9 +17,11 @@ Key syntax features:
 ## Core Syntax Features
 
 ### Layout Rules
+
 Indentation-based grouping instead of braces.
 
 **Key Concepts:**
+
 - Blocks defined by indentation level
 - Consistent indentation required
 - Replaces `{` `}` and `;` separators
@@ -30,6 +32,7 @@ Indentation-based grouping instead of braces.
 ---
 
 ### Comments
+
 Documentation and notes in code.
 
 **Example:** [comment-example.l4](comment-example.l4)
@@ -39,6 +42,7 @@ Documentation and notes in code.
 ---
 
 ### Identifiers
+
 Names for variables, functions, and types.
 
 **Example:** [identifier-example.l4](identifier-example.l4)
@@ -47,6 +51,7 @@ Names for variables, functions, and types.
 **Quoted:** Use backticks for spaces/special characters
 
 **Case Sensitivity:**
+
 - Keywords: UPPERCASE only
 - Identifiers: Case-sensitive (`age` ≠ `Age`)
 
@@ -57,11 +62,13 @@ Names for variables, functions, and types.
 Metadata attached to declarations.
 
 ### @desc
+
 Human-readable descriptions.
 
 **Example:** [annotation-example.l4](annotation-example.l4)
 
 ### @nlg
+
 Natural language generation hints.
 
 **Inline form:** `The applicant [is %age% years old].`
@@ -69,6 +76,7 @@ Natural language generation hints.
 See [annotation-example.l4](annotation-example.l4)
 
 ### @ref
+
 Cross-references to legal sources.
 
 **Inline form:** `The applicant <<must be at least 18 years old>>.`
@@ -76,11 +84,13 @@ Cross-references to legal sources.
 See [annotation-example.l4](annotation-example.l4)
 
 ### @ref-src / @ref-map
+
 Source references and mappings.
 
 See [annotation-example.l4](annotation-example.l4)
 
 ### @export
+
 Mark declarations for export.
 
 Example: `@export "public_api"`
@@ -92,26 +102,31 @@ Example: `@export "public_api"`
 Compiler commands for testing and evaluation.
 
 ### #EVAL
+
 Evaluate and print expression.
 
 **Example:** [directive-example.l4](directive-example.l4)
 
 ### #EVALTRACE
+
 Evaluate with execution trace.
 
 Example: `#EVALTRACE complexCalculation`
 
 ### #TRACE
+
 Generate state graph traces.
 
 Example: `#TRACE contractStateMachine`
 
 ### #CHECK
+
 Type check expression.
 
 Example: `#CHECK age > 18`
 
 ### #ASSERT
+
 Assert truth value (for testing).
 
 Example: `#ASSERT 2 PLUS 2 EQUALS 4`
@@ -121,11 +136,13 @@ Example: `#ASSERT 2 PLUS 2 EQUALS 4`
 ## Special Syntax
 
 ### Ditto
+
 Copy from line above using `^`.
 
 **Example:** [ditto-example.l4](ditto-example.l4)
 
 **Rules:**
+
 - One `^` per token to copy
 - Copies tokens from line directly above
 - Useful for repetitive declarations
@@ -133,6 +150,7 @@ Copy from line above using `^`.
 ---
 
 ### Asyndetic
+
 Implicit operators using punctuation.
 
 **Ellipsis** (`...`) - Implicit AND  
@@ -143,6 +161,7 @@ Implicit operators using punctuation.
 ---
 
 ### Genitive
+
 Record field access using `'s`.
 
 **Example:** [genitive-example.l4](genitive-example.l4)
@@ -150,11 +169,13 @@ Record field access using `'s`.
 ---
 
 ### Section Markers
+
 Organize code into sections using `§`.
 
 **Example:** [section-example.l4](section-example.l4)
 
 **Features:**
+
 - `§` - Section
 - `§§` - Subsection
 - `§§§` - Sub-subsection
@@ -182,28 +203,30 @@ Organize code into sections using `§`.
 
 `LIST 1, 2, 3`, `EMPTY`, `1 FOLLOWED BY 2 FOLLOWED BY EMPTY`
 
-
-
 ---
 
 ## Symbols
 
 ### Parentheses
+
 `( )` - Grouping and tuples.
 
 Examples: `(age PLUS 5) TIMES 2`, `PAIR OF 1, 2`
 
 ### Brackets
+
 `[ ]` - Inline NLG annotations.
 
 Example: `The applicant [is %age% years old].`
 
 ### Angles
+
 `<< >>` - Inline reference annotations.
 
 Example: `The applicant <<must be 18 or over>>.`
 
 ### Braces
+
 `{ }` - Block comments (alternative).
 
 Example: `{- Block comment -}`
@@ -219,8 +242,6 @@ Example: `{- Block comment -}`
 - `...` - Asyndetic AND
 - `..` - Asyndetic OR
 
-
-
 ---
 
 ## Syntax Conventions
@@ -228,15 +249,18 @@ Example: `{- Block comment -}`
 ### Naming Conventions
 
 **Variables and Functions:**
+
 - camelCase: `taxRate`, `calculateTotal`
 - snake_case: `tax_rate`, `calculate_total`
 - Spaces with backticks: `` `tax rate` ``
 
 **Types:**
+
 - PascalCase: `Person`, `TaxBracket`
 - Prefer nouns
 
 **Constants:**
+
 - UPPERCASE: `MAX_AGE`, `DEFAULT_RATE`
 
 ### Indentation

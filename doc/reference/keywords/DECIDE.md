@@ -92,11 +92,12 @@ DECIDE isEligible IF
 ## Related Keywords
 
 - **[MEANS](MEANS.md)** - Introduces the function body
-- **[IS](IS.md)** - Used in simple definitions
 - **[GIVEN](GIVEN.md)** - Introduces parameters
 - **[GIVETH](GIVETH.md)** - Specifies return type
 - **[WHERE](WHERE.md)** - Local definitions
 - **[IF](IF.md)** - Boolean condition form
+
+> Note: IS is part of the DECIDE syntax, not a separate keyword page.
 
 ## See Also
 

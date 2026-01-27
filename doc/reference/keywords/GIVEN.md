@@ -79,10 +79,10 @@ processPayment customer amount MEANS ...
 ## Related Keywords
 
 - **[GIVETH](GIVETH.md)** - Specifies return type
-- **[GIVES](GIVES.md)** - Synonym for GIVETH
 - **[DECIDE](DECIDE.md)** - Function definition
 - **[MEANS](MEANS.md)** - Function body
-- **[IS](IS.md)** - Type assertion
+- **[TYPE-KEYWORDS](TYPE-KEYWORDS.md)** - Type syntax (IS, etc.)
 
 ## See Also
+
 - **[Types Reference](../types/README.md)** - Available types

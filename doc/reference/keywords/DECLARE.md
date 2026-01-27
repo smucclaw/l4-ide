@@ -90,10 +90,7 @@ DECLARE Person3 HAS name: A STRING
 
 ## Related Keywords
 
-- **[HAS](HAS.md)** - Introduces record fields
-- **[IS](IS.md)** - Type assertion
-- **[ONE](ONE.md)** - Used in enum declarations
-- **[OF](OF.md)** - Type application
+- **[TYPE-KEYWORDS](TYPE-KEYWORDS.md)** - Type-related keywords (IS, HAS, ONE OF)
 
 ## See Also
 

@@ -81,10 +81,11 @@ double x MEANS x TIMES 2
 
 ## Related Keywords
 
-- **[GIVES](GIVES.md)** - Synonym for GIVETH
 - **[GIVEN](GIVEN.md)** - Introduces parameters
 - **[DECIDE](DECIDE.md)** - Function definition
 - **[MEANS](MEANS.md)** - Function body
+
+> Note: GIVES is a synonym for GIVETH.
 
 ## See Also
 
