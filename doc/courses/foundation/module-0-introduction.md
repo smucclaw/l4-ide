@@ -139,25 +139,7 @@ cabal run jl4-repl -- myfile.l4
 
 Create a file called `hello.l4`:
 
-```l4
--- This is a comment (starts with --)
-
--- Define a simple type
-DECLARE Person
-    HAS name IS A STRING
-        age IS A NUMBER
-
--- Create a person
-alice MEANS Person "Alice" 30
-
--- Define a rule
-GIVEN p IS A Person
-GIVETH A BOOLEAN
-DECIDE `is adult` IF p's age >= 18
-
--- Test it
-#EVAL `is adult` alice
-```
+[Example file hello.l4](hello.l4)
 
 Save the file. If you're using VS Code with the L4 extension, you'll see:
 
