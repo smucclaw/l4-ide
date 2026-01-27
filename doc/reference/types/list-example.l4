@@ -1,0 +1,11 @@
+-- Example: List type usage
+-- Demonstrates list literals and cons operator
+
+-- List literal syntax
+`first list` MEANS LIST 1, 2, 3
+
+-- Cons operator (FOLLOWED BY)
+`second list` MEANS 1 FOLLOWED BY 2 FOLLOWED BY 3 FOLLOWED BY EMPTY
+
+#EVAL `first list`
+#EVAL `second list`

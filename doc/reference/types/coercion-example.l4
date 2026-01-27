@@ -1,0 +1,66 @@
+-- Type Coercion Example: Built-in conversion functions
+IMPORT daydate
+
+-- TOSTRING: Convert values to strings
+DECIDE numberText IS TOSTRING 1.20
+#EVAL numberText  -- "1.2" (no trailing zeros)
+
+DECIDE boolText IS TOSTRING TRUE
+#EVAL boolText  -- "TRUE"
+
+DECIDE dateText IS TOSTRING (Date 29 2 2024)
+#EVAL dateText  -- "2024-02-29"
+
+-- AS STRING: Inline syntax (same as TOSTRING)
+DECIDE boolAsString IS TRUE AS STRING
+#EVAL boolAsString  -- "TRUE"
+
+DECIDE dateAsString IS (Date 1 1 2024) AS STRING
+#EVAL dateAsString  -- "2024-01-01"
+
+-- TONUMBER: Parse strings to numbers
+DECIDE parsedGood IS TONUMBER "  -12.50 "
+#EVAL parsedGood  -- JUST -12.5
+
+DECIDE parsedSci IS TONUMBER "1.2E3"
+#EVAL parsedSci  -- JUST 1200
+
+DECIDE parsedBad IS TONUMBER "oops"
+#EVAL parsedBad  -- NOTHING
+
+-- TODATE: Parse strings to dates
+DECIDE parsedISODate IS TODATE "2024-02-29"
+#EVAL parsedISODate  -- JUST (Date 29 2 2024)
+
+DECIDE parsedSlashDate IS TODATE "15/01/2024"
+#EVAL parsedSlashDate  -- JUST (Date 15 1 2024)
+
+DECIDE parsedNamedDate IS TODATE "Feb 01, 2024"
+#EVAL parsedNamedDate  -- JUST (Date 1 2 2024)
+
+DECIDE parsedBadDate IS TODATE "31/02/2024"
+#EVAL parsedBadDate  -- NOTHING (Feb 31 doesn't exist)
+
+-- TRUNC: Truncate decimal places
+DECIDE truncWhole IS TRUNC 12.987 0
+#EVAL truncWhole  -- 12
+
+DECIDE truncDecimals IS TRUNC 12.987 2
+#EVAL truncDecimals  -- 12.98
+
+DECIDE truncNegativeDigits IS TRUNC 123.45 (0 MINUS 1)
+#EVAL truncNegativeDigits  -- 120
+
+DECIDE truncNegativeNumber IS TRUNC (0 MINUS 123.45) 1
+#EVAL truncNegativeNumber  -- -123.4
+
+-- Combining coercions with pattern matching
+GIVEN input IS A STRING
+GIVETH A STRING
+parseAndDouble input MEANS
+    CONSIDER TONUMBER input
+    WHEN NOTHING THEN "Invalid number"
+    WHEN JUST n THEN TOSTRING (n TIMES 2)
+
+#EVAL parseAndDouble "21"    -- "42"
+#EVAL parseAndDouble "abc"   -- "Invalid number"

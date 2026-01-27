@@ -1,171 +1,276 @@
-# AI Agent Development Notes for L4 IDE
+# AGENTS.md
+
+Coding guidelines for AI agents working in this repository.
 
 ## About L4
 
-**L4 is a domain-specific language (DSL) for law.** It enables computer-readable formalizations of contracts, legislation, and regulations, translating legal documents into precise, executable code.
+**L4 is a domain-specific programming language for law.** It formalizes legal rules and contracts as executable specifications.
 
-### Design Principles
+**Design Philosophy:**
 
-1. **Optimized for editability and learnability** - Most human uses involve tweaking existing text rather than drafting from scratch
-2. **Machine-written, human-reviewed** - LLMs can ingest legal documents into L4; humans review and revise
-3. **Isomorphic to legal text** - L4 encoding closely follows the original legal document structure and verbiage
-4. **Layout-sensitive syntax** - Uses indentation for grouping (like Python), making it approachable for non-programmers
-5. **Strongly typed** - Algebraic data types reduce ambiguity; L4 is written in, and inspired by, Haskell and functional programming.
-6. **Both specification and programming language** - Can express both "letter of the law" and "spirit of the law"
+- Layout-sensitive syntax (like Python)
+- Strongly typed with algebraic data types (inspired by Haskell)
+- Isomorphic to legal text structure
 
-### Target Users
+## Repository Structure
 
-1. **Legal professionals** - Lawyers and legal drafters (no programming experience required)
-2. **Legal engineers** - Those who translate legal text to L4 code
-3. **End-users of L4-based applications** - People asking questions like:
-   - "Do I qualify? Why/Why not?"
-   - "How much do I have to pay/get paid?"
-   - "What do I need to do to achieve a goal?"
-4. **AI/LLMs** - Copilot can automatically translate legal text into L4
-5. **Developers** - Improving the toolchain and IDE experience
+**Dual-stack monorepo:**
 
-### Project Goals
+### Haskell (Cabal)
 
-The project aims to answer common legal questions computationally:
+| Package                 | Purpose                                        |
+| ----------------------- | ---------------------------------------------- |
+| `jl4-core/`             | Core language (parser, typechecker, evaluator) |
+| `jl4/`                  | CLI tool and JSON schema generator             |
+| `jl4-lsp/`              | Language Server Protocol for IDE support       |
+| `jl4-repl/`             | Interactive REPL                               |
+| `jl4-decision-service/` | REST API for decision evaluation               |
+| `jl4-websessions/`      | Session persistence service                    |
+| `jl4-query-plan/`       | Query planning utilities                       |
 
-- Current state given events
-- Immediate obligations
-- Paths to achieve/avoid outcomes
-- Basis for calculations (audit trails)
-- Detect potential loopholes and ambiguities
+### TypeScript (npm workspaces + Turborepo)
 
-Key applications include:
+| Package            | Purpose                                    |
+| ------------------ | ------------------------------------------ |
+| `ts-apps/vscode/`  | VS Code extension                          |
+| `ts-apps/jl4-web/` | Web-based editor (Svelte)                  |
+| `ts-shared/`       | Shared libraries (RPC client, visualizers) |
 
-- IDE support for legal drafters
-- Automated generation of end-user web/mobile apps
-- Visualizations (ladder diagrams) for comprehension
-- Chatbot interfaces for conversational engagement
-- SAT/SMT verification and formal reasoning
+### Documentation
 
----
+| Location      | Content                                                             |
+| ------------- | ------------------------------------------------------------------- |
+| `doc/`        | L4 language documentation (reference, courses, tutorials, concepts) |
+| `specs/`      | Development specifications (todo, done, proposals, roadmap)         |
+| `*/README.md` | Component-specific setup and usage                                  |
 
-## Development Guide
-
-### Shell Quoting
-
-**Backticks (`` `...` ``) are meaningful to both L4 and the shell.** In L4 sources they denote quoted identifiers, but in `bash`/`zsh` they trigger command substitution. When running `rg`, `sed`, etc. against L4 snippets containing backticks, quote or escape them (e.g. `rg 'foo `bar`'` or `rg \"foo \\`bar\\`\"`) to avoid accidentally executing commands.
-
-When you need to pass multi-line text containing backticks to shell commands (e.g. GitHub issue bodies), prefer a single-quoted heredoc to prevent command substitution:
+## Essential Commands
 
 ```bash
-cat > /tmp/body.md <<'EOF'
-This refers to `WHERE` and `LET` in L4.
-EOF
+# Build
+cabal build all          # Haskell
+npm run build            # TypeScript
+
+# Test (REQUIRED before commits)
+cabal test all           # Haskell tests
+npm test                 # TypeScript tests
+
+# Format (REQUIRED before commits)
+npm run format           # TypeScript formatting
+
+# Run tools
+cabal run jl4-cli -- file.l4
+cabal run jl4-repl -- file.l4
 ```
 
-### Testing
+## Pre-Commit Checklist
 
-**We aspire to follow Test-Driven Development (TDD) practices.** This means:
-
-1. **Write tests first** when adding new features - define expected behavior before implementation
-2. **Update tests** when modifying existing behavior - tests should reflect the current spec
-3. **Add regression tests** when fixing bugs - prevent the same bug from recurring
-
-TDD helps us catch issues early and ensures our code meets specifications before we consider a feature complete.
-
-Before committing changes, always run the full test suite to ensure nothing is broken:
+**Always run before committing:**
 
 ```bash
-cabal test all
+cabal test all && npm ci && npm run format
 ```
 
-The test suite should pass before creating a git commit.
+CI will reject unformatted TypeScript code.
 
-**Note:** The test output is extensive (hundreds of examples). For easier analysis, pipe to a file:
+## Git Workflow
+
+### Never Commit to Main
+
+Always create a feature branch:
 
 ```bash
-cabal test all 2>&1 | tee /tmp/test-output.txt
+git checkout -b feature-name
+# Make changes
+# Run tests and format
+git push -u origin feature-name
+# Create PR
 ```
 
-Then you can:
+### After Creating PR
 
-- Check summary: `tail -50 /tmp/test-output.txt`
-- Search for failures: `grep -i "fail\|error" /tmp/test-output.txt`
-- Check specific tests: `grep "ok/factorial" /tmp/test-output.txt`
-- Read incrementally: `less /tmp/test-output.txt`
+1. Wait ~10 minutes for CI
+2. Check for reviewer comments and CI failures
+3. Fix issues immediately without waiting for input
+4. Merge when green and approved
 
-Also before committing changes, run `npm run format` so that Github's CI doesn't fail PRs on formatting errors.
+## Testing
 
-#### Golden Files
+### Golden Files
 
-The test suite uses golden files for snapshot testing. Golden files capture the expected output of tests.
+- First run creates golden file (test fails)
+- Second run validates against golden file (should pass)
+- To update: delete golden files, run tests twice
 
-**Important behaviors:**
+### Test Locations
 
-- **First run**: If a golden file doesn't exist, it will be created automatically on the first test run. The test will fail with "Failed because failFirstTime is set to True".
-- **Second run**: Running the test again will compare against the newly created golden file and should pass.
-- **When adding new test files**: You typically need to run `cabal test all` twice - once to create the golden files, and once to verify they match.
+- `jl4/ok/` - Files that should succeed
+- `jl4/not-ok/` - Files that should fail
+- `jl4/experiments/` - Real-world examples
 
-**Updating golden files:**
-
-If you've made intentional changes that affect test output and you're confident the new behavior is correct, you can:
-
-1. Delete the relevant golden files (usually in `.golden/` directories)
-2. Run `cabal test all` twice to regenerate and verify the golden files
-
-This is preferable to manually editing golden files, as it ensures the test output exactly matches what the system produces.
-
-### Building
-
-To build the entire project:
+### Filtering Tests
 
 ```bash
-cabal build all
+cabal test jl4-test --test-options='--match "pattern"'
 ```
 
-To run the CLI tool:
+## Adding Features
+
+1. Write spec in `specs/todo/FEATURE-NAME-SPEC.md`
+2. Add tests in `jl4/ok/` or `jl4/not-ok/`
+3. Implement in relevant `L4.*` modules
+4. Run `cabal test all` twice (golden files)
+5. Move spec to `specs/done/`
+6. Update `doc/reference/` if adding keywords/types/operators
+7. Validate generated L4 code with CLI or MCP to be valid!
+
+## L4 Language Pipeline
+
+```
+Source (.l4) → Parser → AST → Desugarer → Type Checker → Evaluator → Results
+```
+
+**Key modules in `jl4-core/src/L4/`:**
+
+- `Parser.hs` - Layout-sensitive parsing
+- `Syntax.hs` - AST definitions
+- `Desugar.hs` - Mixfix resolution, sugar expansion
+- `TypeCheck.hs` - Bidirectional type checking
+- `EvaluateLazy.hs` - Lazy evaluation with traces
+
+## Shell Quoting
+
+**Backticks are meaningful in L4** (quoted identifiers) but trigger command substitution in bash/zsh:
 
 ```bash
-cabal run jl4-cli -- <file.l4>
+rg 'foo `bar`'     # Good - single quotes
+rg "foo \`bar\`"   # Good - escaped
+rg foo `bar`       # BAD - executes bar command
 ```
 
-To install the LSP tool:
+## Package Manager
+
+- Use `npm ci` for regular development (reproducible, faster)
+- Only use `npm install` when adding/updating packages
+
+## Requirements
+
+- **Haskell:** GHC 9.10.2, Cabal 3.10+ (via GHCup)
+- **Node.js:** >= 20
+- **GraphViz:** `dot` for trace visualization
+
+**Nix users:** `nix-shell nix/shell.nix` provides all dependencies.
+
+## Writing Documentation
+
+### Documentation Structure
+
+The `doc/` folder has four distinct sections with different purposes:
+
+| Folder           | Purpose                                                        | Audience                            |
+| ---------------- | -------------------------------------------------------------- | ----------------------------------- |
+| `doc/reference/` | Precise technical specs for keywords, types, operators, syntax | Developers needing exact details    |
+| `doc/courses/`   | Structured learning paths with modules                         | Learners studying L4 systematically |
+| `doc/tutorials/` | Task-oriented guides ("How do I do X?")                        | Users with specific goals           |
+| `doc/concepts/`  | Explanations of ideas and design decisions                     | Anyone wanting to understand "why"  |
+
+### Important Index Files
+
+Always keep these files accurate and up-to-date:
+
+- `doc/README.md` - Main documentation entry point
+- `doc/reference/GLOSSARY.md` - Master index of all language features
+- `doc/*/README.md` - Section overviews with navigation
+- `doc/*/SUMMARY.md` - Table of contents for mdBook rendering
+
+### L4 Code in Documentation
+
+**Prefer separate `.l4` files over inline code blocks:**
+
+````markdown
+<!-- ✅ Good: Link to validated file -->
+
+**Example:** [eligibility-example.l4](eligibility-example.l4)
+
+<!-- ❌ Avoid: Inline code that can't be validated -->
+
+```l4
+DECIDE `is eligible` IF ...
+```
+````
+
+````
+
+**All L4 code must be valid.** Use the MCP validator or CLI:
 
 ```bash
-cabal install exe:jl4-lsp --overwrite-policy=always
+cabal run jl4-cli -- path/to/file.l4
+````
+
+### Writing L4 for Legal Audiences
+
+L4's target users are **policy writers and legal authors**, not programmers. Write code that reads like natural language:
+
+```l4
+-- ✅ Good: Reads like legal text
+GIVEN person IS A Person
+GIVETH A BOOLEAN
+DECIDE `the person is eligible for benefits` IF
+    `the person is a citizen`
+    AND `the person has resided for at least 5 years`
+    AND NOT `the person has been disqualified`
+
+-- ❌ Poor: Reads like programmer code
+GIVEN p IS A Person
+GIVETH A BOOLEAN
+isEligible p MEANS p's citizen && p's years >= 5 && !p's disqualified
 ```
 
----
+**Use backtick identifiers liberally:**
 
-## Task Management
+- `` `the applicant` `` not `applicant`
+- `` `has valid identification` `` not `hasValidID`
+- `` `the person must not sell alcohol` `` not `alcoholSaleProhibited`
 
-### Specifications
+### Validating Documentation
 
-Task specifications and feature designs are organized in the `doc/dev/specs/` directory:
+**Always run after documentation changes:**
 
-- **`doc/dev/specs/todo/`** - Specifications for planned features and tasks in progress (e.g., `EXPORT-SYNTAX-SPEC.md`, `BOOLEAN-MINIMIZATION-SPEC.md`)
-- **`doc/dev/specs/done/`** - Completed specifications for reference (e.g., `BIDIRECTIONAL-TYPE-CHECKING-SPEC.md`, `STRING-CONCAT-SPEC.md`)
+```bash
+./doc/test-docs.sh
+```
 
-When working on a feature, check if there's an existing spec in `doc/dev/specs/todo/` that describes the requirements.
+This script:
 
-### GitHub Issues
+1. Checks all markdown links are valid (no broken references)
+2. Validates all `.l4` files in `doc/` compile without errors
+3. Detects orphaned files (`.md` and `.l4` files not linked from anywhere)
 
-Consult the GitHub issues for bug reports, feature requests, and ongoing discussions:
+**Fix all errors before committing.** Common issues:
 
-**https://github.com/smucclaw/l4-ide/issues**
+- Links to non-existent files (check paths carefully)
+- Links to planned-but-not-written pages (use "Coming soon" text instead)
+- Invalid L4 syntax in example files
+- Orphaned files that need to be linked from a tutorial or reference page
 
-Issues often contain important context, design decisions, and acceptance criteria that may not be fully captured in the spec documents.
+> Note: README.md and SUMMARY.md files are exempt from the orphan check since they are index files.
 
-### Pull Requests
+### Cross-Linking Guidelines
 
-To understand recent project activity and context, review recent pull requests:
+- Link to existing pages only (run `./doc/test-docs.sh` to verify)
+- Use relative paths: `../concepts/README.md` not absolute paths
+- Reference the GLOSSARY for keyword/type lookups
+- Each page should link to related content in other sections
 
-**https://github.com/smucclaw/l4-ide/pulls**
+### Documentation Checklist
 
-Reviewing merged PRs helps understand what work has been done recently, ongoing architectural decisions, and the current state of the codebase.
+When adding or modifying documentation:
 
-### Keeping Documentation Current
-
-**Always update documentation alongside code changes.** When completing work:
-
-1. **Update the relevant spec** in `doc/dev/specs/todo/` to reflect what was implemented, any deviations from the original plan, and remaining work
-2. **Move completed specs** from `doc/dev/specs/todo/` to `doc/dev/specs/done/` when a feature is fully implemented
-3. **Update related docs** (e.g., `doc/README.md`, tutorials) if the change affects user-facing behavior
-4. **Note any new limitations or known issues** discovered during implementation
-
-Documentation is a first-class deliverable, not an afterthought.
+1. [ ] Place content in the correct section (reference/courses/tutorials/concepts)
+2. [ ] Create `.l4` example files, not inline code blocks
+3. [ ] Validate L4 files: `cabal run jl4-cli -- file.l4` or use MCP
+4. [ ] Use backtick identifiers that read like natural language
+5. [ ] Update relevant README.md and SUMMARY.md files
+6. [ ] Update GLOSSARY.md if adding new language features
+7. [ ] Run `./doc/test-docs.sh` and fix all errors
+8. [ ] Verify links point to existing files only
