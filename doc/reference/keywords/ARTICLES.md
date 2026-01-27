@@ -1,4 +1,4 @@
-# Type Articles: A, AN, THE
+# Type Articles: A, AN
 
 Type articles are small keywords that improve readability in type declarations and expressions. They are syntactically optional but recommended for clarity.
 
@@ -6,7 +6,6 @@ Type articles are small keywords that improve readability in type declarations a
 
 - **A** - Singular article for types
 - **AN** - Singular article before vowel sounds
-- **THE** - Definite article (used in certain contexts)
 
 ## A / AN
 
@@ -40,10 +39,6 @@ GIVEN obj IS AN Object
 - Use **A** before consonant sounds: `A NUMBER`, `A STRING`, `A BOOLEAN`
 - Use **AN** before vowel sounds: `AN Account`, `AN Integer`
 - Both are syntactically equivalent — the distinction is for readability only
-
-## THE
-
-Used in certain contexts, primarily in natural language annotations.
 
 ### Note
 
