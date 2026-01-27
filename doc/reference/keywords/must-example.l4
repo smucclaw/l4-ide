@@ -1,6 +1,4 @@
--- =============================================================================
 -- MUST Keyword Examples - Legal Obligations
--- =============================================================================
 --
 -- The MUST keyword expresses legal obligations - actions that a party is
 -- required to perform. If not fulfilled within the deadline, consequences
@@ -26,11 +24,8 @@
 --   • Employment contracts
 --   • Lease agreements
 --
--- =============================================================================
 
--- =============================================================================
 -- Type Declarations
--- =============================================================================
 
 DECLARE `Contract Party` IS ONE OF
   `The Borrower`
@@ -52,9 +47,7 @@ DECLARE `Contract Action` IS ONE OF
   `pay penalty` HAS `penalty amount` IS A NUMBER
   `return security deposit` HAS `deposit amount` IS A NUMBER
 
--- =============================================================================
 -- Basic Payment Obligation
--- =============================================================================
 
 -- Simple payment obligation with a deadline
 -- The Borrower must make a payment of $10,000 within 30 days
@@ -63,9 +56,7 @@ DECLARE `Contract Action` IS ONE OF
   MUST `make payment` 10000
   WITHIN 30
 
--- =============================================================================
 -- With HENCE (Consequence on Fulfillment)
--- =============================================================================
 
 -- Purchase contract: If The Buyer pays, then The Seller must deliver
 -- This creates a conditional chain of obligations
@@ -93,9 +84,7 @@ DECLARE `Contract Action` IS ONE OF
       MUST `make payment` 15000  -- Final payment
       WITHIN 7
 
--- =============================================================================
 -- With LEST (Consequence on Breach)
--- =============================================================================
 
 -- Simple breach: If The Borrower doesn't pay, the contract is breached
 `payment or breach` MEANS
@@ -127,9 +116,7 @@ DECLARE `Contract Action` IS ONE OF
     MUST `provide notice` "tenant will arrange repairs and deduct cost"
     WITHIN 3
 
--- =============================================================================
 -- MUST NOT (Prohibition)
--- =============================================================================
 
 -- MUST NOT is equivalent to SHANT - expresses a prohibition
 -- The Contractor must not disclose confidential information
@@ -139,9 +126,7 @@ DECLARE `Contract Action` IS ONE OF
   MUST NOT `provide notice` "confidential information disclosure"
   WITHIN 730
 
--- =============================================================================
 -- Chained Obligations
--- =============================================================================
 
 -- Complex contract with multiple sequential obligations
 -- Demonstrates a complete contract lifecycle
@@ -181,9 +166,7 @@ DECLARE `Contract Action` IS ONE OF
         WITHIN 30
         LEST BREACH
 
--- =============================================================================
 -- Testing Obligations
--- =============================================================================
 
 -- Test 1: Basic obligation fulfilled on time
 #TRACE `monthly loan payment` AT 0 WITH

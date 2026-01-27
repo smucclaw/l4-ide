@@ -1,8 +1,6 @@
 -- GIVEN keyword examples
 
--- =============================================================================
 -- Single Parameter Functions
--- =============================================================================
 
 GIVEN x IS A NUMBER
 `double the value` x MEANS x TIMES 2
@@ -13,9 +11,7 @@ GIVEN `person name` IS A STRING
 #EVAL `double the value` 21
 #EVAL `greet the person` "World"
 
--- =============================================================================
 -- Multiple Parameters (Same Line)
--- =============================================================================
 
 GIVEN a IS A NUMBER, b IS A NUMBER
 `add two numbers` a b MEANS a PLUS b
@@ -26,9 +22,7 @@ GIVEN x IS A NUMBER, y IS A NUMBER
 #EVAL `add two numbers` 10 32
 #EVAL `multiply two numbers` 6 7
 
--- =============================================================================
 -- Multiple Parameters (Continuation with Indentation)
--- =============================================================================
 
 GIVEN x1 IS A NUMBER
       y1 IS A NUMBER
@@ -37,9 +31,7 @@ GIVEN x1 IS A NUMBER
 
 #EVAL `sum of three numbers` 1 2 3
 
--- =============================================================================
 -- Parameters with Complex Types
--- =============================================================================
 
 DECLARE Point HAS x IS A NUMBER, y IS A NUMBER
 
@@ -59,9 +51,7 @@ DECIDE `point one` IS Point WITH x IS 3, y IS 4
 #EVAL `get x coordinate` `point one`
 #EVAL `distance squared between points` `the origin` `point one`
 
--- =============================================================================
 -- Type Parameters
--- =============================================================================
 
 GIVEN a IS A TYPE, xs IS A LIST OF a
 GIVETH A NUMBER
@@ -73,9 +63,7 @@ GIVETH A NUMBER
 #EVAL `length of list` (LIST 1, 2, 3, 4, 5)
 #EVAL `length of list` (LIST "a", "b", "c")
 
--- =============================================================================
 -- Combined with GIVETH
--- =============================================================================
 
 GIVEN n IS A NUMBER
 GIVETH A BOOLEAN

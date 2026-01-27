@@ -1,8 +1,6 @@
 -- Type articles: A, AN, THE
 
--- =============================================================================
 -- Using A with Types
--- =============================================================================
 
 -- A before consonant sounds
 ASSUME age IS A NUMBER
@@ -15,9 +13,7 @@ double x MEANS x TIMES 2
 
 #EVAL double 21
 
--- =============================================================================
 -- Using AN with Types
--- =============================================================================
 
 -- AN before vowel sounds (for readability)
 DECLARE Account HAS
@@ -31,9 +27,7 @@ ASSUME myAccount IS AN Account
 GIVEN acc IS AN Account
 getBalance acc MEANS acc's balance
 
--- =============================================================================
 -- Using THE for Field Access
--- =============================================================================
 
 DECLARE Person HAS
   personName IS A STRING
@@ -50,18 +44,14 @@ DECIDE johnsAge IS john's personAge
 #EVAL johnsName
 #EVAL johnsAge
 
--- =============================================================================
 -- Comparing THE...OF vs Genitive
--- =============================================================================
 
 -- Genitive syntax for field access
 DECIDE nameViaGenitive IS john's personName
 
 #EVAL nameViaGenitive
 
--- =============================================================================
 -- Articles in Legal-Style Text
--- =============================================================================
 
 DECLARE Contract HAS
   effectiveDate IS A NUMBER

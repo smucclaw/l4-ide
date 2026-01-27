@@ -1,8 +1,6 @@
 -- DECLARE keyword examples
 
--- =============================================================================
 -- Record Types (Product Types)
--- =============================================================================
 
 -- Basic record with multiple fields
 DECLARE Person
@@ -13,9 +11,7 @@ DECLARE Person
 -- Record with single line syntax
 DECLARE Point HAS x IS A NUMBER, y IS A NUMBER
 
--- =============================================================================
 -- Enum Types (Sum Types)
--- =============================================================================
 
 -- Simple enum with value constructors
 DECLARE Colour IS ONE OF `bright red`, `forest green`, `ocean blue`
@@ -26,16 +22,12 @@ DECLARE Shape IS ONE OF
   Rectangle HAS width IS A NUMBER, height IS A NUMBER
   Point
 
--- =============================================================================
 -- Type Synonyms
--- =============================================================================
 
 DECLARE Age IS NUMBER
 DECLARE PersonName IS STRING
 
--- =============================================================================
 -- Parameterized Types
--- =============================================================================
 
 GIVEN a IS A TYPE
 DECLARE Box HAS contents IS AN a
@@ -43,9 +35,7 @@ DECLARE Box HAS contents IS AN a
 GIVEN a IS A TYPE, b IS A TYPE
 DECLARE MyPair HAS first IS AN a, second IS A b
 
--- =============================================================================
 -- Usage Examples
--- =============================================================================
 
 -- Create record instances
 DECIDE `the applicant` IS Person WITH `full name` IS "John", age IS 30

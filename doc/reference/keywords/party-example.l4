@@ -4,9 +4,7 @@
 -- showing how to express obligations, permissions, and prohibitions that
 -- are commonly found in contracts, legislation, and regulations.
 
--- =============================================================================
 -- Type Declarations
--- =============================================================================
 
 DECLARE `Legal Entity` IS ONE OF
   `The Borrower`
@@ -27,9 +25,7 @@ DECLARE `Contract Action` IS ONE OF
   `vacate premises`
   `pay damages` HAS amount IS A NUMBER
 
--- =============================================================================
 -- Basic Obligation (MUST)
--- =============================================================================
 
 -- Simple payment obligation with a deadline
 -- The Borrower must make a payment within 30 days
@@ -38,9 +34,7 @@ DECLARE `Contract Action` IS ONE OF
   MUST `make payment` 5000
   WITHIN 30
 
--- =============================================================================
 -- Permission (MAY)
--- =============================================================================
 
 -- Early termination right
 -- The Tenant may vacate the premises early without penalty
@@ -49,9 +43,7 @@ DECLARE `Contract Action` IS ONE OF
   MAY `vacate premises`
   WITHIN 60
 
--- =============================================================================
 -- Prohibition (SHANT)
--- =============================================================================
 
 -- Non-disclosure obligation (confidentiality clause)
 -- The Employee shall not disclose confidential information for 2 years
@@ -67,9 +59,7 @@ DECLARE `Contract Action` IS ONE OF
   MUST NOT `disclose confidential information`
   WITHIN 730
 
--- =============================================================================
 -- With Consequences (HENCE/LEST)
--- =============================================================================
 
 -- Payment with grace period and penalty
 -- If The Borrower pays on time, the contract is fulfilled.
@@ -86,9 +76,7 @@ DECLARE `Contract Action` IS ONE OF
     LEST BREACH
   )
 
--- =============================================================================
 -- Chained Obligations
--- =============================================================================
 
 -- Purchase and delivery contract
 -- The Buyer pays, then The Seller must deliver goods
@@ -118,9 +106,7 @@ DECLARE `Contract Action` IS ONE OF
       WITHIN 7
       HENCE FULFILLED
 
--- =============================================================================
 -- Testing with #TRACE
--- =============================================================================
 
 -- Test 1: Payment obligation fulfilled on time
 #TRACE `payment obligation` AT 0 WITH

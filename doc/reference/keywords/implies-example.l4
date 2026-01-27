@@ -1,25 +1,19 @@
 -- IMPLIES keyword examples
 
--- =============================================================================
 -- Basic IMPLIES Operations
--- =============================================================================
 
 #EVAL TRUE IMPLIES TRUE
 #EVAL TRUE IMPLIES FALSE
 #EVAL FALSE IMPLIES TRUE
 #EVAL FALSE IMPLIES FALSE
 
--- =============================================================================
 -- Symbolic Alternative (=>)
--- =============================================================================
 
 #EVAL TRUE => TRUE
 #EVAL TRUE => FALSE
 #EVAL FALSE => TRUE
 
--- =============================================================================
 -- Equivalence to NOT A OR B
--- =============================================================================
 
 GIVEN a IS A BOOLEAN
       b IS A BOOLEAN
@@ -38,9 +32,7 @@ orVersion a b MEANS NOT a OR b
 #EVAL impliesVersion FALSE TRUE
 #EVAL orVersion FALSE TRUE
 
--- =============================================================================
 -- Legal Rule Examples
--- =============================================================================
 
 -- "If you are an employee, you must have a badge"
 ASSUME isEmployee IS A BOOLEAN
@@ -58,9 +50,7 @@ DECIDE consentRule IS (personAge < 18) IMPLIES hasParentalConsent
 
 #CHECK consentRule
 
--- =============================================================================
 -- Chained Implications
--- =============================================================================
 
 -- Implication is right-associative: A => B => C means A => (B => C)
 GIVEN x IS A BOOLEAN
@@ -72,9 +62,7 @@ chainedImpl x y z MEANS x => y => z
 #EVAL chainedImpl TRUE TRUE FALSE
 #EVAL chainedImpl FALSE FALSE FALSE
 
--- =============================================================================
 -- Combined with AND/OR
--- =============================================================================
 
 GIVEN p IS A BOOLEAN
       q IS A BOOLEAN

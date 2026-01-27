@@ -1,22 +1,16 @@
 -- NOT keyword examples
 
--- =============================================================================
 -- Basic NOT Operations
--- =============================================================================
 
 #EVAL NOT TRUE
 #EVAL NOT FALSE
 
--- =============================================================================
 -- Double Negation
--- =============================================================================
 
 #EVAL NOT NOT TRUE
 #EVAL NOT NOT FALSE
 
--- =============================================================================
 -- In Conditional Logic
--- =============================================================================
 
 ASSUME hasCriminalRecord IS A BOOLEAN
 
@@ -24,9 +18,7 @@ DECIDE isClean IS NOT hasCriminalRecord
 
 #CHECK isClean
 
--- =============================================================================
 -- With AND
--- =============================================================================
 
 ASSUME personAge IS A NUMBER
 ASSUME isBlocked IS A BOOLEAN
@@ -35,9 +27,7 @@ DECIDE canAccess IS personAge >= 18 AND NOT isBlocked
 
 #CHECK canAccess
 
--- =============================================================================
 -- With OR
--- =============================================================================
 
 GIVEN isAdmin IS A BOOLEAN, isRestricted IS A BOOLEAN
 hasAccess isAdmin isRestricted MEANS isAdmin OR NOT isRestricted
@@ -45,9 +35,7 @@ hasAccess isAdmin isRestricted MEANS isAdmin OR NOT isRestricted
 #EVAL hasAccess FALSE FALSE
 #EVAL hasAccess FALSE TRUE
 
--- =============================================================================
 -- Negating Compound Expressions
--- =============================================================================
 
 GIVEN a IS A BOOLEAN, b IS A BOOLEAN
 
@@ -62,9 +50,7 @@ notBoth a b MEANS NOT (a AND b)
 #EVAL notBoth TRUE TRUE
 #EVAL notBoth FALSE TRUE
 
--- =============================================================================
 -- NOT with Comparisons
--- =============================================================================
 
 GIVEN n IS A NUMBER
 isNotZero n MEANS NOT (n EQUALS 0)
@@ -75,9 +61,7 @@ isNotPositive n MEANS NOT (n > 0)
 #EVAL isNotPositive 5
 #EVAL isNotPositive (-3)
 
--- =============================================================================
 -- In IF Expressions
--- =============================================================================
 
 GIVEN flag IS A BOOLEAN
 invertedMessage flag MEANS

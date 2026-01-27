@@ -1,8 +1,6 @@
 -- IF keyword examples
 
--- =============================================================================
 -- Basic If-Then-Else
--- =============================================================================
 
 -- Simple conditional
 DECIDE `basic if example` IS IF TRUE THEN "yes" ELSE "no"
@@ -15,9 +13,7 @@ GIVEN x IS A NUMBER
 #EVAL `check if positive` 5
 #EVAL `check if positive` -3
 
--- =============================================================================
 -- Multi-line Format
--- =============================================================================
 
 GIVEN n IS A NUMBER
 `absolute value of` n MEANS
@@ -28,9 +24,7 @@ GIVEN n IS A NUMBER
 #EVAL `absolute value of` 5
 #EVAL `absolute value of` -5
 
--- =============================================================================
 -- Nested If-Else (Chained Conditions)
--- =============================================================================
 
 GIVEN score IS A NUMBER
 `letter grade for` score MEANS
@@ -44,9 +38,7 @@ GIVEN score IS A NUMBER
 #EVAL `letter grade for` 75
 #EVAL `letter grade for` 50
 
--- =============================================================================
 -- Complex Conditions
--- =============================================================================
 
 GIVEN age IS A NUMBER
       `has valid ID` IS A BOOLEAN
@@ -60,9 +52,7 @@ GIVEN age IS A NUMBER
 #EVAL `can enter venue` 18 TRUE FALSE
 #EVAL `can enter venue` 18 FALSE TRUE
 
--- =============================================================================
 -- DECIDE ... IF Form (Boolean Functions)
--- =============================================================================
 
 -- Shorthand for boolean-returning functions
 GIVEN `person age` IS A NUMBER
@@ -76,9 +66,7 @@ DECIDE `is adult 2` IS IF `person age 2` >= 18 THEN TRUE ELSE FALSE
 #CHECK `is adult` WITH `person age` IS 21
 #CHECK `is adult 2` WITH `person age 2` IS 15
 
--- =============================================================================
 -- Returning Different Types
--- =============================================================================
 
 -- Returning numbers
 GIVEN a IS A NUMBER, b IS A NUMBER
@@ -95,9 +83,7 @@ GIVEN condition IS A BOOLEAN
 #EVAL `list if true otherwise empty` TRUE
 #EVAL `list if true otherwise empty` FALSE
 
--- =============================================================================
 -- If in Complex Expressions
--- =============================================================================
 
 GIVEN n IS A NUMBER
 GIVETH A NUMBER

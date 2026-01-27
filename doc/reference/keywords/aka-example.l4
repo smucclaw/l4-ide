@@ -1,8 +1,6 @@
 -- AKA keyword examples
 
--- =============================================================================
 -- Value Aliases
--- =============================================================================
 
 -- Define a value with multiple names
 x AKA y, z MEANS TRUE
@@ -12,9 +10,7 @@ x AKA y, z MEANS TRUE
 #EVAL y
 #EVAL z
 
--- =============================================================================
 -- Type Aliases
--- =============================================================================
 
 -- Create an alias for BOOLEAN
 DECLARE B AKA YesNo IS BOOLEAN
@@ -29,9 +25,7 @@ example2 MEANS FALSE
 #EVAL example1
 #EVAL example2
 
--- =============================================================================
 -- Record Type with Alias
--- =============================================================================
 
 GIVEN a IS A TYPE
       b IS A TYPE
@@ -51,9 +45,7 @@ testPair2 MEANS Pair WITH px IS 10, py IS 20
 #EVAL testPair1
 #EVAL testPair2
 
--- =============================================================================
 -- Legal Terminology Example
--- =============================================================================
 
 -- Primary legal term with common alias
 DECLARE `Authorized Representative` AKA Agent
@@ -69,9 +61,7 @@ DECIDE myAgent IS `Authorized Representative` WITH
 -- Access works with both names
 #EVAL myAgent's name
 
--- =============================================================================
 -- Function with Alias
--- =============================================================================
 
 GIVEN n IS A NUMBER
 double AKA twice MEANS n TIMES 2
@@ -80,9 +70,7 @@ double AKA twice MEANS n TIMES 2
 #EVAL double 5
 #EVAL twice 5
 
--- =============================================================================
 -- Multiple Aliases
--- =============================================================================
 
 GIVEN amount IS A NUMBER
 tax AKA VAT, `sales tax`, GST MEANS amount TIMES 0.1

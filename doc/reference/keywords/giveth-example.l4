@@ -1,8 +1,6 @@
 -- GIVETH keyword examples
 
--- =============================================================================
 -- Basic Return Types
--- =============================================================================
 
 GIVEN n IS A NUMBER
 GIVETH A NUMBER
@@ -16,9 +14,7 @@ maximum a b MEANS IF a > b THEN a ELSE b
 #EVAL square 7
 #EVAL maximum 10 25
 
--- =============================================================================
 -- Boolean Return Types
--- =============================================================================
 
 GIVEN age IS A NUMBER
 GIVETH A BOOLEAN
@@ -31,9 +27,7 @@ isEven n MEANS (n MODULO 2) EQUALS 0
 #EVAL isAdult 21
 #EVAL isEven 4
 
--- =============================================================================
 -- String Return Types
--- =============================================================================
 
 GIVEN name IS A STRING
 GIVETH A STRING
@@ -49,9 +43,7 @@ describe num MEANS
 #EVAL greet "Alice"
 #EVAL describe (-5)
 
--- =============================================================================
 -- Complex Return Types
--- =============================================================================
 
 -- Returning MAYBE
 GIVEN xs IS A LIST OF NUMBER
@@ -74,9 +66,7 @@ countdown n MEANS
 
 #EVAL countdown 5
 
--- =============================================================================
 -- GIVES as Synonym
--- =============================================================================
 
 GIVEN x IS A NUMBER
 GIVES A NUMBER
@@ -84,9 +74,7 @@ triple x MEANS x TIMES 3
 
 #EVAL triple 7
 
--- =============================================================================
 -- Parameterized Return Types
--- =============================================================================
 
 GIVEN a IS A TYPE, x IS AN a
 GIVETH A LIST OF a
@@ -95,9 +83,7 @@ singleton x MEANS x FOLLOWED BY EMPTY
 #EVAL singleton 42
 #EVAL singleton "hello"
 
--- =============================================================================
 -- Record Return Types
--- =============================================================================
 
 DECLARE Person HAS name IS A STRING, age IS A NUMBER
 

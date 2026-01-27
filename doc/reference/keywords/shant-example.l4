@@ -1,6 +1,4 @@
--- =============================================================================
 -- SHANT Keyword Examples - Legal Prohibitions
--- =============================================================================
 --
 -- The SHANT keyword (and its alternative MUST NOT) expresses legal prohibitions
 -- - actions that a party is forbidden from performing.
@@ -23,11 +21,8 @@
 --   • Loan agreements
 --   • Commercial contracts
 --
--- =============================================================================
 
--- =============================================================================
 -- Type Declarations
--- =============================================================================
 
 DECLARE `Legal Party` IS ONE OF
   `The Employee`
@@ -46,9 +41,7 @@ DECLARE `Prohibited Action` IS ONE OF
   `dispose of collateral`
   `pay penalty` HAS `penalty amount` IS A NUMBER
 
--- =============================================================================
 -- Basic Prohibition - Non-Disclosure Agreement
--- =============================================================================
 
 -- A simple prohibition with a time period
 `confidentiality obligation` MEANS
@@ -56,9 +49,7 @@ DECLARE `Prohibited Action` IS ONE OF
   SHANT `disclose confidential information`
   WITHIN 1825  -- 5 years in days
 
--- =============================================================================
 -- Prohibition with MUST NOT (Alternative Syntax)
--- =============================================================================
 
 -- MUST NOT and SHANT are equivalent ways to express prohibition
 `non-compete clause` MEANS
@@ -66,9 +57,7 @@ DECLARE `Prohibited Action` IS ONE OF
   MUST NOT `compete with employer` "software development"
   WITHIN 730  -- 2 years in days
 
--- =============================================================================
 -- Prohibition with Breach Consequence
--- =============================================================================
 
 -- If the prohibition is violated, an explicit breach is declared
 `no subleasing` MEANS
@@ -77,9 +66,7 @@ DECLARE `Prohibited Action` IS ONE OF
   WITHIN 365
   LEST BREACH BY `The Tenant` BECAUSE "violated lease agreement section 8"
 
--- =============================================================================
 -- Conditional Prohibition
--- =============================================================================
 
 -- Prohibition applies only when a condition is met
 `structural alteration prohibition` MEANS
@@ -89,9 +76,7 @@ DECLARE `Prohibited Action` IS ONE OF
   WITHIN 365
   LEST BREACH BY `The Tenant` BECAUSE "made unauthorized structural changes"
 
--- =============================================================================
 -- Prohibition with Financial Threshold
--- =============================================================================
 
 -- Common in loan agreements - borrower cannot take on significant new debt
 `debt restriction` MEANS
@@ -100,9 +85,7 @@ DECLARE `Prohibited Action` IS ONE OF
   WITHIN 1095  -- 3 years
   LEST BREACH BY `The Borrower` BECAUSE "exceeded debt covenant limit"
 
--- =============================================================================
 -- Prohibition with Financial Penalty
--- =============================================================================
 
 -- If prohibition is violated, a financial penalty must be paid
 `collateral protection` MEANS
@@ -115,9 +98,7 @@ DECLARE `Prohibited Action` IS ONE OF
     WITHIN 30
     LEST BREACH BY `The Borrower` BECAUSE "failed to pay penalty for collateral disposal"
 
--- =============================================================================
 -- Testing Prohibitions
--- =============================================================================
 
 -- Test 1: Prohibition complied with (no action taken - this is success)
 #TRACE `confidentiality obligation` AT 0 WITH

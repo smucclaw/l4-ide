@@ -1,8 +1,6 @@
 -- IMPORT keyword examples
 
--- =============================================================================
 -- Importing Standard Libraries
--- =============================================================================
 
 -- Import math library for mathematical functions
 IMPORT math
@@ -10,9 +8,7 @@ IMPORT math
 -- Use functions from math library
 #EVAL exp 1
 #EVAL sqrt 16
--- =============================================================================
 -- Using Imported Functions
--- =============================================================================
 
 -- Math functions become available after import
 GIVEN r IS A NUMBER
@@ -20,9 +16,7 @@ circleArea r MEANS 3.14159 TIMES r TIMES r
 
 #EVAL circleArea 5
 
--- =============================================================================
 -- Import Syntax Notes
--- =============================================================================
 
 -- For hyphenated library names, use backticks:
 -- IMPORT `some-library`

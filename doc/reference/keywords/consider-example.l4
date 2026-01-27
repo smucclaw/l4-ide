@@ -1,8 +1,6 @@
 -- CONSIDER keyword examples (pattern matching)
 
--- =============================================================================
 -- Matching Simple Enums
--- =============================================================================
 
 DECLARE Colour IS ONE OF red, green, blue
 
@@ -16,9 +14,7 @@ GIVEN c IS A Colour
 #EVAL `name of colour` red
 #EVAL `name of colour` blue
 
--- =============================================================================
 -- Matching Lists
--- =============================================================================
 
 -- Sum all elements
 GIVEN xs IS A LIST OF NUMBER
@@ -51,9 +47,7 @@ GIVETH A NUMBER
 
 #EVAL `length of list` (LIST "a", "b", "c")
 
--- =============================================================================
 -- Matching MAYBE Values
--- =============================================================================
 
 GIVEN mx IS A MAYBE NUMBER
 `get value or default to zero` mx MEANS
@@ -64,9 +58,7 @@ GIVEN mx IS A MAYBE NUMBER
 #EVAL `get value or default to zero` (JUST 42)
 #EVAL `get value or default to zero` NOTHING
 
--- =============================================================================
 -- Matching Enums with Fields
--- =============================================================================
 
 DECLARE Shape IS ONE OF
   Circle HAS radius IS A NUMBER
@@ -87,9 +79,7 @@ DECIDE `my rectangle` IS Rectangle WITH width IS 4, height IS 6
 #EVAL `area of shape` `my rectangle`
 #EVAL `area of shape` Point
 
--- =============================================================================
 -- Matching EITHER Values
--- =============================================================================
 
 GIVEN result IS AN EITHER STRING NUMBER
 `handle either result` result MEANS
@@ -100,9 +90,7 @@ GIVEN result IS AN EITHER STRING NUMBER
 #EVAL `handle either result` (LEFT "not found")
 #EVAL `handle either result` (RIGHT 42)
 
--- =============================================================================
 -- Matching Pairs/Tuples
--- =============================================================================
 
 DECLARE PairNum HAS first IS A NUMBER, second IS A NUMBER
 
@@ -114,9 +102,7 @@ GIVEN p IS A PairNum
 DECIDE `first pair` IS PairNum WITH first IS 10, second IS 20
 #EVAL `add pair values` `first pair`
 
--- =============================================================================
 -- Nested Pattern Matching
--- =============================================================================
 
 GIVEN maybeList IS A MAYBE (LIST OF NUMBER)
 `sum of maybe list` maybeList MEANS

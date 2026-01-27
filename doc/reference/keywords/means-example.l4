@@ -1,8 +1,6 @@
 -- MEANS keyword examples
 
--- =============================================================================
 -- Basic MEANS Usage
--- =============================================================================
 
 -- Simple value definition
 greeting MEANS "Hello, World!"
@@ -11,9 +9,7 @@ answer MEANS 42
 #EVAL greeting
 #EVAL answer
 
--- =============================================================================
 -- Functions with MEANS
--- =============================================================================
 
 GIVEN x IS A NUMBER
 double x MEANS x TIMES 2
@@ -24,9 +20,7 @@ add a b MEANS a PLUS b
 #EVAL double 21
 #EVAL add 10 32
 
--- =============================================================================
 -- Multi-line Function Bodies
--- =============================================================================
 
 GIVEN n IS A NUMBER
 GIVETH A NUMBER
@@ -37,9 +31,7 @@ factorial n MEANS
 
 #EVAL factorial 6
 
--- =============================================================================
 -- MEANS with WHERE Clauses
--- =============================================================================
 
 GIVEN radius IS A NUMBER
 circumference radius MEANS
@@ -60,9 +52,7 @@ outerFunction MEANS
 
 #EVAL outerFunction
 
--- =============================================================================
 -- MEANS vs IS Comparison
--- =============================================================================
 
 -- Using MEANS for definitions
 valueWithMeans MEANS 100
@@ -71,9 +61,7 @@ valueWithMeans2 MEANS 200
 #EVAL valueWithMeans
 #EVAL valueWithMeans2
 
--- =============================================================================
 -- MEANS in Complex Expressions
--- =============================================================================
 
 GIVEN items IS A LIST OF NUMBER
 sumItems items MEANS
