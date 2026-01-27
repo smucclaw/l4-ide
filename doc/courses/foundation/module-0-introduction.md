@@ -106,7 +106,7 @@ HENCE PARTY buyer MUST `pay invoice` WITHIN 30
 ### Option 1: VS Code (Recommended)
 
 1. Install [VS Code](https://code.visualstudio.com/)
-2. Install the L4 extension from the marketplace
+2. Install the [L4 extension from the marketplace](https://marketplace.visualstudio.com/items?itemName=Legalese.l4-vscode)
 3. Create a file ending in `.l4`
 4. Start writing!
 
@@ -119,7 +119,7 @@ The extension provides:
 
 ### Option 2: Web Editor
 
-Visit the [L4 Web Editor](https://l4-ide.smucclaw.dev/) to try L4 in your browser without installing anything.
+Visit the [L4 Web Editor](https://jl4.legalese.com/) to try L4 in your browser without installing anything.
 
 ### Option 3: Command Line
 
