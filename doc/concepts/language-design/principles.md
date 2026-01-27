@@ -33,7 +33,7 @@ These principles sometimes tension with each other—the art of language design 
 Legal text:
 
 > Alcohol prohibition rule:
-> A person must not buy alcohol if the person is not at least 18 years of age.
+> A person shall not buy alcohol if the person is not at least 18 years of age.
 
 L4 code:
 
