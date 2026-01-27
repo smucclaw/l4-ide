@@ -553,7 +553,332 @@ With this clarified, we are now in a position to discuss types and operators wit
 
 ---
 
-## 11. References
+## 11. L4 Syntax Proposals
+
+This section explores concrete syntax options compatible with existing L4 constructs.
+
+### 11.1 Current L4 Syntax Summary
+
+L4 rules are expressed as functions with:
+```l4
+GIVEN param1 IS A Type1, param2 IS A Type2
+GIVETH A ReturnType
+DECIDE `function name` param1 param2 IS
+  expression
+```
+
+Key existing constructs:
+- `DECIDE ... IS/IF/MEANS` - function definition
+- `CONSIDER ... WHEN ... THEN` - pattern matching
+- `WHERE` / `LET ... IN` - local bindings
+- `AND`, `OR`, `NOT` - boolean operators
+- `IF ... THEN ... ELSE` - conditionals
+- Sections (`§`) for organizing rules
+- Regulative modals: `MUST`, `MAY`, `MUST NOT`
+
+### 11.2 Design Principles
+
+1. **Declarative over imperative**: Express relations, not evaluation order
+2. **Isomorphic to legal text**: Syntax should read like the source document
+3. **Composable**: New constructs should compose with existing ones
+4. **Explicit references**: Avoid "anything to the contrary" ambiguity
+5. **Statically analyzable**: Priority graphs, transformer scopes should be checkable
+
+### 11.3 Syntax Proposals by Semantic Role
+
+---
+
+#### 11.3.1 Guards (Preconditions)
+
+**Context:** "Tenant may assign lease, subject to landlord's consent"
+
+**Option A: REQUIRES clause on actions**
+```l4
+GIVEN tenant IS A Tenant, lease IS A Lease
+DECIDE `tenant may assign lease` tenant lease
+  REQUIRES `landlord consent obtained` tenant lease
+  IS TRUE
+```
+
+**Option B: GIVEN THAT as guard**
+```l4
+GIVEN tenant IS A Tenant, lease IS A Lease
+GIVEN THAT `landlord consent obtained` tenant lease
+DECIDE `tenant may assign lease` tenant lease IS TRUE
+```
+
+**Option C: SUBJECT TO as explicit guard keyword**
+```l4
+GIVEN tenant IS A Tenant, lease IS A Lease
+DECIDE `tenant may assign lease` tenant lease
+  SUBJECT TO `landlord consent obtained` tenant lease
+  IS TRUE
+```
+
+**Recommendation:** Option C is most isomorphic to legal text but requires parsing "SUBJECT TO" differently based on what follows (a condition vs a section reference).
+
+---
+
+#### 11.3.2 Input Filters (Domain Restriction)
+
+**Context:** "This Part applies to all employees, subject to exclusions in Schedule 2"
+
+**Option A: APPLIES WHEN / EXCEPT WHEN clauses**
+```l4
+§ `Part 3: Annual Leave`
+
+@applies WHEN `is employee` person AND NOT `excluded under Schedule 2` person
+
+GIVEN person IS A Person
+DECIDE `annual leave entitlement` person IS 20
+```
+
+**Option B: GIVEN with filter predicate**
+```l4
+GIVEN person IS A Person
+  WHERE `is employee` person
+  EXCEPT WHEN `excluded under Schedule 2` person
+DECIDE `annual leave entitlement` person IS 20
+```
+
+**Option C: Section-level SCOPE declaration**
+```l4
+§ `Part 3: Annual Leave`
+  SCOPE `is employee` person
+  EXCEPT `excluded under Schedule 2` person
+
+DECIDE `annual leave entitlement` person IS 20
+```
+
+**Recommendation:** Option C for section-level filters; Option B for rule-level filters.
+
+---
+
+#### 11.3.3 Input Transformers (Homoiconic Predicate Rewriting)
+
+**Context:** "Subject to Dec 25-Jan 1 exception: beverages taxed as food"
+
+This is the most novel construct. It rewrites how predicates are interpreted.
+
+**Option A: TREATING ... AS ... DURING**
+```l4
+§ `Holiday Tax Exception`
+  TREATING `is beverage` AS `is food`
+  DURING `december 25` TO `january 1`
+
+-- The tax rules themselves are unchanged:
+GIVEN item IS AN Item
+DECIDE `tax rate` item IS
+  IF `is food` item THEN 0%
+  ELSE 10%
+```
+
+**Option B: REINTERPRET block**
+```l4
+§ `Holiday Tax Exception`
+  REINTERPRET DURING `december 25` TO `january 1`
+    `is food` item MEANS `is food` item OR `is beverage` item
+```
+
+**Option C: Context-scoped predicate override**
+```l4
+§ `Holiday Tax Exception`
+
+GIVEN item IS AN Item, date IS A Date
+DECIDE `is food for tax purposes` item date IS
+  `is food` item
+  OR (`is beverage` item AND `is holiday period` date)
+
+-- Tax rule uses the context-aware predicate:
+DECIDE `tax rate` item date IS
+  IF `is food for tax purposes` item date THEN 0%
+  ELSE 10%
+```
+
+**Recommendation:** Option C is most explicit and doesn't require new syntax, but loses the "homoiconic" quality. Option A is most readable but requires temporal scoping infrastructure.
+
+---
+
+#### 11.3.4 Output Modifiers (Result Transformation)
+
+**Context:** "Parking costs $4/weekend, $6/weekday, subject to 50% holiday discount"
+
+**Option A: MODIFIED BY clause**
+```l4
+GIVEN day IS A Day
+DECIDE `parking rate` day IS
+  IF `is weekend` day THEN 4 ELSE 6
+  MODIFIED BY `holiday discount` day
+
+GIVEN day IS A Day, base IS A NUMBER
+DECIDE `holiday discount` day base IS
+  IF `is holiday` day THEN base * 0.5 ELSE base
+```
+
+**Option B: Pipeline with THEN APPLY**
+```l4
+GIVEN day IS A Day
+DECIDE `parking rate` day IS
+  (IF `is weekend` day THEN 4 ELSE 6)
+  THEN APPLY `holiday discount` day
+```
+
+**Option C: Explicit base + modifier pattern**
+```l4
+GIVEN day IS A Day
+DECIDE `base parking rate` day IS
+  IF `is weekend` day THEN 4 ELSE 6
+
+GIVEN day IS A Day
+DECIDE `parking rate` day IS
+  LET base = `base parking rate` day
+  IN IF `is holiday` day THEN base * 0.5 ELSE base
+```
+
+**Recommendation:** Option C is already expressible in L4 and most explicit. Options A/B add syntactic sugar but may obscure the computation.
+
+---
+
+#### 11.3.5 Priority / Override (Conflict Resolution)
+
+**Context:** "Notwithstanding Section 5, landlord may terminate for non-payment"
+
+This is the key new construct - declaring which rule wins when both fire.
+
+**Option A: NOTWITHSTANDING as rule modifier**
+```l4
+§ `Section 5: Termination Rights`
+
+DECIDE `landlord may terminate` lease IS
+  `notice period satisfied` lease
+
+§ `Section 6: Non-Payment Exception`
+
+DECIDE `landlord may terminate` lease
+  NOTWITHSTANDING `Section 5`
+  IS `tenant in arrears` lease
+```
+
+**Option B: PRIORITY declaration (separate from rules)**
+```l4
+§ `Section 5: Termination Rights`
+DECIDE `s5 termination right` lease IS `notice period satisfied` lease
+
+§ `Section 6: Non-Payment Exception`
+DECIDE `s6 termination right` lease IS `tenant in arrears` lease
+
+§ `Priority`
+PRIORITY `s6 termination right` OVER `s5 termination right`
+  -- or: `s6 termination right` NOTWITHSTANDING `s5 termination right`
+
+-- Final combined rule:
+DECIDE `landlord may terminate` lease IS
+  `s5 termination right` lease OR `s6 termination right` lease
+```
+
+**Option C: Explicit conflict resolution function**
+```l4
+DECIDE `landlord may terminate` lease IS
+  RESOLVE
+    `s5 termination right` lease
+    `s6 termination right` lease
+  WITH PRIORITY `s6 termination right`
+```
+
+**Option D: Section-level override declaration**
+```l4
+§ `Section 6: Non-Payment Exception`
+  NOTWITHSTANDING `Section 5`
+
+DECIDE `landlord may terminate` lease IS
+  `tenant in arrears` lease
+```
+
+**Recommendation:** Option D for section-level overrides (most common pattern); Option A for rule-level overrides.
+
+---
+
+### 11.4 Composite Example
+
+A complete example combining multiple roles:
+
+```l4
+§ `Alcohol Sales Regulations`
+
+-- Type declarations
+DECLARE Seller HAS
+  `is body corporate` IS A BOOLEAN
+  `is public house` IS A BOOLEAN
+  `has conviction` IS A BOOLEAN
+
+DECLARE Day HAS
+  `is public holiday` IS A BOOLEAN
+  `is weekend` IS A BOOLEAN
+
+-- Section 1: General prohibition (base rule)
+§ `Section 1: Prohibition`
+  SCOPE `is body corporate` seller
+
+GIVEN seller IS A Seller
+DECIDE `may sell alcohol` seller IS FALSE
+
+-- Section 2: Licensed premises exception (override)
+§ `Section 2: Licensed Premises`
+  NOTWITHSTANDING `Section 1`
+  SCOPE `is public house` seller OR `is hotel` seller
+
+GIVEN seller IS A Seller
+DECIDE `may sell alcohol` seller IS TRUE
+
+-- Section 3: Conviction disqualification (override of override)
+§ `Section 3: Disqualification`
+  NOTWITHSTANDING `Section 2`
+
+GIVEN seller IS A Seller
+DECIDE `may sell alcohol` seller
+  REQUIRES NOT `has conviction` seller
+  IS TRUE
+
+-- Section 4: Holiday pricing (output modifier)
+§ `Section 4: Pricing`
+
+GIVEN day IS A Day
+DECIDE `alcohol duty rate` day IS
+  LET base = IF `is weekend` day THEN 0.15 ELSE 0.20
+  IN IF `is public holiday` day THEN base * 0.5 ELSE base
+```
+
+### 11.5 Static Analysis Implications
+
+The proposed syntax enables:
+
+1. **Priority graph construction**: Extract all `NOTWITHSTANDING` declarations and build a directed graph. Check for cycles.
+
+2. **Scope coverage verification**: For sections with `SCOPE` declarations, verify all rules in the section respect the scope.
+
+3. **Transformer conflict detection**: If two transformers affect the same predicate in overlapping time periods, flag a warning.
+
+4. **Guard completeness**: For rules with `REQUIRES`, verify the guard condition is satisfiable.
+
+5. **Unreachable rule detection**: If rule A is always overridden by rule B (same inputs, B always wins), flag A as potentially dead code.
+
+### 11.6 Open Questions
+
+1. **Syntactic disambiguation**: How to distinguish "SUBJECT TO Section 5" (priority) from "SUBJECT TO consent obtained" (guard)?
+   - Option: Different keywords (`SUBORDINATE TO` vs `REQUIRES`)
+   - Option: Type-based disambiguation (section reference vs boolean expression)
+
+2. **Scope of transformers**: Should transformers affect only the current section, or propagate to subsections?
+
+3. **Priority transitivity**: If A > B and B > C, is A > C implicit?
+
+4. **Conflict semantics**: What happens when rules don't conflict but priority is declared anyway?
+
+5. **Evaluation traces**: How should the trace display priority resolution and modifier application?
+
+---
+
+## 12. References
 
 ### Legal Drafting
 - [Weagree: Notwithstanding in Contracts](https://weagree.com/clm/contracts/contract-wording/notwithstanding/)
