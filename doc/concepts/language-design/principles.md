@@ -32,20 +32,24 @@ These principles sometimes tension with each other—the art of language design 
 
 Legal text:
 
-> A person must not sell alcohol if the person is a body corporate.
+> Alcohol prohibition rule:
+> A person shall not buy alcohol if the person is not at least 18 years of age.
 
 L4 code:
 
 ```l4
-DECIDE `a person must not sell alcohol`
-IF `the person is a body corporate`
+DECLARE Person HAS
+    age IS A NUMBER
+
+GIVEN person IS A Person
+`Alcohol prohibition rule` MEANS
+    IF      NOT person's age AT LEAST 18
+    THEN    PARTY  person
+            SHANT `buy alcohol`
+    ELSE    FULFILLED
 ```
 
-The structure matches:
-
-- "A person must not sell alcohol" → `DECIDE \`a person must not sell alcohol\``
-- "if" → `IF`
-- "the person is a body corporate" → `\`the person is a body corporate\``
+Notice how the wording in L4 can match the original legal text.
 
 ### Implications
 
