@@ -51,10 +51,10 @@ Learn L4 from scratch. No prior programming experience required.
 
 Deep dives for production use.
 
-- Real Regulatory Schemes
-- Cross-Cutting Concerns
-- Complex Contracts
-- Production Patterns
+- Module A1: Real Regulatory Schemes
+- Module A2: Cross-Cutting Concerns
+- Module A3: Complex Contracts
+- Module A4: Production Patterns
 
 **Prerequisites:** Foundation Course
 
