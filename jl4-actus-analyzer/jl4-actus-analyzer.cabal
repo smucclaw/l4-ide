@@ -1,0 +1,109 @@
+cabal-version: 3.0
+name: jl4-actus-analyzer
+version: 0.1.0.0
+synopsis: Static analyzer to classify L4 contracts by ACTUS type and FIBO class
+description:
+  A tool that consumes FIBO/ACTUS RDF ontologies and uses them to classify
+  L4 contract encodings by ACTUS contract type (e.g., FXOUT for foreign exchange)
+  and FIBO financial ontology class.
+
+  Features:
+  * Direct RDF loading from FIBO/ACTUS ontologies
+  * Feature extraction from L4 AST (currency types, deontic rules, state machines)
+  * Pattern-based scoring with confidence levels
+  * Container/contained classification for master agreements
+  * JSON, RDF, and Markdown output formats
+
+build-type: Simple
+tested-with: GHC==9.10.2
+license: MIT
+license-file: LICENSE
+
+source-repository head
+  type: git
+  location: https://github.com/smucclaw/l4-ide/tree/main/jl4-actus-analyzer
+
+common defaults
+  default-language: GHC2021
+  ghc-options:
+    -Wall
+    -Wderiving-typeable
+    -Wunused-packages
+    -Werror
+    -Widentities
+    -Wincomplete-record-updates
+    -Wincomplete-uni-patterns
+    -Wmissing-export-lists
+    -Wmissing-home-modules
+    -Wpartial-fields
+    -Wredundant-constraints
+
+  default-extensions:
+    BlockArguments
+    DeriveAnyClass
+    DerivingStrategies
+    DuplicateRecordFields
+    LambdaCase
+    NoFieldSelectors
+    OverloadedRecordDot
+    OverloadedStrings
+    NoImportQualifiedPost
+
+  build-depends:
+    base >=4.7 && <5
+
+library
+  import: defaults
+  hs-source-dirs:
+    src
+  exposed-modules:
+    L4.ACTUS.Analyzer
+    L4.ACTUS.FeatureExtractor
+    L4.ACTUS.Ontology.Types
+    L4.ACTUS.Ontology.Loader
+    L4.ACTUS.Ontology.Cache
+    L4.ACTUS.Ontology.Query
+    L4.ACTUS.Matching.Rules
+    L4.ACTUS.Matching.Scorer
+    L4.ACTUS.Matching.ACTUS
+    L4.ACTUS.Report.JSON
+    L4.ACTUS.Report.RDF
+    L4.ACTUS.Report.Markdown
+  build-depends:
+    aeson,
+    aeson-pretty,
+    binary,
+    containers,
+    directory,
+    filepath,
+    jl4-core,
+    optics,
+    rdf4h,
+    text,
+    time
+
+executable jl4-actus
+  import: defaults
+  main-is: Main.hs
+  hs-source-dirs:
+    app
+  build-depends:
+    jl4-actus-analyzer,
+    optparse-applicative,
+    text
+
+test-suite jl4-actus-analyzer-test
+  import: defaults
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  hs-source-dirs:
+    test
+  other-modules:
+    FeatureExtractorSpec
+    MatchingSpec
+  build-tool-depends:
+    hspec-discover:hspec-discover
+  build-depends:
+    containers,
+    hspec,
+    jl4-actus-analyzer
