@@ -39,20 +39,13 @@ L4 is not:
 
 ## How L4 Works
 
-L4 code looks like a hybrid of legal text and programming:
+L4 code looks like a hybrid of legal text and programming. Here's a complete example of a charity's legal obligation:
 
-```l4
-GIVEN charity IS A RegisteredCharity
-IF charity's status EQUALS Active
-PARTY charity
-MUST `file annual return`
-WITHIN 60
-HENCE `compliance maintained`
-LEST `Commissioner may issue notice`
-```
+**Example:** [charity-obligation.l4](charity-obligation.l4)
 
 This reads almost like English, but with precise meaning:
 
+- **DECLARE** - Defines what things look like (types)
 - **GIVEN** - Declares what entities are involved
 - **IF** - States conditions that must be true
 - **PARTY** - Identifies who has the obligation
@@ -60,6 +53,7 @@ This reads almost like English, but with precise meaning:
 - **WITHIN** - Sets a deadline (in days)
 - **HENCE** - What happens on compliance
 - **LEST** - What happens on non-compliance
+- **#TRACE** - Simulates how the contract plays out
 
 ---
 
@@ -69,35 +63,25 @@ This reads almost like English, but with precise meaning:
 
 L4 uses types to define what things look like:
 
-```l4
-DECLARE RegisteredCharity
-    HAS name IS A STRING
-        registrationNumber IS A STRING
-        status IS A Status
-```
+**Example:** [type-declaration.l4](type-declaration.l4)
 
 This prevents errors—you can't accidentally use a person where you need a charity.
 
 ### 2. Rules Define Logic
 
-Rules capture legal reasoning:
+Rules capture legal reasoning using natural language:
 
-```l4
-DECIDE `is eligible` IF
-    applicant's age >= 18
-    AND applicant's hasValidID EQUALS TRUE
-```
+**Example:** [eligibility-rule.l4](eligibility-rule.l4)
+
+Notice how the rule reads like English: "the applicant is eligible if the applicant is at least 18 years old and the applicant has shown valid identification."
 
 ### 3. Contracts Define Obligations
 
-Regulative rules capture who must do what:
+Regulative rules capture who must do what, with deadlines and consequences:
 
-```l4
-PARTY seller
-MUST `deliver goods`
-WITHIN 14
-HENCE PARTY buyer MUST `pay invoice` WITHIN 30
-```
+**Example:** [sale-contract.l4](sale-contract.l4)
+
+This models a simple sale: the seller must deliver within 14 days, then the buyer must pay within 30 days.
 
 ---
 

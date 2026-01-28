@@ -13,6 +13,8 @@ Regulative keywords express legal obligations, permissions, prohibitions, and th
 | [SHANT](SHANT.md) | Prohibition (forbidden)   |
 | DO                | Possibility (optionality) |
 
+**[DEONTIC](DEONTIC.md)** - Regulative Type
+
 ### Rule Structure
 
 | Keyword               | Purpose                           |

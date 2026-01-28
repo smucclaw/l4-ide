@@ -134,7 +134,18 @@ Once you complete the Foundation Course, you can:
 
 ## Example Files
 
-All code examples from this course are available in the repository:
+Each module has a companion example file with complete, validated L4 code:
+
+| Module   | Example File                                     |
+| -------- | ------------------------------------------------ |
+| Module 1 | [module-1-examples.l4](module-1-examples.l4)     |
+| Module 2 | [module-2-examples.l4](module-2-examples.l4)     |
+| Module 3 | [module-3-examples.l4](module-3-examples.l4)     |
+| Module 4 | [module-4-examples.l4](module-4-examples.l4)     |
+| Module 5 | [module-5-examples.l4](module-5-examples.l4)     |
+| Module 6 | [module-6-examples.l4](module-6-examples.l4)     |
+
+Additional examples in the repository:
 
 - `jl4/examples/legal/` - Real-world legal examples
 - `jl4/examples/ok/` - Working code samples

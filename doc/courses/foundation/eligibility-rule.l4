@@ -1,0 +1,36 @@
+-- Example: A simple eligibility rule
+-- From Module 0: Introduction to L4
+
+-- Define what an applicant looks like
+DECLARE Applicant
+    HAS `the applicant's name` IS A STRING
+        `the applicant's age` IS A NUMBER
+        `the applicant has valid ID` IS A BOOLEAN
+
+-- Define the eligibility rule in natural language
+GIVEN applicant IS A Applicant
+GIVETH A BOOLEAN
+DECIDE `the applicant is eligible` IF
+    `the applicant is at least 18 years old` applicant
+    AND `the applicant has shown valid identification` applicant
+
+-- Break down the conditions into readable sub-rules
+GIVEN applicant IS A Applicant
+GIVETH A BOOLEAN
+`the applicant is at least 18 years old` MEANS
+    applicant's `the applicant's age` >= 18
+
+GIVEN applicant IS A Applicant
+GIVETH A BOOLEAN
+`the applicant has shown valid identification` MEANS
+    applicant's `the applicant has valid ID` EQUALS TRUE
+
+-- Create test applicants
+`Alice the adult` MEANS Applicant "Alice" 25 TRUE
+`Bob without ID` MEANS Applicant "Bob" 30 FALSE
+`Young Charlie` MEANS Applicant "Charlie" 16 TRUE
+
+-- Test the rule
+#EVAL `the applicant is eligible` `Alice the adult`
+#EVAL `the applicant is eligible` `Bob without ID`
+#EVAL `the applicant is eligible` `Young Charlie`
