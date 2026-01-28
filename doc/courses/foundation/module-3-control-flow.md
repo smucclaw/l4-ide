@@ -33,16 +33,18 @@ GIVETH A STRING
 
 Every `IF` must have both `THEN` and `ELSE` branches—L4 requires you to handle all cases.
 
-### Nested Conditionals
+### Nested Conditionals with BRANCH
 
 ```l4
 GIVEN score IS A NUMBER
 GIVETH A STRING
-`the letter grade` MEANS
-    IF score >= 90 THEN "A"
-    ELSE IF score >= 80 THEN "B"
-    ELSE IF score >= 70 THEN "C"
-    ELSE "F"
+`grade` MEANS
+    BRANCH
+        IF score >= 90 THEN "A"
+        IF score >= 80 THEN "B"
+        IF score >= 70 THEN "C"
+        IF score >= 60 THEN "D"
+        OTHERWISE "F"
 ```
 
 ### Conditional in Context

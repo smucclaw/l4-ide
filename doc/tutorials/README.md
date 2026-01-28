@@ -13,6 +13,15 @@ New to L4? Start here:
 
 ## By Topic
 
+### Natural Language Functions
+
+Write functions that read like legal prose:
+
+- **[Infix, Postfix, and Mixfix Functions](natural-language-functions/natural-language-functions.md)** - Define operators like `` `is eligible for` `` or `` `percent` ``
+
+**Audience:** All L4 users  
+**Prerequisites:** Basic function syntax
+
 ### LLM Integration
 
 Working with AI and language models in L4:

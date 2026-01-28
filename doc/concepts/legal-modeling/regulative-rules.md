@@ -245,8 +245,8 @@ LEST BREACH
 
 ```
 ┌──────────────────────────────────────────────┐
-│                  CREATED                      │
-│           (rule becomes active)               │
+│                  CREATED                     │
+│           (rule becomes active)              │
 └──────────────────────────────────────────────┘
                       │
                       ▼
