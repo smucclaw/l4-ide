@@ -1030,32 +1030,32 @@
         </svg>
         Logic Viz
       </button>
-    {/if}
-    <button
-      class="fab fab-wizard"
-      onclick={handleOpenWizard}
-      aria-label="Deploy"
-      title="Deploy"
-    >
-      <svg
-        width="20"
-        height="20"
-        style="font-size: 24px; vertical-align: middle; margin-right: 0.2em;"
-        viewBox="0 0 24 24"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        stroke-width="1.5"
-        stroke="currentColor"
+      <button
+        class="fab fab-wizard"
+        onclick={handleOpenWizard}
+        aria-label="Form Wizard"
+        title="Form Wizard"
       >
-        <!-- Magic wand / wizard icon -->
-        <path
-          d="M15 4V2M15 16V14M8 9H10M20 9H22M17.8 11.8L19 13M17.8 6.2L19 5M12.2 11.8L11 13M12.2 6.2L11 5"
-        />
-        <path d="M15 9L3 21" stroke-linecap="round" />
-        <path d="M13 7L17 11" stroke-linecap="round" />
-      </svg>
-      Deploy
-    </button>
+        <svg
+          width="20"
+          height="20"
+          style="font-size: 24px; vertical-align: middle; margin-right: 0.2em;"
+          viewBox="0 0 24 24"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          stroke-width="1.5"
+          stroke="currentColor"
+        >
+          <!-- Magic wand / wizard icon -->
+          <path
+            d="M15 4V2M15 16V14M8 9H10M20 9H22M17.8 11.8L19 13M17.8 6.2L19 5M12.2 11.8L11 13M12.2 6.2L11 5"
+          />
+          <path d="M15 9L3 21" stroke-linecap="round" />
+          <path d="M13 7L17 11" stroke-linecap="round" />
+        </svg>
+        Form Wizard
+      </button>
+    {/if}
     <button
       class="fab fab-share"
       onclick={handleShare}

@@ -17,7 +17,7 @@ New to L4? Start here:
 
 Write functions that read like legal prose:
 
-- **[Infix, Postfix, and Mixfix Functions](natural-language-functions/natural-language-functions.md)** - Define operators like `` `is eligible for` `` or `` `percent` ``
+- **[Infix, Postfix, and Mixfix Functions](natural-language-functions/natural-language-functions.md)**
 
 **Audience:** All L4 users  
 **Prerequisites:** Basic function syntax
