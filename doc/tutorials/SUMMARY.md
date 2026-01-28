@@ -10,6 +10,10 @@
 - [Wedding Vows](getting-started/wedding-vows.md)
 - [Common Patterns](getting-started/common-patterns.md)
 
+## Natural Language Functions
+
+- [Using Infix, Postfix, and Mixfix Functions](natural-language-functions/natural-language-functions.md)
+
 ## LLM Integration
 
 - [Getting Started with LLM](llm-integration/llm-getting-started.md)

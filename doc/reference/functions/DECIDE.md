@@ -97,8 +97,6 @@ DECIDE isEligible IF
 - **[WHERE](WHERE.md)** - Local definitions
 - **[IF](../control-flow/IF.md)** - Boolean condition form
 
-> Note: IS is part of the DECIDE syntax, not a separate keyword page.
+## Tutorials
 
-## See Also
-
-- **[Keywords Reference](README.md)** - All keywords
+- **[Using Infix, Postfix, and Mixfix Functions](../../tutorials/natural-language-functions/natural-language-functions.md)** - Define functions that read like natural language

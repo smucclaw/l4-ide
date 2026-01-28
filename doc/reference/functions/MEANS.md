@@ -80,4 +80,6 @@ LET y MEAN 10 IN y PLUS 1
 - **[DECIDE](DECIDE.md)** - Declares a decision
 - **[WHERE](WHERE.md)** - Local definitions
 
-> Note: IS and BE are alternative forms with the same meaning as MEANS.
+## Tutorials
+
+- **[Using Infix, Postfix, and Mixfix Functions](../../tutorials/natural-language-functions/natural-language-functions.md)** - Define functions that read like natural language
