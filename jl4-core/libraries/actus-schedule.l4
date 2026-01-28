@@ -1,0 +1,71 @@
+-- =============================================================================
+-- ACTUS Schedule Generation Library
+-- Algorithmic Contract Types Unified Standards (actusfrf.org)
+-- =============================================================================
+-- Schedule generation - simplified version with basic monthly schedules.
+-- =============================================================================
+
+IMPORT prelude
+IMPORT `actus-core`
+
+§ `ACTUS Schedule Generation`
+
+-- =============================================================================
+§§ `Add Period to Date`
+-- =============================================================================
+
+GIVEN date IS A DATE
+      months IS A NUMBER
+GIVETH A DATE
+`add months` MEANS
+    DATE_FROM_DMY day newMonth newYear
+    WHERE
+        day MEANS DATE_DAY date
+        oldMonth MEANS DATE_MONTH date
+        oldYear MEANS DATE_YEAR date
+        totalMonths MEANS oldMonth PLUS months
+        newYear MEANS oldYear PLUS (FLOOR ((totalMonths MINUS 1) DIVIDED BY 12))
+        newMonth MEANS ((totalMonths MINUS 1) MODULO 12) PLUS 1
+
+GIVEN date IS A DATE
+      days IS A NUMBER
+GIVETH A DATE
+`add days` MEANS
+    DATE_FROM_SERIAL ((DATE_SERIAL date) PLUS days)
+
+-- =============================================================================
+§§ `Simple Monthly Schedule`
+-- =============================================================================
+
+GIVEN startDate IS A DATE
+      numMonths IS A NUMBER
+GIVETH A LIST OF DATE
+`monthly schedule` MEANS
+    `monthly schedule helper` startDate numMonths 0
+
+GIVEN startDate IS A DATE
+      numMonths IS A NUMBER
+      current IS A NUMBER
+GIVETH A LIST OF DATE
+`monthly schedule helper` MEANS
+    IF current EQUALS numMonths
+    THEN EMPTY
+    ELSE (`add months` startDate current) FOLLOWED BY
+         (`monthly schedule helper` startDate numMonths (current PLUS 1))
+
+-- =============================================================================
+§§ `Schedule Length`
+-- =============================================================================
+
+GIVEN schedule IS A LIST OF DATE
+GIVETH A NUMBER
+`schedule length` MEANS
+    CONSIDER schedule
+    WHEN EMPTY THEN 0
+    WHEN d FOLLOWED BY rest THEN 1 PLUS (`schedule length` rest)
+
+-- =============================================================================
+§§ `Version Information`
+-- =============================================================================
+
+`ACTUS Schedule Library Version` MEANS "1.0.0"
