@@ -85,7 +85,9 @@ Task-focused guides for specific goals:
 Look up specific features:
 
 - **[Syntax Reference](reference/syntax/README.md)** - Complete syntax guide
-- **[Keywords](reference/keywords/README.md)** - All L4 keywords
+- **[Types](reference/types/README.md)** - L4 Types
+- **[Functions](reference/functions/README.md)** - Functions as rules
+- **[Regulative](reference/regulative/README.md)** - Regulative language
 - **[Libraries](reference/libraries/README.md)** - Standard library
 - **[Operators](reference/operators/README.md)** - Operators and precedence
 

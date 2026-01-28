@@ -47,6 +47,6 @@ Can be imported into L4 files with `IMPORT daydate`.
 
 ### Example: Date Calculations
 
-[daydate-example.l4](daydate-example.l4).
+[daydate-example.l4](daydate-example.l4)
 
 **See [daydate.l4](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/libraries/daydate.l4) source for all functions.**

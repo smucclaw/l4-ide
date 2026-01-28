@@ -10,35 +10,32 @@ Master index linking to all language features - start here to find what you need
 
 ### Language Components
 
-#### [Keywords](keywords/README.md)
+#### [Functions](functions/README.md)
 
-Reserved words that form the structure of L4 programs:
+Keywords for defining functions and computations:
 
-- **Declarations:** ASSUME, DECIDE, DECLARE, MEANS
-- **Functions:** GIVEN, GIVETH, WHERE, LET
-- **Control Flow:** IF, THEN, ELSE, CONSIDER, WHEN
-- **Logic:** AND, OR, NOT, IMPLIES
-- **Regulative:** PARTY, MUST, MAY, SHANT, WITHIN, HENCE, LEST
-- **And more...**
+- **Parameters:** GIVEN, GIVETH
+- **Definitions:** DECIDE, MEANS, YIELD
+- **Local bindings:** LET, WHERE
+- **Aliases:** AKA
 
 #### [Types](types/README.md)
 
 L4's type system for representing data:
 
 - **Primitives:** BOOLEAN, NUMBER, STRING, DATE
-- **Algebraic Types:** Records, Enums
+- **Type Constructors:** DECLARE, IS, HAS, ONE OF
 - **Polymorphic Types:** LIST, MAYBE, EITHER
-- **Type Constructors:** IS, HAS, ONE OF
 
 #### [Operators](operators/README.md)
 
 Operations for computing and comparing values:
 
 - **Arithmetic:** PLUS, MINUS, TIMES, DIVIDED BY, MODULO
-- **Comparison:** EQUALS, GREATER THAN, LESS THAN
+- **Comparison:** EQUALS, GREATER THAN, LESS THAN, AT MOST, AT LEAST
 - **Logical:** AND, OR, NOT, IMPLIES
-- **String:** CONCAT
-- **Temporal:** AT, WITHIN, STARTING, FOLLOWED
+- **String:** CONCAT, APPEND
+- **Temporal:** AT, WITHIN
 
 #### [Syntax](syntax/README.md)
 

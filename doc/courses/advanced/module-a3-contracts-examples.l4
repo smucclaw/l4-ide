@@ -1,0 +1,339 @@
+-- Module A3: Contracts in Depth - Examples
+-- This file demonstrates advanced contract modeling including complex payment terms,
+-- recursive obligations, and penalty structures.
+
+--------------------------------------------------------------------------------
+-- SECTION 1: Type Definitions
+--------------------------------------------------------------------------------
+
+-- Money type with currency
+DECLARE Money
+    HAS amount IS A NUMBER
+        currency IS A STRING
+
+-- Currency constructors
+GIVEN n IS A NUMBER
+GIVETH A Money
+USD MEANS Money WITH amount IS n, currency IS "USD"
+
+GIVEN n IS A NUMBER
+GIVETH A Money
+SGD MEANS Money WITH amount IS n, currency IS "SGD"
+
+-- Person and Company types (basic definitions)
+DECLARE Person
+    HAS name IS A STRING
+
+DECLARE Company
+    HAS name IS A STRING
+
+-- Party types
+DECLARE Party IS ONE OF
+    BorrowerParty HAS `the borrower` IS A Borrower
+    LenderParty HAS `the lender` IS A Lender
+
+-- Borrower can be individual or company
+DECLARE Borrower IS ONE OF
+    IndividualBorrower HAS person IS A Person
+    CorporateBorrower HAS company IS A Company
+
+DECLARE Lender IS ONE OF
+    IndividualLender HAS person IS A Person
+    InstitutionalLender HAS company IS A Company
+
+-- Payment record
+DECLARE Payment
+    HAS amount IS A Money
+        dueDate IS A NUMBER  -- Days from commencement
+
+-- Penalty terms
+DECLARE PenaltyTerms
+    HAS interestRate IS A NUMBER
+        gracePeriodDays IS A NUMBER
+
+--------------------------------------------------------------------------------
+-- SECTION 2: Loan Terms
+--------------------------------------------------------------------------------
+
+DECLARE LoanTerms
+    HAS principal IS A Money
+        annualInterestRate IS A NUMBER
+        numberOfInstallments IS A NUMBER
+        defaultAfterDays IS A NUMBER
+        penaltyTerms IS A PenaltyTerms
+
+-- Example loan
+exampleLoan MEANS LoanTerms WITH
+    principal            IS USD 25000
+    annualInterestRate   IS 0.15             -- 15% annual interest
+    numberOfInstallments IS 12               -- 12 monthly installments
+    defaultAfterDays     IS 30               -- Default after 30 days late
+    penaltyTerms         IS PenaltyTerms WITH
+                              interestRate    IS 0.05   -- 5% penalty
+                              gracePeriodDays IS 10
+
+--------------------------------------------------------------------------------
+-- SECTION 3: Payment Calculations
+--------------------------------------------------------------------------------
+
+-- Monthly interest rate
+GIVEN terms IS A LoanTerms
+GIVETH A NUMBER
+`monthly rate` MEANS terms's annualInterestRate / 12
+
+-- Power function for calculations
+GIVEN base IS A NUMBER
+      exp IS A NUMBER
+GIVETH A NUMBER
+`power` MEANS
+    IF exp = 0
+    THEN 1
+    ELSE IF exp = 1
+         THEN base
+         ELSE base * `power` base (exp - 1)
+
+-- Monthly payment using amortization formula
+-- PMT = P × (r(1+r)^n) / ((1+r)^n - 1)
+GIVEN terms IS A LoanTerms
+GIVETH A Money
+`monthly payment amount` MEANS
+    Money WITH amount IS payment, currency IS terms's principal's currency
+    WHERE
+        p MEANS terms's principal's amount
+        r MEANS `monthly rate` terms
+        n MEANS terms's numberOfInstallments
+        compoundFactor MEANS `power` (1 + r) n
+        payment MEANS p * (r * compoundFactor) / (compoundFactor - 1)
+
+-- Placeholder functions for payment scheduling
+GIVEN terms IS A LoanTerms
+      outstanding IS A Money
+GIVETH A Money
+`calculate next payment` MEANS `monthly payment amount` terms
+
+GIVEN terms IS A LoanTerms
+      outstanding IS A Money
+GIVETH A NUMBER
+`calculate due date` MEANS 30  -- Simplified: 30 days between payments
+
+--------------------------------------------------------------------------------
+-- SECTION 4: Loan Contract Actions
+--------------------------------------------------------------------------------
+
+-- Actions for the loan contract
+DECLARE LoanAction IS ONE OF
+    `pay installment` HAS recipient IS A Lender
+                          amount IS A Money
+
+-- Validate payment amount
+GIVEN paid IS A Money
+      expected IS A Money
+GIVETH A BOOLEAN
+`is valid payment` MEANS
+    paid's currency EQUALS expected's currency
+    AND paid's amount >= (expected's amount - 0.05)  -- Allow small rounding
+
+--------------------------------------------------------------------------------
+-- SECTION 5: Recursive Payment Obligations
+--------------------------------------------------------------------------------
+
+-- Test borrower and lender for examples
+aliceBorrower MEANS IndividualBorrower (Person WITH name IS "Alice")
+bobLender MEANS IndividualLender (Person WITH name IS "Bob")
+
+-- The recursive payment obligation
+GIVEN terms IS A LoanTerms
+      debtorParty IS A Borrower
+      creditorParty IS A Lender
+      outstanding IS A Money  -- Remaining balance
+GIVETH A DEONTIC Party LoanAction
+`payment obligation` MEANS
+    IF outstanding's amount > 0
+    THEN
+        PARTY BorrowerParty debtorParty
+        MUST `pay installment` EXACTLY creditorParty
+                               amountPaid PROVIDED amountPaid's amount >= paymentDue's amount
+        WITHIN nextDueDate
+        HENCE
+            -- Recursive call with reduced balance
+            `payment obligation` terms debtorParty creditorParty newOutstanding
+        LEST
+            -- Late: apply penalty
+            `late payment handling` terms debtorParty creditorParty outstanding
+    ELSE FULFILLED
+    WHERE
+        -- Calculate next payment
+        paymentDue MEANS `calculate next payment` terms outstanding
+        nextDueDate MEANS `calculate due date` terms outstanding
+        -- After payment, reduce outstanding (simplified)
+        newOutstanding MEANS Money WITH
+            amount   IS outstanding's amount - paymentDue's amount
+            currency IS outstanding's currency
+
+-- Late payment with penalty
+GIVEN terms IS A LoanTerms
+      debtorParty IS A Borrower
+      creditorParty IS A Lender
+      outstanding IS A Money
+GIVETH A DEONTIC Party LoanAction
+`late payment handling` MEANS
+    -- Grace period with penalty interest
+    PARTY BorrowerParty debtorParty
+    MUST `pay installment` EXACTLY creditorParty
+                           amountPaid PROVIDED amountPaid's amount >= paymentWithPenalty's amount
+    WITHIN (nextDueDate + terms's penaltyTerms's gracePeriodDays)
+    HENCE
+        -- Continue with remaining payments
+        `payment obligation` terms debtorParty creditorParty newOutstanding
+    LEST
+        -- Default: full balance due
+        `default handling` terms debtorParty creditorParty outstanding
+    WHERE
+        basePayment MEANS `calculate next payment` terms outstanding
+        penaltyAmount MEANS basePayment's amount * terms's penaltyTerms's interestRate
+        paymentWithPenalty MEANS Money WITH
+            amount   IS basePayment's amount + penaltyAmount
+            currency IS basePayment's currency
+        nextDueDate MEANS `calculate due date` terms outstanding
+        newOutstanding MEANS Money WITH
+            amount   IS outstanding's amount - paymentWithPenalty's amount
+            currency IS outstanding's currency
+
+-- Default: Full balance due
+GIVEN terms IS A LoanTerms
+      debtorParty IS A Borrower
+      creditorParty IS A Lender
+      outstanding IS A Money
+GIVETH A DEONTIC Party LoanAction
+`default handling` MEANS
+    PARTY BorrowerParty debtorParty
+    MUST `pay installment` EXACTLY creditorParty
+                           EXACTLY outstanding  -- Full balance required
+    WITHIN terms's defaultAfterDays
+    HENCE FULFILLED
+    LEST BREACH BY (BorrowerParty debtorParty) BECAUSE "loan default"
+
+--------------------------------------------------------------------------------
+-- SECTION 6: Multi-Party Contracts (Escrow)
+--------------------------------------------------------------------------------
+
+-- Escrow arrangement: Buyer, Seller, Escrow Agent
+DECLARE EscrowParty IS ONE OF Buyer, Seller, EscrowAgent
+
+DECLARE EscrowAction IS ONE OF
+    `deposit funds` HAS amount IS A Money
+    `deliver goods`
+    `release funds to seller`
+    `return funds to buyer`
+
+GIVEN amount IS A Money
+GIVETH A DEONTIC EscrowParty EscrowAction
+`escrow arrangement` MEANS
+    -- Buyer deposits funds
+    PARTY Buyer
+    MUST `deposit funds` amount
+    WITHIN 7
+    HENCE
+        -- Seller delivers goods
+        PARTY Seller
+        MUST `deliver goods`
+        WITHIN 14
+        HENCE
+            -- Escrow releases to seller
+            PARTY EscrowAgent
+            MUST `release funds to seller`
+            WITHIN 3
+            HENCE FULFILLED
+            LEST BREACH BY EscrowAgent BECAUSE "escrow agent failed to release funds"
+        LEST
+            -- Seller didn't deliver, return funds
+            PARTY EscrowAgent
+            MUST `return funds to buyer`
+            WITHIN 3
+            HENCE BREACH BY Seller BECAUSE "seller failed to deliver goods"
+            LEST BREACH BY EscrowAgent BECAUSE "escrow agent failed to return funds"
+    LEST BREACH BY Buyer BECAUSE "buyer failed to deposit funds"
+
+--------------------------------------------------------------------------------
+-- SECTION 7: Parallel and Alternative Obligations
+--------------------------------------------------------------------------------
+
+-- Types for service contract examples
+DECLARE ServiceParty IS ONE OF Provider, Client
+
+DECLARE ContractAction IS ONE OF
+    `deliver service`
+    `provide documentation`
+    `ship goods`
+    `arrange pickup`
+    `make payment`
+
+-- Parallel obligations with RAND
+-- Service contract: Provider must deliver service AND provide documentation
+GIVETH A DEONTIC ServiceParty ContractAction
+`service delivery` MEANS
+    (PARTY Provider MUST `deliver service` WITHIN 30 HENCE FULFILLED LEST BREACH BY Provider BECAUSE "failed to deliver service")
+    RAND
+    (PARTY Provider MUST `provide documentation` WITHIN 30 HENCE FULFILLED LEST BREACH BY Provider BECAUSE "failed to provide documentation")
+
+-- Alternative obligations with ROR
+-- Delivery options: Ship OR pickup
+GIVETH A DEONTIC ServiceParty ContractAction
+`delivery options` MEANS
+    (PARTY Provider MUST `ship goods` WITHIN 14 HENCE FULFILLED LEST BREACH BY Provider BECAUSE "failed to ship")
+    ROR
+    (PARTY Provider MUST `arrange pickup` WITHIN 7 HENCE FULFILLED LEST BREACH BY Provider BECAUSE "failed to arrange pickup")
+
+--------------------------------------------------------------------------------
+-- SECTION 8: Practical Patterns
+--------------------------------------------------------------------------------
+
+-- Credit card style: Pay minimum or full balance
+DECLARE CardParty IS ONE OF Cardholder, Bank
+
+DECLARE CardAction IS ONE OF
+    `pay` HAS `payment amount` IS A NUMBER
+
+GIVEN balance IS A Money
+      minimumPct IS A NUMBER
+GIVETH A DEONTIC CardParty CardAction
+`credit payment` MEANS
+    PARTY Cardholder
+    MUST `pay` paidAmount PROVIDED paidAmount >= minimumPayment
+    WITHIN 30
+    HENCE
+        IF paidAmount >= balance's amount
+        THEN FULFILLED  -- Paid in full
+        ELSE `credit payment` newBalance minimumPct  -- Recurse with new balance
+    LEST BREACH BY Cardholder BECAUSE "missed credit card payment"
+    WHERE
+        minimumPayment MEANS balance's amount * minimumPct
+        newBalance MEANS Money WITH amount IS balance's amount - minimumPayment, currency IS balance's currency
+
+-- Milestone-based payment pattern
+DECLARE Milestone IS ONE OF
+    Design
+    Development
+    Testing
+    Delivery
+
+DECLARE MilestoneAction IS ONE OF
+    `complete milestone` HAS milestone IS A Milestone
+    `pay milestone` HAS milestone IS A Milestone
+
+GIVEN milestones IS A LIST OF Milestone
+GIVETH A DEONTIC ServiceParty MilestoneAction
+`milestone payments` MEANS
+    CONSIDER milestones
+    WHEN EMPTY THEN FULFILLED
+    WHEN m FOLLOWED BY rest THEN
+        PARTY Provider
+        MUST `complete milestone` m
+        WITHIN 30
+        HENCE
+            PARTY Client
+            MUST `pay milestone` m
+            WITHIN 14
+            HENCE `milestone payments` rest  -- Recurse
+            LEST BREACH BY Client BECAUSE "client failed to pay milestone"
+        LEST BREACH BY Provider BECAUSE "provider failed to complete milestone"

@@ -23,6 +23,10 @@ We'll build a simplified charity registration system based on real legislation. 
 - Regulative obligations
 - Testing
 
+The complete working implementation:
+
+[module-6-examples.l4](module-6-examples.l4)
+
 ### Requirements
 
 1. **Charities** have names, purposes, governors, and financial records
@@ -38,34 +42,14 @@ We'll build a simplified charity registration system based on real legislation. 
 Start by modeling the domain:
 
 ```l4
-§ `Type Definitions`
-
 -- Charitable purposes (from legislation)
 DECLARE Purpose IS ONE OF
     `prevention or relief of poverty`
     `advancement of education`
     `advancement of religion`
     `advancement of health`
-    `advancement of citizenship`
-    `advancement of arts and culture`
-    `advancement of amateur sport`
-    `advancement of human rights`
-    `advancement of environmental protection`
-    `relief of those in need`
     `advancement of animal welfare`
     other HAS description IS A STRING
-
--- Legal status
-DECLARE Status IS ONE OF
-    Active
-    Suspended HAS reason IS A STRING
-    Deregistered HAS date IS A NUMBER
-                    reason IS A STRING
-
--- Criminal conviction record
-DECLARE Conviction
-    HAS description IS A STRING
-        isSpent IS A BOOLEAN
 
 -- Governor of a charity
 DECLARE Governor
@@ -73,23 +57,13 @@ DECLARE Governor
         age IS A NUMBER
         isBankrupt IS A BOOLEAN
         convictions IS A LIST OF Conviction
-
--- Financial year record
-DECLARE FinancialRecord
-    HAS year IS A NUMBER
-        income IS A NUMBER
-        expenditure IS A NUMBER
-
--- The main charity record
-DECLARE RegisteredCharity
-    HAS name IS A STRING
-        registrationNumber IS A STRING
-        status IS A Status
-        purposes IS A LIST OF Purpose
-        governors IS A LIST OF Governor
-        financials IS A LIST OF FinancialRecord
-        yearEnd IS A NUMBER  -- day of year (1-365)
 ```
+
+Key design decisions:
+
+1. **Use natural language field names:** `` `the governor's name` `` reads like legal text
+2. **Use enumerations for fixed categories:** Prevents typos and invalid values
+3. **Use lists for multiple items:** governors, purposes, convictions
 
 ---
 
@@ -98,56 +72,33 @@ DECLARE RegisteredCharity
 Rules for who can be a governor and what makes a valid charity:
 
 ```l4
-§ `Eligibility Rules`
-
 -- A governor must be an adult
 GIVEN governor IS A Governor
 GIVETH A BOOLEAN
 DECIDE `is adult` IF governor's age >= 18
 
--- Check for disqualifying convictions (unspent convictions)
+-- Check for disqualifying convictions
 GIVEN governor IS A Governor
 GIVETH A BOOLEAN
 DECIDE `has disqualifying conviction` IF
     any (GIVEN c YIELD c's isSpent EQUALS FALSE) (governor's convictions)
 
--- A person can be a governor if they're an adult, not bankrupt,
--- and have no disqualifying convictions
+-- Combined eligibility check
 GIVEN governor IS A Governor
 GIVETH A BOOLEAN
 DECIDE `can be governor` IF
     `is adult` governor
     AND NOT governor's isBankrupt
     AND NOT `has disqualifying conviction` governor
-
--- A purpose is charitable if it's from the approved list
-GIVEN purpose IS A Purpose
-GIVETH A BOOLEAN
-DECIDE `is charitable purpose` IS
-    CONSIDER purpose
-    WHEN `prevention or relief of poverty` THEN TRUE
-    WHEN `advancement of education` THEN TRUE
-    WHEN `advancement of religion` THEN TRUE
-    WHEN `advancement of health` THEN TRUE
-    WHEN `advancement of citizenship` THEN TRUE
-    WHEN `advancement of arts and culture` THEN TRUE
-    WHEN `advancement of amateur sport` THEN TRUE
-    WHEN `advancement of human rights` THEN TRUE
-    WHEN `advancement of environmental protection` THEN TRUE
-    WHEN `relief of those in need` THEN TRUE
-    WHEN `advancement of animal welfare` THEN TRUE
-    WHEN other desc THEN FALSE  -- "other" requires special approval
-
--- A charity is valid if it has valid purposes and valid governors
-GIVEN charity IS A RegisteredCharity
-GIVETH A BOOLEAN
-DECIDE `is valid charity` IF
-    charity's status EQUALS Active
-    AND length (charity's purposes) > 0
-    AND all (GIVEN p YIELD `is charitable purpose` p) (charity's purposes)
-    AND length (charity's governors) > 0
-    AND all (GIVEN g YIELD `can be governor` g) (charity's governors)
 ```
+
+Key patterns:
+
+1. **Simple predicates:** `` `is adult` ``
+2. **Using `any` with predicates:** checking for disqualifying convictions
+3. **Combining conditions:** using `AND` and `NOT`
+
+**Note:** These functions require `IMPORT prelude` for `any`, `all`, etc.
 
 ---
 
@@ -156,19 +107,6 @@ DECIDE `is valid charity` IF
 The filing obligations:
 
 ```l4
-§ `Filing Obligations`
-
--- Actors and actions for the regulatory system
-DECLARE Actor IS ONE OF
-    Charity HAS charity IS A RegisteredCharity
-    Commissioner
-
-DECLARE Action IS ONE OF
-    `file annual return`
-    `issue Required Steps Notice` HAS deadline IS A NUMBER
-    `correct deficiencies`
-    `deregister`
-
 -- Annual return filing obligation
 GIVEN charity IS A RegisteredCharity
 GIVETH A DEONTIC Actor Action
@@ -177,7 +115,7 @@ GIVETH A DEONTIC Actor Action
     THEN
         PARTY Charity charity
         MUST `file annual return`
-        WITHIN 60  -- 60 days from year end
+        WITHIN 60
         HENCE FULFILLED
         LEST
             PARTY Commissioner
@@ -186,41 +124,25 @@ GIVETH A DEONTIC Actor Action
             HENCE `correction period` charity
             LEST BREACH BY Commissioner BECAUSE "failed to issue notice"
     ELSE FULFILLED
-
--- After notice is issued, charity has time to correct
-GIVEN charity IS A RegisteredCharity
-GIVETH A DEONTIC Actor Action
-`correction period` MEANS
-    PARTY Charity charity
-    MUST `correct deficiencies`
-    WITHIN 30
-    HENCE FULFILLED
-    LEST
-        PARTY Commissioner
-        MAY `deregister`
-        HENCE BREACH BY (Charity charity) BECAUSE "failed to file after notice"
 ```
+
+Key patterns:
+
+1. **Actor and Action types:** Define who can act and what actions exist
+2. **Conditional obligations:** Only active charities must file
+3. **Chained obligations:** Non-compliance triggers Commissioner action
+4. **Clear blame assignment:** `BREACH BY ... BECAUSE ...`
 
 ---
 
 ## Step 4: Create Test Data
 
-Define example charities for testing:
-
 ```l4
-§ `Test Data`
-
 -- Valid governor
 validGovernor MEANS Governor "Jane Smith" 45 FALSE (LIST)
 
 -- Governor with issues
 bankruptGovernor MEANS Governor "John Doe" 50 TRUE (LIST)
-
-unspentConviction MEANS Conviction "Fraud conviction 2020" FALSE
-governorWithConviction MEANS Governor "Bob Jones" 40 FALSE (LIST unspentConviction)
-
--- Minor (under 18)
-minorGovernor MEANS Governor "Young Person" 16 FALSE (LIST)
 
 -- Valid charity
 validCharity MEANS RegisteredCharity
@@ -229,69 +151,38 @@ validCharity MEANS RegisteredCharity
     Active
     (LIST `advancement of animal welfare`, `advancement of education`)
     (LIST validGovernor)
-    (LIST FinancialRecord 2023 50000 45000, FinancialRecord 2022 48000 42000)
-    365  -- Year end Dec 31
-
--- Charity with invalid governor
-charityWithBadGovernor MEANS RegisteredCharity
-    "Problem Charity"
-    "CH002"
-    Active
-    (LIST `advancement of education`)
-    (LIST bankruptGovernor)
-    (LIST FinancialRecord 2023 10000 8000)
-    365
-
--- Suspended charity
-suspendedCharity MEANS RegisteredCharity
-    "Suspended Charity"
-    "CH003"
-    (Suspended "Financial irregularities")
-    (LIST `advancement of health`)
-    (LIST validGovernor)
-    (LIST)
+    (LIST FinancialRecord 2023 50000 45000)
     365
 ```
+
+Create governors and charities with various characteristics for testing.
 
 ---
 
 ## Step 5: Test Everything
 
-Verify the rules work correctly:
+### Unit Tests with #EVAL
 
 ```l4
-§ `Tests`
+#EVAL `is adult` validGovernor              -- TRUE
+#EVAL `can be governor` validGovernor       -- TRUE
+#EVAL `can be governor` bankruptGovernor    -- FALSE
+#EVAL `is valid charity` validCharity       -- TRUE
+```
 
--- Governor eligibility tests
-#EVAL `is adult` validGovernor                      -- TRUE
-#EVAL `is adult` minorGovernor                      -- FALSE
-#EVAL `can be governor` validGovernor               -- TRUE
-#EVAL `can be governor` bankruptGovernor            -- FALSE (bankrupt)
-#EVAL `can be governor` governorWithConviction      -- FALSE (unspent conviction)
-#EVAL `can be governor` minorGovernor               -- FALSE (under 18)
+### Scenario Tests with #TRACE
 
--- Charity validity tests
-#EVAL `is valid charity` validCharity               -- TRUE
-#EVAL `is valid charity` charityWithBadGovernor     -- FALSE
-#EVAL `is valid charity` suspendedCharity           -- FALSE (suspended)
-
--- Test filing obligation scenarios
+```l4
 -- Happy path: charity files on time
 #TRACE `annual return obligation` validCharity AT 0 WITH
     PARTY (Charity validCharity) DOES `file annual return` AT 30
+-- Result: FULFILLED
 
 -- Late filing: notice issued, then charity corrects
 #TRACE `annual return obligation` validCharity AT 0 WITH
-    -- Charity doesn't file, Commissioner issues notice
     PARTY Commissioner DOES `issue Required Steps Notice` 30 AT 70
-    -- Charity corrects within notice period
     PARTY (Charity validCharity) DOES `correct deficiencies` AT 90
-
--- Worst case: deregistration
-#TRACE `annual return obligation` validCharity AT 0 WITH
-    PARTY Commissioner DOES `issue Required Steps Notice` 30 AT 70
-    -- Charity fails to correct, Commissioner deregisters
-    PARTY Commissioner DOES `deregister` AT 110
+-- Result: FULFILLED
 ```
 
 ---
@@ -328,8 +219,6 @@ Sections create a hierarchy:
 
 ### 1. Start with Types
 
-Define your domain model before writing rules:
-
 ```l4
 -- ✅ Good: Clear domain model
 DECLARE Application
@@ -340,31 +229,22 @@ DECLARE Application
 
 ### 2. Small, Focused Functions
 
-Each function should do one thing:
-
 ```l4
 -- ✅ Good: Single responsibility
 DECIDE `is adult` IF person's age >= 18
 DECIDE `is not bankrupt` IF NOT person's isBankrupt
-DECIDE `has no disqualifying convictions` IF NOT any (GIVEN c YIELD NOT c's isSpent) (person's convictions)
 
 -- Combine them
 DECIDE `can be governor` IF
     `is adult` person
     AND `is not bankrupt` person
-    AND `has no disqualifying convictions` person
 ```
 
 ### 3. Test Every Path
 
-Write tests for happy paths, edge cases, and error cases:
-
 ```l4
 -- Happy path
 #EVAL `can be governor` validGovernor        -- TRUE
-
--- Edge cases
-#EVAL `can be governor` (Governor "Edge" 18 FALSE (LIST))  -- TRUE (exactly 18)
 
 -- Error cases
 #EVAL `can be governor` bankruptGovernor     -- FALSE
@@ -376,11 +256,9 @@ Write tests for happy paths, edge cases, and error cases:
 ```l4
 -- ✅ Good: Clear, readable names
 DECIDE `charity meets filing requirements` IF ...
-DECIDE `governor has unspent conviction` IF ...
 
 -- ❌ Bad: Cryptic names
 DECIDE check1 IF ...
-DECIDE validate IF ...
 ```
 
 ### 5. Document Complex Logic
@@ -390,10 +268,7 @@ DECIDE validate IF ...
 -- 1. All purposes must be from the statutory list (Art 5)
 -- 2. The charity must provide public benefit (Art 7)
 -- 3. All governors must be fit and proper (Art 19)
-DECIDE `meets charity test` IF
-    `has charitable purposes` charity
-    AND `provides public benefit` charity
-    AND `has fit governors` charity
+DECIDE `meets charity test` IF ...
 ```
 
 ---

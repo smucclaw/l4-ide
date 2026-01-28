@@ -16,26 +16,28 @@ By the end of this module, you will be able to:
 
 ## A Simple Legal Obligation
 
-Let's start with something every lawyer understands: a simple legal obligation.
+Let's start with something every lawyer understands: a simple legal obligation. Find the complete working example later in this document.
 
-**Example:** "A registered charity must file an annual return."
+**The annual return obligation:** "A registered charity must file an annual return."
 
 In L4, we write this as:
 
 ```l4
 GIVEN charity IS A RegisteredCharity
-PARTY charity
-MUST `file annual return`
+`The annual return obligation` MEANS
+    PARTY charity
+    MUST `file annual return`
 ```
 
 Let's break this down:
 
-| Code                                   | Meaning                                    |
-| -------------------------------------- | ------------------------------------------ |
-| `GIVEN charity IS A RegisteredCharity` | This rule applies to registered charities  |
-| `PARTY charity`                        | The charity is the one with the obligation |
-| `MUST`                                 | This creates a legal obligation            |
-| `\`file annual return\``               | This is what they must do                  |
+| Code                                       | Meaning                                    |
+| ------------------------------------------ | ------------------------------------------ |
+| `GIVEN charity IS A RegisteredCharity`     | This rule applies to registered charities  |
+| `` `The annual return obligation` MEANS `` | The name of this rule                      |
+| `PARTY charity`                            | The charity is the one with the obligation |
+| `MUST`                                     | This creates a legal obligation            |
+| `` `file annual return` ``                 | This is what they must do                  |
 
 ### Backtick Names
 
@@ -56,16 +58,11 @@ Use backticks when you want names that read like natural language.
 
 Write a rule that says "A solicitor must maintain client confidentiality."
 
-<details>
-<summary>Click to see the answer</summary>
+Hint: You'll need to:
 
-```l4
-GIVEN solicitor IS A Solicitor
-PARTY solicitor
-MUST `maintain client confidentiality`
-```
-
-</details>
+1. Define a `DECLARE` for the Solicitor type
+2. Define `DECLARE` for the Actor and Action types
+3. Use `PARTY ... MUST ...` to create the obligation
 
 ---
 
@@ -74,10 +71,9 @@ MUST `maintain client confidentiality`
 Real legal rules have conditions. Let's add one:
 
 ```l4
-GIVEN charity IS A RegisteredCharity
 IF charity's status EQUALS Active
-PARTY charity
-MUST `file annual return`
+    PARTY charity
+    MUST `file annual return`
 ```
 
 The `IF` keyword adds a condition that must be true for the obligation to apply.
@@ -87,11 +83,8 @@ The `IF` keyword adds a condition that must be true for the obligation to apply.
 Use `AND` and `OR` for multiple conditions:
 
 ```l4
-GIVEN charity IS A RegisteredCharity
 IF charity's status EQUALS Active
    AND charity's income > 10000
-PARTY charity
-MUST `file annual return`
 ```
 
 ### Accessing Fields
@@ -101,7 +94,6 @@ The `'s` syntax accesses fields of a record:
 ```l4
 charity's status      -- the status field of charity
 charity's income      -- the income field of charity
-charity's name        -- the name field of charity
 ```
 
 ---
@@ -111,23 +103,12 @@ charity's name        -- the name field of charity
 Legal obligations usually have deadlines. Use `WITHIN`:
 
 ```l4
-GIVEN charity IS A RegisteredCharity
-IF charity's status EQUALS Active
 PARTY charity
 MUST `file annual return`
 WITHIN 60
 ```
 
 `WITHIN 60` means "within 60 days." L4 uses days as the default time unit.
-
-### Relative Deadlines
-
-You can make deadlines relative to events:
-
-```l4
-WITHIN 60                    -- 60 days from now
-WITHIN 2 months              -- approximately 60 days (using daydate library)
-```
 
 ---
 
@@ -136,13 +117,11 @@ WITHIN 2 months              -- approximately 60 days (using daydate library)
 What happens when someone complies or doesn't comply? Use `HENCE` and `LEST`:
 
 ```l4
-GIVEN charity IS A RegisteredCharity
-IF charity's status EQUALS Active
 PARTY charity
 MUST `file annual return`
 WITHIN 60
-HENCE `compliance maintained`
-LEST `Commissioner may issue notice`
+HENCE FULFILLED
+LEST BREACH
 ```
 
 | Keyword | Meaning                               |
@@ -162,7 +141,9 @@ HENCE
     PARTY buyer
     MUST `pay invoice`
     WITHIN 30
-LEST `seller may cancel order`
+    HENCE FULFILLED
+    LEST BREACH
+LEST BREACH
 ```
 
 This creates a chain: if the seller delivers, the buyer must pay.
@@ -171,33 +152,14 @@ This creates a chain: if the seller delivers, the buyer must pay.
 
 ## Complete Example
 
-Let's put it all together with a realistic example:
+[module-1-examples.l4](module-1-examples.l4)
 
-```l4
--- Define the type first
-DECLARE RegisteredCharity
-    HAS name IS A STRING
-        status IS A STRING
-        income IS A NUMBER
+Included are:
 
--- Define an example charity
-testCharity MEANS RegisteredCharity
-    "Animal Welfare Society"
-    "Active"
-    50000
-
--- Define the obligation
-GIVEN charity IS A RegisteredCharity
-GIVETH A DEONTIC
-`annual return obligation` MEANS
-    IF charity's status EQUALS "Active"
-    THEN PARTY charity
-         MUST `file annual return`
-         WITHIN 60
-         HENCE FULFILLED
-         LEST `Commissioner may issue Required Steps Notice`
-    ELSE FULFILLED
-```
+- Type definitions for charities, actors, and actions
+- The annual return obligation with conditions and deadlines
+- A chained sale contract
+- Test data and `#TRACE` simulations
 
 ### Understanding GIVETH A DEONTIC
 
@@ -205,7 +167,7 @@ When a function returns an obligation (not just a value), we use `GIVETH A DEONT
 
 - `GIVETH A BOOLEAN` - returns true/false
 - `GIVETH A NUMBER` - returns a number
-- `GIVETH A DEONTIC` - returns an obligation
+- `GIVETH A DEONTIC Actor Action` - returns an obligation (specifying actor and action types)
 
 ---
 
@@ -217,10 +179,7 @@ Use `#EVAL` to test expressions:
 #EVAL testCharity's name
 -- Result: "Animal Welfare Society"
 
-#EVAL testCharity's status EQUALS "Active"
--- Result: TRUE
-
-#EVAL testCharity's income > 10000
+#EVAL testCharity's status EQUALS Active
 -- Result: TRUE
 ```
 
@@ -253,14 +212,10 @@ The result shows whether the obligation was `FULFILLED` or `BREACH`.
 ```l4
 -- ❌ Wrong: Type not declared
 GIVEN charity IS A RegisteredCharity
-PARTY charity MUST `file return`
 
 -- ✅ Right: Declare the type first
 DECLARE RegisteredCharity
     HAS name IS A STRING
-
-GIVEN charity IS A RegisteredCharity
-PARTY charity MUST `file return`
 ```
 
 ### 2. Wrong Field Access
@@ -283,75 +238,19 @@ MUST file annual return
 MUST `file annual return`
 ```
 
----
-
 ## Exercises
 
 ### Exercise 1: Simple Obligation
 
 Write an L4 rule for: "An employee must submit a timesheet every week."
 
-<details>
-<summary>Solution</summary>
-
-```l4
-DECLARE Employee
-    HAS name IS A STRING
-
-GIVEN employee IS A Employee
-PARTY employee
-MUST `submit timesheet`
-WITHIN 7
-```
-
-</details>
-
 ### Exercise 2: Conditional Obligation
 
 Write an L4 rule for: "If a tenant is more than 14 days late on rent, the landlord may issue an eviction notice."
 
-<details>
-<summary>Solution</summary>
-
-```l4
-DECLARE Tenant
-    HAS name IS A STRING
-        daysLate IS A NUMBER
-
-GIVEN tenant IS A Tenant
-IF tenant's daysLate > 14
-PARTY Landlord
-MAY `issue eviction notice`
-```
-
-</details>
-
 ### Exercise 3: Chained Obligations
 
 Write L4 rules for: "The seller must deliver goods within 14 days. If delivered, the buyer must pay within 30 days."
-
-<details>
-<summary>Solution</summary>
-
-```l4
-DECLARE Person IS ONE OF Buyer, Seller
-DECLARE Action IS ONE OF `deliver goods`, `pay invoice`
-
-GIVETH DEONTIC Person Action
-`sale contract` MEANS
-    PARTY Seller
-    MUST `deliver goods`
-    WITHIN 14
-    HENCE
-        PARTY Buyer
-        MUST `pay invoice`
-        WITHIN 30
-        HENCE FULFILLED
-        LEST BREACH
-    LEST BREACH
-```
-
-</details>
 
 ---
 

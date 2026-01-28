@@ -29,4 +29,4 @@ USD, EUR, GBP, JPY, CHF, CAD, AUD, CNY, HKD, SGD, INR, BRL, MXN, SEK, NZD, KRW
 
 ### Example: Currency Operations
 
-[currency-example.l4](currency-example.l4).
+[currency-example.l4](currency-example.l4)

@@ -11,7 +11,7 @@ L4 operators are organized into categories:
 - **Logical** - Boolean operations (AND, OR, NOT, IMPLIES)
 - **String** - Text manipulation (CONCAT, APPEND)
 - **List** - List construction and manipulation (FOLLOWED BY, EMPTY)
-- **Temporal** - Time-based operations (AT, WITHIN, STARTING)
+- **Temporal** - Time-based operations (AT, WITHIN)
 
 ---
 
@@ -51,7 +51,6 @@ Mathematical operations on numbers.
 ### Modulo
 
 - **Keyword:** MODULO
-- **Symbol:** `%` (reserved)
 - **Type:** `NUMBER -> NUMBER -> NUMBER`
 - **Example:** `17 MODULO 5` → `2`
 - **Note:** Remainder after division
@@ -110,8 +109,8 @@ Boolean operations for conditions and logic.
 
 ### Conjunction
 
-- **Keyword:** AND
-- **Symbol:** `&&`
+- **Keyword:** [AND](AND.md)
+- **Symbol:** `&&` / `...`
 - **Type:** `BOOLEAN -> BOOLEAN -> BOOLEAN`
 - **Example:** `TRUE AND FALSE` → `FALSE`
 - **Truth table:**
@@ -122,8 +121,8 @@ Boolean operations for conditions and logic.
 
 ### Disjunction
 
-- **Keyword:** OR
-- **Symbol:** `||`
+- **Keyword:** [OR](OR.md)
+- **Symbol:** `||` \ `..`
 - **Type:** `BOOLEAN -> BOOLEAN -> BOOLEAN`
 - **Example:** `TRUE OR FALSE` → `TRUE`
 - **Truth table:**
@@ -134,17 +133,30 @@ Boolean operations for conditions and logic.
 
 ### Negation
 
-- **Keyword:** NOT
+- **Keyword:** [NOT](NOT.md)
 - **Type:** `BOOLEAN -> BOOLEAN`
 - **Example:** `NOT TRUE` → `FALSE`
 
 ### Implication
 
-- **Keyword:** IMPLIES
+- **Keyword:** [IMPLIES](IMPLIES.md)
 - **Symbol:** `=>`
 - **Type:** `BOOLEAN -> BOOLEAN -> BOOLEAN`
 - **Example:** `FALSE IMPLIES TRUE` → `TRUE`
 - **Note:** `p IMPLIES q` is equivalent to `NOT p OR q`
+
+### Exception
+
+- **Keyword:** [UNLESS](UNLESS.md)
+- **Type:** `BOOLEAN -> BOOLEAN -> BOOLEAN`
+- **Example:** `TRUE UNLESS FALSE` → `TRUE`
+- **Note:** `p UNLESS q` is equivalent to `p AND NOT q`
+- **Precedence:** Binds looser than OR (applies to entire expression)
+- **Truth table:**
+  - `TRUE UNLESS TRUE` → `FALSE`
+  - `TRUE UNLESS FALSE` → `TRUE`
+  - `FALSE UNLESS TRUE` → `FALSE`
+  - `FALSE UNLESS FALSE` → `FALSE`
 
 ---
 
@@ -194,30 +206,14 @@ Time-based operations for dates and deadlines.
 ### At
 
 - **Keyword:** AT
-- **Type:** Varies by context
+- **Type:** Used during tracing of regulative statements to track points in time
 - **Example:** `event AT date`
-- **Note:** Specifies point in time
 
 ### Within
 
 - **Keyword:** WITHIN
-- **Type:** Time duration constraint
+- **Type:** Time duration constraint in regulative statements
 - **Example:** `PARTY MUST DO action WITHIN 30 DAYS`
-- **Note:** Temporal deadline
-
-### Starting
-
-- **Keyword:** STARTING
-- **Type:** Time reference
-- **Example:** `STARTING FROM date`
-- **Note:** Beginning of time period
-
-### Followed
-
-- **Keywords:** FOLLOWED (temporal sequence)
-- **Type:** Event sequencing
-- **Example:** `event1 FOLLOWED event2`
-- **Note:** Different from list cons FOLLOWED BY
 
 ---
 
@@ -232,7 +228,8 @@ Operators are evaluated in the following order (highest to lowest precedence):
 5. **Comparison** (EQUALS, GREATER THAN, LESS THAN, etc.)
 6. **Logical AND**
 7. **Logical OR**
-8. **IMPLIES** (lowest)
+8. **UNLESS** (exception clause)
+9. **IMPLIES** (lowest)
 
 Use parentheses `()` to override precedence.
 
@@ -294,7 +291,7 @@ Implicit operators using punctuation:
 - **`...`** (ellipsis) - Implicit AND
 - **`..`** (double dot) - Implicit OR
 
-See the syntax reference for details.
+**Example:** [asyndetic-example.l4](asyndetic-example.l4)
 
 ### Genitive
 
@@ -329,24 +326,6 @@ Both are equivalent and can be mixed.
 ## See Also
 
 - **[GLOSSARY](../GLOSSARY.md)** - All operators indexed
-- **[Keywords](../keywords/README.md)** - Operator keywords
+- **[Functions](../functions/README.md)** - Function keywords
 - **[Types](../types/README.md)** - Types used with operators
 - **[Syntax](../syntax/README.md)** - Operator syntax rules
-
----
-
-## Examples
-
-Operator examples are included as `.l4` files in this directory.
-
----
-
-## Contributing
-
-To add operator documentation:
-
-1. Check [Lexer.hs](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/src/L4/Lexer.hs) for operators
-2. Add examples as `.l4` files in this directory
-3. Document textual and symbolic forms
-4. Include type signatures
-5. Submit pull request

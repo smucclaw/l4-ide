@@ -149,17 +149,6 @@ Copy from line above using `^`.
 
 ---
 
-### Asyndetic
-
-Implicit operators using punctuation.
-
-**Ellipsis** (`...`) - Implicit AND  
-**Double Dot** (`..`) - Implicit OR
-
-**Example:** [asyndetic-example.l4](asyndetic-example.l4)
-
----
-
 ### Genitive
 
 Record field access using `'s`.
@@ -317,5 +306,5 @@ Example: `{- Block comment -}`
 ## See Also
 
 - **[GLOSSARY](../GLOSSARY.md)** - Complete feature index
-- **[Keywords](../keywords/README.md)** - Language keywords
+- **[Functions](../functions/README.md)** - Function keywords
 - **[Specifications](https://github.com/smucclaw/l4-ide/tree/main/specs)** - Technical specifications

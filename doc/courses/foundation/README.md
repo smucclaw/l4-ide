@@ -130,11 +130,7 @@ Once you complete the Foundation Course, you can:
 2. **[Tutorials](../../tutorials/README.md)** - Task-focused guides for specific goals
 3. **[Reference](../../reference/README.md)** - Look up specific language features
 
----
-
-## Example Files
-
-All code examples from this course are available in the repository:
+Additional examples in the repository:
 
 - `jl4/examples/legal/` - Real-world legal examples
 - `jl4/examples/ok/` - Working code samples

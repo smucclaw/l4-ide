@@ -19,7 +19,7 @@ Converts a value to its string representation.
 
 **Example:**
 
-See [coercion-example.l4](coercion-example.l4).
+[coercion-example.l4](coercion-example.l4)
 
 ---
 
@@ -117,6 +117,6 @@ All coercion functions are **deterministic and locale-independent**. This ensure
 
 ## See Also
 
-- **[Types](../types/README.md)** - Type system documentation
-- **[Keywords](../keywords/README.md)** - Language keywords
-- **[Libraries](README.md)** - Core libraries
+- **[Types](README.md)** - Type system documentation
+- **[Functions](../functions/README.md)** - Function keywords
+- **[Libraries](../libraries/README.md)** - Core libraries

@@ -31,6 +31,6 @@ Mathematical functions beyond basic arithmetic. Provides safe wrappers around nu
 
 ### Example: Math Functions
 
-[math-example.l4](math-example.l4).
+[math-example.l4](math-example.l4)
 
 **See [math.l4](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/libraries/math.l4) source for all functions.**

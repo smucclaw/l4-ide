@@ -1,6 +1,6 @@
 # Module A2: Cross-Cutting Concerns
 
-In this module, you'll learn patterns for concerns that span multiple rules: timing, notices, appeals, and escalation.
+In this module, you'll learn patterns for concerns that span multiple rules: timing, notices, appeals, and escalation. Find a full working example at the end.
 
 ## Learning Objectives
 
@@ -132,7 +132,8 @@ GIVETH A DEONTIC Actor Action
         LEST
             PARTY regulator
             MAY consequenceAction
-            HENCE BREACH BY regulated
+            HENCE BREACH BY regulated BECAUSE "failed to cure violation"
+    -- If notice not issued, no further action required
 ```
 
 ### Real Example: Required Steps Notice
@@ -155,7 +156,7 @@ GIVETH A DEONTIC Actor Action
     -- Commissioner issues notice
     PARTY CommissionerActor
     MUST `serve Required Steps Notice`
-    HENCE
+    HENCE (
         -- Charity must comply
         PARTY CharityActor charity
         MUST `take required steps` notice
@@ -166,12 +167,12 @@ GIVETH A DEONTIC Actor Action
             MUST `publish compliance`
             WITHIN 14
             HENCE FULFILLED
-            LEST BREACH BY CommissionerActor
+            LEST BREACH BY CommissionerActor BECAUSE "failed to publish compliance"
         LEST
             -- If not complied, Commissioner MAY deregister
             PARTY CommissionerActor
             MAY `deregister charity`
-            HENCE FULFILLED
+        )
     LEST BREACH BY CommissionerActor BECAUSE "failed to serve notice"
 ```
 
@@ -203,7 +204,7 @@ GIVETH A DEONTIC Actor Action
         MUST `determine appeal`
         WITHIN 90  -- Typical statutory deadline
         HENCE FULFILLED
-        LEST BREACH BY AppealBody
+        LEST BREACH BY AppealBody BECAUSE "failed to determine appeal in time"
 ```
 
 ### Appeal with Suspension Effect
@@ -219,42 +220,38 @@ GIVETH A DEONTIC Actor Action
     MAY `lodge appeal against` decision
     WITHIN appealDeadline
     HENCE
-        -- Original decision is suspended
-        `decision suspended` decision
-        RAND
         -- Appeal must be determined
         PARTY AppealBody
         MUST `determine appeal against` decision
         WITHIN 90
         HENCE FULFILLED
-        LEST BREACH
+        LEST BREACH BY AppealBody BECAUSE "failed to determine appeal"
 ```
 
 ### Real Example: Charity Decision Appeals
 
 ```l4
--- Article 33: Appeal to Royal Court
+-- Article 33: Appeal Commissioner decision to Royal Court
 
 GIVEN charity IS A RegisteredCharity
       decision IS A CommissionerDecision
 GIVETH A DEONTIC Actor Action
 `appeal commissioner decision` MEANS
     PARTY CharityActor charity
-    MAY `appeal to Royal Court` decision
+    MAY `hear appeal` decision
     WITHIN 21  -- 21 days from notification
     HENCE
         PARTY RoyalCourt
         MUST `hear appeal` decision
-        -- No statutory deadline for hearing
-        HENCE
-            CONSIDER `court decision`
-            WHEN Upheld THEN
-                `original decision takes effect`
-            WHEN Quashed THEN
-                `decision has no effect`
-            WHEN Varied newDecision THEN
-                `varied decision takes effect` newDecision
-        LEST BREACH
+        -- No statutory deadline for hearing in original law
+        HENCE CONSIDER `court decision`
+                WHEN Upheld THEN
+                    `original decision takes effect`
+                WHEN Quashed THEN
+                    `decision has no effect`
+                WHEN Varied newDecision THEN
+                    `varied decision takes effect` newDecision
+        LEST BREACH BY RoyalCourt BECAUSE "failed to hear appeal"
 ```
 
 ---
@@ -272,7 +269,7 @@ GIVEN subject IS A Actor
 GIVETH A DEONTIC Actor Action
 `escalation chain` MEANS
     -- Level 1: Warning
-    PARTY Regulator
+    PARTY RegulatoryBody
     MAY `issue warning`
     HENCE
         PARTY subject
@@ -281,7 +278,7 @@ GIVETH A DEONTIC Actor Action
         HENCE FULFILLED
         LEST
             -- Level 2: Fine
-            PARTY Regulator
+            PARTY RegulatoryBody
             MAY `impose fine`
             HENCE
                 PARTY subject
@@ -290,7 +287,7 @@ GIVETH A DEONTIC Actor Action
                 HENCE FULFILLED
                 LEST
                     -- Level 3: Suspension
-                    PARTY Regulator
+                    PARTY RegulatoryBody
                     MAY `suspend registration`
                     HENCE
                         PARTY subject
@@ -299,7 +296,7 @@ GIVETH A DEONTIC Actor Action
                         HENCE FULFILLED
                         LEST
                             -- Level 4: Removal
-                            PARTY Regulator
+                            PARTY RegulatoryBody
                             MUST `remove from register`
                             HENCE BREACH
 ```
@@ -310,23 +307,30 @@ Sometimes serious violations skip early steps:
 
 ```l4
 GIVEN violation IS A Violation
+      subject IS A Actor
 GIVETH A DEONTIC Actor Action
 `enforcement response` MEANS
     IF violation's severity EQUALS Critical
     THEN
-        -- Immediate suspension
-        PARTY Regulator
+        -- Immediate suspension for critical violations
+        PARTY RegulatoryBody
         MUST `suspend immediately`
-        HENCE `remediation required`
+        HENCE FULFILLED
+        LEST BREACH BY RegulatoryBody BECAUSE "failed to suspend critical violation"
     ELSE IF violation's severity EQUALS Serious
-    THEN
-        -- Skip warning, go to fine
-        PARTY Regulator
-        MAY `impose fine`
-        HENCE `escalation chain level 2`
-    ELSE
-        -- Start with warning
-        `escalation chain`
+         THEN
+             -- Skip warning for serious violations, go straight to fine
+             PARTY RegulatoryBody
+             MAY `impose fine`
+             HENCE
+                 PARTY subject
+                 MUST `pay fine and comply`
+                 WITHIN 14
+                 HENCE FULFILLED
+                 LEST BREACH BY subject BECAUSE "failed to pay fine"
+         ELSE
+             -- Start with warning for minor violations
+             `escalation chain` subject
 ```
 
 ---
@@ -336,7 +340,7 @@ GIVETH A DEONTIC Actor Action
 Grace periods delay consequences:
 
 ```l4
--- Payment with grace period
+-- Payment with grace period before late fee applies
 GIVEN debtor IS A Actor
       amount IS A NUMBER
       dueDate IS A NUMBER
@@ -349,45 +353,18 @@ GIVETH A DEONTIC Actor Action
     WITHIN dueDate
     HENCE FULFILLED
     LEST
-        -- Grace period before late fee
+        -- Grace period with late fee
         PARTY debtor
-        MUST `pay with late fee` (amount * (1 + lateFeePct))
-        WITHIN (dueDate + gracePeriod)
+        MUST `pay with late fee` lateAmount
+        WITHIN graceDeadline
         HENCE FULFILLED
-        LEST BREACH
+        LEST BREACH BY debtor BECAUSE "failed to pay within grace period"
+    WHERE
+        lateAmount MEANS amount * (1 + lateFeePct)
+        graceDeadline MEANS dueDate + gracePeriod
 ```
 
 ---
-
-## Composition: Combining Patterns
-
-Real procedures combine multiple patterns:
-
-```l4
--- Complete regulatory procedure:
--- 1. Violation detected
--- 2. Warning issued (notice)
--- 3. Cure period
--- 4. If not cured, penalty with grace period
--- 5. If not paid, appeal right
--- 6. If no appeal or appeal dismissed, enforcement
-
-GIVEN subject IS A Actor
-      violation IS A Violation
-GIVETH A DEONTIC Actor Action
-`full enforcement procedure` MEANS
-    -- Phase 1: Notice and Cure
-    `notice and cure` Regulator subject (violation's description) 30 `impose penalty`
-    WHERE
-        -- Phase 2: Penalty with Grace
-        `impose penalty` MEANS
-            PARTY Regulator
-            MUST `issue penalty notice` (violation's penalty)
-            HENCE
-                `payment with grace` subject (violation's penalty) 14 10 0.1
-                RAND
-                `right to appeal` subject 21
-```
 
 ---
 
@@ -407,16 +384,20 @@ Encode this procedure:
 <summary>Solution</summary>
 
 ```l4
-DECLARE LicenceHolder IS ONE OF Holder
+-- Separate party type for licence procedures
+DECLARE LicenceParty IS ONE OF
+    Holder HAS `the holder name` IS A STRING
+
+-- Licence actions
 DECLARE LicenceAction IS ONE OF
     `apply for renewal`
     `apply with late fee`
     `apply for reinstatement`
-    `lodge appeal`
+    `lodge licence appeal`
 
-GIVEN holder IS A LicenceHolder
+GIVEN holder IS A LicenceParty
       expiryDate IS A NUMBER
-GIVETH A DEONTIC LicenceHolder LicenceAction
+GIVETH A DEONTIC LicenceParty LicenceAction
 `licence renewal procedure` MEANS
     PARTY holder
     MUST `apply for renewal`
@@ -426,29 +407,30 @@ GIVETH A DEONTIC LicenceHolder LicenceAction
         -- Grace period with late fee
         PARTY holder
         MUST `apply with late fee`
-        WITHIN (expiryDate - 30 + 14)  -- 14 day grace
+        WITHIN (expiryDate - 30 + 14)  -- 14 day grace period
         HENCE FULFILLED
         LEST
-            -- Suspension
-            `licence suspended`
-            RAND
-            -- Reinstatement period
+            -- Reinstatement period after suspension
             PARTY holder
             MAY `apply for reinstatement`
             WITHIN 60
             HENCE FULFILLED
             LEST
                 -- Revocation with appeal right
-                `licence revoked`
-                RAND
                 PARTY holder
-                MAY `lodge appeal`
+                MAY `lodge licence appeal`
                 WITHIN 21
-                HENCE `appeal procedure`
-                -- If no appeal, final
+                HENCE FULFILLED
+                -- If no appeal filed, licence is revoked
 ```
 
 </details>
+
+---
+
+## Full Example
+
+[module-a2-cross-cutting-examples.l4](module-a2-cross-cutting-examples.l4)
 
 ---
 

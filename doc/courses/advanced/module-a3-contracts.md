@@ -1,6 +1,6 @@
 # Module A3: Contracts in Depth
 
-In this module, you'll learn advanced contract modeling including complex payment terms, recursive obligations, and penalty structures.
+In this module, you'll learn advanced contract modeling including complex payment terms, recursive obligations, and penalty structures. Find the full working example at the bottom.
 
 ## Learning Objectives
 
@@ -45,16 +45,16 @@ DECLARE Money
 -- Currency constructors
 GIVEN n IS A NUMBER
 GIVETH A Money
-USD MEANS Money n "USD"
+USD MEANS Money WITH amount IS n, currency IS "USD"
 
 GIVEN n IS A NUMBER
 GIVETH A Money
-SGD MEANS Money n "SGD"
+SGD MEANS Money WITH amount IS n, currency IS "SGD"
 
 -- Party types
 DECLARE Party IS ONE OF
-    BorrowerParty HAS borrower IS A Borrower
-    LenderParty HAS lender IS A Lender
+    BorrowerParty HAS `the borrower` IS A Borrower
+    LenderParty HAS `the lender` IS A Lender
 
 -- Borrower can be individual or company
 DECLARE Borrower IS ONE OF
@@ -87,12 +87,14 @@ DECLARE LoanTerms
         penaltyTerms IS A PenaltyTerms
 
 -- Example loan
-exampleLoan MEANS LoanTerms
-    (USD 25000)          -- Principal
-    0.15                 -- 15% annual interest
-    12                   -- 12 monthly installments
-    30                   -- Default after 30 days late
-    (PenaltyTerms 0.05 10)  -- 5% penalty, 10-day grace
+exampleLoan MEANS LoanTerms WITH
+    principal            IS USD 25000
+    annualInterestRate   IS 0.15             -- 15% annual interest
+    numberOfInstallments IS 12               -- 12 monthly installments
+    defaultAfterDays     IS 30               -- Default after 30 days late
+    penaltyTerms         IS PenaltyTerms WITH
+                              interestRate    IS 0.05   -- 5% penalty
+                              gracePeriodDays IS 10
 ```
 
 ### Step 3: Calculate Payment Schedule
@@ -103,27 +105,29 @@ GIVEN terms IS A LoanTerms
 GIVETH A NUMBER
 `monthly rate` MEANS terms's annualInterestRate / 12
 
+-- Power function for calculations
+GIVEN base IS A NUMBER
+      exp IS A NUMBER
+GIVETH A NUMBER
+`power` MEANS
+    IF exp = 0
+    THEN 1
+    ELSE IF exp = 1
+         THEN base
+         ELSE base * `power` base (exp - 1)
+
 -- Monthly payment using amortization formula
 -- PMT = P × (r(1+r)^n) / ((1+r)^n - 1)
 GIVEN terms IS A LoanTerms
 GIVETH A Money
 `monthly payment amount` MEANS
-    Money payment (terms's principal's currency)
+    Money WITH amount IS payment, currency IS terms's principal's currency
     WHERE
         p MEANS terms's principal's amount
         r MEANS `monthly rate` terms
         n MEANS terms's numberOfInstallments
         compoundFactor MEANS `power` (1 + r) n
         payment MEANS p * (r * compoundFactor) / (compoundFactor - 1)
-
--- Power function
-GIVEN base IS A NUMBER
-      exp IS A NUMBER
-GIVETH A NUMBER
-`power` MEANS
-    IF exp = 0 THEN 1
-    ELSE IF exp = 1 THEN base
-    ELSE base * (`power` base (exp - 1))
 ```
 
 ---
@@ -138,39 +142,6 @@ DECLARE LoanAction IS ONE OF
     `pay installment` HAS recipient IS A Lender
                           amount IS A Money
 
--- The recursive payment obligation
-GIVEN terms IS A LoanTerms
-      borrower IS A Borrower
-      lender IS A Lender
-      outstanding IS A Money  -- Remaining balance
-GIVETH A DEONTIC Party LoanAction
-`payment obligation` MEANS
-    IF outstanding's amount > 0
-    THEN
-        PARTY BorrowerParty borrower
-        MUST `pay installment` lender paymentDue
-            PROVIDED `is valid payment` transferAmount paymentDue
-        WITHIN nextDueDate
-        HENCE
-            -- Recursive call with reduced balance
-            `payment obligation` terms borrower lender newOutstanding
-        LEST
-            -- Late: apply penalty
-            `late payment obligation` terms borrower lender outstanding
-    ELSE FULFILLED
-    WHERE
-        -- Calculate next payment
-        paymentDue MEANS `calculate next payment` terms outstanding
-        nextDueDate MEANS `calculate due date` terms outstanding
-
-        -- After payment, reduce outstanding
-        newOutstanding MEANS Money
-            (outstanding's amount - transferAmount's amount)
-            (outstanding's currency)
-
-        -- Variable from the action
-        transferAmount MEANS `Amount Transferred`  -- Bound by PROVIDED
-
 -- Validate payment amount
 GIVEN paid IS A Money
       expected IS A Money
@@ -178,51 +149,84 @@ GIVETH A BOOLEAN
 `is valid payment` MEANS
     paid's currency EQUALS expected's currency
     AND paid's amount >= (expected's amount - 0.05)  -- Allow small rounding
+
+-- The recursive payment obligation
+GIVEN terms IS A LoanTerms
+      debtorParty IS A Borrower
+      creditorParty IS A Lender
+      outstanding IS A Money  -- Remaining balance
+GIVETH A DEONTIC Party LoanAction
+`payment obligation` MEANS
+    IF outstanding's amount > 0
+    THEN
+        PARTY BorrowerParty debtorParty
+        MUST `pay installment` EXACTLY creditorParty
+                               amountPaid PROVIDED amountPaid's amount >= paymentDue's amount
+        WITHIN nextDueDate
+        HENCE
+            -- Recursive call with reduced balance
+            `payment obligation` terms debtorParty creditorParty newOutstanding
+        LEST
+            -- Late: apply penalty
+            `late payment handling` terms debtorParty creditorParty outstanding
+    ELSE FULFILLED
+    WHERE
+        -- Calculate next payment
+        paymentDue MEANS `calculate next payment` terms outstanding
+        nextDueDate MEANS `calculate due date` terms outstanding
+        -- After payment, reduce outstanding (simplified)
+        newOutstanding MEANS Money WITH
+            amount   IS outstanding's amount - paymentDue's amount
+            currency IS outstanding's currency
 ```
 
 ### Late Payment with Penalty
 
 ```l4
 GIVEN terms IS A LoanTerms
-      borrower IS A Borrower
-      lender IS A Lender
+      debtorParty IS A Borrower
+      creditorParty IS A Lender
       outstanding IS A Money
 GIVETH A DEONTIC Party LoanAction
-`late payment obligation` MEANS
+`late payment handling` MEANS
     -- Grace period with penalty interest
-    PARTY BorrowerParty borrower
-    MUST `pay installment` lender paymentWithPenalty
-        PROVIDED `is valid payment` transferAmount paymentWithPenalty
+    PARTY BorrowerParty debtorParty
+    MUST `pay installment` EXACTLY creditorParty
+                           amountPaid PROVIDED amountPaid's amount >= paymentWithPenalty's amount
     WITHIN (nextDueDate + terms's penaltyTerms's gracePeriodDays)
     HENCE
         -- Continue with remaining payments
-        `payment obligation` terms borrower lender newOutstanding
+        `payment obligation` terms debtorParty creditorParty newOutstanding
     LEST
         -- Default: full balance due
-        `default obligation` terms borrower lender outstanding
+        `default handling` terms debtorParty creditorParty outstanding
     WHERE
         basePayment MEANS `calculate next payment` terms outstanding
         penaltyAmount MEANS basePayment's amount * terms's penaltyTerms's interestRate
-        paymentWithPenalty MEANS Money
-            (basePayment's amount + penaltyAmount)
-            (basePayment's currency)
+        paymentWithPenalty MEANS Money WITH
+            amount   IS basePayment's amount + penaltyAmount
+            currency IS basePayment's currency
         nextDueDate MEANS `calculate due date` terms outstanding
+        newOutstanding MEANS Money WITH
+            amount   IS outstanding's amount - paymentWithPenalty's amount
+            currency IS outstanding's currency
 ```
 
 ### Default: Full Balance Due
 
 ```l4
 GIVEN terms IS A LoanTerms
-      borrower IS A Borrower
-      lender IS A Lender
+      debtorParty IS A Borrower
+      creditorParty IS A Lender
       outstanding IS A Money
 GIVETH A DEONTIC Party LoanAction
-`default obligation` MEANS
-    PARTY BorrowerParty borrower
-    MUST `pay installment` lender outstanding  -- Full balance
+`default handling` MEANS
+    PARTY BorrowerParty debtorParty
+    MUST `pay installment` EXACTLY creditorParty
+                           EXACTLY outstanding  -- Full balance required
     WITHIN terms's defaultAfterDays
     HENCE FULFILLED
-    LEST BREACH BY (BorrowerParty borrower) BECAUSE "loan default"
+    LEST BREACH BY (BorrowerParty debtorParty) BECAUSE "loan default"
 ```
 
 ---
@@ -232,10 +236,14 @@ GIVETH A DEONTIC Party LoanAction
 ### Happy Path: All Payments On Time
 
 ```l4
-#TRACE `payment obligation` exampleLoan theBorrower theLender (USD 25000) AT 0 WITH
-    PARTY (BorrowerParty theBorrower) DOES `pay installment` theLender (USD 2256.46) AT 30
-    PARTY (BorrowerParty theBorrower) DOES `pay installment` theLender (USD 2256.46) AT 60
-    PARTY (BorrowerParty theBorrower) DOES `pay installment` theLender (USD 2256.46) AT 90
+-- Define test parties
+aliceBorrower MEANS IndividualBorrower (Person WITH name IS "Alice")
+bobLender MEANS IndividualLender (Person WITH name IS "Bob")
+
+#TRACE `payment obligation` exampleLoan aliceBorrower bobLender (USD 25000) AT 0 WITH
+    PARTY (BorrowerParty aliceBorrower) DOES `pay installment` bobLender (USD 2256.46) AT 30
+    PARTY (BorrowerParty aliceBorrower) DOES `pay installment` bobLender (USD 2256.46) AT 60
+    PARTY (BorrowerParty aliceBorrower) DOES `pay installment` bobLender (USD 2256.46) AT 90
     -- ... continue for all 12 payments
 ```
 
@@ -243,18 +251,18 @@ GIVETH A DEONTIC Party LoanAction
 
 ```l4
 -- First payment on time, second payment late (in grace period)
-#TRACE `payment obligation` exampleLoan theBorrower theLender (USD 25000) AT 0 WITH
-    PARTY (BorrowerParty theBorrower) DOES `pay installment` theLender (USD 2256.46) AT 30
+#TRACE `payment obligation` exampleLoan aliceBorrower bobLender (USD 25000) AT 0 WITH
+    PARTY (BorrowerParty aliceBorrower) DOES `pay installment` bobLender (USD 2256.46) AT 30
     -- Second payment late with penalty
-    PARTY (BorrowerParty theBorrower) DOES `pay installment` theLender (USD 2369.28) AT 75
+    PARTY (BorrowerParty aliceBorrower) DOES `pay installment` bobLender (USD 2369.28) AT 75
 ```
 
 ### Default Scenario
 
 ```l4
 -- Borrower stops paying
-#TRACE `payment obligation` exampleLoan theBorrower theLender (USD 25000) AT 0 WITH
-    PARTY (BorrowerParty theBorrower) DOES `pay installment` theLender (USD 2256.46) AT 30
+#TRACE `payment obligation` exampleLoan aliceBorrower bobLender (USD 25000) AT 0 WITH
+    PARTY (BorrowerParty aliceBorrower) DOES `pay installment` bobLender (USD 2256.46) AT 30
     -- No more payments... contract should reach BREACH
 ```
 
@@ -267,12 +275,14 @@ Some contracts involve more than two parties:
 ```l4
 -- Escrow arrangement: Buyer, Seller, Escrow Agent
 DECLARE EscrowParty IS ONE OF Buyer, Seller, EscrowAgent
+
 DECLARE EscrowAction IS ONE OF
     `deposit funds` HAS amount IS A Money
     `deliver goods`
     `release funds to seller`
     `return funds to buyer`
 
+GIVEN amount IS A Money
 GIVETH A DEONTIC EscrowParty EscrowAction
 `escrow arrangement` MEANS
     -- Buyer deposits funds
@@ -290,15 +300,15 @@ GIVETH A DEONTIC EscrowParty EscrowAction
             MUST `release funds to seller`
             WITHIN 3
             HENCE FULFILLED
-            LEST BREACH BY EscrowAgent
+            LEST BREACH BY EscrowAgent BECAUSE "escrow agent failed to release funds"
         LEST
             -- Seller didn't deliver, return funds
             PARTY EscrowAgent
             MUST `return funds to buyer`
             WITHIN 3
-            HENCE BREACH BY Seller
-            LEST BREACH BY EscrowAgent
-    LEST BREACH BY Buyer
+            HENCE BREACH BY Seller BECAUSE "seller failed to deliver goods"
+            LEST BREACH BY EscrowAgent BECAUSE "escrow agent failed to return funds"
+    LEST BREACH BY Buyer BECAUSE "buyer failed to deposit funds"
 ```
 
 ---
@@ -308,12 +318,22 @@ GIVETH A DEONTIC EscrowParty EscrowAction
 When multiple obligations must all be fulfilled:
 
 ```l4
+-- Types for service contract examples
+DECLARE ServiceParty IS ONE OF Provider, Client
+
+DECLARE ContractAction IS ONE OF
+    `deliver service`
+    `provide documentation`
+    `ship goods`
+    `arrange pickup`
+    `make payment`
+
 -- Service contract: Provider must deliver service AND provide documentation
-GIVETH A DEONTIC Party ContractAction
+GIVETH A DEONTIC ServiceParty ContractAction
 `service delivery` MEANS
-    (PARTY Provider MUST `deliver service` WITHIN 30 HENCE FULFILLED LEST BREACH)
+    (PARTY Provider MUST `deliver service` WITHIN 30 HENCE FULFILLED LEST BREACH BY Provider BECAUSE "failed to deliver service")
     RAND
-    (PARTY Provider MUST `provide documentation` WITHIN 30 HENCE FULFILLED LEST BREACH)
+    (PARTY Provider MUST `provide documentation` WITHIN 30 HENCE FULFILLED LEST BREACH BY Provider BECAUSE "failed to provide documentation")
 ```
 
 Both obligations must be fulfilled for the contract to be fulfilled.
@@ -326,11 +346,11 @@ When fulfilling any one obligation is sufficient:
 
 ```l4
 -- Delivery options: Ship OR pickup
-GIVETH A DEONTIC Party ContractAction
+GIVETH A DEONTIC ServiceParty ContractAction
 `delivery options` MEANS
-    (PARTY Seller MUST `ship goods` WITHIN 14 HENCE `payment due`)
+    (PARTY Provider MUST `ship goods` WITHIN 14 HENCE FULFILLED LEST BREACH BY Provider BECAUSE "failed to ship")
     ROR
-    (PARTY Seller MUST `arrange pickup` WITHIN 7 HENCE `payment due`)
+    (PARTY Provider MUST `arrange pickup` WITHIN 7 HENCE FULFILLED LEST BREACH BY Provider BECAUSE "failed to arrange pickup")
 ```
 
 Either shipping or arranging pickup fulfills the delivery obligation.
@@ -343,21 +363,26 @@ Either shipping or arranging pickup fulfills the delivery obligation.
 
 ```l4
 -- Credit card style: Pay minimum or full balance
+DECLARE CardParty IS ONE OF Cardholder, Bank
+
+DECLARE CardAction IS ONE OF
+    `pay` HAS `payment amount` IS A NUMBER
+
 GIVEN balance IS A Money
       minimumPct IS A NUMBER
-GIVETH A DEONTIC Party Action
+GIVETH A DEONTIC CardParty CardAction
 `credit payment` MEANS
     PARTY Cardholder
-    MUST `pay` amount PROVIDED amount >= minimum
+    MUST `pay` paidAmount PROVIDED paidAmount >= minimumPayment
     WITHIN 30
     HENCE
-        IF amount >= balance's amount
+        IF paidAmount >= balance's amount
         THEN FULFILLED  -- Paid in full
         ELSE `credit payment` newBalance minimumPct  -- Recurse with new balance
-    LEST BREACH
+    LEST BREACH BY Cardholder BECAUSE "missed credit card payment"
     WHERE
-        minimum MEANS balance's amount * minimumPct
-        newBalance MEANS Money (balance's amount - amount) (balance's currency)
+        minimumPayment MEANS balance's amount * minimumPct
+        newBalance MEANS Money WITH amount IS balance's amount - minimumPayment, currency IS balance's currency
 ```
 
 ### Milestone-Based Payment
@@ -369,8 +394,12 @@ DECLARE Milestone IS ONE OF
     Testing
     Delivery
 
+DECLARE MilestoneAction IS ONE OF
+    `complete milestone` HAS milestone IS A Milestone
+    `pay milestone` HAS milestone IS A Milestone
+
 GIVEN milestones IS A LIST OF Milestone
-GIVETH A DEONTIC Party Action
+GIVETH A DEONTIC ServiceParty MilestoneAction
 `milestone payments` MEANS
     CONSIDER milestones
     WHEN EMPTY THEN FULFILLED
@@ -383,9 +412,15 @@ GIVETH A DEONTIC Party Action
             MUST `pay milestone` m
             WITHIN 14
             HENCE `milestone payments` rest  -- Recurse
-            LEST BREACH BY Client
-        LEST BREACH BY Provider
+            LEST BREACH BY Client BECAUSE "client failed to pay milestone"
+        LEST BREACH BY Provider BECAUSE "provider failed to complete milestone"
 ```
+
+---
+
+### Full Example
+
+[module-a3-contracts-examples.l4](module-a3-contracts-examples.l4)
 
 ---
 
