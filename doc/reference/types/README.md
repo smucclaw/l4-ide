@@ -212,7 +212,9 @@ See [Built-ins](../builtins/README.md) and [coercions](coercions.md) for details
 
 ### Maybe and Nullability
 
-L4 uses MAYBE for optional values, not null. See [maybe-example.l4](maybe-example.l4) for usage patterns.
+L4 uses MAYBE for optional values, not null. 
+
+[maybe-example.l4](maybe-example.l4) for usage patterns.
 
 ---
 
@@ -220,19 +222,27 @@ L4 uses MAYBE for optional values, not null. See [maybe-example.l4](maybe-exampl
 
 ### Option Type Pattern
 
-Use MAYBE for nullable values. See prelude's `lookup` function \n\n[maybe-example.l4](maybe-example.l4)
+Use MAYBE for nullable values. See prelude's `lookup` function
+
+[maybe-example.l4](maybe-example.l4)
 
 ### Either for Errors
 
-Use EITHER for success/failure. [either-example.l4](either-example.l4)
+Use EITHER for success/failure.
+
+[either-example.l4](either-example.l4)
 
 ### Lists for Collections
 
-Use LIST for ordered data. See prelude's `sum` function \n\n[list-example.l4](list-example.l4)
+Use LIST for ordered data. See prelude's `sum` function
+
+[list-example.l4](list-example.l4)
 
 ### Records for Structured Data
 
-Use records for entities. [record-example.l4](record-example.l4)
+Use records for entities.
+
+[record-example.l4](record-example.l4)
 
 ---
 

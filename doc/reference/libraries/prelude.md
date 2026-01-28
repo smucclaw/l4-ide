@@ -136,6 +136,6 @@ The prelude can be imported into every L4 program with `IMPORT prelude` and prov
 
 ### Example: Using Prelude Functions
 
-\n\n[prelude-example.l4](prelude-example.l4)
+[prelude-example.l4](prelude-example.l4)
 
 **See [prelude.l4](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/libraries/prelude.l4) source for all functions.**

@@ -34,4 +34,4 @@ Legal entity type definitions for natural persons and corporate entities. Import
 
 ### Example: Legal Persons
 
-\n\n[legal-persons-example.l4](legal-persons-example.l4)
+[legal-persons-example.l4](legal-persons-example.l4)
