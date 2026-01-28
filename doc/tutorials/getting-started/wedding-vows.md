@@ -5,7 +5,7 @@ A fun introduction to regulative rules using wedding vows.
 **Audience:** Anyone new to regulative rules  
 **Prerequisites:** Basic L4 knowledge  
 **Time:** 20 minutes  
-**Goal:** Understand MUST, MAY, SHANT, HENCE, and LEST through a familiar example
+**Goal:** Understand MUST, MAY, SHANT, DO, HENCE, and LEST through a familiar example
 
 ---
 
@@ -38,7 +38,7 @@ DECLARE Action IS ONE OF
     `have and hold`
     `support`
     `care for`
-    abandon
+    `abandon`
     `be unfaithful`
 ```
 
@@ -76,7 +76,7 @@ GIVETH DEONTIC Person Action
 | ------------------------------ | ------------------------------------------------------------------------ |
 | `GIVETH DEONTIC Person Action` | This returns an obligation/permission involving these actors and actions |
 | `PARTY Spouse1`                | Spouse1 is the one with the obligation                                   |
-| `MUST \`exchange vows\``       | They must exchange vows                                                  |
+| `` `MUST `exchange vows` ``    | They must exchange vows                                                  |
 | `WITHIN 1`                     | Within 1 day (the wedding day)                                           |
 | `HENCE ...`                    | If they do, then Spouse2 must respond                                    |
 | `LEST BREACH`                  | If they don't, it's a breach                                             |
@@ -181,6 +181,7 @@ GIVETH DEONTIC Person Action
 | `MUST`  | Required action   | Must love and cherish   |
 | `MAY`   | Permitted action  | May have pets           |
 | `SHANT` | Prohibited action | Shall not be unfaithful |
+| `DO`    | Possible action   | enters the premise      |
 
 ---
 
