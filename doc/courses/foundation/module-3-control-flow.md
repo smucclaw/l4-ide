@@ -16,7 +16,10 @@ By the end of this module, you will be able to:
 
 ## Conditional Expressions
 
-The complete working examples are in [module-3-examples.l4](module-3-examples.l4).
+This is the complete working example to work along.
+
+[module-3-examples.l4](module-3-examples.l4)
+
 
 ### Basic IF/THEN/ELSE
 
@@ -247,8 +250,6 @@ DECIDE `the person is eligible for the position` IF
 ---
 
 ## Exercises
-
-Try creating your own L4 files based on these requirements. Use [module-3-examples.l4](module-3-examples.l4) as a reference.
 
 ### Exercise 1: Nested Conditional
 

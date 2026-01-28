@@ -23,7 +23,10 @@ We'll build a simplified charity registration system based on real legislation. 
 - Regulative obligations
 - Testing
 
-The complete working implementation is in **[module-6-examples.l4](module-6-examples.l4)**.
+The complete working implementation:
+
+[module-6-examples.l4](module-6-examples.l4)
+
 
 ### Requirements
 

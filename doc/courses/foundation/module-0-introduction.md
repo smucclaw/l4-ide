@@ -43,7 +43,7 @@ L4 code looks like a hybrid of legal text and programming. Here's a complete exa
 
 **Example:** [charity-obligation.l4](charity-obligation.l4)
 
-This reads almost like English, but with precise meaning:
+This may be a lot right now, but notice how it reads almost like English, but with precise meaning:
 
 - **DECLARE** - Defines what things look like (types)
 - **GIVEN** - Declares what entities are involved

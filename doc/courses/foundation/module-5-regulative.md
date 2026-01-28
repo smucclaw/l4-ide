@@ -37,7 +37,10 @@ A DEONTIC value represents an obligation, permission, or prohibition. It has:
 - **When** (WITHIN): The deadline
 - **Consequences** (HENCE/LEST): What happens next
 
-The complete working examples are in [module-5-examples.l4](module-5-examples.l4).
+The complete working example:
+
+[module-5-examples.l4](module-5-examples.l4)
+
 
 ### Defining Actor and Action Types
 
@@ -243,7 +246,7 @@ Result: `BREACH` (seller delivered late)
 
 ## Real-World Example: Wedding Vows
 
-See the wedding vows example in [module-5-examples.l4](module-5-examples.l4), which demonstrates:
+See the wedding vows example which demonstrates:
 
 - Mutual exchange of vows
 - Prohibitions (fidelity clause)
@@ -327,8 +330,6 @@ HENCE FULFILLED
 ---
 
 ## Exercises
-
-Try creating your own L4 files based on these requirements. Use [module-5-examples.l4](module-5-examples.l4) as a reference.
 
 ### Exercise 1: Simple Obligation
 

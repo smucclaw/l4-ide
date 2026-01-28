@@ -18,15 +18,15 @@ By the end of this module, you will be able to:
 
 Let's start with something every lawyer understands: a simple legal obligation. 
 
-**File annual return requirement Example:** "A registered charity must file an annual return."
+**The annual return obligation:** "A registered charity must file an annual return."
 
-The complete working example is in [module-1-examples.l4](module-1-examples.l4).
+The complete working example is at the end.
 
 In L4, we write this as:
 
 ```l4
 GIVEN charity IS A RegisteredCharity
-`File annual return requirement` MEANS
+`The annual return obligation` MEANS
     PARTY charity
     MUST `file annual return`
 ```
@@ -36,7 +36,7 @@ Let's break this down:
 | Code                                   | Meaning                                    |
 | -------------------------------------- | ------------------------------------------ |
 | `GIVEN charity IS A RegisteredCharity` | This rule applies to registered charities  |
-| `File annual return requirement` MEANS | The name of this rule                      |
+| `\`The annual return obligation\` MEANS` | The name of this rule                      |
 | `PARTY charity`                        | The charity is the one with the obligation |
 | `MUST`                                 | This creates a legal obligation            |
 | `\`file annual return\``               | This is what they must do                  |
@@ -72,9 +72,9 @@ Hint: You'll need to:
 Real legal rules have conditions. Let's add one:
 
 ```l4
-    IF charity's status EQUALS Active
-        PARTY charity
-        MUST `file annual return`
+IF charity's status EQUALS Active
+    PARTY charity
+    MUST `file annual return`
 ```
 
 The `IF` keyword adds a condition that must be true for the obligation to apply.
@@ -153,7 +153,9 @@ This creates a chain: if the seller delivers, the buyer must pay.
 
 ## Complete Example
 
-The complete working example is in [module-1-examples.l4](module-1-examples.l4). It includes:
+[module-1-examples.l4](module-1-examples.l4)
+
+Included are:
 
 - Type definitions for charities, actors, and actions
 - The annual return obligation with conditions and deadlines
@@ -237,11 +239,8 @@ MUST file annual return
 MUST `file annual return`
 ```
 
----
 
 ## Exercises
-
-Try creating your own L4 files based on these requirements. Use [module-1-examples.l4](module-1-examples.l4) as a reference.
 
 ### Exercise 1: Simple Obligation
 

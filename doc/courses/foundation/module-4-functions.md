@@ -16,7 +16,10 @@ By the end of this module, you will be able to:
 
 ## Function Basics
 
-The complete working examples are in [module-4-examples.l4](module-4-examples.l4).
+This is the complete working examples to work along.
+
+[module-4-examples.l4](module-4-examples.l4)
+
 
 ### The Structure of a Function
 
@@ -191,21 +194,7 @@ filter (GIVEN n YIELD n > 0) (LIST -1, 2, -3, 4)
 
 ---
 
-## Real-World Example: Loan Calculator
-
-For a complete real-world example, see the capstone module: [module-6-examples.l4](module-6-examples.l4).
-
----
-
-## Function Composition
-
-Build complex functions from simpler ones by defining helpers in WHERE blocks and calling other functions.
-
----
-
 ## Exercises
-
-Try creating your own L4 files based on these requirements. Use [module-4-examples.l4](module-4-examples.l4) as a reference.
 
 ### Exercise 1: Simple Function
 
