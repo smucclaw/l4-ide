@@ -65,6 +65,15 @@ DECIDE eligible IS
   AND NOT hasCriminalRecord
 ```
 
+## Asyndetic AND
+
+Implicit operators using punctuation.
+
+**Ellipsis** (`...`) - Implicit AND  
+
+**Example:** [asyndetic-example.l4](asyndetic-example.l4)
+
+
 ## Short-Circuit Evaluation
 
 AND evaluates lazily - if the first operand is FALSE, the second is not evaluated.

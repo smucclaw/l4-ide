@@ -50,6 +50,42 @@ log_verbose() {
     fi
 }
 
+# Convert a markdown heading to its anchor form
+# Rules: lowercase, spaces to hyphens, remove most special chars
+heading_to_anchor() {
+    local heading="$1"
+    echo "$heading" | \
+        tr '[:upper:]' '[:lower:]' | \
+        sed 's/ /-/g' | \
+        sed 's/[^a-z0-9_-]//g'
+}
+
+# Extract all valid anchors from a markdown file
+# Returns one anchor per line
+get_file_anchors() {
+    local file="$1"
+    
+    # Extract headings (lines starting with #)
+    grep -E '^#{1,6} ' "$file" 2>/dev/null | while IFS= read -r line; do
+        # Remove the # prefix and leading/trailing whitespace
+        heading=$(echo "$line" | sed -E 's/^#+ *//' | sed 's/ *$//')
+        heading_to_anchor "$heading"
+    done
+    
+    # Also extract explicit anchor targets: {#anchor-name} or <a name="anchor"> or <a id="anchor">
+    grep -oE '\{#[^}]+\}' "$file" 2>/dev/null | sed 's/{#//;s/}$//' || true
+    grep -oE '<a [^>]*(name|id)="[^"]+"' "$file" 2>/dev/null | sed 's/.*[name|id]="//;s/"$//' || true
+}
+
+# Check if an anchor exists in a file
+anchor_exists() {
+    local file="$1"
+    local anchor="$2"
+    
+    # Get all anchors and check if our anchor is among them
+    get_file_anchors "$file" | grep -qFx "$anchor"
+}
+
 show_help() {
     cat << EOF
 test-docs.sh - Validate L4 documentation
@@ -64,7 +100,8 @@ OPTIONS:
 CHECKS:
     1. Markdown link validation
        - Checks that all relative links point to existing files
-       - Checks that anchor links reference valid headings
+       - Validates anchor links (#heading) reference valid headings
+       - Validates cross-file anchors (file.md#heading) exist
        - Reports external links (not validated)
        - Errors on links pointing to folders instead of files
 
@@ -133,9 +170,18 @@ check_link() {
         return 0
     fi
     
-    # Skip anchor-only links (same file)
+    # Handle anchor-only links (same file)
     if [[ "$link" =~ ^# ]]; then
-        log_verbose "  [SKIP] Anchor: $link"
+        local same_file_anchor="${link#\#}"
+        if anchor_exists "$source_file" "$same_file_anchor"; then
+            ((LINK_OK++))
+            log_verbose "  [OK] $link (same-file anchor)"
+        else
+            log_error "Broken anchor in $source_file"
+            echo "       Anchor: $link"
+            echo "       No heading found that generates anchor: $same_file_anchor"
+            ((LINK_ERRORS++))
+        fi
         return 0
     fi
     
@@ -178,6 +224,20 @@ check_link() {
         echo "       Resolved to folder: $resolved_path"
         ((LINK_ERRORS++))
         return 1
+    fi
+    
+    # If there's an anchor, validate it exists in the target file
+    if [[ -n "$anchor" ]]; then
+        # Only check anchors for markdown files
+        if [[ "$resolved_path" =~ \.md$ ]]; then
+            if ! anchor_exists "$resolved_path" "$anchor"; then
+                log_error "Broken anchor in $source_file"
+                echo "       Link: $link"
+                echo "       File exists but anchor '#$anchor' not found"
+                ((LINK_ERRORS++))
+                return 1
+            fi
+        fi
     fi
     
     ((LINK_OK++))

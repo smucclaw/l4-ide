@@ -149,17 +149,6 @@ Copy from line above using `^`.
 
 ---
 
-### Asyndetic
-
-Implicit operators using punctuation.
-
-**Ellipsis** (`...`) - Implicit AND  
-**Double Dot** (`..`) - Implicit OR
-
-**Example:** [asyndetic-example.l4](asyndetic-example.l4)
-
----
-
 ### Genitive
 
 Record field access using `'s`.
