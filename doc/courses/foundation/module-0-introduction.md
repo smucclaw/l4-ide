@@ -157,25 +157,3 @@ L4 is based on functional programming. You define _what_ things are, not step-by
 ## What's Next?
 
 In [Module 1: Your First Legal Rule](module-1-first-rule.md), you'll write a complete legal obligation with conditions, deadlines, and consequences.
-
----
-
-## Quick Reference
-
-| Keyword   | Purpose                       |
-| --------- | ----------------------------- |
-| `DECLARE` | Define a new type             |
-| `DECIDE`  | Define a rule/function        |
-| `GIVEN`   | Declare parameters            |
-| `GIVETH`  | Declare return type           |
-| `MEANS`   | Define what something equals  |
-| `IF`      | Add a condition               |
-| `PARTY`   | Who has the obligation        |
-| `MUST`    | Obligation                    |
-| `MAY`     | Permission                    |
-| `SHANT`   | Prohibition                   |
-| `WITHIN`  | Deadline                      |
-| `HENCE`   | Consequence of compliance     |
-| `LEST`    | Consequence of non-compliance |
-| `#EVAL`   | Evaluate an expression        |
-| `#TRACE`  | Simulate a scenario           |
