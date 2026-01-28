@@ -10,62 +10,61 @@ Keywords are reserved words that form the structure of L4 programs.
 
 ### Function Keywords
 
-| Keyword      | Purpose                               | Reference                                  |
-| ------------ | ------------------------------------- | ------------------------------------------ |
-| **AKA**      | Provides alternate names (aliases)             | [AKA](functions/AKA.md)         |
-| **DECIDE**   | Defines a decision function                    | [DECIDE](functions/DECIDE.md)   |
-| **FUNCTION** | Declares a function type              | [TYPE-KEYWORDS](types/keywords.md) |
-| **GIVEN**    | Introduces function parameters        | [GIVEN](functions/GIVEN.md)               |
-| **GIVETH** / **GIVES**   | Specifies function return type        | [GIVETH](functions/GIVETH.md)               |
-| **IN**       | Used with LET for scoped bindings     | [LET](functions/LET.md)                     |
-| **LET**      | Introduces a local binding            | [LET](functions/LET.md)                     |
-| **MEANS**    | Defines the body of a function or decision     | [MEANS](functions/MEANS.md)     |
-| **WHERE**    | Introduces local declarations         | [WHERE](functions/WHERE.md)                 |
-| **YIELD**    | Creates anonymous functions (lambdas) | [YIELD](functions/YIELD.md) |
+| Keyword                | Purpose                                    | Reference                          |
+| ---------------------- | ------------------------------------------ | ---------------------------------- |
+| **AKA**                | Provides alternate names (aliases)         | [AKA](functions/AKA.md)            |
+| **DECIDE**             | Defines a decision function                | [DECIDE](functions/DECIDE.md)      |
+| **FUNCTION**           | Declares a function type                   | [TYPE-KEYWORDS](types/keywords.md) |
+| **GIVEN**              | Introduces function parameters             | [GIVEN](functions/GIVEN.md)        |
+| **GIVETH** / **GIVES** | Specifies function return type             | [GIVETH](functions/GIVETH.md)      |
+| **IN**                 | Used with LET for scoped bindings          | [LET](functions/LET.md)            |
+| **LET**                | Introduces a local binding                 | [LET](functions/LET.md)            |
+| **MEANS**              | Defines the body of a function or decision | [MEANS](functions/MEANS.md)        |
+| **WHERE**              | Introduces local declarations              | [WHERE](functions/WHERE.md)        |
+| **YIELD**              | Creates anonymous functions (lambdas)      | [YIELD](functions/YIELD.md)        |
 
 ### Control Flow Keywords
 
-| Keyword       | Purpose                              | Reference                                |
-| ------------- | ------------------------------------ | ---------------------------------------- |
+| Keyword       | Purpose                              | Reference                              |
+| ------------- | ------------------------------------ | -------------------------------------- |
 | **BRANCH**    | Alternative pattern matching keyword | [CONTROL-FLOW](control-flow/README.md) |
-| **CONSIDER**  | Pattern matching on values           | [CONSIDER](control-flow/CONSIDER.md)         |
+| **CONSIDER**  | Pattern matching on values           | [CONSIDER](control-flow/CONSIDER.md)   |
 | **ELSE**      | Alternative branch of IF             | [CONTROL-FLOW](control-flow/README.md) |
-| **IF**        | Conditional expression               | [IF](control-flow/IF.md)                     |
+| **IF**        | Conditional expression               | [IF](control-flow/IF.md)               |
 | **THEN**      | Consequent branch of IF              | [CONTROL-FLOW](control-flow/README.md) |
 | **OTHERWISE** | Default case in CONSIDER             | [CONTROL-FLOW](control-flow/README.md) |
-| **WHEN**      | Introduces a pattern match case      | [CONSIDER](control-flow/CONSIDER.md)         |
+| **WHEN**      | Introduces a pattern match case      | [CONSIDER](control-flow/CONSIDER.md)   |
 
 ### Logical Keywords
 
-| Keyword     | Purpose             | Reference                            |
-| ----------- | ------------------- | ------------------------------------ |
-| **AND** / **...** | Logical conjunction | [AND](operators/AND.md)               |
-| **IMPLIES** | Logical implication | [IMPLIES](operators/IMPLIES.md)       |
-| **NOT**     | Logical negation    | [NOT](operators/NOT.md)               |
-| **OR** / **..**   | Logical disjunction | [OR](operators/OR.md)                 |
-| **UNLESS**  | Exception clause (AND NOT) | [UNLESS](operators/UNLESS.md)    |
+| Keyword           | Purpose                    | Reference                       |
+| ----------------- | -------------------------- | ------------------------------- |
+| **AND** / **...** | Logical conjunction        | [AND](operators/AND.md)         |
+| **IMPLIES**       | Logical implication        | [IMPLIES](operators/IMPLIES.md) |
+| **NOT**           | Logical negation           | [NOT](operators/NOT.md)         |
+| **OR** / **..**   | Logical disjunction        | [OR](operators/OR.md)           |
+| **UNLESS**        | Exception clause (AND NOT) | [UNLESS](operators/UNLESS.md)   |
 
 ### Comparison Keywords
 
-| Keyword     | Purpose                        | Reference                              |
-| ----------- | ------------------------------ | -------------------------------------- |
-| **ABOVE**   | Synonym for GREATER THAN       | [COMPARISONS](comparisons/README.md) |
-| **BELOW**   | Synonym for LESS THAN          | [COMPARISONS](comparisons/README.md) |
-| **EQUALS**  | Equality test                  | [COMPARISONS](comparisons/README.md) |
-| **GREATER** | Greater than comparison        | [COMPARISONS](comparisons/README.md) |
-| **LESS**    | Less than comparison           | [COMPARISONS](comparisons/README.md) |
-| **THAN**    | Comparison conjunction word    | [COMPARISONS](comparisons/README.md) |
-| **LEAST**   | Used in "AT LEAST" (≥)         | [COMPARISONS](comparisons/README.md) |
-| **MOST**    | Used in "AT MOST" (≤)          | [COMPARISONS](comparisons/README.md) |
-
+| Keyword     | Purpose                     | Reference                            |
+| ----------- | --------------------------- | ------------------------------------ |
+| **ABOVE**   | Synonym for GREATER THAN    | [COMPARISONS](comparisons/README.md) |
+| **BELOW**   | Synonym for LESS THAN       | [COMPARISONS](comparisons/README.md) |
+| **EQUALS**  | Equality test               | [COMPARISONS](comparisons/README.md) |
+| **GREATER** | Greater than comparison     | [COMPARISONS](comparisons/README.md) |
+| **LESS**    | Less than comparison        | [COMPARISONS](comparisons/README.md) |
+| **THAN**    | Comparison conjunction word | [COMPARISONS](comparisons/README.md) |
+| **LEAST**   | Used in "AT LEAST" (≥)      | [COMPARISONS](comparisons/README.md) |
+| **MOST**    | Used in "AT MOST" (≤)       | [COMPARISONS](comparisons/README.md) |
 
 ### Type Keywords
 
-| Keyword        | Purpose                                 | Reference                                  |
-| -------------- | --------------------------------------- | ------------------------------------------ |
-| **A** / **AN** | Type articles                           | [ARTICLES](types/A-AN.md)           
-| **ASSUME**     | Declares a variable of assumed type     | [ASSUME](types/ASSUME.md)   |
-| **DECLARE**    | Defines a type                          | [DECLARE](types/DECLARE.md)   |
+| Keyword        | Purpose                                 | Reference                          |
+| -------------- | --------------------------------------- | ---------------------------------- |
+| **A** / **AN** | Type articles                           | [ARTICLES](types/A-AN.md)          |
+| **ASSUME**     | Declares a variable of assumed type     | [ASSUME](types/ASSUME.md)          |
+| **DECLARE**    | Defines a type                          | [DECLARE](types/DECLARE.md)        |
 | **IS**         | Type assertion or definition            | [TYPE-KEYWORDS](types/keywords.md) |
 | **HAS**        | Record field declaration                | [TYPE-KEYWORDS](types/keywords.md) |
 | **LIST**       | List type or list literal               | [TYPE-KEYWORDS](types/keywords.md) |
@@ -79,27 +78,27 @@ Keywords are reserved words that form the structure of L4 programs.
 
 For expressing legal obligations, permissions, and prohibitions.
 
-| Keyword           | Purpose                          | Reference                            |
-| ----------------- | -------------------------------- | ------------------------------------ |
-| **PARTY**         | Declares a legal party           | [PARTY](regulative/PARTY.md)           |
-| **MUST**          | Obligation (deontic necessity)   | [MUST](regulative/MUST.md)             |
-| **MAY**           | Permission (deontic possibility) | [MAY](regulative/MAY.md)               |
-| **SHANT**         | Prohibition                      | [SHANT](regulative/SHANT.md)           |
-| **DO**            | Optionality (deontic possibility) | [REGULATIVE](regulative/README.md) |
-| **DOES**          | Action verb in directive         | [REGUALTIVE](regulative/README.md)  |
-| **EXACTLY**       | Exact match/precision modifier   | [REGULATIVE](regulative/README.md) |
-| **WITHIN**        | Temporal deadline                | [REGULATIVE](regulative/README.md) |
-| **HENCE**         | Consequence (then)               | [REGULATIVE](regulative/README.md) |
-| **LEST**          | Negative consequence (else)      | [REGULATIVE](regulative/README.md) |
-| **BREACH**        | Violation of obligation          | [REGULATIVE](regulative/README.md) |
-| **BECAUSE**       | Justification or reason for breach | [BECAUSE](regulative/BECAUSE.md) |
-| **PROVIDED**      | Condition or proviso             | [REGULATIVE](regulative/README.md) |
-| **AT**            | Temporal specification           | [REGULATIVE](regulative/README.md) |
+| Keyword      | Purpose                            | Reference                          |
+| ------------ | ---------------------------------- | ---------------------------------- |
+| **PARTY**    | Declares a legal party             | [PARTY](regulative/PARTY.md)       |
+| **MUST**     | Obligation (deontic necessity)     | [MUST](regulative/MUST.md)         |
+| **MAY**      | Permission (deontic possibility)   | [MAY](regulative/MAY.md)           |
+| **SHANT**    | Prohibition                        | [SHANT](regulative/SHANT.md)       |
+| **DO**       | Optionality (deontic possibility)  | [REGULATIVE](regulative/README.md) |
+| **DOES**     | Action verb in directive           | [REGUALTIVE](regulative/README.md) |
+| **EXACTLY**  | Exact match/precision modifier     | [REGULATIVE](regulative/README.md) |
+| **WITHIN**   | Temporal deadline                  | [REGULATIVE](regulative/README.md) |
+| **HENCE**    | Consequence (then)                 | [REGULATIVE](regulative/README.md) |
+| **LEST**     | Negative consequence (else)        | [REGULATIVE](regulative/README.md) |
+| **BREACH**   | Violation of obligation            | [REGULATIVE](regulative/README.md) |
+| **BECAUSE**  | Justification or reason for breach | [BECAUSE](regulative/BECAUSE.md)   |
+| **PROVIDED** | Condition or proviso               | [REGULATIVE](regulative/README.md) |
+| **AT**       | Temporal specification             | [REGULATIVE](regulative/README.md) |
 
 ### Arithmetic Keywords
 
-| Keyword     | Purpose                   | Reference                            |
-| ----------- | ------------------------- | ------------------------------------ |
+| Keyword     | Purpose                   | Reference                          |
+| ----------- | ------------------------- | ---------------------------------- |
 | **PLUS**    | Addition                  | [ARITHMETIC](arithmetic/README.md) |
 | **MINUS**   | Subtraction               | [ARITHMETIC](arithmetic/README.md) |
 | **TIMES**   | Multiplication            | [ARITHMETIC](arithmetic/README.md) |
@@ -109,10 +108,9 @@ For expressing legal obligations, permissions, and prohibitions.
 
 ### Other Keywords
 
-| Keyword           | Purpose                           | Reference                                  |
-| ----------------- | --------------------------------- | ------------------------------------------ |
-| **IMPORT**        | Imports definitions from another file          | [IMPORT](libraries/IMPORT.md)   |
-
+| Keyword    | Purpose                               | Reference                     |
+| ---------- | ------------------------------------- | ----------------------------- |
+| **IMPORT** | Imports definitions from another file | [IMPORT](libraries/IMPORT.md) |
 
 ---
 
@@ -133,11 +131,11 @@ For complete documentation, see **[Types Reference](types/README.md)**.
 
 ### Polymorphic Types
 
-| Type           | Description                               |
-| -------------- | ----------------------------------------- |
-| **LIST**       | Ordered collection of elements            |
-| **MAYBE**      | Optional values (JUST x or NOTHING)       |
-| **EITHER**     | Choice between two values (LEFT or RIGHT) |
+| Type       | Description                               |
+| ---------- | ----------------------------------------- |
+| **LIST**   | Ordered collection of elements            |
+| **MAYBE**  | Optional values (JUST x or NOTHING)       |
+| **EITHER** | Choice between two values (LEFT or RIGHT) |
 
 ### Special Types
 
@@ -185,10 +183,10 @@ For complete documentation, see **[Operators Reference](operators/README.md)**.
 
 ### Temporal Operators
 
-| Operator     | Description              |
-| ------------ | ------------------------ |
-| **AT**       | Point in time            |
-| **WITHIN**   | Time duration constraint |
+| Operator   | Description              |
+| ---------- | ------------------------ |
+| **AT**     | Point in time            |
+| **WITHIN** | Time duration constraint |
 
 ---
 
@@ -279,13 +277,13 @@ See [coercions documentation](types/coercions.md) for details.
 
 #### HTTP and JSON
 
-| Function       | Purpose                        |
-| -------------- | ------------------------------ |
-| **FETCH**      | HTTP GET request               |
-| **POST**       | HTTP POST request              |
-| **ENV**        | Read environment variable      |
-| **JSONENCODE** | Convert value to JSON string   |
-| **JSONDECODE** | Parse JSON string to value     |
+| Function       | Purpose                      |
+| -------------- | ---------------------------- |
+| **FETCH**      | HTTP GET request             |
+| **POST**       | HTTP POST request            |
+| **ENV**        | Read environment variable    |
+| **JSONENCODE** | Convert value to JSON string |
+| **JSONDECODE** | Parse JSON string to value   |
 
 See [HTTP and JSON documentation](builtins/http-json.md) for details.
 

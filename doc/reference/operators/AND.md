@@ -69,10 +69,9 @@ DECIDE eligible IS
 
 Implicit operators using punctuation.
 
-**Ellipsis** (`...`) - Implicit AND  
+**Ellipsis** (`...`) - Implicit AND
 
 **Example:** [asyndetic-example.l4](asyndetic-example.l4)
-
 
 ## Short-Circuit Evaluation
 

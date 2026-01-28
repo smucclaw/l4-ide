@@ -1,6 +1,6 @@
 # FOR ALL
 
-Universal quantifier for introducing type variables in polymorphic type signatures. Used to declare that a value or function works for *any* type.
+Universal quantifier for introducing type variables in polymorphic type signatures. Used to declare that a value or function works for _any_ type.
 
 ## Syntax
 
@@ -42,6 +42,7 @@ ASSUME map IS
 ```
 
 This says: "For all types `a` and `b`, `map` is a function that takes:
+
 - a function from `a` to `b`
 - a list of `a` values
 
@@ -98,12 +99,14 @@ map f list MEANS
 ```
 
 Both express the same polymorphic type, but:
+
 - `FOR ALL` is for **type declarations** (no implementation)
 - `GIVEN ... IS A TYPE` is for **function definitions** (with implementation)
 
 ## Type Variables
 
 Type variables introduced by `FOR ALL`:
+
 - Are conventionally single lowercase letters: `a`, `b`, `c`
 - Can be any valid identifier
 - Are scoped to the type signature
@@ -167,7 +170,7 @@ ASSUME filter IS
 
 ## NOT a Runtime Quantifier
 
-**Important:** `FOR ALL` is a *type-level* construct, not a runtime quantifier over lists or collections.
+**Important:** `FOR ALL` is a _type-level_ construct, not a runtime quantifier over lists or collections.
 
 ```l4
 -- WRONG - FOR ALL is not for iterating over lists:
@@ -180,10 +183,10 @@ any (GIVEN x YIELD x > 0) myList    -- Check if any element
 
 ## Comparison with Other Languages
 
-| L4 | Haskell | TypeScript | Java |
-|----|---------|------------|------|
-| `FOR ALL a` | `forall a.` | `<T>` | `<T>` |
-| `FOR ALL a AND b` | `forall a b.` | `<T, U>` | `<T, U>` |
+| L4                | Haskell       | TypeScript | Java     |
+| ----------------- | ------------- | ---------- | -------- |
+| `FOR ALL a`       | `forall a.`   | `<T>`      | `<T>`    |
+| `FOR ALL a AND b` | `forall a b.` | `<T, U>`   | `<T, U>` |
 
 ## Related Keywords
 

@@ -10,6 +10,7 @@ BREACH BY party BECAUSE reason
 ```
 
 Where:
+
 - `party` - The party responsible for the breach (optional)
 - `reason` - A STRING explaining why the breach occurred
 
@@ -111,12 +112,12 @@ HENCE BREACH BY Employee BECAUSE "smoking policy violation logged"
 
 BREACH can be used in several forms:
 
-| Form | Example | Description |
-|------|---------|-------------|
-| Simple | `BREACH` | Anonymous breach |
-| With party | `BREACH BY Seller` | Identifies responsible party |
-| With reason | `BREACH BECAUSE "reason"` | Documents why |
-| Full form | `BREACH BY Seller BECAUSE "reason"` | Complete breach info |
+| Form        | Example                             | Description                  |
+| ----------- | ----------------------------------- | ---------------------------- |
+| Simple      | `BREACH`                            | Anonymous breach             |
+| With party  | `BREACH BY Seller`                  | Identifies responsible party |
+| With reason | `BREACH BECAUSE "reason"`           | Documents why                |
+| Full form   | `BREACH BY Seller BECAUSE "reason"` | Complete breach info         |
 
 ## Best Practices
 
@@ -189,6 +190,7 @@ When tracing regulative rules, BECAUSE reasons appear in the output:
 ```
 
 This helps with:
+
 - **Debugging** contracts during development
 - **Explainability** when generating reports
 - **Audit trails** for compliance

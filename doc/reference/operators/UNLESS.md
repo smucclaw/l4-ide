@@ -20,7 +20,7 @@ x AND NOT y
 
 ## Precedence
 
-**Key Feature:** UNLESS binds *looser* than both AND and OR. This makes it act as an exception to the entire preceding expression:
+**Key Feature:** UNLESS binds _looser_ than both AND and OR. This makes it act as an exception to the entire preceding expression:
 
 ```l4
 -- UNLESS applies to the ENTIRE preceding expression:
@@ -63,6 +63,7 @@ DECIDE `is eligible` IF
 ```
 
 This reads naturally and correctly evaluates as:
+
 ```
 (is a citizen AND has resided for 5 years) AND NOT has been disqualified
 ```
@@ -129,21 +130,21 @@ A OR B UNLESS C  means  (A OR B) AND NOT C  -- CORRECT!
 
 ## Truth Table
 
-| A | B | A UNLESS B |
-|---|---|------------|
-| TRUE | TRUE | FALSE |
-| TRUE | FALSE | TRUE |
-| FALSE | TRUE | FALSE |
-| FALSE | FALSE | FALSE |
+| A     | B     | A UNLESS B |
+| ----- | ----- | ---------- |
+| TRUE  | TRUE  | FALSE      |
+| TRUE  | FALSE | TRUE       |
+| FALSE | TRUE  | FALSE      |
+| FALSE | FALSE | FALSE      |
 
 ## Comparison with AND NOT
 
-| Expression | Equivalent To | Result |
-|------------|---------------|--------|
-| `TRUE UNLESS TRUE` | `TRUE AND NOT TRUE` | FALSE |
-| `TRUE UNLESS FALSE` | `TRUE AND NOT FALSE` | TRUE |
-| `A OR B UNLESS C` | `(A OR B) AND NOT C` | depends |
-| `A AND B UNLESS C` | `(A AND B) AND NOT C` | depends |
+| Expression          | Equivalent To         | Result  |
+| ------------------- | --------------------- | ------- |
+| `TRUE UNLESS TRUE`  | `TRUE AND NOT TRUE`   | FALSE   |
+| `TRUE UNLESS FALSE` | `TRUE AND NOT FALSE`  | TRUE    |
+| `A OR B UNLESS C`   | `(A OR B) AND NOT C`  | depends |
+| `A AND B UNLESS C`  | `(A AND B) AND NOT C` | depends |
 
 ## Related Keywords
 

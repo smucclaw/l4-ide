@@ -6,25 +6,25 @@ Regulative keywords express legal obligations, permissions, prohibitions, and th
 
 ### Deontic Modalities
 
-| Keyword               | Meaning                   |
-| --------------------- | ------------------------- |
+| Keyword           | Meaning                   |
+| ----------------- | ------------------------- |
 | [MUST](MUST.md)   | Obligation (required)     |
 | [MAY](MAY.md)     | Permission (allowed)      |
 | [SHANT](SHANT.md) | Prohibition (forbidden)   |
-| DO                    | Possibility (optionality) |
+| DO                | Possibility (optionality) |
 
 ### Rule Structure
 
 | Keyword               | Purpose                           |
 | --------------------- | --------------------------------- |
-| [PARTY](PARTY.md) | Who has the obligation/permission |
-| WITHIN            | Temporal deadline                 |
-| HENCE             | Consequence on fulfillment        |
-| LEST              | Consequence on breach             |
-| PROVIDED          | Guard condition                   |
-| BREACH            | Explicit violation marker         |
-| [BECAUSE](BECAUSE.md) | Reason for breach             |
-| FULFILLED         | Successfully completed            |
+| [PARTY](PARTY.md)     | Who has the obligation/permission |
+| WITHIN                | Temporal deadline                 |
+| HENCE                 | Consequence on fulfillment        |
+| LEST                  | Consequence on breach             |
+| PROVIDED              | Guard condition                   |
+| BREACH                | Explicit violation marker         |
+| [BECAUSE](BECAUSE.md) | Reason for breach                 |
+| FULFILLED             | Successfully completed            |
 
 ## Basic Rule Structure
 
@@ -141,7 +141,6 @@ PARTY Bob
 MUST payment price PROVIDED price >= 20
 WITHIN 3
 ```
-
 
 ## EXACTLY (Guard Condition)
 

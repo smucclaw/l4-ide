@@ -212,7 +212,7 @@ See [Built-ins](../builtins/README.md) and [coercions](coercions.md) for details
 
 ### Maybe and Nullability
 
-L4 uses MAYBE for optional values, not null. 
+L4 uses MAYBE for optional values, not null.
 
 [maybe-example.l4](maybe-example.l4) for usage patterns.
 

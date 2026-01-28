@@ -49,13 +49,13 @@ L4 includes several **built-in functions** that are always available without imp
 
 ### HTTP and JSON Builtins
 
-| Function     | Signature                    | Description                      |
-| ------------ | ---------------------------- | -------------------------------- |
-| `FETCH`      | `STRING → STRING`            | HTTP GET request                 |
-| `POST`       | `STRING, STRING, STRING → STRING` | HTTP POST request           |
-| `ENV`        | `STRING → STRING`            | Read environment variable        |
-| `JSONENCODE` | `a → STRING`                 | Convert value to JSON string     |
-| `JSONDECODE` | `STRING → EITHER STRING a`   | Parse JSON string to value       |
+| Function     | Signature                         | Description                  |
+| ------------ | --------------------------------- | ---------------------------- |
+| `FETCH`      | `STRING → STRING`                 | HTTP GET request             |
+| `POST`       | `STRING, STRING, STRING → STRING` | HTTP POST request            |
+| `ENV`        | `STRING → STRING`                 | Read environment variable    |
+| `JSONENCODE` | `a → STRING`                      | Convert value to JSON string |
+| `JSONDECODE` | `STRING → EITHER STRING a`        | Parse JSON string to value   |
 
 For detailed HTTP/JSON documentation, see [HTTP and JSON](http-json.md).
 

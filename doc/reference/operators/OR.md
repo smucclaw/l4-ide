@@ -22,7 +22,6 @@ expression1 || expression2
 
 **Example file:** [or-example.l4](or-example.l4)
 
-
 ## Asyndetic OR
 
 Implicit operators using punctuation.
@@ -30,7 +29,6 @@ Implicit operators using punctuation.
 **Double dots** (`..`) - Implicit OR
 
 **Example:** [asyndetic-example.l4](asyndetic-example.l4)
-
 
 ## Short-Circuit Evaluation
 

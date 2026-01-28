@@ -11,6 +11,7 @@ Performs an HTTP GET request.
 **Signature:** `STRING → STRING`
 
 **Parameters:**
+
 - `url` - The URL to fetch
 
 **Returns:** Response body as a STRING
@@ -33,6 +34,7 @@ Performs an HTTP POST request.
 **Signature:** `STRING → STRING → STRING → STRING`
 
 **Parameters:**
+
 - `url` - The URL to post to
 - `headers` - HTTP headers as a JSON string (e.g., `"{\"Content-Type\": \"application/json\"}"`)
 - `body` - Request body as a STRING
@@ -58,6 +60,7 @@ Reads an environment variable.
 **Signature:** `STRING → STRING`
 
 **Parameters:**
+
 - `name` - The environment variable name
 
 **Returns:** The value of the environment variable, or empty string if not set
@@ -82,6 +85,7 @@ Converts an L4 value to its JSON string representation.
 **Signature:** `a → STRING` (polymorphic)
 
 **Behavior:**
+
 - Numbers render as JSON numbers
 - Strings render as JSON strings (with escaping)
 - Booleans render as `true` or `false`
@@ -113,10 +117,12 @@ Parses a JSON string into an L4 value.
 **Signature:** `STRING → EITHER STRING a` (polymorphic)
 
 **Returns:**
+
 - `RIGHT value` on successful parse
 - `LEFT errorMessage` on parse failure
 
 **Behavior:**
+
 - JSON objects decode to records (field names must match)
 - JSON arrays decode to lists
 - JSON numbers decode to NUMBER

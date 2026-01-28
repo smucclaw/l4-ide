@@ -133,12 +133,12 @@ all (GIVEN p YIELD p's age >= 18) people's members
 
 ## YIELD vs MEANS
 
-| Aspect | YIELD | MEANS |
-|--------|-------|-------|
-| Creates | Anonymous function (lambda) | Named function |
-| Used with | GIVEN (inline) | GIVEN (top-level) or DECIDE |
-| Function name | None | Required |
-| Typical use | Passing to higher-order functions | Defining reusable functions |
+| Aspect        | YIELD                             | MEANS                       |
+| ------------- | --------------------------------- | --------------------------- |
+| Creates       | Anonymous function (lambda)       | Named function              |
+| Used with     | GIVEN (inline)                    | GIVEN (top-level) or DECIDE |
+| Function name | None                              | Required                    |
+| Typical use   | Passing to higher-order functions | Defining reusable functions |
 
 **Named function with MEANS:**
 

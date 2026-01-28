@@ -54,7 +54,6 @@ limitedGambling MEANS
 - Prohibition is **breached** when the party performs the forbidden action
 - LEST consequences trigger on breach
 
-
 ## Related Keywords
 
 - **[PARTY](PARTY.md)** - Identifies who has the prohibition
