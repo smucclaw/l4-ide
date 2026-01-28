@@ -29,10 +29,6 @@ L4 supports multiple calling patterns that read more naturally:
 
 An **infix** function takes two arguments with the function name between them.
 
-### Definition
-
-**Example file:** [natural-language-example.l4](natural-language-example.l4)
-
 ```l4
 GIVEN a IS A NUMBER, b IS A NUMBER
 GIVETH A NUMBER
@@ -261,7 +257,9 @@ When nesting mixfix calls, use parentheses for clarity:
 
 ## Complete Example File
 
-See the full working example: [natural-language-example.l4](natural-language-example.l4)
+See the full working example:
+
+[natural-language-example.l4](natural-language-example.l4)
 
 ## Summary
 
@@ -277,4 +275,3 @@ See the full working example: [natural-language-example.l4](natural-language-exa
 - **[DECIDE](../../reference/functions/DECIDE.md)** - Function declaration keyword
 - **[MEANS](../../reference/functions/MEANS.md)** - Function body keyword
 - **[GIVEN](../../reference/functions/GIVEN.md)** - Parameter declaration
-- **[Identifiers](../../reference/syntax/identifier-example.l4)** - Backtick syntax
