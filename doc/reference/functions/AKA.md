@@ -83,7 +83,7 @@ DECLARE Value Added Tax AKA VAT, `sales tax`
 
 ## Related Keywords
 
-- **[DECLARE](DECLARE.md)** - Type declarations
+- **[DECLARE](../types/DECLARE.md)** - Type declarations
 - **[DECIDE](DECIDE.md)** - Value definitions
 - **[MEANS](MEANS.md)** - Definition body
 

@@ -95,7 +95,7 @@ DECIDE isEligible IF
 - **[GIVEN](GIVEN.md)** - Introduces parameters
 - **[GIVETH](GIVETH.md)** - Specifies return type
 - **[WHERE](WHERE.md)** - Local definitions
-- **[IF](IF.md)** - Boolean condition form
+- **[IF](../control-flow/IF.md)** - Boolean condition form
 
 > Note: IS is part of the DECIDE syntax, not a separate keyword page.
 

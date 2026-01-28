@@ -311,5 +311,5 @@ L4 solution: Support multiple phrasings with identical semantics.
 ## Further Reading
 
 - [Syntax Reference](../../reference/syntax/README.md) - Full syntax guide
-- [Keywords Reference](../../reference/keywords/README.md) - All L4 keywords
+- [Language Reference](../../reference/README.md) - All L4 keywords
 - [Foundation Course](../../courses/foundation/README.md) - Learn L4 from scratch

@@ -61,11 +61,6 @@ L4 includes several standard libraries:
 2. Library names resolve to `jl4-core/libraries/`
 3. Relative names resolve to the current directory
 
-## Related Keywords
-
-- **[DECLARE](DECLARE.md)** - Define types to export
-- **[DECIDE](DECIDE.md)** - Define functions to export
-
 ## See Also
 
 - **[Libraries Reference](../libraries/README.md)** - Available libraries

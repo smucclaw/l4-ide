@@ -21,7 +21,7 @@ ASSUME name IS A Type
 
 ### Examples
 
-**Example file:** [articles-example.l4](articles-example.l4)
+**Example file:** [articles-example.l4](a-an-example.l4)
 
 ```l4
 -- "A" before consonant sounds
@@ -62,7 +62,7 @@ See [Syntax: Genitive](../syntax/genitive-example.l4) for details.
 
 - **[IS](../syntax/README.md)** - Type assertions
 - **[DECLARE](DECLARE.md)** - Type declarations
-- **[GIVEN](GIVEN.md)** - Function parameters
+- **[GIVEN](../functions/GIVEN.md)** - Function parameters
 
 ## See Also
 

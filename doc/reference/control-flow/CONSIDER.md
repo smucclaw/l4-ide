@@ -95,6 +95,6 @@ describe n MEANS
 ## Related Keywords
 
 - **[IF](IF.md)** - Simple conditional alternative
-- **[CONTROL-FLOW](CONTROL-FLOW.md)** - All control flow keywords
+- **[CONTROL-FLOW](README.md)** - All control flow keywords
 
 > Note: WHEN, OTHERWISE, and BRANCH are part of the CONSIDER syntax.

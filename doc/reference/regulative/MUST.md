@@ -29,4 +29,4 @@ MUST expresses a legal obligation - something that a party is required to do. If
 - **[PARTY](PARTY.md)** - Identifies who has the obligation
 - **[MAY](MAY.md)** - Permission (optional action)
 - **[SHANT](SHANT.md)** - Prohibition
-- **[REGULATIVE](REGULATIVE.md)** - Full regulative rule reference
+- **[REGULATIVE](README.md)** - Full regulative rule reference

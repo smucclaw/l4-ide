@@ -156,8 +156,8 @@ See **[Libraries Reference](../libraries/README.md)** for more functions.
 
 ## Related Keywords
 
-- **[COMPARISONS](COMPARISONS.md)** - Compare arithmetic results
-- **[IF](IF.md)** - Conditional arithmetic
+- **[COMPARISONS](../comparisons/README.md)** - Compare arithmetic results
+- **[IF](../control-flow/IF.md)** - Conditional arithmetic
 
 ## See Also
 

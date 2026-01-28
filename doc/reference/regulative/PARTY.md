@@ -81,7 +81,7 @@ ruleName MEANS
 - **[MUST](MUST.md)** - Obligation
 - **[MAY](MAY.md)** - Permission
 - **[SHANT](SHANT.md)** - Prohibition
-- **[REGULATIVE](REGULATIVE.md)** - Full regulative rule reference
+- **[REGULATIVE](README.md)** - Full regulative rule reference
 
 ## See Also
 

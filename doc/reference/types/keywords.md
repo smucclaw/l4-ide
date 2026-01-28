@@ -6,6 +6,7 @@ These keywords are used in type declarations and type expressions.
 
 | Keyword              | Purpose                     |
 | -------------------- | --------------------------- |
+| **DECLARE**          | Type definition             |
 | **IS**               | Type assertion / definition |
 | **HAS**              | Record field declaration    |
 | **ONE OF**           | Enum variant declaration    |
@@ -13,8 +14,17 @@ These keywords are used in type declarations and type expressions.
 | **WITH**             | Record construction         |
 | **LIST**             | List type / literal         |
 | **FUNCTION FROM TO** | Function type               |
-| **FOR ALL**          | Universal quantification    |
 | **TYPE**             | Kind of types               |
+
+## DECLARE
+
+Begins a new type definition.
+
+```l4
+DECLARE Person HAS
+  name IS A STRING
+  age IS A NUMBER
+```
 
 ## IS
 
@@ -93,22 +103,18 @@ DECLARE Status IS ONE OF
 
 Used for type application (applying type constructors to arguments).
 
-### With LIST
+### To create type instances
 
 ```l4
-LIST OF NUMBER
-LIST OF STRING
-LIST OF Person
+DECLARE Person HAS
+    age IS A NUMBER
+    name IS A STRING
+
+person1 MEANS Person OF 20, "John"  -- Explicit form using OF
+person2 MEANS Person 21, "Jill"     -- Short form
 ```
 
-### With MAYBE
-
-```l4
-MAYBE NUMBER          -- Short form
-MAYBE OF NUMBER       -- Explicit form
-```
-
-### With Custom Types
+### Within ASSUME
 
 ```l4
 DECLARE Container a HAS value IS A a
@@ -183,26 +189,6 @@ ASSUME g IS A FUNCTION FROM NUMBER AND STRING TO BOOLEAN
 
 **See [Types: Functions](../types/function-type-example.l4).**
 
-## FOR ALL
-
-Universal type quantification for polymorphic types.
-
-### Syntax
-
-```l4
-FOR ALL a . TypeExpression
-```
-
-### Example
-
-```l4
--- Identity function works for any type
-GIVEN a IS A TYPE
-      x IS A a
-GIVETH A a
-identity x MEANS x
-```
-
 ## TYPE
 
 The kind of types (used in type-level programming).
@@ -218,9 +204,9 @@ identity x MEANS x
 ## Related Pages
 
 - **[DECLARE](DECLARE.md)** - Type declarations
-- **[GIVEN](GIVEN.md)** - Type parameters in functions
-- **[GIVETH](GIVETH.md)** - Return type declarations
-- **[ARTICLES](ARTICLES.md)** - A, AN, THE
+- **[GIVEN](../functions/GIVEN.md)** - Type parameters in functions
+- **[GIVETH](../functions/GIVETH.md)** - Return type declarations
+- **[ARTICLES](A-AN.md)** - A, AN
 
 ## See Also
 

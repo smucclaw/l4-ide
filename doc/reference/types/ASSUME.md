@@ -73,9 +73,9 @@ DECIDE isAdult IS age >= 18
 
 ## Related Keywords
 
-- **[DECIDE](DECIDE.md)** - Define a value or function with a body
-- **[GIVEN](GIVEN.md)** - Introduce function parameters
-- **[TYPE-KEYWORDS](TYPE-KEYWORDS.md)** - Type syntax (IS, FUNCTION, etc.)
+- **[DECIDE](../functions/DECIDE.md)** - Define a value or function with a body
+- **[GIVEN](../functions/GIVEN.md)** - Introduce function parameters
+- **[TYPE-KEYWORDS](keywords.md)** - Type syntax (IS, FUNCTION, etc.)
 
 ## See Also
 

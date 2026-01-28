@@ -90,7 +90,7 @@ DECLARE Person3 HAS name: A STRING
 
 ## Related Keywords
 
-- **[TYPE-KEYWORDS](TYPE-KEYWORDS.md)** - Type-related keywords (IS, HAS, ONE OF)
+- **[TYPE-KEYWORDS](keywords.md)** - Type-related keywords (IS, HAS, ONE OF)
 
 ## See Also
 

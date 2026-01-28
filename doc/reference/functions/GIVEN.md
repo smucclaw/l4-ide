@@ -81,7 +81,7 @@ processPayment customer amount MEANS ...
 - **[GIVETH](GIVETH.md)** - Specifies return type
 - **[DECIDE](DECIDE.md)** - Function definition
 - **[MEANS](MEANS.md)** - Function body
-- **[TYPE-KEYWORDS](TYPE-KEYWORDS.md)** - Type syntax (IS, etc.)
+- **[TYPE-KEYWORDS](../types/keywords.md)** - Type syntax (IS, etc.)
 
 ## See Also
 

@@ -288,6 +288,6 @@ TYPE
 ## See Also
 
 - **[GLOSSARY](../GLOSSARY.md)** - Complete language index
-- **[Keywords](../keywords/README.md)** - Type-related keywords
+- **[Functions](../functions/README.md)** - Function keywords
 - **[Operators](../operators/README.md)** - Operations on types
 - **[Specifications](https://github.com/smucclaw/l4-ide/tree/main/specs)** - Technical specifications

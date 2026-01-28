@@ -146,9 +146,9 @@ Comparisons work on:
 
 ## Related Keywords
 
-- **[AND](AND.md)** - Combine comparisons
-- **[OR](OR.md)** - Alternative conditions
-- **[IF](IF.md)** - Use comparisons in conditionals
+- **[AND](../control-flow/AND.md)** - Combine comparisons
+- **[OR](../control-flow/OR.md)** - Alternative conditions
+- **[IF](../control-flow/IF.md)** - Use comparisons in conditionals
 
 ## See Also
 

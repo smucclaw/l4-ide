@@ -367,5 +367,5 @@ MUST deliver
 ## Further Reading
 
 - [Foundation Course Module 5](../../courses/foundation/module-5-regulative.md) - Hands-on tutorial
-- [Keywords: PARTY](../../reference/keywords/PARTY.md) - Reference for PARTY keyword
-- [Keywords: MUST](../../reference/keywords/MUST.md) - Reference for MUST keyword
+- [Keywords: PARTY](../../reference/regulative/PARTY.md) - Reference for PARTY keyword
+- [Keywords: MUST](../../reference/regulative/MUST.md) - Reference for MUST keyword

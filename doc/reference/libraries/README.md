@@ -44,7 +44,7 @@ IMPORT "my-custom-lib.l4"        -- Custom library
 
 - **[GLOSSARY](../GLOSSARY.md)** - Language feature index
 - **[Types](../types/README.md)** - Type system documentation
-- **[Keywords](../keywords/README.md)** - Language keywords
+- **[IMPORT keyword](IMPORT.md)** - IMPORT keyword details
 - **[Specs](https://github.com/smucclaw/l4-ide/tree/main/specs)** - Technical specifications
 
 ---

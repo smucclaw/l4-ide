@@ -11,7 +11,7 @@ L4 operators are organized into categories:
 - **Logical** - Boolean operations (AND, OR, NOT, IMPLIES)
 - **String** - Text manipulation (CONCAT, APPEND)
 - **List** - List construction and manipulation (FOLLOWED BY, EMPTY)
-- **Temporal** - Time-based operations (AT, WITHIN, STARTING)
+- **Temporal** - Time-based operations (AT, WITHIN)
 
 ---
 
@@ -51,7 +51,6 @@ Mathematical operations on numbers.
 ### Modulo
 
 - **Keyword:** MODULO
-- **Symbol:** `%` (reserved)
 - **Type:** `NUMBER -> NUMBER -> NUMBER`
 - **Example:** `17 MODULO 5` → `2`
 - **Note:** Remainder after division
@@ -194,30 +193,14 @@ Time-based operations for dates and deadlines.
 ### At
 
 - **Keyword:** AT
-- **Type:** Varies by context
+- **Type:** Used during tracing of regulative statements to track points in time
 - **Example:** `event AT date`
-- **Note:** Specifies point in time
 
 ### Within
 
 - **Keyword:** WITHIN
-- **Type:** Time duration constraint
+- **Type:** Time duration constraint in regulative statements
 - **Example:** `PARTY MUST DO action WITHIN 30 DAYS`
-- **Note:** Temporal deadline
-
-### Starting
-
-- **Keyword:** STARTING
-- **Type:** Time reference
-- **Example:** `STARTING FROM date`
-- **Note:** Beginning of time period
-
-### Followed
-
-- **Keywords:** FOLLOWED (temporal sequence)
-- **Type:** Event sequencing
-- **Example:** `event1 FOLLOWED event2`
-- **Note:** Different from list cons FOLLOWED BY
 
 ---
 
@@ -329,7 +312,7 @@ Both are equivalent and can be mixed.
 ## See Also
 
 - **[GLOSSARY](../GLOSSARY.md)** - All operators indexed
-- **[Keywords](../keywords/README.md)** - Operator keywords
+- **[Functions](../functions/README.md)** - Function keywords
 - **[Types](../types/README.md)** - Types used with operators
 - **[Syntax](../syntax/README.md)** - Operator syntax rules
 
