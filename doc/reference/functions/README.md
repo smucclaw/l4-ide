@@ -20,6 +20,7 @@ DECIDE name MEANS expression   -- Definition
 | [GIVETH](GIVETH.md) | Specifies the return type | Optional (can be inferred) |
 | [DECIDE](DECIDE.md) | Defines a named value or function | Yes (or use bare MEANS) |
 | [MEANS](MEANS.md) | Connects the function name to its body | Yes |
+| [YIELD](YIELD.md) | Creates anonymous functions (lambdas) | For inline functions |
 | [WHERE](WHERE.md) | Adds local definitions after an expression | Optional |
 | [LET](LET.md) | Adds local definitions before an expression | Optional |
 | [AKA](AKA.md) | Creates aliases for definitions | Optional |
@@ -58,6 +59,15 @@ circleArea radius MEANS
 ```l4
 `total cost` AKA `final price` MEANS
   basePrice PLUS tax
+```
+
+### Anonymous Functions (Lambdas)
+
+Use `GIVEN ... YIELD` for inline functions:
+
+```l4
+GIVEN numbers IS A LIST OF NUMBER
+`all positive` MEANS all (GIVEN n YIELD n > 0) numbers
 ```
 
 ## Function Definition Patterns

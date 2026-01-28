@@ -21,7 +21,7 @@ Keywords are reserved words that form the structure of L4 programs.
 | **LET**      | Introduces a local binding            | [LET](functions/LET.md)                     |
 | **MEANS**    | Defines the body of a function or decision     | [MEANS](functions/MEANS.md)     |
 | **WHERE**    | Introduces local declarations         | [WHERE](functions/WHERE.md)                 |
-| **YIELD**    | Returns a value in lambda expressions | [TYPE-KEYWORDS](types/keywords.md) |
+| **YIELD**    | Creates anonymous functions (lambdas) | [YIELD](functions/YIELD.md) |
 
 ### Control Flow Keywords
 
