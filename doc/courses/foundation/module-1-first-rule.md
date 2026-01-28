@@ -16,11 +16,9 @@ By the end of this module, you will be able to:
 
 ## A Simple Legal Obligation
 
-Let's start with something every lawyer understands: a simple legal obligation. 
+Let's start with something every lawyer understands: a simple legal obligation. Find the complete working example later in this document.
 
 **The annual return obligation:** "A registered charity must file an annual return."
-
-The complete working example is at the end.
 
 In L4, we write this as:
 

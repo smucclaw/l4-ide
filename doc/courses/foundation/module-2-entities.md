@@ -22,7 +22,10 @@ Using simple text leads to errors and ambiguity. You can't distinguish a charity
 
 ### Structured Types: The Solution
 
-The complete working example is in [module-2-examples.l4](module-2-examples.l4).
+The complete working example:
+
+[module-2-examples.l4](module-2-examples.l4)
+
 
 ```l4
 DECLARE `Registered Charity`
