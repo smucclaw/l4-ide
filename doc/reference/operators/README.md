@@ -145,6 +145,19 @@ Boolean operations for conditions and logic.
 - **Example:** `FALSE IMPLIES TRUE` → `TRUE`
 - **Note:** `p IMPLIES q` is equivalent to `NOT p OR q`
 
+### Exception (Unless)
+
+- **Keyword:** [UNLESS](UNLESS.md)
+- **Type:** `BOOLEAN -> BOOLEAN -> BOOLEAN`
+- **Example:** `TRUE UNLESS FALSE` → `TRUE`
+- **Note:** `p UNLESS q` is equivalent to `p AND NOT q`
+- **Precedence:** Binds looser than OR (applies to entire expression)
+- **Truth table:**
+  - `TRUE UNLESS TRUE` → `FALSE`
+  - `TRUE UNLESS FALSE` → `TRUE`
+  - `FALSE UNLESS TRUE` → `FALSE`
+  - `FALSE UNLESS FALSE` → `FALSE`
+
 ---
 
 ## String Operators
@@ -215,7 +228,8 @@ Operators are evaluated in the following order (highest to lowest precedence):
 5. **Comparison** (EQUALS, GREATER THAN, LESS THAN, etc.)
 6. **Logical AND**
 7. **Logical OR**
-8. **IMPLIES** (lowest)
+8. **UNLESS** (exception clause)
+9. **IMPLIES** (lowest)
 
 Use parentheses `()` to override precedence.
 

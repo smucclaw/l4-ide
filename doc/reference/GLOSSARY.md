@@ -15,8 +15,8 @@ Keywords are reserved words that form the structure of L4 programs.
 | **AKA**      | Provides alternate names (aliases)             | [AKA](functions/AKA.md)         |
 | **DECIDE**   | Defines a decision function                    | [DECIDE](functions/DECIDE.md)   |
 | **FUNCTION** | Declares a function type              | [TYPE-KEYWORDS](types/keywords.md) |
-| **GIVETH**   | Specifies function return type        | [GIVETH](functions/GIVETH.md)               |
-| **GIVES**    | Synonym for GIVETH                    | [GIVETH](functions/GIVETH.md)               |
+| **GIVEN**    | Introduces function parameters        | [GIVEN](functions/GIVEN.md)               |
+| **GIVETH** / **GIVES**   | Specifies function return type        | [GIVETH](functions/GIVETH.md)               |
 | **IN**       | Used with LET for scoped bindings     | [LET](functions/LET.md)                     |
 | **LET**      | Introduces a local binding            | [LET](functions/LET.md)                     |
 | **MEANS**    | Defines the body of a function or decision     | [MEANS](functions/MEANS.md)     |
@@ -43,6 +43,7 @@ Keywords are reserved words that form the structure of L4 programs.
 | **IMPLIES** | Logical implication | [IMPLIES](operators/IMPLIES.md)       |
 | **NOT**     | Logical negation    | [NOT](operators/NOT.md)               |
 | **OR** / **..**   | Logical disjunction | [OR](operators/OR.md)                 |
+| **UNLESS**  | Exception clause (AND NOT) | [UNLESS](operators/UNLESS.md)    |
 
 ### Comparison Keywords
 
@@ -72,6 +73,7 @@ Keywords are reserved words that form the structure of L4 programs.
 | **OF**         | Type application or constructor pattern | [TYPE-KEYWORDS](types/keywords.md) |
 | **TYPE**       | The kind of types                       | [TYPE-KEYWORDS](types/keywords.md) |
 | **WITH**       | Record construction with named fields   | [TYPE-KEYWORDS](types/keywords.md) |
+| **FOR ALL**    | Universal quantifier for polymorphism   | [FOR ALL](types/for-all.md)        |
 
 ### Regulative Keywords
 
@@ -262,9 +264,11 @@ For complete documentation, see **[Libraries Reference](libraries/README.md)**.
 | **jurisdiction**  | Jurisdiction definitions             |
 | **llm**           | LLM API integration                  |
 
-### Built-in Coercion Functions
+### Built-in Functions
 
 These are built into the compiler (not a library):
+
+#### Type Coercion
 
 | Function     | Purpose           |
 | ------------ | ----------------- |
@@ -274,6 +278,18 @@ These are built into the compiler (not a library):
 | **TRUNC**    | Truncate number   |
 
 See [coercions documentation](types/coercions.md) for details.
+
+#### HTTP and JSON
+
+| Function       | Purpose                        |
+| -------------- | ------------------------------ |
+| **FETCH**      | HTTP GET request               |
+| **POST**       | HTTP POST request              |
+| **ENV**        | Read environment variable      |
+| **JSONENCODE** | Convert value to JSON string   |
+| **JSONDECODE** | Parse JSON string to value     |
+
+See [HTTP and JSON documentation](builtins/http-json.md) for details.
 
 ---
 
