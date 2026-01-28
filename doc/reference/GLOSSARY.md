@@ -13,14 +13,13 @@ Keywords are reserved words that form the structure of L4 programs.
 | Keyword      | Purpose                               | Reference                                  |
 | ------------ | ------------------------------------- | ------------------------------------------ |
 | **AKA**      | Provides alternate names (aliases)             | [AKA](functions/AKA.md)         |
-| **DECLARE** | Declares a new type (record, enum, or synonym) | [DECLARE](types/DECLARE.md) |
 | **DECIDE**   | Defines a decision function                    | [DECIDE](functions/DECIDE.md)   |
 | **FUNCTION** | Declares a function type              | [TYPE-KEYWORDS](types/keywords.md) |
-| **LET**      | Introduces a local binding            | [LET](functions/LET.md)                     |
-| **IN**       | Used with LET for scoped bindings     | [LET](functions/LET.md)                     |
-| **MEANS**    | Defines the body of a function or decision     | [MEANS](functions/MEANS.md)     |
 | **GIVETH**   | Specifies function return type        | [GIVETH](functions/GIVETH.md)               |
 | **GIVES**    | Synonym for GIVETH                    | [GIVETH](functions/GIVETH.md)               |
+| **IN**       | Used with LET for scoped bindings     | [LET](functions/LET.md)                     |
+| **LET**      | Introduces a local binding            | [LET](functions/LET.md)                     |
+| **MEANS**    | Defines the body of a function or decision     | [MEANS](functions/MEANS.md)     |
 | **WHERE**    | Introduces local declarations         | [WHERE](functions/WHERE.md)                 |
 | **YIELD**    | Returns a value in lambda expressions | [TYPE-KEYWORDS](types/keywords.md) |
 
@@ -28,52 +27,51 @@ Keywords are reserved words that form the structure of L4 programs.
 
 | Keyword       | Purpose                              | Reference                                |
 | ------------- | ------------------------------------ | ---------------------------------------- |
+| **BRANCH**    | Alternative pattern matching keyword | [CONTROL-FLOW](control-flow/README.md) |
+| **CONSIDER**  | Pattern matching on values           | [CONSIDER](control-flow/CONSIDER.md)         |
+| **ELSE**      | Alternative branch of IF             | [CONTROL-FLOW](control-flow/README.md) |
 | **IF**        | Conditional expression               | [IF](control-flow/IF.md)                     |
 | **THEN**      | Consequent branch of IF              | [CONTROL-FLOW](control-flow/README.md) |
-| **ELSE**      | Alternative branch of IF             | [CONTROL-FLOW](control-flow/README.md) |
 | **OTHERWISE** | Default case in CONSIDER             | [CONTROL-FLOW](control-flow/README.md) |
-| **CONSIDER**  | Pattern matching on values           | [CONSIDER](control-flow/CONSIDER.md)         |
 | **WHEN**      | Introduces a pattern match case      | [CONSIDER](control-flow/CONSIDER.md)         |
-| **BRANCH**    | Alternative pattern matching keyword | [CONTROL-FLOW](control-flow/README.md) |
 
 ### Logical Keywords
 
 | Keyword     | Purpose             | Reference                            |
 | ----------- | ------------------- | ------------------------------------ |
 | **AND** / **...** | Logical conjunction | [AND](control-flow/AND.md)               |
-| **OR** / **..**   | Logical disjunction | [OR](control-flow/OR.md)                 |
-| **NOT**     | Logical negation    | [NOT](control-flow/NOT.md)               |
 | **IMPLIES** | Logical implication | [IMPLIES](control-flow/IMPLIES.md)       |
+| **NOT**     | Logical negation    | [NOT](control-flow/NOT.md)               |
+| **OR** / **..**   | Logical disjunction | [OR](control-flow/OR.md)                 |
 
 ### Comparison Keywords
 
 | Keyword     | Purpose                        | Reference                              |
 | ----------- | ------------------------------ | -------------------------------------- |
+| **ABOVE**   | Synonym for GREATER THAN       | [COMPARISONS](comparisons/README.md) |
+| **BELOW**   | Synonym for LESS THAN          | [COMPARISONS](comparisons/README.md) |
 | **EQUALS**  | Equality test                  | [COMPARISONS](comparisons/README.md) |
 | **GREATER** | Greater than comparison        | [COMPARISONS](comparisons/README.md) |
 | **LESS**    | Less than comparison           | [COMPARISONS](comparisons/README.md) |
 | **THAN**    | Comparison conjunction word    | [COMPARISONS](comparisons/README.md) |
-| **ABOVE**   | Synonym for GREATER THAN       | [COMPARISONS](comparisons/README.md) |
-| **BELOW**   | Synonym for LESS THAN          | [COMPARISONS](comparisons/README.md) |
 | **LEAST**   | Used in "AT LEAST" (≥)         | [COMPARISONS](comparisons/README.md) |
 | **MOST**    | Used in "AT MOST" (≤)          | [COMPARISONS](comparisons/README.md) |
-| **EXACTLY** | Exact match/precision modifier | [COMPARISONS](comparisons/README.md) |
 
 
 ### Type Keywords
 
 | Keyword        | Purpose                                 | Reference                                  |
 | -------------- | --------------------------------------- | ------------------------------------------ |
+| **A** / **AN** | Type articles                           | [ARTICLES](types/A-AN.md)           
+| **ASSUME**     | Declares a variable of assumed type     | [ASSUME](types/ASSUME.md)   |
 | **DECLARE**    | Defines a type                          | [DECLARE](types/DECLARE.md)   |
 | **IS**         | Type assertion or definition            | [TYPE-KEYWORDS](types/keywords.md) |
 | **HAS**        | Record field declaration                | [TYPE-KEYWORDS](types/keywords.md) |
+| **LIST**       | List type or list literal               | [TYPE-KEYWORDS](types/keywords.md) |
 | **ONE OF**     | Used for enum types                     | [TYPE-KEYWORDS](types/keywords.md) |
 | **OF**         | Type application or constructor pattern | [TYPE-KEYWORDS](types/keywords.md) |
-| **WITH**       | Record construction with named fields   | [TYPE-KEYWORDS](types/keywords.md) |
-| **A** / **AN** | Type articles                           | [ARTICLES](types/A-AN.md)           |
-| **LIST**       | List type or list literal               | [TYPE-KEYWORDS](types/keywords.md) |
 | **TYPE**       | The kind of types                       | [TYPE-KEYWORDS](types/keywords.md) |
-| **ASSUME**     | Declares a variable, optionally with a type    | [ASSUME](types/ASSUME.md)   |
+| **WITH**       | Record construction with named fields   | [TYPE-KEYWORDS](types/keywords.md) |
 
 ### Regulative Keywords
 
@@ -86,6 +84,7 @@ For expressing legal obligations, permissions, and prohibitions.
 | **MAY**           | Permission (deontic possibility) | [MAY](regulative/MAY.md)               |
 | **SHANT**         | Prohibition                      | [SHANT](regulative/SHANT.md)           |
 | **DO** / **DOES** | Action verb in regulative rules  | [REGULATIVE](regulative/README.md) |
+| **EXACTLY**       | Exact match/precision modifier | [REGULATIVE](regulative/README.md) |
 | **WITHIN**        | Temporal deadline                | [REGULATIVE](regulative/README.md) |
 | **HENCE**         | Consequence (then)               | [REGULATIVE](regulative/README.md) |
 | **LEST**          | Negative consequence (else)      | [REGULATIVE](regulative/README.md) |

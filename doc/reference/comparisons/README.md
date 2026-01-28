@@ -13,7 +13,6 @@ Comparison keywords are used to compare values and return BOOLEAN results. Most 
 | AT MOST      | `<=`   | Less or equal            |
 | ABOVE        | `>`    | Synonym for GREATER THAN |
 | BELOW        | `<`    | Synonym for LESS THAN    |
-| EXACTLY      | -      | Exact match in patterns  |
 
 ## Equality: EQUALS
 
@@ -91,32 +90,6 @@ Alternative keywords for greater/less than.
 ```l4
 #EVAL 10 ABOVE 5           -- TRUE (same as GREATER THAN)
 #EVAL 3 BELOW 7            -- TRUE (same as LESS THAN)
-```
-
-## EXACTLY
-
-Used in pattern matching for exact value matches, especially in regulative rules.
-
-### Syntax
-
-```l4
-MUST action EXACTLY value
-WHEN EXACTLY pattern THEN result
-```
-
-### Examples
-
-```l4
--- In regulative rules
-PARTY Alice
-MUST EXACTLY payment 100
-WITHIN 30
-
--- In pattern matching
-CONSIDER x
-  WHEN EXACTLY 0 THEN "zero"
-  WHEN EXACTLY 1 THEN "one"
-  OTHERWISE "many"
 ```
 
 ## Combining Comparisons

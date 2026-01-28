@@ -11,7 +11,7 @@ Regulative keywords express legal obligations, permissions, prohibitions, and th
 | **[MUST](MUST.md)**   | Obligation (required)     |
 | **[MAY](MAY.md)**     | Permission (allowed)      |
 | **[SHANT](SHANT.md)** | Prohibition (forbidden)   |
-| **MUST NOT**          | Prohibition (alternative) |
+| DO                    | Possibility (optionality) |
 
 ### Rule Structure
 
@@ -23,20 +23,13 @@ Regulative keywords express legal obligations, permissions, prohibitions, and th
 | **LEST**              | Consequence on breach             |
 | **PROVIDED**          | Guard condition                   |
 | **BREACH**            | Explicit violation marker         |
-
-### Combining Rules
-
-| Keyword       | Purpose                     |
-| ------------- | --------------------------- |
-| **RAND**      | Sequential AND of contracts |
-| **ROR**       | Choice OR of contracts      |
-| **FULFILLED** | Successfully completed      |
+| **FULFILLED**         | Successfully completed            |
 
 ## Basic Rule Structure
 
 ```l4
 PARTY partyName
-MUST/MAY/SHANT action
+MUST/MAY/SHANT/DO action
 WITHIN deadline
 ```
 
@@ -140,7 +133,7 @@ Adds a condition to an action.
 ### Syntax
 
 ```l4
-MUST action PROVIDED condition
+MUST action parameter PROVIDED parameter-condition
 ```
 
 ### Examples
@@ -150,6 +143,27 @@ MUST action PROVIDED condition
 PARTY Bob
 MUST payment price PROVIDED price >= 20
 WITHIN 3
+```
+
+
+## EXACTLY (Guard Condition)
+
+Used in pattern matching for exact value matches, especially in regulative rules.
+`price EXACTLY 20` is equivalent to `price PROVIDED price EQUALS 20`
+
+### Syntax
+
+```l4
+MUST action parameter EXACTLY value
+```
+
+### Examples
+
+```l4
+-- In regulative rules
+PARTY Alice
+MUST pay price EXACTLY 100
+WITHIN 30
 ```
 
 ## BREACH
@@ -171,26 +185,6 @@ LEST BREACH
 
 -- Detailed breach (syntax varies)
 LEST BREACH
-```
-
-## RAND / ROR (Contract Combinators)
-
-Combine multiple contracts.
-
-### RAND (Sequential AND)
-
-Both contracts must be fulfilled, in sequence.
-
-```l4
-contract1 RAND contract2
-```
-
-### ROR (Choice OR)
-
-Either contract fulfills the combined obligation.
-
-```l4
-contract1 ROR contract2
 ```
 
 ## FULFILLED

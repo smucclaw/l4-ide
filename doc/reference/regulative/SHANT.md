@@ -54,17 +54,6 @@ limitedGambling MEANS
 - Prohibition is **breached** when the party performs the forbidden action
 - LEST consequences trigger on breach
 
-## SHANT vs MUST NOT
-
-Both express prohibition:
-
-```l4
--- Using SHANT
-rule1 MEANS PARTY Alice SHANT smoke WITHIN 30
-
--- Using MUST NOT
-rule2 MEANS PARTY Alice MUST NOT smoke WITHIN 30
-```
 
 ## Related Keywords
 

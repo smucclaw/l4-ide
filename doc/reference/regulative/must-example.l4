@@ -1,29 +1,4 @@
 -- MUST Keyword Examples - Legal Obligations
---
--- The MUST keyword expresses legal obligations - actions that a party is
--- required to perform. If not fulfilled within the deadline, consequences
--- (LEST) may apply.
---
--- Key Concepts:
---   • MUST creates a duty to perform an action
---   • WITHIN specifies the deadline for performance
---   • HENCE specifies what happens upon fulfillment
---   • LEST specifies consequences of breach
---   • MUST NOT is equivalent to SHANT (prohibition)
---
--- Common Legal Uses:
---   • Payment obligations (loan agreements, purchase contracts)
---   • Delivery obligations (sale of goods, services contracts)
---   • Performance obligations (construction, consulting)
---   • Notice requirements (lease agreements, employment contracts)
---
--- This file demonstrates typical obligation patterns found in:
---   • Commercial contracts
---   • Loan agreements
---   • Sale and purchase agreements
---   • Employment contracts
---   • Lease agreements
---
 
 -- Type Declarations
 

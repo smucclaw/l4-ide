@@ -24,9 +24,8 @@ Keywords for defining functions and computations:
 L4's type system for representing data:
 
 - **Primitives:** BOOLEAN, NUMBER, STRING, DATE
-- **Algebraic Types:** Records, Enums
+- **Type Constructors:** DECLARE, IS, HAS, ONE OF
 - **Polymorphic Types:** LIST, MAYBE, EITHER
-- **Type Constructors:** IS, HAS, ONE OF
 
 #### [Operators](operators/README.md)
 
