@@ -220,7 +220,7 @@ L4 uses MAYBE for optional values, not null. See [maybe-example.l4](maybe-exampl
 
 ### Option Type Pattern
 
-Use MAYBE for nullable values. See prelude's `lookup` function and [maybe-example.l4](maybe-example.l4).
+Use MAYBE for nullable values. See prelude's `lookup` function \n\n[maybe-example.l4](maybe-example.l4)
 
 ### Either for Errors
 
@@ -228,7 +228,7 @@ Use EITHER for success/failure. [either-example.l4](either-example.l4)
 
 ### Lists for Collections
 
-Use LIST for ordered data. See prelude's `sum` function and [list-example.l4](list-example.l4).
+Use LIST for ordered data. See prelude's `sum` function \n\n[list-example.l4](list-example.l4)
 
 ### Records for Structured Data
 
