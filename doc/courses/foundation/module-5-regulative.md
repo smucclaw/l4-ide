@@ -41,7 +41,6 @@ The complete working example:
 
 [module-5-examples.l4](module-5-examples.l4)
 
-
 ### Defining Actor and Action Types
 
 First, define who can act and what actions exist:
@@ -73,14 +72,14 @@ GIVETH A DEONTIC Person Action
     LEST BREACH
 ```
 
-| Part                           | Meaning                                                       |
-| ------------------------------ | ------------------------------------------------------------- |
-| `GIVETH A DEONTIC Person Action`| Returns a deontic value with Person actors and Action actions |
-| `PARTY Seller`                 | The seller has this obligation                                |
-| `MUST \`deliver goods\``       | They must deliver goods                                       |
-| `WITHIN 14`                    | Within 14 days                                                |
-| `HENCE FULFILLED`              | If they do, the obligation is fulfilled                       |
-| `LEST BREACH`                  | If they don't, it's a breach                                  |
+| Part                             | Meaning                                                       |
+| -------------------------------- | ------------------------------------------------------------- |
+| `GIVETH A DEONTIC Person Action` | Returns a deontic value with Person actors and Action actions |
+| `PARTY Seller`                   | The seller has this obligation                                |
+| `MUST \`deliver goods\``         | They must deliver goods                                       |
+| `WITHIN 14`                      | Within 14 days                                                |
+| `HENCE FULFILLED`                | If they do, the obligation is fulfilled                       |
+| `LEST BREACH`                    | If they don't, it's a breach                                  |
 
 ---
 

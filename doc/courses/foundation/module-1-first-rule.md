@@ -31,13 +31,13 @@ GIVEN charity IS A RegisteredCharity
 
 Let's break this down:
 
-| Code                                   | Meaning                                    |
-| -------------------------------------- | ------------------------------------------ |
-| `GIVEN charity IS A RegisteredCharity` | This rule applies to registered charities  |
+| Code                                       | Meaning                                    |
+| ------------------------------------------ | ------------------------------------------ |
+| `GIVEN charity IS A RegisteredCharity`     | This rule applies to registered charities  |
 | `` `The annual return obligation` MEANS `` | The name of this rule                      |
-| `PARTY charity`                        | The charity is the one with the obligation |
-| `MUST`                                 | This creates a legal obligation            |
-| `` `file annual return` ``               | This is what they must do                  |
+| `PARTY charity`                            | The charity is the one with the obligation |
+| `MUST`                                     | This creates a legal obligation            |
+| `` `file annual return` ``                 | This is what they must do                  |
 
 ### Backtick Names
 
@@ -59,6 +59,7 @@ Use backticks when you want names that read like natural language.
 Write a rule that says "A solicitor must maintain client confidentiality."
 
 Hint: You'll need to:
+
 1. Define a `DECLARE` for the Solicitor type
 2. Define `DECLARE` for the Actor and Action types
 3. Use `PARTY ... MUST ...` to create the obligation
@@ -236,7 +237,6 @@ MUST file annual return
 -- ✅ Right: Use backticks
 MUST `file annual return`
 ```
-
 
 ## Exercises
 

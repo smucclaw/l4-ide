@@ -20,7 +20,6 @@ This is the complete working examples to work along.
 
 [module-4-examples.l4](module-4-examples.l4)
 
-
 ### The Structure of a Function
 
 Every L4 function has these parts:

@@ -27,7 +27,6 @@ The complete working implementation:
 
 [module-6-examples.l4](module-6-examples.l4)
 
-
 ### Requirements
 
 1. **Charities** have names, purposes, governors, and financial records

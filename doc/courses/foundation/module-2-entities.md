@@ -26,7 +26,6 @@ The complete working example:
 
 [module-2-examples.l4](module-2-examples.l4)
 
-
 ```l4
 DECLARE `Registered Charity`
     HAS `the charity's name` IS A STRING
@@ -125,6 +124,7 @@ DECIDE `the purpose is charitable` IS
 ### CONSIDER Syntax
 
 The general pattern is:
+
 - `CONSIDER expression`
 - `WHEN pattern THEN result` (one for each variant)
 - `OTHERWISE defaultResult` (optional catch-all)

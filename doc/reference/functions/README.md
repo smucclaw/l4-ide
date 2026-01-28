@@ -14,16 +14,16 @@ DECIDE name MEANS expression   -- Definition
 
 ## Keywords
 
-| Keyword             | Purpose                                     | Required                   |
-| ------------------- | ------------------------------------------- | -------------------------- |
-| [GIVEN](GIVEN.md)   | Declares function parameters with types     | For functions with inputs  |
+| Keyword                                  | Purpose                                     | Required                   |
+| ---------------------------------------- | ------------------------------------------- | -------------------------- |
+| [GIVEN](GIVEN.md)                        | Declares function parameters with types     | For functions with inputs  |
 | [GIVETH](GIVETH.md) / [GIVES](GIVETH.md) | Specifies the return type                   | Optional (can be inferred) |
-| [DECIDE](DECIDE.md) | Defines a named value or function           | Yes (or use bare MEANS)    |
-| [MEANS](MEANS.md)   | Connects the function name to its body      | Yes                        |
-| [YIELD](YIELD.md)   | Creates anonymous functions (lambdas)       | For inline functions       |
-| [WHERE](WHERE.md)   | Adds local definitions after an expression  | Optional                   |
-| [LET](LET.md)       | Adds local definitions before an expression | Optional                   |
-| [AKA](AKA.md)       | Creates aliases for definitions             | Optional                   |
+| [DECIDE](DECIDE.md)                      | Defines a named value or function           | Yes (or use bare MEANS)    |
+| [MEANS](MEANS.md)                        | Connects the function name to its body      | Yes                        |
+| [YIELD](YIELD.md)                        | Creates anonymous functions (lambdas)       | For inline functions       |
+| [WHERE](WHERE.md)                        | Adds local definitions after an expression  | Optional                   |
+| [LET](LET.md)                            | Adds local definitions before an expression | Optional                   |
+| [AKA](AKA.md)                            | Creates aliases for definitions             | Optional                   |
 
 ## Quick Examples
 

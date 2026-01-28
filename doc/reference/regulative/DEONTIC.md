@@ -25,6 +25,7 @@ ruleName MEANS
 5. **What happens** on breach (`LEST`)
 
 The DEONTIC type is parameterized by two type arguments:
+
 - **ActorType**: The type of parties who can act (e.g., `Buyer`, `Seller`)
 - **ActionType**: The type of actions that can be performed (e.g., `deliver`, `pay`)
 
@@ -71,6 +72,7 @@ GIVETH A DEONTIC ActorType ActionType
 ```
 
 For example:
+
 - `GIVETH A DEONTIC Person Action` — Obligations involving `Person` actors and `Action` actions
 - `GIVETH A DEONTIC ContractParty ContractAction` — Custom actor and action types
 
@@ -140,11 +142,11 @@ Use `EVENT` to construct events:
 
 ## Deontic Modalities
 
-| Modality | Keyword | Meaning           | On Action      | On No Action |
-| -------- | ------- | ----------------- | -------------- | ------------ |
-| Must     | `MUST`  | Obligation        | HENCE (comply) | LEST (breach)|
-| May      | `MAY`   | Permission        | HENCE (comply) | Nothing      |
-| Shall not| `SHANT` | Prohibition       | LEST (breach)  | HENCE (comply)|
+| Modality  | Keyword | Meaning     | On Action      | On No Action   |
+| --------- | ------- | ----------- | -------------- | -------------- |
+| Must      | `MUST`  | Obligation  | HENCE (comply) | LEST (breach)  |
+| May       | `MAY`   | Permission  | HENCE (comply) | Nothing        |
+| Shall not | `SHANT` | Prohibition | LEST (breach)  | HENCE (comply) |
 
 ## Advanced Features
 
