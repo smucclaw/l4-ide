@@ -22,6 +22,7 @@ module L4.ACTUS.Analyzer (
   analyzeFile,
   analyzeFiles,
   analyzeModule,
+  analyzeModuleHybrid,
 
   -- * Configuration
   AnalyzerConfig (..),
@@ -34,6 +35,7 @@ module L4.ACTUS.Analyzer (
   -- * Re-exports
   module L4.ACTUS.Ontology.Types,
   module L4.ACTUS.FeatureExtractor,
+  module L4.ACTUS.Qualia.Hybrid,
 ) where
 
 import Control.Monad (forM)
@@ -48,6 +50,7 @@ import L4.ACTUS.FeatureExtractor
 import L4.ACTUS.Matching.ACTUS (inferFIBOClass)
 import L4.ACTUS.Matching.Rules (buildRulesFromOntology, defaultRules)
 import L4.ACTUS.Matching.Scorer
+import L4.ACTUS.Qualia.Hybrid
 import L4.ACTUS.Ontology.Cache
 import L4.ACTUS.Ontology.Loader
 import L4.ACTUS.Ontology.Types
@@ -154,6 +157,43 @@ analyzeModule config path mod' = do
     Right ontology -> do
       result <- analyzeModuleInternal config ontology [path] mod'
       pure $ Right result
+
+-- | Analyze a module using hybrid classification.
+--
+-- This combines qualia-based structural analysis with symbolic pattern
+-- matching for best-of-both-worlds classification.
+--
+-- @
+-- result <- analyzeModuleHybrid defaultHybridConfig defaultConfig path mod'
+-- @
+analyzeModuleHybrid ::
+  HybridConfig ->
+  AnalyzerConfig ->
+  FilePath ->
+  Module Resolved ->
+  IO AnalysisResult
+analyzeModuleHybrid hybridConfig analyzerConfig path mod' = do
+  -- Load ontology for label lookup
+  ontologyResult <- loadOntologyWithCache analyzerConfig
+  case ontologyResult of
+    Left err -> pure $ Left $ OntologyError err
+    Right ontology -> do
+      let features = extractFeatures path mod'
+          -- Add ontology-derived rules to the hybrid config
+          rules = buildRulesFromOntology ontology ++ hybridConfig.hcMatchingRules
+          hybridConfig' = hybridConfig {hcMatchingRules = rules}
+          -- Run hybrid classification
+          baseResult = classifyHybrid hybridConfig' features mod'
+          -- Enrich with ontology labels and timestamp
+      now <- getCurrentTime
+      let timestamp = T.pack $ iso8601Show now
+          enrichedResult =
+            baseResult
+              { sourceFiles = [path]
+              , primaryActusLabel = baseResult.primaryActusType >>= lookupLabel ontology
+              , analyzedAt = timestamp
+              }
+      pure $ Right enrichedResult
 
 -- Internal implementation
 

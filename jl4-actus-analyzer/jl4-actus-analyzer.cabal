@@ -66,6 +66,10 @@ library
     L4.ACTUS.Matching.Rules
     L4.ACTUS.Matching.Scorer
     L4.ACTUS.Matching.ACTUS
+    L4.ACTUS.Qualia.ObligationGraph
+    L4.ACTUS.Qualia.Essence
+    L4.ACTUS.Qualia.Archetypes
+    L4.ACTUS.Qualia.Hybrid
     L4.ACTUS.Report.JSON
     L4.ACTUS.Report.RDF
     L4.ACTUS.Report.Markdown
@@ -76,6 +80,7 @@ library
     containers,
     directory,
     filepath,
+    hashable,
     jl4-core,
     optics,
     rdf4h,
@@ -99,11 +104,17 @@ test-suite jl4-actus-analyzer-test
   hs-source-dirs:
     test
   other-modules:
+    ArchetypesSpec
+    EssenceSpec
     FeatureExtractorSpec
+    HybridSpec
     MatchingSpec
+    ObligationGraphSpec
   build-tool-depends:
     hspec-discover:hspec-discover
   build-depends:
     containers,
     hspec,
-    jl4-actus-analyzer
+    jl4-actus-analyzer,
+    jl4-core,
+    text
