@@ -10,7 +10,7 @@ Arithmetic keywords perform mathematical operations on numbers. Each has both a 
 | MINUS      | `-`    | Subtraction    |
 | TIMES      | `*`    | Multiplication |
 | DIVIDED BY | `/`    | Division       |
-| MODULO     | `%`    | Remainder      |
+| MODULO     | None   | Remainder      |
 
 ## PLUS
 
@@ -100,14 +100,12 @@ Returns the remainder after division.
 
 ```l4
 value1 MODULO value2
-value1 % value2
 ```
 
 ### Examples
 
 ```l4
 #EVAL 17 MODULO 5     -- 2
-#EVAL 17 % 5          -- 2
 #EVAL 10 MODULO 3     -- 1
 ```
 
@@ -116,7 +114,7 @@ value1 % value2
 Standard mathematical precedence:
 
 1. Parentheses `()` (highest)
-2. Multiplication, Division, Modulo (`*`, `/`, `%`)
+2. Multiplication, Division, Modulo
 3. Addition, Subtraction (`+`, `-`) (lowest)
 
 ### Examples

@@ -277,7 +277,7 @@ Implicit operators using punctuation:
 - **`...`** (ellipsis) - Implicit AND
 - **`..`** (double dot) - Implicit OR
 
-See the syntax reference for details.
+**Example:** [asyndetic-example.l4](asyndetic-example.l4)
 
 ### Genitive
 
