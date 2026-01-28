@@ -73,7 +73,7 @@ DECLARE Person HAS
   employed IS A BOOLEAN
 ```
 
-**See [DECLARE](DECLARE.md) and [Types: Records](../types/record-example.l4).**
+[DECLARE](DECLARE.md) and [Types: Records](../types/record-example.l4)
 
 ## ONE OF
 
@@ -97,7 +97,7 @@ DECLARE Status IS ONE OF
   Pending HAS reason IS A STRING
 ```
 
-**See [DECLARE](DECLARE.md) and [Types: Enums](../types/enum-example.l4).**
+[DECLARE](DECLARE.md) and [Types: Enums](../types/enum-example.l4)
 
 ## OF
 
@@ -164,7 +164,7 @@ DECIDE myList IS LIST 1, 2, 3, 4, 5
 DECIDE empty IS EMPTY
 ```
 
-**See [Types: Lists](../types/list-example.l4).**
+[Types: Lists](../types/list-example.l4)
 
 ## FUNCTION FROM TO
 
@@ -187,7 +187,7 @@ ASSUME f IS A FUNCTION FROM NUMBER TO NUMBER
 ASSUME g IS A FUNCTION FROM NUMBER AND STRING TO BOOLEAN
 ```
 
-**See [Types: Functions](../types/function-type-example.l4).**
+[Types: Functions](../types/function-type-example.l4)
 
 ## TYPE
 

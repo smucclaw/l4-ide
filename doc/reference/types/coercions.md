@@ -19,7 +19,7 @@ Converts a value to its string representation.
 
 **Example:**
 
-See [coercion-example.l4](coercion-example.l4).
+[coercion-example.l4](coercion-example.l4)
 
 ---
 
