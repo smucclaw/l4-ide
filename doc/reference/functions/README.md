@@ -17,7 +17,7 @@ DECIDE name MEANS expression   -- Definition
 | Keyword             | Purpose                                     | Required                   |
 | ------------------- | ------------------------------------------- | -------------------------- |
 | [GIVEN](GIVEN.md)   | Declares function parameters with types     | For functions with inputs  |
-| [GIVETH](GIVETH.md) | Specifies the return type                   | Optional (can be inferred) |
+| [GIVETH](GIVETH.md) / [GIVES](GIVETH.md) | Specifies the return type                   | Optional (can be inferred) |
 | [DECIDE](DECIDE.md) | Defines a named value or function           | Yes (or use bare MEANS)    |
 | [MEANS](MEANS.md)   | Connects the function name to its body      | Yes                        |
 | [YIELD](YIELD.md)   | Creates anonymous functions (lambdas)       | For inline functions       |
