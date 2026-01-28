@@ -1,42 +1,11 @@
-# Module A3: Contracts in Depth
+-- Module A3: Contracts in Depth - Examples
+-- This file demonstrates advanced contract modeling including complex payment terms,
+-- recursive obligations, and penalty structures.
 
-In this module, you'll learn advanced contract modeling including complex payment terms, recursive obligations, and penalty structures. Find the full working example at the bottom.
+--------------------------------------------------------------------------------
+-- SECTION 1: Type Definitions
+--------------------------------------------------------------------------------
 
-## Learning Objectives
-
-By the end of this module, you will be able to:
-
-- Model complex payment schedules
-- Implement recursive payment obligations
-- Create penalty and interest calculations
-- Handle multi-party contracts
-
----
-
-## Contract Modeling Principles
-
-Well-modeled contracts in L4 follow these principles:
-
-1. **Clear parties**: Who has obligations?
-2. **Precise actions**: What must be done?
-3. **Explicit conditions**: When do obligations apply?
-4. **Complete paths**: Every scenario leads to FULFILLED or BREACH
-5. **Testable**: Use #TRACE to verify behavior
-
----
-
-## Case Study: Promissory Note
-
-We'll build a complete promissory note with:
-
-- Principal and interest
-- Monthly installments
-- Late payment penalties
-- Default provisions
-
-### Step 1: Define Types
-
-```l4
 -- Money type with currency
 DECLARE Money
     HAS amount IS A NUMBER
@@ -50,6 +19,13 @@ USD MEANS Money WITH amount IS n, currency IS "USD"
 GIVEN n IS A NUMBER
 GIVETH A Money
 SGD MEANS Money WITH amount IS n, currency IS "SGD"
+
+-- Person and Company types (basic definitions)
+DECLARE Person
+    HAS name IS A STRING
+
+DECLARE Company
+    HAS name IS A STRING
 
 -- Party types
 DECLARE Party IS ONE OF
@@ -74,11 +50,11 @@ DECLARE Payment
 DECLARE PenaltyTerms
     HAS interestRate IS A NUMBER
         gracePeriodDays IS A NUMBER
-```
 
-### Step 2: Define Loan Terms
+--------------------------------------------------------------------------------
+-- SECTION 2: Loan Terms
+--------------------------------------------------------------------------------
 
-```l4
 DECLARE LoanTerms
     HAS principal IS A Money
         annualInterestRate IS A NUMBER
@@ -95,11 +71,11 @@ exampleLoan MEANS LoanTerms WITH
     penaltyTerms         IS PenaltyTerms WITH
                               interestRate    IS 0.05   -- 5% penalty
                               gracePeriodDays IS 10
-```
 
-### Step 3: Calculate Payment Schedule
+--------------------------------------------------------------------------------
+-- SECTION 3: Payment Calculations
+--------------------------------------------------------------------------------
 
-```l4
 -- Monthly interest rate
 GIVEN terms IS A LoanTerms
 GIVETH A NUMBER
@@ -128,15 +104,22 @@ GIVETH A Money
         n MEANS terms's numberOfInstallments
         compoundFactor MEANS `power` (1 + r) n
         payment MEANS p * (r * compoundFactor) / (compoundFactor - 1)
-```
 
----
+-- Placeholder functions for payment scheduling
+GIVEN terms IS A LoanTerms
+      outstanding IS A Money
+GIVETH A Money
+`calculate next payment` MEANS `monthly payment amount` terms
 
-## Recursive Payment Obligations
+GIVEN terms IS A LoanTerms
+      outstanding IS A Money
+GIVETH A NUMBER
+`calculate due date` MEANS 30  -- Simplified: 30 days between payments
 
-The key insight: **payment obligations are recursive**. After each payment, there's another payment (until paid off).
+--------------------------------------------------------------------------------
+-- SECTION 4: Loan Contract Actions
+--------------------------------------------------------------------------------
 
-```l4
 -- Actions for the loan contract
 DECLARE LoanAction IS ONE OF
     `pay installment` HAS recipient IS A Lender
@@ -149,6 +132,14 @@ GIVETH A BOOLEAN
 `is valid payment` MEANS
     paid's currency EQUALS expected's currency
     AND paid's amount >= (expected's amount - 0.05)  -- Allow small rounding
+
+--------------------------------------------------------------------------------
+-- SECTION 5: Recursive Payment Obligations
+--------------------------------------------------------------------------------
+
+-- Test borrower and lender for examples
+aliceBorrower MEANS IndividualBorrower (Person WITH name IS "Alice")
+bobLender MEANS IndividualLender (Person WITH name IS "Bob")
 
 -- The recursive payment obligation
 GIVEN terms IS A LoanTerms
@@ -178,11 +169,8 @@ GIVETH A DEONTIC Party LoanAction
         newOutstanding MEANS Money WITH
             amount   IS outstanding's amount - paymentDue's amount
             currency IS outstanding's currency
-```
 
-### Late Payment with Penalty
-
-```l4
+-- Late payment with penalty
 GIVEN terms IS A LoanTerms
       debtorParty IS A Borrower
       creditorParty IS A Lender
@@ -210,11 +198,8 @@ GIVETH A DEONTIC Party LoanAction
         newOutstanding MEANS Money WITH
             amount   IS outstanding's amount - paymentWithPenalty's amount
             currency IS outstanding's currency
-```
 
-### Default: Full Balance Due
-
-```l4
+-- Default: Full balance due
 GIVEN terms IS A LoanTerms
       debtorParty IS A Borrower
       creditorParty IS A Lender
@@ -227,52 +212,11 @@ GIVETH A DEONTIC Party LoanAction
     WITHIN terms's defaultAfterDays
     HENCE FULFILLED
     LEST BREACH BY (BorrowerParty debtorParty) BECAUSE "loan default"
-```
 
----
+--------------------------------------------------------------------------------
+-- SECTION 6: Multi-Party Contracts (Escrow)
+--------------------------------------------------------------------------------
 
-## Testing with #TRACE
-
-### Happy Path: All Payments On Time
-
-```l4
--- Define test parties
-aliceBorrower MEANS IndividualBorrower (Person WITH name IS "Alice")
-bobLender MEANS IndividualLender (Person WITH name IS "Bob")
-
-#TRACE `payment obligation` exampleLoan aliceBorrower bobLender (USD 25000) AT 0 WITH
-    PARTY (BorrowerParty aliceBorrower) DOES `pay installment` bobLender (USD 2256.46) AT 30
-    PARTY (BorrowerParty aliceBorrower) DOES `pay installment` bobLender (USD 2256.46) AT 60
-    PARTY (BorrowerParty aliceBorrower) DOES `pay installment` bobLender (USD 2256.46) AT 90
-    -- ... continue for all 12 payments
-```
-
-### Late Payment Scenario
-
-```l4
--- First payment on time, second payment late (in grace period)
-#TRACE `payment obligation` exampleLoan aliceBorrower bobLender (USD 25000) AT 0 WITH
-    PARTY (BorrowerParty aliceBorrower) DOES `pay installment` bobLender (USD 2256.46) AT 30
-    -- Second payment late with penalty
-    PARTY (BorrowerParty aliceBorrower) DOES `pay installment` bobLender (USD 2369.28) AT 75
-```
-
-### Default Scenario
-
-```l4
--- Borrower stops paying
-#TRACE `payment obligation` exampleLoan aliceBorrower bobLender (USD 25000) AT 0 WITH
-    PARTY (BorrowerParty aliceBorrower) DOES `pay installment` bobLender (USD 2256.46) AT 30
-    -- No more payments... contract should reach BREACH
-```
-
----
-
-## Multi-Party Contracts
-
-Some contracts involve more than two parties:
-
-```l4
 -- Escrow arrangement: Buyer, Seller, Escrow Agent
 DECLARE EscrowParty IS ONE OF Buyer, Seller, EscrowAgent
 
@@ -309,15 +253,11 @@ GIVETH A DEONTIC EscrowParty EscrowAction
             HENCE BREACH BY Seller BECAUSE "seller failed to deliver goods"
             LEST BREACH BY EscrowAgent BECAUSE "escrow agent failed to return funds"
     LEST BREACH BY Buyer BECAUSE "buyer failed to deposit funds"
-```
 
----
+--------------------------------------------------------------------------------
+-- SECTION 7: Parallel and Alternative Obligations
+--------------------------------------------------------------------------------
 
-## Parallel Obligations with RAND
-
-When multiple obligations must all be fulfilled:
-
-```l4
 -- Types for service contract examples
 DECLARE ServiceParty IS ONE OF Provider, Client
 
@@ -328,40 +268,26 @@ DECLARE ContractAction IS ONE OF
     `arrange pickup`
     `make payment`
 
+-- Parallel obligations with RAND
 -- Service contract: Provider must deliver service AND provide documentation
 GIVETH A DEONTIC ServiceParty ContractAction
 `service delivery` MEANS
     (PARTY Provider MUST `deliver service` WITHIN 30 HENCE FULFILLED LEST BREACH BY Provider BECAUSE "failed to deliver service")
     RAND
     (PARTY Provider MUST `provide documentation` WITHIN 30 HENCE FULFILLED LEST BREACH BY Provider BECAUSE "failed to provide documentation")
-```
 
-Both obligations must be fulfilled for the contract to be fulfilled.
-
----
-
-## Alternative Obligations with ROR
-
-When fulfilling any one obligation is sufficient:
-
-```l4
+-- Alternative obligations with ROR
 -- Delivery options: Ship OR pickup
 GIVETH A DEONTIC ServiceParty ContractAction
 `delivery options` MEANS
     (PARTY Provider MUST `ship goods` WITHIN 14 HENCE FULFILLED LEST BREACH BY Provider BECAUSE "failed to ship")
     ROR
     (PARTY Provider MUST `arrange pickup` WITHIN 7 HENCE FULFILLED LEST BREACH BY Provider BECAUSE "failed to arrange pickup")
-```
 
-Either shipping or arranging pickup fulfills the delivery obligation.
+--------------------------------------------------------------------------------
+-- SECTION 8: Practical Patterns
+--------------------------------------------------------------------------------
 
----
-
-## Practical Patterns
-
-### Minimum Payment
-
-```l4
 -- Credit card style: Pay minimum or full balance
 DECLARE CardParty IS ONE OF Cardholder, Bank
 
@@ -383,11 +309,8 @@ GIVETH A DEONTIC CardParty CardAction
     WHERE
         minimumPayment MEANS balance's amount * minimumPct
         newBalance MEANS Money WITH amount IS balance's amount - minimumPayment, currency IS balance's currency
-```
 
-### Milestone-Based Payment
-
-```l4
+-- Milestone-based payment pattern
 DECLARE Milestone IS ONE OF
     Design
     Development
@@ -414,31 +337,3 @@ GIVETH A DEONTIC ServiceParty MilestoneAction
             HENCE `milestone payments` rest  -- Recurse
             LEST BREACH BY Client BECAUSE "client failed to pay milestone"
         LEST BREACH BY Provider BECAUSE "provider failed to complete milestone"
-```
-
----
-
-### Full Example
-
-[module-a3-contracts-examples.l4](module-a3-contracts-examples.l4)
-
----
-
-## Summary
-
-| Pattern                   | Use Case                            |
-| ------------------------- | ----------------------------------- |
-| **Recursive obligations** | Installment payments, subscriptions |
-| **Penalty structures**    | Late fees, interest                 |
-| **Default acceleration**  | Full balance on default             |
-| **Multi-party**           | Escrow, three-way agreements        |
-| **RAND**                  | Multiple parallel obligations       |
-| **ROR**                   | Alternative ways to fulfill         |
-
-Key insight: Complex contracts are **compositions of simpler patterns**, often with recursion for repeated obligations.
-
----
-
-## What's Next?
-
-In [Module A4: Production Patterns](module-a4-production.md), you'll learn patterns for organizing large codebases, testing strategies, and integration considerations.

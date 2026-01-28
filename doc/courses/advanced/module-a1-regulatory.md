@@ -1,6 +1,6 @@
 # Module A1: Real Regulatory Schemes
 
-In this module, you'll learn how to model complete legislative frameworks using a systematic three-layer approach.
+In this module, you'll learn how to model complete legislative frameworks using a systematic three-layer approach. Find a working example at the end.
 
 ## Learning Objectives
 
@@ -88,20 +88,20 @@ DECLARE CharitablePurpose IS ONE OF
     `other charitable purpose` HAS description IS A STRING
 
 -- Article 2: Governor definition
-DECLARE Governor
-    HAS name IS A STRING
-        dateOfBirth IS A Date
-        address IS A STRING
-        isBankrupt IS A BOOLEAN
-        convictions IS A LIST OF Conviction
+DECLARE Governor HAS
+    name IS A STRING
+    dateOfBirth IS A DATE
+    address IS A STRING
+    isBankrupt IS A BOOLEAN
+    convictions IS A LIST OF Conviction
 
 -- Core financial information (Regulation 1, Core Info Regs 2018)
-DECLARE CoreFinancialInfo
-    HAS income IS A Money
-        expenditure IS A Money
-        openingAssets IS A Money
-        closingAssets IS A Money
-        otherAssets IS A LIST OF Asset
+DECLARE CoreFinancialInfo HAS
+    income IS A Money
+    expenditure IS A Money
+    openingAssets IS A Money
+    closingAssets IS A Money
+    otherAssets IS A LIST OF Asset
 
 -- Register sections
 DECLARE RegisterSection IS ONE OF
@@ -112,24 +112,26 @@ DECLARE RegisterSection IS ONE OF
 DECLARE CharityStatus IS ONE OF
     Pending
     Active
-    Suspended HAS reason IS A STRING
-                  date IS A Date
-    Deregistered HAS reason IS A STRING
-                     date IS A Date
-                     isRetrospective IS A BOOLEAN
+    Suspended HAS
+        reason IS A STRING
+        date IS A DATE
+    Deregistered HAS
+        reason IS A STRING
+        date IS A DATE
+        isRetrospective IS A BOOLEAN
 
 -- Main charity record
-DECLARE RegisteredCharity
-    HAS name IS A STRING
-        registrationNumber IS A STRING
-        section IS A RegisterSection
-        status IS A CharityStatus
-        constitution IS A STRING
-        purposes IS A LIST OF CharitablePurpose
-        publicBenefitStatement IS A STRING
-        governors IS A LIST OF Governor
-        financials IS A CoreFinancialInfo
-        registrationDate IS A Date
+DECLARE RegisteredCharity HAS
+    name IS A STRING
+    registrationNumber IS A STRING
+    section IS A RegisterSection
+    status IS A CharityStatus
+    constitution IS A STRING
+    purposes IS A LIST OF CharitablePurpose
+    publicBenefitStatement IS A STRING
+    governors IS A LIST OF Governor
+    financials IS A CoreFinancialInfo
+    registrationDate IS A DATE
 ```
 
 ### Key Principle: Glossary-First
@@ -161,20 +163,18 @@ DECLARE Action IS ONE OF
     -- Charity obligations
     `file annual return`
     `report change of particulars`
-    `report reportable matter` HAS matter IS A ReportableMatter
-
+    `report reportable matter` HAS
+        matter IS A ReportableMatter
     -- Commissioner powers
     `demand information`
-    `issue Required Steps Notice` HAS steps IS A LIST OF STRING
-                                       deadline IS A NUMBER
-    `suspend governor` HAS reason IS A STRING
-    `deregister charity` HAS reason IS A STRING
-                             isRetrospective IS A BOOLEAN
-
+    `issue Required Steps Notice`
+    `suspend governor` HAS
+        reason IS A STRING
+    `deregister charity` HAS
+        reason IS A STRING
     -- Governor obligations
     `act in best interests`
     `report conviction`
-
     -- Appeal actions
     `lodge appeal`
 ```
@@ -189,7 +189,6 @@ Each statutory rule becomes a function:
 -- "A registered charity must file an annual return within 2 months of year end"
 
 GIVEN charity IS A RegisteredCharity
-      currentDate IS A Date
 GIVETH A DEONTIC Actor Action
 `annual return obligation` MEANS
     IF charity's status EQUALS Active
@@ -209,8 +208,6 @@ GIVETH A DEONTIC Actor Action
 `Commissioner may issue notice` MEANS
     PARTY CommissionerActor
     MAY `issue Required Steps Notice`
-        (LIST "File outstanding annual return", "Provide missing documents")
-        30
     HENCE `charity must comply with notice` charity
 ```
 
@@ -236,33 +233,30 @@ Track what happens when actions occur:
 
 -- Events that change the register
 DECLARE RegisterEvent IS ONE OF
-    -- Registration events
-    CharityRegistered HAS charity IS A RegisteredCharity
-                          date IS A Date
-
-    -- Status changes
-    CharityMovedToRestricted HAS charity IS A RegisteredCharity
-                                  date IS A Date
-    CharityDeregistered HAS charity IS A RegisteredCharity
-                             reason IS A STRING
-                             date IS A Date
-                             isRetrospective IS A BOOLEAN
-
-    -- Filing events
-    AnnualReturnFiled HAS charity IS A RegisteredCharity
-                           year IS A NUMBER
-                           wasLate IS A BOOLEAN
-
-    -- Enforcement events
-    RequiredStepsNoticeIssued HAS charity IS A RegisteredCharity
-                                   noticeId IS A STRING
-                                   deadline IS A Date
-
-    -- Governor events
-    GovernorSuspended HAS governor IS A Governor
-                           charity IS A RegisteredCharity
-                           reason IS A STRING
-                           period IS A NUMBER
+    CharityRegistered HAS
+        charity IS A RegisteredCharity
+        date IS A DATE
+    CharityMovedToRestricted HAS
+        charity IS A RegisteredCharity
+        date IS A DATE
+    CharityDeregistered HAS
+        charity IS A RegisteredCharity
+        reason IS A STRING
+        date IS A DATE
+        isRetrospective IS A BOOLEAN
+    AnnualReturnFiled HAS
+        charity IS A RegisteredCharity
+        year IS A NUMBER
+        wasLate IS A BOOLEAN
+    RequiredStepsNoticeIssued HAS
+        charity IS A RegisteredCharity
+        noticeId IS A STRING
+        deadline IS A DATE
+    GovernorSuspended HAS
+        governor IS A Governor
+        charity IS A RegisteredCharity
+        reason IS A STRING
+        period IS A NUMBER
 
 -- Effect of events on register
 GIVEN event IS A RegisterEvent
@@ -324,18 +318,18 @@ Legislation changes over time. Track versions:
 -- R&O 27/2025 added "advancement of animal welfare"
 
 -- Model with effective dates:
-DECLARE PurposeWithDate
-    HAS purpose IS A CharitablePurpose
-        effectiveFrom IS A Date
+DECLARE PurposeWithDate HAS
+    purpose IS A CharitablePurpose
+    effectiveFrom IS A DATE
 
 -- Check if purpose was valid at a given date
 GIVEN purpose IS A CharitablePurpose
-      asOfDate IS A Date
+      asOfDate IS A DATE
 GIVETH A BOOLEAN
 DECIDE `purpose valid at date` IF
     -- Animal welfare only valid from 2025
     IF purpose EQUALS `advancement of animal welfare`
-    THEN asOfDate >= Date 2025 1 1
+    THEN asOfDate >= Date 1 1 2025
     ELSE TRUE  -- Other purposes valid from 2014
 ```
 
@@ -356,11 +350,14 @@ Encode this statutory requirement:
 ```l4
 -- Reportable matters under Article 19(1)
 DECLARE ReportableMatter IS ONE OF
-    Bankruptcy HAS date IS A Date
-    DirectorDisqualification HAS date IS A Date
-                                  jurisdiction IS A STRING
-    DishonestConviction HAS description IS A STRING
-                             date IS A Date
+    Bankruptcy HAS
+        date IS A DATE
+    DirectorDisqualification HAS
+        date IS A DATE
+        jurisdiction IS A STRING
+    DishonestConviction HAS
+        description IS A STRING
+        date IS A DATE
 
 -- B-GOV-02: Governor reporting obligation
 GIVEN governor IS A Governor
@@ -375,6 +372,12 @@ GIVETH A DEONTIC Actor Action
 ```
 
 </details>
+
+---
+
+## Full Example
+
+[module-a1-regulatory-examples.l4](module-a1-regulatory-examples.l4)
 
 ---
 
