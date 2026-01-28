@@ -34,10 +34,10 @@ Let's break this down:
 | Code                                   | Meaning                                    |
 | -------------------------------------- | ------------------------------------------ |
 | `GIVEN charity IS A RegisteredCharity` | This rule applies to registered charities  |
-| `\`The annual return obligation\` MEANS` | The name of this rule                      |
+| `` `The annual return obligation` MEANS `` | The name of this rule                      |
 | `PARTY charity`                        | The charity is the one with the obligation |
 | `MUST`                                 | This creates a legal obligation            |
-| `\`file annual return\``               | This is what they must do                  |
+| `` `file annual return` ``               | This is what they must do                  |
 
 ### Backtick Names
 

@@ -259,8 +259,6 @@ alice MEANS Person "Alice" 30 TRUE
 
 ## Exercises
 
-Try creating your own L4 files based on these requirements. Use [module-2-examples.l4](module-2-examples.l4) as a reference.
-
 ### Exercise 1: Define a Contract Type
 
 Define types for a simple contract with parties and an amount.
