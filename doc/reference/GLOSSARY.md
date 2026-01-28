@@ -83,8 +83,9 @@ For expressing legal obligations, permissions, and prohibitions.
 | **MUST**          | Obligation (deontic necessity)   | [MUST](regulative/MUST.md)             |
 | **MAY**           | Permission (deontic possibility) | [MAY](regulative/MAY.md)               |
 | **SHANT**         | Prohibition                      | [SHANT](regulative/SHANT.md)           |
-| **DO** / **DOES** | Action verb in regulative rules  | [REGULATIVE](regulative/README.md) |
-| **EXACTLY**       | Exact match/precision modifier | [REGULATIVE](regulative/README.md) |
+| **DO**            | Optionality (deontic possibility) | [REGULATIVE](regulative/README.md) |
+| **DOES**          | Action verb in directive         | [REGUALTIVE](regulative/README.md)  |
+| **EXACTLY**       | Exact match/precision modifier   | [REGULATIVE](regulative/README.md) |
 | **WITHIN**        | Temporal deadline                | [REGULATIVE](regulative/README.md) |
 | **HENCE**         | Consequence (then)               | [REGULATIVE](regulative/README.md) |
 | **LEST**          | Negative consequence (else)      | [REGULATIVE](regulative/README.md) |
@@ -92,10 +93,6 @@ For expressing legal obligations, permissions, and prohibitions.
 | **BECAUSE**       | Justification or reason          | [REGULATIVE](regulative/README.md) |
 | **PROVIDED**      | Condition or proviso             | [REGULATIVE](regulative/README.md) |
 | **AT**            | Temporal specification           | [REGULATIVE](regulative/README.md) |
-| **STARTING**      | Temporal start point             | [REGULATIVE](regulative/README.md) |
-| **FOLLOWED**      | Temporal sequence or list cons   | [REGULATIVE](regulative/README.md) |
-| **FOR**           | Duration or iteration            | [REGULATIVE](regulative/README.md) |
-| **UNLESS**        | Negative condition               | [REGULATIVE](regulative/README.md) |
 
 ### Arithmetic Keywords
 
@@ -112,13 +109,8 @@ For expressing legal obligations, permissions, and prohibitions.
 
 | Keyword           | Purpose                           | Reference                                  |
 | ----------------- | --------------------------------- | ------------------------------------------ |
-| **IMPORT**  | Imports definitions from another file          | [IMPORT](libraries/IMPORT.md)   |
-| **ALL**           | Universal quantification          | [TYPE-KEYWORDS](types/keywords.md)         |
-| **FETCH**         | HTTP GET request                  | [Libraries](libraries/README.md)           |
-| **POST**          | HTTP POST request                 | [Libraries](libraries/README.md)           |
-| **ENV**           | Environment variable access       | [Libraries](libraries/README.md)           |
-| **CONCAT**        | String concatenation              | [Operators](operators/README.md)           |
-| **AS**            | Type annotation or alias          | [TYPE-KEYWORDS](types/keywords.md)         |
+| **IMPORT**        | Imports definitions from another file          | [IMPORT](libraries/IMPORT.md)   |
+
 
 ---
 

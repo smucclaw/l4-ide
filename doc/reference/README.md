@@ -15,7 +15,7 @@ Master index linking to all language features - start here to find what you need
 Keywords for defining functions and computations:
 
 - **Parameters:** GIVEN, GIVETH
-- **Definitions:** DECIDE, MEANS
+- **Definitions:** DECIDE, MEANS, YIELD
 - **Local bindings:** LET, WHERE
 - **Aliases:** AKA
 
