@@ -109,8 +109,8 @@ Boolean operations for conditions and logic.
 
 ### Conjunction
 
-- **Keyword:** AND
-- **Symbol:** `&&`
+- **Keyword:** [AND](AND.md)
+- **Symbol:** `&&` / `...`
 - **Type:** `BOOLEAN -> BOOLEAN -> BOOLEAN`
 - **Example:** `TRUE AND FALSE` → `FALSE`
 - **Truth table:**
@@ -121,8 +121,8 @@ Boolean operations for conditions and logic.
 
 ### Disjunction
 
-- **Keyword:** OR
-- **Symbol:** `||`
+- **Keyword:** [OR](OR.md)
+- **Symbol:** `||` \ `..`
 - **Type:** `BOOLEAN -> BOOLEAN -> BOOLEAN`
 - **Example:** `TRUE OR FALSE` → `TRUE`
 - **Truth table:**
@@ -133,13 +133,13 @@ Boolean operations for conditions and logic.
 
 ### Negation
 
-- **Keyword:** NOT
+- **Keyword:** [NOT](NOT.md)
 - **Type:** `BOOLEAN -> BOOLEAN`
 - **Example:** `NOT TRUE` → `FALSE`
 
 ### Implication
 
-- **Keyword:** IMPLIES
+- **Keyword:** [IMPLIES](IMPLIES.md)
 - **Symbol:** `=>`
 - **Type:** `BOOLEAN -> BOOLEAN -> BOOLEAN`
 - **Example:** `FALSE IMPLIES TRUE` → `TRUE`

@@ -132,7 +132,7 @@ CONSIDER status
 
 - **[IF](IF.md)** - Detailed conditional documentation
 - **[CONSIDER](CONSIDER.md)** - Detailed pattern matching documentation
-- **[AND](AND.md)** / **[OR](OR.md)** - Combine conditions
+- **[AND](../operators/AND.md)** / **[OR](../operators/OR.md)** - Combine conditions
 
 ## See Also
 

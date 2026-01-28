@@ -119,8 +119,8 @@ Comparisons work on:
 
 ## Related Keywords
 
-- **[AND](../control-flow/AND.md)** - Combine comparisons
-- **[OR](../control-flow/OR.md)** - Alternative conditions
+- **[AND](../operators/AND.md)** - Combine comparisons
+- **[OR](../operators/OR.md)** - Alternative conditions
 - **[IF](../control-flow/IF.md)** - Use comparisons in conditionals
 
 ## See Also

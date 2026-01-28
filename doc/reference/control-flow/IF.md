@@ -77,8 +77,8 @@ DECIDE isEligible IS IF age >= 18 THEN TRUE ELSE FALSE
 
 ## Related Keywords
 
-- **[AND](AND.md)** - Logical conjunction in conditions
-- **[OR](OR.md)** - Logical disjunction in conditions
+- **[AND](../operators/AND.md)** - Logical conjunction in conditions
+- **[OR](../operators/OR.md)** - Logical disjunction in conditions
 - **[CONSIDER](CONSIDER.md)** - Pattern matching alternative
 - **[CONTROL-FLOW](README.md)** - All control flow keywords
 

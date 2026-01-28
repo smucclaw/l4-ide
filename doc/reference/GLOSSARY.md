@@ -39,10 +39,10 @@ Keywords are reserved words that form the structure of L4 programs.
 
 | Keyword     | Purpose             | Reference                            |
 | ----------- | ------------------- | ------------------------------------ |
-| **AND** / **...** | Logical conjunction | [AND](control-flow/AND.md)               |
-| **IMPLIES** | Logical implication | [IMPLIES](control-flow/IMPLIES.md)       |
-| **NOT**     | Logical negation    | [NOT](control-flow/NOT.md)               |
-| **OR** / **..**   | Logical disjunction | [OR](control-flow/OR.md)                 |
+| **AND** / **...** | Logical conjunction | [AND](operators/AND.md)               |
+| **IMPLIES** | Logical implication | [IMPLIES](operators/IMPLIES.md)       |
+| **NOT**     | Logical negation    | [NOT](operators/NOT.md)               |
+| **OR** / **..**   | Logical disjunction | [OR](operators/OR.md)                 |
 
 ### Comparison Keywords
 
