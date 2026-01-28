@@ -92,7 +92,7 @@ For expressing legal obligations, permissions, and prohibitions.
 | **HENCE**         | Consequence (then)               | [REGULATIVE](regulative/README.md) |
 | **LEST**          | Negative consequence (else)      | [REGULATIVE](regulative/README.md) |
 | **BREACH**        | Violation of obligation          | [REGULATIVE](regulative/README.md) |
-| **BECAUSE**       | Justification or reason          | [REGULATIVE](regulative/README.md) |
+| **BECAUSE**       | Justification or reason for breach | [BECAUSE](regulative/BECAUSE.md) |
 | **PROVIDED**      | Condition or proviso             | [REGULATIVE](regulative/README.md) |
 | **AT**            | Temporal specification           | [REGULATIVE](regulative/README.md) |
 
@@ -189,8 +189,6 @@ For complete documentation, see **[Operators Reference](operators/README.md)**.
 | ------------ | ------------------------ |
 | **AT**       | Point in time            |
 | **WITHIN**   | Time duration constraint |
-| **STARTING** | Starting time            |
-| **FOLLOWED** | Temporal sequence        |
 
 ---
 

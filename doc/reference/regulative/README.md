@@ -23,6 +23,7 @@ Regulative keywords express legal obligations, permissions, prohibitions, and th
 | **LEST**              | Consequence on breach             |
 | **PROVIDED**          | Guard condition                   |
 | **BREACH**            | Explicit violation marker         |
+| **[BECAUSE](BECAUSE.md)** | Reason for breach             |
 | **FULFILLED**         | Successfully completed            |
 
 ## Basic Rule Structure
@@ -53,7 +54,6 @@ Specifies when an action must/may be performed.
 
 ```l4
 WITHIN timeUnits
-WITHIN duration STARTING referenceTime
 ```
 
 ### Examples
@@ -61,9 +61,6 @@ WITHIN duration STARTING referenceTime
 ```l4
 -- Simple deadline
 PARTY Alice MUST pay 100 WITHIN 30
-
--- With starting point
-PARTY Bob MUST deliver WITHIN 14 STARTING signatureDate
 ```
 
 ## HENCE (Fulfillment Consequence)
@@ -174,6 +171,8 @@ Explicit marker that a rule violation has occurred.
 
 ```l4
 LEST BREACH
+LEST BREACH BY party
+LEST BREACH BECAUSE reason
 LEST BREACH BY party BECAUSE reason
 ```
 
@@ -183,9 +182,17 @@ LEST BREACH BY party BECAUSE reason
 -- Simple breach
 LEST BREACH
 
--- Detailed breach (syntax varies)
-LEST BREACH
+-- With responsible party
+LEST BREACH BY Seller
+
+-- With reason
+LEST BREACH BECAUSE "delivery deadline exceeded"
+
+-- Full form
+LEST BREACH BY Seller BECAUSE "failed to deliver within 14 days"
 ```
+
+See **[BECAUSE](BECAUSE.md)** for detailed documentation on breach reasons.
 
 ## FULFILLED
 

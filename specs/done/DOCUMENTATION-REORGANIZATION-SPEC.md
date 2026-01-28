@@ -180,7 +180,7 @@ The new documentation follows the Diátaxis framework with four pillars:
 │   │   ├── comparison.md       # EQUALS, GREATER THAN, LESS THAN, etc.
 │   │   ├── logical.md          # AND, OR, NOT, IMPLIES
 │   │   ├── string.md           # CONCAT, string functions
-│   │   └── temporal.md         # AT, WITHIN, STARTING, FOLLOWED
+│   │   └── temporal.md         # AT, WITHIN
 │   ├── syntax/                 # Syntax patterns
 │   │   ├── README.md
 │   │   ├── layout.md           # Indentation rules
@@ -371,7 +371,7 @@ Any additional information, edge cases, or gotchas.
 
 **Regulative Keywords:**
 
-- PARTY, MUST, MAY, SHANT, DO, DOES, WITHIN, HENCE, LEST, BREACH, BECAUSE, PROVIDED, STARTING, FOLLOWED, AT, FOR
+- PARTY, MUST, MAY, SHANT, DO, DOES, WITHIN, HENCE, LEST, BREACH, BECAUSE, PROVIDED, AT, FOR
 
 **Comparison Keywords:**
 

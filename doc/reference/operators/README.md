@@ -145,7 +145,7 @@ Boolean operations for conditions and logic.
 - **Example:** `FALSE IMPLIES TRUE` → `TRUE`
 - **Note:** `p IMPLIES q` is equivalent to `NOT p OR q`
 
-### Exception (Unless)
+### Exception
 
 - **Keyword:** [UNLESS](UNLESS.md)
 - **Type:** `BOOLEAN -> BOOLEAN -> BOOLEAN`
