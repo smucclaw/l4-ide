@@ -87,6 +87,7 @@ Look up specific features:
 - **[Syntax Reference](reference/syntax/README.md)** - Complete syntax guide
 - **[Types](reference/types/README.md)** - L4 Types
 - **[Functions](reference/functions/README.md)** - Functions in L4
+- **[Regulative](reference/regulative/README.md)** - Regulative language
 - **[Libraries](reference/libraries/README.md)** - Standard library
 - **[Operators](reference/operators/README.md)** - Operators and precedence
 

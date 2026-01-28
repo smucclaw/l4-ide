@@ -32,9 +32,9 @@ L4's type system for representing data:
 Operations for computing and comparing values:
 
 - **Arithmetic:** PLUS, MINUS, TIMES, DIVIDED BY, MODULO
-- **Comparison:** EQUALS, GREATER THAN, LESS THAN
+- **Comparison:** EQUALS, GREATER THAN, LESS THAN, AT MOST, AT LEAST
 - **Logical:** AND, OR, NOT, IMPLIES
-- **String:** CONCAT
+- **String:** CONCAT, APPEND
 - **Temporal:** AT, WITHIN
 
 #### [Syntax](syntax/README.md)
