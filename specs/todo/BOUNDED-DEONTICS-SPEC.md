@@ -10,6 +10,7 @@
 This specification describes L4's approach to deontic modality ("must", "may", "must not") and its relationship to formal verification via model checking. The key insight is that **deontic force is always bounded by context** — what looks like an absolute obligation is always relative to some goal or consequence.
 
 This design enables:
+
 1. Compositionality of contracts (à la Hvitved's CSL)
 2. Model checking at the LTL/CTL assertion level
 3. Natural expression of both constitutive and regulative rules
@@ -21,10 +22,10 @@ This design enables:
 
 John Searle distinguished two kinds of rules:
 
-| Type | Form | Example | Non-compliance |
-|------|------|---------|----------------|
+| Type             | Form                         | Example                                              | Non-compliance                             |
+| ---------------- | ---------------------------- | ---------------------------------------------------- | ------------------------------------------ |
 | **Constitutive** | "X counts as Y in context C" | "All directors must vote yes for resolution to pass" | Institutional fact doesn't come into being |
-| **Regulative** | "If C, do X" | "Directors must vote within 7 days" | Breach, penalty, liability |
+| **Regulative**   | "If C, do X"                 | "Directors must vote within 7 days"                  | Breach, penalty, liability                 |
 
 Constitutive rules **define** institutional reality. The "must" in "all directors must vote yes for it to pass" is really a "must be" — a necessary condition — not an obligation. There's no breach if directors vote no; the resolution simply doesn't pass.
 
@@ -34,16 +35,17 @@ Regulative rules **prescribe** behaviour. The "must" in "directors must vote wit
 
 Kant distinguished:
 
-| Type | Example | Binding force |
-|------|---------|---------------|
-| **Categorical** | "You must not lie" | Unconditional, applies to all rational agents |
-| **Hypothetical** | "If you want wine, you must call the waiter" | Conditional on your goals |
+| Type             | Example                                      | Binding force                                 |
+| ---------------- | -------------------------------------------- | --------------------------------------------- |
+| **Categorical**  | "You must not lie"                           | Unconditional, applies to all rational agents |
+| **Hypothetical** | "If you want wine, you must call the waiter" | Conditional on your goals                     |
 
 Hypothetical imperatives are goal-directed. Non-compliance isn't breach — you simply don't achieve your goal. The patron who doesn't raise their hand isn't violating anything; they just don't get wine.
 
 ### Gneezy & Rustichini: A Fine Is A Price
 
 In their classic paper ["A Fine Is A Price"](https://www.jstor.org/stable/10.1086/468061), Gneezy and Rustichini showed that penalties have multiple dimensions:
+
 - Economic/financial/monetary
 - Moral/social
 
@@ -63,11 +65,11 @@ This "must" dissolves under scrutiny — it's really just a menu of options with
 
 Every deontic statement is **bounded** by its consequences. The force of a "must" depends on what's at stake:
 
-| Apparent rule | Actual structure | Real "must"? |
-|---------------|------------------|--------------|
-| "Must file within 30 days or $5 penalty" | Pricing / menu of options | No — just pay the premium |
-| "Must file within 30 days or license suspended" | Real consequence with teeth | Probably, for most actors |
-| "Must file within 30 days or criminal prosecution" | Serious enforcement | Yes, for risk-averse actors |
+| Apparent rule                                        | Actual structure            | Real "must"?                     |
+| ---------------------------------------------------- | --------------------------- | -------------------------------- |
+| "Must file within 30 days or $5 penalty"             | Pricing / menu of options   | No — just pay the premium        |
+| "Must file within 30 days or license suspended"      | Real consequence with teeth | Probably, for most actors        |
+| "Must file within 30 days or criminal prosecution"   | Serious enforcement         | Yes, for risk-averse actors      |
 | "Must get all director votes for resolution to pass" | Constitutive — definitional | N/A — it's a necessary condition |
 
 ### The Primitive: DO
@@ -87,11 +89,11 @@ This simply describes a choice point with two branches. No moral weight is assig
 The familiar deontic operators are syntactic sugar over `DO` with conventional default outcomes:
 
 | Operator | HENCE triggers when... | Default HENCE | LEST triggers when... | Default LEST |
-|----------|------------------------|---------------|----------------------|--------------|
-| `DO` | action is taken | (required) | deadline passes | (required) |
-| `MUST` | action is taken | `FULFILLED` | deadline passes | `BREACH` |
-| `MAY` | action is taken | `FULFILLED` | deadline passes | `FULFILLED` |
-| `SHANT` | deadline passes | `FULFILLED` | action is taken | `BREACH` |
+| -------- | ---------------------- | ------------- | --------------------- | ------------ |
+| `DO`     | action is taken        | (required)    | deadline passes       | (required)   |
+| `MUST`   | action is taken        | `FULFILLED`   | deadline passes       | `BREACH`     |
+| `MAY`    | action is taken        | `FULFILLED`   | deadline passes       | `FULFILLED`  |
+| `SHANT`  | deadline passes        | `FULFILLED`   | action is taken       | `BREACH`     |
 
 The key insight: **"breach" in an inner contract isn't inherently bad** — it just means "this path wasn't taken." The valence (good/bad) comes from the enclosing context.
 
@@ -121,7 +123,7 @@ The "breach" of the inner contract (patron doesn't raise hand) carries no moral 
 
 ### Why This Matters
 
-This design allows **constitutive rules to be expressed as regulative rules** when that fits human intuition. The sentence "all directors must vote yes for it to pass" *sounds* regulative (it uses "must"), even though it's constitutive. L4 permits this phrasing because:
+This design allows **constitutive rules to be expressed as regulative rules** when that fits human intuition. The sentence "all directors must vote yes for it to pass" _sounds_ regulative (it uses "must"), even though it's constitutive. L4 permits this phrasing because:
 
 1. At the object level, we write the mechanics: choice points and branches
 2. At the assertion level, model checking reveals the actual semantics
@@ -163,6 +165,7 @@ AG(borrowed_book → ¬E[¬returned_book U ¬fine_applies])
 ```
 
 This is where "must" acquires its force — as path necessity. The model checker can:
+
 1. Verify that the object-level contract satisfies the assertion
 2. Discover implicit "musts" (actions that are necessary for any goal-achieving path)
 3. Find counterexamples (loopholes, race conditions, impossible requirements)
@@ -171,11 +174,11 @@ This is where "must" acquires its force — as path necessity. The model checker
 
 When natural language is ambiguous between constitutive and regulative readings, the two-level architecture disambiguates:
 
-| Natural language | Object level | Assertion level reveals |
-|------------------|--------------|------------------------|
-| "Directors must vote yes for it to pass" | `IF all_yes THEN passed ELSE not_passed` | Constitutive: `passed` is unreachable without `all_yes` |
-| "Directors must vote within 7 days" | `DO vote WITHIN 7 days HENCE ok LEST breach` | Regulative: `breach` is reachable if deadline missed |
-| "You must raise your hand to get wine" | `DO raise_hand HENCE waiter_obligated LEST nothing` | Hypothetical: `wine` unreachable without `raise_hand`, but `nothing` is also acceptable |
+| Natural language                         | Object level                                        | Assertion level reveals                                                                 |
+| ---------------------------------------- | --------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| "Directors must vote yes for it to pass" | `IF all_yes THEN passed ELSE not_passed`            | Constitutive: `passed` is unreachable without `all_yes`                                 |
+| "Directors must vote within 7 days"      | `DO vote WITHIN 7 days HENCE ok LEST breach`        | Regulative: `breach` is reachable if deadline missed                                    |
+| "You must raise your hand to get wine"   | `DO raise_hand HENCE waiter_obligated LEST nothing` | Hypothetical: `wine` unreachable without `raise_hand`, but `nothing` is also acceptable |
 
 ## Implementation Roadmap
 
@@ -289,6 +292,7 @@ The compositional structure resembles communicating sequential processes, with `
 ### Temporal Logic (LTL, CTL)
 
 The assertion level uses temporal operators:
+
 - **A** (all paths), **E** (exists path)
 - **G** (globally), **F** (finally), **X** (next), **U** (until)
 
@@ -297,6 +301,7 @@ Path necessity ("you must do X to achieve Y") emerges from quantification over p
 ### Deontic Logic
 
 Traditional deontic logic (O for obligation, P for permission, F for prohibition) maps to:
+
 - O(action) ≈ `MUST action` with negative `LEST`
 - P(action) ≈ `MAY action` (both branches acceptable)
 - F(action) ≈ `SHANT action` with negative `LEST`
@@ -305,13 +310,13 @@ But L4 makes the consequences explicit rather than relying on abstract modal sem
 
 ## References
 
-1. Searle, J. (1969). *Speech Acts*. Cambridge University Press.
-2. Searle, J. (1995). *The Construction of Social Reality*. Free Press.
-3. Hvitved, T. (2012). *Contract Formalisation and Modular Implementation of Domain-Specific Languages*. PhD thesis, University of Copenhagen.
-4. Gneezy, U. & Rustichini, A. (2000). "A Fine Is A Price." *Journal of Legal Studies*, 29(1).
-5. Kant, I. (1785). *Groundwork of the Metaphysics of Morals*.
-6. Hoare, C.A.R. (1978). "Communicating Sequential Processes." *Communications of the ACM*, 21(8).
-7. Clarke, E., Grumberg, O., & Peled, D. (1999). *Model Checking*. MIT Press.
+1. Searle, J. (1969). _Speech Acts_. Cambridge University Press.
+2. Searle, J. (1995). _The Construction of Social Reality_. Free Press.
+3. Hvitved, T. (2012). _Contract Formalisation and Modular Implementation of Domain-Specific Languages_. PhD thesis, University of Copenhagen.
+4. Gneezy, U. & Rustichini, A. (2000). "A Fine Is A Price." _Journal of Legal Studies_, 29(1).
+5. Kant, I. (1785). _Groundwork of the Metaphysics of Morals_.
+6. Hoare, C.A.R. (1978). "Communicating Sequential Processes." _Communications of the ACM_, 21(8).
+7. Clarke, E., Grumberg, O., & Peled, D. (1999). _Model Checking_. MIT Press.
 
 ## Appendix: The Unix Analogy
 
@@ -322,7 +327,7 @@ grep "pattern" file.txt
 echo $?  # 0 if found, 1 if not found, 2 if error
 ```
 
-`grep` returning 1 (pattern not found) isn't an *error* — it's just stating a fact. Similarly, an inner contract reaching its `LEST` branch isn't necessarily *breach* — it might just be "this path wasn't taken."
+`grep` returning 1 (pattern not found) isn't an _error_ — it's just stating a fact. Similarly, an inner contract reaching its `LEST` branch isn't necessarily _breach_ — it might just be "this path wasn't taken."
 
 The outer script decides what to do with that exit code:
 
@@ -334,4 +339,4 @@ else
 fi
 ```
 
-L4's compositional deontics work the same way: the inner contract produces an outcome, and the outer contract decides what that outcome *means*.
+L4's compositional deontics work the same way: the inner contract produces an outcome, and the outer contract decides what that outcome _means_.

@@ -4,7 +4,7 @@
 
 This document proposes a compatibility bridge between [ACTUS](https://www.actusfrf.org) (Algorithmic Contract Types Unified Standards) and L4, enabling the L4 language to express, validate, and execute ACTUS-compliant financial contracts.
 
-**Why this matters:** ACTUS provides the *what* (standardized financial contract semantics) while L4 provides the *how* (a DSL for legal/financial reasoning with formal verification). Together, they could create a powerful platform where financial contracts are both ACTUS-compliant (ensuring interoperability) and L4-expressed (enabling explainability, testing, and verification).
+**Why this matters:** ACTUS provides the _what_ (standardized financial contract semantics) while L4 provides the _how_ (a DSL for legal/financial reasoning with formal verification). Together, they could create a powerful platform where financial contracts are both ACTUS-compliant (ensuring interoperability) and L4-expressed (enabling explainability, testing, and verification).
 
 ## Background
 
@@ -23,16 +23,19 @@ ACTUS is now used by the US Treasury's Office of Financial Research and is an IS
 ### Strategic Fit with L4
 
 L4 and ACTUS share philosophical alignment:
+
 - Both treat contracts as **executable specifications** rather than documents
 - Both emphasize **deterministic, unambiguous** semantics
 - Both support **temporal reasoning** about contract evolution
 - Both enable **formal verification** of contract properties
 
 However, they approach from different angles:
-- **ACTUS**: Top-down standardization of financial contract *patterns*
-- **L4**: Bottom-up formalization of arbitrary legal/financial *rules*
+
+- **ACTUS**: Top-down standardization of financial contract _patterns_
+- **L4**: Bottom-up formalization of arbitrary legal/financial _rules_
 
 The bridge creates value in both directions:
+
 - L4 gains access to battle-tested financial contract semantics
 - ACTUS gains L4's explainability, verification, and web app generation
 
@@ -40,42 +43,42 @@ The bridge creates value in both directions:
 
 ### Contract Types (Taxonomy)
 
-| Family | Contract Type | Acronym | Description |
-|--------|---------------|---------|-------------|
-| **Basic** | Principal at Maturity | PAM | Bullet bonds, term deposits |
-| | Linear Amortizer | LAM | Amortizing loans with constant principal |
-| | Negative Amortizer | NAM | ARM mortgages with deferred principal |
-| | Annuity | ANN | Level-payment mortgages |
-| | Call Money | CLM | Interbank loans with call features |
-| | Cash | CSH | Cash positions |
-| | Stock | STK | Equity instruments |
-| | Undefined Maturity | UMP | Savings accounts, current accounts |
-| | Commodity | COM | Physical commodities |
-| **Combined** | Swap | SWAPS | Interest rate, currency swaps |
-| | Plain Vanilla Swap | SWPPV | Standard fixed-float swaps |
-| | Option | OPTNS | European, American, Bermudan |
-| | Future | FUTUR | Exchange-traded futures |
-| | FX Outright | FXOUT | Currency forwards |
-| | Cap/Floor | CAPFL | Interest rate options |
-| **Credit Enhancement** | Guarantee | CEG | Personal/government guarantees |
-| | Collateral | CEC | Secured lending |
-| | Margining | MAR | Variation/initial margin |
+| Family                 | Contract Type         | Acronym | Description                              |
+| ---------------------- | --------------------- | ------- | ---------------------------------------- |
+| **Basic**              | Principal at Maturity | PAM     | Bullet bonds, term deposits              |
+|                        | Linear Amortizer      | LAM     | Amortizing loans with constant principal |
+|                        | Negative Amortizer    | NAM     | ARM mortgages with deferred principal    |
+|                        | Annuity               | ANN     | Level-payment mortgages                  |
+|                        | Call Money            | CLM     | Interbank loans with call features       |
+|                        | Cash                  | CSH     | Cash positions                           |
+|                        | Stock                 | STK     | Equity instruments                       |
+|                        | Undefined Maturity    | UMP     | Savings accounts, current accounts       |
+|                        | Commodity             | COM     | Physical commodities                     |
+| **Combined**           | Swap                  | SWAPS   | Interest rate, currency swaps            |
+|                        | Plain Vanilla Swap    | SWPPV   | Standard fixed-float swaps               |
+|                        | Option                | OPTNS   | European, American, Bermudan             |
+|                        | Future                | FUTUR   | Exchange-traded futures                  |
+|                        | FX Outright           | FXOUT   | Currency forwards                        |
+|                        | Cap/Floor             | CAPFL   | Interest rate options                    |
+| **Credit Enhancement** | Guarantee             | CEG     | Personal/government guarantees           |
+|                        | Collateral            | CEC     | Secured lending                          |
+|                        | Margining             | MAR     | Variation/initial margin                 |
 
 ### Event Types
 
-| Event | Acronym | Description |
-|-------|---------|-------------|
-| Initial Exchange | IED | Principal disbursement |
-| Interest Payment | IP | Scheduled interest payment |
-| Principal Redemption | PR | Scheduled principal repayment |
-| Maturity | MD | Contract maturity |
-| Rate Reset | RR | Variable rate fixing |
-| Fee Payment | FP | Fee payment event |
-| Dividend Payment | DV | Dividend distribution |
-| Exercise | XD | Option exercise |
-| Settlement | STD | Exercise settlement |
-| Termination | TD | Early termination |
-| Monitoring | AD | State evaluation |
+| Event                | Acronym | Description                   |
+| -------------------- | ------- | ----------------------------- |
+| Initial Exchange     | IED     | Principal disbursement        |
+| Interest Payment     | IP      | Scheduled interest payment    |
+| Principal Redemption | PR      | Scheduled principal repayment |
+| Maturity             | MD      | Contract maturity             |
+| Rate Reset           | RR      | Variable rate fixing          |
+| Fee Payment          | FP      | Fee payment event             |
+| Dividend Payment     | DV      | Dividend distribution         |
+| Exercise             | XD      | Option exercise               |
+| Settlement           | STD     | Exercise settlement           |
+| Termination          | TD      | Early termination             |
+| Monitoring           | AD      | State evaluation              |
 
 ### Key Contract Terms (Data Dictionary)
 
@@ -325,47 +328,55 @@ GIVETH A STRING
 ### Phase 1: Foundation (4 weeks)
 
 **Deliverables:**
+
 1. `actus-types.l4` - Core type definitions
 2. `actus-terms.l4` - Contract term structures
 3. `actus-state.l4` - State variable definitions
 4. `actus-events.l4` - Event type definitions
 
 **Validation:**
+
 - Types compile and typecheck
 - Can construct sample PAM contract in L4
 
 ### Phase 2: Basic Contracts (6 weeks)
 
 **Deliverables:**
+
 1. PAM (Principal at Maturity) - Full implementation
 2. LAM (Linear Amortizer) - Full implementation
 3. ANN (Annuity) - Full implementation
 4. Test suite using ACTUS reference tests
 
 **Validation:**
+
 - Pass all ACTUS reference tests for PAM, LAM, ANN
 - Cash flows match ACTUS Java implementation
 
 ### Phase 3: Advanced Contracts (8 weeks)
 
 **Deliverables:**
+
 1. NAM, UMP, CLM - Remaining basic contracts
 2. SWPPV - Plain vanilla swap
 3. OPTNS - Options
 
 **Validation:**
+
 - Pass reference tests for all implemented contracts
 - Cross-validate with ACTUS service API
 
 ### Phase 4: Integration (4 weeks)
 
 **Deliverables:**
+
 1. JSON import/export with ACTUS format
 2. Decision service integration
 3. Web app generation for contract analysis
 4. Documentation and examples
 
 **Validation:**
+
 - Round-trip JSON tests
 - Web app demonstrates contract evaluation
 - User documentation complete
@@ -423,6 +434,7 @@ L4's formal methods can verify ACTUS contracts:
 4. **No race conditions** - Events at same timestamp have defined ordering
 
 Example verification property:
+
 ```l4
 -- Property: Interest never accrues on negative notional
 VERIFY FOR ALL contract, state:
@@ -435,6 +447,7 @@ VERIFY FOR ALL contract, state:
 ### 1. Regulatory Compliance
 
 A bank encodes its loan portfolio in ACTUS-L4:
+
 - L4 generates explainable cash flow projections
 - Auditors verify calculations against ACTUS reference
 - OFR receives standardized position data
@@ -442,6 +455,7 @@ A bank encodes its loan portfolio in ACTUS-L4:
 ### 2. Smart Contract Development
 
 DeFi protocol uses ACTUS-L4:
+
 - Define bond tokenization as PAM contract
 - L4 verifies no edge cases in interest calculation
 - Generate Solidity code from verified specification
@@ -449,6 +463,7 @@ DeFi protocol uses ACTUS-L4:
 ### 3. Insurance Product Design
 
 Insurance company models investment products:
+
 - Encode guarantee features using ACTUS CEG type
 - L4's query planning identifies missing data
 - Web app lets actuaries explore scenarios
@@ -456,33 +471,37 @@ Insurance company models investment products:
 ### 4. Legal Contract Integration
 
 Law firm drafts commercial loan:
+
 - Natural language contract mapped to ACTUS terms
 - L4 formal specification attached as schedule
 - Disputes resolved by evaluating L4 model
 
 ## Comparison with Existing Work
 
-| Approach | Focus | Verification | Explainability |
-|----------|-------|--------------|----------------|
-| ACTUS Java | Reference implementation | Testing only | Limited |
-| Daml/Digital Asset | Smart contracts | Formal proofs | Some |
-| Catala | Tax/benefits rules | Type checking | Good |
-| **ACTUS-L4** | Financial + Legal | Full formal methods | Excellent |
+| Approach           | Focus                    | Verification        | Explainability |
+| ------------------ | ------------------------ | ------------------- | -------------- |
+| ACTUS Java         | Reference implementation | Testing only        | Limited        |
+| Daml/Digital Asset | Smart contracts          | Formal proofs       | Some           |
+| Catala             | Tax/benefits rules       | Type checking       | Good           |
+| **ACTUS-L4**       | Financial + Legal        | Full formal methods | Excellent      |
 
 ## Resources
 
 ### ACTUS Documentation
+
 - Technical Specification: https://github.com/actusfrf/actus-techspecs
 - Data Dictionary: https://github.com/actusfrf/actus-dictionary
 - Reference Tests: https://github.com/actusfrf/actus-tests
 - Web Demo: https://demo.actusfrf.org
 
 ### Academic Background
+
 - [ACTUS Wikipedia](https://en.wikipedia.org/wiki/Algorithmic_Contract_Types_Unified_Standards)
 - [ACTUS Financial Protocol (Medium)](https://medium.com/at-par/the-actus-financial-protocol-839a3d8f52dc)
 - [ZHAW Research Project](https://www.zhaw.ch/en/research/project/70327)
 
 ### Related L4 Modules
+
 - `currency.l4` - ISO 4217 currency support
 - `holdings.l4` - Debt/equity (ACTUS-inspired)
 - `daydate.l4` - Date arithmetic
@@ -494,17 +513,17 @@ The file `jl4/examples/legal/promissory-note.l4` is a **de facto ACTUS ANN (Annu
 
 ### Mapping: Promissory Note → ACTUS ANN
 
-| L4 Term | ACTUS Term | Acronym | Value |
-|---------|------------|---------|-------|
-| `Note Date` | Contract Deal Date | CDD | Feb 4 2024 |
-| `Principal Amount` | Notional Principal | NT | USD 25,000 |
-| `Interest Rate Per Annum` | Nominal Interest Rate | IPNR | 15% |
-| `Monthly Installments` | Number of PR Events | - | 12 |
-| `Monthly Installment Amount` | Next Principal Redemption Payment | PRNXT | USD 2,256.46 |
-| `Default After Days Not Paid Beyond Due` | Delinquency Period | DQP | 30 days |
-| `Late Payment Penalty`'s `Grace Period Days` | Grace Period | GRP | 10 days |
-| `Late Payment Penalty`'s `Interest Rate` | Penalty Rate | PYRT | 5% |
-| `Total Repayment Amount` | Sum of all payoffs | - | USD 27,077.49 |
+| L4 Term                                      | ACTUS Term                        | Acronym | Value         |
+| -------------------------------------------- | --------------------------------- | ------- | ------------- |
+| `Note Date`                                  | Contract Deal Date                | CDD     | Feb 4 2024    |
+| `Principal Amount`                           | Notional Principal                | NT      | USD 25,000    |
+| `Interest Rate Per Annum`                    | Nominal Interest Rate             | IPNR    | 15%           |
+| `Monthly Installments`                       | Number of PR Events               | -       | 12            |
+| `Monthly Installment Amount`                 | Next Principal Redemption Payment | PRNXT   | USD 2,256.46  |
+| `Default After Days Not Paid Beyond Due`     | Delinquency Period                | DQP     | 30 days       |
+| `Late Payment Penalty`'s `Grace Period Days` | Grace Period                      | GRP     | 10 days       |
+| `Late Payment Penalty`'s `Interest Rate`     | Penalty Rate                      | PYRT    | 5%            |
+| `Total Repayment Amount`                     | Sum of all payoffs                | -       | USD 27,077.49 |
 
 ### Structural Correspondence
 
@@ -539,6 +558,7 @@ MD @ 2025-02-04                   AT Day (February 4 2026)
 The L4 promissory note already implements the core logic. An ACTUS-compliant version would add:
 
 1. **Explicit Contract Type Declaration**
+
 ```l4
 `This Contract` IS AN `ACTUS Contract` WITH
     `Contract Type`    IS ANN
@@ -547,6 +567,7 @@ The L4 promissory note already implements the core logic. An ACTUS-compliant ver
 ```
 
 2. **Standard State Variables**
+
 ```l4
 -- Current contract state per ACTUS
 `Contract State at` date MEANS
@@ -557,6 +578,7 @@ The L4 promissory note already implements the core logic. An ACTUS-compliant ver
 ```
 
 3. **Reference Test Compatibility**
+
 ```l4
 -- Validate against ACTUS reference tests
 #TEST `Contract Events` EQUALS
@@ -566,6 +588,7 @@ The L4 promissory note already implements the core logic. An ACTUS-compliant ver
 ```
 
 4. **Day Count Convention**
+
 ```l4
 `Day Count Convention` MEANS `Actual/365`  -- explicit, not assumed
 ```
@@ -590,9 +613,10 @@ This existing contract demonstrates that **L4 is already capable of expressing A
 
 ---
 
-*This specification was researched and drafted on 2025-01-28.*
+_This specification was researched and drafted on 2025-01-28._
 
-*Sources:*
+_Sources:_
+
 - [ACTUS Financial Research Foundation](https://www.actusfrf.org)
 - [ACTUS Documentation](https://documentation.actusfrf.org/docs/intro)
 - [ACTUS GitHub Organization](https://github.com/actusfrf)

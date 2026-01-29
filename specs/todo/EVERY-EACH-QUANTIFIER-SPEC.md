@@ -111,6 +111,7 @@ We analyze patterns for each modality.
 **Layperson's interpretation:** Same - "each of us has to keep secrets."
 
 **CSP formalization:**
+
 ```
 CONF(Alice) ||| CONF(Bob) ||| CONF(Carol)
 -- where CONF(p) = ((maintain_confidentiality.p → CONF(p)) □ (breach.p → STOP))
@@ -127,6 +128,7 @@ Pure interleaving - each party's obligation is independent.
 **Layperson's interpretation:** "For this to be official, everyone needs to say yes."
 
 **Constitutive vs Regulative distinction:**
+
 - **Constitutive:** Defines what counts as X (e.g., "a goal must cross the line to count")
 - **Regulative:** Imposes obligation to do X (e.g., "players must not handle the ball")
 
@@ -140,7 +142,7 @@ EVERY director
     HENCE  the_resolution passes
 ```
 
-This uses **barrier/join semantics**: all approvals must be collected before HENCE fires once. No director is *obligated* to approve; each *may* approve. Only when all have done so does the resolution pass.
+This uses **barrier/join semantics**: all approvals must be collected before HENCE fires once. No director is _obligated_ to approve; each _may_ approve. Only when all have done so does the resolution pass.
 
 **Contrast with fork semantics (EACH):**
 
@@ -162,6 +164,7 @@ Here, **each approval triggers its own HENCE independently**—if 5 directors ap
 **Layperson's interpretation:** "Any of us can be made to pay the whole thing."
 
 **CSP formalization:** This requires tracking a shared resource (the debt amount):
+
 ```
 GUARANTEE(debt) =
     (pay.g1?amount → GUARANTEE(debt - amount))
@@ -179,6 +182,7 @@ GUARANTEE(debt) =
 **Layperson's interpretation:** "We all sign together at the closing."
 
 **CSP formalization:**
+
 ```
 joint_execution.{Alice, Bob, Carol} → closing_complete
 -- A single synchronized event requiring all parties
@@ -205,6 +209,7 @@ joint_execution.{Alice, Bob, Carol} → closing_complete
 **Layperson's interpretation:** "Whoever wants out first can end it for everyone."
 
 **CSP formalization:**
+
 ```
 TERMINABLE = (terminate.Alice → TERMINATED)
            □ (terminate.Bob → TERMINATED)
@@ -232,6 +237,7 @@ External choice - first event determines the outcome.
 **Layperson's interpretation:** "None of us can tell outsiders."
 
 **CSP formalization:**
+
 ```
 -- For each party p, the action disclose.p is not in the allowed alphabet
 CONF(p) = (work.p → CONF(p))  -- disclose.p is simply not offered
@@ -254,6 +260,7 @@ CONF(p) = (work.p → CONF(p))  -- disclose.p is simply not offered
 **Layperson's interpretation:** "Don't poach each other's staff."
 
 **L4 formalization:**
+
 ```l4
 EACH p_x
     SHANT  solicit_employees_of p_y
@@ -274,6 +281,7 @@ RAND
 ```
 
 **Problems:**
+
 - Verbose: O(n) clauses for n parties
 - Error-prone: easy to miss a party or introduce inconsistencies
 - Not isomorphic: source text says "each party" once; L4 repeats it n times
@@ -294,6 +302,7 @@ GIVEN directors IS A LIST OF Director
 ```
 
 **Problems:**
+
 - Imposes artificial sequencing (d1 must approve before d2 can)
 - The legal text implies parallel, independent approvals converging at a barrier
 - HENCE chains don't naturally express "all complete, then continue"
@@ -313,6 +322,7 @@ GIVEN debt IS A NUMBER
 ```
 
 **Problems:**
+
 - L4's deontic model doesn't naturally handle shared mutable state
 - "Any may satisfy" is disjunctive permission with cumulative effects
 - Current primitives don't compose well for this pattern
@@ -327,6 +337,7 @@ PARTY (parties_as_collective_entity) MUST execute_closing
 ```
 
 **Problems:**
+
 - L4's PARTY construct takes a single entity
 - No primitive for "synchronized multi-party action"
 - Would require defining a synthetic collective entity
@@ -335,12 +346,12 @@ PARTY (parties_as_collective_entity) MUST execute_closing
 
 The analysis above reveals that current L4 primitives are:
 
-| Pattern | Expressible? | Ergonomic? | Isomorphic? |
-|---------|--------------|------------|-------------|
-| A: Distributive | Yes | No (verbose) | No |
-| B: Barrier | Partially | No (forces sequencing) | No |
-| C: Joint & Several | With difficulty | No | No |
-| D: Truly Joint | No | N/A | N/A |
+| Pattern            | Expressible?    | Ergonomic?             | Isomorphic? |
+| ------------------ | --------------- | ---------------------- | ----------- |
+| A: Distributive    | Yes             | No (verbose)           | No          |
+| B: Barrier         | Partially       | No (forces sequencing) | No          |
+| C: Joint & Several | With difficulty | No                     | No          |
+| D: Truly Joint     | No              | N/A                    | N/A         |
 
 **The EVERY/EACH syntax addresses patterns A and B directly:**
 
@@ -360,6 +371,7 @@ EVERY d
 ```
 
 **Benefits:**
+
 - **Concise:** One clause regardless of party count
 - **Isomorphic:** Mirrors source legal text structure
 - **Correct semantics:** Barrier behavior for Pattern B is built-in
@@ -369,12 +381,13 @@ EVERY d
 
 `EVERY` and `EACH` are **not synonyms**—they have distinct continuation semantics:
 
-| Quantifier | Semantics | HENCE behavior |
-|------------|-----------|----------------|
-| `EVERY` | Barrier/Join | Collects all completions, fires HENCE **once** when all done |
-| `EACH` | Fork/Distributive | Fires HENCE **for each** completion independently |
+| Quantifier | Semantics         | HENCE behavior                                               |
+| ---------- | ----------------- | ------------------------------------------------------------ |
+| `EVERY`    | Barrier/Join      | Collects all completions, fires HENCE **once** when all done |
+| `EACH`     | Fork/Distributive | Fires HENCE **for each** completion independently            |
 
 **EVERY (barrier):**
+
 ```l4
 EVERY director
     MAY    approve
@@ -384,6 +397,7 @@ EVERY director
 If 5 directors approve, the resolution passes once.
 
 **EACH (fork):**
+
 ```l4
 EACH director
     MAY    approve
@@ -393,10 +407,12 @@ EACH director
 If 5 directors approve, company must send 5 notifications.
 
 **Formal distinction:**
+
 - `EVERY p ... HENCE h` ≈ `(P1 ||| P2 ||| P3) ; h` (CSP sequential composition after interleaving)
 - `EACH p ... HENCE h` ≈ `(P1 ; h) ||| (P2 ; h) ||| (P3 ; h)` (CSP interleaving of each with its continuation)
 
 **Without HENCE/LEST, both behave identically** (pure distributive):
+
 ```l4
 EVERY p MUST sign    ≡    EACH p MUST sign    -- when no HENCE/LEST
 ```
@@ -480,11 +496,11 @@ EVERY p MUST X HENCE shared_h LEST shared_l
 
 **Process algebra correspondence for EVERY:**
 
-| Model | Representation |
-|-------|----------------|
+| Model         | Representation                                                     |
+| ------------- | ------------------------------------------------------------------ | --- | --- | --- | --- | --- | ------------------------------------------------------- |
 | **Petri Net** | AND-join: all input places must have tokens for transition to fire |
-| **CSP** | `(P1 ||| P2 ||| P3) ; HENCE` — interleaving with sequential composition |
-| **Counting** | Semaphore initialized to n; HENCE fires when count reaches 0 |
+| **CSP**       | `(P1                                                               |     |     | P2  |     |     | P3) ; HENCE` — interleaving with sequential composition |
+| **Counting**  | Semaphore initialized to n; HENCE fires when count reaches 0       |
 
 ### 3.2 EACH: The Fork Model
 
@@ -500,11 +516,11 @@ EACH p MUST X HENCE h(p) LEST l(p)
 
 **Process algebra correspondence for EACH:**
 
-| Model | Representation |
-|-------|----------------|
-| **Petri Net** | Parallel independent transitions, no join |
-| **CSP** | `(P1 ; h1) ||| (P2 ; h2) ||| (P3 ; h3)` — each process has its own continuation |
-| **Counting** | No shared counter; each completion is independent |
+| Model         | Representation                                    |
+| ------------- | ------------------------------------------------- | --- | --- | --------- | --- | --- | -------------------------------------------------- |
+| **Petri Net** | Parallel independent transitions, no join         |
+| **CSP**       | `(P1 ; h1)                                        |     |     | (P2 ; h2) |     |     | (P3 ; h3)` — each process has its own continuation |
+| **Counting**  | No shared counter; each completion is independent |
 
 ### 3.3 Without HENCE/LEST: Both Equivalent
 
@@ -593,6 +609,7 @@ The party type `P` is determined by the deontic context (`GIVETH DEONTIC P A`):
 **Configuration:** `⟨B, σ, t⟩` — barrier B, trace σ, current time t
 
 **Rule 1: Party Completes**
+
 ```
     p ∈ B.pending
     (p, B.action(p), t') ∈ σ
@@ -602,6 +619,7 @@ The party type `P` is determined by the deontic context (`GIVETH DEONTIC P A`):
 ```
 
 **Rule 2: Barrier Achieved**
+
 ```
     B.pending = ∅
     B.failed = ∅
@@ -612,6 +630,7 @@ The party type `P` is determined by the deontic context (`GIVETH DEONTIC P A`):
 ```
 
 **Rule 3: Deadline Failure**
+
 ```
     t > B.deadline
     B.pending ≠ ∅
@@ -622,6 +641,7 @@ The party type `P` is determined by the deontic context (`GIVETH DEONTIC P A`):
 ```
 
 **Rule 4: Early Failure (optional policy)**
+
 ```
     B.failurePolicy = EARLY_FAILURE_DETECTION
     ∃p ∈ B.pending. incapacitated(p)
@@ -672,6 +692,7 @@ EACH p_x
 ```
 
 If A terminates at t=10 and B terminates at t=15:
+
 - A's termination spawns: C must settle with A by t=40, B must settle with A by t=40
 - B's termination spawns: C must settle with B by t=45, A must settle with B by t=45
 
@@ -691,6 +712,7 @@ computeBlame bo tr =
 ```
 
 **Example:**
+
 - Parties: {A, B, C}
 - A and B complete; C doesn't
 - Blame: {C}, not {A, B, C}
@@ -708,6 +730,7 @@ data BlameAttribution = BlameAttribution
 ```
 
 **Example:**
+
 - A completes
 - B is prevented by A's wrongful interference
 - C simply doesn't perform
@@ -768,6 +791,7 @@ EVERY seller s MUST deliver(s)
 ```
 
 The inner barrier spawns when the outer barrier achieves, with:
+
 - `entryTime = outer.achievementTime`
 - Scope chain captures `s` binding for inner body
 
@@ -835,11 +859,11 @@ BARRIER { p1, p2, ... } MUST X HENCE shared_h LEST shared_l
 
 ### 9.3 When to Use Which
 
-| Keyword | Semantics | HENCE/LEST behavior | Use Case |
-|---------|-----------|---------------------|----------|
-| `EACH` | Fork | Fires for each independently | Individualized consequences |
-| `EVERY` | Barrier | Fires once when all complete | All-or-nothing transactions |
-| Either (no HENCE) | Distributive | N/A | Independent compliance |
+| Keyword           | Semantics    | HENCE/LEST behavior          | Use Case                    |
+| ----------------- | ------------ | ---------------------------- | --------------------------- |
+| `EACH`            | Fork         | Fires for each independently | Individualized consequences |
+| `EVERY`           | Barrier      | Fires once when all complete | All-or-nothing transactions |
+| Either (no HENCE) | Distributive | N/A                          | Independent compliance      |
 
 **Examples:**
 
@@ -858,13 +882,15 @@ EVERY director MAY approve
 ### 10.1 Complexity
 
 For n parties:
+
 - State space: O(2^n) completion states per barrier
-- With k nested barriers: O(2^(n*k))
+- With k nested barriers: O(2^(n\*k))
 - PSPACE-complete for finite instances
 
 ### 10.2 Decidable Fragments
 
 Verification is decidable under:
+
 - Finite party sets
 - Bounded temporal depth (HENCE nesting)
 - Acyclic HENCE graphs
@@ -873,6 +899,7 @@ Verification is decidable under:
 ### 10.3 Static Analysis
 
 At contract analysis time, check for:
+
 - **Deadlock**: Cyclic dependencies between barriers
 - **Temporal impossibility**: Conflicting deadlines
 - **Empty quantification**: Warn if domain might be empty
@@ -978,6 +1005,7 @@ Uses existing recursion; no new syntax needed.
 ### 13.1 Early Failure Policy
 
 Should early failure detection (before deadline) be:
+
 - Default behavior?
 - Opt-in via modifier?
 - Contract-level configuration?

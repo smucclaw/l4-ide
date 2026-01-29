@@ -11,11 +11,13 @@ This spec describes a structural approach to contract classification that analyz
 ## Problem Statement
 
 The current `jl4-actus-analyzer` uses **symbolic pattern matching** to classify contracts:
+
 - Type names containing "borrower", "lender", "currency"
 - Field names matching patterns like "principal", "interestRate"
 - String matching against ontology labels
 
 This approach fails when:
+
 - Contracts use non-standard naming conventions
 - Variable names are obfuscated or in different languages
 - The contract structure is correct but terminology differs
@@ -123,6 +125,7 @@ Edge: Obligation (amount, condition, timing)
 ```
 
 **Qualia detected:**
+
 - **Net debtor**: Party with more outgoing than incoming obligation edges
 - **Net creditor**: Party with more incoming than outgoing obligation edges
 - **Symmetric exchange**: Balanced bidirectional edges (FX, swap)
@@ -132,13 +135,13 @@ Edge: Obligation (amount, condition, timing)
 
 Analyze how value moves through the contract over time:
 
-| Pattern | Essence | ACTUS Type |
-|---------|---------|------------|
+| Pattern                                | Essence                       | ACTUS Type    |
+| -------------------------------------- | ----------------------------- | ------------- |
 | Single outflow at T₀, periodic inflows | Loan disbursement + repayment | PAM, ANN, LAM |
-| Bilateral exchange at T₁ | Spot/forward transaction | FXOUT |
-| Periodic bilateral flows | Swap payments | SWAPS |
-| Conditional large outflow | Option exercise | OPTNS |
-| Initial premium, contingent payout | Insurance/guarantee | CEG |
+| Bilateral exchange at T₁               | Spot/forward transaction      | FXOUT         |
+| Periodic bilateral flows               | Swap payments                 | SWAPS         |
+| Conditional large outflow              | Option exercise               | OPTNS         |
+| Initial premium, contingent payout     | Insurance/guarantee           | CEG           |
 
 ### 3. Temporal Topology
 
@@ -170,12 +173,12 @@ Topology signatures:
 
 Measure the structural symmetry between parties:
 
-| Symmetry Type | Characteristics | Contract Family |
-|---------------|-----------------|-----------------|
-| Asymmetric | One party has most obligations | Debt instruments |
-| Symmetric bilateral | Balanced mutual obligations | Exchanges, swaps |
+| Symmetry Type               | Characteristics                             | Contract Family   |
+| --------------------------- | ------------------------------------------- | ----------------- |
+| Asymmetric                  | One party has most obligations              | Debt instruments  |
+| Symmetric bilateral         | Balanced mutual obligations                 | Exchanges, swaps  |
 | Asymmetric with optionality | One party has rights, other has obligations | Options, warrants |
-| Multi-party asymmetric | Central counterparty | Clearing, netting |
+| Multi-party asymmetric      | Central counterparty                        | Clearing, netting |
 
 ## Concrete Example: Promissory Note Analysis
 
@@ -184,6 +187,7 @@ Consider the L4 promissory note at `jl4/examples/legal/promissory-note.l4`.
 ### Current Symbolic Analysis (45% confidence)
 
 The symbolic analyzer detects:
+
 - Type `Borrower` → matches "borrower" pattern
 - Type `Lender` → matches "lender" pattern
 - Field `Interest Rate` in `Penalty` → matches interest pattern
@@ -1017,7 +1021,7 @@ data Transition = Transition
 
 1. **Language agnostic**: Works regardless of variable naming conventions
 2. **Robust to obfuscation**: Structure reveals essence even with obscured names
-3. **Deeper understanding**: Captures *why* something is a loan, not just *that* it looks like one
+3. **Deeper understanding**: Captures _why_ something is a loan, not just _that_ it looks like one
 4. **Novel contract detection**: Can identify contracts that don't fit existing types
 5. **Cross-jurisdictional**: Same essence can have different legal terminology
 
@@ -1031,6 +1035,7 @@ data Transition = Transition
 ## Relationship to Current Implementation
 
 The current `jl4-actus-analyzer` can serve as a **fast path**:
+
 - If symbolic matching yields high confidence (>90%), use that result
 - If symbolic matching is uncertain, fall back to qualia-based analysis
 - Qualia analysis can also validate/confirm symbolic results
@@ -1120,6 +1125,7 @@ test/golden/qualia/
 ```
 
 Example golden file format:
+
 ```yaml
 # promissory-note.essence.golden
 partyCount: 2
@@ -1145,6 +1151,7 @@ classification:
 ### Near-term
 
 - **Explanation generation**: Generate natural language explanations for classifications
+
   - "This contract is classified as ANN (Annuity) because:
     - Party A has unidirectional outgoing obligations to Party B
     - The obligation amount decreases recursively (amortization pattern)
@@ -1158,11 +1165,13 @@ classification:
 ### Medium-term
 
 - **Machine learning augmentation**: Train ML models to refine archetype boundaries
+
   - Use extracted essence features as input vectors
   - Learn from corpus of correctly classified contracts
   - Identify new contract patterns that don't fit existing archetypes
 
 - **Contract synthesis**: Given an archetype, generate valid L4 contract skeletons
+
   - Inverse of classification: archetype → essence → L4 skeleton
   - Useful for contract drafting assistance
 
@@ -1174,10 +1183,12 @@ classification:
 ### Long-term
 
 - **Temporal logic verification**: Use model checking to verify contract properties
+
   - "Can this contract reach a state where both parties have unfulfilled obligations?"
   - "Is it possible for the debt to never be repaid?"
 
 - **Cross-jurisdictional mapping**: Map structural qualia to different legal frameworks
+
   - Same essence, different terminology across jurisdictions
   - Regulatory compliance checking by structure rather than labels
 

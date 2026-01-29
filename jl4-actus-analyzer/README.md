@@ -66,35 +66,35 @@ main = do
 
 ### ACTUS Types with Matching Rules
 
-| ACTUS Code | Description | Key Features Detected |
-|------------|-------------|----------------------|
-| **FXOUT** | Foreign Exchange Outright | Currency types, two-currency exchange, value date, settlement |
-| **SWAPS** | Plain Vanilla Swap | Payment legs, notional amount, payment schedule |
-| **OPTNS** | Options | Strike price, expiration date, underlying asset, premium |
-| **PAM** | Principal at Maturity | Principal, interest rate, maturity date |
-| **FUTUR** | Futures | Contract size, settlement date, underlying, margin |
+| ACTUS Code          | Description                  | Key Features Detected                                             |
+| ------------------- | ---------------------------- | ----------------------------------------------------------------- |
+| **FXOUT**           | Foreign Exchange Outright    | Currency types, two-currency exchange, value date, settlement     |
+| **SWAPS**           | Plain Vanilla Swap           | Payment legs, notional amount, payment schedule                   |
+| **OPTNS**           | Options                      | Strike price, expiration date, underlying asset, premium          |
+| **PAM**             | Principal at Maturity        | Principal, interest rate, maturity date                           |
+| **FUTUR**           | Futures                      | Contract size, settlement date, underlying, margin                |
 | **MasterAgreement** | Master Agreement (container) | Schedule structure, multiple transaction types, close-out netting |
 
 ### ACTUS-to-FIBO Mappings
 
 The analyzer maps ACTUS types to their corresponding FIBO ontology classes:
 
-| ACTUS Code | FIBO Class |
-|------------|------------|
-| FXOUT | `fibo-der-drc-cur:ForeignExchangeForwardAgreement` |
-| SWAPS | `fibo-der-drc-swp:Swap` |
-| OPTNS | `fibo-der-drc-opt:Option` |
-| PAM | `fibo-sec-dbt-di:DebtInstrument` |
-| ANN | `fibo-sec-dbt-di:DebtInstrument` |
-| LAM | `fibo-sec-dbt-di:DebtInstrument` |
-| NAM | `fibo-sec-dbt-di:DebtInstrument` |
-| FUTUR | `fibo-fbc-fi-fi:Future` |
-| STK | `fibo-sec-eq-ei:Share` |
-| CDSWP | `fibo-der-cr-cds:CreditDefaultSwap` |
-| TRSWP | `fibo-der-drc-swp:TotalReturnSwap` |
-| CEG | `fibo-fbc-dae-dbt:CreditEnhancementAgreement` |
-| CEC | `fibo-fbc-pas-caa:CollateralAccount` |
-| MasterAgreement | `fibo-fnd-agr-ctr:MasterAgreement` |
+| ACTUS Code      | FIBO Class                                         |
+| --------------- | -------------------------------------------------- |
+| FXOUT           | `fibo-der-drc-cur:ForeignExchangeForwardAgreement` |
+| SWAPS           | `fibo-der-drc-swp:Swap`                            |
+| OPTNS           | `fibo-der-drc-opt:Option`                          |
+| PAM             | `fibo-sec-dbt-di:DebtInstrument`                   |
+| ANN             | `fibo-sec-dbt-di:DebtInstrument`                   |
+| LAM             | `fibo-sec-dbt-di:DebtInstrument`                   |
+| NAM             | `fibo-sec-dbt-di:DebtInstrument`                   |
+| FUTUR           | `fibo-fbc-fi-fi:Future`                            |
+| STK             | `fibo-sec-eq-ei:Share`                             |
+| CDSWP           | `fibo-der-cr-cds:CreditDefaultSwap`                |
+| TRSWP           | `fibo-der-drc-swp:TotalReturnSwap`                 |
+| CEG             | `fibo-fbc-dae-dbt:CreditEnhancementAgreement`      |
+| CEC             | `fibo-fbc-pas-caa:CollateralAccount`               |
+| MasterAgreement | `fibo-fnd-agr-ctr:MasterAgreement`                 |
 
 ## Architecture
 
@@ -137,20 +137,21 @@ The analyzer extracts the following semantic features from L4 AST:
 
 ### Domain Indicators
 
-| Indicator | What It Detects |
-|-----------|-----------------|
-| `CurrencyIndicator` | Enum types with currency codes (USD, EUR, etc.) |
-| `FXTransactionIndicator` | Records with two currency fields, value date |
-| `SwapIndicator` | Leg structures, notional amounts, payment schedules |
-| `OptionIndicator` | Strike price, expiry date, underlying asset |
-| `LoanIndicator` | Principal, interest rate, amortization schedule |
-| `SettlementIndicator` | Netting provisions, delivery obligations |
-| `CreditSupportIndicator` | Guaranty, collateral, margin requirements |
-| `MasterAgreementIndicator` | Schedule structure, close-out netting |
+| Indicator                  | What It Detects                                     |
+| -------------------------- | --------------------------------------------------- |
+| `CurrencyIndicator`        | Enum types with currency codes (USD, EUR, etc.)     |
+| `FXTransactionIndicator`   | Records with two currency fields, value date        |
+| `SwapIndicator`            | Leg structures, notional amounts, payment schedules |
+| `OptionIndicator`          | Strike price, expiry date, underlying asset         |
+| `LoanIndicator`            | Principal, interest rate, amortization schedule     |
+| `SettlementIndicator`      | Netting provisions, delivery obligations            |
+| `CreditSupportIndicator`   | Guaranty, collateral, margin requirements           |
+| `MasterAgreementIndicator` | Schedule structure, close-out netting               |
 
 ### Deontic Patterns
 
 Detects MUST/MAY/SHANT obligations from L4 regulative rules:
+
 - Party roles (obligor, beneficiary)
 - Action types (deliver, pay, exercise)
 - Consequences (HENCE/LEST clauses)
@@ -158,6 +159,7 @@ Detects MUST/MAY/SHANT obligations from L4 regulative rules:
 ### State Transitions
 
 Extracts state machine patterns from HENCE/LEST clauses:
+
 - Breach detection
 - State progression
 - Trigger conditions
@@ -165,6 +167,7 @@ Extracts state machine patterns from HENCE/LEST clauses:
 ### Type Patterns
 
 Classifies L4 type declarations:
+
 - `CurrencyEnumType` - Currency code enumerations
 - `AmountRecordType` - Value + currency records
 - `TransactionRecordType` - Transaction with parties, amounts, dates
@@ -205,6 +208,7 @@ For master agreements that govern multiple transaction types, the analyzer repor
 2. **Contained Types** - Transaction types governed by the agreement
 
 Example output:
+
 ```json
 {
   "container": {
@@ -212,8 +216,8 @@ Example output:
     "fiboClass": "fibo-fnd-agr-ctr:MasterAgreement"
   },
   "containedTypes": [
-    {"actusType": "FXOUT", "confidence": 0.87},
-    {"actusType": "SWAPS", "confidence": 0.42}
+    { "actusType": "FXOUT", "confidence": 0.87 },
+    { "actusType": "SWAPS", "confidence": 0.42 }
   ]
 }
 ```
@@ -318,20 +322,21 @@ cabal test jl4-actus-analyzer
 
 ## Primary Classification
 
-| Property | Value |
-|----------|-------|
-| ACTUS Type | **FXOUT** |
-| Label | foreign exchange outright |
-| Confidence | 100.0% |
+| Property   | Value                                              |
+| ---------- | -------------------------------------------------- |
+| ACTUS Type | **FXOUT**                                          |
+| Label      | foreign exchange outright                          |
+| Confidence | 100.0%                                             |
 | FIBO Class | `fibo-der-drc-cur:ForeignExchangeForwardAgreement` |
 
 ## Supporting Evidence
 
-| Feature | Weight |
-|---------|--------|
-| Currency types | 25.0% |
-| FX transaction type | 20.0% |
-| Two currency exchange | 15.0% |
+| Feature               | Weight |
+| --------------------- | ------ |
+| Currency types        | 25.0%  |
+| FX transaction type   | 20.0%  |
+| Two currency exchange | 15.0%  |
+
 ...
 ```
 
