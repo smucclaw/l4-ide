@@ -87,13 +87,13 @@ EVERY Person p
 WITHIN `April 15 of following year`
 ```
 
-| Aspect | Contract Mode | Legislative Mode |
-|--------|---------------|------------------|
-| **Parties** | Named, finite | Open class, potentially infinite |
-| **Activation** | UPON events, HENCE chains | Predicate satisfaction |
-| **State machine** | Explicit transitions | Implicit (rules fire when applicable) |
-| **Query direction** | "What happens next?" | "What rules apply to entity X?" |
-| **Typical keyword** | `PARTY alice` | `EVERY Person p WHO ...` |
+| Aspect              | Contract Mode             | Legislative Mode                      |
+| ------------------- | ------------------------- | ------------------------------------- |
+| **Parties**         | Named, finite             | Open class, potentially infinite      |
+| **Activation**      | UPON events, HENCE chains | Predicate satisfaction                |
+| **State machine**   | Explicit transitions      | Implicit (rules fire when applicable) |
+| **Query direction** | "What happens next?"      | "What rules apply to entity X?"       |
+| **Typical keyword** | `PARTY alice`             | `EVERY Person p WHO ...`              |
 
 **Mixed Mode:** The `EVERY...WHO` syntax can introduce a named party `p` that then participates in contract-mode `HENCE`/`LEST` chains.
 
@@ -103,19 +103,19 @@ WITHIN `April 15 of following year`
 
 ### EVERY vs EACH
 
-| Keyword | Semantics | HENCE fires | Use when |
-|---------|-----------|-------------|----------|
-| `EVERY` | Barrier/Join | **Once** when all complete | All-or-nothing (resolution passes) |
-| `EACH` | Fork/Distributive | **For each** completion | Individualized consequences |
+| Keyword | Semantics         | HENCE fires                | Use when                           |
+| ------- | ----------------- | -------------------------- | ---------------------------------- |
+| `EVERY` | Barrier/Join      | **Once** when all complete | All-or-nothing (resolution passes) |
+| `EACH`  | Fork/Distributive | **For each** completion    | Individualized consequences        |
 
 Without HENCE/LEST, both are equivalent (pure distributive).
 
 ### WHO Clause Forms
 
-| Form | Example | Notes |
-|------|---------|-------|
-| **Predicate** | `WHO `is adult`` | Bound variable supplied as **last** argument |
-| **Explicit** | `WHO p's age >= 18` | Full boolean expression |
+| Form          | Example             | Notes                                        |
+| ------------- | ------------------- | -------------------------------------------- |
+| **Predicate** | `WHO `is adult``    | Bound variable supplied as **last** argument |
+| **Explicit**  | `WHO p's age >= 18` | Full boolean expression                      |
 
 **Disambiguation:** If the bound variable appears in the expression, no implicit application occurs.
 
@@ -141,6 +141,7 @@ The type annotation (`Person`) is required. The `WHO` clause is optional.
 Two forms are supported:
 
 **Predicate form** — bound variable supplied as **last** argument (curried convention):
+
 ```l4
 EVERY Person p
   WHO `has green hair`  -- becomes: `has green hair` p
@@ -148,6 +149,7 @@ EVERY Person p
 ```
 
 **Explicit form** — full boolean expression:
+
 ```l4
 EVERY Person p
   WHO p's age >= 18
@@ -157,6 +159,7 @@ EVERY Person p
 **Disambiguation rule:** If the bound variable appears anywhere in the WHO expression, no implicit application occurs. This prevents confusion when mixing styles.
 
 **Multi-argument predicates:**
+
 ```l4
 GIVEN `owes at least` IS A FUNCTION FROM NUMBER TO Person TO BOOLEAN
 DECIDE `owes at least` amount p MEANS p's debt >= amount
@@ -329,6 +332,7 @@ t=25: HENCE spawns: escrow_agent's deadline = 25 + 5 = 30
 ### 5.2 Reference Time for LEST
 
 When LEST fires, continuation deadlines are relative to **failure time**:
+
 - Deadline failure: `t_ref = deadline`
 - Early failure detection: `t_ref = detection_time`
 
@@ -343,6 +347,7 @@ EACH p_x MAY terminate
 ```
 
 If A terminates at t=10 and B terminates at t=15:
+
 - A's termination: C & B must settle with A by t=40
 - B's termination: C & A must settle with B by t=45
 
@@ -428,6 +433,7 @@ EACH p_x MAY terminate
 ```
 
 Expansion for {A, B, C}:
+
 - A MAY terminate HENCE (B MUST settle_with A AND C MUST settle_with A)
 - B MAY terminate HENCE (A MUST settle_with B AND C MUST settle_with B)
 - C MAY terminate HENCE (A MUST settle_with C AND B MUST settle_with C)
@@ -455,6 +461,7 @@ EVERY Person p WHO `owes at least` amount
 ```
 
 Desugars to:
+
 ```l4
 GIVEN amount IS A NUMBER, p IS A Person
 PARTY p IF `owes at least` amount p  -- p is LAST argument
@@ -466,6 +473,7 @@ PARTY p IF `owes at least` amount p  -- p is LAST argument
 The [HOMOICONICITY-SPEC](HOMOICONICITY-SPEC.md) proposes treating deontic positions as first-class values. This affects `EVERY...WHO`:
 
 **Instantiation strategies:**
+
 - **Lazy (Option A):** Evaluate `EVERY` rules on query. Recommended for unbounded types.
 - **Eager (Option B):** Pre-populate registry when parties enter. Recommended for bounded enums.
 
@@ -546,6 +554,7 @@ resolve v scope = case Map.lookup v (scopeBindings scope) of
 ### 10.2 Decidable Fragments
 
 Verification is decidable under:
+
 - Finite party sets
 - Bounded temporal depth (HENCE nesting)
 - Acyclic HENCE graphs
@@ -554,6 +563,7 @@ Verification is decidable under:
 ### 10.3 Static Analysis
 
 Check for:
+
 - **Deadlock:** Cyclic dependencies between barriers
 - **Temporal impossibility:** Conflicting deadlines
 - **Empty quantification:** Warn if domain might be empty
@@ -707,6 +717,7 @@ EVERY p MUST X HENCE ... COORDINATED WITH other_barrier
 **Rejected:** `WHO 's age >= 18` as shorthand for `WHO p's age >= 18`.
 
 **Why:**
+
 1. Adds third form, increasing cognitive load
 2. Inconsistent with L4 where `'s` always follows an expression
 3. Marginal benefit (only 2 characters shorter)
@@ -717,6 +728,7 @@ EVERY p MUST X HENCE ... COORDINATED WITH other_barrier
 **Rejected as sole mechanism:** Inferring type from deontic context without explicit annotation.
 
 **Why:**
+
 1. Not all EVERY/EACH uses occur in typed deontic contexts
 2. Legislative mode rules often stand alone
 3. Explicit `EVERY Person p` is clearer
@@ -758,6 +770,7 @@ Every individual party has their own separate obligation. If Alice breaches, onl
 This is a **constitutive** rule ("must be"), not **regulative** ("must do"). Directors bear no penalty for not approving—the resolution simply doesn't pass.
 
 **L4 representation using barrier:**
+
 ```l4
 EVERY director MAY approve the_resolution
     HENCE the_resolution passes
@@ -829,13 +842,13 @@ EACH p_x
 
 ### A.4 Coverage Summary
 
-| Pattern | EVERY/EACH handles? |
-|---------|---------------------|
-| A: Distributive | ✓ Yes |
-| B: Barrier | ✓ Yes |
-| C: Joint & Several | ✗ Future work |
-| D: Truly Joint | ✗ Future work |
-| E-J: Permissions & Prohibitions | ✓ Yes |
+| Pattern                         | EVERY/EACH handles? |
+| ------------------------------- | ------------------- |
+| A: Distributive                 | ✓ Yes               |
+| B: Barrier                      | ✓ Yes               |
+| C: Joint & Several              | ✗ Future work       |
+| D: Truly Joint                  | ✗ Future work       |
+| E-J: Permissions & Prohibitions | ✓ Yes               |
 
 ---
 
