@@ -1,0 +1,9 @@
+-- Test: Basic EVERY without WHO clause
+-- Every person has a basic obligation
+
+IMPORT prelude
+
+DECLARE Person
+
+EVERY Person p
+ MUST `exist`

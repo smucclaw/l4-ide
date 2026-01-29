@@ -1,0 +1,11 @@
+-- Test: EVERY with WHO clause using explicit expression
+-- The bound variable is used directly in the boolean expression
+
+IMPORT prelude
+
+DECLARE Person HAS
+    age IS A NUMBER
+
+EVERY Person p
+  WHO p's age >= 18
+ MUST `pay taxes`

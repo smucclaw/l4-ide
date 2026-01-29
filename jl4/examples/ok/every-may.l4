@@ -1,0 +1,10 @@
+-- Test: EVERY with MAY (permission)
+
+IMPORT prelude
+
+DECLARE Person
+DECLARE Location
+
+GIVEN l IS A Location
+EVERY Person p
+  MAY `depart` l

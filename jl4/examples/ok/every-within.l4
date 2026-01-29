@@ -1,0 +1,11 @@
+-- Test: EVERY with WITHIN temporal clause
+
+IMPORT prelude
+
+DECLARE Person HAS
+    `has green hair` IS A BOOLEAN
+
+EVERY Person p
+  WHO p's `has green hair`
+ MUST `wash hair`
+WITHIN 7 days

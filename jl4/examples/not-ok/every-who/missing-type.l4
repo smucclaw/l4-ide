@@ -1,0 +1,7 @@
+-- Test: EVERY without type name (should fail)
+-- Error: expected type name after EVERY
+
+IMPORT prelude
+
+EVERY p        -- Missing type name
+ MUST `exist`
