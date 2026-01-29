@@ -1,0 +1,33 @@
+{
+    "$defs": {
+        "Contract Role": {
+            "enum": [
+                "RPA",
+                "RPL",
+                "CLO",
+                "CNO",
+                "COL",
+                "LG",
+                "ST",
+                "BUY",
+                "SEL",
+                "RFL",
+                "PFL",
+                "RF",
+                "PF"
+            ],
+            "type": "string"
+        }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "role": {
+            "$ref": "#/$defs/Contract Role"
+        }
+    },
+    "required": [
+        "role"
+    ],
+    "title": "role sign",
+    "type": "object"
+}
