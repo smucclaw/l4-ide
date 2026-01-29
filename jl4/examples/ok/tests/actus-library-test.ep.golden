@@ -102,8 +102,8 @@ IMPORT `actus-schedule`
 #EVAL `1900 is leap year`  -- Should be FALSE (divisible by 100 but not 400)
 
 -- Test days in month
-`Feb 2024 days` MEANS `days in month` 2 2024
-`Feb 2023 days` MEANS `days in month` 2 2023
+`Feb 2024 days` MEANS `Days in month` 2 2024
+`Feb 2023 days` MEANS `Days in month` 2 2023
 
 #EVAL `Feb 2024 days`  -- Should be 29 (leap year)
 #EVAL `Feb 2023 days`  -- Should be 28

@@ -7,6 +7,7 @@
 -- =============================================================================
 
 IMPORT prelude
+IMPORT daydate
 IMPORT `actus-core`
 
 § `ACTUS Day Count Conventions`
@@ -48,37 +49,6 @@ GIVETH A NUMBER
     daysBetween DIVIDED BY 360
     WHERE
         daysBetween MEANS (DATE_SERIAL endDate) MINUS (DATE_SERIAL startDate)
-
--- =============================================================================
-§§ `Leap Year Check`
--- =============================================================================
-
-GIVEN year IS A NUMBER
-GIVETH A BOOLEAN
-`is leap year` MEANS
-    (year MODULO 4) EQUALS 0 AND NOT ((year MODULO 100) EQUALS 0 AND NOT ((year MODULO 400) EQUALS 0))
-
--- =============================================================================
-§§ `Days in Month`
--- =============================================================================
-
-GIVEN month IS A NUMBER
-      year IS A NUMBER
-GIVETH A NUMBER
-`days in month` MEANS
-    BRANCH
-        IF month EQUALS 1 THEN 31
-        IF month EQUALS 2 THEN IF `is leap year` year THEN 29 ELSE 28
-        IF month EQUALS 3 THEN 31
-        IF month EQUALS 4 THEN 30
-        IF month EQUALS 5 THEN 31
-        IF month EQUALS 6 THEN 30
-        IF month EQUALS 7 THEN 31
-        IF month EQUALS 8 THEN 31
-        IF month EQUALS 9 THEN 30
-        IF month EQUALS 10 THEN 31
-        IF month EQUALS 11 THEN 30
-        OTHERWISE 31
 
 -- =============================================================================
 §§ `Day Count Utilities`

@@ -6,6 +6,7 @@
 -- =============================================================================
 
 IMPORT prelude
+IMPORT daydate
 IMPORT `actus-core`
 IMPORT `actus-daycount`
 
@@ -28,7 +29,7 @@ GIVETH A DATE
         newYear MEANS oldYear PLUS (FLOOR ((totalMonths MINUS 1) DIVIDED BY 12))
         newMonth MEANS ((totalMonths MINUS 1) MODULO 12) PLUS 1
         -- Clamp the day to the last valid day of the target month
-        maxDayInTargetMonth MEANS `days in month` newMonth newYear
+        maxDayInTargetMonth MEANS `Days in month` newMonth newYear
         clampedDay MEANS IF originalDay GREATER THAN maxDayInTargetMonth
                          THEN maxDayInTargetMonth
                          ELSE originalDay
