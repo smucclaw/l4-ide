@@ -1,51 +1,37 @@
 # L4 - Rules as Code - Summary
 
-## Introduction
+- [Home](README.md)
+- [Glossary](reference/GLOSSARY.md)
 
-- [Overview](README.md)
-- [Background](Background.md)
-- [Principles](principles.md)
-- [Glossary](GLOSSARY.md)
+## Reference
 
-## Core Concepts
+- [Reference Home](reference/README.md)
+- [Types](reference/types/README.md)
+- [Coercions](reference/types/coercions.md)
+- [Functions](reference/functions/README.md)
+- [Control-Flow](reference/control-flow/README.md)
+- [Comparisons](reference/comparisons/README.md)
+- [Arithmetic]reference/(arithmetic/README.md)
+- [Operators](reference/operators/README.md)
+- [Syntax](reference/syntax/README.md)
+- [Built-ins](reference/builtins/README.md)
+- [Libraries](reference/libraries/README.md)
 
-- [Basic Syntax](20-basic-syntax.md)
-- [Data Types](10-data-types.md)
-- [Boolean Logic](10-boolean-logic.md)
-- [Functions](25-functions.md)
-- [Algebraic Types](30-algebraic-types.md)
-- [Scope](scope.md)
+## Courses
 
-## Advanced Features
+- [Courses Home](courses/README.md)
+- [Foundation Course](courses/foundation/README.md)
+- [Advanced Course](courses/advanced/README.md)
 
-- [Default Values](default-values.md)
-- [Default Logic](default-logic.md)
-- [Multitemporals](multitemporals.md)
-- [Modifiers](modifiers.md)
-- [Assistive Features](guide-index.md)
+## Tutorials
 
-## Regulative Rules
+- [Tutorials Home](tutorials/README.md)
+- [Getting Started](tutorials/getting-started/first-l4-file.md)
+- [LLM Integration](tutorials/llm-integration/llm-getting-started.md)
 
-- [Overview](regulative.md)
-- [Examples](regulative-examples.md)
-- [Deontics](regulative-deontics.md)
-- [Shall](regulative-shall.md)
+## Concepts
 
-## Applications and Integration
-
-- [Applications](apps.md)
-
-## Libraries
-
-- [Days and Dates](libraries/daydate.md)
-- [Excel Date Compatibility](libraries/excel-date.md)
-
-## Other
-
-- [2024-12 Report](2024-12-report.md)
-- [Proposal JL4 NL Query](proposal-jl4-nl-query-mar-24-2025.md)
-
-## Development
-
-- [Development Notes](dev/frontend-dev.md)
-- [Future Features](future-features.md)
+- [Concepts Home](concepts/README.md)
+- [Language Design](concepts/language-design/principles.md)
+- [Legal Modeling](concepts/legal-modeling/regulative-rules.md)
+- [Type System](concepts/type-system/algebraic-types.md)

@@ -2,6 +2,8 @@
 *~
 *.actual
 build
+.continue
+olddoc
 # Build Outputs
 ## Built Visual Studio Code Extensions
 .cabal

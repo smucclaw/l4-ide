@@ -1,0 +1,145 @@
+-- HTTP and JSON Built-in Examples
+-- Demonstrates FETCH, POST, ENV, JSONENCODE, and JSONDECODE
+
+--------------------------------------------------------------------------------
+-- Record type for examples
+--------------------------------------------------------------------------------
+
+DECLARE Person HAS
+  name IS A STRING
+  age IS A NUMBER
+
+--------------------------------------------------------------------------------
+-- JSONENCODE Examples
+--------------------------------------------------------------------------------
+
+-- Encode a simple record
+DECIDE alice IS Person WITH name IS "Alice", age IS 30
+DECIDE aliceJson IS JSONENCODE alice
+#EVAL aliceJson  -- {"name":"Alice","age":30}
+
+-- Encode a list
+DECIDE numbers IS LIST 1, 2, 3, 4, 5
+DECIDE numbersJson IS JSONENCODE numbers
+#EVAL numbersJson  -- [1,2,3,4,5]
+
+-- Encode nested structures
+DECLARE Team HAS
+  teamName IS A STRING
+  members IS A LIST OF Person
+
+DECIDE bob IS Person WITH name IS "Bob", age IS 25
+
+DECIDE team IS Team WITH
+  teamName IS "Engineering"
+  members IS LIST alice, bob
+
+DECIDE teamJson IS JSONENCODE team
+#EVAL teamJson
+
+-- Encode MAYBE values
+DECIDE justValue IS JSONENCODE (JUST 42)
+#EVAL justValue  -- 42
+
+DECIDE nothingValue IS JSONENCODE NOTHING
+#EVAL nothingValue  -- null
+
+--------------------------------------------------------------------------------
+-- JSONDECODE Examples
+--------------------------------------------------------------------------------
+
+
+
+
+
+-- Decode JSON primitives - returns EITHER STRING value
+DECIDE decodeString IS JSONDECODE "\"hello\""
+DECIDE decodeNumber IS JSONDECODE "42"
+DECIDE decodeArray IS JSONDECODE "[1, 2, 3]"
+
+
+
+
+
+
+#EVAL decodeString   -- RIGHT "hello"
+#EVAL decodeNumber   -- RIGHT 42
+#EVAL decodeArray    -- RIGHT (LIST 1, 2, 3)
+
+
+-- Decode a JSON object (returns generic object)
+DECIDE decodeObject IS JSONDECODE "{\"name\":\"Charlie\",\"age\":28}"
+#EVAL decodeObject
+
+
+
+
+-- Pattern match to extract values from EITHER
+DECIDE extractedValue IS
+  CONSIDER decodeNumber
+  WHEN RIGHT n THEN n
+  WHEN LEFT err THEN 0
+
+
+#EVAL extractedValue  -- 42
+
+-- Handle decode errors gracefully
+
+
+DECIDE badDecodeResult IS JSONDECODE "not valid json"
+
+DECIDE handleError IS
+  CONSIDER badDecodeResult
+
+  WHEN RIGHT val THEN "Success"
+  WHEN LEFT err THEN CONCAT "Error: ", err
+
+#EVAL handleError  -- "Error: ..."
+
+--------------------------------------------------------------------------------
+-- ENV Examples (conceptual - requires environment variables to be set)
+--------------------------------------------------------------------------------
+
+-- Read an environment variable
+-- DECIDE apiKey IS ENV "API_KEY"
+
+-- Use in conditional logic
+-- DECIDE hasApiKey IS NOT (apiKey EQUALS "")
+
+--------------------------------------------------------------------------------
+-- FETCH Examples (conceptual - requires network access)
+--------------------------------------------------------------------------------
+
+-- Simple GET request
+-- DECIDE uuid IS FETCH "https://www.uuidtools.com/api/generate/v4"
+
+-- Fetch and decode JSON
+-- ASSUME userData IS A EITHER STRING Person
+-- DECIDE userData IS JSONDECODE (FETCH "https://api.example.com/user/1")
+
+--------------------------------------------------------------------------------
+-- POST Examples (conceptual - requires network access)
+--------------------------------------------------------------------------------
+
+-- POST with JSON body
+-- DECIDE response IS POST
+--   "https://api.example.com/users"
+--   "{\"Content-Type\": \"application/json\"}"
+--   (JSONENCODE (Person WITH name IS "New User", age IS 21))
+
+--------------------------------------------------------------------------------
+-- Combined Pattern: Safe API Call with Fallback
+--------------------------------------------------------------------------------
+
+GIVEN jsonStr IS A STRING
+      fallback IS A Person
+GIVETH A Person
+`safe decode person` jsonStr fallback MEANS
+  CONSIDER JSONDECODE jsonStr
+  WHEN RIGHT p THEN p
+  WHEN LEFT err THEN fallback
+
+DECIDE defaultPerson IS Person WITH name IS "Default", age IS 0
+DECIDE result IS `safe decode person` "{\"name\":\"Test\",\"age\":99}" defaultPerson
+
+#EVAL result's name  -- "Test"

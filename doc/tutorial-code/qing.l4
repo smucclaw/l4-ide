@@ -1,9 +1,0 @@
-
-
-§ qing
-@ref url https://www.lomography.com/magazine/337259-color-chronicles-deconstructing-qing
-GIVEN c IS A STRING
-DECIDE `is qing` IF
-       c EQUALS "green"
-    OR c EQUALS "blue"
-

@@ -17,6 +17,7 @@ module L4.ACTUS.Matching.Scorer (
 ) where
 
 import Data.List (sortBy)
+import qualified Data.Map.Strict as Map
 import Data.Ord (comparing)
 import Data.Text (Text)
 import L4.ACTUS.FeatureExtractor
@@ -49,21 +50,45 @@ normalizeScore :: Double -> Double
 normalizeScore = max 0.0 . min 1.0
 
 -- | Aggregate scores, combining evidence for the same ACTUS type.
+--
+-- Groups matches by ACTUS type and takes the best score for each,
+-- merging evidence from all matches of the same type.
 aggregateScores :: [ScoredMatch] -> [ScoredMatch]
 aggregateScores matches =
-  -- Group by ACTUS type and take the best score for each
-  -- (In practice, we shouldn't have duplicates, but this handles edge cases)
-  sortBy (comparing (negate . getConfidence)) matches
+  -- Group by ACTUS type and take the best score for each, merging evidence
+  let grouped = Map.toList $ foldr groupByType Map.empty matches
+      merged = map mergeGroup grouped
+   in sortBy (comparing (negate . getConfidence)) merged
  where
   getConfidence m = m.matchConfidence
+
+  -- Group matches by ACTUS type, keeping all matches for each type
+  groupByType :: ScoredMatch -> Map.Map Text [ScoredMatch] -> Map.Map Text [ScoredMatch]
+  groupByType m = Map.insertWith (++) m.matchActusType [m]
+
+  -- Merge a group of matches: take best confidence, combine all evidence
+  mergeGroup :: (Text, [ScoredMatch]) -> ScoredMatch
+  mergeGroup (actusType, groupMatches) =
+    let bestConf = maximum $ map getConfidence groupMatches
+        allEvidence = concatMap (\m -> m.matchEvidence) groupMatches
+     in ScoredMatch
+          { matchActusType = actusType
+          , matchConfidence = bestConf
+          , matchEvidence = allEvidence
+          }
 
 -- | Select the primary classification from scored matches.
 --
 -- Returns Nothing if no match exceeds the minimum threshold.
-selectPrimaryClassification :: [ScoredMatch] -> Maybe ScoredMatch
-selectPrimaryClassification matches =
+-- The threshold should be passed from AnalyzerConfig.minConfidence.
+selectPrimaryClassification ::
+  -- | Minimum confidence threshold (from AnalyzerConfig.minConfidence)
+  Double ->
+  [ScoredMatch] ->
+  Maybe ScoredMatch
+selectPrimaryClassification minConfidence matches =
   case sortBy (comparing (negate . getConfidence)) matches of
-    (best : _) | best.matchConfidence >= 0.3 -> Just best
+    (best : _) | best.matchConfidence >= minConfidence -> Just best
     _ -> Nothing
  where
   getConfidence m = m.matchConfidence
@@ -72,11 +97,16 @@ selectPrimaryClassification matches =
 --
 -- A container wraps other contract types. If we detect master agreement
 -- structure, we return it as the container and look for contained types.
-determineContainerType :: [ScoredMatch] -> Maybe ScoredMatch
-determineContainerType matches =
+-- The threshold should be passed from AnalyzerConfig.minConfidence.
+determineContainerType ::
+  -- | Minimum confidence threshold (from AnalyzerConfig.minConfidence)
+  Double ->
+  [ScoredMatch] ->
+  Maybe ScoredMatch
+determineContainerType minConfidence matches =
   let masterMatches = filter isMasterAgreement matches
    in case masterMatches of
-        (m : _) | m.matchConfidence >= 0.4 -> Just m
+        (m : _) | m.matchConfidence >= minConfidence -> Just m
         _ -> Nothing
  where
   isMasterAgreement m = m.matchActusType == "MasterAgreement"

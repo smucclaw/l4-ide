@@ -1,0 +1,124 @@
+-- SHANT Keyword Examples - Legal Prohibitions
+--
+-- The SHANT keyword (and its alternative MUST NOT) expresses legal prohibitions
+-- - actions that a party is forbidden from performing.
+--
+-- Key Concepts:
+--   • SHANT means "shall not" - a party must refrain from an action
+--   • If the prohibited action occurs, it results in BREACH
+--   • SHANT and MUST NOT are equivalent - use whichever reads more naturally
+--   • Prohibitions are maintained by NOT performing the forbidden action
+--
+-- Common Legal Uses:
+--   • Non-disclosure agreements (protecting confidential information)
+--   • Non-compete clauses (restricting competitive activities)
+--   • Lease restrictions (limiting tenant actions)
+--   • Loan covenants (preventing risky borrower behavior)
+--
+-- This file demonstrates typical prohibition patterns found in:
+--   • Employment contracts
+--   • Lease agreements  
+--   • Loan agreements
+--   • Commercial contracts
+--
+
+-- Type Declarations
+
+DECLARE `Legal Party` IS ONE OF
+  `The Employee`
+  `The Employer`
+  `The Tenant`
+  `The Landlord`
+  `The Borrower`
+  `The Lender`
+
+DECLARE `Prohibited Action` IS ONE OF
+  `disclose confidential information`
+  `compete with employer` HAS `competing business` IS A STRING
+  `sublease the premises`
+  `make alterations` HAS `alteration type` IS A STRING
+  `incur additional debt` HAS `debt amount` IS A NUMBER
+  `dispose of collateral`
+  `pay penalty` HAS `penalty amount` IS A NUMBER
+
+-- Basic Prohibition - Non-Disclosure Agreement
+
+-- A simple prohibition with a time period
+`confidentiality obligation` MEANS
+  PARTY `The Employee`
+  SHANT `disclose confidential information`
+  WITHIN 1825  -- 5 years in days
+
+-- Prohibition with MUST NOT (Alternative Syntax)
+
+-- MUST NOT and SHANT are equivalent ways to express prohibition
+`non-compete clause` MEANS
+  PARTY `The Employee`
+  MUST NOT `compete with employer` "software development"
+  WITHIN 730  -- 2 years in days
+
+-- Prohibition with Breach Consequence
+
+-- If the prohibition is violated, an explicit breach is declared
+`no subleasing` MEANS
+  PARTY `The Tenant`
+  SHANT `sublease the premises`
+  WITHIN 365
+  LEST BREACH BY `The Tenant` BECAUSE "violated lease agreement section 8"
+
+-- Conditional Prohibition
+
+-- Prohibition applies only when a condition is met
+`structural alteration prohibition` MEANS
+  PARTY `The Tenant`
+  SHANT `make alterations` `alt type` PROVIDED
+    `alt type` EQUALS "structural" OR `alt type` EQUALS "load-bearing"
+  WITHIN 365
+  LEST BREACH BY `The Tenant` BECAUSE "made unauthorized structural changes"
+
+-- Prohibition with Financial Threshold
+
+-- Common in loan agreements - borrower cannot take on significant new debt
+`debt restriction` MEANS
+  PARTY `The Borrower`
+  SHANT `incur additional debt` `new debt` PROVIDED `new debt` GREATER THAN 50000
+  WITHIN 1095  -- 3 years
+  LEST BREACH BY `The Borrower` BECAUSE "exceeded debt covenant limit"
+
+-- Prohibition with Financial Penalty
+
+-- If prohibition is violated, a financial penalty must be paid
+`collateral protection` MEANS
+  PARTY `The Borrower`
+  SHANT `dispose of collateral`
+  WITHIN 1095
+  LEST
+    PARTY `The Borrower`
+    MUST `pay penalty` 10000
+    WITHIN 30
+    LEST BREACH BY `The Borrower` BECAUSE "failed to pay penalty for collateral disposal"
+
+-- Testing Prohibitions
+
+-- Test 1: Prohibition complied with (no action taken - this is success)
+#TRACE `confidentiality obligation` AT 0 WITH
+
+-- Test 2: Prohibition violated (action taken - this should result in breach)
+#TRACE `confidentiality obligation` AT 0 WITH
+  PARTY `The Employee` DOES `disclose confidential information` AT 100
+
+-- Test 3: Conditional prohibition not violated (condition not met)
+#TRACE `structural alteration prohibition` AT 0 WITH
+  PARTY `The Tenant` DOES `make alterations` "cosmetic" AT 50
+
+-- Test 4: Conditional prohibition violated (condition met)
+#TRACE `structural alteration prohibition` AT 0 WITH
+  PARTY `The Tenant` DOES `make alterations` "structural" AT 50
+
+-- Test 5: Financial prohibition within threshold (allowed)
+#TRACE `debt restriction` AT 0 WITH
+  PARTY `The Borrower` DOES `incur additional debt` 40000 AT 100
+
+-- Test 6: Financial prohibition exceeded (breach)
+#TRACE `debt restriction` AT 0 WITH
+  PARTY `The Borrower` DOES `incur additional debt` 75000 AT 100

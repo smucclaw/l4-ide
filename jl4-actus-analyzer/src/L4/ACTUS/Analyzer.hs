@@ -239,13 +239,13 @@ classifyFeatures ::
   [FilePath] ->
   L4Features ->
   IO ClassificationResult
-classifyFeatures _config ontology paths features = do
+classifyFeatures config ontology paths features = do
   let rules = buildRulesFromOntology ontology ++ defaultRules
       scores = computeConfidence rules features
       aggregated = aggregateScores scores
 
   -- Determine container type
-  let mContainer = determineContainerType aggregated
+  let mContainer = determineContainerType config.minConfidence aggregated
       getActusType m = m.matchActusType
       containerActusType = fmap getActusType mContainer
       containerFibo = containerActusType >>= inferFIBOClass
@@ -255,7 +255,7 @@ classifyFeatures _config ontology paths features = do
         case mContainer of
           Just c -> filter (\m -> m.matchActusType /= c.matchActusType) aggregated
           Nothing -> aggregated
-      mPrimary = selectPrimaryClassification nonContainer
+      mPrimary = selectPrimaryClassification config.minConfidence nonContainer
       primaryActus = fmap getActusType mPrimary
       primaryFibo = primaryActus >>= inferFIBOClass
 

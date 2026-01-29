@@ -1,0 +1,306 @@
+-- DEONTIC Type Examples - Regulative Values in L4
+
+-- ============================================================
+-- § Type Declarations
+-- ============================================================
+
+-- Every DEONTIC value needs Actor and Action types
+-- These define WHO can act and WHAT actions exist
+
+DECLARE Actor IS ONE OF
+    Buyer
+    Seller
+    Commissioner
+
+DECLARE Action IS ONE OF
+    `deliver goods` HAS description IS A STRING
+    `pay invoice` HAS amount IS A NUMBER
+    `inspect goods`
+    `issue notice` HAS content IS A STRING
+    `cancel order`
+
+-- ============================================================
+-- § Basic DEONTIC Values
+-- ============================================================
+
+-- A DEONTIC value represents an obligation, permission, or prohibition
+-- The type signature shows the Actor and Action types
+
+GIVETH A DEONTIC Actor Action
+`simple delivery obligation` MEANS
+    PARTY Seller
+    MUST `deliver goods` "standard package"
+    WITHIN 14
+    HENCE FULFILLED
+    LEST BREACH
+
+-- DEONTIC values are first-class - they can be stored in variables
+GIVETH A DEONTIC Actor Action
+`the seller's duty` MEANS `simple delivery obligation`
+
+-- ============================================================
+-- § DEONTIC with Parameters
+-- ============================================================
+
+-- Functions can take parameters and return DEONTIC values
+
+GIVEN deadline IS A NUMBER
+GIVETH A DEONTIC Actor Action
+`delivery within days` MEANS
+    PARTY Seller
+    MUST `deliver goods` "standard package"
+    WITHIN deadline
+    HENCE FULFILLED
+    LEST BREACH
+
+GIVEN price IS A NUMBER
+      paymentDeadline IS A NUMBER
+GIVETH A DEONTIC Actor Action
+`payment obligation` MEANS
+    PARTY Buyer
+    MUST `pay invoice` price
+    WITHIN paymentDeadline
+    HENCE FULFILLED
+    LEST BREACH
+
+-- ============================================================
+-- § DEONTIC Composition with HENCE
+-- ============================================================
+
+-- HENCE chains DEONTIC values - one obligation leads to another
+
+GIVEN price IS A NUMBER
+GIVETH A DEONTIC Actor Action
+`sale contract` MEANS
+    PARTY Seller
+    MUST `deliver goods` "merchandise"
+    WITHIN 14
+    HENCE
+        PARTY Buyer
+        MUST `pay invoice` price
+        WITHIN 30
+        HENCE FULFILLED
+        LEST BREACH BY Buyer BECAUSE "failed to pay"
+    LEST BREACH BY Seller BECAUSE "failed to deliver"
+
+-- ============================================================
+-- § DEONTIC Composition with RAND (Parallel)
+-- ============================================================
+
+-- RAND combines DEONTIC values that must ALL be fulfilled
+
+GIVETH A DEONTIC Actor Action
+`mutual obligations` MEANS
+    (PARTY Seller MUST `deliver goods` "item A" WITHIN 14 HENCE FULFILLED LEST BREACH)
+    RAND
+    (PARTY Buyer MUST `pay invoice` 1000 WITHIN 30 HENCE FULFILLED LEST BREACH)
+
+-- ============================================================
+-- § DEONTIC Composition with ROR (Alternative)
+-- ============================================================
+
+-- ROR combines DEONTIC values where ANY ONE fulfills the contract
+-- Note: ROR applies to entire provisions, not individual obligations
+
+GIVETH A DEONTIC Actor Action
+`flexible delivery` MEANS
+    (PARTY Seller MUST `deliver goods` "express shipping" WITHIN 7 HENCE FULFILLED LEST BREACH)
+    ROR
+    (PARTY Seller MUST `deliver goods` "standard shipping" WITHIN 14 HENCE FULFILLED LEST BREACH)
+
+-- ============================================================
+-- § Terminal DEONTIC Values
+-- ============================================================
+
+-- FULFILLED - The contract is successfully completed
+-- BREACH - The contract is broken (optionally with blame)
+
+GIVETH A DEONTIC Actor Action
+`already fulfilled` MEANS FULFILLED
+
+GIVETH A DEONTIC Actor Action
+`immediate breach` MEANS BREACH
+
+GIVETH A DEONTIC Actor Action
+`breach with blame` MEANS BREACH BY Seller BECAUSE "goods were defective"
+
+-- ============================================================
+-- § Conditional DEONTIC Values
+-- ============================================================
+
+-- DEONTIC values can be computed conditionally
+
+GIVEN isUrgent IS A BOOLEAN
+GIVETH A DEONTIC Actor Action
+`conditional delivery` MEANS
+    IF isUrgent
+    THEN
+        PARTY Seller
+        MUST `deliver goods` "urgent delivery"
+        WITHIN 3
+        HENCE FULFILLED
+        LEST BREACH
+    ELSE
+        PARTY Seller
+        MUST `deliver goods` "standard delivery"
+        WITHIN 14
+        HENCE FULFILLED
+        LEST BREACH
+
+-- ============================================================
+-- § The EVALTRACE Function
+-- ============================================================
+
+-- EVALTRACE is the underlying function for evaluating contracts
+-- Type: FORALL party action. DEONTIC party action -> NUMBER -> LIST (EVENT party action) -> DEONTIC party action
+
+-- Create events using the EVENT constructor
+testEvents MEANS LIST EVENT Seller (`deliver goods` "standard package") 5, EVENT Buyer (`pay invoice` 100) 20
+
+-- Evaluate a contract against events starting at time 0
+#EVAL EVALTRACE `simple delivery obligation` 0 testEvents
+
+-- ============================================================
+-- § Testing DEONTIC Values with #TRACE
+-- ============================================================
+
+-- #TRACE is syntactic sugar for EVALTRACE
+
+-- Test 1: Simple obligation fulfilled
+#TRACE `simple delivery obligation` AT 0 WITH
+    PARTY Seller DOES `deliver goods` "standard package" AT 10
+
+-- Test 2: Simple obligation breached (deadline passed)
+#TRACE `simple delivery obligation` AT 0 WITH
+    PARTY Seller DOES `deliver goods` "standard package" AT 20
+
+-- Test 3: Parameterized delivery
+#TRACE `delivery within days` 7 AT 0 WITH
+    PARTY Seller DOES `deliver goods` "standard package" AT 5
+
+-- Test 4: Sale contract - happy path
+#TRACE `sale contract` 500 AT 0 WITH
+    PARTY Seller DOES `deliver goods` "merchandise" AT 10
+    PARTY Buyer DOES `pay invoice` 500 AT 30
+
+-- Test 5: Mutual obligations with RAND
+#TRACE `mutual obligations` AT 0 WITH
+    PARTY Seller DOES `deliver goods` "item A" AT 10
+    PARTY Buyer DOES `pay invoice` 1000 AT 25
+
+-- Test 6: Flexible delivery with ROR (first option)
+#TRACE `flexible delivery` AT 0 WITH
+    PARTY Seller DOES `deliver goods` "express shipping" AT 5
+
+-- Test 7: Flexible delivery with ROR (second option)
+#TRACE `flexible delivery` AT 0 WITH
+    PARTY Seller DOES `deliver goods` "standard shipping" AT 12
+
+-- Test 8: Conditional delivery (urgent)
+#TRACE `conditional delivery` TRUE AT 0 WITH
+    PARTY Seller DOES `deliver goods` "urgent delivery" AT 2
+
+-- Test 9: Conditional delivery (not urgent)
+#TRACE `conditional delivery` FALSE AT 0 WITH
+    PARTY Seller DOES `deliver goods` "standard delivery" AT 10
+
+-- ============================================================
+-- § Advanced: PROVIDED Clause for Pattern Matching
+-- ============================================================
+
+-- PROVIDED adds conditions to action pattern matching
+
+GIVETH A DEONTIC Actor Action
+`minimum payment contract` MEANS
+    PARTY Buyer
+    MUST `pay invoice` amount PROVIDED amount >= 100
+    WITHIN 30
+    HENCE FULFILLED
+    LEST BREACH
+
+-- Test: Payment meets minimum
+#TRACE `minimum payment contract` AT 0 WITH
+    PARTY Buyer DOES `pay invoice` 150 AT 20
+
+-- Test: Payment below minimum (doesn't match, continues waiting)
+#TRACE `minimum payment contract` AT 0 WITH
+    PARTY Buyer DOES `pay invoice` 50 AT 20
+
+-- ============================================================
+-- § Advanced: EXACTLY for Precise Matching
+-- ============================================================
+
+-- EXACTLY requires an exact value match in patterns
+
+GIVEN requiredAmount IS A NUMBER
+GIVETH A DEONTIC Actor Action
+`exact payment required` MEANS
+    PARTY Buyer
+    MUST EXACTLY `pay invoice` requiredAmount
+    WITHIN 30
+    HENCE FULFILLED
+    LEST BREACH
+
+-- Test: Exact amount paid
+#TRACE `exact payment required` 500 AT 0 WITH
+    PARTY Buyer DOES `pay invoice` 500 AT 15
+
+-- Test: Wrong amount (doesn't match)
+#TRACE `exact payment required` 500 AT 0 WITH
+    PARTY Buyer DOES `pay invoice` 499 AT 15
+
+-- ============================================================
+-- § Advanced: WAIT UNTIL for Time Advancement
+-- ============================================================
+
+-- WAIT UNTIL advances time without an event
+-- Useful for testing deadline behavior
+
+#TRACE `simple delivery obligation` AT 0 WITH
+    (`WAIT UNTIL` 20)
+
+-- ============================================================
+-- § DEONTIC as Return Values
+-- ============================================================
+
+-- Functions can compute and return DEONTIC values dynamically
+
+GIVEN orderType IS A STRING
+      price IS A NUMBER
+GIVETH A DEONTIC Actor Action
+`create order contract` MEANS
+    IF orderType EQUALS "express"
+    THEN
+        PARTY Seller
+        MUST `deliver goods` "express order"
+        WITHIN 3
+        HENCE
+            PARTY Buyer
+            MUST `pay invoice` expressPrice
+            WITHIN 7
+            HENCE FULFILLED
+            LEST BREACH
+        LEST BREACH
+    ELSE
+        PARTY Seller
+        MUST `deliver goods` "standard order"
+        WITHIN 14
+        HENCE
+            PARTY Buyer
+            MUST `pay invoice` price
+            WITHIN 30
+            HENCE FULFILLED
+            LEST BREACH
+        LEST BREACH
+    WHERE
+        expressPrice MEANS price + 50
+
+-- Test express order
+#TRACE `create order contract` "express" 200 AT 0 WITH
+    PARTY Seller DOES `deliver goods` "express order" AT 2
+    PARTY Buyer DOES `pay invoice` 250 AT 5
+
+-- Test standard order
+#TRACE `create order contract` "standard" 200 AT 0 WITH
+    PARTY Seller DOES `deliver goods` "standard order" AT 10
+    PARTY Buyer DOES `pay invoice` 200 AT 30

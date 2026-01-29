@@ -1,0 +1,110 @@
+-- =============================================================================
+-- ACTUS Day Count Conventions Library
+-- Algorithmic Contract Types Unified Standards (actusfrf.org)
+-- =============================================================================
+-- Year fraction calculations for interest accrual.
+-- Simplified version - supports A365 and A360 conventions.
+-- =============================================================================
+
+IMPORT prelude
+IMPORT `actus-core`
+
+§ `ACTUS Day Count Conventions`
+
+-- =============================================================================
+§§ `Year Fraction Function Y(S,E)`
+-- =============================================================================
+
+GIVEN startDate IS A DATE
+      endDate IS A DATE
+      convention IS A `Day Count Convention`
+GIVETH A NUMBER
+`year fraction` MEANS
+    CONSIDER convention
+    WHEN A360  THEN `year fraction A360` startDate endDate
+    WHEN A365  THEN `year fraction A365` startDate endDate
+    OTHERWISE `year fraction A365` startDate endDate
+
+-- =============================================================================
+§§ `Actual/365 Fixed`
+-- =============================================================================
+
+GIVEN startDate IS A DATE
+      endDate IS A DATE
+GIVETH A NUMBER
+`year fraction A365` MEANS
+    daysBetween DIVIDED BY 365
+    WHERE
+        daysBetween MEANS (DATE_SERIAL endDate) MINUS (DATE_SERIAL startDate)
+
+-- =============================================================================
+§§ `Actual/360`
+-- =============================================================================
+
+GIVEN startDate IS A DATE
+      endDate IS A DATE
+GIVETH A NUMBER
+`year fraction A360` MEANS
+    daysBetween DIVIDED BY 360
+    WHERE
+        daysBetween MEANS (DATE_SERIAL endDate) MINUS (DATE_SERIAL startDate)
+
+-- =============================================================================
+§§ `Leap Year Check`
+-- =============================================================================
+
+GIVEN year IS A NUMBER
+GIVETH A BOOLEAN
+`is leap year` MEANS
+    (year MODULO 4) EQUALS 0 AND NOT ((year MODULO 100) EQUALS 0 AND NOT ((year MODULO 400) EQUALS 0))
+
+-- =============================================================================
+§§ `Days in Month`
+-- =============================================================================
+
+GIVEN month IS A NUMBER
+      year IS A NUMBER
+GIVETH A NUMBER
+`days in month` MEANS
+    BRANCH
+        IF month EQUALS 1 THEN 31
+        IF month EQUALS 2 THEN IF `is leap year` year THEN 29 ELSE 28
+        IF month EQUALS 3 THEN 31
+        IF month EQUALS 4 THEN 30
+        IF month EQUALS 5 THEN 31
+        IF month EQUALS 6 THEN 30
+        IF month EQUALS 7 THEN 31
+        IF month EQUALS 8 THEN 31
+        IF month EQUALS 9 THEN 30
+        IF month EQUALS 10 THEN 31
+        IF month EQUALS 11 THEN 30
+        OTHERWISE 31
+
+-- =============================================================================
+§§ `Day Count Utilities`
+-- =============================================================================
+
+GIVEN startDate IS A DATE
+      endDate IS A DATE
+GIVETH A NUMBER
+`days between` MEANS
+    (DATE_SERIAL endDate) MINUS (DATE_SERIAL startDate)
+
+-- =============================================================================
+§§ `Interest Accrual`
+-- =============================================================================
+
+GIVEN principal IS A NUMBER
+      rate IS A NUMBER
+      startDate IS A DATE
+      endDate IS A DATE
+      convention IS A `Day Count Convention`
+GIVETH A NUMBER
+`accrued interest for period` MEANS
+    principal TIMES rate TIMES (`year fraction` startDate endDate convention)
+
+-- =============================================================================
+§§ `Version Information`
+-- =============================================================================
+
+`ACTUS Day Count Library Version` MEANS "1.0.0"

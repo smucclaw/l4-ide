@@ -7,7 +7,7 @@ import L4.ACTUS.FeatureExtractor
 import L4.ACTUS.Matching.ACTUS
 import L4.ACTUS.Matching.Rules
 import L4.ACTUS.Matching.Scorer
-import L4.ACTUS.Ontology.Types (ContainedType(..))
+import L4.ACTUS.Ontology.Types (ContainedType(..), Evidence(..))
 import Test.Hspec
 
 spec :: Spec
@@ -63,19 +63,46 @@ spec = do
           aggregated = aggregateScores scores
       length aggregated `shouldBe` 2
 
+    it "deduplicates same ACTUS type from multiple rules" $ do
+      -- Simulates loan and bond rules both emitting PAM
+      let ev1 = Evidence "Loan type" Nothing "Loan type -> PAM" 0.25
+          ev2 = Evidence "Bond type" Nothing "Bond type -> PAM" 0.20
+          scores =
+            [ ScoredMatch "PAM" 0.5 [ev1]
+            , ScoredMatch "PAM" 0.6 [ev2]
+            , ScoredMatch "FXOUT" 0.8 []
+            ]
+          aggregated = aggregateScores scores
+      -- Should have only 2 unique types, not 3
+      length aggregated `shouldBe` 2
+      -- PAM should have the best confidence (0.6) and merged evidence
+      let pamMatches = filter (\s -> s.matchActusType == "PAM") aggregated
+      case pamMatches of
+        (pam : _) -> do
+          pam.matchConfidence `shouldBe` 0.6
+          length pam.matchEvidence `shouldBe` 2
+        [] -> expectationFailure "Expected PAM match"
+
   describe "Primary classification selection" $ do
     it "selects highest confidence match" $ do
       let scores =
             [ ScoredMatch "FXOUT" 0.8 []
             , ScoredMatch "SWAPS" 0.5 []
             ]
-      case selectPrimaryClassification scores of
+      case selectPrimaryClassification 0.3 scores of
         Just primary -> primary.matchActusType `shouldBe` "FXOUT"
         Nothing -> expectationFailure "Expected primary classification"
 
     it "returns Nothing for low confidence matches" $ do
       let scores = [ScoredMatch "FXOUT" 0.2 []]
-      selectPrimaryClassification scores `shouldBe` Nothing
+      selectPrimaryClassification 0.3 scores `shouldBe` Nothing
+
+    it "honors custom minConfidence threshold" $ do
+      let scores = [ScoredMatch "FXOUT" 0.4 []]
+      -- With default 0.3 threshold, should match
+      selectPrimaryClassification 0.3 scores `shouldSatisfy` maybe False (const True)
+      -- With higher 0.5 threshold, should not match
+      selectPrimaryClassification 0.5 scores `shouldBe` Nothing
 
   describe "Container type detection" $ do
     it "detects master agreement as container" $ do
@@ -83,9 +110,19 @@ spec = do
             [ ScoredMatch "MasterAgreement" 0.6 []
             , ScoredMatch "FXOUT" 0.8 []
             ]
-      case determineContainerType scores of
+      case determineContainerType 0.3 scores of
         Just container -> container.matchActusType `shouldBe` "MasterAgreement"
         Nothing -> expectationFailure "Expected container type"
+
+    it "honors custom minConfidence threshold for container detection" $ do
+      let scores =
+            [ ScoredMatch "MasterAgreement" 0.4 []
+            , ScoredMatch "FXOUT" 0.8 []
+            ]
+      -- With 0.3 threshold, should detect container
+      determineContainerType 0.3 scores `shouldSatisfy` maybe False (const True)
+      -- With 0.5 threshold, should not detect container
+      determineContainerType 0.5 scores `shouldBe` Nothing
 
     it "detects contained types" $ do
       let scores =

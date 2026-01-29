@@ -1,0 +1,202 @@
+-- FOR ALL Examples
+-- Universal quantifier for polymorphic type signatures
+
+--------------------------------------------------------------------------------
+-- Basic Polymorphic Type Declarations
+--------------------------------------------------------------------------------
+
+-- Identity function: works for any type
+ASSUME identity IS
+  FOR ALL a
+  A FUNCTION FROM a TO a
+
+-- Constant function: ignores second argument
+ASSUME const IS
+  FOR ALL a AND b
+  A FUNCTION FROM a AND b TO a
+
+--------------------------------------------------------------------------------
+-- List Operations (Polymorphic)
+--------------------------------------------------------------------------------
+
+-- Map: apply function to each element
+ASSUME map IS
+  FOR ALL a AND b
+  A FUNCTION
+    FROM      FUNCTION FROM a TO b
+          AND LIST OF a
+    TO    LIST OF b
+
+-- Filter: keep elements matching predicate
+ASSUME filter IS
+  FOR ALL a
+  A FUNCTION
+    FROM      FUNCTION FROM a TO BOOLEAN
+          AND LIST OF a
+    TO    LIST OF a
+
+-- Fold: reduce list to single value
+ASSUME foldl IS
+  FOR ALL a AND b
+  A FUNCTION
+    FROM      FUNCTION FROM b AND a TO b
+          AND b
+          AND LIST OF a
+    TO    b
+
+--------------------------------------------------------------------------------
+-- Custom Algebraic Types with Type Parameters
+--------------------------------------------------------------------------------
+
+-- A choice between two types (like Either in Haskell)
+DECLARE Choice OF a, b
+  IS ONE OF
+    Left  HAS payload IS AN a
+    Right HAS payload IS A  b
+
+-- Optional value (like Maybe in Haskell)
+DECLARE Optional OF a
+  IS ONE OF
+    None
+    Some HAS value IS AN a
+
+-- A pair of two values
+DECLARE Pair OF a, b
+  HAS first IS AN a
+      second IS A b
+
+--------------------------------------------------------------------------------
+-- Functions Using Custom Types
+--------------------------------------------------------------------------------
+
+-- Handle either alternative of a Choice
+ASSUME either IS
+  FOR ALL a AND b AND c
+  A FUNCTION
+    FROM      FUNCTION FROM a TO c
+          AND FUNCTION FROM b TO c
+          AND Choice OF a, b
+    TO    c
+
+-- Extract value from Optional with default
+ASSUME fromOptional IS
+  FOR ALL a
+  A FUNCTION
+    FROM      a
+          AND Optional OF a
+    TO    a
+
+-- Create a pair
+ASSUME makePair IS
+  FOR ALL a AND b
+  A FUNCTION FROM a AND b TO Pair OF a, b
+
+--------------------------------------------------------------------------------
+-- Implementing Polymorphic Functions with GIVEN
+--------------------------------------------------------------------------------
+
+-- The definition style uses GIVEN ... IS A TYPE
+GIVEN a IS A TYPE
+      b IS A TYPE
+      f IS A FUNCTION FROM a TO b
+      list IS A LIST OF a
+GIVETH A LIST OF b
+myMap f list MEANS
+  CONSIDER list
+  WHEN EMPTY THEN EMPTY
+  WHEN x FOLLOWED BY xs THEN f x FOLLOWED BY myMap f xs
+
+-- Length works for any list type
+GIVEN a IS A TYPE
+      list IS A LIST OF a
+GIVETH A NUMBER
+myLength list MEANS
+  CONSIDER list
+  WHEN EMPTY THEN 0
+  WHEN x FOLLOWED BY xs THEN 1 PLUS myLength xs
+
+-- Reverse a list (simplified - just demonstrates the pattern)
+GIVEN a IS A TYPE
+      list IS A LIST OF a
+GIVETH A LIST OF a
+myReverse list MEANS
+  CONSIDER list
+  WHEN EMPTY THEN EMPTY
+  WHEN x FOLLOWED BY xs THEN append (myReverse xs) (x FOLLOWED BY EMPTY)
+
+-- Helper for append
+GIVEN a IS A TYPE
+      list1 IS A LIST OF a
+      list2 IS A LIST OF a
+GIVETH A LIST OF a
+append list1 list2 MEANS
+  CONSIDER list1
+  WHEN EMPTY THEN list2
+  WHEN x FOLLOWED BY xs THEN x FOLLOWED BY append xs list2
+
+--------------------------------------------------------------------------------
+-- Using Polymorphic Functions
+--------------------------------------------------------------------------------
+
+-- Test data
+DECIDE numbers IS LIST 1, 2, 3, 4, 5
+DECIDE strings IS LIST "a", "b", "c"
+
+-- Apply myLength to different list types
+#EVAL myLength numbers  -- 5
+#EVAL myLength strings  -- 3
+
+-- Map with different types
+GIVEN n IS A NUMBER
+double n MEANS n TIMES 2
+
+#EVAL myMap double numbers  -- LIST 2, 4, 6, 8, 10
+
+--------------------------------------------------------------------------------
+-- Higher-Order Polymorphic Functions
+--------------------------------------------------------------------------------
+
+-- Function composition
+ASSUME compose IS
+  FOR ALL a AND b AND c
+  A FUNCTION
+    FROM      FUNCTION FROM b TO c
+          AND FUNCTION FROM a TO b
+    TO    FUNCTION FROM a TO c
+
+-- Flip argument order
+ASSUME flip IS
+  FOR ALL a AND b AND c
+  A FUNCTION
+    FROM      FUNCTION FROM a AND b TO c
+    TO    FUNCTION FROM b AND a TO c
+
+--------------------------------------------------------------------------------
+-- Polymorphic Tree Type
+--------------------------------------------------------------------------------
+
+DECLARE Tree OF a
+  IS ONE OF
+    Leaf HAS value IS AN a
+    Node HAS
+      left IS A Tree OF a
+      right IS A Tree OF a
+
+-- Count nodes in a tree
+GIVEN a IS A TYPE
+      tree IS A Tree OF a
+GIVETH A NUMBER
+treeSize tree MEANS
+  CONSIDER tree
+  WHEN Leaf v THEN 1
+  WHEN Node l r THEN treeSize l PLUS treeSize r
+
+-- Example tree
+DECIDE exampleTree IS
+  Node WITH
+    left IS Leaf WITH value IS 1
+    right IS Node WITH
+      left IS Leaf WITH value IS 2
+      right IS Leaf WITH value IS 3
+
+#EVAL treeSize exampleTree  -- 3

@@ -1,0 +1,94 @@
+-- Module 1: Your First Legal Rule - Complete Examples
+-- All examples are validated and use natural language identifiers
+
+-- =============================================================================
+-- SECTION 1: Basic Obligation (simplified for teaching)
+-- =============================================================================
+
+-- Define types needed for obligations
+DECLARE `Charity Status` IS ONE OF
+    Active
+    Suspended
+    Dissolved
+
+DECLARE `Registered Charity`
+    HAS `the name` IS A STRING
+        `the status` IS A `Charity Status`
+        `the annual income` IS A NUMBER
+
+-- Define actors and actions
+DECLARE Party IS ONE OF
+    `the charity`
+    `the buyer`
+    `the seller`
+    `the Commissioner`
+
+DECLARE Action IS ONE OF
+    `file the annual return`
+    `deliver the goods`
+    `pay the invoice` HAS amount IS A NUMBER
+    `cancel the order`
+    `issue a Required Steps Notice`
+
+-- =============================================================================
+-- SECTION 2: The Annual Return Obligation
+-- =============================================================================
+
+-- A charity's obligation to file an annual return
+GIVEN charity IS A `Registered Charity`
+GIVETH A DEONTIC Party Action
+`the annual return obligation` MEANS
+    IF charity's `the status` EQUALS Active
+    THEN PARTY `the charity`
+         MUST `file the annual return`
+         WITHIN 60
+         HENCE FULFILLED
+         LEST PARTY `the Commissioner`
+              MAY `issue a Required Steps Notice`
+              HENCE FULFILLED
+    ELSE FULFILLED
+
+-- =============================================================================
+-- SECTION 3: Chained Obligations - Sale Contract
+-- =============================================================================
+
+-- The seller must deliver, then the buyer must pay
+GIVETH A DEONTIC Party Action
+`the sale contract` MEANS
+    PARTY `the seller`
+    MUST `deliver the goods`
+    WITHIN 14
+    HENCE
+        PARTY `the buyer`
+        MUST `pay the invoice` 1000
+        WITHIN 30
+        HENCE FULFILLED
+        LEST BREACH
+    LEST
+        PARTY `the seller`
+        MAY `cancel the order`
+        HENCE FULFILLED
+
+-- =============================================================================
+-- SECTION 4: Test Data
+-- =============================================================================
+
+`Animal Welfare Society` MEANS `Registered Charity` "Animal Welfare Society" Active 50000
+
+-- =============================================================================
+-- SECTION 5: Tests
+-- =============================================================================
+
+-- Test field access
+#EVAL `Animal Welfare Society`'s `the name`
+#EVAL `Animal Welfare Society`'s `the status` EQUALS Active
+#EVAL `Animal Welfare Society`'s `the annual income` > 10000
+
+-- Test obligation - charity files on time
+#TRACE `the annual return obligation` `Animal Welfare Society` AT 0 WITH
+    PARTY `the charity` DOES `file the annual return` AT 30
+
+-- Test sale contract - happy path
+#TRACE `the sale contract` AT 0 WITH
+    PARTY `the seller` DOES `deliver the goods` AT 10
+    PARTY `the buyer` DOES `pay the invoice` 1000 AT 25
