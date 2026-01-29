@@ -281,18 +281,18 @@ echo ""
 log_info "Validating L4 files..."
 echo ""
 
-# Check if jl4-cli is available
-if ! command -v jl4-cli &> /dev/null; then
-    # Try to use cabal run
-    if command -v cabal &> /dev/null; then
-        JL4_CMD="cabal run jl4-cli --"
-    else
-        log_warn "jl4-cli not found and cabal not available"
-        log_warn "Skipping L4 validation"
-        JL4_CMD=""
-    fi
-else
+# Prefer cabal run when in development (cabal.project exists at repo root)
+# This ensures we use the locally built version, not a stale global install
+if [[ -f "$REPO_ROOT/cabal.project" ]] && command -v cabal &> /dev/null; then
+    JL4_CMD="cabal run jl4-cli --"
+elif command -v jl4-cli &> /dev/null; then
     JL4_CMD="jl4-cli"
+elif command -v cabal &> /dev/null; then
+    JL4_CMD="cabal run jl4-cli --"
+else
+    log_warn "jl4-cli not found and cabal not available"
+    log_warn "Skipping L4 validation"
+    JL4_CMD=""
 fi
 
 if [[ -n "$JL4_CMD" ]]; then
