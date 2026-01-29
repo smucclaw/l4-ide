@@ -501,14 +501,14 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Expr n) where
       pure $ Breach ann mParty' mReason'
     Inert ann txt ctx -> pure $ Inert ann txt ctx
 
-instance (HasSrcRange n, HasNlg n) => HasNlg (Obligation n) where
-  addNlg (MkObligation ann' party event deadline followup lest) = do
+instance (HasSrcRange n, HasNlg n) => HasNlg (Deonton n) where
+  addNlg (MkDeonton ann' party event deadline followup lest) = do
     party' <- addNlg party
     event' <- addNlg event
     deadline' <- traverse addNlg deadline
     followup' <- traverse addNlg followup
     lest' <- traverse addNlg lest
-    pure $  MkObligation ann' party' event' deadline' followup' lest'
+    pure $  MkDeonton ann' party' event' deadline' followup' lest'
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (RAction n) where
   addNlg (MkAction ann modal rule provided) = do

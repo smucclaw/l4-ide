@@ -1,0 +1,203 @@
+-- =============================================================================
+-- ACTUS Main Library
+-- Algorithmic Contract Types Unified Standards (actusfrf.org)
+-- =============================================================================
+-- This is the main ACTUS library that re-exports all ACTUS modules and
+-- provides the core contract evaluation engine.
+--
+-- Import this library to get full ACTUS functionality:
+--   IMPORT actus
+--
+-- Version: 1.0.0
+-- Date: 2025-01-28
+-- =============================================================================
+
+IMPORT prelude
+IMPORT `actus-core`
+IMPORT `actus-terms`
+IMPORT `actus-events`
+IMPORT `actus-state`
+IMPORT `actus-daycount`
+IMPORT `actus-schedule`
+
+§ `ACTUS Contract Evaluation`
+
+-- =============================================================================
+§§ `Payoff Functions (POF)`
+-- =============================================================================
+-- Payoff functions calculate the cash flow for each event type.
+-- Convention: positive = inflow to contract holder, negative = outflow
+
+-- POF_IED: Initial Exchange Date payoff
+-- Cash flow for initial principal exchange
+GIVEN terms IS AN `ACTUS Contract Terms`
+      state IS A `Contract State`
+GIVETH A NUMBER
+`POF_IED` MEANS
+    (`role sign` (terms's contractRole)) TIMES (0 MINUS 1) TIMES
+        (terms's notionalPrincipal)
+
+-- POF_IP: Interest Payment payoff
+-- Cash flow for scheduled interest payment
+GIVEN terms IS AN `ACTUS Contract Terms`
+      state IS A `Contract State`
+GIVETH A NUMBER
+`POF_IP` MEANS
+    (`role sign` (terms's contractRole)) TIMES (state's accruedInterest)
+
+-- POF_MD: Maturity payoff
+-- Cash flow at maturity (remaining principal + final interest)
+GIVEN terms IS AN `ACTUS Contract Terms`
+      state IS A `Contract State`
+GIVETH A NUMBER
+`POF_MD` MEANS
+    (`role sign` (terms's contractRole)) TIMES
+        ((state's notionalPrincipal) PLUS (state's accruedInterest))
+
+-- POF_PR: Principal Redemption payoff
+-- Cash flow for scheduled principal repayment
+GIVEN terms IS AN `ACTUS Contract Terms`
+      state IS A `Contract State`
+      amount IS A NUMBER
+GIVETH A NUMBER
+`POF_PR` MEANS
+    (`role sign` (terms's contractRole)) TIMES amount
+
+-- =============================================================================
+§§ `State Transition Functions (STF)`
+-- =============================================================================
+-- State transition functions update contract state after each event.
+-- Note: L4 constructs new records rather than updating in place.
+
+-- STF_IED: Initial Exchange Date state transition
+-- Initialize state after initial exchange
+GIVEN terms IS AN `ACTUS Contract Terms`
+      preState IS A `Contract State`
+      eventDate IS A DATE
+GIVETH A `Contract State`
+`STF_IED` MEANS
+    `Contract State` WITH
+        statusDate          IS eventDate,
+        contractPerformance IS preState's contractPerformance,
+        notionalPrincipal   IS terms's notionalPrincipal,
+        accruedInterest     IS 0,
+        nominalInterestRate IS terms's nominalInterestRate,
+        feeAccrued          IS preState's feeAccrued
+
+-- STF_IP: Interest Payment state transition
+-- Reset accrued interest after payment
+GIVEN preState IS A `Contract State`
+      eventDate IS A DATE
+GIVETH A `Contract State`
+`STF_IP` MEANS
+    `Contract State` WITH
+        statusDate          IS eventDate,
+        contractPerformance IS preState's contractPerformance,
+        notionalPrincipal   IS preState's notionalPrincipal,
+        accruedInterest     IS 0,
+        nominalInterestRate IS preState's nominalInterestRate,
+        feeAccrued          IS preState's feeAccrued
+
+-- STF_MD: Maturity state transition
+-- Contract reaches maturity, notional goes to zero
+GIVEN preState IS A `Contract State`
+      eventDate IS A DATE
+GIVETH A `Contract State`
+`STF_MD` MEANS
+    `Contract State` WITH
+        statusDate          IS eventDate,
+        contractPerformance IS preState's contractPerformance,
+        notionalPrincipal   IS 0,
+        accruedInterest     IS 0,
+        nominalInterestRate IS preState's nominalInterestRate,
+        feeAccrued          IS preState's feeAccrued
+
+-- STF_PR: Principal Redemption state transition
+-- Reduce notional by redemption amount
+GIVEN preState IS A `Contract State`
+      eventDate IS A DATE
+      amount IS A NUMBER
+GIVETH A `Contract State`
+`STF_PR` MEANS
+    `Contract State` WITH
+        statusDate          IS eventDate,
+        contractPerformance IS preState's contractPerformance,
+        notionalPrincipal   IS (preState's notionalPrincipal) MINUS amount,
+        accruedInterest     IS 0,
+        nominalInterestRate IS preState's nominalInterestRate,
+        feeAccrued          IS preState's feeAccrued
+
+-- =============================================================================
+§§ `Interest Accrual`
+-- =============================================================================
+-- Accrue interest from one date to another.
+
+GIVEN terms IS AN `ACTUS Contract Terms`
+      state IS A `Contract State`
+      toDate IS A DATE
+GIVETH A `Contract State`
+`accrue interest to` MEANS
+    `Contract State` WITH
+        statusDate          IS toDate,
+        contractPerformance IS state's contractPerformance,
+        notionalPrincipal   IS state's notionalPrincipal,
+        accruedInterest     IS (state's accruedInterest) PLUS newInterest,
+        nominalInterestRate IS state's nominalInterestRate,
+        feeAccrued          IS state's feeAccrued
+    WHERE
+        yearFrac MEANS `year fraction`
+                           (state's statusDate)
+                           toDate
+                           (terms's dayCountConvention)
+        newInterest MEANS (state's notionalPrincipal) TIMES
+                          (state's nominalInterestRate) TIMES
+                          yearFrac
+
+-- =============================================================================
+§§ `FX Transaction Evaluation (FXOUT)`
+-- =============================================================================
+-- Evaluate FX outright transactions for IFEMA compatibility.
+
+-- Create FX pay event
+GIVEN fxTerms IS AN `FXOUT Terms`
+GIVETH A `Contract Event`
+`FXOUT pay event` MEANS
+    `make event`
+        IED
+        (fxTerms's valueDate)
+        (roleSign TIMES (0 MINUS (fxTerms's amount1)))
+        (fxTerms's currency1)
+        0 0 0
+    WHERE
+        roleSign MEANS `role sign` (fxTerms's contractRole)
+
+-- Create FX receive event
+GIVEN fxTerms IS AN `FXOUT Terms`
+GIVETH A `Contract Event`
+`FXOUT receive event` MEANS
+    `make event`
+        IED
+        (fxTerms's valueDate)
+        (roleSign TIMES (fxTerms's amount2))
+        (fxTerms's currency2)
+        0 0 0
+    WHERE
+        roleSign MEANS `role sign` (fxTerms's contractRole)
+
+-- =============================================================================
+§§ `Cash Flow Projection`
+-- =============================================================================
+-- Project cash flows for a contract.
+
+-- Sum all cash flows from events
+GIVEN events IS A LIST OF `Contract Event`
+GIVETH A NUMBER
+`net cash flow` MEANS
+    `total payoff` events
+
+-- =============================================================================
+§§ `Version Information`
+-- =============================================================================
+
+`ACTUS Library Version` MEANS "1.0.0"
+`ACTUS Library Date` MEANS "2025-01-28"

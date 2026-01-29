@@ -1,0 +1,35 @@
+-- Example: A simple sale contract with chained obligations
+-- From Module 0: Introduction to L4
+
+-- Define who can be a party to the contract
+DECLARE Party IS ONE OF
+    `the seller`
+    `the buyer`
+
+-- Define what actions can be performed
+DECLARE `Contract Action` IS ONE OF
+    `deliver the goods`
+    `pay the invoice`
+    `cancel the order`
+
+-- The sale contract: seller delivers, then buyer pays
+GIVETH A DEONTIC Party `Contract Action`
+`the sale contract` MEANS
+    PARTY `the seller`
+    MUST `deliver the goods`
+    WITHIN 14
+    HENCE
+        PARTY `the buyer`
+        MUST `pay the invoice`
+        WITHIN 30
+        HENCE FULFILLED
+        LEST BREACH
+    LEST
+        PARTY `the seller`
+        MAY `cancel the order`
+        HENCE FULFILLED
+
+-- Simulate: seller delivers on day 10, buyer pays on day 35
+#TRACE `the sale contract` AT 0 WITH
+    PARTY `the seller` DOES `deliver the goods` AT 10
+    PARTY `the buyer` DOES `pay the invoice` AT 35

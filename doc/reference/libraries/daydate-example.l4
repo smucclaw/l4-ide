@@ -1,0 +1,58 @@
+-- Daydate Example: Date calculations and temporal logic
+IMPORT daydate
+
+-- Date construction
+DECIDE `Christmas 2024` IS Date 25 12 2024
+DECIDE `New Year 2025` IS Date 1 1 2025
+
+#EVAL `Christmas 2024`
+#EVAL `New Year 2025`
+
+-- Date arithmetic
+DECIDE `week later` IS `Christmas 2024` PLUS 7
+#EVAL `week later`  -- January 1, 2025
+
+DECIDE `week before` IS `Christmas 2024` MINUS 7
+#EVAL `week before`  -- December 18, 2024
+
+-- Date components
+#EVAL DATE_DAY `Christmas 2024`    -- 25
+#EVAL DATE_MONTH `Christmas 2024`  -- 12
+#EVAL DATE_YEAR `Christmas 2024`   -- 2024
+
+-- Weekday calculations
+DECIDE `day of week` IS `Weekday of` `Christmas 2024`
+#EVAL `day of week`  -- Wednesday (3)
+
+#EVAL `Name of weekday` `Christmas 2024`  -- "Wednesday"
+
+-- Weekend checks
+#EVAL `is weekend` `Christmas 2024`   -- FALSE
+#EVAL `is weekday` `Christmas 2024`   -- TRUE
+
+DECIDE `last Saturday in 2024` IS Date 28 12 2024
+#EVAL `is weekend` `last Saturday in 2024` -- TRUE
+
+-- Week of year
+#EVAL `Week of the year` `Christmas 2024`  -- 52
+
+-- Leap year
+#EVAL `is leap year` 2024  -- TRUE
+#EVAL `is leap year` 2023  -- FALSE
+
+-- Relative time phrases
+DECIDE `tomorrow` IS `the day after` `Christmas 2024`
+#EVAL `tomorrow`
+
+DECIDE `next week` IS `the week after` `Christmas 2024`
+#EVAL `next week`
+
+
+-- Date comparison (via operator overloads)
+#EVAL `Christmas 2024` < `New Year 2025`   -- TRUE
+#EVAL `Christmas 2024` >= `New Year 2025`  -- FALSE
+
+-- Month helpers
+DECIDE `July 4th` IS July 4 2024
+#EVAL `July 4th`
+#EVAL `Name of month` `July 4th`  -- "July"

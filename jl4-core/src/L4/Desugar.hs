@@ -53,7 +53,7 @@ carameliseExprWithContext ctx = carameliseNode >>> \ case
   AppNamed   ann n nes morder -> AppNamed ann n (fmap caramliseNamedExpr nes) morder
   IfThenElse ann b t e -> IfThenElse ann (carameliseExprWithContext InertCtxNone b) (carameliseExprWithContext InertCtxNone t) (carameliseExprWithContext InertCtxNone e)
   MultiWayIf ann es e -> MultiWayIf ann (map (\(MkGuardedExpr ann' a b) -> MkGuardedExpr ann' (carameliseExprWithContext InertCtxNone a) (carameliseExprWithContext InertCtxNone b)) es) (carameliseExprWithContext InertCtxNone e)
-  Regulative ann o -> Regulative ann (carameliseObligation o)
+  Regulative ann o -> Regulative ann (carameliseDeonton o)
   Consider   ann e branches -> Consider ann (carameliseExprWithContext InertCtxNone e) (fmap carameliseBranch branches)
   Lit        ann l -> Lit ann l
   Percent    ann e -> Percent ann (carameliseExprWithContext InertCtxNone e)
@@ -105,10 +105,10 @@ carameliseEvent = \ case
       , atFirst
       }
 
-carameliseObligation :: HasName n => Obligation n -> Obligation n
-carameliseObligation = \ case
-  MkObligation { anno, party, action, due, hence, lest} ->
-    MkObligation
+carameliseDeonton :: HasName n => Deonton n -> Deonton n
+carameliseDeonton = \ case
+  MkDeonton { anno, party, action, due, hence, lest} ->
+    MkDeonton
       { anno
       , party = carameliseExpr party
       , action = carameliseRAction action

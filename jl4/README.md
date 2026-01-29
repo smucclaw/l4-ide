@@ -54,7 +54,7 @@ DECLARE Action IS ONE OF
   payment HAS amount IS A NUMBER
 
 -- now, a contract is defined by declaring a value of type 
--- PROVISION Person Action
+-- DEONTIC Person Action
 aContract MEANS 
   -- this is a very simple obligation: 
   -- "the party S must deliver within 3"
@@ -66,7 +66,7 @@ aContract MEANS
   WITHIN 3 -- this has to be of type (positive) Number
   -- "HENCE" is like the "then" in Hvitved's obligations
   HENCE
-    -- after "HENCE", you can insert a new thing of type PROVISION Person Action
+    -- after "HENCE", you can insert a new thing of type DEONTIC Person Action
     PARTY B
     MUST payment price PROVIDED price >= 20 
     -- payment price is a pattern of type Action, which binds "price" as a variable and brings it into scope 
@@ -76,12 +76,12 @@ aContract MEANS
     -- Since a successful match on the pattern means we proceed in the HENCE clause, price also stays in scope there.
     -- Obviously it mustn't be in scope in the LEST clause, because that implies we didn't have a successful match.
     WITHIN 3
-    -- since PROVISION's are normal values, we can also return them as results of the usual expressions - in this case, 
+    -- since DEONTIC's are normal values, we can also return them as results of the usual expressions - in this case, 
     -- the result is FULFILLED if the price is 20 and otherwise a further obligation
     HENCE (IF price = 20 THEN FULFILLED ELSE PARTY B MUST return WITHIN 10)
     -- the LEST clause is entered, if the specific obligation can't be fulfilled anymore. This is the case if a non-matching
     -- event arrived after the deadline.
-    LEST -- after a LEST, something of type PROVISION Person Action has to follow, again
+    LEST -- after a LEST, something of type DEONTIC Person Action has to follow, again
       PARTY B
       MUST EXACTLY payment fine 
       -- EXACTLY is a keyword in patterns that makes them a boolean guard using equality, i.e. the pattern matches iff the 
@@ -114,7 +114,7 @@ This does not change semantics *at all*, it's merely sugar.
 Now for evaluating traces against this provision, there are two ways of doing it: 
 
 - `EVALTRACE` which is simply a function of type 
-  `FORALL party action. PROVISION party action -> NUMBER -> LIST (EVENT party action) -> PROVISION party action`
+  `FORALL party action. DEONTIC party action -> NUMBER -> LIST (EVENT party action) -> DEONTIC party action`
 - `#TRACE` which (conceptually) desugars into `#EVAL EVALTRACE`
 
 ```

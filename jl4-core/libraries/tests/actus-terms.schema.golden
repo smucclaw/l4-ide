@@ -1,0 +1,58 @@
+{
+    "$defs": {
+        "FXOUT Terms": {
+            "properties": {
+                "amount1": {
+                    "$ref": "#/$defs/NUMBER"
+                },
+                "amount2": {
+                    "$ref": "#/$defs/NUMBER"
+                },
+                "contractID": {
+                    "$ref": "#/$defs/STRING"
+                },
+                "contractRole": {
+                    "$ref": "#/$defs/Contract Role"
+                },
+                "currency1": {
+                    "$ref": "#/$defs/ACTUS Currency"
+                },
+                "currency2": {
+                    "$ref": "#/$defs/ACTUS Currency"
+                },
+                "exchangeRate": {
+                    "$ref": "#/$defs/NUMBER"
+                },
+                "statusDate": {
+                    "$ref": "#/$defs/DATE"
+                },
+                "valueDate": {
+                    "$ref": "#/$defs/DATE"
+                }
+            },
+            "required": [
+                "contractID",
+                "contractRole",
+                "statusDate",
+                "currency1",
+                "amount1",
+                "currency2",
+                "amount2",
+                "valueDate",
+                "exchangeRate"
+            ],
+            "type": "object"
+        }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "fxTerms": {
+            "$ref": "#/$defs/FXOUT Terms"
+        }
+    },
+    "required": [
+        "fxTerms"
+    ],
+    "title": "implied exchange rate",
+    "type": "object"
+}

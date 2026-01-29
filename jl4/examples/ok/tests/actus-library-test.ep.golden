@@ -1,0 +1,158 @@
+-- =============================================================================
+-- ACTUS Library Test
+-- Tests basic functionality of the ACTUS L4 library
+-- =============================================================================
+
+IMPORT prelude
+IMPORT `actus-core`
+IMPORT `actus-events`
+IMPORT `actus-daycount`
+IMPORT `actus-schedule`
+
+§ `ACTUS Library Tests`
+
+-- Test role sign calculation
+`role sign RPA` MEANS `role sign` RPA
+`role sign RPL` MEANS `role sign` RPL
+
+#EVAL `role sign RPA`   -- Should be 1
+#EVAL `role sign RPL`   -- Should be -1
+
+-- Test day count conventions
+`days in year A365` MEANS `days in year for` A365
+`days in year A360` MEANS `days in year for` A360
+
+#EVAL `days in year A365`  -- Should be 365
+#EVAL `days in year A360`  -- Should be 360
+
+-- Test currency codes
+`USD code` MEANS `currency code` `ACTUS USD`
+`EUR code` MEANS `currency code` `ACTUS EUR`
+
+#EVAL `USD code`  -- Should be "USD"
+#EVAL `EUR code`  -- Should be "EUR"
+
+-- Test contract performance predicates
+-- Note: PF in this context is Contract Performance, not Contract Role
+`performance PF is active` MEANS `is active` PF
+`performance DF is active` MEANS `is active` DF
+`performance MA is active` MEANS `is active` MA
+
+#EVAL `performance PF is active`  -- Should be TRUE
+#EVAL `performance DF is active`  -- Should be FALSE
+#EVAL `performance MA is active`  -- Should be FALSE
+
+-- Test non-performing predicate
+`performance PF is non-performing` MEANS `is non-performing` PF
+`performance DQ is non-performing` MEANS `is non-performing` DQ
+
+#EVAL `performance PF is non-performing`  -- Should be FALSE
+#EVAL `performance DQ is non-performing`  -- Should be TRUE
+
+-- Test event acronym
+`IED acronym` MEANS `event acronym` IED
+`IP acronym` MEANS `event acronym` IP
+`PR acronym` MEANS `event acronym` PR
+
+#EVAL `IED acronym`  -- Should be "IED"
+#EVAL `IP acronym`   -- Should be "IP"
+#EVAL `PR acronym`   -- Should be "PR"
+
+-- Test event sequence
+`IED sequence` MEANS `event sequence` IED
+`IP sequence` MEANS `event sequence` IP
+`MD sequence` MEANS `event sequence` MD
+
+#EVAL `IED sequence`  -- Should be 1
+#EVAL `IP sequence`   -- Should be 8
+#EVAL `MD sequence`   -- Should be 19
+
+-- Test year fraction calculation (A365)
+`test year fraction A365` MEANS
+    `year fraction` (DATE_FROM_DMY 1 1 2024) (DATE_FROM_DMY 1 7 2024) A365
+
+#EVAL `test year fraction A365`  -- Should be ~0.4986 (182/365)
+
+-- Test year fraction calculation (A360)
+`test year fraction A360` MEANS
+    `year fraction` (DATE_FROM_DMY 1 1 2024) (DATE_FROM_DMY 1 7 2024) A360
+
+#EVAL `test year fraction A360`  -- Should be ~0.5056 (182/360)
+
+-- Test accrued interest calculation
+`test accrued interest` MEANS
+    `accrued interest for period`
+        100000    -- principal
+        0.05      -- 5% rate
+        (DATE_FROM_DMY 1 1 2024)
+        (DATE_FROM_DMY 1 7 2024)
+        A365
+
+#EVAL `test accrued interest`  -- Should be ~2493 (100000 * 0.05 * 182/365)
+
+-- Test leap year detection
+`2024 is leap year` MEANS `is leap year` 2024
+`2023 is leap year` MEANS `is leap year` 2023
+`2000 is leap year` MEANS `is leap year` 2000
+`1900 is leap year` MEANS `is leap year` 1900
+
+#EVAL `2024 is leap year`  -- Should be TRUE
+#EVAL `2023 is leap year`  -- Should be FALSE
+#EVAL `2000 is leap year`  -- Should be TRUE (divisible by 400)
+#EVAL `1900 is leap year`  -- Should be FALSE (divisible by 100 but not 400)
+
+-- Test days in month
+`Feb 2024 days` MEANS `Days in month` 2 2024
+`Feb 2023 days` MEANS `Days in month` 2 2023
+
+#EVAL `Feb 2024 days`  -- Should be 29 (leap year)
+#EVAL `Feb 2023 days`  -- Should be 28
+
+-- Test cycle creation
+`monthly cycle` MEANS `Monthly Cycle`
+`annual cycle` MEANS `Annual Cycle`
+
+#EVAL `monthly cycle`'s period      -- Should be 1
+#EVAL `monthly cycle`'s periodUnit  -- Should be Months
+#EVAL `annual cycle`'s period       -- Should be 1
+#EVAL `annual cycle`'s periodUnit   -- Should be Years
+
+-- Test ACTUS Amount constructor
+`test USD amount` MEANS `ACTUS_USD` 1000
+`test EUR amount` MEANS `ACTUS_EUR` 500
+
+#EVAL `test USD amount`'s value     -- Should be 1000
+#EVAL `test EUR amount`'s value     -- Should be 500
+
+-- =============================================================================
+-- Test schedule generation with end-of-month edge cases
+-- =============================================================================
+
+-- Test add months: Jan 31 + 1 month should clamp to Feb 28/29
+`Jan31 plus 1 month 2023` MEANS `add months` (DATE_FROM_DMY 31 1 2023) 1
+`Jan31 plus 1 month 2024` MEANS `add months` (DATE_FROM_DMY 31 1 2024) 1
+
+#EVAL `Jan31 plus 1 month 2023`  -- Should be 2023-02-28 (non-leap year)
+#EVAL `Jan31 plus 1 month 2024`  -- Should be 2024-02-29 (leap year)
+
+-- Test add months: Jan 30 + 1 month should clamp to Feb 28/29
+`Jan30 plus 1 month 2023` MEANS `add months` (DATE_FROM_DMY 30 1 2023) 1
+`Jan30 plus 1 month 2024` MEANS `add months` (DATE_FROM_DMY 30 1 2024) 1
+
+#EVAL `Jan30 plus 1 month 2023`  -- Should be 2023-02-28 (non-leap year)
+#EVAL `Jan30 plus 1 month 2024`  -- Should be 2024-02-29 (leap year)
+
+-- Test add months: Mar 31 + 1 month should clamp to Apr 30
+`Mar31 plus 1 month` MEANS `add months` (DATE_FROM_DMY 31 3 2024) 1
+
+#EVAL `Mar31 plus 1 month`  -- Should be 2024-04-30
+
+-- Test add months: normal case (15th of month, should stay 15th)
+`Jan15 plus 1 month` MEANS `add months` (DATE_FROM_DMY 15 1 2024) 1
+
+#EVAL `Jan15 plus 1 month`  -- Should be 2024-02-15
+
+-- Test monthly schedule starting from Jan 31 (edge case for end-of-month contracts)
+`schedule from Jan31 2024` MEANS `monthly schedule` (DATE_FROM_DMY 31 1 2024) 3
+
+#EVAL `schedule from Jan31 2024`  -- Should be [2024-01-31, 2024-02-29, 2024-03-31]

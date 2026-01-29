@@ -1,0 +1,13 @@
+-- Example: Comments in L4
+-- This demonstrates line and block comments
+
+-- This is a line comment
+ASSUME age IS A NUMBER  -- inline comment
+
+{- This is a
+   multi-line
+   block comment -}
+
+ASSUME name IS A STRING
+
+#EVAL age

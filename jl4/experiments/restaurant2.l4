@@ -14,7 +14,7 @@ IMPORT prelude
 GIVEN patron   IS AN Actor
       bar      IS AN Actor
       symtab   IS A `Symbol Table`
-GIVETH PROVISION Actor Action
+GIVETH DEONTIC Actor Action
 `entry point` MEANS
          -- [TODO] how do we allow the patron to order an arbitrary nonnegative number of beers?
             PARTY     patron  MUST order "beer"   1              WITHIN 20 HENCE `entry point` patron bar (addToTab 1 "beer")

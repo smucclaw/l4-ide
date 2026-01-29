@@ -79,9 +79,7 @@ mustDrink MEANS
   MUST DO drink
   WITHIN 30
 
--- =============================================================================
 -- Behavior Tests using #TRACE
--- =============================================================================
 -- NOTE: As of Phase 1-3 implementation, only PARSING is complete.
 -- The evaluator does not yet distinguish MUST vs MUST NOT/SHANT semantics.
 -- Current behavior: SHANT/MUST NOT are parsed but evaluated as MUST.

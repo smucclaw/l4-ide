@@ -1,0 +1,72 @@
+-- AND keyword examples
+
+-- Basic AND Operations
+
+#EVAL TRUE AND TRUE
+#EVAL TRUE AND FALSE
+#EVAL FALSE AND TRUE
+#EVAL FALSE AND FALSE
+
+-- Symbolic Alternative (&&)
+
+#EVAL TRUE && TRUE
+#EVAL TRUE && FALSE
+
+-- In Conditional Logic
+
+ASSUME age IS A NUMBER
+ASSUME hasLicense IS A BOOLEAN
+
+DECIDE canDrive IS age >= 16 AND hasLicense
+
+#CHECK canDrive
+
+-- Chaining Multiple Conditions
+
+GIVEN a IS A BOOLEAN
+      b IS A BOOLEAN
+      c IS A BOOLEAN
+allTrue a b c MEANS a AND b AND c
+
+#EVAL allTrue TRUE TRUE TRUE
+#EVAL allTrue TRUE TRUE FALSE
+
+-- Layout-Sensitive AND (Vertical Format)
+
+ASSUME personAge IS A NUMBER
+ASSUME personIncome IS A NUMBER
+ASSUME hasCriminalRecord IS A BOOLEAN
+
+DECIDE isEligible IS
+      personAge >= 18
+  AND personIncome > 30000
+  AND NOT hasCriminalRecord
+
+#CHECK isEligible
+
+-- Complex Expressions with AND
+
+GIVEN x IS A NUMBER, y IS A NUMBER
+inRange x y MEANS x >= 0 AND x <= 100 AND y >= 0 AND y <= 100
+
+#EVAL inRange 50 50
+#EVAL inRange 150 50
+
+-- AND with Comparisons
+
+GIVEN score IS A NUMBER
+passingGrade score MEANS score >= 60 AND score <= 100
+
+#EVAL passingGrade 75
+#EVAL passingGrade 55
+
+-- AND in IF Expressions
+
+GIVEN userAge IS A NUMBER, hasPermission IS A BOOLEAN
+accessLevel userAge hasPermission MEANS
+  IF userAge >= 18 AND hasPermission
+  THEN "full access"
+  ELSE "restricted"
+
+#EVAL accessLevel 25 TRUE
+#EVAL accessLevel 25 FALSE

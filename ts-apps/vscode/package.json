@@ -3,7 +3,7 @@
   "displayName": "L4 Rules-as-code",
   "description": "Language support for L4 rules-as-code with syntax highlighting, IntelliSense, and ladder diagram visualization",
   "license": "Apache-2.0",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "publisher": "legalese",
   "categories": [
     "Programming Languages",
