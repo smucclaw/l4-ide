@@ -1,0 +1,39 @@
+`role sign RPA`
+`role sign RPL`
+`days in year A365`
+`days in year A360`
+`USD code`
+`EUR code`
+`performance PF is active`
+`performance DF is active`
+`performance MA is active`
+`performance PF is non-performing`
+`performance DQ is non-performing`
+`IED acronym`
+`IP acronym`
+`PR acronym`
+`IED sequence`
+`IP sequence`
+`MD sequence`
+`test year fraction A365`
+`test year fraction A360`
+`test accrued interest`
+`2024 is leap year`
+`2023 is leap year`
+`2000 is leap year`
+`1900 is leap year`
+`Feb 2024 days`
+`Feb 2023 days`
+`monthly cycle` 's `period`
+`monthly cycle` 's `periodUnit`
+`annual cycle` 's `period`
+`annual cycle` 's `periodUnit`
+`test USD amount` 's `value`
+`test EUR amount` 's `value`
+`Jan31 plus 1 month 2023`
+`Jan31 plus 1 month 2024`
+`Jan30 plus 1 month 2023`
+`Jan30 plus 1 month 2024`
+`Mar31 plus 1 month`
+`Jan15 plus 1 month`
+`schedule from Jan31 2024`
