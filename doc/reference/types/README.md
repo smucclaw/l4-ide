@@ -21,9 +21,9 @@ L4's type system is inspired by functional programming languages like Haskell an
 Numeric values including integers and rationals.
 
 - Integers: `42`, `-17`, `0`
-- Rationals: `3.14`, `-0.5`, `2.718`
+- Rationals: `3.14`, `-0.5`, `2.718`, `5.4%`
 - Arbitrary precision arithmetic
-- **Examples:** Age calculations, financial amounts, quantities
+- **Examples:** Age calculations, financial amounts, quantities, percentages
 
 ### STRING
 
@@ -63,7 +63,7 @@ Product types with named fields.
 **Example:** [record-example.l4](record-example.l4)
 
 - Named fields with types
-- Field access with `'s` or `THE ... OF`
+- Field access with `'s`
 - Construction with `WITH` keyword
 - **Examples:** Structured data, entities, configurations
 

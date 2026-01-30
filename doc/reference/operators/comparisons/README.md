@@ -119,11 +119,11 @@ Comparisons work on:
 
 ## Related Keywords
 
-- **[AND](../operators/AND.md)** - Combine comparisons
-- **[OR](../operators/OR.md)** - Alternative conditions
-- **[IF](../control-flow/IF.md)** - Use comparisons in conditionals
+- **[AND](../AND.md)** - Combine comparisons
+- **[OR](../OR.md)** - Alternative conditions
+- **[IF](../../control-flow/IF.md)** - Use comparisons in conditionals
 
 ## See Also
 
-- **[Operators Reference](../operators/README.md)** - Full operator documentation
-- **[Types Reference](../types/README.md)** - Comparable types
+- **[Operators Reference](../README.md)** - Full operator documentation
+- **[Types Reference](../../types/README.md)** - Comparable types

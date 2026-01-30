@@ -49,14 +49,14 @@ Keywords are reserved words that form the structure of L4 programs.
 
 | Keyword     | Purpose                     | Reference                            |
 | ----------- | --------------------------- | ------------------------------------ |
-| **ABOVE**   | Synonym for GREATER THAN    | [COMPARISONS](comparisons/README.md) |
-| **BELOW**   | Synonym for LESS THAN       | [COMPARISONS](comparisons/README.md) |
-| **EQUALS**  | Equality test               | [COMPARISONS](comparisons/README.md) |
-| **GREATER** | Greater than comparison     | [COMPARISONS](comparisons/README.md) |
-| **LESS**    | Less than comparison        | [COMPARISONS](comparisons/README.md) |
-| **THAN**    | Comparison conjunction word | [COMPARISONS](comparisons/README.md) |
-| **LEAST**   | Used in "AT LEAST" (≥)      | [COMPARISONS](comparisons/README.md) |
-| **MOST**    | Used in "AT MOST" (≤)       | [COMPARISONS](comparisons/README.md) |
+| **ABOVE**   | Synonym for GREATER THAN    | [COMPARISONS](operators/comparisons/README.md) |
+| **BELOW**   | Synonym for LESS THAN       | [COMPARISONS](operators/comparisons/README.md) |
+| **EQUALS**  | Equality test               | [COMPARISONS](operators/comparisons/README.md) |
+| **GREATER** | Greater than comparison     | [COMPARISONS](operators/comparisons/README.md) |
+| **LESS**    | Less than comparison        | [COMPARISONS](operators/comparisons/README.md) |
+| **THAN**    | Comparison conjunction word | [COMPARISONS](operators/comparisons/README.md) |
+| **LEAST**   | Used in "AT LEAST" (≥)      | [COMPARISONS](operators/comparisons/README.md) |
+| **MOST**    | Used in "AT MOST" (≤)       | [COMPARISONS](operators/comparisons/README.md) |
 
 ### Type Keywords
 
@@ -99,12 +99,12 @@ For expressing legal obligations, permissions, and prohibitions.
 
 | Keyword     | Purpose                   | Reference                          |
 | ----------- | ------------------------- | ---------------------------------- |
-| **PLUS**    | Addition                  | [ARITHMETIC](arithmetic/README.md) |
-| **MINUS**   | Subtraction               | [ARITHMETIC](arithmetic/README.md) |
-| **TIMES**   | Multiplication            | [ARITHMETIC](arithmetic/README.md) |
-| **DIVIDED** | Division (use with BY)    | [ARITHMETIC](arithmetic/README.md) |
-| **BY**      | Division conjunction word | [ARITHMETIC](arithmetic/README.md) |
-| **MODULO**  | Modulus (remainder)       | [ARITHMETIC](arithmetic/README.md) |
+| **PLUS**    | Addition                  | [ARITHMETIC](operators/arithmetic/README.md) |
+| **MINUS**   | Subtraction               | [ARITHMETIC](operators/arithmetic/README.md) |
+| **TIMES**   | Multiplication            | [ARITHMETIC](operators/arithmetic/README.md) |
+| **DIVIDED** | Division (use with BY)    | [ARITHMETIC](operators/arithmetic/README.md) |
+| **BY**      | Division conjunction word | [ARITHMETIC](operators/arithmetic/README.md) |
+| **MODULO**  | Modulus (remainder)       | [ARITHMETIC](operators/arithmetic/README.md) |
 
 ### Other Keywords
 

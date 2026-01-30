@@ -150,15 +150,15 @@ IMPORT math
 #EVAL exp 1            -- 2.718...
 ```
 
-See **[Libraries Reference](../libraries/README.md)** for more functions.
+See **[Libraries Reference](../../libraries/README.md)** for more functions.
 
 ## Related Keywords
 
 - **[COMPARISONS](../comparisons/README.md)** - Compare arithmetic results
-- **[IF](../control-flow/IF.md)** - Conditional arithmetic
+- **[IF](../../control-flow/IF.md)** - Conditional arithmetic
 
 ## See Also
 
-- **[Operators Reference](../operators/README.md)** - Full operator documentation
-- **[Types: NUMBER](../types/README.md)** - Numeric types
-- **[Syntax: Precedence](../syntax/README.md)** - Operator precedence rules
+- **[Operators Reference](../README.md)** - Full operator documentation
+- **[Types: NUMBER](../../types/README.md)** - Numeric types
+- **[Syntax: Precedence](../../syntax/README.md)** - Operator precedence rules
