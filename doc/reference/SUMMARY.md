@@ -11,8 +11,6 @@
 ## Language Details
 
 - [Control-Flow](control-flow/README.md)
-- [Comparisons](comparisons/README.md)
-- [Arithmetic](arithmetic/README.md)
 - [Operators](operators/README.md)
 - [Syntax](syntax/README.md)
 - [Coercions](types/coercions.md)

@@ -19,6 +19,8 @@ L4 operators are organized into categories:
 
 Mathematical operations on numbers.
 
+[Details and examples on arithmetic operators](arithmetic/README.md)
+
 ### Addition
 
 - **Keyword:** PLUS
@@ -60,6 +62,8 @@ Mathematical operations on numbers.
 ## Comparison Operators
 
 Compare values and return BOOLEAN results.
+
+[Details and examples on comparison operators](comparisons/README.md)
 
 ### Equality
 

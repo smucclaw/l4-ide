@@ -42,7 +42,7 @@ Coding guidelines for AI agents working in this repository.
 | ------------- | ------------------------------------------------------------------- |
 | `doc/`        | L4 language documentation (reference, courses, tutorials, concepts) |
 | `specs/`      | Development specifications (todo, done, proposals, roadmap)         |
-| `*/README.md` | Component-specific setup and usage                                  |
+| `*/README.md` | Component-specific setup and usage for developers                   |
 
 ## Essential Commands
 

@@ -10,7 +10,7 @@ Welcome to the L4 language documentation. L4 is a domain-specific language for l
 
 New to L4? Start here:
 
-1. **[Get L4](https://marketplace.visualstudio.com/items?itemName=Legalese.l4-vscode)** - Download the VS Code extension or [code online](https://jl4.legalese.com)
+1. **[Get L4](https://marketplace.visualstudio.com/items?itemName=Legalese.l4-vscode)** - Download the VS Code extension [![L4 Rules-as-code](https://img.shields.io/visual-studio-marketplace/v/Legalese.l4-vscode?color=blue&logo=visualstudiocode&logoColor=white&label=L4%20Rules-as-code)](https://marketplace.visualstudio.com/items?itemName=Legalese.l4-vscode)
 2. **[Foundation Course](courses/foundation/README.md)** - Learn L4 systematically (start here!)
 3. **[Your First L4 File](tutorials/getting-started/first-l4-file.md)** - Hands-on in 15 minutes
 
@@ -115,8 +115,11 @@ Understand the "why" behind L4:
 
 ---
 
-## More Resources
+## Developer Resources
 
-- **[L4 IDE Repository](https://github.com/smucclaw/l4-ide)** - Source code
-- **[Example Code](https://github.com/smucclaw/l4-ide/tree/main/jl4/examples)** - Working examples
-- **[Experiments](https://github.com/smucclaw/l4-ide/tree/main/jl4/experiments)** - Real-world encodings
+- **[Latest Stable Build](https://github.com/smucclaw/l4-ide/releases)** - [![L4-IDE](https://img.shields.io/github/v/release/smucclaw/l4-ide?color=brightgreen&logo=github&label=L4-IDE)](https://github.com/smucclaw/l4-ide/releases/latest)
+- **[L4 IDE Repository](https://github.com/smucclaw/l4-ide)** - Open-Source code
+
+---
+
+L4 is published under the [Apache-2.0 License](https://github.com/smucclaw/l4-ide/blob/main/LICENSE).
