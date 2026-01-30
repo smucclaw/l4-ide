@@ -47,8 +47,8 @@ Keywords are reserved words that form the structure of L4 programs.
 
 ### Comparison Keywords
 
-| Keyword     | Purpose                     | Reference                            |
-| ----------- | --------------------------- | ------------------------------------ |
+| Keyword     | Purpose                     | Reference                                      |
+| ----------- | --------------------------- | ---------------------------------------------- |
 | **ABOVE**   | Synonym for GREATER THAN    | [COMPARISONS](operators/comparisons/README.md) |
 | **BELOW**   | Synonym for LESS THAN       | [COMPARISONS](operators/comparisons/README.md) |
 | **EQUALS**  | Equality test               | [COMPARISONS](operators/comparisons/README.md) |
@@ -97,8 +97,8 @@ For expressing legal obligations, permissions, and prohibitions.
 
 ### Arithmetic Keywords
 
-| Keyword     | Purpose                   | Reference                          |
-| ----------- | ------------------------- | ---------------------------------- |
+| Keyword     | Purpose                   | Reference                                    |
+| ----------- | ------------------------- | -------------------------------------------- |
 | **PLUS**    | Addition                  | [ARITHMETIC](operators/arithmetic/README.md) |
 | **MINUS**   | Subtraction               | [ARITHMETIC](operators/arithmetic/README.md) |
 | **TIMES**   | Multiplication            | [ARITHMETIC](operators/arithmetic/README.md) |
