@@ -117,8 +117,9 @@ Understand the "why" behind L4:
 
 ## Developer Resources
 
-- **[Latest Stable Build](https://github.com/smucclaw/l4-ide/releases)** - [![L4-IDE](https://img.shields.io/github/v/release/smucclaw/l4-ide?color=brightgreen&logo=github)](https://github.com/smucclaw/l4-ide/releases/latest)
+- **[Latest Stable Build](https://github.com/smucclaw/l4-ide/releases)** - [![L4-IDE](https://img.shields.io/github/v/release/smucclaw/l4-ide?color=brightgreen&logo=github&label=L4-IDE)](https://github.com/smucclaw/l4-ide/releases/latest)
 - **[L4 IDE Repository](https://github.com/smucclaw/l4-ide)** - Open-Source code
 
+---
 
 L4 is published under the [Apache-2.0 License](https://github.com/smucclaw/l4-ide/blob/main/LICENSE).
