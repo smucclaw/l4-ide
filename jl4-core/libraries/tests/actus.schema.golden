@@ -1,0 +1,17 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "state": {
+            "$ref": "#/$defs/Contract State"
+        },
+        "terms": {
+            "$ref": "#/$defs/ACTUS Contract Terms"
+        }
+    },
+    "required": [
+        "terms",
+        "state"
+    ],
+    "title": "POF_IED",
+    "type": "object"
+}

@@ -63,3 +63,4 @@ yarn-error.log*
 # Generated skill packages
 l4/l4.skill
 l4/l4.zip
+.cache/

@@ -1,0 +1,17 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "date": {
+            "$ref": "#/$defs/DATE"
+        },
+        "months": {
+            "$ref": "#/$defs/NUMBER"
+        }
+    },
+    "required": [
+        "date",
+        "months"
+    ],
+    "title": "add months",
+    "type": "object"
+}

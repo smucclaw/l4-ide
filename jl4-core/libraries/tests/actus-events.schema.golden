@@ -1,0 +1,36 @@
+{
+    "$defs": {
+        "Event Type": {
+            "enum": [
+                "IED",
+                "PR",
+                "PP",
+                "MD",
+                "IP",
+                "IPCI",
+                "RR",
+                "RRF",
+                "FP",
+                "PY",
+                "TD",
+                "XD",
+                "STD",
+                "DV",
+                "CE",
+                "AD"
+            ],
+            "type": "string"
+        }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "evt": {
+            "$ref": "#/$defs/Event Type"
+        }
+    },
+    "required": [
+        "evt"
+    ],
+    "title": "event sequence",
+    "type": "object"
+}
