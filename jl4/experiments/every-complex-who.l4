@@ -1,0 +1,12 @@
+-- Test: EVERY with complex boolean expression in WHO
+
+IMPORT prelude
+
+DECLARE Person HAS
+    age IS A NUMBER
+    citizenship IS A STRING
+
+EVERY Person p
+  WHO p's age >= 18
+  AND p's citizenship EQUALS "Singapore"
+  MAY `vote`

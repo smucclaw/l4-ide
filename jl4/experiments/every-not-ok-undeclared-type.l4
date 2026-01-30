@@ -1,0 +1,7 @@
+-- Test: EVERY with undeclared type (should fail)
+-- Error: UndeclaredType not in scope
+
+IMPORT prelude
+
+EVERY UndeclaredType x
+ MUST `exist`

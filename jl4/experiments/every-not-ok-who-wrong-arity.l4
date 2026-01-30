@@ -1,0 +1,13 @@
+-- Test: WHO with predicate that doesn't match bound variable type (should fail)
+-- Error: type mismatch in predicate application
+
+IMPORT prelude
+
+DECLARE Person
+DECLARE Animal
+
+GIVEN `is dangerous` IS A FUNCTION FROM Animal TO BOOLEAN
+
+EVERY Person p
+  WHO `is dangerous`  -- expects Animal, got Person
+ MUST `stay away`

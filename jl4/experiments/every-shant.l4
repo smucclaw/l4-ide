@@ -1,0 +1,10 @@
+-- Test: EVERY with SHANT (prohibition)
+
+IMPORT prelude
+
+DECLARE Person HAS
+    age IS A NUMBER
+
+EVERY Person p
+  WHO p's age < 21
+SHANT `purchase alcohol`

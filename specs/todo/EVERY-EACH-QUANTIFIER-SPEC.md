@@ -5,6 +5,30 @@
 **Date:** 2025-01-26
 **Branch:** mengwong/every-each
 
+---
+
+## Table of Contents
+
+1. [Motivation](#1-motivation)
+2. [Quick Reference](#2-quick-reference)
+3. [Syntax](#3-syntax)
+4. [Semantics](#4-semantics)
+5. [Temporal Semantics](#5-temporal-semantics)
+6. [Blame Attribution](#6-blame-attribution)
+7. [Compositionality](#7-compositionality)
+8. [Feature Interactions](#8-feature-interactions)
+9. [Implementation](#9-implementation)
+10. [Verification](#10-verification)
+11. [Examples](#11-examples)
+12. [Extended Use Cases](#12-extended-use-cases)
+13. [Open Questions](#13-open-questions)
+14. [Excluded Designs](#14-excluded-designs)
+15. [Related Work](#15-related-work)
+16. [Appendix: Legal Pattern Analysis](#appendix-a-legal-pattern-analysis)
+17. [Appendix: Formal Grammar](#appendix-b-formal-grammar)
+
+---
+
 ## 1. Motivation
 
 ### 1.1 The Problem
@@ -19,519 +43,212 @@ CSL (Hvitved's Contract Specification Language) provides primitives (conjunction
 
 ### 1.2 The Solution
 
-L4 should provide first-class quantification constructs that:
+L4 provides first-class quantification constructs that:
 
-1. Mirror natural legal language (isomorphism with source text)
-2. Have precise formal semantics (trace-based, following CSL's CSP lineage)
-3. Support proper blame attribution
-4. Handle temporal forking when permissions are exercised
-5. Compose cleanly with existing L4 constructs (HENCE, LEST, IF/THEN/ELSE)
+1. **Mirror natural legal language** (isomorphism with source text)
+2. **Have precise formal semantics** (trace-based, following CSL's CSP lineage)
+3. **Support proper blame attribution**
+4. **Handle temporal forking** when permissions are exercised
+5. **Compose cleanly** with existing L4 constructs (HENCE, LEST, IF/THEN/ELSE)
 
 ### 1.3 Intellectual Lineage
 
-CSL's trace-based semantics descend primarily from **CSP** (Hoare), not CCS (Milner). Key indicators:
+CSL's trace-based semantics descend primarily from **CSP** (Hoare), not CCS (Milner):
 
 - Denotational semantics via traces (not operational/LTS)
 - External choice operator
 - Alphabet-based parallel composition
 - Trace refinement as the equivalence notion
 
-L4's quantifiers should maintain this CSP lineage while adding legal-domain extensions (blame attribution, deadline handling, multi-party modeling).
+L4's quantifiers maintain this CSP lineage while adding legal-domain extensions (blame attribution, deadline handling, multi-party modeling).
 
-## 2. Syntax
+### 1.4 Legislative Mode vs Contract Mode
 
-### 2.1 Basic Quantified Obligation
+L4 supports two distinct styles of regulative rules:
 
-Since deontic expressions are already typed via `GIVETH DEONTIC PartyType ActionType`, the quantifier variable's type is inferred from context:
-
-```l4
-DECLARE Person
-    HAS name IS A STRING
-
-DECLARE Action IS ONE OF
-    sign
-    approve
-    pay HAS amount IS A NUMBER
-
-GIVETH DEONTIC Person Action
-example MEANS
-    EVERY p                         -- p has type Person (from DEONTIC)
-        WHO    predicate            -- predicate : Person -> Boolean
-        MUST   action
-        WITHIN deadline
-        HENCE  success_continuation
-        LEST   failure_continuation
-```
-
-The `WHO` clause takes a predicate expression. The bound variable `p` is implicitly inserted as the **first** argument to this predicate. This follows natural English where the person is the subject of the predicate.
-
-For set membership, use `member_of` (Haskell's `elem`):
+**Contract Mode** — Bilateral/multilateral agreements between **named parties** forming an explicit state machine:
 
 ```l4
-GIVEN signatories IS A LIST OF Person
-
-GIVETH DEONTIC Person Action
-sign_all MEANS
-    EVERY p
-        WHO    member_of signatories    -- expands to: member_of p signatories
-        MUST   sign
-        WITHIN 30 days
-        HENCE  closing_complete
-        LEST   deal_falls_through
+§ `Sale Agreement`
+PARTY buyer MUST `pay` purchasePrice WITHIN 30 days
+HENCE PARTY seller MUST `deliver` goods WITHIN 14 days
+      HENCE FULFILLED
+      LEST  PARTY buyer MAY `claim refund`
+LEST  BREACH
 ```
 
-The predicate `member_of signatories` expands to `member_of p signatories` where `member_of : a -> List a -> Boolean` (exactly Haskell's `elem`). This reads naturally as "is p a member of signatories?"
-
-This design is more expressive than explicit set binding because:
-
-1. **Type inference**: No redundant type annotation; `p`'s type comes from the deontic context
-2. **Predicate is first-class**: Any `PartyType -> Boolean` function works
-3. **Predicate subsumes sets**: `WHO member_of some_list` achieves explicit set binding
-4. **Richer constraints**: `WHO is_adult AND is_shareholder AND NOT is_conflicted`
-5. **Composable**: Predicates can be combined with AND/OR/NOT
-
-### 2.2 Distributive vs Collective: Real-World Legal Patterns
-
-Before defining syntax, we must understand how quantified deontics appear in real legal texts. Legal language uses quantifiers with all three deontic modalities:
-
-- **MUST** (obligation): "Each party shall maintain confidentiality..."
-- **MAY** (permission): "Any party may terminate upon notice..."
-- **SHANT** (prohibition): "No party shall disclose..."
-
-We analyze patterns for each modality.
-
-#### 2.2.1 Obligation Patterns (MUST)
-
-**Pattern A: Distributive Obligation (Most Common)**
-
-> "Each party shall maintain the confidentiality of all Confidential Information."
-
-**Lawyer's interpretation:** Every individual party has their own separate obligation. If Alice breaches, Alice is liable; Bob and Carol's obligations are unaffected.
-
-**Layperson's interpretation:** Same - "each of us has to keep secrets."
-
-**CSP formalization:**
-
-```
-CONF(Alice) ||| CONF(Bob) ||| CONF(Carol)
--- where CONF(p) = ((maintain_confidentiality.p → CONF(p)) □ (breach.p → STOP))
-```
-
-Pure interleaving - each party's obligation is independent.
-
-**Pattern B: Constitutive Rule Masquerading as Obligation**
-
-> "All directors must approve the resolution before it takes effect."
-
-**Lawyer's interpretation:** This is actually a **constitutive** rule ("must be"), not a **regulative** rule ("must do"). Directors bear no penalty for not approving—the resolution simply doesn't pass. The "must" here defines what counts as a valid resolution, not what directors are obligated to do.
-
-**Layperson's interpretation:** "For this to be official, everyone needs to say yes."
-
-**Constitutive vs Regulative distinction:**
-
-- **Constitutive:** Defines what counts as X (e.g., "a goal must cross the line to count")
-- **Regulative:** Imposes obligation to do X (e.g., "players must not handle the ball")
-
-See [BOUNDED-DEONTICS-SPEC](BOUNDED-DEONTICS-SPEC.md) for a full treatment of this distinction, including how L4's two-level architecture (object-level contracts vs LTL/CTL assertions) allows constitutive rules to be phrased in regulative syntax when that fits human intuition.
-
-To cast this constitutive notion into regulative form using permissions:
+**Legislative Mode** — Regulations applying to **open classes** who satisfy predicates:
 
 ```l4
-EVERY director
-    MAY    approve the_resolution
-    HENCE  the_resolution passes
+§ `Income Tax Act s.10`
+EVERY Person p
+  WHO p's annualIncome > 50000
+ MUST `file tax return`
+WITHIN `April 15 of following year`
 ```
 
-This uses **barrier/join semantics**: all approvals must be collected before HENCE fires once. No director is _obligated_ to approve; each _may_ approve. Only when all have done so does the resolution pass.
+| Aspect              | Contract Mode             | Legislative Mode                      |
+| ------------------- | ------------------------- | ------------------------------------- |
+| **Parties**         | Named, finite             | Open class, potentially infinite      |
+| **Activation**      | UPON events, HENCE chains | Predicate satisfaction                |
+| **State machine**   | Explicit transitions      | Implicit (rules fire when applicable) |
+| **Query direction** | "What happens next?"      | "What rules apply to entity X?"       |
+| **Typical keyword** | `PARTY alice`             | `EVERY Person p WHO ...`              |
 
-**Contrast with fork semantics (EACH):**
+**Mixed Mode:** The `EVERY...WHO` syntax can introduce a named party `p` that then participates in contract-mode `HENCE`/`LEST` chains.
+
+---
+
+## 2. Quick Reference
+
+### EVERY vs EACH
+
+| Keyword | Semantics         | HENCE fires                | Use when                           |
+| ------- | ----------------- | -------------------------- | ---------------------------------- |
+| `EVERY` | Barrier/Join      | **Once** when all complete | All-or-nothing (resolution passes) |
+| `EACH`  | Fork/Distributive | **For each** completion    | Individualized consequences        |
+
+Without HENCE/LEST, both are equivalent (pure distributive).
+
+### WHO Clause Forms
+
+| Form          | Example             | Notes                                        |
+| ------------- | ------------------- | -------------------------------------------- |
+| **Predicate** | `WHO `is adult``    | Bound variable supplied as **last** argument |
+| **Explicit**  | `WHO p's age >= 18` | Full boolean expression                      |
+
+**Disambiguation:** If the bound variable appears in the expression, no implicit application occurs.
+
+---
+
+## 3. Syntax
+
+### 3.1 Basic Form
 
 ```l4
-EACH director
-    MAY    approve the_resolution
-    HENCE  company MUST notify all_other_directors that someone has approved
-           WITHIN 24 hours
+EVERY Person p
+  WHO predicate
+ MUST action
+WITHIN deadline
+HENCE success_continuation
+LEST  failure_continuation
 ```
 
-Here, **each approval triggers its own HENCE independently**—if 5 directors approve, the company sends 5 notifications. This is fork semantics, not barrier semantics.
+The type annotation (`Person`) is required. The `WHO` clause is optional.
 
-**Pattern C: Joint and Several Liability**
+### 3.2 WHO Clause Semantics
 
-> "The Guarantors shall be jointly and severally liable for the Debt."
+Two forms are supported:
 
-**Lawyer's interpretation:** The creditor can pursue any guarantor for the full amount, or all of them proportionally. Each guarantor is individually liable for 100%, but the creditor can only collect 100% total.
-
-**Layperson's interpretation:** "Any of us can be made to pay the whole thing."
-
-**CSP formalization:** This requires tracking a shared resource (the debt amount):
-
-```
-GUARANTEE(debt) =
-    (pay.g1?amount → GUARANTEE(debt - amount))
-    □ (pay.g2?amount → GUARANTEE(debt - amount))
-    □ (pay.g3?amount → GUARANTEE(debt - amount))
-    □ ([debt <= 0] → SKIP)
-```
-
-**Pattern D: Collective Action (Truly Joint)**
-
-> "The parties shall jointly execute the Closing Documents."
-
-**Lawyer's interpretation:** All parties must participate in a single, coordinated act. This is not multiple independent signings; it's one event requiring all participants.
-
-**Layperson's interpretation:** "We all sign together at the closing."
-
-**CSP formalization:**
-
-```
-joint_execution.{Alice, Bob, Carol} → closing_complete
--- A single synchronized event requiring all parties
-```
-
-#### 2.2.2 Permission Patterns (MAY)
-
-**Pattern E: Distributive Permission**
-
-> "Each party may assign its rights under this Agreement with prior written consent."
-
-**Lawyer's interpretation:** Every party individually has the permission to assign. Alice's decision to assign doesn't affect Bob's permission.
-
-**Layperson's interpretation:** "Any of us can assign if we get consent."
-
-**Key insight (Hvitved):** A MAY is meaningful because it creates correlative obligations on counterparties. "A may assign" implies "B and C must not prevent A's assignment" and "B and C must recognize the assignment as valid."
-
-**Pattern F: First-to-Act Permission**
-
-> "Any party may terminate this Agreement upon 30 days' written notice."
-
-**Lawyer's interpretation:** Each party has permission to terminate. Once one party exercises it, the termination affects all parties.
-
-**Layperson's interpretation:** "Whoever wants out first can end it for everyone."
-
-**CSP formalization:**
-
-```
-TERMINABLE = (terminate.Alice → TERMINATED)
-           □ (terminate.Bob → TERMINATED)
-           □ (terminate.Carol → TERMINATED)
-```
-
-External choice - first event determines the outcome.
-
-**Pattern G: Exhaustible Permission**
-
-> "The Licensee may make up to three copies of the Software."
-
-**Lawyer's interpretation:** Permission with a quota. Each exercise consumes one unit of the permission until exhausted.
-
-**Layperson's interpretation:** "We can copy it, but only three times total."
-
-#### 2.2.3 Prohibition Patterns (SHANT)
-
-**Pattern H: Distributive Prohibition**
-
-> "No party shall disclose Confidential Information to any third party."
-
-**Lawyer's interpretation:** Each party is individually prohibited. This is logically equivalent to "Each party shall not disclose..."
-
-**Layperson's interpretation:** "None of us can tell outsiders."
-
-**CSP formalization:**
-
-```
--- For each party p, the action disclose.p is not in the allowed alphabet
-CONF(p) = (work.p → CONF(p))  -- disclose.p is simply not offered
-```
-
-**Pattern I: Collective Prohibition**
-
-> "The parties shall not collectively hold more than 49% of the voting shares."
-
-**Lawyer's interpretation:** The prohibition applies to the aggregate. Individual holdings are fine as long as the sum stays under the threshold.
-
-**Layperson's interpretation:** "Together we can't own too much."
-
-**Pattern J: Cross-Party Prohibition**
-
-> "No party shall solicit the employees of any other party."
-
-**Lawyer's interpretation:** Each party is prohibited from soliciting employees of each other party. Creates n × (n-1) prohibition instances.
-
-**Layperson's interpretation:** "Don't poach each other's staff."
-
-**L4 formalization:**
+**Predicate form** — bound variable supplied as **last** argument (curried convention):
 
 ```l4
-EACH p_x
-    SHANT  solicit_employees_of p_y
-    WHERE  differs_from p_x p_y
+EVERY Person p
+  WHO `has green hair`  -- becomes: `has green hair` p
+ MUST `wash hair`
 ```
 
-#### 2.2.4 Representing These Patterns in Current L4
-
-**Pattern A (Distributive)** - Expressible but verbose:
+**Explicit form** — full boolean expression:
 
 ```l4
--- Manual expansion for 3 parties:
-(PARTY Alice MUST maintain_confidentiality WITHIN contract_term)
-RAND
-(PARTY Bob MUST maintain_confidentiality WITHIN contract_term)
-RAND
-(PARTY Carol MUST maintain_confidentiality WITHIN contract_term)
+EVERY Person p
+  WHO p's age >= 18
+ MUST `pay taxes`
 ```
 
-**Problems:**
+**Disambiguation rule:** If the bound variable appears anywhere in the WHO expression, no implicit application occurs. This prevents confusion when mixing styles.
 
-- Verbose: O(n) clauses for n parties
-- Error-prone: easy to miss a party or introduce inconsistencies
-- Not isomorphic: source text says "each party" once; L4 repeats it n times
-- Maintenance burden: adding a party requires adding another clause
-
-**Pattern B (Barrier)** - Expressible but very verbose:
+**Multi-argument predicates:**
 
 ```l4
--- Using recursion over a list:
-GIVEN directors IS A LIST OF Director
-`all must approve` MEANS
-    CONSIDER directors
-        WHEN []          THEN resolution_takes_effect
-        WHEN (d :: rest) THEN
-            PARTY d MUST approve WITHIN 14 days
-            HENCE `all must approve` rest
-            LEST resolution_fails
+GIVEN `owes at least` IS A FUNCTION FROM NUMBER TO Person TO BOOLEAN
+DECIDE `owes at least` amount p MEANS p's debt >= amount
+
+-- Implicit: p doesn't appear, appended as LAST argument
+EVERY Person p
+  WHO `owes at least` 100  -- becomes: `owes at least` 100 p
+ MUST `pay debt`
+
+-- Explicit: p appears, must typecheck as BOOLEAN directly
+EVERY Person p
+  WHO `owes at least` 100 AND p's age > 21
+ MUST `do something`
 ```
 
-**Problems:**
+### 3.3 Cross-Party References
 
-- Imposes artificial sequencing (d1 must approve before d2 can)
-- The legal text implies parallel, independent approvals converging at a barrier
-- HENCE chains don't naturally express "all complete, then continue"
-- Blame attribution is per-step, not "who among the set failed"
-
-**Pattern C (Joint and Several)** - Difficult to express:
-
-```l4
--- Would need explicit state tracking:
-GIVEN debt IS A NUMBER
-      guarantors IS A SET OF Party
-`guarantee` MEANS
-    IF debt > 0 THEN
-        -- But how to express "any of them may pay any amount"?
-        -- And track cumulative payments?
-        -- This requires external state management
-```
-
-**Problems:**
-
-- L4's deontic model doesn't naturally handle shared mutable state
-- "Any may satisfy" is disjunctive permission with cumulative effects
-- Current primitives don't compose well for this pattern
-
-**Pattern D (Truly Joint Action)** - Not directly expressible:
-
-```l4
--- No way to express "single synchronized action by all parties"
--- Would need to model as:
-PARTY (parties_as_collective_entity) MUST execute_closing
--- But L4's PARTY expects an individual, not a set
-```
-
-**Problems:**
-
-- L4's PARTY construct takes a single entity
-- No primitive for "synchronized multi-party action"
-- Would require defining a synthetic collective entity
-
-#### 2.2.5 Why New Syntax is Needed
-
-The analysis above reveals that current L4 primitives are:
-
-| Pattern            | Expressible?    | Ergonomic?             | Isomorphic? |
-| ------------------ | --------------- | ---------------------- | ----------- |
-| A: Distributive    | Yes             | No (verbose)           | No          |
-| B: Barrier         | Partially       | No (forces sequencing) | No          |
-| C: Joint & Several | With difficulty | No                     | No          |
-| D: Truly Joint     | No              | N/A                    | N/A         |
-
-**The EVERY/EACH syntax addresses patterns A and B directly:**
-
-```l4
--- Pattern A: Distributive (no HENCE/LEST barrier)
-EACH p
-    MUST   maintain_confidentiality
-    WITHIN contract_term
-
--- Pattern B: Barrier (with HENCE/LEST)
-EVERY d
-    WHO    member_of directors
-    MUST   approve
-    WITHIN 14 days
-    HENCE  resolution_takes_effect
-    LEST   resolution_fails
-```
-
-**Benefits:**
-
-- **Concise:** One clause regardless of party count
-- **Isomorphic:** Mirrors source legal text structure
-- **Correct semantics:** Barrier behavior for Pattern B is built-in
-- **Proper blame:** Non-completers identified automatically
-
-#### 2.2.6 EVERY vs EACH: Barrier vs Fork Semantics
-
-`EVERY` and `EACH` are **not synonyms**—they have distinct continuation semantics:
-
-| Quantifier | Semantics         | HENCE behavior                                               |
-| ---------- | ----------------- | ------------------------------------------------------------ |
-| `EVERY`    | Barrier/Join      | Collects all completions, fires HENCE **once** when all done |
-| `EACH`     | Fork/Distributive | Fires HENCE **for each** completion independently            |
-
-**EVERY (barrier):**
-
-```l4
-EVERY director
-    MAY    approve
-    HENCE  resolution passes    -- fires once when ALL have approved
-```
-
-If 5 directors approve, the resolution passes once.
-
-**EACH (fork):**
-
-```l4
-EACH director
-    MAY    approve
-    HENCE  company MUST notify others WITHIN 24 hours  -- fires for EACH approval
-```
-
-If 5 directors approve, company must send 5 notifications.
-
-**Formal distinction:**
-
-- `EVERY p ... HENCE h` ≈ `(P1 ||| P2 ||| P3) ; h` (CSP sequential composition after interleaving)
-- `EACH p ... HENCE h` ≈ `(P1 ; h) ||| (P2 ; h) ||| (P3 ; h)` (CSP interleaving of each with its continuation)
-
-**Without HENCE/LEST, both behave identically** (pure distributive):
-
-```l4
-EVERY p MUST sign    ≡    EACH p MUST sign    -- when no HENCE/LEST
-```
-
-The semantic difference only manifests when continuations are present.
-
-#### 2.2.7 Collective Semantics (Future Work)
-
-Patterns C and D require additional constructs beyond EVERY/EACH:
-
-```l4
--- Pattern C: Joint and Several (proposed future syntax)
-JOINTLY AND SEVERALLY guarantors MUST pay debt
-    UNTIL debt_satisfied
-
--- Pattern D: Truly Joint (proposed future syntax)
-ALL parties MUST JOINTLY execute closing_documents
-```
-
-These collective patterns are deferred to a future specification. For now, EVERY/EACH addresses the most common patterns (A and B) which cover the majority of real-world quantified obligations.
-
-### 2.3 Cross-Party References
+Nested quantifiers can reference outer-bound variables:
 
 ```l4
 EACH p_x
     MAY    terminate
     HENCE  EVERY p_y
-               WHO  differs_from p_x   -- differs_from : a -> a -> Boolean
+               WHO  `differs from` p_x   -- p_y /= p_x
                MUST settle_outstanding_accounts_with p_x
                WITHIN 30 days
 ```
 
-The predicate `differs_from p_x` expands to `differs_from p_y p_x` (i.e., `p_y /= p_x`), reading as "does p_y differ from p_x?" This filters the inner quantifier's domain to exclude the outer-bound variable.
-
-Note: Since `/=` is symmetric, the argument order doesn't affect the result. The key point is that `differs_from : a -> a -> Boolean` with `p_y` inserted as the first argument and `p_x` as the second.
-
-### 2.4 Full Grammar
+### 3.4 Grammar
 
 ```
 QuantifiedDeonton ::=
-    Quantifier Variable [Filter]
+    Quantifier TypeName Variable [Filter]
         DeonticModal Action
         [TemporalConstraint]
         [HenceClause]
         [LestClause]
 
 Quantifier ::= 'EVERY' | 'EACH' | 'ALL' | 'NO'
-
-Filter ::= 'WHO' Predicate
-         | 'WHERE' Predicate
-
+Filter ::= 'WHO' Predicate | 'WHERE' Predicate
 DeonticModal ::= 'MUST' | 'MAY' | 'SHANT'
-
-TemporalConstraint ::= 'WITHIN' Duration
-                     | 'BEFORE' Deadline
-                     | 'BY' Deadline
-
+TemporalConstraint ::= 'WITHIN' Duration | 'BEFORE' Deadline | 'BY' Deadline
 HenceClause ::= 'HENCE' Continuation
-
 LestClause ::= 'LEST' Continuation
-
-Continuation ::= Deonton
-               | QuantifiedDeonton
-               | 'FULFILLED'
-               | 'BREACH'
+Continuation ::= Deonton | QuantifiedDeonton | 'FULFILLED' | 'BREACH'
 ```
 
-## 3. Semantics Overview
+---
 
-### 3.1 EVERY: The Barrier Model
+## 4. Semantics
 
-`EVERY` with HENCE/LEST has **barrier semantics**:
+### 4.1 EVERY: Barrier Semantics
 
-- **HENCE fires** when ALL parties complete (join point)
-- **LEST fires** when the barrier becomes unachievable (deadline or early failure)
+`EVERY` with HENCE/LEST collects completions at a barrier:
+
+- **HENCE fires once** when ALL parties complete (join point)
+- **LEST fires once** when the barrier becomes unachievable
 
 ```l4
-EVERY p MUST X HENCE shared_h LEST shared_l
--- Desugars to barrier structure, NOT simple conjunction
+EVERY director MAY approve
+    HENCE resolution passes    -- fires once when ALL have approved
 ```
 
-**Process algebra correspondence for EVERY:**
+**CSP correspondence:** `(P1 ||| P2 ||| P3) ; HENCE` — interleaving with sequential composition.
 
-| Model         | Representation                                                     |
-| ------------- | ------------------------------------------------------------------ | --- | --- | --- | --- | --- | ------------------------------------------------------- |
-| **Petri Net** | AND-join: all input places must have tokens for transition to fire |
-| **CSP**       | `(P1                                                               |     |     | P2  |     |     | P3) ; HENCE` — interleaving with sequential composition |
-| **Counting**  | Semaphore initialized to n; HENCE fires when count reaches 0       |
+### 4.2 EACH: Fork Semantics
 
-### 3.2 EACH: The Fork Model
+`EACH` with HENCE/LEST fires continuations independently:
 
-`EACH` with HENCE/LEST has **fork semantics**:
-
-- **HENCE fires** independently for each party that completes
-- **LEST fires** independently for each party that fails
+- **HENCE fires for each** party that completes
+- **LEST fires for each** party that fails
 
 ```l4
-EACH p MUST X HENCE h(p) LEST l(p)
--- Desugars to: (p1 MUST X HENCE h(p1) LEST l(p1)) ||| (p2 MUST X HENCE h(p2) LEST l(p2)) ||| ...
+EACH director MAY approve
+    HENCE company MUST notify_board WITHIN 1 day  -- fires for EACH approval
 ```
 
-**Process algebra correspondence for EACH:**
+**CSP correspondence:** `(P1 ; h1) ||| (P2 ; h2) ||| (P3 ; h3)` — each process has its own continuation.
 
-| Model         | Representation                                    |
-| ------------- | ------------------------------------------------- | --- | --- | --------- | --- | --- | -------------------------------------------------- |
-| **Petri Net** | Parallel independent transitions, no join         |
-| **CSP**       | `(P1 ; h1)                                        |     |     | (P2 ; h2) |     |     | (P3 ; h3)` — each process has its own continuation |
-| **Counting**  | No shared counter; each completion is independent |
+### 4.3 Without Continuations
 
-### 3.3 Without HENCE/LEST: Both Equivalent
-
-When there is no continuation clause, EVERY and EACH are semantically equivalent—both produce distributive obligations:
+When there is no HENCE/LEST, EVERY and EACH are semantically equivalent:
 
 ```l4
-EVERY p MUST X    ≡    EACH p MUST X    -- when no HENCE/LEST
--- Both desugar to: (p1 MUST X) ||| (p2 MUST X) ||| ...
+EVERY p MUST sign  ≡  EACH p MUST sign
+-- Both: (p1 MUST sign) ||| (p2 MUST sign) ||| ...
 ```
 
-### 3.4 State Transitions (EVERY Barrier)
+### 4.4 State Machine (EVERY Barrier)
 
 ```
                     Pending
@@ -555,148 +272,88 @@ EVERY p MUST X    ≡    EACH p MUST X    -- when no HENCE/LEST
     (clock starts at t_last)
 ```
 
-## 4. Formal Semantics
+### 4.5 Formal Semantics
 
-### 4.1 Semantic Domain
+**Semantic domain:**
 
 ```haskell
 data BarrierObligation = BarrierObligation
-    { boParties      :: Set Party           -- obligated parties
-    , boAction       :: Party -> Action     -- parameterized action
-    , boDeadline     :: Time                -- shared deadline
-    , boCompleted    :: Set Party           -- parties who completed
-    , boPending      :: Set Party           -- parties still pending
-    , boFailed       :: Set Party           -- parties who cannot complete
-    , boEntryTime    :: Time                -- when obligation was entered
-    , boHence        :: Maybe Continuation  -- success continuation
-    , boLest         :: Maybe Continuation  -- failure continuation
+    { boParties      :: Set Party
+    , boAction       :: Party -> Action
+    , boDeadline     :: Time
+    , boCompleted    :: Set Party
+    , boPending      :: Set Party
+    , boFailed       :: Set Party
+    , boEntryTime    :: Time
+    , boHence        :: Maybe Continuation
+    , boLest         :: Maybe Continuation
     , boStatus       :: BarrierStatus
     }
 
-data BarrierStatus
-    = Pending
-    | Achieved Time              -- completion time (for HENCE clock)
-    | Failed Time (Set Party)    -- failure time and blamed parties
+data BarrierStatus = Pending | Achieved Time | Failed Time (Set Party)
 ```
 
-### 4.2 Denotational Semantics
-
-The party type `P` is determined by the deontic context (`GIVETH DEONTIC P A`):
+**Denotational semantics:**
 
 ```haskell
 ⟦EVERY v WHO pred MUST act WITHIN δ HENCE h LEST l⟧ :: Trace -> Time -> Verdict
--- where v has type P from the enclosing DEONTIC context
 ⟦...⟧ tr t =
-    let parties   = { p | p ∈ P, pred(p) }    -- P is the party type from context
+    let parties   = { p | p ∈ PartyType, pred(p) }
         completed = { p | p ∈ parties, (p, act(p), t') ∈ tr, t' ≤ δ }
         pending   = parties \ completed
-
-        status =
-            if completed == parties
-            then Achieved (max { t' | (p, _, t') ∈ completions })
-            else if t > δ
-            then Failed δ pending
-            else Pending
-
+        status    = if completed == parties
+                    then Achieved (max completionTimes)
+                    else if t > δ then Failed δ pending else Pending
     in case status of
-        Achieved t_ach -> (Success, spawn(h, t_ach))
-        Failed t_f blame -> (Breach t_f blame, spawn(l, t_f))
-        Pending -> (Pending, [])
+        Achieved t_ach      -> (Success, spawn(h, t_ach))
+        Failed t_f blame    -> (Breach t_f blame, spawn(l, t_f))
+        Pending             -> (Pending, [])
 ```
 
-### 4.3 Operational Semantics (SOS Rules)
+---
 
-**Configuration:** `⟨B, σ, t⟩` — barrier B, trace σ, current time t
+## 5. Temporal Semantics
 
-**Rule 1: Party Completes**
-
-```
-    p ∈ B.pending
-    (p, B.action(p), t') ∈ σ
-    t' ≤ B.deadline
-─────────────────────────────────────────────────────────
-    ⟨B, σ, t⟩ → ⟨B[completed ∪= {p}, pending \= {p}], σ, t⟩
-```
-
-**Rule 2: Barrier Achieved**
-
-```
-    B.pending = ∅
-    B.failed = ∅
-    t_last = max { t' | (p, _, t') ∈ completions }
-────────────────────────────────────────────────────────
-    ⟨B, σ, t⟩ → ⟨Achieved(t_last), σ, t⟩
-    spawn(B.hence, t_last)
-```
-
-**Rule 3: Deadline Failure**
-
-```
-    t > B.deadline
-    B.pending ≠ ∅
-    blame = B.pending ∪ B.failed
-─────────────────────────────────────────
-    ⟨B, σ, t⟩ → ⟨Failed(B.deadline, blame), σ, t⟩
-    spawn(B.lest, B.deadline)
-```
-
-**Rule 4: Early Failure (optional policy)**
-
-```
-    B.failurePolicy = EARLY_FAILURE_DETECTION
-    ∃p ∈ B.pending. incapacitated(p)
-─────────────────────────────────────────────
-    ⟨B, σ, t⟩ → ⟨Failed(t, {p}), σ, t⟩
-    spawn(B.lest, t)
-```
-
-## 5. Clock and Temporal Semantics
-
-### 5.1 Reference Time for Continuations
+### 5.1 Reference Time for HENCE
 
 When HENCE fires, continuation deadlines are relative to **last completion time**:
 
 ```
-EVERY p
-    MUST   sign
-    WITHIN 30
-    HENCE  escrow_agent MUST release_funds WITHIN 5
+EVERY p MUST sign WITHIN 30 HENCE escrow_agent MUST release_funds WITHIN 5
 
 Timeline:
 t=0:  Obligation entered
 t=10: Party A signs
 t=20: Party B signs
 t=25: Party C signs  ← barrier achieved, t_last = 25
-t=25: HENCE spawns with reference time = 25
-      escrow_agent's deadline = 25 + 5 = 30
+t=25: HENCE spawns: escrow_agent's deadline = 25 + 5 = 30
 ```
 
-### 5.2 LEST Reference Time
+### 5.2 Reference Time for LEST
 
 When LEST fires, continuation deadlines are relative to **failure time**:
 
-- If deadline failure: `t_ref = deadline`
-- If early failure: `t_ref = detection_time`
+- Deadline failure: `t_ref = deadline`
+- Early failure detection: `t_ref = detection_time`
 
 ### 5.3 Temporal Forking (MAY Exercise)
 
-When a party exercises a MAY, the HENCE obligations activate relative to exercise time:
+When a party exercises a MAY, HENCE obligations activate relative to exercise time:
 
 ```l4
-EACH p_x
-    MAY   terminate
-    HENCE EVERY p_y
-              WHO    differs_from p_x
-              MUST   settle_with p_x
-              WITHIN 30
+EACH p_x MAY terminate
+    HENCE EVERY p_y WHO `differs from` p_x
+              MUST settle_with p_x WITHIN 30
 ```
 
 If A terminates at t=10 and B terminates at t=15:
 
-- A's termination spawns: C must settle with A by t=40, B must settle with A by t=40
-- B's termination spawns: C must settle with B by t=45, A must settle with B by t=45
+- A's termination: C & B must settle with A by t=40
+- B's termination: C & A must settle with B by t=45
 
 These are **independent obligation contexts** (CSP interleaving).
+
+---
 
 ## 6. Blame Attribution
 
@@ -705,186 +362,193 @@ These are **independent obligation contexts** (CSP interleaving).
 When LEST fires, blame is attributed to exactly those who didn't complete:
 
 ```haskell
-computeBlame :: BarrierObligation -> Trace -> Set Party
-computeBlame bo tr =
-    let completed = completedParties bo tr
-    in bo.parties `Set.difference` completed
+computeBlame bo tr = bo.parties `Set.difference` (completedParties bo tr)
 ```
 
-**Example:**
+**Example:** Parties {A, B, C}; A and B complete; C doesn't → Blame: {C}
 
-- Parties: {A, B, C}
-- A and B complete; C doesn't
-- Blame: {C}, not {A, B, C}
-
-### 6.2 Causal Blame Analysis
+### 6.2 Causal Blame
 
 When a party's failure is caused by another:
 
 ```haskell
 data BlameAttribution = BlameAttribution
-    { baDirectBlame   :: Set Party    -- simply didn't perform
-    , baCausalBlame   :: Set Party    -- caused others' failure
-    , baExcused       :: Set Party    -- excused due to causation
+    { baDirectBlame :: Set Party   -- simply didn't perform
+    , baCausalBlame :: Set Party   -- caused others' failure
+    , baExcused     :: Set Party   -- excused due to causation
     }
 ```
 
-**Example:**
+### 6.3 Indexed Blame (EACH)
 
-- A completes
-- B is prevented by A's wrongful interference
-- C simply doesn't perform
-- Result: Direct={C}, Causal={A}, Excused={B}, Final={A,C}
-
-### 6.3 Indexed Blame for Distributive Obligations
-
-For `EACH p MUST X` (no shared HENCE/LEST), each obligation has independent blame:
+For `EACH p MUST X`, each obligation has independent blame tracking:
 
 ```haskell
-data Verdict
-    = Success
-    | Breach Time (Set Party)
-    | IndexedBreach Time (Map Party BlameInfo)  -- per-party tracking
+data Verdict = Success | Breach Time (Set Party) | IndexedBreach Time (Map Party BlameInfo)
 ```
 
-## 7. MAY and Correlative Obligations
+---
 
-### 7.1 Hvitved's Insight
+## 7. Compositionality
 
-A contractual MAY is meaningful precisely because it imposes obligations on counterparties. Without this correlative, the MAY could be omitted without loss.
-
-### 7.2 Correlative Structure
-
-```l4
-EACH p_x
-    MAY   terminate
-    HENCE EVERY p_y
-              WHO  differs_from p_x
-              MUST settle_outstanding_accounts_with p_x
-```
-
-The HENCE clause explicitly captures the correlative obligation. This is preferable to implicit correlatives because:
-
-1. Uses existing HENCE machinery
-2. Explicit about what the correlative requires
-3. Composes naturally with other constructs
-
-### 7.3 Expansion
-
-For parties {A, B, C}:
-
-```l4
-A MAY terminate HENCE (B MUST settle_with A AND C MUST settle_with A)
-B MAY terminate HENCE (A MUST settle_with B AND C MUST settle_with B)
-C MAY terminate HENCE (A MUST settle_with C AND B MUST settle_with C)
-```
-
-Total: 3 permissions, each with 2 correlative obligations = 3 + 6 = 9 deontic atoms.
-
-## 8. Compositionality
-
-### 8.1 Nesting Quantifiers
+### 7.1 Nesting Quantifiers
 
 ```l4
 EVERY seller s MUST deliver(s)
     HENCE EVERY buyer b MUST pay(amount_for s b) WITHIN 30
 ```
 
-The inner barrier spawns when the outer barrier achieves, with:
+Inner barrier spawns when outer achieves; scope chain captures `s`.
 
-- `entryTime = outer.achievementTime`
-- Scope chain captures `s` binding for inner body
-
-### 8.2 With IF/THEN/ELSE
+### 7.2 With Conditionals
 
 ```l4
-IF condition THEN
-    EVERY p MUST X
-ELSE
-    EVERY p MUST Y
+IF condition THEN EVERY p MUST X ELSE EVERY p MUST Y
 ```
 
-Standard conditional; the quantified deontons are in the branches.
-
-### 8.3 With RAND/ROR
+### 7.3 With RAND/ROR
 
 ```l4
-(EVERY seller MUST deliver HENCE ...)
-RAND
-(EVERY buyer MUST pay HENCE ...)
+(EVERY seller MUST deliver HENCE ...) RAND (EVERY buyer MUST pay HENCE ...)
 ```
 
-Both quantified obligations must be satisfied (regulative conjunction).
-
-### 8.4 With Pattern Matching
+### 7.4 With Pattern Matching
 
 ```l4
 GIVEN parties IS A LIST OF Party
 `sign in order` MEANS
     CONSIDER parties
         WHEN []          THEN FULFILLED
-        WHEN (p :: rest) THEN PARTY p MUST sign
-                              HENCE `sign in order` rest
+        WHEN (p :: rest) THEN PARTY p MUST sign HENCE `sign in order` rest
 ```
 
-Recursion over lists to build sequential HENCE chains. This is already expressible in L4 without new syntax.
+### 7.5 MAY and Correlative Obligations
 
-## 9. Comparison: EVERY (Barrier) vs EACH (Fork)
-
-### 9.1 EACH: Fork Expansion
+A contractual MAY creates correlative obligations on counterparties (Hvitved's insight):
 
 ```l4
-EACH p MUST X HENCE h(p) LEST l(p)
--- Desugars to:
-(p1 MUST X HENCE h(p1) LEST l(p1)) ||| (p2 MUST X HENCE h(p2) LEST l(p2)) ||| ...
+EACH p_x MAY terminate
+    HENCE EVERY p_y WHO `differs from` p_x
+              MUST settle_outstanding_accounts_with p_x
 ```
 
-- Each party has its own independent HENCE/LEST
-- No synchronization between parties
-- Blame per-party (individual accountability)
-- HENCE fires as each party completes
+Expansion for {A, B, C}:
 
-### 9.2 EVERY: Barrier Expansion
+- A MAY terminate HENCE (B MUST settle_with A AND C MUST settle_with A)
+- B MAY terminate HENCE (A MUST settle_with B AND C MUST settle_with B)
+- C MAY terminate HENCE (A MUST settle_with C AND B MUST settle_with C)
+
+---
+
+## 8. Feature Interactions
+
+### 8.1 With UPON
 
 ```l4
-EVERY p MUST X HENCE shared_h LEST shared_l
--- Desugars to barrier structure:
-BARRIER { p1, p2, ... } MUST X HENCE shared_h LEST shared_l
+UPON `receiving invoice`
+EVERY Customer c WHO `is premium member`
+ MUST `pay within` 30 days
 ```
 
-- Single shared HENCE (fires once when ALL complete)
-- Single shared LEST (fires once when barrier fails)
-- Blame is the set of non-completers (collective accountability)
-- Reference time for HENCE is max completion time
+The `UPON` clause precedes `EVERY`, consistent with existing regulative syntax.
 
-### 9.3 When to Use Which
-
-| Keyword           | Semantics    | HENCE/LEST behavior          | Use Case                    |
-| ----------------- | ------------ | ---------------------------- | --------------------------- |
-| `EACH`            | Fork         | Fires for each independently | Individualized consequences |
-| `EVERY`           | Barrier      | Fires once when all complete | All-or-nothing transactions |
-| Either (no HENCE) | Distributive | N/A                          | Independent compliance      |
-
-**Examples:**
+### 8.2 With GIVEN
 
 ```l4
--- Notifications for each approval (fork)
-EACH director MAY approve
-    HENCE company MUST notify_board WITHIN 1 day
-
--- Resolution passes only when all approve (barrier)
-EVERY director MAY approve
-    HENCE resolution passes
+GIVEN amount IS A NUMBER
+EVERY Person p WHO `owes at least` amount
+ MUST pay amount
 ```
+
+Desugars to:
+
+```l4
+GIVEN amount IS A NUMBER, p IS A Person
+PARTY p IF `owes at least` amount p  -- p is LAST argument
+ MUST pay amount
+```
+
+### 8.3 With DEONTIC Reification
+
+The [HOMOICONICITY-SPEC](HOMOICONICITY-SPEC.md) proposes treating deontic positions as first-class values. This affects `EVERY...WHO`:
+
+**Instantiation strategies:**
+
+- **Lazy (Option A):** Evaluate `EVERY` rules on query. Recommended for unbounded types.
+- **Eager (Option B):** Pre-populate registry when parties enter. Recommended for bounded enums.
+
+**Higher-order operations** can target quantified deontics:
+
+```l4
+§ `Tax Relief Power`
+PARTY parliament MAY
+  WAIVE (EVERY Person p WHO p's age >= 65 MUST `pay taxes`)
+  PROVIDED `budget permits`
+```
+
+### 8.4 With Powers Hierarchy
+
+`EVERY...WHO` can be used at multiple levels of power hierarchy:
+
+```l4
+-- Base permission
+EVERY Person p MAY `move freely`
+
+-- First-order power: officers can restrict
+EVERY Officer o WHO `is authorized`
+  MAY REVOKE (PARTY person MAY `move freely`)
+  PROVIDED `lawful grounds exist`
+
+-- Second-order power: legislature grants officer powers
+PARTY parliament MAY
+  GRANT (EVERY Officer o WHO `meets criteria`
+           MAY REVOKE (PARTY person MAY `move freely`))
+```
+
+---
+
+## 9. Implementation
+
+### 9.1 Runtime State
+
+```haskell
+data BarrierRuntime = BarrierRuntime
+    { brParties     :: Set Party
+    , brCompleted   :: Set Party
+    , brPending     :: Set Party
+    , brFailed      :: Set Party
+    , brDeadline    :: Time
+    , brEntryTime   :: Time
+    , brCompletions :: [(Party, Time)]
+    }
+```
+
+### 9.2 Desugaring Strategy
+
+1. **Parse** quantified deonton
+2. **Expand** to barrier structure (not simple conjunction)
+3. **Track** completion state at runtime
+4. **Fire** HENCE/LEST at appropriate transitions
+5. **Propagate** reference time to continuation
+
+### 9.3 Scope Handling
+
+```haskell
+data Scope = Scope { scopeBindings :: Map Variable Value, scopeParent :: Maybe Scope }
+
+resolve v scope = case Map.lookup v (scopeBindings scope) of
+    Just val -> val
+    Nothing  -> maybe (error "unbound") (resolve v) (scopeParent scope)
+```
+
+---
 
 ## 10. Verification
 
 ### 10.1 Complexity
 
-For n parties:
-
 - State space: O(2^n) completion states per barrier
-- With k nested barriers: O(2^(n\*k))
+- With k nested barriers: O(2^(n×k))
 - PSPACE-complete for finite instances
 
 ### 10.2 Decidable Fragments
@@ -898,93 +562,45 @@ Verification is decidable under:
 
 ### 10.3 Static Analysis
 
-At contract analysis time, check for:
+Check for:
 
-- **Deadlock**: Cyclic dependencies between barriers
-- **Temporal impossibility**: Conflicting deadlines
-- **Empty quantification**: Warn if domain might be empty
+- **Deadlock:** Cyclic dependencies between barriers
+- **Temporal impossibility:** Conflicting deadlines
+- **Empty quantification:** Warn if domain might be empty
 
-## 11. Implementation Notes
+---
 
-### 11.1 Runtime State
+## 11. Examples
 
-```haskell
-data BarrierRuntime = BarrierRuntime
-    { brParties     :: Set Party
-    , brCompleted   :: Set Party
-    , brPending     :: Set Party
-    , brFailed      :: Set Party
-    , brDeadline    :: Time
-    , brEntryTime   :: Time
-    , brCompletions :: [(Party, Time)]  -- for blame/timing
-    }
-```
-
-### 11.2 Desugaring Strategy
-
-1. **Parse** quantified deonton
-2. **Expand** to barrier structure (not simple conjunction)
-3. **Track** completion state at runtime
-4. **Fire** HENCE/LEST at appropriate transitions
-5. **Propagate** reference time to continuation
-
-### 11.3 Scope Handling
-
-For nested quantifiers, maintain scope chain:
-
-```haskell
-data Scope = Scope
-    { scopeBindings :: Map Variable Value
-    , scopeParent   :: Maybe Scope
-    }
-
-resolve :: Variable -> Scope -> Value
-resolve v scope = case Map.lookup v (scopeBindings scope) of
-    Just val -> val
-    Nothing  -> maybe (error "unbound") (resolve v) (scopeParent scope)
-```
-
-## 12. Examples
-
-### 12.1 Mutual NDA
+### 11.1 Mutual NDA
 
 ```l4
-GIVEN confidential_info IS A SET OF Information
-
-EVERY p
-    WHO    member_of parties
-    MUST   keep_confidential confidential_info
-    WITHIN contract_duration
-    LEST   PARTY p MUST pay_damages
+EVERY SigningParty p
+ MUST `keep confidential` (`other party` p)'s confidentialInfo
+LEST BREACH
 ```
 
-### 12.2 Document Signing with Barrier
+### 11.2 Document Signing with Barrier
 
 ```l4
-EVERY d
-    WHO    member_of directors
-    MUST   sign_resolution
-    WITHIN 14 days
-    HENCE  company MUST file_with_registrar WITHIN 7 days
-    LEST   resolution_fails
+EVERY Director d WHO `is member of` board
+ MUST sign_resolution WITHIN 14 days
+HENCE company MUST file_with_registrar WITHIN 7 days
+LEST  resolution_fails
 ```
 
-The filing obligation only triggers when ALL directors have signed.
-
-### 12.3 Termination with Settlement
+### 11.3 Termination with Settlement
 
 ```l4
 EACH p_x
     MAY    terminate upon 30 days notice
-    HENCE  EVERY p_y
-               WHO    differs_from p_x
-               MUST   settle_outstanding_accounts_with p_x
-               WITHIN 30 days
-               HENCE  FULFILLED
-               LEST   PARTY p_y MUST pay_penalty_to p_x
+    HENCE  EVERY p_y WHO `differs from` p_x
+               MUST settle_outstanding_accounts_with p_x WITHIN 30 days
+               HENCE FULFILLED
+               LEST  PARTY p_y MUST pay_penalty_to p_x
 ```
 
-### 12.4 Sequential Signing by Seniority
+### 11.4 Sequential Signing by Seniority
 
 ```l4
 GIVEN board IS A LIST OF Director
@@ -992,29 +608,83 @@ GIVEN board IS A LIST OF Director
 `sign in order` MEANS
     CONSIDER sortOn seniority board
         WHEN []          THEN FULFILLED
-        WHEN (d :: rest) THEN
-            PARTY d MUST sign WITHIN 7 days
-                HENCE `sign in order` rest
-                LEST signing_failed
+        WHEN (d :: rest) THEN PARTY d MUST sign WITHIN 7 days
+                              HENCE `sign in order` rest
+                              LEST signing_failed
 ```
 
-Uses existing recursion; no new syntax needed.
+---
+
+## 12. Extended Use Cases
+
+### 12.1 Age-Based Regulations
+
+```l4
+-- Voting rights
+EVERY Person p
+  WHO p's age >= 18 AND p's citizenship EQUALS Singapore
+  MAY vote
+
+-- Alcohol prohibition
+EVERY Person p WHO p's age < 21
+SHANT `purchase alcohol`
+LEST `commit offense under` LiquorControlAct
+
+-- Mandatory education
+EVERY Person p WHO p's age >= 6 AND p's age <= 16
+ MUST `attend school`
+LEST PARTY p's parents MUST `pay truancy fine`
+
+-- Senior benefits
+EVERY Person p WHO p's age >= 65
+  MAY `claim` seniorCitizenDiscount
+```
+
+### 12.2 Employment Law
+
+```l4
+-- Minimum wage
+EVERY Employer e
+ MUST `pay at least` minimumWage TO `each employee of` e
+
+-- Anti-discrimination
+EVERY Employer e
+SHANT `discriminate based on` protectedCharacteristics IN `hiring decisions`
+LEST `commit offense under` EmploymentAct
+```
+
+### 12.3 Tax Law
+
+```l4
+-- Progressive taxation
+EVERY Person p WHO p's annualIncome > 0 AND p's annualIncome <= 20000
+ MUST `pay tax at rate` 0%
+
+EVERY Person p WHO p's annualIncome > 20000 AND p's annualIncome <= 40000
+ MUST `pay tax at rate` 2%
+
+EVERY Person p WHO p's annualIncome > 40000
+ MUST `pay tax at rate` (progressiveTaxRate p's annualIncome)
+
+-- GST registration
+EVERY Business b WHO b's annualRevenue > 1000000
+ MUST `register for GST` WITHIN 30 days OF `exceeding threshold`
+LEST `pay penalty` (lateRegistrationPenalty b)
+```
+
+---
 
 ## 13. Open Questions
 
 ### 13.1 Early Failure Policy
 
-Should early failure detection (before deadline) be:
-
-- Default behavior?
-- Opt-in via modifier?
-- Contract-level configuration?
+Should early failure detection (before deadline) be default, opt-in, or contract-level?
 
 **Recommendation:** Opt-in, as legal systems typically allow cure until deadline.
 
 ### 13.2 Partial Completion Visibility
 
-Should intermediate completion state be observable to other parts of the contract?
+Should intermediate completion state be observable?
 
 ```l4
 IF (count_completed parties action) >= quorum THEN ...
@@ -1024,55 +694,183 @@ IF (count_completed parties action) >= quorum THEN ...
 
 ### 13.3 Synchronization Modifiers
 
-For complex coordination, consider explicit sync:
+For complex coordination:
 
 ```l4
-EVERY p
-    MUST   X
-    HENCE  ...
-    COORDINATED WITH other_barrier
-    SYNCHRONIZES ON final_settlement
+EVERY p MUST X HENCE ... COORDINATED WITH other_barrier
 ```
 
-**Recommendation:** Defer to future iteration; current design covers common cases.
+**Recommendation:** Defer to future iteration.
 
-## 14. Related Work
+---
 
-- **Hvitved's CSL**: Trace-based contract semantics, blame assignment
-- **CSP (Hoare)**: Trace semantics, parallel composition, external choice
-- **Petri Nets**: AND-join synchronization pattern
-- **Hohfeld**: Jural correlatives (privilege/no-right)
-- **Deontic Logic**: Obligation, permission, prohibition modalities
+## 14. Excluded Designs
 
-## 15. Appendix: Formal Grammar
+### 14.1 First-Argument Insertion
+
+**Rejected:** Supplying bound variable as **first** argument to predicates.
+
+**Why:** Inconsistent with curried function convention; breaks partial application patterns like `owes_at_least 100 :: Person -> Boolean`.
+
+### 14.2 Leading `'s` Accessor Form
+
+**Rejected:** `WHO 's age >= 18` as shorthand for `WHO p's age >= 18`.
+
+**Why:**
+
+1. Adds third form, increasing cognitive load
+2. Inconsistent with L4 where `'s` always follows an expression
+3. Marginal benefit (only 2 characters shorter)
+4. Predicate form already provides conciseness: `EVERY Person p WHO `is adult` MUST ...`
+
+### 14.3 Implicit Type Inference Only
+
+**Rejected as sole mechanism:** Inferring type from deontic context without explicit annotation.
+
+**Why:**
+
+1. Not all EVERY/EACH uses occur in typed deontic contexts
+2. Legislative mode rules often stand alone
+3. Explicit `EVERY Person p` is clearer
+
+**However:** Type inference may be used as fallback when type is omitted and context provides it.
+
+---
+
+## 15. Related Work
+
+- **Hvitved's CSL:** Trace-based contract semantics, blame assignment
+- **CSP (Hoare):** Trace semantics, parallel composition, external choice
+- **Petri Nets:** AND-join synchronization pattern
+- **Hohfeld:** Jural correlatives (privilege/no-right)
+- **Deontic Logic:** Obligation, permission, prohibition modalities
+- **LegalRuleML:** `<Agent>` elements with optional qualifiers
+- **Defeasible Deontic Logic:** Universal quantification with applicability conditions
+
+---
+
+## Appendix A: Legal Pattern Analysis
+
+This appendix analyzes how quantified obligations appear in real legal texts.
+
+### A.1 Obligation Patterns (MUST)
+
+**Pattern A: Distributive Obligation (Most Common)**
+
+> "Each party shall maintain the confidentiality of all Confidential Information."
+
+Every individual party has their own separate obligation. If Alice breaches, only Alice is liable.
+
+**CSP:** `CONF(Alice) ||| CONF(Bob) ||| CONF(Carol)` — pure interleaving.
+
+**Pattern B: Constitutive Rule Masquerading as Obligation**
+
+> "All directors must approve the resolution before it takes effect."
+
+This is a **constitutive** rule ("must be"), not **regulative** ("must do"). Directors bear no penalty for not approving—the resolution simply doesn't pass.
+
+**L4 representation using barrier:**
+
+```l4
+EVERY director MAY approve the_resolution
+    HENCE the_resolution passes
+```
+
+**Pattern C: Joint and Several Liability**
+
+> "The Guarantors shall be jointly and severally liable for the Debt."
+
+Creditor can pursue any guarantor for full amount. Requires tracking shared resource.
+
+**Status:** Future work — requires constructs beyond EVERY/EACH.
+
+**Pattern D: Collective Action (Truly Joint)**
+
+> "The parties shall jointly execute the Closing Documents."
+
+Single synchronized event requiring all participants.
+
+**Status:** Future work — proposed syntax: `ALL parties MUST JOINTLY execute closing_documents`
+
+### A.2 Permission Patterns (MAY)
+
+**Pattern E: Distributive Permission**
+
+> "Each party may assign its rights under this Agreement with prior written consent."
+
+Every party individually has permission; Alice's decision doesn't affect Bob's permission.
+
+**Pattern F: First-to-Act Permission**
+
+> "Any party may terminate this Agreement upon 30 days' written notice."
+
+External choice — first event determines outcome for all.
+
+**CSP:** `(terminate.Alice → TERMINATED) □ (terminate.Bob → TERMINATED) □ ...`
+
+**Pattern G: Exhaustible Permission**
+
+> "The Licensee may make up to three copies of the Software."
+
+Permission with quota; each exercise consumes one unit.
+
+### A.3 Prohibition Patterns (SHANT)
+
+**Pattern H: Distributive Prohibition**
+
+> "No party shall disclose Confidential Information to any third party."
+
+Each party individually prohibited. Equivalent to "Each party shall not disclose..."
+
+**Pattern I: Collective Prohibition**
+
+> "The parties shall not collectively hold more than 49% of the voting shares."
+
+Prohibition applies to aggregate; individual holdings fine if sum under threshold.
+
+**Pattern J: Cross-Party Prohibition**
+
+> "No party shall solicit the employees of any other party."
+
+Creates n × (n-1) prohibition instances.
+
+```l4
+EACH p_x
+    EACH p_y WHO `differs from` p_x
+        SHANT `solicit employees of` p_y
+```
+
+### A.4 Coverage Summary
+
+| Pattern                         | EVERY/EACH handles? |
+| ------------------------------- | ------------------- |
+| A: Distributive                 | ✓ Yes               |
+| B: Barrier                      | ✓ Yes               |
+| C: Joint & Several              | ✗ Future work       |
+| D: Truly Joint                  | ✗ Future work       |
+| E-J: Permissions & Prohibitions | ✓ Yes               |
+
+---
+
+## Appendix B: Formal Grammar
 
 ```ebnf
 quantified_deonton ::=
-    quantifier variable 'IN' set_expr [filter]
+    quantifier type_name variable [filter]
     deontic_modal action_expr
     [temporal_constraint]
     [hence_clause]
     [lest_clause]
 
 quantifier ::= 'EVERY' | 'EACH' | 'ALL' | 'NO'
-
 filter ::= 'WHO' predicate | 'WHERE' predicate
-
 deontic_modal ::= 'MUST' | 'MAY' | 'SHANT'
-
-temporal_constraint ::= 'WITHIN' duration_expr
-                      | 'BEFORE' time_expr
-                      | 'BY' time_expr
-
+temporal_constraint ::= 'WITHIN' duration_expr | 'BEFORE' time_expr | 'BY' time_expr
 hence_clause ::= 'HENCE' continuation
-
 lest_clause ::= 'LEST' continuation
-
 continuation ::= deonton | quantified_deonton | 'FULFILLED' | 'BREACH'
 
-predicate ::= 'is' 'not' variable
-            | 'is' 'in' set_expr
-            | 'meets' predicate_name
+predicate ::= boolean_expr
             | predicate 'AND' predicate
             | predicate 'OR' predicate
             | 'NOT' predicate
