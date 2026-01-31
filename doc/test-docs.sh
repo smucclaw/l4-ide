@@ -174,13 +174,13 @@ check_link() {
     if [[ "$link" =~ ^# ]]; then
         local same_file_anchor="${link#\#}"
         if anchor_exists "$source_file" "$same_file_anchor"; then
-            ((LINK_OK++))
+            ((LINK_OK+=1))
             log_verbose "  [OK] $link (same-file anchor)"
         else
             log_error "Broken anchor in $source_file"
             echo "       Anchor: $link"
             echo "       No heading found that generates anchor: $same_file_anchor"
-            ((LINK_ERRORS++))
+            ((LINK_ERRORS+=1))
         fi
         return 0
     fi
@@ -213,7 +213,7 @@ check_link() {
         log_error "Broken link in $source_file"
         echo "       Link: $link"
         echo "       Expected: $source_dir/$file_path"
-        ((LINK_ERRORS++))
+        ((LINK_ERRORS+=1))
         return 1
     fi
     
@@ -222,7 +222,7 @@ check_link() {
         log_error "Link to folder in $source_file"
         echo "       Link: $link"
         echo "       Resolved to folder: $resolved_path"
-        ((LINK_ERRORS++))
+        ((LINK_ERRORS+=1))
         return 1
     fi
     
@@ -234,13 +234,13 @@ check_link() {
                 log_error "Broken anchor in $source_file"
                 echo "       Link: $link"
                 echo "       File exists but anchor '#$anchor' not found"
-                ((LINK_ERRORS++))
+                ((LINK_ERRORS+=1))
                 return 1
             fi
         fi
     fi
     
-    ((LINK_OK++))
+    ((LINK_OK+=1))
     log_verbose "  [OK] $link"
     return 0
 }
@@ -281,41 +281,72 @@ echo ""
 log_info "Validating L4 files..."
 echo ""
 
-# Check if jl4-cli is available
-if ! command -v jl4-cli &> /dev/null; then
-    # Try to use cabal run
-    if command -v cabal &> /dev/null; then
-        JL4_CMD="cabal run jl4-cli --"
+# Function to run jl4-cli - handles both direct invocation and cabal run
+run_jl4_cli() {
+    local file="$1"
+    if [[ -n "$JL4_CLI_DIRECT" ]]; then
+        "$JL4_CLI_DIRECT" "$file" 2>&1
     else
-        log_warn "jl4-cli not found and cabal not available"
+        # Run from repo root for proper library resolution
+        # Use cabal run which sets up data-files paths correctly
+        (cd "$REPO_ROOT" && cabal run jl4:jl4-cli -v0 -- "$file" 2>&1)
+    fi
+}
+
+# Check if jl4-cli is available
+JL4_CLI_DIRECT=""
+JL4_AVAILABLE=false
+
+if command -v jl4-cli &> /dev/null; then
+    JL4_CLI_DIRECT="jl4-cli"
+    JL4_AVAILABLE=true
+    log_verbose "Using jl4-cli from PATH"
+elif command -v cabal &> /dev/null; then
+    # Try to find the built binary using cabal list-bin (fully qualified name)
+    JL4_BIN=""
+    set +e  # Temporarily disable exit on error for cabal command
+    JL4_BIN=$(cd "$REPO_ROOT" && cabal list-bin jl4:jl4-cli 2>/dev/null)
+    CABAL_EXIT=$?
+    set -e
+    
+    if [[ $CABAL_EXIT -eq 0 && -n "$JL4_BIN" && -x "$JL4_BIN" ]]; then
+        JL4_AVAILABLE=true
+        log_verbose "Using cabal run jl4-cli"
+    else
+        log_warn "jl4-cli not built. Run 'cabal build jl4:jl4-cli' first."
         log_warn "Skipping L4 validation"
-        JL4_CMD=""
     fi
 else
-    JL4_CMD="jl4-cli"
+    log_warn "jl4-cli not found and cabal not available"
+    log_warn "Skipping L4 validation"
 fi
 
-if [[ -n "$JL4_CMD" ]]; then
+if $JL4_AVAILABLE; then
     # Find all .l4 files in doc/
     while IFS= read -r -d '' l4_file; do
         relative_path="${l4_file#$SCRIPT_DIR/}"
         
         # Run jl4-cli and capture output
-        if output=$($JL4_CMD "$l4_file" 2>&1); then
+        set +e  # Disable exit on error for this command
+        output=$(run_jl4_cli "$l4_file")
+        run_exit_code=$?
+        set -e  # Re-enable
+        
+        if [[ $run_exit_code -eq 0 ]]; then
             # Check if there are actual errors (not just #EVAL output containing "error" text)
             # Real errors have "Severity: DiagnosticSeverity_Error" while #EVAL output has "Information"
             if echo "$output" | grep -qi "DiagnosticSeverity_Error"; then
                 log_error "Validation failed: $relative_path"
                 echo "$output" | head -20 | sed 's/^/       /'
-                ((L4_ERRORS++))
+                ((L4_ERRORS+=1))
             else
-                ((L4_OK++))
+                ((L4_OK+=1))
                 log_verbose "[OK] $relative_path"
             fi
         else
             log_error "Validation failed: $relative_path"
             echo "$output" | head -20 | sed 's/^/       /'
-            ((L4_ERRORS++))
+            ((L4_ERRORS+=1))
         fi
     done < <(find "$SCRIPT_DIR" -name "*.l4" -type f -print0)
     
@@ -406,17 +437,17 @@ while IFS= read -r -d '' file; do
     # Skip README.md and SUMMARY.md files - they are index files
     if [[ "$filename" == "README.md" ]] || [[ "$filename" == "SUMMARY.md" ]]; then
         log_verbose "  [SKIP] Index file: $relative_path"
-        ((ORPHAN_OK++))
+        ((ORPHAN_OK+=1))
         continue
     fi
     
     # Check if this file is linked from anywhere (grep for exact match)
     if grep -qFx "$file" "$LINKED_FILES_TMP"; then
         log_verbose "  [OK] $relative_path"
-        ((ORPHAN_OK++))
+        ((ORPHAN_OK+=1))
     else
         log_error "Orphaned file (not linked from anywhere): $relative_path"
-        ((ORPHAN_ERRORS++))
+        ((ORPHAN_ERRORS+=1))
     fi
     
 done < <(find "$SCRIPT_DIR" \( -name "*.md" -o -name "*.l4" \) -type f -print0)
