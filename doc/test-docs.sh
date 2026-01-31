@@ -296,15 +296,23 @@ run_jl4_cli() {
 # Check if jl4-cli is available
 JL4_CLI_DIRECT=""
 JL4_AVAILABLE=false
+
 if command -v jl4-cli &> /dev/null; then
     JL4_CLI_DIRECT="jl4-cli"
     JL4_AVAILABLE=true
     log_verbose "Using jl4-cli from PATH"
 elif command -v cabal &> /dev/null; then
-    # Verify jl4-cli is built by checking if cabal can find it
-    if cabal list-bin jl4-cli &>/dev/null; then
-        JL4_AVAILABLE=true
-        log_verbose "Using cabal run jl4-cli"
+    # Try to find the built binary using cabal list-bin
+    # Use fully qualified name (jl4:jl4-cli) for reliability
+    if JL4_BIN=$(cd "$REPO_ROOT" && cabal list-bin jl4:jl4-cli 2>/dev/null); then
+        if [[ -x "$JL4_BIN" ]]; then
+            # Binary exists, we'll use cabal run for proper environment setup
+            JL4_AVAILABLE=true
+            log_verbose "Using cabal run jl4-cli (binary at $JL4_BIN)"
+        else
+            log_warn "jl4-cli binary not found at: $JL4_BIN"
+            log_warn "Skipping L4 validation"
+        fi
     else
         log_warn "jl4-cli not built. Run 'cabal build jl4:jl4-cli' first."
         log_warn "Skipping L4 validation"
