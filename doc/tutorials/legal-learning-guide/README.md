@@ -5,12 +5,14 @@
 L4 is a programming language designed specifically for translating legal documents into precise, executable code. This guide will take you step-by-step from writing your first legal rule to modeling complete regulatory schemes like the Jersey Charities Law.
 
 **What You'll Learn:**
+
 - How to write legal rules that a computer can understand and execute
 - How to model complex legal relationships and processes
 - How to test and simulate legal scenarios
 - How to organize and maintain large bodies of legislation
 
-**Prerequisites:** 
+**Prerequisites:**
+
 - Basic familiarity with legal concepts
 - No programming experience required (we'll teach you what you need)
 
@@ -33,8 +35,9 @@ MUST `file annual return`
 ```
 
 Let's break this down:
+
 - `GIVEN charity IS A RegisteredCharity` - This rule applies to registered charities
-- `PARTY charity` - The charity is the one with the obligation  
+- `PARTY charity` - The charity is the one with the obligation
 - `MUST` - This creates a legal obligation
 - `file annual return` - This is what they must do
 
@@ -45,9 +48,10 @@ Let's break this down:
 
 ```l4
 GIVEN solicitor IS A Solicitor
-PARTY solicitor  
+PARTY solicitor
 MUST `maintain client confidentiality`
 ```
+
 </details>
 
 ## **1.2 Adding Conditions and Consequences**
@@ -65,6 +69,7 @@ LEST `Commissioner may issue Required Steps Notice`
 ```
 
 New elements:
+
 - `IF charity IS registered` - Adds a condition
 - `WITHIN 2 months OF` - Sets a deadline
 - `HENCE` - What happens if they comply
@@ -100,26 +105,30 @@ testCharity MEANS RegisteredCharity WITH
 **Problem:** Using simple text leads to errors and ambiguity.
 
 **Bad approach:**
+
 ```l4
 charity MEANS "Some Charity Name"  -- Just text, no structure
 ```
 
 **Better approach - Structured Types:**
+
 ```l4
 DECLARE RegisteredCharity
     HAS name IS A STRING
-        registrationNumber IS A STRING  
+        registrationNumber IS A STRING
         registrationDate IS A Date
         address IS A STRING
         purposes IS A LIST OF Purpose
 ```
 
 **Why This Matters:**
+
 - **Prevents errors:** Can't accidentally use a person where you need a charity
 - **Captures relationships:** Links charities to their purposes, addresses, etc.
 - **Enables validation:** L4 can check if all required information is present
 
 **Example:**
+
 ```l4
 animalCharity MEANS RegisteredCharity WITH
     name IS "Jersey Animal Welfare"
@@ -134,15 +143,17 @@ animalCharity MEANS RegisteredCharity WITH
 **Legal Insight:** Law often provides specific lists and categories.
 
 Instead of treating charitable purposes as free text:
+
 ```l4
 purposes IS A LIST OF STRING  -- Allows typos and inconsistencies
 ```
 
 Use precise legal categories:
+
 ```l4
 DECLARE Purpose IS ONE OF
     `prevention or relief of poverty`
-    `advancement of education` 
+    `advancement of education`
     `advancement of religion`
     `advancement of health`
     `advancement of animal welfare`
@@ -151,11 +162,13 @@ DECLARE Purpose IS ONE OF
 ```
 
 **Benefits:**
+
 - **Matches legal structure:** Mirrors how legislation actually defines categories
 - **Prevents typos:** Can't accidentally write "education advancement" instead of "advancement of education"
 - **Enables legal tests:** Can easily check if all purposes are charitable
 
 **Pattern matching with legal categories:**
+
 ```l4
 GIVEN p IS A Purpose
 GIVETH A BOOLEAN
@@ -177,7 +190,7 @@ DECLARE Person
         address IS A STRING
         isGovernor IS A BOOLEAN
 
-DECLARE RegisteredCharity  
+DECLARE RegisteredCharity
     HAS name IS A STRING
         registrationNumber IS A STRING
         governors IS A LIST OF Person  -- Relationship to people
@@ -186,6 +199,7 @@ DECLARE RegisteredCharity
 ```
 
 **Real legal rule using relationships:**
+
 ```l4
 GIVEN governor IS A Person
       charity IS A RegisteredCharity
@@ -208,14 +222,16 @@ MUST `act in best interests of charity and beneficiaries`
 **Example Process:** Charity registration involves application → assessment → decision → registration → ongoing compliance.
 
 **Traditional approach (limited):**
+
 ```l4
 PARTY applicant MUST `submit application`
-PARTY Commissioner MUST `assess application`  
+PARTY Commissioner MUST `assess application`
 PARTY Commissioner MUST `make decision`
 -- These are disconnected rules
 ```
 
 **DEONTIC approach (powerful):**
+
 ```l4
 § `Charity Registration Process`
 GIVEN applicant IS A CharityApplication
@@ -249,11 +265,13 @@ DECLARE Action IS ONE OF
 ```
 
 **Why This Works:**
+
 - **Legal precision:** Matches how law defines roles and powers
 - **Prevents errors:** A charity can't issue regulatory notices
 - **Clear authority:** Shows who has power to do what
 
 **Example using structured actors/actions:**
+
 ```l4
 GIVETH A DEONTIC Actor Action
 `registration assessment` MEANS
@@ -286,8 +304,9 @@ DECIDE `add charity to register` IS
 ```
 
 **Complete process with state changes:**
+
 ```l4
-GIVETH A DEONTIC Actor Action  
+GIVETH A DEONTIC Actor Action
 `complete registration` MEANS
   PARTY Commissioner
   MUST RegisterCharity OF newCharity
@@ -308,12 +327,13 @@ Now we'll build a complete model of real legislation step by step.
 **Real legislation has three types of provisions:**
 
 1. **Structural/Interpretive Layer:** Definitions, institutions, basic concepts
-2. **Deontic Rules Layer:** Obligations, powers, prohibitions  
+2. **Deontic Rules Layer:** Obligations, powers, prohibitions
 3. **Register/State-Transition Layer:** How actions change official records
 
 **Jersey Charities Example:**
 
 **Layer 1 - Structural:**
+
 ```l4
 -- Basic definitions (Art 1-2)
 DECLARE Purpose IS ONE OF
@@ -321,18 +341,19 @@ DECLARE Purpose IS ONE OF
     `advancement of education`
     -- ... 13 statutory purposes from Art 6(2)
 
--- Institutions (Art 3-4)  
+-- Institutions (Art 3-4)
 Commissioner  -- Created by the Law
 CharityRegister  -- Official register maintained by Commissioner
 ```
 
 **Layer 2 - Deontic Rules:**
+
 ```l4
 -- Annual return obligation (Art 13)
 § `Annual Return Obligation`
 GIVETH A DEONTIC Actor Action
 `annual return process` MEANS
-  PARTY RegisteredCharity  
+  PARTY RegisteredCharity
   MUST FileReturn OF financialData
   WITHIN 2 months OF `financial year end`
   HENCE `transparency maintained`
@@ -340,6 +361,7 @@ GIVETH A DEONTIC Actor Action
 ```
 
 **Layer 3 - Register Events:**
+
 ```l4
 -- How filing updates the register
 DECLARE RegisterAction IS ONE OF
@@ -351,8 +373,9 @@ DECLARE RegisterAction IS ONE OF
 ## **4.2 Building Your Register**
 
 **Start with an empty register:**
+
 ```l4
-emptyRegister MEANS CharityRegister 
+emptyRegister MEANS CharityRegister
     WITH activeCharities IS EMPTY_LIST
          historicCharities IS EMPTY_LIST
          nextRegistrationNumber IS 1
@@ -360,6 +383,7 @@ emptyRegister MEANS CharityRegister
 ```
 
 **Add registration process:**
+
 ```l4
 § `Charity Registration (Art 11)`
 GIVETH A DEONTIC Actor Action
@@ -371,14 +395,15 @@ GIVETH A DEONTIC Actor Action
 ```
 
 **Show the complete flow:**
+
 ```l4
 #TRACE `Complete Registration` applicant Commissioner emptyRegister AT 1 WITH
   -- Step 1: Application
   PARTY applicant DOES ProvideApplication OF applicationDocs AT 10
-  
-  -- Step 2: Assessment  
+
+  -- Step 2: Assessment
   PARTY Commissioner DOES AssessApplication OF application AT 20
-  
+
   -- Step 3: Registration
   PARTY Commissioner DOES RegisterCharity OF newCharity AT 30
 ```
@@ -399,7 +424,7 @@ GIVETH A DEONTIC Actor Action
        LEST `misconduct unaddressed`
 
 -- Required Steps Notice (Art 27)
-§ `Required Steps Notice Power`  
+§ `Required Steps Notice Power`
 GIVETH A DEONTIC Actor Action
 `enforcement escalation` MEANS
   IF `compliance failure detected`
@@ -417,16 +442,16 @@ GIVETH A DEONTIC Actor Action
   -- Registration
   PARTY charity DOES ProvideApplication OF docs AT 10
   PARTY Commissioner DOES RegisterCharity OF charity AT 20
-  
+
   -- Ongoing compliance
   PARTY charity DOES FileReturn OF year1Financials AT 365
   PARTY charity DOES FileReturn OF year2Financials AT 730
-  
+
   -- Enforcement
   PARTY Commissioner DOES `discover non-compliance` AT 800
   PARTY Commissioner DOES IssueNotice OF requiredSteps AT 810
   PARTY charity DOES `comply with required steps` AT 830
-  
+
   -- Voluntary deregistration
   PARTY charity DOES `request deregistration` AT 1000
   PARTY Commissioner DOES `move to historic register` AT 1010
@@ -443,9 +468,11 @@ GIVETH A DEONTIC Actor Action
 **The Problem:** Legal drafting often suffers from ambiguity and inconsistency.
 
 **Example ambiguity:**
+
 > "The charity must notify the person responsible within 30 days."
 
 **Questions arise:**
+
 - Which person? The governor? The secretary? The Commissioner?
 - 30 days from what event?
 - What form should the notification take?
@@ -458,7 +485,7 @@ DECLARE NotificationTarget IS ONE OF
     Commissioner
     Secretary HAS name IS A STRING
 
-DECLARE NotificationEvent IS ONE OF  
+DECLARE NotificationEvent IS ONE OF
     GovernorAppointment HAS date IS A Date
     ConvictionReported HAS convictionDate IS A Date
     AddressChange HAS changeDate IS A Date
@@ -469,6 +496,7 @@ WITHIN 30 days OF event's date
 ```
 
 **Benefits:**
+
 - **Eliminates ambiguity:** Exactly which person, exactly which event
 - **Prevents inconsistency:** Can't accidentally use wrong notification type
 - **Enables automation:** Computer can check compliance automatically
@@ -480,8 +508,9 @@ WITHIN 30 days OF event's date
 **Problem:** Real legal processes are interconnected workflows, not isolated duties.
 
 **Example - Annual Return Process:**
+
 - Art 13(7): Charity must file return
-- Art 13(8): Commissioner must publish data  
+- Art 13(8): Commissioner must publish data
 - Art 27(1): Commissioner may issue Required Steps Notice for non-compliance
 - Art 16(1): Commissioner may deregister for continued non-compliance
 
@@ -502,6 +531,7 @@ GIVETH A DEONTIC Actor Action
 ```
 
 **Benefits:**
+
 - **Captures legal reality:** Shows how legal processes actually work
 - **Enables simulation:** Can test complete workflows, not just isolated rules
 - **Supports drafting:** Reveals gaps and inconsistencies in legal design
@@ -511,6 +541,7 @@ GIVETH A DEONTIC Actor Action
 **Legal reality:** Modern regulation involves primary law + multiple subsidiary instruments.
 
 **Jersey Charities Example:**
+
 - **Primary Law:** Charities (Jersey) Law 2014
 - **Core Financial Info Regs 2018:** Defines financial reporting requirements
 - **Additional Info Order 2018:** Adds governor payment reporting
@@ -520,7 +551,7 @@ GIVETH A DEONTIC Actor Action
 **L4 modular approach:**
 
 ```l4
--- Main legislation file  
+-- Main legislation file
 IMPORT prelude
 IMPORT `charities-types`     -- Shared definitions
 IMPORT `annual-returns`      -- Specific processes
@@ -536,6 +567,7 @@ IMPORT `charities-types`
 ```
 
 **Benefits:**
+
 - **Mirrors legal structure:** Matches how law is actually organized
 - **Supports collaboration:** Different teams can work on different modules
 - **Enables updates:** Can amend subsidiary regulations without changing primary law
@@ -544,12 +576,15 @@ IMPORT `charities-types`
 ## **5.4 Common Patterns in Regulatory Law**
 
 **Recognition Patterns** (registration, licensing):
+
 - Application → Assessment → Decision → Registration → Ongoing compliance
 
 **Ongoing Compliance Patterns** (reporting, inspection):
+
 - Periodic obligations → Monitoring → Non-compliance → Enforcement → Resolution
 
 **Enforcement Patterns** (sanctions, appeals):
+
 - Detection → Investigation → Decision → Sanction → Appeal → Final resolution
 
 **These patterns appear across different regulatory domains** (charities, financial services, professional regulation, etc.)
@@ -561,21 +596,22 @@ IMPORT `charities-types`
 DECLARE EnforcementAction IS ONE OF
     Warning HAS issueDate IS A Date
     Fine HAS amount IS A Money
-    Suspension HAS period IS A Duration  
+    Suspension HAS period IS A Duration
     Revocation HAS effectiveDate IS A Date
 ```
 
 ---
 
-# **Part 6: Advanced Techniques** 
+# **Part 6: Advanced Techniques**
 
 ## **6.1 Cross-Cutting Concerns**
 
 **Problem:** Some legal concepts (like appeals) apply across multiple processes.
 
 **Example:** Appeals can be made against:
+
 - Registration refusal (Art 33)
-- Required Steps Notice (Art 33)  
+- Required Steps Notice (Art 33)
 - Deregistration decision (Art 33)
 - Name change refusal (Art 33)
 
@@ -590,7 +626,7 @@ DECLARE AppealableDecision IS ONE OF
 
 § `Universal Appeal Right (Art 33)`
 GIVEN decision IS AN AppealableDecision
-GIVETH A DEONTIC Actor Action  
+GIVETH A DEONTIC Actor Action
 `appeal process` MEANS
   PARTY AffectedParty
   MAY AppealDecision OF decision
@@ -604,14 +640,16 @@ GIVETH A DEONTIC Actor Action
 **Real example - Annual Return Requirements:**
 
 Combines requirements from 4 different instruments:
+
 - **Art 13(7)-(10) Law 2014:** Basic obligation
-- **Core Info Regs 2018:** Financial data requirements  
+- **Core Info Regs 2018:** Financial data requirements
 - **Additional Info Order 2018:** Governor payment details
 - **Timing Order 2019:** Deadline specifications
 
 **L4 integration approach:**
 
 **Step 1:** Define the complex data structure outside the DEONTIC return type:
+
 ```l4
 -- Define integrated financial data structure first
 integratedFinancialData MEANS IntegratedFinancialData WITH
@@ -621,6 +659,7 @@ integratedFinancialData MEANS IntegratedFinancialData WITH
 ```
 
 **Step 2:** Reference it in the DEONTIC rule:
+
 ```l4
 § `Integrated Annual Return (4 instruments)`
 GIVETH A DEONTIC Actor Action
@@ -639,6 +678,7 @@ GIVETH A DEONTIC Actor Action
 **Critical Rule:** Avoid complex object construction within DEONTIC rules.
 
 **❌ Problematic (causes syntax errors):**
+
 ```l4
 PARTY applicant
 MUST ProvideApplication OF ApplicationContents WITH
@@ -650,6 +690,7 @@ MUST ProvideApplication OF ApplicationContents WITH
 ```
 
 **✅ Correct approach - Use helper functions:**
+
 ```l4
 -- Define helper function outside DEONTIC expressions
 GIVEN applicant IS A RegisterEntry
@@ -668,6 +709,7 @@ MUST ProvideApplication OF `build application contents` applicant
 ```
 
 **✅ Alternative - Pre-define examples:**
+
 ```l4
 -- Define complete example outside DEONTIC expressions
 exampleApplication MEANS ApplicationContents WITH
@@ -681,12 +723,14 @@ MUST ProvideApplication OF exampleApplication
 ```
 
 **Why this matters:**
+
 - **Syntax requirements:** L4 parser expects simple expressions in DEONTIC actions
 - **Readability:** Complex object construction clutters the legal logic
 - **Maintainability:** Helper functions can be reused across multiple DEONTIC rules
 - **Testing:** Pre-defined objects are easier to validate and test
 
 **Pattern for actions with structured data:**
+
 1. **Define the structure** using `DECLARE`
 2. **Create helper functions** or examples using `DECIDE` or `MEANS`
 3. **Use simple references** in DEONTIC expressions
@@ -701,22 +745,22 @@ MUST ProvideApplication OF exampleApplication
   -- Discovery phase
   PARTY Commissioner DOES `discover potential misconduct` governor AT 10
   PARTY Commissioner DOES `investigate allegations` AT 20
-  
-  -- Decision phase  
+
+  -- Decision phase
   PARTY Commissioner DOES SuspendGovernor OF governor, "mismanagement", (Date OF 2024, 12, 31) AT 30
-  
+
   -- Charity response (may fail)
   PARTY charity DOES `attempt to ignore suspension` AT 40  -- Error condition
   PARTY Commissioner DOES `detect non-compliance by charity` AT 50
-  
+
   -- Escalation
   PARTY Commissioner DOES IssueNotice OF requiredSteps AT 60
   PARTY charity DOES `comply with required steps` AT 70
-  
+
   -- Appeal
   PARTY governor DOES AppealDecision OF suspensionOrder AT 80
   PARTY tribunal DOES `hear appeal and vary order` AT 120
-  
+
   -- Resolution
   PARTY Commissioner DOES VaryOrder OF originalSuspension, newConditions AT 130
 ```
@@ -754,6 +798,7 @@ DECLARE BulkAction IS ONE OF
 **Example transformation from procedural to functional thinking:**
 
 **❌ Procedural mindset:**
+
 ```l4
 -- "Step 1: Check if application complete"
 -- "Step 2: Check if purposes charitable"
@@ -761,6 +806,7 @@ DECLARE BulkAction IS ONE OF
 ```
 
 **✅ Functional mindset:**
+
 ```l4
 -- Define what completeness IS
 GIVEN applicant IS A RegisterEntry
@@ -791,6 +837,7 @@ GIVETH A BOOLEAN
 **The most important syntax rule in L4:** Function application has higher precedence than field access.
 
 **This causes systematic errors that look like this:**
+
 ```
 unexpected 's
 expecting &&, (, *, +, -, /, ;, <, <=, =, >, >=, AND, OR...
@@ -799,6 +846,7 @@ expecting &&, (, *, +, -, /, ;, <, <=, =, >, >=, AND, OR...
 **Problem examples and solutions:**
 
 **❌ Wrong - Parser confusion:**
+
 ```l4
 length applicant's purposes > 0           -- Parser sees: (length applicant)'s purposes > 0
 all (GIVEN p YIELD...) charity's purposes -- Parser sees: (all (GIVEN p YIELD...) charity)'s purposes
@@ -806,6 +854,7 @@ elem governor charity's governors         -- Parser sees: (elem governor charity
 ```
 
 **✅ Correct - Use parentheses:**
+
 ```l4
 length (applicant's purposes) > 0
 all (GIVEN p YIELD...) (charity's purposes)
@@ -815,6 +864,7 @@ elem governor (charity's governors)
 **The pattern:** When passing field access as function arguments, always wrap in parentheses.
 
 **Why this happens:**
+
 - L4 follows Haskell-like precedence: `function application > field access > comparison > boolean operators`
 - `length applicant's purposes` is parsed as `(length applicant)'s purposes`
 - The parser expects `length` to be applied to `applicant`, then tries to access `purposes` field of the result
@@ -825,6 +875,7 @@ elem governor (charity's governors)
 **L4 supports both possessive syntax and function application for field access.**
 
 **When possessive syntax works:**
+
 ```l4
 applicant's purposes                    -- ✅ Fine in simple contexts
 charity's constitution's isWritten      -- ✅ Chained access works
@@ -832,6 +883,7 @@ governor's convictions                  -- ✅ Basic field access
 ```
 
 **When you MUST use function application:**
+
 ```l4
 -- In EXISTS expressions (possessive not supported)
 ❌ EXISTS c IN list SUCH THAT c's isSpent EQUALS FALSE
@@ -847,10 +899,12 @@ governor's convictions                  -- ✅ Basic field access
 ```
 
 **Convert possessive to functional:**
+
 - `object's field` → `field object`
 - `object's field1's field2` → `field2 (field1 object)`
 
 **For deeply nested access:**
+
 ```l4
 -- Possessive (can be problematic in complex expressions)
 (lastFinancialRecord charity)'s financialYear's endDate
@@ -864,6 +918,7 @@ endDate (financialYear (lastFinancialRecord charity))
 **Key insight:** Use prelude functions instead of inventing syntax.
 
 **❌ Non-existent syntax:**
+
 ```l4
 EXISTS c IN list SUCH THAT condition    -- Not valid L4
 EVERY x IS A Type WHERE condition       -- Not valid L4
@@ -871,6 +926,7 @@ FOR ALL x IN list CHECK condition       -- Not valid L4
 ```
 
 **✅ Use prelude functions:**
+
 ```l4
 -- For "exists" - use `any`
 any (GIVEN c YIELD condition) list
@@ -886,6 +942,7 @@ filter (GIVEN x YIELD condition) list
 ```
 
 **Pattern for quantified conditions:**
+
 ```l4
 -- Template: quantifier (GIVEN variable YIELD condition) list
 
@@ -904,11 +961,13 @@ NOT any (GIVEN gov YIELD gov's isDisqualified EQUALS TRUE) governors
 **Problem:** L4's prelude is minimal—common functions may be missing.
 
 **Systematic approach:**
+
 1. **Check if function exists** in prelude (like `length`, `elem`, `filter`)
 2. **Define missing functions** at the top of your file
 3. **Use proper types** (don't mix STRING and LIST operations)
 
 **Essential missing functions to define:**
+
 ```l4
 -- String length (often needed, not in prelude)
 GIVEN str IS A STRING
@@ -938,6 +997,7 @@ safeAt list index MEANS
 ```
 
 **Type checking patterns:**
+
 ```l4
 -- ❌ Type error: mixing string and list operations
 length someString > 0           -- length expects LIST, gets STRING
@@ -954,18 +1014,21 @@ length someList > 0            -- LIST operation
 **Prefer direct comparisons over negation:**
 
 **❌ Unnecessarily complex:**
+
 ```l4
 NOT c's isSpent EQUALS TRUE
 NOT governor's isDisqualified EQUALS TRUE
 ```
 
 **✅ Cleaner and clearer:**
+
 ```l4
 c's isSpent EQUALS FALSE
 governor's isDisqualified EQUALS FALSE
 ```
 
 **Comparison precedence patterns:**
+
 ```l4
 -- ✅ Simple comparisons work naturally
 age >= 18
@@ -979,6 +1042,7 @@ date EQUALS today
 ```
 
 **Boolean combination patterns:**
+
 ```l4
 -- AND/OR precedence (AND binds tighter than OR)
 condition1 AND condition2 OR condition3    -- Means: (condition1 AND condition2) OR condition3
@@ -1000,6 +1064,7 @@ condition1 AND (condition2 OR condition3)
 5. **Boolean logic:** Are comparisons and boolean operations correctly parenthesized?
 
 **Error patterns and fixes:**
+
 ```
 Error: "unexpected 's"
 → Fix: Add parentheses around field access in function arguments
@@ -1023,13 +1088,14 @@ Error: "could not find definition for EXISTS"
 You've learned to:
 
 1. **Write precise legal rules** that capture obligations, conditions, and consequences
-2. **Model complex legal entities** with proper types and relationships  
+2. **Model complex legal entities** with proper types and relationships
 3. **Handle multi-step legal processes** using the DEONTIC approach
 4. **Organize complete regulatory schemes** using the three-layer architecture
 5. **Understand the design principles** that make L4 effective for legal modeling
 6. **Apply advanced techniques** for real-world complexity
 
 **What's Next:**
+
 - Practice with your own legal domain (employment law, tax law, etc.)
 - Experiment with the Jersey Charities model in the examples
 - Explore integration with legal databases and case management systems
@@ -1042,17 +1108,19 @@ You've learned to:
 # **Quick Reference**
 
 ## **Basic Syntax**
+
 ```l4
 -- Comments start with --
 GIVEN entity IS A Type        -- Input parameters
 PARTY actor                   -- Who has the obligation
-MUST action                   -- What they must do  
+MUST action                   -- What they must do
 WITHIN timeframe             -- Deadline
 HENCE consequence            -- If they comply
 LEST alternative             -- If they don't comply
 ```
 
 ## **Type Declarations**
+
 ```l4
 DECLARE TypeName              -- Simple type
 DECLARE RecordType           -- Record with fields
@@ -1065,6 +1133,7 @@ DECLARE EnumType IS ONE OF   -- Enumeration
 ```
 
 ## **DEONTIC Syntax**
+
 ```l4
 GIVETH A DEONTIC Actor Action
 `process name` MEANS
@@ -1088,6 +1157,7 @@ MUST Action OF predefinedExample
 ```
 
 ## **Simulation**
+
 ```l4
 #EVAL expression                                    -- Evaluate expression
 #TRACE `name` actor1 actor2 state AT time WITH  -- Simulate process

@@ -3,6 +3,7 @@
 ## Summary
 
 JSONDECODE fails to properly decode:
+
 1. **Lists of custom types** (`LIST OF CustomType`)
 2. **Nested custom types** (records containing other record types)
 
@@ -17,11 +18,18 @@ This file contains three minimal test cases demonstrating the bug:
 ### Test 1: List of Records ❌
 
 **Input JSON:**
+
 ```json
-{"items":[{"name":"first","value":1},{"name":"second","value":2}]}
+{
+  "items": [
+    { "name": "first", "value": 1 },
+    { "name": "second", "value": 2 }
+  ]
+}
 ```
 
 **Type Definition:**
+
 ```l4
 DECLARE `Item` HAS
   `name` IS A STRING
@@ -40,11 +48,13 @@ DECLARE `List Container` HAS
 ### Test 2: Nested Record ❌
 
 **Input JSON:**
+
 ```json
-{"nested":{"field":"hello"},"value":42}
+{ "nested": { "field": "hello" }, "value": 42 }
 ```
 
 **Type Definition:**
+
 ```l4
 DECLARE `Inner` HAS
   `field` IS A STRING
@@ -63,11 +73,13 @@ DECLARE `Outer` HAS
 ### Test 3: Content Block List ❌
 
 **Input JSON:**
+
 ```json
-{"content":[{"type":"text","text":"Hello world"}]}
+{ "content": [{ "type": "text", "text": "Hello world" }] }
 ```
 
 **Type Definition:**
+
 ```l4
 DECLARE `Content Block` HAS
   `type` IS A STRING
@@ -88,6 +100,7 @@ DECLARE `Content Container` HAS
 This bug blocks the Thailand Cosmetics compliance project's ability to parse Anthropic Claude API responses.
 
 **Real API response excerpt:**
+
 ```json
 {
   "id": "msg_018cEZHkWRhKEXR7u5kGzMd2",
@@ -97,6 +110,7 @@ This bug blocks the Thailand Cosmetics compliance project's ability to parse Ant
 ```
 
 **Current behavior:**
+
 - `id` ✅ decodes correctly (primitive STRING)
 - `content` ❌ becomes `(LIST NOTHING)` (should be list of Content Block records)
 - `usage` ❌ becomes `NOTHING` (should be nested Usage record)
@@ -112,6 +126,7 @@ Observe that all three `#EVAL` outputs show `NOTHING` or `(LIST NOTHING)` for ne
 ## Expected Behavior
 
 JSONDECODE should recursively decode nested structures:
+
 - Lists should contain properly decoded custom type instances
 - Nested record fields should contain properly decoded custom type instances
 - This should work to arbitrary nesting depth
