@@ -281,27 +281,44 @@ echo ""
 log_info "Validating L4 files..."
 echo ""
 
-# Check if jl4-cli is available
-if ! command -v jl4-cli &> /dev/null; then
-    # Try to use cabal run
-    if command -v cabal &> /dev/null; then
-        JL4_CMD="cabal run jl4-cli --"
+# Function to run jl4-cli - handles both direct invocation and cabal run
+run_jl4_cli() {
+    local file="$1"
+    if [[ -n "$JL4_CLI_DIRECT" ]]; then
+        "$JL4_CLI_DIRECT" "$file" 2>&1
     else
-        log_warn "jl4-cli not found and cabal not available"
+        # Run from repo root for proper library resolution
+        (cd "$REPO_ROOT" && cabal run jl4-cli -- "$file" 2>&1)
+    fi
+}
+
+# Check if jl4-cli is available
+JL4_CLI_DIRECT=""
+JL4_AVAILABLE=false
+if command -v jl4-cli &> /dev/null; then
+    JL4_CLI_DIRECT="jl4-cli"
+    JL4_AVAILABLE=true
+elif command -v cabal &> /dev/null; then
+    # Verify jl4-cli is built by checking if cabal can find it
+    if cabal list-bin jl4-cli &>/dev/null; then
+        JL4_AVAILABLE=true
+        # We'll use cabal run (via run_jl4_cli function) for proper library resolution
+    else
+        log_warn "jl4-cli not built. Run 'cabal build jl4:jl4-cli' first."
         log_warn "Skipping L4 validation"
-        JL4_CMD=""
     fi
 else
-    JL4_CMD="jl4-cli"
+    log_warn "jl4-cli not found and cabal not available"
+    log_warn "Skipping L4 validation"
 fi
 
-if [[ -n "$JL4_CMD" ]]; then
+if $JL4_AVAILABLE; then
     # Find all .l4 files in doc/
     while IFS= read -r -d '' l4_file; do
         relative_path="${l4_file#$SCRIPT_DIR/}"
         
         # Run jl4-cli and capture output
-        if output=$($JL4_CMD "$l4_file" 2>&1); then
+        if output=$(run_jl4_cli "$l4_file"); then
             # Check if there are actual errors (not just #EVAL output containing "error" text)
             # Real errors have "Severity: DiagnosticSeverity_Error" while #EVAL output has "Information"
             if echo "$output" | grep -qi "DiagnosticSeverity_Error"; then

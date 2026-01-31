@@ -120,13 +120,8 @@ jobs:
       - name: Run tests
         run: cabal test all
 
-      - name: Install jl4-cli to PATH
-        run: cabal install jl4:jl4-cli --installdir=$HOME/.local/bin --overwrite-policy=always
-
       - name: Run documentation tests
-        run: |
-          export PATH="$HOME/.local/bin:$PATH"
-          ./doc/test-docs.sh
+        run: ./doc/test-docs.sh
 
   # ============================================
   # TypeScript Tests
