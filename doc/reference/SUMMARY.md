@@ -13,7 +13,6 @@
 - [Control-Flow](control-flow/README.md)
 - [Operators](operators/README.md)
 - [Syntax](syntax/README.md)
-- [Coercions](types/coercions.md)
 - [Regulative](regulative/README.md)
 - [Built-ins](builtins/README.md)
 

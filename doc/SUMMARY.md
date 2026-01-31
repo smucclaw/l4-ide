@@ -11,7 +11,6 @@
 - [Control-Flow](reference/control-flow/README.md)
 - [Operators](reference/operators/README.md)
 - [Syntax](reference/syntax/README.md)
-- [Coercions](reference/types/coercions.md)
 - [Regulative](reference/regulative/README.md)
 - [Built-ins](reference/builtins/README.md)
 - [Libraries](reference/libraries/README.md)
