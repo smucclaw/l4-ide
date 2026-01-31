@@ -288,7 +288,8 @@ run_jl4_cli() {
         "$JL4_CLI_DIRECT" "$file" 2>&1
     else
         # Run from repo root for proper library resolution
-        (cd "$REPO_ROOT" && cabal run jl4-cli -- "$file" 2>&1)
+        # Use cabal run which sets up data-files paths correctly
+        (cd "$REPO_ROOT" && cabal run -v0 jl4-cli -- "$file" 2>&1)
     fi
 }
 
@@ -298,11 +299,12 @@ JL4_AVAILABLE=false
 if command -v jl4-cli &> /dev/null; then
     JL4_CLI_DIRECT="jl4-cli"
     JL4_AVAILABLE=true
+    log_verbose "Using jl4-cli from PATH"
 elif command -v cabal &> /dev/null; then
     # Verify jl4-cli is built by checking if cabal can find it
     if cabal list-bin jl4-cli &>/dev/null; then
         JL4_AVAILABLE=true
-        # We'll use cabal run (via run_jl4_cli function) for proper library resolution
+        log_verbose "Using cabal run jl4-cli"
     else
         log_warn "jl4-cli not built. Run 'cabal build jl4:jl4-cli' first."
         log_warn "Skipping L4 validation"
