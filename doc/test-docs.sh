@@ -295,7 +295,7 @@ run_jl4_cli() {
     else
         # Run from repo root for proper library resolution
         # Use cabal run which sets up data-files paths correctly
-        (cd "$REPO_ROOT" && cabal run -v0 jl4-cli -- "$file" 2>&1)
+        (cd "$REPO_ROOT" && cabal run jl4:jl4-cli -v0 -- "$file" 2>&1)
     fi
 }
 
@@ -339,9 +339,15 @@ if $JL4_AVAILABLE; then
     # Find all .l4 files in doc/
     while IFS= read -r -d '' l4_file; do
         relative_path="${l4_file#$SCRIPT_DIR/}"
+        echo "  Processing: $relative_path"
         
         # Run jl4-cli and capture output
-        if output=$(run_jl4_cli "$l4_file"); then
+        set +e  # Disable exit on error for this command
+        output=$(run_jl4_cli "$l4_file")
+        run_exit_code=$?
+        set -e  # Re-enable
+        
+        if [[ $run_exit_code -eq 0 ]]; then
             # Check if there are actual errors (not just #EVAL output containing "error" text)
             # Real errors have "Severity: DiagnosticSeverity_Error" while #EVAL output has "Information"
             if echo "$output" | grep -qi "DiagnosticSeverity_Error"; then
