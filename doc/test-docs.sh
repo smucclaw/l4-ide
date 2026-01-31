@@ -4,6 +4,9 @@
 
 set -euo pipefail
 
+# Debug: show line number on error
+trap 'echo "Error on line $LINENO: exit code $?" >&2' ERR
+
 # Get the directory where this script lives
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -281,6 +284,9 @@ echo ""
 log_info "Validating L4 files..."
 echo ""
 
+# Flush output to ensure we see messages before any failure
+exec 1>&1 2>&2
+
 # Function to run jl4-cli - handles both direct invocation and cabal run
 run_jl4_cli() {
     local file="$1"
@@ -300,21 +306,28 @@ JL4_AVAILABLE=false
 if command -v jl4-cli &> /dev/null; then
     JL4_CLI_DIRECT="jl4-cli"
     JL4_AVAILABLE=true
-    log_verbose "Using jl4-cli from PATH"
+    echo "  Using jl4-cli from PATH"
 elif command -v cabal &> /dev/null; then
+    echo "  Checking for jl4-cli via cabal..."
+    echo "  REPO_ROOT=$REPO_ROOT"
+    
     # Try to find the built binary using cabal list-bin
-    # Use fully qualified name (jl4:jl4-cli) for reliability
-    if JL4_BIN=$(cd "$REPO_ROOT" && cabal list-bin jl4:jl4-cli 2>/dev/null); then
-        if [[ -x "$JL4_BIN" ]]; then
-            # Binary exists, we'll use cabal run for proper environment setup
-            JL4_AVAILABLE=true
-            log_verbose "Using cabal run jl4-cli (binary at $JL4_BIN)"
-        else
-            log_warn "jl4-cli binary not found at: $JL4_BIN"
-            log_warn "Skipping L4 validation"
-        fi
+    # Run in subshell to avoid changing directory in main script
+    JL4_BIN=""
+    set +e  # Temporarily disable exit on error
+    JL4_BIN=$(cd "$REPO_ROOT" && cabal list-bin jl4:jl4-cli 2>&1)
+    CABAL_EXIT=$?
+    set -e  # Re-enable exit on error
+    
+    echo "  cabal list-bin exit code: $CABAL_EXIT"
+    echo "  cabal list-bin output: $JL4_BIN"
+    
+    if [[ $CABAL_EXIT -eq 0 && -n "$JL4_BIN" && -x "$JL4_BIN" ]]; then
+        # Binary exists, we'll use cabal run for proper environment setup
+        JL4_AVAILABLE=true
+        echo "  Using cabal run jl4-cli"
     else
-        log_warn "jl4-cli not built. Run 'cabal build jl4:jl4-cli' first."
+        log_warn "jl4-cli not available (exit=$CABAL_EXIT, bin=$JL4_BIN)"
         log_warn "Skipping L4 validation"
     fi
 else
