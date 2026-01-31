@@ -11,10 +11,47 @@ concurrency:
 
 jobs:
   # ============================================
-  # Lint Check (TypeScript)
+  # Detect which files changed to skip unnecessary jobs
   # ============================================
-  lint:
-    name: Lint & Format Check
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      haskell: ${{ steps.filter.outputs.haskell }}
+      typescript: ${{ steps.filter.outputs.typescript }}
+      docs: ${{ steps.filter.outputs.docs }}
+    steps:
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            haskell:
+              - '**/*.hs'
+              - '**/*.cabal'
+              - 'cabal.project'
+              - 'cabal.project.local'
+              - 'jl4-core/libraries/**'
+            typescript:
+              - '**/*.ts'
+              - '**/*.tsx'
+              - '**/*.js'
+              - '**/*.svelte'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'ts-apps/**'
+              - 'ts-shared/**'
+            docs:
+              - 'doc/**'
+
+  # ============================================
+  # TypeScript: Lint, Format, Build & Test (combined)
+  # ============================================
+  typescript:
+    name: TypeScript Checks
+    needs: changes
+    if: needs.changes.outputs.typescript == 'true'
     runs-on: ubuntu-latest
     container:
       image: ubuntu:24.04
@@ -22,7 +59,7 @@ jobs:
       - name: Update repositories
         run: apt update
       - name: Install deps
-        run: apt install -y git sudo software-properties-common curl
+        run: apt install -y git sudo software-properties-common curl xvfb
       - name: Update git config
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
       - uses: actions/checkout@v4
@@ -39,12 +76,15 @@ jobs:
       - run: npm run lint
       - run: npm run format:check
       - run: npm run check
+      - run: xvfb-run -a npm run test
 
   # ============================================
-  # Ubuntu Build & Tests (Haskell)
+  # Haskell: Build & Tests
   # ============================================
-  build-and-test:
-    name: Build & Test (Ubuntu)
+  haskell:
+    name: Haskell Build & Test
+    needs: changes
+    if: needs.changes.outputs.haskell == 'true' || needs.changes.outputs.docs == 'true'
     runs-on: ubuntu-latest
     container:
       image: ubuntu:24.04
@@ -93,9 +133,10 @@ jobs:
           cabal configure --enable-tests --enable-benchmarks --disable-documentation
           cabal build all --dry-run
 
+      # Cache both dependencies AND build artifacts
       - name: Restore cached dependencies
         uses: actions/cache/restore@v4
-        id: cache
+        id: deps-cache
         env:
           key: ${{ runner.os }}-ghc-${{ steps.setup.outputs.ghc-version }}-cabal-${{ steps.setup.outputs.cabal-version }}
         with:
@@ -103,19 +144,35 @@ jobs:
           key: ${{ env.key }}-plan-${{ hashFiles('**/plan.json') }}
           restore-keys: ${{ env.key }}-
 
+      - name: Restore cached build artifacts
+        uses: actions/cache/restore@v4
+        id: build-cache
+        with:
+          path: dist-newstyle
+          key: ${{ runner.os }}-ghc-${{ steps.setup.outputs.ghc-version }}-dist-${{ hashFiles('**/*.hs', '**/*.cabal') }}
+          restore-keys: |
+            ${{ runner.os }}-ghc-${{ steps.setup.outputs.ghc-version }}-dist-
+
       - name: Install dependencies
-        if: steps.cache.outputs.cache-hit != 'true'
+        if: steps.deps-cache.outputs.cache-hit != 'true'
         run: cabal build all --only-dependencies
 
       - name: Save cached dependencies
         uses: actions/cache/save@v4
-        if: steps.cache.outputs.cache-hit != 'true'
+        if: steps.deps-cache.outputs.cache-hit != 'true'
         with:
           path: ${{ steps.setup.outputs.cabal-store }}
-          key: ${{ steps.cache.outputs.cache-primary-key }}
+          key: ${{ steps.deps-cache.outputs.cache-primary-key }}
 
       - name: Build
         run: cabal build all
+
+      - name: Save cached build artifacts
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: dist-newstyle
+          key: ${{ runner.os }}-ghc-${{ steps.setup.outputs.ghc-version }}-dist-${{ hashFiles('**/*.hs', '**/*.cabal') }}
 
       - name: Run tests
         run: cabal test all
@@ -124,39 +181,12 @@ jobs:
         run: ./doc/test-docs.sh
 
   # ============================================
-  # TypeScript Tests
-  # ============================================
-  ts-tests:
-    name: TypeScript Tests
-    runs-on: ubuntu-latest
-    container:
-      image: ubuntu:24.04
-
-    steps:
-      - name: Update repositories
-        run: apt update
-      - name: Install deps
-        run: apt install -y git sudo software-properties-common curl xvfb
-      - name: Update git config
-        run: git config --global --add safe.directory $GITHUB_WORKSPACE
-      - uses: actions/checkout@v4
-
-      - name: Use Node.js
-        uses: actions/setup-node@v4
-        with:
-          cache-dependency-path: package-lock.json
-          node-version: "20.x"
-          cache: npm
-
-      - run: npm ci
-      - run: npm run build
-      - run: xvfb-run -a npm run test
-
-  # ============================================
-  # WASM Build & Test
+  # WASM Build & Test (only when Haskell changes)
   # ============================================
   wasm-build:
     name: WASM Build & Test
+    needs: changes
+    if: needs.changes.outputs.haskell == 'true'
     runs-on: ubuntu-latest
     env:
       GHC_WASM_VERSION: "9.10"
