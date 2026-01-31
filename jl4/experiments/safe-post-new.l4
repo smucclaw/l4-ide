@@ -1,0 +1,711 @@
+-- ============================================================================
+-- SAFE (Simple Agreement for Future Equity)
+-- Post-Money Valuation Cap
+-- ============================================================================
+-- Based on YC SAFE template: http://ycombinator.com/documents
+-- This L4 encoding formalizes the legal rules as executable specifications.
+-- ============================================================================
+
+IMPORT prelude
+IMPORT currency
+IMPORT daydate
+
+§ `SAFE Agreement`
+
+§§ `Document Information`
+
+-- THIS INSTRUMENT AND ANY SECURITIES ISSUABLE PURSUANT HERETO HAVE NOT BEEN
+-- REGISTERED UNDER THE SECURITIES ACT OF 1933, AS AMENDED (THE "SECURITIES ACT"),
+-- OR UNDER THE SECURITIES LAWS OF CERTAIN STATES.
+
+`about this document` MEANS
+  `Agreement Template` WITH
+    `form name`       IS "SAFE (Simple Agreement for Future Equity)"
+    `form source`     IS "http://ycombinator.com/documents"
+    jurisdiction      IS "Delaware"
+    `governing law`   IS "State of Delaware"
+    version           IS "Post-Money Valuation Cap"
+    `is modified`     IS FALSE
+
+-- ============================================================================
+§§ `Key Terms`
+-- ============================================================================
+-- These are the bracketed terms to be filled in for each SAFE
+
+`the Company`          MEANS Company WITH
+                               name                     IS "[Company Name]"
+                               `state of incorporation` IS "[State of Incorporation]"
+                               `cap table`              IS EMPTY
+                               `unissued option pool`   IS 0
+
+`the Investor`         MEANS `Individual Investor` OF
+                               NaturalPerson WITH
+                                 name    IS "[Investor Name]"
+                                 address IS "[Investor Address]"
+                                 email   IS "[Investor Email]"
+
+-- Money amounts are stored as NUMBER (in major units like dollars)
+-- Currency is tracked separately using ISO 4217 codes from the currency library
+`the Purchase Amount`          MEANS 100000
+`the Purchase Amount Currency` MEANS `US Dollar code`
+`the Date of Safe`             MEANS  January 15 2024
+`the Post-Money Valuation Cap` MEANS 10000000
+`the Valuation Cap Currency`   MEANS `US Dollar code`
+
+-- ============================================================================
+§ `Section 2: Definitions`
+-- ============================================================================
+-- We define types and terms first, as they are referenced by the Events section.
+
+§§ `Core Types`
+
+DECLARE `Agreement Template`
+    HAS `form name`       IS A STRING
+        `form source`     IS A STRING
+        jurisdiction      IS A STRING
+        `governing law`   IS A STRING
+        version           IS A STRING
+        `is modified`     IS A BOOLEAN
+
+DECLARE Company
+    HAS name                     IS A STRING
+        `state of incorporation` IS A STRING
+        `cap table`              IS A LIST OF `Cap Table Entry`
+        `unissued option pool`   IS A NUMBER
+
+DECLARE NaturalPerson
+    HAS name    IS A STRING
+        address IS A STRING
+        email   IS A STRING
+
+DECLARE Investor IS ONE OF
+   `Corporate Investor`  HAS company    IS A Company
+   `Individual Investor` HAS individual IS A NaturalPerson
+
+§§ `Securities Types`
+
+-- "Capital Stock" means the capital stock of the Company, including,
+-- without limitation, the "Common Stock" and the "Preferred Stock."
+DECLARE `Capital Stock` IS ONE OF
+    `Common Stock`
+    `Preferred Stock` HAS `stock class` IS A STRING
+
+-- Security quantity can be shares with a price, or just a dollar amount (for SAFEs)
+-- Amounts are NUMBER, currency codes are STRING (using ISO 4217 from currency library)
+DECLARE `Security Quantity` IS ONE OF
+    Shares  HAS `number of shares` IS A NUMBER
+                `price paid`       IS A NUMBER
+                `price currency`   IS A STRING
+    Dollars HAS `safe amount`      IS A NUMBER
+                `safe currency`    IS A STRING
+
+DECLARE Security
+    HAS instrument  IS A STRING    -- "Common Stock", "Preferred Stock", "SAFE", etc.
+        class       IS A STRING    -- "Class A", "Series A", etc.
+        quantity    IS A `Security Quantity`
+
+DECLARE `Cap Table Entry`
+    HAS holder   IS AN Investor
+        security IS A Security
+
+-- "Options" includes options, restricted stock awards or purchases,
+-- RSUs, SARs, warrants or similar securities, vested or unvested.
+DECLARE Options
+    HAS `option type`   IS A STRING
+        `share count`   IS A NUMBER
+        `is vested`     IS A BOOLEAN
+
+-- "Promised Options" means promised but ungranted Options
+DECLARE `Promised Options`
+    HAS `share count` IS A NUMBER
+        description   IS A STRING
+
+§§ `Event Types`
+
+-- "Liquidity Event" means a Change of Control, a Direct Listing or
+-- an Initial Public Offering.
+DECLARE `Liquidity Event` IS ONE OF
+    `Change of Control`       HAS `transaction details` IS A STRING
+    `Direct Listing`          HAS `exchange name`       IS A STRING
+    `Initial Public Offering` HAS `exchange name`       IS A STRING
+                                  `offering price`      IS A NUMBER
+                                  `offering currency`   IS A STRING
+
+-- "Dissolution Event" means (i) a voluntary termination of operations,
+-- (ii) a general assignment for the benefit of the Company's creditors or
+-- (iii) any other liquidation, dissolution or winding up of the Company
+-- (excluding a Liquidity Event), whether voluntary or involuntary.
+DECLARE `Dissolution Event` IS ONE OF
+    `Voluntary Termination of Operations`
+    `General Assignment for Creditors`
+    `Liquidation`  HAS `is voluntary` IS A BOOLEAN
+    `Dissolution`  HAS `is voluntary` IS A BOOLEAN
+    `Winding Up`   HAS `is voluntary` IS A BOOLEAN
+
+-- "Equity Financing" means a bona fide transaction or series of transactions
+-- with the principal purpose of raising capital, pursuant to which the Company
+-- issues and sells Preferred Stock at a fixed valuation.
+DECLARE `Equity Financing`
+    HAS `new investors`         IS A LIST OF `Cap Table Entry`
+        `pre-money valuation`   IS A MAYBE NUMBER
+        `post-money valuation`  IS A MAYBE NUMBER
+        `valuation currency`    IS A STRING
+        `initial closing date`  IS A DATE
+
+-- "Proceeds" means cash and other assets (including without limitation stock
+-- consideration) that are proceeds from the Liquidity Event or the Dissolution
+-- Event, as applicable, and legally available for distribution.
+DECLARE Proceeds
+    HAS `cash amount`       IS A NUMBER
+        `stock value`       IS A NUMBER
+        `other assets`      IS A NUMBER
+        `proceeds currency` IS A STRING
+
+-- ============================================================================
+§§ `Key Definitions`
+-- ============================================================================
+
+-- "Company Capitalization" is calculated as of immediately prior to the
+-- Equity Financing and (without double-counting, in each case calculated
+-- on an as-converted to Common Stock basis):
+-- - Includes all shares of Capital Stock issued and outstanding
+-- - Includes all Converting Securities
+-- - Includes all (i) issued and outstanding Options and (ii) Promised Options
+-- - Includes the Unissued Option Pool (with specified exceptions)
+GIVEN company                IS A Company
+      `outstanding options`  IS A NUMBER
+      `promised options`     IS A NUMBER
+      `converting securities` IS A NUMBER
+      `option pool increase` IS A NUMBER
+GIVETH A NUMBER
+`Company Capitalization` MEANS
+    `issued capital stock` + `converting securities` + `outstanding options`
+                         + `promised options` + `adjusted option pool`
+  WHERE
+    `issued capital stock` MEANS
+      sum OF map (GIVEN entry YIELD `share count of` entry) (company's `cap table`)
+    `adjusted option pool` MEANS
+      IF `promised options` > company's `unissued option pool`
+      THEN company's `unissued option pool` + `option pool increase`
+      ELSE company's `unissued option pool`
+
+-- Helper: count shares in a cap table entry
+GIVEN entry IS A `Cap Table Entry`
+GIVETH A NUMBER
+`share count of` MEANS
+  CONSIDER entry's security's quantity
+    WHEN Shares n price curr THEN n
+    WHEN Dollars amount curr THEN 0
+
+-- "Liquidity Capitalization" is calculated as of immediately prior to the
+-- Liquidity Event, similar to Company Capitalization but:
+-- - Excludes Converting Securities receiving Cash-Out Amounts
+-- - Excludes the Unissued Option Pool
+GIVEN company                     IS A Company
+      `outstanding options`       IS A NUMBER
+      `promised options receiving proceeds` IS A NUMBER
+      `converting securities not cashing out` IS A NUMBER
+GIVETH A NUMBER
+`Liquidity Capitalization` MEANS
+    `issued capital stock` + `outstanding options`
+                         + `promised options receiving proceeds`
+                         + `converting securities not cashing out`
+  WHERE
+    `issued capital stock` MEANS
+      sum OF map (GIVEN entry YIELD `share count of` entry) (company's `cap table`)
+
+-- "Safe Price" means the price per share equal to the Post-Money Valuation Cap
+-- divided by the Company Capitalization.
+GIVEN `company capitalization` IS A NUMBER
+GIVETH A MAYBE NUMBER
+`Safe Price` MEANS
+  IF `company capitalization` > 0
+  THEN JUST OF (`the Post-Money Valuation Cap` / `company capitalization`)
+  ELSE NOTHING
+
+-- "Liquidity Price" means the price per share equal to the Post-Money Valuation Cap
+-- divided by the Liquidity Capitalization.
+GIVEN `liquidity capitalization` IS A NUMBER
+GIVETH A MAYBE NUMBER
+`Liquidity Price` MEANS
+  IF `liquidity capitalization` > 0
+  THEN JUST OF (`the Post-Money Valuation Cap` / `liquidity capitalization`)
+  ELSE NOTHING
+
+-- "Standard Preferred Stock" means the shares of the series of Preferred Stock
+-- issued to the investors investing new money in the Company in connection
+-- with the initial closing of the Equity Financing.
+GIVEN financing IS AN `Equity Financing`
+GIVETH A LIST OF `Cap Table Entry`
+`Standard Preferred Stock` MEANS
+  filter `is preferred stock entry` (financing's `new investors`)
+  WHERE
+    GIVEN entry IS A `Cap Table Entry`
+    `is preferred stock entry` MEANS
+      entry's security's instrument EQUALS "Preferred Stock"
+
+-- Calculate lowest price per share from Equity Financing
+GIVEN financing IS AN `Equity Financing`
+GIVETH A MAYBE NUMBER
+`lowest price per share of Standard Preferred Stock` MEANS
+  `minimum price` OF (catMaybes OF (map `price per share of entry` (financing's `new investors`)))
+  WHERE
+    GIVEN prices IS A LIST OF NUMBER
+    `minimum price` MEANS
+      CONSIDER prices
+        WHEN EMPTY              THEN NOTHING
+        WHEN p FOLLOWED BY rest THEN JUST OF foldl min p rest
+
+    GIVEN entry IS A `Cap Table Entry`
+    `price per share of entry` MEANS
+      CONSIDER entry's security's quantity
+        WHEN Shares n price curr THEN
+          IF n > 0
+          THEN JUST OF (price / n)
+          ELSE NOTHING
+        WHEN Dollars safeAmount curr THEN NOTHING
+
+-- "Safe Preferred Stock" means the shares of Preferred Stock issued to the
+-- Investor having identical rights as Standard Preferred Stock, except that
+-- price-based preferences will be based on the Safe Price.
+
+-- "Cash-Out Amount" means the Purchase Amount
+`Cash-Out Amount` MEANS `the Purchase Amount`
+
+-- Calculate "Conversion Amount" for Liquidity Event
+-- Returns the dollar value of shares the investor would receive
+GIVEN `liquidity capitalization` IS A NUMBER
+      `price per common share`   IS A NUMBER
+GIVETH A NUMBER
+`Conversion Amount` MEANS
+  CONSIDER `Liquidity Price` `liquidity capitalization`
+    WHEN NOTHING    THEN `the Purchase Amount`
+    WHEN JUST price THEN (`the Purchase Amount` / price) * `price per common share`
+
+-- ============================================================================
+§ `Section 1: Events`
+-- ============================================================================
+
+§§ `SAFE Parties and Actions`
+
+-- Parties that can act under this SAFE
+DECLARE `SAFE Party` IS ONE OF
+    `The Company`  HAS company  IS A Company
+    `The Investor` HAS investor IS AN Investor
+
+-- Actions that can be taken under this SAFE
+DECLARE `SAFE Action` IS ONE OF
+    `convert SAFE to shares`       HAS `number of shares` IS A NUMBER
+                                       `share class`      IS A STRING
+    `pay proceeds to investor`     HAS amount   IS A NUMBER
+                                       currency IS A STRING
+    `execute transaction documents`
+    `issue Capital Stock`          HAS entry IS A `Cap Table Entry`
+    `terminate this Safe`
+
+-- ============================================================================
+§§ `Section 1(a): Equity Financing`
+-- ============================================================================
+-- If there is an Equity Financing before the termination of this Safe,
+-- on the initial closing of such Equity Financing, this Safe will automatically
+-- convert into the greater of:
+--   (1) the number of shares of Standard Preferred Stock equal to
+--       the Purchase Amount divided by the lowest price per share of
+--       the Standard Preferred Stock; or
+--   (2) the number of shares of Safe Preferred Stock equal to
+--       the Purchase Amount divided by the Safe Price.
+
+GIVEN financing             IS AN `Equity Financing`
+      `company cap`         IS A NUMBER
+GIVETH A NUMBER
+`shares from Equity Financing conversion` MEANS
+  max `standard preferred shares` `safe preferred shares`
+  WHERE
+    -- Option 1: Purchase Amount / lowest price per share of Standard Preferred
+    `standard preferred shares` MEANS
+      CONSIDER `lowest price per share of Standard Preferred Stock` financing
+        WHEN NOTHING    THEN 0
+        WHEN JUST price THEN `the Purchase Amount` / price
+
+    -- Option 2: Purchase Amount / Safe Price
+    `safe preferred shares` MEANS
+      CONSIDER `Safe Price` `company cap`
+        WHEN NOTHING    THEN 0
+        WHEN JUST price THEN `the Purchase Amount` / price
+
+-- The Equity Financing conversion rule
+GIVEN financing     IS AN `Equity Financing`
+      `company cap` IS A NUMBER
+GIVETH A DEONTIC `SAFE Party` `SAFE Action`
+`Equity Financing conversion rule` MEANS
+  -- The Company must convert the SAFE to shares
+  PARTY `The Company` `the Company`
+  MUST `convert SAFE to shares` `conversion shares` `share class`
+  WITHIN 1
+  HENCE
+    -- Then the Investor must execute transaction documents
+    PARTY `The Investor` `the Investor`
+    MUST `execute transaction documents`
+    WITHIN 30
+    HENCE
+      PARTY `The Company` `the Company`
+      MUST `terminate this Safe`
+      HENCE FULFILLED
+      LEST BREACH BY (`The Company` `the Company`) BECAUSE "failed to terminate Safe after conversion"
+    LEST BREACH BY (`The Investor` `the Investor`) BECAUSE "failed to execute transaction documents"
+  LEST BREACH BY (`The Company` `the Company`) BECAUSE "failed to convert SAFE"
+  WHERE
+    `conversion shares` MEANS `shares from Equity Financing conversion` financing `company cap`
+    `share class` MEANS
+      IF `uses Safe Preferred Stock` financing `company cap`
+      THEN "Safe Preferred Stock"
+      ELSE "Standard Preferred Stock"
+
+-- Determine if Safe Preferred Stock is used (when Safe Price gives more shares)
+GIVEN financing     IS AN `Equity Financing`
+      `company cap` IS A NUMBER
+GIVETH A BOOLEAN
+`uses Safe Preferred Stock` MEANS
+  `safe preferred shares` > `standard preferred shares`
+  WHERE
+    `standard preferred shares` MEANS
+      CONSIDER `lowest price per share of Standard Preferred Stock` financing
+        WHEN NOTHING    THEN 0
+        WHEN JUST price THEN `the Purchase Amount` / price
+
+    `safe preferred shares` MEANS
+      CONSIDER `Safe Price` `company cap`
+        WHEN NOTHING    THEN 0
+        WHEN JUST price THEN `the Purchase Amount` / price
+
+-- ============================================================================
+§§ `Section 1(b): Liquidity Event`
+-- ============================================================================
+-- If there is a Liquidity Event before the termination of this Safe,
+-- the Investor will automatically be entitled to receive a portion of Proceeds
+-- equal to the greater of:
+--   (i)  the Purchase Amount (the "Cash-Out Amount") or
+--   (ii) the amount payable on the number of shares of Common Stock equal to
+--        the Purchase Amount divided by the Liquidity Price (the "Conversion Amount")
+
+GIVEN event                     IS A `Liquidity Event`
+      `liquidity cap`           IS A NUMBER
+      `price per common share`  IS A NUMBER
+      `available proceeds`      IS A Proceeds
+GIVETH A DEONTIC `SAFE Party` `SAFE Action`
+`Liquidity Event rule` MEANS
+  PARTY `The Company` `the Company`
+  MUST `pay proceeds to investor` `investor entitlement` `the Purchase Amount Currency`
+  WITHIN 1
+  HENCE
+    PARTY `The Company` `the Company`
+    MUST `terminate this Safe`
+    HENCE FULFILLED
+    LEST BREACH BY (`The Company` `the Company`) BECAUSE "failed to terminate Safe"
+  LEST BREACH BY (`The Company` `the Company`) BECAUSE "failed to pay Liquidity Event proceeds"
+  WHERE
+    `investor entitlement` MEANS
+      `greater of Cash-Out or Conversion` `liquidity cap` `price per common share`
+
+-- Calculate the greater of Cash-Out Amount or Conversion Amount
+GIVEN `liquidity cap`          IS A NUMBER
+      `price per common share` IS A NUMBER
+GIVETH A NUMBER
+`greater of Cash-Out or Conversion` MEANS
+  IF `Cash-Out Amount` >= `Conversion Amount` `liquidity cap` `price per common share`
+  THEN `Cash-Out Amount`
+  ELSE `Conversion Amount` `liquidity cap` `price per common share`
+
+-- ============================================================================
+§§ `Section 1(c): Dissolution Event`
+-- ============================================================================
+-- If there is a Dissolution Event before the termination of this Safe,
+-- the Investor will automatically be entitled to receive a portion of Proceeds
+-- equal to the Cash-Out Amount.
+
+GIVEN event IS A `Dissolution Event`
+GIVETH A DEONTIC `SAFE Party` `SAFE Action`
+`Dissolution Event rule` MEANS
+  PARTY `The Company` `the Company`
+  MUST `pay proceeds to investor` `Cash-Out Amount` `the Purchase Amount Currency`
+  WITHIN 1
+  HENCE
+    PARTY `The Company` `the Company`
+    MUST `terminate this Safe`
+    HENCE FULFILLED
+    LEST BREACH BY (`The Company` `the Company`) BECAUSE "failed to terminate Safe"
+  LEST BREACH BY (`The Company` `the Company`) BECAUSE "failed to pay Dissolution Event proceeds"
+
+-- ============================================================================
+§§ `Section 1(d): Liquidation Priority`
+-- ============================================================================
+-- In a Liquidity Event or Dissolution Event, this Safe is intended to operate
+-- like standard non-participating Preferred Stock.
+
+-- The Investor's right to receive Cash-Out Amount is:
+--   (i)   Junior to: outstanding indebtedness and creditor claims
+--   (ii)  On par with: other Safes and/or Preferred Stock
+--   (iii) Senior to: Common Stock
+
+-- The Investor's right to receive Conversion Amount is:
+--   (A) On par with: Common Stock and other converting securities
+--   (B) Junior to: (i) and (ii) above when those are Cash-Out Amounts
+
+DECLARE `Liquidation Priority` IS ONE OF
+    `Junior to Creditors`
+    `On Par with Preferred`
+    `Senior to Common`
+
+GIVEN `investor claim type` IS A STRING
+GIVETH A `Liquidation Priority`
+`priority of investor claim` MEANS
+  IF `investor claim type` EQUALS "Cash-Out Amount"
+  THEN `On Par with Preferred`
+  ELSE `Senior to Common`
+
+-- Pro-rata distribution when proceeds insufficient
+GIVEN `total proceeds`       IS A NUMBER
+      `total claims on par`  IS A NUMBER
+      `this investor claim`  IS A NUMBER
+GIVETH A NUMBER
+`pro rata distribution` MEANS
+  IF `total claims on par` > 0
+  THEN `total proceeds` * (`this investor claim` / `total claims on par`)
+  ELSE 0
+
+-- ============================================================================
+§§ `Section 1(e): Termination`
+-- ============================================================================
+-- This Safe will automatically terminate immediately following the earliest of:
+--   (i)  issuance of Capital Stock pursuant to Section 1(a); or
+--   (ii) payment of amounts pursuant to Section 1(b) or Section 1(c).
+
+DECLARE `Termination Trigger` IS ONE OF
+    `Capital Stock Issued from Equity Financing`
+    `Proceeds Paid from Liquidity Event`
+    `Proceeds Paid from Dissolution Event`
+
+GIVEN trigger IS A `Termination Trigger`
+GIVETH A BOOLEAN
+`Safe is terminated` MEANS TRUE  -- Once any trigger occurs, Safe terminates
+
+-- ============================================================================
+§ `Section 3: Company Representations`
+-- ============================================================================
+
+DECLARE `Company Representation` IS ONE OF
+    `duly organized and validly existing`
+    `has power and authority`
+    `Safe is valid and binding`
+    `not in material violation`
+    `no material adverse effect from Safe`
+    `has necessary corporate approvals`
+    `owns sufficient IP rights`
+
+-- The Company represents that it is duly organized, validly existing and
+-- in good standing under the laws of its state of incorporation
+GIVEN company IS A Company
+GIVETH A BOOLEAN
+`company is duly organized` MEANS TRUE  -- Asserted by signing
+
+-- The Company represents the Safe is a legal, valid and binding obligation
+GIVEN company IS A Company
+GIVETH A BOOLEAN
+`Safe is enforceable against Company` MEANS TRUE  -- Asserted by signing
+
+-- ============================================================================
+§ `Section 4: Investor Representations`
+-- ============================================================================
+
+DECLARE `Investor Representation` IS ONE OF
+    `has full legal capacity`
+    `Safe is valid and binding on Investor`
+    `is accredited investor`
+    `understands securities not registered`
+    `purchasing for own account`
+    `has sufficient knowledge and experience`
+
+-- The Investor represents they are an accredited investor
+GIVEN investor IS AN Investor
+GIVETH A BOOLEAN
+`investor is accredited` MEANS TRUE  -- Asserted by signing
+
+-- If not accredited at Equity Financing, Company may void Safe
+GIVEN investor             IS AN Investor
+      `is accredited now`  IS A BOOLEAN
+GIVETH A BOOLEAN
+`Company may void Safe` MEANS NOT `is accredited now`
+
+-- ============================================================================
+§ `Section 5: Miscellaneous`
+-- ============================================================================
+
+§§ `Section 5(a): Amendment`
+
+-- The Safe may be amended by written consent of Company and either:
+--   (i)  the Investor, or
+--   (ii) majority-in-interest of Safes with same terms
+
+GIVEN `has investor consent`  IS A BOOLEAN
+      `has majority consent`  IS A BOOLEAN
+      `is purchase amount change` IS A BOOLEAN
+GIVETH A BOOLEAN
+`amendment is valid` MEANS
+  `has investor consent`
+  OR (`has majority consent` AND NOT `is purchase amount change`)
+
+-- "Majority-in-interest" means holders with >50% of total Purchase Amount
+GIVEN `consenting purchase amounts` IS A NUMBER
+      `total purchase amounts`      IS A NUMBER
+GIVETH A BOOLEAN
+`is majority in interest` MEANS
+  `consenting purchase amounts` > (`total purchase amounts` / 2)
+
+§§ `Section 5(c): No Voting Rights`
+
+-- The Investor is not entitled to vote or be deemed a holder of Capital Stock
+-- until shares have been issued pursuant to Section 1
+GIVEN `shares have been issued` IS A BOOLEAN
+GIVETH A BOOLEAN
+`Investor has voting rights` MEANS `shares have been issued`
+
+-- However, if dividends are paid on Common Stock, Investor receives Dividend Amount
+GIVEN `dividend per common share` IS A NUMBER
+      `liquidity cap`             IS A NUMBER
+GIVETH A NUMBER
+`Dividend Amount` MEANS
+  CONSIDER `Liquidity Price` `liquidity cap`
+    WHEN NOTHING    THEN 0
+    WHEN JUST price THEN `dividend per common share` * (`the Purchase Amount` / price)
+
+§§ `Section 5(d): Transfer Restrictions`
+
+-- The Safe is not transferable without consent, except to:
+--   (i)  Investor's estate, heirs, etc. on death/disability
+--   (ii) Controlled affiliates of the Investor
+
+DECLARE `Transfer Type` IS ONE OF
+    `to estate or heirs`
+    `to controlled affiliate`
+    `to unrelated third party`
+
+GIVEN `transfer type` IS A `Transfer Type`
+GIVETH A BOOLEAN
+`transfer requires Company consent` MEANS
+  CONSIDER `transfer type`
+    WHEN `to estate or heirs`       THEN FALSE
+    WHEN `to controlled affiliate`  THEN FALSE
+    WHEN `to unrelated third party` THEN TRUE
+
+§§ `Section 5(e): Severability`
+
+-- If any provision is invalid, it will be deemed null and void
+-- without affecting other provisions
+GIVEN `provision is invalid` IS A BOOLEAN
+GIVETH A BOOLEAN
+`remaining provisions are valid` MEANS TRUE
+
+§§ `Section 5(g): Tax Treatment`
+
+-- The parties agree to treat this Safe as stock for US federal and state
+-- income tax purposes
+GIVEN `is for tax purposes` IS A BOOLEAN
+GIVETH A STRING
+`Safe tax characterization` MEANS "common stock"
+
+-- ============================================================================
+§ `Test Scenarios`
+-- ============================================================================
+
+§§ `Test Data`
+
+-- Sample Company with existing cap table
+`test Company` MEANS
+  Company WITH
+    name                     IS "Acme Startup Inc."
+    `state of incorporation` IS "Delaware"
+    `cap table`              IS `test cap table`
+    `unissued option pool`   IS 100000
+
+`test cap table` MEANS
+  LIST
+    `Cap Table Entry` OF
+      `Individual Investor` OF
+        NaturalPerson OF "Founder A", "123 Main St", "founder@acme.com"
+      Security OF "Common Stock", "Founder Shares", Shares 1000000 1000 `US Dollar code`
+    `Cap Table Entry` OF
+      `Individual Investor` OF
+        NaturalPerson OF "Founder B", "456 Oak Ave", "founderb@acme.com"
+      Security OF "Common Stock", "Founder Shares", Shares 1000000 1000 `US Dollar code`
+
+-- Sample Equity Financing (Series A)
+`test Equity Financing` MEANS
+  `Equity Financing` WITH
+    `new investors`        IS `series A investors`
+    `pre-money valuation`  IS JUST OF 8000000
+    `post-money valuation` IS JUST OF 10000000
+    `valuation currency`   IS `US Dollar code`
+    `initial closing date` IS June 1 2024
+
+`series A investors` MEANS
+  LIST
+    `Cap Table Entry` OF
+      `Individual Investor` OF
+        NaturalPerson OF "VC Partner", "789 Sand Hill Rd", "vc@venture.com"
+      Security OF "Preferred Stock", "Series A", Shares 500000 1000000 `US Dollar code`
+    `Cap Table Entry` OF
+      `Individual Investor` OF
+        NaturalPerson OF "Angel Investor", "321 Elm St", "angel@invest.com"
+      Security OF "Preferred Stock", "Series A", Shares 500000 1000000 `US Dollar code`
+
+-- Company Capitalization for test: 2M founder + 1M Series A + 100K options = 3.1M
+`test company cap` MEANS 3100000
+
+§§ `Equity Financing Test`
+
+-- Test: SAFE converts at Equity Financing
+-- Purchase Amount: $100,000
+-- Post-Money Valuation Cap: $10,000,000
+-- Company Capitalization: 3,100,000 shares
+-- Safe Price: $10M / 3.1M = $3.23 per share
+-- Series A Price: $2M / 1M shares = $2.00 per share
+-- Standard Preferred shares: $100K / $2.00 = 50,000 shares
+-- Safe Preferred shares: $100K / $3.23 = 30,960 shares
+-- Result: Convert to 50,000 shares of Standard Preferred Stock
+
+#EVAL `shares from Equity Financing conversion` `test Equity Financing` `test company cap`
+
+-- Test the conversion rule
+#TRACE `Equity Financing conversion rule` `test Equity Financing` `test company cap` AT 0 WITH
+  PARTY (`The Company` `the Company`)  DOES (`convert SAFE to shares` 50000 "Standard Preferred Stock") AT 0
+  PARTY (`The Investor` `the Investor`) DOES `execute transaction documents` AT 15
+  PARTY (`The Company` `the Company`)  DOES `terminate this Safe` AT 16
+
+§§ `Liquidity Event Test`
+
+-- Test: Liquidity Event payout
+`test Liquidity Event` MEANS
+  `Initial Public Offering` WITH
+    `exchange name`      IS "NASDAQ"
+    `offering price`     IS 5
+    `offering currency`  IS `US Dollar code`
+
+`test liquidity cap` MEANS 3000000
+`test price per common` MEANS 5
+
+-- Cash-Out Amount: $100,000
+-- Liquidity Price: $10M / 3M = $3.33 per share
+-- Conversion shares: $100K / $3.33 = 30,030 shares
+-- Conversion Amount: 30,030 × $5 = $150,150
+-- Result: Investor receives $150,150 (Conversion Amount is greater)
+
+#EVAL `greater of Cash-Out or Conversion` `test liquidity cap` `test price per common`
+
+§§ `Dissolution Event Test`
+
+-- Test: Dissolution Event payout (always Cash-Out Amount)
+`test Dissolution Event` MEANS `Voluntary Termination of Operations`
+
+#TRACE `Dissolution Event rule` `test Dissolution Event` AT 0 WITH
+  PARTY (`The Company` `the Company`) DOES (`pay proceeds to investor` 100000 `US Dollar code`) AT 0
+  PARTY (`The Company` `the Company`) DOES `terminate this Safe` AT 1
