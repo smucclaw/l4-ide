@@ -1,0 +1,21 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+jsondecode-dates.l4:21:1-22:
+  RIGHT OF (Event OF "Conference", (DATE OF 15, 6, 2025))
+jsondecode-dates.l4:40:1-22:
+  RIGHT OF (`Date Range` OF (DATE OF 1, 1, 2025), (DATE OF 31, 12, 2025), "Fiscal Year 2025")
+jsondecode-dates.l4:63:1-27:
+  RIGHT OF (Employment OF (Person OF "Alice", (DATE OF 25, 3, 1990)), (DATE OF 1, 7, 2020), "Engineering")
+jsondecode-dates.l4:81:1-31:
+  RIGHT OF (Task OF "Review PR", (JUST OF (DATE OF 15, 2, 2025)), FALSE)
+jsondecode-dates.l4:86:1-34:
+  RIGHT OF (Task OF "Backlog item", NOTHING, FALSE)
+jsondecode-dates.l4:104:1-25:
+  RIGHT OF (Schedule OF "Weekly Standup", (LIST DATE OF 3, 2, 2025, DATE OF 10, 2, 2025, DATE OF 17, 2, 2025))
+jsondecode-dates.l4:116:1-25:
+  TRUE
+jsondecode-dates.l4:124:1-24:
+  TRUE
+jsondecode-dates.l4:132:1-25:
+  TRUE

@@ -1,0 +1,13 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "json": {
+            "$ref": "#/$defs/STRING"
+        }
+    },
+    "required": [
+        "json"
+    ],
+    "title": "decode event",
+    "type": "object"
+}
