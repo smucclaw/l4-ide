@@ -10,10 +10,12 @@ The decision service supports multiple ways to load and manage L4 functions:
 2. **Dynamic loading from disk** - L4 files can be loaded at startup via `--sourcePaths` (see "Loading L4 Functions" below)
 3. **Runtime function management** - Functions can be created, updated, and deleted via REST API while the service is running
 
+4. **Query planning** - Intelligent elicitation support to determine which inputs to ask for next
+5. **State graph extraction** - Visualize contract state machines from regulative rules (MUST/MAY/SHANT/DO)
+
 ## Planned Features
 
 - Improved error messages and validation feedback
-- Enhanced trace visualization options
 - Additional evaluation backends beyond JL4
 
 ## Usage
@@ -88,6 +90,28 @@ Function evaluation is provided via the endpoints:
 - `POST  /functions/<name>/evaluation`: Evaluate the function `<name>` with given arguments.
 - `POST  /functions/<name>/batch`: Evaluate the function `<name>` with an array of arguments.
 
+#### Controlling Trace Output
+
+By default, evaluation returns only the result. To include a full execution trace, use either:
+
+- **Query parameter**: `?trace=full`
+- **HTTP header**: `X-L4-Trace: full`
+
+The header takes precedence if both are provided. Valid values are `none` (default) and `full`.
+
+```bash
+# Using query parameter
+curl -X POST 'http://localhost:8081/functions/compute_qualifies/evaluation?trace=full' \
+  -H 'Content-Type: application/json' \
+  -d '{"fnArguments":{"walks": true, "drinks": true, "eats": true}}'
+
+# Using header
+curl -X POST 'http://localhost:8081/functions/compute_qualifies/evaluation' \
+  -H 'Content-Type: application/json' \
+  -H 'X-L4-Trace: full' \
+  -d '{"fnArguments":{"walks": true, "drinks": true, "eats": true}}'
+```
+
 ### Visualizing Evaluation Traces
 
 New to L4? You can now see how your logic flows by asking the decision service for a GraphViz trace. Start with `trace=full` so the engine records every lazy step, then toggle `graphviz=true` to include DOT output plus ready-made image links in the JSON response:
@@ -152,13 +176,60 @@ Here's what a typical trace looks like—this one shows a scoring calculation wi
 
 More examples are available in `doc/images/trace-*.png` (short-circuit evaluation, recursion, CONSIDER branches, etc.).
 
+### Query Planning
+
+The query plan endpoint helps build interactive questionnaires by analyzing which boolean inputs still affect the outcome:
+
+- `POST /functions/<name>/query-plan`: Given partial inputs, returns which questions to ask next.
+
+```bash
+curl -X POST 'http://localhost:8081/functions/compute_qualifies/query-plan' \
+  -H 'Content-Type: application/json' \
+  -d '{"fnArguments":{"walks": true}}' | jq '.asks[:3]'
+```
+
+The response includes:
+
+- `determined`: Whether the outcome is already known (`true`, `false`, or `null` if more inputs needed)
+- `stillNeeded`: Boolean atoms that could still affect the result
+- `ranked`: Atoms ranked by their impact on the decision
+- `asks`: Questions to present to the user, with schema information for rendering forms
+- `impact`: Per-atom analysis showing how each input affects the outcome
+
+This is useful for building conversational interfaces that ask only relevant questions.
+
+### State Graphs
+
+L4 regulative rules (using `MUST`, `MAY`, `SHANT`) define contract state machines. The decision service can extract and visualize these:
+
+- `GET  /functions/<name>/state-graphs`: List all state graphs in the module
+- `GET  /functions/<name>/state-graphs/<graphName>`: Get DOT source for a specific graph
+- `GET  /functions/<name>/state-graphs/<graphName>/svg`: Render as SVG
+- `GET  /functions/<name>/state-graphs/<graphName>/png`: Render as PNG
+
+```bash
+# List available state graphs
+curl -s 'http://localhost:8081/functions/weddingcontract/state-graphs' | jq '.graphs[].graphName'
+
+# Get DOT source
+curl -s 'http://localhost:8081/functions/weddingcontract/state-graphs/weddingceremony' > ceremony.dot
+
+# Render as SVG (requires GraphViz installed on server)
+curl -s 'http://localhost:8081/functions/weddingcontract/state-graphs/weddingceremony/svg' > ceremony.svg
+```
+
+State graphs show:
+- **States**: Initial, intermediate, fulfilled, and breach states
+- **Transitions**: Labeled with the triggering action and any temporal constraints (WITHIN deadlines)
+- **Deontic modality**: Whether transitions are obligations (MUST), permissions (MAY), or prohibitions (SHANT)
+
 ## Loading L4 Functions
 
-Two functions are hardcoded by default; see [src/Examples.hs](src/Examples.hs) for details.
+Three functions are hardcoded by default (`compute_qualifies`, `vermin_and_rodent`, `the_answer`); see [src/Examples.hs](src/Examples.hs) for details.
 
 Other functions can be loaded at start time using the `--sourcePaths` command line option.
 
-The argument to the option is a directory or individual `.l4` files.
+The argument to the option is a directory or individual `.l4` files. The service automatically follows `IMPORT` statements to load dependencies.
 
 For each `.l4` file, if a matching `.yaml` sidecar exists, it is used as the function declaration. Otherwise, functions are exposed when their leading comment uses the `@export` (or `@export default`) syntax:
 
@@ -229,6 +300,36 @@ function:
   supportedBackends:
     - "jl4"
 ```
+
+## CLI Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--port`, `-p` | HTTP port | 8081 |
+| `--serverName`, `-s` | Server URL (for swagger.json) | - |
+| `--sourcePaths`, `-f` | L4 files or directories to load | - |
+| `--crudServerName` | Session backend hostname | localhost |
+| `--crudServerPort` | Session backend port | 5008 |
+| `--crudServerSecure` | Use HTTPS for session backend | false |
+| `--crudServerPath` | Path prefix for session backend | (empty) |
+
+### Session Backend Integration
+
+The decision service can retrieve L4 programs from an external CRUD backend using UUIDs. This enables session-based workflows where programs are stored and retrieved by ID:
+
+```bash
+# Access a function by UUID (fetched from CRUD backend)
+curl -X POST 'http://localhost:8081/functions/b52992ed-39fd-4226-bad2-2deee2473881/evaluation' \
+  -H 'Content-Type: application/json' \
+  -d '{"fnArguments":{"x": 5}}'
+
+# UUID with explicit function name
+curl -X POST 'http://localhost:8081/functions/b52992ed-39fd-4226-bad2-2deee2473881:my_function/evaluation' \
+  -H 'Content-Type: application/json' \
+  -d '{"fnArguments":{"x": 5}}'
+```
+
+When a UUID is provided, the service contacts the CRUD backend to fetch the L4 source, typechecks it, and exposes the exported functions.
 
 ## See Also
 

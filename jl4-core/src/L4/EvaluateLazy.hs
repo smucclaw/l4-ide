@@ -509,15 +509,26 @@ execEvalExprInContextOfModule evalConfig entityInfo expr (env, m) = do
       Directive emptyAnno $ LazyEval emptyAnno expr
     -- Didn't make a new module that imported the context module,
     -- because making the import requires a Resolved.
-    moduleWithoutDirectives = over moduleTopDecls (filter $ not . isDirective) m
+    -- Filter directives recursively (including in nested sections)
+    moduleWithoutDirectives = filterDirectivesFromModule m
   (_, res) <- execEvalModuleWithEnv evalConfig entityInfo env (evalExprDirective `prependToModule` moduleWithoutDirectives)
   case res of
     [result] -> pure (Just result)
     _        -> pure Nothing
   where
-    isDirective :: TopDecl Resolved -> Bool
-    isDirective (Directive _ _) = True
-    isDirective _ = False
-
     prependToModule :: TopDecl Resolved -> Module Resolved -> Module Resolved
     prependToModule newDecl = over moduleTopDecls (newDecl :)
+
+-- | Recursively filter out all Directive nodes from a module (including nested sections)
+filterDirectivesFromModule :: Module Resolved -> Module Resolved
+filterDirectivesFromModule (MkModule ann uri section) =
+  MkModule ann uri (filterDirectivesFromSection section)
+
+filterDirectivesFromSection :: Section Resolved -> Section Resolved
+filterDirectivesFromSection (MkSection sann sresolved maka decls) =
+  MkSection sann sresolved maka (mapMaybe filterTopDecl decls)
+  where
+    filterTopDecl :: TopDecl Resolved -> Maybe (TopDecl Resolved)
+    filterTopDecl (Directive _ _) = Nothing  -- Remove directives
+    filterTopDecl (Section ann sec) = Just (Section ann (filterDirectivesFromSection sec))  -- Recurse into sections
+    filterTopDecl other = Just other  -- Keep everything else
