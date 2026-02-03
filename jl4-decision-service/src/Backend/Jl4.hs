@@ -33,7 +33,6 @@ import System.FilePath ((<.>), takeFileName)
 
 import Backend.Api
 import Backend.CodeGen (generateEvalWrapper, GeneratedCode(..))
-import Backend.DirectiveFilter (filterIdeDirectives)
 import L4.Export (extractAssumeParamTypes)
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Aeson
@@ -51,6 +50,7 @@ data CompiledModule = CompiledModule
   , compiledDecide :: !(Decide Resolved)
   , compiledModuleContext :: !ModuleContext          -- ^ Context needed for IMPORT resolution
   , compiledImportEnv :: !EvalEnv.Environment        -- ^ Evaluator environment from imports
+  , compiledSource :: !Text                          -- ^ Original source text (preserves layout)
   }
   deriving (Generic)
 
@@ -97,6 +97,7 @@ precompileModule filepath source moduleContext funName = runExceptT $ do
     , compiledDecide = decide
     , compiledModuleContext = moduleContext  -- Store context for IMPORT resolution
     , compiledImportEnv = importEnv
+    , compiledSource = source                -- Preserve original source for layout-sensitive re-parsing
     }
  where
   evalErrorToText :: EvaluatorError -> Text
@@ -315,16 +316,69 @@ evaluateWrapperInContext
   -> CompiledModule
   -> IO ([Text], Maybe [Eval.EvalDirectiveResult])
 evaluateWrapperInContext filepath wrapperCode compiled = do
-  -- Import the precompiled module's declarations into the wrapper's context
-  -- For simplicity, we concatenate the filtered module text with the wrapper
-  -- But we skip re-typechecking the original module
-  let filteredModule = filterIdeDirectives compiled.compiledModule
-      filteredSource = prettyLayout filteredModule
+  -- Use original source text to preserve layout-sensitive formatting
+  -- L4 is layout-sensitive (like Python), so prettyLayout can break indentation
+  -- We filter IDE directives (#EVAL, #TRACE, etc.) using text-based filtering
+  let filteredSource = filterIdeDirectivesText compiled.compiledSource
       combinedProgram = filteredSource <> wrapperCode
 
   -- Evaluate the combined program using the original module context
   -- This ensures IMPORT statements can be resolved correctly
   evaluateModule filepath combinedProgram compiled.compiledModuleContext
+
+-- | Filter IDE directives from source text while preserving layout
+-- Removes lines starting with #EVAL, #TRACE, #EVALTRACE, #ASSERT, #CHECK
+-- Also removes continuation lines for multiline directives (#TRACE ... WITH)
+-- A continuation line is one that:
+-- 1. Immediately follows a directive line or another continuation
+-- 2. Is more indented than the directive line (or is a blank/comment line)
+filterIdeDirectivesText :: Text -> Text
+filterIdeDirectivesText = Text.unlines . filterLines . Text.lines
+  where
+    -- Filter lines, tracking whether we're inside a multiline directive
+    filterLines :: [Text] -> [Text]
+    filterLines = go Nothing
+      where
+        -- mIndent = Nothing: not in a directive
+        -- mIndent = Just indent: in a directive with given base indentation
+        go :: Maybe Int -> [Text] -> [Text]
+        go _ [] = []
+        go mIndent (line:rest)
+          | isDirectiveLine line =
+              -- Start of a directive - skip it and enter directive state
+              let baseIndent = lineIndentation line
+              in go (Just baseIndent) rest
+          | Just baseIndent <- mIndent, isContinuationLine baseIndent line =
+              -- Continuation of a multiline directive - skip it
+              go mIndent rest
+          | otherwise =
+              -- Not a directive or continuation - keep it and reset state
+              line : go Nothing rest
+
+    -- Check if line starts a directive (with optional leading whitespace)
+    isDirectiveLine :: Text -> Bool
+    isDirectiveLine line =
+      let stripped = Text.stripStart line
+      in any (`Text.isPrefixOf` stripped)
+           ["#EVAL", "#EVALTRACE", "#TRACE", "#ASSERT", "#CHECK"]
+
+    -- Check if line is a continuation of a multiline directive
+    -- Continuation lines are either:
+    -- 1. More indented than the base directive
+    -- 2. Empty or whitespace-only (blank lines within directive)
+    -- 3. Comment-only lines (starting with --) that are more indented
+    isContinuationLine :: Int -> Text -> Bool
+    isContinuationLine baseIndent line
+      | Text.all isSpace line = True  -- Blank line - include in directive block
+      | lineIndentation line > baseIndent = True  -- More indented = continuation
+      | otherwise = False
+
+    -- Get the indentation (number of leading spaces/tabs) of a line
+    lineIndentation :: Text -> Int
+    lineIndentation = Text.length . Text.takeWhile isSpace
+
+    isSpace :: Char -> Bool
+    isSpace c = c == ' ' || c == '\t'
 
 -- | Convert FnLiteral parameters to Aeson.Value
 -- Missing parameters (Nothing) become FnUnknown -> Aeson.Null for partial evaluation
@@ -434,9 +488,9 @@ createFunction filepath fnDecl fnImpl moduleContext = do
                 let givenParamTypes = extractParamTypes funDecide
                     assumeParamTypes = extractAssumeParamTypes tcRes.module' funDecide
 
-                -- 3. Filter IDE directives from the module
-                let filteredModule = filterIdeDirectives tcRes.module'
-                    filteredSource = prettyLayout filteredModule
+                -- 3. Filter IDE directives from the original source text
+                -- L4 is layout-sensitive, so we must preserve the original formatting
+                let filteredSource = filterIdeDirectivesText fnImpl
 
                 -- 4. Convert input parameters to JSON
                 inputJson <- paramsToJson params'

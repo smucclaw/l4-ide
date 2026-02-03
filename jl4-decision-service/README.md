@@ -200,7 +200,7 @@ This is useful for building conversational interfaces that ask only relevant que
 
 ### State Graphs
 
-L4 regulative rules (using `MUST`, `MAY`, `SHANT`) define contract state machines. The decision service can extract and visualize these:
+L4 regulative rules (using `MUST`, `MAY`, `SHANT`, `DO`) define contract state machines. The decision service can extract and visualize these:
 
 - `GET  /functions/<name>/state-graphs`: List all state graphs in the module
 - `GET  /functions/<name>/state-graphs/<graphName>`: Get DOT source for a specific graph
@@ -225,9 +225,9 @@ State graphs show:
 
 ## Loading L4 Functions
 
-Three functions are hardcoded by default (`compute_qualifies`, `vermin_and_rodent`, `the_answer`); see [src/Examples.hs](src/Examples.hs) for details.
+When **no** `--sourcePaths` are provided, the service loads three hardcoded example functions (`compute_qualifies`, `vermin_and_rodent`, `the_answer`) for testing purposes; see [src/Examples.hs](src/Examples.hs) for details.
 
-Other functions can be loaded at start time using the `--sourcePaths` command line option.
+When `--sourcePaths` are provided, **only** functions from those files are loaded—the hardcoded examples are not included.
 
 The argument to the option is a directory or individual `.l4` files. The service automatically follows `IMPORT` statements to load dependencies.
 
