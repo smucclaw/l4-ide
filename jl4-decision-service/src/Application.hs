@@ -49,12 +49,18 @@ defaultMain = do
   when (null sourcePaths) $ putStrLn $ "sourcePaths expanded to empty: " <> show sourcePaths
   unless (null sourcePaths) $ putStrLn $ "Scanning .l4 files from: " <> show l4Files
 
-  (l4Functions, _moduleContext) <- Examples.loadL4Functions l4Files
-  unless (null sourcePaths) $ putStrLn $ "** Loaded l4 functions from disk: " <> show (length l4Functions)
-  unless (null l4Functions) $ print $ Map.keys l4Functions
-
-  exampleFunctions <- Examples.functionSpecs
-  dbRef <- newTVarIO (exampleFunctions <> l4Functions)
+  -- Only load hardcoded examples if no source paths provided
+  -- When source paths are given, only load functions from those files
+  functions <- if null sourcePaths
+    then do
+      putStrLn "* No source paths provided, loading hardcoded examples"
+      Examples.functionSpecs
+    else do
+      (l4Functions, _moduleContext) <- Examples.loadL4Functions l4Files
+      putStrLn $ "** Loaded l4 functions from disk: " <> show (length l4Functions)
+      unless (null l4Functions) $ print $ Map.keys l4Functions
+      pure l4Functions
+  dbRef <- newTVarIO functions
   mgr <- newManager defaultManagerSettings
   putStrLn $ "will contact crud server on following base url: " <> show crudServerName
   let
