@@ -219,6 +219,7 @@ curl -s 'http://localhost:8081/functions/weddingcontract/state-graphs/weddingcer
 ```
 
 State graphs show:
+
 - **States**: Initial, intermediate, fulfilled, and breach states
 - **Transitions**: Labeled with the triggering action and any temporal constraints (WITHIN deadlines)
 - **Deontic modality**: Whether transitions are obligations (MUST), permissions (MAY), or prohibitions (SHANT)
@@ -303,15 +304,15 @@ function:
 
 ## CLI Options
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--port`, `-p` | HTTP port | 8081 |
-| `--serverName`, `-s` | Server URL (for swagger.json) | - |
-| `--sourcePaths`, `-f` | L4 files or directories to load | - |
-| `--crudServerName` | Session backend hostname | localhost |
-| `--crudServerPort` | Session backend port | 5008 |
-| `--crudServerSecure` | Use HTTPS for session backend | false |
-| `--crudServerPath` | Path prefix for session backend | (empty) |
+| Option                | Description                     | Default   |
+| --------------------- | ------------------------------- | --------- |
+| `--port`, `-p`        | HTTP port                       | 8081      |
+| `--serverName`, `-s`  | Server URL (for swagger.json)   | -         |
+| `--sourcePaths`, `-f` | L4 files or directories to load | -         |
+| `--crudServerName`    | Session backend hostname        | localhost |
+| `--crudServerPort`    | Session backend port            | 5008      |
+| `--crudServerSecure`  | Use HTTPS for session backend   | false     |
+| `--crudServerPath`    | Path prefix for session backend | (empty)   |
 
 ### Session Backend Integration
 

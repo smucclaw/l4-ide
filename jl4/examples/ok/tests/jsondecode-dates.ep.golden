@@ -1,0 +1,132 @@
+-- Test JSONDECODE with DATE type handling
+-- DATE fields in JSON should accept ISO-8601 strings (YYYY-MM-DD)
+
+--------------------------------------------------------------------------------
+-- Record with a DATE field
+--------------------------------------------------------------------------------
+
+DECLARE Event HAS
+    `event name`    IS A STRING
+    `event date`    IS A DATE
+
+GIVEN json IS A STRING
+GIVETH AN EITHER STRING Event
+`decode event` json MEANS JSONDECODE json
+
+-- Test: Decode a record with an ISO-8601 date string
+DECIDE `test event json` IS "{\"event name\":\"Conference\",\"event date\":\"2025-06-15\"}"
+
+DECIDE `decoded event` IS `decode event` `test event json`
+
+#EVAL `decoded event`
+
+--------------------------------------------------------------------------------
+-- Record with multiple DATE fields
+--------------------------------------------------------------------------------
+
+DECLARE `Date Range` HAS
+    `start date`    IS A DATE
+    `end date`      IS A DATE
+    `description`   IS A STRING
+
+GIVEN json IS A STRING
+GIVETH AN EITHER STRING `Date Range`
+`decode date range` json MEANS JSONDECODE json
+
+DECIDE `test range json` IS "{\"start date\":\"2025-01-01\",\"end date\":\"2025-12-31\",\"description\":\"Fiscal Year 2025\"}"
+
+DECIDE `decoded range` IS `decode date range` `test range json`
+
+#EVAL `decoded range`
+
+--------------------------------------------------------------------------------
+-- Nested record with DATE fields
+--------------------------------------------------------------------------------
+
+DECLARE Person HAS
+    `name`          IS A STRING
+    `birth date`    IS A DATE
+
+DECLARE Employment HAS
+    `employee`      IS A Person
+    `hire date`     IS A DATE
+    `department`    IS A STRING
+
+GIVEN json IS A STRING
+GIVETH AN EITHER STRING Employment
+`decode employment` json MEANS JSONDECODE json
+
+DECIDE `test employment json` IS "{\"employee\":{\"name\":\"Alice\",\"birth date\":\"1990-03-25\"},\"hire date\":\"2020-07-01\",\"department\":\"Engineering\"}"
+
+DECIDE `decoded employment` IS `decode employment` `test employment json`
+
+#EVAL `decoded employment`
+
+--------------------------------------------------------------------------------
+-- Record with MAYBE DATE field
+--------------------------------------------------------------------------------
+
+DECLARE Task HAS
+    `task name`     IS A STRING
+    `due date`      IS A MAYBE DATE
+    `completed`     IS A BOOLEAN
+
+GIVEN json IS A STRING
+GIVETH AN EITHER STRING Task
+`decode task` json MEANS JSONDECODE json
+
+-- Test with a date present
+DECIDE `test task with date` IS "{\"task name\":\"Review PR\",\"due date\":\"2025-02-15\",\"completed\":false}"
+DECIDE `decoded task with date` IS `decode task` `test task with date`
+#EVAL `decoded task with date`
+
+-- Test with null date
+DECIDE `test task without date` IS "{\"task name\":\"Backlog item\",\"due date\":null,\"completed\":false}"
+DECIDE `decoded task without date` IS `decode task` `test task without date`
+#EVAL `decoded task without date`
+
+--------------------------------------------------------------------------------
+-- Record with LIST OF DATE
+--------------------------------------------------------------------------------
+
+DECLARE Schedule HAS
+    `meeting name`  IS A STRING
+    `meeting dates` IS A LIST OF DATE
+
+GIVEN json IS A STRING
+GIVETH AN EITHER STRING Schedule
+`decode schedule` json MEANS JSONDECODE json
+
+DECIDE `test schedule json` IS "{\"meeting name\":\"Weekly Standup\",\"meeting dates\":[\"2025-02-03\",\"2025-02-10\",\"2025-02-17\"]}"
+
+DECIDE `decoded schedule` IS `decode schedule` `test schedule json`
+
+#EVAL `decoded schedule`
+
+--------------------------------------------------------------------------------
+-- Verify decoded dates can be used in date operations
+--------------------------------------------------------------------------------
+
+-- Extract date from decoded event and check it equals a known date
+DECIDE `check event date` IS
+    CONSIDER `decoded event`
+    WHEN RIGHT e THEN (e's `event date`) EQUALS (DATE_FROM_DMY 15 6 2025)
+    WHEN LEFT err THEN FALSE
+
+#EVAL `check event date`
+
+-- Extract date from employment record (nested)
+DECIDE `check hire date` IS
+    CONSIDER `decoded employment`
+    WHEN RIGHT emp THEN (emp's `hire date`) EQUALS (DATE_FROM_DMY 1 7 2020)
+    WHEN LEFT err THEN FALSE
+
+#EVAL `check hire date`
+
+-- Check nested person's birth date
+DECIDE `check birth date` IS
+    CONSIDER `decoded employment`
+    WHEN RIGHT emp THEN ((emp's `employee`)'s `birth date`) EQUALS (DATE_FROM_DMY 25 3 1990)
+    WHEN LEFT err THEN FALSE
+
+#EVAL `check birth date`
