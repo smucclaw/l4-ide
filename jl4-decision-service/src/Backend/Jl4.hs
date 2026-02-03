@@ -11,6 +11,7 @@ import L4.Annotation
 import qualified L4.Evaluate.ValueLazy as Eval
 import qualified L4.EvaluateLazy as Eval
 import L4.EvaluateLazy.Machine (EvalException, emptyEnvironment)
+import qualified L4.Evaluate.ValueLazy as EvalEnv (Environment)
 import L4.EvaluateLazy.Trace
 import qualified L4.EvaluateLazy.GraphViz2 as GraphViz
 import L4.TracePolicy (apiDefaultPolicy, TracePolicy(..))
@@ -45,10 +46,11 @@ type ModuleContext = Map FilePath Text
 -- | Pre-compiled L4 module ready for fast evaluation
 data CompiledModule = CompiledModule
   { compiledModule :: !(Module Resolved)
-  , compiledEnvironment :: !Environment
+  , compiledEnvironment :: !Environment              -- ^ Typechecker environment (for type info)
   , compiledEntityInfo :: !EntityInfo
   , compiledDecide :: !(Decide Resolved)
-  , compiledModuleContext :: !ModuleContext  -- ^ Context needed for IMPORT resolution
+  , compiledModuleContext :: !ModuleContext          -- ^ Context needed for IMPORT resolution
+  , compiledImportEnv :: !EvalEnv.Environment        -- ^ Evaluator environment from imports
   }
   deriving (Generic)
 
@@ -82,6 +84,11 @@ precompileModule filepath source moduleContext funName = runExceptT $ do
   -- Extract the function definition
   decide <- withExceptT evalErrorToText $ getFunctionDefinition funName tcRes.module'
 
+  -- Pre-evaluate import dependencies to get the evaluator Environment
+  -- This is needed because execEvalExprInContextOfModule expects the import
+  -- environment to be pre-computed (it only evaluates the current module fresh)
+  importEnv <- liftIO $ buildImportEnvironment filepath source moduleContext tcRes.entityInfo
+
   -- Build the compiled module
   pure CompiledModule
     { compiledModule = tcRes.module'
@@ -89,6 +96,7 @@ precompileModule filepath source moduleContext funName = runExceptT $ do
     , compiledEntityInfo = tcRes.entityInfo
     , compiledDecide = decide
     , compiledModuleContext = moduleContext  -- Store context for IMPORT resolution
+    , compiledImportEnv = importEnv
     }
  where
   evalErrorToText :: EvaluatorError -> Text
@@ -215,14 +223,14 @@ evaluateDirectAST compiled params traceLevel includeGraphViz = do
   fixedNow <- liftIO Eval.readFixedNowEnv
   evalConfig <- liftIO $ Eval.resolveEvalConfig fixedNow evalTracePolicy
 
-  -- Pass empty environment - the module will be evaluated fresh each time
-  -- The evaluator's Environment (Map Unique Reference) is different from
-  -- the typechecker's Environment (Map RawName [Unique])
+  -- Pass the pre-computed import environment
+  -- The module's own definitions are evaluated fresh each time, but imports
+  -- need their References to be pre-allocated
   mResult <- liftIO $ Eval.execEvalExprInContextOfModule
     evalConfig
     compiled.compiledEntityInfo
     callExpr
-    (emptyEnvironment, compiled.compiledModule)
+    (compiled.compiledImportEnv, compiled.compiledModule)
 
   -- Handle result
   case mResult of
@@ -490,6 +498,63 @@ getFunctionDefinition name (MkModule _ _ sect) = case goSection sect of
     Section _ s -> goSection s
 
   nameOf (MkDecide _ _ (MkAppForm _ n _ _) _) = n
+
+-- | Build the evaluator Environment for imported modules
+-- This evaluates all imports and returns their combined environment
+-- so that execEvalExprInContextOfModule can reference imported definitions
+buildImportEnvironment
+  :: FilePath
+  -> Text
+  -> ModuleContext
+  -> EntityInfo
+  -> IO EvalEnv.Environment
+buildImportEnvironment filepath source moduleContext _entityInfo = do
+  -- We need to evaluate the imports to get their References
+  -- The cleanest way is to use the existing evaluation infrastructure
+  -- which handles import resolution through the Shake system
+  --
+  -- Strategy: Create a minimal module that just has the imports (no code),
+  -- evaluate it, and extract the resulting environment
+  fixedNow <- Eval.readFixedNowEnv
+  evalConfig <- Eval.resolveEvalConfig fixedNow apiDefaultPolicy
+
+  -- The easiest approach is to evaluate the full module and get the import environment
+  -- from the GetLazyEvaluationDependencies result. But since we're outside the Shake
+  -- monad, we use oneshotL4ActionAndErrors with the EvaluateLazy rule.
+  --
+  -- However, EvaluateLazy doesn't directly expose the import environment.
+  -- Instead, we can evaluate an empty directive and get the environment from
+  -- the module evaluation. But this is complex.
+  --
+  -- Simpler approach: Since the wrapper-based evaluation already works
+  -- (it uses evaluateModule which goes through Shake), the issue is only
+  -- in the direct AST path. For now, let's just extract imports from the
+  -- module and evaluate them.
+  --
+  -- Actually, the simplest fix is to evaluate the module once during precompilation
+  -- using the same infrastructure as evaluateModule, and capture the environment.
+
+  result <- oneshotL4ActionAndErrors evalConfig filepath $ \nfp -> do
+    let uri = normalizedFilePathToUri nfp
+    -- Add all module files as virtual files for IMPORT resolution
+    forM_ (Map.toList moduleContext) $ \(path, content) -> do
+      let modulePath = toNormalizedFilePath ("." <> takeFileName path)
+      _ <- Shake.addVirtualFile modulePath content
+      pure ()
+    -- Add the main file
+    _ <- Shake.addVirtualFile nfp source
+    -- Use GetLazyEvaluationDependencies which returns (Environment, [EvalDirectiveResult])
+    -- This rule is defined with defineWithCallStack, so we need to wrap it with AttachCallStack
+    Shake.use (Shake.AttachCallStack [uri] Rules.GetLazyEvaluationDependencies) uri
+
+  case result of
+    (_errs, Just (importEnv, _dirResults)) ->
+      -- Successfully built import environment
+      pure importEnv
+    (_errs, Nothing) ->
+      -- Fall back to empty environment if evaluation fails
+      -- (This shouldn't happen since the module already typechecked)
+      pure emptyEnvironment
 
 -- ----------------------------------------------------------------------------
 -- Helpers and other non-generic functions
