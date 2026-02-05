@@ -2,10 +2,15 @@
 module Backend.CodeGen
   ( generateEvalWrapper
   , GeneratedCode(..)
+  -- Exported for testing
+  , inputFieldName
+  , transformJsonKeys
   ) where
 
 import Base
 import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.Key as AesonKey
+import qualified Data.Aeson.KeyMap as AesonKeyMap
 import qualified Data.Text as Text
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TL
@@ -39,6 +44,18 @@ quoteIdent :: Text -> Text
 quoteIdent name
   | Text.any (== ' ') name = "`" <> name <> "`"
   | otherwise = name
+
+-- | Prefix for InputArgs field names to avoid collision with source identifiers.
+-- The generated InputArgs record creates accessor functions, which would otherwise
+-- collide with GIVEN parameter names in the original source file.
+-- We use a suffix approach: "name" -> "name (input)" to keep field names readable
+-- while avoiding conflicts.
+inputFieldName :: Text -> Text
+inputFieldName name = name <> " (input)"
+
+-- | Quote an InputArgs field name (which has been prefixed)
+quoteInputField :: Text -> Text
+quoteInputField = quoteIdent . inputFieldName
 
 -- | Create a safe unwrapped variable name
 -- For names with spaces, creates a backtick-quoted identifier like `unwrapped_tranche number`
@@ -139,9 +156,9 @@ generateInputRecordLifted params = Text.unlines $
       let indent = if idx == 0 then "  " else ", "
           -- Lift ALL types to MAYBE
           tyText = liftTypeToMaybe ty
-          -- Quote identifiers with spaces
-          quotedName = quoteIdent name
-      in indent <> quotedName <> " IS A " <> tyText
+          -- Use prefixed field names to avoid collision with source identifiers
+          quotedFieldName = quoteInputField name
+      in indent <> quotedFieldName <> " IS A " <> tyText
 
 -- | Generate typed decoder function
 generateDecoder :: Text
@@ -152,9 +169,21 @@ generateDecoder = Text.unlines
   ]
 
 -- | Generate JSON payload as L4 string literal
+-- Transforms JSON keys to match the renamed InputArgs field names
 generateJsonPayload :: Aeson.Value -> Text
 generateJsonPayload json =
-  "DECIDE inputJson IS " <> escapeAsL4String json
+  "DECIDE inputJson IS " <> escapeAsL4String (transformJsonKeys json)
+
+-- | Transform JSON object keys to match InputArgs field names
+-- Adds " (input)" suffix to all top-level keys to match the collision-avoiding
+-- field names in the generated InputArgs record.
+transformJsonKeys :: Aeson.Value -> Aeson.Value
+transformJsonKeys (Aeson.Object obj) =
+  Aeson.Object $ AesonKeyMap.fromList $ map transformPair $ AesonKeyMap.toList obj
+  where
+    transformPair (key, val) =
+      (AesonKey.fromText (inputFieldName (AesonKey.toText key)), val)
+transformJsonKeys other = other
 
 -- | Escape JSON value as an L4 string literal
 escapeAsL4String :: Aeson.Value -> Text
@@ -193,7 +222,7 @@ generateEvalDirectiveLiftedWithAssumes funName givenParamInfo assumeParamInfo tr
       -- Date types need conversion via dateConvertedVar
       givenArgExprs = map snd $ sortOn fst $
         [(idx, expr) | (idx, ((name, _), True, _, _)) <- zip [0 :: Int ..] givenParamInfo
-                     , let expr = "(fromMaybe FALSE (args's " <> quoteIdent name <> "))"] ++
+                     , let expr = "(fromMaybe FALSE (args's " <> quoteInputField name <> "))"] ++
         [(idx, expr) | (idx, ((name, _), False, _, isDate)) <- zip [0 :: Int ..] givenParamInfo
                      , let expr = if isDate then dateConvertedVar name else unwrappedVar name]
 
@@ -214,7 +243,7 @@ generateEvalDirectiveLiftedWithAssumes funName givenParamInfo assumeParamInfo tr
           wrapOne ((name, _), isBoolean, _, isDate) expr =
             let quotedName = quoteIdent name
                 valueExpr = if isBoolean
-                  then "(fromMaybe FALSE (args's " <> quotedName <> "))"
+                  then "(fromMaybe FALSE (args's " <> quoteInputField name <> "))"
                   else if isDate then dateConvertedVar name else unwrappedVar name
             in "LET " <> quotedName <> " = " <> valueExpr <> " IN " <> expr
 
@@ -257,17 +286,17 @@ generateNestedConsiderWithAssumes [] functionCall assumeParamInfo indent =
           wrapOne ((name, _), isBoolean, _, isDate) expr =
             let quotedName = quoteIdent name
                 valueExpr = if isBoolean
-                  then "(fromMaybe FALSE (args's " <> quotedName <> "))"
+                  then "(fromMaybe FALSE (args's " <> quoteInputField name <> "))"
                   else if isDate then dateConvertedVar name else unwrappedVar name
             in "LET " <> quotedName <> " = " <> valueExpr <> " IN " <> expr
   in [indentStr <> "JUST (" <> wrapWithAssumes functionCall <> ")"]
 generateNestedConsiderWithAssumes (((name, _), _, _, isDate):rest) functionCall assumeParamInfo indent =
   let indentStr = Text.replicate indent "  "
-      quotedName = quoteIdent name
+      quotedFieldName = quoteInputField name
   in if isDate
      then
        -- For DATE types: first unwrap the MAYBE STRING, then convert to DATE via TODATE
-       [ indentStr <> "CONSIDER args's " <> quotedName
+       [ indentStr <> "CONSIDER args's " <> quotedFieldName
        , indentStr <> "  WHEN JUST " <> unwrappedVar name <> " THEN"
        , indentStr <> "    CONSIDER TODATE " <> unwrappedVar name
        , indentStr <> "      WHEN JUST " <> dateConvertedVar name <> " THEN"
@@ -278,7 +307,7 @@ generateNestedConsiderWithAssumes (((name, _), _, _, isDate):rest) functionCall 
        ]
      else
        -- For non-DATE types: just unwrap the MAYBE
-       [ indentStr <> "CONSIDER args's " <> quotedName
+       [ indentStr <> "CONSIDER args's " <> quotedFieldName
        , indentStr <> "  WHEN JUST " <> unwrappedVar name <> " THEN"
        ] ++
        generateNestedConsiderWithAssumes rest functionCall assumeParamInfo (indent + 2) ++
