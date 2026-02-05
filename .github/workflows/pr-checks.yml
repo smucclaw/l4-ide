@@ -296,3 +296,18 @@ jobs:
           echo "- **GHC WASM:** ${{ env.GHC_WASM_VERSION }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Binary Size:** ${WASM_SIZE_MB} MB" >> $GITHUB_STEP_SUMMARY
           echo "- **Status:** All tests passed" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================
+  # Nix Flake Check
+  # ============================================
+  nix-check:
+    name: Nix Flake Check
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: "write"
+      contents: "read"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+      - run: nix flake check
+      - run: nix -Lv build .#jl4-web

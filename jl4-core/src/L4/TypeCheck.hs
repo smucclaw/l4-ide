@@ -1125,12 +1125,17 @@ checkConsider ec ann e branches t = do
   let redundant = redundantBranches $ annotateRefinement bs
       missing = nubBy ((==) `on` fmap getUnique) $ expandToPattern scrutVar $ normalizeRefinement $ uncoverRefinement bs
 
-  unless (null missing) do
+  -- Skip pattern analysis warnings for primitive types (NUMBER, STRING, DATE)
+  -- because the analysis is designed for algebraic data types with known constructors.
+  -- Primitive types have infinitely many values (literals) that can't be enumerated.
+  -- We need to apply the current substitution to resolve any inference variables.
+  resolvedTe <- applySubst te
+  let isPrimitiveScrutinee = isPrimitiveType resolvedTe
+
+  unless (null missing || isPrimitiveScrutinee) do
     addWarning $ PatternMatchesMissing missing
-  unless (null redundant) do
+  unless (null redundant || isPrimitiveScrutinee) do
     addWarning $ PatternMatchRedundant redundant
-
-
 
   pure (Consider ann re rbranches)
 
@@ -1481,6 +1486,21 @@ isStringCoercible ty = case ty of
   TyApp _ tyRef [] ->
     let t = nameToText (getName tyRef)
     in t `elem` ["NUMBER", "STRING", "BOOLEAN", "DATE"]
+  _ -> False
+
+-- | Check if a type is a primitive type with infinitely many values.
+-- Used to skip pattern exhaustiveness/redundancy analysis for CONSIDER expressions
+-- on primitive types, since the analysis is designed for algebraic data types
+-- with a finite, known set of constructors.
+isPrimitiveType :: Type' Resolved -> Bool
+isPrimitiveType ty = case ty of
+  InfVar{} -> False  -- Unknown type, don't skip analysis
+  TyApp _ tyRef [] ->
+    let t = nameToText (getName tyRef)
+    -- NUMBER and STRING have infinitely many literal values
+    -- DATE also has many values that can't be enumerated
+    -- BOOLEAN has only TRUE/FALSE so analysis works correctly for it
+    in t `elem` ["NUMBER", "STRING", "DATE"]
   _ -> False
 
 inferEvent :: Event Name -> Check (Event Resolved, Type' Resolved)
