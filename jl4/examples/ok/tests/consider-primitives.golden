@@ -1,0 +1,15 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+consider-primitives.l4:37:1-26:
+  "one"
+consider-primitives.l4:38:1-27:
+  "other"
+consider-primitives.l4:39:1-28:
+  "letter a"
+consider-primitives.l4:40:1-28:
+  "other letter"
+consider-primitives.l4:41:1-27:
+  "yes"
+consider-primitives.l4:42:1-28:
+  "no"
