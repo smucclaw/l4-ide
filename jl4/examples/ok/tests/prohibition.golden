@@ -1,12 +1,12 @@
 Parsing successful
 Typechecking successful
 Evaluation successful
-prohibition.l4:93:1-27:
+prohibition.l4:91:1-27:
   PARTY Alice
   MUST NOT smoke
   WITHIN 30
   HENCE FULFILLED
-prohibition.l4:98:1-99:31:
+prohibition.l4:96:1-97:31:
   DEONTIC BREACHED:
     party
       Alice
@@ -20,12 +20,12 @@ prohibition.l4:98:1-99:31:
       MUST NOT smoke
     before their deadline, which was at
       15
-prohibition.l4:104:1-28:
+prohibition.l4:102:1-28:
   PARTY Bob
   MUST NOT drink
   WITHIN 30
   HENCE FULFILLED
-prohibition.l4:109:1-110:29:
+prohibition.l4:107:1-108:29:
   DEONTIC BREACHED:
     party
       Bob
@@ -39,16 +39,16 @@ prohibition.l4:109:1-110:29:
       MUST NOT drink
     before their deadline, which was at
       10
-prohibition.l4:114:1-115:31:
+prohibition.l4:112:1-113:31:
   FULFILLED
-prohibition.l4:119:1-27:
+prohibition.l4:117:1-27:
   PARTY Alice
   MUST drink
   WITHIN 30
   HENCE FULFILLED
-prohibition.l4:123:1-124:29:
+prohibition.l4:121:1-122:29:
   FULFILLED
-prohibition.l4:129:1-26:
+prohibition.l4:127:1-26:
   PARTY Bob
   MAY drink
   WITHIN 30

@@ -1,0 +1,89 @@
+-- WHERE keyword examples
+
+-- Basic Local Definitions
+
+GIVEN radius IS A NUMBER
+`area of circle` radius MEANS
+  pi TIMES radius TIMES radius
+  WHERE
+    pi MEANS 3.14159
+
+#EVAL `area of circle` 10
+
+-- Multiple Local Definitions
+
+GIVEN x IS A NUMBER, y IS A NUMBER
+`sum times difference` x y MEANS
+  `sum value` TIMES `diff value`
+  WHERE
+    `sum value` MEANS x PLUS y
+    `diff value` MEANS x MINUS y
+
+#EVAL `sum times difference` 10 3
+
+-- Avoiding Repetition
+
+GIVEN a IS A NUMBER
+      b IS A NUMBER
+      c IS A NUMBER
+`quadratic discriminant` a b c MEANS
+  `b squared` MINUS `four a c`
+  WHERE
+    `b squared` MEANS b TIMES b
+    `four a c` MEANS 4 TIMES a TIMES c
+
+#EVAL `quadratic discriminant` 1 5 6
+
+-- Nested WHERE Clauses
+
+outer MEANS
+  middle
+  WHERE
+    middle MEANS
+      inner
+      WHERE
+        inner MEANS 42
+
+#EVAL outer
+
+-- Local Functions
+
+GIVEN n1 IS A NUMBER, n2 IS A NUMBER
+`sum of squares` n1 n2 MEANS
+  `square of` n1 PLUS `square of` n2
+  WHERE
+    `square of` n MEANS n TIMES n
+
+#EVAL `sum of squares` 3 4
+
+-- Complex Example: Pythagorean Distance
+
+GIVEN x1 IS A NUMBER
+      y1 IS A NUMBER
+      x2 IS A NUMBER
+      y2 IS A NUMBER
+`distance between points` x1 y1 x2 y2 MEANS
+  `square root` (`dx squared` PLUS `dy squared`)
+  WHERE
+    `delta x` MEANS x2 MINUS x1
+    `delta y` MEANS y2 MINUS y1
+    `dx squared` MEANS `delta x` TIMES `delta x`
+    `dy squared` MEANS `delta y` TIMES `delta y`
+    `square root` n MEANS sqrt n
+
+IMPORT math
+
+#EVAL `distance between points` 0 0 3 4
+
+-- WHERE with Pattern Matching
+
+GIVEN xs IS A LIST OF NUMBER
+GIVETH A NUMBER
+`sum of list using where` xs MEANS
+  CONSIDER xs
+  WHEN EMPTY THEN 0
+  WHEN head FOLLOWED BY tail THEN head PLUS `rest sum`
+    WHERE
+      `rest sum` MEANS `sum of list using where` tail
+
+#EVAL `sum of list using where` (LIST 1, 2, 3, 4, 5)

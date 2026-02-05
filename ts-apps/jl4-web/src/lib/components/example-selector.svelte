@@ -12,7 +12,7 @@
   <div class="button-grid">
     <button
       class="example-button external"
-      onclick={() => window.open('https://l4.legalese.com', '_blank')}
+      onclick={() => window.open('https://legalese.com/l4', '_blank')}
     >
       Visit the L4 Documentation
     </button>

@@ -1,0 +1,14 @@
+-- Example: Operator precedence
+-- Demonstrates how operators are evaluated in order
+
+x MEANS 3
+y MEANS 4
+z MEANS 5
+
+-- Multiplication before addition
+#EVAL x PLUS y TIMES z
+-- Evaluates as: 3 + (4 * 5) = 23
+
+-- Use parentheses for clarity
+#EVAL (x PLUS y) TIMES z
+-- Evaluates as: 7 * 5 = 35

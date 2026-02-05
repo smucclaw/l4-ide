@@ -1,0 +1,12 @@
+-- Example: Maybe type usage
+-- Demonstrates optional values with JUST and NOTHING
+
+`value is present` MEANS JUST OF 42
+`value is absent` MEANS NOTHING
+
+`get the value or default to zero` MEANS
+  CONSIDER `value is present`
+  WHEN JUST OF x THEN x
+  WHEN NOTHING THEN 0
+
+#EVAL `get the value or default to zero`

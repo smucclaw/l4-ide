@@ -1,0 +1,19 @@
+-- Example: Genitive ('s) for field access
+-- Demonstrates possessive syntax for record fields
+
+DECLARE Person
+  HAS `full name` IS A STRING
+      age         IS A NUMBER
+
+DECIDE `the applicant` IS Person WITH
+  `full name` IS "John Doe"
+  age         IS 30
+
+-- Using genitive (reads like English)
+DECIDE `applicant age using genitive` IS `the applicant`'s age
+
+-- Equivalent to using THE ... OF
+DECIDE `applicant age using THE OF` IS age OF `the applicant`
+
+#EVAL `applicant age using genitive`
+#EVAL `applicant age using THE OF`

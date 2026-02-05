@@ -1,0 +1,46 @@
+{
+    "$defs": {
+        "Contract State": {
+            "properties": {
+                "accruedInterest": {
+                    "$ref": "#/$defs/NUMBER"
+                },
+                "contractPerformance": {
+                    "$ref": "#/$defs/Contract Performance"
+                },
+                "feeAccrued": {
+                    "$ref": "#/$defs/NUMBER"
+                },
+                "nominalInterestRate": {
+                    "$ref": "#/$defs/NUMBER"
+                },
+                "notionalPrincipal": {
+                    "$ref": "#/$defs/NUMBER"
+                },
+                "statusDate": {
+                    "$ref": "#/$defs/DATE"
+                }
+            },
+            "required": [
+                "statusDate",
+                "contractPerformance",
+                "notionalPrincipal",
+                "accruedInterest",
+                "nominalInterestRate",
+                "feeAccrued"
+            ],
+            "type": "object"
+        }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "state": {
+            "$ref": "#/$defs/Contract State"
+        }
+    },
+    "required": [
+        "state"
+    ],
+    "title": "is fully paid",
+    "type": "object"
+}

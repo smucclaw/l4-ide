@@ -127,6 +127,7 @@ test-suite jl4-decision-service-test
   other-modules:
     ApiSpec
     AskOrderingSpec
+    CodeGenSpec
     DiskLoadingSpec
     Paths_jl4_decision_service
     BooleanDecisionQuerySpec
