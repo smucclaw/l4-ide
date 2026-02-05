@@ -1,0 +1,12 @@
+-- Example: Identifiers in L4
+-- Demonstrates regular and quoted identifiers
+
+-- Regular identifiers
+ASSUME age IS A NUMBER
+ASSUME taxRate IS A NUMBER
+
+-- Quoted identifiers with spaces
+ASSUME `total tax` IS A NUMBER
+ASSUME `Section 2(a)` IS A STRING
+
+#EVAL age

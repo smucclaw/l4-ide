@@ -1,0 +1,21 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "convention": {
+            "$ref": "#/$defs/Day Count Convention"
+        },
+        "endDate": {
+            "$ref": "#/$defs/DATE"
+        },
+        "startDate": {
+            "$ref": "#/$defs/DATE"
+        }
+    },
+    "required": [
+        "startDate",
+        "endDate",
+        "convention"
+    ],
+    "title": "year fraction",
+    "type": "object"
+}

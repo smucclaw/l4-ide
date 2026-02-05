@@ -1,0 +1,57 @@
+-- Legal Persons Example: Natural and corporate entity modeling
+IMPORT daydate
+IMPORT `legal-persons`
+
+-- Name formatting
+DECIDE `john's full name` IS `full name` "John" "Doe"
+#EVAL `john's full name`  -- "John Doe"
+
+DECIDE `jane's formal name` IS `formal name` "Dr." "Jane" "Smith"
+#EVAL `jane's formal name`  -- "Dr. Jane Smith"
+
+-- Address formatting
+DECIDE `formatted address` IS `format address` "123 Main St" "New York" "NY" "10001" "US"
+#EVAL `formatted address`
+
+-- Age calculations
+DECIDE `birth date` IS Date 15 6 1990
+DECIDE `reference date` IS Date 1 1 2024
+
+DECIDE `age at reference` IS `age in years` `birth date` `reference date`
+#EVAL `age at reference`  -- 33
+
+-- Legal capacity checks (varies by jurisdiction)
+#EVAL `is adult` `birth date` "US"  -- TRUE (18+)
+#EVAL `is adult` `birth date` "JP"  -- TRUE (Japan uses 20)
+
+DECIDE `minor birth date` IS Date 1 1 2010
+#EVAL `is adult` `minor birth date` "US"  -- FALSE
+#EVAL `is minor` `minor birth date` "US"  -- TRUE
+
+-- Contract capacity
+#EVAL `can enter contract` `birth date` "US"  -- TRUE
+
+-- Voting age (varies by country)
+#EVAL `can vote` `birth date` "US"  -- TRUE
+#EVAL `can vote` `birth date` "BR"  -- TRUE (Brazil allows 16+)
+
+-- Citizenship functions
+DECIDE `citizenship list` IS LIST "US", "UK"
+#EVAL `has citizenship in` `citizenship list` "US"  -- TRUE
+#EVAL `has citizenship in` `citizenship list` "JP"  -- FALSE
+#EVAL `has multiple citizenships` `citizenship list`  -- TRUE
+#EVAL `citizenship count` `citizenship list`  -- 2
+
+-- Corporate entity types
+#EVAL `Corporation type`  -- "CORPORATION"
+#EVAL `LLC type`          -- "LLC"
+
+-- Beneficial ownership thresholds
+#EVAL `is beneficial owner` 25   -- TRUE (25%+ threshold)
+#EVAL `is beneficial owner` 24   -- FALSE
+#EVAL `is majority owner` 51     -- TRUE
+#EVAL `has significant control` 30  -- TRUE
+
+-- Corporate jurisdiction checks
+#EVAL `is US corporation` "US-DE"  -- TRUE (Delaware)
+#EVAL `is UK corporation` "GB"     -- TRUE

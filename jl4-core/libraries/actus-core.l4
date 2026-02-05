@@ -1,0 +1,342 @@
+-- =============================================================================
+-- ACTUS Core Types Library
+-- Algorithmic Contract Types Unified Standards (actusfrf.org)
+-- =============================================================================
+-- This library provides core type definitions for ACTUS-compliant financial
+-- contracts in L4. Based on ACTUS Technical Specification v1.1 and
+-- Data Dictionary v1.4 (December 2023).
+--
+-- Version: 1.0.0
+-- Date: 2025-01-28
+-- License: Apache-2.0 (aligned with ACTUS)
+-- =============================================================================
+
+IMPORT prelude
+
+§ `ACTUS Core Types`
+
+-- =============================================================================
+§§ `Contract Type Taxonomy`
+-- =============================================================================
+-- ACTUS defines ~32 contract types organized into families.
+-- See: actus-dictionary-taxonomy.json
+
+-- Basic Contract Types (fixed income, ownership)
+DECLARE `Basic Contract Type` IS ONE OF
+    PAM     -- Principal at Maturity (bullet bonds, term deposits)
+    LAM     -- Linear Amortizer (constant principal amortization)
+    NAM     -- Negative Amortizer (variable maturity ARMs)
+    ANN     -- Annuity (level payment mortgages)
+    CLM     -- Call Money (interbank loans with call features)
+    CSH     -- Cash (cash positions)
+    STK     -- Stock (equity instruments)
+    UMP     -- Undefined Maturity Profile (savings accounts)
+    COM     -- Commodity (physical commodities)
+
+-- Exotic Basic Types (step-up features)
+DECLARE `Exotic Basic Contract Type` IS ONE OF
+    LAX     -- Exotic Linear Amortizer
+    NAX     -- Exotic Negative Amortizer
+    ANX     -- Exotic Annuity
+
+-- Combined Contract Types (derivatives)
+DECLARE `Combined Contract Type` IS ONE OF
+    SWAPS   -- General Swap
+    SWPPV   -- Plain Vanilla Swap (fixed-float)
+    OPTNS   -- Options (European, American, Bermudan)
+    FUTUR   -- Futures (exchange-traded)
+    FXOUT   -- Foreign Exchange Outright
+    CAPFL   -- Cap/Floor (interest rate options)
+    BCS     -- Boundary Controlled Switch (barrier options)
+
+-- Credit Enhancement Types
+DECLARE `Credit Enhancement Contract Type` IS ONE OF
+    CEG     -- Guarantee
+    CEC     -- Collateral
+    MAR     -- Margining
+
+-- Unified Contract Type (all types)
+DECLARE `Contract Type` IS ONE OF
+    `Basic` HAS contractType IS A `Basic Contract Type`
+    `Exotic` HAS contractType IS A `Exotic Basic Contract Type`
+    `Combined` HAS contractType IS A `Combined Contract Type`
+    `CreditEnhancement` HAS contractType IS A `Credit Enhancement Contract Type`
+
+-- =============================================================================
+§§ `Contract Role`
+-- =============================================================================
+-- Defines the role of the contract holder relative to cash flows.
+-- Sign convention: positive = inflow to holder, negative = outflow
+
+DECLARE `Contract Role` IS ONE OF
+    RPA     -- Real Position Asset: receive principal at start, pay at end
+    RPL     -- Real Position Liability: pay principal at start, receive at end
+    CLO     -- Role of a lender in a loan
+    CNO     -- Role of a borrower in a loan
+    COL     -- Role of a collateral holder
+    LG      -- Long position (receive if positive payoff)
+    ST      -- Short position (pay if positive payoff)
+    BUY     -- Buyer in a sales contract
+    SEL     -- Seller in a sales contract
+    RFL     -- Receive first leg in a swap
+    PFL     -- Pay first leg in a swap
+    RF      -- Receive fixed leg
+    PF      -- Pay fixed leg
+
+-- Role sign multiplier for payoff calculations
+GIVEN role IS A `Contract Role`
+GIVETH A NUMBER
+`role sign` MEANS
+    CONSIDER role
+    WHEN RPA THEN 1
+    WHEN RPL THEN -1
+    WHEN CLO THEN 1
+    WHEN CNO THEN -1
+    WHEN COL THEN 1
+    WHEN LG THEN 1
+    WHEN ST THEN -1
+    WHEN BUY THEN -1
+    WHEN SEL THEN 1
+    WHEN RFL THEN 1
+    WHEN PFL THEN -1
+    WHEN RF THEN 1
+    WHEN PF THEN -1
+
+-- =============================================================================
+§§ `Contract Performance Status`
+-- =============================================================================
+-- State variable indicating current performance of the contract.
+
+DECLARE `Contract Performance` IS ONE OF
+    PF      -- Performant: contract performing according to terms
+    DL      -- Delayed: payment delayed within grace period
+    DQ      -- Delinquent: payment delayed beyond grace period
+    DF      -- Default: contract in default
+    MA      -- Matured: contract has matured
+    TE      -- Terminated: contract has been terminated
+
+-- Check if contract is in a non-performing state
+GIVEN perf IS A `Contract Performance`
+GIVETH A BOOLEAN
+`is non-performing` MEANS
+    CONSIDER perf
+    WHEN PF THEN FALSE
+    WHEN DL THEN FALSE
+    WHEN DQ THEN TRUE
+    WHEN DF THEN TRUE
+    WHEN MA THEN FALSE
+    WHEN TE THEN FALSE
+
+-- Check if contract is still active
+GIVEN perf IS A `Contract Performance`
+GIVETH A BOOLEAN
+`is active` MEANS
+    CONSIDER perf
+    WHEN PF THEN TRUE
+    WHEN DL THEN TRUE
+    WHEN DQ THEN TRUE
+    WHEN DF THEN FALSE
+    WHEN MA THEN FALSE
+    WHEN TE THEN FALSE
+
+-- =============================================================================
+§§ `Day Count Conventions`
+-- =============================================================================
+-- Standard conventions for calculating year fractions in interest calculations.
+-- ACTUS acronyms: AA (Actual/Actual), A360, A365, 30E360, 30E360ISDA, BUS252
+
+DECLARE `Day Count Convention` IS ONE OF
+    AA          -- Actual/Actual (ISDA)
+    A360        -- Actual/360
+    A365        -- Actual/365 Fixed
+    `30E360`    -- 30E/360 (Eurobond basis)
+    `30E360ISDA` -- 30E/360 ISDA
+    BUS252      -- Business/252 (Brazilian)
+
+-- Days in year for each convention
+GIVEN dcc IS A `Day Count Convention`
+GIVETH A NUMBER
+`days in year for` MEANS
+    CONSIDER dcc
+    WHEN AA THEN 365.25       -- Approximation for Actual/Actual
+    WHEN A360 THEN 360
+    WHEN A365 THEN 365
+    WHEN `30E360` THEN 360
+    WHEN `30E360ISDA` THEN 360
+    WHEN BUS252 THEN 252
+
+-- =============================================================================
+§§ `End of Month Convention`
+-- =============================================================================
+-- How to handle dates when a cycle anchor falls on month-end.
+
+DECLARE `End of Month Convention` IS ONE OF
+    EOM     -- End of Month: adjust to end of month
+    SD      -- Same Day: keep same day number
+    EOMP    -- End of Month Preserve: only adjust if anchor was EOM
+
+-- =============================================================================
+§§ `Business Day Convention`
+-- =============================================================================
+-- How to adjust dates falling on non-business days.
+
+DECLARE `Business Day Convention` IS ONE OF
+    SCR     -- No adjustment (Saturday, Sunday, holiday counts)
+    SCRF    -- Following: move to next business day
+    SCRP    -- Preceding: move to previous business day
+    SCRMF   -- Modified Following: next, unless crosses month boundary
+    SCRMP   -- Modified Preceding: previous, unless crosses month boundary
+
+-- =============================================================================
+§§ `Calendar Type`
+-- =============================================================================
+-- Reference calendar for business day calculations.
+
+DECLARE `Calendar Type` IS ONE OF
+    NoCalendar      -- No holiday calendar (every day is business day)
+    MondayToFriday  -- Weekends only
+    `Calendar` HAS calendarCode IS A STRING  -- Custom calendar by code
+
+-- =============================================================================
+§§ `Period and Cycle`
+-- =============================================================================
+-- ACTUS uses ISO 8601 period notation: P[n]Y[n]M[n]DL[stub]
+-- Example: P1ML0 = 1 Month, Long stub at end
+
+DECLARE `Period Unit` IS ONE OF
+    Days
+    Weeks
+    Months
+    Quarters
+    Years
+
+-- Stub convention for incomplete periods
+DECLARE `Stub Convention` IS ONE OF
+    `Long Initial`   -- L1: Long stub at start
+    `Short Initial`  -- S1: Short stub at start
+    `Long Final`     -- L0: Long stub at end
+    `Short Final`    -- S0: Short stub at end
+
+-- Cycle definition (e.g., monthly interest payments)
+DECLARE Cycle HAS
+    period      IS A NUMBER
+    periodUnit  IS A `Period Unit`
+    stub        IS A `Stub Convention`
+
+-- Convenience constructors for common cycles
+`Monthly Cycle` MEANS Cycle WITH period IS 1, periodUnit IS Months, stub IS `Short Final`
+`Quarterly Cycle` MEANS Cycle WITH period IS 3, periodUnit IS Months, stub IS `Short Final`
+`Semi-Annual Cycle` MEANS Cycle WITH period IS 6, periodUnit IS Months, stub IS `Short Final`
+`Annual Cycle` MEANS Cycle WITH period IS 1, periodUnit IS Years, stub IS `Short Final`
+
+-- =============================================================================
+§§ `Interest Payment Convention`
+-- =============================================================================
+-- When interest accrual is capitalized vs paid out.
+
+DECLARE `Interest Payment Convention` IS ONE OF
+    PayInterest         -- Interest is paid out
+    CapitalizeInterest  -- Interest is added to principal
+
+-- =============================================================================
+§§ `Penalty Type`
+-- =============================================================================
+-- Type of penalty applied on prepayment or breach.
+
+DECLARE `Penalty Type` IS ONE OF
+    NoPenalty           -- O: No penalty
+    AbsolutePenalty     -- A: Fixed amount penalty
+    RelativePenalty     -- N: Percentage of notional
+    InterestPenalty     -- I: Percentage of interest due
+
+-- =============================================================================
+§§ `Option Type`
+-- =============================================================================
+-- For contracts with embedded options.
+
+DECLARE `Option Type` IS ONE OF
+    CallOption          -- C: Right to buy
+    PutOption           -- P: Right to sell
+    Straddle            -- S: Both call and put
+
+DECLARE `Option Exercise Type` IS ONE OF
+    European            -- E: Exercise only at expiry
+    American            -- A: Exercise anytime before expiry
+    Bermudan            -- B: Exercise on specific dates
+
+-- =============================================================================
+§§ `Scaling Effect`
+-- =============================================================================
+-- How scaling index affects contract terms.
+
+DECLARE `Scaling Effect` IS ONE OF
+    NoScaling           -- 0: No scaling
+    InterestScaling     -- I: Scale interest payments
+    PrincipalScaling    -- N: Scale notional/principal
+    BothScaling         -- IN: Scale both
+
+-- =============================================================================
+§§ `Currency (ISO 4217)`
+-- =============================================================================
+-- Major currencies for ACTUS contracts.
+
+DECLARE `ACTUS Currency` IS ONE OF
+    `ACTUS USD`     -- United States Dollar
+    `ACTUS EUR`     -- Euro
+    `ACTUS GBP`     -- British Pound Sterling
+    `ACTUS JPY`     -- Japanese Yen
+    `ACTUS CHF`     -- Swiss Franc
+    `ACTUS CAD`     -- Canadian Dollar
+    `ACTUS AUD`     -- Australian Dollar
+    `ACTUS CNY`     -- Chinese Yuan
+    `ACTUS HKD`     -- Hong Kong Dollar
+    `ACTUS SGD`     -- Singapore Dollar
+    `ACTUS Other` HAS isoCode IS A STRING
+
+-- Get ISO 4217 code string
+GIVEN ccy IS AN `ACTUS Currency`
+GIVETH A STRING
+`currency code` MEANS
+    CONSIDER ccy
+    WHEN `ACTUS USD` THEN "USD"
+    WHEN `ACTUS EUR` THEN "EUR"
+    WHEN `ACTUS GBP` THEN "GBP"
+    WHEN `ACTUS JPY` THEN "JPY"
+    WHEN `ACTUS CHF` THEN "CHF"
+    WHEN `ACTUS CAD` THEN "CAD"
+    WHEN `ACTUS AUD` THEN "AUD"
+    WHEN `ACTUS CNY` THEN "CNY"
+    WHEN `ACTUS HKD` THEN "HKD"
+    WHEN `ACTUS SGD` THEN "SGD"
+    OTHERWISE ccy's isoCode
+
+-- =============================================================================
+§§ `Monetary Amount`
+-- =============================================================================
+-- Amount with currency (ACTUS-compliant)
+
+DECLARE `ACTUS Amount` HAS
+    value    IS A NUMBER
+    currency IS AN `ACTUS Currency`
+
+-- Constructors for common currencies
+GIVEN n IS A NUMBER
+`ACTUS_USD` MEANS `ACTUS Amount` WITH value IS n, currency IS `ACTUS USD`
+
+GIVEN n IS A NUMBER
+`ACTUS_EUR` MEANS `ACTUS Amount` WITH value IS n, currency IS `ACTUS EUR`
+
+GIVEN n IS A NUMBER
+`ACTUS_GBP` MEANS `ACTUS Amount` WITH value IS n, currency IS `ACTUS GBP`
+
+GIVEN n IS A NUMBER
+`ACTUS_SGD` MEANS `ACTUS Amount` WITH value IS n, currency IS `ACTUS SGD`
+
+-- =============================================================================
+§§ `Version Information`
+-- =============================================================================
+
+`ACTUS Core Library Version` MEANS "1.0.0"
+`ACTUS Core Library Date` MEANS "2025-01-28"
+`ACTUS Specification Version` MEANS "1.1"
+`ACTUS Dictionary Version` MEANS "1.4"

@@ -2,6 +2,8 @@
 *~
 *.actual
 build
+.continue
+olddoc
 # Build Outputs
 ## Built Visual Studio Code Extensions
 .cabal
@@ -61,3 +63,4 @@ yarn-error.log*
 # Generated skill packages
 l4/l4.skill
 l4/l4.zip
+.cache/

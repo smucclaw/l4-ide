@@ -1,0 +1,118 @@
+-- LET keyword examples
+
+-- Single Binding
+
+DECIDE `result with single binding` IS
+  LET x IS 5
+  IN x TIMES 2
+
+#EVAL `result with single binding`
+
+-- Multiple Bindings (Inline)
+
+DECIDE `sum of two values` IS
+  LET
+    x IS 5
+    y IS 10
+  IN x PLUS y
+
+#EVAL `sum of two values`
+
+-- Multiple Bindings (Multi-line)
+
+DECIDE `sum of three values` IS
+  LET
+    x IS 5
+    y IS 10
+    z IS 15
+  IN x PLUS y PLUS z
+
+#EVAL `sum of three values`
+
+-- Forward References
+
+DECIDE `calculated result using forward references` IS
+  LET
+    `initial value` IS 5
+    `doubled value` IS `initial value` TIMES 2
+    `final value` IS `doubled value` PLUS 3
+  IN `final value`
+
+#EVAL `calculated result using forward references`
+
+-- Various Binding Keywords
+
+DECIDE `sum using various binding keywords` IS
+  LET
+    a IS 1
+    b BE 2
+    c MEAN 3
+    d MEANS 4
+    e = 5
+  IN a PLUS b PLUS c PLUS d PLUS e
+
+#EVAL `sum using various binding keywords`
+
+-- Using = Operator
+
+DECIDE `using equals for binding` IS
+  LET
+    val = 42
+    result = val PLUS 8
+  IN result
+
+#EVAL `using equals for binding`
+
+-- Nested LET Expressions
+
+DECIDE `nested let expressions` IS
+  LET `step one` IS 10
+  IN LET `step two` IS `step one` TIMES 2
+     IN LET `step three` IS `step two` PLUS 5
+        IN `step three`
+
+#EVAL `nested let expressions`
+
+-- LET with Complex Expressions
+
+GIVEN n IS A NUMBER
+`factorial of` n MEANS
+  IF n <= 1
+  THEN 1
+  ELSE LET `previous factorial` IS `factorial of` (n MINUS 1)
+       IN n TIMES `previous factorial`
+
+#EVAL `factorial of` 5
+
+-- LET with Records
+
+DECLARE Point HAS x IS A NUMBER, y IS A NUMBER
+
+DECIDE `shifted point example` IS
+  LET
+    `the origin` IS Point WITH x IS 0, y IS 0
+    `shifted point` IS Point WITH x IS `the origin`'s x PLUS 10, y IS `the origin`'s y PLUS 20
+  IN `shifted point`
+
+#EVAL `shifted point example`
+
+-- LET with Lists
+
+DECIDE `list of numbers example` IS
+  LET
+    `all numbers` IS LIST 1, 2, 3, 4, 5
+  IN `all numbers`
+
+#EVAL `list of numbers example`
+
+-- LET in Function Definitions
+
+GIVEN a IS A NUMBER
+      b IS A NUMBER
+      c IS A NUMBER
+`quadratic discriminant` a b c MEANS
+  LET
+    `the discriminant` IS b TIMES b MINUS 4 TIMES a TIMES c
+  IN `the discriminant`
+
+#EVAL `quadratic discriminant` 1 5 6

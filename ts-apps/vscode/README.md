@@ -2,7 +2,7 @@
 
 Language support for L4 rules-as-code functional programming language with syntax highlighting, IntelliSense, and ladder diagram visualization.
 
-Documentation: https://l4.legalese.com
+Documentation: https://legalese.com/l4
 
 ## Features
 

@@ -1,0 +1,15 @@
+-- Example: Defining types in L4
+-- From Module 0: Introduction to L4
+
+-- A simple record type describing a registered charity
+DECLARE `Registered Charity`
+    HAS `the name` IS A STRING
+        `the registration number` IS A STRING
+        `the annual income` IS A NUMBER
+
+-- Create an example charity using positional arguments
+`Example Charity` MEANS `Registered Charity` "Jersey Wildlife Trust" "JC-2024-042" 75000
+
+-- Access its fields
+#EVAL `Example Charity`'s `the name`
+#EVAL `Example Charity`'s `the annual income`

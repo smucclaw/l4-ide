@@ -1,0 +1,146 @@
+§ `Natural Language Functions Tutorial`
+
+-- This file demonstrates infix, postfix, and mixfix function patterns
+-- that allow L4 code to read like natural language.
+
+-- ============================================================================
+-- INFIX FUNCTIONS
+-- Pattern: param `keyword` param
+-- ============================================================================
+
+-- Simple numeric infix operator
+GIVEN a IS A NUMBER, b IS A NUMBER
+GIVETH A NUMBER
+a `plus` b MEANS a + b
+
+-- Multi-word infix operator
+GIVEN person IS A STRING, program IS A STRING
+GIVETH A BOOLEAN
+person `is eligible for` program MEANS TRUE
+
+-- Test infix calls
+#EVAL 3 `plus` 5
+#EVAL "Alice" `is eligible for` "Medicare"
+
+-- Infix can also be called with prefix notation
+#EVAL `plus` 10 20
+
+-- ============================================================================
+-- POSTFIX FUNCTIONS
+-- Pattern: param `keyword`
+-- ============================================================================
+
+-- Simple postfix operator
+GIVEN amount IS A NUMBER
+GIVETH A NUMBER
+amount `percent` MEANS amount / 100
+
+-- Another postfix example
+GIVEN n IS A NUMBER
+GIVETH A NUMBER
+n squared MEANS n * n
+
+-- Test postfix calls
+#EVAL 50 `percent`
+#EVAL 75 percent
+#EVAL 5 squared
+#EVAL 7 `squared`
+
+-- Postfix with expressions
+#EVAL (10 + 5) `percent`
+
+-- ============================================================================
+-- TERNARY MIXFIX FUNCTIONS
+-- Pattern: `keyword` param `keyword` param `keyword` param
+-- ============================================================================
+
+-- Custom conditional operator
+GIVEN cond IS A BOOLEAN, thenVal IS A NUMBER, elseVal IS A NUMBER
+GIVETH A NUMBER
+`myif` cond `mythen` thenVal `myelse` elseVal MEANS
+  IF cond THEN thenVal ELSE elseVal
+
+-- Test ternary mixfix
+#EVAL `myif` TRUE `mythen` 42 `myelse` 0
+#EVAL `myif` FALSE `mythen` 42 `myelse` 0
+#EVAL `myif` (1 = 1) `mythen` (10 + 5) `myelse` (20 - 5)
+
+-- ============================================================================
+-- QUATERNARY MIXFIX FUNCTIONS
+-- Pattern: param `keyword` param `keyword` param `keyword` param
+-- ============================================================================
+
+GIVEN mummy IS A STRING, daddy IS A STRING, baby IS A STRING, nickname IS A STRING
+GIVETH A STRING
+mummy `and` daddy `had` baby `called` nickname MEANS baby
+
+-- Test quaternary mixfix
+#EVAL "Alice" `and` "Bob" `had` "Charlie" `called` "Chuck"
+
+-- Prefix notation also works
+#EVAL `and` "Mom" "Dad" "Kid" "Kiddo"
+
+-- ============================================================================
+-- ARITY-5 MIXFIX FUNCTIONS
+-- ============================================================================
+
+GIVEN a IS A NUMBER, b IS A NUMBER, c IS A NUMBER, d IS A NUMBER, e IS A NUMBER
+GIVETH A NUMBER
+a `op1` b `op2` c `op3` d `op4` e MEANS a + b + c + d + e
+
+#EVAL 1 `op1` 2 `op2` 3 `op3` 4 `op4` 5
+#EVAL (10 - 9) `op1` (1 + 1) `op2` 3 `op3` (2 * 2) `op4` 5
+
+-- ============================================================================
+-- RANGE CHECK MIXFIX
+-- A practical example for legal conditions
+-- ============================================================================
+
+GIVEN lower IS A NUMBER, value IS A NUMBER, upper IS A NUMBER
+GIVETH A BOOLEAN
+lower `is at most` value `which is at most` upper MEANS
+  lower <= value AND value <= upper
+
+#EVAL 0 `is at most` 5 `which is at most` 10
+#EVAL 0 `is at most` 15 `which is at most` 10
+
+-- ============================================================================
+-- PRACTICAL LEGAL EXAMPLE
+-- Functions that read like legal prose
+-- ============================================================================
+
+DECLARE Person HAS
+  name IS A STRING
+  age IS A NUMBER
+
+GIVEN person IS A Person
+GIVETH A BOOLEAN
+person `is an adult` MEANS person's age >= 18
+
+GIVEN person IS A Person
+GIVETH A BOOLEAN
+person `is a minor` MEANS person's age < 18
+
+-- Create test data
+`test adult` MEANS Person WITH name IS "Alice", age IS 30
+`test minor` MEANS Person WITH name IS "Bob", age IS 15
+
+-- Test legal predicates
+#EVAL `test adult` `is an adult`
+#EVAL `test minor` `is a minor`
+
+-- ============================================================================
+-- MIXFIX WITH WHERE CLAUSE
+-- Defining helper operators locally
+-- ============================================================================
+
+GIVEN radius IS A NUMBER
+GIVETH A NUMBER
+`circle area for radius` radius MEANS
+  radius `squared locally` TIMES pi
+  WHERE
+    pi MEANS 3.14159
+    GIVEN r IS A NUMBER
+    r `squared locally` MEANS r * r
+
+#EVAL `circle area for radius` 10

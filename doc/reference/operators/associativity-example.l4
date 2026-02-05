@@ -1,0 +1,14 @@
+-- Example: Operator associativity
+-- Demonstrates left and right associative operators
+
+-- Left-associative: subtraction
+a MEANS 10
+b MEANS 3
+c MEANS 2
+
+#EVAL a MINUS b MINUS c
+-- Evaluates as: (10 - 3) - 2 = 5
+
+-- Right-associative: list cons
+#EVAL 1 FOLLOWED BY 2 FOLLOWED BY 3 FOLLOWED BY EMPTY
+-- Evaluates as: 1 FOLLOWED BY (2 FOLLOWED BY (3 FOLLOWED BY EMPTY))

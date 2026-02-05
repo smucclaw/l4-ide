@@ -1284,6 +1284,16 @@ jsonValueToWHNFTyped jsonValue ty = do
             Aeson.Bool b -> pure $ if b then ValBool True else ValBool False
             _ -> InternalException $ RuntimeTypeError $
                   "Expected JSON boolean but got: " <> Text.pack (show jsonValue)
+        "DATE" -> do
+          -- DATE fields in JSON should be ISO-8601 strings (YYYY-MM-DD)
+          case jsonValue of
+            Aeson.String s -> do
+              case parseDateText s of
+                Just day -> pure $ ValDate day
+                Nothing -> InternalException $ RuntimeTypeError $
+                  "Could not parse date string '" <> s <> "'. Expected format: YYYY-MM-DD"
+            _ -> InternalException $ RuntimeTypeError $
+                  "Expected JSON string for DATE field but got: " <> Text.pack (show jsonValue)
 
         -- Not a primitive, check if it's a custom record type
         _ -> do

@@ -1,0 +1,55 @@
+-- DECLARE keyword examples
+
+-- Record Types (Product Types)
+
+-- Basic record with multiple fields
+DECLARE Person
+  HAS
+    `full name` IS A STRING
+    age         IS A NUMBER
+
+-- Record with single line syntax
+DECLARE Point HAS x IS A NUMBER, y IS A NUMBER
+
+-- Enum Types (Sum Types)
+
+-- Simple enum with value constructors
+DECLARE Colour IS ONE OF `bright red`, `forest green`, `ocean blue`
+
+-- Enum with constructors that have fields
+DECLARE Shape IS ONE OF
+  Circle HAS radius IS A NUMBER
+  Rectangle HAS width IS A NUMBER, height IS A NUMBER
+  Point
+
+-- Type Synonyms
+
+DECLARE Age IS NUMBER
+DECLARE PersonName IS STRING
+
+-- Parameterized Types
+
+GIVEN a IS A TYPE
+DECLARE Box HAS contents IS AN a
+
+GIVEN a IS A TYPE, b IS A TYPE
+DECLARE MyPair HAS first IS AN a, second IS A b
+
+-- Usage Examples
+
+-- Create record instances
+DECIDE `the applicant` IS Person WITH `full name` IS "John", age IS 30
+DECIDE `the origin` IS Point WITH x IS 0, y IS 0
+
+-- Use enum constructors
+DECIDE `my favourite colour` IS `bright red`
+DECIDE `my shape` IS Circle WITH radius IS 5
+
+-- Use parameterized types
+DECIDE `box with number` IS Box WITH contents IS 42
+DECIDE `box with text` IS Box WITH contents IS "hello"
+
+-- Evaluate examples
+#EVAL `the applicant`'s `full name`
+#EVAL `the applicant`'s age
+#EVAL `my favourite colour`
