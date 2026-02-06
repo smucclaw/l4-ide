@@ -3,7 +3,6 @@
 *.actual
 build
 .continue
-olddoc
 # Build Outputs
 ## Built Visual Studio Code Extensions
 .cabal
@@ -16,7 +15,6 @@ coverage
 .direnv
 dist
 dist-newstyle/
-doc/*/*.html
 .DS_Store
 .env
 .env.development.local
