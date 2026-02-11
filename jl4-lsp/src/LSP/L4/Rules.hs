@@ -308,14 +308,33 @@ jl4Rules evalConfig rootDirectory recorder = do
                         pure $ dir </> modName <.> "l4"
                       rootPath = rootDirectory </> modName <.> "l4"
 
+                  -- Look for libraries in multiple locations, in order of priority:
+                  -- 1. JL4_LIBRARY_PATH environment variable (user override)
+                  -- 2. XDG data directory (~/.local/share/jl4/libraries/) for cabal install
+                  -- 3. Bundled with VSCode extension (../../libraries from executable)
+                  -- 4. Cabal's getDataDir (for cabal run during development)
                   builtinPaths <- liftIO $ do
+                    -- 1. Check JL4_LIBRARY_PATH environment variable
+                    mEnvPath <- lookupEnv "JL4_LIBRARY_PATH"
+                    let envPaths = case mEnvPath of
+                          Just p  -> [p </> modName <.> "l4"]
+                          Nothing -> []
+
+                    -- 2. XDG data directory (~/.local/share/jl4/libraries/)
+                    xdgDataDir <- getXdgDirectory XdgData "jl4"
+                    let xdgPath = xdgDataDir </> "libraries" </> modName <.> "l4"
+
+                    -- 3. VSCode extension bundled libraries
                     exePath <- getExecutablePath
                     let exeDir = takeDirectory exePath
                         extensionRoot = exeDir </> ".." </> ".."
                         bundledPath = extensionRoot </> "libraries" </> modName <.> "l4"
+
+                    -- 4. Cabal's getDataDir (for development / cabal run)
                     dataDir <- Paths_jl4_core.getDataDir
                     let cabalPath = dataDir </> "libraries" </> modName <.> "l4"
-                    pure [bundledPath, cabalPath]
+
+                    pure $ envPaths <> [xdgPath, bundledPath, cabalPath]
 
                   let paths = catMaybes [Just rootPath, relPath] <> builtinPaths
 
