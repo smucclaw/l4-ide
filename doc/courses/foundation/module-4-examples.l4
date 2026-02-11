@@ -1,177 +1,301 @@
--- Module 4: Functions - Complete Examples
+-- Module 4: Decision Logic - Complete Examples
 -- All examples are validated and use natural language identifiers
 
 IMPORT prelude
 
--- =============================================================================
--- SECTION 1: Basic Functions
--- =============================================================================
+-- =======================================
+-- SECTION 1: Basic Eligibility Decisions
+-- =======================================
 
--- Square a number
-GIVEN n IS A NUMBER
+-- Simple age-based eligibility
+GIVEN `the person's age` IS A NUMBER
+GIVETH A BOOLEAN
+DECIDE `the person is an adult` IF `the person's age` >= 18
+
+-- Voting eligibility
+GIVEN `the person's age` IS A NUMBER
+      `is citizen` IS A BOOLEAN
+GIVETH A BOOLEAN
+DECIDE `the person is eligible to vote` IF
+    `the person's age` >= 18
+    AND `is citizen`
+
+-- Senior discount qualification
+GIVEN `the customer's age` IS A NUMBER
+GIVETH A BOOLEAN
+DECIDE `qualifies for senior discount` IF
+    `the customer's age` >= 65
+
+-- Student status determination
+GIVEN `the person's age` IS A NUMBER
+      `is enrolled` IS A BOOLEAN
+GIVETH A BOOLEAN
+DECIDE `the person is a student` IF
+    `the person's age` >= 16
+    AND `the person's age` <= 25
+    AND `is enrolled`
+
+-- =======================================
+-- SECTION 2: Using DECIDE IF vs DECIDE IS vs MEANS
+-- =======================================
+
+-- DECIDE IF: Best for yes/no questions with conditions
+GIVEN `the income` IS A NUMBER
+GIVETH A BOOLEAN
+DECIDE `qualifies for exemption` IF `the income` < 10000
+
+-- DECIDE IS: Best for classification or value assignment
+GIVEN `the income` IS A NUMBER
+GIVETH A STRING
+DECIDE `the tax bracket` IS
+    BRANCH
+        IF `the income` < 10000 THEN "exempt"
+        IF `the income` < 50000 THEN "standard"
+        OTHERWISE "higher rate"
+
+-- MEANS: Best for computations and definitions
+GIVEN `the income` IS A NUMBER
+GIVETH A STRING
+`the income category` MEANS
+    BRANCH
+        IF `the income` < 20000 THEN "low"
+        IF `the income` < 80000 THEN "medium"
+        OTHERWISE "high"
+
+-- =======================================
+-- SECTION 3: Tax and Financial Calculations with WHERE
+-- =======================================
+
+-- Simple tax calculation
+GIVEN `the gross income` IS A NUMBER
+      `the tax rate` IS A NUMBER
 GIVETH A NUMBER
-`the square of` MEANS n * n
-
--- Add two numbers together
-GIVEN x IS A NUMBER
-      y IS A NUMBER
-GIVETH A NUMBER
-`the sum of` MEANS x + y
-
--- Check if a person is an adult
-GIVEN age IS A NUMBER
-GIVETH A BOOLEAN
-DECIDE `the person is an adult` IF age >= 18
-
--- =============================================================================
--- SECTION 2: Using DECIDE IF vs MEANS
--- =============================================================================
-
--- These are equivalent ways to define a boolean function:
-GIVEN age IS A NUMBER
-GIVETH A BOOLEAN
-`is adult (using MEANS)` MEANS age >= 18
-
-GIVEN age IS A NUMBER
-GIVETH A BOOLEAN
-DECIDE `is adult (using DECIDE IF)` IF age >= 18
-
-GIVEN age IS A NUMBER
-GIVETH A BOOLEAN
-DECIDE `is adult (using DECIDE IS)` IS age >= 18
-
--- =============================================================================
--- SECTION 3: Local Definitions with WHERE
--- =============================================================================
-
--- Compound interest calculation
-GIVEN principal IS A NUMBER
-      rate IS A NUMBER
-      years IS A NUMBER
-GIVETH A NUMBER
-`the compound interest` MEANS
-    principal * (`power` factor years)
+`the tax owed` MEANS
+    `the taxable income` * `the tax rate`
     WHERE
-        factor MEANS 1 + rate
+        `the standard deduction` MEANS 12000
+        `the taxable income` MEANS
+            IF `the gross income` > `the standard deduction`
+            THEN `the gross income` - `the standard deduction`
+            ELSE 0
 
-        -- Simple power function (integer exponents only)
-        GIVEN base IS A NUMBER
-              exp IS A NUMBER
-        GIVETH A NUMBER
-        `power` MEANS
-            IF exp <= 0
-            THEN 1
-            ELSE base * (`power` base (exp - 1))
-
--- Monthly payment calculation (simplified)
-GIVEN loan IS A NUMBER
-      annualRate IS A NUMBER
-      months IS A NUMBER
+-- Progressive tax with multiple brackets
+GIVEN `the income` IS A NUMBER
 GIVETH A NUMBER
-`the monthly payment` MEANS
-    loan * monthlyRate / (1 - discountFactor)
+`the income tax owed` MEANS
+    `tax on first bracket` + `tax on second bracket` + `tax on third bracket`
     WHERE
-        monthlyRate MEANS annualRate / 12
-        discountFactor MEANS `power` (1 + monthlyRate) (0 - months)
+        `tax on first bracket` MEANS
+            `amount in first bracket` * 0.10
 
-        GIVEN base IS A NUMBER
-              exp IS A NUMBER
-        GIVETH A NUMBER
-        `power` MEANS
-            IF exp <= 0
-            THEN 1 / (`positive power` base (0 - exp))
-            ELSE `positive power` base exp
+        `tax on second bracket` MEANS
+            `amount in second bracket` * 0.20
 
-        GIVEN base IS A NUMBER
-              exp IS A NUMBER
-        GIVETH A NUMBER
-        `positive power` MEANS
-            IF exp <= 0
-            THEN 1
-            ELSE base * (`positive power` base (exp - 1))
+        `tax on third bracket` MEANS
+            `amount in third bracket` * 0.30
 
--- =============================================================================
--- SECTION 4: Recursive Functions
--- =============================================================================
+        `amount in first bracket` MEANS
+            BRANCH
+                IF `the income` <= 10000 THEN `the income`
+                OTHERWISE 10000
 
--- Factorial: n!
-GIVEN n IS A NUMBER
+        `amount in second bracket` MEANS
+            BRANCH
+                IF `the income` <= 10000 THEN 0
+                IF `the income` <= 50000 THEN `the income` - 10000
+                OTHERWISE 40000
+
+        `amount in third bracket` MEANS
+            BRANCH
+                IF `the income` <= 50000 THEN 0
+                OTHERWISE `the income` - 50000
+
+-- Net income calculation
+GIVEN `the gross income` IS A NUMBER
+      `the expenses` IS A NUMBER
 GIVETH A NUMBER
-`the factorial of` MEANS
-    IF n <= 1
-    THEN 1
-    ELSE n * (`the factorial of` (n - 1))
+`the net income` MEANS
+    `the gross income` - `the total deductions`
+    WHERE
+        `the standard deduction` MEANS
+            IF `calculated deduction` >= 1000
+            THEN `calculated deduction`
+            ELSE 1000
 
--- Sum a list of numbers (using recursion)
-GIVEN numbers IS A LIST OF NUMBER
-GIVETH A NUMBER
-`the sum of the list` MEANS
-    CONSIDER numbers
-    WHEN EMPTY THEN 0
-    WHEN x FOLLOWED BY rest THEN x + `the sum of the list` rest
+        `calculated deduction` MEANS `the gross income` * 0.10
 
--- Count elements in a list
-GIVEN xs IS A LIST OF NUMBER
-GIVETH A NUMBER
-`the length of` MEANS
-    CONSIDER xs
-    WHEN EMPTY THEN 0
-    WHEN x FOLLOWED BY rest THEN 1 + `the length of` rest
+        `the total deductions` MEANS
+            `the standard deduction` + `the expenses`
 
--- =============================================================================
--- SECTION 5: Higher-Order Functions
--- =============================================================================
+-- =======================================
+-- SECTION 4: Structured Entity Examples
+-- =======================================
 
--- Double each number in a list
-GIVEN numbers IS A LIST OF NUMBER
-GIVETH A LIST OF NUMBER
-`the doubled list` MEANS
-    map (GIVEN n YIELD n * 2) numbers
+DECLARE Person HAS
+    name IS A STRING
+    age IS A NUMBER
+    citizenship IS A STRING
+    `annual income` IS A NUMBER
+    `criminal record` IS A BOOLEAN
 
--- Get only positive numbers
-GIVEN numbers IS A LIST OF NUMBER
-GIVETH A LIST OF NUMBER
-`the positive numbers in` MEANS
-    filter (GIVEN n YIELD n > 0) numbers
-
--- Check if all numbers satisfy a condition
-GIVEN numbers IS A LIST OF NUMBER
-      threshold IS A NUMBER
+-- Comprehensive benefit eligibility
+GIVEN `the applicant` IS A Person
 GIVETH A BOOLEAN
-DECIDE `all numbers are above threshold` IF
-    all (GIVEN n YIELD n > threshold) numbers
+DECIDE `the applicant is eligible for benefit` IF
+    `the applicant is a qualifying resident`
+    AND `the applicant is of age`
+    AND `the applicant meets income threshold`
+    AND NOT `the applicant is disqualified`
+    WHERE
+        `the applicant is a qualifying resident` MEANS
+            `the applicant`'s citizenship = "citizen"
 
--- =============================================================================
--- SECTION 6: Test Data
--- =============================================================================
+        `the applicant is of age` MEANS
+            `the applicant`'s age >= 21
+            AND `the applicant`'s age < 65
 
-`test numbers` MEANS LIST 1, 2, 3, 4, 5
-`mixed numbers` MEANS LIST -2, -1, 0, 1, 2, 3
+        `the applicant meets income threshold` MEANS
+            `the applicant`'s `annual income` < 30000
 
--- =============================================================================
--- SECTION 7: Tests
--- =============================================================================
+        `the applicant is disqualified` MEANS
+            `the applicant`'s `criminal record`
 
--- Basic function tests
-#EVAL `the square of` 5
-#EVAL `the sum of` 3 4
+-- Tax bracket determination with record
+GIVEN `the taxpayer` IS A Person
+GIVETH A STRING
+DECIDE `the taxpayer's bracket` IS
+    BRANCH
+        IF `the taxpayer`'s `annual income` < 10000 THEN "exempt"
+        IF `the taxpayer`'s `annual income` < 50000 THEN "standard"
+        IF `the taxpayer`'s `annual income` < 100000 THEN "higher"
+        OTHERWISE "top rate"
+
+-- =======================================
+-- SECTION 5: Multi-Factor Decisions
+-- =======================================
+
+-- Loan approval decision
+GIVEN `the income` IS A NUMBER
+      `the credit score` IS A NUMBER
+      `the loan amount` IS A NUMBER
+GIVETH A BOOLEAN
+DECIDE `the loan is approved` IF
+    `income requirement is met`
+    AND `credit score is sufficient`
+    AND `debt to income ratio is acceptable`
+    WHERE
+        `income requirement is met` MEANS
+            `the income` >= `the loan amount` * 0.3
+
+        `credit score is sufficient` MEANS
+            `the credit score` >= 650
+
+        `debt to income ratio is acceptable` MEANS
+            `the loan amount` <= `the income` * 4
+
+-- Insurance premium calculation
+GIVEN `the insured age` IS A NUMBER
+      `the coverage amount` IS A NUMBER
+      `is smoker` IS A BOOLEAN
+GIVETH A NUMBER
+`the annual premium` MEANS
+    `the base premium` * `the age factor` * `the smoking factor`
+    WHERE
+        `the base premium` MEANS
+            `the coverage amount` * 0.001
+
+        `the age factor` MEANS
+            BRANCH
+                IF `the insured age` < 30 THEN 1.0
+                IF `the insured age` < 50 THEN 1.5
+                OTHERWISE 2.0
+
+        `the smoking factor` MEANS
+            IF `is smoker` THEN 1.5 ELSE 1.0
+
+-- =======================================
+-- SECTION 6: Real-World Contract Scenarios
+-- =======================================
+
+-- Late payment penalty calculation
+GIVEN `the principal amount` IS A NUMBER
+      `days overdue` IS A NUMBER
+GIVETH A NUMBER
+`the late payment penalty` MEANS
+    BRANCH
+        IF `days overdue` <= 0 THEN 0
+        IF `days overdue` <= 30 THEN `the principal amount` * 0.02
+        OTHERWISE `the principal amount` * 0.05
+
+-- Lease renewal qualification
+GIVEN `years as tenant` IS A NUMBER
+      `late payments` IS A NUMBER
+      `current rent` IS A NUMBER
+      `market rent` IS A NUMBER
+GIVETH A BOOLEAN
+DECIDE `qualifies for lease renewal` IF
+    `tenant is in good standing`
+    AND `rent is at market rate`
+    WHERE
+        `tenant is in good standing` MEANS
+            `years as tenant` >= 1
+            AND `late payments` = 0
+
+        `rent is at market rate` MEANS
+            `current rent` >= `market rent` * 0.9
+
+-- =======================================
+-- SECTION 7: Test Data
+-- =======================================
+
+`test person eligible` MEANS
+    Person "Alice" 25 "citizen" 25000 FALSE
+
+`test person ineligible age` MEANS
+    Person "Bob" 17 "citizen" 20000 FALSE
+
+`test person ineligible citizenship` MEANS
+    Person "Carol" 30 "permanent resident" 20000 FALSE
+
+`test person ineligible income` MEANS
+    Person "David" 30 "citizen" 50000 FALSE
+
+`test person disqualified` MEANS
+    Person "Eve" 30 "citizen" 20000 TRUE
+
+-- =======================================
+-- SECTION 8: Tests
+-- =======================================
+
+-- Basic eligibility tests
 #EVAL `the person is an adult` 21
 #EVAL `the person is an adult` 16
+#EVAL `the person is eligible to vote` 25 TRUE
+#EVAL `the person is eligible to vote` 16 TRUE
+#EVAL `qualifies for senior discount` 70
+#EVAL `qualifies for senior discount` 50
 
--- Equivalent definitions all return TRUE for age 25
-#EVAL `is adult (using MEANS)` 25
-#EVAL `is adult (using DECIDE IF)` 25
-#EVAL `is adult (using DECIDE IS)` 25
+-- Tax calculation tests
+#EVAL `the tax owed` 50000 0.20
+#EVAL `the income tax owed` 75000
+#EVAL `the net income` 100000 15000
 
--- WHERE clause tests
-#EVAL `the compound interest` 1000 0.05 3
+-- Structured entity tests
+#EVAL `the applicant is eligible for benefit` `test person eligible`
+#EVAL `the applicant is eligible for benefit` `test person ineligible age`
+#EVAL `the applicant is eligible for benefit` `test person ineligible citizenship`
+#EVAL `the applicant is eligible for benefit` `test person ineligible income`
+#EVAL `the applicant is eligible for benefit` `test person disqualified`
+#EVAL `the taxpayer's bracket` `test person eligible`
 
--- Recursive function tests
-#EVAL `the factorial of` 5
-#EVAL `the sum of the list` `test numbers`
-#EVAL `the length of` `test numbers`
+-- Multi-factor decision tests
+#EVAL `the loan is approved` 60000 700 200000
+#EVAL `the loan is approved` 40000 700 200000
+#EVAL `the annual premium` 35 100000 FALSE
+#EVAL `the annual premium` 35 100000 TRUE
 
--- Higher-order function tests
-#EVAL `the doubled list` `test numbers`
-#EVAL `the positive numbers in` `mixed numbers`
-#EVAL `all numbers are above threshold` `test numbers` 0
+-- Contract scenario tests
+#EVAL `the late payment penalty` 1000 15
+#EVAL `the late payment penalty` 1000 45
+#EVAL `qualifies for lease renewal` 2 0 1800 2000
+#EVAL `qualifies for lease renewal` 2 3 1800 2000

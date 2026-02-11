@@ -33,9 +33,28 @@ GIVETH A STRING
 
 Every `IF` must have both `THEN` and `ELSE` branches—L4 requires you to handle all cases.
 
-### Nested Conditionals with BRANCH
+### Multi-Way Decisions with BRANCH
+
+When you need to choose between multiple alternatives based on conditions, use `BRANCH` instead of nesting `IF/THEN/ELSE` statements.
+
+**Why BRANCH?**
+
+Nested IF/THEN/ELSE can lead to indentation problems and is harder to read:
 
 ```l4
+-- ❌ Avoid: Nested IF/THEN/ELSE (fragile indentation)
+`grade` MEANS
+    IF score >= 90 THEN "A"
+    ELSE IF score >= 80 THEN "B"
+         ELSE IF score >= 70 THEN "C"
+              ELSE IF score >= 60 THEN "D"
+                   ELSE "F"
+```
+
+BRANCH provides a cleaner, more readable alternative:
+
+```l4
+-- ✅ Better: BRANCH (clear, flat structure)
 GIVEN score IS A NUMBER
 GIVETH A STRING
 `grade` MEANS
@@ -46,6 +65,19 @@ GIVETH A STRING
         IF score >= 60 THEN "D"
         OTHERWISE "F"
 ```
+
+**When to use BRANCH:**
+
+- Multiple conditions checked in sequence
+- Classification into categories
+- Any time you'd write nested IF/THEN/ELSE
+
+**Key points:**
+
+- Conditions are checked top-to-bottom
+- First matching condition wins
+- `OTHERWISE` provides the default case
+- All branches must have same return type
 
 ### Conditional in Context
 
@@ -252,9 +284,19 @@ DECIDE `the person is eligible for the position` IF
 
 ## Exercises
 
-### Exercise 1: Nested Conditional
+### Exercise 1: BRANCH for Classification
 
-Write a function that categorizes an amount as "small" (< 100), "medium" (100-999), or "large" (>= 1000).
+Write a function that categorizes an amount as "small" (< 100), "medium" (100-999), or "large" (>= 1000). Use `BRANCH` for the multi-way decision.
+
+**Hint:**
+```l4
+GIVEN amount IS A NUMBER
+GIVETH A STRING
+`the amount category` MEANS
+    BRANCH
+        IF ... THEN "small"
+        -- Complete this
+```
 
 ### Exercise 2: List Validation
 
@@ -306,20 +348,21 @@ Functions like `all`, `any`, `filter`, `map` require `IMPORT prelude`.
 
 ## Summary
 
-| Concept          | Syntax                                   |
-| ---------------- | ---------------------------------------- |
-| Conditional      | `IF condition THEN result1 ELSE result2` |
-| Pattern match    | `CONSIDER expr WHEN pattern THEN result` |
-| List destructure | `WHEN first FOLLOWED BY rest THEN ...`   |
-| Boolean AND      | `condition1 AND condition2`              |
-| Boolean OR       | `condition1 OR condition2`               |
-| Boolean NOT      | `NOT condition`                          |
-| Check all        | `all (GIVEN x YIELD condition) list`     |
-| Check any        | `any (GIVEN x YIELD condition) list`     |
-| List membership  | `elem item list`                         |
+| Concept          | Syntax                                           |
+| ---------------- | ------------------------------------------------ |
+| Conditional      | `IF condition THEN result1 ELSE result2`         |
+| Multi-way        | `BRANCH IF cond1 THEN res1 ... OTHERWISE resN`   |
+| Pattern match    | `CONSIDER expr WHEN pattern THEN result`         |
+| List destructure | `WHEN first FOLLOWED BY rest THEN ...`           |
+| Boolean AND      | `condition1 AND condition2`                      |
+| Boolean OR       | `condition1 OR condition2`                       |
+| Boolean NOT      | `NOT condition`                                  |
+| Check all        | `all (GIVEN x YIELD condition) list`             |
+| Check any        | `any (GIVEN x YIELD condition) list`             |
+| List membership  | `elem item list`                                 |
 
 ---
 
 ## What's Next?
 
-In [Module 4: Functions](module-4-functions.md), you'll learn how to define reusable functions, use local definitions with WHERE, and build more complex computations.
+In [Module 4: Decision Logic](module-4-decision-logic.md), you'll learn how to express constitutive rules for legal decision-making using DECIDE and MEANS, break down complex calculations with WHERE, and build legal determinations that read like natural language.
