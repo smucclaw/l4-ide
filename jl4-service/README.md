@@ -2,15 +2,29 @@
 
 Multi-tenant decision service for L4 rule bundles. Deploy L4 programs as persistent, namespaced REST APIs with zip-upload bundles, async compilation, and filesystem persistence.
 
-## How It Differs from jl4-decision-service
+## Why jl4-service Replaces jl4-decision-service
 
-|                   | jl4-decision-service                               | jl4-service                                                         |
-| ----------------- | -------------------------------------------------- | ------------------------------------------------------------------- |
-| Tenancy           | Single-tenant, all functions in one flat namespace | Multi-tenant, each deployment is isolated under `/deployments/{id}` |
-| Loading           | CLI flags (`--sourcePaths`) or hardcoded examples  | Zip upload via REST API, persisted to disk                          |
-| Lifecycle         | Ephemeral, functions lost on restart               | Persistent, auto-reloaded on startup                                |
-| Function CRUD     | PUT/POST/DELETE individual functions               | Deploy/replace/delete entire bundles                                |
-| PNG/SVG rendering | Server-side GraphViz rendering                     | DOT text only (render client-side)                                  |
+`jl4-decision-service` is deprecated. `jl4-service` is the production-grade successor with multi-tenancy, persistence, and operational safeguards.
+
+|                        | jl4-decision-service (deprecated)                 | jl4-service                                                   |
+| ---------------------- | ------------------------------------------------- | ------------------------------------------------------------- |
+| **Tenancy**            | Single-tenant, flat function namespace            | Multi-tenant, isolated under `/deployments/{id}`              |
+| **Loading**            | CLI flags (`--sourcePaths`) or hardcoded examples | Zip upload via REST API, persisted to disk                    |
+| **Persistence**        | Ephemeral — functions lost on restart             | Filesystem-backed — auto-reloaded on startup                  |
+| **Deployment model**   | PUT/POST/DELETE individual functions              | Deploy/replace/delete entire bundles atomically               |
+| **Staging**            | N/A                                               | Old version serves traffic while new bundle compiles          |
+| **Deduplication**      | None                                              | SHA-256 content hash skips recompilation of identical sources |
+| **Health check**       | None                                              | `GET /health` with deployment counts (orchestrator-ready)     |
+| **Concurrency limit**  | None                                              | Configurable; returns 503 when exceeded                       |
+| **Eval memory limit**  | None                                              | Per-evaluation GHC allocation limit (default 256 MB)          |
+| **Timeouts**           | Hardcoded 60 s eval only                          | Configurable eval + compile timeouts                          |
+| **Upload validation**  | N/A                                               | Zip size, file count, path traversal, deployment ID format    |
+| **Logging**            | Apache-style access log via `wai-logger`          | Structured JSON lines to stdout                               |
+| **Error sanitization** | Stack traces exposed in responses                 | Generic errors by default; details only with `--debug`        |
+| **Configuration**      | 4 CLI options                                     | 12 CLI options, all with env var overrides                    |
+| **GraphViz rendering** | Server-side PNG/SVG (requires `dot` binary)       | DOT text only (render client-side, no server dependency)      |
+| **Session backend**    | Optional `jl4-websessions` integration            | Not needed (persistent filesystem store)                      |
+| **Swagger UI**         | Bundled at `/swagger-ui/`                         | OpenAPI metadata at `/deployments/{id}/openapi.json`          |
 
 ## Quick Start
 
