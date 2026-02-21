@@ -10,6 +10,7 @@ module TestData (
   qualifiesJL4,
   recordJL4,
   maybeParamJL4,
+  saleContractJL4,
 ) where
 
 import Backend.Jl4 as Jl4
@@ -189,4 +190,31 @@ DECIDE with_maybe IS Result WITH
         CONSIDER extra
             WHEN JUST x THEN TRUE
             WHEN NOTHING THEN FALSE
+|]
+
+-- | L4 source with an exported boolean function and a regulative (sale contract) rule.
+-- Used for testing state graph extraction and DOT output.
+saleContractJL4 :: Text
+saleContractJL4 =
+  [i|
+DECLARE Party IS ONE OF `the seller`, `the buyer`
+DECLARE `Contract Action` IS ONE OF `deliver the goods`, `pay the invoice`
+
+@export default test function
+GIVEN walks IS A BOOLEAN
+GIVETH A BOOLEAN
+DECIDE test_fn IF walks
+
+GIVETH A DEONTIC Party `Contract Action`
+`the sale contract` MEANS
+    PARTY `the seller`
+    MUST `deliver the goods`
+    WITHIN 14
+    HENCE
+        PARTY `the buyer`
+        MUST `pay the invoice`
+        WITHIN 30
+        HENCE FULFILLED
+        LEST BREACH
+    LEST BREACH
 |]

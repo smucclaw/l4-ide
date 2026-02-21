@@ -17,6 +17,7 @@ import Types
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.STM (newTVarIO)
 import Control.Exception (try)
+import Data.Foldable (toList)
 import qualified Codec.Archive.Zip as Zip
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Aeson.Key
@@ -34,7 +35,7 @@ import Network.Wai.Handler.Warp (testWithApplication)
 import System.Directory (removeDirectoryRecursive, doesDirectoryExist)
 import System.IO.Error (isPermissionError)
 
-import TestData (qualifiesJL4, recordJL4, maybeParamJL4)
+import TestData (qualifiesJL4, recordJL4, maybeParamJL4, saleContractJL4)
 
 spec :: SpecWith ()
 spec = describe "integration" do
@@ -293,6 +294,123 @@ spec = describe "integration" do
       withServiceFromSources "qp-404" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
         resp <- queryPlan' baseUrl mgr "qp-404" "no_such_fn"
           (Aeson.object ["fnArguments" Aeson..= Aeson.object []])
+        statusCode' resp `shouldBe` 404
+
+  describe "evaluation with trace" do
+    it "includes reasoning when trace=full" do
+      withServiceFromSources "trace-full" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        req <- buildJsonPost
+          (baseUrl <> "/deployments/trace-full/functions/compute_qualifies/evaluation?trace=full")
+          (Aeson.object
+            [ "fnArguments" Aeson..= Aeson.object
+                [ "walks" Aeson..= True
+                , "eats" Aeson..= True
+                , "drinks" Aeson..= True
+                ]
+            ])
+        resp <- httpLbs req mgr
+        assertSuccess resp \r -> do
+          -- trace=full should produce a non-trivial reasoning tree
+          let Reasoning tree = r.reasoning
+          show tree `shouldSatisfy` (not . null)
+
+    it "includes graphviz DOT when trace=full and graphviz=true" do
+      withServiceFromSources "trace-gv" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        req <- buildJsonPost
+          (baseUrl <> "/deployments/trace-gv/functions/compute_qualifies/evaluation?trace=full&graphviz=true")
+          (Aeson.object
+            [ "fnArguments" Aeson..= Aeson.object
+                [ "walks" Aeson..= True
+                , "eats" Aeson..= True
+                , "drinks" Aeson..= True
+                ]
+            ])
+        resp <- httpLbs req mgr
+        assertSuccess resp \r ->
+          case r.graphviz of
+            Just gv ->
+              gv.dot `shouldSatisfy` Text.isInfixOf "digraph"
+            Nothing ->
+              expectationFailure "Expected graphviz to be present with trace=full&graphviz=true"
+
+    it "omits graphviz when trace=none" do
+      withServiceFromSources "trace-none" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        req <- buildJsonPost
+          (baseUrl <> "/deployments/trace-none/functions/compute_qualifies/evaluation?trace=none")
+          (Aeson.object
+            [ "fnArguments" Aeson..= Aeson.object
+                [ "walks" Aeson..= True
+                , "eats" Aeson..= True
+                , "drinks" Aeson..= True
+                ]
+            ])
+        resp <- httpLbs req mgr
+        assertSuccess resp \r ->
+          r.graphviz `shouldBe` Nothing
+
+  describe "function details and metadata" do
+    it "returns function schema via GET" do
+      withServiceFromSources "fn-details" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        req <- parseRequest (baseUrl <> "/deployments/fn-details/functions/compute_qualifies")
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 200
+        let body = decodeObject (responseBody resp)
+        -- Function wrapper has type=function and nested function object
+        lookupKey "type" body `shouldBe` Just (Aeson.String "function")
+
+    it "returns deployment metadata via openapi.json" do
+      withServiceFromSources "openapi" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        req <- parseRequest (baseUrl <> "/deployments/openapi/openapi.json")
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 200
+        let body = decodeObject (responseBody resp)
+        lookupArrayLength "metaFunctions" body `shouldSatisfy` maybe False (> 0)
+
+  describe "state graphs" do
+    it "returns empty list for a boolean-only module" do
+      withServiceFromSources "sg-empty" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        req <- parseRequest (baseUrl <> "/deployments/sg-empty/functions/compute_qualifies/state-graphs")
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 200
+        let body = decodeObject (responseBody resp)
+        lookupArrayLength "graphs" body `shouldBe` Just 0
+
+    it "returns state graphs for a module with regulative rules" do
+      withServiceFromSources "sg-contract" [("contract.l4", saleContractJL4)] \baseUrl mgr -> do
+        req <- parseRequest (baseUrl <> "/deployments/sg-contract/functions/test_fn/state-graphs")
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 200
+        let body = decodeObject (responseBody resp)
+        lookupArrayLength "graphs" body `shouldSatisfy` maybe False (> 0)
+
+    it "returns DOT text for a specific state graph" do
+      withServiceFromSources "sg-dot" [("contract.l4", saleContractJL4)] \baseUrl mgr -> do
+        -- First get the list to find a graph name
+        listReq <- parseRequest (baseUrl <> "/deployments/sg-dot/functions/test_fn/state-graphs")
+        listResp <- httpLbs listReq mgr
+        statusCode' listResp `shouldBe` 200
+        let listBody = decodeObject (responseBody listResp)
+        case lookupKey "graphs" listBody of
+          Just (Aeson.Array graphs) | not (null graphs) -> do
+            -- Extract the first graph name
+            case toList graphs of
+              (Aeson.Object g : _) ->
+                case Aeson.KeyMap.lookup "graphName" g of
+                  Just (Aeson.String graphName) -> do
+                    -- Fetch the DOT output
+                    dotReq <- parseRequest (baseUrl <> "/deployments/sg-dot/functions/test_fn/state-graphs/" <> Text.unpack graphName)
+                    dotResp <- httpLbs dotReq mgr
+                    statusCode' dotResp `shouldBe` 200
+                    let dotText = Text.Encoding.decodeUtf8 (LBS.toStrict (responseBody dotResp))
+                    dotText `shouldSatisfy` Text.isInfixOf "digraph"
+                  _ -> expectationFailure "Graph object missing graphName"
+              _ -> expectationFailure "Expected graph object in array"
+          _ -> expectationFailure "Expected non-empty graphs array"
+
+    it "returns 404 for non-existent state graph" do
+      withServiceFromSources "sg-404" [("contract.l4", saleContractJL4)] \baseUrl mgr -> do
+        req <- parseRequest (baseUrl <> "/deployments/sg-404/functions/test_fn/state-graphs/nonexistent")
+        resp <- httpLbs req mgr
         statusCode' resp `shouldBe` 404
 
   describe "compiler" do
