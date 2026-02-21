@@ -189,6 +189,7 @@ instance ToSchema Parameter where
                , ("description", textSchema)
                , ("alias", mTextSchema)
                , ("type", textSchema)
+               , ("format", mTextSchema)
                , ("properties", nestedPropsSchema)
                , ("propertyOrder", mTextListSchema)
                , ("items", itemsSchema)

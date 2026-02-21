@@ -253,7 +253,7 @@ parametersFromExport resolvedModule params =
 paramToParameter :: Map Text (Declare Resolved) -> ExportedParam -> Parameter
 paramToParameter declares param =
   let p0 = maybe
-              (Parameter "object" Nothing [] "" Nothing Nothing Nothing)
+              (Parameter "object" Nothing Nothing [] "" Nothing Nothing Nothing)
               (typeToParameter declares Set.empty)
               param.paramType
   in p0

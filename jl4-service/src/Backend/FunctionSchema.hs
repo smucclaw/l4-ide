@@ -32,6 +32,7 @@ data Parameters = MkParameters
 data Parameter = Parameter
   { parameterType :: !Text
   , parameterAlias :: !(Maybe Text)
+  , parameterFormat :: !(Maybe Text) -- Format hint (e.g., "date" for YYYY-MM-DD, "date-time" for ISO 8601)
   , parameterEnum :: ![Text]
   , parameterDescription :: !Text
   , parameterProperties :: !(Maybe (Map Text Parameter)) -- Nested properties for object types
@@ -63,6 +64,9 @@ instance ToJSON Parameter where
       , "enum" .= p.parameterEnum
       , "description" .= p.parameterDescription
       ]
+        ++ case p.parameterFormat of
+          Nothing -> []
+          Just fmt -> ["format" .= fmt]
         ++ case p.parameterProperties of
           Nothing -> []
           Just props -> ["properties" .= props]
@@ -78,6 +82,7 @@ instance FromJSON Parameter where
     Parameter
       <$> p .: "type"
       <*> p .:? "alias"
+      <*> p .:? "format"
       <*> p .:? "enum" .!= []
       <*> p .: "description"
       <*> p .:? "properties"
@@ -132,6 +137,7 @@ typeToParameter declares visited ty =
     Parameter
       { parameterType = t
       , parameterAlias = Nothing
+      , parameterFormat = Nothing
       , parameterEnum = []
       , parameterDescription = ""
       , parameterProperties = Nothing
@@ -142,26 +148,26 @@ typeToParameter declares visited ty =
   typeNameToParameter :: Resolved -> Parameter
   typeNameToParameter name =
     case primitiveJsonType name of
-      Just t -> emptyParam t
+      Just (t, fmt) -> (emptyParam t) { parameterFormat = fmt }
       Nothing ->
         case Map.lookup (resolvedNameText name) declares of
           Nothing -> emptyParam "object"
           Just decl -> declareToParameter (resolvedNameText name) decl
 
-  primitiveJsonType :: Resolved -> Maybe Text
+  -- | Map L4 primitive type names to JSON Schema type and optional format.
+  primitiveJsonType :: Resolved -> Maybe (Text, Maybe Text)
   primitiveJsonType name =
     case Text.toLower (resolvedNameText name) of
-      "number" -> Just "number"
-      "int" -> Just "number"
-      "integer" -> Just "number"
-      "float" -> Just "number"
-      "double" -> Just "number"
-      "boolean" -> Just "boolean"
-      "bool" -> Just "boolean"
-      "string" -> Just "string"
-      "text" -> Just "string"
-      "date" -> Just "string"
-      "datetime" -> Just "string"
+      "number" -> Just ("number", Nothing)
+      "int" -> Just ("number", Nothing)
+      "integer" -> Just ("number", Nothing)
+      "float" -> Just ("number", Nothing)
+      "double" -> Just ("number", Nothing)
+      "boolean" -> Just ("boolean", Nothing)
+      "bool" -> Just ("boolean", Nothing)
+      "string" -> Just ("string", Nothing)
+      "text" -> Just ("string", Nothing)
+      "date" -> Just ("string", Just "date")
       _ -> Nothing
 
   declareToParameter :: Text -> Declare Resolved -> Parameter
@@ -250,6 +256,7 @@ parametersFromDecideWithErrors resolvedModule decide@(MkDecide _ (MkTypeSig _ (M
     Parameter
       { parameterType = t
       , parameterAlias = Nothing
+      , parameterFormat = Nothing
       , parameterEnum = []
       , parameterDescription = ""
       , parameterProperties = Nothing
