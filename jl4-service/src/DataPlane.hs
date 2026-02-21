@@ -7,7 +7,7 @@ module DataPlane (
 ) where
 
 import Backend.Api
-import Backend.DecisionQueryPlan (queryPlan, QueryPlanResponse)
+import Backend.DecisionQueryPlan (CachedDecisionQuery, buildDecisionQueryCacheFromCompiled, queryPlan, QueryPlanResponse)
 import Backend.Jl4 (CompiledModule (..))
 import qualified L4.StateGraph as StateGraph
 import Options (Options (..))
@@ -15,7 +15,7 @@ import Types
 
 import Data.Int (Int64)
 import Control.Concurrent.Async (forConcurrently)
-import Control.Concurrent.STM (readTVarIO)
+import Control.Concurrent.STM (atomically, modifyTVar', readTVarIO)
 import Control.Exception (catch)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (runExceptT)
@@ -206,11 +206,32 @@ queryPlanHandler' deployId fnName fnArgs = do
   (fns, _meta) <- requireDeploymentReady deployId
   vf <- requireFunction fns fnName
 
-  case vf.fnDecisionQueryCache of
-    Nothing ->
-      throwError err500 { errBody = "Query plan not available for this function" }
-    Just cached ->
-      pure $ queryPlan fnName cached fnArgs
+  cached <- case vf.fnDecisionQueryCache of
+    Just c -> pure c
+    Nothing -> do
+      compiled <- case vf.fnCompiled of
+        Nothing -> throwError err500 { errBody = "No compiled module available for query-plan" }
+        Just c -> pure c
+      c <- buildDecisionQueryCacheFromCompiled fnName compiled vf.fnSources
+      storeDecisionQueryCache deployId fnName c
+      pure c
+
+  pure $ queryPlan fnName cached fnArgs
+
+-- | Persist a freshly-built decision query cache back into the deployment registry
+-- so subsequent requests can reuse it without rebuilding.
+storeDecisionQueryCache :: DeploymentId -> Text -> CachedDecisionQuery -> AppM ()
+storeDecisionQueryCache deployId fnName cache = do
+  registryTVar <- asks (.deploymentRegistry)
+  liftIO $ atomically $ modifyTVar' registryTVar $ \registry ->
+    case Map.lookup deployId registry of
+      Just (DeploymentReady fns meta) ->
+        case Map.lookup fnName fns of
+          Just vf ->
+            let vf' = vf { fnDecisionQueryCache = Just cache }
+            in Map.insert deployId (DeploymentReady (Map.insert fnName vf' fns) meta) registry
+          Nothing -> registry
+      _ -> registry
 
 -- ----------------------------------------------------------------------------
 -- State Graph Handlers

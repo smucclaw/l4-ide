@@ -19,6 +19,8 @@ import Control.Concurrent.STM (newTVarIO)
 import Control.Exception (try)
 import qualified Codec.Archive.Zip as Zip
 import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.Key as Aeson.Key
+import qualified Data.Aeson.KeyMap as Aeson.KeyMap
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
 import Data.Map.Strict (Map)
@@ -215,6 +217,84 @@ spec = describe "integration" do
         getResp <- httpLbs getReq mgr
         statusCode' getResp `shouldBe` 404
 
+  describe "query-plan" do
+    it "returns a query plan with no bindings" do
+      withServiceFromSources "qp-empty" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        resp <- queryPlan' baseUrl mgr "qp-empty" "compute_qualifies"
+          (Aeson.object ["fnArguments" Aeson..= Aeson.object []])
+        statusCode' resp `shouldBe` 200
+        let body = decodeObject (responseBody resp)
+        lookupKey "determined" body `shouldBe` Just Aeson.Null
+        lookupArrayLength "stillNeeded" body `shouldSatisfy` maybe False (> 0)
+        lookupArrayLength "asks" body `shouldSatisfy` maybe False (> 0)
+
+    it "determines True when all args are true" do
+      withServiceFromSources "qp-all-true" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        resp <- queryPlan' baseUrl mgr "qp-all-true" "compute_qualifies"
+          (Aeson.object
+            [ "fnArguments" Aeson..= Aeson.object
+                [ "walks" Aeson..= True
+                , "eats" Aeson..= True
+                , "drinks" Aeson..= True
+                ]
+            ])
+        statusCode' resp `shouldBe` 200
+        let body = decodeObject (responseBody resp)
+        lookupKey "determined" body `shouldBe` Just (Aeson.Bool True)
+        lookupArrayLength "stillNeeded" body `shouldBe` Just 0
+
+    it "determines False when one arg is false" do
+      withServiceFromSources "qp-one-false" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        resp <- queryPlan' baseUrl mgr "qp-one-false" "compute_qualifies"
+          (Aeson.object
+            [ "fnArguments" Aeson..= Aeson.object
+                [ "walks" Aeson..= False
+                ]
+            ])
+        statusCode' resp `shouldBe` 200
+        let body = decodeObject (responseBody resp)
+        lookupKey "determined" body `shouldBe` Just (Aeson.Bool False)
+
+    it "is undetermined with partial true bindings" do
+      withServiceFromSources "qp-partial" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        resp <- queryPlan' baseUrl mgr "qp-partial" "compute_qualifies"
+          (Aeson.object
+            [ "fnArguments" Aeson..= Aeson.object
+                [ "walks" Aeson..= True
+                , "eats" Aeson..= True
+                ]
+            ])
+        statusCode' resp `shouldBe` 200
+        let body = decodeObject (responseBody resp)
+        lookupKey "determined" body `shouldBe` Just Aeson.Null
+        lookupArrayLength "stillNeeded" body `shouldSatisfy` maybe False (> 0)
+
+    it "caches the query plan across requests" do
+      withServiceFromSources "qp-cache" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        -- First request builds the cache
+        resp1 <- queryPlan' baseUrl mgr "qp-cache" "compute_qualifies"
+          (Aeson.object ["fnArguments" Aeson..= Aeson.object []])
+        statusCode' resp1 `shouldBe` 200
+
+        -- Second request should use the cached version
+        resp2 <- queryPlan' baseUrl mgr "qp-cache" "compute_qualifies"
+          (Aeson.object
+            [ "fnArguments" Aeson..= Aeson.object
+                [ "walks" Aeson..= True
+                , "eats" Aeson..= True
+                , "drinks" Aeson..= True
+                ]
+            ])
+        statusCode' resp2 `shouldBe` 200
+        let body = decodeObject (responseBody resp2)
+        lookupKey "determined" body `shouldBe` Just (Aeson.Bool True)
+
+    it "returns 404 for unknown function" do
+      withServiceFromSources "qp-404" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        resp <- queryPlan' baseUrl mgr "qp-404" "no_such_fn"
+          (Aeson.object ["fnArguments" Aeson..= Aeson.object []])
+        statusCode' resp `shouldBe` 404
+
   describe "compiler" do
     it "compiles valid L4 sources" do
       logger <- newLogger False
@@ -397,6 +477,27 @@ cleanDir :: FilePath -> IO ()
 cleanDir path = do
   exists <- doesDirectoryExist path
   if exists then removeDirectoryRecursive path else pure ()
+
+-- | Query a function's query-plan via the API.
+queryPlan' :: String -> Manager -> Text -> Text -> Aeson.Value -> IO (Response LBS.ByteString)
+queryPlan' baseUrl mgr deployId fnName body = do
+  req <- buildJsonPost (baseUrl <> "/deployments/" <> Text.unpack deployId <> "/functions/" <> Text.unpack fnName <> "/query-plan") body
+  httpLbs req mgr
+
+-- | Decode a JSON response body as an Aeson Object.
+decodeObject :: LBS.ByteString -> Maybe Aeson.Object
+decodeObject = Aeson.decode
+
+-- | Look up a key in a Maybe Object.
+lookupKey :: Text -> Maybe Aeson.Object -> Maybe Aeson.Value
+lookupKey k = (>>= Aeson.KeyMap.lookup (Aeson.Key.fromText k))
+
+-- | Look up a JSON array in a Maybe Object, returning its length.
+lookupArrayLength :: Text -> Maybe Aeson.Object -> Maybe Int
+lookupArrayLength k obj = do
+  v <- lookupKey k obj
+  arr <- Aeson.decode (Aeson.encode v) :: Maybe [Aeson.Value]
+  Just (length arr)
 
 -- | Default options for tests.
 testOptions :: Options

@@ -8,8 +8,7 @@
 module Backend.DecisionQueryPlan (
   CachedDecisionQuery (..),
   decisionQueryCacheKey,
-  getOrBuildDecisionQueryCache,
-  buildDecisionQueryCache,
+  buildDecisionQueryCacheFromCompiled,
   orderAsksForElicitation,
   QueryAtom (..),
   QueryOutcome (..),
@@ -23,8 +22,7 @@ module Backend.DecisionQueryPlan (
 import Base
 import qualified Backend.BooleanDecisionQuery as BDQ
 import Backend.FunctionSchema (Parameter (..), Parameters (..), parametersFromDecideWithErrors)
-import Backend.Jl4 as Jl4
-import Control.Concurrent.STM
+import Backend.Jl4 (CompiledModule (..))
 import Data.Aeson (FromJSON, ToJSON, (.=), object)
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString as BS
@@ -37,18 +35,16 @@ import qualified Data.Set as Set
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import Text.Read (readMaybe)
-import Servant (ServerError (..), err400, err404, err500)
+import Servant (ServerError (..), err500)
 
 import qualified Data.UUID as UUID
 import qualified Data.UUID.V5 as UUIDV5
 
-import qualified LSP.L4.Rules as Rules
 import qualified LSP.L4.Viz.Ladder as LadderViz
 import qualified LSP.L4.Viz.VizExpr as VizExpr
 import qualified Language.LSP.Protocol.Types as LSP
 
 import Backend.Api (EvalBackend (..), FnArguments (..), FnLiteral (..))
-import L4.Syntax (RawName (..))
 import qualified L4.Decision.QueryPlan as QP
 import L4.Decision.QueryPlan (QueryAtom (..), QueryImpact (..), QueryInput (..), QueryOutcome (..))
 
@@ -174,78 +170,28 @@ decisionQueryCacheKey funName sources =
         ]
   in UUID.toText (UUIDV5.generateNamed UUIDV5.namespaceURL (BS.unpack (Text.encodeUtf8 canonical)))
 
-getOrBuildDecisionQueryCache ::
-  (MonadIO m) =>
-  (MonadError ServerError m) =>
-  TVar (Map Text fn) ->
-  Text ->
-  (fn -> Maybe CachedDecisionQuery) ->
-  (fn -> Text) ->
-  (CachedDecisionQuery -> fn -> fn) ->
-  (Text -> fn -> m CachedDecisionQuery) ->
-  m CachedDecisionQuery
-getOrBuildDecisionQueryCache functionsTVar name getCache cacheKeyNow setCache buildCache =
-  go (2 :: Int)
- where
-  go retriesRemaining = do
-    fn <- do
-      functions <- liftIO $ readTVarIO functionsTVar
-      case Map.lookup name functions of
-        Nothing -> throwError err404
-        Just f -> pure f
-
-    let keyNow = cacheKeyNow fn
-    case getCache fn of
-      Just cached | cached.cacheKey == keyNow -> pure cached
-      _ -> do
-        cached <- buildCache name fn
-        stored <-
-          liftIO $
-            atomically $
-              stateTVar functionsTVar $ \functions ->
-                case Map.lookup name functions of
-                  Nothing -> (False, functions)
-                  Just fn0 ->
-                    if cacheKeyNow fn0 == cached.cacheKey
-                      then (True, Map.insert name (setCache cached fn0) functions)
-                      else (False, functions)
-        if stored
-          then pure cached
-          else
-            if retriesRemaining <= 0
-              then pure cached
-              else go (retriesRemaining - 1)
-
-buildDecisionQueryCache ::
-  (MonadIO m) =>
+-- | Build the decision query cache from an already-compiled module.
+-- Uses the pre-compiled AST and resolved module directly, avoiding re-typechecking.
+buildDecisionQueryCacheFromCompiled ::
   (MonadError ServerError m) =>
   Text ->
+  CompiledModule ->
   Map EvalBackend Text ->
   m CachedDecisionQuery
-buildDecisionQueryCache funName sources = do
-  source <- case Map.lookup JL4 sources of
-    Nothing -> throwError err400 {errBody = "No JL4 source available for query-plan"}
-    Just s -> pure s
+buildDecisionQueryCacheFromCompiled funName compiled sources = do
+  let resolvedModule = compiled.compiledModule
+      decide = compiled.compiledDecide
+      fileName = Text.unpack funName <> ".l4"
+      verDocId = mkVerDocId fileName
+      -- The module is already fully resolved; an empty substitution is sufficient.
+      vizCfg = LadderViz.mkVizConfig verDocId resolvedModule Map.empty True
 
-  let fileName = Text.unpack funName <> ".l4"
-  (errs, mTcRes) <- liftIO $ Jl4.typecheckModule fileName source Map.empty
-  tcRes <- case mTcRes of
-    Nothing -> throwError err500 {errBody = encodeTextLBS (Text.intercalate "; " errs)}
-    Just r -> pure r
-  let Rules.TypeCheckResult{module' = resolvedModule, substitution = subst, errors = tcErrors} = tcRes
-
-  decide <- runExceptT (Jl4.getFunctionDefinition (NormalName funName) resolvedModule) >>= \case
-    Left e -> throwError err500 {errBody = encodeTextLBS (Text.pack (show e))}
-    Right d -> pure d
-
-  let verDocId = mkVerDocId fileName
-  let vizCfg = LadderViz.mkVizConfig verDocId resolvedModule subst True
   (ladderInfo, vizState) <- case LadderViz.doVisualize decide vizCfg of
     Left e -> throwError err500 {errBody = encodeTextLBS (LadderViz.prettyPrintVizError e)}
     Right x -> pure x
 
   let (boolExpr, labels, order) = vizExprToBoolExpr ladderInfo.funDecl.body
-      compiled = BDQ.compileDecisionQuery order boolExpr
+      bddCompiled = BDQ.compileDecisionQuery order boolExpr
       deps = LadderViz.getAtomDeps vizState
       inputRefs = LadderViz.getAtomInputRefs vizState
 
@@ -261,9 +207,9 @@ buildDecisionQueryCache funName sources = do
                 fmap
                   (Set.map (\ref -> QP.MkInputRef ref.rootUnique ref.path))
                   inputRefs
-            , compiled
+            , compiled = bddCompiled
             }
-      , paramSchema = parametersFromDecideWithErrors resolvedModule decide tcErrors
+      , paramSchema = parametersFromDecideWithErrors resolvedModule decide []
       }
 
 encodeTextLBS :: Text -> LBS.ByteString
