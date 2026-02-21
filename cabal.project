@@ -7,6 +7,7 @@ packages:
   ./jl4-decision-service
   ./jl4-websessions
   ./jl4-actus-analyzer
+  ./jl4-service
 
 index-state: 2025-03-31T10:46:26Z
 

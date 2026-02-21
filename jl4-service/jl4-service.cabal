@@ -1,0 +1,148 @@
+cabal-version: 3.0
+name: jl4-service
+version: 0.1.0.0
+build-type: Simple
+tested-with: GHC==9.10.2
+
+source-repository head
+  type: git
+  location: https://github.com/smucclaw/l4-ide/tree/main/jl4-service
+
+common defaults
+  default-language: GHC2021
+  ghc-options:
+    -Wall
+    -Wderiving-typeable
+    -Wunused-packages
+    -Werror
+    -Widentities
+    -Wincomplete-record-updates
+    -Wincomplete-uni-patterns
+    -Wmissing-export-lists
+    -Wmissing-home-modules
+    -Wpartial-fields
+    -Wredundant-constraints
+
+  default-extensions:
+    BlockArguments
+    DefaultSignatures
+    DeriveAnyClass
+    DerivingStrategies
+    DerivingVia
+    DuplicateRecordFields
+    LambdaCase
+    NoFieldSelectors
+    OverloadedLabels
+    OverloadedRecordDot
+    OverloadedStrings
+    NoImportQualifiedPost
+
+  build-depends:
+    base >=4.7 && <5
+
+library
+  import: defaults
+  hs-source-dirs: src
+  exposed-modules:
+    Application
+    Backend.Api
+    Backend.BooleanDecisionQuery
+    Backend.CodeGen
+    Backend.DecisionQueryPlan
+    Backend.DirectiveFilter
+    Backend.FunctionSchema
+    Backend.Jl4
+    Backend.MaybeLift
+    BundleStore
+    Compiler
+    ControlPlane
+    DataPlane
+    Options
+    Schema
+    Types
+
+  build-depends:
+    -- Core L4 packages
+    jl4-core,
+    jl4-query-plan,
+    jl4-lsp,
+    -- Web stack
+    servant >=0.20.2 && <0.21,
+    servant-multipart,
+    servant-openapi3,
+    servant-server >=0.20.2 && <0.21,
+    openapi3,
+    warp,
+    wai,
+    wai-cors,
+    wai-logger,
+    -- JSON / data
+    aeson,
+    scientific,
+    vector,
+    -- Concurrency / state
+    async,
+    stm,
+    -- Crypto / archiving
+    cryptohash-sha256,
+    zip-archive,
+    -- Utilities
+    bytestring,
+    containers,
+    directory,
+    filepath,
+    lens,
+    lsp-types,
+    optics,
+    optparse-applicative,
+    text,
+    time,
+    transformers,
+    uuid,
+
+executable jl4-service
+  import: defaults
+  main-is: Main.hs
+  hs-source-dirs: app
+  build-depends:
+    jl4-service
+
+test-suite jl4-service-test
+  import: defaults
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+    ApiSpec
+    BooleanDecisionQuerySpec
+    BundleStoreSpec
+    CodeGenSpec
+    DecisionQueryCacheKeySpec
+    IntegrationSpec
+    SchemaSpec
+    TestData
+
+  hs-source-dirs:
+    test
+
+  build-tool-depends:
+    hspec-discover:hspec-discover
+
+  build-depends:
+    aeson,
+    bytestring,
+    containers,
+    directory,
+    hspec,
+    http-client,
+    http-types,
+    jl4-service,
+    QuickCheck,
+    quickcheck-instances,
+    servant >=0.20.2 && <0.21,
+    stm,
+    string-interpolate,
+    text,
+    time,
+    transformers,
+    warp,
+    zip-archive,
