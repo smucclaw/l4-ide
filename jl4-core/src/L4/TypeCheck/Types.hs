@@ -1,9 +1,12 @@
 -- | Types needed during the scope and type checking phase.
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE UndecidableInstances #-}
 module L4.TypeCheck.Types where
 
 import Base
+#if defined(SERIALISE_ENABLED)
 import Codec.Serialise (Serialise)
+#endif
 import qualified Optics
 import L4.Annotation (HasSrcRange(..), HasAnno(..), AnnoExtra, AnnoToken, emptyAnno)
 import L4.Lexer (PosToken)
@@ -38,7 +41,11 @@ data CheckEntity =
   | KnownSection (Section Resolved)
   | KnownTypeVariable
   deriving stock (Eq, Generic, Show)
-  deriving anyclass (NFData, Serialise)
+  deriving anyclass (NFData)
+
+#if defined(SERIALISE_ENABLED)
+deriving anyclass instance Serialise CheckEntity
+#endif
 
 data CheckState =
   MkCheckState

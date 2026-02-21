@@ -1,6 +1,8 @@
+{-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 module L4.Instances.Serialise () where
 
+#if defined(SERIALISE_ENABLED)
 import Codec.Serialise (Serialise (..))
 import L4.Annotation (Anno_ (..), emptyAnno)
 import Language.LSP.Protocol.Types (NormalizedUri, Uri (..), fromNormalizedUri, toNormalizedUri)
@@ -20,3 +22,4 @@ instance Serialise NormalizedUri where
 instance (Monoid e) => Serialise (Anno_ t e) where
   encode _ = encode ()
   decode = emptyAnno <$ decode @()
+#endif

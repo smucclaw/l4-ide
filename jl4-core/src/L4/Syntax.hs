@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -7,10 +8,12 @@ module L4.Syntax where
 
 import Base
 import L4.Annotation
-import L4.Instances.Serialise ()
 import L4.Lexer (PosToken)
 
+#if defined(SERIALISE_ENABLED)
+import L4.Instances.Serialise ()
 import Codec.Serialise (Serialise)
+#endif
 import Data.Default
 import qualified GHC.Generics as GHC
 import qualified Generics.SOP as SOP
@@ -818,6 +821,7 @@ app = TyApp emptyAnno
 -- Serialise instances (CBOR) for AST caching in jl4-service
 -- ----------------------------------------------------------------------------
 
+#if defined(SERIALISE_ENABLED)
 deriving anyclass instance Serialise Name
 deriving anyclass instance Serialise RawName
 deriving anyclass instance Serialise Unique
@@ -862,4 +866,5 @@ deriving anyclass instance Serialise n => Serialise (NlgFragment n)
 deriving anyclass instance Serialise Comment
 deriving anyclass instance Serialise Ref
 deriving anyclass instance Serialise Desc
+#endif
 
