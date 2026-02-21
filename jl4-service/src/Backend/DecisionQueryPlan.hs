@@ -26,7 +26,6 @@ import Backend.Jl4 (CompiledModule (..))
 import Data.Aeson (FromJSON, ToJSON, (.=), object)
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Char as Char
 import qualified Data.List as List
 import qualified Data.Map.Strict as Map
@@ -35,7 +34,7 @@ import qualified Data.Set as Set
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import Text.Read (readMaybe)
-import Servant (ServerError (..), err500)
+import Servant (ServerError (..), err400)
 
 import qualified Data.UUID as UUID
 import qualified Data.UUID.V5 as UUIDV5
@@ -187,7 +186,7 @@ buildDecisionQueryCacheFromCompiled funName compiled sources = do
       vizCfg = LadderViz.mkVizConfig verDocId resolvedModule Map.empty True
 
   (ladderInfo, vizState) <- case LadderViz.doVisualize decide vizCfg of
-    Left e -> throwError err500 {errBody = encodeTextLBS (LadderViz.prettyPrintVizError e)}
+    Left e -> throwError err400 {errBody = Aeson.encode $ object ["error" .= LadderViz.prettyPrintVizError e]}
     Right x -> pure x
 
   let (boolExpr, labels, order) = vizExprToBoolExpr ladderInfo.funDecl.body
@@ -211,9 +210,6 @@ buildDecisionQueryCacheFromCompiled funName compiled sources = do
             }
       , paramSchema = parametersFromDecideWithErrors resolvedModule decide []
       }
-
-encodeTextLBS :: Text -> LBS.ByteString
-encodeTextLBS = LBS.fromStrict . Text.encodeUtf8
 
 mkVerDocId :: FilePath -> LSP.VersionedTextDocumentIdentifier
 mkVerDocId fileName =
