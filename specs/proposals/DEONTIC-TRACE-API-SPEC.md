@@ -59,12 +59,12 @@ API consumers can:
 
 Extend the existing `POST /deployments/{id}/functions/{fn}/evaluation` with two optional fields: `startTime` and `events`. The endpoint behaviour is determined by the function's return type and the presence of these fields:
 
-| Return type | `events` present | Behaviour |
-|-------------|-----------------|-----------|
-| Non-deontic (BOOLEAN, STRING, ...) | No | Existing behaviour (unchanged) |
-| Non-deontic | Yes | **400 Bad Request** — events only apply to deontic functions |
-| DEONTIC | No | Evaluate and return the **initial obligation** (what the contract expects first) |
-| DEONTIC | Yes | Evaluate with `EVALTRACE`, return resulting contract state |
+| Return type                        | `events` present | Behaviour                                                                        |
+| ---------------------------------- | ---------------- | -------------------------------------------------------------------------------- |
+| Non-deontic (BOOLEAN, STRING, ...) | No               | Existing behaviour (unchanged)                                                   |
+| Non-deontic                        | Yes              | **400 Bad Request** — events only apply to deontic functions                     |
+| DEONTIC                            | No               | Evaluate and return the **initial obligation** (what the contract expects first) |
+| DEONTIC                            | Yes              | Evaluate with `EVALTRACE`, return resulting contract state                       |
 
 ### Request Schema
 
@@ -86,39 +86,49 @@ The existing `FnArguments` type gains two optional fields:
   },
   "startTime": 1,
   "events": [
-    { "party": { "NaturalPerson": { "name": "John Doe" } },
+    {
+      "party": { "NaturalPerson": { "name": "John Doe" } },
       "action": { "order": { "itemName": "beer", "quantity": 1 } },
-      "at": 2 },
-    { "party": { "NaturalPerson": { "name": "John Doe" } },
+      "at": 2
+    },
+    {
+      "party": { "NaturalPerson": { "name": "John Doe" } },
       "action": { "order": { "itemName": "potato", "quantity": 1 } },
-      "at": 12 },
-    { "party": { "NaturalPerson": { "name": "John Doe" } },
+      "at": 12
+    },
+    {
+      "party": { "NaturalPerson": { "name": "John Doe" } },
       "action": { "getBill": {} },
-      "at": 20 },
-    { "party": { "Restaurant": { "name": "EatAtJoes, Inc." } },
+      "at": 20
+    },
+    {
+      "party": { "Restaurant": { "name": "EatAtJoes, Inc." } },
       "action": { "showBill": { "amount": 12 } },
-      "at": 30 },
-    { "party": { "NaturalPerson": { "name": "John Doe" } },
+      "at": 30
+    },
+    {
+      "party": { "NaturalPerson": { "name": "John Doe" } },
       "action": { "pay": { "amount": 12 } },
-      "at": 40 }
+      "at": 40
+    }
   ]
 }
 ```
 
 #### New Fields on `FnArguments`
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `startTime` | `number` | No | Start time for contract evaluation. Required when `events` is present. |
-| `events` | `array` | No | Ordered list of events to replay against the contract. |
+| Field       | Type     | Required | Description                                                            |
+| ----------- | -------- | -------- | ---------------------------------------------------------------------- |
+| `startTime` | `number` | No       | Start time for contract evaluation. Required when `events` is present. |
+| `events`    | `array`  | No       | Ordered list of events to replay against the contract.                 |
 
 #### Event Object
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `party` | `value` | Yes | The acting party, serialized matching the function's Party type |
-| `action` | `value` | Yes | The action taken, serialized matching the function's Action type |
-| `at` | `number` | Yes | The timestamp when this event occurred |
+| Field    | Type     | Required | Description                                                      |
+| -------- | -------- | -------- | ---------------------------------------------------------------- |
+| `party`  | `value`  | Yes      | The acting party, serialized matching the function's Party type  |
+| `action` | `value`  | Yes      | The action taken, serialized matching the function's Action type |
+| `at`     | `number` | Yes      | The timestamp when this event occurred                           |
 
 ### Response Schema
 
@@ -478,6 +488,7 @@ The handler validates:
 3. **startTime without events on non-deontic function** → same 400
 
 No validation is needed for:
+
 - Empty event list — allowed (returns initial obligation)
 - Event timestamp ordering — L4's evaluator handles this naturally (unmatched events are simply skipped)
 
@@ -488,6 +499,7 @@ No validation is needed for:
 Phase 1 returns minimal obligation info. Phase 2 adds:
 
 - **Nested obligations** — when `ValROp` (RAND/ROR) composes multiple obligations, return the full tree:
+
   ```json
   {
     "fnResult": {
@@ -519,12 +531,17 @@ GET /deployments/{id}/functions/{fn}/expected-events
 ```
 
 Response:
+
 ```json
 {
   "expectedEvents": [
     {
       "party": { "type": "Actor", "description": "the patron" },
-      "action": { "type": "Action", "pattern": "order", "fields": { "itemName": "STRING", "quantity": "NUMBER" } },
+      "action": {
+        "type": "Action",
+        "pattern": "order",
+        "fields": { "itemName": "STRING", "quantity": "NUMBER" }
+      },
       "modal": "MUST",
       "deadline": 10
     }
@@ -538,13 +555,13 @@ This uses the state graph extraction combined with the current position to deter
 
 ## Files to Modify
 
-| File | Change |
-|------|--------|
-| `jl4-service/src/Backend/Api.hs` | Add `TraceEvent` type; add `startTime` and `events` fields to `FnArguments` |
-| `jl4-service/src/Backend/CodeGen.hs` | Add `generateDeonticWrapper` function |
-| `jl4-service/src/Backend/Jl4.hs` | Add `isDeonticReturn`; replace `ValObligation`/`ValBreached`/`ValROp` error cases in `nfToFnLiteral` with proper serialization; add helper functions `breachToFnLiteral`, `obligationToFnLiteral`, `modalToText` |
-| `jl4-service/src/DataPlane.hs` | Add branching logic in `evalFunctionHandler`; add `runDeonticEvaluator` |
-| `jl4-service/src/Schema.hs` | Add `ToSchema TraceEvent` |
+| File                                 | Change                                                                                                                                                                                                           |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `jl4-service/src/Backend/Api.hs`     | Add `TraceEvent` type; add `startTime` and `events` fields to `FnArguments`                                                                                                                                      |
+| `jl4-service/src/Backend/CodeGen.hs` | Add `generateDeonticWrapper` function                                                                                                                                                                            |
+| `jl4-service/src/Backend/Jl4.hs`     | Add `isDeonticReturn`; replace `ValObligation`/`ValBreached`/`ValROp` error cases in `nfToFnLiteral` with proper serialization; add helper functions `breachToFnLiteral`, `obligationToFnLiteral`, `modalToText` |
+| `jl4-service/src/DataPlane.hs`       | Add branching logic in `evalFunctionHandler`; add `runDeonticEvaluator`                                                                                                                                          |
+| `jl4-service/src/Schema.hs`          | Add `ToSchema TraceEvent`                                                                                                                                                                                        |
 
 ### No New Files Required
 
@@ -552,10 +569,10 @@ The implementation fits entirely within the existing jl4-service module structur
 
 ### Test Files
 
-| File | Purpose |
-|------|---------|
-| `jl4-service/test/IntegrationSpec.hs` | Add deontic evaluation integration tests |
-| `jl4-service/test/TestData.hs` | Add/extend test L4 source with deontic rules suitable for trace testing |
+| File                                  | Purpose                                                                 |
+| ------------------------------------- | ----------------------------------------------------------------------- |
+| `jl4-service/test/IntegrationSpec.hs` | Add deontic evaluation integration tests                                |
+| `jl4-service/test/TestData.hs`        | Add/extend test L4 source with deontic rules suitable for trace testing |
 
 ---
 
@@ -573,31 +590,37 @@ The implementation fits entirely within the existing jl4-service module structur
 Using the `restaurant1.l4` example (adapted for test data):
 
 1. **All events present → FULFILLED**
+
    ```
    POST /evaluation with all 5 events → { "fnResult": { "value": "FULFILLED" } }
    ```
 
 2. **Missing final event → OBLIGATION (residual)**
+
    ```
    POST /evaluation with 4 events (no pay) → { "fnResult": { "value": { "OBLIGATION": { "party": ..., "modal": "MUST", "action": "pay ..." } } } }
    ```
 
 3. **Late event → BREACH**
+
    ```
    POST /evaluation with pay AT 400 (exceeds WITHIN 10) → { "fnResult": { "value": { "BREACH": { ... } } } }
    ```
 
 4. **Wrong amount → OBLIGATION (unmatched action)**
+
    ```
    POST /evaluation with pay 11 instead of 12 → { "fnResult": { "value": { "OBLIGATION": { ... } } } }
    ```
 
 5. **Empty events → initial OBLIGATION**
+
    ```
    POST /evaluation with events: [] → { "fnResult": { "value": { "OBLIGATION": { "party": ..., "modal": "MUST", "action": "order beer ..." } } } }
    ```
 
 6. **No events field at all, deontic function → initial OBLIGATION**
+
    ```
    POST /evaluation without events field → same as empty events (initial obligation)
    ```
@@ -712,6 +735,7 @@ curl -X POST \
 ```
 
 Response — what the contract expects first:
+
 ```json
 {
   "fnResult": {
@@ -758,6 +782,7 @@ curl -X POST \
 ```
 
 Response:
+
 ```json
 {
   "fnResult": {
