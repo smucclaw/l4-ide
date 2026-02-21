@@ -68,6 +68,10 @@ liftTypeText tyText
           innerUpper = Text.toUpper $ Text.strip inner
       in if isPrimitiveType innerUpper
          then tyText  -- MAYBE primitive - already fully lifted
+         else if isDateType inner
+              -- MAYBE DATE -> MAYBE STRING (JSON doesn't have date type)
+              -- CodeGen handles the string→date conversion with TODATE
+              then "MAYBE STRING"
          else if "LIST OF " `Text.isPrefixOf` innerUpper
               -- MAYBE (LIST OF x) - recurse into list element
               then let elemType = Text.strip $ Text.drop 8 inner

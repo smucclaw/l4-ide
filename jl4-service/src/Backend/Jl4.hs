@@ -237,21 +237,22 @@ evaluateDirectAST compiled params traceLevel includeGraphViz = do
   case mResult of
     Nothing -> throwError $ InterpreterError "L4: Expression evaluation failed."
     Just Eval.MkEvalDirectiveResult{result, trace} ->
-      handleEvalResultDirect result trace traceLevel includeGraphViz compiled.compiledModule
+      handleEvalResultDirect compiled.compiledEntityInfo result trace traceLevel includeGraphViz compiled.compiledModule
 
 -- | Handle evaluation result (simplified version for direct evaluation)
 handleEvalResultDirect
-  :: Eval.EvalDirectiveValue
+  :: EntityInfo
+  -> Eval.EvalDirectiveValue
   -> Maybe EvalTrace
   -> TraceLevel
   -> Bool
   -> Module Resolved
   -> ExceptT EvaluatorError IO ResponseWithReason
-handleEvalResultDirect result trace traceLevel includeGraphViz mModule = case result of
+handleEvalResultDirect ei result trace traceLevel includeGraphViz mModule = case result of
   Eval.Assertion _ -> throwError $ InterpreterError "L4: Got an assertion instead of a normal result."
   Eval.Reduction (Left evalExc) -> throwError $ InterpreterError $ Text.textShow evalExc
   Eval.Reduction (Right val) -> do
-    r <- nfToFnLiteral val
+    r <- nfToFnLiteral ei val
     pure $ ResponseWithReason
       { fnResult = Map.singleton "value" r
       , reasoning = case traceLevel of
@@ -302,7 +303,7 @@ evaluateWithWrapper filepath fnDecl compiled params traceLevel includeGraphViz =
   case mEvalRes of
     Nothing -> throwError $ InterpreterError (mconcat errs)
     Just [Eval.MkEvalDirectiveResult{result, trace}] ->
-      handleEvalResult result trace genCode.decodeFailedSentinel traceLevel includeGraphViz compiled.compiledModule
+      handleEvalResult compiled.compiledEntityInfo result trace genCode.decodeFailedSentinel traceLevel includeGraphViz compiled.compiledModule
     Just [] -> throwError $ InterpreterError "L4: No #EVAL found in the program."
     Just _xs -> throwError $ InterpreterError "L4: More than ONE #EVAL found in the program."
 
@@ -399,28 +400,31 @@ fnLiteralToJson = \case
 
 -- | Handle evaluation result, checking for decode failure sentinel
 handleEvalResult
-  :: Eval.EvalDirectiveValue
+  :: EntityInfo
+  -> Eval.EvalDirectiveValue
   -> Maybe EvalTrace
   -> Text
   -> TraceLevel
   -> Bool
   -> Module Resolved
   -> ExceptT EvaluatorError IO ResponseWithReason
-handleEvalResult result trace _sentinel traceLevel includeGraphViz mModule = case result of
+handleEvalResult ei result trace _sentinel traceLevel includeGraphViz mModule = case result of
   Eval.Assertion _ -> throwError $ InterpreterError "L4: Got an assertion instead of a normal result."
   Eval.Reduction (Left evalExc) -> throwError $ InterpreterError $ Text.textShow evalExc
   Eval.Reduction (Right val) -> do
-    r <- nfToFnLiteral val
+    r <- nfToFnLiteral ei val
     -- Check if the result is NOTHING (decode failure from LEFT error) or JUST value
     actualResult <- case r of
       -- If result is FnUnknown, it means evaluation produced undefined/unknown
       FnUnknown ->
         throwError $ InterpreterError "Evaluation produced unknown value"
       -- If result is NOTHING constructor, it means JSONDECODE returned LEFT (JSON decode failed)
-      FnObject [("NOTHING", FnArray [])] ->
+      FnObject [("NOTHING", _)] ->
         throwError $ InterpreterError "JSON decoding failed: input does not match expected schema"
       -- If result is JUST x (wrapper returns JUST when JSONDECODE returns RIGHT)
       FnObject [("JUST", FnArray [val'])] ->
+        pure val'
+      FnObject [("JUST", FnObject [(_fieldName, val')])] ->
         pure val'
       -- For backwards compatibility, if result is an array with one element
       FnArray [val'] ->
@@ -505,7 +509,7 @@ createFunction filepath fnDecl fnImpl moduleContext = do
                 case mEvalRes of
                   Nothing -> throwError $ InterpreterError (mconcat errs)
                   Just [Eval.MkEvalDirectiveResult{result, trace}] ->
-                    handleEvalResult result trace genCode.decodeFailedSentinel traceLevel includeGraphViz tcRes.module'
+                    handleEvalResult tcRes.entityInfo result trace genCode.decodeFailedSentinel traceLevel includeGraphViz tcRes.module'
                   Just [] -> throwError $ InterpreterError "L4: No #EVAL found in the program."
                   Just _xs -> throwError $ InterpreterError "L4: More than ONE #EVAL found in the program."
             }
@@ -594,12 +598,12 @@ buildImportEnvironment filepath source moduleContext _entityInfo = do
 -- Helpers and other non-generic functions
 -- ----------------------------------------------------------------------------
 
-nfToFnLiteral :: (Monad m) => Eval.NF -> ExceptT EvaluatorError m FnLiteral
-nfToFnLiteral (Eval.MkNF v) = valueToFnLiteral v
-nfToFnLiteral Eval.Omitted  = pure FnUnknown
+nfToFnLiteral :: (Monad m) => EntityInfo -> Eval.NF -> ExceptT EvaluatorError m FnLiteral
+nfToFnLiteral ei (Eval.MkNF v) = valueToFnLiteral ei v
+nfToFnLiteral _  Eval.Omitted  = pure FnUnknown
 
-valueToFnLiteral :: (Monad m) => Eval.Value Eval.NF -> ExceptT EvaluatorError m FnLiteral
-valueToFnLiteral = \case
+valueToFnLiteral :: (Monad m) => EntityInfo -> Eval.Value Eval.NF -> ExceptT EvaluatorError m FnLiteral
+valueToFnLiteral ei = \case
   Eval.ValNumber i ->
     pure $ case isInteger i of
       Just int -> FnLitInt int
@@ -608,7 +612,7 @@ valueToFnLiteral = \case
     pure $ FnLitString (Text.textShow day)
   Eval.ValString t -> pure $ FnLitString t
   Eval.ValNil -> pure $ FnArray []
-  Eval.ValCons v1 v2 -> nfToFnLiteral v1 >>= \ l1 -> listToFnLiteral (DList.singleton l1) v2
+  Eval.ValCons v1 v2 -> nfToFnLiteral ei v1 >>= \ l1 -> listToFnLiteral ei (DList.singleton l1) v2
   Eval.ValClosure{} -> throwError $ InterpreterError "#EVAL produced function closure."
   Eval.ValNullaryBuiltinFun{} -> throwError $ InterpreterError "#EVAL produced builtin closure."
   Eval.ValBinaryBuiltinFun{} -> throwError $ InterpreterError "#EVAL produced function closure."
@@ -631,21 +635,64 @@ valueToFnLiteral = \case
           -- Other nullary constructors become strings (original casing preserved)
           _ -> pure $ FnLitString name
   Eval.ValConstructor resolved vals -> do
-    lits <- traverse nfToFnLiteral vals
-    pure $
-      FnObject
-        [ (prettyLayout $ getActual resolved, FnArray lits)
-        ]
+    lits <- traverse (nfToFnLiteral ei) vals
+    let name = prettyLayout $ getActual resolved
+        fieldNames = lookupFieldNames ei resolved
+    pure $ case fieldNames of
+      Just names | length names == length lits ->
+        -- Constructor has named fields: produce an object with field names
+        FnObject
+          [ (name, FnObject (zip names lits))
+          ]
+      _ ->
+        -- No field names available or count mismatch: fall back to array
+        FnObject
+          [ (name, FnArray lits)
+          ]
   Eval.ValAssumed var ->
     throwError $ InterpreterError $ "#EVAL produced ASSUME: " <> prettyLayout var
 
-listToFnLiteral :: Monad m => DList FnLiteral -> Eval.NF -> ExceptT EvaluatorError m FnLiteral
-listToFnLiteral acc Eval.Omitted                     = pure (FnArray (toList (DList.snoc acc FnUnknown)))
-listToFnLiteral acc (Eval.MkNF Eval.ValNil)          = pure (FnArray (toList acc))
-listToFnLiteral acc (Eval.MkNF (Eval.ValCons v1 v2)) = do
-  l1 <- nfToFnLiteral v1
-  listToFnLiteral (DList.snoc acc l1) v2
-listToFnLiteral _acc (Eval.MkNF _)                   =
+-- | Look up field names for a constructor from the EntityInfo.
+-- Returns 'Just' field names if the constructor has named fields, 'Nothing' otherwise.
+-- First tries Unique-based lookup (fast, works for direct evaluation path),
+-- then falls back to name-based lookup (for wrapper evaluation path where
+-- re-typechecking generates different Uniques).
+lookupFieldNames :: EntityInfo -> Resolved -> Maybe [Text]
+lookupFieldNames ei resolved =
+  case Map.lookup (getUnique resolved) ei of
+    Just (_name, TypeCheck.KnownTerm conType Constructor) ->
+      extractNonEmpty conType
+    _ ->
+      -- Fallback: search by name (wrapper path generates fresh Uniques)
+      let targetName = nameToText (getActual resolved)
+       in listToMaybe $ mapMaybe (matchByName targetName) (Map.elems ei)
+  where
+    extractNonEmpty conType =
+      let names = extractFieldNamesFromType conType
+       in if null names then Nothing else Just names
+    matchByName target (name, TypeCheck.KnownTerm conType Constructor)
+      | nameToText name == target = extractNonEmpty conType
+    matchByName _ _ = Nothing
+
+-- | Extract field names from a constructor's function type.
+-- The constructor type is typically: forall args. (field1: Type1, field2: Type2, ...) -> ResultType
+extractFieldNamesFromType :: Type' Resolved -> [Text]
+extractFieldNamesFromType ty = case ty of
+  Forall _ _ innerTy -> extractFieldNamesFromType innerTy
+  Fun _ argTypes _resultTy -> mapMaybe getFieldName argTypes
+  _ -> []
+  where
+    getFieldName :: OptionallyNamedType Resolved -> Maybe Text
+    getFieldName (MkOptionallyNamedType _ maybeName _ty) =
+      nameToText . TypeCheck.getName <$> maybeName
+
+listToFnLiteral :: Monad m => EntityInfo -> DList FnLiteral -> Eval.NF -> ExceptT EvaluatorError m FnLiteral
+listToFnLiteral _  acc Eval.Omitted                     = pure (FnArray (toList (DList.snoc acc FnUnknown)))
+listToFnLiteral _  acc (Eval.MkNF Eval.ValNil)          = pure (FnArray (toList acc))
+listToFnLiteral ei acc (Eval.MkNF (Eval.ValCons v1 v2)) = do
+  l1 <- nfToFnLiteral ei v1
+  listToFnLiteral ei (DList.snoc acc l1) v2
+listToFnLiteral _  _acc (Eval.MkNF _)                   =
   throwError $ InterpreterError "#EVAL produced a type-incorrect list."
 
 -- ----------------------------------------------------------------------------

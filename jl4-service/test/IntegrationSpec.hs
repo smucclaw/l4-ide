@@ -30,7 +30,7 @@ import Network.Wai.Handler.Warp (testWithApplication)
 import System.Directory (removeDirectoryRecursive, doesDirectoryExist)
 import System.IO.Error (isPermissionError)
 
-import TestData (qualifiesJL4)
+import TestData (qualifiesJL4, recordJL4, maybeParamJL4)
 
 spec :: SpecWith ()
 spec = describe "integration" do
@@ -78,6 +78,68 @@ spec = describe "integration" do
         req <- parseRequest (baseUrl <> "/deployments/exists2/functions/no_such_fn")
         resp <- httpLbs req mgr
         statusCode' resp `shouldBe` 404
+
+  describe "record output with named fields" do
+    it "returns record fields as named object keys" do
+      withServiceFromSources "record-named" [("record.l4", recordJL4)] \baseUrl mgr -> do
+        resp <- evalFunction baseUrl mgr "record-named" "make_person"
+          (Aeson.object
+            [ "fnArguments" Aeson..= Aeson.object
+                [ "n" Aeson..= ("Alice" :: Text)
+                , "a" Aeson..= (30 :: Int)
+                ]
+            ])
+        assertSuccess resp \r -> do
+          let mValue = Map.lookup "value" r.fnResult
+          case mValue of
+            Just (FnObject [(conName, FnObject fields)]) -> do
+              conName `shouldBe` "Person"
+              let fieldMap = Map.fromList fields
+              Map.lookup "name" fieldMap `shouldBe` Just (FnLitString "Alice")
+              Map.lookup "age" fieldMap `shouldBe` Just (FnLitInt 30)
+            other ->
+              expectationFailure ("Expected FnObject with named fields, got: " <> show other)
+
+  describe "MAYBE parameter handling" do
+    it "handles NOTHING (null) for a MAYBE parameter" do
+      withServiceFromSources "maybe-null" [("maybe.l4", maybeParamJL4)] \baseUrl mgr -> do
+        resp <- evalFunction baseUrl mgr "maybe-null" "with_maybe"
+          (Aeson.object
+            [ "fnArguments" Aeson..= Aeson.object
+                [ "label" Aeson..= ("test" :: Text)
+                , "extra" Aeson..= Aeson.Null
+                ]
+            ])
+        assertSuccess resp \r -> do
+          let mValue = Map.lookup "value" r.fnResult
+          case mValue of
+            Just (FnObject [(conName, FnObject fields)]) -> do
+              conName `shouldBe` "Result"
+              let fieldMap = Map.fromList fields
+              Map.lookup "label" fieldMap `shouldBe` Just (FnLitString "test")
+              Map.lookup "extra_provided" fieldMap `shouldBe` Just (FnLitBool False)
+            other ->
+              expectationFailure ("Expected FnObject with named fields, got: " <> show other)
+
+    it "handles JUST (non-null) for a MAYBE parameter" do
+      withServiceFromSources "maybe-just" [("maybe.l4", maybeParamJL4)] \baseUrl mgr -> do
+        resp <- evalFunction baseUrl mgr "maybe-just" "with_maybe"
+          (Aeson.object
+            [ "fnArguments" Aeson..= Aeson.object
+                [ "label" Aeson..= ("test" :: Text)
+                , "extra" Aeson..= ("hello" :: Text)
+                ]
+            ])
+        assertSuccess resp \r -> do
+          let mValue = Map.lookup "value" r.fnResult
+          case mValue of
+            Just (FnObject [(conName, FnObject fields)]) -> do
+              conName `shouldBe` "Result"
+              let fieldMap = Map.fromList fields
+              Map.lookup "label" fieldMap `shouldBe` Just (FnLitString "test")
+              Map.lookup "extra_provided" fieldMap `shouldBe` Just (FnLitBool True)
+            other ->
+              expectationFailure ("Expected FnObject with named fields, got: " <> show other)
 
   describe "batch evaluation" do
     it "evaluates multiple cases in parallel" do

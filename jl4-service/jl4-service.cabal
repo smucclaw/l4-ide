@@ -120,6 +120,7 @@ test-suite jl4-service-test
     CodeGenSpec
     DecisionQueryCacheKeySpec
     IntegrationSpec
+    MaybeLiftSpec
     SchemaSpec
     SerialisationSpec
     TestData

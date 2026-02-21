@@ -8,6 +8,8 @@ module TestData (
   constantFunction,
   constantJL4,
   qualifiesJL4,
+  recordJL4,
+  maybeParamJL4,
 ) where
 
 import Backend.Jl4 as Jl4
@@ -152,4 +154,39 @@ GIVEN walks IS A BOOLEAN
       drinks IS A BOOLEAN
 GIVETH A BOOLEAN
 DECIDE compute_qualifies IF walks AND eats AND drinks
+|]
+
+-- | L4 source returning a record type, for testing named fields in JSON output.
+recordJL4 :: Text
+recordJL4 =
+  [i|
+DECLARE Person HAS
+    name IS A STRING
+    age IS A NUMBER
+
+GIVEN n IS A STRING
+      a IS A NUMBER
+GIVETH A Person
+DECIDE make_person IS Person WITH name IS n, age IS a
+|]
+
+-- | L4 source with a MAYBE parameter, for testing null/NOTHING handling.
+maybeParamJL4 :: Text
+maybeParamJL4 =
+  [i|
+IMPORT prelude
+
+DECLARE Result HAS
+    label IS A STRING
+    extra_provided IS A BOOLEAN
+
+GIVEN label IS A STRING
+      extra IS A MAYBE STRING
+GIVETH A Result
+DECIDE with_maybe IS Result WITH
+    label IS label
+    extra_provided IS
+        CONSIDER extra
+            WHEN JUST x THEN TRUE
+            WHEN NOTHING THEN FALSE
 |]

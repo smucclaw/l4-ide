@@ -15,7 +15,7 @@ import qualified Data.Text as Text
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TL
 import L4.Syntax (Type'(..), Resolved, getUnique)
-import L4.TypeCheck.Environment (booleanUnique, dateUnique)
+import L4.TypeCheck.Environment (booleanUnique, dateUnique, maybeUnique)
 import Backend.Api (TraceLevel(..))
 import Backend.MaybeLift (liftTypeToMaybe)
 
@@ -24,6 +24,11 @@ import Backend.MaybeLift (liftTypeToMaybe)
 isDateType :: Type' Resolved -> Bool
 isDateType (TyApp _ name []) = getUnique name == dateUnique
 isDateType _ = False
+
+-- | Check if a type is MAYBE X (one level)
+isMaybeType :: Type' Resolved -> Bool
+isMaybeType (TyApp _ name [_]) = getUnique name == maybeUnique
+isMaybeType _ = False
 
 -- | Check if a type contains DATE at its core (unwrapping MAYBE)
 -- e.g., DATE -> True, MAYBE DATE -> True, MAYBE (MAYBE DATE) -> True
@@ -112,13 +117,13 @@ generateEvalWrapper funName givenParams assumeParams inputJson traceLevel = do
           isBooleanType :: Type' Resolved -> Bool
           isBooleanType (TyApp _ name []) = getUnique name == booleanUnique
           isBooleanType _ = False
-          -- Annotate GIVEN params with (type info, isBoolean, isGiven, isDate)
-          givenParamInfo = map (\(name, ty) -> ((name, ty), isBooleanType ty, True, containsDateType ty)) givenParams
-          -- Annotate ASSUME params with (type info, isBoolean, isGiven, isDate)
-          assumeParamInfo = map (\(name, ty) -> ((name, ty), isBooleanType ty, False, containsDateType ty)) assumeParams
+          -- Annotate GIVEN params with (type info, isBoolean, isGiven, isDate, isMaybe)
+          givenParamInfo = map (\(name, ty) -> ((name, ty), isBooleanType ty, True, containsDateType ty, isMaybeType ty)) givenParams
+          -- Annotate ASSUME params with (type info, isBoolean, isGiven, isDate, isMaybe)
+          assumeParamInfo = map (\(name, ty) -> ((name, ty), isBooleanType ty, False, containsDateType ty, isMaybeType ty)) assumeParams
           allParamInfo = givenParamInfo <> assumeParamInfo
           -- We always need prelude for fromMaybe (all booleans use it)
-          hasBooleans = any (\(_, isB, _, _) -> isB) allParamInfo
+          hasBooleans = any (\(_, isB, _, _, _) -> isB) allParamInfo
       in Right GeneratedCode
       { generatedWrapper = Text.unlines $
           [ ""
@@ -198,11 +203,13 @@ escapeAsL4String val =
 -- GIVEN params are passed as function arguments.
 -- ASSUME params are injected as LET bindings before the function call.
 --
--- Type signature: [((name, type), isBoolean, isGiven, isDate)]
+-- Type signature: [((name, type), isBoolean, isGiven, isDate, isMaybe)]
+-- isMaybe=True means the parameter's original type is already MAYBE X, so we
+-- should NOT unwrap the value (pass it directly as MAYBE X to the function).
 generateEvalDirectiveLiftedWithAssumes
   :: Text
-  -> [((Text, Type' Resolved), Bool, Bool, Bool)]  -- ^ GIVEN params: ((name, type), isBoolean, isGiven=True, isDate)
-  -> [((Text, Type' Resolved), Bool, Bool, Bool)]  -- ^ ASSUME params: ((name, type), isBoolean, isGiven=False, isDate)
+  -> [((Text, Type' Resolved), Bool, Bool, Bool, Bool)]  -- ^ GIVEN params: ((name, type), isBoolean, isGiven=True, isDate, isMaybe)
+  -> [((Text, Type' Resolved), Bool, Bool, Bool, Bool)]  -- ^ ASSUME params: ((name, type), isBoolean, isGiven=False, isDate, isMaybe)
   -> TraceLevel
   -> Text
 generateEvalDirectiveLiftedWithAssumes funName givenParamInfo assumeParamInfo traceLevel =
@@ -213,18 +220,25 @@ generateEvalDirectiveLiftedWithAssumes funName givenParamInfo assumeParamInfo tr
       -- All params for unwrapping
       allParams = givenParamInfo <> assumeParamInfo
 
-      -- Separate boolean and non-boolean params (for unwrapping logic)
-      nonBoolAllParams = filter (\(_, isB, _, _) -> not isB) allParams
+      -- Params that need CONSIDER unwrapping:
+      -- non-boolean AND not originally-MAYBE (isMaybe=False)
+      needsUnwrap (_, isB, _, _, isM) = not isB && not isM
+      nonBoolNonMaybeParams = filter needsUnwrap allParams
+
+      -- Generate the value expression for a single parameter
+      paramValueExpr :: (Text, Bool, Bool, Bool) -> Text
+      paramValueExpr (name, isBoolean, isDate, isM)
+        | isBoolean = "(fromMaybe FALSE (args's " <> quoteInputField name <> "))"
+        -- Originally MAYBE: pass field value directly (it's already MAYBE X)
+        | isM && isDate = maybeDateConvertedVar name
+        | isM       = "(args's " <> quoteInputField name <> ")"
+        | isDate    = dateConvertedVar name
+        | otherwise = unwrappedVar name
 
       -- Generate argument expressions for GIVEN params only (in original order)
-      -- Booleans use fromMaybe FALSE directly
-      -- Non-booleans reference unwrapped variable names
-      -- Date types need conversion via dateConvertedVar
       givenArgExprs = map snd $ sortOn fst $
-        [(idx, expr) | (idx, ((name, _), True, _, _)) <- zip [0 :: Int ..] givenParamInfo
-                     , let expr = "(fromMaybe FALSE (args's " <> quoteInputField name <> "))"] ++
-        [(idx, expr) | (idx, ((name, _), False, _, isDate)) <- zip [0 :: Int ..] givenParamInfo
-                     , let expr = if isDate then dateConvertedVar name else unwrappedVar name]
+        [(idx, paramValueExpr (name, isB, isDate, isM))
+        | (idx, ((name, _), isB, _, isDate, isM)) <- zip [0 :: Int ..] givenParamInfo]
 
       -- Build function call with only GIVEN params as arguments
       -- Quote function name if it contains spaces
@@ -234,48 +248,67 @@ generateEvalDirectiveLiftedWithAssumes funName givenParamInfo assumeParamInfo tr
         else quotedFunName <> " " <> Text.unwords givenArgExprs
 
       -- Wrap function call with LET bindings for ASSUME params
-      -- Boolean ASSUMEs use fromMaybe FALSE
-      -- Non-boolean ASSUMEs use unwrapped_ variables
-      -- Date ASSUMEs use dateConverted_ variables
       wrapWithAssumes :: Text -> Text
       wrapWithAssumes innerExpr = foldr wrapOne innerExpr assumeParamInfo
         where
-          wrapOne ((name, _), isBoolean, _, isDate) expr =
+          wrapOne ((name, _), isB, _, isDate, isM) expr =
             let quotedName = quoteIdent name
-                valueExpr = if isBoolean
-                  then "(fromMaybe FALSE (args's " <> quoteInputField name <> "))"
-                  else if isDate then dateConvertedVar name else unwrappedVar name
+                valueExpr = paramValueExpr (name, isB, isDate, isM)
             in "LET " <> quotedName <> " = " <> valueExpr <> " IN " <> expr
 
       -- The innermost expression (wrapped function call in JUST)
       innerCall = "JUST (" <> wrapWithAssumes functionCall <> ")"
 
-  in if null nonBoolAllParams
-     then -- All booleans: simple case, no nested CONSIDER needed
+      -- Generate LET bindings for MAYBE DATE params that need string→date conversion
+      -- These are placed before the nested CONSIDER but after the decode
+      maybeDateParams = filter (\(_, _, _, isDate, isM) -> isM && isDate) allParams
+      maybeDateLetBindings = concatMap genMaybeDateLet maybeDateParams
+      genMaybeDateLet ((name, _), _, _, _, _) =
+        [ "      LET " <> maybeDateConvertedVar name <> " ="
+        , "        CONSIDER args's " <> quoteInputField name
+        , "          WHEN JUST " <> unwrappedVar name <> " THEN TODATE " <> unwrappedVar name
+        , "          WHEN NOTHING THEN NOTHING"
+        , "      IN"
+        ]
+
+  in if null nonBoolNonMaybeParams && null maybeDateParams
+     then -- All booleans/passthrough: simple case, no nested CONSIDER needed
        Text.unlines
          [ directive
          , "  CONSIDER decodeArgs inputJson"
          , "    WHEN RIGHT args THEN " <> innerCall
          , "    WHEN LEFT error THEN NOTHING"
          ]
-     else -- Has non-booleans: need nested CONSIDER for unwrapping
+     else if null nonBoolNonMaybeParams
+     then -- Only MAYBE DATE params need LET bindings, no CONSIDER unwrapping
        Text.unlines $
          [ directive
          , "  CONSIDER decodeArgs inputJson"
          , "    WHEN RIGHT args THEN"
          ] ++
-         generateNestedConsiderWithAssumes nonBoolAllParams functionCall assumeParamInfo 3 ++
+         maybeDateLetBindings ++
+         [ "      " <> innerCall
+         , "    WHEN LEFT error THEN NOTHING"
+         ]
+     else -- Has params that need CONSIDER unwrapping
+       Text.unlines $
+         [ directive
+         , "  CONSIDER decodeArgs inputJson"
+         , "    WHEN RIGHT args THEN"
+         ] ++
+         maybeDateLetBindings ++
+         generateNestedConsiderWithAssumes nonBoolNonMaybeParams functionCall assumeParamInfo (3 + if null maybeDateParams then 0 else 1) ++
          [ "    WHEN LEFT error THEN NOTHING"
          ]
 
--- | Generate nested CONSIDER for unwrapping non-boolean MAYBE values,
+-- | Generate nested CONSIDER for unwrapping non-boolean, non-MAYBE values,
 -- with LET bindings for ASSUME params at the innermost level.
 -- For DATE types, adds an additional CONSIDER to convert string -> DATE via TODATE.
 generateNestedConsiderWithAssumes
-  :: [((Text, Type' Resolved), Bool, Bool, Bool)]  -- ^ Non-boolean params to unwrap (name, type, isBoolean, isGiven, isDate)
-  -> Text                                           -- ^ Function call (GIVEN args only)
-  -> [((Text, Type' Resolved), Bool, Bool, Bool)]  -- ^ ASSUME params for LET bindings
-  -> Int                                            -- ^ Indentation level
+  :: [((Text, Type' Resolved), Bool, Bool, Bool, Bool)]  -- ^ Params to unwrap (non-boolean, non-MAYBE)
+  -> Text                                                 -- ^ Function call (GIVEN args only)
+  -> [((Text, Type' Resolved), Bool, Bool, Bool, Bool)]  -- ^ ASSUME params for LET bindings
+  -> Int                                                  -- ^ Indentation level
   -> [Text]
 generateNestedConsiderWithAssumes [] functionCall assumeParamInfo indent =
   let indentStr = Text.replicate indent "  "
@@ -283,14 +316,17 @@ generateNestedConsiderWithAssumes [] functionCall assumeParamInfo indent =
       wrapWithAssumes :: Text -> Text
       wrapWithAssumes innerExpr = foldr wrapOne innerExpr assumeParamInfo
         where
-          wrapOne ((name, _), isBoolean, _, isDate) expr =
+          wrapOne ((name, _), isB, _, isDate, isM) expr =
             let quotedName = quoteIdent name
-                valueExpr = if isBoolean
-                  then "(fromMaybe FALSE (args's " <> quoteInputField name <> "))"
-                  else if isDate then dateConvertedVar name else unwrappedVar name
+                valueExpr
+                  | isB       = "(fromMaybe FALSE (args's " <> quoteInputField name <> "))"
+                  | isM && isDate = maybeDateConvertedVar name
+                  | isM       = "(args's " <> quoteInputField name <> ")"
+                  | isDate    = dateConvertedVar name
+                  | otherwise = unwrappedVar name
             in "LET " <> quotedName <> " = " <> valueExpr <> " IN " <> expr
   in [indentStr <> "JUST (" <> wrapWithAssumes functionCall <> ")"]
-generateNestedConsiderWithAssumes (((name, _), _, _, isDate):rest) functionCall assumeParamInfo indent =
+generateNestedConsiderWithAssumes (((name, _), _, _, isDate, _):rest) functionCall assumeParamInfo indent =
   let indentStr = Text.replicate indent "  "
       quotedFieldName = quoteInputField name
   in if isDate
@@ -320,3 +356,10 @@ dateConvertedVar :: Text -> Text
 dateConvertedVar name
   | Text.any (== ' ') name = "`dateConverted_" <> name <> "`"
   | otherwise = "dateConverted_" <> name
+
+-- | Create a variable name for MAYBE DATE converted values
+-- Used when the original type is MAYBE DATE (string→date conversion preserving MAYBE)
+maybeDateConvertedVar :: Text -> Text
+maybeDateConvertedVar name
+  | Text.any (== ' ') name = "`maybeDateConverted_" <> name <> "`"
+  | otherwise = "maybeDateConverted_" <> name
