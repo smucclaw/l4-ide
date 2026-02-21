@@ -35,7 +35,7 @@ import Network.Wai.Handler.Warp (testWithApplication)
 import System.Directory (removeDirectoryRecursive, doesDirectoryExist)
 import System.IO.Error (isPermissionError)
 
-import TestData (qualifiesJL4, recordJL4, maybeParamJL4, saleContractJL4)
+import TestData (qualifiesJL4, recordJL4, maybeParamJL4, saleContractJL4, deonticExportJL4)
 
 spec :: SpecWith ()
 spec = describe "integration" do
@@ -365,6 +365,108 @@ spec = describe "integration" do
         statusCode' resp `shouldBe` 200
         let body = decodeObject (responseBody resp)
         lookupArrayLength "metaFunctions" body `shouldSatisfy` maybe False (> 0)
+
+  describe "deontic evaluation" do
+    it "evaluates a deontic function to FULFILLED with all events" do
+      withServiceFromSources "deontic-ok" [("contract.l4", deonticExportJL4)] \baseUrl mgr -> do
+        resp <- evalFunction baseUrl mgr "deontic-ok" "the sale contract"
+          (Aeson.object
+            [ "fnArguments" Aeson..= Aeson.object []
+            , "startTime" Aeson..= (0 :: Int)
+            , "events" Aeson..=
+                [ Aeson.object ["party" Aeson..= ("the seller" :: Text), "action" Aeson..= ("deliver the goods" :: Text), "at" Aeson..= (5 :: Int)]
+                , Aeson.object ["party" Aeson..= ("the buyer" :: Text), "action" Aeson..= ("pay the invoice" :: Text), "at" Aeson..= (20 :: Int)]
+                ]
+            ])
+        assertSuccess resp \r ->
+          Map.lookup "value" r.fnResult `shouldBe` Just (FnLitString "FULFILLED")
+
+    it "returns initial OBLIGATION with empty events" do
+      withServiceFromSources "deontic-init" [("contract.l4", deonticExportJL4)] \baseUrl mgr -> do
+        resp <- evalFunction baseUrl mgr "deontic-init" "the sale contract"
+          (Aeson.object
+            [ "fnArguments" Aeson..= Aeson.object []
+            , "startTime" Aeson..= (0 :: Int)
+            , "events" Aeson..= ([] :: [Aeson.Value])
+            ])
+        assertSuccess resp \r -> do
+          let mValue = Map.lookup "value" r.fnResult
+          case mValue of
+            Just (FnObject [("OBLIGATION", FnObject fields)]) -> do
+              let fieldMap = Map.fromList fields
+              Map.lookup "modal" fieldMap `shouldBe` Just (FnLitString "MUST")
+            other ->
+              expectationFailure ("Expected OBLIGATION, got: " <> show other)
+
+    it "returns residual OBLIGATION after partial events" do
+      withServiceFromSources "deontic-partial" [("contract.l4", deonticExportJL4)] \baseUrl mgr -> do
+        resp <- evalFunction baseUrl mgr "deontic-partial" "the sale contract"
+          (Aeson.object
+            [ "fnArguments" Aeson..= Aeson.object []
+            , "startTime" Aeson..= (0 :: Int)
+            , "events" Aeson..=
+                [ Aeson.object ["party" Aeson..= ("the seller" :: Text), "action" Aeson..= ("deliver the goods" :: Text), "at" Aeson..= (5 :: Int)]
+                ]
+            ])
+        assertSuccess resp \r -> do
+          let mValue = Map.lookup "value" r.fnResult
+          case mValue of
+            Just (FnObject [("OBLIGATION", FnObject fields)]) -> do
+              let fieldMap = Map.fromList fields
+              Map.lookup "modal" fieldMap `shouldBe` Just (FnLitString "MUST")
+            other ->
+              expectationFailure ("Expected OBLIGATION for buyer to pay, got: " <> show other)
+
+    it "returns 400 when events provided for non-deontic function" do
+      withServiceFromSources "deontic-err" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        req <- buildJsonPost (baseUrl <> "/deployments/deontic-err/functions/compute_qualifies/evaluation")
+          (Aeson.object
+            [ "fnArguments" Aeson..= Aeson.object ["walks" Aeson..= True, "eats" Aeson..= True, "drinks" Aeson..= True]
+            , "startTime" Aeson..= (0 :: Int)
+            , "events" Aeson..= ([] :: [Aeson.Value])
+            ])
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 400
+
+    it "returns 400 when startTime missing for deontic function" do
+      withServiceFromSources "deontic-no-st" [("contract.l4", deonticExportJL4)] \baseUrl mgr -> do
+        req <- buildJsonPost (baseUrl <> "/deployments/deontic-no-st/functions/the%20sale%20contract/evaluation")
+          (Aeson.object
+            [ "fnArguments" Aeson..= Aeson.object []
+            , "events" Aeson..= ([] :: [Aeson.Value])
+            ])
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 400
+
+    it "returns 400 when events missing for deontic function" do
+      withServiceFromSources "deontic-no-ev" [("contract.l4", deonticExportJL4)] \baseUrl mgr -> do
+        req <- buildJsonPost (baseUrl <> "/deployments/deontic-no-ev/functions/the%20sale%20contract/evaluation")
+          (Aeson.object
+            [ "fnArguments" Aeson..= Aeson.object []
+            , "startTime" Aeson..= (0 :: Int)
+            ])
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 400
+
+    it "includes startTime and events in function schema for deontic function" do
+      withServiceFromSources "deontic-schema" [("contract.l4", deonticExportJL4)] \baseUrl mgr -> do
+        req <- parseRequest (baseUrl <> "/deployments/deontic-schema/functions/the%20sale%20contract")
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 200
+        let body = decodeObject (responseBody resp)
+        -- Check that parameters include startTime and events in required
+        case lookupKey "function" body of
+          Just (Aeson.Object fn) ->
+            case Aeson.KeyMap.lookup "parameters" fn of
+              Just (Aeson.Object params) ->
+                case Aeson.KeyMap.lookup "required" params of
+                  Just reqArr -> do
+                    let reqList = Aeson.decode (Aeson.encode reqArr) :: Maybe [Text]
+                    reqList `shouldSatisfy` maybe False (elem "startTime")
+                    reqList `shouldSatisfy` maybe False (elem "events")
+                  _ -> expectationFailure "Missing required array in parameters"
+              _ -> expectationFailure "Missing parameters in function"
+          _ -> expectationFailure "Missing function object in response"
 
   describe "state graphs" do
     it "returns empty list for a boolean-only module" do

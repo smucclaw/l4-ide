@@ -116,8 +116,11 @@ instance Arbitrary Function where
 instance Arbitrary EvalBackend where
   arbitrary = Q.chooseEnum (minBound, maxBound)
 
+instance Arbitrary TraceEvent where
+  arbitrary = TraceEvent <$> arbitrary <*> arbitrary <*> arbitrary
+
 instance Arbitrary FnArguments where
-  arbitrary = FnArguments <$> arbitrary <*> arbitrary
+  arbitrary = FnArguments <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
 
 instance Arbitrary SimpleFunction where
   arbitrary = SimpleFunction <$> arbitrary <*> arbitrary

@@ -119,6 +119,18 @@ instance FromJSONKey EvalBackend
 data FnArguments = FnArguments
   { fnEvalBackend :: Maybe EvalBackend
   , fnArguments :: Map Text (Maybe FnLiteral)
+  , startTime :: Maybe Scientific.Scientific
+  , events :: Maybe [TraceEvent]
+  }
+  deriving stock (Show, Read, Ord, Eq, Generic)
+  deriving anyclass (FromJSON, ToJSON)
+
+-- | A single event for deontic trace evaluation.
+-- Maps to the L4 EVENT constructor: EVENT party action timestamp
+data TraceEvent = TraceEvent
+  { party  :: !FnLiteral    -- ^ The party performing the action (matches function's Party type)
+  , action :: !FnLiteral    -- ^ The action performed (matches function's Action type)
+  , at     :: !Scientific.Scientific  -- ^ Timestamp when this event occurred
   }
   deriving stock (Show, Read, Ord, Eq, Generic)
   deriving anyclass (FromJSON, ToJSON)

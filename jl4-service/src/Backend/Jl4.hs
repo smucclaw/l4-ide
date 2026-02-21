@@ -1,5 +1,5 @@
 {-# LANGUAGE ViewPatterns #-}
-module Backend.Jl4 (createFunction, createRunFunctionFromCompiled, getFunctionDefinition, buildFunDecide, ModuleContext, CompiledModule(..), precompileModule, evaluateWithCompiled, typecheckModule, buildImportEnvironment) where
+module Backend.Jl4 (createFunction, createRunFunctionFromCompiled, getFunctionDefinition, buildFunDecide, ModuleContext, CompiledModule(..), precompileModule, evaluateWithCompiled, evaluateWithCompiledDeontic, typecheckModule, buildImportEnvironment) where
 
 import Base hiding (trace)
 import qualified Base.DList as DList
@@ -32,7 +32,7 @@ import Language.LSP.Protocol.Types (normalizedFilePathToUri, toNormalizedFilePat
 import System.FilePath ((<.>), takeFileName)
 
 import Backend.Api
-import Backend.CodeGen (generateEvalWrapper, GeneratedCode(..))
+import Backend.CodeGen (generateEvalWrapper, generateDeonticEvalWrapper, GeneratedCode(..))
 import L4.Export (extractAssumeParamTypes)
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Aeson
@@ -185,6 +185,41 @@ evaluateWithCompiled filepath fnDecl compiled params traceLevel includeGraphViz 
   if requiresWrapperEvaluation fullParams
     then evaluateWithWrapper filepath fnDecl compiled fullParams traceLevel includeGraphViz
     else evaluateDirectAST compiled fullParams traceLevel includeGraphViz
+
+-- | Evaluate a deontic function with startTime and events via EVALTRACE wrapper.
+-- Always uses the wrapper path since events need to go through L4 typechecking.
+evaluateWithCompiledDeontic
+  :: FilePath
+  -> FunctionDeclaration
+  -> CompiledModule
+  -> [(Text, Maybe FnLiteral)]
+  -> Scientific.Scientific   -- ^ Start time for contract simulation
+  -> [TraceEvent]             -- ^ Events to replay
+  -> TraceLevel
+  -> Bool
+  -> ExceptT EvaluatorError IO ResponseWithReason
+evaluateWithCompiledDeontic filepath fnDecl compiled params startTime traceEvents traceLevel includeGraphViz = do
+  let givenParamTypes = extractParamTypes compiled.compiledDecide
+      assumeParamTypes = extractAssumeParamTypes compiled.compiledModule compiled.compiledDecide
+
+  -- Convert input parameters to JSON
+  inputJson <- paramsToJson params
+
+  -- Generate deontic wrapper code with EVALTRACE
+  genCode <- case generateDeonticEvalWrapper fnDecl.name givenParamTypes assumeParamTypes inputJson startTime traceEvents traceLevel of
+    Left err -> throwError $ InterpreterError err
+    Right gc -> pure gc
+
+  -- Evaluate the wrapper in the context of the precompiled module
+  (errs, mEvalRes) <- liftIO $ evaluateWrapperInContext filepath genCode.generatedWrapper compiled
+
+  -- Handle result
+  case mEvalRes of
+    Nothing -> throwError $ InterpreterError (mconcat errs)
+    Just [Eval.MkEvalDirectiveResult{result, trace}] ->
+      handleEvalResult compiled.compiledEntityInfo result trace genCode.decodeFailedSentinel traceLevel includeGraphViz compiled.compiledModule
+    Just [] -> throwError $ InterpreterError "L4: No #EVAL found in the program."
+    Just _xs -> throwError $ InterpreterError "L4: More than ONE #EVAL found in the program."
 
 -- | Direct AST evaluation (fast path) - for simple types without FnObject
 evaluateDirectAST
@@ -620,10 +655,35 @@ valueToFnLiteral ei = \case
   Eval.ValTernaryBuiltinFun{} -> throwError $ InterpreterError "#EVAL produced builtin closure."
   Eval.ValPartialTernary{} -> throwError $ InterpreterError "#EVAL produced partial closure."
   Eval.ValPartialTernary2{} -> throwError $ InterpreterError "#EVAL produced partial closure."
-  Eval.ValObligation{} -> throwError $ InterpreterError "#EVAL produced obligation."
+  -- Deontic values: serialize as structured JSON objects
+  Eval.ValObligation _env party action due _followup _lest -> do
+    partyLit <- serializeEitherValue ei party
+    let actionLit = serializeRAction action
+    dueLit <- serializeDue ei due
+    pure $ FnObject
+      [ ("OBLIGATION", FnObject
+          [ ("party", partyLit)
+          , ("modal", actionLit.modal)
+          , ("action", actionLit.actionPat)
+          , ("deadline", dueLit)
+          ])
+      ]
+
+  Eval.ValBreached reason -> do
+    reasonLit <- serializeBreachReason ei reason
+    pure $ FnObject [("BREACH", reasonLit)]
+
+  Eval.ValROp _env op left right -> do
+    leftLit <- serializeEitherValue ei left
+    rightLit <- serializeEitherValue ei right
+    let opStr = case op of
+          Eval.ValROr  -> "OR" :: Text
+          Eval.ValRAnd -> "AND"
+    pure $ FnObject
+      [ (opStr, FnArray [leftLit, rightLit])
+      ]
+
   Eval.ValEnvironment{} -> throwError $ InterpreterError "#EVAL produced environment."
-  Eval.ValROp{} -> throwError $ InterpreterError "#EVAL produced regulative operator."
-  Eval.ValBreached{} -> throwError $ InterpreterError "#EVAL produced breach."
   Eval.ValUnappliedConstructor name ->
     pure $ FnLitString $ prettyLayout name
   Eval.ValConstructor resolved [] ->
@@ -694,6 +754,63 @@ listToFnLiteral ei acc (Eval.MkNF (Eval.ValCons v1 v2)) = do
   listToFnLiteral ei (DList.snoc acc l1) v2
 listToFnLiteral _  _acc (Eval.MkNF _)                   =
   throwError $ InterpreterError "#EVAL produced a type-incorrect list."
+
+-- | Helper: serialized action info
+data SerializedAction = SerializedAction
+  { modal :: FnLiteral
+  , actionPat :: FnLiteral
+  }
+
+-- | Serialize a regulative action (MUST/MAY/SHANT/DO action) to FnLiteral
+serializeRAction :: RAction Resolved -> SerializedAction
+serializeRAction (MkAction _ deonticModal pat _) =
+  SerializedAction
+    { modal = FnLitString $ case deonticModal of
+        DMust    -> "MUST"
+        DMay     -> "MAY"
+        DMustNot -> "SHANT"
+        DDo      -> "DO"
+    , actionPat = FnLitString (Print.prettyLayout pat)
+    }
+
+-- | Serialize Either RExpr (Value NF) — used for obligation party and ROp operands
+serializeEitherValue :: (Monad m) => EntityInfo -> Either (Expr Resolved) (Eval.Value Eval.NF) -> ExceptT EvaluatorError m FnLiteral
+serializeEitherValue _  (Left _expr)  = pure $ FnLitString "<unevaluated>"
+serializeEitherValue ei (Right val)   = valueToFnLiteral ei val
+
+-- | Serialize the deadline/due field of an obligation
+serializeDue :: (Monad m) => EntityInfo -> Either (Maybe (Expr Resolved)) (Eval.Value Eval.NF) -> ExceptT EvaluatorError m FnLiteral
+serializeDue _  (Left Nothing)    = pure FnUnknown
+serializeDue _  (Left (Just _))   = pure $ FnLitString "<unevaluated>"
+serializeDue ei (Right val)       = valueToFnLiteral ei val
+
+-- | Serialize a breach reason to FnLiteral
+serializeBreachReason :: (Monad m) => EntityInfo -> Eval.ReasonForBreach Eval.NF -> ExceptT EvaluatorError m FnLiteral
+serializeBreachReason ei = \case
+  Eval.DeadlineMissed evParty evAction evTimestamp _oblParty oblAction oblDeadline -> do
+    evPartyLit <- nfToFnLiteral ei evParty
+    evActionLit <- nfToFnLiteral ei evAction
+    let oblActionLit = serializeRAction oblAction
+    pure $ FnObject
+      [ ("reason", FnLitString "deadline_missed")
+      , ("eventParty", evPartyLit)
+      , ("eventAction", evActionLit)
+      , ("timestamp", FnLitDouble $ fromRational evTimestamp)
+      , ("obligationAction", oblActionLit.actionPat)
+      , ("deadline", FnLitDouble $ fromRational oblDeadline)
+      ]
+  Eval.ExplicitBreach mParty mReason -> do
+    partyLit <- case mParty of
+      Just nf -> nfToFnLiteral ei nf
+      Nothing -> pure FnUnknown
+    reasonLit <- case mReason of
+      Just nf -> nfToFnLiteral ei nf
+      Nothing -> pure FnUnknown
+    pure $ FnObject
+      [ ("reason", FnLitString "explicit")
+      , ("party", partyLit)
+      , ("detail", reasonLit)
+      ]
 
 -- ----------------------------------------------------------------------------
 -- L4 helpers

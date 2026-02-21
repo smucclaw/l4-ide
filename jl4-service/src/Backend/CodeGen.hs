@@ -1,10 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Backend.CodeGen
   ( generateEvalWrapper
+  , generateDeonticEvalWrapper
+  , isDeonticType
   , GeneratedCode(..)
   -- Exported for testing
   , inputFieldName
   , transformJsonKeys
+  , fnLiteralToL4Expr
   ) where
 
 import Base
@@ -15,9 +18,11 @@ import qualified Data.Text as Text
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TL
 import L4.Syntax (Type'(..), Resolved, getUnique)
-import L4.TypeCheck.Environment (booleanUnique, dateUnique, maybeUnique)
-import Backend.Api (TraceLevel(..))
+import L4.TypeCheck.Environment (booleanUnique, dateUnique, maybeUnique, contractUnique)
+import Backend.Api (TraceLevel(..), TraceEvent(..), FnLiteral(..))
+import qualified Base.Text as BaseText
 import Backend.MaybeLift (liftTypeToMaybe)
+import qualified Data.Scientific as Scientific
 
 -- | Check if a type is exactly DATE (not MAYBE DATE, LIST OF DATE, etc.)
 -- Used to determine if we need TODATE conversion from JSON strings
@@ -363,3 +368,232 @@ maybeDateConvertedVar :: Text -> Text
 maybeDateConvertedVar name
   | Text.any (== ' ') name = "`maybeDateConverted_" <> name <> "`"
   | otherwise = "maybeDateConverted_" <> name
+
+-- ----------------------------------------------------------------------------
+-- Deontic evaluation support
+-- ----------------------------------------------------------------------------
+
+-- | Check if a type is DEONTIC a b (contract type with two type parameters)
+isDeonticType :: Type' Resolved -> Bool
+isDeonticType (TyApp _ name [_, _]) = getUnique name == contractUnique
+isDeonticType _ = False
+
+-- | Convert an FnLiteral to inline L4 source text.
+-- Used for generating EVENT expressions in deontic wrappers.
+fnLiteralToL4Expr :: FnLiteral -> Text
+fnLiteralToL4Expr = \case
+  FnLitString s -> "`" <> s <> "`"
+  FnLitInt i -> BaseText.textShow i
+  FnLitDouble d -> BaseText.textShow d
+  FnLitBool True -> "TRUE"
+  FnLitBool False -> "FALSE"
+  FnArray xs -> "(LIST " <> Text.intercalate ", " (map fnLiteralToL4Expr xs) <> ")"
+  FnObject [(conName, FnObject fields)] ->
+    -- Record constructor: `Constructor` WITH field1 IS val1, field2 IS val2
+    quoteIdent conName <> " WITH " <>
+      Text.intercalate ", " [quoteIdent k <> " IS " <> fnLiteralToL4Expr v | (k, v) <- fields]
+  FnObject [(conName, FnArray [])] ->
+    -- Nullary constructor
+    quoteIdent conName
+  FnObject [(conName, FnArray [singleVal])] ->
+    -- Unary constructor with positional arg
+    quoteIdent conName <> " " <> fnLiteralToL4Expr singleVal
+  FnObject _ -> "NOTHING"  -- Fallback for unexpected shapes
+  FnUncertain -> "NOTHING"
+  FnUnknown -> "NOTHING"
+
+-- | Format a single trace event as an L4 EVENT expression.
+-- Generates: EVENT party action timestamp
+formatTraceEvent :: TraceEvent -> Text
+formatTraceEvent ev =
+  "EVENT " <> fnLiteralToL4Expr ev.party <> " " <> fnLiteralToL4Expr ev.action <> " " <> formatScientific ev.at
+
+-- | Format a Scientific number as L4 source
+formatScientific :: Scientific.Scientific -> Text
+formatScientific n
+  | Scientific.isInteger n = BaseText.textShow (Scientific.coefficient n * (10 ^ Scientific.base10Exponent n))
+  | otherwise = BaseText.textShow (Scientific.toRealFloat n :: Double)
+
+-- | Generate L4 wrapper code for deontic evaluation with EVALTRACE.
+-- Extends generateEvalWrapper by wrapping the function call in EVALTRACE.
+generateDeonticEvalWrapper
+  :: Text                         -- ^ Target function name
+  -> [(Text, Type' Resolved)]     -- ^ GIVEN parameter names and types
+  -> [(Text, Type' Resolved)]     -- ^ ASSUME parameter names and types
+  -> Aeson.Value                  -- ^ Input arguments as JSON object
+  -> Scientific.Scientific        -- ^ Start time
+  -> [TraceEvent]                 -- ^ Events (may be empty for initial state)
+  -> TraceLevel                   -- ^ Whether to generate EVAL or EVALTRACE
+  -> Either Text GeneratedCode
+generateDeonticEvalWrapper funName givenParams assumeParams inputJson startTime events traceLevel = do
+  let allParams = givenParams <> assumeParams
+
+  -- Build the event list expression
+  let eventExprs = map formatTraceEvent events
+      eventListExpr = "(LIST " <> Text.intercalate ", " eventExprs <> ")"
+      startTimeExpr = formatScientific startTime
+
+  -- Handle zero-parameter functions: wrap direct call in EVALTRACE
+  if null allParams
+    then Right GeneratedCode
+      { generatedWrapper = Text.unlines
+          [ ""
+          , "-- ========== GENERATED DEONTIC WRAPPER =========="
+          , ""
+          , generateSimpleDeonticEval funName startTimeExpr eventListExpr traceLevel
+          ]
+      , decodeFailedSentinel = "DECODE_FAILED"
+      }
+    else
+      -- Deep Maybe lifting: all parameters get MAYBE types (same as generateEvalWrapper)
+      let isBooleanType :: Type' Resolved -> Bool
+          isBooleanType (TyApp _ name []) = getUnique name == booleanUnique
+          isBooleanType _ = False
+          givenParamInfo = map (\(name, ty) -> ((name, ty), isBooleanType ty, True, containsDateType ty, isMaybeType ty)) givenParams
+          assumeParamInfo = map (\(name, ty) -> ((name, ty), isBooleanType ty, False, containsDateType ty, isMaybeType ty)) assumeParams
+          allParamInfo = givenParamInfo <> assumeParamInfo
+          hasBooleans = any (\(_, isB, _, _, _) -> isB) allParamInfo
+      in Right GeneratedCode
+      { generatedWrapper = Text.unlines $
+          [ ""
+          , "-- ========== GENERATED DEONTIC WRAPPER (Deep Maybe Lifting) =========="
+          ] ++
+          (if hasBooleans then ["IMPORT prelude  -- for fromMaybe"] else []) ++
+          [ ""
+          , generateInputRecordLifted allParams
+          , ""
+          , generateDecoder
+          , ""
+          , generateJsonPayload inputJson
+          , ""
+          , generateDeonticEvalDirectiveLifted funName givenParamInfo assumeParamInfo startTimeExpr eventListExpr traceLevel
+          ]
+      , decodeFailedSentinel = "DECODE_FAILED"
+      }
+
+-- | Generate simple EVALTRACE for zero-parameter deontic functions
+generateSimpleDeonticEval :: Text -> Text -> Text -> TraceLevel -> Text
+generateSimpleDeonticEval funName startTimeExpr eventListExpr traceLevel =
+  let directive = case traceLevel of
+        TraceNone -> "#EVAL"
+        TraceFull -> "#EVALTRACE"
+  in directive <> " EVALTRACE (" <> quoteIdent funName <> ") " <> startTimeExpr <> " " <> eventListExpr
+
+-- | Generate EVAL/EVALTRACE with EVALTRACE call wrapping the function, with parameter handling
+generateDeonticEvalDirectiveLifted
+  :: Text
+  -> [((Text, Type' Resolved), Bool, Bool, Bool, Bool)]  -- ^ GIVEN params
+  -> [((Text, Type' Resolved), Bool, Bool, Bool, Bool)]  -- ^ ASSUME params
+  -> Text                                                 -- ^ Start time expression
+  -> Text                                                 -- ^ Event list expression
+  -> TraceLevel
+  -> Text
+generateDeonticEvalDirectiveLifted funName givenParamInfo assumeParamInfo startTimeExpr eventListExpr traceLevel =
+  let directive = case traceLevel of
+        TraceNone -> "#EVAL"
+        TraceFull -> "#EVALTRACE"
+
+      allParams = givenParamInfo <> assumeParamInfo
+
+      needsUnwrap (_, isB, _, _, isM) = not isB && not isM
+      nonBoolNonMaybeParams = filter needsUnwrap allParams
+
+      paramValueExpr :: (Text, Bool, Bool, Bool) -> Text
+      paramValueExpr (name, isBoolean, isDate, isM)
+        | isBoolean = "(fromMaybe FALSE (args's " <> quoteInputField name <> "))"
+        | isM && isDate = maybeDateConvertedVar name
+        | isM       = "(args's " <> quoteInputField name <> ")"
+        | isDate    = dateConvertedVar name
+        | otherwise = unwrappedVar name
+
+      givenArgExprs = map snd $ sortOn fst $
+        [(idx, paramValueExpr (name, isB, isDate, isM))
+        | (idx, ((name, _), isB, _, isDate, isM)) <- zip [0 :: Int ..] givenParamInfo]
+
+      quotedFunName = quoteIdent funName
+      functionCall = if null givenArgExprs
+        then quotedFunName
+        else quotedFunName <> " " <> Text.unwords givenArgExprs
+
+      -- Wrap function call with LET bindings for ASSUME params
+      wrapWithAssumes :: Text -> Text
+      wrapWithAssumes innerExpr = foldr wrapOne innerExpr assumeParamInfo
+        where
+          wrapOne ((name, _), isB, _, isDate, isM) expr =
+            let quotedName = quoteIdent name
+                valueExpr = paramValueExpr (name, isB, isDate, isM)
+            in "LET " <> quotedName <> " = " <> valueExpr <> " IN " <> expr
+
+      -- Wrap the function call in EVALTRACE
+      evalTraceCall = "EVALTRACE (" <> wrapWithAssumes functionCall <> ") " <> startTimeExpr <> " " <> eventListExpr
+      innerCall = "JUST (" <> evalTraceCall <> ")"
+
+      -- MAYBE DATE let bindings
+      maybeDateParams = filter (\(_, _, _, isDate, isM) -> isM && isDate) allParams
+      maybeDateLetBindings = concatMap genMaybeDateLet maybeDateParams
+      genMaybeDateLet ((name, _), _, _, _, _) =
+        [ "      LET " <> maybeDateConvertedVar name <> " ="
+        , "        CONSIDER args's " <> quoteInputField name
+        , "          WHEN JUST " <> unwrappedVar name <> " THEN TODATE " <> unwrappedVar name
+        , "          WHEN NOTHING THEN NOTHING"
+        , "      IN"
+        ]
+
+  in if null nonBoolNonMaybeParams && null maybeDateParams
+     then Text.unlines
+       [ directive
+       , "  CONSIDER decodeArgs inputJson"
+       , "    WHEN RIGHT args THEN " <> innerCall
+       , "    WHEN LEFT error THEN NOTHING"
+       ]
+     else if null nonBoolNonMaybeParams
+     then Text.unlines $
+       [ directive
+       , "  CONSIDER decodeArgs inputJson"
+       , "    WHEN RIGHT args THEN"
+       ] ++
+       maybeDateLetBindings ++
+       [ "      " <> innerCall
+       , "    WHEN LEFT error THEN NOTHING"
+       ]
+     else Text.unlines $
+       [ directive
+       , "  CONSIDER decodeArgs inputJson"
+       , "    WHEN RIGHT args THEN"
+       ] ++
+       maybeDateLetBindings ++
+       generateNestedConsiderDeontic nonBoolNonMaybeParams evalTraceCall assumeParamInfo (3 + if null maybeDateParams then 0 else 1) ++
+       [ "    WHEN LEFT error THEN NOTHING"
+       ]
+
+-- | Generate nested CONSIDER for deontic evaluation (wraps result in EVALTRACE)
+generateNestedConsiderDeontic
+  :: [((Text, Type' Resolved), Bool, Bool, Bool, Bool)]  -- ^ Params to unwrap
+  -> Text                                                 -- ^ EVALTRACE function call
+  -> [((Text, Type' Resolved), Bool, Bool, Bool, Bool)]  -- ^ ASSUME params for LET bindings
+  -> Int                                                  -- ^ Indentation level
+  -> [Text]
+generateNestedConsiderDeontic [] evalTraceCall _assumeParamInfo indent =
+  let indentStr = Text.replicate indent "  "
+  in [indentStr <> "JUST (" <> evalTraceCall <> ")"]
+generateNestedConsiderDeontic (((name, _), _, _, isDate, _):rest) evalTraceCall assumeParamInfo indent =
+  let indentStr = Text.replicate indent "  "
+      quotedFieldName = quoteInputField name
+  in if isDate
+     then
+       [ indentStr <> "CONSIDER args's " <> quotedFieldName
+       , indentStr <> "  WHEN JUST " <> unwrappedVar name <> " THEN"
+       , indentStr <> "    CONSIDER TODATE " <> unwrappedVar name
+       , indentStr <> "      WHEN JUST " <> dateConvertedVar name <> " THEN"
+       ] ++
+       generateNestedConsiderDeontic rest evalTraceCall assumeParamInfo (indent + 4) ++
+       [ indentStr <> "      WHEN NOTHING THEN NOTHING  -- date parse failed"
+       , indentStr <> "  WHEN NOTHING THEN NOTHING"
+       ]
+     else
+       [ indentStr <> "CONSIDER args's " <> quotedFieldName
+       , indentStr <> "  WHEN JUST " <> unwrappedVar name <> " THEN"
+       ] ++
+       generateNestedConsiderDeontic rest evalTraceCall assumeParamInfo (indent + 2) ++
+       [ indentStr <> "  WHEN NOTHING THEN NOTHING"
+       ]

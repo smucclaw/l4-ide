@@ -8,8 +8,10 @@ module DataPlane (
 
 import Backend.Api
 import Backend.DecisionQueryPlan (CachedDecisionQuery, buildDecisionQueryCacheFromCompiled, queryPlan, QueryPlanResponse)
-import Backend.Jl4 (CompiledModule (..))
+import Backend.FunctionSchema (Parameter, Parameters(..))
+import Backend.Jl4 (CompiledModule (..), evaluateWithCompiledDeontic)
 import qualified L4.StateGraph as StateGraph
+import Compiler (toDecl)
 import Options (Options (..))
 import Types
 
@@ -25,12 +27,15 @@ import Data.List (find)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import qualified Data.Maybe as Maybe
+import Data.Scientific (Scientific)
 import qualified Data.Set as Set
 import Data.Text (Text)
+import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text.Encoding
 import GHC.Conc (setAllocationCounter, enableAllocationLimit)
 import GHC.IO.Exception (AllocationLimitExceeded (..))
 import Servant
+import System.FilePath ((<.>))
 import System.Timeout (timeout)
 
 -- | The data plane API — per-deployment function evaluation.
@@ -125,7 +130,29 @@ evalFunctionHandler
 evalFunctionHandler deployId fnName mTraceHeader mTraceParam mGraphViz fnArgs = do
   (fns, _meta) <- requireDeploymentReady deployId
   vf <- requireFunction fns fnName
-  runEvaluatorFor vf fnArgs.fnEvalBackend (Map.toList fnArgs.fnArguments) Nothing mTraceHeader mTraceParam mGraphViz
+
+  -- Check if this function has deontic parameters (indicating DEONTIC return type)
+  let paramMap = vf.fnImpl.parameters.parameterMap :: Map Text Parameter
+      isDeontic = Map.member "startTime" paramMap
+                  && Map.member "events" paramMap
+
+  case (isDeontic, fnArgs.startTime, fnArgs.events) of
+    -- Non-deontic function: reject deontic params
+    (False, Just _, _) ->
+      throwError err400 { errBody = "startTime and events are only valid for functions returning DEONTIC" }
+    (False, _, Just _) ->
+      throwError err400 { errBody = "startTime and events are only valid for functions returning DEONTIC" }
+    -- Non-deontic function: existing path
+    (False, Nothing, Nothing) ->
+      runEvaluatorFor vf fnArgs.fnEvalBackend (Map.toList fnArgs.fnArguments) Nothing mTraceHeader mTraceParam mGraphViz
+    -- Deontic function: require both startTime and events
+    (True, Nothing, _) ->
+      throwError err400 { errBody = "startTime is required for functions returning DEONTIC" }
+    (True, _, Nothing) ->
+      throwError err400 { errBody = "events is required for functions returning DEONTIC" }
+    -- Deontic function with both params: use deontic evaluator
+    (True, Just st, Just evts) ->
+      runDeonticEvaluatorFor vf fnArgs.fnEvalBackend (Map.toList fnArgs.fnArguments) st evts mTraceHeader mTraceParam mGraphViz
 
 -- | POST /deployments/{id}/functions/{fn}/evaluation/batch
 batchFunctionHandler
@@ -316,6 +343,46 @@ runEvaluatorForDirect vf engine args outputFilter traceLevel includeGraphViz = d
       case evaluationResult of
         Left err -> pure $ SimpleError err
         Right r -> pure $ SimpleResponse r
+
+-- | Run deontic evaluation with EVALTRACE.
+runDeonticEvaluatorFor
+  :: ValidatedFunction
+  -> Maybe EvalBackend
+  -> [(Text, Maybe FnLiteral)]
+  -> Scientific       -- ^ Start time
+  -> [TraceEvent]     -- ^ Events
+  -> Maybe Text       -- X-L4-Trace header
+  -> Maybe TraceLevel -- ?trace= query param
+  -> Maybe Bool       -- ?graphviz= query param
+  -> AppM SimpleResponse
+runDeonticEvaluatorFor vf _engine args startTime events mTraceHeader mTraceParam mGraphViz = do
+  let traceLevel = determineTraceLevel mTraceHeader mTraceParam
+      includeGraphViz = traceLevel == TraceFull && Maybe.fromMaybe False mGraphViz
+
+  compiled <- case vf.fnCompiled of
+    Nothing -> throwError err500 { errBody = "No compiled module available for deontic evaluation" }
+    Just c -> pure c
+
+  let fnDecl = toDecl vf.fnImpl
+      filepath = Text.unpack vf.fnImpl.name <.> "l4"
+
+  evaluationResult <-
+    timeoutAction $
+      runExceptT
+        ( evaluateWithCompiledDeontic
+            filepath
+            fnDecl
+            compiled
+            args
+            startTime
+            events
+            traceLevel
+            includeGraphViz
+        )
+
+  case evaluationResult of
+    Left err -> pure $ SimpleError err
+    Right r -> pure $ SimpleResponse r
 
 -- | Run an AppM action in IO with a given environment.
 runAppM :: AppEnv -> AppM a -> IO (Either ServerError a)

@@ -11,6 +11,7 @@ module TestData (
   recordJL4,
   maybeParamJL4,
   saleContractJL4,
+  deonticExportJL4,
 ) where
 
 import Backend.Jl4 as Jl4
@@ -205,6 +206,29 @@ GIVEN walks IS A BOOLEAN
 GIVETH A BOOLEAN
 DECIDE test_fn IF walks
 
+GIVETH A DEONTIC Party `Contract Action`
+`the sale contract` MEANS
+    PARTY `the seller`
+    MUST `deliver the goods`
+    WITHIN 14
+    HENCE
+        PARTY `the buyer`
+        MUST `pay the invoice`
+        WITHIN 30
+        HENCE FULFILLED
+        LEST BREACH
+    LEST BREACH
+|]
+
+-- | L4 source with an exported deontic function for testing contract simulation.
+-- The sale contract has no GIVEN parameters — it's a standalone deontic rule.
+deonticExportJL4 :: Text
+deonticExportJL4 =
+  [i|
+DECLARE Party IS ONE OF `the seller`, `the buyer`
+DECLARE `Contract Action` IS ONE OF `deliver the goods`, `pay the invoice`
+
+@export default sale contract
 GIVETH A DEONTIC Party `Contract Action`
 `the sale contract` MEANS
     PARTY `the seller`

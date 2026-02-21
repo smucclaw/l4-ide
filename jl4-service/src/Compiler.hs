@@ -8,6 +8,7 @@ module Compiler (
 import qualified Backend.Jl4 as Jl4
 import Backend.Jl4 (ModuleContext, CompiledModule(..), typecheckModule, buildImportEnvironment, getFunctionDefinition)
 import Backend.Api (EvalBackend (..), FunctionDeclaration (..))
+import Backend.CodeGen (isDeonticType)
 import Backend.FunctionSchema (Parameters (..), Parameter (..), typeToParameter, declaresFromModule)
 import BundleStore (SerializedBundle (..), StoredMetadata (..))
 import Types
@@ -246,12 +247,34 @@ exportToFunction resolvedModule implicitParams export =
         { parameterMap = baseParams.parameterMap <> implicitParamMap
         , required = baseParams.required <> Map.keys implicitParamMap
         }
+      -- Detect deontic return type and add startTime/events parameters
+      isDeontic = case export.exportReturnType of
+        Just ty -> isDeonticType ty
+        Nothing -> False
+      finalParams = if isDeontic
+        then mergedParams
+          { parameterMap = mergedParams.parameterMap <> Map.fromList
+              [ ("startTime", Parameter "number" Nothing Nothing [] "Start time for contract simulation" Nothing Nothing Nothing)
+              , ("events", Parameter "array" Nothing Nothing [] "Events for contract simulation (each: {party, action, at})" Nothing Nothing
+                  (Just $ Parameter "object" Nothing Nothing [] "A trace event"
+                    (Just $ Map.fromList
+                      [ ("party", Parameter "object" Nothing Nothing [] "The party performing the action" Nothing Nothing Nothing)
+                      , ("action", Parameter "object" Nothing Nothing [] "The action performed" Nothing Nothing Nothing)
+                      , ("at", Parameter "number" Nothing Nothing [] "Timestamp" Nothing Nothing Nothing)
+                      ])
+                    (Just ["party", "action", "at"])
+                    Nothing
+                  ))
+              ]
+          , required = mergedParams.required <> ["startTime", "events"]
+          }
+        else mergedParams
   in Function
     { name = export.exportName
     , description =
         let desc = Text.strip export.exportDescription
         in if Text.null desc then "Exported function" else desc
-    , parameters = mergedParams
+    , parameters = finalParams
     , supportedEvalBackend = [JL4]
     }
 
