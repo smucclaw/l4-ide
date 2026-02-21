@@ -70,40 +70,56 @@ postDeploymentHandler multipart = do
   -- Extract zip from multipart file
   sourceMap <- extractSourcesFromMultipart multipart
 
-  -- Compute version and save to store
-  now <- liftIO getCurrentTime
+  -- Compute version hash and check for existing deployment with same sources
   let version = computeVersion sourceMap
-      storedMeta = BundleStore.StoredMetadata
-        { BundleStore.smFunctions = []
-        , BundleStore.smVersion = version
-        , BundleStore.smCreatedAt = Text.pack (show now)
+
+  registry <- liftIO $ readTVarIO env.deploymentRegistry
+  let existingMatch =
+        [ (did, meta)
+        | (did, DeploymentReady _ meta) <- Map.toList registry
+        , meta.metaVersion == version
+        ]
+
+  case existingMatch of
+    ((existingId, existingMeta):_) ->
+      -- Return existing deployment immediately — no recompile needed
+      pure DeploymentStatusResponse
+        { dsId = existingId.unDeploymentId
+        , dsStatus = "ready"
+        , dsMetadata = Just existingMeta
+        , dsError = Nothing
         }
+    [] -> do
+      -- Normal path: save, register as pending, compile async
+      now <- liftIO getCurrentTime
+      let storedMeta = BundleStore.StoredMetadata
+            { BundleStore.smFunctions = []
+            , BundleStore.smVersion = version
+            , BundleStore.smCreatedAt = Text.pack (show now)
+            }
 
-  liftIO $ BundleStore.saveBundle env.bundleStore (deployId.unDeploymentId) sourceMap storedMeta
+      liftIO $ BundleStore.saveBundle env.bundleStore (deployId.unDeploymentId) sourceMap storedMeta
 
-  -- Register as pending
-  liftIO $ atomically $ modifyTVar' env.deploymentRegistry $
-    Map.insert deployId DeploymentPending
+      liftIO $ atomically $ modifyTVar' env.deploymentRegistry $
+        Map.insert deployId DeploymentPending
 
-  -- Launch async compilation
-  _ <- liftIO $ async $ do
-    result <- compileBundle sourceMap
-    case result of
-      Right (fns, meta, bundles) -> do
-        -- Save CBOR cache for fast restart
-        mapM_ (BundleStore.saveBundleCbor env.bundleStore (deployId.unDeploymentId)) bundles
-        atomically $ modifyTVar' env.deploymentRegistry $
-          Map.insert deployId (DeploymentReady fns meta)
-      Left err ->
-        atomically $ modifyTVar' env.deploymentRegistry $
-          Map.insert deployId (DeploymentFailed err)
+      _ <- liftIO $ async $ do
+        result <- compileBundle sourceMap
+        case result of
+          Right (fns, meta, bundles) -> do
+            mapM_ (BundleStore.saveBundleCbor env.bundleStore (deployId.unDeploymentId)) bundles
+            atomically $ modifyTVar' env.deploymentRegistry $
+              Map.insert deployId (DeploymentReady fns meta)
+          Left err ->
+            atomically $ modifyTVar' env.deploymentRegistry $
+              Map.insert deployId (DeploymentFailed err)
 
-  pure DeploymentStatusResponse
-    { dsId = deployId.unDeploymentId
-    , dsStatus = "compiling"
-    , dsMetadata = Nothing
-    , dsError = Nothing
-    }
+      pure DeploymentStatusResponse
+        { dsId = deployId.unDeploymentId
+        , dsStatus = "compiling"
+        , dsMetadata = Nothing
+        , dsError = Nothing
+        }
 
 -- | GET /deployments — list all deployments
 getDeploymentsHandler :: AppM [DeploymentStatusResponse]
