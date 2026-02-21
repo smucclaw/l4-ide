@@ -14,6 +14,7 @@ from disk at startup, holds compiled functions in an in-memory TVar, and loses a
 It has no notion of isolated deployments and no persistence.
 
 `jl4-service` replaces this with a persistent, multi-tenant service that has:
+
 - A **control plane** to deploy/replace/delete self-contained L4 bundles at runtime
 - A **data plane** (same evaluation surface) namespaced per deployment
 - A **bundle store** (filesystem) that survives restarts
@@ -45,6 +46,7 @@ jl4-service (new standalone package)
 #### `jl4-service/jl4-service.cabal`
 
 Model after `jl4-decision-service.cabal`. Key differences:
+
 - Add deps: `zip-archive`, `cryptohash-sha256` or `SHA`, `servant-multipart`
 - Depend directly on `jl4-core` and `jl4-query-plan` — **not** on `jl4-decision-service`
 - Drop: `jl4-websessions`, `jl4-lsp`, `servant-swagger-ui`
@@ -83,6 +85,7 @@ data AppEnv = MkAppEnv
 #### `jl4-service/src/BundleStore.hs`
 
 Filesystem store. Layout:
+
 ```
 {store-path}/
   {deploymentId}/
@@ -92,6 +95,7 @@ Filesystem store. Layout:
 ```
 
 Key functions:
+
 ```haskell
 data BundleStore = BundleStore { storePath :: FilePath }
 
@@ -118,6 +122,7 @@ Writes use `directory` + `filepath` (already in scope). Atomic writes via temp f
 #### `jl4-service/src/Compiler.hs`
 
 Wraps the existing pipeline. Key reuse:
+
 - `Import.Resolution.typecheckWithDependencies` — resolves full import graph from an in-memory
   `ModuleLookup` built from the uploaded source map
 - `Backend.Jl4.precompileModule` and `createFunction` — produce `ValidatedFunction`
@@ -164,6 +169,7 @@ DELETE /deployments/{id}
 ```
 
 On `POST`/`PUT`:
+
 1. Extract zip in-memory (`zip-archive`)
 2. Build `Map FilePath Text` from zip entries
 3. Save to bundle store atomically
@@ -251,16 +257,16 @@ These are copied verbatim into `jl4-service/src/` as a starting point. They are 
 from `jl4-decision-service` — `jl4-service` has no dependency on that package. This lets the two
 services evolve independently.
 
-| Module to copy | Source file | What it provides |
-|----------------|-------------|-----------------|
-| `Backend.Api` | `jl4-decision-service/src/Backend/Api.hs` | `FnLiteral`, `ResponseWithReason`, `RunFunction`, `TraceLevel`, `EvalBackend` |
-| `Backend.Jl4` | `jl4-decision-service/src/Backend/Jl4.hs` | `CompiledModule`, `precompileModule`, `evaluateWithCompiled`, `createFunction` |
-| `Backend.DecisionQueryPlan` | `jl4-decision-service/src/Backend/DecisionQueryPlan.hs` | `getOrBuildDecisionQueryCache`, query plan logic |
-| `Backend.FunctionSchema` | `jl4-decision-service/src/Backend/FunctionSchema.hs` | JSON schema generation per function |
-| `Backend.CodeGen` | `jl4-decision-service/src/Backend/CodeGen.hs` | Wrapper-based evaluation fallback |
-| `Backend.MaybeLift` | `jl4-decision-service/src/Backend/MaybeLift.hs` | Optional type handling |
-| `Backend.DirectiveFilter` | `jl4-decision-service/src/Backend/DirectiveFilter.hs` | Directive filtering |
-| `Backend.BooleanDecisionQuery` | `jl4-decision-service/src/Backend/BooleanDecisionQuery.hs` | Boolean decision compilation |
+| Module to copy                 | Source file                                                | What it provides                                                               |
+| ------------------------------ | ---------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `Backend.Api`                  | `jl4-decision-service/src/Backend/Api.hs`                  | `FnLiteral`, `ResponseWithReason`, `RunFunction`, `TraceLevel`, `EvalBackend`  |
+| `Backend.Jl4`                  | `jl4-decision-service/src/Backend/Jl4.hs`                  | `CompiledModule`, `precompileModule`, `evaluateWithCompiled`, `createFunction` |
+| `Backend.DecisionQueryPlan`    | `jl4-decision-service/src/Backend/DecisionQueryPlan.hs`    | `getOrBuildDecisionQueryCache`, query plan logic                               |
+| `Backend.FunctionSchema`       | `jl4-decision-service/src/Backend/FunctionSchema.hs`       | JSON schema generation per function                                            |
+| `Backend.CodeGen`              | `jl4-decision-service/src/Backend/CodeGen.hs`              | Wrapper-based evaluation fallback                                              |
+| `Backend.MaybeLift`            | `jl4-decision-service/src/Backend/MaybeLift.hs`            | Optional type handling                                                         |
+| `Backend.DirectiveFilter`      | `jl4-decision-service/src/Backend/DirectiveFilter.hs`      | Directive filtering                                                            |
+| `Backend.BooleanDecisionQuery` | `jl4-decision-service/src/Backend/BooleanDecisionQuery.hs` | Boolean decision compilation                                                   |
 
 After copying, apply the following adaptations before treating these modules as the baseline for
 `jl4-service`:
@@ -291,6 +297,7 @@ The field is renamed `values` → `fnResult` to match the `fn`-prefixed input co
 `Map Text FnLiteral` so the output serializes as a JSON object (same style as input).
 
 Construction sites in `Backend.Jl4` (two locations):
+
 ```haskell
 -- before
 { values = [("result", r)] }
@@ -300,6 +307,7 @@ Construction sites in `Backend.Jl4` (two locations):
 ```
 
 The wire format becomes symmetric:
+
 ```json
 // request
 { "fnArguments": { "income": 60000, "is_citizen": true } }

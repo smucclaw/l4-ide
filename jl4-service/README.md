@@ -4,13 +4,13 @@ Multi-tenant decision service for L4 rule bundles. Deploy L4 programs as persist
 
 ## How It Differs from jl4-decision-service
 
-| | jl4-decision-service | jl4-service |
-|---|---|---|
-| Tenancy | Single-tenant, all functions in one flat namespace | Multi-tenant, each deployment is isolated under `/deployments/{id}` |
-| Loading | CLI flags (`--sourcePaths`) or hardcoded examples | Zip upload via REST API, persisted to disk |
-| Lifecycle | Ephemeral, functions lost on restart | Persistent, auto-reloaded on startup |
-| Function CRUD | PUT/POST/DELETE individual functions | Deploy/replace/delete entire bundles |
-| PNG/SVG rendering | Server-side GraphViz rendering | DOT text only (render client-side) |
+|                   | jl4-decision-service                               | jl4-service                                                         |
+| ----------------- | -------------------------------------------------- | ------------------------------------------------------------------- |
+| Tenancy           | Single-tenant, all functions in one flat namespace | Multi-tenant, each deployment is isolated under `/deployments/{id}` |
+| Loading           | CLI flags (`--sourcePaths`) or hardcoded examples  | Zip upload via REST API, persisted to disk                          |
+| Lifecycle         | Ephemeral, functions lost on restart               | Persistent, auto-reloaded on startup                                |
+| Function CRUD     | PUT/POST/DELETE individual functions               | Deploy/replace/delete entire bundles                                |
+| PNG/SVG rendering | Server-side GraphViz rendering                     | DOT text only (render client-side)                                  |
 
 ## Quick Start
 
@@ -63,13 +63,13 @@ DECIDE compute_qualifies IF walks AND eats AND drinks
 
 Manage deployment lifecycle.
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/deployments` | Deploy a new bundle (multipart: `id` + `sources` zip) |
-| `GET` | `/deployments` | List all deployments with status |
-| `GET` | `/deployments/{id}` | Get deployment status |
-| `PUT` | `/deployments/{id}` | Replace a deployment's bundle (old stays active until new compiles) |
-| `DELETE` | `/deployments/{id}` | Remove a deployment |
+| Method   | Endpoint            | Description                                                         |
+| -------- | ------------------- | ------------------------------------------------------------------- |
+| `POST`   | `/deployments`      | Deploy a new bundle (multipart: `id` + `sources` zip)               |
+| `GET`    | `/deployments`      | List all deployments with status                                    |
+| `GET`    | `/deployments/{id}` | Get deployment status                                               |
+| `PUT`    | `/deployments/{id}` | Replace a deployment's bundle (old stays active until new compiles) |
+| `DELETE` | `/deployments/{id}` | Remove a deployment                                                 |
 
 Deployment states: `compiling` (202), `ready` (200), `failed` (200 with error).
 
@@ -77,16 +77,16 @@ Deployment states: `compiling` (202), `ready` (200), `failed` (200 with error).
 
 Evaluate functions within a deployment.
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/deployments/{id}/functions` | List available functions |
-| `GET` | `/deployments/{id}/functions/{fn}` | Get function schema |
-| `POST` | `/deployments/{id}/functions/{fn}/evaluation` | Evaluate a function |
-| `POST` | `/deployments/{id}/functions/{fn}/evaluation/batch` | Batch evaluate across many input cases |
-| `POST` | `/deployments/{id}/functions/{fn}/query-plan` | Get next-question suggestions for interactive elicitation |
-| `GET` | `/deployments/{id}/functions/{fn}/state-graphs` | List state graphs from regulative rules |
-| `GET` | `/deployments/{id}/functions/{fn}/state-graphs/{name}` | Get DOT source for a state graph |
-| `GET` | `/deployments/{id}/openapi.json` | Deployment metadata |
+| Method | Endpoint                                               | Description                                               |
+| ------ | ------------------------------------------------------ | --------------------------------------------------------- |
+| `GET`  | `/deployments/{id}/functions`                          | List available functions                                  |
+| `GET`  | `/deployments/{id}/functions/{fn}`                     | Get function schema                                       |
+| `POST` | `/deployments/{id}/functions/{fn}/evaluation`          | Evaluate a function                                       |
+| `POST` | `/deployments/{id}/functions/{fn}/evaluation/batch`    | Batch evaluate across many input cases                    |
+| `POST` | `/deployments/{id}/functions/{fn}/query-plan`          | Get next-question suggestions for interactive elicitation |
+| `GET`  | `/deployments/{id}/functions/{fn}/state-graphs`        | List state graphs from regulative rules                   |
+| `GET`  | `/deployments/{id}/functions/{fn}/state-graphs/{name}` | Get DOT source for a state graph                          |
+| `GET`  | `/deployments/{id}/openapi.json`                       | Deployment metadata                                       |
 
 ### Evaluation
 
@@ -137,12 +137,12 @@ Returns which inputs are still needed, ranked by impact on the outcome.
 
 ## CLI Options
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--port`, `-p` | HTTP port | `8080` |
-| `--store-path` | Directory for persisting deployment bundles | `/tmp/jl4-store` |
-| `--server-name`, `-s` | Server URL for OpenAPI metadata | - |
-| `--lazy-load` | Compile deployments on first request instead of at startup | `false` |
+| Option                | Description                                                | Default          |
+| --------------------- | ---------------------------------------------------------- | ---------------- |
+| `--port`, `-p`        | HTTP port                                                  | `8080`           |
+| `--store-path`        | Directory for persisting deployment bundles                | `/tmp/jl4-store` |
+| `--server-name`, `-s` | Server URL for OpenAPI metadata                            | -                |
+| `--lazy-load`         | Compile deployments on first request instead of at startup | `false`          |
 
 ## Persistence
 

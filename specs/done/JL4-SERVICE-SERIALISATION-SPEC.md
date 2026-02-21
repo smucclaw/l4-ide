@@ -15,6 +15,7 @@ making restarts proportional to deserialization speed (milliseconds) instead of 
 It falls back to source recompilation if CBOR is absent (backward compatibility, first deploy).
 
 The primary risk — `Serialise` instances for `Module Resolved` — is addressed by:
+
 1. One orphan instance for `NormalizedUri` / `Uri` (the only external blocker)
 2. An annotation-stripping `Serialise` instance for `Anno_` that discards all token/position data
    (not needed for evaluation; dramatically reduces bundle size)
@@ -26,6 +27,7 @@ The primary risk — `Serialise` instances for `Module Resolved` — is addresse
 ## Step 1 — Add `codec-serialise` dependency
 
 **`jl4-core/jl4-core.cabal`**: add behind a cabal flag so WASM builds aren't affected:
+
 ```cabal
 flag serialise-support
   description: Enable Serialise instances for AST types (for jl4-service)
@@ -90,11 +92,11 @@ time; add if absent.
 
 **Files to modify** (add `deriving anyclass (Serialise)` where `GHC.Generic` already exists):
 
-| File | Types |
-|------|-------|
-| `jl4-core/src/L4/Syntax.hs` | `Unique`, `Resolved`, `Name`, `RawName`, `Module`, `Decide`, `Expr`, `Type'`, `TypeSig`, `AppForm`, `Import`, `Entity`, `Section`, `GivenSig`, `GivethSig`, `Extension`, `Nlg`, `Desc` |
-| `jl4-core/src/L4/TypeCheck/Types.hs` | `CheckEntity`, `Environment` (alias — no deriving needed, it's `Map`), `EntityInfo` (alias), `Substitution` (alias) |
-| `jl4-core/src/L4/Lexer.hs` | `TokenType` and all token variants — only needed if not stripping Anno; with stripping these are NOT needed |
+| File                                 | Types                                                                                                                                                                                  |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `jl4-core/src/L4/Syntax.hs`          | `Unique`, `Resolved`, `Name`, `RawName`, `Module`, `Decide`, `Expr`, `Type'`, `TypeSig`, `AppForm`, `Import`, `Entity`, `Section`, `GivenSig`, `GivethSig`, `Extension`, `Nlg`, `Desc` |
+| `jl4-core/src/L4/TypeCheck/Types.hs` | `CheckEntity`, `Environment` (alias — no deriving needed, it's `Map`), `EntityInfo` (alias), `Substitution` (alias)                                                                    |
+| `jl4-core/src/L4/Lexer.hs`           | `TokenType` and all token variants — only needed if not stripping Anno; with stripping these are NOT needed                                                                            |
 
 With the annotation-stripping instance from Step 3, `PosToken`, `SrcRange`, `TokenType`, and
 all lexer types are **not** required — they are discarded by the `Anno_` instance. This
