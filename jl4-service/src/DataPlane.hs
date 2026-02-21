@@ -15,6 +15,8 @@ import Compiler (toDecl)
 import Options (Options (..))
 import Types
 
+import qualified Data.Aeson as Aeson
+import Data.Aeson ((.=), object)
 import Data.Int (Int64)
 import Control.Concurrent.Async (forConcurrently)
 import Control.Concurrent.STM (atomically, modifyTVar', readTVarIO)
@@ -139,17 +141,17 @@ evalFunctionHandler deployId fnName mTraceHeader mTraceParam mGraphViz fnArgs = 
   case (isDeontic, fnArgs.startTime, fnArgs.events) of
     -- Non-deontic function: reject deontic params
     (False, Just _, _) ->
-      throwError err400 { errBody = "startTime and events are only valid for functions returning DEONTIC" }
+      throwError err400 { errBody = jsonError "startTime and events are only valid for functions returning DEONTIC" }
     (False, _, Just _) ->
-      throwError err400 { errBody = "startTime and events are only valid for functions returning DEONTIC" }
+      throwError err400 { errBody = jsonError "startTime and events are only valid for functions returning DEONTIC" }
     -- Non-deontic function: existing path
     (False, Nothing, Nothing) ->
       runEvaluatorFor vf fnArgs.fnEvalBackend (Map.toList fnArgs.fnArguments) Nothing mTraceHeader mTraceParam mGraphViz
     -- Deontic function: require both startTime and events
     (True, Nothing, _) ->
-      throwError err400 { errBody = "startTime is required for functions returning DEONTIC" }
+      throwError err400 { errBody = jsonError "startTime is required for functions returning DEONTIC" }
     (True, _, Nothing) ->
-      throwError err400 { errBody = "events is required for functions returning DEONTIC" }
+      throwError err400 { errBody = jsonError "events is required for functions returning DEONTIC" }
     -- Deontic function with both params: use deontic evaluator
     (True, Just st, Just evts) ->
       runDeonticEvaluatorFor vf fnArgs.fnEvalBackend (Map.toList fnArgs.fnArguments) st evts mTraceHeader mTraceParam mGraphViz
@@ -417,6 +419,10 @@ determineTraceLevel mHeader mParam =
     Just "full" -> TraceFull
     Just "none" -> TraceNone
     _ -> maybe TraceNone id mParam
+
+-- | Encode an error message as a JSON object: {"error": "..."}
+jsonError :: Text -> LBS.ByteString
+jsonError msg = Aeson.encode $ object ["error" .= msg]
 
 -- | Convert Text to lazy ByteString for error bodies.
 textToLBS :: Text -> LBS.ByteString

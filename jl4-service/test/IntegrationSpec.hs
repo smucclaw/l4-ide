@@ -24,6 +24,7 @@ import qualified Data.Aeson.Key as Aeson.Key
 import qualified Data.Aeson.KeyMap as Aeson.KeyMap
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
+import qualified Data.Maybe as Maybe
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.Text (Text)
@@ -427,6 +428,8 @@ spec = describe "integration" do
             ])
         resp <- httpLbs req mgr
         statusCode' resp `shouldBe` 400
+        let body = decodeObject (responseBody resp)
+        lookupKey "error" body `shouldSatisfy` Maybe.isJust
 
     it "returns 400 when startTime missing for deontic function" do
       withServiceFromSources "deontic-no-st" [("contract.l4", deonticExportJL4)] \baseUrl mgr -> do
@@ -437,6 +440,8 @@ spec = describe "integration" do
             ])
         resp <- httpLbs req mgr
         statusCode' resp `shouldBe` 400
+        let body = decodeObject (responseBody resp)
+        lookupKey "error" body `shouldSatisfy` Maybe.isJust
 
     it "returns 400 when events missing for deontic function" do
       withServiceFromSources "deontic-no-ev" [("contract.l4", deonticExportJL4)] \baseUrl mgr -> do
@@ -447,6 +452,8 @@ spec = describe "integration" do
             ])
         resp <- httpLbs req mgr
         statusCode' resp `shouldBe` 400
+        let body = decodeObject (responseBody resp)
+        lookupKey "error" body `shouldSatisfy` Maybe.isJust
 
     it "includes startTime and events in function schema for deontic function" do
       withServiceFromSources "deontic-schema" [("contract.l4", deonticExportJL4)] \baseUrl mgr -> do
