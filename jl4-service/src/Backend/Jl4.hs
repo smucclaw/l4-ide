@@ -1,5 +1,5 @@
 {-# LANGUAGE ViewPatterns #-}
-module Backend.Jl4 (createFunction, getFunctionDefinition, buildFunDecide, ModuleContext, CompiledModule(..), precompileModule, evaluateWithCompiled, typecheckModule) where
+module Backend.Jl4 (createFunction, createRunFunctionFromCompiled, getFunctionDefinition, buildFunDecide, ModuleContext, CompiledModule(..), precompileModule, evaluateWithCompiled, typecheckModule, buildImportEnvironment) where
 
 import Base hiding (trace)
 import qualified Base.DList as DList
@@ -510,6 +510,15 @@ createFunction filepath fnDecl fnImpl moduleContext = do
                   Just _xs -> throwError $ InterpreterError "L4: More than ONE #EVAL found in the program."
             }
       pure (runFn, Nothing)
+
+-- | Create a 'RunFunction' from an already-compiled module.
+-- Used by the CBOR cache path to avoid re-typechecking.
+createRunFunctionFromCompiled :: FilePath -> FunctionDeclaration -> CompiledModule -> RunFunction
+createRunFunctionFromCompiled filepath fnDecl compiled =
+  RunFunction
+    { runFunction = \params' _outFilter traceLevel includeGraphViz ->
+        evaluateWithCompiled filepath fnDecl compiled params' traceLevel includeGraphViz
+    }
 
 -- | Extract parameter names and types from a DECIDE's GIVEN clause
 extractParamTypes :: Decide Resolved -> [(Text, Type' Resolved)]

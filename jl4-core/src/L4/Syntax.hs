@@ -7,8 +7,10 @@ module L4.Syntax where
 
 import Base
 import L4.Annotation
+import L4.Instances.Serialise ()
 import L4.Lexer (PosToken)
 
+import Codec.Serialise (Serialise)
 import Data.Default
 import qualified GHC.Generics as GHC
 import qualified Generics.SOP as SOP
@@ -811,4 +813,53 @@ fun ts t = Fun emptyAnno ts t
 
 app :: n -> [Type' n] -> Type' n
 app = TyApp emptyAnno
+
+-- ----------------------------------------------------------------------------
+-- Serialise instances (CBOR) for AST caching in jl4-service
+-- ----------------------------------------------------------------------------
+
+deriving anyclass instance Serialise Name
+deriving anyclass instance Serialise RawName
+deriving anyclass instance Serialise Unique
+deriving anyclass instance Serialise Resolved
+deriving anyclass instance Serialise n => Serialise (Type' n)
+deriving anyclass instance Serialise n => Serialise (TypedName n)
+deriving anyclass instance Serialise n => Serialise (OptionallyTypedName n)
+deriving anyclass instance Serialise n => Serialise (OptionallyNamedType n)
+deriving anyclass instance Serialise n => Serialise (TypeSig n)
+deriving anyclass instance Serialise n => Serialise (GivenSig n)
+deriving anyclass instance Serialise n => Serialise (GivethSig n)
+deriving anyclass instance Serialise n => Serialise (Decide n)
+deriving anyclass instance Serialise n => Serialise (AppForm n)
+deriving anyclass instance Serialise n => Serialise (Aka n)
+deriving anyclass instance Serialise n => Serialise (Declare n)
+deriving anyclass instance Serialise n => Serialise (Assume n)
+deriving anyclass instance Serialise n => Serialise (Directive n)
+deriving anyclass instance Serialise n => Serialise (Event n)
+deriving anyclass instance Serialise n => Serialise (Import n)
+deriving anyclass instance Serialise n => Serialise (TypeDecl n)
+deriving anyclass instance Serialise n => Serialise (ConDecl n)
+deriving anyclass instance Serialise n => Serialise (Expr n)
+deriving anyclass instance Serialise InertContext
+deriving anyclass instance Serialise n => Serialise (GuardedExpr n)
+deriving anyclass instance Serialise n => Serialise (Deonton n)
+deriving anyclass instance Serialise DeonticModal
+deriving anyclass instance Serialise n => Serialise (RAction n)
+deriving anyclass instance Serialise n => Serialise (NamedExpr n)
+deriving anyclass instance Serialise Lit
+deriving anyclass instance Serialise n => Serialise (Branch n)
+deriving anyclass instance Serialise n => Serialise (BranchLhs n)
+deriving anyclass instance Serialise n => Serialise (Pattern n)
+deriving anyclass instance Serialise n => Serialise (Module n)
+deriving anyclass instance Serialise n => Serialise (Section n)
+deriving anyclass instance Serialise n => Serialise (TopDecl n)
+deriving anyclass instance Serialise n => Serialise (LocalDecl n)
+deriving anyclass instance Serialise Extension
+deriving anyclass instance Serialise Info
+deriving anyclass instance Serialise TermKind
+deriving anyclass instance Serialise Nlg
+deriving anyclass instance Serialise n => Serialise (NlgFragment n)
+deriving anyclass instance Serialise Comment
+deriving anyclass instance Serialise Ref
+deriving anyclass instance Serialise Desc
 

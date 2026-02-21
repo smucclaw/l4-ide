@@ -4,11 +4,11 @@ module Application (defaultMain, app) where
 
 import BundleStore (BundleStore (..))
 import qualified BundleStore
-import Compiler (compileBundle)
+import Compiler (compileBundle, buildFromCborBundle)
 import ControlPlane (ControlPlaneApi, controlPlaneHandler)
 import DataPlane (DataPlaneApi, dataPlaneHandler)
 import Options (Options (..), opts)
-import Types (AppEnv (..), AppM, DeploymentId (..), DeploymentState (..))
+import Types (AppEnv (..), AppM, DeploymentId (..), DeploymentMetadata, DeploymentState (..), ValidatedFunction)
 
 import Data.Text (Text)
 import Control.Concurrent.Async (mapConcurrently_)
@@ -58,12 +58,27 @@ defaultMain = do
     runSettings settings (corsMiddleware $ app env)
 
 -- | Load a deployment from the store and register it.
+-- Tries the fast CBOR cache path first; falls back to full recompilation.
 loadAndRegister :: TVar (Map.Map DeploymentId DeploymentState) -> BundleStore -> Text -> IO ()
 loadAndRegister registry store deployId = do
-  putStrLn $ "  Compiling deployment: " <> show deployId
-  result <- do
-    (sources, _meta) <- BundleStore.loadBundle store deployId
-    compileBundle sources
+  -- Load sources and metadata (always needed)
+  (sources, storedMeta) <- BundleStore.loadBundle store deployId
+
+  -- Try fast path: load from CBOR cache
+  mCbor <- BundleStore.loadBundleCbor store deployId
+  result <- case mCbor of
+    Just bundle -> do
+      putStrLn $ "  Loading deployment from CBOR cache: " <> show deployId
+      cborResult <- buildFromCborBundle bundle sources storedMeta
+      case cborResult of
+        Right ok -> pure (Right ok)
+        Left err -> do
+          putStrLn $ "  CBOR rebuild failed (" <> show err <> "), recompiling from source..."
+          compileFreshAndCache store deployId sources
+    Nothing -> do
+      putStrLn $ "  Compiling deployment: " <> show deployId
+      compileFreshAndCache store deployId sources
+
   case result of
     Right (fns, meta) -> do
       atomically $ modifyTVar' registry $
@@ -73,6 +88,22 @@ loadAndRegister registry store deployId = do
       atomically $ modifyTVar' registry $
         Map.insert (DeploymentId deployId) (DeploymentFailed err)
       putStrLn $ "  FAILED: " <> show deployId <> " — " <> show err
+
+-- | Compile from source and save CBOR cache for next restart.
+compileFreshAndCache
+  :: BundleStore
+  -> Text
+  -> Map.Map FilePath Text
+  -> IO (Either Text (Map.Map Text ValidatedFunction, DeploymentMetadata))
+compileFreshAndCache store deployId sources = do
+  result <- compileBundle sources
+  case result of
+    Right (fns, meta, bundles) -> do
+      -- Save CBOR caches for fast restart
+      mapM_ (BundleStore.saveBundleCbor store deployId) bundles
+      pure $ Right (fns, meta)
+    Left err ->
+      pure $ Left err
 
 -- | CORS middleware — same policy as jl4-decision-service.
 corsMiddleware :: Middleware

@@ -2,27 +2,36 @@ module BundleStore (
   BundleStore (..),
   StoredMetadata (..),
   StoredFunctionSummary (..),
+  SerializedBundle (..),
   initStore,
   saveBundle,
   loadBundle,
   listDeployments,
   deleteBundle,
+  saveBundleCbor,
+  loadBundleCbor,
 ) where
 
+import Codec.Serialise (Serialise, deserialiseOrFail, serialise)
 import Data.Aeson (FromJSON, ToJSON, eitherDecodeFileStrict', encodeFile)
+import qualified Data.ByteString.Lazy as LBS
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text.IO
 import GHC.Generics (Generic)
+import L4.Syntax (Module, Resolved)
+import L4.TypeCheck.Types (Environment, EntityInfo)
 import System.Directory
   ( createDirectoryIfMissing
   , doesDirectoryExist
   , doesFileExist
   , listDirectory
   , removeDirectoryRecursive
+  , removeFile
   , renameDirectory
+  , renameFile
   )
 import System.FilePath ((</>), takeExtension, makeRelative)
 
@@ -47,6 +56,17 @@ data StoredFunctionSummary = StoredFunctionSummary
   }
   deriving stock (Show, Generic)
   deriving anyclass (FromJSON, ToJSON)
+
+-- | Cached typechecked state for a deployment.
+-- Stores the expensive-to-recompute outputs of typechecking so restarts
+-- can skip parsing and typechecking entirely.
+data SerializedBundle = SerializedBundle
+  { sbModule      :: !(Module Resolved)
+  , sbEnvironment :: !Environment     -- ^ Map RawName [Unique]
+  , sbEntityInfo  :: !EntityInfo      -- ^ Map Unique (Name, CheckEntity)
+  }
+  deriving stock (Generic)
+  deriving anyclass (Serialise)
 
 -- | Initialize the bundle store, creating the root directory if absent.
 initStore :: FilePath -> IO BundleStore
@@ -110,6 +130,40 @@ loadBundle (BundleStore root) deployId = do
     Right m -> pure m
 
   pure (sources, meta)
+
+-- | Save the CBOR-serialized compiled state for a deployment.
+-- Uses a temp file + rename for crash safety.
+saveBundleCbor :: BundleStore -> Text -> SerializedBundle -> IO ()
+saveBundleCbor (BundleStore root) deployId bundle = do
+  let did = Text.unpack deployId
+      cborFile = root </> did </> "bundle.cbor"
+      tmpFile = cborFile <> ".tmp"
+  LBS.writeFile tmpFile (serialise bundle)
+  -- Atomic swap: remove old file if it exists, then rename
+  exists <- doesFileExist cborFile
+  if exists
+    then do
+      removeFile cborFile
+      renameFile tmpFile cborFile
+    else
+      renameFile tmpFile cborFile
+
+-- | Try to load the CBOR-serialized compiled state for a deployment.
+-- Returns 'Nothing' if the file is absent or fails to parse
+-- (safe fallback to source recompilation).
+loadBundleCbor :: BundleStore -> Text -> IO (Maybe SerializedBundle)
+loadBundleCbor (BundleStore root) deployId = do
+  let cborFile = root </> Text.unpack deployId </> "bundle.cbor"
+  exists <- doesFileExist cborFile
+  if not exists
+    then pure Nothing
+    else do
+      bytes <- LBS.readFile cborFile
+      case deserialiseOrFail bytes of
+        Left _err -> do
+          putStrLn $ "  Warning: corrupt bundle.cbor for " <> Text.unpack deployId <> ", will recompile"
+          pure Nothing
+        Right bundle -> pure (Just bundle)
 
 -- | Recursively load all .l4 files from a directory.
 loadSourcesRecursive :: FilePath -> FilePath -> IO (Map FilePath Text)

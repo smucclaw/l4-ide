@@ -3,6 +3,7 @@
 module L4.TypeCheck.Types where
 
 import Base
+import Codec.Serialise (Serialise)
 import qualified Optics
 import L4.Annotation (HasSrcRange(..), HasAnno(..), AnnoExtra, AnnoToken, emptyAnno)
 import L4.Lexer (PosToken)
@@ -37,7 +38,7 @@ data CheckEntity =
   | KnownSection (Section Resolved)
   | KnownTypeVariable
   deriving stock (Eq, Generic, Show)
-  deriving anyclass NFData
+  deriving anyclass (NFData, Serialise)
 
 data CheckState =
   MkCheckState

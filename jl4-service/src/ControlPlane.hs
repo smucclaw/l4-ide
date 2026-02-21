@@ -89,7 +89,9 @@ postDeploymentHandler multipart = do
   _ <- liftIO $ async $ do
     result <- compileBundle sourceMap
     case result of
-      Right (fns, meta) ->
+      Right (fns, meta, bundles) -> do
+        -- Save CBOR cache for fast restart
+        mapM_ (BundleStore.saveBundleCbor env.bundleStore (deployId.unDeploymentId)) bundles
         atomically $ modifyTVar' env.deploymentRegistry $
           Map.insert deployId (DeploymentReady fns meta)
       Left err ->
@@ -148,7 +150,9 @@ putDeploymentHandler deployIdText multipart = do
   _ <- liftIO $ async $ do
     result <- compileBundle sourceMap
     case result of
-      Right (fns, meta) ->
+      Right (fns, meta, bundles) -> do
+        -- Save CBOR cache for fast restart
+        mapM_ (BundleStore.saveBundleCbor env.bundleStore (deployId.unDeploymentId)) bundles
         atomically $ modifyTVar' env.deploymentRegistry $
           Map.insert deployId (DeploymentReady fns meta)
       Left err -> do

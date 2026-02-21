@@ -157,7 +157,7 @@ spec = describe "integration" do
       result <- compileBundle sources
       case result of
         Left err -> expectationFailure ("Compilation failed: " <> Text.unpack err)
-        Right (fns, meta) -> do
+        Right (fns, meta, _bundles) -> do
           Map.size fns `shouldSatisfy` (> 0)
           length meta.metaFunctions `shouldSatisfy` (> 0)
           Text.length meta.metaVersion `shouldBe` 64  -- SHA-256 hex
@@ -209,7 +209,7 @@ withServiceFromSources' deployId sources act = do
   result <- compileBundle sourceMap
   (fns, meta) <- case result of
     Left err -> fail ("Test setup: compilation failed: " <> Text.unpack err)
-    Right r -> pure r
+    Right (f, m, _bundles) -> pure (f, m)
 
   -- Register directly in the TVar
   registry <- newTVarIO $ Map.singleton (DeploymentId deployId) (DeploymentReady fns meta)

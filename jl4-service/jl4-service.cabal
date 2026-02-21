@@ -83,6 +83,8 @@ library
     -- Concurrency / state
     async,
     stm,
+    -- Serialization (CBOR)
+    serialise,
     -- Crypto / archiving
     cryptohash-sha256,
     zip-archive,
@@ -119,6 +121,7 @@ test-suite jl4-service-test
     DecisionQueryCacheKeySpec
     IntegrationSpec
     SchemaSpec
+    SerialisationSpec
     TestData
 
   hs-source-dirs:
@@ -132,12 +135,14 @@ test-suite jl4-service-test
     bytestring,
     containers,
     directory,
+    filepath,
     hspec,
     http-client,
     http-types,
     jl4-service,
     QuickCheck,
     quickcheck-instances,
+    serialise,
     servant >=0.20.2 && <0.21,
     stm,
     string-interpolate,
