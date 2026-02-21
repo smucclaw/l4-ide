@@ -17,6 +17,7 @@ import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Builder as Builder
 import qualified Data.ByteString.Lazy as LBS
+import Data.Aeson (toJSON)
 import Data.List (sortBy)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
@@ -28,6 +29,7 @@ import qualified Data.Text.Encoding as Text.Encoding
 import Data.Time (getCurrentTime)
 import L4.Export (ExportedFunction (..), ExportedParam (..), getExportedFunctions, extractImplicitAssumeParams)
 import L4.Syntax (Module, Resolved, Declare(..), Type'(..), RawName(..))
+import Logging (Logger, logInfo, logWarn)
 import qualified LSP.L4.Rules as Rules
 import System.FilePath (takeExtension)
 
@@ -43,9 +45,10 @@ import System.FilePath (takeExtension)
 -- 4. For each export, create a RunFunction + CompiledModule
 -- 5. Build metadata with SHA-256 version
 compileBundle
-  :: Map FilePath Text
+  :: Logger
+  -> Map FilePath Text
   -> IO (Either Text (Map Text ValidatedFunction, DeploymentMetadata, [SerializedBundle]))
-compileBundle sources = do
+compileBundle logger sources = do
   let l4Files = Map.toList $ Map.filterWithKey (\k _ -> takeExtension k == ".l4") sources
   if null l4Files
     then pure $ Left "No .l4 files found in bundle"
@@ -55,7 +58,7 @@ compileBundle sources = do
 
       -- Try each file for exported functions
       results <- forM l4Files $ \(filepath, content) ->
-        compileSingleFile filepath content moduleContext
+        compileSingleFile logger filepath content moduleContext
 
       let allFunctions = concatMap (either (const []) fst) results
           allBundles = concatMap (either (const []) snd) results
@@ -78,7 +81,9 @@ compileBundle sources = do
                 }
 
           unless (null allFunctions) $
-            putStrLn $ "  Compiled " <> show (length allFunctions) <> " function(s)"
+            logInfo logger "Compilation complete"
+              [ ("functionCount", toJSON (length allFunctions))
+              ]
 
           pure $ Right (fnMap, meta, allBundles)
 
@@ -86,17 +91,21 @@ compileBundle sources = do
 -- Returns a list of ValidatedFunctions and optionally a SerializedBundle
 -- (if typechecking succeeded and there were exports).
 compileSingleFile
-  :: FilePath
+  :: Logger
+  -> FilePath
   -> Text
   -> ModuleContext
   -> IO (Either Text ([ValidatedFunction], [SerializedBundle]))
-compileSingleFile filepath content moduleContext = do
+compileSingleFile logger filepath content moduleContext = do
   -- Typecheck the module
   (errs, mTcRes) <- typecheckModule filepath content moduleContext
   case mTcRes of
     Nothing -> do
       unless (null errs) $
-        putStrLn $ "  Typecheck failed for " <> filepath <> ": " <> show errs
+        logWarn logger "Typecheck failed"
+          [ ("file", toJSON filepath)
+          , ("errors", toJSON errs)
+          ]
       pure $ Left (Text.intercalate "\n" errs)
 
     Just Rules.TypeCheckResult{module' = resolvedModule, environment = env, entityInfo = ei, errors = tcErrors} -> do
@@ -128,7 +137,10 @@ compileSingleFile filepath content moduleContext = do
                 , sbEntityInfo = ei
                 }
 
-          putStrLn $ "  Found " <> show (length fns) <> " export(s) in " <> filepath
+          logInfo logger "Found exports"
+            [ ("file", toJSON filepath)
+            , ("exportCount", toJSON (length fns))
+            ]
           pure $ Right (fns, [bundle])
 
 -- | Rebuild ValidatedFunctions from a deserialized CBOR bundle,
@@ -138,11 +150,12 @@ compileSingleFile filepath content moduleContext = do
 -- EntityInfo are loaded from CBOR, and only the evaluator import environment
 -- needs to be rebuilt (which requires the sources).
 buildFromCborBundle
-  :: SerializedBundle
+  :: Logger
+  -> SerializedBundle
   -> Map FilePath Text       -- ^ source files (for import resolution and eval)
   -> StoredMetadata          -- ^ persisted metadata
   -> IO (Either Text (Map Text ValidatedFunction, DeploymentMetadata))
-buildFromCborBundle bundle sources storedMeta = do
+buildFromCborBundle logger bundle sources storedMeta = do
   let resolvedModule = bundle.sbModule
       env = bundle.sbEnvironment
       ei = bundle.sbEntityInfo
@@ -213,7 +226,9 @@ buildFromCborBundle bundle sources storedMeta = do
                 , metaCreatedAt = now
                 }
 
-          putStrLn $ "  Rebuilt " <> show (length validFns) <> " function(s) from CBOR cache"
+          logInfo logger "Rebuilt functions from CBOR cache"
+            [ ("functionCount", toJSON (length validFns))
+            ]
           pure $ Right (fnMap, meta)
 
 -- | Convert an ExportedFunction to our Function type.

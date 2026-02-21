@@ -10,6 +10,8 @@ import Backend.Api
 import BundleStore (initStore)
 import Compiler (compileBundle)
 import ControlPlane (DeploymentStatusResponse (..))
+import Logging (newLogger)
+import Options (Options (..))
 import Types
 
 import Control.Concurrent (threadDelay)
@@ -215,8 +217,9 @@ spec = describe "integration" do
 
   describe "compiler" do
     it "compiles valid L4 sources" do
+      logger <- newLogger False
       let sources = Map.singleton "qualifies.l4" qualifiesJL4
-      result <- compileBundle sources
+      result <- compileBundle logger sources
       case result of
         Left err -> expectationFailure ("Compilation failed: " <> Text.unpack err)
         Right (fns, meta, _bundles) -> do
@@ -225,8 +228,9 @@ spec = describe "integration" do
           Text.length meta.metaVersion `shouldBe` 64  -- SHA-256 hex
 
     it "rejects empty bundles" do
+      logger <- newLogger False
       let sources = Map.empty :: Map FilePath Text
-      result <- compileBundle sources
+      result <- compileBundle logger sources
       case result of
         Left err -> err `shouldBe` "No .l4 files found in bundle"
         Right _ -> expectationFailure "Expected compilation to fail for empty bundle"
@@ -265,17 +269,18 @@ withServiceFromSources' deployId sources act = do
   let tmpPath = "/tmp/jl4-service-test-" <> Text.unpack deployId
   cleanDir tmpPath
   store <- initStore tmpPath
+  logger <- newLogger False
 
   -- Compile the bundle directly
   let sourceMap = Map.fromList sources
-  result <- compileBundle sourceMap
+  result <- compileBundle logger sourceMap
   (fns, meta) <- case result of
     Left err -> fail ("Test setup: compilation failed: " <> Text.unpack err)
     Right (f, m, _bundles) -> pure (f, m)
 
   -- Register directly in the TVar
   registry <- newTVarIO $ Map.singleton (DeploymentId deployId) (DeploymentReady fns meta)
-  let env = MkAppEnv registry store Nothing
+  let env = MkAppEnv registry store Nothing logger testOptions
 
   mgr <- newManager defaultManagerSettings
   testWithApplication (pure $ app env) \port -> do
@@ -302,8 +307,9 @@ withEmptyService' act = do
   let tmpPath = "/tmp/jl4-service-test-empty"
   cleanDir tmpPath
   store <- initStore tmpPath
+  logger <- newLogger False
   registry <- newTVarIO Map.empty
-  let env = MkAppEnv registry store Nothing
+  let env = MkAppEnv registry store Nothing logger testOptions
 
   mgr <- newManager defaultManagerSettings
   testWithApplication (pure $ app env) \port -> do
@@ -391,3 +397,20 @@ cleanDir :: FilePath -> IO ()
 cleanDir path = do
   exists <- doesDirectoryExist path
   if exists then removeDirectoryRecursive path else pure ()
+
+-- | Default options for tests.
+testOptions :: Options
+testOptions = Options
+  { port = 0
+  , storePath = "/tmp/jl4-service-test"
+  , serverName = Nothing
+  , lazyLoad = False
+  , debug = True
+  , maxZipSize = 2097152
+  , maxFileCount = 5096
+  , maxDeployments = 1024
+  , maxConcurrentRequests = 20
+  , maxEvalMemoryMb = 256
+  , evalTimeout = 60
+  , compileTimeout = 60
+  }

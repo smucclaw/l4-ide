@@ -9,15 +9,19 @@ module ControlPlane (
 
 import qualified BundleStore
 import Compiler (compileBundle, computeVersion)
+import Logging (logInfo, logWarn, logError)
+import Options (Options (..))
 import Types
 
 import Control.Concurrent.Async (async)
 import Control.Concurrent.STM (atomically, modifyTVar', readTVarIO)
+import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Reader (asks)
 import qualified Codec.Archive.Zip as Zip
-import Data.Aeson (FromJSON, ToJSON)
+import Data.Aeson (FromJSON, ToJSON, toJSON)
 import qualified Data.ByteString.Lazy as LBS
+import Data.Char (isAlphaNum)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.Text (Text)
@@ -29,6 +33,8 @@ import qualified Data.UUID as UUID
 import GHC.Generics (Generic)
 import Servant
 import Servant.Multipart
+import System.FilePath (splitDirectories)
+import System.Timeout (timeout)
 
 -- | Status returned in GET responses.
 data DeploymentStatusResponse = DeploymentStatusResponse
@@ -64,7 +70,9 @@ postDeploymentHandler multipart = do
 
   -- Extract deployment ID (from multipart field or generate UUID)
   deployId <- case lookupInput "id" multipart of
-    Right idText | not (Text.null idText) -> pure (DeploymentId idText)
+    Right idText | not (Text.null idText) -> do
+      validateDeploymentId idText
+      pure (DeploymentId idText)
     _ -> liftIO $ DeploymentId . Text.pack . UUID.toString <$> nextRandom
 
   -- Extract zip from multipart file
@@ -90,6 +98,11 @@ postDeploymentHandler multipart = do
         , dsError = Nothing
         }
     [] -> do
+      -- Check deployment count limit
+      let cfg = env.options
+      when (Map.size registry >= cfg.maxDeployments) $
+        throwError err400 { errBody = "Maximum deployment limit reached" }
+
       -- Normal path: save, register as pending, compile async
       now <- liftIO getCurrentTime
       let storedMeta = BundleStore.StoredMetadata
@@ -103,14 +116,25 @@ postDeploymentHandler multipart = do
       liftIO $ atomically $ modifyTVar' env.deploymentRegistry $
         Map.insert deployId DeploymentPending
 
+      let compileTimeoutMicros = cfg.compileTimeout * 1_000_000
+
       _ <- liftIO $ async $ do
-        result <- compileBundle sourceMap
-        case result of
-          Right (fns, meta, bundles) -> do
+        mResult <- timeout compileTimeoutMicros $ compileBundle env.logger sourceMap
+        case mResult of
+          Nothing -> do
+            logError env.logger "Compilation timed out"
+              [("deploymentId", toJSON deployId.unDeploymentId)]
+            atomically $ modifyTVar' env.deploymentRegistry $
+              Map.insert deployId (DeploymentFailed "Compilation timed out")
+          Just (Right (fns, meta, bundles)) -> do
             mapM_ (BundleStore.saveBundleCbor env.bundleStore (deployId.unDeploymentId)) bundles
             atomically $ modifyTVar' env.deploymentRegistry $
               Map.insert deployId (DeploymentReady fns meta)
-          Left err ->
+          Just (Left err) -> do
+            logWarn env.logger "Compilation failed"
+              [ ("deploymentId", toJSON deployId.unDeploymentId)
+              , ("error", toJSON err)
+              ]
             atomically $ modifyTVar' env.deploymentRegistry $
               Map.insert deployId (DeploymentFailed err)
 
@@ -124,23 +148,28 @@ postDeploymentHandler multipart = do
 -- | GET /deployments — list all deployments
 getDeploymentsHandler :: AppM [DeploymentStatusResponse]
 getDeploymentsHandler = do
-  registry <- asks (.deploymentRegistry) >>= liftIO . readTVarIO
-  pure [stateToResponse did state | (did, state) <- Map.toList registry]
+  env <- asks id
+  registry <- liftIO $ readTVarIO env.deploymentRegistry
+  let debugMode = env.options.debug
+  pure [stateToResponse debugMode did state | (did, state) <- Map.toList registry]
 
 -- | GET /deployments/{id} — get deployment status
 getDeploymentHandler :: Text -> AppM DeploymentStatusResponse
 getDeploymentHandler deployIdText = do
+  env <- asks id
   let deployId = DeploymentId deployIdText
-  registry <- asks (.deploymentRegistry) >>= liftIO . readTVarIO
+  registry <- liftIO $ readTVarIO env.deploymentRegistry
   case Map.lookup deployId registry of
     Nothing -> throwError err404
-    Just state -> pure (stateToResponse deployId state)
+    Just state -> pure (stateToResponse env.options.debug deployId state)
 
 -- | PUT /deployments/{id} — replace a deployment bundle
 putDeploymentHandler :: Text -> MultipartData Mem -> AppM DeploymentStatusResponse
 putDeploymentHandler deployIdText multipart = do
   env <- asks id
   let deployId = DeploymentId deployIdText
+
+  validateDeploymentId deployIdText
 
   -- Check deployment exists
   registry <- liftIO $ readTVarIO env.deploymentRegistry
@@ -162,18 +191,25 @@ putDeploymentHandler deployIdText multipart = do
 
   liftIO $ BundleStore.saveBundle env.bundleStore (deployId.unDeploymentId) sourceMap storedMeta
 
+  let compileTimeoutMicros = env.options.compileTimeout * 1_000_000
+
   -- Compile in background; old version stays active until new compilation completes
   _ <- liftIO $ async $ do
-    result <- compileBundle sourceMap
-    case result of
-      Right (fns, meta, bundles) -> do
+    mResult <- timeout compileTimeoutMicros $ compileBundle env.logger sourceMap
+    case mResult of
+      Nothing ->
+        logError env.logger "PUT compilation timed out"
+          [("deploymentId", toJSON deployId.unDeploymentId)]
+      Just (Right (fns, meta, bundles)) -> do
         -- Save CBOR cache for fast restart
         mapM_ (BundleStore.saveBundleCbor env.bundleStore (deployId.unDeploymentId)) bundles
         atomically $ modifyTVar' env.deploymentRegistry $
           Map.insert deployId (DeploymentReady fns meta)
-      Left err -> do
-        putStrLn $ "PUT compilation failed for " <> show deployId <> ": " <> Text.unpack err
-        -- Keep old version active, don't overwrite with Failed
+      Just (Left err) ->
+        logWarn env.logger "PUT compilation failed"
+          [ ("deploymentId", toJSON deployId.unDeploymentId)
+          , ("error", toJSON err)
+          ]
 
   pure DeploymentStatusResponse
     { dsId = deployId.unDeploymentId
@@ -196,6 +232,10 @@ deleteDeploymentHandler deployIdText = do
       liftIO $ atomically $ modifyTVar' env.deploymentRegistry $
         Map.delete deployId
       liftIO $ BundleStore.deleteBundle env.bundleStore (deployId.unDeploymentId)
+
+      liftIO $ logInfo env.logger "Deployment deleted"
+        [("deploymentId", toJSON deployId.unDeploymentId)]
+
       pure NoContent
 
 -- ----------------------------------------------------------------------------
@@ -203,28 +243,69 @@ deleteDeploymentHandler deployIdText = do
 -- ----------------------------------------------------------------------------
 
 -- | Convert DeploymentState to a response.
-stateToResponse :: DeploymentId -> DeploymentState -> DeploymentStatusResponse
-stateToResponse (DeploymentId did) = \case
+-- In non-debug mode, error details are hidden.
+stateToResponse :: Bool -> DeploymentId -> DeploymentState -> DeploymentStatusResponse
+stateToResponse debugMode (DeploymentId did) = \case
   DeploymentPending -> DeploymentStatusResponse did "compiling" Nothing Nothing
   DeploymentReady _ meta -> DeploymentStatusResponse did "ready" (Just meta) Nothing
-  DeploymentFailed err -> DeploymentStatusResponse did "failed" Nothing (Just err)
+  DeploymentFailed err ->
+    let errorMsg = if debugMode then Just err else Just "Compilation failed"
+    in DeploymentStatusResponse did "failed" Nothing errorMsg
 
--- | Extract .l4 sources from a multipart zip upload.
+-- | Validate a deployment ID.
+-- Must be <= 36 characters (UUID length), alphanumeric + hyphens + underscores,
+-- and must not contain ".." sequences.
+validateDeploymentId :: Text -> AppM ()
+validateDeploymentId deployId = do
+  when (Text.length deployId > 36) $
+    throwError err400 { errBody = "Deployment ID exceeds maximum length of 36 characters" }
+  when (Text.isInfixOf ".." deployId) $
+    throwError err400 { errBody = "Deployment ID contains invalid sequence" }
+  when (not $ Text.all isValidIdChar deployId) $
+    throwError err400 { errBody = "Deployment ID contains invalid characters (allowed: a-z, A-Z, 0-9, -, _)" }
+ where
+  isValidIdChar c = isAlphaNum c || c == '-' || c == '_'
+
+-- | Check if a zip entry path is safe (no path traversal).
+isPathSafe :: FilePath -> Bool
+isPathSafe path = ".." `notElem` splitDirectories path
+
+-- | Extract sources from a multipart zip upload with validation.
 extractSourcesFromMultipart :: MultipartData Mem -> AppM (Map FilePath Text)
 extractSourcesFromMultipart multipart = do
+  cfg <- asks (.options)
+
   case lookupFile "sources" multipart of
     Left _ -> throwError $ err400 { errBody = "Missing 'sources' file field (zip archive)" }
     Right (fileData :: FileData Mem) -> do
       let zipBytes = fdPayload fileData :: LBS.ByteString
-          archive = Zip.toArchive zipBytes
+
+      -- Validate zip file size
+      when (LBS.length zipBytes > fromIntegral cfg.maxZipSize) $
+        throwError $ err400 { errBody = "Zip archive exceeds maximum size" }
+
+      let archive = Zip.toArchive zipBytes
           entries = Zip.zEntries archive
-          l4Entries =
+
+      -- Validate file count
+      when (length entries > cfg.maxFileCount) $
+        throwError $ err400 { errBody = "Zip archive exceeds maximum file count" }
+
+      -- Extract entries with path traversal check
+      let l4Entries =
             [ (Zip.eRelativePath entry, Text.Encoding.decodeUtf8 $ LBS.toStrict (Zip.fromEntry entry))
             | entry <- entries
             , not (null (Zip.eRelativePath entry))
             , last (Zip.eRelativePath entry) /= '/'  -- Skip directories
             -- Accept all files, not just .l4, to support imports from any extension
             ]
+          unsafePaths = [Zip.eRelativePath entry | entry <- entries, not (isPathSafe (Zip.eRelativePath entry))]
+
+      -- Reject if any paths contain ".."
+      when (not (null unsafePaths)) $
+        throwError $ err400 { errBody = "Zip entry contains path traversal" }
+
       if null l4Entries
         then throwError $ err400 { errBody = "Zip archive contains no files" }
         else pure (Map.fromList l4Entries)
+

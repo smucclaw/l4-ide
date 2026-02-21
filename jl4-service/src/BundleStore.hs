@@ -13,7 +13,7 @@ module BundleStore (
 ) where
 
 import Codec.Serialise (Serialise, deserialiseOrFail, serialise)
-import Data.Aeson (FromJSON, ToJSON, eitherDecodeFileStrict', encodeFile)
+import Data.Aeson (FromJSON, ToJSON, eitherDecodeFileStrict', encodeFile, toJSON)
 import qualified Data.ByteString.Lazy as LBS
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
@@ -23,6 +23,7 @@ import qualified Data.Text.IO as Text.IO
 import GHC.Generics (Generic)
 import L4.Syntax (Module, Resolved)
 import L4.TypeCheck.Types (Environment, EntityInfo)
+import Logging (Logger, logWarn)
 import System.Directory
   ( createDirectoryIfMissing
   , doesDirectoryExist
@@ -151,8 +152,8 @@ saveBundleCbor (BundleStore root) deployId bundle = do
 -- | Try to load the CBOR-serialized compiled state for a deployment.
 -- Returns 'Nothing' if the file is absent or fails to parse
 -- (safe fallback to source recompilation).
-loadBundleCbor :: BundleStore -> Text -> IO (Maybe SerializedBundle)
-loadBundleCbor (BundleStore root) deployId = do
+loadBundleCbor :: Logger -> BundleStore -> Text -> IO (Maybe SerializedBundle)
+loadBundleCbor logger (BundleStore root) deployId = do
   let cborFile = root </> Text.unpack deployId </> "bundle.cbor"
   exists <- doesFileExist cborFile
   if not exists
@@ -161,7 +162,8 @@ loadBundleCbor (BundleStore root) deployId = do
       bytes <- LBS.readFile cborFile
       case deserialiseOrFail bytes of
         Left _err -> do
-          putStrLn $ "  Warning: corrupt bundle.cbor for " <> Text.unpack deployId <> ", will recompile"
+          logWarn logger "Corrupt bundle.cbor, will recompile"
+            [("deploymentId", toJSON deployId)]
           pure Nothing
         Right bundle -> pure (Just bundle)
 

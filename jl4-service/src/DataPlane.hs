@@ -10,10 +10,13 @@ import Backend.Api
 import Backend.DecisionQueryPlan (queryPlan, QueryPlanResponse)
 import Backend.Jl4 (CompiledModule (..))
 import qualified L4.StateGraph as StateGraph
+import Options (Options (..))
 import Types
 
+import Data.Int (Int64)
 import Control.Concurrent.Async (forConcurrently)
 import Control.Concurrent.STM (readTVarIO)
+import Control.Exception (catch)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Reader (runReaderT, asks, ask)
@@ -25,6 +28,8 @@ import qualified Data.Maybe as Maybe
 import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Text.Encoding as Text.Encoding
+import GHC.Conc (setAllocationCounter, enableAllocationLimit)
+import GHC.IO.Exception (AllocationLimitExceeded (..))
 import Servant
 import System.Timeout (timeout)
 
@@ -68,15 +73,19 @@ functionRoutesHandler deployId fnName =
 -- ----------------------------------------------------------------------------
 
 -- | Require a deployment to be in Ready state.
+-- In non-debug mode, error details are hidden.
 requireDeploymentReady :: DeploymentId -> AppM (Map Text ValidatedFunction, DeploymentMetadata)
 requireDeploymentReady deployId = do
+  debugMode <- asks (.options.debug)
   registry <- asks (.deploymentRegistry) >>= liftIO . readTVarIO
   case Map.lookup deployId registry of
     Nothing -> throwError err404
     Just DeploymentPending ->
       throwError err503 { errBody = "Deployment is still compiling" }
     Just (DeploymentFailed msg) ->
-      throwError err500 { errBody = textToLBS ("Deployment compilation failed: " <> msg) }
+      if debugMode
+        then throwError err500 { errBody = textToLBS ("Deployment compilation failed: " <> msg) }
+        else throwError err500 { errBody = "Deployment compilation failed" }
     Just (DeploymentReady fns meta) ->
       pure (fns, meta)
 
@@ -84,7 +93,7 @@ requireDeploymentReady deployId = do
 requireFunction :: Map Text ValidatedFunction -> Text -> AppM ValidatedFunction
 requireFunction fns fnName =
   case Map.lookup fnName fns of
-    Nothing -> throwError err404 { errBody = textToLBS ("Function not found: " <> fnName) }
+    Nothing -> throwError err404 { errBody = "Function not found" }
     Just vf -> pure vf
 
 -- ----------------------------------------------------------------------------
@@ -230,7 +239,7 @@ getStateGraphDotHandler deployId fnName graphName = do
     Just compiled -> do
       let graphs = StateGraph.extractStateGraphs compiled.compiledModule
       case find (\sg -> sg.sgName == graphName) graphs of
-        Nothing -> throwError err404 { errBody = textToLBS ("State graph not found: " <> graphName) }
+        Nothing -> throwError err404 { errBody = "State graph not found" }
         Just graph -> do
           let opts = StateGraph.defaultStateGraphOptions
           pure $ StateGraph.stateGraphToDot opts graph
@@ -291,14 +300,23 @@ runEvaluatorForDirect vf engine args outputFilter traceLevel includeGraphViz = d
 runAppM :: AppEnv -> AppM a -> IO (Either ServerError a)
 runAppM env action = runHandler $ runReaderT action env
 
--- | Timeout for evaluation actions (60 seconds).
+-- | Timeout and memory-limited evaluation action.
+-- Uses configurable eval timeout and per-evaluation allocation limits.
 timeoutAction :: IO b -> AppM b
-timeoutAction act =
-  liftIO (timeout (seconds 60) act) >>= \case
-    Nothing -> throwError err500 { errBody = "Evaluation timed out" }
+timeoutAction act = do
+  cfg <- asks (.options)
+  let timeoutMicros = cfg.evalTimeout * 1_000_000
+      memLimitBytes = fromIntegral cfg.maxEvalMemoryMb * 1024 * 1024 :: Int64
+  result <- liftIO $
+    (timeout timeoutMicros $ do
+      setAllocationCounter memLimitBytes
+      enableAllocationLimit
+      act
+    ) `catch` \AllocationLimitExceeded ->
+      pure Nothing
+  case result of
+    Nothing -> throwError err500 { errBody = "Evaluation resource limit exceeded" }
     Just r -> pure r
- where
-  seconds n = 1_000_000 * n
 
 -- ----------------------------------------------------------------------------
 -- Helpers

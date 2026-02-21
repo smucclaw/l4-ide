@@ -18,6 +18,9 @@ module Types (
   Outcomes (..),
   OutcomeObject (..),
   OutcomeStyle (..),
+  -- * Health
+  HealthResponse (..),
+  HealthDeploymentCounts (..),
   -- * Environment
   AppEnv (..),
   AppM,
@@ -42,6 +45,8 @@ import Data.Text (Text)
 import qualified Data.Text as Text
 import Data.Time (UTCTime)
 import GHC.Generics (Generic)
+import Logging (Logger)
+import Options (Options (..))
 import Servant (FromHttpApiData, Handler, ToHttpApiData)
 
 -- | Unique identifier for a deployment.
@@ -356,7 +361,60 @@ data AppEnv = MkAppEnv
   { deploymentRegistry :: TVar (Map DeploymentId DeploymentState)
   , bundleStore        :: BundleStore
   , serverName         :: Maybe Text
+  , logger             :: Logger
+  , options            :: Options.Options
   }
 
 -- | The handler monad for all Servant routes.
 type AppM = ReaderT AppEnv Handler
+
+-- ----------------------------------------------------------------------------
+-- Health endpoint types
+-- ----------------------------------------------------------------------------
+
+-- | Response for GET /health.
+data HealthResponse = HealthResponse
+  { hrStatus      :: !Text
+  , hrDeployments :: !HealthDeploymentCounts
+  }
+  deriving stock (Show, Generic)
+
+instance ToJSON HealthResponse where
+  toJSON hr =
+    Aeson.object
+      [ "status" .= hr.hrStatus
+      , "deployments" .= hr.hrDeployments
+      ]
+
+instance FromJSON HealthResponse where
+  parseJSON = Aeson.withObject "HealthResponse" $ \o ->
+    HealthResponse
+      <$> o .: "status"
+      <*> o .: "deployments"
+
+-- | Deployment counts in health response.
+data HealthDeploymentCounts = HealthDeploymentCounts
+  { hdTotal     :: !Int
+  , hdReady     :: !Int
+  , hdCompiling :: !Int
+  , hdFailed    :: !Int
+  }
+  deriving stock (Show, Generic)
+
+instance ToJSON HealthDeploymentCounts where
+  toJSON hd =
+    Aeson.object
+      [ "total" .= hd.hdTotal
+      , "ready" .= hd.hdReady
+      , "compiling" .= hd.hdCompiling
+      , "failed" .= hd.hdFailed
+      ]
+
+instance FromJSON HealthDeploymentCounts where
+  parseJSON = Aeson.withObject "HealthDeploymentCounts" $ \o ->
+    HealthDeploymentCounts
+      <$> o .: "total"
+      <*> o .: "ready"
+      <*> o .: "compiling"
+      <*> o .: "failed"
+

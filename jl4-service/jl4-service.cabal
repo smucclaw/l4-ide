@@ -57,6 +57,7 @@ library
     Compiler
     ControlPlane
     DataPlane
+    Logging
     Options
     Schema
     Types
@@ -75,7 +76,7 @@ library
     warp,
     wai,
     wai-cors,
-    wai-logger,
+    http-types,
     -- JSON / data
     aeson,
     scientific,
