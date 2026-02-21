@@ -398,15 +398,22 @@ fnLiteralToL4Expr = \case
   FnObject [(conName, FnArray [singleVal])] ->
     -- Unary constructor with positional arg
     quoteIdent conName <> " " <> fnLiteralToL4Expr singleVal
+  FnObject [("tag", val)] ->
+    -- Tagged union encoding: {"tag": "ConstructorName"} → just the value
+    fnLiteralToL4Expr val
+  FnObject [(conName, val)] ->
+    -- Single-key object: constructor applied to argument
+    quoteIdent conName <> " " <> fnLiteralToL4Expr val
   FnObject _ -> "NOTHING"  -- Fallback for unexpected shapes
   FnUncertain -> "NOTHING"
   FnUnknown -> "NOTHING"
 
 -- | Format a single trace event as an L4 EVENT expression.
--- Generates: EVENT party action timestamp
+-- Generates: EVENT (party) (action) timestamp
+-- Parentheses ensure multi-word expressions aren't parsed as separate arguments.
 formatTraceEvent :: TraceEvent -> Text
 formatTraceEvent ev =
-  "EVENT " <> fnLiteralToL4Expr ev.party <> " " <> fnLiteralToL4Expr ev.action <> " " <> formatScientific ev.at
+  "EVENT (" <> fnLiteralToL4Expr ev.party <> ") (" <> fnLiteralToL4Expr ev.action <> ") " <> formatScientific ev.at
 
 -- | Format a Scientific number as L4 source
 formatScientific :: Scientific.Scientific -> Text

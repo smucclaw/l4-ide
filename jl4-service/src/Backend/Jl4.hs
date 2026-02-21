@@ -775,14 +775,14 @@ serializeRAction (MkAction _ deonticModal pat _) =
 
 -- | Serialize Either RExpr (Value NF) — used for obligation party and ROp operands
 serializeEitherValue :: (Monad m) => EntityInfo -> Either (Expr Resolved) (Eval.Value Eval.NF) -> ExceptT EvaluatorError m FnLiteral
-serializeEitherValue _  (Left _expr)  = pure $ FnLitString "<unevaluated>"
-serializeEitherValue ei (Right val)   = valueToFnLiteral ei val
+serializeEitherValue _  (Left expr)  = pure $ FnLitString (Print.prettyLayout expr)
+serializeEitherValue ei (Right val)  = valueToFnLiteral ei val
 
 -- | Serialize the deadline/due field of an obligation
 serializeDue :: (Monad m) => EntityInfo -> Either (Maybe (Expr Resolved)) (Eval.Value Eval.NF) -> ExceptT EvaluatorError m FnLiteral
-serializeDue _  (Left Nothing)    = pure FnUnknown
-serializeDue _  (Left (Just _))   = pure $ FnLitString "<unevaluated>"
-serializeDue ei (Right val)       = valueToFnLiteral ei val
+serializeDue _  (Left Nothing)     = pure FnUnknown
+serializeDue _  (Left (Just expr)) = pure $ FnLitString (Print.prettyLayout expr)
+serializeDue ei (Right val)        = valueToFnLiteral ei val
 
 -- | Serialize a breach reason to FnLiteral
 serializeBreachReason :: (Monad m) => EntityInfo -> Eval.ReasonForBreach Eval.NF -> ExceptT EvaluatorError m FnLiteral

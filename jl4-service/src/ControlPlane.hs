@@ -19,7 +19,8 @@ import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Reader (asks)
 import qualified Codec.Archive.Zip as Zip
-import Data.Aeson (FromJSON, ToJSON, toJSON)
+import Data.Aeson (FromJSON, ToJSON, toJSON, (.=), object)
+import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy as LBS
 import Data.Char (isAlphaNum)
 import Data.Map.Strict (Map)
@@ -101,7 +102,7 @@ postDeploymentHandler multipart = do
       -- Check deployment count limit
       let cfg = env.options
       when (Map.size registry >= cfg.maxDeployments) $
-        throwError err400 { errBody = "Maximum deployment limit reached" }
+        throwError err400 { errBody = jsonError "Maximum deployment limit reached" }
 
       -- Normal path: save, register as pending, compile async
       now <- liftIO getCurrentTime
@@ -258,11 +259,11 @@ stateToResponse debugMode (DeploymentId did) = \case
 validateDeploymentId :: Text -> AppM ()
 validateDeploymentId deployId = do
   when (Text.length deployId > 36) $
-    throwError err400 { errBody = "Deployment ID exceeds maximum length of 36 characters" }
+    throwError err400 { errBody = jsonError "Deployment ID exceeds maximum length of 36 characters" }
   when (Text.isInfixOf ".." deployId) $
-    throwError err400 { errBody = "Deployment ID contains invalid sequence" }
+    throwError err400 { errBody = jsonError "Deployment ID contains invalid sequence" }
   when (not $ Text.all isValidIdChar deployId) $
-    throwError err400 { errBody = "Deployment ID contains invalid characters (allowed: a-z, A-Z, 0-9, -, _)" }
+    throwError err400 { errBody = jsonError "Deployment ID contains invalid characters (allowed: a-z, A-Z, 0-9, -, _)" }
  where
   isValidIdChar c = isAlphaNum c || c == '-' || c == '_'
 
@@ -276,20 +277,20 @@ extractSourcesFromMultipart multipart = do
   cfg <- asks (.options)
 
   case lookupFile "sources" multipart of
-    Left _ -> throwError $ err400 { errBody = "Missing 'sources' file field (zip archive)" }
+    Left _ -> throwError $ err400 { errBody = jsonError "Missing 'sources' file field (zip archive)" }
     Right (fileData :: FileData Mem) -> do
       let zipBytes = fdPayload fileData :: LBS.ByteString
 
       -- Validate zip file size
       when (LBS.length zipBytes > fromIntegral cfg.maxZipSize) $
-        throwError $ err400 { errBody = "Zip archive exceeds maximum size" }
+        throwError $ err400 { errBody = jsonError "Zip archive exceeds maximum size" }
 
       let archive = Zip.toArchive zipBytes
           entries = Zip.zEntries archive
 
       -- Validate file count
       when (length entries > cfg.maxFileCount) $
-        throwError $ err400 { errBody = "Zip archive exceeds maximum file count" }
+        throwError $ err400 { errBody = jsonError "Zip archive exceeds maximum file count" }
 
       -- Extract entries with path traversal check
       let l4Entries =
@@ -303,9 +304,13 @@ extractSourcesFromMultipart multipart = do
 
       -- Reject if any paths contain ".."
       when (not (null unsafePaths)) $
-        throwError $ err400 { errBody = "Zip entry contains path traversal" }
+        throwError $ err400 { errBody = jsonError "Zip entry contains path traversal" }
 
       if null l4Entries
-        then throwError $ err400 { errBody = "Zip archive contains no files" }
+        then throwError $ err400 { errBody = jsonError "Zip archive contains no files" }
         else pure (Map.fromList l4Entries)
+
+-- | Encode an error message as a JSON object: {"error": "..."}
+jsonError :: Text -> LBS.ByteString
+jsonError msg = Aeson.encode $ object ["error" .= msg]
 

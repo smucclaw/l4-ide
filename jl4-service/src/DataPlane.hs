@@ -33,7 +33,6 @@ import Data.Scientific (Scientific)
 import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Text as Text
-import qualified Data.Text.Encoding as Text.Encoding
 import GHC.Conc (setAllocationCounter, enableAllocationLimit)
 import GHC.IO.Exception (AllocationLimitExceeded (..))
 import Servant
@@ -88,11 +87,11 @@ requireDeploymentReady deployId = do
   case Map.lookup deployId registry of
     Nothing -> throwError err404
     Just DeploymentPending ->
-      throwError err503 { errBody = "Deployment is still compiling" }
+      throwError err503 { errBody = jsonError "Deployment is still compiling" }
     Just (DeploymentFailed msg) ->
       if debugMode
-        then throwError err500 { errBody = textToLBS ("Deployment compilation failed: " <> msg) }
-        else throwError err500 { errBody = "Deployment compilation failed" }
+        then throwError err500 { errBody = jsonError ("Deployment compilation failed: " <> msg) }
+        else throwError err500 { errBody = jsonError "Deployment compilation failed" }
     Just (DeploymentReady fns meta) ->
       pure (fns, meta)
 
@@ -100,7 +99,7 @@ requireDeploymentReady deployId = do
 requireFunction :: Map Text ValidatedFunction -> Text -> AppM ValidatedFunction
 requireFunction fns fnName =
   case Map.lookup fnName fns of
-    Nothing -> throwError err404 { errBody = "Function not found" }
+    Nothing -> throwError err404 { errBody = jsonError "Function not found" }
     Just vf -> pure vf
 
 -- ----------------------------------------------------------------------------
@@ -239,7 +238,7 @@ queryPlanHandler' deployId fnName fnArgs = do
     Just c -> pure c
     Nothing -> do
       compiled <- case vf.fnCompiled of
-        Nothing -> throwError err500 { errBody = "No compiled module available for query-plan" }
+        Nothing -> throwError err500 { errBody = jsonError "No compiled module available for query-plan" }
         Just c -> pure c
       c <- buildDecisionQueryCacheFromCompiled fnName compiled vf.fnSources
       storeDecisionQueryCache deployId fnName c
@@ -272,7 +271,7 @@ listStateGraphsHandler deployId fnName = do
   (fns, _meta) <- requireDeploymentReady deployId
   vf <- requireFunction fns fnName
   case vf.fnCompiled of
-    Nothing -> throwError err404 { errBody = "No compiled module found for function" }
+    Nothing -> throwError err404 { errBody = jsonError "No compiled module found for function" }
     Just compiled -> do
       let graphs = StateGraph.extractStateGraphs compiled.compiledModule
       pure $ StateGraphListResponse
@@ -285,11 +284,11 @@ getStateGraphDotHandler deployId fnName graphName = do
   (fns, _meta) <- requireDeploymentReady deployId
   vf <- requireFunction fns fnName
   case vf.fnCompiled of
-    Nothing -> throwError err404 { errBody = "No compiled module found for function" }
+    Nothing -> throwError err404 { errBody = jsonError "No compiled module found for function" }
     Just compiled -> do
       let graphs = StateGraph.extractStateGraphs compiled.compiledModule
       case find (\sg -> sg.sgName == graphName) graphs of
-        Nothing -> throwError err404 { errBody = "State graph not found" }
+        Nothing -> throwError err404 { errBody = jsonError "State graph not found" }
         Just graph -> do
           let opts = StateGraph.defaultStateGraphOptions
           pure $ StateGraph.stateGraphToDot opts graph
@@ -331,7 +330,7 @@ runEvaluatorForDirect
 runEvaluatorForDirect vf engine args outputFilter traceLevel includeGraphViz = do
   let evalBackend = Maybe.fromMaybe JL4 engine
   case Map.lookup evalBackend vf.fnEvaluator of
-    Nothing -> throwError err500 { errBody = "No evaluator available for backend" }
+    Nothing -> throwError err500 { errBody = jsonError "No evaluator available for backend" }
     Just runFn -> do
       evaluationResult <-
         timeoutAction $
@@ -362,7 +361,7 @@ runDeonticEvaluatorFor vf _engine args startTime events mTraceHeader mTraceParam
       includeGraphViz = traceLevel == TraceFull && Maybe.fromMaybe False mGraphViz
 
   compiled <- case vf.fnCompiled of
-    Nothing -> throwError err500 { errBody = "No compiled module available for deontic evaluation" }
+    Nothing -> throwError err500 { errBody = jsonError "No compiled module available for deontic evaluation" }
     Just c -> pure c
 
   let fnDecl = toDecl vf.fnImpl
@@ -405,7 +404,7 @@ timeoutAction act = do
     ) `catch` \AllocationLimitExceeded ->
       pure Nothing
   case result of
-    Nothing -> throwError err500 { errBody = "Evaluation resource limit exceeded" }
+    Nothing -> throwError err500 { errBody = jsonError "Evaluation resource limit exceeded" }
     Just r -> pure r
 
 -- ----------------------------------------------------------------------------
@@ -423,7 +422,3 @@ determineTraceLevel mHeader mParam =
 -- | Encode an error message as a JSON object: {"error": "..."}
 jsonError :: Text -> LBS.ByteString
 jsonError msg = Aeson.encode $ object ["error" .= msg]
-
--- | Convert Text to lazy ByteString for error bodies.
-textToLBS :: Text -> LBS.ByteString
-textToLBS = LBS.fromStrict . Text.Encoding.encodeUtf8
