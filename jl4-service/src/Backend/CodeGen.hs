@@ -8,6 +8,7 @@ module Backend.CodeGen
   , inputFieldName
   , transformJsonKeys
   , fnLiteralToL4Expr
+  , fnLiteralToL4ExprWithType
   ) where
 
 import Base
@@ -408,12 +409,30 @@ fnLiteralToL4Expr = \case
   FnUncertain -> "NOTHING"
   FnUnknown -> "NOTHING"
 
+-- | Convert FnLiteral to L4 source, using the type name to wrap record values.
+-- The type name is only needed for record types (bare FnObject with multiple fields).
+-- For enums (FnLitString) and tagged unions (FnObject with single key), the existing
+-- fnLiteralToL4Expr already produces correct L4 because the constructor info is in the value.
+fnLiteralToL4ExprWithType :: Maybe Text -> FnLiteral -> Text
+fnLiteralToL4ExprWithType Nothing lit = fnLiteralToL4Expr lit
+fnLiteralToL4ExprWithType (Just typeName) lit = case lit of
+  -- Bare FnObject with multiple fields → record type, needs constructor wrapper
+  -- {"name": "Alice", "age": 30} → `Driver` WITH `name` IS "Alice", `age` IS 30
+  FnObject fields@(_:_:_) ->
+    quoteIdent typeName <> " WITH " <>
+      Text.intercalate ", " [quoteIdent k <> " IS " <> fnLiteralToL4Expr v | (k, v) <- fields]
+  -- Single-key FnObject → tagged union, key is already the constructor (existing logic handles this)
+  -- FnLitString → enum constructor (existing logic handles this)
+  -- Everything else → delegate to existing function
+  other -> fnLiteralToL4Expr other
+
 -- | Format a single trace event as an L4 EVENT expression.
 -- Generates: EVENT (party) (action) timestamp
 -- Parentheses ensure multi-word expressions aren't parsed as separate arguments.
-formatTraceEvent :: TraceEvent -> Text
-formatTraceEvent ev =
-  "EVENT (" <> fnLiteralToL4Expr ev.party <> ") (" <> fnLiteralToL4Expr ev.action <> ") " <> formatScientific ev.at
+-- Uses type names (when available) to correctly wrap record-typed values.
+formatTraceEvent :: Maybe Text -> Maybe Text -> TraceEvent -> Text
+formatTraceEvent mPartyType mActionType ev =
+  "EVENT (" <> fnLiteralToL4ExprWithType mPartyType ev.party <> ") (" <> fnLiteralToL4ExprWithType mActionType ev.action <> ") " <> formatScientific ev.at
 
 -- | Format a Scientific number as L4 source
 formatScientific :: Scientific.Scientific -> Text
@@ -430,13 +449,15 @@ generateDeonticEvalWrapper
   -> Aeson.Value                  -- ^ Input arguments as JSON object
   -> Scientific.Scientific        -- ^ Start time
   -> [TraceEvent]                 -- ^ Events (may be empty for initial state)
+  -> Maybe Text                   -- ^ Party type name (for formatting events)
+  -> Maybe Text                   -- ^ Action type name (for formatting events)
   -> TraceLevel                   -- ^ Whether to generate EVAL or EVALTRACE
   -> Either Text GeneratedCode
-generateDeonticEvalWrapper funName givenParams assumeParams inputJson startTime events traceLevel = do
+generateDeonticEvalWrapper funName givenParams assumeParams inputJson startTime events mPartyType mActionType traceLevel = do
   let allParams = givenParams <> assumeParams
 
   -- Build the event list expression
-  let eventExprs = map formatTraceEvent events
+  let eventExprs = map (formatTraceEvent mPartyType mActionType) events
       eventListExpr = "(LIST " <> Text.intercalate ", " eventExprs <> ")"
       startTimeExpr = formatScientific startTime
 

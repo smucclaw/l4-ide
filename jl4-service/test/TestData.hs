@@ -57,6 +57,8 @@ rodentAndVerminFunction = do
                 , required = Map.keys params
                 }
         , supportedEvalBackend = [JL4]
+        , deonticPartyType = Nothing
+        , deonticActionType = Nothing
         }
   (runFn, mCompiled) <- liftIO $ Jl4.createFunction "vermin_and_rodent.l4" (toDecl fnDecl) rodentAndVerminJL4 Map.empty
   pure $
@@ -128,6 +130,8 @@ constantFunction = do
               , required = []
               }
         , supportedEvalBackend = [JL4]
+        , deonticPartyType = Nothing
+        , deonticActionType = Nothing
         }
   (runFn, mCompiled) <- liftIO $ Jl4.createFunction "the_answer.l4" (toDecl fnDecl) constantJL4 Map.empty
   pure $

@@ -153,7 +153,9 @@ evalFunctionHandler deployId fnName mTraceHeader mTraceParam mGraphViz fnArgs = 
       throwError err400 { errBody = jsonError "events is required for functions returning DEONTIC" }
     -- Deontic function with both params: use deontic evaluator
     (True, Just st, Just evts) ->
-      runDeonticEvaluatorFor vf fnArgs.fnEvalBackend (Map.toList fnArgs.fnArguments) st evts mTraceHeader mTraceParam mGraphViz
+      runDeonticEvaluatorFor vf fnArgs.fnEvalBackend (Map.toList fnArgs.fnArguments) st evts
+        vf.fnImpl.deonticPartyType vf.fnImpl.deonticActionType
+        mTraceHeader mTraceParam mGraphViz
 
 -- | POST /deployments/{id}/functions/{fn}/evaluation/batch
 batchFunctionHandler
@@ -352,11 +354,13 @@ runDeonticEvaluatorFor
   -> [(Text, Maybe FnLiteral)]
   -> Scientific       -- ^ Start time
   -> [TraceEvent]     -- ^ Events
+  -> Maybe Text       -- ^ Party type name
+  -> Maybe Text       -- ^ Action type name
   -> Maybe Text       -- X-L4-Trace header
   -> Maybe TraceLevel -- ?trace= query param
   -> Maybe Bool       -- ?graphviz= query param
   -> AppM SimpleResponse
-runDeonticEvaluatorFor vf _engine args startTime events mTraceHeader mTraceParam mGraphViz = do
+runDeonticEvaluatorFor vf _engine args startTime events mPartyType mActionType mTraceHeader mTraceParam mGraphViz = do
   let traceLevel = determineTraceLevel mTraceHeader mTraceParam
       includeGraphViz = traceLevel == TraceFull && Maybe.fromMaybe False mGraphViz
 
@@ -377,6 +381,8 @@ runDeonticEvaluatorFor vf _engine args startTime events mTraceHeader mTraceParam
             args
             startTime
             events
+            mPartyType
+            mActionType
             traceLevel
             includeGraphViz
         )

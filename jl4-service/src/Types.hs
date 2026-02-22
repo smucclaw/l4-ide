@@ -127,20 +127,26 @@ data Function = Function
   , description           :: !Text
   , parameters            :: !Parameters
   , supportedEvalBackend  :: [EvalBackend]
+  , deonticPartyType      :: !(Maybe Text)
+  -- ^ Type name for the party parameter of a DEONTIC function (e.g. "Party", "Driver")
+  , deonticActionType     :: !(Maybe Text)
+  -- ^ Type name for the action parameter of a DEONTIC function (e.g. "Contract Action")
   }
   deriving stock (Show, Read, Ord, Eq, Generic)
 
 instance ToJSON Function where
-  toJSON (Function n desc params backends) =
+  toJSON fn =
     Aeson.object
       [ "type" .= Aeson.String "function"
       , "function"
           .= Aeson.object
-            [ "name" .= Aeson.String n
-            , "description" .= Aeson.String desc
-            , "parameters" .= params
-            , "supportedBackends" .= backends
-            ]
+            ([ "name" .= Aeson.String fn.name
+            , "description" .= Aeson.String fn.description
+            , "parameters" .= fn.parameters
+            , "supportedBackends" .= fn.supportedEvalBackend
+            ] <>
+            maybe [] (\pt -> ["deonticPartyType" .= pt]) fn.deonticPartyType <>
+            maybe [] (\at -> ["deonticActionType" .= at]) fn.deonticActionType)
       ]
 
 instance FromJSON Function where
@@ -158,6 +164,8 @@ instance FromJSON Function where
             <*> p .: "description"
             <*> p .: "parameters"
             <*> p .: "supportedBackends"
+            <*> p .:? "deonticPartyType"
+            <*> p .:? "deonticActionType"
       )
       props
 

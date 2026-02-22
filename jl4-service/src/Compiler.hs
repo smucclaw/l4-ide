@@ -29,7 +29,7 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text.Encoding
 import Data.Time (getCurrentTime)
 import L4.Export (ExportedFunction (..), ExportedParam (..), getExportedFunctions, extractImplicitAssumeParams)
-import L4.Syntax (Module, Resolved, Declare(..), Type'(..), RawName(..))
+import L4.Syntax (Module, Resolved, Declare(..), Type'(..), RawName(..), getActual, rawName, rawNameToText)
 import Logging (Logger, logInfo, logWarn)
 import qualified LSP.L4.Rules as Rules
 import System.FilePath (takeExtension)
@@ -247,10 +247,24 @@ exportToFunction resolvedModule implicitParams export =
         { parameterMap = baseParams.parameterMap <> implicitParamMap
         , required = baseParams.required <> Map.keys implicitParamMap
         }
-      -- Detect deontic return type and add startTime/events parameters
+      -- Detect deontic return type and extract party/action type names
       isDeontic = case export.exportReturnType of
         Just ty -> isDeonticType ty
         Nothing -> False
+      (mPartyType, mActionType) = case export.exportReturnType of
+        Just ty -> case extractDeonticTypeNames ty of
+          Just (p, a) -> (Just p, Just a)
+          Nothing -> (Nothing, Nothing)
+        Nothing -> (Nothing, Nothing)
+      -- Build typed event schema using actual party/action types
+      (partyParam, actionParam) = case export.exportReturnType of
+        Just (TyApp _ _ [partyTy, actionTy]) ->
+          ( (typeToParameter declares Set.empty partyTy) { parameterDescription = "The party performing the action" }
+          , (typeToParameter declares Set.empty actionTy) { parameterDescription = "The action performed" }
+          )
+        _ -> ( Parameter "object" Nothing Nothing [] "The party performing the action" Nothing Nothing Nothing
+             , Parameter "object" Nothing Nothing [] "The action performed" Nothing Nothing Nothing
+             )
       finalParams = if isDeontic
         then mergedParams
           { parameterMap = mergedParams.parameterMap <> Map.fromList
@@ -258,8 +272,8 @@ exportToFunction resolvedModule implicitParams export =
               , ("events", Parameter "array" Nothing Nothing [] "Events for contract simulation (each: {party, action, at})" Nothing Nothing
                   (Just $ Parameter "object" Nothing Nothing [] "A trace event"
                     (Just $ Map.fromList
-                      [ ("party", Parameter "object" Nothing Nothing [] "The party performing the action" Nothing Nothing Nothing)
-                      , ("action", Parameter "object" Nothing Nothing [] "The action performed" Nothing Nothing Nothing)
+                      [ ("party", partyParam)
+                      , ("action", actionParam)
                       , ("at", Parameter "number" Nothing Nothing [] "Timestamp" Nothing Nothing Nothing)
                       ])
                     (Just ["party", "action", "at"])
@@ -276,6 +290,8 @@ exportToFunction resolvedModule implicitParams export =
         in if Text.null desc then "Exported function" else desc
     , parameters = finalParams
     , supportedEvalBackend = [JL4]
+    , deonticPartyType = mPartyType
+    , deonticActionType = mActionType
     }
 
 -- | Build Parameters from ExportedParam list.
@@ -316,6 +332,17 @@ toDecl fn =
       | (long, param) <- Map.toList fn.parameters.parameterMap
       , Just alias <- [param.parameterAlias]
       ]
+
+-- | Extract party and action type names from a DEONTIC return type.
+-- Given: DEONTIC Party `Contract Action` → Just ("Party", "Contract Action")
+extractDeonticTypeNames :: Type' Resolved -> Maybe (Text, Text)
+extractDeonticTypeNames ty@(TyApp _ _ [partyTy, actionTy])
+  | isDeonticType ty = Just (typeName partyTy, typeName actionTy)
+  where
+    typeName :: Type' Resolved -> Text
+    typeName (TyApp _ n _) = rawNameToText (rawName (getActual n))
+    typeName _ = "Unknown"
+extractDeonticTypeNames _ = Nothing
 
 -- | Compute SHA-256 version from sorted source contents.
 computeVersion :: Map FilePath Text -> Text

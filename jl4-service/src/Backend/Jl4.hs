@@ -195,10 +195,12 @@ evaluateWithCompiledDeontic
   -> [(Text, Maybe FnLiteral)]
   -> Scientific.Scientific   -- ^ Start time for contract simulation
   -> [TraceEvent]             -- ^ Events to replay
+  -> Maybe Text               -- ^ Party type name (for formatting events)
+  -> Maybe Text               -- ^ Action type name (for formatting events)
   -> TraceLevel
   -> Bool
   -> ExceptT EvaluatorError IO ResponseWithReason
-evaluateWithCompiledDeontic filepath fnDecl compiled params startTime traceEvents traceLevel includeGraphViz = do
+evaluateWithCompiledDeontic filepath fnDecl compiled params startTime traceEvents mPartyType mActionType traceLevel includeGraphViz = do
   let givenParamTypes = extractParamTypes compiled.compiledDecide
       assumeParamTypes = extractAssumeParamTypes compiled.compiledModule compiled.compiledDecide
 
@@ -206,7 +208,7 @@ evaluateWithCompiledDeontic filepath fnDecl compiled params startTime traceEvent
   inputJson <- paramsToJson params
 
   -- Generate deontic wrapper code with EVALTRACE
-  genCode <- case generateDeonticEvalWrapper fnDecl.name givenParamTypes assumeParamTypes inputJson startTime traceEvents traceLevel of
+  genCode <- case generateDeonticEvalWrapper fnDecl.name givenParamTypes assumeParamTypes inputJson startTime traceEvents mPartyType mActionType traceLevel of
     Left err -> throwError $ InterpreterError err
     Right gc -> pure gc
 
