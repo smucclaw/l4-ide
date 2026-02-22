@@ -392,11 +392,13 @@ filterIdeDirectivesText = Text.unlines . filterLines . Text.lines
               line : go Nothing rest
 
     -- Check if line starts a directive (with optional leading whitespace)
+    -- Also matches @desc annotations since they annotate the following directive
+    -- and become orphaned when the directive is removed.
     isDirectiveLine :: Text -> Bool
     isDirectiveLine line =
       let stripped = Text.stripStart line
       in any (`Text.isPrefixOf` stripped)
-           ["#EVAL", "#EVALTRACE", "#TRACE", "#ASSERT", "#CHECK"]
+           ["#EVAL", "#EVALTRACE", "#TRACE", "#ASSERT", "#CHECK", "@desc"]
 
     -- Check if line is a continuation of a multiline directive
     -- Continuation lines are either:

@@ -15,6 +15,8 @@ import Base
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as AesonKey
 import qualified Data.Aeson.KeyMap as AesonKeyMap
+import qualified Data.Map.Strict as Map
+import qualified Data.Set as Set
 import qualified Data.Text as Text
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TL
@@ -416,23 +418,86 @@ fnLiteralToL4Expr = \case
 fnLiteralToL4ExprWithType :: Maybe Text -> FnLiteral -> Text
 fnLiteralToL4ExprWithType Nothing lit = fnLiteralToL4Expr lit
 fnLiteralToL4ExprWithType (Just typeName) lit = case lit of
-  -- Bare FnObject with multiple fields → record type, needs constructor wrapper
-  -- {"name": "Alice", "age": 30} → `Driver` WITH `name` IS "Alice", `age` IS 30
-  FnObject fields@(_:_:_) ->
+  -- FnObject with any fields → record type, needs constructor wrapper
+  -- {"name": "Alice"} → Driver WITH name IS "Alice"
+  -- {"name": "Alice", "age": 30} → Driver WITH name IS "Alice", age IS 30
+  -- Note: field VALUES use fnLiteralToL4Value (strings as "quoted literals")
+  -- rather than fnLiteralToL4Expr (strings as `backtick identifiers`).
+  -- This is critical because record field values are data, not constructor references.
+  FnObject fields@(_:_) ->
     quoteIdent typeName <> " WITH " <>
-      Text.intercalate ", " [quoteIdent k <> " IS " <> fnLiteralToL4Expr v | (k, v) <- fields]
-  -- Single-key FnObject → tagged union, key is already the constructor (existing logic handles this)
+      Text.intercalate ", " [quoteIdent k <> " IS " <> fnLiteralToL4Value v | (k, v) <- fields]
   -- FnLitString → enum constructor (existing logic handles this)
   -- Everything else → delegate to existing function
   other -> fnLiteralToL4Expr other
 
--- | Format a single trace event as an L4 EVENT expression.
--- Generates: EVENT (party) (action) timestamp
--- Parentheses ensure multi-word expressions aren't parsed as separate arguments.
--- Uses type names (when available) to correctly wrap record-typed values.
-formatTraceEvent :: Maybe Text -> Maybe Text -> TraceEvent -> Text
-formatTraceEvent mPartyType mActionType ev =
-  "EVENT (" <> fnLiteralToL4ExprWithType mPartyType ev.party <> ") (" <> fnLiteralToL4ExprWithType mActionType ev.action <> ") " <> formatScientific ev.at
+-- | Convert FnLiteral to L4 source text as a data value.
+-- Unlike fnLiteralToL4Expr (which treats strings as constructor references
+-- using backtick quoting), this formats strings as double-quoted string literals.
+-- Used for record field values where strings represent data, not constructors.
+fnLiteralToL4Value :: FnLiteral -> Text
+fnLiteralToL4Value = \case
+  FnLitString s -> "\"" <> escapeL4String s <> "\""
+  FnArray xs -> "(LIST " <> Text.intercalate ", " (map fnLiteralToL4Value xs) <> ")"
+  other -> fnLiteralToL4Expr other
+  where
+    escapeL4String = Text.replace "\\" "\\\\" . Text.replace "\"" "\\\""
+
+-- | Prepare events for EVALTRACE by generating MEANS definitions for record-typed
+-- party/action values and a formatted event list expression.
+--
+-- Record values (FnObject) can't be inlined in EVENT expressions because L4's parser
+-- doesn't handle WITH keyword inside parenthesized arguments. Instead, we generate
+-- top-level MEANS definitions and reference them by name — matching how L4 source
+-- code typically defines named constants for record values.
+--
+-- Example: {"name": "Alice"} with party type "Driver" generates:
+--   `event party 0` MEANS Driver WITH name IS "Alice"
+--   ... EVENT (`event party 0`) (`wear seatbelt`) 1
+prepareEvents
+  :: Maybe Text -> Maybe Text -> [TraceEvent]
+  -> ([Text], Text)  -- ^ (MEANS definitions, event list expression)
+prepareEvents mPartyType mActionType events =
+  let isRecordLit (FnObject (_:_)) = True
+      isRecordLit _ = False
+
+      -- Deduplicated record-typed party values → binding names
+      uniquePartyRecords :: Map FnLiteral Text
+      uniquePartyRecords = Map.fromList
+        [ (lit, "event party " <> BaseText.textShow i)
+        | (i, lit) <- zip [0 :: Int ..]
+            $ Set.toList $ Set.fromList [ev.party | ev <- events, isRecordLit ev.party]
+        ]
+
+      uniqueActionRecords :: Map FnLiteral Text
+      uniqueActionRecords = Map.fromList
+        [ (lit, "event action " <> BaseText.textShow i)
+        | (i, lit) <- zip [0 :: Int ..]
+            $ Set.toList $ Set.fromList [ev.action | ev <- events, isRecordLit ev.action]
+        ]
+
+      -- MEANS definitions for record values
+      meansDefns =
+        [ quoteIdent name <> " MEANS " <> fnLiteralToL4ExprWithType mPartyType lit
+        | (lit, name) <- Map.toList uniquePartyRecords
+        ] ++
+        [ quoteIdent name <> " MEANS " <> fnLiteralToL4ExprWithType mActionType lit
+        | (lit, name) <- Map.toList uniqueActionRecords
+        ]
+
+      -- Format a single event, using binding names for records
+      fmtEvent ev =
+        let partyExpr = case Map.lookup ev.party uniquePartyRecords of
+              Just name -> quoteIdent name
+              Nothing   -> fnLiteralToL4ExprWithType mPartyType ev.party
+            actionExpr = case Map.lookup ev.action uniqueActionRecords of
+              Just name -> quoteIdent name
+              Nothing   -> fnLiteralToL4ExprWithType mActionType ev.action
+        in "EVENT (" <> partyExpr <> ") (" <> actionExpr <> ") " <> formatScientific ev.at
+
+      eventExprs = map fmtEvent events
+      eventListExpr = "(LIST " <> Text.intercalate ", " eventExprs <> ")"
+  in (meansDefns, eventListExpr)
 
 -- | Format a Scientific number as L4 source
 formatScientific :: Scientific.Scientific -> Text
@@ -456,18 +521,19 @@ generateDeonticEvalWrapper
 generateDeonticEvalWrapper funName givenParams assumeParams inputJson startTime events mPartyType mActionType traceLevel = do
   let allParams = givenParams <> assumeParams
 
-  -- Build the event list expression
-  let eventExprs = map (formatTraceEvent mPartyType mActionType) events
-      eventListExpr = "(LIST " <> Text.intercalate ", " eventExprs <> ")"
+  -- Build event list expression with MEANS bindings for record-typed values
+  let (recordMeansDefns, eventListExpr) = prepareEvents mPartyType mActionType events
       startTimeExpr = formatScientific startTime
 
   -- Handle zero-parameter functions: wrap direct call in EVALTRACE
   if null allParams
     then Right GeneratedCode
-      { generatedWrapper = Text.unlines
+      { generatedWrapper = Text.unlines $
           [ ""
           , "-- ========== GENERATED DEONTIC WRAPPER =========="
-          , ""
+          ] ++
+          recordMeansDefns ++
+          [ ""
           , generateSimpleDeonticEval funName startTimeExpr eventListExpr traceLevel
           ]
       , decodeFailedSentinel = "DECODE_FAILED"
@@ -493,7 +559,9 @@ generateDeonticEvalWrapper funName givenParams assumeParams inputJson startTime 
           , generateDecoder
           , ""
           , generateJsonPayload inputJson
-          , ""
+          ] ++
+          (if null recordMeansDefns then [] else "" : recordMeansDefns) ++
+          [ ""
           , generateDeonticEvalDirectiveLifted funName givenParamInfo assumeParamInfo startTimeExpr eventListExpr traceLevel
           ]
       , decodeFailedSentinel = "DECODE_FAILED"

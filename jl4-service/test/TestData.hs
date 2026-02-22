@@ -12,6 +12,7 @@ module TestData (
   maybeParamJL4,
   saleContractJL4,
   deonticExportJL4,
+  deonticRecordPartyJL4,
 ) where
 
 import Backend.Jl4 as Jl4
@@ -245,4 +246,37 @@ GIVETH A DEONTIC Party `Contract Action`
         HENCE FULFILLED
         LEST BREACH
     LEST BREACH
+|]
+
+-- | L4 source with a deontic function that uses record-typed parties.
+-- Tests that events with JSON object parties (e.g. {"name": "Alice"})
+-- are correctly formatted as L4 record construction (Driver WITH name IS "Alice")
+-- rather than backtick-quoted identifiers.
+deonticRecordPartyJL4 :: Text
+deonticRecordPartyJL4 =
+  [i|
+DECLARE Car HAS
+    `number of wheels` IS A NUMBER
+
+DECLARE Driver HAS
+    name IS A STRING
+
+DECLARE `Driver Action` IS ONE OF
+    `wear seatbelt`
+    `drive`
+
+@export default seatbelt requirement
+GIVEN car    IS A Car
+      driver IS A Driver
+GIVETH A PROVISION OF Driver, `Driver Action`
+`Seatbelt Requirement` MEANS
+    IF      car's `number of wheels` EQUALS 4
+    THEN    PARTY driver
+            MUST `wear seatbelt`
+            WITHIN 1
+            HENCE
+                PARTY driver
+                MAY `drive`
+    ELSE    PARTY driver
+            MAY `drive`
 |]

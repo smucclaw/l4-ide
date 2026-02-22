@@ -36,7 +36,7 @@ import Network.Wai.Handler.Warp (testWithApplication)
 import System.Directory (removeDirectoryRecursive, doesDirectoryExist)
 import System.IO.Error (isPermissionError)
 
-import TestData (qualifiesJL4, recordJL4, maybeParamJL4, saleContractJL4, deonticExportJL4)
+import TestData (qualifiesJL4, recordJL4, maybeParamJL4, saleContractJL4, deonticExportJL4, deonticRecordPartyJL4)
 
 spec :: SpecWith ()
 spec = describe "integration" do
@@ -472,6 +472,98 @@ spec = describe "integration" do
                     reqList `shouldSatisfy` maybe False (elem "startTime")
                     reqList `shouldSatisfy` maybe False (elem "events")
                   _ -> expectationFailure "Missing required array in parameters"
+              _ -> expectationFailure "Missing parameters in function"
+          _ -> expectationFailure "Missing function object in response"
+
+  describe "deontic evaluation with record-typed parties" do
+    it "evaluates to FULFILLED when record-typed party wears seatbelt then drives" do
+      withServiceFromSources "deontic-rec-ok" [("seatbelt.l4", deonticRecordPartyJL4)] \baseUrl mgr -> do
+        resp <- evalFunction baseUrl mgr "deontic-rec-ok" "Seatbelt Requirement"
+          (Aeson.object
+            [ "fnArguments" Aeson..= Aeson.object
+                [ "car" Aeson..= Aeson.object ["number of wheels" Aeson..= (4 :: Int)]
+                , "driver" Aeson..= Aeson.object ["name" Aeson..= ("Alice" :: Text)]
+                ]
+            , "startTime" Aeson..= (0 :: Int)
+            , "events" Aeson..=
+                [ Aeson.object ["party" Aeson..= Aeson.object ["name" Aeson..= ("Alice" :: Text)], "action" Aeson..= ("wear seatbelt" :: Text), "at" Aeson..= (1 :: Int)]
+                , Aeson.object ["party" Aeson..= Aeson.object ["name" Aeson..= ("Alice" :: Text)], "action" Aeson..= ("drive" :: Text), "at" Aeson..= (2 :: Int)]
+                ]
+            ])
+        assertSuccess resp \r ->
+          Map.lookup "value" r.fnResult `shouldBe` Just (FnLitString "FULFILLED")
+
+    it "returns OBLIGATION when record-typed party drives without seatbelt" do
+      withServiceFromSources "deontic-rec-obl" [("seatbelt.l4", deonticRecordPartyJL4)] \baseUrl mgr -> do
+        resp <- evalFunction baseUrl mgr "deontic-rec-obl" "Seatbelt Requirement"
+          (Aeson.object
+            [ "fnArguments" Aeson..= Aeson.object
+                [ "car" Aeson..= Aeson.object ["number of wheels" Aeson..= (4 :: Int)]
+                , "driver" Aeson..= Aeson.object ["name" Aeson..= ("Alice" :: Text)]
+                ]
+            , "startTime" Aeson..= (0 :: Int)
+            , "events" Aeson..=
+                [ Aeson.object ["party" Aeson..= Aeson.object ["name" Aeson..= ("Alice" :: Text)], "action" Aeson..= ("drive" :: Text), "at" Aeson..= (1 :: Int)]
+                ]
+            ])
+        assertSuccess resp \r -> do
+          let mValue = Map.lookup "value" r.fnResult
+          case mValue of
+            Just (FnObject [("OBLIGATION", FnObject fields)]) -> do
+              let fieldMap = Map.fromList fields
+              Map.lookup "modal" fieldMap `shouldBe` Just (FnLitString "MUST")
+            other ->
+              expectationFailure ("Expected OBLIGATION, got: " <> show other)
+
+    it "evaluates 3-wheeled car to FULFILLED without seatbelt" do
+      withServiceFromSources "deontic-rec-3w" [("seatbelt.l4", deonticRecordPartyJL4)] \baseUrl mgr -> do
+        resp <- evalFunction baseUrl mgr "deontic-rec-3w" "Seatbelt Requirement"
+          (Aeson.object
+            [ "fnArguments" Aeson..= Aeson.object
+                [ "car" Aeson..= Aeson.object ["number of wheels" Aeson..= (3 :: Int)]
+                , "driver" Aeson..= Aeson.object ["name" Aeson..= ("Bob" :: Text)]
+                ]
+            , "startTime" Aeson..= (0 :: Int)
+            , "events" Aeson..=
+                [ Aeson.object ["party" Aeson..= Aeson.object ["name" Aeson..= ("Bob" :: Text)], "action" Aeson..= ("drive" :: Text), "at" Aeson..= (1 :: Int)]
+                ]
+            ])
+        assertSuccess resp \r ->
+          Map.lookup "value" r.fnResult `shouldBe` Just (FnLitString "FULFILLED")
+
+    it "includes record-typed party schema in events parameter" do
+      withServiceFromSources "deontic-rec-sch" [("seatbelt.l4", deonticRecordPartyJL4)] \baseUrl mgr -> do
+        req <- parseRequest (baseUrl <> "/deployments/deontic-rec-sch/functions/Seatbelt%20Requirement")
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 200
+        let body = decodeObject (responseBody resp)
+        -- Check events parameter has object-typed party with "name" field
+        case lookupKey "function" body of
+          Just (Aeson.Object fn) ->
+            case Aeson.KeyMap.lookup "parameters" fn of
+              Just (Aeson.Object params) ->
+                case Aeson.KeyMap.lookup "properties" params of
+                  Just (Aeson.Object props) ->
+                    case Aeson.KeyMap.lookup "events" props of
+                      Just (Aeson.Object eventsParam) ->
+                        case Aeson.KeyMap.lookup "items" eventsParam of
+                          Just (Aeson.Object items) ->
+                            case Aeson.KeyMap.lookup "properties" items of
+                              Just (Aeson.Object eventProps) -> do
+                                -- party should be an object type (record), not a string (enum)
+                                case Aeson.KeyMap.lookup "party" eventProps of
+                                  Just (Aeson.Object partyParam) ->
+                                    Aeson.KeyMap.lookup "type" partyParam `shouldBe` Just (Aeson.String "object")
+                                  _ -> expectationFailure "Missing party in event properties"
+                                -- action should be a string type (enum)
+                                case Aeson.KeyMap.lookup "action" eventProps of
+                                  Just (Aeson.Object actionParam) ->
+                                    Aeson.KeyMap.lookup "type" actionParam `shouldBe` Just (Aeson.String "string")
+                                  _ -> expectationFailure "Missing action in event properties"
+                              _ -> expectationFailure "Missing properties in events items"
+                          _ -> expectationFailure "Missing items in events parameter"
+                      _ -> expectationFailure "Missing events in properties"
+                  _ -> expectationFailure "Missing properties in parameters"
               _ -> expectationFailure "Missing parameters in function"
           _ -> expectationFailure "Missing function object in response"
 
