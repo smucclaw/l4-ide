@@ -2164,9 +2164,12 @@ evalRef rf =
     thunk@(WHNF val) ->
       case val of
         ValNullaryBuiltinFun fn ->
+          -- Don't cache nullary builtins (e.g. TIMEZONE, TODAY, NOW) because
+          -- their results depend on mutable state (TemporalContext) that can
+          -- change between evaluations while the thunk IORef persists in
+          -- cached import environments.
           (thunk, do
               evaluated <- evalNullaryBuiltin fn
-              updateThunkToWHNF rf evaluated
               Backward evaluated)
         _ ->
           (thunk, Backward val)
