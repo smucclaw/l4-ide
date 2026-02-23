@@ -12,3 +12,13 @@ Provides the uppercase DATE constructor for code that used the old record-based 
 
 **Legacy syntax:** DATE 15 3 1990
 **Modern syntax:** Date 15 3 1990
+
+### Field Accessor Helpers
+
+Named functions to extract date components:
+
+- `` `Day of` `` / `` `day of` `` — extract day from date (`DATE_DAY`)
+- `` `Month of` `` / `` `month of` `` — extract month from date (`DATE_MONTH`)
+- `` `Year of` `` / `` `year of` `` — extract year from date (`DATE_YEAR`)
+
+Each accessor has a capitalised primary name and a lowercase `AKA` alias.

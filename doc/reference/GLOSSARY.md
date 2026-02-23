@@ -253,6 +253,7 @@ For complete documentation, see **[Libraries Reference](libraries/README.md)**.
 | ----------------- | ------------------------------------ |
 | **prelude**       | Standard functions (always imported) |
 | **daydate**       | Date calculations and temporal logic |
+| **actus**         | ACTUS financial contract standards   |
 | **excel-date**    | Excel date compatibility             |
 | **math**          | Mathematical functions               |
 | **currency**      | ISO 4217 currency handling           |

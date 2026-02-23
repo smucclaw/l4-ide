@@ -14,9 +14,6 @@
 --
 -- If you need the old field accessor style, use the helpers below.
 
-IMPORT prelude
-IMPORT daydate
-
 §§ `DATE Constructor Alias`
 
 -- Provides DATE as an alias for Date for backwards compatibility
@@ -34,32 +31,14 @@ GIVETH A DATE
 
 §§ `Field Accessor Helpers`
 
--- These provide named functions to replace the old field accessor syntax
--- Usage: `day of` someDate  (instead of someDate's day)
+GIVEN date IS A DATE
+GIVETH A NUMBER
+`Day of` AKA `day of` MEANS DATE_DAY date
 
 GIVEN date IS A DATE
 GIVETH A NUMBER
-`day of` MEANS DATE_DAY date
+`Month of` AKA `month of` MEANS DATE_MONTH date
 
 GIVEN date IS A DATE
 GIVETH A NUMBER
-`month of` MEANS DATE_MONTH date
-
-GIVEN date IS A DATE
-GIVETH A NUMBER
-`year of` MEANS DATE_YEAR date
-
--- Alternative postfix style accessors
--- Usage: someDate's `the day`
-
-GIVEN date IS A DATE
-GIVETH A NUMBER
-`the day` date MEANS DATE_DAY date
-
-GIVEN date IS A DATE
-GIVETH A NUMBER
-`the month` date MEANS DATE_MONTH date
-
-GIVEN date IS A DATE
-GIVETH A NUMBER
-`the year` date MEANS DATE_YEAR date
+`Year of` AKA `year of` MEANS DATE_YEAR date

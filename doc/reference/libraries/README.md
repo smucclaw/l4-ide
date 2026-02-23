@@ -14,6 +14,7 @@ Core libraries are located in the [jl4-core/libraries/](https://github.com/smucc
 - **[legal-persons](legal-persons.md)** - Legal entity types and capacity
 - **[jurisdiction](jurisdiction.md)** - Jurisdiction definitions
 - **[holdings](holdings.md)** - Holdings and ownership
+- **[actus](actus.md)** - ACTUS financial contract types and evaluation
 - **[date-compat](date-compat.md)** - Legacy DATE syntax compatibility
 - **[llm](llm.md)** - LLM API integration
 
