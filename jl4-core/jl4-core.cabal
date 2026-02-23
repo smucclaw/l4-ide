@@ -62,6 +62,7 @@ library
     pretty-simple,
     prettyprinter,
     time,
+    tz,
     scientific,
     split,
     text >= 2 && < 2.1.2,

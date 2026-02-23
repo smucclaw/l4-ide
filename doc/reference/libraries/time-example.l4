@@ -1,0 +1,46 @@
+-- Time Example: Wall-clock time operations
+IMPORT time
+
+-- Time construction (24-hour format)
+DECIDE `office start` IS Time 9 0 0
+DECIDE `lunch break` IS Time 12 30
+DECIDE `end of day` IS Time 17
+
+#EVAL `office start`   -- 09:00:00
+#EVAL `lunch break`    -- 12:30:00
+#EVAL `end of day`     -- 17:00:00
+
+-- AM/PM construction
+DECIDE `early meeting` IS Time 7 30 am
+DECIDE `dinner time` IS Time 7 pm
+
+#EVAL `early meeting`  -- 07:30:00
+#EVAL `dinner time`    -- 19:00:00
+
+-- Extracting components
+#EVAL `the hour of` `office start`    -- 9
+#EVAL `the minute of` `lunch break`   -- 30
+
+-- Time predicates
+DECIDE `morning check` IS `office start` `is morning`
+DECIDE `afternoon check` IS `lunch break` `is afternoon`
+#EVAL `morning check`     -- TRUE
+#EVAL `afternoon check`   -- TRUE
+
+-- Time arithmetic (wraps at midnight)
+DECIDE `plus two hours` IS `office start` `plus hours` 2
+#EVAL `plus two hours`  -- 11:00:00
+
+DECIDE `minus one hour` IS `office start` `minus hours` 1
+#EVAL `minus one hour`  -- 08:00:00
+
+-- Time comparisons
+DECIDE `start before lunch` IS `office start` LESS THAN `lunch break`
+#EVAL `start before lunch`  -- TRUE
+
+#EVAL `the earlier of` `office start` `lunch break`  -- 09:00:00
+#EVAL `the later of` `office start` `lunch break`    -- 12:30:00
+
+-- Serial conversion (fraction of day)
+#EVAL (Time 12 0 0) `Time to serial`  -- 0.5 (noon = half day)
+#EVAL 0.5 `Serial to time`            -- 12:00:00

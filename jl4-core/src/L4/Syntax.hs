@@ -350,6 +350,7 @@ data TopDecl n =
   | Directive Anno (Directive n)
   | Import    Anno (Import n)
   | Section   Anno (Section n)
+  | Timezone  Anno (Expr n)       -- ^ @TIMEZONE IS <expr>@ declaration
   deriving stock (GHC.Generic, Eq, Ord, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 

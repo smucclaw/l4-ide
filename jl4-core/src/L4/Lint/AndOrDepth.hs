@@ -164,6 +164,7 @@ checkTopDecl (Assume _ _) = []
 checkTopDecl (Directive _ dir) = checkDirective dir
 checkTopDecl (Import _ _) = []
 checkTopDecl (Section _ s) = checkSection s
+checkTopDecl (Timezone _ _) = []
 
 -- | Check a directive for AND/OR warnings.
 checkDirective :: Directive n -> [AndOrWarning]

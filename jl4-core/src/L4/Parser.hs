@@ -450,7 +450,12 @@ topdeclWithRecovery n = do
 
 topdecl :: Parser (TopDecl Name)
 topdecl =
-  withTypeSig (\ sig -> attachAnno $
+  -- TIMEZONE IS must be tried before withTypeSig because the meansKW
+  -- alternative inside decide would consume TIMEZONE as an identifier
+  -- via appForm, preventing backtracking to timezone'.
+      attachAnno
+        (Timezone  emptyAnno <$> annoHole (try timezone'))
+  <|> withTypeSig (\ sig -> attachAnno $
         Declare   emptyAnno <$> annoHole (declare sig)
     <|> Decide    emptyAnno <$> annoHole (decide sig)
     <|> Assume    emptyAnno <$> annoHole (assume sig)
@@ -591,6 +596,15 @@ import' =
       <$  annoLexeme (spacedKeyword_ TKImport)
       <*> annoHole name
       <*> pure Nothing
+
+-- | Parse @TIMEZONE IS <expr>@
+-- TIMEZONE is not a keyword — it's matched as an identifier so it can
+-- also be used as a builtin name in expressions.
+timezone' :: Parser (Expr Name)
+timezone' =
+  spacedToken_ (TIdentifiers (TIdentifier "TIMEZONE"))
+    *> spacedKeyword_ TKIs
+    *> expr
 
 assume :: TypeSig Name -> Parser (Assume Name)
 assume sig = do

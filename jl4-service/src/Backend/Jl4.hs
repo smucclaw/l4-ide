@@ -597,6 +597,7 @@ getFunctionDefinition name (MkModule _ _ sect) = case goSection sect of
     Directive _ _ -> Nothing
     Import _ _ -> Nothing
     Section _ s -> goSection s
+    Timezone _ _ -> Nothing
 
   nameOf (MkDecide _ _ (MkAppForm _ n _ _) _) = n
 
@@ -649,6 +650,10 @@ valueToFnLiteral ei = \case
       Nothing -> FnLitDouble $ fromRational i
   Eval.ValDate day ->
     pure $ FnLitString (Text.textShow day)
+  Eval.ValTime tod ->
+    pure $ FnLitString (Text.textShow tod)
+  Eval.ValDateTime utc _tzName ->
+    pure $ FnLitString (Text.textShow utc)
   Eval.ValString t -> pure $ FnLitString t
   Eval.ValNil -> pure $ FnArray []
   Eval.ValCons v1 v2 -> nfToFnLiteral ei v1 >>= \ l1 -> listToFnLiteral ei (DList.singleton l1) v2

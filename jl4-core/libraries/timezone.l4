@@ -1,0 +1,42 @@
+§ `Timezone Definitions`
+
+-- IANA timezone name constants for use with TIMEZONE IS and DATETIME constructors.
+-- These map common timezone abbreviations to their IANA names.
+-- The tz package handles DST transitions automatically based on the actual date,
+-- so EST and EDT both map to the same IANA zone "America/New_York".
+
+§§ `Americas`
+
+EST  MEANS "America/New_York"
+EDT  MEANS "America/New_York"
+CST  MEANS "America/Chicago"
+CDT  MEANS "America/Chicago"
+MST  MEANS "America/Denver"
+MDT  MEANS "America/Denver"
+PST  MEANS "America/Los_Angeles"
+PDT  MEANS "America/Los_Angeles"
+
+§§ `Europe`
+
+GMT  MEANS "Europe/London"
+BST  MEANS "Europe/London"
+CET  MEANS "Europe/Berlin"
+CEST MEANS "Europe/Berlin"
+EET  MEANS "Europe/Helsinki"
+EEST MEANS "Europe/Helsinki"
+
+§§ `Asia-Pacific`
+
+IST  MEANS "Asia/Kolkata"
+SGT  MEANS "Asia/Singapore"
+HKT  MEANS "Asia/Hong_Kong"
+JST  MEANS "Asia/Tokyo"
+KST  MEANS "Asia/Seoul"
+AEST MEANS "Australia/Sydney"
+AEDT MEANS "Australia/Sydney"
+NZST MEANS "Pacific/Auckland"
+NZDT MEANS "Pacific/Auckland"
+
+§§ `Universal`
+
+UTC  MEANS "Etc/UTC"

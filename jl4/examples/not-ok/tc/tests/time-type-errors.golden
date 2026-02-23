@@ -1,0 +1,59 @@
+Parsing successful
+Typechecking successful
+Info | updateFileDiagnostics published different from new diagnostics - file diagnostics:
+File: time-type-errors.l4
+  Hidden: no
+  Range: 4:36-4:42
+  Source: check
+  Severity: DiagnosticSeverity_Error
+  Code: <none>
+  Message:
+    The first argument of function 
+
+      TIME_FROM_HMS (predefined)
+
+    is expected to be of type
+
+      NUMBER
+
+    but is here of type
+
+      STRING
+
+File: time-type-errors.l4
+  Hidden: no
+  Range: 7:32-7:36
+  Source: check
+  Severity: DiagnosticSeverity_Error
+  Code: <none>
+  Message:
+    The first argument of function 
+
+      TIME_HOUR (predefined)
+
+    is expected to be of type
+
+      TIME
+
+    but is here of type
+
+      BOOLEAN
+
+File: time-type-errors.l4
+  Hidden: no
+  Range: 10:36-10:38
+  Source: check
+  Severity: DiagnosticSeverity_Error
+  Code: <none>
+  Message:
+    The first argument of function 
+
+      TIME_SERIAL (predefined)
+
+    is expected to be of type
+
+      TIME
+
+    but is here of type
+
+      NUMBER
