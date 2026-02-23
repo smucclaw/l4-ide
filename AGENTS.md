@@ -24,7 +24,8 @@ Coding guidelines for AI agents working in this repository.
 | `jl4/`                  | CLI tool and JSON schema generator             |
 | `jl4-lsp/`              | Language Server Protocol for IDE support       |
 | `jl4-repl/`             | Interactive REPL                               |
-| `jl4-decision-service/` | REST API for decision evaluation               |
+| `jl4-decision-service/` | REST API for decision evaluation (deprecated)  |
+| `jl4-service/`          | REST API for decision evaluation               |
 | `jl4-websessions/`      | Session persistence service                    |
 | `jl4-query-plan/`       | Query planning utilities                       |
 
