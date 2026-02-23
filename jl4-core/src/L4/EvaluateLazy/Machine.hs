@@ -60,7 +60,7 @@ import L4.Evaluate.Operators
 import L4.Evaluate.ValueLazy
 import L4.TemporalContext (EvalClause (..), TemporalContext (..), applyEvalClauses)
 import L4.Parser.SrcSpan (SrcRange)
-import L4.Print
+import L4.Print hiding (tryLoadTZ, tryLoadTZPure, formatDateTimeIso)
 import L4.Syntax
 import qualified L4.TypeCheck as TypeCheck
 import L4.TypeCheck.Types (EntityInfo)

@@ -5,12 +5,13 @@ IMPORT daydate
 
 TIMEZONE IS SGT
 
+
 -- DateTime construction (uses document timezone SGT by default)
 DECIDE `the deadline` IS Datetime (Date 31 12 2025) 17 0 0
 #EVAL `the deadline`  -- 2025-12-31T17:00:00+08:00
 
 -- With explicit timezone override
-DECIDE `london meeting` IS Datetime (Date 1 6 2026) (TIME_FROM_HMS 9 0 0) "Europe/London"
+DECIDE `london meeting` IS Datetime (DATE_FROM_DMY 1 6 2026) (TIME_FROM_HMS 9 0 0) "Europe/London"
 #EVAL `london meeting`  -- 2026-06-01T09:00:00+01:00
 
 -- Date-only (midnight in document timezone)

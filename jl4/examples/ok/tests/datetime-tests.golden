@@ -2,13 +2,13 @@ Parsing successful
 Typechecking successful
 Evaluation successful
 datetime-tests.l4:16:1-21:
-  DATETIME IN "Asia/Singapore"
+  2025-06-15T14:30:00+0800
 datetime-tests.l4:17:1-17:
-  DATETIME IN "Asia/Singapore"
+  2025-12-31T17:00:00+0800
 datetime-tests.l4:18:1-23:
-  DATETIME IN "Europe/London"
+  2026-06-01T09:00:00+0100
 datetime-tests.l4:19:1-21:
-  DATETIME IN "Asia/Singapore"
+  2026-01-01T00:00:00+0800
 datetime-tests.l4:22:1-31:
   DATE OF 15, 6, 2025
 datetime-tests.l4:23:1-31:
@@ -32,15 +32,15 @@ datetime-tests.l4:35:1-38:
 datetime-tests.l4:36:1-36:
   assertion satisfied
 datetime-tests.l4:39:1-35:
-  DATETIME IN "Asia/Singapore"
+  2025-06-15T00:00:00+0800
 datetime-tests.l4:40:1-31:
-  DATETIME IN "Asia/Singapore"
+  2025-06-15T12:00:00+0800
 datetime-tests.l4:41:1-49:
-  DATETIME IN "Asia/Singapore"
+  2025-06-15T15:00:00+0800
 datetime-tests.l4:44:1-49:
-  DATETIME IN "Asia/Singapore"
+  2025-06-15T14:30:00+0800
 datetime-tests.l4:45:1-47:
-  DATETIME IN "Asia/Singapore"
+  2025-12-31T17:00:00+0800
 datetime-tests.l4:52:1-34:
   assertion satisfied
 datetime-tests.l4:53:1-33:
