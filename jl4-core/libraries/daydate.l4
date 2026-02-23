@@ -5,7 +5,7 @@
 -- A week begins on Monday
 -- Check the test/daydate.l4 file to see examples
 
-
+IMPORT `date-compat`
 
 
 §§ `Constants`
@@ -319,7 +319,6 @@ GIVEN date  IS A DATE
 GIVETH A NUMBER
 `Years to days` MEANS
     `Years to days` (DATE_YEAR date)
-
 
 
 
