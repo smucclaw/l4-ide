@@ -1,0 +1,29 @@
+`morning time`
+`afternoon time`
+`midnight`
+`early morning`
+`evening time`
+`midnight via am`
+`noon via pm`
+`the hour of` with `morning time`
+`the minute of` with `morning time`
+`the second of` with `morning time`
+`Time to serial` with `Time` with 12, 0 and 0
+`Serial to time` with 0.5
+`is morning` with `morning time`
+`is afternoon` with `afternoon time`
+`is evening` with `Time` with 20, 0 and 0
+`is before noon` with `morning time`
+`is after noon` with `afternoon time`
+`plus hours` with `morning time` and 2
+`plus minutes` with `morning time` and 30
+`minus hours` with `morning time` and 1
+`morning before afternoon`
+`afternoon after morning`
+`the earlier of` with `morning time` and `afternoon time`
+`the later of` with `morning time` and `afternoon time`
+`leq check`
+`geq check`
+`lt check`
+`gt check`
+the difference between `morning time` and `afternoon time`

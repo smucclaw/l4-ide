@@ -1,0 +1,193 @@
+§ `DateTime Definitions and Helpers`
+
+-- DATETIME is an absolute point in time.
+-- Uses document TIMEZONE by default; can override with explicit tz parameter (IANA string).
+-- Stored internally as UTC; extractors return LOCAL values in the stored timezone.
+
+IMPORT daydate
+
+
+§§ `DateTime Constructors`
+
+-- Datetime date time  -> uses document TIMEZONE
+GIVEN date IS A DATE
+      t    IS A TIME
+GIVETH A DATETIME
+`Datetime` MEANS
+    DATETIME_FROM_DTZ date t TIMEZONE
+
+-- Datetime date time tz  -> explicit IANA timezone string
+GIVEN date IS A DATE
+      t    IS A TIME
+      tz   IS A STRING
+GIVETH A DATETIME
+`Datetime` MEANS
+    DATETIME_FROM_DTZ date t tz
+
+-- Datetime date h m s  -> via Time h m s + document TIMEZONE
+GIVEN date IS A DATE
+      h    IS A NUMBER
+      m    IS A NUMBER
+      s    IS A NUMBER
+GIVETH A DATETIME
+`Datetime` MEANS
+    DATETIME_FROM_DTZ date (TIME_FROM_HMS h m s) TIMEZONE
+
+-- Datetime date h m s tz  -> via Time h m s + explicit tz
+GIVEN date IS A DATE
+      h    IS A NUMBER
+      m    IS A NUMBER
+      s    IS A NUMBER
+      tz   IS A STRING
+GIVETH A DATETIME
+`Datetime` MEANS
+    DATETIME_FROM_DTZ date (TIME_FROM_HMS h m s) tz
+
+-- Datetime date  -> midnight in document TIMEZONE
+GIVEN date IS A DATE
+GIVETH A DATETIME
+`Datetime` MEANS
+    DATETIME_FROM_DTZ date (TIME_FROM_HMS 0 0 0) TIMEZONE
+
+-- Datetime date tz  -> midnight in explicit timezone
+GIVEN date IS A DATE
+      tz   IS A STRING
+GIVETH A DATETIME
+`Datetime` MEANS
+    DATETIME_FROM_DTZ date (TIME_FROM_HMS 0 0 0) tz
+
+-- Datetime dt  -> identity (1 DATETIME -> DATETIME)
+GIVEN dt IS A DATETIME
+GIVETH A DATETIME
+`Datetime` MEANS dt
+
+
+§§ `DateTime Extractors`
+
+GIVEN dt IS A DATETIME
+GIVETH A DATE
+`Date of` dt MEANS DATETIME_DATE dt
+
+GIVEN dt IS A DATETIME
+GIVETH A TIME
+`Time of` dt MEANS DATETIME_TIME dt
+
+GIVEN dt IS A DATETIME
+GIVETH A STRING
+`Timezone of` dt MEANS DATETIME_TZ dt
+
+GIVEN dt IS A DATETIME
+GIVETH A NUMBER
+`the hour of` dt MEANS TIME_HOUR (DATETIME_TIME dt)
+
+GIVEN dt IS A DATETIME
+GIVETH A NUMBER
+`the minute of` dt MEANS TIME_MINUTE (DATETIME_TIME dt)
+
+GIVEN dt IS A DATETIME
+GIVETH A NUMBER
+`the second of` dt MEANS TIME_SECOND (DATETIME_TIME dt)
+
+GIVEN dt IS A DATETIME
+GIVETH A NUMBER
+`the day of` dt MEANS DATE_DAY (DATETIME_DATE dt)
+
+GIVEN dt IS A DATETIME
+GIVETH A NUMBER
+`the month of` dt MEANS DATE_MONTH (DATETIME_DATE dt)
+
+GIVEN dt IS A DATETIME
+GIVETH A NUMBER
+`the year of` dt MEANS DATE_YEAR (DATETIME_DATE dt)
+
+
+§§ `DateTime Serial`
+
+-- Serial is the UTC datestamp (number of days since L4 epoch)
+GIVEN dt IS A DATETIME
+GIVETH A NUMBER
+dt `Datetime to serial` MEANS DATETIME_SERIAL dt
+
+
+§§ `DateTime Predicates`
+
+GIVEN dt IS A DATETIME
+GIVETH A BOOLEAN
+dt `is before noon` MEANS TIME_HOUR (DATETIME_TIME dt) LESS THAN 12
+
+GIVEN dt IS A DATETIME
+GIVETH A BOOLEAN
+dt `is after noon` MEANS TIME_HOUR (DATETIME_TIME dt) AT LEAST 12
+
+GIVEN dt IS A DATETIME
+GIVETH A BOOLEAN
+dt `is morning` MEANS TIME_HOUR (DATETIME_TIME dt) LESS THAN 12
+
+GIVEN dt IS A DATETIME
+GIVETH A BOOLEAN
+dt `is afternoon` MEANS TIME_HOUR (DATETIME_TIME dt) AT LEAST 12 AND TIME_HOUR (DATETIME_TIME dt) LESS THAN 18
+
+GIVEN dt IS A DATETIME
+GIVETH A BOOLEAN
+dt `is evening` MEANS TIME_HOUR (DATETIME_TIME dt) AT LEAST 18
+
+
+§§ `DateTime Relative`
+
+GIVEN dt IS A DATETIME
+GIVETH A DATETIME
+`at midnight` dt MEANS
+    Datetime (DATETIME_DATE dt) (TIME_FROM_HMS 0 0 0) (DATETIME_TZ dt)
+
+GIVEN dt IS A DATETIME
+GIVETH A DATETIME
+`at noon` dt MEANS
+    Datetime (DATETIME_DATE dt) (TIME_FROM_HMS 12 0 0) (DATETIME_TZ dt)
+
+GIVEN dt IS A DATETIME
+      t  IS A TIME
+GIVETH A DATETIME
+dt `at` t MEANS
+    Datetime (DATETIME_DATE dt) t (DATETIME_TZ dt)
+
+
+§§ `DateTime Comparators`
+
+GIVEN dt1 IS A DATETIME
+      dt2 IS A DATETIME
+GIVETH A DATETIME
+`the earlier of` dt1 dt2 MEANS
+    IF DATETIME_SERIAL dt1 AT MOST DATETIME_SERIAL dt2 THEN dt1 ELSE dt2
+
+GIVEN dt1 IS A DATETIME
+      dt2 IS A DATETIME
+GIVETH A DATETIME
+`the later of` dt1 dt2 MEANS
+    IF DATETIME_SERIAL dt1 AT LEAST DATETIME_SERIAL dt2 THEN dt1 ELSE dt2
+
+
+§§ `Native overloads`
+
+GIVEN a IS A DATETIME
+      b IS A DATETIME
+GIVETH A BOOLEAN
+`__GEQ__` MEANS
+    DATETIME_SERIAL a AT LEAST DATETIME_SERIAL b
+
+GIVEN a IS A DATETIME
+      b IS A DATETIME
+GIVETH A BOOLEAN
+`__LEQ__` MEANS
+    DATETIME_SERIAL a AT MOST DATETIME_SERIAL b
+
+GIVEN a IS A DATETIME
+      b IS A DATETIME
+GIVETH A BOOLEAN
+`__GT__` MEANS
+    DATETIME_SERIAL a GREATER THAN DATETIME_SERIAL b
+
+GIVEN a IS A DATETIME
+      b IS A DATETIME
+GIVETH A BOOLEAN
+`__LT__` MEANS
+    DATETIME_SERIAL a LESS THAN DATETIME_SERIAL b

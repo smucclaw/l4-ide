@@ -168,6 +168,8 @@ typeToParameter declares visited ty =
       "string" -> Just ("string", Nothing)
       "text" -> Just ("string", Nothing)
       "date" -> Just ("string", Just "date")
+      "time" -> Just ("string", Just "time")
+      "datetime" -> Just ("string", Just "date-time")
       _ -> Nothing
 
   declareToParameter :: Text -> Declare Resolved -> Parameter

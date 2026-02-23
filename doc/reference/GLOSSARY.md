@@ -108,9 +108,10 @@ For expressing legal obligations, permissions, and prohibitions.
 
 ### Other Keywords
 
-| Keyword    | Purpose                               | Reference                     |
-| ---------- | ------------------------------------- | ----------------------------- |
-| **IMPORT** | Imports definitions from another file | [IMPORT](libraries/IMPORT.md) |
+| Keyword         | Purpose                               | Reference                         |
+| --------------- | ------------------------------------- | --------------------------------- |
+| **IMPORT**      | Imports definitions from another file | [IMPORT](libraries/IMPORT.md)     |
+| **TIMEZONE IS** | Sets document timezone (IANA name)    | [timezone](libraries/timezone.md) |
 
 ---
 
@@ -122,12 +123,14 @@ For complete documentation, see **[Types Reference](types/README.md)**.
 
 ### Primitive Types
 
-| Type        | Description                             |
-| ----------- | --------------------------------------- |
-| **NUMBER**  | Numeric values (integers and rationals) |
-| **STRING**  | Text strings                            |
-| **BOOLEAN** | Truth values (TRUE, FALSE)              |
-| **DATE**    | Calendar dates                          |
+| Type         | Description                             |
+| ------------ | --------------------------------------- |
+| **NUMBER**   | Numeric values (integers and rationals) |
+| **STRING**   | Text strings                            |
+| **BOOLEAN**  | Truth values (TRUE, FALSE)              |
+| **DATE**     | Calendar dates                          |
+| **TIME**     | Wall-clock time-of-day (no timezone)    |
+| **DATETIME** | Absolute point in time with timezone    |
 
 ### Polymorphic Types
 
@@ -253,6 +256,9 @@ For complete documentation, see **[Libraries Reference](libraries/README.md)**.
 | ----------------- | ------------------------------------ |
 | **prelude**       | Standard functions (always imported) |
 | **daydate**       | Date calculations and temporal logic |
+| **time**          | Wall-clock time-of-day operations    |
+| **datetime**      | Absolute points in time (with tz)    |
+| **timezone**      | IANA timezone constants              |
 | **actus**         | ACTUS financial contract standards   |
 | **excel-date**    | Excel date compatibility             |
 | **math**          | Mathematical functions               |
@@ -267,12 +273,14 @@ These are built into the compiler (not a library):
 
 #### Type Coercion
 
-| Function     | Purpose           |
-| ------------ | ----------------- |
-| **TOSTRING** | Convert to STRING |
-| **TONUMBER** | Convert to NUMBER |
-| **TODATE**   | Convert to DATE   |
-| **TRUNC**    | Truncate number   |
+| Function       | Purpose             |
+| -------------- | ------------------- |
+| **TOSTRING**   | Convert to STRING   |
+| **TONUMBER**   | Convert to NUMBER   |
+| **TODATE**     | Convert to DATE     |
+| **TOTIME**     | Convert to TIME     |
+| **TODATETIME** | Convert to DATETIME |
+| **TRUNC**      | Truncate number     |
 
 See [coercions documentation](types/coercions.md) for details.
 

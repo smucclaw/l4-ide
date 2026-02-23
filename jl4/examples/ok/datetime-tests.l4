@@ -1,0 +1,109 @@
+IMPORT datetime
+IMPORT timezone
+IMPORT daydate
+
+TIMEZONE IS SGT
+
+-- DateTime constructors
+DECIDE `meeting time` IS Datetime (Date 15 6 2025) (TIME_FROM_HMS 14 30 0)
+DECIDE `deadline` IS Datetime (Date 31 12 2025) 17 0 0
+DECIDE `london meeting` IS Datetime (Date 1 6 2026) (TIME_FROM_HMS 9 0 0) "Europe/London"
+DECIDE `new york event` IS Datetime (Date 4 7 2026) 12 0 0 EST
+DECIDE `start of day` IS Datetime (Date 1 1 2026)
+DECIDE `start of day utc` IS Datetime (Date 1 1 2026) UTC
+DECIDE `same datetime` IS Datetime `meeting time`
+
+#EVAL `meeting time`
+#EVAL `deadline`
+#EVAL `london meeting`
+#EVAL `start of day`
+
+-- DateTime extractors
+#EVAL `Date of` `meeting time`
+#EVAL `Time of` `meeting time`
+#EVAL `Timezone of` `meeting time`
+#EVAL `the hour of` `meeting time`
+#EVAL `the minute of` `meeting time`
+#EVAL `the day of` `meeting time`
+#EVAL `the month of` `meeting time`
+#EVAL `the year of` `meeting time`
+
+-- DateTime serial
+#EVAL `meeting time` `Datetime to serial`
+
+-- DateTime predicates
+#ASSERT `meeting time` `is afternoon`
+#ASSERT `start of day` `is morning`
+
+-- DateTime relative
+#EVAL `at midnight` `meeting time`
+#EVAL `at noon` `meeting time`
+#EVAL `meeting time` `at` (TIME_FROM_HMS 15 0 0)
+
+-- DateTime comparisons
+#EVAL `the earlier of` `meeting time` `deadline`
+#EVAL `the later of` `meeting time` `deadline`
+
+-- DateTime operator overloads
+DECIDE `meeting before deadline` IS `meeting time` LESS THAN `deadline`
+DECIDE `deadline after meeting` IS `deadline` GREATER THAN `meeting time`
+DECIDE `leq datetime` IS `meeting time` AT MOST `deadline`
+DECIDE `geq datetime` IS `deadline` AT LEAST `meeting time`
+#ASSERT `meeting before deadline`
+#ASSERT `deadline after meeting`
+#ASSERT `leq datetime`
+#ASSERT `geq datetime`
+
+-- Cross-timezone comparison (same UTC instant, different local times)
+DECIDE `sg morning` IS Datetime (Date 1 6 2026) 8 0 0 SGT
+DECIDE `london midnight` IS Datetime (Date 1 6 2026) 0 0 0 "Europe/London"
+DECIDE `sg vs london` IS `sg morning` GREATER THAN `london midnight`
+#EVAL `sg vs london`
+
+-- Verify TIMEZONE builtin
+#EVAL TIMEZONE
+
+-- Date math tests (using daydate library operators)
+DECIDE `base date` IS Date 15 6 2025
+
+-- DATE + NUMBER = add days, DATE - NUMBER = subtract days
+DECIDE `plus 30 days` IS `base date` PLUS 30
+DECIDE `minus 10 days` IS `base date` MINUS 10
+#EVAL `plus 30 days`
+#EVAL `minus 10 days`
+
+-- Date navigation
+DECIDE `next day` IS `the day after` `base date`
+DECIDE `prev day` IS `the day before` `base date`
+DECIDE `next month` IS `the month after` `base date`
+DECIDE `next year` IS `the year after` `base date`
+#EVAL `next day`
+#EVAL `prev day`
+#EVAL `next month`
+#EVAL `next year`
+
+-- Date comparison operators
+DECIDE `date1` IS Date 1 1 2025
+DECIDE `date2` IS Date 31 12 2025
+DECIDE `date less` IS `date1` LESS THAN `date2`
+DECIDE `date greater` IS `date2` GREATER THAN `date1`
+DECIDE `date leq` IS `date1` AT MOST `date2`
+DECIDE `date equal` IS `date1` EQUALS `date1`
+#ASSERT `date less`
+#ASSERT `date greater`
+#ASSERT `date leq`
+#ASSERT `date equal`
+
+-- Date difference (DATE - DATE = NUMBER of days)
+DECIDE `days diff` IS `date2` MINUS `date1`
+#EVAL `days diff`
+
+-- Date and DateTime cross-type: extract date from datetime for comparison
+DECIDE `dt for cross` IS Datetime (Date 15 6 2025) 14 30 0
+DECIDE `date from dt` IS `Date of` `dt for cross`
+DECIDE `same date check` IS `date from dt` EQUALS `base date`
+#ASSERT `same date check`
+
+-- Earlier/later date comparators
+#EVAL `the earlier of` `date1` `date2`
+#EVAL `the later of` `date1` `date2`

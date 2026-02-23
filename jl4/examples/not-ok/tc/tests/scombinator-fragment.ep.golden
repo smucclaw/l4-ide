@@ -1,11 +1,11 @@
 Info | updateFileDiagnostics published different from new diagnostics - file diagnostics:
 File: scombinator-fragment.l4
-  Hidden:   no
-  Range:    11:1-11:1
-  Source:   parser
+  Hidden: no
+  Range: 11:1-11:1
+  Source: parser
   Severity: DiagnosticSeverity_Error
-  Code:     <none>
-  Message: 
+  Code: <none>
+  Message:
        |
     11 | 
        | ^

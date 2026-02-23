@@ -1,0 +1,21 @@
+IMPORT timezone
+
+§ `Timezone declaration tests`
+
+-- Test document timezone declaration with a timezone constant
+TIMEZONE IS EST
+
+-- Verify TIMEZONE builtin returns the timezone string
+DECIDE `document timezone` IS TIMEZONE
+#EVAL `document timezone`
+
+-- Test various timezone constants resolve to IANA strings
+DECIDE `est value` IS EST
+DECIDE `pst value` IS PST
+DECIDE `gmt value` IS GMT
+DECIDE `sgt value` IS SGT
+DECIDE `utc value` IS UTC
+DECIDE `jst value` IS JST
+
+-- EST and EDT both map to same IANA zone
+#ASSERT EST EQUALS EDT

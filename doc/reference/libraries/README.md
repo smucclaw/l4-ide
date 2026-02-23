@@ -8,6 +8,9 @@ Core libraries are located in the [jl4-core/libraries/](https://github.com/smucc
 
 - **[prelude](prelude.md)** - Standard functions (automatically imported)
 - **[daydate](daydate.md)** - Date calculations and temporal logic
+- **[time](time.md)** - Wall-clock time-of-day operations
+- **[datetime](datetime.md)** - Absolute points in time with timezones
+- **[timezone](timezone.md)** - IANA timezone constants
 - **[excel-date](excel-date.md)** - Excel date compatibility
 - **[math](math.md)** - Mathematical functions
 - **[currency](currency.md)** - Currency handling (ISO 4217)

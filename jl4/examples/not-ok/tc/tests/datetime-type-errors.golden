@@ -1,0 +1,40 @@
+Parsing successful
+Typechecking successful
+Info | updateFileDiagnostics published different from new diagnostics - file diagnostics:
+File: datetime-type-errors.l4
+  Hidden: no
+  Range: 4:44-4:46
+  Source: check
+  Severity: DiagnosticSeverity_Error
+  Code: <none>
+  Message:
+    The first argument of function 
+
+      DATETIME_FROM_DTZ (predefined)
+
+    is expected to be of type
+
+      DATE
+
+    but is here of type
+
+      NUMBER
+
+File: datetime-type-errors.l4
+  Hidden: no
+  Range: 7:39-7:55
+  Source: check
+  Severity: DiagnosticSeverity_Error
+  Code: <none>
+  Message:
+    The first argument of function 
+
+      DATETIME_DATE (predefined)
+
+    is expected to be of type
+
+      DATETIME
+
+    but is here of type
+
+      STRING

@@ -23,6 +23,7 @@ data TemporalContext = TemporalContext
   , tcRuleEncodingTime :: !(Maybe UTCTime)
   , tcRuleCommit :: !(Maybe Text.Text)
   , tcDecisionTime :: !(Maybe UTCTime)
+  , tcDocumentTimezone :: !(Maybe Text.Text)  -- ^ IANA timezone name (e.g. "Asia/Singapore")
   }
   deriving stock (Eq, Show, Generic)
 
@@ -46,6 +47,7 @@ initialTemporalContext now =
     , tcRuleEncodingTime = Nothing
     , tcRuleCommit = Nothing
     , tcDecisionTime = Just now
+    , tcDocumentTimezone = Nothing
     }
 
 -- | Apply a list of clauses to a context, left-to-right.

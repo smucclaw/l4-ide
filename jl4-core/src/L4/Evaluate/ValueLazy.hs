@@ -2,7 +2,8 @@ module L4.Evaluate.ValueLazy where
 
 import Base
 import Control.Concurrent (ThreadId)
-import Data.Time (Day)
+import Data.Time (Day, UTCTime)
+import Data.Time.LocalTime (TimeOfDay)
 import L4.Syntax
 import L4.Evaluate.Operators (BinOp)
 
@@ -43,6 +44,8 @@ data Value a =
     ValNumber Rational
   | ValString Text
   | ValDate Day
+  | ValTime !TimeOfDay                 -- ^ Wall-clock time (local, no date/tz)
+  | ValDateTime !UTCTime !Text         -- ^ UTC instant + IANA timezone name
   | ValNil
   | ValCons a a
   | ValClosure (GivenSig Resolved) (Expr Resolved) Environment
@@ -77,6 +80,7 @@ data ReasonForBreach a
 data NullaryBuiltinFun
   = NullaryTodaySerial
   | NullaryNowSerial
+  | NullaryTimezone          -- ^ Returns document IANA timezone name from TemporalContext
   deriving stock (Show)
 
 data UnaryBuiltinFun
@@ -114,6 +118,19 @@ data UnaryBuiltinFun
   | UnaryToString        -- α → STRING (runtime-restricted to supported types)
   | UnaryToNumber        -- STRING → MAYBE NUMBER
   | UnaryToDate          -- STRING → MAYBE DATE (uses runtime type info)
+  -- TIME builtins
+  | UnaryTimeHour         -- TIME → NUMBER
+  | UnaryTimeMinute       -- TIME → NUMBER
+  | UnaryTimeSecond       -- TIME → NUMBER
+  | UnaryTimeToSerial     -- TIME → NUMBER (fraction of day)
+  | UnaryTimeFromSerial   -- NUMBER → TIME
+  | UnaryToTime           -- STRING → TIME (parse "HH:MM:SS")
+  -- DATETIME builtins
+  | UnaryDatetimeDate     -- DATETIME → DATE (local date via stored tz)
+  | UnaryDatetimeTime     -- DATETIME → TIME (local time via stored tz)
+  | UnaryDatetimeSerial   -- DATETIME → NUMBER (UTC-based serial)
+  | UnaryDatetimeTzName   -- DATETIME → STRING (IANA timezone name)
+  | UnaryToDatetime       -- STRING → DATETIME (parse ISO-8601)
   deriving stock (Show)
 
 data TernaryBuiltinFun
@@ -123,6 +140,9 @@ data TernaryBuiltinFun
   | TernaryDateFromDMY   -- NUMBER → NUMBER → NUMBER → DATE
   | TernaryEverBetween
   | TernaryAlwaysBetween
+  -- TIME/DATETIME constructors
+  | TernaryTimeFromHMS      -- NUMBER → NUMBER → NUMBER → TIME
+  | TernaryDatetimeFromDTZ  -- DATE → TIME → STRING → DATETIME
   deriving stock (Show)
 
 -- | This is a non-standard instance because environments can be recursive, hence we must
@@ -131,6 +151,8 @@ instance NFData a => NFData (Value a) where
   rnf :: Value a -> ()
   rnf (ValNumber i)               = rnf i
   rnf (ValDate d)                 = rnf d
+  rnf (ValTime t)                 = rnf t
+  rnf (ValDateTime u tz)          = rnf u `seq` rnf tz
   rnf (ValROp env op a b)     = env `seq` op `deepseq` a `deepseq` b `deepseq` ()
   rnf (ValString t)               = rnf t
   rnf ValNil                      = ()
@@ -159,6 +181,7 @@ instance NFData NullaryBuiltinFun where
   rnf :: NullaryBuiltinFun -> ()
   rnf NullaryTodaySerial = ()
   rnf NullaryNowSerial = ()
+  rnf NullaryTimezone = ()
 
 instance NFData UnaryBuiltinFun where
   rnf :: UnaryBuiltinFun -> ()
@@ -194,6 +217,17 @@ instance NFData UnaryBuiltinFun where
   rnf UnaryDateMonth = ()
   rnf UnaryDateYear = ()
   rnf UnaryTimeValue = ()
+  rnf UnaryTimeHour = ()
+  rnf UnaryTimeMinute = ()
+  rnf UnaryTimeSecond = ()
+  rnf UnaryTimeToSerial = ()
+  rnf UnaryTimeFromSerial = ()
+  rnf UnaryToTime = ()
+  rnf UnaryDatetimeDate = ()
+  rnf UnaryDatetimeTime = ()
+  rnf UnaryDatetimeSerial = ()
+  rnf UnaryDatetimeTzName = ()
+  rnf UnaryToDatetime = ()
 
 instance NFData TernaryBuiltinFun where
   rnf :: TernaryBuiltinFun -> ()
@@ -204,3 +238,5 @@ instance NFData TernaryBuiltinFun where
   rnf TernaryDateFromDMY = ()
   rnf TernaryEverBetween = ()
   rnf TernaryAlwaysBetween = ()
+  rnf TernaryTimeFromHMS = ()
+  rnf TernaryDatetimeFromDTZ = ()

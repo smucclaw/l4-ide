@@ -1,9 +1,9 @@
 
 Info | updateFileDiagnostics published different from new diagnostics - file diagnostics:
 File: nlg_section1.l4
-  Hidden:   no
-  Range:    1:1-1:68
-  Source:   parser
+  Hidden: no
+  Range: 1:1-1:68
+  Source: parser
   Severity: DiagnosticSeverity_Warning
-  Code:     <none>
-  Message:  Not attached to any valid syntax node.
+  Code: <none>
+  Message: Not attached to any valid syntax node.

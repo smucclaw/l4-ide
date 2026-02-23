@@ -1,0 +1,83 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+datetime-tests.l4:16:1-21:
+  DATETIME IN "Asia/Singapore"
+datetime-tests.l4:17:1-17:
+  DATETIME IN "Asia/Singapore"
+datetime-tests.l4:18:1-23:
+  DATETIME IN "Europe/London"
+datetime-tests.l4:19:1-21:
+  DATETIME IN "Asia/Singapore"
+datetime-tests.l4:22:1-31:
+  DATE OF 15, 6, 2025
+datetime-tests.l4:23:1-31:
+  TIME OF 14, 30, 0.0
+datetime-tests.l4:24:1-35:
+  "Asia/Singapore"
+datetime-tests.l4:25:1-35:
+  14
+datetime-tests.l4:26:1-37:
+  30
+datetime-tests.l4:27:1-34:
+  15
+datetime-tests.l4:28:1-36:
+  6
+datetime-tests.l4:29:1-35:
+  2025
+datetime-tests.l4:32:1-42:
+  739781.2708333334
+datetime-tests.l4:35:1-38:
+  assertion satisfied
+datetime-tests.l4:36:1-36:
+  assertion satisfied
+datetime-tests.l4:39:1-35:
+  DATETIME IN "Asia/Singapore"
+datetime-tests.l4:40:1-31:
+  DATETIME IN "Asia/Singapore"
+datetime-tests.l4:41:1-49:
+  DATETIME IN "Asia/Singapore"
+datetime-tests.l4:44:1-49:
+  DATETIME IN "Asia/Singapore"
+datetime-tests.l4:45:1-47:
+  DATETIME IN "Asia/Singapore"
+datetime-tests.l4:52:1-34:
+  assertion satisfied
+datetime-tests.l4:53:1-33:
+  assertion satisfied
+datetime-tests.l4:54:1-23:
+  assertion satisfied
+datetime-tests.l4:55:1-23:
+  assertion satisfied
+datetime-tests.l4:61:1-21:
+  TRUE
+datetime-tests.l4:64:1-15:
+  "Asia/Singapore"
+datetime-tests.l4:72:1-21:
+  DATE OF 15, 7, 2025
+datetime-tests.l4:73:1-22:
+  DATE OF 5, 6, 2025
+datetime-tests.l4:80:1-17:
+  DATE OF 16, 6, 2025
+datetime-tests.l4:81:1-17:
+  DATE OF 14, 6, 2025
+datetime-tests.l4:82:1-19:
+  DATE OF 1, 7, 2025
+datetime-tests.l4:83:1-18:
+  DATE OF 1, 1, 2026
+datetime-tests.l4:92:1-20:
+  assertion satisfied
+datetime-tests.l4:93:1-23:
+  assertion satisfied
+datetime-tests.l4:94:1-19:
+  assertion satisfied
+datetime-tests.l4:95:1-21:
+  assertion satisfied
+datetime-tests.l4:99:1-18:
+  364
+datetime-tests.l4:105:1-26:
+  assertion satisfied
+datetime-tests.l4:108:1-39:
+  DATE OF 1, 1, 2025
+datetime-tests.l4:109:1-37:
+  DATE OF 31, 12, 2025

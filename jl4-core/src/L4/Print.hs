@@ -7,6 +7,7 @@ import L4.Syntax
 
 import Data.Char
 import Data.Time (toGregorian)
+import Data.Time.LocalTime (TimeOfDay(..))
 import Prettyprinter
 import Prettyprinter.Render.Text
 import qualified Data.List.NonEmpty as NE
@@ -228,6 +229,7 @@ instance (LayoutPrinterWithName a, n ~ Int) => LayoutPrinter (n, TopDecl a) wher
     (_, Directive _ t) -> printWithLayout t
     (_, Import    _ t) -> printWithLayout t
     (i, Section   _ t) -> printWithLayout (i, t)
+    (_, Timezone  _ _) -> mempty  -- TIMEZONE IS declarations are not pretty-printed
 
 instance LayoutPrinterWithName a => LayoutPrinter (Expr a) where
   printWithLayout :: LayoutPrinter a => Expr a -> Doc ann
@@ -454,6 +456,11 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
     Lazy.ValDate day               ->
       let (y, m, d) = toGregorian day
       in "DATE OF" <+> hsep [pretty d <> ",", pretty m <> ",", pretty y]
+    Lazy.ValTime tod               ->
+      let h = todHour tod; mi = todMin tod; s = todSec tod
+      in "TIME OF" <+> hsep [pretty h <> ",", pretty mi <> ",", pretty (realToFrac s :: Double)]
+    Lazy.ValDateTime _utc tzName   ->
+      "DATETIME IN" <+> surround (pretty tzName) "\"" "\""
     Lazy.ValNil                    -> "EMPTY"
     Lazy.ValCons v1 v2             -> "(" <> printWithLayout v1 <> " FOLLOWED BY " <> printWithLayout v2 <> ")" -- TODO: parens
     Lazy.ValClosure{}              -> "<function>"
@@ -486,6 +493,8 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
     Lazy.ValNumber{}               -> printWithLayout v
     Lazy.ValString{}               -> printWithLayout v
     Lazy.ValDate{}                 -> printWithLayout v
+    Lazy.ValTime{}                 -> printWithLayout v
+    Lazy.ValDateTime{}             -> printWithLayout v
     Lazy.ValNil                    -> "EMPTY"
     Lazy.ValClosure{}              -> printWithLayout v
     Lazy.ValUnappliedConstructor{} -> printWithLayout v

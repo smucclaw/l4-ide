@@ -545,6 +545,7 @@ isTopLevelBindingInSection u (MkSection _a  _mn _maka decls) = any (elem u . map
     Assume _ (MkAssume _ _ af _) -> appFormHeads af
     Directive _ _ -> []
     Import _ _ -> []
+    Timezone _ _ -> []
     -- NOTE: Sections are a toplevel binding in the current section but can also contain further
     -- toplevel bindings
     Section _ (MkSection _ mr maka decls') -> toResolved mr <> toResolved maka <> foldMap relevantResolveds decls'

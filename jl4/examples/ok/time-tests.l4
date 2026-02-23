@@ -1,0 +1,66 @@
+IMPORT time
+
+-- Time constructors
+DECIDE `morning time` IS Time 9 30 0
+DECIDE `afternoon time` IS Time 14 45
+DECIDE `midnight` IS Time 0
+DECIDE `same time` IS Time `morning time`
+
+#EVAL `morning time`
+#EVAL `afternoon time`
+#EVAL `midnight`
+
+-- AM/PM constructors (using Meridiem Indicator enum)
+DECIDE `early morning` IS Time 7 am
+DECIDE `evening time` IS Time 7 0 0 pm
+DECIDE `midnight via am` IS Time 12 0 am
+DECIDE `noon via pm` IS Time 12 0 0 pm
+DECIDE `morning shorthand` IS Time 9 30 am
+DECIDE `noon shorthand` IS Time 12 pm
+
+#EVAL `early morning`
+#EVAL `evening time`
+#EVAL `midnight via am`
+#EVAL `noon via pm`
+
+-- Time extractors
+#EVAL `the hour of` `morning time`
+#EVAL `the minute of` `morning time`
+#EVAL `the second of` `morning time`
+
+-- Time serial conversion
+#EVAL (Time 12 0 0) `Time to serial`
+#EVAL 0.5 `Serial to time`
+
+-- Time predicates
+#ASSERT `morning time` `is morning`
+#ASSERT `afternoon time` `is afternoon`
+#ASSERT (Time 20 0 0) `is evening`
+#ASSERT `morning time` `is before noon`
+#ASSERT `afternoon time` `is after noon`
+
+-- Time arithmetic
+#EVAL `morning time` `plus hours` 2
+#EVAL `morning time` `plus minutes` 30
+#EVAL `morning time` `minus hours` 1
+
+-- Time comparisons (using DECIDE + operator keywords)
+DECIDE `morning before afternoon` IS `morning time` LESS THAN `afternoon time`
+DECIDE `afternoon after morning` IS `afternoon time` GREATER THAN `morning time`
+#ASSERT `morning before afternoon`
+#ASSERT `afternoon after morning`
+
+#EVAL `the earlier of` `morning time` `afternoon time`
+#EVAL `the later of` `morning time` `afternoon time`
+
+-- Time operator overloads
+DECIDE `leq check` IS `morning time` AT MOST `afternoon time`
+DECIDE `geq check` IS `afternoon time` AT LEAST `morning time`
+DECIDE `lt check` IS `morning time` LESS THAN `afternoon time`
+DECIDE `gt check` IS `afternoon time` GREATER THAN `morning time`
+#ASSERT `leq check`
+#ASSERT `geq check`
+#ASSERT `lt check`
+#ASSERT `gt check`
+
+#EVAL `afternoon time` MINUS `morning time`

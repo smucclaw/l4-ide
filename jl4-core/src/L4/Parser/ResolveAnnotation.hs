@@ -191,6 +191,8 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (TopDecl n) where
     Section ann s -> do
       section <- addNlg s
       pure $ Section ann section
+    Timezone ann e -> do
+      pure $ Timezone ann e
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Declare n) where
   addNlg a = extendNlgA a $ case a of
@@ -582,6 +584,7 @@ instance HasDesc (TopDecl n) where
     Directive ann dir -> Directive ann <$> addDesc dir
     Import ann imp -> Import ann <$> addDesc imp
     Section ann sect -> Section ann <$> addDesc sect
+    Timezone ann e -> pure $ Timezone ann e
 
 instance HasDesc (Declare n) where
   addDesc decl@(MkDeclare ann tySig appForm tyDecl) = do

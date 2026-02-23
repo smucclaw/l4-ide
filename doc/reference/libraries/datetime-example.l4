@@ -1,0 +1,47 @@
+-- DateTime Example: Absolute points in time with timezones
+IMPORT datetime
+IMPORT timezone
+IMPORT daydate
+
+TIMEZONE IS SGT
+
+-- DateTime construction (uses document timezone SGT by default)
+DECIDE `the deadline` IS Datetime (Date 31 12 2025) 17 0 0
+#EVAL `the deadline`  -- 2025-12-31T17:00:00+08:00
+
+-- With explicit timezone override
+DECIDE `london meeting` IS Datetime (Date 1 6 2026) (TIME_FROM_HMS 9 0 0) "Europe/London"
+#EVAL `london meeting`  -- 2026-06-01T09:00:00+01:00
+
+-- Date-only (midnight in document timezone)
+DECIDE `start of year` IS Datetime (Date 1 1 2026)
+#EVAL `start of year`  -- 2026-01-01T00:00:00+08:00
+
+-- Extracting components (returns local values)
+DECIDE `meeting` IS Datetime (Date 15 6 2025) (TIME_FROM_HMS 14 30 0)
+#EVAL `Date of` `meeting`      -- the date component
+#EVAL `Time of` `meeting`      -- the time component
+#EVAL `Timezone of` `meeting`  -- "Asia/Singapore"
+#EVAL `the hour of` `meeting`  -- 14
+#EVAL `the day of` `meeting`   -- 15
+
+-- Predicates
+DECIDE `afternoon check` IS `meeting` `is afternoon`
+#EVAL `afternoon check`  -- TRUE
+
+-- Relative operations
+#EVAL `at midnight` `meeting`  -- same date at 00:00:00
+#EVAL `at noon` `meeting`      -- same date at 12:00:00
+
+-- Cross-timezone comparison (compares UTC instants)
+DECIDE `sg morning` IS Datetime (Date 1 6 2026) 8 0 0 SGT
+DECIDE `london midnight` IS Datetime (Date 1 6 2026) 0 0 0 "Europe/London"
+DECIDE `sg is later` IS `sg morning` GREATER THAN `london midnight`
+#EVAL `sg is later`  -- TRUE (SGT 08:00 = UTC 00:00, London 00:00 BST = UTC 23:00 prev day)
+
+-- DateTime comparisons
+DECIDE `before deadline` IS `meeting` LESS THAN `the deadline`
+#EVAL `before deadline`  -- TRUE
+
+#EVAL `the earlier of` `meeting` `the deadline`
+#EVAL `the later of` `meeting` `the deadline`
