@@ -84,6 +84,7 @@ All number-based constructors accept an optional trailing `tz` (STRING) for expl
 
 - `the earlier of` dt1 dt2
 - `the later of` dt1 dt2
+- dt1 `is before` dt2, dt1 `is after` dt2
 - Standard comparison operators: LESS THAN, GREATER THAN, AT MOST, AT LEAST
 
 ### Example: DateTime Operations

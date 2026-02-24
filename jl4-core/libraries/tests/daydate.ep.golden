@@ -612,14 +612,24 @@ GIVETH A BOOLEAN
 GIVEN a IS A DATE
       b IS A DATE
 GIVETH A BOOLEAN
-`__GT__` AKA `is after` MEANS
+`__GT__` MEANS
     Day a GREATER THAN Day b
 
 GIVEN a IS A DATE
       b IS A DATE
 GIVETH A BOOLEAN
-`__LT__` AKA `is before` MEANS
+`__LT__` MEANS
     Day a LESS THAN Day b
+
+GIVEN a IS A DATE
+      b IS A DATE
+GIVETH A BOOLEAN
+a `is before` b MEANS a LESS THAN b
+
+GIVEN a IS A DATE
+      b IS A DATE
+GIVETH A BOOLEAN
+a `is after` b MEANS a GREATER THAN b
 
 GIVEN a IS A DATE
       b IS A NUMBER

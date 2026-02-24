@@ -58,6 +58,12 @@ DECIDE `next week` IS `the week after` `Christmas 2024`
 #EVAL `Christmas 2024` < `New Year 2025`   -- TRUE
 #EVAL `Christmas 2024` >= `New Year 2025`  -- FALSE
 
+-- Readable comparisons
+DECIDE `christmas is before new year` IS `Christmas 2024` `is before` `New Year 2025`
+DECIDE `new year is after christmas` IS `New Year 2025` `is after` `Christmas 2024`
+#EVAL `christmas is before new year`  -- TRUE
+#EVAL `new year is after christmas`   -- TRUE
+
 -- Month helpers
 DECIDE `July 4th` IS July 4 2024
 #EVAL `July 4th`

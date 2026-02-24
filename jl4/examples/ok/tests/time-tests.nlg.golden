@@ -26,4 +26,6 @@
 `geq check`
 `lt check`
 `gt check`
+`is before check`
+`is after check`
 the difference between `morning time` and `afternoon time`

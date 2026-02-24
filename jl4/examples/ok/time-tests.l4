@@ -63,4 +63,10 @@ DECIDE `gt check` IS `afternoon time` GREATER THAN `morning time`
 #ASSERT `lt check`
 #ASSERT `gt check`
 
+-- Mixfix is before / is after
+DECIDE `is before check` IS `morning time` `is before` `afternoon time`
+DECIDE `is after check` IS `afternoon time` `is after` `morning time`
+#ASSERT `is before check`
+#ASSERT `is after check`
+
 #EVAL `afternoon time` MINUS `morning time`

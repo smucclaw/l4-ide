@@ -75,5 +75,10 @@ DECIDE `sg is later` IS `sg morning` GREATER THAN `london midnight`
 DECIDE `before deadline` IS `meeting` LESS THAN `the deadline`
 #EVAL `before deadline`  -- TRUE
 
+DECIDE `meeting is before deadline` IS `meeting` `is before` `the deadline`
+DECIDE `deadline is after meeting` IS `the deadline` `is after` `meeting`
+#EVAL `meeting is before deadline`  -- TRUE
+#EVAL `deadline is after meeting`   -- TRUE
+
 #EVAL `the earlier of` `meeting` `the deadline`
 #EVAL `the later of` `meeting` `the deadline`

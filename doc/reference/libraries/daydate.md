@@ -49,6 +49,13 @@ Can be imported into L4 files with `IMPORT daydate`. Automatically imports `date
 - `is weekend`, `is weekday` - Check day type
 - `is leap year` - Check leap year
 
+**Comparators:**
+
+- `the earlier of` d1 d2
+- `the later of` d1 d2
+- d1 `is before` d2, d1 `is after` d2
+- Standard comparison operators: LESS THAN, GREATER THAN, AT MOST, AT LEAST
+
 ### Example: Date Calculations
 
 [daydate-example.l4](daydate-example.l4)

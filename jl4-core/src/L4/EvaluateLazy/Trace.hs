@@ -301,6 +301,7 @@ printUserEvalExceptionShort StackOverflow                   = "stack overflow"
 printUserEvalExceptionShort (DivisionByZero _)              = "division by zero"
 printUserEvalExceptionShort (NotAnInteger _ _)              = "not an integer"
 printUserEvalExceptionShort (Stuck _)                       = "stuck"
+printUserEvalExceptionShort (UserError _)                   = "user error"
 
 -- | This is a stack data structure that is maintained while building an 'EvalPreTrace'.
 type PreTraceStack = [PreTraceFrame]

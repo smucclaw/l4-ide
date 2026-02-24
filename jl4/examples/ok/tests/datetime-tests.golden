@@ -49,35 +49,39 @@ datetime-tests.l4:54:1-23:
   assertion satisfied
 datetime-tests.l4:55:1-23:
   assertion satisfied
-datetime-tests.l4:61:1-21:
+datetime-tests.l4:60:1-29:
+  assertion satisfied
+datetime-tests.l4:61:1-28:
+  assertion satisfied
+datetime-tests.l4:67:1-21:
   TRUE
-datetime-tests.l4:64:1-15:
+datetime-tests.l4:70:1-15:
   "Asia/Singapore"
-datetime-tests.l4:72:1-21:
+datetime-tests.l4:78:1-21:
   DATE OF 15, 7, 2025
-datetime-tests.l4:73:1-22:
+datetime-tests.l4:79:1-22:
   DATE OF 5, 6, 2025
-datetime-tests.l4:80:1-17:
+datetime-tests.l4:86:1-17:
   DATE OF 16, 6, 2025
-datetime-tests.l4:81:1-17:
+datetime-tests.l4:87:1-17:
   DATE OF 14, 6, 2025
-datetime-tests.l4:82:1-19:
+datetime-tests.l4:88:1-19:
   DATE OF 1, 7, 2025
-datetime-tests.l4:83:1-18:
+datetime-tests.l4:89:1-18:
   DATE OF 1, 1, 2026
-datetime-tests.l4:92:1-20:
+datetime-tests.l4:98:1-20:
   assertion satisfied
-datetime-tests.l4:93:1-23:
+datetime-tests.l4:99:1-23:
   assertion satisfied
-datetime-tests.l4:94:1-19:
+datetime-tests.l4:100:1-19:
   assertion satisfied
-datetime-tests.l4:95:1-21:
+datetime-tests.l4:101:1-21:
   assertion satisfied
-datetime-tests.l4:99:1-18:
+datetime-tests.l4:105:1-18:
   364
-datetime-tests.l4:105:1-26:
+datetime-tests.l4:111:1-26:
   assertion satisfied
-datetime-tests.l4:108:1-39:
+datetime-tests.l4:114:1-39:
   DATE OF 1, 1, 2025
-datetime-tests.l4:109:1-37:
+datetime-tests.l4:115:1-37:
   DATE OF 31, 12, 2025

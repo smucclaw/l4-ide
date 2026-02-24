@@ -54,8 +54,14 @@ Core libraries shipped with L4:
 
 - **prelude:** Standard functions (auto-imported)
 - **daydate:** Date calculations and temporal logic
+- **time:** Wall-clock time-of-day operations
+- **datetime:** Absolute points in time with timezones
+- **timezone:** IANA timezone constants
 - **excel-date:** Excel date compatibility
 - **math:** Mathematical functions
-- **currency:** Currency handling
-- **legal-persons:** Legal entity types
+- **currency:** Currency handling (ISO 4217)
+- **legal-persons:** Legal entity types and capacity
 - **jurisdiction:** Jurisdiction definitions
+- **holdings:** Holdings and ownership
+- **actus:** ACTUS financial contract types and evaluation
+- **llm:** LLM API integration
