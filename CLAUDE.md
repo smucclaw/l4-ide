@@ -237,9 +237,9 @@ isEligible p MEANS p's citizen && p's years >= 5 && !p's disqualified
 
 **Always run after documentation changes:**
 
-```bash
+````bash
 ./doc/test-docs.sh
-```
+screen ```
 
 This script:
 
@@ -275,3 +275,4 @@ When adding or modifying documentation:
 6. [ ] Update GLOSSARY.md if adding new language features
 7. [ ] Run `./doc/test-docs.sh` and fix all errors
 8. [ ] Verify links point to existing files only
+````

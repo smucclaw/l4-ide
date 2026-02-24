@@ -58,6 +58,10 @@ yarn-debug.log*
 yarn-error.log*
 *.qcow2
 
+# Generated HTML from doc specs
+doc/**/*.html
+specs/**/*.html
+
 # Generated skill packages
 l4/l4.skill
 l4/l4.zip

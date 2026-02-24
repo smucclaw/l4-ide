@@ -22,3 +22,6 @@ examples/
 hie.yaml
 
 .vscode-test/
+
+# Generated HTML files from doc specs
+doc/**/*.html
