@@ -61,6 +61,21 @@ GIVEN date  IS A DATE
 GIVETH A DATE
 `Date` AKA `Days to date` MEANS date
 
+-- Date str  -> parse date string (YYYY-MM-DD, etc.), ignores time/timezone if present
+GIVEN str IS A STRING
+GIVETH A MAYBE DATE
+`Date` AKA `Days to date` MEANS
+    CONSIDER DATEVALUE str
+    WHEN RIGHT d THEN JUST d
+    WHEN LEFT err THEN
+        CONSIDER TODATETIME str
+        WHEN JUST dt THEN JUST (DATETIME_DATE dt)
+        WHEN NOTHING THEN NOTHING
+
+-- Date dt  -> extract date from DATETIME (ignores time and timezone)
+GIVEN dt IS A DATETIME
+GIVETH A DATE
+`Date` AKA `Days to date` MEANS DATETIME_DATE dt
 
 
 
