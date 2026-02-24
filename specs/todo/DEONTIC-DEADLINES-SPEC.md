@@ -1,7 +1,7 @@
 # Specification: Deontic Deadline Elaboration
 
 **Status:** Draft
-**Date:** 2026-02-25 (rev 2; originally 2026-02-24)
+**Date:** 2026-02-25 (rev 3; rev 2 2026-02-25; originally 2026-02-24)
 **Author:** Meng Wong
 **Branch:** `mengwong/deadlines`
 **Related:** `TEMPORAL-MASTER.md`, `TEMPORAL_EVAL_SPEC.md`, `TEMPORAL_PRELUDE_MACROS.md`, `BOUNDED-DEONTICS-SPEC.md`, `UPON-EXTERNAL-EVENTS-SPEC.md`
@@ -173,10 +173,10 @@ This dichotomy should be taught as a core concept: **deadlines bound achievement
 ```
 deadline  ::=  WITHIN      <expr>
             |  BY          <expr>
-            |  EVENTUALLY
+            |  EVENTUALLY  [AFTER <expr>]
 ```
 
-The parser desugars `EVENTUALLY` into an expression that produces `DeadlineWindow { notBefore = TRIGGER_DATE, notAfter = FOREVER }`.
+The parser desugars `EVENTUALLY` into an expression that produces `DeadlineWindow { notBefore = TRIGGER_DATE, notAfter = FOREVER }`. With the optional `AFTER` clause, the lower bound shifts: `EVENTUALLY AFTER <dur>` desugars to `DeadlineWindow { notBefore = TRIGGER_DATE + <dur>, notAfter = FOREVER }`.
 
 `FOREVER` itself remains a library-defined `DATE` constant (not a compiler builtin):
 
@@ -287,6 +287,12 @@ PARTY Tenant
 MUST `give notice`
 BY December 31 2026 `after` October 1 2026
 -- DeadlineWindow { notBefore = Oct 1 2026, notAfter = Dec 31 2026 }
+
+-- Unbounded with waiting period (e.g., stock option with vesting cliff)
+PARTY Employee
+MAY `exercise option`
+EVENTUALLY AFTER 1 `year`
+-- DeadlineWindow { notBefore = TRIGGER_DATE + 1y, notAfter = FOREVER }
 ```
 
 **Evaluator change** (in `Contract5 CheckTiming`):
@@ -381,14 +387,9 @@ Add `TKBy` to the lexer's keyword table. (Note: `TKBy` already exists for `BREAC
 
 ### 4. Add `TRIGGER_DATE` Builtin
 
-In `TypeCheck/Environment.hs`, add `TRIGGER_DATE` as a builtin of type `DATE`. In the evaluator, it reads the timestamp of the event that activated the current obligation from the trace. This aligns with Hvitved's trace-based contract semantics: each event in the trace is timestamped, and when a deontic obligation fires (via `HENCE` or `UPON`), the triggering event's timestamp becomes `TRIGGER_DATE`.
+In `TypeCheck/Environment.hs`, add `TRIGGER_DATE` as a builtin of type `DATE`. In the evaluator, it reads the timestamp of the event that activated the current obligation from the obligation evaluation context. This aligns with Hvitved's trace-based contract semantics: each event in the trace is timestamped, and when a deontic obligation fires (via `HENCE` or `UPON`), the triggering event's timestamp becomes `TRIGGER_DATE`.
 
-Implementation options:
-
-- **Via TemporalContext**: Add a `tcTriggerDate :: Maybe Day` field, set by the deontic activation logic before evaluating the deadline expression.
-- **Via trace inspection**: The evaluator already walks the event trace for residuation; `TRIGGER_DATE` could read the current event's timestamp directly from the trace cursor.
-
-The latter is more principled but depends on the trace machinery being available during deadline evaluation.
+Implementation: `TRIGGER_DATE` reads from the evaluator's obligation context — specifically, it maps to `time'` in `Machine.hs`'s `Contract5 CheckTiming`. The evaluator injects this value into the environment when processing a deontic construct. For `UPON`-triggered obligations, it is the event's timestamp; for `HENCE`-chained obligations, it is the timestamp of the fulfilling event from the predecessor. This is implemented by adding a new `NullaryTriggerDateSerial` case to the evaluator's builtin dispatch (alongside `NullaryTodaySerial` and `NullaryNowSerial`), which reads from the obligation's reference time rather than from `TemporalContext`.
 
 ### 5. Three-Way Timing Check in the Evaluator
 
@@ -634,9 +635,9 @@ At the parser level, the grammar is deliberately thin. The deadline clause is **
 
 ```
 deonton   ::=  PARTY <expr> <modal> <action> <deadline> [HENCE <expr>] [LEST <expr>]
-deadline  ::=  WITHIN      <expr>    -- expr : DeadlineWindow | DATE | NUMBER (with auto-coercion)
-            |  BY          <expr>    -- expr : DeadlineWindow | DATE (with auto-coercion)
-            |  EVENTUALLY            -- desugars to DeadlineWindow { TRIGGER_DATE, FOREVER }; LSP yellow flag
+deadline  ::=  WITHIN      <expr>              -- expr : DeadlineWindow | DATE | NUMBER (with auto-coercion)
+            |  BY          <expr>              -- expr : DeadlineWindow | DATE (with auto-coercion)
+            |  EVENTUALLY  [AFTER <expr>]      -- desugars to DeadlineWindow { TRIGGER_DATE [+ expr], FOREVER }; LSP flag
 ```
 
 A missing `deadline` is a **parse error**, not a valid program. The error message should suggest `EVENTUALLY` for intentionally unbounded obligations.
@@ -649,7 +650,7 @@ All further structure -- duration units, anchoring, calendar selection -- is res
 
 This spec is **orthogonal to** but **compatible with** the multi-temporal EVAL system described in `TEMPORAL_EVAL_SPEC.md` and `TEMPORAL_PRELUDE_MACROS.md`:
 
-- `TRIGGER_DATE` reads from `TemporalContext`, so `EVAL AS OF SYSTEM TIME ...` can override it for counterfactual deadline reasoning.
+- `TRIGGER_DATE` reads from the obligation evaluation context (the triggering event's timestamp), not from `TemporalContext`. However, `EVAL AS OF SYSTEM TIME ...` can still influence deadline reasoning by overriding the `TODAY`/`NOW` builtins used in calendar computations.
 - Duration library functions operate on `DATE` values, which the temporal EVAL system can manipulate.
 - The `temporal-prelude.l4` macros (when implemented) can compose with deadline expressions.
 
@@ -820,9 +821,9 @@ Note: the existing `WITHIN` clauses use computed day-counts relative to commence
 - [ ] Update all downstream `Maybe` handling (TypeCheck, Desugar, pretty-printers)
 - [ ] Make `deadline` non-optional in parser (remove `optional` wrapper)
 - [ ] Add helpful parse error: `"expected WITHIN, BY, or EVENTUALLY — use EVENTUALLY for perpetual obligations"`
-- [ ] Add `TKEventually` to lexer and parser (desugars to `DeadlineWindow { TRIGGER_DATE, FOREVER }`)
-- [ ] Add `TKBy` to lexer (or disambiguate existing `TKBy`)
-- [ ] Extend `deadline` parser to accept `BY` and `EVENTUALLY` alternatives
+- [ ] Add `TKEventually` and `TKAfter` to lexer
+- [ ] Reuse existing `TKBy` token (parser context disambiguates — see Resolved Q6)
+- [ ] Extend `deadline` parser to accept `BY`, `EVENTUALLY`, and `EVENTUALLY AFTER` alternatives
 - [ ] Change `due` type constraint from `number` to `DeadlineWindow` (with layered auto-coercion)
 - [ ] Add NUMBER→DATE→DeadlineWindow auto-coercion chain with deprecation warning for NUMBER
 - [ ] Implement three-way timing check in evaluator (`Contract5 CheckTiming`)
@@ -840,20 +841,23 @@ Note: the existing `WITHIN` clauses use computed day-counts relative to commence
 - [ ] Implement explicit-anchor forms: `days of`, `weeks of`, `months of`, `years of`
 - [ ] Implement `nth business day after` (higher-order, calendar-parameterized)
 - [ ] Implement `business days` / `business days under` / `business days under ... of` mixfix forms
-- [ ] Add `default calendar` binding (configurable per module)
+- [ ] Add `default calendar` binding (set via import convention — see Resolved Q5)
+- [ ] Implement `CountingConvention` type (`exclude trigger date` / `include trigger date`)
+- [ ] Default counting convention: `exclude trigger date` (T+1), overridable per library/construct
 
 ### Phase 3: Jurisdictional Libraries
 
-- [ ] Singapore business calendar (`sg-calendar.l4`)
+- [ ] Singapore business calendar (`sg-holidays.l4`) — holiday LIST OF DATE, imports register `default calendar`
 - [ ] UK banking calendar
 - [ ] US federal calendar
 - [ ] ISDA business day conventions
-- [ ] Module-level `USING` convention for default calendar selection
+- [ ] `jl4-calendar-import` CLI tool for generating `.l4` from iCalendar/CSV/API sources
 
 ### Phase 4: Testing and Migration
 
 - [ ] Golden tests for `BY` and `WITHIN` with DATE expressions
 - [ ] Golden tests for `EVENTUALLY` (perpetual obligations, desugaring to FOREVER)
+- [ ] Golden tests for `EVENTUALLY AFTER` (unbounded with lower bound)
 - [ ] Golden tests for `DeadlineWindow` with `after` combinator (three-way timing)
 - [ ] Golden tests for sugarless `DeadlineWindow` direct construction
 - [ ] Golden tests for duration mixfix resolution
@@ -867,24 +871,82 @@ Note: the existing `WITHIN` clauses use computed day-counts relative to commence
 
 ## Open Questions
 
-1. **`TRIGGER_DATE` naming and provenance**: Should it be `TRIGGER_DATE`, `THE TRIGGER DATE`, `OBLIGATION DATE`, or something else? Must be unambiguous and readable in context. Additionally, should it be surfaced as a standalone builtin, or as a field accessor on the current event in the trace (e.g., `THE EVENT DATE`)?
+*All original open questions have been resolved. See Resolved Questions below.*
 
-2. **Module-level default calendar**: Should there be a `USING` keyword, or should the default calendar be set via an import convention (e.g., `IMPORT sg-calendar` sets the default)?
-
-3. **`TKBy` token**: The lexer may already have `TKBy` for `BREACH BY party`. If so, does the parser context disambiguate, or do we need a distinct token?
-
-4. **Holiday data format**: Should holiday lists be L4 data declarations, or imported from external sources (YAML, CSV, iCalendar)?
-
-5. **Counting convention**: "Within 5 business days" -- does the count start on the trigger date or the next business day? Different jurisdictions have different conventions. This should probably be configurable per calendar library.
-
-6. **FOREVER representation**: Is `December 31 9999` the right sentinel, or should `FOREVER` be a compiler-level special value that the evaluator short-circuits (skipping the comparison)? The sentinel approach is simpler and keeps `FOREVER` in the library layer, but a special value would be more principled and avoid any risk of false positives in the year 9999.
-
-7. **`EVENTUALLY` + `after`**: Should `EVENTUALLY` accept a lower bound? E.g., `EVENTUALLY AFTER 30 days` meaning "at some point after a 30-day waiting period, with no upper bound." This would desugar to `DeadlineWindow { notBefore = TRIGGER_DATE + 30, notAfter = FOREVER }`. If not supported via `EVENTUALLY`, the same effect is achievable via `WITHIN FOREVER `after` 30 `days`` — but this mixes the sugar and sugarless forms awkwardly.
-
-8. **Explicit maintenance obligation syntax**: Should L4 introduce a `MUST CONTINUOUSLY` or `SHALL MAINTAIN` modal for obligations that are semantically maintenance (continuous state) rather than achievement (one-time event)? Current L4 uses `MUST` for both, and the LSP's `unbounded-achievement` warning correctly flags the tension. A dedicated maintenance modal would: (a) eliminate the false positive on perpetual `MUST` vows, (b) enable the evaluator to distinguish "check that the state holds at every event" from "check that the event happens once," and (c) align with Governatori's formal distinction in computational law. However, this is a significant language extension beyond the scope of this spec.
+~~1. `TRIGGER_DATE` naming and provenance → Resolved #4~~
+~~2. Module-level default calendar → Resolved #5~~
+~~3. `TKBy` token disambiguation → Resolved #6~~
+~~4. Holiday data format → Resolved #7~~
+~~5. Counting convention → Resolved #8~~
+~~6. FOREVER representation → Resolved #9~~
+~~7. `EVENTUALLY` + `after` → Resolved #10~~
+~~8. Explicit maintenance obligation syntax → Resolved #3~~
 
 ## Resolved Questions
 
 1. **Should `due` be optional (`Maybe`)?** No. Following CSL's design, deadlines are structurally mandatory. Perpetual obligations use the `EVENTUALLY` keyword as an explicit escape hatch, which desugars to `DeadlineWindow { TRIGGER_DATE, FOREVER }`. The LSP flags `EVENTUALLY` with a yellow warning to draw attention to unbounded obligations. This catches drafting errors, aligns with Hvitved's trace semantics, and forces authors to be deliberate. (Resolved 2026-02-25)
 
 2. **How should waiting periods / lower bounds be expressed?** Hybrid approach: internally, `due` holds a `DeadlineWindow` record with `not before` and `not after` fields. The `after` combinator is a library-level mixfix (not a parser keyword), and advanced users can construct `DeadlineWindow` records directly for arbitrarily complex temporal predicates. The parser stays thin (WITHIN/BY/EVENTUALLY), and the evaluator implements three-way timing (too early / within window / deadline missed). (Resolved 2026-02-25)
+
+3. **Explicit maintenance obligation syntax**: No new modal needed. The achievement/maintenance distinction can be modeled with existing primitives: maintenance obligations are `SHANT` prohibitions (e.g., `SHANT breach confidentiality EVENTUALLY`), which the LSP already flags as `ℹ perpetual-prohibition` rather than `⚠ unbounded-achievement`. For the rare case where a positive maintenance obligation is needed (e.g., "must continuously maintain insurance"), the idiomatic pattern is a `MUST` with a recurring `HENCE` chain or a loop construct, which keeps the language orthogonal. A dedicated `MUST CONTINUOUSLY` modal remains a candidate for future extension but is not needed for the current design. (Resolved 2026-02-25)
+
+4. **`TRIGGER_DATE` naming and provenance**: Use `TRIGGER_DATE` as the builtin name. Rationale: (a) it parallels existing all-caps builtins (`TODAY`, `NOW`); (b) its primary audience is library authors writing sugarless `DeadlineWindow` records, for whom technical precision outweighs natural-language readability; (c) L4's backtick convention allows `` `the trigger date` `` as a natural-language alias if desired. **Provenance:** `TRIGGER_DATE` is a new nullary builtin (like `TODAY`/`NOW`) but reads from the obligation evaluation context rather than `TemporalContext`. The evaluator injects it into the environment when processing a deontic construct: for an `UPON`-triggered obligation, it is the event's timestamp; for a `HENCE`-chained obligation, it is the timestamp of the fulfilling event from the predecessor. This maps directly to `time'` in `Machine.hs`'s `Contract5 CheckTiming`. A field-accessor approach (e.g., `THIS.startDate`) was rejected because obligations lack a reified "self" in the current evaluator; adding one would be a larger change. (Resolved 2026-02-25)
+
+5. **Module-level default calendar**: Use the import convention, not a new `USING` keyword. When a module imports a calendar library (e.g., `IMPORT sg-holidays`), the library registers a default `Calendar` value that `business days` and other calendar-aware combinators pick up implicitly. This follows L4's existing pattern where imported libraries provide defaults through the module system (as `daydate.l4` already provides the default `DATE` constructors). Multiple calendar imports are resolved by normal scope rules: the last import wins, or explicit qualification disambiguates (e.g., `sg-holidays.calendar` vs `us-federal.calendar`). No parser change needed; this is purely a library/runtime convention. A `USING` keyword could be added later as syntactic sugar for documentation clarity, but is not required for MVP. (Resolved 2026-02-25)
+
+6. **`TKBy` token disambiguation**: No new token needed. The parser already disambiguates `BY` by context: `BREACH BY` is parsed as a two-token sequence in the `breach` production (Parser.hs:1706), `FOLLOWED BY` in the operator table (Parser.hs:1199), and `DIVIDED BY` (Parser.hs:1203). The new `BY <date>` deadline syntax appears in the `deadline` production, which is syntactically disjoint from all existing `BY` uses — `deadline` is parsed after `MUST/MAY/SHANT/DO action [PROVIDED guard]`, while `BREACH BY` starts with `TKBreach`, and `FOLLOWED BY`/`DIVIDED BY` are binary operators in expression context. The parser will try `WITHIN`, `BY`, and `EVENTUALLY` as alternatives in the `deadline` production, with `BY` consuming `TKBy` followed by an indented expression. No ambiguity arises. (Resolved 2026-02-25)
+
+7. **Holiday data format**: Use L4 data declarations as the canonical format, with tooling for import from external sources. A calendar library (e.g., `sg-holidays.l4`) declares holidays as a `LIST OF DATE`:
+
+    ```l4
+    DECLARE `SG Public Holidays 2026` IS A LIST OF DATE
+    `SG Public Holidays 2026` MEANS
+      [ January 1 2026      -- New Year's Day
+      , January 29 2026     -- Chinese New Year
+      , January 30 2026     -- Chinese New Year
+      ...
+      ]
+    ```
+
+    This keeps holidays in the L4 type system (type-checked, version-controlled, documentable). External sources (iCalendar `.ics` files, CSV, government APIs) are consumed by **offline tooling** (a `jl4-calendar-import` CLI or build step) that generates `.l4` files, rather than by the runtime. This avoids adding external-format parsers to `jl4-core` and keeps the library layer self-contained. The generated `.l4` files are committed to version control so that builds are reproducible without network access. (Resolved 2026-02-25)
+
+8. **Counting convention**: Configurable per calendar library, with a sensible default. The `business days` mixfix combinator accepts an optional `CountingConvention` parameter:
+
+    ```l4
+    DECLARE CountingConvention IS ONE OF
+      `exclude trigger date`    -- T+1 convention (most common: UK, SG, US federal)
+      `include trigger date`    -- T+0 convention (some civil law jurisdictions)
+    ```
+
+    The default is `exclude trigger date` (T+1), matching the most common convention in major jurisdictions (a deadline of "5 business days" starting Monday means the count begins Tuesday and ends the following Monday). Calendar libraries override this default when the jurisdiction requires T+0. Individual deontic constructs can override the convention explicitly if needed:
+
+    ```l4
+    WITHIN 5 `business days` `including trigger date`
+    ```
+
+    This pushes jurisdiction-specific policy into the library layer where it belongs, while keeping the evaluator convention-agnostic. (Resolved 2026-02-25)
+
+9. **FOREVER representation**: Use the library-level sentinel `December 31 9999`, with evaluator awareness for short-circuiting. The sentinel is defined as a library constant in `daydate.l4`:
+
+    ```l4
+    DECLARE FOREVER IS A DATE
+    FOREVER MEANS December 31 9999
+    ```
+
+    The evaluator *may* optimize by recognizing this specific value and skipping the deadline comparison (an optional optimization, not a semantic requirement). This is the pragmatic choice: (a) it keeps `FOREVER` in the library layer, not the compiler; (b) the year-9999 sentinel is a well-established convention (SQL `DATE '9999-12-31'`, ISO 8601 open-ended intervals); (c) no L4 contract will plausibly run in the year 9999; (d) a compiler-level special value would require changes to the type checker, evaluator, and serialization layers for marginal benefit. If a principled `+∞` representation is ever needed, it can be added as a `DATE` variant (`DATE IS ONE OF ... | FOREVER`) without changing the API surface. (Resolved 2026-02-25)
+
+10. **`EVENTUALLY` + `after`**: Yes, support `EVENTUALLY AFTER <duration>` as parser-level sugar. This is a natural and common pattern (e.g., "the option may be exercised at any time after the vesting period"). The desugaring is straightforward:
+
+    ```
+    EVENTUALLY AFTER <dur>  →  DeadlineWindow { notBefore = TRIGGER_DATE + <dur>, notAfter = FOREVER }
+    ```
+
+    The parser grammar for `deadline` becomes:
+
+    ```
+    deadline ::= WITHIN <expr>
+               | BY <expr>
+               | EVENTUALLY [AFTER <expr>]
+    ```
+
+    Without `AFTER`, `EVENTUALLY` desugars as before (lower bound = `TRIGGER_DATE`, upper bound = `FOREVER`). With `AFTER`, the lower bound shifts. The `AFTER` keyword in this context is unambiguous because it only appears immediately after `EVENTUALLY` in the deadline production. This avoids the awkward `WITHIN FOREVER `after` 30 `days`` form that mixes sugar levels. The LSP's `EVENTUALLY` diagnostic still fires (warning or info depending on modal) — the `AFTER` clause doesn't suppress it, since the obligation is still unbounded. (Resolved 2026-02-25)
