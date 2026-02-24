@@ -9,12 +9,14 @@ Can be imported into L4 files with `IMPORT daydate`. Automatically imports `date
 
 ### Features
 
-- Date construction from day/month/year or serial numbers
+- Date construction from day/month/year, serial numbers, strings, or DATETIME extraction
 - Date arithmetic (add/subtract days, weeks, months, years)
 - Weekday and weekend detection
 - Week-of-year calculations
 - Month and year helpers
 - Leap year detection
+- String parsing for JSON interoperability
+- DATETIME date extraction
 
 ### Key Functions
 
@@ -28,6 +30,8 @@ Can be imported into L4 files with `IMPORT daydate`. Automatically imports `date
 
 - `Date day month year` - Create date from components
 - `Date serialNumber` - Create date from serial number
+- `Date str` - Parse date string (ISO format, ignores time/timezone if present), returns MAYBE DATE
+- `Date dt` - Extract date from DATETIME (ignores time and timezone)
 - `Week weekNumber year` - First day of week
 - `Month month year` - First day of month
 - `Year year` - First day of year

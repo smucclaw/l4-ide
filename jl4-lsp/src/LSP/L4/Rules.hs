@@ -790,8 +790,9 @@ jl4Rules evalConfig rootDirectory recorder = do
         { _range = srcRangeToLspRange range
         , _severity =
             case res of
-              EvaluateLazy.Assertion False -> Just LSP.DiagnosticSeverity_Error
-              _                            -> Just LSP.DiagnosticSeverity_Information
+              EvaluateLazy.Assertion False  -> Just LSP.DiagnosticSeverity_Error
+              EvaluateLazy.Reduction (Left _) -> Just LSP.DiagnosticSeverity_Error
+              _                             -> Just LSP.DiagnosticSeverity_Information
         , _code = Nothing
         , _codeDescription = Nothing
         , _source = Just "eval"

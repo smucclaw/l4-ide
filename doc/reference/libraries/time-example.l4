@@ -10,6 +10,10 @@ DECIDE `end of day` IS Time 17
 #EVAL `lunch break`    -- 12:30:00
 #EVAL `end of day`     -- 17:00:00
 
+-- Time from string (JSON interop) - returns MAYBE TIME
+DECIDE `from string` IS Time "14:30:00"
+#EVAL `from string`  -- JUST OF (TIME OF 14, 30, 0.0)
+
 -- AM/PM construction
 DECIDE `early meeting` IS Time 7 30 am
 DECIDE `dinner time` IS Time 7 pm

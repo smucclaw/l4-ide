@@ -1,12 +1,18 @@
 -- Daydate Example: Date calculations and temporal logic
 IMPORT daydate
 
--- Date construction
+-- Date construction from components
 DECIDE `Christmas 2024` IS Date 25 12 2024
 DECIDE `New Year 2025` IS Date 1 1 2025
 
 #EVAL `Christmas 2024`
 #EVAL `New Year 2025`
+
+-- Date from ISO string (returns MAYBE DATE, ignores time/timezone if present)
+DECIDE `from iso date` IS Date "2025-06-15"
+DECIDE `from iso datetime` IS Date "2025-06-15T10:30:00Z"
+#EVAL `from iso date`       -- JUST OF (DATE OF 15, 6, 2025)
+#EVAL `from iso datetime`   -- JUST OF (DATE OF 15, 6, 2025)
 
 -- Date arithmetic
 DECIDE `week later` IS `Christmas 2024` PLUS 7

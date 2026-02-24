@@ -289,7 +289,8 @@ run_jl4_cli() {
     else
         # Run from repo root for proper library resolution
         # Use cabal run which sets up data-files paths correctly
-        (cd "$REPO_ROOT" && cabal run jl4:jl4-cli -v0 -- "$file" 2>&1)
+        # Set JL4_LIBRARY_PATH to prefer local libraries over installed ones
+        (cd "$REPO_ROOT" && JL4_LIBRARY_PATH="${JL4_LIBRARY_PATH:-jl4-core/libraries}" cabal run jl4:jl4-cli -v0 -- "$file" 2>&1)
     fi
 }
 

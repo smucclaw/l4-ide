@@ -48,6 +48,16 @@ GIVEN t IS A TIME
 GIVETH A TIME
 `Time` MEANS t
 
+-- Time str  -> parse time string (HH:MM:SS, HH:MM)
+GIVEN str IS A STRING
+GIVETH A MAYBE TIME
+`Time` MEANS TOTIME str
+
+-- Time dt  -> extract time from DATETIME (ignores date and timezone)
+GIVEN dt IS A DATETIME
+GIVETH A TIME
+`Time` MEANS DATETIME_TIME dt
+
 -- Time h m s am/pm  (3 NUMBERs + Meridiem Indicator -> TIME)
 GIVEN h  IS A NUMBER
       m  IS A NUMBER
