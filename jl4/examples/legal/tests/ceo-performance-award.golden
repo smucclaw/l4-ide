@@ -82,10 +82,7 @@ ceo-performance-award.l4:709:1-710:80:
 ceo-performance-award.l4:713:1-714:95:
   FULFILLED
 ceo-performance-award.l4:730:1-733:60:
-  Internal error:
-  I encountered a type error during evaluation:
-    DATE_FROM_DMY produced an invalid date
-  Please report this as a bug.
+  DATE_FROM_DMY produced an invalid date
 ceo-performance-award.l4:735:1-736:79:
   FULFILLED
 ceo-performance-award.l4:738:1-739:71:

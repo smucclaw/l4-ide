@@ -110,15 +110,9 @@ legal-persons-tests.l4:107:1-51:
 legal-persons-tests.l4:109:1-55:
   FALSE
 legal-persons-tests.l4:110:1-53:
-  Trying to check equality on types that do not support it
-  These were the values you tried to compare:
-    (&561@legal-persons-tests.l4 FOLLOWED BY &2@legal-persons-tests.l4)
-    EMPTY
+  TRUE
 legal-persons-tests.l4:111:1-55:
-  Trying to check equality on types that do not support it
-  These were the values you tried to compare:
-    (&568@legal-persons-tests.l4 FOLLOWED BY &569@legal-persons-tests.l4)
-    EMPTY
+  TRUE
 legal-persons-tests.l4:113:1-47:
   1
 legal-persons-tests.l4:114:1-45:

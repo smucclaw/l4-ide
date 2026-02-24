@@ -132,14 +132,11 @@ DECIDE handleError IS
 --------------------------------------------------------------------------------
 
 GIVEN jsonStr IS A STRING
-      fallback IS A Person
-GIVETH A Person
-`safe decode person` jsonStr fallback MEANS
+GIVETH A BOOLEAN
+`can decode` jsonStr MEANS
   CONSIDER JSONDECODE jsonStr
-  WHEN RIGHT p THEN p
-  WHEN LEFT err THEN fallback
+  WHEN RIGHT val THEN TRUE
+  WHEN LEFT err THEN FALSE
 
-DECIDE defaultPerson IS Person WITH name IS "Default", age IS 0
-DECIDE result IS `safe decode person` "{\"name\":\"Test\",\"age\":99}" defaultPerson
-
-#EVAL result's name  -- "Test"
+#EVAL `can decode` "{\"name\":\"Test\",\"age\":99}"  -- TRUE
+#EVAL `can decode` "not valid json"                   -- FALSE

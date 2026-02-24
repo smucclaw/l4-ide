@@ -42,6 +42,11 @@ DECIDE `minus one hour` IS `office start` `minus hours` 1
 DECIDE `start before lunch` IS `office start` LESS THAN `lunch break`
 #EVAL `start before lunch`  -- TRUE
 
+DECIDE `start is before lunch` IS `office start` `is before` `lunch break`
+DECIDE `lunch is after start` IS `lunch break` `is after` `office start`
+#EVAL `start is before lunch`  -- TRUE
+#EVAL `lunch is after start`   -- TRUE
+
 #EVAL `the earlier of` `office start` `lunch break`  -- 09:00:00
 #EVAL `the later of` `office start` `lunch break`    -- 12:30:00
 

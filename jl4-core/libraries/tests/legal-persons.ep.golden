@@ -220,7 +220,10 @@ GIVETH A BOOLEAN
 `has multiple citizenships` MEANS
     CONSIDER citizenships
     WHEN EMPTY THEN FALSE
-    WHEN first FOLLOWED BY xs THEN NOT (xs EQUALS EMPTY)
+    WHEN first FOLLOWED BY xs THEN
+        CONSIDER xs
+        WHEN EMPTY THEN FALSE
+        WHEN second FOLLOWED BY rest THEN TRUE
 
 GIVEN citizenships IS A LIST OF STRING
 GIVETH A NUMBER

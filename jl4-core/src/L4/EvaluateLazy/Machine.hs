@@ -154,6 +154,7 @@ data UserEvalException =
   | DivisionByZero BinOp
   | NotAnInteger BinOp Rational
   | Stuck Resolved -- ^ stores the term we got stuck on
+  | UserError Text -- ^ general user-facing error (e.g. missing TIMEZONE declaration)
   deriving stock (Generic, Show)
   deriving anyclass NFData
 
@@ -650,7 +651,7 @@ backward val = WithPoppedFrame $ \ case
             PushFrame (EverBetweenFrame originalCtx predicate endDay nextDay step)
             applyDatePredicate predicate nextDay
       Nothing ->
-        InternalException $ RuntimeTypeError "EVER BETWEEN expects predicate returning BOOLEAN"
+        UserException $ UserError "EVER BETWEEN expects predicate returning BOOLEAN"
   Just (AlwaysBetweenFrame originalCtx predicate endDay currentDay step) -> do
     PutTemporalContext originalCtx
     case boolView val of
@@ -665,7 +666,7 @@ backward val = WithPoppedFrame $ \ case
             PushFrame (AlwaysBetweenFrame originalCtx predicate endDay nextDay step)
             applyDatePredicate predicate nextDay
       Nothing ->
-        InternalException $ RuntimeTypeError "ALWAYS BETWEEN expects predicate returning BOOLEAN"
+        UserException $ UserError "ALWAYS BETWEEN expects predicate returning BOOLEAN"
   Just (WhenLastFrame originalCtx predicate currentDay) -> do
     PutTemporalContext originalCtx
     case boolView val of
@@ -682,7 +683,7 @@ backward val = WithPoppedFrame $ \ case
             PushFrame (WhenLastFrame originalCtx predicate nextDay)
             applyDatePredicate predicate nextDay
       Nothing ->
-        InternalException $ RuntimeTypeError "WHEN LAST expects predicate returning BOOLEAN"
+        UserException $ UserError "WHEN LAST expects predicate returning BOOLEAN"
   Just (WhenNextFrame originalCtx predicate currentDay limitDay) -> do
     PutTemporalContext originalCtx
     case boolView val of
@@ -699,7 +700,7 @@ backward val = WithPoppedFrame $ \ case
             PushFrame (WhenNextFrame originalCtx predicate nextDay limitDay)
             applyDatePredicate predicate nextDay
       Nothing ->
-        InternalException $ RuntimeTypeError "WHEN NEXT expects predicate returning BOOLEAN"
+        UserException $ UserError "WHEN NEXT expects predicate returning BOOLEAN"
   Just (ValueAtFrame originalCtx) -> do
     PutTemporalContext originalCtx
     Backward val
@@ -1251,7 +1252,7 @@ jsonValueToWHNFTyped jsonValue ty = do
             let values = Vector.toList vec
             jsonListToWHNFTyped values elementType
           _ -> do
-            InternalException $ RuntimeTypeError $
+            UserException $ UserError $
               "Expected JSON array to decode to LIST type, but got: " <> Text.pack (show jsonValue)
 
     -- Handle MAYBE α
@@ -1276,17 +1277,17 @@ jsonValueToWHNFTyped jsonValue ty = do
         "STRING" -> do
           case jsonValue of
             Aeson.String s -> pure $ ValString s
-            _ -> InternalException $ RuntimeTypeError $
+            _ -> UserException $ UserError $
                   "Expected JSON string but got: " <> Text.pack (show jsonValue)
         "NUMBER" -> do
           case jsonValue of
             Aeson.Number n -> pure $ ValNumber (toRational n)
-            _ -> InternalException $ RuntimeTypeError $
+            _ -> UserException $ UserError $
                   "Expected JSON number but got: " <> Text.pack (show jsonValue)
         "BOOLEAN" -> do
           case jsonValue of
             Aeson.Bool b -> pure $ if b then ValBool True else ValBool False
-            _ -> InternalException $ RuntimeTypeError $
+            _ -> UserException $ UserError $
                   "Expected JSON boolean but got: " <> Text.pack (show jsonValue)
         "DATE" -> do
           -- DATE fields in JSON should be ISO-8601 strings (YYYY-MM-DD)
@@ -1294,9 +1295,9 @@ jsonValueToWHNFTyped jsonValue ty = do
             Aeson.String s -> do
               case parseDateText s of
                 Just day -> pure $ ValDate day
-                Nothing -> InternalException $ RuntimeTypeError $
+                Nothing -> UserException $ UserError $
                   "Could not parse date string '" <> s <> "'. Expected format: YYYY-MM-DD"
-            _ -> InternalException $ RuntimeTypeError $
+            _ -> UserException $ UserError $
                   "Expected JSON string for DATE field but got: " <> Text.pack (show jsonValue)
         "TIME" -> do
           -- TIME fields in JSON should be strings (HH:MM:SS or HH:MM)
@@ -1304,9 +1305,9 @@ jsonValueToWHNFTyped jsonValue ty = do
             Aeson.String s -> do
               case parseTimeText s of
                 Just tod -> pure $ ValTime tod
-                Nothing -> InternalException $ RuntimeTypeError $
+                Nothing -> UserException $ UserError $
                   "Could not parse time string '" <> s <> "'. Expected format: HH:MM:SS or HH:MM"
-            _ -> InternalException $ RuntimeTypeError $
+            _ -> UserException $ UserError $
                   "Expected JSON string for TIME field but got: " <> Text.pack (show jsonValue)
         "DATETIME" -> do
           -- DATETIME fields in JSON should be ISO-8601 strings with timezone
@@ -1317,9 +1318,9 @@ jsonValueToWHNFTyped jsonValue ty = do
                   tc <- GetTemporalContext
                   let tzName = fromMaybe "Etc/UTC" tc.tcDocumentTimezone
                   pure $ ValDateTime utc tzName
-                Nothing -> InternalException $ RuntimeTypeError $
+                Nothing -> UserException $ UserError $
                   "Could not parse datetime string '" <> s <> "'. Expected ISO-8601 format: YYYY-MM-DDTHH:MM:SSZ"
-            _ -> InternalException $ RuntimeTypeError $
+            _ -> UserException $ UserError $
                   "Expected JSON string for DATETIME field but got: " <> Text.pack (show jsonValue)
 
         -- Not a primitive, check if it's a custom record type
@@ -1377,7 +1378,7 @@ jsonValueToWHNFTyped jsonValue ty = do
                         case KeyMap.lookup (Key.fromText fieldName) obj of
                           Nothing -> do
                             -- Field missing in JSON, this is an error
-                            InternalException $ RuntimeTypeError $
+                            UserException $ UserError $
                               "Missing required field '" <> fieldName <> "' in JSON object"
                           Just fieldValue -> do
                             -- RECURSIVELY decode the field value WITH TYPE INFORMATION
@@ -1387,7 +1388,7 @@ jsonValueToWHNFTyped jsonValue ty = do
                       pure $ ValConstructor conRef fieldRefs
                     _ -> do
                       -- JSON value is not an object, can't decode to record
-                      InternalException $ RuntimeTypeError $
+                      UserException $ UserError $
                         "Expected JSON object to decode to record type, but got: " <> Text.pack (show jsonValue)
 
     -- For other types, fall back to generic decoding
@@ -1531,7 +1532,7 @@ coerceToString val = case val of
     incompatible
   where
     incompatible =
-      InternalException $ RuntimeTypeError $
+      UserException $ UserError $
         "AS STRING/TOSTRING can only convert NUMBER, BOOLEAN, DATE, TIME, DATETIME, or STRING to STRING, but found: " <> prettyLayout val
 
 formatDateIso :: Time.Day -> Text
@@ -1789,7 +1790,7 @@ runBuiltin es op mTy = do
           let localTime' = TZ.utcToLocalTimeTZ tz utc
           Backward $ ValDate (localDay localTime')
         Nothing ->
-          InternalException $ RuntimeTypeError $ "Could not load timezone: " <> tzName
+          UserException $ UserError $ "Could not load timezone: " <> tzName
     UnaryDatetimeTime -> do
       (utc, tzName) <- expectDateTimeValue es
       case tryLoadTZPure tzName of
@@ -1797,7 +1798,7 @@ runBuiltin es op mTy = do
           let localTime' = TZ.utcToLocalTimeTZ tz utc
           Backward $ ValTime (localTimeOfDay localTime')
         Nothing ->
-          InternalException $ RuntimeTypeError $ "Could not load timezone: " <> tzName
+          UserException $ UserError $ "Could not load timezone: " <> tzName
     UnaryDatetimeSerial -> do
       (utc, _tzName) <- expectDateTimeValue es
       Backward $ ValNumber (utcDatestamp utc)
@@ -1823,11 +1824,11 @@ runBuiltin es op mTy = do
       case op of
         UnaryLn ->
           if val <= 0
-            then InternalException $ RuntimeTypeError "LN expects input greater than 0"
+            then UserException $ UserError "LN expects input greater than 0"
             else Backward $ ValNumber (toRational (log valDouble))
         UnaryLog10 ->
           if val <= 0
-            then InternalException $ RuntimeTypeError "LOG10 expects input greater than 0"
+            then UserException $ UserError "LOG10 expects input greater than 0"
             else Backward $ ValNumber (toRational (logBase 10 valDouble))
         UnarySin ->
           Backward $ ValNumber (toRational (sin valDouble))
@@ -1837,11 +1838,11 @@ runBuiltin es op mTy = do
           Backward $ ValNumber (toRational (tan valDouble))
         UnaryAsin ->
           if val < (-1) || val > 1
-            then InternalException $ RuntimeTypeError "ASIN expects input between -1 and 1"
+            then UserException $ UserError "ASIN expects input between -1 and 1"
             else Backward $ ValNumber (toRational (asin valDouble))
         UnaryAcos ->
           if val < (-1) || val > 1
-            then InternalException $ RuntimeTypeError "ACOS expects input between -1 and 1"
+            then UserException $ UserError "ACOS expects input between -1 and 1"
             else Backward $ ValNumber (toRational (acos valDouble))
         UnaryAtan ->
           Backward $ ValNumber (toRational (atan valDouble))
@@ -1881,7 +1882,7 @@ runTernaryBuiltin TernaryDateFromDMY dVal mVal yVal = do
   case Time.fromGregorianValid yInt (fromInteger mInt) (fromInteger dInt) of
     Just day -> Backward (ValDate day)
     Nothing ->
-      InternalException $ RuntimeTypeError "DATE_FROM_DMY produced an invalid date"
+      UserException $ UserError "DATE_FROM_DMY produced an invalid date"
 runTernaryBuiltin TernaryTimeFromHMS hVal mVal sVal = do
   hNum <- expectNumber hVal
   mNum <- expectNumber mVal
@@ -1891,7 +1892,7 @@ runTernaryBuiltin TernaryTimeFromHMS hVal mVal sVal = do
   let sPico = realToFrac sNum :: Pico
   if hInt >= 0 && hInt < 24 && mInt >= 0 && mInt < 60 && sPico >= 0 && sPico < 60
     then Backward $ ValTime (TimeOfDay (fromInteger hInt) (fromInteger mInt) sPico)
-    else InternalException $ RuntimeTypeError "TIME_FROM_HMS: values out of range (H: 0-23, M: 0-59, S: 0-59)"
+    else UserException $ UserError "TIME_FROM_HMS: values out of range (H: 0-23, M: 0-59, S: 0-59)"
 runTernaryBuiltin TernaryDatetimeFromDTZ dateVal timeVal tzVal = do
   day <- expectDateValue dateVal
   tod <- expectTimeValue timeVal
@@ -1902,7 +1903,7 @@ runTernaryBuiltin TernaryDatetimeFromDTZ dateVal timeVal tzVal = do
           utc = TZ.localTimeToUTCTZ tz localTime
       Backward $ ValDateTime utc tzName
     Nothing ->
-      InternalException $ RuntimeTypeError $ "Unknown timezone: '" <> tzName <> "'"
+      UserException $ UserError $ "Unknown timezone: '" <> tzName <> "'. Use an IANA timezone name like \"Asia/Singapore\" or \"America/New_York\"."
 runTernaryBuiltin TernaryEverBetween startVal endVal predicate =
   startEverBetween startVal endVal predicate
 runTernaryBuiltin TernaryAlwaysBetween startVal endVal predicate =
@@ -2292,10 +2293,10 @@ evalTopDecl env (Timezone _ann expr) = do
           tc <- GetTemporalContext
           PutTemporalContext tc { tcDocumentTimezone = Just tzName }
         Nothing ->
-          InternalException $ RuntimeTypeError $
+          UserException $ UserError $
             "Unknown timezone: '" <> tzName <> "'. Use an IANA timezone name like \"Asia/Singapore\" or \"America/New_York\"."
     Nothing ->
-      InternalException $ RuntimeTypeError
+      UserException $ UserError
         "TIMEZONE IS must be a string literal or a simple identifier that resolves to a string."
   pure []
 
@@ -2553,6 +2554,8 @@ prettyUserEvalException = \ case
     [ "I could not continue evaluating, because I needed to know the value of" ]
     <> indentMany r
     <> [ "but it is an assumed term." ]
+  UserError msg ->
+    [ msg ]
 
 maximumStackSize :: Int
 maximumStackSize = 200
@@ -2617,6 +2620,7 @@ initialEnvironment = do
   jsonDecodeRef <- AllocateValue (ValUnaryBuiltinFun UnaryJsonDecode)
   todayRef <- AllocateValue (ValNullaryBuiltinFun NullaryTodaySerial)
   nowRef <- AllocateValue (ValNullaryBuiltinFun NullaryNowSerial)
+  currentTimeRef <- AllocateValue (ValNullaryBuiltinFun NullaryCurrentTime)
   dateFromTextRef <- AllocateValue (ValUnaryBuiltinFun UnaryDateValue)
   dateSerialRef <- AllocateValue (ValUnaryBuiltinFun UnaryDateSerial)
   dateFromSerialRef <- AllocateValue (ValUnaryBuiltinFun UnaryDateFromSerial)
@@ -2680,6 +2684,7 @@ initialEnvironment = do
       , (TypeCheck.jsonDecodeUnique, jsonDecodeRef)
       , (TypeCheck.todaySerialUnique, todayRef)
       , (TypeCheck.nowSerialUnique, nowRef)
+      , (TypeCheck.currentTimeUnique, currentTimeRef)
       , (TypeCheck.dateFromTextUnique, dateFromTextRef)
       , (TypeCheck.dateSerialUnique, dateSerialRef)
       , (TypeCheck.dateFromSerialUnique, dateFromSerialRef)
@@ -2778,7 +2783,7 @@ evalNullaryBuiltin = \case
                 todayDay = localDay localTime
             pure $ ValDate todayDay
           Nothing ->
-            InternalException $ RuntimeTypeError $
+            UserException $ UserError $
               "Could not load timezone '" <> tzName <> "' for TODAY."
       Nothing -> do
         -- Fall back to UTC if no timezone declared
@@ -2786,15 +2791,31 @@ evalNullaryBuiltin = \case
         pure $ ValDate todayDay
   NullaryNowSerial -> do
     tc <- GetTemporalContext
-    let TemporalContext { tcSystemTime = systemTime } = tc
-    pure $ ValNumber (utcDatestamp systemTime)
+    let tzName = fromMaybe "Etc/UTC" tc.tcDocumentTimezone
+    pure $ ValDateTime tc.tcSystemTime tzName
   NullaryTimezone -> do
     tc <- GetTemporalContext
     case tc.tcDocumentTimezone of
       Just tzName -> pure $ ValString tzName
       Nothing ->
-        InternalException $ RuntimeTypeError
+        UserException $ UserError
           "TIMEZONE is not declared. Add 'TIMEZONE IS \"<IANA timezone>\"' to your document."
+  NullaryCurrentTime -> do
+    tc <- GetTemporalContext
+    case tc.tcDocumentTimezone of
+      Just tzName -> do
+        mTz <- liftIO $ tryLoadTZ (Text.unpack tzName)
+        case mTz of
+          Just tz -> do
+            let localTime = TZ.utcToLocalTimeTZ tz tc.tcSystemTime
+                tod = localTimeOfDay localTime
+            pure $ ValTime tod
+          Nothing ->
+            UserException $ UserError $
+              "Could not load timezone '" <> tzName <> "' for CURRENTTIME."
+      Nothing ->
+        UserException $ UserError
+          "TIMEZONE is not declared. CURRENTTIME requires 'TIMEZONE IS \"<IANA timezone>\"' in your document."
 
 utcDatestamp :: Time.UTCTime -> Rational
 utcDatestamp time =

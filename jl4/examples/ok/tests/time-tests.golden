@@ -57,5 +57,9 @@ time-tests.l4:63:1-19:
   assertion satisfied
 time-tests.l4:64:1-19:
   assertion satisfied
-time-tests.l4:66:1-44:
+time-tests.l4:69:1-26:
+  assertion satisfied
+time-tests.l4:70:1-25:
+  assertion satisfied
+time-tests.l4:72:1-44:
   18900

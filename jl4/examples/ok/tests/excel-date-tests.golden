@@ -3,8 +3,6 @@ Typechecking successful
 Evaluation successful
 excel-date-tests.l4:18:1-17:
   DATE OF 31, 1, 2025
-excel-date-tests.l4:19:1-15:
-  45688.65659722222
 excel-date-tests.l4:21:1-34:
   RIGHT OF (DATE OF 29, 2, 2024)
 excel-date-tests.l4:22:1-34:
