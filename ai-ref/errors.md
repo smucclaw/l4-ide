@@ -252,4 +252,6 @@ factorial MEANS
 
 ## Search Terms
 
-Parse error, type mismatch, pattern match, indentation error, scope error, recursion, stack overflow, import error, module not found, field access, arity mismatch, boolean literal, equality operator
+**Error types:** parse error, type mismatch, type error, pattern match, indentation error, scope error, recursion, stack overflow, import error, module not found, field access, arity mismatch, boolean literal, equality operator, undefined variable, exhaustive match, circular definition
+
+**Common confusions from other languages:** == should be = (equality), True/true should be TRUE (boolean), False/false should be FALSE, % should be MODULO, . (dot) should be 's (possessive), ++ should be CONCAT, def/fn/function should be MEANS or DECIDE, return (not needed, expression-based), ; (not needed, layout-sensitive), { } (not needed, indentation-based), null/nil should be Nothing (MAYBE type)

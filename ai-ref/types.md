@@ -15,12 +15,14 @@ Type theory foundations and FP correspondence.
 
 ## Primitive Types
 
-| L4 Type | Description | Haskell | Type Theory |
-|---------|-------------|---------|-------------|
-| BOOLEAN | True/False | Bool | 2 (two-element type) |
-| NUMBER | Numeric values | Rational/Double | ℚ or ℝ |
-| STRING | Text | String/Text | List Char |
-| DATE | Calendar dates | Day | Date algebra |
+| L4 Type | Description | Haskell | Coercion from STRING |
+|---------|-------------|---------|---------------------|
+| BOOLEAN | TRUE/FALSE (not True/true) | Bool | - |
+| NUMBER | Numeric values | Rational/Double | - |
+| STRING | Text | String/Text | - |
+| DATE | Calendar dates (YYYY-MM-DD) | Day | TODATE |
+| TIME | Time of day (HH:MM:SS or HH:MM) | TimeOfDay | TOTIME |
+| DATETIME | Date+time+tz (ISO-8601) | UTCTime + TZ | TODATETIME |
 
 ---
 
@@ -80,16 +82,18 @@ f MEANS expression
 
 ## Type Correspondence Table
 
-| L4 Construct | Type | Haskell Equivalent | Category Theory |
-|--------------|------|-------------------|----------------|
-| `DECLARE T HAS ...` | Product | `data T = T { ... }` | Product object (×) |
-| `IS ONE OF` | Sum | `data T = A \| B` | Coproduct (+) |
-| `GIVEN...GIVETH` | Arrow | `a -> b` | Exponential (B^A) |
-| `MAYBE T` | Option | `Maybe T = Nothing \| Just T` | T + 1 |
-| `LIST OF T` | List | `[T]` | Free monoid |
-| `CONSIDER` | Pattern match | `case...of` | Catamorphism |
-| `WHERE` | Local binding | `let...in` / `where` | Substitution |
-| `DEONTIC` | Effect | Custom monad | Kleisli category |
+| L4 Construct | Type | Haskell | Other Languages | Category Theory |
+|--------------|------|---------|-----------------|----------------|
+| `DECLARE T HAS ...` | Product | `data T = T { ... }` | struct/class/interface | Product (×) |
+| `IS ONE OF` | Sum | `data T = A \| B` | enum/union/variant/sealed class | Coproduct (+) |
+| `GIVEN...GIVETH` | Arrow | `a -> b` | function signature/def/fn | Exponential (B^A) |
+| `MAYBE T` | Option | `Maybe T` | Optional/null/nil/None/? | T + 1 |
+| `LIST OF T` | List | `[T]` | Array/List/Vec/Sequence | Free monoid |
+| `CONSIDER` | Match | `case...of` | switch/case/match/when | Catamorphism |
+| `BRANCH` | Guards | `\| cond = ...` | if-elseif chain/cond | - |
+| `WHERE` / `LET...IN` | Binding | `where` / `let...in` | let/const/var/local | Substitution |
+| `DEONTIC` | Effect | Custom monad | - (domain-specific) | Kleisli category |
+| `'s` possessive | Accessor | Record field / lens | dot notation / .field | Projection |
 
 ---
 
@@ -285,10 +289,12 @@ factorial MEANS
 
 ## Search Terms
 
-Type theory: arrow type, product type, sum type, ADT, inductive type, catamorphism, elimination form
+**Type theory:** arrow type, product type, sum type, ADT, algebraic data type, inductive type, catamorphism, elimination form, introduction form, coproduct, exponential object
 
-Haskell: Maybe monad, list type, pattern matching, lazy evaluation, Hindley-Milner, bidirectional typing
+**Haskell:** Maybe monad, list type, pattern matching, lazy evaluation, Hindley-Milner, bidirectional typing, where clause, let-in, data declaration, record syntax, guards, case expression
 
-FP: parametric polymorphism, higher-order function, lambda calculus, call-by-need
+**FP:** parametric polymorphism, higher-order function, lambda calculus, call-by-need, currying, partial application, pure function, referential transparency, immutable data
 
-Modal logic: necessity operator, possibility operator, deontic logic, Kripke semantics
+**Other languages:** struct (C/Go/Rust), class (Java/Python/JS), interface (TypeScript/Go), enum (Rust/Java/Swift), union (C/TypeScript), sealed class (Kotlin), Optional (Java/Swift), nullable (Kotlin/C#), Array (JS), Vec (Rust), dict/map/HashMap → (see prelude DICTIONARY)
+
+**Modal logic:** necessity operator, possibility operator, deontic logic, temporal logic, Kripke semantics, obligation, permission, prohibition

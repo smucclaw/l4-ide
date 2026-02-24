@@ -118,7 +118,7 @@ GIVEN borrower  IS A Person
       capital   IS A NUMBER -- in practice we would import the `currency` library
       interest  IS A NUMBER
       closing   IS A NUMBER -- [TODO] -- this needs to become a DATE
-      repayment IS A DATE   -- ditto. see the mengwong/deadlines branch
+      wrepayment IS A DATE   -- ditto. see the mengwong/deadlines branch
       `conditions precedent are met` IS A BOOLEAN
 `Loan Contract` MEANS
   IF     NOT `conditions precedent are met`

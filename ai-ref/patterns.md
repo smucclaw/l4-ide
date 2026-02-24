@@ -1,10 +1,10 @@
 # Canonical L4 Patterns
 
-Copy-paste templates for common cases. Each pattern: name, structure, example.
+Copy-paste templates. For struct/record use DECLARE HAS. For enum/union use IS ONE OF. For function use MEANS/DECIDE. For switch/case use CONSIDER/BRANCH. For dot access use 's possessive. For string concat use CONCAT. For optional/nullable use MAYBE.
 
 ---
 
-## Product Type (Record)
+## Product Type (Record / Struct / Class / Interface)
 
 ```l4
 DECLARE TypeName HAS
@@ -13,17 +13,27 @@ DECLARE TypeName HAS
     field3 IS A Type3
 ```
 
-**Access:** `record's field1`, `record's field2's nested`
+**Access (dot notation equivalent):** `record's field1`, `record's field2's nested`
 
 ---
 
-## Sum Type (Enum/ADT)
+## Sum Type with Payloads (Enum / Union / Variant / ADT)
 
 ```l4
 DECLARE TypeName IS ONE OF
     Constructor1
     | Constructor2 ArgType
     | Constructor3 ArgType1 ArgType2
+```
+
+**Sum type constructors can have their own fields:**
+```l4
+DECLARE Status IS ONE OF
+    Active
+    | Suspended
+        HAS reason     IS A STRING
+            `start date` IS A DATE
+    | Closed
 ```
 
 **Pattern match:**
@@ -328,15 +338,134 @@ OTHERWISE defaultResult  -- Catch remaining cases
 
 ---
 
+## Mixfix Function Definition (Infix / Postfix)
+
+```l4
+-- Parameters interspersed with identifier words
+GIVEN mom IS A STRING
+      dad IS A STRING
+      kid IS A STRING
+GIVES A STRING
+mom and dad `have a baby named` kid MEANS
+    CONCAT "mother: ", mom, ", father: ", dad, ", child: ", kid
+
+-- Call: "alice" and "bob" `have a baby named` "carol"
+```
+
+---
+
+## String Concatenation
+
+```l4
+-- CONCAT joins multiple string arguments
+greeting MEANS CONCAT "Hello, ", person's name, "!"
+
+-- With type coercion
+summary MEANS CONCAT person's name, " owes ", TOSTRING(amount)
+```
+
+---
+
+## Caret Operator (Ditto / Vertical Alignment)
+
+```l4
+-- ^ means "same token as previous line in this position"
+`tautology` MEANS
+        p EQUALS TRUE
+    OR  p EQUALS FALSE
+   AND  q ^      TRUE    -- ^ = EQUALS
+    OR  q ^      FALSE
+```
+
+---
+
+## UNLESS (AND NOT)
+
+```l4
+-- UNLESS = AND NOT, for natural legal phrasing
+DECIDE `is eligible` IF
+        `meets age requirement`
+    AND `has valid ID`
+ UNLESS  `is disqualified`
+```
+
+---
+
+## LET / IN (Alternative to WHERE)
+
+```l4
+-- Prefix-style local bindings
+result MEANS
+    LET x MEANS a + b
+        y MEANS c * d
+    IN  x + y
+
+-- Compare: same logic with WHERE (postfix style)
+result MEANS
+    x + y
+    WHERE
+        x MEANS a + b
+        y MEANS c * d
+```
+
+---
+
+## Section Scoping with §
+
+```l4
+§ Definitions
+  DECLARE Person HAS
+      name IS A STRING
+      age IS A NUMBER
+
+§ Eligibility
+  GIVEN p IS A Person
+  DECIDE `is eligible` IF p's age >= 18
+
+  §§ Special Cases
+    -- Nested subsection
+    DECIDE `is exempt` IF ...
+```
+
+---
+
+## Full Regulative Rule (Loan Contract)
+
+```l4
+GIVEN borrower IS A Person
+      lender   IS A Person
+      capital  IS A NUMBER
+      interest IS A NUMBER
+      closing  IS A DATE
+      repayment IS A DATE
+      `conditions precedent are met` IS A BOOLEAN
+`Loan Contract` MEANS
+  IF     NOT `conditions precedent are met`
+  THEN   FULFILLED
+  ELSE   PARTY lender
+         MUST  EXACTLY send capital to borrower
+         BEFORE closing
+         HENCE    PARTY  borrower
+                  MUST   EXACTLY send accrued to lender
+                  BEFORE repayment
+  WHERE
+    send money to person MEANS
+        CONCAT person's name, " receives ", TOSTRING(money)
+    accrued MEANS capital PLUS capital * interest
+```
+
+---
+
 ## Testing Pattern
 
 ```l4
--- At end of file
+-- At end of file: evaluate expression
 #EVAL `function name` arg1 arg2 arg3
 -- Expected result shown in output
 
+-- Evaluate deontic rule, show obligation trace
 #TRACE `deontic rule` context
--- Shows obligation trace
+-- Shows: PARTY X MUST ... HENCE PARTY Y MUST ...
 ```
 
 ---
@@ -410,12 +539,16 @@ GIVETH A DEONTIC
 ## Common Type Constructors
 
 ```l4
-BOOLEAN
-NUMBER
-STRING
-DATE
-DEONTIC
-LIST OF T
-MAYBE T
-CustomType  -- User-defined via DECLARE
+BOOLEAN          -- TRUE / FALSE (uppercase!)
+NUMBER           -- numeric
+STRING           -- text
+DATE             -- YYYY-MM-DD (IMPORT daydate)
+TIME             -- HH:MM:SS (IMPORT time)
+DATETIME         -- ISO-8601 with timezone (IMPORT datetime)
+DEONTIC          -- obligation/permission/prohibition effect
+LIST OF T        -- homogeneous list (IMPORT prelude for operations)
+MAYBE T          -- optional: Nothing or Just value
+CustomType       -- user-defined via DECLARE
 ```
+
+**Coercions:** `TODATE("2024-01-15")`, `TOTIME("14:30:00")`, `TODATETIME("2024-01-15T14:30:00Z")`, `TOSTRING(42)`
