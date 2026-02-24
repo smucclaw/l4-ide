@@ -16,7 +16,7 @@ IMPORT `excel-date`
 `Holidays 24`  MEANS Date 26 1 2024 FOLLOWED BY EMPTY
 
 #EVAL excelToday
-#EVAL excelNow
+-- excelNow is non-deterministic (returns current time), not suitable for golden tests
 
 #EVAL ExcelDateValue "2024-02-29"
 #EVAL ExcelDateValue "31/12/2023"

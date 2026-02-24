@@ -59,6 +59,7 @@ mkBuiltins
   , "jsonDecode" `rename` "JSONDECODE"
   , "todaySerial" `rename` "TODAY"
   , "nowSerial" `rename` "NOW"
+  , "currentTime" `rename` "CURRENTTIME"
   , "dateFromText" `rename` "DATEVALUE"
   , "dateSerial" `rename` "DATE_SERIAL"
   , "dateFromSerial" `rename` "DATE_FROM_SERIAL"
@@ -257,7 +258,10 @@ todayBuiltin :: Type' Resolved
 todayBuiltin = date
 
 nowBuiltin :: Type' Resolved
-nowBuiltin = number
+nowBuiltin = datetime
+
+currentTimeBuiltin :: Type' Resolved
+currentTimeBuiltin = time
 
 dateValueBuiltin :: Type' Resolved
 dateValueBuiltin = fun_ [string] (eitherType string date)
@@ -658,6 +662,9 @@ todayInfo = KnownTerm todayBuiltin Computable
 nowInfo :: CheckEntity
 nowInfo = KnownTerm nowBuiltin Computable
 
+currentTimeInfo :: CheckEntity
+currentTimeInfo = KnownTerm currentTimeBuiltin Computable
+
 dateFromTextInfo :: CheckEntity
 dateFromTextInfo = KnownTerm dateValueBuiltin Computable
 
@@ -930,6 +937,7 @@ initialEnvironment =
     , (rawName jsonDecodeName,   [jsonDecodeUnique])
     , (rawName todaySerialName,  [todaySerialUnique])
     , (rawName nowSerialName,    [nowSerialUnique])
+    , (rawName currentTimeName,   [currentTimeUnique])
     , (rawName dateFromTextName, [dateFromTextUnique])
     , (rawName dateSerialName,   [dateSerialUnique])
     , (rawName dateFromSerialName, [dateFromSerialUnique])
@@ -1045,6 +1053,7 @@ initialEntityInfo =
     , (jsonDecodeUnique,   (jsonDecodeName,   jsonDecodeInfo  ))
     , (todaySerialUnique,  (todaySerialName,  todayInfo       ))
     , (nowSerialUnique,    (nowSerialName,    nowInfo         ))
+    , (currentTimeUnique,   (currentTimeName,   currentTimeInfo   ))
     , (dateFromTextUnique, (dateFromTextName, dateFromTextInfo))
     , (dateSerialUnique,   (dateSerialName,   dateSerialInfo  ))
     , (dateFromSerialUnique, (dateFromSerialName, dateFromSerialInfo))

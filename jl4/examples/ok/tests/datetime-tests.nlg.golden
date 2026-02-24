@@ -22,6 +22,8 @@
 `deadline after meeting`
 `leq datetime`
 `geq datetime`
+`is before datetime`
+`is after datetime`
 `sg vs london`
 `TIMEZONE`
 `plus 30 days`

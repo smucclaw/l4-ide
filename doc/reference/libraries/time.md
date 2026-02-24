@@ -59,8 +59,13 @@ Can be imported into L4 files with `IMPORT time`.
 
 - `the earlier of` t1 t2
 - `the later of` t1 t2
+- t1 `is before` t2, t1 `is after` t2
 - Standard comparison operators: LESS THAN, GREATER THAN, AT MOST, AT LEAST
 - TIME MINUS TIME returns difference in seconds
+
+**Clock:**
+
+- `CURRENTTIME` - Returns the current local time as a TIME value (requires `TIMEZONE IS`)
 
 ### Example: Time Operations
 

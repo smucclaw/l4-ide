@@ -4,7 +4,7 @@ IMPORT daydate
 §§ `Runtime Bridges`
 
 `Today serial` MEANS DATE_SERIAL TODAY
-`Now serial` MEANS NOW
+`Now serial` MEANS DATETIME_SERIAL NOW
 
 GIVEN text IS A STRING
 GIVETH AN EITHER STRING NUMBER

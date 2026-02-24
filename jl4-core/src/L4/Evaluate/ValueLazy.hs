@@ -81,6 +81,7 @@ data NullaryBuiltinFun
   = NullaryTodaySerial
   | NullaryNowSerial
   | NullaryTimezone          -- ^ Returns document IANA timezone name from TemporalContext
+  | NullaryCurrentTime       -- ^ Returns current local TIME (requires TIMEZONE IS)
   deriving stock (Show)
 
 data UnaryBuiltinFun
@@ -182,6 +183,7 @@ instance NFData NullaryBuiltinFun where
   rnf NullaryTodaySerial = ()
   rnf NullaryNowSerial = ()
   rnf NullaryTimezone = ()
+  rnf NullaryCurrentTime = ()
 
 instance NFData UnaryBuiltinFun where
   rnf :: UnaryBuiltinFun -> ()

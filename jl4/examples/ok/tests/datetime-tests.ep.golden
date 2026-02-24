@@ -54,6 +54,12 @@ DECIDE `geq datetime` IS `deadline` AT LEAST `meeting time`
 #ASSERT `leq datetime`
 #ASSERT `geq datetime`
 
+-- Mixfix is before / is after
+DECIDE `is before datetime` IS `meeting time` `is before` `deadline`
+DECIDE `is after datetime` IS `deadline` `is after` `meeting time`
+#ASSERT `is before datetime`
+#ASSERT `is after datetime`
+
 -- Cross-timezone comparison (same UTC instant, different local times)
 DECIDE `sg morning` IS Datetime (Date 1 6 2026) 8 0 0 SGT
 DECIDE `london midnight` IS Datetime (Date 1 6 2026) 0 0 0 "Europe/London"
