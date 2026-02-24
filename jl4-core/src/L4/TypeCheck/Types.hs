@@ -1,8 +1,12 @@
 -- | Types needed during the scope and type checking phase.
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE UndecidableInstances #-}
 module L4.TypeCheck.Types where
 
 import Base
+#if defined(SERIALISE_ENABLED)
+import Codec.Serialise (Serialise)
+#endif
 import qualified Optics
 import L4.Annotation (HasSrcRange(..), HasAnno(..), AnnoExtra, AnnoToken, emptyAnno)
 import L4.Lexer (PosToken)
@@ -37,7 +41,11 @@ data CheckEntity =
   | KnownSection (Section Resolved)
   | KnownTypeVariable
   deriving stock (Eq, Generic, Show)
-  deriving anyclass NFData
+  deriving anyclass (NFData)
+
+#if defined(SERIALISE_ENABLED)
+deriving anyclass instance Serialise CheckEntity
+#endif
 
 data CheckState =
   MkCheckState
@@ -537,6 +545,7 @@ isTopLevelBindingInSection u (MkSection _a  _mn _maka decls) = any (elem u . map
     Assume _ (MkAssume _ _ af _) -> appFormHeads af
     Directive _ _ -> []
     Import _ _ -> []
+    Timezone _ _ -> []
     -- NOTE: Sections are a toplevel binding in the current section but can also contain further
     -- toplevel bindings
     Section _ (MkSection _ mr maka decls') -> toResolved mr <> toResolved maka <> foldMap relevantResolveds decls'

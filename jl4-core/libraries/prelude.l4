@@ -96,6 +96,17 @@ filter f list MEANS
       THEN x FOLLOWED BY filter f xs
       ELSE filter f xs
 
+GIVEN a    IS A TYPE
+      list IS A LIST OF a
+GIVETH A NUMBER
+count list MEANS
+  go 0 list
+  WHERE
+    go acc l MEANS
+      CONSIDER l
+        WHEN EMPTY THEN acc
+        WHEN x FOLLOWED BY xs THEN go (acc + 1) xs
+
 GIVEN
   a    IS A TYPE
   list IS A LIST OF a

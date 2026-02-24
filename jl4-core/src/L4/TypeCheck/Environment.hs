@@ -117,6 +117,25 @@ mkBuiltins
   , "toNumber" `rename` "TONUMBER"
   , "toDate" `rename` "TODATE"
   , "trunc" `rename` "TRUNC"
+  -- TIME type + builtins
+  , "time" `rename` "TIME"
+  , "timeHour" `rename` "TIME_HOUR"
+  , "timeMinute" `rename` "TIME_MINUTE"
+  , "timeSecond" `rename` "TIME_SECOND"
+  , "timeToSerial" `rename` "TIME_SERIAL"
+  , "timeFromSerial" `rename` "TIME_FROM_SERIAL"
+  , "timeFromHMS" `rename` "TIME_FROM_HMS"
+  , "toTime" `rename` "TOTIME"
+  -- DATETIME type + builtins
+  , "datetime" `rename` "DATETIME"
+  , "datetimeDate" `rename` "DATETIME_DATE"
+  , "datetimeTime" `rename` "DATETIME_TIME"
+  , "datetimeSerial" `rename` "DATETIME_SERIAL"
+  , "datetimeTzName" `rename` "DATETIME_TZ"
+  , "datetimeFromDTZ" `rename` "DATETIME_FROM_DTZ"
+  , "toDatetime" `rename` "TODATETIME"
+  -- TIMEZONE (nullary → STRING)
+  , "timezone" `rename` "TIMEZONE"
   ]
 
 boolean :: Type' Resolved
@@ -131,6 +150,16 @@ number = app numberRef []
 
 date :: Type' Resolved
 date = app dateRef []
+
+-- TIME
+
+time :: Type' Resolved
+time = app timeRef []
+
+-- DATETIME
+
+datetime :: Type' Resolved
+datetime = app datetimeRef []
 
 -- STRING
 
@@ -422,6 +451,54 @@ toDateBuiltin = forall' [aDef] $ fun_ [string] (maybeType (app aRef []))
 truncBuiltin :: Type' Resolved
 truncBuiltin = fun_ [number, number] number
 
+-- TIME builtins
+
+timeHourBuiltin :: Type' Resolved
+timeHourBuiltin = fun_ [time] number
+
+timeMinuteBuiltin :: Type' Resolved
+timeMinuteBuiltin = fun_ [time] number
+
+timeSecondBuiltin :: Type' Resolved
+timeSecondBuiltin = fun_ [time] number
+
+timeToSerialBuiltin :: Type' Resolved
+timeToSerialBuiltin = fun_ [time] number
+
+timeFromSerialBuiltin :: Type' Resolved
+timeFromSerialBuiltin = fun_ [number] time
+
+timeFromHmsBuiltin :: Type' Resolved
+timeFromHmsBuiltin = fun_ [number, number, number] time
+
+toTimeBuiltin :: Type' Resolved
+toTimeBuiltin = fun_ [string] time
+
+-- DATETIME builtins
+
+datetimeDateBuiltin :: Type' Resolved
+datetimeDateBuiltin = fun_ [datetime] date
+
+datetimeTimeBuiltin :: Type' Resolved
+datetimeTimeBuiltin = fun_ [datetime] time
+
+datetimeSerialBuiltin :: Type' Resolved
+datetimeSerialBuiltin = fun_ [datetime] number
+
+datetimeTzNameBuiltin :: Type' Resolved
+datetimeTzNameBuiltin = fun_ [datetime] string
+
+datetimeFromDtzBuiltin :: Type' Resolved
+datetimeFromDtzBuiltin = fun_ [date, time, string] datetime
+
+toDatetimeBuiltin :: Type' Resolved
+toDatetimeBuiltin = fun_ [string] datetime
+
+-- TIMEZONE (nullary → STRING)
+
+timezoneBuiltin :: Type' Resolved
+timezoneBuiltin = string
+
 -- infos
 
 booleanInfo :: CheckEntity
@@ -446,6 +523,14 @@ rationalInfo =
 
 dateInfo :: CheckEntity
 dateInfo =
+  KnownType 0 [] Nothing
+
+timeInfo :: CheckEntity
+timeInfo =
+  KnownType 0 [] Nothing
+
+datetimeInfo :: CheckEntity
+datetimeInfo =
   KnownType 0 [] Nothing
 
 stringInfo :: CheckEntity
@@ -704,6 +789,54 @@ toDateInfo = KnownTerm toDateBuiltin Computable
 truncInfo :: CheckEntity
 truncInfo = KnownTerm truncBuiltin Computable
 
+-- TIME builtins
+
+timeHourInfo :: CheckEntity
+timeHourInfo = KnownTerm timeHourBuiltin Computable
+
+timeMinuteInfo :: CheckEntity
+timeMinuteInfo = KnownTerm timeMinuteBuiltin Computable
+
+timeSecondInfo :: CheckEntity
+timeSecondInfo = KnownTerm timeSecondBuiltin Computable
+
+timeToSerialInfo :: CheckEntity
+timeToSerialInfo = KnownTerm timeToSerialBuiltin Computable
+
+timeFromSerialInfo :: CheckEntity
+timeFromSerialInfo = KnownTerm timeFromSerialBuiltin Computable
+
+timeFromHmsInfo :: CheckEntity
+timeFromHmsInfo = KnownTerm timeFromHmsBuiltin Computable
+
+toTimeInfo :: CheckEntity
+toTimeInfo = KnownTerm toTimeBuiltin Computable
+
+-- DATETIME builtins
+
+datetimeDateInfo :: CheckEntity
+datetimeDateInfo = KnownTerm datetimeDateBuiltin Computable
+
+datetimeTimeInfo :: CheckEntity
+datetimeTimeInfo = KnownTerm datetimeTimeBuiltin Computable
+
+datetimeSerialInfo :: CheckEntity
+datetimeSerialInfo = KnownTerm datetimeSerialBuiltin Computable
+
+datetimeTzNameInfo :: CheckEntity
+datetimeTzNameInfo = KnownTerm datetimeTzNameBuiltin Computable
+
+datetimeFromDtzInfo :: CheckEntity
+datetimeFromDtzInfo = KnownTerm datetimeFromDtzBuiltin Computable
+
+toDatetimeInfo :: CheckEntity
+toDatetimeInfo = KnownTerm toDatetimeBuiltin Computable
+
+-- TIMEZONE (nullary → STRING)
+
+timezoneInfo :: CheckEntity
+timezoneInfo = KnownTerm timezoneBuiltin Computable
+
 -- Comparison
 
 ltInfos :: [CheckEntity]
@@ -847,6 +980,25 @@ initialEnvironment =
     , (rawName toNumberName,     [toNumberUnique    ])
     , (rawName toDateName,       [toDateUnique      ])
     , (rawName truncName,        [truncUnique       ])
+    -- TIME
+    , (rawName timeName,         [timeUnique        ])
+    , (rawName timeHourName,     [timeHourUnique    ])
+    , (rawName timeMinuteName,   [timeMinuteUnique  ])
+    , (rawName timeSecondName,   [timeSecondUnique  ])
+    , (rawName timeToSerialName, [timeToSerialUnique])
+    , (rawName timeFromSerialName, [timeFromSerialUnique])
+    , (rawName timeFromHMSName,  [timeFromHMSUnique ])
+    , (rawName toTimeName,       [toTimeUnique      ])
+    -- DATETIME
+    , (rawName datetimeName,     [datetimeUnique    ])
+    , (rawName datetimeDateName, [datetimeDateUnique])
+    , (rawName datetimeTimeName, [datetimeTimeUnique])
+    , (rawName datetimeSerialName, [datetimeSerialUnique])
+    , (rawName datetimeTzNameName, [datetimeTzNameUnique])
+    , (rawName datetimeFromDTZName, [datetimeFromDTZUnique])
+    , (rawName toDatetimeName,   [toDatetimeUnique  ])
+    -- TIMEZONE
+    , (rawName timezoneName,     [timezoneUnique    ])
     ]
       -- NOTE: we currently do not include the Cons constructor because it has special syntax
 
@@ -939,6 +1091,25 @@ initialEntityInfo =
     , (toNumberUnique,     (toNumberName,     toNumberInfo    ))
     , (toDateUnique,       (toDateName,       toDateInfo      ))
     , (truncUnique,        (truncName,        truncInfo       ))
+    -- TIME
+    , (timeUnique,         (timeName,         timeInfo        ))
+    , (timeHourUnique,     (timeHourName,     timeHourInfo    ))
+    , (timeMinuteUnique,   (timeMinuteName,   timeMinuteInfo  ))
+    , (timeSecondUnique,   (timeSecondName,   timeSecondInfo  ))
+    , (timeToSerialUnique, (timeToSerialName, timeToSerialInfo))
+    , (timeFromSerialUnique, (timeFromSerialName, timeFromSerialInfo))
+    , (timeFromHMSUnique,  (timeFromHMSName,  timeFromHmsInfo ))
+    , (toTimeUnique,       (toTimeName,       toTimeInfo      ))
+    -- DATETIME
+    , (datetimeUnique,     (datetimeName,     datetimeInfo    ))
+    , (datetimeDateUnique, (datetimeDateName, datetimeDateInfo))
+    , (datetimeTimeUnique, (datetimeTimeName, datetimeTimeInfo))
+    , (datetimeSerialUnique, (datetimeSerialName, datetimeSerialInfo))
+    , (datetimeTzNameUnique, (datetimeTzNameName, datetimeTzNameInfo))
+    , (datetimeFromDTZUnique, (datetimeFromDTZName, datetimeFromDtzInfo))
+    , (toDatetimeUnique,   (toDatetimeName,   toDatetimeInfo  ))
+    -- TIMEZONE
+    , (timezoneUnique,     (timezoneName,     timezoneInfo    ))
     ]
     <>
       [ (uniq, (name, info))

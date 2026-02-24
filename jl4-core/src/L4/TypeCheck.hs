@@ -474,6 +474,9 @@ inferTopDecl (Import ann import_) = do
 inferTopDecl (Section ann sec) = do
   (sec', extends) <- inferSection sec
   pure (Section ann sec', extends)
+inferTopDecl (Timezone ann tzExpr) = do
+  (rtzExpr, _ty) <- inferExpr tzExpr
+  pure (Timezone ann rtzExpr, [])
 
 -- TODO: Somewhere near the top we should do dependency analysis. Note that
 -- there is a potential problem. If we use type-directed name resolution but
@@ -2091,6 +2094,7 @@ inferTyDeclTopLevel = \ case
   Directive _ _ -> pure []
   Import    _ _ -> pure []
   Section   _ s -> inferTyDeclSection s
+  Timezone  _ _ -> pure []
 
 inferTyDeclDeclare :: Declare Name -> Check (Maybe (DeclChecked (Declare Resolved)))
 inferTyDeclDeclare (MkDeclare ann _tysig appForm t) = prune $
@@ -2143,6 +2147,7 @@ scanTyDeclTopLevel = \ case
   Directive _ _ -> pure []
   Import    _ _ -> pure []
   Section   _ s -> scanTyDeclSection s
+  Timezone  _ _ -> pure []
 
 scanTyDeclLocalDecl :: LocalDecl Name -> Check (Maybe DeclTypeSig)
 scanTyDeclLocalDecl = \ case
@@ -2698,6 +2703,7 @@ scanFunSigTopLevel = \ case
   Directive _ _ -> pure []
   Import    _ _ -> pure []
   Section   _ s -> scanFunSigSection s
+  Timezone  _ _ -> pure []
 
 scanFunSigLocalDecl :: LocalDecl Name -> Check (Maybe FunTypeSig)
 scanFunSigLocalDecl = \ case

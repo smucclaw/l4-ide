@@ -6,7 +6,12 @@ import L4.Evaluate.ValueLazy as Lazy
 import L4.Syntax
 
 import Data.Char
-import Data.Time (toGregorian)
+import Data.Time (UTCTime, toGregorian)
+import Data.Time.LocalTime (TimeOfDay(..))
+import qualified Data.Time.Format as TimeFormat
+import qualified Data.Time.Zones as TZ
+import Control.Exception (SomeException, catch)
+import System.IO.Unsafe (unsafePerformIO)
 import Prettyprinter
 import Prettyprinter.Render.Text
 import qualified Data.List.NonEmpty as NE
@@ -228,6 +233,7 @@ instance (LayoutPrinterWithName a, n ~ Int) => LayoutPrinter (n, TopDecl a) wher
     (_, Directive _ t) -> printWithLayout t
     (_, Import    _ t) -> printWithLayout t
     (i, Section   _ t) -> printWithLayout (i, t)
+    (_, Timezone  _ _) -> mempty  -- TIMEZONE IS declarations are not pretty-printed
 
 instance LayoutPrinterWithName a => LayoutPrinter (Expr a) where
   printWithLayout :: LayoutPrinter a => Expr a -> Doc ann
@@ -454,6 +460,11 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
     Lazy.ValDate day               ->
       let (y, m, d) = toGregorian day
       in "DATE OF" <+> hsep [pretty d <> ",", pretty m <> ",", pretty y]
+    Lazy.ValTime tod               ->
+      let h = todHour tod; mi = todMin tod; s = todSec tod
+      in "TIME OF" <+> hsep [pretty h <> ",", pretty mi <> ",", pretty (realToFrac s :: Double)]
+    Lazy.ValDateTime utc tzName    ->
+      pretty (formatDateTimeIso utc tzName)
     Lazy.ValNil                    -> "EMPTY"
     Lazy.ValCons v1 v2             -> "(" <> printWithLayout v1 <> " FOLLOWED BY " <> printWithLayout v2 <> ")" -- TODO: parens
     Lazy.ValClosure{}              -> "<function>"
@@ -486,6 +497,8 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
     Lazy.ValNumber{}               -> printWithLayout v
     Lazy.ValString{}               -> printWithLayout v
     Lazy.ValDate{}                 -> printWithLayout v
+    Lazy.ValTime{}                 -> printWithLayout v
+    Lazy.ValDateTime{}             -> printWithLayout v
     Lazy.ValNil                    -> "EMPTY"
     Lazy.ValClosure{}              -> printWithLayout v
     Lazy.ValUnappliedConstructor{} -> printWithLayout v
@@ -629,3 +642,25 @@ escapeStringLiteral = Text.concatMap (\ case
   '\\' -> "\\\\"
   c -> Text.singleton c
   )
+
+-- | Format a UTCTime with timezone offset as ISO-8601
+formatDateTimeIso :: UTCTime -> Text -> Text
+formatDateTimeIso utc tzName =
+  case tryLoadTZPure tzName of
+    Just tz ->
+      let localTime' = TZ.utcToLocalTimeTZ tz utc
+          offset = TZ.timeZoneForUTCTime tz utc
+          offsetStr = TimeFormat.formatTime TimeFormat.defaultTimeLocale "%z" offset
+      in Text.pack (TimeFormat.formatTime TimeFormat.defaultTimeLocale "%Y-%m-%dT%H:%M:%S" localTime') <> Text.pack offsetStr
+    Nothing ->
+      -- Fallback: format as UTC
+      Text.pack $ TimeFormat.formatTime TimeFormat.defaultTimeLocale "%Y-%m-%dT%H:%M:%SZ" utc
+
+-- | Pure wrapper for TZ loading (uses unsafePerformIO since TZ data is static)
+tryLoadTZPure :: Text -> Maybe TZ.TZ
+tryLoadTZPure name = unsafePerformIO $ tryLoadTZ (Text.unpack name)
+{-# NOINLINE tryLoadTZPure #-}
+
+tryLoadTZ :: String -> IO (Maybe TZ.TZ)
+tryLoadTZ name =
+  (Just <$> TZ.loadTZFromDB name) `catch` \(_ :: SomeException) -> pure Nothing

@@ -8,12 +8,16 @@ Core libraries are located in the [jl4-core/libraries/](https://github.com/smucc
 
 - **[prelude](prelude.md)** - Standard functions (automatically imported)
 - **[daydate](daydate.md)** - Date calculations and temporal logic
+- **[time](time.md)** - Wall-clock time-of-day operations
+- **[datetime](datetime.md)** - Absolute points in time with timezones
+- **[timezone](timezone.md)** - IANA timezone constants
 - **[excel-date](excel-date.md)** - Excel date compatibility
 - **[math](math.md)** - Mathematical functions
 - **[currency](currency.md)** - Currency handling (ISO 4217)
 - **[legal-persons](legal-persons.md)** - Legal entity types and capacity
 - **[jurisdiction](jurisdiction.md)** - Jurisdiction definitions
 - **[holdings](holdings.md)** - Holdings and ownership
+- **[actus](actus.md)** - ACTUS financial contract types and evaluation
 - **[date-compat](date-compat.md)** - Legacy DATE syntax compatibility
 - **[llm](llm.md)** - LLM API integration
 

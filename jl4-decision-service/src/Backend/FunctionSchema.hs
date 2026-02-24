@@ -161,6 +161,7 @@ typeToParameter declares visited ty =
       "string" -> Just "string"
       "text" -> Just "string"
       "date" -> Just "string"
+      "time" -> Just "string"
       "datetime" -> Just "string"
       _ -> Nothing
 

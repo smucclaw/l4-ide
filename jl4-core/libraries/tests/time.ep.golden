@@ -1,0 +1,212 @@
+§ `Time Definitions and Helpers`
+
+-- TIME is a wall-clock time-of-day. No date, no timezone.
+-- Uses 24-hour format internally. Hours 0-23, minutes 0-59, seconds 0-59.
+
+§§ `Constants`
+
+`Seconds in a minute` MEANS 60
+`Minutes in an hour`  MEANS 60
+`Hours in a day`      MEANS 24
+`Seconds in an hour`  MEANS 3600
+`Seconds in a day`    MEANS 86400
+
+DECIDE Midnight IS TIME_FROM_HMS 0 0 0
+
+DECIDE Noon IS TIME_FROM_HMS 12 0 0
+
+
+§§ `Meridiem`
+
+DECLARE `Meridiem Indicator` IS ONE OF am, pm
+
+§§ `Time Constructors`
+
+-- Time h m s  (3 NUMBERs -> TIME)
+GIVEN h IS A NUMBER
+      m IS A NUMBER
+      s IS A NUMBER
+GIVETH A TIME
+`Time` MEANS
+    TIME_FROM_HMS h m s
+
+-- Time h m  (2 NUMBERs -> TIME, seconds=0)
+GIVEN h IS A NUMBER
+      m IS A NUMBER
+GIVETH A TIME
+`Time` MEANS
+    TIME_FROM_HMS h m 0
+
+-- Time h  (1 NUMBER -> TIME, minutes=0, seconds=0)
+GIVEN h IS A NUMBER
+GIVETH A TIME
+`Time` MEANS
+    TIME_FROM_HMS h 0 0
+
+-- Time t  (identity: 1 TIME -> TIME)
+GIVEN t IS A TIME
+GIVETH A TIME
+`Time` MEANS t
+
+-- Time h m s am/pm  (3 NUMBERs + Meridiem Indicator -> TIME)
+GIVEN h  IS A NUMBER
+      m  IS A NUMBER
+      s  IS A NUMBER
+      ap IS A `Meridiem Indicator`
+GIVETH A TIME
+`Time` MEANS
+    IF ap EQUALS am
+    THEN TIME_FROM_HMS (IF h EQUALS 12 THEN 0 ELSE h) m s
+    ELSE TIME_FROM_HMS (IF h EQUALS 12 THEN 12 ELSE h PLUS 12) m s
+
+-- Time h m am/pm  (2 NUMBERs + Meridiem Indicator -> TIME)
+GIVEN h  IS A NUMBER
+      m  IS A NUMBER
+      ap IS A `Meridiem Indicator`
+GIVETH A TIME
+`Time` MEANS
+    Time h m 0 ap
+
+-- Time h am/pm  (1 NUMBER + Meridiem Indicator -> TIME)
+GIVEN h  IS A NUMBER
+      ap IS A `Meridiem Indicator`
+GIVETH A TIME
+`Time` MEANS
+    Time h 0 0 ap
+
+
+§§ `Time Extractors`
+
+GIVEN t IS A TIME
+GIVETH A NUMBER
+`the hour of` t MEANS TIME_HOUR t
+
+GIVEN t IS A TIME
+GIVETH A NUMBER
+`the minute of` t MEANS TIME_MINUTE t
+
+GIVEN t IS A TIME
+GIVETH A NUMBER
+`the second of` t MEANS TIME_SECOND t
+
+
+§§ `Time Serial`
+
+-- Serial is fraction of day (0.0 = midnight, 0.5 = noon, 1.0 = next midnight)
+GIVEN t IS A TIME
+GIVETH A NUMBER
+t `Time to serial` MEANS TIME_SERIAL t
+
+GIVEN serial IS A NUMBER
+GIVETH A TIME
+serial `Serial to time` MEANS TIME_FROM_SERIAL serial
+
+
+§§ `Time Arithmetic`
+
+GIVEN t IS A TIME
+      n IS A NUMBER
+GIVETH A TIME
+t `plus hours` n MEANS
+    LET serial BE TIME_SERIAL t PLUS (n DIVIDED BY `Hours in a day`)
+    IN TIME_FROM_SERIAL (serial MINUS FLOOR serial)
+
+GIVEN t IS A TIME
+      n IS A NUMBER
+GIVETH A TIME
+t `plus minutes` n MEANS
+    LET serial BE TIME_SERIAL t PLUS (n DIVIDED BY `Seconds in a day` TIMES `Seconds in a minute`)
+    IN TIME_FROM_SERIAL (serial MINUS FLOOR serial)
+
+GIVEN t IS A TIME
+      n IS A NUMBER
+GIVETH A TIME
+t `plus seconds` n MEANS
+    LET serial BE TIME_SERIAL t PLUS (n DIVIDED BY `Seconds in a day`)
+    IN TIME_FROM_SERIAL (serial MINUS FLOOR serial)
+
+GIVEN t IS A TIME
+      n IS A NUMBER
+GIVETH A TIME
+t `minus hours` n MEANS t `plus hours` (0 MINUS n)
+
+GIVEN t IS A TIME
+      n IS A NUMBER
+GIVETH A TIME
+t `minus minutes` n MEANS t `plus minutes` (0 MINUS n)
+
+GIVEN t IS A TIME
+      n IS A NUMBER
+GIVETH A TIME
+t `minus seconds` n MEANS t `plus seconds` (0 MINUS n)
+
+
+§§ `Time Predicates`
+
+GIVEN t IS A TIME
+GIVETH A BOOLEAN
+t `is before noon` MEANS TIME_HOUR t LESS THAN 12
+
+GIVEN t IS A TIME
+GIVETH A BOOLEAN
+t `is after noon` MEANS TIME_HOUR t AT LEAST 12
+
+GIVEN t IS A TIME
+GIVETH A BOOLEAN
+t `is morning` MEANS TIME_HOUR t LESS THAN 12
+
+GIVEN t IS A TIME
+GIVETH A BOOLEAN
+t `is afternoon` MEANS TIME_HOUR t AT LEAST 12 AND TIME_HOUR t LESS THAN 18
+
+GIVEN t IS A TIME
+GIVETH A BOOLEAN
+t `is evening` MEANS TIME_HOUR t AT LEAST 18
+
+
+§§ `Time Comparators`
+
+GIVEN t1 IS A TIME
+      t2 IS A TIME
+GIVETH A TIME
+`the earlier of` t1 t2 MEANS
+    IF TIME_SERIAL t1 AT MOST TIME_SERIAL t2 THEN t1 ELSE t2
+
+GIVEN t1 IS A TIME
+      t2 IS A TIME
+GIVETH A TIME
+`the later of` t1 t2 MEANS
+    IF TIME_SERIAL t1 AT LEAST TIME_SERIAL t2 THEN t1 ELSE t2
+
+
+§§ `Native overloads`
+
+GIVEN a IS A TIME
+      b IS A TIME
+GIVETH A BOOLEAN
+`__GEQ__` MEANS
+    TIME_SERIAL a AT LEAST TIME_SERIAL b
+
+GIVEN a IS A TIME
+      b IS A TIME
+GIVETH A BOOLEAN
+`__LEQ__` MEANS
+    TIME_SERIAL a AT MOST TIME_SERIAL b
+
+GIVEN a IS A TIME
+      b IS A TIME
+GIVETH A BOOLEAN
+`__GT__` AKA `is after` MEANS
+    TIME_SERIAL a GREATER THAN TIME_SERIAL b
+
+GIVEN a IS A TIME
+      b IS A TIME
+GIVETH A BOOLEAN
+`__LT__` AKA `is before` MEANS
+    TIME_SERIAL a LESS THAN TIME_SERIAL b
+
+GIVEN a IS A TIME
+      b IS A TIME
+GIVETH A NUMBER
+`__MINUS__` MEANS
+    (TIME_SERIAL a MINUS TIME_SERIAL b) TIMES `Seconds in a day`

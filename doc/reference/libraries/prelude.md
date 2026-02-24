@@ -21,6 +21,7 @@ The prelude can be imported into every L4 program with `IMPORT prelude` and prov
 
 - `map` - Apply function to each element
 - `filter` - Keep elements matching predicate
+- `count` - Count number of elements in a list
 - `take` - First n elements
 - `drop` - All but first n elements
 - `takeWhile` / `dropWhile` - Conditional take/drop

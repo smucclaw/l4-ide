@@ -2,6 +2,8 @@
 
 Exposes L4 programs for use by LLM AI agents via the Tool Calling / Function Calling API.
 
+**DEPRECATION NOTICE:** While still maintained, the jl4-decision-service is on notice and superceded by jl4-service.
+
 ## Current Features
 
 The decision service supports multiple ways to load and manage L4 functions:

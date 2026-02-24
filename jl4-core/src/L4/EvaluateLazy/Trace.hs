@@ -446,6 +446,8 @@ nfFromTrace m = \ case
   ValNumber i   -> MkNF (ValNumber i)
   ValString s   -> MkNF (ValString s)
   ValDate day   -> MkNF (ValDate day)
+  ValTime tod   -> MkNF (ValTime tod)
+  ValDateTime utc tz -> MkNF (ValDateTime utc tz)
   ValNil        -> MkNF ValNil
   ValCons r1 r2 ->
     MkNF (ValCons (rec r1) (rec r2))

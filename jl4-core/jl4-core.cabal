@@ -9,6 +9,11 @@ flag safe-mode
   default: False
   manual: True
 
+flag serialise-support
+  description: Enable Serialise instances for AST types (for jl4-service CBOR caching). Disable for WASM builds where cborg doesn't compile.
+  default: True
+  manual: True
+
 data-files: libraries/*.l4
 
 common defaults
@@ -57,6 +62,7 @@ library
     pretty-simple,
     prettyprinter,
     time,
+    tz,
     scientific,
     split,
     text >= 2 && < 2.1.2,
@@ -67,6 +73,10 @@ library
   if !flag(safe-mode)
     build-depends: req >= 3.0
     cpp-options: -DHTTP_ENABLED
+
+  if flag(serialise-support)
+    build-depends: serialise
+    cpp-options: -DSERIALISE_ENABLED
 
   -- For WASM JavaScript FFI exports
   if arch(wasm32)
@@ -133,6 +143,7 @@ library
     L4.Viz.Ladder
     L4.Viz.VizExpr
     L4.Import.Resolution
+    L4.Instances.Serialise
     L4.API
     L4.API.VirtualFS
     L4.API.EmbeddedLibraries

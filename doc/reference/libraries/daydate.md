@@ -1,7 +1,7 @@
 # Daydate Library
 
 Date arithmetic and temporal logic for legal deadlines and time-based rules. Follows ISO 8601 conventions.
-Can be imported into L4 files with `IMPORT daydate`.
+Can be imported into L4 files with `IMPORT daydate`. Automatically imports `date-compat` for backwards-compatible DATE accessors.
 
 ### Location
 

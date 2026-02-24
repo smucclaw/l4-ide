@@ -1,12 +1,12 @@
 
 Info | updateFileDiagnostics published different from new diagnostics - file diagnostics:
 File: nlg_ambiguous1.l4
-  Hidden:   no
-  Range:    1:3-1:17
-  Source:   parser
+  Hidden: no
+  Range: 1:3-1:17
+  Source: parser
   Severity: DiagnosticSeverity_Warning
-  Code:     <none>
-  Message: 
+  Code: <none>
+  Message:
     More than one NLG annotation attached to: `Section Head`
     The following annotations would be attached:
 

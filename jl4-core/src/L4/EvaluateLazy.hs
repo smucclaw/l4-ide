@@ -368,6 +368,8 @@ nfAux  d _v | d < 0                  = pure Omitted
 nfAux _d (ValNumber i)               = pure (MkNF (ValNumber i))
 nfAux _d (ValString s)               = pure (MkNF (ValString s))
 nfAux _d (ValDate day)               = pure (MkNF (ValDate day))
+nfAux _d (ValTime tod)               = pure (MkNF (ValTime tod))
+nfAux _d (ValDateTime utc tz)        = pure (MkNF (ValDateTime utc tz))
 nfAux _d ValNil                      = pure (MkNF ValNil)
 nfAux  d (ValCons r1 r2)             = do
   v1 <- evalAndNF d r1

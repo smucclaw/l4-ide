@@ -1,0 +1,7 @@
+-- DateTime type errors: passing wrong types to DATETIME builtins
+
+-- NUMBER where DATE expected
+DECIDE `bad datetime` IS DATETIME_FROM_DTZ 42 (TIME_FROM_HMS 0 0 0) "UTC"
+
+-- STRING where DATETIME expected
+DECIDE `bad extract` IS DATETIME_DATE "not a datetime"

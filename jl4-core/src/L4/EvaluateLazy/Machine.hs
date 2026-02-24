@@ -52,13 +52,15 @@ import qualified Data.Char as Char
 import Data.Fixed (Pico)
 import Data.Time (UTCTime)
 import qualified Data.Time as Time
+import Data.Time.LocalTime (TimeOfDay(..), LocalTime(..), timeToTimeOfDay, timeOfDayToTime)
 import qualified Data.Time.Format as TimeFormat
+import qualified Data.Time.Zones as TZ
 import L4.Annotation
 import L4.Evaluate.Operators
 import L4.Evaluate.ValueLazy
 import L4.TemporalContext (EvalClause (..), TemporalContext (..), applyEvalClauses)
 import L4.Parser.SrcSpan (SrcRange)
-import L4.Print
+import L4.Print hiding (tryLoadTZ, tryLoadTZPure, formatDateTimeIso)
 import L4.Syntax
 import qualified L4.TypeCheck as TypeCheck
 import L4.TypeCheck.Types (EntityInfo)
@@ -68,6 +70,8 @@ import qualified L4.TracePolicy as TracePolicy
 import L4.Utils.Ratio
 import Text.Read (readMaybe)
 import qualified Data.Scientific as Sci
+import System.IO.Unsafe (unsafePerformIO)
+import Control.Exception (SomeException, catch)
 
 data Frame =
     BinOp1 BinOp {- -} (Expr Resolved) Environment
@@ -1294,6 +1298,29 @@ jsonValueToWHNFTyped jsonValue ty = do
                   "Could not parse date string '" <> s <> "'. Expected format: YYYY-MM-DD"
             _ -> InternalException $ RuntimeTypeError $
                   "Expected JSON string for DATE field but got: " <> Text.pack (show jsonValue)
+        "TIME" -> do
+          -- TIME fields in JSON should be strings (HH:MM:SS or HH:MM)
+          case jsonValue of
+            Aeson.String s -> do
+              case parseTimeText s of
+                Just tod -> pure $ ValTime tod
+                Nothing -> InternalException $ RuntimeTypeError $
+                  "Could not parse time string '" <> s <> "'. Expected format: HH:MM:SS or HH:MM"
+            _ -> InternalException $ RuntimeTypeError $
+                  "Expected JSON string for TIME field but got: " <> Text.pack (show jsonValue)
+        "DATETIME" -> do
+          -- DATETIME fields in JSON should be ISO-8601 strings with timezone
+          case jsonValue of
+            Aeson.String s -> do
+              case parseDatetimeText s of
+                Just utc -> do
+                  tc <- GetTemporalContext
+                  let tzName = fromMaybe "Etc/UTC" tc.tcDocumentTimezone
+                  pure $ ValDateTime utc tzName
+                Nothing -> InternalException $ RuntimeTypeError $
+                  "Could not parse datetime string '" <> s <> "'. Expected ISO-8601 format: YYYY-MM-DDTHH:MM:SSZ"
+            _ -> InternalException $ RuntimeTypeError $
+                  "Expected JSON string for DATETIME field but got: " <> Text.pack (show jsonValue)
 
         -- Not a primitive, check if it's a custom record type
         _ -> do
@@ -1486,6 +1513,10 @@ coerceToString val = case val of
     Backward $ ValString (if b then "TRUE" else "FALSE")
   ValDate day ->
     Backward $ ValString (formatDateIso day)
+  ValTime tod ->
+    Backward $ ValString (formatTimeOfDay tod)
+  ValDateTime utc tzName ->
+    Backward $ ValString (formatDateTimeIso utc tzName)
   ValConstructor con fields
     | isDateConstructor con -> do
         case fields of
@@ -1501,7 +1532,7 @@ coerceToString val = case val of
   where
     incompatible =
       InternalException $ RuntimeTypeError $
-        "AS STRING/TOSTRING can only convert NUMBER, BOOLEAN, DATE, or STRING to STRING, but found: " <> prettyLayout val
+        "AS STRING/TOSTRING can only convert NUMBER, BOOLEAN, DATE, TIME, DATETIME, or STRING to STRING, but found: " <> prettyLayout val
 
 formatDateIso :: Time.Day -> Text
 formatDateIso day =
@@ -1724,6 +1755,66 @@ runBuiltin es op mTy = do
         Right fraction -> do
           valRef <- AllocateValue (ValNumber fraction)
           Backward $ ValConstructor TypeCheck.rightRef [valRef]
+    -- TIME builtins
+    UnaryTimeHour -> do
+      tod <- expectTimeValue es
+      Backward $ ValNumber (fromIntegral $ todHour tod)
+    UnaryTimeMinute -> do
+      tod <- expectTimeValue es
+      Backward $ ValNumber (fromIntegral $ todMin tod)
+    UnaryTimeSecond -> do
+      tod <- expectTimeValue es
+      Backward $ ValNumber (realToFrac $ todSec tod)
+    UnaryTimeToSerial -> do
+      tod <- expectTimeValue es
+      let seconds = timeOfDayToTime tod
+      Backward $ ValNumber (toRational seconds / toRational (86400 :: Pico))
+    UnaryTimeFromSerial -> do
+      serial <- expectNumber es
+      let seconds = realToFrac (serial * 86400) :: Pico
+      Backward $ ValTime (timeToTimeOfDay (realToFrac seconds))
+    UnaryToTime -> do
+      str <- expectString es
+      case parseTimeText str of
+        Just tod -> do
+          todRef <- AllocateValue (ValTime tod)
+          Backward $ ValConstructor TypeCheck.justRef [todRef]
+        Nothing ->
+          Backward $ ValConstructor TypeCheck.nothingRef []
+    -- DATETIME builtins
+    UnaryDatetimeDate -> do
+      (utc, tzName) <- expectDateTimeValue es
+      case tryLoadTZPure tzName of
+        Just tz -> do
+          let localTime' = TZ.utcToLocalTimeTZ tz utc
+          Backward $ ValDate (localDay localTime')
+        Nothing ->
+          InternalException $ RuntimeTypeError $ "Could not load timezone: " <> tzName
+    UnaryDatetimeTime -> do
+      (utc, tzName) <- expectDateTimeValue es
+      case tryLoadTZPure tzName of
+        Just tz -> do
+          let localTime' = TZ.utcToLocalTimeTZ tz utc
+          Backward $ ValTime (localTimeOfDay localTime')
+        Nothing ->
+          InternalException $ RuntimeTypeError $ "Could not load timezone: " <> tzName
+    UnaryDatetimeSerial -> do
+      (utc, _tzName) <- expectDateTimeValue es
+      Backward $ ValNumber (utcDatestamp utc)
+    UnaryDatetimeTzName -> do
+      (_utc, tzName) <- expectDateTimeValue es
+      Backward $ ValString tzName
+    UnaryToDatetime -> do
+      str <- expectString es
+      case parseDatetimeText str of
+        Just utc -> do
+          -- Use document timezone as default for the stored tz name
+          tc <- GetTemporalContext
+          let tzName = fromMaybe "Etc/UTC" tc.tcDocumentTimezone
+          dtRef <- AllocateValue (ValDateTime utc tzName)
+          Backward $ ValConstructor TypeCheck.justRef [dtRef]
+        Nothing ->
+          Backward $ ValConstructor TypeCheck.nothingRef []
     -- Numeric unary operations (catch-all)
     _ -> do
       val :: Rational <- expectNumber es
@@ -1791,6 +1882,27 @@ runTernaryBuiltin TernaryDateFromDMY dVal mVal yVal = do
     Just day -> Backward (ValDate day)
     Nothing ->
       InternalException $ RuntimeTypeError "DATE_FROM_DMY produced an invalid date"
+runTernaryBuiltin TernaryTimeFromHMS hVal mVal sVal = do
+  hNum <- expectNumber hVal
+  mNum <- expectNumber mVal
+  sNum <- expectNumber sVal
+  hInt <- expectWhole "TIME_FROM_HMS expects integer hour" hNum
+  mInt <- expectWhole "TIME_FROM_HMS expects integer minute" mNum
+  let sPico = realToFrac sNum :: Pico
+  if hInt >= 0 && hInt < 24 && mInt >= 0 && mInt < 60 && sPico >= 0 && sPico < 60
+    then Backward $ ValTime (TimeOfDay (fromInteger hInt) (fromInteger mInt) sPico)
+    else InternalException $ RuntimeTypeError "TIME_FROM_HMS: values out of range (H: 0-23, M: 0-59, S: 0-59)"
+runTernaryBuiltin TernaryDatetimeFromDTZ dateVal timeVal tzVal = do
+  day <- expectDateValue dateVal
+  tod <- expectTimeValue timeVal
+  tzName <- expectString tzVal
+  case tryLoadTZPure tzName of
+    Just tz -> do
+      let localTime = LocalTime day tod
+          utc = TZ.localTimeToUTCTZ tz localTime
+      Backward $ ValDateTime utc tzName
+    Nothing ->
+      InternalException $ RuntimeTypeError $ "Unknown timezone: '" <> tzName <> "'"
 runTernaryBuiltin TernaryEverBetween startVal endVal predicate =
   startEverBetween startVal endVal predicate
 runTernaryBuiltin TernaryAlwaysBetween startVal endVal predicate =
@@ -1827,15 +1939,27 @@ runBinOp BinOpEquals val1             val2                       = runBinOpEqual
 runBinOp BinOpLeq    (ValNumber num1) (ValNumber num2)           = Backward $ ValBool (num1 <= num2)
 runBinOp BinOpLeq    (ValString str1) (ValString str2)           = Backward $ ValBool (str1 <= str2)
 runBinOp BinOpLeq    (ValBool b1)     (ValBool b2)               = Backward $ ValBool (b1 <= b2)
+runBinOp BinOpLeq    (ValDate d1)     (ValDate d2)               = Backward $ ValBool (d1 <= d2)
+runBinOp BinOpLeq    (ValTime t1)     (ValTime t2)               = Backward $ ValBool (t1 <= t2)
+runBinOp BinOpLeq    (ValDateTime u1 _) (ValDateTime u2 _)       = Backward $ ValBool (u1 <= u2)
 runBinOp BinOpGeq    (ValNumber num1) (ValNumber num2)           = Backward $ ValBool (num1 >= num2)
 runBinOp BinOpGeq    (ValString str1) (ValString str2)           = Backward $ ValBool (str1 >= str2)
 runBinOp BinOpGeq    (ValBool b1)     (ValBool b2)               = Backward $ ValBool (b1 >= b2)
+runBinOp BinOpGeq    (ValDate d1)     (ValDate d2)               = Backward $ ValBool (d1 >= d2)
+runBinOp BinOpGeq    (ValTime t1)     (ValTime t2)               = Backward $ ValBool (t1 >= t2)
+runBinOp BinOpGeq    (ValDateTime u1 _) (ValDateTime u2 _)       = Backward $ ValBool (u1 >= u2)
 runBinOp BinOpLt     (ValNumber num1) (ValNumber num2)           = Backward $ ValBool (num1 < num2)
 runBinOp BinOpLt     (ValString str1) (ValString str2)           = Backward $ ValBool (str1 < str2)
 runBinOp BinOpLt     (ValBool b1)     (ValBool b2)               = Backward $ ValBool (b1 < b2)
+runBinOp BinOpLt     (ValDate d1)     (ValDate d2)               = Backward $ ValBool (d1 < d2)
+runBinOp BinOpLt     (ValTime t1)     (ValTime t2)               = Backward $ ValBool (t1 < t2)
+runBinOp BinOpLt     (ValDateTime u1 _) (ValDateTime u2 _)       = Backward $ ValBool (u1 < u2)
 runBinOp BinOpGt     (ValNumber num1) (ValNumber num2)           = Backward $ ValBool (num1 > num2)
 runBinOp BinOpGt     (ValString str1) (ValString str2)           = Backward $ ValBool (str1 > str2)
 runBinOp BinOpGt     (ValBool b1)     (ValBool b2)               = Backward $ ValBool (b1 > b2)
+runBinOp BinOpGt     (ValDate d1)     (ValDate d2)               = Backward $ ValBool (d1 > d2)
+runBinOp BinOpGt     (ValTime t1)     (ValTime t2)               = Backward $ ValBool (t1 > t2)
+runBinOp BinOpGt     (ValDateTime u1 _) (ValDateTime u2 _)       = Backward $ ValBool (u1 > u2)
 -- String binary operations
 runBinOp BinOpContains   (ValString haystack) (ValString needle) = Backward $ ValBool (needle `Text.isInfixOf` haystack)
 runBinOp BinOpStartsWith (ValString text) (ValString prefix)     = Backward $ ValBool (prefix `Text.isPrefixOf` text)
@@ -1870,6 +1994,8 @@ runBinOpEquals :: WHNF -> WHNF -> Machine Config
 runBinOpEquals (ValNumber num1)        (ValNumber num2) = Backward $ valBool $ num1 == num2
 runBinOpEquals (ValString str1)        (ValString str2) = Backward $ valBool $ str1 == str2
 runBinOpEquals (ValDate d1)            (ValDate d2) = Backward $ valBool $ d1 == d2
+runBinOpEquals (ValTime t1)            (ValTime t2) = Backward $ valBool $ t1 == t2
+runBinOpEquals (ValDateTime u1 _)      (ValDateTime u2 _) = Backward $ valBool $ u1 == u2
 runBinOpEquals ValNil                  ValNil           = Backward $ valBool True
 runBinOpEquals (ValCons r1 rs1)        (ValCons r2 rs2) = do
   PushFrame (EqConstructor1 r2 [(rs1, rs2)])
@@ -2038,9 +2164,12 @@ evalRef rf =
     thunk@(WHNF val) ->
       case val of
         ValNullaryBuiltinFun fn ->
+          -- Don't cache nullary builtins (e.g. TIMEZONE, TODAY, NOW) because
+          -- their results depend on mutable state (TemporalContext) that can
+          -- change between evaluations while the thunk IORef persists in
+          -- cached import environments.
           (thunk, do
               evaluated <- evalNullaryBuiltin fn
-              updateThunkToWHNF rf evaluated
               Backward evaluated)
         _ ->
           (thunk, Backward val)
@@ -2102,6 +2231,8 @@ scanTopDecl (Directive _ann _directive) =
   pure []
 scanTopDecl (Import _ann _import_) =
   pure []
+scanTopDecl (Timezone _ann _expr) =
+  pure []
 
 -- | Just collect all defined names; could plausibly be done generically.
 scanLocalDecl :: LocalDecl Resolved -> Machine [Resolved]
@@ -2148,6 +2279,24 @@ evalTopDecl env (Directive _ann directive) =
 evalTopDecl env (Section _ann section) =
   evalSection env section
 evalTopDecl _env (Import _ann _import_) =
+  pure []
+evalTopDecl env (Timezone _ann expr) = do
+  -- Extract timezone string from the expression and set it in TemporalContext
+  mTzName <- extractTimezoneString env expr
+  case mTzName of
+    Just tzName -> do
+      -- Validate it's a known IANA timezone by attempting to load it
+      mTz <- liftIO $ tryLoadTZ (Text.unpack tzName)
+      case mTz of
+        Just _ -> do
+          tc <- GetTemporalContext
+          PutTemporalContext tc { tcDocumentTimezone = Just tzName }
+        Nothing ->
+          InternalException $ RuntimeTypeError $
+            "Unknown timezone: '" <> tzName <> "'. Use an IANA timezone name like \"Asia/Singapore\" or \"America/New_York\"."
+    Nothing ->
+      InternalException $ RuntimeTypeError
+        "TIMEZONE IS must be a string literal or a simple identifier that resolves to a string."
   pure []
 
 evalDirective :: Environment -> Directive Resolved -> Machine [EvalDirective]
@@ -2441,6 +2590,23 @@ initialEnvironment = do
   toStringRef <- AllocateValue (ValUnaryBuiltinFun UnaryToString)
   toNumberRef <- AllocateValue (ValUnaryBuiltinFun UnaryToNumber)
   toDateRef <- AllocateValue (ValUnaryBuiltinFun UnaryToDate)
+  -- TIME builtins
+  timeHourRef <- AllocateValue (ValUnaryBuiltinFun UnaryTimeHour)
+  timeMinuteRef <- AllocateValue (ValUnaryBuiltinFun UnaryTimeMinute)
+  timeSecondRef <- AllocateValue (ValUnaryBuiltinFun UnaryTimeSecond)
+  timeToSerialRef <- AllocateValue (ValUnaryBuiltinFun UnaryTimeToSerial)
+  timeFromSerialRef <- AllocateValue (ValUnaryBuiltinFun UnaryTimeFromSerial)
+  timeFromHMSRef <- AllocateValue (ValTernaryBuiltinFun TernaryTimeFromHMS)
+  toTimeRef <- AllocateValue (ValUnaryBuiltinFun UnaryToTime)
+  -- DATETIME builtins
+  datetimeDateRef <- AllocateValue (ValUnaryBuiltinFun UnaryDatetimeDate)
+  datetimeTimeRef <- AllocateValue (ValUnaryBuiltinFun UnaryDatetimeTime)
+  datetimeSerialRef <- AllocateValue (ValUnaryBuiltinFun UnaryDatetimeSerial)
+  datetimeTzNameRef <- AllocateValue (ValUnaryBuiltinFun UnaryDatetimeTzName)
+  datetimeFromDTZRef <- AllocateValue (ValTernaryBuiltinFun TernaryDatetimeFromDTZ)
+  toDatetimeRef <- AllocateValue (ValUnaryBuiltinFun UnaryToDatetime)
+  -- TIMEZONE nullary builtin
+  timezoneRef <- AllocateValue (ValNullaryBuiltinFun NullaryTimezone)
   -- Ternary string builtins
   substringRef <- AllocateValue (ValTernaryBuiltinFun TernarySubstring)
   replaceRef <- AllocateValue (ValTernaryBuiltinFun TernaryReplace)
@@ -2541,6 +2707,23 @@ initialEnvironment = do
       , (TypeCheck.toStringUnique, toStringRef)
       , (TypeCheck.toNumberUnique, toNumberRef)
       , (TypeCheck.toDateUnique, toDateRef)
+      -- TIME builtins
+      , (TypeCheck.timeHourUnique, timeHourRef)
+      , (TypeCheck.timeMinuteUnique, timeMinuteRef)
+      , (TypeCheck.timeSecondUnique, timeSecondRef)
+      , (TypeCheck.timeToSerialUnique, timeToSerialRef)
+      , (TypeCheck.timeFromSerialUnique, timeFromSerialRef)
+      , (TypeCheck.timeFromHMSUnique, timeFromHMSRef)
+      , (TypeCheck.toTimeUnique, toTimeRef)
+      -- DATETIME builtins
+      , (TypeCheck.datetimeDateUnique, datetimeDateRef)
+      , (TypeCheck.datetimeTimeUnique, datetimeTimeRef)
+      , (TypeCheck.datetimeSerialUnique, datetimeSerialRef)
+      , (TypeCheck.datetimeTzNameUnique, datetimeTzNameRef)
+      , (TypeCheck.datetimeFromDTZUnique, datetimeFromDTZRef)
+      , (TypeCheck.toDatetimeUnique, toDatetimeRef)
+      -- TIMEZONE
+      , (TypeCheck.timezoneUnique, timezoneRef)
       -- Ternary string functions
       , (TypeCheck.substringUnique, substringRef)
       , (TypeCheck.replaceUnique, replaceRef)
@@ -2586,13 +2769,32 @@ evalNullaryBuiltin :: NullaryBuiltinFun -> Machine WHNF
 evalNullaryBuiltin = \case
   NullaryTodaySerial -> do
     tc <- GetTemporalContext
-    let TemporalContext { tcSystemTime = systemTime } = tc
-        todayDay = Time.utctDay systemTime
-    pure $ ValDate todayDay
+    case tc.tcDocumentTimezone of
+      Just tzName -> do
+        mTz <- liftIO $ tryLoadTZ (Text.unpack tzName)
+        case mTz of
+          Just tz -> do
+            let localTime = TZ.utcToLocalTimeTZ tz tc.tcSystemTime
+                todayDay = localDay localTime
+            pure $ ValDate todayDay
+          Nothing ->
+            InternalException $ RuntimeTypeError $
+              "Could not load timezone '" <> tzName <> "' for TODAY."
+      Nothing -> do
+        -- Fall back to UTC if no timezone declared
+        let todayDay = Time.utctDay tc.tcSystemTime
+        pure $ ValDate todayDay
   NullaryNowSerial -> do
     tc <- GetTemporalContext
     let TemporalContext { tcSystemTime = systemTime } = tc
     pure $ ValNumber (utcDatestamp systemTime)
+  NullaryTimezone -> do
+    tc <- GetTemporalContext
+    case tc.tcDocumentTimezone of
+      Just tzName -> pure $ ValString tzName
+      Nothing ->
+        InternalException $ RuntimeTypeError
+          "TIMEZONE is not declared. Add 'TIMEZONE IS \"<IANA timezone>\"' to your document."
 
 utcDatestamp :: Time.UTCTime -> Rational
 utcDatestamp time =
@@ -2789,6 +2991,95 @@ parseDigits txt =
   if Text.all Char.isDigit txt
     then Right (Text.foldl' (\acc ch -> acc * 10 + toInteger (Char.digitToInt ch)) 0 txt)
     else Left "TIMEVALUE: expected only digits in fractional part."
+
+----------------------------------------------------------------------------
+-- Timezone utilities
+----------------------------------------------------------------------------
+
+-- | Try to load a TZ from the IANA database. Returns Nothing on failure.
+tryLoadTZ :: String -> IO (Maybe TZ.TZ)
+tryLoadTZ name =
+  (Just <$> TZ.loadTZFromDB name) `catch` \(_ :: SomeException) -> pure Nothing
+
+-- | Extract a timezone string from a TIMEZONE IS expression.
+-- Handles string literals directly and simple identifiers by peeking at thunks.
+extractTimezoneString :: Environment -> Expr Resolved -> Machine (Maybe Text)
+extractTimezoneString _env (Lit _ (StringLit _ s)) = pure (Just s)
+extractTimezoneString env (App _ nameRef []) = do
+  case Map.lookup (getUnique nameRef) env of
+    Just refId ->
+      PokeThunk refId $ \_ thunk -> case thunk of
+        WHNF (ValString s) -> (thunk, Just s)
+        Unevaluated _ (Lit _ (StringLit _ s)) _ -> (thunk, Just s)
+        _ -> (thunk, Nothing)
+    Nothing -> pure Nothing
+extractTimezoneString _ _ = pure Nothing
+
+-- | Parse a time string in HH:MM:SS or HH:MM format to TimeOfDay
+parseTimeText :: Text -> Maybe TimeOfDay
+parseTimeText raw =
+  let trimmed = Text.strip raw
+      formats = ["%H:%M:%S", "%H:%M:%S%Q", "%H:%M"]
+  in listToMaybe
+       [ tod
+       | fmt <- formats
+       , Just tod <- [TimeFormat.parseTimeM True TimeFormat.defaultTimeLocale fmt (Text.unpack trimmed)]
+       ]
+
+-- | Parse an ISO-8601 datetime string to UTCTime
+parseDatetimeText :: Text -> Maybe UTCTime
+parseDatetimeText raw =
+  let trimmed = Text.strip raw
+      formats =
+        [ "%Y-%m-%dT%H:%M:%S%Z"
+        , "%Y-%m-%dT%H:%M:%S%Q%Z"
+        , "%Y-%m-%dT%H:%M:%SZ"
+        , "%Y-%m-%dT%H:%M:%S%QZ"
+        , "%Y-%m-%dT%H:%M:%S%z"
+        , "%Y-%m-%dT%H:%M:%S%Q%z"
+        , "%Y-%m-%d %H:%M:%S%Z"
+        , "%Y-%m-%d %H:%M:%S%z"
+        ]
+  in listToMaybe
+       [ utc
+       | fmt <- formats
+       , Just utc <- [TimeFormat.parseTimeM True TimeFormat.defaultTimeLocale fmt (Text.unpack trimmed)]
+       ]
+
+-- | Format a TimeOfDay as HH:MM:SS
+formatTimeOfDay :: TimeOfDay -> Text
+formatTimeOfDay tod =
+  Text.pack $ TimeFormat.formatTime TimeFormat.defaultTimeLocale "%H:%M:%S" tod
+
+-- | Format a UTCTime with timezone offset as ISO-8601
+formatDateTimeIso :: UTCTime -> Text -> Text
+formatDateTimeIso utc tzName =
+  case tryLoadTZPure tzName of
+    Just tz ->
+      let localTime' = TZ.utcToLocalTimeTZ tz utc
+          offset = TZ.timeZoneForUTCTime tz utc
+          offsetStr = TimeFormat.formatTime TimeFormat.defaultTimeLocale "%z" offset
+      in Text.pack (TimeFormat.formatTime TimeFormat.defaultTimeLocale "%Y-%m-%dT%H:%M:%S" localTime') <> Text.pack offsetStr
+    Nothing ->
+      -- Fallback: format as UTC
+      Text.pack $ TimeFormat.formatTime TimeFormat.defaultTimeLocale "%Y-%m-%dT%H:%M:%SZ" utc
+
+-- | Pure-ish wrapper for TZ loading (uses unsafePerformIO since TZ data is static)
+tryLoadTZPure :: Text -> Maybe TZ.TZ
+tryLoadTZPure name = unsafePerformIO $ tryLoadTZ (Text.unpack name)
+{-# NOINLINE tryLoadTZPure #-}
+
+-- | Extract TimeOfDay from a WHNF value
+expectTimeValue :: WHNF -> Machine TimeOfDay
+expectTimeValue (ValTime tod) = pure tod
+expectTimeValue val = InternalException $ RuntimeTypeError $
+  "Expected TIME value but got: " <> prettyLayout val
+
+-- | Extract UTCTime and timezone from a WHNF value
+expectDateTimeValue :: WHNF -> Machine (UTCTime, Text)
+expectDateTimeValue (ValDateTime utc tz) = pure (utc, tz)
+expectDateTimeValue val = InternalException $ RuntimeTypeError $
+  "Expected DATETIME value but got: " <> prettyLayout val
 
 boolBinOpClosure :: Reference -> Reference -> (Resolved -> Resolved -> Expr Resolved) -> Machine (Value a)
 boolBinOpClosure true false buildExpr = do
