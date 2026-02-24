@@ -20,17 +20,18 @@ TIMEZONE IS SGT
 
 ### Features
 
-- DateTime construction with flexible overloads (date + time + optional timezone)
+- DateTime construction with flexible overloads (date + time, numbers in DMY order, or ISO-8601 strings)
 - Automatic use of document `TIMEZONE IS` declaration
 - Explicit timezone override per value using IANA timezone strings
 - Date, time, and timezone extraction from DateTime values
 - Time-of-day predicates (morning, afternoon, evening)
 - Cross-timezone comparison (UTC-based equality)
 - Relative datetime operations (at midnight, at noon, at specific time)
+- ISO-8601 string parsing for JSON interoperability
 
 ### Key Functions
 
-**DateTime Construction:**
+**DateTime Construction (from DATE/TIME):**
 
 - `Datetime date time` - Date + time in document timezone
 - `Datetime date time tz` - Date + time in explicit IANA timezone
@@ -38,6 +39,23 @@ TIMEZONE IS SGT
 - `Datetime date h m s tz` - Date + hours/minutes/seconds in explicit timezone
 - `Datetime date` - Date at midnight in document timezone
 - `Datetime date tz` - Date at midnight in explicit timezone
+
+**DateTime Construction (from numbers, DMY order):**
+
+- `Datetime d m y h mn s` - Day, month, year, hour, minute, second in document timezone
+- `Datetime d m y h mn s tz` - Same with explicit timezone
+- `Datetime d m y h mn` - Seconds default to 0
+- `Datetime d m y h` - Minutes and seconds default to 0
+- `Datetime d m y` - Midnight in document timezone
+- `Datetime m y` - 1st of month, midnight
+- `Datetime y` - January 1st, midnight
+
+All number-based constructors accept an optional trailing `tz` (STRING) for explicit timezone.
+
+**DateTime Construction (from strings, returns MAYBE DATETIME):**
+
+- `Datetime str` - Parse ISO-8601 string (e.g. `"2024-06-15T10:30:00Z"`)
+- `Datetime str tz` - Parse ISO-8601 string with explicit display timezone
 
 **DateTime Extractors:**
 

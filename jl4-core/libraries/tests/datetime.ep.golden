@@ -61,6 +61,129 @@ GIVEN dt IS A DATETIME
 GIVETH A DATETIME
 `Datetime` MEANS dt
 
+-- Datetime d m y h mn s  -> day, month, year, hour, min, sec, document TIMEZONE
+GIVEN d  IS A NUMBER
+      mo IS A NUMBER
+      y  IS A NUMBER
+      h  IS A NUMBER
+      mn IS A NUMBER
+      s  IS A NUMBER
+GIVETH A DATETIME
+`Datetime` MEANS
+    DATETIME_FROM_DTZ (DATE_FROM_DMY d mo y) (TIME_FROM_HMS h mn s) TIMEZONE
+
+-- Datetime d m y h mn s tz  -> day, month, year, hour, min, sec, explicit tz
+GIVEN d  IS A NUMBER
+      mo IS A NUMBER
+      y  IS A NUMBER
+      h  IS A NUMBER
+      mn IS A NUMBER
+      s  IS A NUMBER
+      tz IS A STRING
+GIVETH A DATETIME
+`Datetime` MEANS
+    DATETIME_FROM_DTZ (DATE_FROM_DMY d mo y) (TIME_FROM_HMS h mn s) tz
+
+-- Datetime d m y h mn  -> day, month, year, hour, min, document TIMEZONE
+GIVEN d  IS A NUMBER
+      mo IS A NUMBER
+      y  IS A NUMBER
+      h  IS A NUMBER
+      mn IS A NUMBER
+GIVETH A DATETIME
+`Datetime` MEANS
+    DATETIME_FROM_DTZ (DATE_FROM_DMY d mo y) (TIME_FROM_HMS h mn 0) TIMEZONE
+
+-- Datetime d m y h mn tz  -> day, month, year, hour, min, explicit tz
+GIVEN d  IS A NUMBER
+      mo IS A NUMBER
+      y  IS A NUMBER
+      h  IS A NUMBER
+      mn IS A NUMBER
+      tz IS A STRING
+GIVETH A DATETIME
+`Datetime` MEANS
+    DATETIME_FROM_DTZ (DATE_FROM_DMY d mo y) (TIME_FROM_HMS h mn 0) tz
+
+-- Datetime d m y h  -> day, month, year, hour, document TIMEZONE
+GIVEN d IS A NUMBER
+      m IS A NUMBER
+      y IS A NUMBER
+      h IS A NUMBER
+GIVETH A DATETIME
+`Datetime` MEANS
+    DATETIME_FROM_DTZ (DATE_FROM_DMY d m y) (TIME_FROM_HMS h 0 0) TIMEZONE
+
+-- Datetime d m y h tz  -> day, month, year, hour, explicit tz
+GIVEN d  IS A NUMBER
+      m  IS A NUMBER
+      y  IS A NUMBER
+      h  IS A NUMBER
+      tz IS A STRING
+GIVETH A DATETIME
+`Datetime` MEANS
+    DATETIME_FROM_DTZ (DATE_FROM_DMY d m y) (TIME_FROM_HMS h 0 0) tz
+
+-- Datetime d m y  -> day, month, year, midnight, document TIMEZONE
+GIVEN d IS A NUMBER
+      m IS A NUMBER
+      y IS A NUMBER
+GIVETH A DATETIME
+`Datetime` MEANS
+    DATETIME_FROM_DTZ (DATE_FROM_DMY d m y) (TIME_FROM_HMS 0 0 0) TIMEZONE
+
+-- Datetime d m y tz  -> day, month, year, midnight, explicit tz
+GIVEN d  IS A NUMBER
+      m  IS A NUMBER
+      y  IS A NUMBER
+      tz IS A STRING
+GIVETH A DATETIME
+`Datetime` MEANS
+    DATETIME_FROM_DTZ (DATE_FROM_DMY d m y) (TIME_FROM_HMS 0 0 0) tz
+
+-- Datetime m y  -> month, year, 1st day, midnight, document TIMEZONE
+GIVEN m IS A NUMBER
+      y IS A NUMBER
+GIVETH A DATETIME
+`Datetime` MEANS
+    DATETIME_FROM_DTZ (DATE_FROM_DMY 1 m y) (TIME_FROM_HMS 0 0 0) TIMEZONE
+
+-- Datetime m y tz  -> month, year, 1st day, midnight, explicit tz
+GIVEN m  IS A NUMBER
+      y  IS A NUMBER
+      tz IS A STRING
+GIVETH A DATETIME
+`Datetime` MEANS
+    DATETIME_FROM_DTZ (DATE_FROM_DMY 1 m y) (TIME_FROM_HMS 0 0 0) tz
+
+-- Datetime y  -> year, January 1st, midnight, document TIMEZONE
+GIVEN y IS A NUMBER
+GIVETH A DATETIME
+`Datetime` MEANS
+    DATETIME_FROM_DTZ (DATE_FROM_DMY 1 1 y) (TIME_FROM_HMS 0 0 0) TIMEZONE
+
+-- Datetime y tz  -> year, January 1st, midnight, explicit tz
+GIVEN y  IS A NUMBER
+      tz IS A STRING
+GIVETH A DATETIME
+`Datetime` MEANS
+    DATETIME_FROM_DTZ (DATE_FROM_DMY 1 1 y) (TIME_FROM_HMS 0 0 0) tz
+
+-- Datetime str  -> parse ISO-8601 string (e.g. "2024-06-15T10:30:00Z"), document TIMEZONE
+GIVEN str IS A STRING
+GIVETH A MAYBE DATETIME
+`Datetime` MEANS
+    TODATETIME str
+
+-- Datetime str tz  -> parse ISO-8601 string with explicit display timezone
+GIVEN str IS A STRING
+      tz  IS A STRING
+GIVETH A MAYBE DATETIME
+`Datetime` MEANS
+    CONSIDER TODATETIME str
+    WHEN JUST dt THEN JUST (DATETIME_FROM_DTZ (DATETIME_DATE dt) (DATETIME_TIME dt) tz)
+    WHEN NOTHING THEN NOTHING
+
 
 §§ `DateTime Extractors`
 

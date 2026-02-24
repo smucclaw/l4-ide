@@ -472,7 +472,7 @@ timeFromHmsBuiltin :: Type' Resolved
 timeFromHmsBuiltin = fun_ [number, number, number] time
 
 toTimeBuiltin :: Type' Resolved
-toTimeBuiltin = fun_ [string] time
+toTimeBuiltin = fun_ [string] (maybeType time)
 
 -- DATETIME builtins
 
@@ -492,7 +492,7 @@ datetimeFromDtzBuiltin :: Type' Resolved
 datetimeFromDtzBuiltin = fun_ [date, time, string] datetime
 
 toDatetimeBuiltin :: Type' Resolved
-toDatetimeBuiltin = fun_ [string] datetime
+toDatetimeBuiltin = fun_ [string] (maybeType datetime)
 
 -- TIMEZONE (nullary → STRING)
 

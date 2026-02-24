@@ -9,12 +9,13 @@ Can be imported into L4 files with `IMPORT time`.
 
 ### Features
 
-- Time construction from hours/minutes/seconds or serial numbers
+- Time construction from hours/minutes/seconds, serial numbers, strings, or DATETIME extraction
 - AM/PM support via `Meridiem Indicator` enum
 - Time arithmetic (add/subtract hours, minutes, seconds) with midnight wrapping
 - Time-of-day predicates (morning, afternoon, evening)
 - Serial conversion (fraction of day: 0.0 = midnight, 0.5 = noon)
 - Comparison operators and min/max functions
+- String parsing for JSON interoperability
 
 ### Key Functions
 
@@ -31,6 +32,8 @@ Can be imported into L4 files with `IMPORT time`.
 - `Time h` - Create time (minutes and seconds default to 0)
 - `Time h m s am` / `Time h m s pm` - 12-hour AM/PM format
 - `Time h am` / `Time h pm` - Shorthand 12-hour format
+- `Time str` - Parse time string ("HH:MM:SS" or "HH:MM"), returns MAYBE TIME
+- `Time dt` - Extract time from DATETIME (ignores date and timezone)
 - `serial Serial to time` - Create time from day fraction
 
 **Time Extractors:**
