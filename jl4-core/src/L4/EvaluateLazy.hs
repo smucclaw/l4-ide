@@ -58,7 +58,9 @@ data EvalState =
     }
 
 data EvalConfig = EvalConfig
-  { evalTime :: !UTCTime
+  { evalTime :: !(Maybe UTCTime)
+    -- ^ 'Nothing' means use the wall-clock at each evaluation (live mode).
+    -- 'Just t' means use a fixed time (for tests / JL4_FIXED_NOW).
   , tracePolicy :: !TracePolicy
   , safeMode :: !Bool  -- ^ When True, HTTP operations (FETCH/POST) return errors instead of making requests
   }
@@ -67,11 +69,14 @@ resolveEvalConfig :: Maybe UTCTime -> TracePolicy -> IO EvalConfig
 resolveEvalConfig mTime tracePolicy = resolveEvalConfigWithSafeMode mTime tracePolicy False
 
 resolveEvalConfigWithSafeMode :: Maybe UTCTime -> TracePolicy -> Bool -> IO EvalConfig
-resolveEvalConfigWithSafeMode mTime tracePolicy safe = case mTime of
-  Nothing -> do
-    time <- getCurrentTime
-    pure (EvalConfig time tracePolicy safe)
-  Just time -> pure (EvalConfig time tracePolicy safe)
+resolveEvalConfigWithSafeMode mTime tracePolicy safe =
+  pure (EvalConfig mTime tracePolicy safe)
+
+-- | Resolve the eval time: use the fixed time if set, otherwise get the wall clock.
+resolveEvalTime :: EvalConfig -> IO UTCTime
+resolveEvalTime cfg = case cfg.evalTime of
+  Just t  -> pure t
+  Nothing -> getCurrentTime
 
 parseFixedNow :: Text -> Maybe UTCTime
 parseFixedNow = ISO8601.iso8601ParseM . Text.unpack
@@ -436,10 +441,11 @@ execEvalModuleWithEnv evalConfig entityInfo env m@(MkModule _ moduleUri _) = do
     MkEval f -> do
       stack     <- newIORef emptyStack
       supply    <- newIORef 0
-      let temporalCtx = initialTemporalContext evalConfig.evalTime
+      actualTime <- resolveEvalTime evalConfig
+      let temporalCtx = initialTemporalContext actualTime
       temporalContext <- newIORef temporalCtx
       let evalTrace = Nothing
-      r <- f MkEvalState {moduleUri, stack, supply, evalTrace, entityInfo, evalTime = evalConfig.evalTime, temporalContext, tracePolicy = evalConfig.tracePolicy, safeMode = evalConfig.safeMode}
+      r <- f MkEvalState {moduleUri, stack, supply, evalTrace, entityInfo, evalTime = actualTime, temporalContext, tracePolicy = evalConfig.tracePolicy, safeMode = evalConfig.safeMode}
       case r of
         Left exc -> do
           hPutStrLn stderr $ "Eval failure in module: " <> show moduleUri
@@ -485,10 +491,11 @@ execEvalModuleWithJSON evalConfig entityInfo json m@(MkModule _ moduleUri _) = d
     MkEval f -> do
       stack <- newIORef emptyStack
       supply <- newIORef 0
-      let temporalCtx = initialTemporalContext evalConfig.evalTime
+      actualTime <- resolveEvalTime evalConfig
+      let temporalCtx = initialTemporalContext actualTime
       temporalContext <- newIORef temporalCtx
       let evalTrace = Nothing
-      r <- f MkEvalState {moduleUri, stack, supply, evalTrace, entityInfo, evalTime = evalConfig.evalTime, temporalContext, tracePolicy = evalConfig.tracePolicy, safeMode = evalConfig.safeMode}
+      r <- f MkEvalState {moduleUri, stack, supply, evalTrace, entityInfo, evalTime = actualTime, temporalContext, tracePolicy = evalConfig.tracePolicy, safeMode = evalConfig.safeMode}
       case r of
         Left exc -> do
           hPutStrLn stderr $ "Eval failure in module: " <> show moduleUri
