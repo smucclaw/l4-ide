@@ -6,7 +6,7 @@ L4's type system provides strong static typing with type inference, algebraic da
 
 L4's type system is inspired by functional programming languages like Haskell and includes:
 
-- **Primitive types** - Basic data types (NUMBER, STRING, BOOLEAN, DATE)
+- **Primitive types** - Basic data types (NUMBER, STRING, BOOLEAN, DATE, TIME, DATETIME)
 - **Algebraic types** - Records (products) and enums (sums)
 - **Polymorphic types** - Generic types parameterized by other types
 - **Function types** - First-class functions
@@ -51,6 +51,25 @@ Calendar dates for temporal reasoning.
 - Date arithmetic and comparison
 - Integration with daydate library
 - **Examples:** Deadlines, effective dates, time periods
+
+### TIME
+
+Wall-clock time-of-day (no date or timezone component).
+
+- 24-hour format internally: `HH:MM:SS`
+- Time arithmetic with midnight wrapping
+- Integration with time library
+- **Examples:** Business hours, curfew checks, scheduling constraints
+
+### DATETIME
+
+Absolute points in time combining date, time, and timezone.
+
+- Stored internally as UTC
+- Extractors return local values in the stored timezone
+- Cross-timezone comparison
+- Integration with datetime library
+- **Examples:** Legal deadlines, transaction timestamps, cross-timezone events
 
 ---
 
@@ -200,6 +219,8 @@ Built-in conversion functions:
 - **TOSTRING** - Convert to STRING
 - **TONUMBER** - Convert to NUMBER
 - **TODATE** - Convert to DATE
+- **TOTIME** - Convert to TIME
+- **TODATETIME** - Convert to DATETIME
 - **TRUNC** - Truncate to integer
 
 See [Built-ins](../builtins/README.md) and [coercions](coercions.md) for details.
@@ -207,7 +228,7 @@ See [Built-ins](../builtins/README.md) and [coercions](coercions.md) for details
 ### Comparison
 
 - Equality (`EQUALS`, `=`) works for most types
-- Ordering (`<`, `>`, `<=`, `>=`) for NUMBER, STRING, DATE
+- Ordering (`<`, `>`, `<=`, `>=`) for NUMBER, STRING, DATE, TIME, DATETIME
 - Custom comparison via functions
 
 ### Maybe and Nullability
@@ -254,7 +275,9 @@ TYPE
   │   ├─ NUMBER
   │   ├─ STRING
   │   ├─ BOOLEAN
-  │   └─ DATE
+  │   ├─ DATE
+  │   ├─ TIME
+  │   └─ DATETIME
   │
   ├─ Algebraic Types
   │   ├─ Records (product types)
