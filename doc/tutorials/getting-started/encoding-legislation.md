@@ -95,8 +95,8 @@ Notice how the L4 mirrors the legislation:
 
 | Legal Text                                  | L4 Code                                                |
 | ------------------------------------------- | ------------------------------------------------------ |
-| "the person is a body corporate"            | `\`the person is a body corporate\``                   |
-| "the person is not a public house or hotel" | `NOT \`..is a public house\` AND NOT \`..is a hotel\`` |
+| "the person is a body corporate"            | `` `the person is a body corporate` ``                 |
+| "the person is not a public house or hotel" | `` NOT `..is a public house` AND NOT `..is a hotel` `` |
 | "any of the following applies"              | `(...OR...OR...)`                                      |
 
 ---

@@ -43,18 +43,18 @@ Prevent `app` from consuming backticked names as arguments by:
 
 ### Result
 
-This fix made `alice \`copulated with\` bob` work correctly, but **broke many other tests** where backticked names ARE meant to be function arguments, e.g.:
+This fix made ``alice `copulated with` bob`` work correctly, but **broke many other tests** where backticked names ARE meant to be function arguments, e.g.:
 
-- `Day \`Excel 1900 epoch\`` - function application (Day is a function)
+- ``Day `Excel 1900 epoch` `` - function application (Day is a function)
 - `` `Total Repayment Amount` `` in promissory-note.l4
 
 ### Why Simple Fix Won't Work
 
 The fundamental issue is **ambiguity that can't be resolved at parse time**:
 
-- `Day \`Excel 1900 epoch\`` - backticked name is a function argument
-- `alice \`copulated with\` bob` - backticked name is a mixfix operator
-- `alice \`is cool\`` - postfix mixfix operator (no following expression)
+- `` Day `Excel 1900 epoch` `` - backticked name is a function argument
+- ``alice `copulated with` bob`` - backticked name is a mixfix operator
+- `` alice `is cool` `` - postfix mixfix operator (no following expression)
 
 Without semantic information (knowing if `alice` vs `Day` is a function), the parser cannot distinguish these cases.
 
@@ -62,15 +62,15 @@ Without semantic information (knowing if `alice` vs `Day` is a function), the pa
 
 ### Option 1: Require Parentheses (Status Quo)
 
-- For mixfix: `(alice) \`copulated with\` (bob)`
+- For mixfix: ``(alice) `copulated with` (bob)``
 - Document this behavior as expected
 - Pros: No code changes, backward compatible
 - Cons: Less intuitive syntax
 
 ### Option 2: Require Parentheses for Backticked Arguments
 
-- For function args: `Day (\`Excel 1900 epoch\`)`
-- For mixfix: `alice \`copulated with\` bob` (no parens needed)
+- For function args: ``Day (`Excel 1900 epoch`) ``
+- For mixfix: ``alice `copulated with` bob`` (no parens needed)
 - Pros: More intuitive for mixfix
 - Cons: Breaks existing code, requires migration
 
@@ -78,14 +78,14 @@ Without semantic information (knowing if `alice` vs `Day` is a function), the pa
 
 - Parse greedily as function application
 - During typechecking, detect when a non-function is "applied" to arguments that include backticked names
-- Rewrite `App alice [\`copulated with\`, bob, ...]`to mixfix when`alice` isn't a function
+- Rewrite ``App alice [`copulated with`, bob, ...]`` to mixfix when `alice` isn't a function
 - Pros: Best of both worlds, no syntax changes
 - Cons: More complex implementation, requires typechecker changes
 
 ### Option 4: Explicit Mixfix Syntax
 
 - Use different syntax to invoke mixfix operators
-- E.g., `@mixfix alice \`copulated with\` bob`
+- E.g., `` @mixfix alice `copulated with` bob``
 - Pros: Unambiguous
 - Cons: Verbose, changes language syntax
 
