@@ -2785,10 +2785,9 @@ evalNullaryBuiltin = \case
           Nothing ->
             UserException $ UserError $
               "Could not load timezone '" <> tzName <> "' for TODAY."
-      Nothing -> do
-        -- Fall back to UTC if no timezone declared
-        let todayDay = Time.utctDay tc.tcSystemTime
-        pure $ ValDate todayDay
+      Nothing ->
+        UserException $ UserError
+          "TIMEZONE is not declared. TODAY requires 'TIMEZONE IS \"<IANA timezone>\"' in your document."
   NullaryNowSerial -> do
     tc <- GetTemporalContext
     let tzName = fromMaybe "Etc/UTC" tc.tcDocumentTimezone

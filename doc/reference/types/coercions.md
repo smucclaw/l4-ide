@@ -8,13 +8,15 @@ L4 provides built-in type coercion functions that are always available without i
 
 Converts a value to its string representation.
 
-**Signature:** `NUMBER | BOOLEAN | DATE | STRING → STRING`
+**Signature:** `NUMBER | BOOLEAN | DATE | TIME | DATETIME | STRING → STRING`
 
 **Behavior:**
 
 - Numbers render with canonical decimal text (no trailing zeros)
 - Booleans render as `TRUE` or `FALSE`
 - Dates render as `YYYY-MM-DD`
+- Times render as `HH:MM:SS`
+- DateTimes render as ISO-8601 (e.g., `2024-06-15T10:30:00+08:00`)
 - Strings pass through unchanged
 
 **Example:**
@@ -66,6 +68,43 @@ Parses a string to a date.
 - Month names are case-insensitive
 - Rejects dates outside `0001-01-01` to `9999-12-31`
 - Returns `NOTHING` for invalid dates (e.g., `"31/02/2024"`)
+
+---
+
+### TOTIME
+
+Parses a string to a time.
+
+**Signature:** `STRING → MAYBE TIME`
+
+**Accepted formats:**
+
+- `HH:MM:SS`: `"14:30:00"`
+- `HH:MM`: `"14:30"`
+- `h:MM AM/PM`: `"2:30 PM"`
+
+**Behavior:**
+
+- Returns `NOTHING` for invalid times
+- 24-hour and 12-hour (AM/PM) formats accepted
+
+---
+
+### TODATETIME
+
+Parses a string to a datetime.
+
+**Signature:** `STRING → MAYBE DATETIME`
+
+**Accepted formats:**
+
+- ISO-8601 with timezone: `"2024-06-15T10:30:00+08:00"`
+- ISO-8601 with Z (UTC): `"2024-06-15T10:30:00Z"`
+
+**Behavior:**
+
+- Returns `NOTHING` for invalid datetime strings
+- Timezone offset is preserved in the parsed value
 
 ---
 

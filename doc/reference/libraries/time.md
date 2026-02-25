@@ -63,10 +63,6 @@ Can be imported into L4 files with `IMPORT time`.
 - Standard comparison operators: LESS THAN, GREATER THAN, AT MOST, AT LEAST
 - TIME MINUS TIME returns difference in seconds
 
-**Clock:**
-
-- `CURRENTTIME` - Returns the current local time as a TIME value (requires `TIMEZONE IS`)
-
 ### Example: Time Operations
 
 [time-example.l4](time-example.l4)

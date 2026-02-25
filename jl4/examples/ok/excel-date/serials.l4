@@ -1,6 +1,9 @@
 IMPORT prelude
 IMPORT daydate
+IMPORT timezone
 IMPORT `excel-date`
+
+TIMEZONE IS "Etc/UTC"
 
 `Sample iso`    MEANS "2024-02-29"
 `Sample slash`  MEANS "31/12/2023"

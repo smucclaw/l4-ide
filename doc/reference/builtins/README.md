@@ -4,13 +4,15 @@ L4 includes several **built-in functions** that are always available without imp
 
 ### Type Coercion Builtins
 
-| Function    | Signature                      | Description                      |
-| ----------- | ------------------------------ | -------------------------------- |
-| `TOSTRING`  | `NUMBER/BOOLEAN/DATE → STRING` | Convert to string representation |
-| `TONUMBER`  | `STRING → MAYBE NUMBER`        | Parse string to number           |
-| `TODATE`    | `STRING → MAYBE DATE`          | Parse string to date             |
-| `TRUNC`     | `NUMBER, NUMBER → NUMBER`      | Truncate decimal places          |
-| `AS STRING` | `value AS STRING`              | Inline string conversion         |
+| Function     | Signature                                    | Description                      |
+| ------------ | -------------------------------------------- | -------------------------------- |
+| `TOSTRING`   | `NUMBER/BOOLEAN/DATE/TIME/DATETIME → STRING` | Convert to string representation |
+| `TONUMBER`   | `STRING → MAYBE NUMBER`                      | Parse string to number           |
+| `TODATE`     | `STRING → MAYBE DATE`                        | Parse string to date             |
+| `TOTIME`     | `STRING → MAYBE TIME`                        | Parse string to time             |
+| `TODATETIME` | `STRING → MAYBE DATETIME`                    | Parse string to datetime         |
+| `TRUNC`      | `NUMBER, NUMBER → NUMBER`                    | Truncate decimal places          |
+| `AS STRING`  | `value AS STRING`                            | Inline string conversion         |
 
 ### Numeric Builtins
 
@@ -37,15 +39,36 @@ L4 includes several **built-in functions** that are always available without imp
 
 ### Date Builtins
 
-| Function           | Description                          |
-| ------------------ | ------------------------------------ |
-| `DATE_FROM_DMY`    | Construct DATE from day, month, year |
-| `DATE_FROM_SERIAL` | Construct DATE from serial number    |
-| `DATE_SERIAL`      | Get serial number from DATE          |
-| `DATE_DAY`         | Extract day from DATE                |
-| `DATE_MONTH`       | Extract month from DATE              |
-| `DATE_YEAR`        | Extract year from DATE               |
-| `TODAY`            | Current date                         |
+| Function           | Description                           |
+| ------------------ | ------------------------------------- |
+| `DATE_FROM_DMY`    | Construct DATE from day, month, year  |
+| `DATE_FROM_SERIAL` | Construct DATE from serial number     |
+| `DATE_SERIAL`      | Get serial number from DATE           |
+| `DATE_DAY`         | Extract day from DATE                 |
+| `DATE_MONTH`       | Extract month from DATE               |
+| `DATE_YEAR`        | Extract year from DATE                |
+| `TODAY`            | Current date (requires `TIMEZONE IS`) |
+
+### Time Builtins
+
+| Function      | Description                                 |
+| ------------- | ------------------------------------------- |
+| `TIME_SERIAL` | Get serial number (day fraction) from TIME  |
+| `CURRENTTIME` | Current local time (requires `TIMEZONE IS`) |
+
+### DateTime Builtins
+
+| Function          | Description                                                   |
+| ----------------- | ------------------------------------------------------------- |
+| `DATETIME_SERIAL` | Get UTC serial number from DATETIME                           |
+| `NOW`             | Current date and time (defaults to UTC without `TIMEZONE IS`) |
+
+### Timezone Builtins
+
+| Function      | Description                                                   |
+| ------------- | ------------------------------------------------------------- |
+| `TIMEZONE`    | Returns the document timezone string (requires `TIMEZONE IS`) |
+| `TIMEZONE IS` | Top-level declaration setting the document timezone           |
 
 ### HTTP and JSON Builtins
 
