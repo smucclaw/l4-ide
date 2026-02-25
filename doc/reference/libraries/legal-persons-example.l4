@@ -1,6 +1,9 @@
 -- Legal Persons Example: Natural and corporate entity modeling
 IMPORT daydate
+IMPORT timezone
 IMPORT `legal-persons`
+
+TIMEZONE IS "Etc/UTC"
 
 -- Name formatting
 DECIDE `john's full name` IS `full name` "John" "Doe"

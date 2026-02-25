@@ -1,6 +1,9 @@
 IMPORT prelude
 IMPORT daydate
+IMPORT timezone
 IMPORT `excel-date`
+
+TIMEZONE IS "Etc/UTC"
 
 `Start 2012` MEANS Date 1 1 2012
 `Mid 2012`   MEANS Date 1 7 2012

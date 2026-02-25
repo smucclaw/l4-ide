@@ -329,15 +329,19 @@ Metadata annotations for documentation and generation.
 
 ## Built-in Constants
 
-| Constant    | Type           | Description               |
-| ----------- | -------------- | ------------------------- |
-| **TRUE**    | BOOLEAN        | Boolean true value        |
-| **FALSE**   | BOOLEAN        | Boolean false value       |
-| **NOTHING** | MAYBE a        | Absence of value          |
-| **JUST**    | a → MAYBE a    | Present value constructor |
-| **LEFT**    | a → EITHER a b | Left alternative          |
-| **RIGHT**   | b → EITHER a b | Right alternative         |
-| **EMPTY**   | LIST a         | Empty list                |
+| Constant        | Type           | Description                                                   |
+| --------------- | -------------- | ------------------------------------------------------------- |
+| **TRUE**        | BOOLEAN        | Boolean true value                                            |
+| **FALSE**       | BOOLEAN        | Boolean false value                                           |
+| **NOTHING**     | MAYBE a        | Absence of value                                              |
+| **JUST**        | a → MAYBE a    | Present value constructor                                     |
+| **LEFT**        | a → EITHER a b | Left alternative                                              |
+| **RIGHT**       | b → EITHER a b | Right alternative                                             |
+| **EMPTY**       | LIST a         | Empty list                                                    |
+| **TODAY**       | DATE           | Current date (requires `TIMEZONE IS`)                         |
+| **NOW**         | DATETIME       | Current date and time (defaults to UTC without `TIMEZONE IS`) |
+| **CURRENTTIME** | TIME           | Current local time (requires `TIMEZONE IS`)                   |
+| **TIMEZONE**    | STRING         | Document timezone (requires `TIMEZONE IS`)                    |
 
 ---
 
