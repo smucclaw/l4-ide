@@ -40,18 +40,18 @@ deal MEANS Deal WITH
 ```l4
 DECLARE TypeName IS ONE OF
     Constructor1
-    | Constructor2 ArgType
-    | Constructor3 ArgType1 ArgType2
+    Constructor2 HAS payload IS A ArgType
+    Constructor3 HAS first IS A ArgType1, second IS A ArgType2
 ```
 
-**Sum type constructors can have their own fields:**
+**Sum type constructors can have their own fields (multi-line for readability):**
 ```l4
 DECLARE Status IS ONE OF
     Active
-    | Suspended
-        HAS reason     IS A STRING
-            `start date` IS A DATE
-    | Closed
+    Suspended HAS
+        reason     IS A STRING
+        `start date` IS A DATE
+    Closed
 ```
 
 **Pattern match:**

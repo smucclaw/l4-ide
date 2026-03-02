@@ -226,9 +226,35 @@ factorial MEANS
 **General:** L4 is layout-sensitive (like Python/Haskell)
 
 **Rules:**
-- Nested blocks must be consistently indented
+- Continuation lines of a subexpression must be indented more deeply than the line that introduced them
 - Use spaces, not tabs
 - WHERE bindings align vertically
+- MEANS/DECIDE body must be indented relative to the definition line
+
+**Common gotcha:** If MEANS is indented too deeply, the body appears to be at the same or lower indent level, confusing the parser.
+
+**Wrong:**
+```l4
+        result MEANS
+    x + y           -- ERROR: body is less indented than MEANS
+```
+
+**Fix:**
+```l4
+result MEANS
+    x + y           -- body is indented relative to definition
+```
+
+**Another gotcha:** Multi-line function arguments without OF must be indented more deeply than the function name:
+```l4
+-- WRONG: bare values on continuation lines confuse the parser
+r MEANS triple
+    100              -- parser can't tell if this continues the expression
+    200
+
+-- RIGHT: use OF with commas for multi-argument calls
+r MEANS triple OF 100, 200, 300
+```
 
 **Tip:** Use editor with layout mode support (VS Code extension)
 
@@ -247,6 +273,51 @@ factorial MEANS
 - Prevents inference ambiguity
 
 **Linter:** May flag missing type annotations as yellow warning (not error)
+
+---
+
+## Sum Type: Pipes Don't Work
+
+**Symptom:** `Parse error` when using `|` to separate sum type constructors
+
+**Cause:** L4 does NOT use Haskell-style pipe `|` separators in sum types. Use commas or newlines.
+
+**Wrong:**
+```l4
+DECLARE Color IS ONE OF
+    Red | Green | Blue
+```
+
+**Fix:**
+```l4
+DECLARE Color IS ONE OF Red, Green, Blue
+
+-- OR with newlines:
+DECLARE Color IS ONE OF
+    Red
+    Green
+    Blue
+```
+
+---
+
+## Sum Type: Bare Positional Payload
+
+**Symptom:** `expecting HAS` when putting a bare type after a constructor
+
+**Cause:** Sum type constructors with fields require HAS, not positional bare types
+
+**Wrong:**
+```l4
+DECLARE Shape IS ONE OF
+    Circle NUMBER           -- ERROR: expecting HAS
+```
+
+**Fix:**
+```l4
+DECLARE Shape IS ONE OF
+    Circle HAS radius IS A NUMBER
+```
 
 ---
 
@@ -279,4 +350,4 @@ append (LIST 1, 2) (LIST 3)  -- List concat (lowercase, prefix)
 
 **Error types:** parse error, type mismatch, type error, pattern match, indentation error, scope error, recursion, stack overflow, import error, module not found, field access, arity mismatch, boolean literal, equality operator, undefined variable, exhaustive match, circular definition
 
-**Common confusions from other languages:** == should be = (equality), True/true should be TRUE (boolean), False/false should be FALSE, % should be MODULO, . (dot) should be 's (genitive/possessive), ++ should be CONCAT, def/fn/function should be MEANS or DECIDE, return (not needed, expression-based), ; (not needed, layout-sensitive), { } (not needed, indentation-based), null/nil should be Nothing (MAYBE type)
+**Common confusions from other languages:** == should be = (equality), True/true should be TRUE (boolean), False/false should be FALSE, % should be MODULO, . (dot) should be 's (genitive/possessive), ++ should be CONCAT, def/fn/function should be MEANS or DECIDE, return (not needed, expression-based), ; (not needed, layout-sensitive), { } (not needed, indentation-based), null/nil should be Nothing (MAYBE type), | (pipe) should be comma or newline (sum type separators), Data Constructor Type should be Constructor HAS field IS A Type (sum type payloads)

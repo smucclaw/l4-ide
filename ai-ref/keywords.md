@@ -2,7 +2,7 @@
 
 Dense technical specs. Each section: syntax, type, semantics, FP analog, example.
 
-**Cross-language cheat sheet:** struct/class/interface → DECLARE HAS. enum/union/variant → IS ONE OF. def/fn/function → MEANS or DECIDE. switch/case/match → CONSIDER or BRANCH. ternary/if-else → IF THEN ELSE (for long chains, use BRANCH). lambda/arrow function/closure → GIVEN...YIELD. let/const/local variable → WHERE or LET...IN. null/nil/None/optional/nullable → MAYBE. array/list/sequence → LIST OF. dot notation/property access/member access/genitive → `'s` possessive. string concatenation/join → CONCAT. modulo/remainder/mod → MODULO. toString/str()/cast → TOSTRING. for-each/forEach/all/every → `all`/`any` (IMPORT prelude). namespace/scope → § sections. implicit AND/asyndetic conjunction → `...` (three dots). implicit OR/asyndetic disjunction → `..` (two dots). comment/annotation/inert/no-op → bare `"string"` in boolean context.
+**Cross-language cheat sheet:** struct/class/interface → DECLARE HAS. enum/union/variant → IS ONE OF. def/fn/function → MEANS or DECIDE. switch/case/match → CONSIDER or BRANCH. ternary/if-else → IF THEN ELSE (for long chains, use BRANCH). lambda/arrow function/closure → GIVEN...YIELD. let/const/local variable → WHERE or LET...IN. null/nil/None/optional/nullable → MAYBE. array/list/sequence → LIST OF. dot notation/property access/member access/genitive → `'s` possessive. string concatenation/join → CONCAT. modulo/remainder/mod → MODULO. toString/str()/cast → TOSTRING. for-each/forEach/all/every → `all`/`any` (IMPORT prelude). namespace/scope → § sections. implicit AND/asyndetic conjunction → `...` (three dots). implicit OR/asyndetic disjunction → `..` (two dots). comment/annotation/inert/no-op → bare `"string"` in boolean context. comma-separated args/apply/call → OF (e.g. `f OF arg1, arg2`).
 
 ---
 
@@ -223,7 +223,7 @@ DECIDE bracket IS
 ## DECLARE
 
 **Syntax:** `DECLARE TypeName HAS field1 IS A Type1, ...` (record)
-         `DECLARE TypeName IS ONE OF Ctor1 | Ctor2 Type | ...` (sum)
+         `DECLARE TypeName IS ONE OF Ctor1, Ctor2 HAS field IS A Type, ...` (sum)
 **Semantics:** Algebraic data type definition
 **Haskell:** `data TypeName = TypeName { field1 :: Type1, ... }` or `data TypeName = Ctor1 | Ctor2 Type`
 
@@ -234,11 +234,12 @@ DECLARE Person HAS
     age IS A NUMBER
     status IS A Status
 
--- Sum type (enum)
+-- Sum type (enum with fields)
 DECLARE Status IS ONE OF
     Active
-    | Suspended STRING
-    | Closed
+    Suspended HAS
+        reason IS A STRING
+    Closed
 
 -- Nested
 DECLARE Company HAS
@@ -262,11 +263,12 @@ DECLARE Company HAS
 GIVEN contract IS A Contract, today IS A DATE
 GIVETH A DEONTIC
 `payment obligation` MEANS
-    PARTY contract's buyer
-    MUST `pay` (contract's amount)
-    TO contract's seller
-    WITHIN 30 days
     IF today >= contract's effectiveDate
+    THEN
+        PARTY contract's buyer
+        MUST `pay` (contract's amount)
+        WITHIN 30 days
+    ELSE FULFILLED
 ```
 
 **Combinators:** HENCE (fulfillment), LEST (breach)
@@ -404,10 +406,11 @@ status MEANS IF age >= 18 THEN "adult" ELSE "minor"
 
 ## IS ONE OF
 
-**Syntax:** `DECLARE TypeName IS ONE OF Ctor1 | Ctor2 Type | ...`
-**Semantics:** Sum type / discriminated union / algebraic data type
-**Haskell:** `data TypeName = Ctor1 | Ctor2 Type`
+**Syntax:** `DECLARE TypeName IS ONE OF Ctor1, Ctor2 HAS field IS A Type, ...`
+**Semantics:** Sum type / discriminated union / algebraic data type. Constructors separated by commas or newlines (NOT pipes `|`).
+**Haskell:** `data TypeName = Ctor1 | Ctor2 { field :: Type }`
 **Use:** Pattern match with CONSIDER
+**Note:** Constructor fields require HAS (not positional bare types)
 
 ---
 
@@ -528,7 +531,7 @@ DECIDE `is even` IF n MODULO 2 EQUALS 0
 
 ## MUST
 
-**Syntax:** `PARTY actor MUST action TO beneficiary ...`
+**Syntax:** `PARTY actor MUST action ...`
 **Type:** `DEONTIC`
 **Semantics:** Obligation (deontic modality)
 **Legal:** "shall", "is required to", "is obligated to"
@@ -537,8 +540,7 @@ DECIDE `is even` IF n MODULO 2 EQUALS 0
 ```l4
 PARTY tenant
 MUST `pay rent`
-TO landlord
-WITHIN 5 days OF `start of month`
+WITHIN 5 days
 ```
 
 ---
@@ -549,6 +551,44 @@ WITHIN 5 days OF `start of month`
 **Type:** `BOOLEAN -> BOOLEAN`
 **Semantics:** Logical negation
 **Precedence:** Highest
+**See also:** `UNLESS`
+
+---
+
+## OF
+
+**Syntax:** Varies by context (see below)
+**Semantics:** Multi-purpose structural keyword that introduces comma-separated argument lists. Without OF, arguments must be space-separated on the same line or indented on subsequent lines.
+
+**Contexts where OF appears:**
+
+| Context | Syntax | Example |
+|---------|--------|---------|
+| Sum type declaration | `IS ONE OF` | `DECLARE Color IS ONE OF Red, Green, Blue` |
+| Type constructor | `LIST OF Type` | `field IS A LIST OF Person` |
+| Record construction (positional) | `Type OF val1, val2` | `Pair OF 10, 20` |
+| Function application | `fname OF arg1, arg2` | `add OF 3, 4` |
+| Pattern matching | `Constructor OF pat1, pat2` | `WHEN Pair OF x, y THEN ...` |
+| Function type | `FUNCTION FROM T1 TO T2` | (OF not used here, but related) |
+
+**Key insight:** OF enables comma-separated arguments on the same line. Without OF, you must use space-separated arguments or indented continuation lines.
+
+```l4
+-- WITH OF: comma-separated args on one line
+result1 MEANS add OF 3, 4
+result2 MEANS foldr OF add, 0, numbers
+
+-- WITHOUT OF: space-separated on same line
+result3 MEANS add 3 4
+
+-- Record construction: OF (positional) vs WITH (named)
+pair1 MEANS Pair OF 10, 20                         -- positional, fragile
+pair2 MEANS Pair WITH first IS 10, second IS 20    -- named, resilient
+```
+
+**Note:** OF is optional in function application — `add OF 3, 4` and `add 3 4` are equivalent. But for multi-argument calls, OF + commas is often clearer than relying on whitespace parsing.
+
+**Caution:** "NOT OF" is valid syntax (`NOT OF expr`) but OF is optional there — `NOT expr` works the same way. (As one linguist noted, "NOT OF" reads like the Americanism "off of".)
 
 ---
 
@@ -574,15 +614,58 @@ WITHIN 5 days OF `start of month`
 
 **Syntax:** `PARTY expression`
 **Semantics:** Actor in regulative rule (deontic subject)
-**Type:** Any type, typically Person/Entity
+**Type:** Any type, typically Person/Entity, according to the type definition of the deonton
+
+---
+
+## RAND (Regulative AND / Parallel Conjunction)
+
+**Syntax:** `deonton1 RAND deonton2`
+**Type:** `DEONTIC -> DEONTIC -> DEONTIC`
+**Semantics:** Parallel conjunction of deontic obligations — ALL must be fulfilled for the compound to be fulfilled. Short-circuit evaluation: if either side breaches, the whole breaches.
+**Precedence:** 3 (higher than ROR, lower than comparisons)
+**Associativity:** Right
+**Theory:** Corresponds to Hvitved's subcontract conjunction in CSL (Contract Specification Language). In concurrency theory terms, this is parallel composition where all threads must complete successfully.
+**See also:** ROR (disjunctive choice), HENCE, LEST
+
+```l4
+-- Both obligations must be fulfilled
+(PARTY seller MUST deliver WITHIN 14 HENCE FULFILLED LEST BREACH)
+RAND
+(PARTY buyer MUST pay WITHIN 30 HENCE FULFILLED LEST BREACH)
+```
+
+---
+
+## ROR (Regulative OR / Disjunctive Choice)
+
+**Syntax:** `deonton1 ROR deonton2`
+**Type:** `DEONTIC -> DEONTIC -> DEONTIC`
+**Semantics:** Disjunctive choice between deontic obligations — EITHER fulfilling suffices for the compound to be fulfilled. Short-circuit evaluation: if either side fulfills, the whole fulfills.
+**Precedence:** 2 (lower than RAND)
+**Associativity:** Right
+**Theory:** Corresponds to Hvitved's subcontract disjunction in CSL. In concurrency theory terms, this is a race where the first to complete determines the outcome.
+**See also:** RAND (parallel conjunction), HENCE, LEST
+
+```l4
+-- Either obligation can fulfill the contract
+(PARTY seller MUST ship WITHIN 14 HENCE FULFILLED LEST BREACH)
+ROR
+(PARTY seller MUST `arrange pickup` WITHIN 7 HENCE FULFILLED LEST BREACH)
+```
+
+**RAND vs ROR summary:**
+- `A RAND B` = both A and B must succeed (like logical AND for obligations)
+- `A ROR B` = either A or B succeeding suffices (like logical OR for obligations)
+- RAND binds tighter than ROR, so `A ROR B RAND C` means `A ROR (B RAND C)`
 
 ---
 
 ## § (Section Scope)
 
 **Syntax:** `§ SectionName` or `§§ SubsectionName`
-**Semantics:** Nested scoping within a file, like sections in legislation
-**Use:** Organize definitions into logical sections, control visibility
+**Semantics:** Nested scoping within a file, like sections in legislation. Same-named definitions in different sections do NOT shadow each other — the compiler creates fully qualified name bindings for disambiguation.
+**Use:** Organize definitions into logical sections
 **Other languages:** namespace (C++), module (Python), package (Java)
 **Note:** Multiple § levels for nesting depth (§, §§, §§§)
 
@@ -593,6 +676,45 @@ WITHIN 5 days OF `start of month`
 § Eligibility Rules
   GIVEN p IS A Person
   DECIDE `is eligible` IF ...
+```
+
+**Same name, different sections:** Definitions don't shadow — they coexist and consumers must qualify to disambiguate. This parallels how legislation scopes definitions: "for purposes of subsection 2, X means ...".
+
+```l4
+§ `Part VII`
+
+§§ `Subsection 2`
+`age of majority` MEANS 18
+
+§§ `Subsection 3`
+`age of majority` MEANS 21
+
+§ Application
+
+-- Consumer must qualify: a 19-year-old is an adult
+-- under Subsection 2 (age 18) but not Subsection 3 (age 21)
+GIVEN age IS A NUMBER
+GIVETH A BOOLEAN
+DECIDE `is adult for purposes of subsection 2` IF
+    age >= `Part VII`'s `Subsection 2`'s `age of majority`
+
+GIVEN age IS A NUMBER
+GIVETH A BOOLEAN
+DECIDE `is adult for purposes of subsection 3` IF
+    age >= `Part VII`'s `Subsection 3`'s `age of majority`
+
+#EVAL `is adult for purposes of subsection 2` 19  -- TRUE
+#EVAL `is adult for purposes of subsection 3` 19  -- FALSE
+```
+
+**Note:** Sections provide namespacing, not lexical scoping. A function defined inside a section does NOT automatically prefer its own section's bindings — if the same name exists in multiple sections, you must always qualify. Dot notation also works: `` `Part VII`.`Subsection 2`.`age of majority` ``.
+
+**Section aliases (AKA):** Provide shorter names for qualified references:
+```l4
+§ `Definitions for Part VII` AKA defs
+  taxableIncome MEANS 50000
+
+result MEANS defs.taxableIncome   -- via alias
 ```
 
 ---
@@ -607,15 +729,46 @@ WITHIN 5 days OF `start of month`
 
 ---
 
-## TIMES / PLUS (Arithmetic Operator Aliases)
+## Arithmetic Operators
 
-**Syntax:** `expr TIMES expr`, `expr PLUS expr`
-**Semantics:** Natural language aliases for arithmetic operators
-**Mappings:** `TIMES` = `*`, `PLUS` = `+`, `MINUS` = `-`
+L4 provides both symbolic and keyword forms for arithmetic. All keyword forms are uppercase. Keyword and symbol forms are interchangeable.
+
+| Keyword(s) | Symbol | Meaning | Precedence |
+|------------|--------|---------|------------|
+| `TIMES` | `*` | Multiplication | 7 (highest) |
+| `DIVIDED BY` | `/` | Division | 7 |
+| `MODULO` | — | Remainder | 7 |
+| `PLUS` | `+` | Addition | 6 |
+| `MINUS` | `-` | Subtraction | 6 |
+
+**Note:** `DIVIDED BY` is two keywords (`DIVIDED` + `BY`). `+` works for numbers only, not strings (use CONCAT or APPEND for strings).
 
 ```l4
-DECIDE `twice of` IS 2 TIMES n
-accrued MEANS capital PLUS capital * interest
+accrued MEANS capital PLUS capital TIMES interest
+share MEANS total DIVIDED BY count
+remainder MEANS n MODULO 2
+```
+
+---
+
+## Comparison Operators
+
+| Keyword(s) | Symbol | Meaning | Precedence |
+|------------|--------|---------|------------|
+| `EQUALS` | `=` | Equality | 4 |
+| `GREATER THAN` | `>` | Greater than | 4 |
+| `ABOVE` | — | Synonym for `>` | 4 |
+| `LESS THAN` | `<` | Less than | 4 |
+| `BELOW` | — | Synonym for `<` | 4 |
+| `AT LEAST` | `>=` | Greater or equal | 4 |
+| `AT MOST` | `<=` | Less or equal | 4 |
+
+**Note:** L4 uses `=` for equality (NOT `==`). `ABOVE`/`BELOW` are semantic synonyms for `GREATER THAN`/`LESS THAN`, useful for natural-language readability in legal contexts (e.g. "income ABOVE threshold").
+
+```l4
+DECIDE `is adult` IF age AT LEAST 18
+DECIDE `is minor` IF age BELOW 18
+DECIDE `exceeds limit` IF amount ABOVE 10000
 ```
 
 ---
@@ -802,18 +955,20 @@ Key observations:
 
 **Functional programming:** algebraic data type, sum type, product type, pattern matching, pure function, type signature, lazy evaluation, currying, partial application, higher-order function, closure, lambda, anonymous function, immutable, referential transparency
 
-**Formal methods:** modal logic, deontic logic, temporal logic, constitutive rule, regulative rule, obligation, permission, prohibition, formal verification, model checking, property assertion, Hohfeld, Searle, LegalRuleML
+**Formal methods:** modal logic, deontic logic, temporal logic, constitutive rule, regulative rule, obligation, permission, prohibition, formal verification, model checking, property assertion, Hohfeld, Searle, LegalRuleML, Hvitved, CSL, contract specification language, subcontract conjunction, subcontract disjunction, parallel composition, concurrency
 
 **Haskell correspondence:** case expression → CONSIDER, where clause → WHERE, let-in → LET...IN, data declaration → DECLARE, Maybe monad → MAYBE, guards → BRANCH, pattern matching → CONSIDER/WHEN, type class → (not yet), do-notation → (not yet), record syntax → DECLARE HAS, record access → 's genitive/possessive
 
 **Other language mappings:** struct/class/interface → DECLARE HAS, enum/union/variant/tagged union → IS ONE OF, def/fn/function/method → MEANS or DECIDE, switch/case/match → CONSIDER or BRANCH, if-else/ternary/conditional → IF THEN ELSE, lambda/arrow function/(x) => → GIVEN...YIELD, let/const/var → WHERE or LET...IN, null/nil/None/undefined/optional → MAYBE, array/list/vector/sequence → LIST OF, dot notation/property access/.field → 's genitive/possessive, string concat/join/+ → CONCAT, modulo/remainder/% → MODULO, toString/str/show/cast → TOSTRING, import/require/include/use → IMPORT, namespace/module/package/scope → § sections
 
-**L4-specific syntax:** mixfix (infix/postfix function application), caret ^ (ditto operator / vertical alignment / repeat token from previous line / ellipsis / gapping / stripping / coordination reduction), `...` three-dot ellipsis (implicit AND / asyndetic conjunction), `..` two-dot ellipsis (implicit OR / asyndetic disjunction), inert elements (bare strings as boolean scaffolding / no-op / identity element / annotation), backtick delimiters for multi-word identifiers, UNLESS (= AND NOT), 's genitive/possessive/Saxon genitive/genitive clitic/possessive clitic (= dot notation / record field access / member access / property access / projection / dereference), § section scoping (= namespace / module), EXACTLY (strict deontic action), FULFILLED (terminal deontic value / base case)
+**L4-specific syntax:** mixfix (infix/postfix function application), caret ^ (ditto operator / vertical alignment / repeat token from previous line / ellipsis / gapping / stripping / coordination reduction), `...` three-dot ellipsis (implicit AND / asyndetic conjunction), `..` two-dot ellipsis (implicit OR / asyndetic disjunction), inert elements (bare strings as boolean scaffolding / no-op / identity element / annotation), backtick delimiters for multi-word identifiers, UNLESS (= AND NOT), 's genitive/possessive/Saxon genitive/genitive clitic/possessive clitic (= dot notation / record field access / member access / property access / projection / dereference), § section scoping (= namespace / module / qualified names), EXACTLY (strict deontic action), FULFILLED (terminal deontic value / base case), OF (comma-separated argument lists / function application / record construction / type constructors)
 
 **Type theory:** arrow type, unit type, product, coproduct, elimination form, constructor, introduction form, bidirectional type checking, Hindley-Milner, parametric polymorphism
 
 **Legal/compliance:** shall, must, may, may not, shall not, obligation, permission, prohibition, entitlement, deadline, penalty, breach, fulfillment, liability, indemnity, contract, legislation, regulation, statutory instrument, rules as code, computational law
 
-**Arithmetic operators:** PLUS (+), MINUS (-), TIMES (*), MODULO (%), EQUALS (=), GREATER THAN (>), LESS THAN (<), AT LEAST (>=), AT MOST (<=)
+**Arithmetic operators:** PLUS (+), MINUS (-), TIMES (*), DIVIDED BY (/), MODULO (%), EQUALS (=), GREATER THAN (>), LESS THAN (<), AT LEAST (>=), AT MOST (<=), ABOVE (> synonym), BELOW (< synonym)
 
 **Boolean operators:** AND (&&), OR (||), NOT (!), IMPLIES (=>), UNLESS (AND NOT)
+
+**Deontic composition:** RAND (parallel conjunction / all must fulfill / subcontract AND), ROR (disjunctive choice / either suffices / subcontract OR), Hvitved CSL, contract composition, concurrent obligations
