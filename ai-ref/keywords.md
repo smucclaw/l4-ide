@@ -728,6 +728,39 @@ mom and dad `have a baby named` kid MEANS
 
 ---
 
+## FAQ: Deontic Guards — IF vs PROVIDED
+
+**Q: When should I use IF (outside) vs PROVIDED (inside) a deontic rule?**
+
+They serve different purposes:
+
+| | IF (outside) | PROVIDED (inside) |
+|---|---|---|
+| **Controls** | Whether the obligation **exists** | Which events **satisfy** the obligation |
+| **When false** | No obligation arises | Obligation exists but event doesn't count as fulfillment |
+| **Analogy** | Precondition / applicability test | Pattern match guard / filter |
+
+**Pattern:** Deontic rules typically emerge from a MEANS or DECIDE definition, with IF as a precondition:
+
+```l4
+-- IF controls whether the obligation exists at all
+GIVEN `amount owed` IS A NUMBER
+`payment obligation` MEANS
+    IF `amount owed` > 0
+    THEN
+        PARTY borrower
+        MUST pay
+            `Amount Transferred`
+            PROVIDED `Amount Transferred` >= `amount owed`
+        WITHIN 30
+        HENCE `payment obligation` (`amount owed` - `Amount Transferred`)
+    ELSE FULFILLED
+```
+
+Here, IF tests whether money is still owed (no obligation if fully paid). PROVIDED filters which payment events count (must be at least the amount owed). The obligation exists as long as `amount owed > 0`, but only a sufficiently large payment satisfies it.
+
+---
+
 ## Search Terms
 
 **Functional programming:** algebraic data type, sum type, product type, pattern matching, pure function, type signature, lazy evaluation, currying, partial application, higher-order function, closure, lambda, anonymous function, immutable, referential transparency
