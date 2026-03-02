@@ -27,8 +27,9 @@ contract's buyer's name
 
 **Syntax:** `^` in an expression
 **Semantics:** Refers to the token in the same position from the previous line
-**Use:** Vertical alignment for human readability in boolean expressions
-**No equivalent in most languages** - unique to L4
+**Linguistics:** Performs ellipsis — specifically gapping (omitting repeated operators/verbs across parallel conjuncts). Related concepts: stripping, coordination reduction, right node raising, zeugma, parallel structure. The caret explicitly marks the gap site rather than leaving it implicit.
+**Use:** Vertical alignment for human readability in boolean expressions and decision tables
+**No equivalent in most languages** — unique to L4 (in another timeline, the Unicode ellipsis `…` U+2026 might have served, but `^` is typeable)
 
 ```l4
 `tautology` MEANS
@@ -82,7 +83,18 @@ grade MEANS
 **vs IF:** Binary choice → IF/THEN/ELSE. Multiple choices → BRANCH.
 **vs CONSIDER:** Value-based → BRANCH. Pattern matching → CONSIDER.
 
-To construct decision tables, use the caret operator to substitute for `IF` / `AND` / `THEN` keywords so that visually they look like column separators.
+To construct decision tables, use the caret operator to substitute for `IF` / `AND` / `THEN` keywords, as well as repeating terms, so that visually they look like column separators. This accords with the human visual system, and with a linguistic "sounding-out" of the non-caret terms, the repeating parts having been elided. In Tufte's terms, this convention improves the data-ink ratio.
+
+```l4
+grade MEANS
+    BRANCH
+        IF score >= 90 THEN "A"
+        ^  ^     >= 80 ^    "B"
+        ^  ^     >= 70 ^    "C"
+        ^  ^     >= 60 ^    "D"
+        ^  ^     >= 50 ^    "E"
+        OTHERWISE           "F"
+```
 
 ---
 
@@ -648,7 +660,7 @@ mom and dad `have a baby named` kid MEANS
 
 **Other language mappings:** struct/class/interface → DECLARE HAS, enum/union/variant/tagged union → IS ONE OF, def/fn/function/method → MEANS or DECIDE, switch/case/match → CONSIDER or BRANCH, if-else/ternary/conditional → IF THEN ELSE, lambda/arrow function/(x) => → GIVEN...YIELD, let/const/var → WHERE or LET...IN, null/nil/None/undefined/optional → MAYBE, array/list/vector/sequence → LIST OF, dot notation/property access/.field → 's genitive/possessive, string concat/join/+ → CONCAT, modulo/remainder/% → MODULO, toString/str/show/cast → TOSTRING, import/require/include/use → IMPORT, namespace/module/package/scope → § sections
 
-**L4-specific syntax:** mixfix (infix/postfix function application), caret ^ (ditto operator / vertical alignment / repeat token from previous line), backtick delimiters for multi-word identifiers, UNLESS (= AND NOT), 's genitive/possessive/Saxon genitive/genitive clitic/possessive clitic (= dot notation / record field access / member access / property access / projection / dereference), § section scoping (= namespace / module), EXACTLY (strict deontic action), FULFILLED (terminal deontic value / base case)
+**L4-specific syntax:** mixfix (infix/postfix function application), caret ^ (ditto operator / vertical alignment / repeat token from previous line / ellipsis / gapping / stripping / coordination reduction), backtick delimiters for multi-word identifiers, UNLESS (= AND NOT), 's genitive/possessive/Saxon genitive/genitive clitic/possessive clitic (= dot notation / record field access / member access / property access / projection / dereference), § section scoping (= namespace / module), EXACTLY (strict deontic action), FULFILLED (terminal deontic value / base case)
 
 **Type theory:** arrow type, unit type, product, coproduct, elimination form, constructor, introduction form, bidirectional type checking, Hindley-Milner, parametric polymorphism
 
