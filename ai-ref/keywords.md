@@ -178,7 +178,7 @@ greeting MEANS CONCAT "Hello, ", person's name, "!"
 ```l4
 CONSIDER status
 WHEN Active THEN "running"
-WHEN Suspended reason THEN "paused: " + reason
+WHEN Suspended reason THEN CONCAT "paused: ", reason
 WHEN Closed THEN "stopped"
 ```
 
