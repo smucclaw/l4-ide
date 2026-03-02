@@ -2,7 +2,7 @@
 
 Dense technical specs. Each section: syntax, type, semantics, FP analog, example.
 
-**Cross-language cheat sheet:** struct/class/interface → DECLARE HAS. enum/union/variant → IS ONE OF. def/fn/function → MEANS or DECIDE. switch/case/match → CONSIDER or BRANCH. ternary/if-else → IF THEN ELSE (for long chains, use BRANCH). lambda/arrow function/closure → GIVEN...YIELD. let/const/local variable → WHERE or LET...IN. null/nil/None/optional/nullable → MAYBE. array/list/sequence → LIST OF. dot notation/property access/member access/genitive → `'s` possessive. string concatenation/join → CONCAT. modulo/remainder/mod → MODULO. toString/str()/cast → TOSTRING. for-each/forEach/all/every → `all`/`any` (IMPORT prelude). namespace/scope → § sections.
+**Cross-language cheat sheet:** struct/class/interface → DECLARE HAS. enum/union/variant → IS ONE OF. def/fn/function → MEANS or DECIDE. switch/case/match → CONSIDER or BRANCH. ternary/if-else → IF THEN ELSE (for long chains, use BRANCH). lambda/arrow function/closure → GIVEN...YIELD. let/const/local variable → WHERE or LET...IN. null/nil/None/optional/nullable → MAYBE. array/list/sequence → LIST OF. dot notation/property access/member access/genitive → `'s` possessive. string concatenation/join → CONCAT. modulo/remainder/mod → MODULO. toString/str()/cast → TOSTRING. for-each/forEach/all/every → `all`/`any` (IMPORT prelude). namespace/scope → § sections. implicit AND/asyndetic conjunction → `...` (three dots). implicit OR/asyndetic disjunction → `..` (two dots). comment/annotation/inert/no-op → bare `"string"` in boolean context.
 
 ---
 
@@ -29,7 +29,7 @@ contract's buyer's name
 **Semantics:** Refers to the token in the same position from the previous line
 **Linguistics:** Performs ellipsis — specifically gapping (omitting repeated operators/verbs across parallel conjuncts). Related concepts: stripping, coordination reduction, right node raising, zeugma, parallel structure. The caret explicitly marks the gap site rather than leaving it implicit.
 **Use:** Vertical alignment for human readability in boolean expressions and decision tables
-**No equivalent in most languages** — unique to L4 (in another timeline, the Unicode ellipsis `…` U+2026 might have served, but `^` is typeable)
+**No equivalent in most languages** — unique to L4 (in another timeline, the Unicode ellipsis `…` U+2026 might have served, but humans know how to type `^` on the keyboard. L4 does have actual ellipsis operators used for other purposes.)
 
 ```l4
 `tautology` MEANS
@@ -38,6 +38,60 @@ contract's buyer's name
    AND  q ^      TRUE    -- ^ means EQUALS (from previous line)
     OR  q ^      FALSE
 ```
+
+---
+
+## ... (Ellipsis AND / Asyndetic Conjunction)
+
+**Syntax:** `... expr` within a boolean expression
+**Semantics:** Implicit AND. Three dots join the following expression with AND to the preceding context.
+**Linguistics:** Asyndetic conjunction — coordinating clauses without an explicit conjunction word. Cf. syndetic conjunction (with AND/OR keywords).
+**Use:** Embedding natural-language scaffolding into boolean logic so the L4 reads like the source statute or contract. Used with inert elements (bare string literals in boolean context, which evaluate to TRUE in AND context and FALSE in OR context — the identity values for their respective operators).
+
+```l4
+-- From Singapore Penal Code §415
+DECIDE `commits cheating` IF
+        `by deceiving any person`
+   ...  p1   ...
+                  `fraudulently`
+              OR  `dishonestly`
+              ..  "induces the person so deceived"
+         ...    "to" ...     `deliver`
+                         OR  `cause the delivery`
+```
+
+**Note:** The bare string `"induces the person so deceived"` is an inert element — it appears in the AST for visualization/explanation but evaluates to the boolean identity for its context (TRUE for AND, FALSE for OR), so it doesn't affect the logical result.
+
+---
+
+## .. (Ellipsis OR / Asyndetic Disjunction)
+
+**Syntax:** `.. expr` within a boolean expression
+**Semantics:** Implicit OR. Two dots join the following expression with OR to the preceding context.
+**Linguistics:** Asyndetic disjunction. See `...` above for full explanation.
+**Use:** Same as `...` but for OR chains. Often used to attach inert string scaffolding to OR-linked alternatives.
+
+```l4
+              `causes`
+          OR  `is likely to cause`
+      ...     `damage`
+          OR  `harm`
+          ..  "to any person"    -- inert, evaluates to FALSE (OR identity)
+      ...     "in"
+          ..  `body`
+          ..  `mind`
+          ..  `reputation`
+          OR  `property`
+```
+
+---
+
+## Inert Elements (Bare Strings in Boolean Context)
+
+**Syntax:** `"any string"` appearing as an operand in a boolean expression
+**Semantics:** Grammatical scaffolding. String literals in boolean context are converted to `Inert` nodes during type checking. They evaluate to the identity value for their containing operator: TRUE in AND context, FALSE in OR context.
+**Use:** Mirrors statutory language structure without affecting logical evaluation. Preserved in AST for visualization, NLG, and explanation traces.
+**See also:** `...` (AND ellipsis), `..` (OR ellipsis)
 
 ---
 
@@ -660,7 +714,7 @@ mom and dad `have a baby named` kid MEANS
 
 **Other language mappings:** struct/class/interface → DECLARE HAS, enum/union/variant/tagged union → IS ONE OF, def/fn/function/method → MEANS or DECIDE, switch/case/match → CONSIDER or BRANCH, if-else/ternary/conditional → IF THEN ELSE, lambda/arrow function/(x) => → GIVEN...YIELD, let/const/var → WHERE or LET...IN, null/nil/None/undefined/optional → MAYBE, array/list/vector/sequence → LIST OF, dot notation/property access/.field → 's genitive/possessive, string concat/join/+ → CONCAT, modulo/remainder/% → MODULO, toString/str/show/cast → TOSTRING, import/require/include/use → IMPORT, namespace/module/package/scope → § sections
 
-**L4-specific syntax:** mixfix (infix/postfix function application), caret ^ (ditto operator / vertical alignment / repeat token from previous line / ellipsis / gapping / stripping / coordination reduction), backtick delimiters for multi-word identifiers, UNLESS (= AND NOT), 's genitive/possessive/Saxon genitive/genitive clitic/possessive clitic (= dot notation / record field access / member access / property access / projection / dereference), § section scoping (= namespace / module), EXACTLY (strict deontic action), FULFILLED (terminal deontic value / base case)
+**L4-specific syntax:** mixfix (infix/postfix function application), caret ^ (ditto operator / vertical alignment / repeat token from previous line / ellipsis / gapping / stripping / coordination reduction), `...` three-dot ellipsis (implicit AND / asyndetic conjunction), `..` two-dot ellipsis (implicit OR / asyndetic disjunction), inert elements (bare strings as boolean scaffolding / no-op / identity element / annotation), backtick delimiters for multi-word identifiers, UNLESS (= AND NOT), 's genitive/possessive/Saxon genitive/genitive clitic/possessive clitic (= dot notation / record field access / member access / property access / projection / dereference), § section scoping (= namespace / module), EXACTLY (strict deontic action), FULFILLED (terminal deontic value / base case)
 
 **Type theory:** arrow type, unit type, product, coproduct, elimination form, constructor, introduction form, bidirectional type checking, Hindley-Milner, parametric polymorphism
 
