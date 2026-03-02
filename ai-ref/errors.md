@@ -250,6 +250,31 @@ factorial MEANS
 
 ---
 
+## Case Sensitivity: APPEND vs append
+
+**Symptom:** Wrong type error when using `APPEND` or `append`
+
+**Cause:** Prelude defines two different functions with the same spelling but different case:
+
+| Function | Type | Purpose |
+|----------|------|---------|
+| `APPEND` (uppercase, infix) | `STRING -> STRING -> STRING` | String concatenation (`x APPEND y` = `CONCAT x, y`) |
+| `append` (lowercase, prefix) | `LIST OF a -> LIST OF a -> LIST OF a` | List concatenation |
+
+**Wrong:**
+```l4
+append "hello" "world"       -- Type error: expects lists, not strings
+"hello" APPEND LIST 1, 2, 3  -- Type error: expects strings, not lists
+```
+
+**Fix:**
+```l4
+"hello" APPEND " world"      -- String concat (uppercase, infix)
+append (LIST 1, 2) (LIST 3)  -- List concat (lowercase, prefix)
+```
+
+---
+
 ## Search Terms
 
 **Error types:** parse error, type mismatch, type error, pattern match, indentation error, scope error, recursion, stack overflow, import error, module not found, field access, arity mismatch, boolean literal, equality operator, undefined variable, exhaustive match, circular definition

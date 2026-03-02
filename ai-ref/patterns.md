@@ -15,6 +15,24 @@ DECLARE TypeName HAS
 
 **Access (dot notation equivalent):** `record's field1`, `record's field2's nested`
 
+**Construction — two forms:**
+
+```l4
+-- Named (WITH ... IS ...): fields by name, any order
+alice MEANS Person WITH name IS "Alice", age IS 30
+
+-- Positional (OF ...): fields by declaration order
+bob MEANS Person OF "Bob", 25
+
+-- Nested records
+deal MEANS Deal WITH
+    buyer  IS Party WITH name IS "Alice"
+    seller IS Party WITH name IS "Bob"
+    price  IS 1000
+```
+
+**Note:** `WITH ... IS` is preferred for readability and resilience to field reordering. `OF` is terser but fragile if the DECLARE order changes.
+
 ---
 
 ## Sum Type with Payloads (Enum / Union / Variant / ADT)

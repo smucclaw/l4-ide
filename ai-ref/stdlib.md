@@ -57,7 +57,7 @@ Complete index of builtin operators, builtin functions, and standard library fun
 | `STRINGLENGTH` | `STRING -> NUMBER` | String length |
 | `TOUPPER` | `STRING -> STRING` | Uppercase |
 | `TOLOWER` | `STRING -> STRING` | Lowercase |
-| `APPEND` (infix) | `STRING -> STRING -> STRING` | Binary concat (prelude) |
+| `APPEND` (infix) | `STRING -> STRING -> STRING` | Binary concat (prelude). **Caution:** lowercase `append` is a different function for lists — see prelude list operations. |
 
 ### Type Coercion
 
@@ -97,7 +97,7 @@ Complete index of builtin operators, builtin functions, and standard library fun
 | `filter f list` | `(a->Bool) -> [a] -> [a]` | `filter` | Keep matching elements |
 | `foldr f z list` | `(a->r->r) -> r -> [a] -> r` | `foldr` | Right fold |
 | `foldl f z list` | `(r->a->r) -> r -> [a] -> r` | `foldl` | Left fold |
-| `append l1 l2` | `[a] -> [a] -> [a]` | `(++)` | Concatenate lists |
+| `append l1 l2` | `[a] -> [a] -> [a]` | `(++)` | Concatenate lists. **Caution:** uppercase `APPEND` is a different function for strings. |
 | `concat lists` | `[[a]] -> [a]` | `concat` | Flatten list of lists |
 | `reverse list` | `[a] -> [a]` | `reverse` | Reverse list |
 | `at list i` | `[a] -> Number -> a` | `(!!)` | Index access (0-based) |
