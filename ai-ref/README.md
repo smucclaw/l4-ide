@@ -93,7 +93,7 @@ The `UNLESS` keyword means `AND NOT`.
 
 The caret operator means "the token in this position from the previous line", and is used for human readability.
 
-An apostrophe s (`'s`) possessive means record deference.
+An apostrophe s (`'s`) — the Saxon genitive / possessive clitic — means record dereference.
 
 ``` l4
 

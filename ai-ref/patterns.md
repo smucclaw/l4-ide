@@ -1,6 +1,6 @@
 # Canonical L4 Patterns
 
-Copy-paste templates. For struct/record use DECLARE HAS. For enum/union use IS ONE OF. For function use MEANS/DECIDE. For switch/case use CONSIDER/BRANCH. For dot access use 's possessive. For string concat use CONCAT. For optional/nullable use MAYBE.
+Copy-paste templates. For struct/record use DECLARE HAS. For enum/union use IS ONE OF. For function use MEANS/DECIDE. For switch/case use CONSIDER/BRANCH. For dot access use 's genitive/possessive. For string concat use CONCAT. For optional/nullable use MAYBE.
 
 ---
 

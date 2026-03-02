@@ -93,7 +93,7 @@ f MEANS expression
 | `BRANCH` | Guards | `\| cond = ...` | if-elseif chain/cond | - |
 | `WHERE` / `LET...IN` | Binding | `where` / `let...in` | let/const/var/local | Substitution |
 | `DEONTIC` | Effect | Custom monad | - (domain-specific) | Kleisli category |
-| `'s` possessive | Accessor | Record field / lens | dot notation / .field | Projection |
+| `'s` genitive / possessive | Accessor | Record field / lens | dot notation / .field | Projection (π) |
 
 ---
 

@@ -2,14 +2,14 @@
 
 Dense technical specs. Each section: syntax, type, semantics, FP analog, example.
 
-**Cross-language cheat sheet:** struct/class/interface → DECLARE HAS. enum/union/variant → IS ONE OF. def/fn/function → MEANS or DECIDE. switch/case/match → CONSIDER or BRANCH. ternary/if-else → IF THEN ELSE (for long chains, use BRANCH). lambda/arrow function/closure → GIVEN...YIELD. let/const/local variable → WHERE or LET...IN. null/nil/None/optional/nullable → MAYBE. array/list/sequence → LIST OF. dot notation/property access/member access → `'s` possessive. string concatenation/join → CONCAT. modulo/remainder/mod → MODULO. toString/str()/cast → TOSTRING. for-each/forEach/all/every → `all`/`any` (IMPORT prelude). namespace/scope → § sections.
+**Cross-language cheat sheet:** struct/class/interface → DECLARE HAS. enum/union/variant → IS ONE OF. def/fn/function → MEANS or DECIDE. switch/case/match → CONSIDER or BRANCH. ternary/if-else → IF THEN ELSE (for long chains, use BRANCH). lambda/arrow function/closure → GIVEN...YIELD. let/const/local variable → WHERE or LET...IN. null/nil/None/optional/nullable → MAYBE. array/list/sequence → LIST OF. dot notation/property access/member access/genitive → `'s` possessive. string concatenation/join → CONCAT. modulo/remainder/mod → MODULO. toString/str()/cast → TOSTRING. for-each/forEach/all/every → `all`/`any` (IMPORT prelude). namespace/scope → § sections.
 
 ---
 
-## 's (Possessive / Field Access)
+## 's (Genitive / Possessive / Field Access)
 
 **Syntax:** `record's fieldname`
-**Semantics:** Record field access (dot notation equivalent)
+**Semantics:** Record field access (dot notation equivalent). The `'s` clitic is variously called the possessive, genitive, Saxon genitive, genitive clitic, or possessive clitic in linguistics.
 **Haskell:** Record accessor function, or lens `^. field`
 **Other languages:** `record.field` (JS/Python), `record->field` (C), `record.getField()` (Java)
 **Chaining:** `company's ceo's name` (like `company.ceo.name`)
@@ -648,11 +648,11 @@ mom and dad `have a baby named` kid MEANS
 
 **Formal methods:** modal logic, deontic logic, temporal logic, constitutive rule, regulative rule, obligation, permission, prohibition, formal verification, model checking, property assertion, Hohfeld, Searle, LegalRuleML
 
-**Haskell correspondence:** case expression → CONSIDER, where clause → WHERE, let-in → LET...IN, data declaration → DECLARE, Maybe monad → MAYBE, guards → BRANCH, pattern matching → CONSIDER/WHEN, type class → (not yet), do-notation → (not yet), record syntax → DECLARE HAS, record access → 's possessive
+**Haskell correspondence:** case expression → CONSIDER, where clause → WHERE, let-in → LET...IN, data declaration → DECLARE, Maybe monad → MAYBE, guards → BRANCH, pattern matching → CONSIDER/WHEN, type class → (not yet), do-notation → (not yet), record syntax → DECLARE HAS, record access → 's genitive/possessive
 
-**Other language mappings:** struct/class/interface → DECLARE HAS, enum/union/variant/tagged union → IS ONE OF, def/fn/function/method → MEANS or DECIDE, switch/case/match → CONSIDER or BRANCH, if-else/ternary/conditional → IF THEN ELSE, lambda/arrow function/(x) => → GIVEN...YIELD, let/const/var → WHERE or LET...IN, null/nil/None/undefined/optional → MAYBE, array/list/vector/sequence → LIST OF, dot notation/property access/.field → 's possessive, string concat/join/+ → CONCAT, modulo/remainder/% → MODULO, toString/str/show/cast → TOSTRING, import/require/include/use → IMPORT, namespace/module/package/scope → § sections
+**Other language mappings:** struct/class/interface → DECLARE HAS, enum/union/variant/tagged union → IS ONE OF, def/fn/function/method → MEANS or DECIDE, switch/case/match → CONSIDER or BRANCH, if-else/ternary/conditional → IF THEN ELSE, lambda/arrow function/(x) => → GIVEN...YIELD, let/const/var → WHERE or LET...IN, null/nil/None/undefined/optional → MAYBE, array/list/vector/sequence → LIST OF, dot notation/property access/.field → 's genitive/possessive, string concat/join/+ → CONCAT, modulo/remainder/% → MODULO, toString/str/show/cast → TOSTRING, import/require/include/use → IMPORT, namespace/module/package/scope → § sections
 
-**L4-specific syntax:** mixfix (infix/postfix function application), caret ^ (ditto operator / vertical alignment / repeat token from previous line), backtick delimiters for multi-word identifiers, UNLESS (= AND NOT), 's possessive (= dot notation / record field access / member access / property access), § section scoping (= namespace / module), EXACTLY (strict deontic action), FULFILLED (terminal deontic value / base case)
+**L4-specific syntax:** mixfix (infix/postfix function application), caret ^ (ditto operator / vertical alignment / repeat token from previous line), backtick delimiters for multi-word identifiers, UNLESS (= AND NOT), 's genitive/possessive/Saxon genitive/genitive clitic/possessive clitic (= dot notation / record field access / member access / property access / projection / dereference), § section scoping (= namespace / module), EXACTLY (strict deontic action), FULFILLED (terminal deontic value / base case)
 
 **Type theory:** arrow type, unit type, product, coproduct, elimination form, constructor, introduction form, bidirectional type checking, Hindley-Milner, parametric polymorphism
 
