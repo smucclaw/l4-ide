@@ -8,6 +8,7 @@ Terse technical reference optimized for AI assistants, RAG systems, and context-
 - [patterns.md](patterns.md) - Canonical code templates
 - [types.md](types.md) - Type system and FP correspondence
 - [errors.md](errors.md) - Common errors and fixes
+- [stdlib.md](stdlib.md) - Builtin operators and standard library functions
 
 ## L4 in Brief
 

@@ -2,7 +2,7 @@
 
 Dense technical specs. Each section: syntax, type, semantics, FP analog, example.
 
-**Cross-language cheat sheet:** struct/class/interface → DECLARE HAS. enum/union/variant → IS ONE OF. def/fn/function → MEANS or DECIDE. switch/case/match → CONSIDER or BRANCH. ternary/if-else → IF THEN ELSE. lambda/arrow function/closure → GIVEN...YIELD. let/const/local variable → WHERE or LET...IN. null/nil/None/optional/nullable → MAYBE. array/list/sequence → LIST OF. dot notation/property access/member access → `'s` possessive. string concatenation/join → CONCAT. modulo/remainder/mod → MODULO. toString/str()/cast → TOSTRING. for-each/forEach/all/every → `all`/`any` (IMPORT prelude). namespace/scope → § sections.
+**Cross-language cheat sheet:** struct/class/interface → DECLARE HAS. enum/union/variant → IS ONE OF. def/fn/function → MEANS or DECIDE. switch/case/match → CONSIDER or BRANCH. ternary/if-else → IF THEN ELSE (for long chains, use BRANCH). lambda/arrow function/closure → GIVEN...YIELD. let/const/local variable → WHERE or LET...IN. null/nil/None/optional/nullable → MAYBE. array/list/sequence → LIST OF. dot notation/property access/member access → `'s` possessive. string concatenation/join → CONCAT. modulo/remainder/mod → MODULO. toString/str()/cast → TOSTRING. for-each/forEach/all/every → `all`/`any` (IMPORT prelude). namespace/scope → § sections.
 
 ---
 
