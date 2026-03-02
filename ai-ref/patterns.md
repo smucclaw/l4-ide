@@ -1,6 +1,6 @@
 # Canonical L4 Patterns
 
-Copy-paste templates. For struct/record use DECLARE HAS. For enum/union use IS ONE OF. For function use MEANS/DECIDE. For switch/case use CONSIDER/BRANCH. For dot access use 's genitive/possessive. For string concat use CONCAT. For optional/nullable use MAYBE.
+Copy-paste templates. For struct/record use DECLARE HAS. For enum/union use IS ONE OF. For function use MEANS/DECIDE. For switch/case use CONSIDER/BRANCH. For dot access use 's genitive/possessive. For string concat use CONCAT. For optional/nullable use MAYBE. For statutory isomorphism use `...` (AND) / `..` (OR) with inert `"string"` scaffolding.
 
 ---
 
@@ -376,6 +376,48 @@ summary MEANS CONCAT person's name, " owes ", TOSTRING(amount)
    AND  q ^      TRUE    -- ^ = EQUALS
     OR  q ^      FALSE
 ```
+
+---
+
+## Ellipsis Operators and Inert Elements (Statutory Isomorphism)
+
+```l4
+-- ... = implicit AND (asyndetic conjunction)
+-- ..  = implicit OR  (asyndetic disjunction)
+-- Bare "strings" in boolean context = inert elements (grammatical scaffolding)
+--   Inert elements evaluate to the identity for their operator:
+--   TRUE in AND context, FALSE in OR context
+
+-- Example: Singapore Penal Code §415 (Cheating)
+GIVEN `by deceiving any person`   IS A BOOLEAN
+      `fraudulently`              IS A BOOLEAN
+      `dishonestly`               IS A BOOLEAN
+      `deliver`                   IS A BOOLEAN
+      `cause the delivery`        IS A BOOLEAN
+      `intentionally`             IS A BOOLEAN
+      `causes`                    IS A BOOLEAN
+      `is likely to cause`        IS A BOOLEAN
+      `damage`                    IS A BOOLEAN
+      `harm`                      IS A BOOLEAN
+DECIDE `commits cheating` IF
+        `by deceiving any person`
+   ...      `fraudulently`
+        OR  `dishonestly`
+        ..  "induces the person so deceived"
+   ...  "to" ...  `deliver`
+             OR   `cause the delivery`
+             ..   "of any property to any person"
+
+    OR  `intentionally` .. "induces the person so deceived"
+        ... "which act or omission"
+                ..  `causes`
+                OR  `is likely to cause`
+            ...     `damage`
+                OR  `harm`
+                ..  "to any person"
+```
+
+**Key insight:** The `...` and `..` operators, combined with inert string scaffolding, let L4 mirror the exact structure of legislation while maintaining formal boolean semantics. The quoted strings are preserved in the AST for visualization and explanation but don't affect evaluation.
 
 ---
 
