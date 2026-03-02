@@ -444,10 +444,10 @@ GIVEN borrower IS A Person
   THEN   FULFILLED
   ELSE   PARTY lender
          MUST  EXACTLY send capital to borrower
-         BEFORE closing
+         WITHIN closing
          HENCE    PARTY  borrower
                   MUST   EXACTLY send accrued to lender
-                  BEFORE repayment
+                  WITHIN repayment
   WHERE
     send money to person MEANS
         CONCAT person's name, " receives ", TOSTRING(money)

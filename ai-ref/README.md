@@ -14,7 +14,7 @@ Terse technical reference optimized for AI assistants, RAG systems, and context-
 
 Domain-specific (specification) language for computational law. Haskell-inspired: layout-sensitive, strongly typed, algebraic data types, pure functional core with an "effect system" for multi-party deontic/temporal modal logics.
 
-**Application domain paradigm:** From Searle, and also LegalRuleML, Constitutive rules (DECIDE/MEANS) + Regulative rules (PARTY MUST/MAY/SHANT action BEFORE deadline). From Haskell, destructuring (CONSIDER), case-like statements (BRANCH), and ternary IF/THEN/ELSE; also LET/IN and WHERE. Module system allows imports and also supports multiple nested section scopes within a file using § symbols.
+**Application domain paradigm:** From Searle, and also LegalRuleML, Constitutive rules (DECIDE/MEANS) + Regulative rules (PARTY MUST/MAY/SHANT action WITHIN deadline). From Haskell, destructuring (CONSIDER), case-like statements (BRANCH), and ternary IF/THEN/ELSE; also LET/IN and WHERE. Module system allows imports and also supports multiple nested section scopes within a file using § symbols.
 
 Uses: automated extraction and refinement into operational runtimes, e.g. code-generation of an expert system web UI; a decision service API to support AI chats, with an evaluation trace facility for audit logs.
 
@@ -126,10 +126,10 @@ GIVEN borrower  IS A Person
   THEN   FULFILLED
   ELSE   PARTY lender
          MUST  EXACTLY send capital to borrower
-         BEFORE closing
+         WITHIN closing
          HENCE    PARTY  borrower
                   MUST   EXACTLY send accrued to lender
-                  BEFORE repayment
+                  WITHIN repayment
 
   WHERE
     send money to person MEANS

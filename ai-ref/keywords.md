@@ -54,18 +54,12 @@ age >= 18 AND isCitizen
 
 ---
 
-## BEFORE
+## BEFORE (NOT YET IMPLEMENTED)
 
 **Syntax:** `... BEFORE deadline`
-**Semantics:** Temporal deadline in deontic rule (alternative to WITHIN)
-**Use:** When deadline is a specific date/event, not a duration
-**See also:** WITHIN (for relative durations)
-
-```l4
-PARTY lender
-MUST send capital to borrower
-BEFORE closing
-```
+**Intended semantics:** Temporal deadline in deontic rule (alternative to WITHIN) for absolute dates/events
+**Status:** Planned but not yet in parser. Use WITHIN for now.
+**See also:** WITHIN (implemented, for relative durations)
 
 ---
 
@@ -87,6 +81,8 @@ grade MEANS
 
 **vs IF:** Binary choice → IF/THEN/ELSE. Multiple choices → BRANCH.
 **vs CONSIDER:** Value-based → BRANCH. Pattern matching → CONSIDER.
+
+To construct decision tables, use the caret operator to substitute for `IF` / `AND` / `THEN` keywords so that visually they look like column separators.
 
 ---
 
@@ -589,7 +585,7 @@ DECIDE `is eligible` IF
 
 **Syntax:** `... WITHIN duration [OF event]`
 **Semantics:** Temporal deadline as relative duration in deontic rule
-**See also:** BEFORE (for absolute deadlines)
+**See also:** BEFORE (planned, for absolute deadlines — not yet implemented)
 **Examples:** `WITHIN 30 days`, `WITHIN 5 days OF notice`
 
 ---
@@ -615,8 +611,8 @@ DECIDE `is eligible` IF
 
 ```l4
 #TRACE `Loan Contract` myLender myBorrower 10000 0.05 ...
--- Shows: PARTY lender MUST send 10000 to borrower BEFORE ...
---        HENCE PARTY borrower MUST send 10500 to lender BEFORE ...
+-- Shows: PARTY lender MUST send 10000 to borrower WITHIN ...
+--        HENCE PARTY borrower MUST send 10500 to lender WITHIN ...
 ```
 
 ---
