@@ -100,7 +100,7 @@ DECIDE `commits cheating` IF
 **Syntax:** `expr AND expr`
 **Type:** `BOOLEAN -> BOOLEAN -> BOOLEAN`
 **Semantics:** Logical conjunction
-**Aliases:** `&&`
+**Aliases:** `&&`, `...`
 **Precedence:** Higher than OR, lower than NOT
 
 ```l4
@@ -158,6 +158,7 @@ grade MEANS
 **Type:** `STRING -> STRING -> ... -> STRING`
 **Semantics:** String concatenation of multiple arguments
 **Other languages:** `+` (JS/Python), `++` (Haskell), `strcat` (C), `.` (PHP)
+**See also:** `APPEND` for binary infix alternative
 
 ```l4
 greeting MEANS CONCAT "Hello, ", person's name, "!"
@@ -169,9 +170,9 @@ greeting MEANS CONCAT "Hello, ", person's name, "!"
 
 **Syntax:** `CONSIDER expr WHEN pattern THEN result ... OTHERWISE default`
 **Type:** Pattern match on expr type
-**Semantics:** Pattern matching elimination form
+**Semantics:** Pattern matching / destructuring elimination form
 **Haskell:** `case ... of`
-**Other languages:** switch/case (C/Java), match (Rust/Python 3.10+), when (Kotlin)
+**Other languages:** switch/case (C/Java), match (Rust/Python 3.10+), when (Kotlin), destructuring (JS/TS/Rust)
 **Use:** Sum types, Maybe, List destructuring
 
 ```l4
@@ -749,11 +750,11 @@ mom and dad `have a baby named` kid MEANS
 
 They serve different purposes:
 
-| | IF (outside) | PROVIDED (inside) |
-|---|---|---|
-| **Controls** | Whether the obligation **exists** | Which events **satisfy** the obligation |
-| **When false** | No obligation arises | Obligation exists but event doesn't count as fulfillment |
-| **Analogy** | Precondition / applicability test | Pattern match guard / filter |
+|                | IF (outside)                      | PROVIDED (inside)                                        |
+|----------------|-----------------------------------|----------------------------------------------------------|
+| **Controls**   | Whether the obligation **exists** | Which events **satisfy** the obligation                  |
+| **When false** | No obligation arises              | Obligation exists but event doesn't count as fulfillment |
+| **Analogy**    | Precondition / applicability test | Pattern match guard / filter                             |
 
 **Pattern:** Deontic rules typically emerge from a MEANS or DECIDE definition, with IF as a precondition:
 
@@ -782,12 +783,12 @@ Here, IF tests whether money is still owed (no obligation if fully paid). PROVID
 
 The defaults depend on which deontic modal you use. MUST/MAY/SHANT are syntactic sugar over the primitive `DO`, which requires both HENCE and LEST explicitly:
 
-| Modal | HENCE triggers | Default HENCE | LEST triggers | Default LEST |
-|-------|---------------|---------------|--------------|-------------|
-| `DO` | action taken | *(required)* | deadline passes | *(required)* |
-| `MUST` | action taken | `FULFILLED` | deadline passes | `BREACH` |
-| `MAY` | action taken | `FULFILLED` | deadline passes | `FULFILLED` |
-| `SHANT` | deadline passes | `FULFILLED` | action taken | `BREACH` |
+| Modal   | HENCE triggers  | Default HENCE | LEST triggers   | Default LEST |
+|---------|-----------------|---------------|-----------------|--------------|
+| `DO`    | action taken    | *(required)*  | deadline passes | *(required)* |
+| `MUST`  | action taken    | `FULFILLED`   | deadline passes | `BREACH`     |
+| `MAY`   | action taken    | `FULFILLED`   | deadline passes | `FULFILLED`  |
+| `SHANT` | deadline passes | `FULFILLED`   | action taken    | `BREACH`     |
 
 Key observations:
 - **SHANT flips polarity:** For prohibitions, success = nothing happened; failure = action was taken.
