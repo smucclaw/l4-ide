@@ -340,11 +340,14 @@ GIVETH A BOOLEAN
 **Syntax:** `... HENCE fulfilledRule`
 **Semantics:** Chained obligation on fulfillment
 **Use:** Sequential deontic rules
+**See Also:** `LEST`
 
 ```l4
-PARTY buyer MUST pay TO seller
-HENCE PARTY seller MUST deliver TO buyer
+PARTY buyer MUST pay seller
+HENCE PARTY seller MUST deliver goods to buyer
 ```
+
+**Note:** `to` in `deliver goods to buyer` is part of the mixfix action expression, not a deontic keyword.
 
 ---
 
@@ -582,9 +585,9 @@ accrued MEANS capital PLUS capital * interest
 
 ## TO
 
-**Syntax:** `... TO beneficiary`
-**Semantics:** Beneficiary of deontic action
-**Optional:** In MUST/MAY/SHANT
+**Syntax:** `FUNCTION FROM Type1 TO Type2`
+**Semantics:** Used in function type annotations (`FUNCTION FROM T1 AND T2 TO T3`).
+**Note:** `TO` is a reserved keyword but is **not** a deontic beneficiary marker. In deontic rules, `to` appearing in the action (e.g. `deliver goods to buyer`) is part of the mixfix expression, not a keyword.
 
 ---
 

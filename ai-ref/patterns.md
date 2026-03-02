@@ -211,11 +211,11 @@ WHEN first FOLLOWED BY rest THEN
 
 ```l4
 PARTY actor
-MUST action
-TO beneficiary
+MUST action         -- action is a mixfix expression
 WITHIN duration
-IF precondition
 ```
+
+**Note:** There is no `TO` keyword in deontic rules. The beneficiary, if any, is part of the action expression (e.g. `MUST deliver goods to buyer`).
 
 ---
 
@@ -228,7 +228,6 @@ GIVETH A DEONTIC
     IF `triggering condition` THEN
         PARTY actor
         MUST action
-        TO beneficiary
         WITHIN duration
     ELSE
         NoObligation
@@ -241,11 +240,9 @@ GIVETH A DEONTIC
 ```l4
 PARTY party1
 MUST action1
-TO party2
 HENCE
     PARTY party2
     MUST action2
-    TO party1
 ```
 
 ---
@@ -255,12 +252,10 @@ HENCE
 ```l4
 PARTY obligor
 MUST action
-TO obligee
 WITHIN deadline
 LEST
     PARTY obligor
     MUST `pay penalty`
-    TO obligee
 ```
 
 ---
