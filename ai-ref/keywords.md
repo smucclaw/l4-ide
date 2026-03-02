@@ -358,17 +358,22 @@ GIVETH A BOOLEAN
 
 ## HENCE
 
-**Syntax:** `... HENCE fulfilledRule`
-**Semantics:** Chained obligation on fulfillment
-**Use:** Sequential deontic rules
-**See Also:** `LEST`
+**Syntax:** `... HENCE continuation`
+**Semantics:** What happens on the "success" path of a deonton. The meaning of "success" depends on the deontic modal:
+
+| Modal | HENCE triggers when... | Default if omitted |
+|-------|------------------------|-------------------|
+| `DO` | action is taken | *(required)* |
+| `MUST` | action is taken | `FULFILLED` |
+| `MAY` | action is taken | `FULFILLED` |
+| `SHANT` | deadline passes (prohibition respected) | `FULFILLED` |
+
+**See Also:** LEST (the "failure" path), DO, MUST, MAY, SHANT
 
 ```l4
 PARTY buyer MUST pay seller
 HENCE PARTY seller MUST deliver goods to buyer
 ```
-
-**Note:** `to` in `deliver goods to buyer` is part of the mixfix action expression, not a deontic keyword.
 
 ---
 
@@ -424,14 +429,24 @@ result MEANS
 
 ## LEST
 
-**Syntax:** `... LEST breachRule`
-**Semantics:** Chained obligation on breach/failure
-**Use:** Penalty clause, exception handling, breach consequence in deontic rules
+**Syntax:** `... LEST continuation`
+**Semantics:** What happens on the "failure" path of a deonton. The meaning of "failure" depends on the deontic modal:
+
+| Modal | LEST triggers when... | Default if omitted |
+|-------|----------------------|-------------------|
+| `DO` | deadline passes | *(required)* |
+| `MUST` | deadline passes without action | `BREACH` |
+| `MAY` | deadline passes (permission not exercised) | `FULFILLED` |
+| `SHANT` | action is taken (prohibition violated) | `BREACH` |
+
+**See Also:** HENCE (the "success" path), DO, MUST, MAY, SHANT
 
 ```l4
-PARTY buyer MUST pay WITHIN 30 days
-LEST PARTY buyer MUST `pay penalty` TO seller
+PARTY buyer MUST pay WITHIN 30
+LEST PARTY buyer MUST `pay with penalty`
 ```
+
+**Note:** SHANT flips the polarity — for prohibitions, the *action happening* is the failure case (LEST), while the *deadline passing without action* is success (HENCE).
 
 ---
 
@@ -758,6 +773,27 @@ GIVEN `amount owed` IS A NUMBER
 ```
 
 Here, IF tests whether money is still owed (no obligation if fully paid). PROVIDED filters which payment events count (must be at least the amount owed). The obligation exists as long as `amount owed > 0`, but only a sufficiently large payment satisfies it.
+
+---
+
+## FAQ: HENCE/LEST Defaults by Deontic Modal
+
+**Q: What happens if I omit HENCE or LEST?**
+
+The defaults depend on which deontic modal you use. MUST/MAY/SHANT are syntactic sugar over the primitive `DO`, which requires both HENCE and LEST explicitly:
+
+| Modal | HENCE triggers | Default HENCE | LEST triggers | Default LEST |
+|-------|---------------|---------------|--------------|-------------|
+| `DO` | action taken | *(required)* | deadline passes | *(required)* |
+| `MUST` | action taken | `FULFILLED` | deadline passes | `BREACH` |
+| `MAY` | action taken | `FULFILLED` | deadline passes | `FULFILLED` |
+| `SHANT` | deadline passes | `FULFILLED` | action taken | `BREACH` |
+
+Key observations:
+- **SHANT flips polarity:** For prohibitions, success = nothing happened; failure = action was taken.
+- **MAY never breaches:** Both paths lead to FULFILLED — the party is merely permitted, not obligated.
+- **DO is neutral:** No default moral weight; you must specify both outcomes explicitly.
+- **MUST is the common case:** Do it or breach.
 
 ---
 
