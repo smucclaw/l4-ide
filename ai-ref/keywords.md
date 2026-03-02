@@ -282,12 +282,33 @@ GIVETH A DEONTIC
 
 ## EXACTLY
 
-**Syntax:** `MUST EXACTLY action`
-**Semantics:** Strict obligation modifier — action must be performed precisely as specified
-**Use:** In deontic rules where the action is not merely a description but a precise requirement
+**Syntax:** `MUST EXACTLY expression`
+**Semantics:** Changes how the action is matched against incoming events during contract execution. Without EXACTLY, the action is a **pattern** (matched structurally, like `WHEN` in `CONSIDER` — can bind variables). With EXACTLY, the action is an **expression** that is evaluated to a value and compared for **equality** against the event.
+**Haskell analogy:** Pattern match (`WHEN Constructor args`) vs equality guard (`| val == expr`)
+**See also:** PROVIDED (guard condition on action match)
 
 ```l4
+-- Without EXACTLY: "pay" is a pattern, matches any pay-shaped event
+PARTY buyer MUST pay
+
+-- With EXACTLY: expression is evaluated, event must equal the result
 PARTY lender MUST EXACTLY send capital to borrower
+```
+
+---
+
+## PROVIDED
+
+**Syntax:** `MUST action PROVIDED condition`
+**Semantics:** Guard condition on a deontic action. After an event matches the action pattern, the PROVIDED expression is evaluated. If it returns FALSE, the match is rejected and the system tries the next event. Defaults to TRUE if omitted.
+**Haskell analogy:** Guard in pattern matching (`| condition`)
+**See also:** EXACTLY (controls pattern vs equality matching of the action itself)
+
+```l4
+-- Only matches if the transferred amount meets the threshold
+PARTY borrower
+MUST `Amount Transferred`
+  PROVIDED `is money at least equal` `Amount Transferred` `Payment Due`
 ```
 
 ---
