@@ -189,6 +189,25 @@ When natural language is ambiguous between constitutive and regulative readings,
 - [ ] Support `FULFILLED` and `BREACH` as terminal states
 - [ ] Support contract composition via `HENCE`/`LEST` wiring
 
+### Phase 1b: Prepositional Logic in Action Clauses
+
+Legal text commonly employs prepositional phrases to structure action clauses: "MUST perform some action (to receiver) (with kindness) (under duress) (above board)". The original design intent for L4 is to support a multiline syntax where prepositions introduce named semantic roles, with each subsequent line privileging its first term:
+
+```l4
+PARTY lender
+MUST send capital
+  TO borrower
+  WITH interest
+  BEFORE closing
+```
+
+This would make `TO`, `WITH`, `BEFORE`, `UNDER`, etc. into structured argument markers within the action clause, rather than reserving them as standalone keywords. Currently `TO` is only used in `FUNCTION FROM ... TO ...` type annotations, and `BEFORE` is unimplemented. This phase would reclaim these prepositions for their intended deontic role.
+
+- [ ] Design prepositional argument syntax for action clauses
+- [ ] Determine which prepositions to support (TO, WITH, BEFORE, UNDER, BY, ...)
+- [ ] Reconcile with existing `TO` usage in type annotations
+- [ ] Reconcile with `BEFORE`/`WITHIN` deadline syntax
+
 ### Phase 2: Transpilation to Verification Backends
 
 - [ ] Transpile to UPPAAL (timed automata, CTL)
