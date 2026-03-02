@@ -26,7 +26,7 @@ contract's buyer's name
 ## ^ (Caret / Ditto Operator)
 
 **Syntax:** `^` in an expression
-**Semantics:** Refers to the token in the same position from the previous line
+**Syntactic sugar** for the token in the same position from the previous line.
 **Linguistics:** Performs ellipsis — specifically gapping (omitting repeated operators/verbs across parallel conjuncts). Related concepts: stripping, coordination reduction, right node raising, zeugma, parallel structure. The caret explicitly marks the gap site rather than leaving it implicit.
 **Use:** Vertical alignment for human readability in boolean expressions and decision tables
 **No equivalent in most languages** — unique to L4 (in another timeline, the Unicode ellipsis `…` U+2026 might have served, but humans know how to type `^` on the keyboard. L4 does have actual ellipsis operators used for other purposes.)
@@ -44,7 +44,7 @@ contract's buyer's name
 ## ... (Ellipsis AND / Asyndetic Conjunction)
 
 **Syntax:** `... expr` within a boolean expression
-**Semantics:** Implicit AND. Three dots join the following expression with AND to the preceding context.
+**Syntactic sugar** for AND. Three dots join the following expression with AND to the preceding context.
 **Linguistics:** Asyndetic conjunction — coordinating clauses without an explicit conjunction word. Cf. syndetic conjunction (with AND/OR keywords).
 **Use:** Embedding natural-language scaffolding into boolean logic so the L4 reads like the source statute or contract. Used with inert elements (bare string literals in boolean context, which evaluate to TRUE in AND context and FALSE in OR context — the identity values for their respective operators).
 
@@ -67,7 +67,7 @@ DECIDE `commits cheating` IF
 ## .. (Ellipsis OR / Asyndetic Disjunction)
 
 **Syntax:** `.. expr` within a boolean expression
-**Semantics:** Implicit OR. Two dots join the following expression with OR to the preceding context.
+**Syntactic sugar** for OR. Two dots join the following expression with OR to the preceding context.
 **Linguistics:** Asyndetic disjunction. See `...` above for full explanation.
 **Use:** Same as `...` but for OR chains. Often used to attach inert string scaffolding to OR-linked alternatives.
 

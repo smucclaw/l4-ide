@@ -369,7 +369,7 @@ summary MEANS CONCAT person's name, " owes ", TOSTRING(amount)
 ## Caret Operator (Ditto / Vertical Alignment)
 
 ```l4
--- ^ means "same token as previous line in this position"
+-- ^ is syntactic sugar for "same token as previous line in this position"
 `tautology` MEANS
         p EQUALS TRUE
     OR  p EQUALS FALSE
@@ -382,8 +382,8 @@ summary MEANS CONCAT person's name, " owes ", TOSTRING(amount)
 ## Ellipsis Operators and Inert Elements (Statutory Isomorphism)
 
 ```l4
--- ... = implicit AND (asyndetic conjunction)
--- ..  = implicit OR  (asyndetic disjunction)
+-- ... = syntactic sugar for AND (asyndetic conjunction)
+-- ..  = syntactic sugar for OR  (asyndetic disjunction)
 -- Bare "strings" in boolean context = inert elements (grammatical scaffolding)
 --   Inert elements evaluate to the identity for their operator:
 --   TRUE in AND context, FALSE in OR context
