@@ -87,11 +87,11 @@
     "commands": [
       {
         "command": "l4.visualize",
-        "title": "Visualize L4 expression"
+        "title": "Show decision graph"
       },
       {
         "command": "l4.renderResult",
-        "title": "Track result in L4 Inspector"
+        "title": "Track result"
       }
     ]
   },

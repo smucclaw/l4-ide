@@ -1,6 +1,54 @@
 <script lang="ts">
-  import { tick } from 'svelte'
+  import { tick, untrack } from 'svelte'
   import type { DirectiveResult, SrcPos } from 'jl4-client-rpc'
+  import type * as Monaco from '@codingame/monaco-vscode-editor-api'
+
+  interface Props {
+    monaco?: typeof Monaco
+  }
+  let { monaco }: Props = $props()
+
+  type ColorizedEntry = { header: string; body: string; contentKey: string }
+  let colorized: Record<string, ColorizedEntry> = $state({})
+
+  $effect(() => {
+    if (!monaco) return
+    const m = monaco
+    const toColorize = sections.map((s) => ({
+      id: s.directiveId,
+      lineContent: s.lineContent,
+      prettyText: s.prettyText,
+      contentKey: `${s.lineContent}\0${s.prettyText}`,
+    }))
+    // Read colorized without tracking to avoid a reactive cycle
+    // (the effect only re-runs when `sections` changes, not when `colorized` changes)
+    const current = untrack(() => colorized)
+    for (const { id, lineContent, prettyText, contentKey } of toColorize) {
+      if (current[id]?.contentKey === contentKey) continue
+      const truncated = lineContent.trim()
+      Promise.all([
+        m.editor.colorize(truncated, 'jl4', { tabSize: 2 }),
+        m.editor.colorize(prettyText, 'jl4', { tabSize: 2 }),
+      ]).then(([header, body]) => {
+        colorized = {
+          ...colorized,
+          [id]: {
+            header: header.replace(/<br\s*\/?>\s*$/, ''),
+            body,
+            contentKey,
+          },
+        }
+      })
+    }
+    // Prune stale entries without triggering a re-run
+    const liveIds = new Set(toColorize.map((t) => t.id))
+    const staleKeys = Object.keys(current).filter((id) => !liveIds.has(id))
+    if (staleKeys.length > 0) {
+      const pruned = { ...current }
+      for (const id of staleKeys) delete pruned[id]
+      colorized = pruned
+    }
+  })
 
   export interface ResultSection {
     directiveId: string
@@ -98,72 +146,55 @@
       lineContent: string
     }>
   ) {
-    if (results.length === 0) return
-
-    const liveIds = new Set(results.map((r) => r.directiveId))
-
-    // Pass 1: exact directiveId matches
-    const matchedResultIds = new Set<string>()
-    sections = sections.map((s) => {
-      const match = results.find((r) => r.directiveId === s.directiveId)
-      if (match) {
-        matchedResultIds.add(match.directiveId)
-        return {
-          ...s,
-          prettyText: match.prettyText,
-          success: match.success,
-          lineContent: match.lineContent,
-          stale: false,
-        }
-      }
-      return s
-    })
-
-    const staleSections = sections.filter((s) => !liveIds.has(s.directiveId))
-    if (staleSections.length === 0) return
-
-    const unmatchedResults = results.filter(
-      (r) => !matchedResultIds.has(r.directiveId)
-    )
+    if (results.length === 0) {
+      // No directives in the file — stale everything
+      sections = sections.map((s) => ({ ...s, success: null, stale: true }))
+      return
+    }
 
     const parseLine = (id: string) => parseInt(id.split(':')[0], 10)
-    const remappings = new Map<
-      string,
-      {
-        newId: string
-        newLine: number
-        prettyText: string
-        success: boolean | null
-        lineContent: string
-      }
-    >()
+    const parseCol = (id: string) => parseInt(id.split(':')[1], 10)
 
-    // Group stale sections and unmatched results by lineContent
-    const staleByContent = Map.groupBy(staleSections, (s) => s.lineContent)
-    const resultsByContent = Map.groupBy(unmatchedResults, (r) => r.lineContent)
+    type RemapEntry = {
+      newId: string
+      newLine: number
+      newCol: number
+      prettyText: string
+      success: boolean | null
+      lineContent: string
+    }
+    const remappings = new Map<string, RemapEntry>()
+    const matchedResultIds = new Set<string>()
 
-    for (const [content, stales] of staleByContent) {
+    // Pass 1 (PRIMARY): content-based matching for all sections
+    const sectionsByContent = Map.groupBy(sections, (s) => s.lineContent)
+    const resultsByContent = Map.groupBy(results, (r) => r.lineContent)
+
+    for (const [content, sects] of sectionsByContent) {
       const matchingResults = resultsByContent.get(content)
-      if (!matchingResults) continue // no live result with this content → section stays uncolored
+      if (!matchingResults) continue
 
-      if (stales.length === 1 && matchingResults.length === 1) {
-        // Pass 2: unique content match — direct 1:1 remap
-        remappings.set(stales[0].directiveId, {
-          newId: matchingResults[0].directiveId,
-          newLine: parseLine(matchingResults[0].directiveId),
-          prettyText: matchingResults[0].prettyText,
-          success: matchingResults[0].success,
-          lineContent: matchingResults[0].lineContent,
+      if (sects.length === 1 && matchingResults.length === 1) {
+        // Unique 1:1 content match
+        const r = matchingResults[0]
+        remappings.set(sects[0].directiveId, {
+          newId: r.directiveId,
+          newLine: parseLine(r.directiveId),
+          newCol: parseCol(r.directiveId),
+          prettyText: r.prettyText,
+          success: r.success,
+          lineContent: r.lineContent,
         })
+        matchedResultIds.add(r.directiveId)
       } else {
-        // Pass 3: ambiguous (duplicate content) — use proximity within the group
+        // Duplicate content — proximity tiebreaker
         const usedResultIds = new Set<string>()
-        for (const stale of stales) {
+        for (const sect of sects) {
           let best: (typeof matchingResults)[0] | null = null
           let bestDist = Infinity
           for (const result of matchingResults) {
             if (usedResultIds.has(result.directiveId)) continue
-            const dist = Math.abs(stale.srcLine - parseLine(result.directiveId))
+            const dist = Math.abs(sect.srcLine - parseLine(result.directiveId))
             if (dist < bestDist) {
               bestDist = dist
               best = result
@@ -171,9 +202,11 @@
           }
           if (best !== null) {
             usedResultIds.add(best.directiveId)
-            remappings.set(stale.directiveId, {
+            matchedResultIds.add(best.directiveId)
+            remappings.set(sect.directiveId, {
               newId: best.directiveId,
               newLine: parseLine(best.directiveId),
+              newCol: parseCol(best.directiveId),
               prettyText: best.prettyText,
               success: best.success,
               lineContent: best.lineContent,
@@ -183,9 +216,36 @@
       }
     }
 
-    const staleIds = new Set(staleSections.map((s) => s.directiveId))
+    // Pass 2 (FALLBACK): positional match for sections whose content wasn't found.
+    // Only matches when the result at that position has the same directive prefix
+    // (e.g. #ASSERT stays #ASSERT) — prevents matching a different directive that
+    // shifted into the deleted section's old line position.
+    // Stale sections are skipped — their directiveId is no longer a valid position.
+    const directivePrefix = (line: string) =>
+      line.trimStart().split(/\s/)[0] ?? ''
+    for (const s of sections) {
+      if (s.stale || remappings.has(s.directiveId)) continue
+      const sPrefix = directivePrefix(s.lineContent)
+      const positionalMatch = results.find(
+        (r) =>
+          r.directiveId === s.directiveId &&
+          !matchedResultIds.has(r.directiveId) &&
+          directivePrefix(r.lineContent) === sPrefix
+      )
+      if (positionalMatch) {
+        remappings.set(s.directiveId, {
+          newId: positionalMatch.directiveId,
+          newLine: parseLine(positionalMatch.directiveId),
+          newCol: parseCol(positionalMatch.directiveId),
+          prettyText: positionalMatch.prettyText,
+          success: positionalMatch.success,
+          lineContent: positionalMatch.lineContent,
+        })
+        matchedResultIds.add(positionalMatch.directiveId)
+      }
+    }
 
-    // Remap matched stale sections; unmatched ones lose their success colour (user dismisses manually)
+    // Apply remappings; unmatched sections become stale
     sections = sections
       .map((s) => {
         const remap = remappings.get(s.directiveId)
@@ -194,18 +254,14 @@
             ...s,
             directiveId: remap.newId,
             srcLine: remap.newLine,
-            srcColumn: parseInt(remap.newId.split(':')[1], 10),
+            srcColumn: remap.newCol,
             prettyText: remap.prettyText,
             success: remap.success,
             lineContent: remap.lineContent,
             stale: false,
           }
         }
-        // Unmatched stale section: clear the success indicator and mark stale
-        if (staleIds.has(s.directiveId) && !remappings.has(s.directiveId)) {
-          return { ...s, success: null, stale: true }
-        }
-        return s
+        return { ...s, success: null, stale: true }
       })
       .sort((a, b) => a.srcLine - b.srcLine || a.srcColumn - b.srcColumn)
   }
@@ -224,11 +280,6 @@
     if (success === true) return 'success'
     if (success === false) return 'failure'
     return ''
-  }
-
-  function truncate(text: string, max = 60): string {
-    const trimmed = text.trim()
-    return trimmed.length > max ? trimmed.slice(0, max) + '…' : trimmed
   }
 </script>
 
@@ -260,7 +311,11 @@
             <span class="source-location">{section.srcLine}:</span>
           {/if}
           <span class="directive-label" title={section.lineContent.trim()}>
-            {truncate(section.lineContent)}
+            {#if colorized[section.directiveId]}
+              {@html colorized[section.directiveId].header}
+            {:else}
+              {section.lineContent.trim()}
+            {/if}
           </span>
           <button
             class="dismiss-btn"
@@ -273,7 +328,12 @@
 
         {#if !section.collapsed}
           <div class="section-body">
-            <pre class="result-code">{section.prettyText}</pre>
+            {#if colorized[section.directiveId]}
+              <pre class="result-code">{@html colorized[section.directiveId]
+                  .body}</pre>
+            {:else}
+              <pre class="result-code">{section.prettyText}</pre>
+            {/if}
           </div>
         {/if}
       </div>
@@ -311,7 +371,6 @@
 
   .result-section {
     border: 1px solid #ddd;
-    background: #fff;
     border-radius: 4px;
     margin-bottom: 8px;
     overflow: hidden;
@@ -378,6 +437,12 @@
     flex-shrink: 0;
   }
 
+  /* Ensure Monaco colorize() token spans aren't reset by parent color */
+  .directive-label :global(span[class^='mtk']),
+  .result-code :global(span[class^='mtk']) {
+    font-family: inherit;
+  }
+
   .dismiss-btn {
     margin-left: auto;
     background: none;
@@ -398,7 +463,7 @@
     max-height: 40vh;
     overflow-y: auto;
     padding: 8px 12px;
-    background: #fafaf9;
+    background: #fff;
   }
 
   .result-code {

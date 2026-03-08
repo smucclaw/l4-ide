@@ -418,7 +418,7 @@ This reuses the existing `nfToFnLiteral` pipeline from jl4-service to convert L4
 | **1**  | Rename "Visualize" → "Show decision graph", remove "Simplify and visualize" CodeLens              | `jl4-lsp/app/LSP/L4/Handlers.hs`                      | Small  |
 | **2**  | Add "Simplified" toggle inside ladder webview panel                                               | `ts-apps/webview/`, `ts-shared/l4-ladder-visualizer/` | Small  |
 | **3**  | Add `l4/evalDirectiveResult` custom LSP request — return structured JSON for directive results    | `jl4-lsp/`, `jl4-core/`                               | Medium |
-| **4**  | Add "Track result" CodeLens for `#EVAL` / `#TRACE` / `#EVALTRACE` / `#ASSERT` / `#CHECK`         | `jl4-lsp/app/LSP/L4/Handlers.hs`                      | Small  |
+| **4**  | Add "Track result" CodeLens for `#EVAL` / `#TRACE` / `#EVALTRACE` / `#ASSERT` / `#CHECK`          | `jl4-lsp/app/LSP/L4/Handlers.hs`                      | Small  |
 | **5**  | Create `ts-shared/l4-result-visualizer/` — type detection, L4 value formatter, highlight.js theme | `ts-shared/l4-result-visualizer/`                     | Medium |
 | **6**  | Build primitive renderers (Boolean, Number, String, Date, Time, DateTime)                         | `ts-shared/l4-result-visualizer/src/lib/renderers/`   | Medium |
 | **7**  | Build CodeResult renderer (syntax-highlighted L4 for complex types)                               | `ts-shared/l4-result-visualizer/src/lib/renderers/`   | Medium |

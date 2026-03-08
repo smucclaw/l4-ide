@@ -580,13 +580,11 @@ export async function activate(context: ExtensionContext) {
           }
         }
 
-        if (results.length > 0) {
-          inspectorMessenger.sendNotification(
-            SyncInspectorResults,
-            inspectorWebviewFrontend,
-            { results }
-          )
-        }
+        inspectorMessenger.sendNotification(
+          SyncInspectorResults,
+          inspectorWebviewFrontend,
+          { results }
+        )
       }
     })
   )

@@ -102,8 +102,9 @@ evalDirectiveToResult dirType (EL.MkEvalDirectiveResult _range res mtrace) =
     { directiveType = dirType
     , prettyText = EL.prettyEvalDirectiveResult (EL.MkEvalDirectiveResult _range res mtrace)
     , success = case res of
-        EL.Assertion b -> Just b
-        EL.Reduction _ -> Nothing
+        EL.Assertion b        -> Just b
+        EL.Reduction (Right _) -> Just True
+        EL.Reduction (Left _)  -> Just False
     , structuredValue = case res of
         EL.Assertion b -> Just (Aeson.toJSON b)
         EL.Reduction (Left _) -> Nothing

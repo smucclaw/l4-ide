@@ -715,33 +715,17 @@ export class WasmLspHandler {
           }))
 
           const allUpdates = [...evalUpdates, ...checkUpdates]
-          if (allUpdates.length > 0) {
-            this.send({
-              jsonrpc: '2.0',
-              method: 'l4/directiveResultsUpdated',
-              params: { uri, results: allUpdates },
-            } as LspNotification)
-          }
+          // Always send, even when empty — an empty batch signals that all directives
+          // were removed and lets the inspector mark open sections as stale.
+          this.send({
+            jsonrpc: '2.0',
+            method: 'l4/directiveResultsUpdated',
+            params: { uri, results: allUpdates },
+          } as LspNotification)
         }
       } catch {
-        // Evaluation failed, continue with check diagnostics only
+        // Evaluation failed; leave inspector sections as-is
       }
-    } else if (checkInfos.length > 0) {
-      // Even with errors, push #CHECK type-info updates (they come from the type checker
-      // which runs before evaluation, so they may still be valid).
-      const lines = content.split('\n')
-      const getLine = (line1: number) => lines[line1 - 1] ?? ''
-      const checkUpdates = checkInfos.map((d) => ({
-        directiveId: `${d.range.start.line + 1}:${d.range.start.character + 1}`,
-        prettyText: d.message,
-        success: null as boolean | null,
-        lineContent: getLine(d.range.start.line + 1),
-      }))
-      this.send({
-        jsonrpc: '2.0',
-        method: 'l4/directiveResultsUpdated',
-        params: { uri, results: checkUpdates },
-      } as LspNotification)
     }
 
     // Merge diagnostics: check errors + eval results
