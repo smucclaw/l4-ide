@@ -23,6 +23,7 @@
     srcColumn: number
     lineContent: string
     collapsed: boolean
+    stale: boolean
   }
 
   let sections: ResultSection[] = $state([])
@@ -49,6 +50,7 @@
       srcColumn: msg.srcPos.column,
       lineContent: msg.lineContent,
       collapsed: false,
+      stale: false,
     }
 
     const idx = sections.findIndex(
@@ -107,6 +109,7 @@
           prettyText: match.prettyText,
           success: match.success,
           lineContent: match.lineContent,
+          stale: false,
         }
       }
       return s
@@ -192,11 +195,12 @@
             prettyText: remap.prettyText,
             success: remap.success,
             lineContent: remap.lineContent,
+            stale: false,
           }
         }
-        // Unmatched stale section: clear the success indicator so it shows uncolored
+        // Unmatched stale section: clear the success indicator and mark stale
         if (staleIds.has(s.directiveId) && !remappings.has(s.directiveId)) {
-          return { ...s, success: null }
+          return { ...s, success: null, stale: true }
         }
         return s
       })
@@ -277,7 +281,9 @@
           >
             <span class="chevron" class:rotated={!section.collapsed}>▶</span>
           </button>
-          <span class="source-location">{section.srcLine}:</span>
+          {#if !section.stale}
+            <span class="source-location">{section.srcLine}:</span>
+          {/if}
           <span class="directive-label" title={section.lineContent.trim()}>
             {truncate(section.lineContent)}
           </span>
