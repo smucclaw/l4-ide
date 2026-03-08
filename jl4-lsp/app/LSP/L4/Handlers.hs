@@ -362,7 +362,19 @@ handlers evalConfig recorder =
                 _ -> []
             _ -> []
 
-          renderResultDirectives :: [CodeLens] = foldTopDecls directiveToCodeLens typeCheck.module'
+          -- foldTopDecls only visits the top-level section; directives can be
+          -- nested inside §§ sub-sections, so we recurse through all sections.
+          collectFromSection :: Section Resolved -> [CodeLens]
+          collectFromSection (MkSection _ _ _ topDecls) = concatMap collectFromTopDecl topDecls
+
+          collectFromTopDecl :: TopDecl Resolved -> [CodeLens]
+          collectFromTopDecl td = directiveToCodeLens td ++ case td of
+            Section _ s -> collectFromSection s
+            _           -> []
+
+          renderResultDirectives :: [CodeLens] =
+            let MkModule _ _ section = typeCheck.module'
+            in collectFromSection section
 
         pure (Right (InL (visualizeDecides <> renderResultDirectives)))
     , requestHandler SMethod_TextDocumentReferences $ \ide params -> do
@@ -474,7 +486,7 @@ handlers evalConfig recorder =
                             pure $ Right $ Aeson.toJSON $ Inspector.DirectiveResult
                               { directiveType = "#CHECK"
                               , prettyText = Text.intercalate "\n" (prettyCheckErrorWithContext info)
-                              , success = Nothing
+                              , success = Just True
                               , structuredValue = Nothing
                               }
                   Nothing -> pure $ Left $ TResponseError

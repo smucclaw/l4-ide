@@ -303,11 +303,104 @@
         aliases: ['JL4', 'jl4'],
       })
 
+      // Monarch tokenizer — required for monaco.editor.colorize() in the inspector panel.
+      // Semantic tokens (from LSP) handle editor highlighting; this covers standalone colorization.
+      monaco.languages.setMonarchTokensProvider('jl4', {
+        keywords: [
+          'GIVEN',
+          'GIVETH',
+          'DECIDE',
+          'DECLARE',
+          'ASSUME',
+          'MEANS',
+          'IS',
+          'IF',
+          'THEN',
+          'ELSE',
+          'AND',
+          'OR',
+          'NOT',
+          'WHERE',
+          'LET',
+          'IN',
+          'CONSIDER',
+          'WHEN',
+          'OTHERWISE',
+          'TRUE',
+          'FALSE',
+          'LIST',
+          'OF',
+          'FUNCTION',
+          'FROM',
+          'TO',
+          'TYPE',
+          'SUCH',
+          'THAT',
+          'FOR',
+          'ALL',
+          'SOME',
+          'UNLESS',
+          'A',
+          'AN',
+          'THE',
+          'SECTION',
+          'IMPORT',
+          'NUMBER',
+          'STRING',
+          'BOOLEAN',
+          'DATE',
+          'TIME',
+          'DATETIME',
+          'SUM',
+          'PRODUCT',
+          'DOES',
+          'SATISFIES',
+          'BEFORE',
+          'AFTER',
+          'TIMEZONE',
+          'CURRENTTIME',
+          'TODAY',
+        ],
+        tokenizer: {
+          root: [
+            // Directives (#EVAL, #ASSERT, etc.)
+            [/#[A-Z]+/, 'annotation'],
+            // Line comments
+            [/--.*$/, 'comment'],
+            // Strings
+            [/"[^"]*"/, 'string'],
+            // Backtick-quoted identifiers
+            [/`[^`]*`/, 'variable.name'],
+            // Numbers (integer and rational)
+            [/\d+(\.\d+)?/, 'number'],
+            // Uppercase words: keywords or type names
+            [
+              /[A-Z][A-Z0-9]*/,
+              {
+                cases: {
+                  '@keywords': 'keyword',
+                  '@default': 'type.identifier',
+                },
+              },
+            ],
+            // Regular identifiers
+            [/[a-zA-Z_]\w*/, 'identifier'],
+          ],
+        },
+      })
+
       monaco.editor.defineTheme('jl4Theme', {
         base: 'vs',
         inherit: true,
         rules: [
           { token: 'decorator', foreground: 'ffbd33' }, // for annotations
+          { token: 'annotation', foreground: 'af7800', fontStyle: 'bold' }, // #EVAL, #ASSERT etc.
+          { token: 'keyword', foreground: '0000ff' }, // L4 keywords
+          { token: 'type.identifier', foreground: '267f99' }, // uppercase non-keywords
+          { token: 'variable.name', foreground: '001080' }, // backtick identifiers
+          { token: 'string', foreground: 'a31515' },
+          { token: 'number', foreground: '098658' },
+          { token: 'comment', foreground: '008000', fontStyle: 'italic' },
         ],
         encodedTokensColors: [],
         colors: {
@@ -322,12 +415,23 @@
         value: defaultExample.content,
         language: 'jl4',
         automaticLayout: true,
-        wordBasedSuggestions: 'off',
+        wordBasedSuggestions: 'currentDocument',
         theme: 'jl4Theme',
         'semanticHighlighting.enabled': true,
         glyphMargin: true, // Required for gutter icons
         codeLens: true, // Enable code lenses for visualization actions
       })
+
+      // Prevent the suggestion widget from auto-popping after Enter (new line).
+      // When the widget IS visible, this command doesn't fire so Enter still accepts suggestions.
+      editor.addCommand(
+        monaco.KeyCode.Enter,
+        () => {
+          editor.trigger('keyboard', 'type', { text: '\n' })
+          editor.trigger('', 'hideSuggestWidget', null)
+        },
+        '!suggestWidgetVisible'
+      )
 
       // Add comment/uncomment action to context menu
       editor.addAction({
@@ -1174,7 +1278,7 @@
               class="h-full"
               class:hidden-pane={rightPaneView !== 'inspector'}
             >
-              <InspectorPanel bind:this={inspectorPanel} />
+              <InspectorPanel bind:this={inspectorPanel} {monaco} />
             </div>
           </div>
           <style>

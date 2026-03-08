@@ -75,18 +75,21 @@
   /**
    * Sync all open sections against a fresh batch of results from the LSP.
    *
-   * Pass 1 – exact directiveId match: update content in-place.
-   * Pass 2 – content match: stale sections (id no longer live) are matched
-   *   against unmatched results by their lineContent string, so sections
-   *   track their directive even after line insertions/deletions.
-   * Pass 3 – proximity fallback: any remaining stale sections are matched
-   *   to the closest unmatched result by line-number distance.
+   * Pass 1 (PRIMARY) – content-based matching: all sections are matched
+   *   against results by their lineContent string. Unique matches are remapped
+   *   directly; duplicate content uses proximity (closest line number).
+   * Pass 2 (FALLBACK) – positional match: sections whose content was not found
+   *   in results fall back to matching by directiveId (same position), which
+   *   handles the case where the directive was edited in place.
+   * Unmatched sections become stale (no color, no line number shown).
    */
   function syncSections(msg: SyncInspectorResultsMessage) {
     const results = msg.results
-    if (results.length === 0) return
-
-    const liveIds = new Set(results.map((r) => r.directiveId))
+    if (results.length === 0) {
+      // No directives in the file — stale everything
+      sections = sections.map((s) => ({ ...s, success: null, stale: true }))
+      return
+    }
 
     // directiveId format: "${uri}:${line}:${col}" — line is second-to-last colon-segment
     const parseLine = (id: string) => {
@@ -98,68 +101,46 @@
       return parseInt(parts.at(-1)!, 10)
     }
 
-    // Pass 1: exact directiveId matches
+    type RemapEntry = {
+      newId: string
+      newLine: number
+      newCol: number
+      prettyText: string
+      success: boolean | null
+      lineContent: string
+    }
+    const remappings = new Map<string, RemapEntry>()
     const matchedResultIds = new Set<string>()
-    sections = sections.map((s) => {
-      const match = results.find((r) => r.directiveId === s.directiveId)
-      if (match) {
-        matchedResultIds.add(match.directiveId)
-        return {
-          ...s,
-          prettyText: match.prettyText,
-          success: match.success,
-          lineContent: match.lineContent,
-          stale: false,
-        }
-      }
-      return s
-    })
 
-    const staleSections = sections.filter((s) => !liveIds.has(s.directiveId))
-    if (staleSections.length === 0) return
+    // Pass 1 (PRIMARY): content-based matching for all sections
+    const sectionsByContent = Map.groupBy(sections, (s) => s.lineContent)
+    const resultsByContent = Map.groupBy(results, (r) => r.lineContent)
 
-    const unmatchedResults = results.filter(
-      (r) => !matchedResultIds.has(r.directiveId)
-    )
-
-    const remappings = new Map<
-      string,
-      {
-        newId: string
-        newLine: number
-        newCol: number
-        prettyText: string
-        success: boolean | null
-        lineContent: string
-      }
-    >()
-
-    const staleByContent = Map.groupBy(staleSections, (s) => s.lineContent)
-    const resultsByContent = Map.groupBy(unmatchedResults, (r) => r.lineContent)
-
-    for (const [content, stales] of staleByContent) {
+    for (const [content, sects] of sectionsByContent) {
       const matchingResults = resultsByContent.get(content)
       if (!matchingResults) continue
 
-      if (stales.length === 1 && matchingResults.length === 1) {
-        // Pass 2: unique content match — direct 1:1 remap
-        remappings.set(stales[0].directiveId, {
-          newId: matchingResults[0].directiveId,
-          newLine: parseLine(matchingResults[0].directiveId),
-          newCol: parseCol(matchingResults[0].directiveId),
-          prettyText: matchingResults[0].prettyText,
-          success: matchingResults[0].success,
-          lineContent: matchingResults[0].lineContent,
+      if (sects.length === 1 && matchingResults.length === 1) {
+        // Unique 1:1 content match
+        const r = matchingResults[0]
+        remappings.set(sects[0].directiveId, {
+          newId: r.directiveId,
+          newLine: parseLine(r.directiveId),
+          newCol: parseCol(r.directiveId),
+          prettyText: r.prettyText,
+          success: r.success,
+          lineContent: r.lineContent,
         })
+        matchedResultIds.add(r.directiveId)
       } else {
-        // Pass 3: ambiguous (duplicate content) — use proximity within the group
+        // Duplicate content — proximity tiebreaker
         const usedResultIds = new Set<string>()
-        for (const stale of stales) {
+        for (const sect of sects) {
           let best: (typeof matchingResults)[0] | null = null
           let bestDist = Infinity
           for (const result of matchingResults) {
             if (usedResultIds.has(result.directiveId)) continue
-            const dist = Math.abs(stale.srcLine - parseLine(result.directiveId))
+            const dist = Math.abs(sect.srcLine - parseLine(result.directiveId))
             if (dist < bestDist) {
               bestDist = dist
               best = result
@@ -167,7 +148,8 @@
           }
           if (best !== null) {
             usedResultIds.add(best.directiveId)
-            remappings.set(stale.directiveId, {
+            matchedResultIds.add(best.directiveId)
+            remappings.set(sect.directiveId, {
               newId: best.directiveId,
               newLine: parseLine(best.directiveId),
               newCol: parseCol(best.directiveId),
@@ -180,9 +162,36 @@
       }
     }
 
-    const staleIds = new Set(staleSections.map((s) => s.directiveId))
+    // Pass 2 (FALLBACK): positional match for sections whose content wasn't found.
+    // Only matches when the result at that position has the same directive prefix
+    // (e.g. #ASSERT stays #ASSERT) — prevents matching a different directive that
+    // shifted into the deleted section's old line position.
+    // Stale sections are skipped — their directiveId is no longer a valid position.
+    const directivePrefix = (line: string) =>
+      line.trimStart().split(/\s/)[0] ?? ''
+    for (const s of sections) {
+      if (s.stale || remappings.has(s.directiveId)) continue
+      const sPrefix = directivePrefix(s.lineContent)
+      const positionalMatch = results.find(
+        (r) =>
+          r.directiveId === s.directiveId &&
+          !matchedResultIds.has(r.directiveId) &&
+          directivePrefix(r.lineContent) === sPrefix
+      )
+      if (positionalMatch) {
+        remappings.set(s.directiveId, {
+          newId: positionalMatch.directiveId,
+          newLine: parseLine(positionalMatch.directiveId),
+          newCol: parseCol(positionalMatch.directiveId),
+          prettyText: positionalMatch.prettyText,
+          success: positionalMatch.success,
+          lineContent: positionalMatch.lineContent,
+        })
+        matchedResultIds.add(positionalMatch.directiveId)
+      }
+    }
 
-    // Remap matched stale sections; unmatched ones lose their success colour (user dismisses manually)
+    // Apply remappings; unmatched sections become stale
     sections = sections
       .map((s) => {
         const remap = remappings.get(s.directiveId)
@@ -198,11 +207,7 @@
             stale: false,
           }
         }
-        // Unmatched stale section: clear the success indicator and mark stale
-        if (staleIds.has(s.directiveId) && !remappings.has(s.directiveId)) {
-          return { ...s, success: null, stale: true }
-        }
-        return s
+        return { ...s, success: null, stale: true }
       })
       .sort((a, b) => a.srcLine - b.srcLine || a.srcColumn - b.srcColumn)
   }
@@ -227,6 +232,118 @@
     const trimmed = text.trim()
     return trimmed.length > max ? trimmed.slice(0, max) + '…' : trimmed
   }
+
+  // ---------------------------------------------------------------------------
+  // Lightweight L4 tokenizer for syntax highlighting in the webview
+  // (No Monaco available here — we apply CSS classes keyed to VS Code variables)
+  // ---------------------------------------------------------------------------
+
+  const KEYWORDS = new Set([
+    'GIVEN',
+    'GIVETH',
+    'DECIDE',
+    'DECLARE',
+    'ASSUME',
+    'MEANS',
+    'IS',
+    'A',
+    'AN',
+    'THE',
+    'IF',
+    'AND',
+    'OR',
+    'NOT',
+    'OTHERWISE',
+    'WHERE',
+    'WHEN',
+    'THEN',
+    'HAS',
+    'ONE',
+    'OF',
+    'LIST',
+    'FOR',
+    'FROM',
+    'TO',
+    'WITH',
+    'IN',
+    'BE',
+    'BOOLEAN',
+    'NUMBER',
+    'STRING',
+    'TYPE',
+    'FUNCTION',
+    'TRUE',
+    'FALSE',
+  ])
+
+  type TokenType =
+    | 'keyword'
+    | 'annotation'
+    | 'comment'
+    | 'string'
+    | 'backtick'
+    | 'number'
+    | 'type'
+    | 'plain'
+
+  const TOKEN_PATTERNS: [RegExp, TokenType | 'kwOrType'][] = [
+    [/^`[^`]*`/, 'backtick'],
+    [/^"[^"]*"/, 'string'],
+    [/^--[^\n]*/, 'comment'],
+    [/^#[A-Z]+/, 'annotation'],
+    [/^\d+(?:\.\d+)?/, 'number'],
+    [/^[A-Z][A-Za-z0-9_]*/, 'kwOrType'],
+    [/^[a-zA-Z_]\w*/, 'plain'],
+  ]
+
+  function escapeHtml(text: string): string {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+  }
+
+  function colorize(text: string): string {
+    let out = ''
+    let i = 0
+    while (i < text.length) {
+      let matched = false
+      for (const [pattern, rawType] of TOKEN_PATTERNS) {
+        const m = pattern.exec(text.slice(i))
+        if (m) {
+          const t = m[0]
+          const type: TokenType =
+            rawType === 'kwOrType'
+              ? KEYWORDS.has(t)
+                ? 'keyword'
+                : 'type'
+              : rawType
+          out += `<span class="tok-${type}">${escapeHtml(t)}</span>`
+          i += t.length
+          matched = true
+          break
+        }
+      }
+      if (!matched) {
+        out += escapeHtml(text[i])
+        i++
+      }
+    }
+    return out
+  }
+
+  type ColorizedEntry = { header: string; body: string }
+  const colorized: Record<string, ColorizedEntry> = $derived(
+    Object.fromEntries(
+      sections.map((s) => [
+        s.directiveId,
+        {
+          header: colorize(s.lineContent.trim()),
+          body: colorize(s.prettyText),
+        },
+      ])
+    )
+  )
 
   onMount(() => {
     // eslint-disable-next-line no-undef
@@ -279,13 +396,16 @@
             onclick={() => toggleCollapse(section.directiveId)}
             title={section.collapsed ? 'Expand' : 'Collapse'}
           >
-            <span class="chevron" class:rotated={!section.collapsed}>▶</span>
+            <span class="chevron" class:rotated={!section.collapsed}
+              >&#9002;</span
+            >
           </button>
           {#if !section.stale}
             <span class="source-location">{section.srcLine}:</span>
           {/if}
           <span class="directive-label" title={section.lineContent.trim()}>
-            {truncate(section.lineContent)}
+            {@html colorized[section.directiveId]?.header ??
+              escapeHtml(section.lineContent.trim())}
           </span>
           <button
             class="dismiss-btn"
@@ -298,7 +418,8 @@
 
         {#if !section.collapsed}
           <div class="section-body">
-            <pre class="result-code">{section.prettyText}</pre>
+            <pre class="result-code">{@html colorized[section.directiveId]
+                ?.body ?? escapeHtml(section.prettyText)}</pre>
           </div>
         {/if}
       </div>
@@ -311,7 +432,7 @@
     font-family: var(--vscode-font-family, sans-serif);
     font-size: var(--vscode-font-size, 13px);
     color: var(--vscode-foreground);
-    background: var(--vscode-editor-background);
+    background: var(--vscode-panel-background);
     padding: 8px;
     overflow-y: auto;
     height: 100vh;
@@ -342,7 +463,7 @@
   }
 
   .result-section.success {
-    border-left: 3px solid var(--vscode-editorInfo-foreground, #75beff);
+    border-left: 3px solid #75beff;
   }
 
   .result-section.failure {
@@ -375,7 +496,10 @@
 
   .chevron {
     display: inline-block;
+    color: var(--vscode-descriptionForeground);
     transition: transform 0.15s;
+    transform-origin: 25% 50%;
+    margin: 0 -3px 0 1px;
   }
 
   .chevron.rotated {
@@ -408,7 +532,7 @@
     color: var(--vscode-foreground);
     cursor: pointer;
     opacity: 0.5;
-    font-size: 14px;
+    font-size: 12px;
     padding: 0 4px;
     flex-shrink: 0;
   }
@@ -432,6 +556,58 @@
     font-size: var(--vscode-editor-font-size, 13px);
     line-height: 1.5;
     tab-size: 2;
+  }
+
+  /* Dark theme token colors (VS Code Default Dark+) */
+  :global(body.vscode-dark .tok-keyword) {
+    color: #569cd6;
+  }
+  :global(body.vscode-dark .tok-annotation) {
+    color: #c586c0;
+  }
+  :global(body.vscode-dark .tok-comment) {
+    color: #6a9955;
+  }
+  :global(body.vscode-dark .tok-string) {
+    color: #ce9178;
+  }
+  :global(body.vscode-dark .tok-backtick) {
+    color: #9cdcfe;
+  }
+  :global(body.vscode-dark .tok-number) {
+    color: #b5cea8;
+  }
+  :global(body.vscode-dark .tok-type) {
+    color: #4ec9b0;
+  }
+
+  /* Light theme token colors (VS Code Default Light+) */
+  :global(body.vscode-light .tok-keyword) {
+    color: #0000ff;
+  }
+  :global(body.vscode-light .tok-annotation) {
+    color: #af00db;
+  }
+  :global(body.vscode-light .tok-comment) {
+    color: #008000;
+  }
+  :global(body.vscode-light .tok-string) {
+    color: #a31515;
+  }
+  :global(body.vscode-light .tok-backtick) {
+    color: #001080;
+  }
+  :global(body.vscode-light .tok-number) {
+    color: #098658;
+  }
+  :global(body.vscode-light .tok-type) {
+    color: #267f99;
+  }
+
+  /* High-contrast fallback — bold, no color change */
+  :global(body.vscode-high-contrast .tok-keyword),
+  :global(body.vscode-high-contrast .tok-annotation) {
+    font-weight: bold;
   }
 
   :global(.highlight-flash) {

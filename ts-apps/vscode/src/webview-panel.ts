@@ -114,7 +114,8 @@ function getWebviewContent(
   const basePath = vscode.Uri.joinPath(
     context.extensionUri,
     STATIC_ASSETS_DIR,
-    WEBVIEW_DIR
+    WEBVIEW_DIR,
+    ...(htmlSubpath ? [htmlSubpath] : [])
   )
   const compatibleBasePath = panel.webview.asWebviewUri(basePath)
 
