@@ -1,34 +1,24 @@
 {
   "permissions": {
     "allow": [
-      "Bash(gh search repos \"highlightjs l4 language\" --json fullName,url --limit 10)",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "Bash(git branch -m thomasgorissen/fix-datetime-display thomasgorissen/resultinspector)",
-      "Bash(ls /Users/tgorissen/Sites/l4-ide/ts-shared/jl4-client-rpc/*.ts)",
       "Bash(npx svelte-check --tsconfig ./tsconfig.json)",
       "Bash(npm run dev)",
       "Bash(npm run format)",
       "Bash(bash jl4-wasm/scripts/build-wasm.sh --all)",
-      "Read(//Users/tgorissen/.local/share/jl4/**)",
-      "Bash(xargs kill)",
-      "Bash(/Users/tgorissen/Sites/l4-ide/jl4-wasm/scripts/build-wasm.sh --all)",
       "Bash(node --experimental-wasm-modules -e \":*)",
       "Bash(node -e \":*)",
       "Bash(cabal exec ghci -- -package jl4-core -e ':*)",
       "Bash(cabal exec:*)",
       "Bash(source ~/.ghc-wasm/env)",
       "Bash(wasm32-wasi-cabal build jl4-wasm --project-file=cabal-wasm.project)",
-      "Bash(ls /Users/tgorissen/Sites/l4-ide/jl4/examples/legal/*.l4)",
-      "Read(//Users/tgorissen/.ghc-wasm/**)",
       "Bash(bash jl4-wasm/scripts/build-wasm.sh)",
-      "Bash(kill 21439)",
-      "Bash(pkill -f \"vite dev\")",
-      "Bash(pkill -f \"vite.*jl4-web\")",
-      "Bash(node -e \"console.log\\(typeof Map.groupBy\\)\")"
+      "Bash(rm -rf static/wasm/)",
+      "Bash(bash scripts/maybe-build-wasm.sh)",
+      "Bash(npx svelte-check)",
+      "Bash(npx vsce package --no-dependencies)"
     ],
-    "additionalDirectories": [
-      "/Users/tgorissen/Sites/l4-ide/ts-apps/jl4-web/src/routes"
-    ]
+    "additionalDirectories": []
   }
 }
