@@ -177,21 +177,28 @@
       }
     }
 
-    // Remap matched stale sections; unmatched ones stay as-is (user dismisses manually)
+    const staleIds = new Set(staleSections.map((s) => s.directiveId))
+
+    // Remap matched stale sections; unmatched ones lose their success colour (user dismisses manually)
     sections = sections
       .map((s) => {
         const remap = remappings.get(s.directiveId)
-        return remap
-          ? {
-              ...s,
-              directiveId: remap.newId,
-              srcLine: remap.newLine,
-              srcColumn: remap.newCol,
-              prettyText: remap.prettyText,
-              success: remap.success,
-              lineContent: remap.lineContent,
-            }
-          : s
+        if (remap) {
+          return {
+            ...s,
+            directiveId: remap.newId,
+            srcLine: remap.newLine,
+            srcColumn: remap.newCol,
+            prettyText: remap.prettyText,
+            success: remap.success,
+            lineContent: remap.lineContent,
+          }
+        }
+        // Unmatched stale section: clear the success indicator so it shows uncolored
+        if (staleIds.has(s.directiveId) && !remappings.has(s.directiveId)) {
+          return { ...s, success: null }
+        }
+        return s
       })
       .sort((a, b) => a.srcLine - b.srcLine || a.srcColumn - b.srcColumn)
   }
