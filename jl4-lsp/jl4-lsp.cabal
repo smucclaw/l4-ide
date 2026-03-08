@@ -141,6 +141,7 @@ executable jl4-lsp
     -- NOTE: the reason why we have an upperbound on text is that
     -- it introduces new definitions that conflicts with ours
     text >= 2 && < 2.1.2,
+    text-rope,
     transformers,
     unliftio,
     unordered-containers ^>=0.2.20,
