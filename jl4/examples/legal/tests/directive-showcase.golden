@@ -41,29 +41,50 @@ directive-showcase.l4:82:1-32:
   "Adult"
 directive-showcase.l4:83:1-30:
   "Minor"
-directive-showcase.l4:86:1-62:
+directive-showcase.l4:90:1-62:
   DataPoint OF "Revenue", 42000
-directive-showcase.l4:96:1-66:
+directive-showcase.l4:100:1-66:
   LIST DataPoint OF "Q1 2025", 120, DataPoint OF "Q2 2025", 250, DataPoint OF "Q3 2025", 180, DataPoint OF "Q4 2025", 320
-directive-showcase.l4:105:1-65:
+directive-showcase.l4:109:1-65:
   LIST TimelineEvent OF "2020", "Company founded", TimelineEvent OF "2021", "Series A funding", TimelineEvent OF "2022", "Product launch", TimelineEvent OF "2023", "IPO", TimelineEvent OF "2024", "Global expansion"
-directive-showcase.l4:108:1-26:
+directive-showcase.l4:112:1-31:
   LIST Person OF "Alice", 30, Person OF "Bob", 17
-directive-showcase.l4:112:1-13:
+  ─────
+  ┌ LIST alice, bob
+  ├ alice FOLLOWED BY (LIST bob)
+  │┌ LIST bob
+  │├ bob FOLLOWED BY (LIST )
+  ││┌ LIST 
+  ││└ EMPTY││• EMPTY
+  │└ LIST Person OF "Bob", 17│┌ bob FOLLOWED BY (LIST )
+  ││┌ LIST 
+  ││└ EMPTY││• EMPTY
+  │└ LIST Person OF "Bob", 17│• LIST Person OF "Bob", 17
+  └ LIST Person OF "Alice", 30, Person OF "Bob", 17┌ alice FOLLOWED BY (LIST bob)
+  │┌ LIST bob
+  │├ bob FOLLOWED BY (LIST )
+  ││┌ LIST 
+  ││└ EMPTY││• EMPTY
+  │└ LIST Person OF "Bob", 17│┌ bob FOLLOWED BY (LIST )
+  ││┌ LIST 
+  ││└ EMPTY││• EMPTY
+  │└ LIST Person OF "Bob", 17│• LIST Person OF "Bob", 17
+  └ LIST Person OF "Alice", 30, Person OF "Bob", 17• LIST Person OF "Alice", 30, Person OF "Bob", 17
+directive-showcase.l4:113:1-12:
+  BOOLEAN
+directive-showcase.l4:117:1-13:
   assertion satisfied
-directive-showcase.l4:113:1-18:
+directive-showcase.l4:118:1-18:
   assertion satisfied
-directive-showcase.l4:114:1-18:
+directive-showcase.l4:119:1-18:
   assertion satisfied
-directive-showcase.l4:115:1-27:
+directive-showcase.l4:121:1-29:
   assertion satisfied
-directive-showcase.l4:116:1-29:
+directive-showcase.l4:122:1-40:
   assertion satisfied
-directive-showcase.l4:117:1-40:
-  assertion satisfied
-directive-showcase.l4:119:1-25:
+directive-showcase.l4:124:1-25:
   assertion failed
-directive-showcase.l4:122:1-30:
+directive-showcase.l4:127:1-30:
   TRUE
   ─────
   ┌ `is adult` OF alice
@@ -108,7 +129,7 @@ directive-showcase.l4:122:1-30:
   │└ 30│┌ age
   │└ 30│• 30
   └ TRUE• TRUE
-directive-showcase.l4:123:1-35:
+directive-showcase.l4:128:1-35:
   "Minor"
   ─────
   ┌ `age category of` OF bob
