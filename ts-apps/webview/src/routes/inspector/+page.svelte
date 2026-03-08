@@ -15,6 +15,7 @@
 
   interface ResultSection {
     directiveId: string
+    fileUri: string
     directiveType: string
     prettyText: string
     success: boolean | null
@@ -27,6 +28,68 @@
   }
 
   let sections: ResultSection[] = $state([])
+  let collapsedFiles: Set<string> = $state(new Set())
+
+  // ---------------------------------------------------------------------------
+  // directiveId helpers — format is "uri:line:col" where uri may contain colons
+  // ---------------------------------------------------------------------------
+
+  function parseFileUri(id: string): string {
+    const parts = id.split(':')
+    return parts.slice(0, -2).join(':')
+  }
+
+  function parseLine(id: string): number {
+    const parts = id.split(':')
+    return parseInt(parts.at(-2)!, 10)
+  }
+
+  function parseCol(id: string): number {
+    const parts = id.split(':')
+    return parseInt(parts.at(-1)!, 10)
+  }
+
+  function displayFileName(uri: string): string {
+    const decoded = decodeURIComponent(uri.replace(/^file:\/\//, ''))
+    return decoded.split('/').pop() ?? uri
+  }
+
+  // ---------------------------------------------------------------------------
+  // File grouping
+  // ---------------------------------------------------------------------------
+
+  type FileGroup = {
+    fileUri: string
+    displayName: string
+    sections: ResultSection[]
+  }
+
+  let fileGroups: FileGroup[] = $derived.by(() => {
+    const groups = new Map<string, ResultSection[]>()
+    for (const s of sections) {
+      const existing = groups.get(s.fileUri)
+      if (existing) existing.push(s)
+      else groups.set(s.fileUri, [s])
+    }
+    return Array.from(groups, ([fileUri, sects]) => ({
+      fileUri,
+      displayName: displayFileName(fileUri),
+      sections: sects,
+    }))
+  })
+
+  let hasMultipleFiles: boolean = $derived(fileGroups.length > 1)
+
+  function toggleFileCollapse(fileUri: string) {
+    const next = new Set(collapsedFiles)
+    if (next.has(fileUri)) next.delete(fileUri)
+    else next.add(fileUri)
+    collapsedFiles = next
+  }
+
+  // ---------------------------------------------------------------------------
+  // Section management
+  // ---------------------------------------------------------------------------
 
   function addOrScrollToResult(msg: AddInspectorResultMessage) {
     const existing = sections.find((s) => s.directiveId === msg.directiveId)
@@ -42,6 +105,7 @@
 
     const newSection: ResultSection = {
       directiveId: msg.directiveId,
+      fileUri: parseFileUri(msg.directiveId),
       directiveType: msg.result.directiveType,
       prettyText: msg.result.prettyText,
       success: msg.result.success,
@@ -55,8 +119,11 @@
 
     const idx = sections.findIndex(
       (s) =>
-        s.srcLine > newSection.srcLine ||
-        (s.srcLine === newSection.srcLine && s.srcColumn > newSection.srcColumn)
+        s.fileUri.localeCompare(newSection.fileUri) > 0 ||
+        (s.fileUri === newSection.fileUri &&
+          (s.srcLine > newSection.srcLine ||
+            (s.srcLine === newSection.srcLine &&
+              s.srcColumn > newSection.srcColumn)))
     )
     if (idx === -1) {
       sections = [...sections, newSection]
@@ -73,32 +140,37 @@
   }
 
   /**
-   * Sync all open sections against a fresh batch of results from the LSP.
+   * Sync open sections against a fresh batch of results from the LSP.
    *
-   * Pass 1 (PRIMARY) – content-based matching: all sections are matched
-   *   against results by their lineContent string. Unique matches are remapped
-   *   directly; duplicate content uses proximity (closest line number).
-   * Pass 2 (FALLBACK) – positional match: sections whose content was not found
-   *   in results fall back to matching by directiveId (same position), which
-   *   handles the case where the directive was edited in place.
-   * Unmatched sections become stale (no color, no line number shown).
+   * When `msg.uri` is set, only sections belonging to that file are synced;
+   * sections from other files are left untouched.
+   *
+   * Pass 1 (PRIMARY) – content-based matching.
+   * Pass 2 (FALLBACK) – positional match by directiveId.
+   * Unmatched sections become stale.
    */
   function syncSections(msg: SyncInspectorResultsMessage) {
     const results = msg.results
-    if (results.length === 0) {
-      // No directives in the file — stale everything
-      sections = sections.map((s) => ({ ...s, success: null, stale: true }))
-      return
-    }
+    const syncUri = msg.uri
 
-    // directiveId format: "${uri}:${line}:${col}" — line is second-to-last colon-segment
-    const parseLine = (id: string) => {
-      const parts = id.split(':')
-      return parseInt(parts.at(-2)!, 10)
-    }
-    const parseCol = (id: string) => {
-      const parts = id.split(':')
-      return parseInt(parts.at(-1)!, 10)
+    // Scope: only sync sections belonging to the notified file
+    const toSync = syncUri
+      ? sections.filter((s) => s.fileUri === syncUri)
+      : sections
+    const untouched = syncUri
+      ? sections.filter((s) => s.fileUri !== syncUri)
+      : []
+
+    if (results.length === 0) {
+      sections = [
+        ...untouched,
+        ...toSync.map((s) => ({
+          ...s,
+          success: null as boolean | null,
+          stale: true,
+        })),
+      ]
+      return
     }
 
     type RemapEntry = {
@@ -112,8 +184,8 @@
     const remappings = new Map<string, RemapEntry>()
     const matchedResultIds = new Set<string>()
 
-    // Pass 1 (PRIMARY): content-based matching for all sections
-    const sectionsByContent = Map.groupBy(sections, (s) => s.lineContent)
+    // Pass 1 (PRIMARY): content-based matching
+    const sectionsByContent = Map.groupBy(toSync, (s) => s.lineContent)
     const resultsByContent = Map.groupBy(results, (r) => r.lineContent)
 
     for (const [content, sects] of sectionsByContent) {
@@ -121,7 +193,6 @@
       if (!matchingResults) continue
 
       if (sects.length === 1 && matchingResults.length === 1) {
-        // Unique 1:1 content match
         const r = matchingResults[0]
         remappings.set(sects[0].directiveId, {
           newId: r.directiveId,
@@ -133,7 +204,6 @@
         })
         matchedResultIds.add(r.directiveId)
       } else {
-        // Duplicate content — proximity tiebreaker
         const usedResultIds = new Set<string>()
         for (const sect of sects) {
           let best: (typeof matchingResults)[0] | null = null
@@ -162,14 +232,10 @@
       }
     }
 
-    // Pass 2 (FALLBACK): positional match for sections whose content wasn't found.
-    // Only matches when the result at that position has the same directive prefix
-    // (e.g. #ASSERT stays #ASSERT) — prevents matching a different directive that
-    // shifted into the deleted section's old line position.
-    // Stale sections are skipped — their directiveId is no longer a valid position.
+    // Pass 2 (FALLBACK): positional match
     const directivePrefix = (line: string) =>
       line.trimStart().split(/\s/)[0] ?? ''
-    for (const s of sections) {
+    for (const s of toSync) {
       if (s.stale || remappings.has(s.directiveId)) continue
       const sPrefix = directivePrefix(s.lineContent)
       const positionalMatch = results.find(
@@ -192,24 +258,29 @@
     }
 
     // Apply remappings; unmatched sections become stale
-    sections = sections
-      .map((s) => {
-        const remap = remappings.get(s.directiveId)
-        if (remap) {
-          return {
-            ...s,
-            directiveId: remap.newId,
-            srcLine: remap.newLine,
-            srcColumn: remap.newCol,
-            prettyText: remap.prettyText,
-            success: remap.success,
-            lineContent: remap.lineContent,
-            stale: false,
-          }
+    const synced = toSync.map((s) => {
+      const remap = remappings.get(s.directiveId)
+      if (remap) {
+        return {
+          ...s,
+          directiveId: remap.newId,
+          srcLine: remap.newLine,
+          srcColumn: remap.newCol,
+          prettyText: remap.prettyText,
+          success: remap.success,
+          lineContent: remap.lineContent,
+          stale: false,
         }
-        return { ...s, success: null, stale: true }
-      })
-      .sort((a, b) => a.srcLine - b.srcLine || a.srcColumn - b.srcColumn)
+      }
+      return { ...s, success: null as boolean | null, stale: true }
+    })
+
+    sections = [...untouched, ...synced].sort(
+      (a, b) =>
+        a.fileUri.localeCompare(b.fileUri) ||
+        a.srcLine - b.srcLine ||
+        a.srcColumn - b.srcColumn
+    )
   }
 
   function removeSection(directiveId: string) {
@@ -235,7 +306,6 @@
 
   // ---------------------------------------------------------------------------
   // Lightweight L4 tokenizer for syntax highlighting in the webview
-  // (No Monaco available here — we apply CSS classes keyed to VS Code variables)
   // ---------------------------------------------------------------------------
 
   const KEYWORDS = new Set([
@@ -385,44 +455,69 @@
       </p>
     </div>
   {:else}
-    {#each sections as section (section.directiveId)}
-      <div
-        id="section-{section.directiveId}"
-        class="result-section {successClass(section.success)}"
-      >
-        <div class="section-header">
+    {#each fileGroups as group (group.fileUri)}
+      {#if hasMultipleFiles}
+        <div class="file-header">
           <button
             class="collapse-toggle"
-            onclick={() => toggleCollapse(section.directiveId)}
-            title={section.collapsed ? 'Expand' : 'Collapse'}
+            onclick={() => toggleFileCollapse(group.fileUri)}
+            title={collapsedFiles.has(group.fileUri)
+              ? 'Expand file'
+              : 'Collapse file'}
           >
-            <span class="chevron" class:rotated={!section.collapsed}
-              >&#9002;</span
+            <span
+              class="chevron"
+              class:rotated={!collapsedFiles.has(group.fileUri)}>&#9002;</span
             >
           </button>
-          {#if !section.stale}
-            <span class="source-location">{section.srcLine}:</span>
-          {/if}
-          <span class="directive-label" title={section.lineContent.trim()}>
-            {@html colorized[section.directiveId]?.header ??
-              escapeHtml(section.lineContent.trim())}
-          </span>
-          <button
-            class="dismiss-btn"
-            onclick={() => removeSection(section.directiveId)}
-            title="Remove this result"
+          <span class="file-name" title={group.fileUri}
+            >{group.displayName}</span
           >
-            ✕
-          </button>
+          <span class="file-count">{group.sections.length}</span>
         </div>
+      {/if}
 
-        {#if !section.collapsed}
-          <div class="section-body">
-            <pre class="result-code">{@html colorized[section.directiveId]
-                ?.body ?? escapeHtml(section.prettyText)}</pre>
+      {#if !hasMultipleFiles || !collapsedFiles.has(group.fileUri)}
+        {#each group.sections as section (section.directiveId)}
+          <div
+            id="section-{section.directiveId}"
+            class="result-section {successClass(section.success)}"
+          >
+            <div class="section-header">
+              <button
+                class="collapse-toggle"
+                onclick={() => toggleCollapse(section.directiveId)}
+                title={section.collapsed ? 'Expand' : 'Collapse'}
+              >
+                <span class="chevron" class:rotated={!section.collapsed}
+                  >&#9002;</span
+                >
+              </button>
+              {#if !section.stale}
+                <span class="source-location">{section.srcLine}:</span>
+              {/if}
+              <span class="directive-label" title={section.lineContent.trim()}>
+                {@html colorized[section.directiveId]?.header ??
+                  escapeHtml(section.lineContent.trim())}
+              </span>
+              <button
+                class="dismiss-btn"
+                onclick={() => removeSection(section.directiveId)}
+                title="Remove this result"
+              >
+                ✕
+              </button>
+            </div>
+
+            {#if !section.collapsed}
+              <div class="section-body">
+                <pre class="result-code">{@html colorized[section.directiveId]
+                    ?.body ?? escapeHtml(section.prettyText)}</pre>
+              </div>
+            {/if}
           </div>
-        {/if}
-      </div>
+        {/each}
+      {/if}
     {/each}
   {/if}
 </div>
@@ -453,6 +548,36 @@
     margin-top: 4px;
     opacity: 0.7;
     max-width: 200px;
+  }
+
+  .file-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    margin-top: 4px;
+    margin-bottom: 4px;
+    background: var(--vscode-sideBarSectionHeader-background, #252526);
+    border: 1px solid var(--vscode-panel-border, #444);
+    border-radius: 4px;
+    cursor: default;
+    user-select: none;
+    font-size: 0.85em;
+    font-weight: 500;
+  }
+
+  .file-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .file-count {
+    font-size: 0.8em;
+    opacity: 0.6;
+    flex-shrink: 0;
   }
 
   .result-section {
