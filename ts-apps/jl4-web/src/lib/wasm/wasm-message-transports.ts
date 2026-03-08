@@ -75,10 +75,33 @@ export class WasmLspHandler {
   private disposed = false
 
   /**
+   * Cache of the last successful evaluation results per URI.
+   * Populated in checkAndPublishDiagnostics; cleared on document change.
+   * Keyed by URI; value holds the document version and the eval results.
+   */
+  private evalResultCache = new Map<
+    string,
+    { version: number; results: EvalDirectiveResult[] }
+  >()
+
+  /**
+   * Cache of #CHECK type-info diagnostics per URI.
+   * These come from the type checker (CheckInfo items, severity 3, source 'l4').
+   * Used to serve l4/evalDirectiveResult requests for #CHECK directives.
+   */
+  private checkInfoCache = new Map<
+    string,
+    { version: number; infos: Diagnostic[] }
+  >()
+
+  /**
    * Currently selected visualization state.
    * When set, auto-refresh will update this function on document changes.
    */
   private currentVisualization: VisualizationState | null = null
+
+  /** Debounce timers for checkAndPublishDiagnostics, keyed by URI. */
+  private debounceTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
   constructor(private bridge: L4WasmBridge) {}
 
@@ -161,11 +184,19 @@ export class WasmLspHandler {
         if (newContent !== undefined) {
           this.documentContents.set(p.textDocument.uri, newContent)
           this.documentVersions.set(p.textDocument.uri, p.textDocument.version)
-          this.checkAndPublishDiagnostics(
-            p.textDocument.uri,
-            newContent,
-            p.textDocument.version
-          )
+          // Invalidate caches so next renderResult re-evaluates
+          this.evalResultCache.delete(p.textDocument.uri)
+          this.checkInfoCache.delete(p.textDocument.uri)
+          // Debounce: cancel any pending evaluation and schedule a new one
+          const existing = this.debounceTimers.get(p.textDocument.uri)
+          if (existing) clearTimeout(existing)
+          const uri = p.textDocument.uri
+          const version = p.textDocument.version
+          const timer = setTimeout(() => {
+            this.debounceTimers.delete(uri)
+            this.checkAndPublishDiagnostics(uri, newContent, version)
+          }, 500)
+          this.debounceTimers.set(p.textDocument.uri, timer)
         }
         break
       }
@@ -220,6 +251,9 @@ export class WasmLspHandler {
       case 'textDocument/references':
         return this.handleReferences(params)
 
+      case 'l4/evalDirectiveResult':
+        return this.handleEvalDirectiveResult(params)
+
       case 'workspace/executeCommand':
         return this.handleExecuteCommand(params)
 
@@ -261,7 +295,11 @@ export class WasmLspHandler {
         },
         // Execute command for visualization
         executeCommandProvider: {
-          commands: ['l4.visualize', 'l4.resetvisualization'],
+          commands: [
+            'l4.visualize',
+            'l4.resetvisualization',
+            'l4.renderResult',
+          ],
         },
         // Go-to-definition and find-references (single-file only)
         definitionProvider: true,
@@ -348,6 +386,79 @@ export class WasmLspHandler {
   }
 
   /**
+   * Handle l4/evalDirectiveResult request.
+   * Evaluates a specific directive at a given source position.
+   */
+  private async handleEvalDirectiveResult(params: unknown): Promise<unknown> {
+    const p = params as {
+      verDocId: { uri: string; version: number }
+      srcPos: { line: number; column: number }
+      directiveType: string
+    }
+    const uri = p.verDocId.uri
+    const currentVersion = this.documentVersions.get(uri) ?? 0
+
+    // #CHECK directives produce type-info from the type checker, not from the evaluator.
+    // The type info is cached as SInfo diagnostics (checkInfoCache) and matched by exact position.
+    if (p.directiveType === '#CHECK') {
+      const cachedInfos = this.checkInfoCache.get(uri)
+      if (cachedInfos && cachedInfos.version === currentVersion) {
+        const match = cachedInfos.infos.find(
+          (d) =>
+            d.range.start.line + 1 === p.srcPos.line &&
+            d.range.start.character + 1 === p.srcPos.column
+        )
+        if (match) {
+          return {
+            directiveType: '#CHECK',
+            prettyText: match.message,
+            success: null,
+            structuredValue: null,
+          }
+        }
+      }
+    }
+
+    // Serve from cache when the document hasn't changed since the last eval.
+    // The eval cache is populated by checkAndPublishDiagnostics on every edit,
+    // so clicking "Render result" never triggers a redundant re-evaluation.
+    // Cache keys use 0-indexed ranges (LSP); srcPos is 1-indexed (L4).
+    const cached = this.evalResultCache.get(uri)
+    if (cached && cached.version === currentVersion) {
+      const match = cached.results.find(
+        (r) =>
+          r.range != null &&
+          r.range.start.line + 1 === p.srcPos.line &&
+          r.range.start.character + 1 === p.srcPos.column
+      )
+      if (match) {
+        return {
+          directiveType: p.directiveType,
+          prettyText: match.result,
+          success: match.success,
+          structuredValue: null, // populated later when type-aware rendering is built
+        }
+      }
+    }
+
+    // Fallback: evaluate on demand (e.g. cache miss on first load)
+    const content = this.documentContents.get(uri)
+    if (!content) return null
+
+    try {
+      const result = await this.bridge.evalDirective(
+        content,
+        p.srcPos.line,
+        p.srcPos.column,
+        p.directiveType
+      )
+      return result.error ? null : result
+    } catch {
+      return null
+    }
+  }
+
+  /**
    * Handle textDocument/definition request.
    * Returns the location of the definition for the symbol at the given position.
    */
@@ -424,6 +535,10 @@ export class WasmLspHandler {
 
       case 'l4.resetvisualization':
         this.currentVisualization = null
+        return null
+
+      case 'l4.renderResult':
+        // Handled by client middleware; WASM mode does not support this yet
         return null
 
       default:
@@ -541,6 +656,17 @@ export class WasmLspHandler {
     // Get parse and type check diagnostics
     const checkDiagnostics = await this.bridge.check(content)
 
+    // Stale check: if the document changed while we were type-checking, abort.
+    const currentVersion = this.documentVersions.get(uri) ?? 0
+    if (version !== undefined && currentVersion !== version) return
+
+    // Cache #CHECK type-info diagnostics (severity 3, source 'l4' = CheckInfo from type checker)
+    // These are used to serve l4/evalDirectiveResult for #CHECK directives.
+    const checkInfos = checkDiagnostics.filter(
+      (d) => d.severity === 3 && d.source === 'l4'
+    )
+    this.checkInfoCache.set(uri, { version: version ?? 0, infos: checkInfos })
+
     // Also run evaluation to get #EVAL results as diagnostics
     // Only if there are no errors (matching real LSP behavior)
     let evalDiagnostics: Diagnostic[] = []
@@ -548,14 +674,74 @@ export class WasmLspHandler {
     if (!hasErrors) {
       try {
         const evalResult = await this.bridge.evaluate(content)
+
+        // Stale check: if the document changed while we were evaluating, abort.
+        if (
+          version !== undefined &&
+          (this.documentVersions.get(uri) ?? 0) !== version
+        )
+          return
+
         if (evalResult.success) {
+          // Cache results so renderResult clicks don't re-evaluate
+          this.evalResultCache.set(uri, {
+            version: version ?? 0,
+            results: evalResult.results,
+          })
+
           evalDiagnostics = evalResult.results.map(
             this.evalResultToDiagnostic.bind(this)
           )
+
+          // Notify the client so open inspector sections update in real-time.
+          // directiveId matches the convention used by the inspector panel: "${line}:${col}" (1-indexed).
+          const lines = content.split('\n')
+          const getLine = (line1: number) => lines[line1 - 1] ?? ''
+
+          const evalUpdates = evalResult.results
+            .filter((r) => r.range != null)
+            .map((r) => ({
+              directiveId: `${r.range!.start.line + 1}:${r.range!.start.character + 1}`,
+              prettyText: r.result,
+              success: r.success as boolean | null,
+              lineContent: getLine(r.range!.start.line + 1),
+            }))
+
+          const checkUpdates = checkInfos.map((d) => ({
+            directiveId: `${d.range.start.line + 1}:${d.range.start.character + 1}`,
+            prettyText: d.message,
+            success: null as boolean | null,
+            lineContent: getLine(d.range.start.line + 1),
+          }))
+
+          const allUpdates = [...evalUpdates, ...checkUpdates]
+          if (allUpdates.length > 0) {
+            this.send({
+              jsonrpc: '2.0',
+              method: 'l4/directiveResultsUpdated',
+              params: { uri, results: allUpdates },
+            } as LspNotification)
+          }
         }
       } catch {
         // Evaluation failed, continue with check diagnostics only
       }
+    } else if (checkInfos.length > 0) {
+      // Even with errors, push #CHECK type-info updates (they come from the type checker
+      // which runs before evaluation, so they may still be valid).
+      const lines = content.split('\n')
+      const getLine = (line1: number) => lines[line1 - 1] ?? ''
+      const checkUpdates = checkInfos.map((d) => ({
+        directiveId: `${d.range.start.line + 1}:${d.range.start.character + 1}`,
+        prettyText: d.message,
+        success: null as boolean | null,
+        lineContent: getLine(d.range.start.line + 1),
+      }))
+      this.send({
+        jsonrpc: '2.0',
+        method: 'l4/directiveResultsUpdated',
+        params: { uri, results: checkUpdates },
+      } as LspNotification)
     }
 
     // Merge diagnostics: check errors + eval results
@@ -592,6 +778,10 @@ export class WasmLspHandler {
     this.disposed = true
     this.documentContents.clear()
     this.documentVersions.clear()
+    this.evalResultCache.clear()
+    this.checkInfoCache.clear()
+    for (const timer of this.debounceTimers.values()) clearTimeout(timer)
+    this.debounceTimers.clear()
     this.messageCallback = null
     this.currentVisualization = null
   }

@@ -1,0 +1,33 @@
+Hello, world!
+42
+3.14
+the sum of 2 and the product of 3 and 4
+`TRUE`
+`FALSE`
+`TRUE` and `FALSE`
+`TRUE` or `FALSE`
+list of 1, 2, 3, 4 and 5
+list of apple, banana and cherry
+list of `Red`, `Green` and `Blue`
+`alice`
+`alice` 's `name`
+`alice` 's `age`
+`Red`
+`Green`
+`is adult` with `alice`
+`is adult` with `bob`
+`age category of` with `alice`
+`age category of` with `bob`
+`DataPoint` where `label` is Revenue and `value` is 42000
+list of `q1 revenue`, `q2 revenue`, `q3 revenue` and `q4 revenue`
+list of `event 1`, `event 2`, `event 3`, `event 4` and `event 5`
+list of `alice` and `bob`
+`TRUE`
+the sum of 2 and 2 is equal to 4
+not `FALSE`
+`is adult` with `alice`
+`alice` 's `age` is equal to 30
+`alice` 's `age` is greater than `bob` 's `age`
+`is adult` with `bob`
+`is adult` with `alice`
+`age category of` with `bob`

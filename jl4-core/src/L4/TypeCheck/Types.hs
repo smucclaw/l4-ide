@@ -81,7 +81,7 @@ data CheckError =
   | IllegalApp Resolved (Type' Resolved) Int
   | IllegalAppNamed Resolved (Type' Resolved)
   | IncompleteAppNamed Resolved [OptionallyNamedType Resolved]
-  | CheckInfo (Type' Resolved)
+  | CheckInfo (Type' Resolved) (Maybe SrcRange)
   | CheckWarning CheckWarning
   | IllegalTypeInKindSignature (Type' Resolved)
   | MissingEntityInfo Resolved
@@ -187,6 +187,7 @@ instance HasSrcRange CheckError where
   rangeOf (OutOfScopeError n _)             = rangeOf n
   rangeOf (InconsistentNameInSignature n _) = rangeOf n
   rangeOf (InconsistentNameInAppForm n _)   = rangeOf n
+  rangeOf (CheckInfo _ mr)                  = mr
   rangeOf _                                 = Nothing
 
 -- | A token in a mixfix pattern, representing either a keyword (part of the function name)

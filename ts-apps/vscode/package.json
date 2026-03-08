@@ -88,6 +88,10 @@
       {
         "command": "l4.visualize",
         "title": "Visualize L4 expression"
+      },
+      {
+        "command": "l4.renderResult",
+        "title": "Render result in L4 Inspector"
       }
     ]
   },

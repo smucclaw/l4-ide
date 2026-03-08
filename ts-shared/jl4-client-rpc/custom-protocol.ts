@@ -71,3 +71,33 @@ export const InlineExprsRequestType = makeL4RpcRequestType<
   InlineExprsRequestParams,
   InlineExprsResult
 >('l4/inlineExprs')
+
+/****************************************
+    Inspector protocol extensions
+*****************************************/
+
+export interface SrcPos {
+  line: number
+  column: number
+}
+
+export interface EvalDirectiveResultParams {
+  verDocId: { uri: string; version: number }
+  srcPos: SrcPos
+  directiveType: string
+}
+
+export interface DirectiveResult {
+  directiveType: string
+  prettyText: string
+  success: boolean | null
+  structuredValue: unknown | null
+}
+
+/**
+ * Request type for getting a directive's evaluation result
+ */
+export const EvalDirectiveResultRequestType = makeL4RpcRequestType<
+  EvalDirectiveResultParams,
+  DirectiveResult
+>('l4/evalDirectiveResult')

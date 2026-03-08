@@ -20,6 +20,13 @@ File: error-directive-ambiguity.l4
 
 File: error-directive-ambiguity.l4
   Hidden: no
+  Range: 10:1-10:16
+  Source: check
+  Severity: DiagnosticSeverity_Information
+  Code: <none>
+  Message: res12
+File: error-directive-ambiguity.l4
+  Hidden: no
   Range: 10:8-10:16
   Source: check
   Severity: DiagnosticSeverity_Error
@@ -34,11 +41,3 @@ File: error-directive-ambiguity.l4
 
       foo (defined at error-directive-ambiguity.l4:6:8-11) of type FUNCTION FROM BOOLEAN TO BOOLEAN
       foo (defined at error-directive-ambiguity.l4:3:8-11) of type FUNCTION FROM BOOLEAN TO BOOLEAN
-
-File: error-directive-ambiguity.l4
-  Hidden: no
-  Range: 10:8-10:16
-  Source: check
-  Severity: DiagnosticSeverity_Information
-  Code: <none>
-  Message: res12

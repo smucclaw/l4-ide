@@ -1882,7 +1882,9 @@ runTernaryBuiltin TernaryDateFromDMY dVal mVal yVal = do
   case Time.fromGregorianValid yInt (fromInteger mInt) (fromInteger dInt) of
     Just day -> Backward (ValDate day)
     Nothing ->
-      UserException $ UserError "DATE_FROM_DMY produced an invalid date"
+      UserException $ UserError $
+        "DATE_FROM_DMY produced an invalid date from day="
+        <> Text.pack (show dInt) <> ", month=" <> Text.pack (show mInt) <> ", year=" <> Text.pack (show yInt)
 runTernaryBuiltin TernaryTimeFromHMS hVal mVal sVal = do
   hNum <- expectNumber hVal
   mNum <- expectNumber mVal

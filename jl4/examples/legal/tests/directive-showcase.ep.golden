@@ -1,0 +1,123 @@
+-- Directive Showcase
+-- Demonstrates all L4 directive types and the Results Inspector.
+-- Click "Render result" above any directive to see its output.
+
+IMPORT prelude
+
+§ `Types`
+
+DECLARE `Person` HAS
+    `name` IS A STRING
+    `age`  IS A NUMBER
+
+DECLARE `Color` IS ONE OF
+    Red
+    Green
+    Blue
+
+DECLARE `DataPoint` HAS
+    `label` IS A STRING
+    `value` IS A NUMBER
+
+DECLARE `TimelineEvent` HAS
+    `year`  IS A STRING
+    `event` IS A STRING
+
+§ `Test Data`
+
+`alice` MEANS `Person` WITH
+    `name` IS "Alice"
+    `age`  IS 30
+
+`bob` MEANS `Person` WITH
+    `name` IS "Bob"
+    `age`  IS 17
+
+§ `Functions`
+
+GIVEN p IS A `Person`
+GIVETH A BOOLEAN
+DECIDE `is adult` IF p's `age` >= 18
+
+GIVEN p IS A `Person`
+GIVETH A STRING
+DECIDE `age category of` IS
+    IF p's `age` >= 65
+    THEN "Senior"
+    ELSE IF p's `age` >= 18
+         THEN "Adult"
+         ELSE "Minor"
+
+§ `#EVAL – Strings`
+#EVAL "Hello, world!"
+
+§ `#EVAL – Numbers`
+#EVAL 42
+#EVAL 3.14
+#EVAL 2 + 3 * 4
+
+§ `#EVAL – Booleans`
+#EVAL TRUE
+#EVAL FALSE
+#EVAL TRUE AND FALSE
+#EVAL TRUE OR FALSE
+
+§ `#EVAL – Lists`
+#EVAL LIST 1, 2, 3, 4, 5
+#EVAL LIST "apple", "banana", "cherry"
+#EVAL LIST Red, Green, Blue
+
+§ `#EVAL – Records`
+#EVAL `alice`
+#EVAL `alice`'s `name`
+#EVAL `alice`'s `age`
+
+§ `#EVAL – Enums`
+#EVAL Red
+#EVAL Green
+
+§ `#EVAL – Function Results`
+#EVAL `is adult` `alice`
+#EVAL `is adult` `bob`
+#EVAL `age category of` `alice`
+#EVAL `age category of` `bob`
+
+§ `#EVAL – Pairs`
+#EVAL `DataPoint` WITH `label` IS "Revenue", `value` IS 42000
+
+§ `#EVAL – List of Pairs (chart data)`
+
+-- Quarterly revenue (label, value) — bar/line chart data
+`q1 revenue` MEANS `DataPoint` WITH `label` IS "Q1 2025", `value` IS 120
+`q2 revenue` MEANS `DataPoint` WITH `label` IS "Q2 2025", `value` IS 250
+`q3 revenue` MEANS `DataPoint` WITH `label` IS "Q3 2025", `value` IS 180
+`q4 revenue` MEANS `DataPoint` WITH `label` IS "Q4 2025", `value` IS 320
+
+#EVAL LIST `q1 revenue`, `q2 revenue`, `q3 revenue`, `q4 revenue`
+
+-- Timeline events
+`event 1` MEANS `TimelineEvent` WITH `year` IS "2020", `event` IS "Company founded"
+`event 2` MEANS `TimelineEvent` WITH `year` IS "2021", `event` IS "Series A funding"
+`event 3` MEANS `TimelineEvent` WITH `year` IS "2022", `event` IS "Product launch"
+`event 4` MEANS `TimelineEvent` WITH `year` IS "2023", `event` IS "IPO"
+`event 5` MEANS `TimelineEvent` WITH `year` IS "2024", `event` IS "Global expansion"
+
+#EVAL LIST `event 1`, `event 2`, `event 3`, `event 4`, `event 5`
+
+-- List of records
+#EVAL LIST `alice`, `bob`
+
+§ `#ASSERT – Pass / Fail`
+-- Passing assertions (green)
+#ASSERT TRUE
+#ASSERT 2 + 2 = 4
+#ASSERT NOT FALSE
+#ASSERT `is adult` `alice`
+#ASSERT `alice`'s `age` = 30
+#ASSERT `alice`'s `age` > `bob`'s `age`
+-- Failing assertion (red)
+#ASSERT `is adult` `bob`
+
+§ `#EVALTRACE – Evaluation with Trace`
+#EVALTRACE `is adult` `alice`
+#EVALTRACE `age category of` `bob`

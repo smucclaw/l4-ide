@@ -1,4 +1,4 @@
 Parsing successful
 Typechecking successful
-mixfix-cross-module-ternary-def.l4:15:8-27:
+mixfix-cross-module-ternary-def.l4:15:1-27:
   BOOLEAN
