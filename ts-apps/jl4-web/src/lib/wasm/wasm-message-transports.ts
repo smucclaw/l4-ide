@@ -421,7 +421,7 @@ export class WasmLspHandler {
 
     // Serve from cache when the document hasn't changed since the last eval.
     // The eval cache is populated by checkAndPublishDiagnostics on every edit,
-    // so clicking "Render result" never triggers a redundant re-evaluation.
+    // so clicking "Track result" never triggers a redundant re-evaluation.
     // Cache keys use 0-indexed ranges (LSP); srcPos is 1-indexed (L4).
     const cached = this.evalResultCache.get(uri)
     if (cached && cached.version === currentVersion) {

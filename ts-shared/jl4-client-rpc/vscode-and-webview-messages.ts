@@ -61,6 +61,7 @@ export interface AddInspectorResultMessage {
   directiveId: string
   srcPos: SrcPos
   result: DirectiveResult
+  lineContent: string
 }
 
 export const AddInspectorResult: RequestType<
@@ -87,6 +88,20 @@ export interface UpdateInspectorResultMessage {
 export const UpdateInspectorResult: NotificationType<UpdateInspectorResultMessage> =
   {
     method: 'updateInspectorResult',
+  }
+
+export interface SyncInspectorResultsMessage {
+  results: Array<{
+    directiveId: string
+    prettyText: string
+    success: boolean | null
+    lineContent: string
+  }>
+}
+
+export const SyncInspectorResults: NotificationType<SyncInspectorResultsMessage> =
+  {
+    method: 'syncInspectorResults',
   }
 
 /*************************************************************

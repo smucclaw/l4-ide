@@ -1,6 +1,6 @@
 -- Directive Showcase
 -- Demonstrates all L4 directive types and the Results Inspector.
--- Click "Render result" above any directive to see its output.
+-- Click "Track result" above any directive to see its output.
 
 IMPORT prelude
 

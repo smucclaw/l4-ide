@@ -91,7 +91,7 @@
       },
       {
         "command": "l4.renderResult",
-        "title": "Render result in L4 Inspector"
+        "title": "Track result in L4 Inspector"
       }
     ]
   },

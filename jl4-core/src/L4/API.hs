@@ -645,7 +645,7 @@ l4CodeLenses source uriText version =
                       ]
                   , "command" .= Aeson.object
                       [ "id" .= ("l4.renderResult" :: Text)
-                      , "title" .= ("Render result" :: Text)
+                      , "title" .= ("Track result" :: Text)
                       , "arguments" .=
                           [ Aeson.object [ "uri" .= uriTxt, "version" .= ver ]
                           , Aeson.object [ "line" .= sp.line, "column" .= sp.column ]

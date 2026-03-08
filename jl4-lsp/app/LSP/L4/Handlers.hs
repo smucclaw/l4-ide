@@ -346,7 +346,7 @@ handlers evalConfig recorder =
 
           mkRenderResultCodeLens srcPos label = CodeLens
             { _command = Just Command
-              { _title = "Render result"
+              { _title = "Track result"
               , _command = "l4.renderResult"
               , _arguments = Just [Aeson.toJSON verTextDocId, Aeson.toJSON (Generically srcPos), Aeson.toJSON label]
               }

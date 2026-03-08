@@ -24,12 +24,13 @@ import {
   WebviewFrontendIsReadyNotification,
   AddInspectorResult,
   RemoveInspectorResult,
-  UpdateInspectorResult,
+  SyncInspectorResults,
   ToggleSimplify,
   EvalDirectiveResultRequestType,
   makeLspRelayRequestType,
   type DirectiveResult,
   type SrcPos,
+  type SyncInspectorResultsMessage,
 } from 'jl4-client-rpc'
 import {
   fetchQueryPlan,
@@ -58,7 +59,7 @@ const code2ProtocolConverter = createCodeConverter()
 
 const PANEL_CONFIG: PanelConfig = {
   viewType: 'l4Viz',
-  title: 'Visualize L4',
+  title: 'L4 Decision Graph',
   position: vscode.ViewColumn.Beside,
 }
 
@@ -325,7 +326,7 @@ export async function activate(context: ExtensionContext) {
   // Value: info needed to re-request the result from the LSP
   const openInspectorSections = new Map<
     string,
-    { uri: string; srcPos: SrcPos; directiveType: string }
+    { uri: string; srcPos: SrcPos; directiveType: string; lineContent: string }
   >()
 
   const inspectorMessenger = initializeInspectorMessenger(
@@ -434,7 +435,7 @@ export async function activate(context: ExtensionContext) {
         directiveType: string
       ) => {
         outputChannel.appendLine(
-          `[inspector] Render result: ${directiveType} at line ${srcPos.line}`
+          `[inspector] Track result: ${directiveType} at line ${srcPos.line}`
         )
 
         try {
@@ -453,12 +454,15 @@ export async function activate(context: ExtensionContext) {
 
           const directiveId = `${verDocId.uri}:${srcPos.line}:${srcPos.column}`
           const editor = vscode.window.activeTextEditor
+          const lineContent =
+            editor?.document.lineAt(srcPos.line - 1).text ?? ''
 
           // Track the section so it receives live updates when the file changes
           openInspectorSections.set(directiveId, {
             uri: verDocId.uri,
             srcPos,
             directiveType,
+            lineContent,
           })
 
           // Create/reveal the inspector panel
@@ -483,6 +487,7 @@ export async function activate(context: ExtensionContext) {
               directiveId,
               srcPos,
               result: result as DirectiveResult,
+              lineContent,
             }
           )
 
@@ -504,37 +509,83 @@ export async function activate(context: ExtensionContext) {
   await client.start()
 
   // After the client is running, listen for diagnostic changes (which signal
-  // that the LSP has re-evaluated the file) and push updated results to any
-  // open inspector sections.
+  // that the LSP has re-evaluated the file) and push a batch sync to the inspector.
+  // We query ALL current directive positions via code lenses so the webview can
+  // remap tracked sections even when lines have shifted.
   context.subscriptions.push(
     vscode.languages.onDidChangeDiagnostics(async (e) => {
       for (const uri of e.uris) {
         const uriStr = uri.toString()
-        const sectionsForDoc = [...openInspectorSections.entries()].filter(
-          ([, v]) => v.uri === uriStr
+        const hasTrackedSections = [...openInspectorSections.values()].some(
+          (v) => v.uri === uriStr
         )
-        if (sectionsForDoc.length === 0) continue
+        if (!hasTrackedSections) continue
 
         // Only update if the inspector panel is open
         const panel = inspectorPanelManager.getPanel()
         if (!panel) continue
 
-        for (const [directiveId, { srcPos, directiveType }] of sectionsForDoc) {
+        const document = vscode.workspace.textDocuments.find(
+          (d) => d.uri.toString() === uriStr
+        )
+        if (!document) continue
+
+        // Get all current code lenses to discover live directive positions
+        let codeLenses: vscode.CodeLens[] = []
+        try {
+          codeLenses =
+            (await vscode.commands.executeCommand<vscode.CodeLens[]>(
+              'vscode.executeCodeLensProvider',
+              uri
+            )) ?? []
+        } catch {
+          // If code lens retrieval fails, fall back to silence
+          continue
+        }
+
+        const directiveLenses = codeLenses.filter(
+          (lens) => lens.command?.command === cmdRenderResult
+        )
+
+        const results: SyncInspectorResultsMessage['results'] = []
+        for (const lens of directiveLenses) {
+          const args = lens.command?.arguments
+          if (!args || args.length < 3) continue
+
+          const lensSrcPos = args[1] as SrcPos
+          const lensDirectiveType = args[2] as string
+
           try {
             const result = await client.sendRequest(
               EvalDirectiveResultRequestType,
-              { verDocId: { uri: uriStr, version: 0 }, srcPos, directiveType }
+              {
+                verDocId: { uri: uriStr, version: 0 },
+                srcPos: lensSrcPos,
+                directiveType: lensDirectiveType,
+              }
             )
             if (result) {
-              inspectorMessenger.sendNotification(
-                UpdateInspectorResult,
-                inspectorWebviewFrontend,
-                { directiveId, result: result as DirectiveResult }
-              )
+              const dr = result as DirectiveResult
+              const directiveId = `${uriStr}:${lensSrcPos.line}:${lensSrcPos.column}`
+              const lineContent = document.lineAt(lensSrcPos.line - 1).text
+              results.push({
+                directiveId,
+                prettyText: dr.prettyText,
+                success: dr.success,
+                lineContent,
+              })
             }
           } catch {
-            // Ignore errors during live update — the user can re-click if needed
+            // Skip directives that fail (e.g. type errors with no result yet)
           }
+        }
+
+        if (results.length > 0) {
+          inspectorMessenger.sendNotification(
+            SyncInspectorResults,
+            inspectorWebviewFrontend,
+            { results }
+          )
         }
       }
     })
