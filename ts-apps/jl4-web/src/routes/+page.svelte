@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte'
+  import { onMount, onDestroy, tick } from 'svelte'
   import { SvelteToast, toast } from '@zerodevx/svelte-toast'
   import { debounce } from '$lib/utils'
   import * as Resizable from '$lib/components/ui/resizable/index.js'
@@ -23,11 +23,13 @@
 
   import { defaultExample, type LegalExample } from '$lib/legal-examples'
   import ExampleSelector from '$lib/components/example-selector.svelte'
+  import InspectorPanel from '$lib/components/inspector-panel.svelte'
   import {
     fetchQueryPlan,
     upsertFunctionFromSource,
     type DecisionServiceClient,
   } from '$lib/decision-service-client'
+  import { EvalDirectiveResultRequestType, type SrcPos } from 'jl4-client-rpc'
 
   import {
     LadderFlow,
@@ -76,6 +78,8 @@
     window.innerWidth < 1024 ? false : !ownUrl.searchParams.has('no-examples')
   )
   let showVisualizer = $state(false)
+  let rightPaneView: 'ladder' | 'inspector' = $state('ladder')
+  let inspectorPanel: InspectorPanel | undefined = $state(undefined)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let paneGroup: any = $state()
 
@@ -579,6 +583,22 @@
 
       monacoL4LangClient = new MonacoL4LanguageClient(internalClient)
 
+      // When evaluation completes after an edit, update any open inspector sections.
+      internalClient.onNotification(
+        'l4/directiveResultsUpdated',
+        (params: {
+          uri: string
+          results: Array<{
+            directiveId: string
+            prettyText: string
+            success: boolean | null
+            lineContent: string
+          }>
+        }) => {
+          inspectorPanel?.syncSections(params.results)
+        }
+      )
+
       /**********************************
             Init LadderBackendApi
       ***********************************/
@@ -594,6 +614,38 @@
       return {
         /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
         executeCommand: async (command: any, args: any, next: any) => {
+          // Handle l4.renderResult locally (don't forward to LSP as a command)
+          if (command === 'l4.renderResult' && monacoL4LangClient) {
+            const [verDocId, srcPos, directiveType] = args as [
+              { uri: string; version: number },
+              SrcPos,
+              string,
+            ]
+            try {
+              const result = await monacoL4LangClient.sendRequest(
+                EvalDirectiveResultRequestType,
+                { verDocId, srcPos, directiveType }
+              )
+              if (result) {
+                rightPaneView = 'inspector'
+                showVisualizer = true
+                await tick() // Wait for InspectorPanel to mount if pane was closed
+                const directiveId = `${srcPos.line}:${srcPos.column}`
+                const lineContent =
+                  editor?.getModel()?.getLineContent(srcPos.line) ?? ''
+                inspectorPanel?.addOrScrollToResult(
+                  directiveId,
+                  srcPos,
+                  result,
+                  lineContent
+                )
+              }
+            } catch (e) {
+              logger.error(`l4.renderResult failed: ${e}`)
+            }
+            return
+          }
+
           logger.debug(`trying to execute command ${command}`)
           const responseFromLangServer = await next(command, args)
 
@@ -629,6 +681,7 @@
               if (decoded.right) {
                 const renderLadderInfo: RenderAsLadderInfo = decoded.right
                 await makeLadderFlow(renderLadderInfo)
+                rightPaneView = 'ladder'
               }
               break
             case 'Left':
@@ -783,6 +836,7 @@
   function handleExampleSelect(example: LegalExample) {
     if (showExamples && editor) {
       editor.setValue(example.content)
+      inspectorPanel?.clear()
 
       if (window.innerWidth <= 1023) {
         showSidebar = false
@@ -805,6 +859,7 @@
           const content = e.target?.result as string
           if (content && editor) {
             editor.setValue(content)
+            inspectorPanel?.clear()
             // Clear any URL parameters since we're loading a new file
             const ownUrl = new URL(window.location.href)
             if (ownUrl.searchParams.has('id')) {
@@ -1028,7 +1083,7 @@
           <!-- Curved line from split to right node -->
           <path d="M12 12 Q15 15 17 18" />
         </svg>
-        Logic Viz
+        Inspector
       </button>
       <button
         class="fab fab-wizard"
@@ -1096,7 +1151,11 @@
         <Resizable.Handle />
         <Resizable.Pane defaultSize={50}>
           <div class="relative h-full ladder-border">
-            <div id="jl4-webview" class="h-full max-w-[96%] mx-auto">
+            <div
+              id="jl4-webview"
+              class="h-full max-w-[96%] mx-auto"
+              class:hidden-pane={rightPaneView !== 'ladder'}
+            >
               {#await renderLadderPromise then ladder}
                 {#key ladder.funDeclLirNode}
                   <div class="slightly-shorter-than-full-viewport-height pb-1">
@@ -1110,6 +1169,12 @@
               {:catch error}
                 <p>Error loading Ladder Diagram: {error.message}</p>
               {/await}
+            </div>
+            <div
+              class="h-full"
+              class:hidden-pane={rightPaneView !== 'inspector'}
+            >
+              <InspectorPanel bind:this={inspectorPanel} />
             </div>
           </div>
           <style>
@@ -1235,6 +1300,9 @@
   }
   .slightly-shorter-than-full-viewport-height {
     height: 100%;
+  }
+  .hidden-pane {
+    display: none;
   }
 
   @media (max-width: 1023px) {

@@ -50,7 +50,10 @@ GIVEN day   IS A NUMBER
       year  IS A NUMBER
 GIVETH A DATE
 `Date` AKA `Days to date` MEANS
-    DATE_FROM_DMY day month year
+    DATE_FROM_SERIAL (jan1serial PLUS monthDays PLUS day MINUS 1)
+    WHERE
+        jan1serial MEANS DATE_SERIAL (DATE_FROM_DMY 1 1 year)
+        monthDays MEANS `Months since year start to days` month year
 
 GIVEN days  IS A NUMBER
 GIVETH A DATE
@@ -92,7 +95,7 @@ GIVEN day   IS A NUMBER
       year  IS A NUMBER
 GIVETH A NUMBER
 `Day` AKA `Date to days` MEANS
-    DATE_SERIAL (DATE_FROM_DMY day month year)
+    DATE_SERIAL (Date day month year)
 
 GIVEN days  IS A NUMBER
 GIVETH A NUMBER

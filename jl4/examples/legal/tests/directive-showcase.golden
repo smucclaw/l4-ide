@@ -1,0 +1,226 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+directive-showcase.l4:52:1-22:
+  "Hello, world!"
+directive-showcase.l4:55:1-9:
+  42
+directive-showcase.l4:56:1-11:
+  3.14
+directive-showcase.l4:57:1-16:
+  14
+directive-showcase.l4:60:1-11:
+  TRUE
+directive-showcase.l4:61:1-12:
+  FALSE
+directive-showcase.l4:62:1-21:
+  FALSE
+directive-showcase.l4:63:1-20:
+  TRUE
+directive-showcase.l4:66:1-25:
+  LIST 1, 2, 3, 4, 5
+directive-showcase.l4:67:1-39:
+  LIST "apple", "banana", "cherry"
+directive-showcase.l4:68:1-28:
+  LIST Red, Green, Blue
+directive-showcase.l4:71:1-14:
+  Person OF "Alice", 30
+directive-showcase.l4:72:1-23:
+  "Alice"
+directive-showcase.l4:73:1-22:
+  30
+directive-showcase.l4:76:1-10:
+  Red
+directive-showcase.l4:77:1-12:
+  Green
+directive-showcase.l4:80:1-25:
+  TRUE
+directive-showcase.l4:81:1-23:
+  FALSE
+directive-showcase.l4:82:1-32:
+  "Adult"
+directive-showcase.l4:83:1-30:
+  "Minor"
+directive-showcase.l4:86:1-62:
+  DataPoint OF "Revenue", 42000
+directive-showcase.l4:96:1-66:
+  LIST DataPoint OF "Q1 2025", 120, DataPoint OF "Q2 2025", 250, DataPoint OF "Q3 2025", 180, DataPoint OF "Q4 2025", 320
+directive-showcase.l4:105:1-65:
+  LIST TimelineEvent OF "2020", "Company founded", TimelineEvent OF "2021", "Series A funding", TimelineEvent OF "2022", "Product launch", TimelineEvent OF "2023", "IPO", TimelineEvent OF "2024", "Global expansion"
+directive-showcase.l4:108:1-26:
+  LIST Person OF "Alice", 30, Person OF "Bob", 17
+directive-showcase.l4:112:1-13:
+  assertion satisfied
+directive-showcase.l4:113:1-18:
+  assertion satisfied
+directive-showcase.l4:114:1-18:
+  assertion satisfied
+directive-showcase.l4:115:1-27:
+  assertion satisfied
+directive-showcase.l4:116:1-29:
+  assertion satisfied
+directive-showcase.l4:117:1-40:
+  assertion satisfied
+directive-showcase.l4:119:1-25:
+  assertion failed
+directive-showcase.l4:122:1-30:
+  TRUE
+  ─────
+  ┌ `is adult` OF alice
+  │┌ `is adult`
+  │└ <function>│• <function>
+  ├ (p's age) AT LEAST 18
+  │┌ p's age
+  │├ age OF p
+  ││┌ age
+  ││└ <function>││• <function>
+  │├ CONSIDER Person WHEN Person name
+  ││                              age THEN age
+  │├ age
+  │└ 30│┌ age OF p
+  ││┌ age
+  ││└ <function>││• <function>
+  │├ CONSIDER Person WHEN Person name
+  ││                              age THEN age
+  │├ age
+  │└ 30│┌ CONSIDER Person WHEN Person name
+  ││                              age THEN age
+  │├ age
+  │└ 30│┌ age
+  │└ 30│• 30
+  └ TRUE┌ (p's age) AT LEAST 18
+  │┌ p's age
+  │├ age OF p
+  ││┌ age
+  ││└ <function>││• <function>
+  │├ CONSIDER Person WHEN Person name
+  ││                              age THEN age
+  │├ age
+  │└ 30│┌ age OF p
+  ││┌ age
+  ││└ <function>││• <function>
+  │├ CONSIDER Person WHEN Person name
+  ││                              age THEN age
+  │├ age
+  │└ 30│┌ CONSIDER Person WHEN Person name
+  ││                              age THEN age
+  │├ age
+  │└ 30│┌ age
+  │└ 30│• 30
+  └ TRUE• TRUE
+directive-showcase.l4:123:1-35:
+  "Minor"
+  ─────
+  ┌ `age category of` OF bob
+  │┌ `age category of`
+  │└ <function>│• <function>
+  ├ IF ((p's age) AT LEAST 65) THEN "Senior" ELSE (IF ((p's age) AT LEAST 18) THEN "Adult" ELSE "Minor")
+  │┌ (p's age) AT LEAST 65
+  ││┌ p's age
+  ││├ age OF p
+  │││┌ age
+  │││└ <function>│││• <function>
+  ││├ CONSIDER Person WHEN Person name
+  │││                              age THEN age
+  ││├ age
+  ││└ 17││┌ age OF p
+  │││┌ age
+  │││└ <function>│││• <function>
+  ││├ CONSIDER Person WHEN Person name
+  │││                              age THEN age
+  ││├ age
+  ││└ 17││┌ CONSIDER Person WHEN Person name
+  │││                              age THEN age
+  ││├ age
+  ││└ 17││┌ age
+  ││└ 17││• 17
+  │└ FALSE│• FALSE
+  ├ IF ((p's age) AT LEAST 18) THEN "Adult" ELSE "Minor"
+  │┌ (p's age) AT LEAST 18
+  ││┌ p's age
+  ││├ age OF p
+  │││┌ age
+  │││└ <function>│││• <function>
+  ││├ CONSIDER Person WHEN Person name
+  │││                              age THEN age
+  ││├ age
+  ││└ 17││┌ age OF p
+  │││┌ age
+  │││└ <function>│││• <function>
+  ││├ CONSIDER Person WHEN Person name
+  │││                              age THEN age
+  ││├ age
+  ││└ 17││┌ CONSIDER Person WHEN Person name
+  │││                              age THEN age
+  ││├ age
+  ││└ 17││┌ age
+  ││└ 17││• 17
+  │└ FALSE│• FALSE
+  ├ "Minor"
+  └ "Minor"┌ IF ((p's age) AT LEAST 65) THEN "Senior" ELSE (IF ((p's age) AT LEAST 18) THEN "Adult" ELSE "Minor")
+  │┌ (p's age) AT LEAST 65
+  ││┌ p's age
+  ││├ age OF p
+  │││┌ age
+  │││└ <function>│││• <function>
+  ││├ CONSIDER Person WHEN Person name
+  │││                              age THEN age
+  ││├ age
+  ││└ 17││┌ age OF p
+  │││┌ age
+  │││└ <function>│││• <function>
+  ││├ CONSIDER Person WHEN Person name
+  │││                              age THEN age
+  ││├ age
+  ││└ 17││┌ CONSIDER Person WHEN Person name
+  │││                              age THEN age
+  ││├ age
+  ││└ 17││┌ age
+  ││└ 17││• 17
+  │└ FALSE│• FALSE
+  ├ IF ((p's age) AT LEAST 18) THEN "Adult" ELSE "Minor"
+  │┌ (p's age) AT LEAST 18
+  ││┌ p's age
+  ││├ age OF p
+  │││┌ age
+  │││└ <function>│││• <function>
+  ││├ CONSIDER Person WHEN Person name
+  │││                              age THEN age
+  ││├ age
+  ││└ 17││┌ age OF p
+  │││┌ age
+  │││└ <function>│││• <function>
+  ││├ CONSIDER Person WHEN Person name
+  │││                              age THEN age
+  ││├ age
+  ││└ 17││┌ CONSIDER Person WHEN Person name
+  │││                              age THEN age
+  ││├ age
+  ││└ 17││┌ age
+  ││└ 17││• 17
+  │└ FALSE│• FALSE
+  ├ "Minor"
+  └ "Minor"┌ IF ((p's age) AT LEAST 18) THEN "Adult" ELSE "Minor"
+  │┌ (p's age) AT LEAST 18
+  ││┌ p's age
+  ││├ age OF p
+  │││┌ age
+  │││└ <function>│││• <function>
+  ││├ CONSIDER Person WHEN Person name
+  │││                              age THEN age
+  ││├ age
+  ││└ 17││┌ age OF p
+  │││┌ age
+  │││└ <function>│││• <function>
+  ││├ CONSIDER Person WHEN Person name
+  │││                              age THEN age
+  ││├ age
+  ││└ 17││┌ CONSIDER Person WHEN Person name
+  │││                              age THEN age
+  ││├ age
+  ││└ 17││┌ age
+  ││└ 17││• 17
+  │└ FALSE│• FALSE
+  ├ "Minor"
+  └ "Minor"┌ "Minor"
+  └ "Minor"• "Minor"

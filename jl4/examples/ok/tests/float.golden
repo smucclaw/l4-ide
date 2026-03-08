@@ -1,13 +1,13 @@
 Parsing successful
 Typechecking successful
 Evaluation successful
-float.l4:9:8-10:
+float.l4:9:1-10:
   NUMBER
 float.l4:10:1-12:
   2.71828
 float.l4:11:1-9:
   3.14159265358979
-float.l4:12:8-18:
+float.l4:12:1-18:
   NUMBER
 float.l4:13:1-26:
   5.398135824810264
@@ -41,7 +41,7 @@ float.l4:31:1-22:
   TRUE
 float.l4:33:1-16:
   0.0000001
-float.l4:36:8-27:
+float.l4:36:1-27:
   NUMBER
 float.l4:37:1-25:
   12.56637061435916
@@ -49,7 +49,7 @@ float.l4:38:1-26:
   9
 float.l4:39:1-17:
   4
-float.l4:42:8-20:
+float.l4:42:1-20:
   FUNCTION FROM NUMBER TO BOOLEAN
 float.l4:43:1-22:
   FALSE
