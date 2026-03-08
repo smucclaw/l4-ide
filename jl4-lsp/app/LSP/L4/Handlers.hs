@@ -5,6 +5,7 @@
 
 module LSP.L4.Handlers where
 
+import Control.Concurrent (forkIO)
 import Control.Concurrent.Strict (Chan, writeChan)
 import Control.Exception.Safe (MonadCatch, MonadMask, MonadThrow)
 import Control.Lens ((^.))
@@ -29,6 +30,7 @@ import qualified Data.Maybe as Maybe
 import Data.Text (Text)
 import qualified Base.Text as Text
 import qualified Data.Text.Lazy as LazyText
+import qualified Data.Text.Mixed.Rope as Rope
 import GHC.Generics
 import GHC.TypeLits (Symbol)
 import Data.Proxy (Proxy (..))
@@ -153,6 +155,56 @@ notificationHandler m k = LSP.notificationHandler m $ \TNotificationMessage{_par
   liftIO $ writeChan st.reactor $ ReactorNotification (LSP.runLspT env $ runServerM st $ k st.ideState vfs _params)
 
 -- ----------------------------------------------------------------------------
+-- Directive results notification
+-- ----------------------------------------------------------------------------
+
+-- | After a file change, wait for evaluation to complete then push all directive
+-- results to the client as a @l4/directiveResultsUpdated@ notification.
+-- Runs in a background thread so it doesn't block the reactor.
+scheduleDirectiveResultsNotification
+  :: IdeState -> Uri -> NormalizedUri -> ServerM Config ()
+scheduleDirectiveResultsNotification ide doc nuri = do
+  env <- LSP.getLspEnv
+  liftIO $ Extra.void $ forkIO $ do
+    -- Wait for EvaluateLazy (also blocks on SuccessfulTypeCheck transitively).
+    -- If type-checking fails, mEvalResults is Nothing and we send nothing,
+    -- leaving inspector sections frozen at their last valid state (matching WASM behaviour).
+    (mEvalResults, mTcResult, mRope) <- runAction "l4/directiveResultsNotif" ide $ do
+      mEval <- use EvaluateLazy nuri
+      mTc   <- use SuccessfulTypeCheck nuri
+      mRope <- getFileContents nuri
+      pure (mEval, mTc, mRope)
+    case mEvalResults of
+      Nothing -> pure ()
+      Just evalResults -> do
+        let getLineContent lineNo = case mRope of
+              Nothing   -> ""
+              Just rope ->
+                let ls = Text.lines (Rope.toText rope)
+                in if lineNo > 0 && lineNo <= length ls
+                   then ls !! (lineNo - 1)
+                   else ""
+            evalUpdates  = Maybe.mapMaybe (Inspector.evalDirectiveToUpdateItem getLineContent) evalResults
+            checkUpdates =
+              [ Inspector.DirectiveUpdateItem
+                  { directiveId = Text.pack (show lineNo) <> ":" <> Text.pack (show colNo)
+                  , prettyText  = Text.intercalate "\n" (prettyCheckErrorWithContext info)
+                  , success     = Just True
+                  , lineContent = getLineContent lineNo
+                  }
+              | Just tcResult <- [mTcResult]
+              , info <- tcResult.infos
+              , Just (MkSrcRange (MkSrcPos lineNo colNo) _ _ _) <- [rangeOf info]
+              ]
+        LSP.runLspT env $
+          sendNotification
+            (SMethod_CustomMethod (Proxy @Inspector.DirectiveResultsUpdatedMethodName))
+            (Aeson.toJSON $ Inspector.DirectiveResultsUpdatedParams
+              { uri     = getUri doc
+              , results = evalUpdates <> checkUpdates
+              })
+
+-- ----------------------------------------------------------------------------
 -- Handlers
 -- ----------------------------------------------------------------------------
 
@@ -163,40 +215,46 @@ handlers evalConfig recorder =
       notificationHandler SMethod_Initialized $ \ide _ _ -> do
         liftIO $ shakeSessionInit (cmapWithPrio LogShake recorder) ide
     , -- Handling of the virtual file system
-      notificationHandler SMethod_TextDocumentDidOpen $ \ide vfs msg -> liftIO $ do
+      notificationHandler SMethod_TextDocumentDidOpen $ \ide vfs msg -> do
         let
           doc = msg ^. J.textDocument . J.uri
           version = msg ^. J.textDocument . J.version
-          uri = toNormalizedUri doc
+          nuri = toNormalizedUri doc
         -- Only process .l4 files
         Extra.when (isL4File doc) $ do
-          atomically $ updatePositionMapping ide (VersionedTextDocumentIdentifier doc version) []
-          -- We don't know if the file actually exists, or if the contents match those on disk
-          -- For example, vscode restores previously unsaved contents on open
-          setFileModified (VFSModified vfs) ide uri $
-            addFileOfInterest ide uri Modified{firstOpen=True}
-          logWith recorder Debug $ LogOpenedTextDocument doc
-    , notificationHandler SMethod_TextDocumentDidChange $ \ide vfs msg -> liftIO $ do
+          liftIO $ do
+            atomically $ updatePositionMapping ide (VersionedTextDocumentIdentifier doc version) []
+            -- We don't know if the file actually exists, or if the contents match those on disk
+            -- For example, vscode restores previously unsaved contents on open
+            setFileModified (VFSModified vfs) ide nuri $
+              addFileOfInterest ide nuri Modified{firstOpen=True}
+            logWith recorder Debug $ LogOpenedTextDocument doc
+          scheduleDirectiveResultsNotification ide doc nuri
+    , notificationHandler SMethod_TextDocumentDidChange $ \ide vfs msg -> do
         let
           doc = msg ^. J.textDocument . J.uri
-          uri = toNormalizedUri doc
+          nuri = toNormalizedUri doc
           version = msg ^. J.textDocument . J.version
           changes = msg ^. J.contentChanges
         -- Only process .l4 files
         Extra.when (isL4File doc) $ do
-          atomically $ updatePositionMapping ide (VersionedTextDocumentIdentifier doc version) changes
-          setFileModified (VFSModified vfs) ide uri $
-            addFileOfInterest ide uri Modified{firstOpen=False}
-          logWith recorder Debug $ LogModifiedTextDocument doc
-    , notificationHandler SMethod_TextDocumentDidSave $ \ide vfs msg -> liftIO $ do
+          liftIO $ do
+            atomically $ updatePositionMapping ide (VersionedTextDocumentIdentifier doc version) changes
+            setFileModified (VFSModified vfs) ide nuri $
+              addFileOfInterest ide nuri Modified{firstOpen=False}
+            logWith recorder Debug $ LogModifiedTextDocument doc
+          scheduleDirectiveResultsNotification ide doc nuri
+    , notificationHandler SMethod_TextDocumentDidSave $ \ide vfs msg -> do
         let
           doc = msg ^. J.textDocument . J.uri
-          uri = toNormalizedUri doc
+          nuri = toNormalizedUri doc
         -- Only process .l4 files
         Extra.when (isL4File doc) $ do
-          setFileModified (VFSModified vfs) ide uri $
-            addFileOfInterest ide uri OnDisk
-          logWith recorder Debug $ LogSavedTextDocument doc
+          liftIO $ do
+            setFileModified (VFSModified vfs) ide nuri $
+              addFileOfInterest ide nuri OnDisk
+            logWith recorder Debug $ LogSavedTextDocument doc
+          scheduleDirectiveResultsNotification ide doc nuri
     , notificationHandler SMethod_TextDocumentDidClose $ \ide vfs msg -> liftIO $ do
         let
           doc = msg ^. J.textDocument . J.uri

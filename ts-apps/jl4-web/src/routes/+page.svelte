@@ -29,7 +29,11 @@
     upsertFunctionFromSource,
     type DecisionServiceClient,
   } from '$lib/decision-service-client'
-  import { EvalDirectiveResultRequestType, type SrcPos } from 'jl4-client-rpc'
+  import {
+    EvalDirectiveResultRequestType,
+    type DirectiveResult,
+    type SrcPos,
+  } from 'jl4-client-rpc'
 
   import {
     LadderFlow,
@@ -178,6 +182,7 @@
   let monacoL4LangClient: MonacoL4LanguageClient | undefined
   let monacoErrorLens: MonacoErrorLens | undefined
   let lspConnection: LspConnectionResult | undefined
+  let renderResultCommandDisposable: vscode.Disposable | undefined
 
   function bindingsKey(bindings: Record<string, boolean>) {
     const entries = Object.entries(bindings).sort(([a], [b]) =>
@@ -394,7 +399,7 @@
         inherit: true,
         rules: [
           { token: 'decorator', foreground: 'ffbd33' }, // for annotations
-          { token: 'annotation', foreground: 'af7800', fontStyle: 'bold' }, // #EVAL, #ASSERT etc.
+          { token: 'annotation', foreground: 'be37e8', fontStyle: 'bold' }, // #EVAL, #ASSERT etc.
           { token: 'keyword', foreground: '0000ff' }, // L4 keywords
           { token: 'type.identifier', foreground: '267f99' }, // uppercase non-keywords
           { token: 'variable.name', foreground: '001080' }, // backtick identifiers
@@ -596,6 +601,45 @@
           lspConnection.transports
         )
         await languageClient.start()
+
+        // For websocket LSP: Haskell server doesn't declare executeCommandProvider,
+        // so l4.renderResult is never registered by the language client.
+        // Register it manually so codelens clicks work.
+        if (lspConnection.type === 'websocket') {
+          renderResultCommandDisposable = vscode.commands.registerCommand(
+            'l4.renderResult',
+            async (...args: unknown[]) => {
+              if (!monacoL4LangClient) return
+              const [verDocId, srcPos, directiveType] = args as [
+                { uri: string; version: number },
+                SrcPos,
+                string,
+              ]
+              try {
+                const result = await monacoL4LangClient.sendRequest(
+                  EvalDirectiveResultRequestType,
+                  { verDocId, srcPos, directiveType }
+                )
+                if (result) {
+                  rightPaneView = 'inspector'
+                  showVisualizer = true
+                  await tick()
+                  const directiveId = `${srcPos.line}:${srcPos.column}`
+                  const lineContent =
+                    editor?.getModel()?.getLineContent(srcPos.line) ?? ''
+                  inspectorPanel?.addOrScrollToResult(
+                    directiveId,
+                    srcPos,
+                    result as DirectiveResult,
+                    lineContent
+                  )
+                }
+              } catch (e) {
+                logger.error(`l4.renderResult failed: ${e}`)
+              }
+            }
+          )
+        }
 
         // Handle connection close
         lspConnection.transports.reader.onClose(() => {
@@ -832,6 +876,9 @@
   })
 
   onDestroy(() => {
+    renderResultCommandDisposable?.dispose()
+    renderResultCommandDisposable = undefined
+
     if (monacoErrorLens) {
       monacoErrorLens.dispose()
       monacoErrorLens = undefined

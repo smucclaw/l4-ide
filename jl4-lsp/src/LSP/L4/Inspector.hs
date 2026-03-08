@@ -17,7 +17,7 @@ import Data.Aeson.Types (Parser)
 import Data.Ratio (numerator, denominator)
 import GHC.TypeLits (Symbol)
 import Language.LSP.Protocol.Types as LSP
-import L4.Parser.SrcSpan (SrcPos(..))
+import L4.Parser.SrcSpan (SrcPos(..), SrcRange(..))
 import L4.Print (prettyLayout)
 import L4.Syntax (getActual)
 
@@ -164,3 +164,70 @@ isInteger :: Rational -> Maybe Integer
 isInteger r
   | denominator r == 1 = Just (numerator r)
   | otherwise = Nothing
+
+------------------------------------------------------
+-- l4/directiveResultsUpdated notification
+------------------------------------------------------
+
+type DirectiveResultsUpdatedMethodName :: Symbol
+type DirectiveResultsUpdatedMethodName = "l4/directiveResultsUpdated"
+
+-- | A single directive result entry for the notification.
+-- @directiveId@ is @"line:col"@ (1-indexed, no URI prefix).
+data DirectiveUpdateItem = DirectiveUpdateItem
+  { directiveId :: Text
+  , prettyText  :: Text
+  , success     :: Maybe Bool
+  , lineContent :: Text
+  } deriving stock (Eq, Show, Generic)
+
+instance ToJSON DirectiveUpdateItem where
+  toJSON u = object
+    [ "directiveId" .= u.directiveId
+    , "prettyText"  .= u.prettyText
+    , "success"     .= u.success
+    , "lineContent" .= u.lineContent
+    ]
+
+instance FromJSON DirectiveUpdateItem where
+  parseJSON = withObject "DirectiveUpdateItem" $ \obj ->
+    DirectiveUpdateItem
+      <$> obj .: "directiveId"
+      <*> obj .: "prettyText"
+      <*> obj .: "success"
+      <*> obj .: "lineContent"
+
+data DirectiveResultsUpdatedParams = DirectiveResultsUpdatedParams
+  { uri     :: Text
+  , results :: [DirectiveUpdateItem]
+  } deriving stock (Eq, Show, Generic)
+
+instance ToJSON DirectiveResultsUpdatedParams where
+  toJSON p = object
+    [ "uri"     .= p.uri
+    , "results" .= p.results
+    ]
+
+instance FromJSON DirectiveResultsUpdatedParams where
+  parseJSON = withObject "DirectiveResultsUpdatedParams" $ \obj ->
+    DirectiveResultsUpdatedParams
+      <$> obj .: "uri"
+      <*> obj .: "results"
+
+-- | Convert an 'EL.EvalDirectiveResult' to a 'DirectiveUpdateItem'.
+-- Returns 'Nothing' if the result carries no source range.
+evalDirectiveToUpdateItem
+  :: (Int -> Text)          -- ^ get raw line content by 1-indexed line number
+  -> EL.EvalDirectiveResult
+  -> Maybe DirectiveUpdateItem
+evalDirectiveToUpdateItem getLineContent (EL.MkEvalDirectiveResult (Just rng@(MkSrcRange (MkSrcPos lineNo colNo) _ _ _)) res mtrace) =
+  Just DirectiveUpdateItem
+    { directiveId = Text.pack (show lineNo) <> ":" <> Text.pack (show colNo)
+    , prettyText  = EL.prettyEvalDirectiveResult (EL.MkEvalDirectiveResult (Just rng) res mtrace)
+    , success     = case res of
+        EL.Assertion b         -> Just b
+        EL.Reduction (Right _) -> Just True
+        EL.Reduction (Left _)  -> Just False
+    , lineContent = getLineContent lineNo
+    }
+evalDirectiveToUpdateItem _ _ = Nothing

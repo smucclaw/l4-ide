@@ -30,7 +30,6 @@ import {
   makeLspRelayRequestType,
   type DirectiveResult,
   type SrcPos,
-  type SyncInspectorResultsMessage,
 } from 'jl4-client-rpc'
 import {
   fetchQueryPlan,
@@ -508,85 +507,41 @@ export async function activate(context: ExtensionContext) {
   // Start the client. This will also launch the server
   await client.start()
 
-  // After the client is running, listen for diagnostic changes (which signal
-  // that the LSP has re-evaluated the file) and push a batch sync to the inspector.
-  // We query ALL current directive positions via code lenses so the webview can
-  // remap tracked sections even when lines have shifted.
+  // After evaluation completes, the LSP sends l4/directiveResultsUpdated with all
+  // current directive results. Forward them to the inspector webview as SyncInspectorResults.
+  // This replaces the old onDidChangeDiagnostics + per-directive request approach,
+  // eliminating the race condition where evaluation hadn't completed yet.
   context.subscriptions.push(
-    vscode.languages.onDidChangeDiagnostics(async (e) => {
-      for (const uri of e.uris) {
-        const uriStr = uri.toString()
-        const hasTrackedSections = [...openInspectorSections.values()].some(
-          (v) => v.uri === uriStr
-        )
-        if (!hasTrackedSections) continue
-
+    client.onNotification(
+      'l4/directiveResultsUpdated',
+      (params: {
+        uri: string
+        results: Array<{
+          directiveId: string
+          prettyText: string
+          success: boolean | null
+          lineContent: string
+        }>
+      }) => {
         // Only update if the inspector panel is open
         const panel = inspectorPanelManager.getPanel()
-        if (!panel) continue
+        if (!panel) return
 
-        const document = vscode.workspace.textDocuments.find(
-          (d) => d.uri.toString() === uriStr
-        )
-        if (!document) continue
-
-        // Get all current code lenses to discover live directive positions
-        let codeLenses: vscode.CodeLens[] = []
-        try {
-          codeLenses =
-            (await vscode.commands.executeCommand<vscode.CodeLens[]>(
-              'vscode.executeCodeLensProvider',
-              uri
-            )) ?? []
-        } catch {
-          // If code lens retrieval fails, fall back to silence
-          continue
-        }
-
-        const directiveLenses = codeLenses.filter(
-          (lens) => lens.command?.command === cmdRenderResult
-        )
-
-        const results: SyncInspectorResultsMessage['results'] = []
-        for (const lens of directiveLenses) {
-          const args = lens.command?.arguments
-          if (!args || args.length < 3) continue
-
-          const lensSrcPos = args[1] as SrcPos
-          const lensDirectiveType = args[2] as string
-
-          try {
-            const result = await client.sendRequest(
-              EvalDirectiveResultRequestType,
-              {
-                verDocId: { uri: uriStr, version: 0 },
-                srcPos: lensSrcPos,
-                directiveType: lensDirectiveType,
-              }
-            )
-            if (result) {
-              const dr = result as DirectiveResult
-              const directiveId = `${uriStr}:${lensSrcPos.line}:${lensSrcPos.column}`
-              const lineContent = document.lineAt(lensSrcPos.line - 1).text
-              results.push({
-                directiveId,
-                prettyText: dr.prettyText,
-                success: dr.success,
-                lineContent,
-              })
-            }
-          } catch {
-            // Skip directives that fail (e.g. type errors with no result yet)
-          }
-        }
+        // Prepend the URI so directiveIds match the VS Code webview's "uri:line:col" format
+        const results = params.results.map((r) => ({
+          ...r,
+          directiveId: `${params.uri}:${r.directiveId}`,
+        }))
 
         inspectorMessenger.sendNotification(
           SyncInspectorResults,
           inspectorWebviewFrontend,
-          { results }
+          {
+            results,
+          }
         )
       }
-    })
+    )
   )
 }
 
