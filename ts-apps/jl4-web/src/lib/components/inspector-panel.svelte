@@ -141,7 +141,7 @@
 
     for (const [content, stales] of staleByContent) {
       const matchingResults = resultsByContent.get(content)
-      if (!matchingResults) continue // no live result with this content → stale section will be removed
+      if (!matchingResults) continue // no live result with this content → section stays uncolored
 
       if (stales.length === 1 && matchingResults.length === 1) {
         // Pass 2: unique content match — direct 1:1 remap
@@ -180,21 +180,28 @@
       }
     }
 
-    // Remap matched stale sections; unmatched ones stay as-is (user dismisses manually)
+    const staleIds = new Set(staleSections.map((s) => s.directiveId))
+
+    // Remap matched stale sections; unmatched ones lose their success colour (user dismisses manually)
     sections = sections
       .map((s) => {
         const remap = remappings.get(s.directiveId)
-        return remap
-          ? {
-              ...s,
-              directiveId: remap.newId,
-              srcLine: remap.newLine,
-              srcColumn: parseInt(remap.newId.split(':')[1], 10),
-              prettyText: remap.prettyText,
-              success: remap.success,
-              lineContent: remap.lineContent,
-            }
-          : s
+        if (remap) {
+          return {
+            ...s,
+            directiveId: remap.newId,
+            srcLine: remap.newLine,
+            srcColumn: parseInt(remap.newId.split(':')[1], 10),
+            prettyText: remap.prettyText,
+            success: remap.success,
+            lineContent: remap.lineContent,
+          }
+        }
+        // Unmatched stale section: clear the success indicator so it shows uncolored
+        if (staleIds.has(s.directiveId) && !remappings.has(s.directiveId)) {
+          return { ...s, success: null }
+        }
+        return s
       })
       .sort((a, b) => a.srcLine - b.srcLine || a.srcColumn - b.srcColumn)
   }
