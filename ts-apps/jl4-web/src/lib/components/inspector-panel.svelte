@@ -180,15 +180,8 @@
       }
     }
 
-    // Remove stale sections with no match (directive was deleted), remap the rest
-    const removedIds = new Set(
-      staleSections
-        .filter((s) => !remappings.has(s.directiveId))
-        .map((s) => s.directiveId)
-    )
-
+    // Remap matched stale sections; unmatched ones stay as-is (user dismisses manually)
     sections = sections
-      .filter((s) => !removedIds.has(s.directiveId))
       .map((s) => {
         const remap = remappings.get(s.directiveId)
         return remap
