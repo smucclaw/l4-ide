@@ -232,7 +232,7 @@
   {#if sections.length === 0}
     <div class="empty-state">
       <p class="hint">
-        Click "Render result" above an #EVAL, #EVALTRACE, #CHECK, or #ASSERT
+        Click "Track result" above an #EVAL, #EVALTRACE, #CHECK, or #ASSERT
         directive to add it here.
       </p>
     </div>

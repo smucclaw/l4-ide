@@ -6,7 +6,7 @@ Overhaul the IDE visualization experience with two changes:
 
 1. **Rename & refactor the existing ladder visualizer**: "Visualize" → "Show decision graph". Move "Simplify and visualize" inside the ladder panel as a toggle instead of a separate CodeLens.
 
-2. **New Results Panel**: A scrollable, composable results viewer. Any `#EVAL`, `#TRACE`, `#EVALTRACE`, `#ASSERT`, `#CHECK` directive gets a "Render result" CodeLens. Clicking it adds that result as a section to the Results Panel. Sections are ordered to match the L4 source, each individually dismissible. Results are rendered with type-aware formatting: charts for `LIST OF PAIR`, formatted dates/times, syntax-highlighted L4 for complex types.
+2. **New Results Panel**: A scrollable, composable results viewer. Any `#EVAL`, `#TRACE`, `#EVALTRACE`, `#ASSERT`, `#CHECK` directive gets a "Track result" CodeLens. Clicking it adds that result as a section to the Results Panel. Sections are ordered to match the L4 source, each individually dismissible. Results are rendered with type-aware formatting: charts for `LIST OF PAIR`, formatted dates/times, syntax-highlighted L4 for complex types.
 
 **No L4 library needed. No Haskell backend changes.**
 
@@ -46,7 +46,7 @@ A new webview panel (or a new view within the existing webview) that displays ev
 
 1. User writes `#EVAL some expression` in their L4 file
 2. LSP evaluates it (already happens today — results become diagnostics)
-3. A **"Render result"** CodeLens appears above the directive
+3. A **"Track result"** CodeLens appears above the directive
 4. User clicks → that result is added as a section in the Results Panel
 5. The panel shows all added results, ordered by source position
 6. Each section has an **✕ dismiss** button to remove it
@@ -351,13 +351,13 @@ export const RemoveResult: NotificationType<{ id: string }> = {
 
 **File: [Handlers.hs](jl4-lsp/app/LSP/L4/Handlers.hs)**
 
-Extend the CodeLens handler to also emit "Render result" CodeLens for directives:
+Extend the CodeLens handler to also emit "Track result" CodeLens for directives:
 
 ```haskell
 -- For each #EVAL, #TRACE, #EVALTRACE, #ASSERT, #CHECK directive:
 mkResultCodeLens srcPos directiveType exprText = CodeLens
   { _command = Just Command
-    { _title = "Render result"
+    { _title = "Track result"
     , _command = "l4.renderResult"
     , _arguments = Just [toJSON verTextDocId, toJSON srcPos, toJSON directiveType, toJSON exprText]
     }
@@ -418,7 +418,7 @@ This reuses the existing `nfToFnLiteral` pipeline from jl4-service to convert L4
 | **1**  | Rename "Visualize" → "Show decision graph", remove "Simplify and visualize" CodeLens              | `jl4-lsp/app/LSP/L4/Handlers.hs`                      | Small  |
 | **2**  | Add "Simplified" toggle inside ladder webview panel                                               | `ts-apps/webview/`, `ts-shared/l4-ladder-visualizer/` | Small  |
 | **3**  | Add `l4/evalDirectiveResult` custom LSP request — return structured JSON for directive results    | `jl4-lsp/`, `jl4-core/`                               | Medium |
-| **4**  | Add "Render result" CodeLens for `#EVAL` / `#TRACE` / `#EVALTRACE` / `#ASSERT` / `#CHECK`         | `jl4-lsp/app/LSP/L4/Handlers.hs`                      | Small  |
+| **4**  | Add "Track result" CodeLens for `#EVAL` / `#TRACE` / `#EVALTRACE` / `#ASSERT` / `#CHECK`         | `jl4-lsp/app/LSP/L4/Handlers.hs`                      | Small  |
 | **5**  | Create `ts-shared/l4-result-visualizer/` — type detection, L4 value formatter, highlight.js theme | `ts-shared/l4-result-visualizer/`                     | Medium |
 | **6**  | Build primitive renderers (Boolean, Number, String, Date, Time, DateTime)                         | `ts-shared/l4-result-visualizer/src/lib/renderers/`   | Medium |
 | **7**  | Build CodeResult renderer (syntax-highlighted L4 for complex types)                               | `ts-shared/l4-result-visualizer/src/lib/renderers/`   | Medium |
