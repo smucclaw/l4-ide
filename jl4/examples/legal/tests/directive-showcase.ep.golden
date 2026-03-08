@@ -82,6 +82,10 @@ DECIDE `age category of` IS
 #EVAL `age category of` `alice`
 #EVAL `age category of` `bob`
 
+
+
+
+
 § `#EVAL – Pairs`
 #EVAL `DataPoint` WITH `label` IS "Revenue", `value` IS 42000
 
@@ -105,14 +109,15 @@ DECIDE `age category of` IS
 #EVAL LIST `event 1`, `event 2`, `event 3`, `event 4`, `event 5`
 
 -- List of records
-#EVAL LIST `alice`, `bob`
+#EVALTRACE LIST `alice`, `bob`
+#CHECK TRUE
 
 § `#ASSERT – Pass / Fail`
 -- Passing assertions (green)
 #ASSERT TRUE
 #ASSERT 2 + 2 = 4
 #ASSERT NOT FALSE
-#ASSERT `is adult` `alice`
+
 #ASSERT `alice`'s `age` = 30
 #ASSERT `alice`'s `age` > `bob`'s `age`
 -- Failing assertion (red)

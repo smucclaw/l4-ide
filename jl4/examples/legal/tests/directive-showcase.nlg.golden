@@ -23,9 +23,9 @@ list of `q1 revenue`, `q2 revenue`, `q3 revenue` and `q4 revenue`
 list of `event 1`, `event 2`, `event 3`, `event 4` and `event 5`
 list of `alice` and `bob`
 `TRUE`
+`TRUE`
 the sum of 2 and 2 is equal to 4
 not `FALSE`
-`is adult` with `alice`
 `alice` 's `age` is equal to 30
 `alice` 's `age` is greater than `bob` 's `age`
 `is adult` with `bob`
