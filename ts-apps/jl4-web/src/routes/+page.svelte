@@ -627,11 +627,14 @@
                   const directiveId = `${srcPos.line}:${srcPos.column}`
                   const lineContent =
                     editor?.getModel()?.getLineContent(srcPos.line) ?? ''
+                  const fileUri =
+                    editor?.getModel()?.uri.toString() ?? verDocId.uri
                   inspectorPanel?.addOrScrollToResult(
                     directiveId,
                     srcPos,
                     result as DirectiveResult,
-                    lineContent
+                    lineContent,
+                    fileUri
                   )
                 }
               } catch (e) {
@@ -743,7 +746,7 @@
             lineContent: string
           }>
         }) => {
-          inspectorPanel?.syncSections(params.results)
+          inspectorPanel?.syncSections(params.results, params.uri)
         }
       )
 
@@ -781,11 +784,14 @@
                 const directiveId = `${srcPos.line}:${srcPos.column}`
                 const lineContent =
                   editor?.getModel()?.getLineContent(srcPos.line) ?? ''
+                const fileUri =
+                  editor?.getModel()?.uri.toString() ?? verDocId.uri
                 inspectorPanel?.addOrScrollToResult(
                   directiveId,
                   srcPos,
                   result,
-                  lineContent
+                  lineContent,
+                  fileUri
                 )
               }
             } catch (e) {

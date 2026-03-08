@@ -91,6 +91,8 @@ export const UpdateInspectorResult: NotificationType<UpdateInspectorResultMessag
   }
 
 export interface SyncInspectorResultsMessage {
+  /** When set, only sections belonging to this file are synced; others are left untouched. */
+  uri?: string
   results: Array<{
     directiveId: string
     prettyText: string

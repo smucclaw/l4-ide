@@ -537,6 +537,7 @@ export async function activate(context: ExtensionContext) {
           SyncInspectorResults,
           inspectorWebviewFrontend,
           {
+            uri: params.uri,
             results,
           }
         )

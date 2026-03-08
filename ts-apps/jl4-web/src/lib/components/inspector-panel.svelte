@@ -52,6 +52,7 @@
 
   export interface ResultSection {
     directiveId: string
+    fileUri: string
     directiveType: string
     prettyText: string
     success: boolean | null
@@ -64,6 +65,49 @@
   }
 
   let sections: ResultSection[] = $state([])
+  let collapsedFiles: Set<string> = $state(new Set())
+
+  // ---------------------------------------------------------------------------
+  // File grouping
+  // ---------------------------------------------------------------------------
+
+  function displayFileName(uri: string): string {
+    const decoded = decodeURIComponent(uri.replace(/^file:\/\//, ''))
+    return decoded.split('/').pop() ?? uri
+  }
+
+  type FileGroup = {
+    fileUri: string
+    displayName: string
+    sections: ResultSection[]
+  }
+
+  let fileGroups: FileGroup[] = $derived.by(() => {
+    const groups = new Map<string, ResultSection[]>()
+    for (const s of sections) {
+      const existing = groups.get(s.fileUri)
+      if (existing) existing.push(s)
+      else groups.set(s.fileUri, [s])
+    }
+    return Array.from(groups, ([fileUri, sects]) => ({
+      fileUri,
+      displayName: displayFileName(fileUri),
+      sections: sects,
+    }))
+  })
+
+  let hasMultipleFiles: boolean = $derived(fileGroups.length > 1)
+
+  function toggleFileCollapse(fileUri: string) {
+    const next = new Set(collapsedFiles)
+    if (next.has(fileUri)) next.delete(fileUri)
+    else next.add(fileUri)
+    collapsedFiles = next
+  }
+
+  // ---------------------------------------------------------------------------
+  // Section management
+  // ---------------------------------------------------------------------------
 
   export function clear() {
     sections = []
@@ -73,7 +117,8 @@
     directiveId: string,
     srcPos: SrcPos,
     result: DirectiveResult,
-    lineContent: string
+    lineContent: string,
+    fileUri: string = ''
   ): 'ok' | 'scrolled' {
     const existing = sections.find((s) => s.directiveId === directiveId)
     if (existing) {
@@ -88,6 +133,7 @@
 
     const newSection: ResultSection = {
       directiveId,
+      fileUri,
       directiveType: result.directiveType,
       prettyText: result.prettyText,
       success: result.success,
@@ -101,8 +147,11 @@
 
     const idx = sections.findIndex(
       (s) =>
-        s.srcLine > newSection.srcLine ||
-        (s.srcLine === newSection.srcLine && s.srcColumn > newSection.srcColumn)
+        s.fileUri.localeCompare(newSection.fileUri) > 0 ||
+        (s.fileUri === newSection.fileUri &&
+          (s.srcLine > newSection.srcLine ||
+            (s.srcLine === newSection.srcLine &&
+              s.srcColumn > newSection.srcColumn)))
     )
     if (idx === -1) {
       sections = [...sections, newSection]
@@ -129,14 +178,14 @@
   }
 
   /**
-   * Sync all open sections against a fresh batch of results from the LSP.
+   * Sync open sections against a fresh batch of results from the LSP.
    *
-   * Pass 1 – exact directiveId match: update content in-place.
-   * Pass 2 – content match: stale sections (id no longer live) are matched
-   *   against unmatched results by their lineContent string, so sections
-   *   track their directive even after line insertions/deletions.
-   * Pass 3 – proximity fallback: any remaining stale sections are matched
-   *   to the closest unmatched result by line-number distance.
+   * When `uri` is provided, only sections belonging to that file are synced;
+   * sections from other files are left untouched.
+   *
+   * Pass 1 – content-based matching.
+   * Pass 2 – positional fallback.
+   * Unmatched sections become stale.
    */
   export function syncSections(
     results: Array<{
@@ -144,11 +193,22 @@
       prettyText: string
       success: boolean | null
       lineContent: string
-    }>
+    }>,
+    uri?: string
   ) {
+    // Scope: only sync sections belonging to the notified file
+    const toSync = uri ? sections.filter((s) => s.fileUri === uri) : sections
+    const untouched = uri ? sections.filter((s) => s.fileUri !== uri) : []
+
     if (results.length === 0) {
-      // No directives in the file — stale everything
-      sections = sections.map((s) => ({ ...s, success: null, stale: true }))
+      sections = [
+        ...untouched,
+        ...toSync.map((s) => ({
+          ...s,
+          success: null as boolean | null,
+          stale: true,
+        })),
+      ]
       return
     }
 
@@ -166,8 +226,8 @@
     const remappings = new Map<string, RemapEntry>()
     const matchedResultIds = new Set<string>()
 
-    // Pass 1 (PRIMARY): content-based matching for all sections
-    const sectionsByContent = Map.groupBy(sections, (s) => s.lineContent)
+    // Pass 1 (PRIMARY): content-based matching
+    const sectionsByContent = Map.groupBy(toSync, (s) => s.lineContent)
     const resultsByContent = Map.groupBy(results, (r) => r.lineContent)
 
     for (const [content, sects] of sectionsByContent) {
@@ -175,7 +235,6 @@
       if (!matchingResults) continue
 
       if (sects.length === 1 && matchingResults.length === 1) {
-        // Unique 1:1 content match
         const r = matchingResults[0]
         remappings.set(sects[0].directiveId, {
           newId: r.directiveId,
@@ -187,7 +246,6 @@
         })
         matchedResultIds.add(r.directiveId)
       } else {
-        // Duplicate content — proximity tiebreaker
         const usedResultIds = new Set<string>()
         for (const sect of sects) {
           let best: (typeof matchingResults)[0] | null = null
@@ -216,14 +274,10 @@
       }
     }
 
-    // Pass 2 (FALLBACK): positional match for sections whose content wasn't found.
-    // Only matches when the result at that position has the same directive prefix
-    // (e.g. #ASSERT stays #ASSERT) — prevents matching a different directive that
-    // shifted into the deleted section's old line position.
-    // Stale sections are skipped — their directiveId is no longer a valid position.
+    // Pass 2 (FALLBACK): positional match
     const directivePrefix = (line: string) =>
       line.trimStart().split(/\s/)[0] ?? ''
-    for (const s of sections) {
+    for (const s of toSync) {
       if (s.stale || remappings.has(s.directiveId)) continue
       const sPrefix = directivePrefix(s.lineContent)
       const positionalMatch = results.find(
@@ -246,24 +300,29 @@
     }
 
     // Apply remappings; unmatched sections become stale
-    sections = sections
-      .map((s) => {
-        const remap = remappings.get(s.directiveId)
-        if (remap) {
-          return {
-            ...s,
-            directiveId: remap.newId,
-            srcLine: remap.newLine,
-            srcColumn: remap.newCol,
-            prettyText: remap.prettyText,
-            success: remap.success,
-            lineContent: remap.lineContent,
-            stale: false,
-          }
+    const synced = toSync.map((s) => {
+      const remap = remappings.get(s.directiveId)
+      if (remap) {
+        return {
+          ...s,
+          directiveId: remap.newId,
+          srcLine: remap.newLine,
+          srcColumn: remap.newCol,
+          prettyText: remap.prettyText,
+          success: remap.success,
+          lineContent: remap.lineContent,
+          stale: false,
         }
-        return { ...s, success: null, stale: true }
-      })
-      .sort((a, b) => a.srcLine - b.srcLine || a.srcColumn - b.srcColumn)
+      }
+      return { ...s, success: null as boolean | null, stale: true }
+    })
+
+    sections = [...untouched, ...synced].sort(
+      (a, b) =>
+        a.fileUri.localeCompare(b.fileUri) ||
+        a.srcLine - b.srcLine ||
+        a.srcColumn - b.srcColumn
+    )
   }
 
   function removeSection(directiveId: string) {
@@ -292,51 +351,76 @@
       </p>
     </div>
   {:else}
-    {#each sections as section (section.directiveId)}
-      <div
-        id="section-{section.directiveId}"
-        class="result-section {successClass(section.success)}"
-      >
-        <div class="section-header">
+    {#each fileGroups as group (group.fileUri)}
+      {#if hasMultipleFiles}
+        <div class="file-header">
           <button
             class="collapse-toggle"
-            onclick={() => toggleCollapse(section.directiveId)}
-            title={section.collapsed ? 'Expand' : 'Collapse'}
+            onclick={() => toggleFileCollapse(group.fileUri)}
+            title={collapsedFiles.has(group.fileUri)
+              ? 'Expand file'
+              : 'Collapse file'}
           >
-            <span class="chevron" class:rotated={!section.collapsed}
-              >&#9002;</span
+            <span
+              class="chevron"
+              class:rotated={!collapsedFiles.has(group.fileUri)}>&#9002;</span
             >
           </button>
-          {#if !section.stale}
-            <span class="source-location">{section.srcLine}:</span>
-          {/if}
-          <span class="directive-label" title={section.lineContent.trim()}>
-            {#if colorized[section.directiveId]}
-              {@html colorized[section.directiveId].header}
-            {:else}
-              {section.lineContent.trim()}
-            {/if}
-          </span>
-          <button
-            class="dismiss-btn"
-            onclick={() => removeSection(section.directiveId)}
-            title="Remove this result"
+          <span class="file-name" title={group.fileUri}
+            >{group.displayName}</span
           >
-            &#10005;
-          </button>
+          <span class="file-count">{group.sections.length}</span>
         </div>
+      {/if}
 
-        {#if !section.collapsed}
-          <div class="section-body">
-            {#if colorized[section.directiveId]}
-              <pre class="result-code">{@html colorized[section.directiveId]
-                  .body}</pre>
-            {:else}
-              <pre class="result-code">{section.prettyText}</pre>
+      {#if !hasMultipleFiles || !collapsedFiles.has(group.fileUri)}
+        {#each group.sections as section (section.directiveId)}
+          <div
+            id="section-{section.directiveId}"
+            class="result-section {successClass(section.success)}"
+          >
+            <div class="section-header">
+              <button
+                class="collapse-toggle"
+                onclick={() => toggleCollapse(section.directiveId)}
+                title={section.collapsed ? 'Expand' : 'Collapse'}
+              >
+                <span class="chevron" class:rotated={!section.collapsed}
+                  >&#9002;</span
+                >
+              </button>
+              {#if !section.stale}
+                <span class="source-location">{section.srcLine}:</span>
+              {/if}
+              <span class="directive-label" title={section.lineContent.trim()}>
+                {#if colorized[section.directiveId]}
+                  {@html colorized[section.directiveId].header}
+                {:else}
+                  {section.lineContent.trim()}
+                {/if}
+              </span>
+              <button
+                class="dismiss-btn"
+                onclick={() => removeSection(section.directiveId)}
+                title="Remove this result"
+              >
+                &#10005;
+              </button>
+            </div>
+
+            {#if !section.collapsed}
+              <div class="section-body">
+                {#if colorized[section.directiveId]}
+                  <pre class="result-code">{@html colorized[section.directiveId]
+                      .body}</pre>
+                {:else}
+                  <pre class="result-code">{section.prettyText}</pre>
+                {/if}
+              </div>
             {/if}
           </div>
-        {/if}
-      </div>
+        {/each}
+      {/if}
     {/each}
   {/if}
 </div>
@@ -367,6 +451,36 @@
     margin-top: 4px;
     opacity: 0.7;
     max-width: 200px;
+  }
+
+  .file-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    margin-top: 4px;
+    margin-bottom: 4px;
+    background: #e8e7e6;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    cursor: default;
+    user-select: none;
+    font-size: 0.85em;
+    font-weight: 500;
+  }
+
+  .file-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .file-count {
+    font-size: 0.8em;
+    opacity: 0.6;
+    flex-shrink: 0;
   }
 
   .result-section {
