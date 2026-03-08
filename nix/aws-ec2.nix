@@ -12,6 +12,9 @@
   # without this we get weird delay errors upon nixos-rebuild switch
   systemd.services.systemd-networkd-wait-online.enable = lib.mkForce false;
   networking.useDHCP = lib.mkDefault true;
+  # AWS VPC DNS resolver — fallback in case dhcpcd doesn't populate resolv.conf.
+  # Without this, ACME cert renewal fails (can't resolve letsencrypt.org).
+  networking.nameservers = [ "172.31.0.2" "169.254.169.253" ];
   # but consider the alternative
     # networking.useDHCP = false;
     # networking.useNetworkd = true;
