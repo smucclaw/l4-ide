@@ -50,6 +50,75 @@ export function makeRenderAsLadderFailureResponse(): RenderAsLadderResponse {
 }
 
 /*************************************************************
+            Render Directive Result in Inspector Panel
+                Request and Response
+                  for VSCode Webview
+**************************************************************/
+
+import type { DirectiveResult, SrcPos } from './custom-protocol.js'
+
+export interface AddInspectorResultMessage {
+  directiveId: string
+  srcPos: SrcPos
+  result: DirectiveResult
+  lineContent: string
+}
+
+export const AddInspectorResult: RequestType<
+  AddInspectorResultMessage,
+  { $type: 'ok' | 'scrolled' }
+> = {
+  method: 'addInspectorResult',
+}
+
+export interface RemoveInspectorResultMessage {
+  directiveId: string
+}
+
+export const RemoveInspectorResult: NotificationType<RemoveInspectorResultMessage> =
+  {
+    method: 'removeInspectorResult',
+  }
+
+export interface UpdateInspectorResultMessage {
+  directiveId: string
+  result: DirectiveResult
+}
+
+export const UpdateInspectorResult: NotificationType<UpdateInspectorResultMessage> =
+  {
+    method: 'updateInspectorResult',
+  }
+
+export interface SyncInspectorResultsMessage {
+  /** When set, only sections belonging to this file are synced; others are left untouched. */
+  uri?: string
+  results: Array<{
+    directiveId: string
+    prettyText: string
+    success: boolean | null
+    lineContent: string
+  }>
+}
+
+export const SyncInspectorResults: NotificationType<SyncInspectorResultsMessage> =
+  {
+    method: 'syncInspectorResults',
+  }
+
+/*************************************************************
+            Toggle Simplify for Ladder Visualization
+**************************************************************/
+
+export interface ToggleSimplifyMessage {
+  shouldSimplify: boolean
+}
+
+export const ToggleSimplify: NotificationType<ToggleSimplifyMessage> = {
+  method: 'toggleSimplify',
+}
+
+/*************************************************************
             For the vscode Webview to
             tell, via the Ladder Backend API,
             the VSCode Extension to

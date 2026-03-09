@@ -63,6 +63,21 @@ export interface L4WasmExports {
   l4_eval(source: string): Promise<string>
 
   /**
+   * Evaluate a specific directive at a given source position.
+   * @param source - L4 source code
+   * @param line - 1-indexed line number
+   * @param col - 1-indexed column number
+   * @param directiveType - The directive type (e.g., "#EVAL", "#ASSERT")
+   * @returns JSON-encoded DirectiveResult or error object
+   */
+  l4_eval_directive(
+    source: string,
+    line: number,
+    col: number,
+    directiveType: string
+  ): Promise<string>
+
+  /**
    * Get visualization data for a specific function by name.
    * @param source - L4 source code
    * @param uri - Document URI
@@ -443,6 +458,28 @@ export class L4WasmBridge {
       throw new Error('WASM not initialized')
     }
     const json = await this.exports.l4_code_lenses(source, uri, version)
+    return JSON.parse(json)
+  }
+
+  /**
+   * Evaluate a specific directive at a given source position.
+   * Returns a DirectiveResult or error object.
+   */
+  async evalDirective(
+    source: string,
+    line: number,
+    col: number,
+    directiveType: string
+  ): Promise<Record<string, unknown>> {
+    if (!this.exports) {
+      throw new Error('WASM not initialized')
+    }
+    const json = await this.exports.l4_eval_directive(
+      source,
+      line,
+      col,
+      directiveType
+    )
     return JSON.parse(json)
   }
 

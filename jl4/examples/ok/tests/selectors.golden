@@ -1,11 +1,11 @@
 Parsing successful
 Typechecking successful
 Evaluation successful
-selectors.l4:22:8-14:
+selectors.l4:22:1-14:
   FUNCTION FROM Record TO BOOLEAN
-selectors.l4:23:8-14:
+selectors.l4:23:1-14:
   FUNCTION FROM Record TO NUMBER
-selectors.l4:24:8-14:
+selectors.l4:24:1-14:
   FUNCTION FROM Record TO LIST OF NUMBER
 selectors.l4:26:1-20:
   Record OF TRUE, 3, (LIST 1, 2, 3)

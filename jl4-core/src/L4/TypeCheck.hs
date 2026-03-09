@@ -411,7 +411,7 @@ inferDirective (LazyEvalTrace ann e) = errorContext (WhileCheckingExpression e) 
   pure (LazyEvalTrace ann re)
 inferDirective (Check ann e) = errorContext (WhileCheckingExpression e) do
   (re, te) <- prune $ inferExpr e
-  addError (CheckInfo te)
+  addError (CheckInfo te (rangeOf ann))
   pure (Check ann re)
 inferDirective (Contract ann e t evs) = errorContext (WhileCheckingExpression e) do
   partyT <- fresh (NormalName "party")
@@ -3108,7 +3108,7 @@ prettyCheckError (IncompleteAppNamed r onts)               =
   , "you forgot to supply the following arguments:"
   , ""
   ] ++ map (\ ont -> "  " <> prettyOptionallyNamedType ont) onts
-prettyCheckError (CheckInfo t)                             = [prettyLayout t]
+prettyCheckError (CheckInfo t _)                           = [prettyLayout t]
 prettyCheckError (IllegalTypeInKindSignature t)            =
   [ "In a signature of a type declaration, all parameters must be of type"
   , ""

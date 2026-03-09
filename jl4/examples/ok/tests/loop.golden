@@ -3,7 +3,7 @@ Typechecking successful
 Evaluation successful
 loop.l4:16:1-21:
   FALSE
-loop.l4:42:8-12:
+loop.l4:42:1-12:
   LIST OF NUMBER
 loop.l4:43:1-11:
   EMPTY

@@ -22,13 +22,21 @@ import { DecisionServiceQueryPlanRequest } from '@repo/vscode-webview-rpc'
 import {
   RenderAsLadder,
   WebviewFrontendIsReadyNotification,
+  AddInspectorResult,
+  RemoveInspectorResult,
+  SyncInspectorResults,
+  ToggleSimplify,
+  EvalDirectiveResultRequestType,
   makeLspRelayRequestType,
+  type DirectiveResult,
+  type SrcPos,
 } from 'jl4-client-rpc'
 import {
   fetchQueryPlan,
   upsertFunctionFromSource,
   type DecisionServiceClient,
 } from './decision-service-client.js'
+import { cmdRenderResult } from './commands.js'
 
 /***********************************************
      decode for RenderAsLadderInfo
@@ -50,8 +58,18 @@ const code2ProtocolConverter = createCodeConverter()
 
 const PANEL_CONFIG: PanelConfig = {
   viewType: 'l4Viz',
-  title: 'Visualize L4',
+  title: 'L4 Decision Graph',
   position: vscode.ViewColumn.Beside,
+}
+
+const INSPECTOR_PANEL_CONFIG: PanelConfig = {
+  viewType: 'l4Inspector',
+  title: 'L4 Inspector',
+  position: vscode.ViewColumn.Beside,
+  htmlSubpath: 'inspector',
+  onDispose: async () => {
+    // No special cleanup needed for inspector
+  },
 }
 
 const vizWebviewFrontend: WebviewTypeMessageParticipant = {
@@ -59,9 +77,17 @@ const vizWebviewFrontend: WebviewTypeMessageParticipant = {
   webviewType: 'l4Viz',
 }
 
+const inspectorWebviewFrontend: WebviewTypeMessageParticipant = {
+  type: 'webview',
+  webviewType: 'l4Inspector',
+}
+
 /***************************************
       Set up webview messenger
 ****************************************/
+
+/** Stored args from the last successful l4.visualize invocation, used for simplify toggle */
+let lastVizArgs: unknown[] | null = null
 
 function initializeWebviewMessenger(
   outputChannel: vscode.OutputChannel,
@@ -137,7 +163,41 @@ function initializeWebviewMessenger(
     }
   )
 
+  // -- Listen for simplify toggle from webview
+  webviewMessenger.onNotification(ToggleSimplify, async (msg) => {
+    outputChannel.appendLine(`Ext: Toggle simplify to ${msg.shouldSimplify}`)
+    if (lastVizArgs && lastVizArgs.length >= 3) {
+      // Replay the last visualization with the new simplify flag
+      const newArgs = [...lastVizArgs]
+      newArgs[2] = msg.shouldSimplify
+      await vscode.commands.executeCommand('l4.visualize', ...newArgs)
+    }
+  })
+
   return webviewMessenger
+}
+
+/***************************************
+      Set up inspector messenger
+****************************************/
+
+function initializeInspectorMessenger(
+  outputChannel: vscode.OutputChannel,
+  panelManager: PanelManager,
+  onSectionRemoved: (directiveId: string) => void
+) {
+  const inspectorMessenger = new Messenger({ debugLog: true })
+
+  inspectorMessenger.onNotification(WebviewFrontendIsReadyNotification, () => {
+    panelManager.markFrontendAsReady()
+    outputChannel.appendLine(`Ext: Inspector frontend is ready`)
+  })
+
+  inspectorMessenger.onNotification(RemoveInspectorResult, (msg) => {
+    onSectionRemoved(msg.directiveId)
+  })
+
+  return inspectorMessenger
 }
 
 /***************************************
@@ -254,9 +314,24 @@ export async function activate(context: ExtensionContext) {
 
   // Initialize panelManager and webviewMessenger
   const panelManager = new PanelManager(PANEL_CONFIG)
+  const inspectorPanelManager = new PanelManager(INSPECTOR_PANEL_CONFIG)
   const webviewMessenger = initializeWebviewMessenger(
     outputChannel,
     panelManager
+  )
+
+  // Track open inspector sections so we can push live updates when the file changes.
+  // Key: directiveId (e.g. "file:///foo.l4:42:1")
+  // Value: info needed to re-request the result from the LSP
+  const openInspectorSections = new Map<
+    string,
+    { uri: string; srcPos: SrcPos; directiveType: string; lineContent: string }
+  >()
+
+  const inspectorMessenger = initializeInspectorMessenger(
+    outputChannel,
+    inspectorPanelManager,
+    (directiveId) => openInspectorSections.delete(directiveId)
   )
 
   const clientOptions: LanguageClientOptions = {
@@ -300,6 +375,7 @@ export async function activate(context: ExtensionContext) {
           outputChannel.appendLine('')
 
           const ladderInfo: RenderAsLadderInfo = decode(responseFromLangServer)
+          lastVizArgs = args
 
           panelManager.render(context, editor.document.uri)
           webviewMessenger.registerWebviewPanel(panelManager.getPanel())
@@ -348,8 +424,134 @@ export async function activate(context: ExtensionContext) {
     new LanguageClient(langId, langName, serverOptions, clientOptions)
   )
 
+  // Register the l4.renderResult command
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      cmdRenderResult,
+      async (
+        verDocId: { uri: string; version: number },
+        srcPos: SrcPos,
+        directiveType: string
+      ) => {
+        outputChannel.appendLine(
+          `[inspector] Track result: ${directiveType} at line ${srcPos.line}`
+        )
+
+        try {
+          // Send custom LSP request to get the directive result
+          const result = await client.sendRequest(
+            EvalDirectiveResultRequestType,
+            { verDocId, srcPos, directiveType }
+          )
+
+          if (!result) {
+            outputChannel.appendLine(
+              `[inspector] No result returned from server`
+            )
+            return
+          }
+
+          const directiveId = `${verDocId.uri}:${srcPos.line}:${srcPos.column}`
+          const editor = vscode.window.activeTextEditor
+          const lineContent =
+            editor?.document.lineAt(srcPos.line - 1).text ?? ''
+
+          // Track the section so it receives live updates when the file changes
+          openInspectorSections.set(directiveId, {
+            uri: verDocId.uri,
+            srcPos,
+            directiveType,
+            lineContent,
+          })
+
+          // Create/reveal the inspector panel
+          if (editor) {
+            inspectorPanelManager.render(context, editor.document.uri)
+          } else {
+            inspectorPanelManager.render(
+              context,
+              vscode.Uri.parse(verDocId.uri)
+            )
+          }
+          inspectorMessenger.registerWebviewPanel(
+            inspectorPanelManager.getPanel()
+          )
+          await inspectorPanelManager.getWebviewFrontendIsReadyPromise()
+
+          // Send the result to the inspector webview
+          const response = await inspectorMessenger.sendRequest(
+            AddInspectorResult,
+            inspectorWebviewFrontend,
+            {
+              directiveId,
+              srcPos,
+              result: result as DirectiveResult,
+              lineContent,
+            }
+          )
+
+          if (response.$type === 'scrolled') {
+            outputChannel.appendLine(`[inspector] Scrolled to existing result`)
+          } else {
+            outputChannel.appendLine(`[inspector] Added new result section`)
+          }
+        } catch (err) {
+          outputChannel.appendLine(
+            `[inspector] Error: ${err instanceof Error ? err.message : String(err)}`
+          )
+        }
+      }
+    )
+  )
+
+  // Refresh token colors in webviews when the user changes their color theme
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveColorTheme(() => {
+      panelManager.refreshTokenColors()
+      inspectorPanelManager.refreshTokenColors()
+    })
+  )
+
   // Start the client. This will also launch the server
   await client.start()
+
+  // After evaluation completes, the LSP sends l4/directiveResultsUpdated with all
+  // current directive results. Forward them to the inspector webview as SyncInspectorResults.
+  // This replaces the old onDidChangeDiagnostics + per-directive request approach,
+  // eliminating the race condition where evaluation hadn't completed yet.
+  context.subscriptions.push(
+    client.onNotification(
+      'l4/directiveResultsUpdated',
+      (params: {
+        uri: string
+        results: Array<{
+          directiveId: string
+          prettyText: string
+          success: boolean | null
+          lineContent: string
+        }>
+      }) => {
+        // Only update if the inspector panel is open
+        const panel = inspectorPanelManager.getPanel()
+        if (!panel) return
+
+        // Prepend the URI so directiveIds match the VS Code webview's "uri:line:col" format
+        const results = params.results.map((r) => ({
+          ...r,
+          directiveId: `${params.uri}:${r.directiveId}`,
+        }))
+
+        inspectorMessenger.sendNotification(
+          SyncInspectorResults,
+          inspectorWebviewFrontend,
+          {
+            uri: params.uri,
+            results,
+          }
+        )
+      }
+    )
+  )
 }
 
 export async function deactivate(): Promise<void> {

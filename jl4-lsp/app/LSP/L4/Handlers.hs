@@ -5,6 +5,7 @@
 
 module LSP.L4.Handlers where
 
+import Control.Concurrent (forkIO)
 import Control.Concurrent.Strict (Chan, writeChan)
 import Control.Exception.Safe (MonadCatch, MonadMask, MonadThrow)
 import Control.Lens ((^.))
@@ -29,6 +30,7 @@ import qualified Data.Maybe as Maybe
 import Data.Text (Text)
 import qualified Base.Text as Text
 import qualified Data.Text.Lazy as LazyText
+import qualified Data.Text.Mixed.Rope as Rope
 import GHC.Generics
 import GHC.TypeLits (Symbol)
 import Data.Proxy (Proxy (..))
@@ -59,7 +61,9 @@ import Language.LSP.Server hiding (notificationHandler, requestHandler)
 import qualified Language.LSP.Server as LSP
 import Language.LSP.VFS (VFS)
 import LSP.L4.Actions
+import qualified LSP.L4.Inspector as Inspector
 import L4.EvaluateLazy (EvalConfig)
+import qualified L4.EvaluateLazy as EL
 
 data ReactorMessage
   = ReactorNotification (IO ())
@@ -151,6 +155,56 @@ notificationHandler m k = LSP.notificationHandler m $ \TNotificationMessage{_par
   liftIO $ writeChan st.reactor $ ReactorNotification (LSP.runLspT env $ runServerM st $ k st.ideState vfs _params)
 
 -- ----------------------------------------------------------------------------
+-- Directive results notification
+-- ----------------------------------------------------------------------------
+
+-- | After a file change, wait for evaluation to complete then push all directive
+-- results to the client as a @l4/directiveResultsUpdated@ notification.
+-- Runs in a background thread so it doesn't block the reactor.
+scheduleDirectiveResultsNotification
+  :: IdeState -> Uri -> NormalizedUri -> ServerM Config ()
+scheduleDirectiveResultsNotification ide doc nuri = do
+  env <- LSP.getLspEnv
+  liftIO $ Extra.void $ forkIO $ do
+    -- Wait for EvaluateLazy (also blocks on SuccessfulTypeCheck transitively).
+    -- If type-checking fails, mEvalResults is Nothing and we send nothing,
+    -- leaving inspector sections frozen at their last valid state (matching WASM behaviour).
+    (mEvalResults, mTcResult, mRope) <- runAction "l4/directiveResultsNotif" ide $ do
+      mEval <- use EvaluateLazy nuri
+      mTc   <- use SuccessfulTypeCheck nuri
+      mRope <- getFileContents nuri
+      pure (mEval, mTc, mRope)
+    case mEvalResults of
+      Nothing -> pure ()
+      Just evalResults -> do
+        let getLineContent lineNo = case mRope of
+              Nothing   -> ""
+              Just rope ->
+                let ls = Text.lines (Rope.toText rope)
+                in if lineNo > 0 && lineNo <= length ls
+                   then ls !! (lineNo - 1)
+                   else ""
+            evalUpdates  = Maybe.mapMaybe (Inspector.evalDirectiveToUpdateItem getLineContent) evalResults
+            checkUpdates =
+              [ Inspector.DirectiveUpdateItem
+                  { directiveId = Text.pack (show lineNo) <> ":" <> Text.pack (show colNo)
+                  , prettyText  = Text.intercalate "\n" (prettyCheckErrorWithContext info)
+                  , success     = Just True
+                  , lineContent = getLineContent lineNo
+                  }
+              | Just tcResult <- [mTcResult]
+              , info <- tcResult.infos
+              , Just (MkSrcRange (MkSrcPos lineNo colNo) _ _ _) <- [rangeOf info]
+              ]
+        LSP.runLspT env $
+          sendNotification
+            (SMethod_CustomMethod (Proxy @Inspector.DirectiveResultsUpdatedMethodName))
+            (Aeson.toJSON $ Inspector.DirectiveResultsUpdatedParams
+              { uri     = getUri doc
+              , results = evalUpdates <> checkUpdates
+              })
+
+-- ----------------------------------------------------------------------------
 -- Handlers
 -- ----------------------------------------------------------------------------
 
@@ -161,40 +215,46 @@ handlers evalConfig recorder =
       notificationHandler SMethod_Initialized $ \ide _ _ -> do
         liftIO $ shakeSessionInit (cmapWithPrio LogShake recorder) ide
     , -- Handling of the virtual file system
-      notificationHandler SMethod_TextDocumentDidOpen $ \ide vfs msg -> liftIO $ do
+      notificationHandler SMethod_TextDocumentDidOpen $ \ide vfs msg -> do
         let
           doc = msg ^. J.textDocument . J.uri
           version = msg ^. J.textDocument . J.version
-          uri = toNormalizedUri doc
+          nuri = toNormalizedUri doc
         -- Only process .l4 files
         Extra.when (isL4File doc) $ do
-          atomically $ updatePositionMapping ide (VersionedTextDocumentIdentifier doc version) []
-          -- We don't know if the file actually exists, or if the contents match those on disk
-          -- For example, vscode restores previously unsaved contents on open
-          setFileModified (VFSModified vfs) ide uri $
-            addFileOfInterest ide uri Modified{firstOpen=True}
-          logWith recorder Debug $ LogOpenedTextDocument doc
-    , notificationHandler SMethod_TextDocumentDidChange $ \ide vfs msg -> liftIO $ do
+          liftIO $ do
+            atomically $ updatePositionMapping ide (VersionedTextDocumentIdentifier doc version) []
+            -- We don't know if the file actually exists, or if the contents match those on disk
+            -- For example, vscode restores previously unsaved contents on open
+            setFileModified (VFSModified vfs) ide nuri $
+              addFileOfInterest ide nuri Modified{firstOpen=True}
+            logWith recorder Debug $ LogOpenedTextDocument doc
+          scheduleDirectiveResultsNotification ide doc nuri
+    , notificationHandler SMethod_TextDocumentDidChange $ \ide vfs msg -> do
         let
           doc = msg ^. J.textDocument . J.uri
-          uri = toNormalizedUri doc
+          nuri = toNormalizedUri doc
           version = msg ^. J.textDocument . J.version
           changes = msg ^. J.contentChanges
         -- Only process .l4 files
         Extra.when (isL4File doc) $ do
-          atomically $ updatePositionMapping ide (VersionedTextDocumentIdentifier doc version) changes
-          setFileModified (VFSModified vfs) ide uri $
-            addFileOfInterest ide uri Modified{firstOpen=False}
-          logWith recorder Debug $ LogModifiedTextDocument doc
-    , notificationHandler SMethod_TextDocumentDidSave $ \ide vfs msg -> liftIO $ do
+          liftIO $ do
+            atomically $ updatePositionMapping ide (VersionedTextDocumentIdentifier doc version) changes
+            setFileModified (VFSModified vfs) ide nuri $
+              addFileOfInterest ide nuri Modified{firstOpen=False}
+            logWith recorder Debug $ LogModifiedTextDocument doc
+          scheduleDirectiveResultsNotification ide doc nuri
+    , notificationHandler SMethod_TextDocumentDidSave $ \ide vfs msg -> do
         let
           doc = msg ^. J.textDocument . J.uri
-          uri = toNormalizedUri doc
+          nuri = toNormalizedUri doc
         -- Only process .l4 files
         Extra.when (isL4File doc) $ do
-          setFileModified (VFSModified vfs) ide uri $
-            addFileOfInterest ide uri OnDisk
-          logWith recorder Debug $ LogSavedTextDocument doc
+          liftIO $ do
+            setFileModified (VFSModified vfs) ide nuri $
+              addFileOfInterest ide nuri OnDisk
+            logWith recorder Debug $ LogSavedTextDocument doc
+          scheduleDirectiveResultsNotification ide doc nuri
     , notificationHandler SMethod_TextDocumentDidClose $ \ide vfs msg -> liftIO $ do
         let
           doc = msg ^. J.textDocument . J.uri
@@ -306,22 +366,19 @@ handlers evalConfig recorder =
           use_ TypeCheck (toNormalizedUri verTextDocId._uri)
 
         let
-          mkCodeLens srcPos simplify = CodeLens
+          mkDecisionGraphCodeLens srcPos = CodeLens
             { _command = Just Command
-              { _title = t simplify
+              { _title = "Show decision graph"
               , _command = "l4.visualize"
-              , _arguments = Just [Aeson.toJSON verTextDocId, Aeson.toJSON (Generically srcPos), Aeson.toJSON simplify]
+              , _arguments = Just [Aeson.toJSON verTextDocId, Aeson.toJSON (Generically srcPos), Aeson.toJSON False]
               }
             , _range = pointRange $ srcPosToPosition srcPos
             , _data_ = Nothing
             }
-            where
-              t False = "Visualize"
-              t True  = "Simplify and visualize"
 
-          --  Check if can make viz with a given simplify flag
-          canVisualize decide simplify =
-            let cfg = Ladder.mkVizConfig verTextDocId typeCheck.module' typeCheck.substitution simplify
+          --  Check if can make viz (without simplification — simplification is now a toggle inside the panel)
+          canVisualize decide =
+            let cfg = Ladder.mkVizConfig verTextDocId typeCheck.module' typeCheck.substitution False
             in isRight (Ladder.doVisualize decide cfg)
 
           decideToCodeLens decide =
@@ -330,15 +387,54 @@ handlers evalConfig recorder =
             -- If in future this is too slow, we should think about caching these results or, even better,
             -- make the visualizer work on as many examples as possible.
             case rangeOfNode decide of
-              Just node ->
-                let simplifyFlags = [False, True]
-                in map (mkCodeLens node.start) (filter (canVisualize decide) simplifyFlags)
-              Nothing -> []
+              Just node
+                | canVisualize decide -> [mkDecisionGraphCodeLens node.start]
+              _ -> []
 
           -- adds codelenses to visualize DECIDE or MEANS clauses
           visualizeDecides :: [CodeLens] = foldTopLevelDecides decideToCodeLens typeCheck.module'
 
-        pure (Right (InL visualizeDecides))
+          directiveLabel :: Directive Resolved -> Text
+          directiveLabel = \case
+            LazyEval{}      -> "#EVAL"
+            LazyEvalTrace{} -> "#EVALTRACE"
+            Check{}         -> "#CHECK"
+            Contract{}      -> "#CHECK"
+            Assert{}        -> "#ASSERT"
+
+          mkRenderResultCodeLens srcPos label = CodeLens
+            { _command = Just Command
+              { _title = "Track result"
+              , _command = "l4.renderResult"
+              , _arguments = Just [Aeson.toJSON verTextDocId, Aeson.toJSON (Generically srcPos), Aeson.toJSON label]
+              }
+            , _range = pointRange $ srcPosToPosition srcPos
+            , _data_ = Nothing
+            }
+
+          directiveToCodeLens :: TopDecl Resolved -> [CodeLens]
+          directiveToCodeLens = \case
+            Directive _ d ->
+              case rangeOfNode d of
+                Just node -> [mkRenderResultCodeLens node.start (directiveLabel d)]
+                _ -> []
+            _ -> []
+
+          -- foldTopDecls only visits the top-level section; directives can be
+          -- nested inside §§ sub-sections, so we recurse through all sections.
+          collectFromSection :: Section Resolved -> [CodeLens]
+          collectFromSection (MkSection _ _ _ topDecls) = concatMap collectFromTopDecl topDecls
+
+          collectFromTopDecl :: TopDecl Resolved -> [CodeLens]
+          collectFromTopDecl td = directiveToCodeLens td ++ case td of
+            Section _ s -> collectFromSection s
+            _           -> []
+
+          renderResultDirectives :: [CodeLens] =
+            let MkModule _ _ section = typeCheck.module'
+            in collectFromSection section
+
+        pure (Right (InL (visualizeDecides <> renderResultDirectives)))
     , requestHandler SMethod_TextDocumentReferences $ \ide params -> do
         let doc :: Uri = params ^. J.textDocument . J.uri
             pos :: SrcPos = lspPositionToSrcPos $ params ^. J.position
@@ -391,6 +487,71 @@ handlers evalConfig recorder =
                     , getUri ieParams.verDocId._uri
                     , Ladder.prettyPrintVizError vizError
                     ]
+
+    , requestHandler (SMethod_CustomMethod (Proxy @Inspector.EvalDirectiveResultMethodName)) $ \ide params -> do
+        let parseParams :: Aeson.Value -> Maybe Inspector.EvalDirectiveResultParams
+            parseParams v = case Aeson.fromJSON v of
+              Aeson.Success p -> Just p
+              _               -> Nothing
+
+        case parseParams params of
+          Nothing -> pure $ Left $ TResponseError
+            { _code = InR ErrorCodes_InvalidParams
+            , _message = "Failed to parse evalDirectiveResult params"
+            , _xdata = Nothing
+            }
+          Just reqParams -> do
+            let nuri = toNormalizedUri reqParams.verDocId._uri
+                targetPos = reqParams.srcPos
+
+            mResults <- liftIO $ runAction "l4/evalDirectiveResult" ide $
+              use EvaluateLazy nuri
+
+            case mResults of
+              Nothing -> pure $ Left $ TResponseError
+                { _code = InR ErrorCodes_InvalidRequest
+                , _message = "No evaluation results available"
+                , _xdata = Nothing
+                }
+              Just results -> do
+                let matchesPos (EL.MkEvalDirectiveResult rng _ _) = fmap (.start) rng == Just targetPos
+                    matchingResult = List.find matchesPos results
+                case matchingResult of
+                  Just evalRes ->
+                    pure $ Right $ Aeson.toJSON $
+                      Inspector.evalDirectiveToResult reqParams.directiveType evalRes
+                  Nothing | reqParams.directiveType == "#CHECK" -> do
+                    -- #CHECK results come from the type checker (CheckInfo), not the evaluator.
+                    -- Look for a CheckInfo item on the same line as the target position.
+                    mTcResult <- liftIO $ runAction "l4/evalDirectiveResult/#CHECK" ide $
+                      use SuccessfulTypeCheck nuri
+                    case mTcResult of
+                      Nothing -> pure $ Left $ TResponseError
+                        { _code = InR ErrorCodes_InvalidRequest
+                        , _message = "No type check result available for #CHECK"
+                        , _xdata = Nothing
+                        }
+                      Just tcResult ->
+                        let matchesCheckPos err = fmap (.start) (rangeOf err) == Just targetPos
+                            mInfo = List.find matchesCheckPos tcResult.infos
+                        in case mInfo of
+                          Nothing -> pure $ Left $ TResponseError
+                            { _code = InR ErrorCodes_InvalidRequest
+                            , _message = "No #CHECK result found at the given position"
+                            , _xdata = Nothing
+                            }
+                          Just info ->
+                            pure $ Right $ Aeson.toJSON $ Inspector.DirectiveResult
+                              { directiveType = "#CHECK"
+                              , prettyText = Text.intercalate "\n" (prettyCheckErrorWithContext info)
+                              , success = Just True
+                              , structuredValue = Nothing
+                              }
+                  Nothing -> pure $ Left $ TResponseError
+                    { _code = InR ErrorCodes_InvalidRequest
+                    , _message = "No directive result found at the given position"
+                    , _xdata = Nothing
+                    }
     ]
 
 activeFileDiagnosticsInRange :: ShakeExtras -> NormalizedUri -> Range -> STM [FileDiagnostic]

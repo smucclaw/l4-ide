@@ -21,6 +21,7 @@ module L4.API
   , l4Eval
   , l4VisualizeByName
   , l4CodeLenses
+  , l4EvalDirective
   , l4Definition
   , l4References
   ) where
@@ -31,16 +32,17 @@ import qualified Data.Aeson as Aeson
 import Data.Aeson ((.=))
 import qualified Data.Text.Lazy as LazyText
 import qualified Data.Text.Lazy.Encoding as LazyText
+import qualified Data.List as List
 import qualified Data.Vector as Vector
 
 import L4.Lexer (execLexer, PosToken(..), TokenType(..), TLiterals(..), TSpaces(..), TIdentifiers(..))
 
-import L4.Annotation (HasSrcRange(..))
+import L4.Annotation (HasSrcRange(..), rangeOfNode)
 import L4.Parser.SrcSpan (SrcRange(..), SrcPos(..))
 import L4.TypeCheck (severity, prettyCheckErrorWithContext, applyFinalSubstitution)
 import L4.TypeCheck.Types (CheckResult(..), CheckErrorWithContext(..), Severity(..), Substitution)
 import L4.Print (prettyLayout)
-import L4.Syntax (Info(..), Type'(..), Resolved, OptionallyNamedType(..))
+import L4.Syntax (Info(..), Type'(..), Resolved, OptionallyNamedType(..), TopDecl(..), Directive(..), Module(..), Section(..))
 import L4.Annotation (emptyAnno)
 import qualified L4.Utils.IntervalMap as IV
 import qualified L4.EvaluateLazy as EL
@@ -226,12 +228,14 @@ l4Eval source =
         , "diagnostics" .= Vector.fromList (map importErrorToDiagnostic errors)
         ]
     Right result ->
-      if not (null result.tcdErrors)
+      -- Only fail on actual errors; SInfo items (e.g. #CHECK type annotations) are informational
+      let actualErrors = filter (\e -> severity e /= SInfo) result.tcdErrors
+      in if not (null actualErrors)
         then
           -- Return type check errors as diagnostics
           pure $ encodeJson $ Aeson.object
             [ "success" .= False
-            , "diagnostics" .= Vector.fromList (map checkErrorToDiagnostic result.tcdErrors)
+            , "diagnostics" .= Vector.fromList (map checkErrorToDiagnostic actualErrors)
             ]
         else do
           -- First, evaluate all imported modules to build up the evaluation environment
@@ -246,6 +250,52 @@ l4Eval source =
           pure $ encodeJson $ Aeson.object
             [ "success" .= True
             , "results" .= Vector.fromList (map evalResultToJson results)
+            ]
+
+-- | Evaluate a specific directive at a given source position.
+--
+-- Returns JSON-encoded DirectiveResult:
+-- @
+-- {
+--   "directiveType": "#EVAL",
+--   "prettyText": "\"String\"",
+--   "success": null,
+--   "structuredValue": "String"
+-- }
+-- @
+--
+-- Or an error:
+-- @
+-- { "error": "No directive result found at the given position" }
+-- @
+l4EvalDirective :: Text -> Int -> Int -> Text -> IO Text
+l4EvalDirective source line col directiveType =
+  case checkWithImports emptyVFS source of
+    Left _errors ->
+      pure $ encodeJson $ Aeson.object
+        [ "error" .= ("Parse/import errors prevent evaluation" :: Text) ]
+    Right result -> do
+      evalConfig <- EL.resolveEvalConfigWithSafeMode Nothing (lspDefaultPolicy defaultGraphVizOptions) True
+      importEnv <- evaluateImports evalConfig result.tcdResolvedImports
+      (_env, results) <- EL.execEvalModuleWithEnv evalConfig result.tcdEntityInfo importEnv result.tcdModule
+      let targetPos = MkSrcPos line col
+          matchesPos (EL.MkEvalDirectiveResult rng _ _) = fmap (.start) rng == Just targetPos
+          matchingResult = List.find matchesPos results
+      case matchingResult of
+        Nothing ->
+          pure $ encodeJson $ Aeson.object
+            [ "error" .= ("No directive result found at the given position" :: Text) ]
+        Just (EL.MkEvalDirectiveResult _range res _mtrace) ->
+          pure $ encodeJson $ Aeson.object
+            [ "directiveType" .= directiveType
+            , "prettyText" .= prettyEvalResult res
+            , "success" .= case res of
+                EL.Assertion b -> Aeson.toJSON b
+                EL.Reduction _ -> Aeson.Null
+            , "structuredValue" .= case res of
+                EL.Assertion b -> Aeson.toJSON b
+                EL.Reduction (Left _) -> Aeson.Null
+                EL.Reduction (Right nf) -> Aeson.toJSON (prettyLayout nf)
             ]
 
 -- | Evaluate a list of resolved imports and combine their environments.
@@ -303,6 +353,15 @@ foreign export javascript "l4_eval"
 js_l4_eval :: JSString -> IO JSString
 js_l4_eval source = do
   result <- l4Eval $ Text.pack $ fromJSString source
+  pure $ toJSString $ Text.unpack result
+
+-- | Evaluate a specific directive at a position.
+foreign export javascript "l4_eval_directive"
+  js_l4_eval_directive :: JSString -> Int -> Int -> JSString -> IO JSString
+
+js_l4_eval_directive :: JSString -> Int -> Int -> JSString -> IO JSString
+js_l4_eval_directive source line col directiveType = do
+  result <- l4EvalDirective (Text.pack $ fromJSString source) line col (Text.pack $ fromJSString directiveType)
   pure $ toJSString $ Text.unpack result
 
 -- | Generate ladder diagram visualization for a specific function by name.
@@ -536,25 +595,15 @@ l4CodeLenses source uriText version =
       -- Parse/import errors - return empty array (diagnostics shown separately)
       encodeJson ([] :: [Aeson.Value])
     Right result ->
-      if not (null result.tcdErrors)
-        then
-          -- Type check errors - return empty array (diagnostics shown separately)
-          encodeJson ([] :: [Aeson.Value])
-        else
-          -- Use the URI from type checking result to ensure substitution lookup works correctly
-          let decides = Ladder.findAllVisualizableDecides result.tcdUri result.tcdModule result.tcdSubstitution
-              lenses = concatMap (mkCodeLenses uriText version) decides
-          in encodeJson lenses
+      -- Generate lenses even when there are type check errors/warnings
+      -- (the LSP does the same — CodeLens is always shown after successful parse)
+      let decides = Ladder.findAllVisualizableDecides result.tcdUri result.tcdModule result.tcdSubstitution
+          vizLenses = map (mkVizLens uriText version) decides
+          directiveLenses = collectDirectiveLenses (directiveToCodeLens uriText version) result.tcdModule
+      in encodeJson (vizLenses <> directiveLenses)
   where
-    mkCodeLenses :: Text -> Int -> Ladder.VisualizableDecide -> [Aeson.Value]
-    mkCodeLenses uriTxt ver vd =
-      -- Generate two code lenses: "Visualize" and "Simplify and visualize"
-      [ mkCodeLens uriTxt ver vd False
-      , mkCodeLens uriTxt ver vd True
-      ]
-
-    mkCodeLens :: Text -> Int -> Ladder.VisualizableDecide -> Bool -> Aeson.Value
-    mkCodeLens uriTxt ver vd simplify = Aeson.object
+    mkVizLens :: Text -> Int -> Ladder.VisualizableDecide -> Aeson.Value
+    mkVizLens uriTxt ver vd = Aeson.object
       [ "range" .= Aeson.object
           -- Monaco uses 1-indexed positions
           [ "startLineNumber" .= vd.vdStartLine
@@ -564,14 +613,62 @@ l4CodeLenses source uriText version =
           ]
       , "command" .= Aeson.object
           [ "id" .= ("l4.visualize" :: Text)
-          , "title" .= if simplify then ("Simplify and visualize" :: Text) else ("Visualize" :: Text)
-          , "arguments" .= 
+          , "title" .= ("Show decision graph" :: Text)
+          , "arguments" .=
               [ Aeson.object [ "uri" .= uriTxt, "version" .= ver ]
               , Aeson.String vd.vdName
-              , Aeson.Bool simplify
+              , Aeson.Bool False
               ]
           ]
       ]
+
+    directiveLabel :: Directive Resolved -> Text
+    directiveLabel = \case
+      LazyEval{}      -> "#EVAL"
+      LazyEvalTrace{} -> "#EVALTRACE"
+      Check{}         -> "#CHECK"
+      Contract{}      -> "#CHECK"
+      Assert{}        -> "#ASSERT"
+
+    directiveToCodeLens :: Text -> Int -> TopDecl Resolved -> [Aeson.Value]
+    directiveToCodeLens uriTxt ver = \case
+      Directive _ d ->
+        case rangeOfNode d of
+          Just rng ->
+            let sp = rng.start
+            in [ Aeson.object
+                  [ "range" .= Aeson.object
+                      [ "startLineNumber" .= sp.line
+                      , "startColumn" .= sp.column
+                      , "endLineNumber" .= sp.line
+                      , "endColumn" .= sp.column
+                      ]
+                  , "command" .= Aeson.object
+                      [ "id" .= ("l4.renderResult" :: Text)
+                      , "title" .= ("Track result" :: Text)
+                      , "arguments" .=
+                          [ Aeson.object [ "uri" .= uriTxt, "version" .= ver ]
+                          , Aeson.object [ "line" .= sp.line, "column" .= sp.column ]
+                          , Aeson.String (directiveLabel d)
+                          ]
+                      ]
+                  ]
+               ]
+          _ -> []
+      _ -> []
+
+    -- | Recursively collect directive lenses from all sections (including nested ones).
+    -- foldTopDecls only traverses one level, but directives can be inside nested Sections.
+    collectDirectiveLenses :: (TopDecl Resolved -> [Aeson.Value]) -> Module Resolved -> [Aeson.Value]
+    collectDirectiveLenses f (MkModule _ _ section) = collectFromSection f section
+
+    collectFromSection :: (TopDecl Resolved -> [Aeson.Value]) -> Section Resolved -> [Aeson.Value]
+    collectFromSection f (MkSection _ _ _ topDecls) = concatMap (collectFromTopDecl f) topDecls
+
+    collectFromTopDecl :: (TopDecl Resolved -> [Aeson.Value]) -> TopDecl Resolved -> [Aeson.Value]
+    collectFromTopDecl f td = f td ++ case td of
+      Section _ s -> collectFromSection f s
+      _           -> []
 
 -- | Go to definition at a position.
 --

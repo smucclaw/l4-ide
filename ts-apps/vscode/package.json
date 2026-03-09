@@ -87,14 +87,18 @@
     "commands": [
       {
         "command": "l4.visualize",
-        "title": "Visualize L4 expression"
+        "title": "Show decision graph"
+      },
+      {
+        "command": "l4.renderResult",
+        "title": "Track result"
       }
     ]
   },
   "prettier": "@repo/prettier-config",
   "dependencies": {
-    "@repo/vscode-webview-rpc": "*",
     "@repo/viz-expr": "*",
+    "@repo/vscode-webview-rpc": "*",
     "@repo/webview": "*",
     "jl4-client-rpc": "*",
     "minimatch": "^10.0.1",
@@ -113,7 +117,7 @@
     "@types/vscode": "^1.94.0",
     "@typescript-eslint/eslint-plugin": "^8.18.0",
     "@typescript-eslint/parser": "^8.18.0",
-    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.4.1",
     "@vscode/vsce": "^3.6.0",
     "babel-loader": "^9.2.1",
