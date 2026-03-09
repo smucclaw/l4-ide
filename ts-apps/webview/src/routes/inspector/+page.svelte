@@ -12,6 +12,7 @@
     type WebviewFrontendIsReadyMessage,
   } from 'jl4-client-rpc'
   import type { WebviewApi } from 'vscode-webview'
+  import { colorize, escapeHtml } from '@repo/l4-highlight'
 
   interface ResultSection {
     directiveId: string
@@ -314,104 +315,6 @@
     return trimmed.length > max ? trimmed.slice(0, max) + '…' : trimmed
   }
 
-  // ---------------------------------------------------------------------------
-  // Lightweight L4 tokenizer for syntax highlighting in the webview
-  // ---------------------------------------------------------------------------
-
-  const KEYWORDS = new Set([
-    'GIVEN',
-    'GIVETH',
-    'DECIDE',
-    'DECLARE',
-    'ASSUME',
-    'MEANS',
-    'IS',
-    'A',
-    'AN',
-    'THE',
-    'IF',
-    'AND',
-    'OR',
-    'NOT',
-    'OTHERWISE',
-    'WHERE',
-    'WHEN',
-    'THEN',
-    'HAS',
-    'ONE',
-    'OF',
-    'LIST',
-    'FOR',
-    'FROM',
-    'TO',
-    'WITH',
-    'IN',
-    'BE',
-    'BOOLEAN',
-    'NUMBER',
-    'STRING',
-    'TYPE',
-    'FUNCTION',
-    'TRUE',
-    'FALSE',
-  ])
-
-  type TokenType =
-    | 'keyword'
-    | 'annotation'
-    | 'comment'
-    | 'string'
-    | 'backtick'
-    | 'number'
-    | 'type'
-    | 'plain'
-
-  const TOKEN_PATTERNS: [RegExp, TokenType | 'kwOrType'][] = [
-    [/^`[^`]*`/, 'backtick'],
-    [/^"[^"]*"/, 'string'],
-    [/^--[^\n]*/, 'comment'],
-    [/^#[A-Z]+/, 'annotation'],
-    [/^\d+(?:\.\d+)?/, 'number'],
-    [/^[A-Z][A-Za-z0-9_]*/, 'kwOrType'],
-    [/^[a-zA-Z_]\w*/, 'plain'],
-  ]
-
-  function escapeHtml(text: string): string {
-    return text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-  }
-
-  function colorize(text: string): string {
-    let out = ''
-    let i = 0
-    while (i < text.length) {
-      let matched = false
-      for (const [pattern, rawType] of TOKEN_PATTERNS) {
-        const m = pattern.exec(text.slice(i))
-        if (m) {
-          const t = m[0]
-          const type: TokenType =
-            rawType === 'kwOrType'
-              ? KEYWORDS.has(t)
-                ? 'keyword'
-                : 'type'
-              : rawType
-          out += `<span class="tok-${type}">${escapeHtml(t)}</span>`
-          i += t.length
-          matched = true
-          break
-        }
-      }
-      if (!matched) {
-        out += escapeHtml(text[i])
-        i++
-      }
-    }
-    return out
-  }
-
   type ColorizedEntry = { header: string; body: string }
   const colorized: Record<string, ColorizedEntry> = $derived(
     Object.fromEntries(
@@ -453,6 +356,19 @@
     })
 
     messenger.start()
+
+    // Listen for token color updates from the extension host (theme changes)
+    window.addEventListener('message', (event) => {
+      const msg = event.data
+      if (msg?.type === 'l4-token-colors' && msg.colors) {
+        const root = document.documentElement
+        for (const [key, value] of Object.entries(
+          msg.colors as Record<string, string>
+        )) {
+          root.style.setProperty(`--l4-tok-${key}`, value)
+        }
+      }
+    })
   })
 </script>
 
@@ -708,56 +624,33 @@
     tab-size: 2;
   }
 
-  /* Dark theme token colors (VS Code Default Dark+) */
-  :global(body.vscode-dark .tok-keyword) {
-    color: #569cd6;
+  /* Token colors — injected by the extension host from the active VS Code color theme
+     via --l4-tok-* CSS custom properties. Fallbacks match VS Code Default Dark+. */
+  :global(.tok-keyword) {
+    color: var(--l4-tok-keyword, #569cd6);
   }
-  :global(body.vscode-dark .tok-annotation) {
-    color: #c586c0;
-  }
-  :global(body.vscode-dark .tok-comment) {
-    color: #6a9955;
-  }
-  :global(body.vscode-dark .tok-string) {
-    color: #ce9178;
-  }
-  :global(body.vscode-dark .tok-backtick) {
-    color: #9cdcfe;
-  }
-  :global(body.vscode-dark .tok-number) {
-    color: #b5cea8;
-  }
-  :global(body.vscode-dark .tok-type) {
-    color: #4ec9b0;
-  }
-
-  /* Light theme token colors (VS Code Default Light+) */
-  :global(body.vscode-light .tok-keyword) {
-    color: #0000ff;
-  }
-  :global(body.vscode-light .tok-annotation) {
-    color: #af00db;
-  }
-  :global(body.vscode-light .tok-comment) {
-    color: #008000;
-  }
-  :global(body.vscode-light .tok-string) {
-    color: #a31515;
-  }
-  :global(body.vscode-light .tok-backtick) {
-    color: #001080;
-  }
-  :global(body.vscode-light .tok-number) {
-    color: #098658;
-  }
-  :global(body.vscode-light .tok-type) {
-    color: #267f99;
-  }
-
-  /* High-contrast fallback — bold, no color change */
-  :global(body.vscode-high-contrast .tok-keyword),
-  :global(body.vscode-high-contrast .tok-annotation) {
+  :global(.tok-directive) {
+    color: var(--l4-tok-directive, #c586c0);
     font-weight: bold;
+  }
+  :global(.tok-comment) {
+    color: var(--l4-tok-comment, #6a9955);
+    font-style: italic;
+  }
+  :global(.tok-string) {
+    color: var(--l4-tok-string, #ce9178);
+  }
+  :global(.tok-variable) {
+    color: var(--l4-tok-variable, #9cdcfe);
+  }
+  :global(.tok-number) {
+    color: var(--l4-tok-number, #b5cea8);
+  }
+  :global(.tok-operator) {
+    color: var(--l4-tok-operator, #d4d4d4);
+  }
+  :global(.tok-identifier) {
+    color: var(--l4-tok-identifier, #4ec9b0);
   }
 
   :global(.highlight-flash) {

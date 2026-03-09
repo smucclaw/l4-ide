@@ -51,6 +51,7 @@
     "vite": "^6.0.7"
   },
   "dependencies": {
+    "@repo/l4-highlight": "*",
     "l4-ladder-visualizer": "*",
     "@repo/vscode-webview-rpc": "*",
     "@repo/viz-expr": "*",
