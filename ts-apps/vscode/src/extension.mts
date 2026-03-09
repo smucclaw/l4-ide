@@ -504,6 +504,14 @@ export async function activate(context: ExtensionContext) {
     )
   )
 
+  // Refresh token colors in webviews when the user changes their color theme
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveColorTheme(() => {
+      panelManager.refreshTokenColors()
+      inspectorPanelManager.refreshTokenColors()
+    })
+  )
+
   // Start the client. This will also launch the server
   await client.start()
 

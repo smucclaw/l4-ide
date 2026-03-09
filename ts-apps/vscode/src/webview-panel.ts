@@ -3,6 +3,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import webviewHtml from '../static/webview/index.html'
 import { Uri } from 'vscode'
+import { getTokenColors, tokenColorsToCSS } from './theme-colors.js'
 
 /******************************************
                 Panel
@@ -97,6 +98,21 @@ export class PanelManager {
       // this.#panel.reveal(this.config.position)
     }
   }
+
+  /**
+   * Update the --l4-tok-* CSS custom properties in the webview
+   * to match the current VS Code color theme.
+   */
+  refreshTokenColors() {
+    const panel = this.#panel
+    if (!panel) return
+
+    const colors = getTokenColors()
+    panel.webview.postMessage({
+      type: 'l4-token-colors',
+      colors,
+    })
+  }
 }
 
 /******************************************
@@ -140,9 +156,11 @@ function getWebviewContent(
     html = webviewHtml
   }
 
+  const tokenCSS = tokenColorsToCSS(getTokenColors())
+
   const postprocessedWebviewHtml = html.replace(
     '<head>',
-    `<head><base href="${compatibleBasePath}/">`
+    `<head><base href="${compatibleBasePath}/">${tokenCSS}`
   )
 
   return postprocessedWebviewHtml

@@ -10,6 +10,7 @@
   import { createConverter as createCodeConverter } from 'vscode-languageclient/lib/common/codeConverter.js'
   import * as monaco from '@codingame/monaco-vscode-editor-api'
   import { monacoModuleWrapperForErrorLens } from '$lib/monaco-error-lens-helpers'
+  import { monarchTokensProvider } from '@repo/l4-highlight'
 
   import { MonacoL4LanguageClient } from '$lib/monaco-l4-language-client'
   import {
@@ -310,101 +311,24 @@
 
       // Monarch tokenizer — required for monaco.editor.colorize() in the inspector panel.
       // Semantic tokens (from LSP) handle editor highlighting; this covers standalone colorization.
-      monaco.languages.setMonarchTokensProvider('jl4', {
-        keywords: [
-          'GIVEN',
-          'GIVETH',
-          'DECIDE',
-          'DECLARE',
-          'ASSUME',
-          'MEANS',
-          'IS',
-          'IF',
-          'THEN',
-          'ELSE',
-          'AND',
-          'OR',
-          'NOT',
-          'WHERE',
-          'LET',
-          'IN',
-          'CONSIDER',
-          'WHEN',
-          'OTHERWISE',
-          'TRUE',
-          'FALSE',
-          'LIST',
-          'OF',
-          'FUNCTION',
-          'FROM',
-          'TO',
-          'TYPE',
-          'SUCH',
-          'THAT',
-          'FOR',
-          'ALL',
-          'SOME',
-          'UNLESS',
-          'A',
-          'AN',
-          'THE',
-          'SECTION',
-          'IMPORT',
-          'NUMBER',
-          'STRING',
-          'BOOLEAN',
-          'DATE',
-          'TIME',
-          'DATETIME',
-          'SUM',
-          'PRODUCT',
-          'DOES',
-          'SATISFIES',
-          'BEFORE',
-          'AFTER',
-          'TIMEZONE',
-          'CURRENTTIME',
-          'TODAY',
-        ],
-        tokenizer: {
-          root: [
-            // Directives (#EVAL, #ASSERT, etc.)
-            [/#[A-Z]+/, 'annotation'],
-            // Line comments
-            [/--.*$/, 'comment'],
-            // Strings
-            [/"[^"]*"/, 'string'],
-            // Backtick-quoted identifiers
-            [/`[^`]*`/, 'variable.name'],
-            // Numbers (integer and rational)
-            [/\d+(\.\d+)?/, 'number'],
-            // Uppercase words: keywords or type names
-            [
-              /[A-Z][A-Z0-9]*/,
-              {
-                cases: {
-                  '@keywords': 'keyword',
-                  '@default': 'type.identifier',
-                },
-              },
-            ],
-            // Regular identifiers
-            [/[a-zA-Z_]\w*/, 'identifier'],
-          ],
-        },
-      })
+      // Token definitions from @repo/l4-highlight (canonical source: jl4-core/src/L4/Lexer.hs)
+      monaco.languages.setMonarchTokensProvider(
+        'jl4',
+        monarchTokensProvider() as monaco.languages.IMonarchLanguage
+      )
 
       monaco.editor.defineTheme('jl4Theme', {
         base: 'vs',
         inherit: true,
         rules: [
-          { token: 'decorator', foreground: 'ffbd33' }, // for annotations
-          { token: 'annotation', foreground: 'be37e8', fontStyle: 'bold' }, // #EVAL, #ASSERT etc.
+          { token: 'directive', foreground: 'be37e8', fontStyle: 'bold' }, // #EVAL, #ASSERT etc.
+          { token: 'annotation', foreground: 'ffbd33' }, // @nlg, @ref etc.
           { token: 'keyword', foreground: '0000ff' }, // L4 keywords
           { token: 'type.identifier', foreground: '267f99' }, // uppercase non-keywords
           { token: 'variable.name', foreground: '001080' }, // backtick identifiers
           { token: 'string', foreground: 'a31515' },
           { token: 'number', foreground: '098658' },
+          { token: 'operator', foreground: '888888' }, // operators
           { token: 'comment', foreground: '008000', fontStyle: 'italic' },
         ],
         encodedTokensColors: [],
