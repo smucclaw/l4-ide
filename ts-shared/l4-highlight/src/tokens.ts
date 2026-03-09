@@ -32,8 +32,7 @@ export type L4TokenType =
   | 'identifier'
 
 /**
- * Complete keyword list from jl4-core/src/L4/Lexer.hs `keywords` map,
- * plus built-in constants (TRUE, FALSE) that the parser handles specially.
+ * Complete keyword list from jl4-core/src/L4/Lexer.hs `keywords` map.
  */
 export const L4_KEYWORDS: ReadonlySet<string> = new Set([
   'A',

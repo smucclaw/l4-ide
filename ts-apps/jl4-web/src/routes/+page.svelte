@@ -356,8 +356,8 @@
       editor.addCommand(
         monaco.KeyCode.Enter,
         () => {
-          editor.trigger('keyboard', 'type', { text: '\n' })
-          editor.trigger('', 'hideSuggestWidget', null)
+          editor?.trigger('keyboard', 'type', { text: '\n' })
+          editor?.trigger('', 'hideSuggestWidget', null)
         },
         '!suggestWidgetVisible'
       )
