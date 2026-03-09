@@ -310,11 +310,6 @@
     return ''
   }
 
-  function truncate(text: string, max = 60): string {
-    const trimmed = text.trim()
-    return trimmed.length > max ? trimmed.slice(0, max) + '…' : trimmed
-  }
-
   type ColorizedEntry = { header: string; body: string }
   const colorized: Record<string, ColorizedEntry> = $derived(
     Object.fromEntries(
