@@ -329,6 +329,10 @@
     sections = sections.filter((s) => s.directiveId !== directiveId)
   }
 
+  function removeFileGroup(fileUri: string) {
+    sections = sections.filter((s) => s.fileUri !== fileUri)
+  }
+
   function toggleCollapse(directiveId: string) {
     sections = sections.map((s) =>
       s.directiveId === directiveId ? { ...s, collapsed: !s.collapsed } : s
@@ -369,7 +373,13 @@
           <span class="file-name" title={group.fileUri}
             >{group.displayName}</span
           >
-          <span class="file-count">{group.sections.length}</span>
+          <button
+            class="remove-all-btn"
+            onclick={() => removeFileGroup(group.fileUri)}
+            title="Remove all results from this file"
+          >
+            Remove all
+          </button>
         </div>
       {/if}
 
@@ -477,10 +487,20 @@
     min-width: 0;
   }
 
-  .file-count {
-    font-size: 0.8em;
-    opacity: 0.6;
+  .remove-all-btn {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: #1e1d1c;
+    cursor: pointer;
+    opacity: 0.5;
+    font-size: 0.9em;
+    padding: 0 1px;
     flex-shrink: 0;
+  }
+
+  .remove-all-btn:hover {
+    opacity: 1;
   }
 
   .result-section {

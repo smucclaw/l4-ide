@@ -151,7 +151,13 @@
    */
   function syncSections(msg: SyncInspectorResultsMessage) {
     const results = msg.results
-    const syncUri = msg.uri
+
+    // Derive the file URI to scope the sync.
+    // Primary: extract from the results' directiveIds (always reliable since they
+    // include the URI). Fallback: msg.uri (needed when results is empty).
+    // Without a URI, sync affects all sections (backward compat).
+    const syncUri =
+      results.length > 0 ? parseFileUri(results[0].directiveId) : msg.uri
 
     // Scope: only sync sections belonging to the notified file
     const toSync = syncUri
@@ -285,6 +291,10 @@
 
   function removeSection(directiveId: string) {
     sections = sections.filter((s) => s.directiveId !== directiveId)
+  }
+
+  function removeFileGroup(fileUri: string) {
+    sections = sections.filter((s) => s.fileUri !== fileUri)
   }
 
   function toggleCollapse(directiveId: string) {
@@ -473,7 +483,13 @@
           <span class="file-name" title={group.fileUri}
             >{group.displayName}</span
           >
-          <span class="file-count">{group.sections.length}</span>
+          <button
+            class="remove-all-btn"
+            onclick={() => removeFileGroup(group.fileUri)}
+            title="Remove all results from this file"
+          >
+            Remove all
+          </button>
         </div>
       {/if}
 
@@ -574,10 +590,19 @@
     min-width: 0;
   }
 
-  .file-count {
-    font-size: 0.8em;
-    opacity: 0.6;
+  .remove-all-btn {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: var(--vscode-foreground);
+    cursor: pointer;
+    opacity: 0.5;
+    font-size: 0.9em;
     flex-shrink: 0;
+  }
+
+  .remove-all-btn:hover {
+    opacity: 1;
   }
 
   .result-section {
