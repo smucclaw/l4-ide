@@ -41,7 +41,7 @@ import L4.Annotation (HasSrcRange(..), rangeOfNode)
 import L4.Parser.SrcSpan (SrcRange(..), SrcPos(..))
 import L4.TypeCheck (severity, prettyCheckErrorWithContext, applyFinalSubstitution)
 import L4.TypeCheck.Types (CheckResult(..), CheckErrorWithContext(..), Severity(..), Substitution)
-import L4.Print (prettyLayout)
+import L4.Print (prettyLayout, prettyLayoutNF, ConstructorFieldNames, extractConstructorFieldNames)
 import L4.Syntax (Info(..), Type'(..), Resolved, OptionallyNamedType(..), TopDecl(..), Directive(..), Module(..), Section(..))
 import L4.Annotation (emptyAnno)
 import qualified L4.Utils.IntervalMap as IV
@@ -247,9 +247,10 @@ l4Eval source =
           
           -- Now evaluate the main module with the combined import environment
           (_env, results) <- EL.execEvalModuleWithEnv evalConfig result.tcdEntityInfo importEnv result.tcdModule
+          let conFields = extractConstructorFieldNames result.tcdEntityInfo
           pure $ encodeJson $ Aeson.object
             [ "success" .= True
-            , "results" .= Vector.fromList (map evalResultToJson results)
+            , "results" .= Vector.fromList (map (evalResultToJson conFields) results)
             ]
 
 -- | Evaluate a specific directive at a given source position.
@@ -278,7 +279,8 @@ l4EvalDirective source line col directiveType =
       evalConfig <- EL.resolveEvalConfigWithSafeMode Nothing (lspDefaultPolicy defaultGraphVizOptions) True
       importEnv <- evaluateImports evalConfig result.tcdResolvedImports
       (_env, results) <- EL.execEvalModuleWithEnv evalConfig result.tcdEntityInfo importEnv result.tcdModule
-      let targetPos = MkSrcPos line col
+      let conFields = extractConstructorFieldNames result.tcdEntityInfo
+          targetPos = MkSrcPos line col
           matchesPos (EL.MkEvalDirectiveResult rng _ _) = fmap (.start) rng == Just targetPos
           matchingResult = List.find matchesPos results
       case matchingResult of
@@ -288,14 +290,14 @@ l4EvalDirective source line col directiveType =
         Just (EL.MkEvalDirectiveResult _range res _mtrace) ->
           pure $ encodeJson $ Aeson.object
             [ "directiveType" .= directiveType
-            , "prettyText" .= prettyEvalResult res
+            , "prettyText" .= prettyEvalResult conFields res
             , "success" .= case res of
                 EL.Assertion b -> Aeson.toJSON b
                 EL.Reduction _ -> Aeson.Null
             , "structuredValue" .= case res of
                 EL.Assertion b -> Aeson.toJSON b
                 EL.Reduction (Left _) -> Aeson.Null
-                EL.Reduction (Right nf) -> Aeson.toJSON (prettyLayout nf)
+                EL.Reduction (Right nf) -> Aeson.toJSON (prettyLayoutNF conFields nf)
             ]
 
 -- | Evaluate a list of resolved imports and combine their environments.
@@ -506,9 +508,9 @@ typeFunction n | n > 0 =
 typeFunction _ = error "Internal error: negative arity of type constructor"
 
 -- | Convert an evaluation result to JSON.
-evalResultToJson :: EL.EvalDirectiveResult -> Aeson.Value
-evalResultToJson edr = Aeson.object $
-  [ "result" .= prettyEvalResult edr.result
+evalResultToJson :: ConstructorFieldNames -> EL.EvalDirectiveResult -> Aeson.Value
+evalResultToJson fields edr = Aeson.object $
+  [ "result" .= prettyEvalResult fields edr.result
   , "success" .= isSuccess edr.result
   ] ++
   case edr.range of
@@ -520,11 +522,11 @@ evalResultToJson edr = Aeson.object $
     isSuccess (EL.Reduction (Left _)) = False
 
 -- | Pretty print an evaluation directive result value.
-prettyEvalResult :: EL.EvalDirectiveValue -> Text
-prettyEvalResult (EL.Assertion True)       = "assertion satisfied"
-prettyEvalResult (EL.Assertion False)      = "assertion failed"
-prettyEvalResult (EL.Reduction (Left exc)) = Text.unlines (prettyEvalException exc)
-prettyEvalResult (EL.Reduction (Right v))  = prettyLayout v
+prettyEvalResult :: ConstructorFieldNames -> EL.EvalDirectiveValue -> Text
+prettyEvalResult _fields (EL.Assertion True)       = "assertion satisfied"
+prettyEvalResult _fields (EL.Assertion False)      = "assertion failed"
+prettyEvalResult _fields (EL.Reduction (Left exc)) = Text.unlines (prettyEvalException exc)
+prettyEvalResult fields  (EL.Reduction (Right v))  = prettyLayoutNF fields v
 
 -- | Generate ladder diagram visualization data for a specific DECIDE rule by name.
 --

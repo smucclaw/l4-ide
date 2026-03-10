@@ -184,7 +184,8 @@ scheduleDirectiveResultsNotification ide doc nuri = do
                 in if lineNo > 0 && lineNo <= length ls
                    then ls !! (lineNo - 1)
                    else ""
-            evalUpdates  = Maybe.mapMaybe (Inspector.evalDirectiveToUpdateItem getLineContent) evalResults
+            conFields    = maybe mempty (extractConstructorFieldNames . (.entityInfo)) mTcResult
+            evalUpdates  = Maybe.mapMaybe (Inspector.evalDirectiveToUpdateItem conFields getLineContent) evalResults
             checkUpdates =
               [ Inspector.DirectiveUpdateItem
                   { directiveId = Text.pack (show lineNo) <> ":" <> Text.pack (show colNo)
@@ -504,8 +505,10 @@ handlers evalConfig recorder =
             let nuri = toNormalizedUri reqParams.verDocId._uri
                 targetPos = reqParams.srcPos
 
-            mResults <- liftIO $ runAction "l4/evalDirectiveResult" ide $
-              use EvaluateLazy nuri
+            (mResults, mTcResult') <- liftIO $ runAction "l4/evalDirectiveResult" ide $ do
+              mEval <- use EvaluateLazy nuri
+              mTc   <- use SuccessfulTypeCheck nuri
+              pure (mEval, mTc)
 
             case mResults of
               Nothing -> pure $ Left $ TResponseError
@@ -514,12 +517,13 @@ handlers evalConfig recorder =
                 , _xdata = Nothing
                 }
               Just results -> do
-                let matchesPos (EL.MkEvalDirectiveResult rng _ _) = fmap (.start) rng == Just targetPos
+                let conFields = maybe mempty (extractConstructorFieldNames . (.entityInfo)) mTcResult'
+                    matchesPos (EL.MkEvalDirectiveResult rng _ _) = fmap (.start) rng == Just targetPos
                     matchingResult = List.find matchesPos results
                 case matchingResult of
                   Just evalRes ->
                     pure $ Right $ Aeson.toJSON $
-                      Inspector.evalDirectiveToResult reqParams.directiveType evalRes
+                      Inspector.evalDirectiveToResult conFields reqParams.directiveType evalRes
                   Nothing | reqParams.directiveType == "#CHECK" -> do
                     -- #CHECK results come from the type checker (CheckInfo), not the evaluator.
                     -- Look for a CheckInfo item on the same line as the target position.

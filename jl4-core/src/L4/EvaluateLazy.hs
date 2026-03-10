@@ -16,6 +16,7 @@ module L4.EvaluateLazy
 , execEvalExprInContextOfModule
 , prettyEvalException
 , prettyEvalDirectiveResult
+, prettyEvalDirectiveResultWithFields
 )
 where
 
@@ -363,6 +364,21 @@ prettyEvalDirectiveResult (MkEvalDirectiveResult _range res mtrace) =
    <> case mtrace of
         Nothing -> Text.empty
         Just t  -> "\n─────\n" <> prettyLayout t
+
+-- | Like 'prettyEvalDirectiveResult' but uses named-field syntax (WITH / IS)
+-- for constructors whose field names are provided.
+prettyEvalDirectiveResultWithFields :: ConstructorFieldNames -> EvalDirectiveResult -> Text
+prettyEvalDirectiveResultWithFields fields (MkEvalDirectiveResult _range res mtrace) =
+   prettyEvalDirectiveValueWithFields fields res
+   <> case mtrace of
+        Nothing -> Text.empty
+        Just t  -> "\n─────\n" <> prettyLayout t
+
+prettyEvalDirectiveValueWithFields :: ConstructorFieldNames -> EvalDirectiveValue -> Text
+prettyEvalDirectiveValueWithFields _fields (Assertion True)        = "assertion satisfied"
+prettyEvalDirectiveValueWithFields _fields (Assertion False)       = "assertion failed"
+prettyEvalDirectiveValueWithFields _fields (Reduction (Left exc))  = Text.unlines (prettyEvalException exc)
+prettyEvalDirectiveValueWithFields fields  (Reduction (Right v))   = prettyLayoutNF fields v
 
 -- | Evaluate WHNF to NF, with a cutoff (which possibly could be made configurable).
 nf :: WHNF -> Eval NF
