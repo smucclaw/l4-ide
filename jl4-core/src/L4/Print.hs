@@ -1,9 +1,11 @@
 module L4.Print where
 
 import Base
+import qualified Base.Map as Map
 import qualified Base.Text as Text
 import L4.Evaluate.ValueLazy as Lazy
 import L4.Syntax
+import qualified L4.TypeCheck.Types as TC
 
 import Data.Char
 import Data.Time (UTCTime, toGregorian)
@@ -27,6 +29,35 @@ prettyLayout a = docText $ printWithLayout a
 
 docText :: Doc ann -> Text
 docText = renderStrict . layoutPretty (LayoutOptions Unbounded)
+
+-- | A map from constructor 'Unique' to its field names (in order).
+-- Used for pretty-printing constructor values with named fields.
+type ConstructorFieldNames = Map Unique [Text]
+
+-- | Build a 'ConstructorFieldNames' map from type-checker 'EntityInfo'.
+-- For each constructor, extracts the parameter names from its function type.
+extractConstructorFieldNames :: TC.EntityInfo -> ConstructorFieldNames
+extractConstructorFieldNames ei = Map.fromList
+  [ (u, names)
+  | (u, (_name, TC.KnownTerm ty Constructor)) <- Map.toList ei
+  , let names = fieldNamesFromType ty
+  , not (null names)
+  ]
+  where
+    fieldNamesFromType :: Type' Resolved -> [Text]
+    fieldNamesFromType (Fun _ params _) = mapMaybe paramName params
+    fieldNamesFromType (Forall _ _ inner) = fieldNamesFromType inner
+    fieldNamesFromType _ = []
+
+    paramName :: OptionallyNamedType Resolved -> Maybe Text
+    paramName (MkOptionallyNamedType _ (Just n) _) = Just (resolvedToText n)
+    paramName _ = Nothing
+
+    resolvedToText :: Resolved -> Text
+    resolvedToText r = case rawName (getActual r) of
+      NormalName t -> t
+      QualifiedName _ t -> t
+      PreDef t -> t
 
 -- | Hack to get the lines of a document as 'Doc'. Used for the trace printer
 -- and in situations where we need to prefix all the lines with something else.
@@ -505,6 +536,65 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
     Lazy.ValAssumed{}              -> printWithLayout v
     Lazy.ValConstructor r []       -> printWithLayout r
     _ -> surround (printWithLayout v) "(" ")"
+
+-- | Pretty-print an 'NF' value, using named fields (WITH / IS syntax) for
+-- constructors whose field names are provided in the map.
+prettyNFWithConstructorFields :: ConstructorFieldNames -> Lazy.NF -> Doc ann
+prettyNFWithConstructorFields fields = goNF
+  where
+    goNF :: Lazy.NF -> Doc ann
+    goNF (Lazy.MkNF v)  = goVal v
+    goNF Lazy.Omitted    = "…"
+
+    goVal :: Lazy.Value Lazy.NF -> Doc ann
+    goVal = \case
+      Lazy.ValConstructor r vs
+        | Just names <- Map.lookup (getUnique r) fields
+        , length names == length vs
+        , not (null vs)
+        -> printWithLayout r <+> "WITH"
+           <+> hsep (punctuate comma (zipWith fieldPair names vs))
+      -- For everything else, delegate to the standard LayoutPrinter,
+      -- but recurse into nested NF values with field-name awareness.
+      Lazy.ValCons hd tl ->
+        "LIST" <+> goList hd tl
+      Lazy.ValConstructor r vs -> printWithLayout r <> case vs of
+        [] -> mempty
+        vals@(_:_) -> space <> "OF" <+> hsep (punctuate comma (fmap goNFParens vals))
+      other -> printWithLayout other
+
+    fieldPair :: Text -> Lazy.NF -> Doc ann
+    fieldPair name val = pretty (quoteIfNeeded name) <+> "IS" <+> goNF val
+
+    goList :: Lazy.NF -> Lazy.NF -> Doc ann
+    goList v1 (Lazy.MkNF Lazy.ValNil)        = goNF v1
+    goList v1 (Lazy.MkNF (Lazy.ValCons v2 v3)) = goNF v1 <> comma <+> goList v2 v3
+    goList Lazy.Omitted Lazy.Omitted         = "..."
+    goList v1 Lazy.Omitted                   = goNF v1 <> comma <+> "..."
+    goList v1 v                              = goNF v1 <> comma <+> goNF v
+
+    goNFParens :: Lazy.NF -> Doc ann
+    goNFParens nf = case nf of
+      Lazy.MkNF v -> goValParens v
+      Lazy.Omitted -> "…"
+
+    goValParens :: Lazy.Value Lazy.NF -> Doc ann
+    goValParens v = case v of
+      Lazy.ValNumber{}               -> goVal v
+      Lazy.ValString{}               -> goVal v
+      Lazy.ValDate{}                 -> goVal v
+      Lazy.ValTime{}                 -> goVal v
+      Lazy.ValDateTime{}             -> goVal v
+      Lazy.ValNil                    -> "EMPTY"
+      Lazy.ValClosure{}              -> goVal v
+      Lazy.ValUnappliedConstructor{} -> goVal v
+      Lazy.ValAssumed{}              -> goVal v
+      Lazy.ValConstructor _ []       -> goVal v
+      _ -> surround (goVal v) "(" ")"
+
+-- | Pretty-print an 'NF' to 'Text', using named fields when available.
+prettyLayoutNF :: ConstructorFieldNames -> Lazy.NF -> Text
+prettyLayoutNF fields nf = docText $ prettyNFWithConstructorFields fields nf
 
 instance LayoutPrinter BinOp where
   printWithLayout = \ case

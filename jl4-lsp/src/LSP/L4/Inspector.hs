@@ -18,7 +18,7 @@ import Data.Ratio (numerator, denominator)
 import GHC.TypeLits (Symbol)
 import Language.LSP.Protocol.Types as LSP
 import L4.Parser.SrcSpan (SrcPos(..), SrcRange(..))
-import L4.Print (prettyLayout)
+import L4.Print (prettyLayout, ConstructorFieldNames)
 import L4.Syntax (getActual)
 
 import qualified L4.EvaluateLazy as EL
@@ -96,11 +96,11 @@ instance FromJSON DirectiveResult where
 -- Converting EvalDirectiveResult to DirectiveResult
 ------------------------------------------------------
 
-evalDirectiveToResult :: Text -> EL.EvalDirectiveResult -> DirectiveResult
-evalDirectiveToResult dirType (EL.MkEvalDirectiveResult _range res mtrace) =
+evalDirectiveToResult :: ConstructorFieldNames -> Text -> EL.EvalDirectiveResult -> DirectiveResult
+evalDirectiveToResult fields dirType (EL.MkEvalDirectiveResult _range res mtrace) =
   DirectiveResult
     { directiveType = dirType
-    , prettyText = EL.prettyEvalDirectiveResult (EL.MkEvalDirectiveResult _range res mtrace)
+    , prettyText = EL.prettyEvalDirectiveResultWithFields fields (EL.MkEvalDirectiveResult _range res mtrace)
     , success = case res of
         EL.Assertion b        -> Just b
         EL.Reduction (Right _) -> Just True
@@ -217,17 +217,18 @@ instance FromJSON DirectiveResultsUpdatedParams where
 -- | Convert an 'EL.EvalDirectiveResult' to a 'DirectiveUpdateItem'.
 -- Returns 'Nothing' if the result carries no source range.
 evalDirectiveToUpdateItem
-  :: (Int -> Text)          -- ^ get raw line content by 1-indexed line number
+  :: ConstructorFieldNames
+  -> (Int -> Text)          -- ^ get raw line content by 1-indexed line number
   -> EL.EvalDirectiveResult
   -> Maybe DirectiveUpdateItem
-evalDirectiveToUpdateItem getLineContent (EL.MkEvalDirectiveResult (Just rng@(MkSrcRange (MkSrcPos lineNo colNo) _ _ _)) res mtrace) =
+evalDirectiveToUpdateItem fields getLineContent (EL.MkEvalDirectiveResult (Just rng@(MkSrcRange (MkSrcPos lineNo colNo) _ _ _)) res mtrace) =
   Just DirectiveUpdateItem
     { directiveId = Text.pack (show lineNo) <> ":" <> Text.pack (show colNo)
-    , prettyText  = EL.prettyEvalDirectiveResult (EL.MkEvalDirectiveResult (Just rng) res mtrace)
+    , prettyText  = EL.prettyEvalDirectiveResultWithFields fields (EL.MkEvalDirectiveResult (Just rng) res mtrace)
     , success     = case res of
         EL.Assertion b         -> Just b
         EL.Reduction (Right _) -> Just True
         EL.Reduction (Left _)  -> Just False
     , lineContent = getLineContent lineNo
     }
-evalDirectiveToUpdateItem _ _ = Nothing
+evalDirectiveToUpdateItem _ _ _ = Nothing
