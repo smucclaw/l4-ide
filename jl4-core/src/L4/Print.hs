@@ -557,7 +557,7 @@ prettyNFWithConstructorFields fields = goNF
       -- For everything else, delegate to the standard LayoutPrinter,
       -- but recurse into nested NF values with field-name awareness.
       Lazy.ValCons hd tl ->
-        "(" <> goNF hd <> " FOLLOWED BY " <> goNF tl <> ")"
+        "LIST" <+> goList hd tl
       Lazy.ValConstructor r vs -> printWithLayout r <> case vs of
         [] -> mempty
         vals@(_:_) -> space <> "OF" <+> hsep (punctuate comma (fmap goNFParens vals))
@@ -565,6 +565,13 @@ prettyNFWithConstructorFields fields = goNF
 
     fieldPair :: Text -> Lazy.NF -> Doc ann
     fieldPair name val = pretty (quoteIfNeeded name) <+> "IS" <+> goNF val
+
+    goList :: Lazy.NF -> Lazy.NF -> Doc ann
+    goList v1 (Lazy.MkNF Lazy.ValNil)        = goNF v1
+    goList v1 (Lazy.MkNF (Lazy.ValCons v2 v3)) = goNF v1 <> comma <+> goList v2 v3
+    goList Lazy.Omitted Lazy.Omitted         = "..."
+    goList v1 Lazy.Omitted                   = goNF v1 <> comma <+> "..."
+    goList v1 v                              = goNF v1 <> comma <+> goNF v
 
     goNFParens :: Lazy.NF -> Doc ann
     goNFParens nf = case nf of
