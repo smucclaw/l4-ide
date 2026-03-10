@@ -15,9 +15,9 @@
   import { colorize, escapeHtml } from '@repo/l4-highlight'
 
   interface ResultSection {
+    renderKey: number
     directiveId: string
     fileUri: string
-    directiveType: string
     prettyText: string
     success: boolean | null
     structuredValue: unknown | null
@@ -28,6 +28,7 @@
     stale: boolean
   }
 
+  let nextRenderKey = 0
   let sections: ResultSection[] = $state([])
   let collapsedFiles: Set<string> = $state(new Set())
 
@@ -95,6 +96,23 @@
   function addOrScrollToResult(msg: AddInspectorResultMessage) {
     const existing = sections.find((s) => s.directiveId === msg.directiveId)
     if (existing) {
+      if (existing.stale) {
+        // Re-activate the stale section with fresh data
+        sections = sections.map((s) =>
+          s.directiveId === msg.directiveId
+            ? {
+                ...s,
+                prettyText: msg.result.prettyText,
+                success: msg.result.success,
+                structuredValue: msg.result.structuredValue,
+                srcLine: msg.srcPos.line,
+                srcColumn: msg.srcPos.column,
+                lineContent: msg.lineContent,
+                stale: false,
+              }
+            : s
+        )
+      }
       tick().then(() => {
         const el = document.getElementById(`section-${msg.directiveId}`)
         el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
@@ -105,9 +123,9 @@
     }
 
     const newSection: ResultSection = {
+      renderKey: nextRenderKey++,
       directiveId: msg.directiveId,
       fileUri: parseFileUri(msg.directiveId),
-      directiveType: msg.result.directiveType,
       prettyText: msg.result.prettyText,
       success: msg.result.success,
       structuredValue: msg.result.structuredValue,
@@ -239,17 +257,13 @@
       }
     }
 
-    // Pass 2 (FALLBACK): positional match
-    const directivePrefix = (line: string) =>
-      line.trimStart().split(/\s/)[0] ?? ''
+    // Pass 2 (FALLBACK): positional match by directiveId (same line:col)
     for (const s of toSync) {
       if (s.stale || remappings.has(s.directiveId)) continue
-      const sPrefix = directivePrefix(s.lineContent)
       const positionalMatch = results.find(
         (r) =>
           r.directiveId === s.directiveId &&
-          !matchedResultIds.has(r.directiveId) &&
-          directivePrefix(r.lineContent) === sPrefix
+          !matchedResultIds.has(r.directiveId)
       )
       if (positionalMatch) {
         remappings.set(s.directiveId, {
@@ -405,7 +419,7 @@
       {/if}
 
       {#if !hasMultipleFiles || !collapsedFiles.has(group.fileUri)}
-        {#each group.sections as section (section.directiveId)}
+        {#each group.sections as section (section.renderKey)}
           <div
             id="section-{section.directiveId}"
             class="result-section {successClass(section.success)}"
