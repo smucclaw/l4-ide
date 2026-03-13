@@ -29,6 +29,7 @@
     bundles = lib.mkOption {
       type = lib.types.attrsOf lib.types.path;
       default = {
+        classic = ../../jl4/experiments/classic;
         thailand-cosmetics = ../../jl4/experiments/thailand-cosmetics;
       };
       description = ''
