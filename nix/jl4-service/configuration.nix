@@ -78,6 +78,11 @@
       '';
       Restart = "always";
 
+      # Load ANTHROPIC_API_KEY from server-local env file (not in git).
+      # Create on server: echo 'ANTHROPIC_API_KEY=sk-ant-...' > /var/lib/jl4-service/.env
+      # TODO: Migrate to AWS Secrets Manager with ExecStartPre fetch script.
+      EnvironmentFile = [ "/var/lib/jl4-service/.env" ];
+
       StateDirectory = "jl4-service";
 
       # Security (relaxed vs decision-service: needs writable store)

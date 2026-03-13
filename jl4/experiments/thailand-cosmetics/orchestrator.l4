@@ -1,0 +1,498 @@
+// Decision Aggregator with Category Detection
+//
+// Demonstrates:
+// 1. AI-driven category detection runs FIRST
+// 2. Tier 1 (category-specific) tests run CONDITIONALLY based on detected category
+// 3. Tier 2 & 3 tests always run (apply to all products)
+// 4. Lazy evaluation naturally optimizes - only relevant tests execute
+
+IMPORT anthropicClient
+IMPORT promptLibrary
+IMPORT prelude
+
+§ `Decision Aggregator with Category Detection`
+
+// ============================================================================
+// TYPE DEFINITIONS
+// ============================================================================
+
+// Cosmetic categories (all 23 from Manual + uncategorized)
+DECLARE `Cosmetic Category` IS ONE OF
+    `whitening products`
+    `anti-wrinkle products`
+    `acne products`
+    `contouring products`
+    `exfoliating products`
+    `sunscreen products`
+    `cleansing products`
+    `anti-dandruff products`
+    `hair care products`
+    `hair treatment products`
+    `deodorant products`
+    `perfume products`
+    `nail products`
+    `toothpaste products`
+    `mouthwash products`
+    `breath spray products`
+    `dental floss products`
+    `teeth whitening products`
+    `hemp CBD products`
+    `anti-blue light products`
+    `skin balancing products`
+    `natural products`
+    `detox products`
+    `certified products`
+    `comparison products`
+    `statistical products`
+    `uncategorized`
+
+// Structured evaluation result (matches Claude JSON response)
+DECLARE `Evaluation Result` HAS
+  `verdict`    IS A BOOLEAN
+  `confidence` IS A NUMBER
+  `reasoning`  IS A STRING
+
+// Individual test result with metadata
+DECLARE `Test Result` HAS
+  `test name`  IS A STRING
+  `test tier`  IS A STRING
+  `result`     IS A EITHER STRING `Evaluation Result`
+
+// Category detection result
+DECLARE `Category Detection` HAS
+  `detected category` IS A `Cosmetic Category`
+  `confidence`        IS A NUMBER
+  `reasoning`         IS A STRING
+
+// Aggregated compliance decision
+DECLARE `Compliance Decision` HAS
+  `detected category`  IS A `Cosmetic Category`
+  `compliant`          IS A BOOLEAN
+  `violations`         IS A LIST OF `Test Result`
+  `tests run`          IS A NUMBER
+  `max confidence`     IS A NUMBER
+  `summary`            IS A STRING
+
+// API response types
+DECLARE `Content Block` HAS
+  `type` IS A STRING
+  `text` IS A STRING
+
+DECLARE `Cache Creation` HAS
+  `ephemeral_5m_input_tokens` IS A NUMBER
+  `ephemeral_1h_input_tokens` IS A NUMBER
+
+DECLARE `Usage` HAS
+  `input_tokens`                 IS A NUMBER
+  `cache_creation_input_tokens`  IS A NUMBER
+  `cache_read_input_tokens`      IS A NUMBER
+  `cache_creation`               IS A `Cache Creation`
+  `output_tokens`                IS A NUMBER
+  `service_tier`                 IS A STRING
+
+DECLARE `Claude Response` HAS
+  `id`            IS A STRING
+  `type`          IS A STRING
+  `role`          IS A STRING
+  `content`       IS A LIST OF `Content Block`
+  `model`         IS A STRING
+  `stop_reason`   IS A STRING
+  `stop_sequence` IS A MAYBE STRING
+  `usage`         IS A `Usage`
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+// Decode JSON response from Claude API
+GIVEN responseJson IS A STRING
+GIVETH A EITHER STRING `Claude Response`
+decodeResponse responseJson MEANS
+  JSONDECODE responseJson
+
+// Extract text from API response
+extractText response MEANS
+  CONSIDER response
+    WHEN RIGHT r THEN
+      CONSIDER r's `content`
+        WHEN block FOLLOWED BY rest THEN block's `text`
+        WHEN EMPTY THEN "No content"
+    WHEN LEFT err THEN CONCAT "Failed to parse response: " , err
+
+// Parse evaluation JSON from text
+GIVEN evaluationJson IS A STRING
+GIVETH A EITHER STRING `Evaluation Result`
+parseEvaluation evaluationJson MEANS
+  JSONDECODE evaluationJson
+
+// Parse category detection JSON from text
+GIVEN categoryJson IS A STRING
+GIVETH A EITHER STRING `Category Detection`
+parseCategoryDetection categoryJson MEANS
+  JSONDECODE categoryJson
+
+// Run a single test and return structured result
+GIVEN testName IS A STRING
+      testTier IS A STRING
+      promptFn IS A STRING
+GIVETH A `Test Result`
+runTest testName testTier promptFn MEANS
+  `Test Result` WITH
+    `test name` IS testName
+    `test tier` IS testTier
+    `result`    IS parseEvaluation (extractText (decodeResponse (callClaude promptFn)))
+
+// Check if a test result indicates a violation
+GIVEN testResult IS A `Test Result`
+GIVETH A BOOLEAN
+isViolation testResult MEANS
+  CONSIDER testResult's `result`
+    WHEN RIGHT evalResult THEN evalResult's `verdict`
+    WHEN LEFT err THEN FALSE
+
+// Extract confidence from test result
+GIVEN testResult IS A `Test Result`
+GIVETH A NUMBER
+getConfidence testResult MEANS
+  CONSIDER testResult's `result`
+    WHEN RIGHT evalResult THEN evalResult's `confidence`
+    WHEN LEFT err THEN 0
+
+// Count violations in a list of test results
+GIVEN results IS A LIST OF `Test Result`
+GIVETH A NUMBER
+countViolations results MEANS
+  CONSIDER results
+    WHEN test FOLLOWED BY rest THEN
+      BRANCH
+        IF isViolation test THEN 1 + countViolations rest
+        OTHERWISE countViolations rest
+    WHEN EMPTY THEN 0
+
+// Count total tests in list
+GIVEN results IS A LIST OF `Test Result`
+GIVETH A NUMBER
+countTests results MEANS
+  CONSIDER results
+    WHEN test FOLLOWED BY rest THEN 1 + countTests rest
+    WHEN EMPTY THEN 0
+
+// Find maximum confidence among violations
+GIVEN results IS A LIST OF `Test Result`
+GIVETH A NUMBER
+maxViolationConfidence results MEANS
+  CONSIDER results
+    WHEN test FOLLOWED BY rest THEN
+      BRANCH
+        IF isViolation test THEN
+          BRANCH
+            IF getConfidence test > maxViolationConfidence rest
+            THEN getConfidence test
+            OTHERWISE maxViolationConfidence rest
+        OTHERWISE maxViolationConfidence rest
+    WHEN EMPTY THEN 0
+
+// Filter only violations from test results
+GIVEN results IS A LIST OF `Test Result`
+GIVETH A LIST OF `Test Result`
+filterViolations results MEANS
+  CONSIDER results
+    WHEN test FOLLOWED BY rest THEN
+      BRANCH
+        IF isViolation test THEN test FOLLOWED BY filterViolations rest
+        OTHERWISE filterViolations rest
+    WHEN EMPTY THEN EMPTY
+
+// ============================================================================
+// CATEGORY DETECTION PROMPT
+// ============================================================================
+
+promptCategoryDetection claimText MEANS
+  CONCAT
+    "CATEGORY DETECTION: Cosmetic Product Categorization\n",
+    "Context: Thailand Cosmetics Manual BE 2567\n\n",
+    "Task: Determine which cosmetic category this product belongs to.\n\n",
+    "Categories:\n",
+    "- whitening products: Claims about skin brightening, fairness, tone\n",
+    "- anti-wrinkle products: Claims about wrinkles, aging, firmness\n",
+    "- acne products: Claims about acne, blemishes, pores\n",
+    "- contouring products: Claims about body contouring, firming, slimming\n",
+    "- exfoliating products: Claims about exfoliation, scrubs, peeling, dead skin\n",
+    "- sunscreen products: UV protection, sun protection, SPF\n",
+    "- cleansing products: Face wash, makeup remover, cleansers, antibacterial wash\n",
+    "- anti-dandruff products: Claims about dandruff, scalp flakes, scalp itch\n",
+    "- hair care products: Claims about hair loss, hair nourishment, hair strength\n",
+    "- hair treatment products: Hair straightening, perming, coloring, dye\n",
+    "- deodorant products: Claims about body odor, underarm, perspiration\n",
+    "- perfume products: Fragrance, perfume, cologne, scent\n",
+    "- nail products: Nail polish, nail care, nail treatment\n",
+    "- toothpaste products: Toothpaste, dental paste, tooth cleaning paste\n",
+    "- mouthwash products: Mouthwash, mouth rinse, oral rinse\n",
+    "- breath spray products: Breath spray, mouth spray, oral freshener\n",
+    "- dental floss products: Dental floss, interdental cleaning\n",
+    "- teeth whitening products: Teeth whitening, tooth bleaching\n",
+    "- hemp CBD products: Hemp, cannabis, CBD extract cosmetics\n",
+    "- anti-blue light products: Blue light protection, screen protection\n",
+    "- skin balancing products: Skin balance, pH balance, microbiome\n",
+    "- natural products: Natural ingredients, organic, no chemicals\n",
+    "- detox products: Detox, detoxification, toxin removal\n",
+    "- certified products: Products displaying certification marks, logos\n",
+    "- comparison products: Products making sales comparison claims\n",
+    "- statistical products: Products citing statistical data, surveys\n",
+    "- uncategorized: If none of the above clearly apply\n\n",
+    "Analyze this claim: ", claimText, "\n\n",
+    "Question: Which category best describes this product?\n\n",
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):\n",
+    "{\"detected category\": \"whitening products\", \"confidence\": 95, \"reasoning\": \"Brief explanation\"}\n\n",
+    "Rules:\n",
+    "- detected category: Must be one of the 27 categories above (exact spelling)\n",
+    "- confidence: number 0-100\n",
+    "- reasoning: 1-2 sentence explanation\n",
+    "- NO markdown formatting, NO ```json code blocks, ONLY the raw JSON object"
+
+// ============================================================================
+// LAZY EVALUATION: CATEGORY-CONDITIONAL TESTS
+// ============================================================================
+
+// Tier 1 tests demonstrate lazy evaluation:
+// - They're only called if the category matches
+// - L4's lazy evaluation means the test only runs when needed
+//
+// Tier 2 & 3 tests always run (apply to all products)
+
+GIVEN claimText IS A STRING
+      category IS A `Cosmetic Category`
+GIVETH A LIST OF `Test Result`
+getTier1Tests claimText category MEANS
+  CONSIDER category
+    WHEN `whitening products` THEN
+      LIST runTest "Whitening: Natural Tone Alteration" "Tier 1" (promptWhiteningNaturalTone claimText)
+    WHEN `anti-wrinkle products` THEN
+      LIST runTest "Anti-Wrinkle: Structural Prevention" "Tier 1" (promptAntiWrinkleStructural claimText)
+    WHEN `acne products` THEN
+      LIST runTest "Acne: Therapeutic Claims" "Tier 1" (promptAcneTherapeuticClaims claimText)
+    WHEN `contouring products` THEN
+      LIST runTest "Contouring: Body Structure Alteration" "Tier 1" (promptContourBodyStructure claimText)
+    WHEN `exfoliating products` THEN
+      LIST runTest "Exfoliating: Skin Structural Alteration" "Tier 1" (promptExfoliateStructural claimText)
+    WHEN `sunscreen products` THEN
+      LIST runTest "Sunscreen: Unrealistic Protection" "Tier 1" (promptSunscreenUnrealistic claimText)
+    WHEN `cleansing products` THEN
+      LIST
+        runTest "Cleansing: Microbiological Claims" "Tier 1" (promptCleansingMicrobiological claimText),
+        runTest "Cleansing: Medical Symbols" "Tier 1" (promptCleansingMedicalSymbols claimText)
+    WHEN `anti-dandruff products` THEN
+      LIST runTest "Anti-Dandruff: Therapeutic Claims" "Tier 1" (promptDandruffTherapeutic claimText)
+    WHEN `hair care products` THEN
+      LIST
+        runTest "Hair Care: Unspecified Hair Loss" "Tier 1" (promptHaircareUnspecifiedLoss claimText),
+        runTest "Hair Care: Deep Nourishment" "Tier 1" (promptHaircareDeepNourishment claimText)
+    WHEN `hair treatment products` THEN
+      LIST runTest "Hair Treatment: No-Damage Claims" "Tier 1" (promptHairtreatNoDamage claimText)
+    WHEN `deodorant products` THEN
+      LIST runTest "Deodorant: Gland Structure Claims" "Tier 1" (promptDeodorantGlandStructure claimText)
+    WHEN `perfume products` THEN
+      LIST runTest "Perfume: Psychoactive Effects" "Tier 1" (promptPerfumePsychoactive claimText)
+    WHEN `nail products` THEN
+      LIST runTest "Nail: Therapeutic Growth" "Tier 1" (promptNailTherapeuticGrowth claimText)
+    WHEN `toothpaste products` THEN
+      LIST
+        runTest "Toothpaste: Disease Claims" "Tier 1" (promptToothpasteDiseaseClms claimText),
+        runTest "Toothpaste: Xylitol Decay" "Tier 1" (promptToothpasteXylitolDecay claimText)
+    WHEN `mouthwash products` THEN
+      LIST
+        runTest "Mouthwash: Disease Claims" "Tier 1" (promptMouthwashDiseaseClms claimText),
+        runTest "Mouthwash: Whitening Claims" "Tier 1" (promptMouthwashWhiteningClms claimText),
+        runTest "Mouthwash: Substitute for Brushing" "Tier 1" (promptMouthwashSubstitute claimText),
+        runTest "Mouthwash: Xylitol Decay" "Tier 1" (promptMouthwashXylitolDecay claimText)
+    WHEN `breath spray products` THEN
+      LIST
+        runTest "Breath Spray: Disease Claims" "Tier 1" (promptBreathsprayDiseaseClms claimText),
+        runTest "Breath Spray: Germ Prevention" "Tier 1" (promptBreathsprayGermPrevention claimText)
+    WHEN `dental floss products` THEN
+      LIST runTest "Dental Floss: Disease Prevention" "Tier 1" (promptDentalflossDiseasePrevent claimText)
+    WHEN `teeth whitening products` THEN
+      LIST runTest "Teeth Whitening: Enamel Abnormality" "Tier 1" (promptTeethwhitenEnamelAbnormal claimText)
+    WHEN `hemp CBD products` THEN
+      LIST runTest "Hemp/CBD: Disease Treatment" "Tier 1" (promptHempDiseaseTreatment claimText)
+    WHEN `anti-blue light products` THEN
+      LIST runTest "Anti-Blue Light: Deep Tissue" "Tier 1" (promptBluelightDeepTissue claimText)
+    WHEN `skin balancing products` THEN
+      LIST
+        runTest "Skin Balancing: pH Adjustment" "Tier 1" (promptBalancePHAdjustment claimText),
+        runTest "Skin Balancing: Microbiome Claims" "Tier 1" (promptBalanceMicrobiome claimText)
+    WHEN `natural products` THEN
+      LIST runTest "Natural: False Natural Claims" "Tier 1" (promptNaturalFalseClaims claimText)
+    WHEN `detox products` THEN
+      LIST runTest "Detox: Translated Term" "Tier 1" (promptDetoxTranslatedTerm claimText)
+    WHEN `certified products` THEN
+      LIST
+        runTest "Certified: Medical Symbols" "Tier 1" (promptCertifiedMedicalSymbols claimText),
+        runTest "Certified: Medical Terms" "Tier 1" (promptCertifiedMedicalTerms claimText)
+    WHEN `comparison products` THEN
+      LIST runTest "Comparison: Competitor Claims" "Tier 1" (promptComparisonCompetitor claimText)
+    WHEN `statistical products` THEN
+      LIST runTest "Statistical: Satisfaction vs Efficacy" "Tier 1" (promptStatisticalSatisfactionEfficacy claimText)
+    WHEN `uncategorized` THEN
+      EMPTY  // No category-specific tests
+
+// Tier 2 tests: Manual-specific requirements (apply to all products)
+GIVEN claimText IS A STRING
+GIVETH A LIST OF `Test Result`
+getTier2Tests claimText MEANS
+  LIST
+    runTest "Ingredient Substantiation" "Tier 2" (promptIngredientSubstantiation claimText),
+    runTest "Cosmetic Scope" "Tier 2" (promptCosmeticScope claimText),
+    runTest "Comparative Advertising" "Tier 2" (promptComparativeAdvertising claimText),
+    runTest "Award/Certification" "Tier 2" (promptAwardCertification claimText),
+    runTest "Academic Statistics" "Tier 2" (promptAcademicStatistics claimText),
+    runTest "Monarchy Rules" "Tier 2" (promptMonarchyRules claimText),
+    runTest "Giveaway/Contest" "Tier 2" (promptGiveawayContest claimText)
+
+// Tier 3 tests: Core Article 41 prohibitions (apply to all products)
+GIVEN claimText IS A STRING
+GIVETH A LIST OF `Test Result`
+getTier3Tests claimText MEANS
+  LIST
+    runTest "False/Exaggerated (41.2.1)" "Tier 3" (promptFalseOrExaggerated claimText),
+    runTest "Misleading Science (41.2.2)" "Tier 3" (promptMisleadingScientificRefs claimText),
+    runTest "Medicinal Claims (41.2.3)" "Tier 3" (promptMedicinalTherapeutic claimText),
+    runTest "Sexual Enhancement (41.2.4)" "Tier 3" (promptSexualEnhancement claimText),
+    runTest "Illegal/Immoral (41.2.5)" "Tier 3" (promptIllegalImmoral claimText),
+    runTest "Social Division (41.2.6)" "Tier 3" (promptSocialDivision claimText),
+    runTest "Ministerial Regulations (41.2.7)" "Tier 3" (promptMinisterialRegulations claimText),
+    runTest "Puffery Exemption (41.3)" "Tier 3" (promptPufferyExemption claimText),
+    runTest "Harmful Conduct (Art. 42)" "Tier 3" (promptHarmfulConduct claimText)
+
+// Combined Tier 2 & 3 tests (apply to all products)
+GIVEN claimText IS A STRING
+GIVETH A LIST OF `Test Result`
+getTier2And3Tests claimText MEANS
+  concat (LIST (getTier2Tests claimText), (getTier3Tests claimText))
+
+// ============================================================================
+// MAIN AGGREGATION WITH CATEGORY DETECTION
+// ============================================================================
+
+// Step 1: Detect category (runs first)
+GIVEN claimText IS A STRING
+GIVETH A EITHER STRING `Category Detection`
+detectCategory claimText MEANS
+  parseCategoryDetection (extractText (decodeResponse (callClaude (promptCategoryDetection claimText))))
+
+// Step 2: Run tests based on detected category
+GIVEN claimText IS A STRING
+      categoryDetection IS A EITHER STRING `Category Detection`
+GIVETH A LIST OF `Test Result`
+getAllTests claimText categoryDetection MEANS
+  CONSIDER categoryDetection
+    WHEN RIGHT detection THEN
+      // Tier 1 (category-specific) - CONDITIONALLY RUN based on category
+      // Use prelude's concat to flatten list of lists
+      concat (LIST (getTier1Tests claimText (detection's `detected category`)),
+                   (getTier2And3Tests claimText))
+    WHEN LEFT err THEN
+      // If category detection failed, just run Tier 2 & 3
+      getTier2And3Tests claimText
+
+// Step 3: Aggregate results into final decision
+@export default
+@desc "Evaluate a cosmetic advertising claim for compliance with Thailand's Cosmetics Act BE 2558 and Manual BE 2567. Takes a claim text string, detects product category, runs category-specific + cross-cutting + core Article 41 tests, and returns a structured compliance decision."
+GIVEN claimText IS A STRING
+GIVETH A `Compliance Decision`
+DECIDE evaluateClaim claimText MEANS
+  `Compliance Decision` WITH
+    `detected category` IS detectedCat
+    `compliant`         IS (violationCount EQUALS 0)
+    `violations`        IS violations
+    `tests run`         IS totalTests
+    `max confidence`    IS maxConf
+    `summary`           IS
+      BRANCH
+        IF violationCount EQUALS 0
+        THEN CONCAT "COMPLIANT - No violations found (", (totalTests AS STRING), " tests run)"
+        IF violationCount EQUALS 1
+        THEN CONCAT "PROHIBITED - 1 violation found from ", (totalTests AS STRING),
+                    " tests (confidence: ", (maxConf AS STRING), "%)"
+        OTHERWISE CONCAT "PROHIBITED - ", (violationCount AS STRING),
+                         " violations found from ", (totalTests AS STRING),
+                         " tests (max confidence: ", (maxConf AS STRING), "%)"
+  WHERE
+    categoryDetectionResult MEANS detectCategory claimText
+    detectedCat MEANS
+      CONSIDER categoryDetectionResult
+        WHEN RIGHT detection THEN detection's `detected category`
+        WHEN LEFT err THEN `uncategorized`
+    allTests MEANS getAllTests claimText categoryDetectionResult
+    violations MEANS filterViolations allTests
+    violationCount MEANS countViolations allTests
+    totalTests MEANS countTests allTests
+    maxConf MEANS maxViolationConfidence allTests
+
+// ============================================================================
+// EXAMPLES
+// ============================================================================
+
+// Example 1: Whitening product (should trigger Tier 1 whitening test)
+whiteningClaim MEANS
+  "Facial cleansing oil permanently whitens the skin by 5 levels and eliminates melanin pigment."
+
+whiteningResult MEANS evaluateClaim whiteningClaim
+
+// Example 2: Acne product (should trigger Tier 1 acne test)
+acneClaim MEANS
+  "This cream treats acne and prevents inflammation. Inhibits bacteria causing acne."
+
+acneResult MEANS evaluateClaim acneClaim
+
+// Example 3: General claim (no specific category, only Tier 2&3 run)
+generalClaim MEANS
+  "This cream is 100% guaranteed to make you look beautiful forever."
+
+generalResult MEANS evaluateClaim generalClaim
+
+// ============================================================================
+// OUTPUT
+// ============================================================================
+
+// #EVAL whiteningClaim
+// #EVAL whiteningResult
+
+// #EVAL acneClaim
+// #EVAL acneResult
+
+// #EVAL generalClaim
+// #EVAL generalResult
+
+// ============================================================================
+// ROW 21: Full orchestrator with JSON input boundary
+// In production, this JSON arrives via the decision service API.
+// Here we hardcode it to model the contract shape.
+// ============================================================================
+
+DECLARE `Evaluation Request` HAS
+  `claim_text` IS A STRING
+  `product_name` IS A STRING
+  `source_row` IS A NUMBER
+
+GIVEN requestJson IS A STRING
+GIVETH A EITHER STRING `Evaluation Request`
+parseRequest requestJson MEANS
+  JSONDECODE requestJson
+
+row21InputJson MEANS
+  "{\"claim_text\": \"Thick foam cleanser that thoroughly cleanses the skin, leaving it feeling fresh and vibrant.\", \"product_name\": \"Row 21 Foam Cleanser\", \"source_row\": 21}"
+
+row21Parsed MEANS parseRequest row21InputJson
+
+row21Claim MEANS
+  CONSIDER row21Parsed
+    WHEN RIGHT req THEN req's `claim_text`
+    WHEN LEFT err THEN CONCAT "ERROR: ", err
+
+row21Result MEANS evaluateClaim row21Claim
+
+#EVAL row21InputJson
+#EVAL row21Parsed
+#EVAL row21Claim
+#EVAL row21Result
