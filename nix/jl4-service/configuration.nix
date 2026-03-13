@@ -100,7 +100,8 @@
       RestrictRealtime = true;
       RestrictSUIDSGID = true;
       PrivateMounts = true;
-      ReadWritePaths = [ config.services.jl4-service.storePath ];
+      # Note: ReadWritePaths is not needed - StateDirectory already provides
+      # write access to /var/lib/jl4-service and all subdirectories
     };
   };
 }
