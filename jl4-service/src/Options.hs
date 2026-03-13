@@ -14,6 +14,7 @@ data Options = Options
   { port                  :: !Int
   , storePath             :: !FilePath
   , serverName            :: !(Maybe Text)
+  , instanceToken         :: !(Maybe Text)
   , lazyLoad              :: !Bool
   , debug                 :: !Bool
   , maxZipSize            :: !Int
@@ -32,6 +33,7 @@ buildOpts = do
   envPort       <- readEnvInt "JL4_PORT"
   envStorePath  <- lookupEnv "JL4_STORE_PATH"
   envServerName <- lookupEnv "JL4_SERVER_NAME"
+  envInstToken  <- lookupEnv "JL4_INSTANCE_TOKEN"
   envLazyLoad   <- readEnvBool "JL4_LAZY_LOAD"
   envDebug      <- readEnvBool "JL4_DEBUG"
   envMaxZip     <- readEnvInt "JL4_MAX_ZIP_SIZE"
@@ -65,6 +67,14 @@ buildOpts = do
                       <> metavar "NAME"
                       <> maybe mempty value (Text.pack <$> envServerName)
                       <> help "Server name exposed in OpenAPI metadata (env: JL4_SERVER_NAME)"
+                  )
+              )
+        <*> optional
+              ( strOption
+                  ( long "instance-token"
+                      <> metavar "TOKEN"
+                      <> maybe mempty value (Text.pack <$> envInstToken)
+                      <> help "Opaque token returned in /health for process identity verification (env: JL4_INSTANCE_TOKEN)"
                   )
               )
         <*> ( switch
