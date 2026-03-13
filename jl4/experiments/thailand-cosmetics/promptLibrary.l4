@@ -1,0 +1,1557 @@
+// Thailand Cosmetics - Complete Prompt Library (Functional)
+// Converted from 11-article41-complete-prompts.l4 static strings to callable functions
+//
+// Each prompt function takes claimText as parameter and returns formatted prompt string
+// Total: 51 prompts (9 Tier 3 + 7 Tier 2 + 35 Tier 1)
+
+§ `Thailand Cosmetics Prompt Library`
+
+// ============================================================================
+// TIER 3: CORE ARTICLE 41 PROMPTS (9 prompts - apply to ALL cosmetics)
+// Source: Thai Cosmetics Act BE 2558, Article 41 & 42
+// ============================================================================
+
+// PROMPT 1: Article 41.2.1 - False or Exaggerated Claims
+promptFalseOrExaggerated claimText MEANS
+  CONCAT
+    "REGULATORY TEST: False or Exaggerated Claims (Article 41.2.1)\n",
+    "Context: Thai Cosmetics Act BE 2558, Article 41, Paragraph 2(1)\n\n",
+    "Principle: Cosmetic advertising must not contain statements that are false or\n",
+    "exaggerate beyond truth regarding the nature, quality, quantity, or other\n",
+    "essential characteristics of the cosmetic. Claims must be truthful and\n",
+    "proportionate to available evidence.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE (truthful, proportionate claims):\n",
+    "  - Claims supported by verifiable evidence\n",
+    "  - Proportionate language: \"helps\", \"may\", \"can improve\"\n",
+    "  - Results qualified: \"results may vary\", \"during period of use\"\n",
+    "  - Factual descriptions of actual ingredients/properties\n",
+    "  - Comparison with own products (with data support)\n\n",
+    "❌ PROHIBITED (false or exaggerated):\n",
+    "  - Factually untrue statements\n",
+    "  - Extreme exaggerations: \"transforms completely\", \"miracle\", \"revolutionary\"\n",
+    "  - Absolute guarantees without basis: \"100% effective\", \"guaranteed results\"\n",
+    "  - Overstating speed: \"instant permanent change\", \"immediate transformation\"\n",
+    "  - Overstating degree: \"eliminates all wrinkles\", \"perfect skin\"\n",
+    "  - Fabricated test results or credentials\n",
+    "  - Unverifiable superlatives: \"world's best\", \"the best\", \"non-toxic\",\n",
+    "    \"no side effects\", \"solves all problems\"\n",
+    "  - Comparison to medical procedures: \"equals Botox\", \"like laser treatment\"\n",
+    "  - False FDA certification: \"FDA certified quality\", \"FDA approved safety\"\n\n",
+    "Examples from Manual:\n",
+    "  - ❌ \"Face-lifting set... golden miracle... Within 28 days, tightens skin,\n",
+    "       locks age, firms and slims face... restores sagging skin to perfection\"\n",
+    "  - ❌ \"Just applying equals injections\"\n",
+    "  - ❌ \"Results more remarkable than Botox\"\n",
+    "  - ❌ \"Complies with standards from the Food and Drug Administration\"\n\n",
+    "Key distinction: Proportionate truthful claims ✓ vs. false or exaggerated claims ✗\n\n",
+    "Note: Utterly unrealistic claims obvious to public may qualify for puffery\n",
+    "exemption (Article 41.3) - evaluate separately.\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Is this claim FALSE (factually untrue) or EXAGGERATED (overstates\n",
+    "truth beyond what evidence could support)?\n\n",
+    "Answer with:\n",
+    "- YES (violates 41.2.1 - prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// PROMPT 2: Article 41.2.2 - Misleading Scientific References
+promptMisleadingScientificRefs claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Misleading Scientific References (Article 41.2.2)\n",
+    "Context: Thai Cosmetics Act BE 2558, Article 41, Paragraph 2(2)\n\n",
+    "Principle: Cosmetic advertising must not use or cite academic reports,\n",
+    "statistics, or any other sources in a way that may mislead consumers on\n",
+    "essential aspects of the cosmetic, whether the claims are true or exaggerated.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE (non-misleading citations):\n",
+    "  - Accurate citations of relevant scientific research\n",
+    "  - Clear indication of study scope and limitations\n",
+    "  - Statistical data presented in proper context\n",
+    "  - Academic references that support the specific claim made\n",
+    "  - Proper attribution to credible sources\n\n",
+    "❌ PROHIBITED (misleading use of science):\n",
+    "  - Cherry-picking data to misrepresent conclusions\n",
+    "  - Citing studies about ingredients not present in sufficient quantity\n",
+    "  - Implying causation from correlational studies\n",
+    "  - Misquoting or misrepresenting academic sources\n",
+    "  - Using scientific-sounding language without actual evidence\n",
+    "  - Citing irrelevant studies to create false authority\n",
+    "  - Presenting in vitro results as if they were clinical outcomes\n",
+    "  - Using statistical significance to imply practical significance\n\n",
+    "Examples from Manual:\n",
+    "  - ❌ \"Clinically proven\" without actual clinical trial data\n",
+    "  - ❌ Citing ingredient studies for formulations with trace amounts\n",
+    "  - ❌ \"Dermatologically tested\" without clarifying what was tested\n\n",
+    "Key distinction: Accurate, contextual science ✓ vs. misleading science use ✗\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this claim cite or use scientific/academic information in a way\n",
+    "that could mislead consumers about the product's essential characteristics?\n\n",
+    "Answer with:\n",
+    "- YES (violates 41.2.2 - prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// PROMPT 3: Article 41.2.3 - Medicinal/Therapeutic Claims
+promptMedicinalTherapeutic claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Medicinal/Therapeutic Claims (Article 41.2.3)\n",
+    "Context: Thai Cosmetics Act BE 2558, Article 41, Paragraph 2(3)\n\n",
+    "Principle: Cosmetic advertising must not state or imply that the cosmetic has\n",
+    "properties to prevent, treat, cure, or alleviate diseases or symptoms. Cosmetics\n",
+    "are for cleansing, beautifying, or changing appearance - not medical treatment.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE (cosmetic purpose):\n",
+    "  - \"helps maintain\", \"supports appearance\"\n",
+    "  - \"cleanses\", \"beautifies\", \"enhances appearance\"\n",
+    "  - \"for [skin type]\", \"suitable for sensitive skin\"\n",
+    "  - \"makes skin look/appear [quality]\"\n",
+    "  - \"temporary cosmetic effect during use\"\n\n",
+    "❌ PROHIBITED (medicinal/therapeutic):\n",
+    "  - \"treats\", \"cures\", \"heals\", \"prevents\", \"alleviates\"\n",
+    "  - Disease/condition names: \"treats acne\", \"cures eczema\", \"prevents infection\"\n",
+    "  - Symptom relief: \"reduces pain\", \"relieves inflammation\"\n",
+    "  - Physiological changes: \"increases collagen\", \"boosts immunity\", \"repairs DNA\"\n",
+    "  - Disease prevention: \"prevents cancer\", \"protects against bacteria\"\n",
+    "  - Medical terminology: \"anti-bacterial\", \"anti-fungal\", \"clinical treatment\"\n\n",
+    "Examples from Manual:\n",
+    "  - ✅ \"Formulated for acne-prone skin\"\n",
+    "  - ❌ \"Treats acne\", \"eliminates acne permanently\"\n",
+    "  - ❌ \"Prevents wrinkles by stimulating collagen production\"\n",
+    "  - ❌ \"Heals damaged skin\", \"repairs skin barrier function\"\n\n",
+    "Key distinction: Cosmetic appearance ✓ vs. medical treatment ✗\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this claim imply the product prevents, treats, cures, or\n",
+    "alleviates diseases or medical conditions?\n\n",
+    "Answer with:\n",
+    "- YES (violates 41.2.3 - prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// PROMPT 4: Article 41.2.4 - Sexual Enhancement Claims
+promptSexualEnhancement claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Sexual Enhancement Claims (Article 41.2.4)\n",
+    "Context: Thai Cosmetics Act BE 2558, Article 41, Paragraph 2(4)\n\n",
+    "Principle: Cosmetic advertising must not state or imply that the cosmetic can\n",
+    "enhance sexual potency, increase libido, improve sexual performance, or provide\n",
+    "aphrodisiac effects.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE (cosmetic enhancement):\n",
+    "  - \"enhances confidence\", \"makes you feel attractive\"\n",
+    "  - \"beautiful appearance\", \"radiant skin\"\n",
+    "  - \"feeling refreshed\", \"energized feeling\"\n",
+    "  - Fragrance creating pleasant mood\n\n",
+    "❌ PROHIBITED (sexual enhancement):\n",
+    "  - \"increases libido\", \"enhances sexual desire\"\n",
+    "  - \"improves sexual performance\", \"boosts potency\"\n",
+    "  - \"aphrodisiac effect\", \"stimulates passion\"\n",
+    "  - \"enhances sexual attraction\" (beyond appearance)\n",
+    "  - Pheromone claims implying sexual effects\n",
+    "  - \"increases blood flow\" (with sexual connotation)\n\n",
+    "Key distinction: Appearance/confidence ✓ vs. sexual function ✗\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this claim state or imply effects on sexual potency, libido,\n",
+    "performance, or aphrodisiac properties?\n\n",
+    "Answer with:\n",
+    "- YES (violates 41.2.4 - prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// PROMPT 5: Article 41.2.5 - Illegal/Immoral Content
+promptIllegalImmoral claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Illegal/Immoral Content (Article 41.2.5)\n",
+    "Context: Thai Cosmetics Act BE 2558, Article 41, Paragraph 2(5)\n\n",
+    "Principle: Cosmetic advertising must not include statements that promote,\n",
+    "support, or encourage illegal activities, criminal behavior, or immoral conduct\n",
+    "that degrades public morals or social values.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE:\n",
+    "  - Promoting beauty, health, self-care\n",
+    "  - Encouraging confidence, positive self-image\n",
+    "  - Celebrating diversity, individual expression\n",
+    "  - Standard commercial persuasion\n\n",
+    "❌ PROHIBITED:\n",
+    "  - Encouraging illegal activity or crime\n",
+    "  - Promoting substance abuse\n",
+    "  - Encouraging dangerous behavior\n",
+    "  - Content that degrades public morals\n",
+    "  - Exploitative or degrading imagery/language\n",
+    "  - Promoting deception or dishonesty\n\n",
+    "Key distinction: Lawful persuasion ✓ vs. illegal/immoral promotion ✗\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this claim promote, support, or encourage illegal activities,\n",
+    "criminal behavior, or immoral conduct that degrades public morals?\n\n",
+    "Answer with:\n",
+    "- YES (violates 41.2.5 - prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// PROMPT 6: Article 41.2.6 - Social Division
+promptSocialDivision claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Social Division/Disunity (Article 41.2.6)\n",
+    "Context: Thai Cosmetics Act BE 2558, Article 41, Paragraph 2(6)\n\n",
+    "Principle: Cosmetic advertising must not cause or incite dissension, division,\n",
+    "or disunity among the people of the nation.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE:\n",
+    "  - Celebrating beauty diversity\n",
+    "  - Marketing to specific demographics (age, skin type)\n",
+    "  - Regional product variations\n",
+    "  - Cultural celebration (inclusive)\n\n",
+    "❌ PROHIBITED:\n",
+    "  - Disparaging ethnic, regional, or social groups\n",
+    "  - Creating division between social classes\n",
+    "  - Inflammatory political content\n",
+    "  - Religious divisiveness\n",
+    "  - Stereotyping that breeds discord\n",
+    "  - \"Us vs. them\" rhetoric creating social division\n\n",
+    "Key distinction: Inclusive marketing ✓ vs. divisive content ✗\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this claim cause or incite dissension, division, or disunity\n",
+    "among people?\n\n",
+    "Answer with:\n",
+    "- YES (violates 41.2.6 - prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// PROMPT 7: Article 41.2.7 - Ministerial Regulations
+promptMinisterialRegulations claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Ministerial Regulations (Article 41.2.7)\n",
+    "Context: Thai Cosmetics Act BE 2558, Article 41, Paragraph 2(7)\n\n",
+    "Principle: Cosmetic advertising must not violate prohibitions established in\n",
+    "ministerial regulations issued under the Cosmetics Act.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE:\n",
+    "  - Compliance with all ministerial regulations\n",
+    "  - Proper labeling as required\n",
+    "  - Appropriate product notifications\n",
+    "  - Following category-specific rules\n\n",
+    "❌ PROHIBITED:\n",
+    "  - Violations of Manual on Cosmetic Advertising BE 2567\n",
+    "  - Violations of category-specific regulations\n",
+    "  - Failure to comply with labeling requirements\n",
+    "  - Unauthorized claims for controlled cosmetic categories\n\n",
+    "Note: This is a catch-all for specific ministerial rules. Specific violations\n",
+    "should be evaluated using the appropriate category-specific or Manual-specific\n",
+    "prompts.\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this claim violate specific ministerial regulations under the\n",
+    "Cosmetics Act?\n\n",
+    "Answer with:\n",
+    "- YES (violates 41.2.7 - prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// PROMPT 8: Article 41.3 - Puffery Exemption
+promptPufferyExemption claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Puffery Exemption (Article 41.3)\n",
+    "Context: Thai Cosmetics Act BE 2558, Article 41, Paragraph 3\n\n",
+    "Principle: False or exaggerated claims (41.2.1) may be exempted if they are\n",
+    "UTTERLY UNREALISTIC statements that the general public obviously knows are\n",
+    "exaggerations and would not rely upon.\n\n",
+    "Decision Boundary:\n",
+    "✅ QUALIFIES FOR PUFFERY EXEMPTION (obviously unrealistic):\n",
+    "  - \"Fountain of youth\"\n",
+    "  - \"Makes you look 20 years younger overnight\"\n",
+    "  - \"Turns back time\"\n",
+    "  - Fantastical imagery everyone knows is symbolic\n",
+    "  - Obviously hyperbolic marketing language\n\n",
+    "❌ DOES NOT QUALIFY (could be believed):\n",
+    "  - \"Reduces wrinkles by 50%\" (sounds scientific/measurable)\n",
+    "  - \"Clinically proven\" (implies evidence)\n",
+    "  - \"100% effective\" (sounds factual)\n",
+    "  - \"Guaranteed results\" (sounds like a promise)\n",
+    "  - Any claim the average consumer might actually believe\n\n",
+    "Important: This exemption ONLY applies to false/exaggerated claims (41.2.1).\n",
+    "It does NOT exempt medicinal claims, sexual claims, illegal content, etc.\n\n",
+    "Key distinction: Obvious fantasy ✓ vs. believable claims ✗\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Is this claim so UTTERLY UNREALISTIC that the general public obviously\n",
+    "knows it's an exaggeration and would not rely upon it?\n\n",
+    "Answer with:\n",
+    "- YES (qualifies for puffery exemption) or NO (does not qualify)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// PROMPT 9: Article 42 - Harmful Advertising Conduct
+promptHarmfulConduct claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Harmful Advertising Conduct (Article 42)\n",
+    "Context: Thai Cosmetics Act BE 2558, Article 42\n\n",
+    "Principle: Cosmetic advertising must not be conducted in a manner that may harm\n",
+    "health, mentality, or morality, or cause distress or excessive inconvenience.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE (respectful advertising methods):\n",
+    "  - Standard media advertising (TV, print, online)\n",
+    "  - Respectful in-store promotions\n",
+    "  - Opt-in email/SMS marketing\n",
+    "  - Age-appropriate advertising\n",
+    "  - Reasonable promotional timing/frequency\n\n",
+    "❌ PROHIBITED (harmful conduct):\n",
+    "  - Health hazards: unsafe demonstrations, dangerous usage\n",
+    "  - Mental harm: fear-mongering, exploiting insecurities excessively\n",
+    "  - Moral harm: sexually explicit content, degrading imagery\n",
+    "  - Distress: shock tactics, disturbing imagery\n",
+    "  - Excessive inconvenience: spam, intrusive tactics, harassment\n\n",
+    "Note: This evaluates HOW advertising is conducted, not WHAT is claimed.\n\n",
+    "Key distinction: Respectful methods ✓ vs. harmful conduct ✗\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does the manner or content of this advertising cause harm to health,\n",
+    "mentality, or morality, or cause distress or excessive inconvenience?\n\n",
+    "Answer with:\n",
+    "- YES (violates Article 42 - prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// ============================================================================
+// TIER 2: MANUAL-SPECIFIC PROMPTS (7 prompts - cross-cutting requirements)
+// Source: Thai Cosmetics Manual BE 2567, Sections 4-9
+// ============================================================================
+
+// PROMPT 10: Ingredient Substantiation (Section 4.1)
+promptIngredientSubstantiation claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Ingredient Efficacy Substantiation (Manual Section 4.1)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Section 4.1\n\n",
+    "Principle: Claims about ingredient efficacy must be supported by documentation\n",
+    "showing: (1) the claimed property falls within cosmetic scope, AND (2) the\n",
+    "ingredient is present in sufficient quantity to support the claim.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE (properly substantiated):\n",
+    "  - Claims supported by academic documents, certificates, test results\n",
+    "  - Ingredient present in sufficient quantity\n",
+    "  - Property claimed is within cosmetic scope\n\n",
+    "❌ PROHIBITED (lacks substantiation):\n",
+    "  - Claims about ingredient efficacy without documentation\n",
+    "  - Ingredient present but in insufficient quantity (\"fairy dusting\")\n",
+    "  - Claims exceed cosmetic scope\n",
+    "  - Documentation is non-credible or non-verifiable\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this ingredient efficacy claim LACK proper substantiation\n",
+    "documentation, OR is the ingredient present in insufficient quantity?\n\n",
+    "Answer with:\n",
+    "- YES (lacks substantiation - prohibited) or NO (properly substantiated - acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// PROMPT 11: Cosmetic Scope (Section 4.2)
+promptCosmeticScope claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Cosmetic Scope Boundaries (Manual Section 4.2)\n",
+    "Context: Thai Cosmetics Act Article 4 + Manual BE 2567, Section 4.2\n\n",
+    "Principle: Cosmetics are for EXTERNAL use for: (1) cleansing, (2) beautifying,\n",
+    "(3) changing physical appearance WITHOUT altering body structure, (4) controlling\n",
+    "body odor, or (5) maintaining body parts in good condition.\n\n",
+    "Decision Boundary:\n",
+    "✅ WITHIN COSMETIC SCOPE:\n",
+    "  - Cleansing, beautifying, temporary appearance changes\n",
+    "  - Controlling odor, maintaining good condition\n",
+    "  - Effects are: TEMPORARY, SUPERFICIAL, EXTERNAL\n\n",
+    "❌ EXCEEDS COSMETIC SCOPE:\n",
+    "  - ALTERING body structure (changing tissue, cells, organs)\n",
+    "  - THERAPEUTIC effects (treating, preventing, curing disease)\n",
+    "  - INTERNAL effects (affecting metabolism, circulation, hormones)\n",
+    "  - PERMANENT changes (structural alterations that persist)\n",
+    "  - DEEP tissue effects (beyond epidermis)\n",
+    "  - FUNCTIONAL changes (affecting how body systems work)\n\n",
+    "Key distinction: Temporary external cosmetic effects ✓ vs. structural/internal/\n",
+    "therapeutic/permanent effects ✗\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this claim EXCEED the scope of cosmetics by implying structural\n",
+    "alteration, therapeutic effects, internal effects, or permanent changes?\n\n",
+    "Answer with:\n",
+    "- YES (exceeds scope - prohibited) or NO (within scope - acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// PROMPT 12: Comparative Advertising (Section 5)
+promptComparativeAdvertising claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Comparative Advertising Rules (Manual Section 5)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Section 5\n\n",
+    "Principle: Comparative advertising must be truthful, supported by evidence, not\n",
+    "create social division, and should only compare advertiser's own products.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE:\n",
+    "  - Compares advertiser's OWN products only\n",
+    "  - Truthful and evidence-supported\n",
+    "  - \"New formula vs. old formula\"\n\n",
+    "❌ PROHIBITED:\n",
+    "  - Compares with OTHER companies' products\n",
+    "  - Compares with competitors by name or implication\n",
+    "  - Creates social division\n",
+    "  - \"Better than Brand X\", \"More effective than leading competitor\"\n\n",
+    "Key distinction: Own-product comparison ✓ vs. competitor comparison ✗\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this comparative claim VIOLATE the rules by comparing with other\n",
+    "companies' products, lacking evidence, or creating division?\n\n",
+    "Answer with:\n",
+    "- YES (violates comparative advertising rules - prohibited) or NO (complies - acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// PROMPT 13: Award/Certification (Section 6)
+promptAwardCertification claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Award/Certification Claims (Manual Section 6)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Section 6\n\n",
+    "Principle: Claims about awards or certifications must refer to awards/marks\n",
+    "directly related to the advertised cosmetic, be truthful, supported by evidence,\n",
+    "and clearly indicate the awarding body and year.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE:\n",
+    "  - Award directly related to advertised cosmetic\n",
+    "  - Clearly indicates: awarding body AND year received\n",
+    "  - \"Winner of [Award Name] 2024 from [Organization]\"\n\n",
+    "❌ PROHIBITED:\n",
+    "  - Award not related to specific product advertised\n",
+    "  - Awarding body not indicated\n",
+    "  - Year not specified\n",
+    "  - \"Award-winning\" without specifics\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this award/certification claim VIOLATE the rules by being\n",
+    "unrelated, false, lacking proper attribution (body/year), or misleading?\n\n",
+    "Answer with:\n",
+    "- YES (violates award/certification rules - prohibited) or NO (complies - acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// PROMPT 14: Academic Statistics (Section 7)
+promptAcademicStatistics claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Academic Reports/Statistics (Manual Section 7)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Section 7\n\n",
+    "Principle: Claims based on academic reports or statistics must be verifiable,\n",
+    "truthful according to cited source, with supporting evidence relevant to the\n",
+    "ingredient or product being claimed.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE:\n",
+    "  - Verifiable and truthful according to source\n",
+    "  - Supporting evidence relevant to specific product/ingredient\n",
+    "  - Proper attribution and context\n\n",
+    "❌ PROHIBITED:\n",
+    "  - Unverifiable claims\n",
+    "  - Misrepresentation of source material\n",
+    "  - Cherry-picking data\n",
+    "  - Studies not relevant to product/ingredient\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this academic/statistical claim LACK verifiability, misrepresent\n",
+    "sources, or use irrelevant evidence?\n\n",
+    "Answer with:\n",
+    "- YES (violates academic/statistics rules - prohibited) or NO (proper use - acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// PROMPT 15: Monarchy Rules (Section 8)
+promptMonarchyRules claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Monarchy References (Manual Section 8)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Section 8\n\n",
+    "Principle: Advertising must not falsely refer to the King, Queen, heir apparent,\n",
+    "or regent without proper royal authorization.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE:\n",
+    "  - Stating receipt of medals/certificates/awards from monarchy\n",
+    "  - Indicating receipt of royal permission for business operations\n",
+    "  - All claims truthful and properly authorized\n\n",
+    "❌ PROHIBITED:\n",
+    "  - False references to King/Queen/heir/regent\n",
+    "  - Claims of royal endorsement without authorization\n",
+    "  - Unauthorized use of royal symbols/imagery\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this claim FALSELY REFER to the monarchy without proper\n",
+    "authorization, or inappropriately use royal references in advertising?\n\n",
+    "Answer with:\n",
+    "- YES (violates monarchy rules - prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// PROMPT 16: Giveaway/Contest (Section 9)
+promptGiveawayContest claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Giveaways/Sweepstakes/Contests (Manual Section 9)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Section 9\n\n",
+    "Principle: Advertising with giveaways, prizes by chance, or contests must obtain\n",
+    "prior authorization under gambling law and clearly state all required information.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE:\n",
+    "  - Prior authorization obtained from official under gambling law\n",
+    "  - Clearly states: criteria, start/end dates, gift/prize details, value, area, draw details\n\n",
+    "❌ PROHIBITED:\n",
+    "  - No prior authorization under gambling law\n",
+    "  - Missing required information\n\n",
+    "Evaluate this advertising: ", claimText, "\n\n",
+    "Question: Does this giveaway/sweepstakes/contest advertising LACK prior\n",
+    "authorization or FAIL to clearly state required information?\n\n",
+    "Answer with:\n",
+    "- YES (violates giveaway rules - prohibited) or NO (complies - acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// ============================================================================
+// TIER 1: CATEGORY-SPECIFIC PROMPTS (Key categories - 10 prompts)
+// Source: Thai Cosmetics Manual BE 2567, Pages 22-45
+// Note: Additional category-specific prompts can be added as needed
+// ============================================================================
+
+// CATEGORY: Whitening Products
+promptWhiteningNaturalTone claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Natural Skin Tone Alteration (Whitening Products)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Category 1 (Whitening Products)\n\n",
+    "Principle: Whitening cosmetics can only affect APPEARANCE during use (temporary\n",
+    "cosmetic effect), not ALTER natural skin color (physiological change).\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE: \"appears radiant\", \"appears fair\", \"looks brighter\" (temporary appearance)\n",
+    "❌ PROHIBITED: \"changes natural skin color\", \"whitens by X levels\", \"lightens skin tone\",\n",
+    "    \"reduces melanin\" (physiological alteration)\n\n",
+    "Key distinction: Measurable changes (\"5 levels\", \"3 shades lighter\") imply\n",
+    "physiological alteration, not temporary cosmetic appearance.\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this claim imply ALTERATION of natural skin tone (physiological\n",
+    "change, measurable change, or permanent change) rather than temporary cosmetic\n",
+    "APPEARANCE?\n\n",
+    "Answer with:\n",
+    "- YES (prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// CATEGORY: Anti-Wrinkle Products
+promptAntiWrinkleStructural claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Structural Prevention (Anti-Wrinkle Products)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Category 2 (Anti-Wrinkle)\n\n",
+    "Principle: Anti-wrinkle cosmetics cannot claim efficacy in preventing or\n",
+    "altering structural changes. They can only assist/support appearance during use.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE: \"helps protect the skin from free radicals\", \"helps fight free radicals\"\n",
+    "❌ PROHIBITED: \"prevents free radical damage\", \"free radical protection\",\n",
+    "    claims about preventing age-related degeneration\n\n",
+    "Key distinction: \"helps protect/fight\" (assistance) ✓ vs. \"prevents damage\" (structural prevention) ✗\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this claim imply efficacy in PREVENTING or ALTERING structural\n",
+    "changes from free radicals or aging?\n\n",
+    "Answer with:\n",
+    "- YES (prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// CATEGORY: Acne Products
+promptAcneTherapeuticClaims claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Acne Therapeutic Claims (Acne Products)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Category 3 (Acne-Prone Skin)\n\n",
+    "Principle: Cosmetics for acne-prone skin cannot claim therapeutic efficacy.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE: \"for acne-prone skin\", \"formulated for acne-prone skin\"\n",
+    "❌ PROHIBITED: \"treats acne\", \"eliminates acne\", \"prevents acne\", \"reduces inflammation\"\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this claim imply therapeutic efficacy in PREVENTING, TREATING,\n",
+    "or ELIMINATING acne?\n\n",
+    "Answer with:\n",
+    "- YES (prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// CATEGORY: Cleansing Products
+promptCleansingMicrobiological claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Microbiological Claims (Cleansing Products)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Category 7 (Cleansing)\n\n",
+    "Principle: Cleansing products can reduce bacterial accumulation but cannot\n",
+    "claim to kill, eliminate, or inhibit bacteria (medicinal claims).\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE: \"reduces bacterial accumulation\"\n",
+    "❌ PROHIBITED: \"kills bacteria\", \"eliminates bacteria\", \"inhibits bacteria\",\n",
+    "    antibacterial symbols\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this claim state that the product kills, eliminates, or inhibits\n",
+    "bacteria (microbiological efficacy beyond cosmetic cleansing)?\n\n",
+    "Answer with:\n",
+    "- YES (prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// CATEGORY: Sunscreen Products
+promptSunscreenUnrealistic claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Unrealistic Protection Claims (Sunscreen)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Category 6 (Sunscreen)\n\n",
+    "Principle: Sunscreen can protect from UV radiation but cannot claim complete/\n",
+    "absolute protection or prevent all UV damage.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE: \"protects from UV radiation\", \"SPF 50+\", \"broad spectrum protection\"\n",
+    "❌ PROHIBITED: \"fully prevents UV damage\", \"100% protection\", \"completely blocks all UV\"\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this claim suggest complete, absolute, or 100% UV protection\n",
+    "that goes beyond realistic sunscreen capabilities?\n\n",
+    "Answer with:\n",
+    "- YES (prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// CATEGORY: Contouring/Firming Products
+promptContourBodyStructure claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Body Structure/Function Alteration (Contouring Category)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Category 4 (Contouring/Firming), p.25\n\n",
+    "Principle: Contouring cosmetics can only claim to improve the APPEARANCE of skin,\n",
+    "helping it look naturally firm according to individual structure. They cannot\n",
+    "claim to alter body functions or structure.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE (appearance improvement):\n",
+    "  - \"improves the appearance of the skin\"\n",
+    "  - \"helps facial or body skin look naturally firm\"\n",
+    "  - \"according to each individual's natural structure\"\n",
+    "  - \"appearance of firmness\"\n",
+    "  - Temporary cosmetic effect on how skin looks\n\n",
+    "❌ PROHIBITED (structural/functional alteration):\n",
+    "  - \"increases metabolism\"\n",
+    "  - \"reduces fat accumulation\" / \"breaks down fat\"\n",
+    "  - \"improves blood circulation\"\n",
+    "  - \"reduces waist size\"\n",
+    "  - \"increases or decreases breast size\"\n",
+    "  - \"reduces cellulite\"\n",
+    "  - \"firms body contours\" (if implying structural change)\n",
+    "  - \"reshapes the face\" (if implying structural change)\n",
+    "  - Any claim about altering body functions or structure\n\n",
+    "Key distinction: Appearance of firmness ✓ vs. actual structural/functional alteration ✗\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this claim imply efficacy in ALTERING BODY FUNCTIONS OR STRUCTURE\n",
+    "(metabolism, fat, circulation, size, cellulite), rather than just improving appearance?\n\n",
+    "Answer with:\n",
+    "- YES (violates contouring rules - prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// CATEGORY: Exfoliating Products
+promptExfoliateStructural claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Skin Structural Alteration (Exfoliating Category)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Category 5 (Exfoliating), p.26\n\n",
+    "Principle: Exfoliating cosmetics can only claim to improve skin appearance by\n",
+    "removing dead skin cells (chemical/physical exfoliation). They cannot claim to\n",
+    "alter skin structure, stimulate formation, or affect underlying conditions.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE (surface appearance improvement):\n",
+    "  - \"exfoliates\" / \"removes dead skin cells\"\n",
+    "  - \"smooth skin\"\n",
+    "  - \"radiant skin\"\n",
+    "  - \"improves skin appearance\"\n",
+    "  - Products with AHA, scrub beads, etc. for cell turnover\n",
+    "  - Surface-level cosmetic effects\n\n",
+    "❌ PROHIBITED (structural alteration):\n",
+    "  - \"peels skin to make it bright\" (implies structural change)\n",
+    "  - \"stimulates or enhances new skin formation\"\n",
+    "  - \"stimulates collagen formation\"\n",
+    "  - \"reduces acne, melasma, freckles\" (therapeutic)\n",
+    "  - \"makes skin much whiter than before\" (structural pigmentation change)\n",
+    "  - \"just scrubbing makes skin white\"\n",
+    "  - \"scrub breaks down subcutaneous fat\"\n",
+    "  - \"scrub tightens pores\" (structural change)\n\n",
+    "Key distinction: Removing dead surface cells ✓ vs. stimulating new formation or altering structure ✗\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this claim imply efficacy in ALTERING SKIN STRUCTURE, stimulating\n",
+    "formation (skin/collagen), or affecting underlying conditions, rather than just\n",
+    "removing dead surface cells?\n\n",
+    "Answer with:\n",
+    "- YES (violates exfoliating rules - prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// CATEGORY: Cleansing Products - Medical Symbols
+promptCleansingMedicalSymbols claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Medical Symbols/Imagery (Cleansing Category)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Category 7 (Cleansing), p.29\n\n",
+    "Principle: Cleansing cosmetics cannot use images, symbols, or marks that could\n",
+    "mislead consumers into thinking the product is medicinal. This includes medical\n",
+    "symbols, cross marks, germ-killing imagery, and specific prohibited symbols.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE (cosmetic imagery):\n",
+    "  - Standard product imagery\n",
+    "  - Cleansing/hygiene imagery\n",
+    "  - Trademarks with clear ® or TM designation\n\n",
+    "❌ PROHIBITED (medical/misleading symbols):\n",
+    "  - Cross mark\n",
+    "  - Rx symbol\n",
+    "  - Red Cross symbol (specifically prohibited)\n",
+    "  - Shield symbol\n",
+    "  - Overlay lines suggesting germ killing\n",
+    "  - Images of microbial structures\n",
+    "  - Images suggesting a specific germ\n",
+    "  - Any symbol/mark that could mislead consumers about medicinal properties\n",
+    "  - Trademarks without clear ® or TM (if could be mistaken for medical)\n\n",
+    "Key distinction: Standard cosmetic imagery ✓ vs. medical/germ-killing symbols ✗\n\n",
+    "Evaluate this advertising: ", claimText, "\n\n",
+    "Question: Does this advertising USE IMAGES, SYMBOLS, OR MARKS that could mislead\n",
+    "consumers into thinking the product is medicinal (crosses, Rx, Red Cross, shields,\n",
+    "germ-killing imagery, microbial structures)?\n\n",
+    "Answer with:\n",
+    "- YES (violates cleansing symbol rules - prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// CATEGORY: Anti-Dandruff Products
+promptDandruffTherapeutic claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Dandruff Therapeutic Claims (Anti-Dandruff Category)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Category 8 (Anti-Dandruff), p.30\n\n",
+    "Principle: Anti-dandruff cosmetics can only claim cosmetic cleansing of hair,\n",
+    "scalp, and dandruff flakes, plus reducing itchiness caused by dandruff during\n",
+    "use. They cannot claim therapeutic effects like eliminating fungal itch, treating\n",
+    "inflammation, or permanently removing dandruff.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE (cosmetic cleansing during use):\n",
+    "  - \"cleansing hair, scalp, and dandruff flakes\"\n",
+    "  - \"reducing scalp itchiness caused by dandruff\"\n",
+    "  - \"during the period of product use\"\n",
+    "  - Cosmetic scope effects only\n\n",
+    "❌ PROHIBITED (therapeutic claims):\n",
+    "  - \"eliminating or inhibiting scalp itch caused by fungi\"\n",
+    "  - \"treating scalp inflammation\"\n",
+    "  - \"permanently removing dandruff\"\n",
+    "  - \"cures dandruff\"\n",
+    "  - \"eliminates dandruff\" (implies permanence)\n",
+    "  - Any therapeutic or permanent effect\n\n",
+    "Key distinction: Cosmetic cleansing during use ✓ vs. therapeutic treatment or permanent elimination ✗\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this claim imply therapeutic efficacy (ELIMINATING FUNGAL ITCH,\n",
+    "TREATING INFLAMMATION, PERMANENTLY REMOVING DANDRUFF) rather than cosmetic\n",
+    "cleansing during use?\n\n",
+    "Answer with:\n",
+    "- YES (violates anti-dandruff rules - prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// CATEGORY: Hair Care Products - Unspecified Hair Loss
+promptHaircareUnspecifiedLoss claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Unspecified Hair Loss Claims (Hair Care Category)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Category 9 (Hair Care), p.31\n\n",
+    "Principle: Hair care cosmetics can only claim to reduce hair loss from specific\n",
+    "cosmetic causes (tangled, brittle, dry, damaged hair). They cannot claim to\n",
+    "reduce hair loss without specifying the cause, or claim to reduce loss from\n",
+    "internal factors (hair cycle, scalp conditions, genetics).\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE (specified cosmetic causes):\n",
+    "  - \"reduces breakage / hair loss from brittle, dry, damaged, or tangled hair\"\n",
+    "  - \"makes hair smooth and easy to comb, reduces breakage and hair loss caused\n",
+    "    by tangled hair\"\n",
+    "  - \"nourishes hair / helps hair stay strong from root to tip\" (cosmetic meaning)\n",
+    "  - Must specify the cosmetic cause\n\n",
+    "❌ PROHIBITED (unspecified or internal causes):\n",
+    "  - \"reduces hair loss\" (without specifying cause)\n",
+    "  - \"prevents hair loss\"\n",
+    "  - Implies reducing loss from internal factors\n",
+    "  - Implies reducing loss from hair growth cycle issues\n",
+    "  - Implies reducing loss from scalp conditions\n",
+    "  - Implies reducing loss from genetic traits\n",
+    "  - \"reduces hair fall / hair loss due to hair shedding from hair roots located\n",
+    "    in the dermis\"\n\n",
+    "Key distinction: Specified cosmetic cause (tangled/brittle/dry/damaged) ✓ vs.\n",
+    "unspecified or internal causes ✗\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this claim assert hair loss reduction WITHOUT SPECIFYING the\n",
+    "cosmetic cause, or imply reducing loss from internal/medical factors?\n\n",
+    "Answer with:\n",
+    "- YES (violates hair care rules - prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// CATEGORY: Hair Care Products - Deep Nourishment
+promptHaircareDeepNourishment claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Deep Nourishment to Hair Roots (Hair Care Category)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Category 9 (Hair Care), p.31\n\n",
+    "Principle: Hair care cosmetics can claim surface nourishment of hair but cannot\n",
+    "claim deep nourishment to hair roots, as this implies affecting structures in\n",
+    "the dermis (beyond cosmetic scope).\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE (surface cosmetic nourishment):\n",
+    "  - \"nourishes hair\" (surface coating)\n",
+    "  - \"helps hair stay strong from root to tip\" (if cosmetic meaning clear)\n",
+    "  - \"coating the hair to make it smooth\"\n",
+    "  - Surface conditioning\n\n",
+    "❌ PROHIBITED (deep structural nourishment):\n",
+    "  - \"deep nourishment to hair roots\"\n",
+    "  - \"nourish hair root / helps to strengthen hair root\"\n",
+    "  - \"nourishes hair / helps hair stay strong from the root to tip\" (if\n",
+    "    interpreted as structural/medical)\n",
+    "  - Any claim implying effect on roots located in dermis\n\n",
+    "Key distinction: Surface cosmetic nourishment ✓ vs. deep structural nourishment of roots ✗\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this claim imply DEEP NOURISHMENT TO HAIR ROOTS or effects on\n",
+    "hair root structures in the dermis, rather than surface cosmetic conditioning?\n\n",
+    "Answer with:\n",
+    "- YES (violates hair care rules - prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// CATEGORY: Hair Treatment Products
+promptHairtreatNoDamage claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Unsubstantiated No-Damage Claims (Hair Treatment Category)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Category 10 (Hair Treatment), p.32\n\n",
+    "Principle: Hair straightening/perming/coloring products must indicate effects are\n",
+    "not permanent and advise patch tests. They cannot claim \"no damage\" unless they\n",
+    "contain conditioning agents and this is supported by scientific data.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE (proper treatment claims):\n",
+    "  - States effects are \"not permanent\"\n",
+    "  - Includes \"patch test before use\" advisory\n",
+    "  - \"does not damage hair\" ONLY IF:\n",
+    "    * Contains hair conditioning agent that helps protect/nourish, AND\n",
+    "    * Supported by relevant scientific data\n",
+    "    * May convey: \"contains hair-nourishing ingredients\" or \"hair-nourishing formula\"\n\n",
+    "❌ PROHIBITED (unsubstantiated no-damage claims):\n",
+    "  - \"does not damage hair\" without conditioning agents\n",
+    "  - \"does not damage hair\" without scientific data support\n",
+    "  - Implies permanent effects\n",
+    "  - No patch test advisory\n\n",
+    "Key distinction: Substantiated no-damage (with conditioning agents + data) ✓ vs.\n",
+    "unsubstantiated no-damage claims ✗\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this claim assert the product \"DOES NOT DAMAGE HAIR\" without\n",
+    "either conditioning agents OR scientific data support?\n\n",
+    "Answer with:\n",
+    "- YES (violates hair treatment rules - prohibited) or NO (acceptable)\n",
+    "- UNKNOWN (cannot determine substantiation)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// CATEGORY: Deodorant Products
+promptDeodorantGlandStructure claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Sweat Gland Structure Claims (Deodorant Category)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Category 11 (Deodorant), p.33\n\n",
+    "Principle: Deodorant cosmetics can claim to reduce body odor and control\n",
+    "underarm odor by reducing moisture, thereby reducing unwanted odor. They cannot\n",
+    "claim to reduce sweat production or affect sweat gland structure. Claims about\n",
+    "duration must be supported by testing.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE (odor control via moisture reduction):\n",
+    "  - \"reducing body odor and controlling underarm odor caused by sweat\"\n",
+    "  - \"by reducing moisture in the underarm area, thereby reducing unwanted odor\"\n",
+    "  - Must include: \"results may vary depending on individual conditions\"\n",
+    "  - Duration claims (\"24 hours\") must be supported by efficacy testing\n",
+    "  - Temporary effect while on skin\n",
+    "  - May contain astringent substances or pore-closing ingredients\n\n",
+    "❌ PROHIBITED (sweat production/gland structure):\n",
+    "  - \"reduces sweat production\"\n",
+    "  - \"affects the structure of sweat glands\"\n",
+    "  - \"reduces the number of sweat glands\"\n",
+    "  - \"affects the sweating process\"\n",
+    "  - Suggests use on skin with medical conditions (e.g., ingrown hair)\n",
+    "  - Any claim about altering gland structure or function\n\n",
+    "Note: Cosmetics may temporarily close pores but must not alter sweat gland structure.\n\n",
+    "Key distinction: Reduces odor via moisture reduction ✓ vs. reduces sweat production or alters gland structure ✗\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this claim imply the product REDUCES SWEAT PRODUCTION or AFFECTS\n",
+    "SWEAT GLAND STRUCTURE, rather than just controlling odor by reducing moisture?\n\n",
+    "Answer with:\n",
+    "- YES (violates deodorant rules - prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// CATEGORY: Perfume Products
+promptPerfumePsychoactive claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Psychoactive/Hormonal Effects (Perfume Category)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Category 12 (Perfume), p.34\n\n",
+    "Principle: Perfume cosmetics can only claim fragrance effects on the body\n",
+    "according to the scent. They cannot claim sexual attraction effects, stimulation\n",
+    "of sexual hormones, or effects on mind/nervous system.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE (fragrance effects only):\n",
+    "  - \"fragrance effect on the body according to the scent\"\n",
+    "  - \"pleasant scent\"\n",
+    "  - \"long-lasting fragrance\"\n",
+    "  - Cosmetic scent application\n\n",
+    "❌ PROHIBITED (psychoactive/hormonal/sexual effects):\n",
+    "  - \"sexual attraction effects\"\n",
+    "  - \"stimulates sexual hormones\"\n",
+    "  - \"affects the mind and nervous system\"\n",
+    "  - \"reducing stress\"\n",
+    "  - \"improving sleep\"\n",
+    "  - \"preventing fatigue\"\n",
+    "  - \"pheromone perfume to captivate\"\n",
+    "  - Any psychoactive or hormonal claim\n\n",
+    "Note: Sexual enhancement claims also violate Article 41.2.4.\n\n",
+    "Key distinction: Fragrance effect ✓ vs. psychoactive/hormonal/sexual effects ✗\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this perfume claim imply PSYCHOACTIVE EFFECTS (stress/sleep/\n",
+    "fatigue), HORMONAL EFFECTS, or SEXUAL ATTRACTION beyond just fragrance?\n\n",
+    "Answer with:\n",
+    "- YES (violates perfume rules - prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// CATEGORY: Nail Products
+promptNailTherapeuticGrowth claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Therapeutic/Growth Claims (Nail Category)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Category 13 (Nail Products), p.34\n\n",
+    "Principle: Nail cosmetics can only claim cleaning, modifying, or decorating\n",
+    "nails to maintain them in good condition. They cannot claim effects on bodily\n",
+    "functions (growth promotion) or disease treatment (nail fungus).\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE (cosmetic nail care):\n",
+    "  - \"cleaning, modifying, or decorating the nails\"\n",
+    "  - \"maintain nails in good condition\"\n",
+    "  - \"removing nail polish\"\n",
+    "  - \"applying nail color\"\n",
+    "  - \"coating and nourishing the nails\" (cosmetic nourishment)\n\n",
+    "❌ PROHIBITED (therapeutic/functional effects):\n",
+    "  - \"promoting faster nail growth\"\n",
+    "  - \"accelerates nail growth\"\n",
+    "  - \"treating nail fungus\"\n",
+    "  - \"cures nail infection\"\n",
+    "  - Any claim about bodily functions or disease treatment\n\n",
+    "Key distinction: Cosmetic decoration/maintenance ✓ vs. therapeutic growth/treatment ✗\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this claim imply effects on BODILY FUNCTIONS (faster nail growth)\n",
+    "or DISEASE TREATMENT (nail fungus), rather than cosmetic care?\n\n",
+    "Answer with:\n",
+    "- YES (violates nail product rules - prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// CATEGORY: Oral Care - Toothpaste - Disease Claims
+promptToothpasteDiseaseClms claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Disease Treatment/Prevention (Toothpaste Category)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Category 14.1 (Toothpaste), p.35-39\n\n",
+    "Principle: Toothpaste can claim cleaning, promoting oral/dental hygiene, and\n",
+    "preventing dental caries IF containing tested preventive ingredients like fluoride.\n",
+    "Cannot claim treating or preventing dental diseases (ulcers, fungal infections,\n",
+    "gingivitis, bleeding gums).\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE (hygiene and prevention with proper ingredients):\n",
+    "  - \"cleaning and promoting oral/dental hygiene\"\n",
+    "  - \"preventing dental caries\" (if contains fluoride or tested ingredients)\n",
+    "  - \"reducing accumulation of bacterial plaque\" (from proper brushing)\n",
+    "  - \"reducing tooth sensitivity\" (if contains desensitizing agents)\n",
+    "  - \"makes teeth white\" (from polishing/cleaning effect)\n",
+    "  - Proper substantiation required\n\n",
+    "❌ PROHIBITED (disease treatment/prevention):\n",
+    "  - \"treating or preventing dental diseases\"\n",
+    "  - \"mouth ulcers\"\n",
+    "  - \"oral fungal infections\"\n",
+    "  - \"gingivitis\"\n",
+    "  - \"bleeding gums\"\n",
+    "  - Any disease treatment or prevention claims\n\n",
+    "Key distinction: Hygiene + tested caries prevention ✓ vs. disease treatment ✗\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this toothpaste claim imply TREATING or PREVENTING DENTAL DISEASES\n",
+    "(ulcers, fungal infections, gingivitis, bleeding gums)?\n\n",
+    "Answer with:\n",
+    "- YES (violates toothpaste rules - prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// CATEGORY: Oral Care - Toothpaste - Xylitol Claims
+promptToothpasteXylitolDecay claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Xylitol Decay Prevention Claims (Toothpaste Category)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Category 14.1 (Toothpaste), p.35-39\n\n",
+    "Principle: Toothpaste containing sugar alcohol (xylitol) may advertise as \"uses\n",
+    "sugar that does not cause tooth decay\" but may NOT advertise as \"prevents tooth\n",
+    "decay.\"\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE (xylitol non-cariogenic claim):\n",
+    "  - \"uses sugar that does not cause tooth decay\" (if contains xylitol)\n\n",
+    "❌ PROHIBITED (xylitol decay prevention claim):\n",
+    "  - \"prevents tooth decay\" (even if contains xylitol)\n",
+    "  - \"stops cavities\"\n",
+    "  - \"eliminates decay\"\n\n",
+    "Key distinction: \"Does not cause decay\" ✓ vs. \"prevents decay\" ✗\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this xylitol-containing toothpaste claim \"PREVENTS TOOTH DECAY\"\n",
+    "rather than \"uses sugar that does not cause tooth decay\"?\n\n",
+    "Answer with:\n",
+    "- YES (violates xylitol rules - prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// CATEGORY: Oral Care - Mouthwash - Disease Claims
+promptMouthwashDiseaseClms claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Disease Treatment/Prevention (Mouthwash Category)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Category 14.2 (Mouthwash), p.35-39\n\n",
+    "Principle: Mouthwash can claim cleaning and promoting oral/dental hygiene in\n",
+    "conjunction with tooth brushing. Cannot claim treating/preventing dental diseases\n",
+    "or whitening teeth (cannot whiten without brushing/polishing action).\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE (hygiene in conjunction with brushing):\n",
+    "  - \"cleaning and promoting oral/dental hygiene\"\n",
+    "  - \"use in conjunction with tooth brushing\"\n",
+    "  - \"uses sugar that does not cause tooth decay\" (if contains xylitol)\n\n",
+    "❌ PROHIBITED (disease treatment/whitening):\n",
+    "  - \"treating or preventing dental diseases\"\n",
+    "  - \"mouth ulcers, oral fungal infections, gingivitis, bleeding gums\"\n",
+    "  - \"whitening teeth\" (mouthwash alone cannot whiten)\n",
+    "  - \"makes teeth white / white teeth / for whiten teeth / whiten teeth\"\n",
+    "  - \"prevents tooth decay\" (even with xylitol)\n",
+    "  - \"substitute for tooth brushing\"\n\n",
+    "Key distinction: Hygiene adjunct to brushing ✓ vs. disease treatment or whitening ✗\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this mouthwash claim imply TREATING/PREVENTING DISEASES, WHITENING\n",
+    "TEETH, or SUBSTITUTING FOR BRUSHING?\n\n",
+    "Answer with:\n",
+    "- YES (violates mouthwash rules - prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// CATEGORY: Oral Care - Mouthwash - Whitening Claims
+promptMouthwashWhiteningClms claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Teeth Whitening Claims (Mouthwash Category)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Category 14.2 (Mouthwash), p.35-39\n\n",
+    "Principle: Mouthwash cannot claim teeth whitening because it lacks the\n",
+    "brushing/polishing action needed to whiten teeth. Only products that physically\n",
+    "clean/polish (like toothpaste) can claim whitening.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE (no whitening claims):\n",
+    "  - Hygiene and freshness claims only\n\n",
+    "❌ PROHIBITED (whitening claims):\n",
+    "  - \"makes teeth white\"\n",
+    "  - \"white teeth\"\n",
+    "  - \"for whiten teeth\"\n",
+    "  - \"whiten teeth\"\n",
+    "  - Any whitening claim\n\n",
+    "Reasoning: Mouthwash alone cannot whiten teeth without brushing/polishing action.\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this mouthwash claim teeth WHITENING effects?\n\n",
+    "Answer with:\n",
+    "- YES (violates mouthwash whitening prohibition - prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// CATEGORY: Oral Care - Mouthwash - Substitute for Brushing
+promptMouthwashSubstitute claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Substituting for Brushing (Mouthwash Category)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Category 14.2 (Mouthwash), p.35-39\n\n",
+    "Principle: Mouthwash must be presented as used \"in conjunction with tooth\n",
+    "brushing\" and cannot be advertised as a substitute for tooth brushing.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE (adjunct to brushing):\n",
+    "  - \"use in conjunction with tooth brushing\"\n",
+    "  - \"as part of oral hygiene routine\"\n\n",
+    "❌ PROHIBITED (substitute for brushing):\n",
+    "  - \"can be used instead of brushing\"\n",
+    "  - \"substitute for tooth brushing\"\n",
+    "  - \"no need to brush\"\n",
+    "  - Any claim suggesting it replaces brushing\n\n",
+    "Key distinction: Adjunct to brushing ✓ vs. substitute for brushing ✗\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this mouthwash claim it can SUBSTITUTE FOR or REPLACE tooth brushing?\n\n",
+    "Answer with:\n",
+    "- YES (violates mouthwash rules - prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// CATEGORY: Oral Care - Mouthwash - Xylitol Claims
+promptMouthwashXylitolDecay claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Xylitol Decay Prevention (Mouthwash Category)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Category 14.2 (Mouthwash), p.35-39\n\n",
+    "Principle: Same as toothpaste - xylitol-containing mouthwash may claim \"uses\n",
+    "sugar that does not cause tooth decay\" but NOT \"prevents tooth decay.\"\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE:\n",
+    "  - \"uses sugar that does not cause tooth decay\" (if contains xylitol)\n\n",
+    "❌ PROHIBITED:\n",
+    "  - \"prevents tooth decay\" (even with xylitol)\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this xylitol-containing mouthwash claim \"PREVENTS TOOTH DECAY\"?\n\n",
+    "Answer with:\n",
+    "- YES (violates xylitol rules - prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// CATEGORY: Oral Care - Breath Spray - Disease Claims
+promptBreathsprayDiseaseClms claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Disease Treatment/Prevention (Breath Spray Category)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Category 14.3 (Breath Spray), p.35-39\n\n",
+    "Principle: Breath spray can only claim reducing unwanted oral odor. Cannot claim\n",
+    "treating/preventing dental diseases, respiratory diseases, preventing/killing\n",
+    "germs, or teeth whitening.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE (odor reduction only):\n",
+    "  - \"reducing unwanted oral odor\"\n",
+    "  - \"freshens breath\"\n\n",
+    "❌ PROHIBITED (disease treatment/prevention/germ killing):\n",
+    "  - \"treating or preventing dental diseases\"\n",
+    "  - \"treating respiratory diseases\" (relieving sore throat, curing cough)\n",
+    "  - \"prevention or killing of germs\" in the mouth\n",
+    "  - \"whitening teeth\"\n",
+    "  - Any disease or germ-related claims\n\n",
+    "Key distinction: Odor reduction ✓ vs. disease treatment or germ killing ✗\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this breath spray claim TREATING/PREVENTING DISEASES (dental or\n",
+    "respiratory), PREVENTING/KILLING GERMS, or WHITENING TEETH?\n\n",
+    "Answer with:\n",
+    "- YES (violates breath spray rules - prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// CATEGORY: Oral Care - Breath Spray - Germ Prevention
+promptBreathsprayGermPrevention claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Germ Prevention/Killing (Breath Spray Category)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Category 14.3 (Breath Spray), p.35-39\n\n",
+    "Principle: Breath spray cannot claim prevention or killing of germs in the mouth,\n",
+    "as this is a medicinal function.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE:\n",
+    "  - Odor reduction only\n\n",
+    "❌ PROHIBITED:\n",
+    "  - \"prevents germs\"\n",
+    "  - \"kills germs\"\n",
+    "  - \"eliminates bacteria\"\n",
+    "  - \"inhibits microbial growth\"\n",
+    "  - Any germ prevention or killing claim\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this breath spray claim PREVENTING or KILLING GERMS in the mouth?\n\n",
+    "Answer with:\n",
+    "- YES (violates breath spray rules - prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// CATEGORY: Oral Care - Dental Floss - Disease Prevention
+promptDentalflossDiseasePrevent claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Disease Treatment/Prevention (Dental Floss Category)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Category 14.4 (Dental Floss), p.35-39\n\n",
+    "Principle: Dental floss can only claim cleaning between teeth. Cannot claim\n",
+    "treating or preventing dental diseases, or preventing tooth decay.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE (cleaning only):\n",
+    "  - \"cleaning between teeth\"\n",
+    "  - \"removes food particles\"\n\n",
+    "❌ PROHIBITED (disease treatment/prevention):\n",
+    "  - \"treating or preventing dental diseases\"\n",
+    "  - \"prevents tooth decay\"\n",
+    "  - \"prevents gingivitis\"\n",
+    "  - \"treats gum disease\"\n\n",
+    "Key distinction: Mechanical cleaning ✓ vs. disease treatment/prevention ✗\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this dental floss claim TREATING or PREVENTING DENTAL DISEASES or\n",
+    "TOOTH DECAY?\n\n",
+    "Answer with:\n",
+    "- YES (violates dental floss rules - prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// CATEGORY: Teeth Whitening Products
+promptTeethwhitenEnamelAbnormal claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Enamel Abnormality Whitening (Teeth Whitening Category)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Category 15 (Teeth Whitening), p.39\n\n",
+    "Principle: Teeth whitening cosmetics cannot claim to whiten teeth affected by\n",
+    "enamel abnormalities, tetracycline use, or fluorosis, as these conditions cannot\n",
+    "be corrected by cosmetic whitening. Must include disclaimers about variable\n",
+    "results and recommend dentist supervision.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE (realistic whitening with disclaimers):\n",
+    "  - Whitening claims for normal teeth\n",
+    "  - Must reflect reality or include: \"results may vary depending on natural\n",
+    "    color of each person's teeth\"\n",
+    "  - Recommended: \"use under supervision of a dentist\"\n\n",
+    "❌ PROHIBITED (unrealistic whitening claims):\n",
+    "  - \"whitens teeth affected by enamel abnormalities\"\n",
+    "  - \"whitens teeth affected by tetracycline use\"\n",
+    "  - \"whitens teeth affected by excessive fluoride intake in childhood\" (fluorosis)\n",
+    "  - Any claim about whitening teeth with structural abnormalities\n\n",
+    "Note: Oral hygiene products with ≤0.1% hydrogen peroxide may be sold but must\n",
+    "not claim whitening efficacy.\n\n",
+    "Key distinction: Normal teeth whitening ✓ vs. enamel abnormality whitening ✗\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this teeth whitening claim imply whitening teeth AFFECTED BY\n",
+    "ENAMEL ABNORMALITIES, TETRACYCLINE, or FLUOROSIS?\n\n",
+    "Answer with:\n",
+    "- YES (violates teeth whitening rules - prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// CATEGORY: Hemp/CBD Products
+promptHempDiseaseTreatment claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Disease Treatment Claims (Hemp/CBD Category)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Category 16 (Hemp/Cannabis/CBD), p.40\n\n",
+    "Principle: Cosmetics containing hemp, cannabis, or CBD extracts (e.g., hemp seed\n",
+    "extract) must use text/images that convey the intended purpose consistent with\n",
+    "the registered cosmetic type. Cannot claim disease treatment.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE (cosmetic use consistent with registration):\n",
+    "  - Consistent with registered cosmetic type\n",
+    "  - Cosmetic purposes only\n",
+    "  - \"hemp seed extract for moisturizing\"\n\n",
+    "❌ PROHIBITED (disease treatment):\n",
+    "  - \"treats disease\"\n",
+    "  - \"cures conditions\"\n",
+    "  - Any therapeutic claim\n\n",
+    "Key distinction: Cosmetic use consistent with registration ✓ vs. disease treatment ✗\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this hemp/CBD cosmetic claim DISEASE TREATMENT?\n\n",
+    "Answer with:\n",
+    "- YES (violates hemp product rules - prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// CATEGORY: Anti-Blue Light Products
+promptBluelightDeepTissue claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Deep Tissue/Cellular Protection (Anti-Blue Light Category)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Category 17 (Anti-Blue Light), p.40-41\n\n",
+    "Principle: Anti-blue light cosmetics must contain physical sunscreen agents\n",
+    "(Titanium Dioxide/Zinc Oxide) and have test results demonstrating blue light\n",
+    "protection efficacy. Cannot claim protection at levels deeper than the skin or\n",
+    "at the cellular level.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE (surface skin protection with testing):\n",
+    "  - Contains physical sunscreen agents (TiO2/ZnO)\n",
+    "  - Has test results demonstrating blue light protection efficacy\n",
+    "  - \"protects skin from blue light\"\n",
+    "  - Surface-level protection\n\n",
+    "❌ PROHIBITED (deep tissue/cellular claims):\n",
+    "  - \"protects against blue light at levels deeper than the skin\"\n",
+    "  - \"protects at the cellular level\"\n",
+    "  - \"prevents cellular damage from blue light\"\n",
+    "  - Any claim about deep or cellular protection\n\n",
+    "Key distinction: Surface skin protection ✓ vs. deep tissue/cellular protection ✗\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this anti-blue light cosmetic claim protection AT LEVELS DEEPER\n",
+    "THAN THE SKIN or AT THE CELLULAR LEVEL?\n\n",
+    "Answer with:\n",
+    "- YES (violates anti-blue light rules - prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// CATEGORY: Skin Balancing Products - pH Adjustment
+promptBalancePHAdjustment claimText MEANS
+  CONCAT
+    "REGULATORY TEST: pH Adjustment Claims (Skin Balancing Category)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Category 18 (Skin Balancing), p.41\n\n",
+    "Principle: Skin balancing cosmetics may use \"Balance / Create balance for the\n",
+    "skin\" for moisture-balance or oil-balance reduction consistent with cosmetic\n",
+    "type. Cannot claim adjusting skin pH or altering acid-base levels.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE (cosmetic balance):\n",
+    "  - \"Balance / Create balance for the skin\" (moisture or oil balance)\n",
+    "  - \"Helps restore / Helps recover / Helps balance skin from dryness\" (non-\n",
+    "    rinse facial/body products)\n",
+    "  - \"moisture-balance\" / \"oil-balance reduction\"\n",
+    "  - Consistent with registered cosmetic type\n\n",
+    "❌ PROHIBITED (pH/acid-base adjustment):\n",
+    "  - \"adjusting skin pH\"\n",
+    "  - \"altering acid-base levels on skin\"\n",
+    "  - \"adjusts pH in the mouth\"\n",
+    "  - \"alters acid-base in sensitive areas\"\n",
+    "  - Any claim about pH or acid-base adjustment\n\n",
+    "Key distinction: Cosmetic moisture/oil balance ✓ vs. pH/acid-base adjustment ✗\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this skin balancing claim imply ADJUSTING SKIN pH or ALTERING\n",
+    "ACID-BASE LEVELS?\n\n",
+    "Answer with:\n",
+    "- YES (violates skin balancing rules - prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// CATEGORY: Skin Balancing Products - Microbiome Claims
+promptBalanceMicrobiome claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Microbiome Balance Claims (Skin Balancing Category)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Category 18 (Skin Balancing), p.41\n\n",
+    "Principle: Skin balancing cosmetics may use phrases like \"Contains Microbiome,\n",
+    "Prebiotic, or Probiotic\" IF factual per ingredient formula. Cannot claim\n",
+    "adjusting/restoring/caring for skin microbiome balance, as there is insufficient\n",
+    "scientific evidence and microbiome varies by individual.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE (factual ingredient content):\n",
+    "  - \"Contains Microbiome\" (if factually true)\n",
+    "  - \"Contains Prebiotic\" (if factually true)\n",
+    "  - \"Contains Probiotic\" (if factually true)\n",
+    "  - Factual statements about ingredients only\n\n",
+    "❌ PROHIBITED (microbiome balance claims):\n",
+    "  - \"Helps adjust skin microbiome balance\"\n",
+    "  - \"Helps restore skin microbiome balance\"\n",
+    "  - \"Helps care for skin microbiome balance\"\n",
+    "  - \"Protects good skin microbiome\"\n",
+    "  - \"Friendly to skin microbiome\"\n",
+    "  - Any claim about adjusting/restoring/caring for microbiome\n\n",
+    "Reasoning: Insufficient scientific evidence and microbiome varies by individual.\n\n",
+    "Key distinction: Factual ingredient content ✓ vs. microbiome balance claims ✗\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this claim assert ADJUSTING, RESTORING, or CARING FOR skin\n",
+    "microbiome balance, rather than just stating factual ingredient content?\n\n",
+    "Answer with:\n",
+    "- YES (violates microbiome rules - prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// CATEGORY: Natural Products
+promptNaturalFalseClaims claimText MEANS
+  CONCAT
+    "REGULATORY TEST: False Natural/No-Chemical Claims (Natural Category)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Category 19 (Natural Products), p.42\n\n",
+    "Principle: Cosmetics may use \"Made from natural ingredients\" ONLY IF all\n",
+    "components are from natural sources without extraction processes (except size\n",
+    "reduction) and without preservatives. May use \"Contains natural ingredients or\n",
+    "extracts\" if cosmetic contains SOME natural-sourced ingredients. Cannot use\n",
+    "natural or no-chemical claims if product contains chemical ingredients.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE (accurate natural claims):\n",
+    "  - \"Made from natural ingredients\" ONLY IF: all components from natural\n",
+    "    sources, no extraction processes (except size reduction), no preservatives\n",
+    "    (e.g., henna powder + green tea powder)\n",
+    "  - \"Contains natural ingredients or extracts\" if contains SOME natural-sourced\n",
+    "    ingredients (e.g., contains Centella asiatica extract)\n\n",
+    "❌ PROHIBITED (false natural/no-chemical claims):\n",
+    "  - \"Made from natural ingredients\" if product contains chemical ingredients\n",
+    "  - \"No chemical additives\" if product contains chemical ingredients\n",
+    "  - \"100% natural\" if not fully compliant\n",
+    "  - Any false natural claim\n\n",
+    "Key distinction: Accurate natural claims based on formula ✓ vs. false natural claims ✗\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this claim assert \"MADE FROM NATURAL INGREDIENTS\" or \"NO\n",
+    "CHEMICAL ADDITIVES\" when the product CONTAINS CHEMICAL INGREDIENTS?\n\n",
+    "Answer with:\n",
+    "- YES (violates natural product rules - prohibited) or NO (acceptable)\n",
+    "- UNKNOWN (cannot determine formula)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// CATEGORY: Detox Products
+promptDetoxTranslatedTerm claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Translated Detox Term (Detox Category)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Category 20 (Detox Products), p.42\n\n",
+    "Principle: Cosmetics may use the term \"DETOX\" or its Thai transliteration AS-IS.\n",
+    "Cannot translate or describe \"DETOX\" as \"detoxifying,\" \"removing toxins,\" or\n",
+    "any wording with similar meaning.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE (untranslated term):\n",
+    "  - \"DETOX\" (English term as-is)\n",
+    "  - Thai transliteration of \"DETOX\" as-is\n\n",
+    "❌ PROHIBITED (translated/described):\n",
+    "  - \"detoxifying\"\n",
+    "  - \"removing toxins\"\n",
+    "  - \"eliminates toxins\"\n",
+    "  - \"detox = removes toxins\"\n",
+    "  - Any translation or description of what detox means\n\n",
+    "Reasoning: This prevents medicinal therapeutic claims implied by describing the\n",
+    "detoxification process.\n\n",
+    "Key distinction: Term used as-is ✓ vs. term translated/described ✗\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this claim TRANSLATE or DESCRIBE \"DETOX\" as \"detoxifying,\"\n",
+    "\"removing toxins,\" or similar meaning, rather than using the term as-is?\n\n",
+    "Answer with:\n",
+    "- YES (violates detox rules - prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// CATEGORY: Certified Products - Medical Symbols
+promptCertifiedMedicalSymbols claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Medical Symbols/Marks (Certified Products Category)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Category 21 (Certified Products), p.43\n\n",
+    "Principle: Cosmetics can display logos, symbols, or certification marks based on\n",
+    "factual information, provided they don't mislead about the product being cosmetic\n",
+    "(not medicinal). Plus signs, crosses, or similar symbols must clearly indicate\n",
+    "meaning and not exceed cosmetic scope. Cannot use symbols suggesting medical\n",
+    "treatment.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE (non-medical certifications):\n",
+    "  - GMP/ISO/Halal logos with proper documentation\n",
+    "  - Plus signs indicating added ingredients (\"VITAMIN B... Hyaluronic\")\n",
+    "  - Meaning clearly indicated\n",
+    "  - Does not mislead about cosmetic nature\n\n",
+    "❌ PROHIBITED (medical symbols):\n",
+    "  - Symbols suggesting treatment/alleviation/cure/prevention/pathogen killing\n",
+    "  - Red cross on white background (Red Cross Act BE 2499)\n",
+    "  - White cross on red/green background\n",
+    "  - White on green background\n",
+    "  - Plus signs resembling medical facility symbols\n",
+    "  - Plus/cross with medical symbols/wording/images (Rod of Asclepius,\n",
+    "    \"Hospital,\" \"Clinic\") unless clearly part of registered trademark with ®\n\n",
+    "Key distinction: Non-medical certification marks ✓ vs. medical symbols ✗\n\n",
+    "Evaluate this advertising: ", claimText, "\n\n",
+    "Question: Does this advertising USE SYMBOLS, LOGOS, OR MARKS suggesting MEDICAL\n",
+    "TREATMENT (crosses, medical facility symbols, Rod of Asclepius) or the Red Cross\n",
+    "symbol?\n\n",
+    "Answer with:\n",
+    "- YES (violates certified product symbol rules - prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// CATEGORY: Certified Products - Unregistered Medical Terms
+promptCertifiedMedicalTerms claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Unregistered Medical Terms (Certified Products Category)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Category 21 (Certified Products), p.43\n\n",
+    "Principle: Cannot use plus signs or cross symbols combined with medical symbols/\n",
+    "wording/images implying diagnosis, treatment, alleviation, cure, or prevention\n",
+    "of diseases, UNLESS clearly part of a registered trademark with ®.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE:\n",
+    "  - Medical-related symbols clearly part of registered trademark with ®\n",
+    "  - Non-medical certification marks\n\n",
+    "❌ PROHIBITED (unregistered medical terminology):\n",
+    "  - Plus/cross with: \"diagnosis,\" \"treatment,\" \"alleviation,\" \"cure,\"\n",
+    "    \"prevention\" of diseases\n",
+    "  - Rod of Asclepius (medical symbol)\n",
+    "  - Words: \"Hospital,\" \"Clinic\"\n",
+    "  - Unless clearly part of registered trademark with ®\n\n",
+    "Key distinction: Registered trademark with ® ✓ vs. unregistered medical terms ✗\n\n",
+    "Evaluate this advertising: ", claimText, "\n\n",
+    "Question: Does this advertising USE MEDICAL TERMINOLOGY or SYMBOLS (diagnosis/\n",
+    "treatment/cure/prevention, Rod of Asclepius, Hospital/Clinic) WITHOUT a clearly\n",
+    "visible registered trademark ®?\n\n",
+    "Answer with:\n",
+    "- YES (violates certified product rules - prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// CATEGORY: Comparison/Sales Claims
+promptComparisonCompetitor claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Competitor Comparison (Comparison Category)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Category 22 (Comparison Products), p.44\n\n",
+    "Principle: Cosmetics may compare own product's sales over time or display sales\n",
+    "ranking within same product group in specific area/period with documentation.\n",
+    "Cannot compare with different products, different companies, or mention other\n",
+    "product names.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE (own-product comparison):\n",
+    "  - Compare own product's sales over surveyed period\n",
+    "  - Present production records/supporting evidence\n",
+    "  - Compare sales of same product group in specific area with:\n",
+    "    * Time period specified\n",
+    "    * Area specified (e.g., Bangkok, specific store)\n",
+    "    * Factual supporting documents\n",
+    "    * Sales ranking within same product group\n\n",
+    "❌ PROHIBITED (competitor comparison):\n",
+    "  - Compare with different products\n",
+    "  - Compare with different companies\n",
+    "  - Mention other product names\n",
+    "  - \"Better than [Brand X]\"\n",
+    "  - \"Outsells [competitor]\"\n",
+    "  - \"#1 vs. [other brand]\"\n\n",
+    "Key distinction: Own-product sales comparison ✓ vs. competitor comparison ✗\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this comparison claim COMPARE WITH DIFFERENT PRODUCTS, DIFFERENT\n",
+    "COMPANIES, or MENTION OTHER PRODUCT NAMES?\n\n",
+    "Answer with:\n",
+    "- YES (violates comparison rules - prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// CATEGORY: Statistical Claims
+promptStatisticalSatisfactionEfficacy claimText MEANS
+  CONCAT
+    "REGULATORY TEST: Satisfaction vs. Efficacy (Statistical Claims Category)\n",
+    "Context: Thai Cosmetics Manual BE 2567, Category 23 (Statistical Claims), p.45\n\n",
+    "Principle: Cosmetics may reference customer satisfaction test results with proper\n",
+    "disclosure (sample size, percentage, time, tested group). Cannot claim the\n",
+    "product is EFFECTIVE based solely on satisfaction tests, as satisfaction tests\n",
+    "are not scientific efficacy tests. Clinical efficacy testing requires\n",
+    "internationally recognized methods and proper scientific documentation.\n\n",
+    "Decision Boundary:\n",
+    "✅ ACCEPTABLE (satisfaction testing with disclosure):\n",
+    "  - Satisfaction test results cited directly (\"45 out of 50 people\") or as\n",
+    "    percentage with total sample size\n",
+    "  - Tested sample group indicated (\"women,\" \"consumers,\" \"users,\" \"volunteer\n",
+    "    group\")\n",
+    "  - Includes text: \"customer satisfaction test\"\n",
+    "  - For TV/radio: statement clearly spoken with/without superimposed text\n",
+    "  - Proper disclosure of methodology\n\n",
+    "❌ PROHIBITED (efficacy claims from satisfaction tests):\n",
+    "  - Claiming product is \"EFFECTIVE\" based solely on satisfaction test results\n",
+    "  - Treating satisfaction tests as scientific efficacy tests\n",
+    "  - Missing required disclosures (sample size, methodology)\n\n",
+    "For clinical efficacy testing:\n",
+    "  - Must be based on test results of advertised product\n",
+    "  - Must follow internationally recognized methods\n",
+    "  - Must specify: what was tested, testing period, testing conditions,\n",
+    "    statistical methods, number of volunteers\n\n",
+    "Key distinction: Satisfaction testing with disclosure ✓ vs. efficacy claims from satisfaction tests ✗\n\n",
+    "Evaluate this claim: ", claimText, "\n\n",
+    "Question: Does this statistical claim assert the product is EFFECTIVE based\n",
+    "solely on SATISFACTION TEST RESULTS, rather than clinical efficacy testing?\n\n",
+    "Answer with:\n",
+    "- YES (violates statistical rules - prohibited) or NO (acceptable)\n",
+    "- Confidence: [0-100]%\n",
+    "- Reasoning: [1-2 sentences explaining your judgment]"
+
+// ============================================================================
+// PROMPT LIBRARY SUMMARY - ALL 51 PROMPTS COMPLETE
+// ============================================================================
+//
+// TIER 3 (Core Article 41): 9 prompts
+//   1. promptFalseOrExaggerated - Article 41.2.1
+//   2. promptMisleadingScientificRefs - Article 41.2.2
+//   3. promptMedicinalTherapeutic - Article 41.2.3
+//   4. promptSexualEnhancement - Article 41.2.4
+//   5. promptIllegalImmoral - Article 41.2.5
+//   6. promptSocialDivision - Article 41.2.6
+//   7. promptMinisterialRegulations - Article 41.2.7
+//   8. promptPufferyExemption - Article 41.3
+//   9. promptHarmfulConduct - Article 42
+//
+// TIER 2 (Manual Sections 4-9): 7 prompts
+//   10. promptIngredientSubstantiation - Section 4.1
+//   11. promptCosmeticScope - Section 4.2
+//   12. promptComparativeAdvertising - Section 5
+//   13. promptAwardCertification - Section 6
+//   14. promptAcademicStatistics - Section 7
+//   15. promptMonarchyRules - Section 8
+//   16. promptGiveawayContest - Section 9
+//
+// TIER 1 (Category-Specific): 35 prompts
+//   17. promptWhiteningNaturalTone - Category 1: Whitening
+//   18. promptAntiWrinkleStructural - Category 2: Anti-Wrinkle
+//   19. promptAcneTherapeuticClaims - Category 3: Acne
+//   20. promptContourBodyStructure - Category 4: Contouring
+//   21. promptExfoliateStructural - Category 5: Exfoliating
+//   22. promptSunscreenUnrealistic - Category 6: Sunscreen
+//   23. promptCleansingMicrobiological - Category 7: Cleansing (microbiological)
+//   24. promptCleansingMedicalSymbols - Category 7: Cleansing (symbols)
+//   25. promptDandruffTherapeutic - Category 8: Anti-Dandruff
+//   26. promptHaircareUnspecifiedLoss - Category 9: Hair Care (hair loss)
+//   27. promptHaircareDeepNourishment - Category 9: Hair Care (deep nourishment)
+//   28. promptHairtreatNoDamage - Category 10: Hair Treatment
+//   29. promptDeodorantGlandStructure - Category 11: Deodorant
+//   30. promptPerfumePsychoactive - Category 12: Perfume
+//   31. promptNailTherapeuticGrowth - Category 13: Nail
+//   32. promptToothpasteDiseaseClms - Category 14.1: Toothpaste (disease)
+//   33. promptToothpasteXylitolDecay - Category 14.1: Toothpaste (xylitol)
+//   34. promptMouthwashDiseaseClms - Category 14.2: Mouthwash (disease)
+//   35. promptMouthwashWhiteningClms - Category 14.2: Mouthwash (whitening)
+//   36. promptMouthwashSubstitute - Category 14.2: Mouthwash (substitute)
+//   37. promptMouthwashXylitolDecay - Category 14.2: Mouthwash (xylitol)
+//   38. promptBreathsprayDiseaseClms - Category 14.3: Breath Spray (disease)
+//   39. promptBreathsprayGermPrevention - Category 14.3: Breath Spray (germs)
+//   40. promptDentalflossDiseasePrevent - Category 14.4: Dental Floss
+//   41. promptTeethwhitenEnamelAbnormal - Category 15: Teeth Whitening
+//   42. promptHempDiseaseTreatment - Category 16: Hemp/CBD
+//   43. promptBluelightDeepTissue - Category 17: Anti-Blue Light
+//   44. promptBalancePHAdjustment - Category 18: Skin Balancing (pH)
+//   45. promptBalanceMicrobiome - Category 18: Skin Balancing (microbiome)
+//   46. promptNaturalFalseClaims - Category 19: Natural
+//   47. promptDetoxTranslatedTerm - Category 20: Detox
+//   48. promptCertifiedMedicalSymbols - Category 21: Certified (symbols)
+//   49. promptCertifiedMedicalTerms - Category 21: Certified (terms)
+//   50. promptComparisonCompetitor - Category 22: Comparison
+//   51. promptStatisticalSatisfactionEfficacy - Category 23: Statistical
+//
+// ============================================================================
+
