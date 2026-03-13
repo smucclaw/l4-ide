@@ -1,0 +1,59 @@
+-- Computed Fields: Legislative Definitions
+-- Demonstrates legal isomorphism: a statutory definition section
+-- maps directly onto a DECLARE block with computed fields.
+--
+-- Based loosely on Singapore's Employment Act definitions.
+-- The apostrophe triple pun in action:
+--   employee's name                        (possessive: "the name of the employee")
+--   employee's covered                     (copula: "the employee is covered")
+--   employee's eligible for retirement     (copula: "the employee is eligible for retirement")
+
+IMPORT prelude
+
+GIVEN `date1` IS A NUMBER
+      `date2` IS A NUMBER
+GIVETH A NUMBER
+`years between` MEANS `date2` - `date1`
+
+DECLARE Employee HAS
+    `name`               IS A STRING
+    `date of birth`      IS A NUMBER       -- year, simplified
+    `date of employment` IS A NUMBER       -- year, simplified
+    `monthly salary`     IS A NUMBER
+    `current year`       IS A NUMBER
+    `age`                IS A NUMBER
+        MEANS `years between` `date of birth`, `current year`
+    `years of service`   IS A NUMBER
+        MEANS `years between` `date of employment`, `current year`
+    `covered by Act`     IS A BOOLEAN
+        MEANS `monthly salary` <= 4500
+          AND `age` >= 16
+    `eligible for retirement benefit` IS A BOOLEAN
+        MEANS `covered by Act`
+          AND `years of service` >= 5
+          AND `age` >= 62
+
+-- A long-serving, covered employee
+veteran MEANS Employee WITH
+    `name`               IS "Lim"
+    `date of birth`      IS 1960
+    `date of employment` IS 1990
+    `monthly salary`     IS 3000
+    `current year`       IS 2026
+
+-- A young, high-earning employee
+junior MEANS Employee WITH
+    `name`               IS "Chen"
+    `date of birth`      IS 1998
+    `date of employment` IS 2023
+    `monthly salary`     IS 8000
+    `current year`       IS 2026
+
+#EVAL veteran's `age`                             -- 66
+#EVAL veteran's `years of service`                -- 36
+#EVAL veteran's `covered by Act`                  -- TRUE  (salary <= 4500, age >= 16)
+#EVAL veteran's `eligible for retirement benefit` -- TRUE  (covered, service >= 5, age >= 62)
+
+#EVAL junior's `age`                              -- 28
+#EVAL junior's `covered by Act`                   -- FALSE (salary > 4500)
+#EVAL junior's `eligible for retirement benefit`  -- FALSE (not covered)

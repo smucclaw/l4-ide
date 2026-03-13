@@ -1,0 +1,16 @@
+-- Computed Fields: Constructor Override (SHOULD FAIL)
+-- This file should produce a compile-time error: cannot supply a computed field in a constructor.
+
+IMPORT prelude
+
+DECLARE Person HAS
+    `name`  IS A STRING
+    `age`   IS A NUMBER
+    `adult` IS A BOOLEAN
+        MEANS `age` >= 18
+
+-- ERROR: `adult` is a computed field and cannot be supplied in WITH
+bad MEANS Person WITH
+    `name`  IS "Alice"
+    `age`   IS 25
+    `adult` IS FALSE
