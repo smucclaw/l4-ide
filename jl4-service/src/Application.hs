@@ -19,7 +19,7 @@ import Control.Concurrent.STM (TVar, atomically, modifyTVar', newTVarIO, readTVa
 import Control.Exception (finally)
 import Control.Monad (forM_)
 import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Trans.Reader (ReaderT (..), asks)
+import Control.Monad.Trans.Reader (ReaderT (..), ask)
 import Data.IORef (newIORef, atomicModifyIORef')
 import qualified Data.Map.Strict as Map
 import Data.Time (getCurrentTime, diffUTCTime)
@@ -214,7 +214,8 @@ serverT env =
 -- | GET /health — health check handler.
 healthHandler :: ServerT HealthApi AppM
 healthHandler = do
-  registry <- asks (.deploymentRegistry) >>= liftIO . readTVarIO
+  env <- ask
+  registry <- liftIO . readTVarIO $ env.deploymentRegistry
   let states = Map.elems registry
       nReady = length [() | DeploymentReady _ _ <- states]
       nCompiling = length [() | DeploymentPending <- states]
@@ -228,4 +229,5 @@ healthHandler = do
         , hdCompiling = nCompiling
         , hdFailed = nFailed
         }
+    , hrInstanceToken = env.options.instanceToken
     }
