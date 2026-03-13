@@ -1,0 +1,70 @@
+-- Computed Fields: Chained Dependencies
+-- Tests computed fields that depend on other computed fields.
+-- Lazy evaluation should resolve the dependency chain naturally.
+
+IMPORT prelude
+
+DECLARE `Risk Category` IS ONE OF
+    `Low Risk`
+    `Medium Risk`
+    `High Risk`
+    `Uninsurable`
+
+-- This is the "methods" version of carInsurance.l4.
+-- External DECIDE functions have been pulled into the record as computed fields.
+-- Note the apostrophe triple pun:
+--   driver's name         = "the name belonging to driver"      (possessive)
+--   driver's adult        = "driver is adult"                   (copula)
+--   driver's experienced  = "driver is experienced"             (copula)
+--   driver's eligible     = "driver is eligible"                (copula)
+
+DECLARE Driver HAS
+    `name`              IS A STRING
+    `age`               IS A NUMBER
+    `years licensed`    IS A NUMBER
+    `accident count`    IS A NUMBER
+    `has tickets`       IS A BOOLEAN
+    `adult`             IS A BOOLEAN
+        MEANS `age` >= 18
+    `experienced`       IS A BOOLEAN
+        MEANS `years licensed` >= 2
+    `risk category`     IS A `Risk Category`
+        MEANS IF `accident count` = 0
+              THEN IF `has tickets` THEN `Medium Risk` ELSE `Low Risk`
+              ELSE IF `accident count` <= 2 THEN `High Risk`
+              ELSE `Uninsurable`
+    `eligible`          IS A BOOLEAN                -- depends on two other computed fields
+        MEANS `adult`
+          AND `experienced`
+          AND `accident count` <= 3
+
+-- Construction: only stored fields are supplied
+alice MEANS Driver WITH
+    `name`           IS "Alice"
+    `age`            IS 25
+    `years licensed` IS 3
+    `accident count` IS 0
+    `has tickets`    IS FALSE
+
+teen MEANS Driver WITH
+    `name`           IS "Teen"
+    `age`            IS 16
+    `years licensed` IS 0
+    `accident count` IS 0
+    `has tickets`    IS FALSE
+
+risky MEANS Driver WITH
+    `name`           IS "Risky"
+    `age`            IS 40
+    `years licensed` IS 10
+    `accident count` IS 4
+    `has tickets`    IS TRUE
+
+-- Computed field chain: eligible depends on adult and experienced
+#EVAL alice's `eligible`        -- TRUE  (adult=T, experienced=T, accidents<=3)
+#EVAL teen's `eligible`         -- FALSE (adult=F)
+#EVAL risky's `eligible`        -- FALSE (accident count > 3)
+
+-- Intermediate computed fields are also accessible
+#EVAL alice's `risk category`   -- Low Risk
+#EVAL risky's `risk category`   -- Uninsurable
