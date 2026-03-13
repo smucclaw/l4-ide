@@ -4,6 +4,7 @@
     ./jl4-web/configuration.nix
     ./jl4-lsp/configuration.nix
     ./jl4-decision-service/configuration.nix
+    ./jl4-service/configuration.nix
     ./jl4-websessions/configuration.nix
     ./l4-wizard/configuration.nix
     ./module.nix

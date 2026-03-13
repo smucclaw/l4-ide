@@ -1,0 +1,731 @@
+
+IMPORT prelude
+
+§ `Thailand Cosmetics Act - Article 41 (Tribrid Three-Tier Architecture)`
+
+// Three-tier evaluation: (1) Category-specific if known, (2) Manual-specific requirements, (3) Core Act prohibitions
+// Source: Thailand Cosmetics Act (BE 2558 / 2015) and Manual on Cosmetic Advertising (BE 2567 / 2024)
+
+§§ `Type Definitions`
+
+DECLARE `Cosmetic Category` IS ONE OF
+    `whitening products`
+    `anti-wrinkle products`
+    `acne products`
+    `contouring products`
+    `exfoliating products`
+    `sunscreen products`
+    `cleansing products`
+    `anti-dandruff products`
+    `hair care products`
+    `hair treatment products`
+    `deodorant products`
+    `perfume products`
+    `nail products`
+    `toothpaste products`
+    `mouthwash products`
+    `breath spray products`
+    `dental floss products`
+    `teeth whitening products`
+    `hemp products`
+    `anti-blue-light products`
+    `skin balancing products`
+    `natural products`
+    `detox products`
+    `certified products`
+    `comparison products`
+    `statistical products`
+    `uncategorized`
+
+DECLARE `Sub-Claim` HAS
+    `text content`                                     IS A STRING
+    `claim type`                                       IS A STRING
+
+DECLARE `Advertising Statement` HAS
+    `full text`                                        IS A STRING
+    `sub-claims`                                       IS A LIST OF `Sub-Claim`
+    `product categories`                               IS A LIST OF `Cosmetic Category`
+
+@desc The input for evaluating a single cosmetic advertising claim against Thailand's cosmetics regulations. Provide the claim text, claim type, product categories, and boolean assessments for specific regulatory predicates. Use NOTHING for predicates that haven't been assessed yet.
+DECLARE `Claim Assessment Input` HAS
+    `claim text`                                       IS A STRING
+    `claim type`                                       IS A STRING
+    `claim categories`                                 IS A LIST OF `Cosmetic Category`
+
+    // === TIER 1: CATEGORY-SPECIFIC PREDICATES ===
+
+    // 1. Whitening products (Manual p.22)
+    `whitening - alters natural tone`                  IS A MAYBE BOOLEAN
+
+    // 2. Anti-wrinkle products (Manual p.23)
+    `antiwrinkle - prevents free radicals`             IS A MAYBE BOOLEAN
+    `antiwrinkle - structural changes`                 IS A MAYBE BOOLEAN
+
+    // 3. Acne products (Manual p.24)
+    `acne - prevents acne`                             IS A MAYBE BOOLEAN
+    `acne - treats acne`                               IS A MAYBE BOOLEAN
+    `acne - reduces inflammation`                      IS A MAYBE BOOLEAN
+    `acne - eliminates acne`                           IS A MAYBE BOOLEAN
+
+    // 4. Contouring products (Manual p.25)
+    `contour - increases metabolism`                   IS A MAYBE BOOLEAN
+    `contour - reduces fat`                            IS A MAYBE BOOLEAN
+    `contour - improves circulation`                   IS A MAYBE BOOLEAN
+    `contour - reduces waist size`                     IS A MAYBE BOOLEAN
+    `contour - alters breast size`                     IS A MAYBE BOOLEAN
+    `contour - reduces cellulite`                      IS A MAYBE BOOLEAN
+
+    // 5. Exfoliating products (Manual p.26)
+    `exfoliate - peels to brighten`                    IS A MAYBE BOOLEAN
+    `exfoliate - stimulates skin formation`            IS A MAYBE BOOLEAN
+    `exfoliate - stimulates collagen`                  IS A MAYBE BOOLEAN
+    `exfoliate - reduces acne melasma freckles`        IS A MAYBE BOOLEAN
+    `exfoliate - whitens skin`                         IS A MAYBE BOOLEAN
+    `exfoliate - breaks down fat`                      IS A MAYBE BOOLEAN
+    `exfoliate - tightens pores`                       IS A MAYBE BOOLEAN
+
+    // 6. Sunscreen products (Manual p.27-28)
+    `sunscreen - long lasting no reapply`              IS A MAYBE BOOLEAN
+    `sunscreen - fully prevents UV`                    IS A MAYBE BOOLEAN
+    `sunscreen - prevents non-sun tissue changes`      IS A MAYBE BOOLEAN
+    `sunscreen - sweat resistant`                      IS A MAYBE BOOLEAN
+
+    // 7. Cleansing products (Manual p.29)
+    `cleansing - kills bacteria`                       IS A MAYBE BOOLEAN
+    `cleansing - eliminates bacteria`                  IS A MAYBE BOOLEAN
+    `cleansing - inhibits bacteria`                    IS A MAYBE BOOLEAN
+    `cleansing - kills fungi`                          IS A MAYBE BOOLEAN
+    `cleansing - kills viruses`                        IS A MAYBE BOOLEAN
+    `cleansing - specifies microorganisms`             IS A MAYBE BOOLEAN
+    `cleansing - uses medical symbols`                 IS A MAYBE BOOLEAN
+    `cleansing - uses prohibited terms`                IS A MAYBE BOOLEAN
+
+    // 8. Anti-dandruff products (Manual p.30)
+    `dandruff - eliminates fungal itch`                IS A MAYBE BOOLEAN
+    `dandruff - treats inflammation`                   IS A MAYBE BOOLEAN
+    `dandruff - permanently removes`                   IS A MAYBE BOOLEAN
+
+    // 9. Hair care products (Manual p.31)
+    `haircare - reduces loss unspecified`              IS A MAYBE BOOLEAN
+    `haircare - reduces loss internal`                 IS A MAYBE BOOLEAN
+    `haircare - nourishes roots deep`                  IS A MAYBE BOOLEAN
+
+    // 10. Hair treatment products (Manual p.32)
+    `hairtreat - claims no damage unsubstantiated`     IS A MAYBE BOOLEAN
+
+    // 11. Deodorant products (Manual p.33)
+    `deodorant - reduces sweat production`             IS A MAYBE BOOLEAN
+    `deodorant - affects gland structure`              IS A MAYBE BOOLEAN
+    `deodorant - use on medical conditions`            IS A MAYBE BOOLEAN
+
+    // 12. Perfume products (Manual p.34)
+    `perfume - sexual attraction`                      IS A MAYBE BOOLEAN
+    `perfume - affects hormones`                       IS A MAYBE BOOLEAN
+    `perfume - affects mind nervous`                   IS A MAYBE BOOLEAN
+    `perfume - reduces stress`                         IS A MAYBE BOOLEAN
+    `perfume - improves sleep`                         IS A MAYBE BOOLEAN
+    `perfume - prevents fatigue`                       IS A MAYBE BOOLEAN
+
+    // 13. Nail products (Manual p.34)
+    `nail - faster growth`                             IS A MAYBE BOOLEAN
+    `nail - treats fungus`                             IS A MAYBE BOOLEAN
+
+    // 14-17. Oral care products (Manual p.35-39)
+    `toothpaste - treats diseases`                     IS A MAYBE BOOLEAN
+    `toothpaste - prevents diseases`                   IS A MAYBE BOOLEAN
+    `toothpaste - prevents decay xylitol`              IS A MAYBE BOOLEAN
+    `mouthwash - treats diseases`                      IS A MAYBE BOOLEAN
+    `mouthwash - whitens teeth`                        IS A MAYBE BOOLEAN
+    `mouthwash - substitutes brushing`                 IS A MAYBE BOOLEAN
+    `mouthwash - prevents decay xylitol`               IS A MAYBE BOOLEAN
+    `breathspray - treats dental diseases`             IS A MAYBE BOOLEAN
+    `breathspray - treats respiratory`                 IS A MAYBE BOOLEAN
+    `breathspray - prevents kills germs`               IS A MAYBE BOOLEAN
+    `breathspray - whitens teeth`                      IS A MAYBE BOOLEAN
+    `dentalfloss - treats diseases`                    IS A MAYBE BOOLEAN
+    `dentalfloss - prevents decay`                     IS A MAYBE BOOLEAN
+
+    // 18. Teeth whitening products (Manual p.39)
+    `teethwhiten - abnormal enamel`                    IS A MAYBE BOOLEAN
+    `teethwhiten - tetracycline affected`              IS A MAYBE BOOLEAN
+    `teethwhiten - fluorosis`                          IS A MAYBE BOOLEAN
+
+    // 19. Hemp products (Manual p.40)
+    `hemp - disease treatment`                         IS A MAYBE BOOLEAN
+
+    // 20. Anti-blue light products (Manual p.40-41)
+    `bluelight - deeper than skin`                     IS A MAYBE BOOLEAN
+    `bluelight - cellular level`                       IS A MAYBE BOOLEAN
+
+    // 21. Skin balancing products (Manual p.41)
+    `balance - adjusts pH`                             IS A MAYBE BOOLEAN
+    `balance - alters acid base`                       IS A MAYBE BOOLEAN
+    `balance - microbiome claims`                      IS A MAYBE BOOLEAN
+
+    // 22. Natural products (Manual p.42)
+    `natural - false natural claim`                    IS A MAYBE BOOLEAN
+    `natural - false no chemicals claim`               IS A MAYBE BOOLEAN
+
+    // 23. Detox products (Manual p.42)
+    `detox - translates term`                          IS A MAYBE BOOLEAN
+
+    // 24. Certified products (Manual p.43)
+    `certified - medical symbols`                      IS A MAYBE BOOLEAN
+    `certified - red cross symbol`                     IS A MAYBE BOOLEAN
+    `certified - medical terms unregistered`           IS A MAYBE BOOLEAN
+
+    // 25. Comparison products (Manual p.44)
+    `comparison - different products`                  IS A MAYBE BOOLEAN
+    `comparison - different companies`                 IS A MAYBE BOOLEAN
+    `comparison - mentions names`                      IS A MAYBE BOOLEAN
+
+    // 26. Statistical products (Manual p.45)
+    `statistical - satisfaction not efficacy`          IS A MAYBE BOOLEAN
+
+    // === TIER 2: MANUAL-SPECIFIC PREDICATES ===
+
+    `lacks ingredient substantiation`                  IS A MAYBE BOOLEAN
+    `exceeds cosmetic scope`                           IS A MAYBE BOOLEAN
+    `violates comparative advertising rules`           IS A MAYBE BOOLEAN
+    `violates award certification rules`               IS A MAYBE BOOLEAN
+    `violates academic statistics rules`               IS A MAYBE BOOLEAN
+    `violates monarchy rules`                          IS A MAYBE BOOLEAN
+    `violates giveaway rules`                          IS A MAYBE BOOLEAN
+
+    // === TIER 3: CORE ARTICLE 41 PREDICATES ===
+
+    `is false or exaggerated`                          IS A MAYBE BOOLEAN
+    `misleads via scientific references`               IS A MAYBE BOOLEAN
+    `suggests medicinal effects`                       IS A MAYBE BOOLEAN
+    `implies sexual enhancement`                       IS A MAYBE BOOLEAN
+    `encourages illegality or immorality`              IS A MAYBE BOOLEAN
+    `causes social division`                           IS A MAYBE BOOLEAN
+    `violates ministerial regulations`                 IS A MAYBE BOOLEAN
+    `is clearly unrealistic to public`                 IS A MAYBE BOOLEAN
+
+    // === ARTICLE 42: CONDUCT PREDICATE ===
+
+    `is harmful conduct`                               IS A MAYBE BOOLEAN
+
+DECLARE `Statement Assessment Input` HAS
+    `full text`                                        IS A STRING
+    `product categories`                               IS A LIST OF `Cosmetic Category`
+    `claim assessments`                                IS A LIST OF `Claim Assessment Input`
+
+§§ `Tier 1: Category-Specific Evaluation (Manual Product Groups 1-23)`
+
+// Category-specific Do/Don't rules from the Manual.
+// Only evaluated if category is known (JUST category) or confidently detected.
+
+DECLARE `Category Specific Evaluation` HAS
+    `violates category rules`                          IS A BOOLEAN
+    `specific violation`                               IS A STRING
+    `category tested`                                  IS A `Cosmetic Category`
+
+// 1. Whitening products: Cannot claim to change natural skin color
+GIVEN input IS A `Claim Assessment Input`
+GIVETH BOOLEAN
+`violates whitening category rules` input MEANS
+    maybe_bool (input's `whitening - alters natural tone`)
+
+// 2. Anti-wrinkle: Cannot claim to prevent free radical damage or alter structure
+GIVEN input IS A `Claim Assessment Input`
+GIVETH BOOLEAN
+`violates anti-wrinkle category rules` input MEANS
+       maybe_bool (input's `antiwrinkle - prevents free radicals`)
+    OR maybe_bool (input's `antiwrinkle - structural changes`)
+
+// 3. Acne products: Cannot claim to treat, reduce inflammation, or eliminate acne
+GIVEN input IS A `Claim Assessment Input`
+GIVETH BOOLEAN
+`violates acne category rules` input MEANS
+       maybe_bool (input's `acne - prevents acne`)
+    OR maybe_bool (input's `acne - treats acne`)
+    OR maybe_bool (input's `acne - reduces inflammation`)
+    OR maybe_bool (input's `acne - eliminates acne`)
+
+// 4. Contouring products: Cannot alter body structure/function
+GIVEN input IS A `Claim Assessment Input`
+GIVETH BOOLEAN
+`violates contouring category rules` input MEANS
+       maybe_bool (input's `contour - increases metabolism`)
+    OR maybe_bool (input's `contour - reduces fat`)
+    OR maybe_bool (input's `contour - improves circulation`)
+    OR maybe_bool (input's `contour - reduces waist size`)
+    OR maybe_bool (input's `contour - alters breast size`)
+    OR maybe_bool (input's `contour - reduces cellulite`)
+
+// 5. Exfoliating products: Cannot alter skin structure
+GIVEN input IS A `Claim Assessment Input`
+GIVETH BOOLEAN
+`violates exfoliating category rules` input MEANS
+       maybe_bool (input's `exfoliate - peels to brighten`)
+    OR maybe_bool (input's `exfoliate - stimulates skin formation`)
+    OR maybe_bool (input's `exfoliate - stimulates collagen`)
+    OR maybe_bool (input's `exfoliate - reduces acne melasma freckles`)
+    OR maybe_bool (input's `exfoliate - whitens skin`)
+    OR maybe_bool (input's `exfoliate - breaks down fat`)
+    OR maybe_bool (input's `exfoliate - tightens pores`)
+
+// 6. Sunscreen products: Cannot claim unrealistic protection
+GIVEN input IS A `Claim Assessment Input`
+GIVETH BOOLEAN
+`violates sunscreen category rules` input MEANS
+       maybe_bool (input's `sunscreen - long lasting no reapply`)
+    OR maybe_bool (input's `sunscreen - fully prevents UV`)
+    OR maybe_bool (input's `sunscreen - prevents non-sun tissue changes`)
+    OR maybe_bool (input's `sunscreen - sweat resistant`)
+
+// 7. Cleansing: Cannot claim to kill/eliminate bacteria (only reduce accumulation)
+GIVEN input IS A `Claim Assessment Input`
+GIVETH BOOLEAN
+`violates cleansing category rules` input MEANS
+       maybe_bool (input's `cleansing - kills bacteria`)
+    OR maybe_bool (input's `cleansing - eliminates bacteria`)
+    OR maybe_bool (input's `cleansing - inhibits bacteria`)
+    OR maybe_bool (input's `cleansing - kills fungi`)
+    OR maybe_bool (input's `cleansing - kills viruses`)
+    OR maybe_bool (input's `cleansing - specifies microorganisms`)
+    OR maybe_bool (input's `cleansing - uses medical symbols`)
+    OR maybe_bool (input's `cleansing - uses prohibited terms`)
+
+// 8. Anti-dandruff products: Cosmetic cleansing only
+GIVEN input IS A `Claim Assessment Input`
+GIVETH BOOLEAN
+`violates dandruff category rules` input MEANS
+       maybe_bool (input's `dandruff - eliminates fungal itch`)
+    OR maybe_bool (input's `dandruff - treats inflammation`)
+    OR maybe_bool (input's `dandruff - permanently removes`)
+
+// 9. Hair care: Cannot claim to reduce hair loss generally (only from tangling)
+GIVEN input IS A `Claim Assessment Input`
+GIVETH BOOLEAN
+`violates hair-care category rules` input MEANS
+       maybe_bool (input's `haircare - reduces loss unspecified`)
+    OR maybe_bool (input's `haircare - reduces loss internal`)
+    OR maybe_bool (input's `haircare - nourishes roots deep`)
+
+// 10. Hair treatment products: Damage claims need substantiation
+GIVEN input IS A `Claim Assessment Input`
+GIVETH BOOLEAN
+`violates hair-treatment category rules` input MEANS
+    maybe_bool (input's `hairtreat - claims no damage unsubstantiated`)
+
+// 11. Deodorant products: Cannot affect sweat gland structure/function
+GIVEN input IS A `Claim Assessment Input`
+GIVETH BOOLEAN
+`violates deodorant category rules` input MEANS
+       maybe_bool (input's `deodorant - reduces sweat production`)
+    OR maybe_bool (input's `deodorant - affects gland structure`)
+    OR maybe_bool (input's `deodorant - use on medical conditions`)
+
+// 12. Perfume products: Scent only, no physiological effects
+GIVEN input IS A `Claim Assessment Input`
+GIVETH BOOLEAN
+`violates perfume category rules` input MEANS
+       maybe_bool (input's `perfume - sexual attraction`)
+    OR maybe_bool (input's `perfume - affects hormones`)
+    OR maybe_bool (input's `perfume - affects mind nervous`)
+    OR maybe_bool (input's `perfume - reduces stress`)
+    OR maybe_bool (input's `perfume - improves sleep`)
+    OR maybe_bool (input's `perfume - prevents fatigue`)
+
+// 13. Nail products: Cosmetic appearance only
+GIVEN input IS A `Claim Assessment Input`
+GIVETH BOOLEAN
+`violates nail category rules` input MEANS
+       maybe_bool (input's `nail - faster growth`)
+    OR maybe_bool (input's `nail - treats fungus`)
+
+// 14. Toothpaste products: Hygiene only, no disease treatment
+GIVEN input IS A `Claim Assessment Input`
+GIVETH BOOLEAN
+`violates toothpaste category rules` input MEANS
+       maybe_bool (input's `toothpaste - treats diseases`)
+    OR maybe_bool (input's `toothpaste - prevents diseases`)
+    OR maybe_bool (input's `toothpaste - prevents decay xylitol`)
+
+// 15. Mouthwash products: Must be used with brushing
+GIVEN input IS A `Claim Assessment Input`
+GIVETH BOOLEAN
+`violates mouthwash category rules` input MEANS
+       maybe_bool (input's `mouthwash - treats diseases`)
+    OR maybe_bool (input's `mouthwash - whitens teeth`)
+    OR maybe_bool (input's `mouthwash - substitutes brushing`)
+    OR maybe_bool (input's `mouthwash - prevents decay xylitol`)
+
+// 16. Breath spray products: Odor control only
+GIVEN input IS A `Claim Assessment Input`
+GIVETH BOOLEAN
+`violates breathspray category rules` input MEANS
+       maybe_bool (input's `breathspray - treats dental diseases`)
+    OR maybe_bool (input's `breathspray - treats respiratory`)
+    OR maybe_bool (input's `breathspray - prevents kills germs`)
+    OR maybe_bool (input's `breathspray - whitens teeth`)
+
+// 17. Dental floss products: Cleaning only
+GIVEN input IS A `Claim Assessment Input`
+GIVETH BOOLEAN
+`violates dentalfloss category rules` input MEANS
+       maybe_bool (input's `dentalfloss - treats diseases`)
+    OR maybe_bool (input's `dentalfloss - prevents decay`)
+
+// 18. Teeth whitening products: Appearance-based only
+GIVEN input IS A `Claim Assessment Input`
+GIVETH BOOLEAN
+`violates teethwhitening category rules` input MEANS
+       maybe_bool (input's `teethwhiten - abnormal enamel`)
+    OR maybe_bool (input's `teethwhiten - tetracycline affected`)
+    OR maybe_bool (input's `teethwhiten - fluorosis`)
+
+// 19. Hemp products: Cosmetic use only
+GIVEN input IS A `Claim Assessment Input`
+GIVETH BOOLEAN
+`violates hemp category rules` input MEANS
+    maybe_bool (input's `hemp - disease treatment`)
+
+// 20. Anti-blue light products: Skin-level protection only
+GIVEN input IS A `Claim Assessment Input`
+GIVETH BOOLEAN
+`violates bluelight category rules` input MEANS
+       maybe_bool (input's `bluelight - deeper than skin`)
+    OR maybe_bool (input's `bluelight - cellular level`)
+
+// 21. Skin balancing products: Cannot alter pH or microbiome
+GIVEN input IS A `Claim Assessment Input`
+GIVETH BOOLEAN
+`violates balance category rules` input MEANS
+       maybe_bool (input's `balance - adjusts pH`)
+    OR maybe_bool (input's `balance - alters acid base`)
+    OR maybe_bool (input's `balance - microbiome claims`)
+
+// 22. Natural products: Must be truthful about ingredients
+GIVEN input IS A `Claim Assessment Input`
+GIVETH BOOLEAN
+`violates natural category rules` input MEANS
+       maybe_bool (input's `natural - false natural claim`)
+    OR maybe_bool (input's `natural - false no chemicals claim`)
+
+// 23. Detox products: Term must not be translated
+GIVEN input IS A `Claim Assessment Input`
+GIVETH BOOLEAN
+`violates detox category rules` input MEANS
+    maybe_bool (input's `detox - translates term`)
+
+// 24. Certified products: No misleading medical symbols
+GIVEN input IS A `Claim Assessment Input`
+GIVETH BOOLEAN
+`violates certified category rules` input MEANS
+       maybe_bool (input's `certified - medical symbols`)
+    OR maybe_bool (input's `certified - red cross symbol`)
+    OR maybe_bool (input's `certified - medical terms unregistered`)
+
+// 25. Comparison products: Must compare own products only
+GIVEN input IS A `Claim Assessment Input`
+GIVETH BOOLEAN
+`violates comparison category rules` input MEANS
+       maybe_bool (input's `comparison - different products`)
+    OR maybe_bool (input's `comparison - different companies`)
+    OR maybe_bool (input's `comparison - mentions names`)
+
+// 26. Statistical products: Satisfaction ≠ efficacy
+GIVEN input IS A `Claim Assessment Input`
+GIVETH BOOLEAN
+`violates statistical category rules` input MEANS
+    maybe_bool (input's `statistical - satisfaction not efficacy`)
+
+// Aggregate category-specific evaluation
+GIVEN input IS A `Claim Assessment Input`
+      category IS A `Cosmetic Category`
+GIVETH `Category Specific Evaluation`
+`evaluate category specific` input category MEANS
+    `Category Specific Evaluation` WITH
+        `violates category rules`  IS violates
+        `specific violation`       IS violation_text
+        `category tested`          IS category
+  WHERE
+    violates MEANS
+        CONSIDER category
+            WHEN `whitening products`      THEN `violates whitening category rules` input
+            WHEN `anti-wrinkle products`   THEN `violates anti-wrinkle category rules` input
+            WHEN `acne products`           THEN `violates acne category rules` input
+            WHEN `contouring products`     THEN `violates contouring category rules` input
+            WHEN `exfoliating products`    THEN `violates exfoliating category rules` input
+            WHEN `sunscreen products`      THEN `violates sunscreen category rules` input
+            WHEN `cleansing products`      THEN `violates cleansing category rules` input
+            WHEN `anti-dandruff products`  THEN `violates dandruff category rules` input
+            WHEN `hair care products`      THEN `violates hair-care category rules` input
+            WHEN `hair treatment products` THEN `violates hair-treatment category rules` input
+            WHEN `deodorant products`      THEN `violates deodorant category rules` input
+            WHEN `perfume products`        THEN `violates perfume category rules` input
+            WHEN `nail products`           THEN `violates nail category rules` input
+            WHEN `toothpaste products`     THEN `violates toothpaste category rules` input
+            WHEN `mouthwash products`      THEN `violates mouthwash category rules` input
+            WHEN `breath spray products`   THEN `violates breathspray category rules` input
+            WHEN `dental floss products`   THEN `violates dentalfloss category rules` input
+            WHEN `teeth whitening products` THEN `violates teethwhitening category rules` input
+            WHEN `hemp products`           THEN `violates hemp category rules` input
+            WHEN `anti-blue-light products` THEN `violates bluelight category rules` input
+            WHEN `skin balancing products` THEN `violates balance category rules` input
+            WHEN `natural products`        THEN `violates natural category rules` input
+            WHEN `detox products`          THEN `violates detox category rules` input
+            WHEN `certified products`      THEN `violates certified category rules` input
+            WHEN `comparison products`     THEN `violates comparison category rules` input
+            WHEN `statistical products`    THEN `violates statistical category rules` input
+            WHEN `uncategorized`           THEN FALSE
+            OTHERWISE FALSE
+    violation_text MEANS
+        IF violates
+            THEN "Category rule violated"
+            ELSE "No category violation"
+
+§§ `Tier 2: Manual-Specific Requirements (Non-Core, Non-Category)`
+
+// Requirements from the Manual that are NOT restatements of Article 41.2.1-7
+// and are NOT category-specific. These are the Manual's unique additions.
+
+DECLARE `Manual Specific Evaluation` HAS
+    `violates manual requirements`                     IS A BOOLEAN
+    `violations`                                       IS A LIST OF STRING
+
+// Section 4.1: Ingredient efficacy claims need substantiation
+GIVEN input IS A `Claim Assessment Input`
+GIVETH BOOLEAN
+`lacks ingredient substantiation` input MEANS
+    maybe_bool (input's `lacks ingredient substantiation`)
+
+// Section 4.2: Product efficacy must be within cosmetic scope
+GIVEN input IS A `Claim Assessment Input`
+GIVETH BOOLEAN
+`exceeds cosmetic scope` input MEANS
+    maybe_bool (input's `exceeds cosmetic scope`)
+
+// Section 5: Comparative advertising restrictions
+GIVEN input IS A `Claim Assessment Input`
+GIVETH BOOLEAN
+`violates comparative advertising rules` input MEANS
+    maybe_bool (input's `violates comparative advertising rules`)
+
+// Section 6: Awards/certifications claims
+GIVEN input IS A `Claim Assessment Input`
+GIVETH BOOLEAN
+`violates award certification rules` input MEANS
+    maybe_bool (input's `violates award certification rules`)
+
+// Section 7: Academic reports/statistics claims
+GIVEN input IS A `Claim Assessment Input`
+GIVETH BOOLEAN
+`violates academic statistics rules` input MEANS
+    maybe_bool (input's `violates academic statistics rules`)
+
+// Section 8: Monarchy-related claims
+GIVEN input IS A `Claim Assessment Input`
+GIVETH BOOLEAN
+`violates monarchy rules` input MEANS
+    maybe_bool (input's `violates monarchy rules`)
+
+// Section 9: Giveaways/contests
+GIVEN input IS A `Claim Assessment Input`
+GIVETH BOOLEAN
+`violates giveaway rules` input MEANS
+    maybe_bool (input's `violates giveaway rules`)
+
+// Aggregate Manual-specific evaluation
+GIVEN input IS A `Claim Assessment Input`
+GIVETH `Manual Specific Evaluation`
+`evaluate manual specific` input MEANS
+    `Manual Specific Evaluation` WITH
+        `violates manual requirements` IS NOT is_empty
+        `violations`                   IS manual_violation_list
+  WHERE
+    manual_violation_list MEANS
+     concat OF LIST
+                  IF `lacks ingredient substantiation` input THEN LIST "Ingredient claim lacks substantiation (Manual 4.1)" ELSE EMPTY
+                  IF `exceeds cosmetic scope` input THEN LIST "Exceeds cosmetic scope (Manual 4.2)" ELSE EMPTY
+                  IF `violates comparative advertising rules` input THEN LIST "Violates comparative advertising (Manual 5)" ELSE EMPTY
+                  IF `violates award certification rules` input THEN LIST "Violates award/certification rules (Manual 6)" ELSE EMPTY
+                  IF `violates academic statistics rules` input THEN LIST "Violates academic/statistics rules (Manual 7)" ELSE EMPTY
+                  IF `violates monarchy rules` input THEN LIST "Violates monarchy rules (Manual 8)" ELSE EMPTY
+    is_empty MEANS
+        CONSIDER manual_violation_list
+            WHEN EMPTY THEN TRUE
+            WHEN head FOLLOWED BY tail THEN FALSE
+
+§§ `Tier 3: Core Article 41 Prohibitions (Primary Legislation)`
+
+// The seven prohibited statement types from Article 41 Paragraph 2.
+// These are duplicated in Manual Section 2, so we evaluate them once here.
+// This is where the puffery exemption (Article 41.3) applies.
+
+DECLARE `Article 41 Core Evaluation` HAS
+    `violates article 41`                              IS A BOOLEAN
+    `prohibited type matched`                          IS A MAYBE OF STRING
+    `exempt as puffery`                                IS A BOOLEAN
+
+// Article 41.2.1 - False or exaggerated claims
+GIVEN input IS A `Claim Assessment Input`
+GIVETH `Article 41 Core Evaluation`
+`evaluate article 41 core` input MEANS
+    `Article 41 Core Evaluation` WITH
+        `violates article 41`      IS violates
+        `prohibited type matched`  IS violation_type
+        `exempt as puffery`        IS qualifies_for_puffery
+  WHERE
+    is_false MEANS maybe_bool (input's `is false or exaggerated`)
+    is_misleading MEANS maybe_bool (input's `misleads via scientific references`)
+    is_medicinal MEANS maybe_bool (input's `suggests medicinal effects`)
+    is_sexual MEANS maybe_bool (input's `implies sexual enhancement`)
+    is_immoral MEANS maybe_bool (input's `encourages illegality or immorality`)
+    is_divisive MEANS maybe_bool (input's `causes social division`)
+    is_ministerial MEANS maybe_bool (input's `violates ministerial regulations`)
+    is_unrealistic MEANS maybe_bool (input's `is clearly unrealistic to public`)
+    matches_prohibited_type MEANS
+        is_false OR is_misleading OR is_medicinal OR is_sexual OR is_immoral OR is_divisive OR is_ministerial
+    qualifies_for_puffery MEANS
+        is_false AND is_unrealistic
+    violates MEANS
+        matches_prohibited_type AND NOT qualifies_for_puffery
+    violation_type MEANS
+        IF NOT violates THEN NOTHING
+        ELSE
+          BRANCH
+             IF is_medicinal THEN JUST "medicinal/therapeutic (Art 41.2.3)"
+             IF is_sexual THEN JUST "aphrodisiac/sexual (Art 41.2.4)"
+             IF is_misleading THEN JUST "misleading scientific references (Art 41.2.2)"
+             IF is_false THEN JUST "false or exaggerated (Art 41.2.1)"
+             IF is_immoral THEN JUST "promotes illegality/immorality (Art 41.2.5)"
+             IF is_divisive THEN JUST "causes division (Art 41.2.6)"
+             IF is_ministerial THEN JUST "ministerial violation (Art 41.2.7)"
+             OTHERWISE NOTHING
+
+§§ `Article 42: Harmful Advertising Conduct`
+
+// Separate from Article 41 content restrictions - covers harmful methods
+
+GIVEN claim IS A `Sub-Claim`
+GIVETH BOOLEAN
+`violates article 42` claim MEANS
+    // Harmful to health, violates morality, or causes distress
+    FALSE
+
+§§ `Maybe helpers`
+
+GIVEN value IS A MAYBE BOOLEAN
+GIVETH BOOLEAN
+maybe_bool value MEANS
+    CONSIDER value
+        WHEN JUST v THEN v
+        WHEN NOTHING THEN FALSE
+
+GIVEN xs IS A LIST OF STRING
+GIVETH NUMBER
+`count strings` xs MEANS
+    CONSIDER xs
+        WHEN EMPTY THEN 0
+        WHEN head FOLLOWED BY tail THEN 1 + `count strings` tail
+
+GIVEN cat_eval IS A `Category Specific Evaluation`
+      acc IS A LIST OF STRING
+GIVETH LIST OF STRING
+category_violation_reduce cat_eval acc MEANS
+    IF cat_eval's `violates category rules`
+        THEN (cat_eval's `specific violation`) FOLLOWED BY acc
+        ELSE acc
+
+§§ `Combined Three-Tier Evaluation for Single Sub-Claim`
+
+DECLARE `Sub-Claim Evaluation Result` HAS
+    `sub-claim text`                                   IS A STRING
+    `tier 1 results`                                   IS A LIST OF `Category Specific Evaluation`
+    `tier 2 result`                                    IS A `Manual Specific Evaluation`
+    `tier 3 result`                                    IS AN `Article 41 Core Evaluation`
+    `article 42 violation`                             IS A BOOLEAN
+    `overall compliant`                                IS A BOOLEAN
+    `all violations`                                   IS A LIST OF STRING
+
+@export default Given a cosmetic advertising claim and its assessed predicates, evaluate compliance with all three tiers of Thailand's cosmetics advertising regulations (Cosmetics Act BE 2558 and Manual BE 2567). Returns detailed violation results across category-specific rules, manual requirements, and core Article 41 prohibitions.
+GIVEN input IS A `Claim Assessment Input`
+      `statement category` IS A MAYBE OF `Cosmetic Category`
+GIVETH `Sub-Claim Evaluation Result`
+`evaluate sub-claim` input `statement category` MEANS
+    `Sub-Claim Evaluation Result` WITH
+        `sub-claim text`       IS input's `claim text`
+        `tier 1 results`       IS tier1_results
+        `tier 2 result`        IS tier2
+        `tier 3 result`        IS tier3
+        `article 42 violation` IS art42
+        `overall compliant`    IS is_compliant
+        `all violations`       IS aggregated_violations
+  WHERE
+    effective_categories MEANS
+        CONSIDER (input's `claim categories`)
+            WHEN cat FOLLOWED BY tail THEN input's `claim categories`
+            WHEN EMPTY THEN
+                CONSIDER `statement category`
+                    WHEN JUST cat THEN LIST cat
+                    WHEN NOTHING THEN EMPTY
+    tier1_results MEANS
+        map (GIVEN cat YIELD `evaluate category specific` input cat) effective_categories
+    tier2 MEANS `evaluate manual specific` input
+    tier3 MEANS `evaluate article 41 core` input
+    art42 MEANS maybe_bool (input's `is harmful conduct`)
+    category_violation_list MEANS
+        foldr category_violation_reduce EMPTY tier1_results
+    core_violation_list MEANS
+        CONSIDER (tier3's `prohibited type matched`)
+            WHEN JUST vtype THEN LIST vtype
+            WHEN NOTHING THEN EMPTY
+    article42_list MEANS
+        IF art42 THEN LIST "Harmful conduct (Art 42)" ELSE EMPTY
+    aggregated_violations MEANS
+        concat OF LIST category_violation_list
+                       (tier2's `violations`)
+                       core_violation_list
+                       article42_list
+    is_compliant MEANS
+        CONSIDER aggregated_violations
+            WHEN EMPTY THEN TRUE
+            WHEN head FOLLOWED BY tail THEN FALSE
+
+§§ `Full Statement Evaluation (All Sub-Claims)`
+
+DECLARE `Statement Evaluation Result` HAS
+    `full statement text`                              IS A STRING
+    `product categories`                               IS A LIST OF `Cosmetic Category`
+    `sub-claim results`                                IS A LIST OF `Sub-Claim Evaluation Result`
+    `overall compliant`                                IS A BOOLEAN
+    `total violations`                                 IS A NUMBER
+
+GIVEN result IS A `Sub-Claim Evaluation Result`
+      acc IS A BOOLEAN
+GIVETH BOOLEAN
+`combine compliance` result acc MEANS
+    (result's `overall compliant`) AND acc
+
+GIVEN result IS A `Sub-Claim Evaluation Result`
+      acc IS A NUMBER
+GIVETH NUMBER
+`count violations` result acc MEANS
+    (`count strings` (result's `all violations`)) + acc
+
+@export Evaluate a full multi-claim cosmetic advertising statement against all Thailand cosmetics regulations. Takes a complete statement with multiple sub-claims and product categories, evaluates each sub-claim through the three-tier architecture, and aggregates results.
+GIVEN statement IS A `Statement Assessment Input`
+GIVETH `Statement Evaluation Result`
+`evaluate full statement` statement MEANS
+    `Statement Evaluation Result` WITH
+        `full statement text` IS statement's `full text`
+        `product categories`  IS statement's `product categories`
+        `sub-claim results`   IS sub_claim_results
+        `overall compliant`   IS all_compliant
+        `total violations`    IS total_vcount
+  WHERE
+    maybe_cat MEANS
+        CONSIDER (statement's `product categories`)
+            WHEN cat FOLLOWED BY tail THEN JUST cat
+            WHEN EMPTY THEN NOTHING
+    sub_claim_results MEANS
+        map (GIVEN sc YIELD `evaluate sub-claim` sc maybe_cat) (statement's `claim assessments`)
+    all_compliant MEANS
+        foldr `combine compliance` TRUE sub_claim_results
+    total_vcount MEANS
+        foldr `count violations` 0 sub_claim_results
