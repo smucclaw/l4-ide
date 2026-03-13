@@ -80,8 +80,9 @@
 
       # Load ANTHROPIC_API_KEY from server-local env file (not in git).
       # Create on server: echo 'ANTHROPIC_API_KEY=sk-ant-...' > /var/lib/jl4-service/.env
+      # The "-" prefix makes this optional - service starts even if file is missing.
       # TODO: Migrate to AWS Secrets Manager with ExecStartPre fetch script.
-      EnvironmentFile = [ "/var/lib/jl4-service/.env" ];
+      EnvironmentFile = [ "-/var/lib/jl4-service/.env" ];
 
       StateDirectory = "jl4-service";
 
