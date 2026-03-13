@@ -396,11 +396,10 @@ getAllTests claimText categoryDetection MEANS
       getTier2And3Tests claimText
 
 // Step 3: Aggregate results into final decision
-@export default
-@desc "Evaluate a cosmetic advertising claim for compliance with Thailand's Cosmetics Act BE 2558 and Manual BE 2567. Takes a claim text string, detects product category, runs category-specific + cross-cutting + core Article 41 tests, and returns a structured compliance decision."
+@export default Evaluate a cosmetic advertising claim for compliance with Thailand's Cosmetics Act BE 2558 and Manual BE 2567. Takes a claim text string, detects product category, runs category-specific + cross-cutting + core Article 41 tests, and returns a structured compliance decision.
 GIVEN claimText IS A STRING
 GIVETH A `Compliance Decision`
-DECIDE evaluateClaim claimText MEANS
+evaluateClaim claimText MEANS
   `Compliance Decision` WITH
     `detected category` IS detectedCat
     `compliant`         IS (violationCount EQUALS 0)

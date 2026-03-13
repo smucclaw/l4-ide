@@ -41,8 +41,13 @@
   };
 
   config.services.nginx.virtualHosts.${config.networking.domain}.locations = {
-    ${config.services.jl4-service.path}.proxyPass =
-      "http://localhost:${toString config.services.jl4-service.port}/";
+    ${config.services.jl4-service.path} = {
+      proxyPass = "http://localhost:${toString config.services.jl4-service.port}/";
+      extraConfig = ''
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+      '';
+    };
   };
 
   config.systemd.services.jl4-service = {
@@ -74,6 +79,7 @@
           --port ${toString config.services.jl4-service.port} \
           --store-path "${config.services.jl4-service.storePath}" \
           --server-name https://${config.networking.domain + config.services.jl4-service.path} \
+          --eval-timeout 300 \
           ${lib.optionalString config.services.jl4-service.debug "--debug"}
       '';
       Restart = "always";
