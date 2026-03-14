@@ -5,6 +5,10 @@ module ControlPlane (
   ControlPlaneApi,
   DeploymentStatusResponse (..),
   controlPlaneHandler,
+  -- Individual handlers (re-exported for short routes)
+  getDeploymentHandler,
+  putDeploymentHandler,
+  deleteDeploymentHandler,
 ) where
 
 import qualified BundleStore
@@ -273,8 +277,15 @@ stateToResponse debugMode (DeploymentId did) = \case
 -- | Validate a deployment ID.
 -- Must be <= 36 characters (UUID length), alphanumeric + hyphens + underscores,
 -- and must not contain ".." sequences.
+-- | Reserved words that cannot be used as deployment IDs.
+-- These correspond to top-level route segments in the API.
+reservedWords :: [Text]
+reservedWords = ["health", "deployments"]
+
 validateDeploymentId :: Text -> AppM ()
 validateDeploymentId deployId = do
+  when (deployId `elem` reservedWords) $
+    throwError err400 { errBody = jsonError "Deployment ID is a reserved word" }
   when (Text.length deployId > 36) $
     throwError err400 { errBody = jsonError "Deployment ID exceeds maximum length of 36 characters" }
   when (Text.isInfixOf ".." deployId) $

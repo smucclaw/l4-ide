@@ -6,7 +6,7 @@ import BundleStore (BundleStore (..))
 import qualified BundleStore
 import Compiler (compileBundle, buildFromCborBundle)
 import ControlPlane (ControlPlaneApi, controlPlaneHandler)
-import DataPlane (DataPlaneApi, dataPlaneHandler)
+import DataPlane (DataPlaneApi, dataPlaneHandler, ShortRoutes, shortRoutesHandler)
 import Logging (Logger, logInfo, logWarn, logError, logDebug, newLogger)
 import Options (Options (..), buildOpts)
 import Types
@@ -36,7 +36,7 @@ import Servant
 import System.Timeout (timeout)
 
 -- | Combined service API.
-type ServiceApi = HealthApi :<|> ControlPlaneApi :<|> DataPlaneApi
+type ServiceApi = HealthApi :<|> ControlPlaneApi :<|> DataPlaneApi :<|> ShortRoutes
 
 -- | Health check endpoint.
 type HealthApi = "health" :> Get '[JSON] HealthResponse
@@ -223,7 +223,7 @@ app env = serve (Proxy @ServiceApi) (serverT env)
 
 serverT :: AppEnv -> Server ServiceApi
 serverT env =
-  hoistServer (Proxy @ServiceApi) (nt env) (healthHandler :<|> controlPlaneHandler :<|> dataPlaneHandler)
+  hoistServer (Proxy @ServiceApi) (nt env) (healthHandler :<|> controlPlaneHandler :<|> dataPlaneHandler :<|> shortRoutesHandler)
  where
   nt :: AppEnv -> AppM a -> Handler a
   nt s x = runReaderT x s

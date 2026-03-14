@@ -4,9 +4,13 @@
 module DataPlane (
   DataPlaneApi,
   dataPlaneHandler,
+  ShortRoutes,
+  shortRoutesHandler,
 ) where
 
 import Backend.Api
+import ControlPlane (DeploymentStatusResponse, getDeploymentHandler, putDeploymentHandler, deleteDeploymentHandler)
+import Servant.Multipart
 import Backend.DecisionQueryPlan (CachedDecisionQuery, buildDecisionQueryCacheFromCompiled, queryPlan, QueryPlanResponse)
 import Backend.FunctionSchema (Parameter, Parameters(..))
 import Backend.Jl4 (CompiledModule (..), evaluateWithCompiledDeontic)
@@ -43,6 +47,26 @@ import System.Timeout (timeout)
 type DataPlaneApi =
   "deployments" :> Capture "deploymentId" Text :> DeploymentRoutes
 
+-- | Short routes: /{id} and /{id}/{fn}/... as aliases for the full paths.
+-- These MUST appear after HealthApi, ControlPlaneApi, and DataPlaneApi in ServiceApi
+-- so that literal prefixes like "health" and "deployments" match first.
+type ShortRoutes =
+  Capture "deploymentId" Text :> ShortDeploymentRoutes
+
+type ShortDeploymentRoutes =
+       -- GET /{id} → deployment status
+       Get '[JSON] DeploymentStatusResponse
+       -- PUT /{id} → replace deployment
+  :<|> MultipartForm Mem (MultipartData Mem) :> Verb 'PUT 202 '[JSON] DeploymentStatusResponse
+       -- DELETE /{id} → remove deployment
+  :<|> DeleteNoContent
+       -- GET /{id}/functions → list functions
+  :<|> "functions" :> Get '[JSON] [SimpleFunction]
+       -- GET /{id}/openapi.json → OpenAPI spec
+  :<|> "openapi.json" :> Get '[JSON] DeploymentMetadata
+       -- /{id}/{fn}/... → function routes
+  :<|> Capture "name" Text :> FunctionRoutes
+
 type DeploymentRoutes =
        "functions" :> Get '[JSON] [SimpleFunction]
   :<|> "functions" :> Capture "name" Text :> FunctionRoutes
@@ -62,6 +86,18 @@ dataPlaneHandler deployIdText =
        listFunctionsHandler deployId
   :<|> functionRoutesHandler deployId
   :<|> openApiHandler deployId
+ where
+  deployId = DeploymentId deployIdText
+
+-- | Handler for short routes: /{id}/...
+shortRoutesHandler :: ServerT ShortRoutes AppM
+shortRoutesHandler deployIdText =
+       getDeploymentHandler deployIdText
+  :<|> putDeploymentHandler deployIdText
+  :<|> deleteDeploymentHandler deployIdText
+  :<|> listFunctionsHandler deployId
+  :<|> openApiHandler deployId
+  :<|> functionRoutesHandler deployId
  where
   deployId = DeploymentId deployIdText
 

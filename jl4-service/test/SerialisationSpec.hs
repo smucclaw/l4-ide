@@ -47,8 +47,10 @@ testOpts = Options
   , maxDeployments = 1024
   , maxConcurrentRequests = 20
   , maxEvalMemoryMb = 256
+  , maxCompileMemoryMb = 512
   , evalTimeout = 60
   , compileTimeout = 60
+  , instanceToken = Nothing
   }
 
 spec :: SpecWith ()
