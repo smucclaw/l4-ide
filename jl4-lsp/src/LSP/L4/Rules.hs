@@ -447,11 +447,15 @@ jl4Rules evalConfig rootDirectory recorder = do
                         Just p  -> [p </> modName <.> "l4"]
                         Nothing -> []
 
-                  -- 2. XDG data directory (~/.local/share/jl4/libraries/)
+                  -- 2. Cabal's getDataDir (source tree during development, install prefix when installed)
+                  dataDir <- Paths_jl4_core.getDataDir
+                  let cabalPath = dataDir </> "libraries" </> modName <.> "l4"
+
+                  -- 3. XDG data directory (~/.local/share/jl4/libraries/)
                   xdgDataDir <- getXdgDirectory XdgData "jl4"
                   let xdgPath = xdgDataDir </> "libraries" </> modName <.> "l4"
 
-                  -- 3. VSCode extension bundled libraries
+                  -- 4. VSCode extension bundled libraries
                   -- The VSCode extension structure is:
                   --   extension/
                   --   ├── bin/<platform>/jl4-lsp[.exe]  <- executable is here
@@ -462,11 +466,7 @@ jl4Rules evalConfig rootDirectory recorder = do
                   let extensionRoot = exeDir </> ".." </> ".."
                   let bundledPath = extensionRoot </> "libraries" </> modName <.> "l4"
 
-                  -- 4. Cabal's getDataDir (for development / cabal run)
-                  dataDir <- Paths_jl4_core.getDataDir
-                  let cabalPath = dataDir </> "libraries" </> modName <.> "l4"
-
-                  pure $ envPaths <> [xdgPath, bundledPath, cabalPath]
+                  pure $ envPaths <> [cabalPath, xdgPath, bundledPath]
 
                 pure $ [Just rootPath, relPath] <> map Just builtinPaths
 
