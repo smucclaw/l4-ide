@@ -64,13 +64,21 @@
         ${lib.concatStringsSep "\n" (lib.mapAttrsToList (id: srcDir: ''
           # Pre-seed bundle: ${id}
           bundleDir="$storePath/${id}"
-          if [ ! -f "$bundleDir/metadata.json" ]; then
-            echo "Pre-seeding bundle: ${id}"
+          # Compute hash of source files to detect changes
+          srcHash=$(find ${srcDir} -name '*.l4' -exec cat {} + | sha256sum | cut -d' ' -f1)
+          storedHash=""
+          if [ -f "$bundleDir/.src-hash" ]; then
+            storedHash=$(cat "$bundleDir/.src-hash")
+          fi
+          if [ ! -f "$bundleDir/metadata.json" ] || [ "$srcHash" != "$storedHash" ]; then
+            echo "Pre-seeding bundle: ${id} (hash: $srcHash)"
+            rm -rf "$bundleDir"
             mkdir -p "$bundleDir/sources"
             cp -rL ${srcDir}/* "$bundleDir/sources/"
             echo '{"smFunctions":[],"smVersion":"pre-seeded","smCreatedAt":"2025-01-01T00:00:00Z"}' > "$bundleDir/metadata.json"
+            echo "$srcHash" > "$bundleDir/.src-hash"
           else
-            echo "Bundle already exists: ${id}"
+            echo "Bundle unchanged: ${id}"
           fi
         '') config.services.jl4-service.bundles)}
       '';

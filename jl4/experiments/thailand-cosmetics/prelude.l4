@@ -1,1 +1,1045 @@
-../../../jl4-core/libraries/prelude.l4
+GIVEN
+  a IS A TYPE
+  x IS AN a
+GIVETH AN a
+id x MEANS x
+
+GIVEN
+  a IS A TYPE
+  b IS A TYPE
+  x IS AN a
+  y IS A b
+GIVETH AN a
+const x y MEANS x
+
+GIVEN
+  a    IS A TYPE
+  list IS A LIST OF a
+GIVETH A BOOLEAN
+null list MEANS
+  CONSIDER list
+  WHEN EMPTY            THEN TRUE
+  WHEN x FOLLOWED BY xs THEN FALSE
+
+GIVEN
+  a    IS A TYPE
+  r    IS A TYPE
+  cons IS A FUNCTION FROM a AND r TO r
+  nil  IS AN r
+  list IS A LIST OF a
+GIVETH AN r
+foldr cons nil list MEANS go list
+  WHERE
+    go l MEANS CONSIDER l
+      WHEN EMPTY            THEN nil
+      WHEN x FOLLOWED BY xs THEN cons OF x, go xs
+
+GIVEN
+  a    IS A TYPE
+  r    IS A TYPE
+  op   IS A FUNCTION FROM r AND a TO r
+  ini  IS AN r
+  list IS A LIST OF a
+GIVETH AN r
+foldl op ini list MEANS go ini list
+  WHERE
+    go acc l MEANS CONSIDER l
+      WHEN EMPTY            THEN acc
+      WHEN x FOLLOWED BY xs THEN go OF op acc x, xs
+
+GIVEN
+  a     IS A TYPE
+  list1 IS A LIST OF a
+  list2 IS A LIST OF a
+GIVETH A LIST OF a
+append list1 list2 MEANS
+  CONSIDER list1
+  WHEN EMPTY            THEN list2
+  WHEN x FOLLOWED BY xs THEN x FOLLOWED BY append xs list2
+
+-- String concatenation (infix wrapper for CONCAT builtin)
+GIVEN x IS A STRING
+      y IS A STRING
+GIVETH A STRING
+x APPEND y MEANS CONCAT x, y
+
+GIVEN
+  a     IS A TYPE
+  lists IS A LIST OF LIST OF a
+GIVETH A LIST OF a
+concat lists MEANS
+  CONSIDER lists
+  WHEN EMPTY              THEN EMPTY
+  WHEN xs FOLLOWED BY xss THEN append xs (concat xss)
+
+GIVEN
+  a       IS A TYPE
+  b       IS A TYPE
+  f       IS A FUNCTION FROM a TO b
+  list    IS A LIST OF a
+GIVETH A LIST OF b
+map f list MEANS
+  CONSIDER list
+  WHEN EMPTY            THEN EMPTY
+  WHEN x FOLLOWED BY xs THEN f x FOLLOWED BY map f xs
+
+GIVEN
+  a       IS A TYPE
+  f       IS A FUNCTION FROM a TO BOOLEAN
+  list    IS A LIST OF a
+GIVETH A LIST OF a
+filter f list MEANS
+  CONSIDER list
+  WHEN EMPTY            THEN EMPTY
+  WHEN x FOLLOWED BY xs THEN
+    IF f x
+      THEN x FOLLOWED BY filter f xs
+      ELSE filter f xs
+
+GIVEN a    IS A TYPE
+      list IS A LIST OF a
+GIVETH A NUMBER
+count list MEANS
+  go 0 list
+  WHERE
+    go acc l MEANS
+      CONSIDER l
+        WHEN EMPTY THEN acc
+        WHEN x FOLLOWED BY xs THEN go (acc + 1) xs
+
+GIVEN
+  a    IS A TYPE
+  list IS A LIST OF a
+  i    IS A NUMBER
+GIVETH AN a
+at list i MEANS
+  CONSIDER list
+  WHEN x FOLLOWED BY xs THEN
+    IF i <= 0
+      THEN x
+      ELSE at xs (i - 1)
+
+GIVEN
+  a    IS A TYPE
+  list IS A LIST OF a
+GIVETH A LIST OF a
+reverse list MEANS go EMPTY list
+  WHERE
+    go acc l MEANS
+      CONSIDER l
+      WHEN EMPTY            THEN acc
+      WHEN x FOLLOWED BY xs THEN go (x FOLLOWED BY acc) xs
+
+GIVEN
+  a    IS A TYPE
+  n    IS A NUMBER
+  x    IS AN a
+GIVETH A LIST OF a
+replicate n x MEANS
+  IF n <= 0
+    THEN EMPTY
+    ELSE x FOLLOWED BY replicate (n - 1) x
+
+GIVEN
+  a    IS A TYPE
+  n    IS A NUMBER
+  list IS A LIST OF a
+GIVETH A LIST OF a
+take n list MEANS
+  IF n <= 0
+    THEN EMPTY
+    ELSE CONSIDER list
+         WHEN EMPTY            THEN EMPTY
+         WHEN x FOLLOWED BY xs THEN x FOLLOWED BY take (n - 1) xs
+
+GIVEN
+  a    IS A TYPE
+  n    IS A NUMBER
+  list IS A LIST OF a
+GIVETH A LIST OF a
+drop n list MEANS
+  IF n <= 0
+    THEN list
+    ELSE CONSIDER list
+         WHEN EMPTY            THEN EMPTY
+         WHEN x FOLLOWED BY xs THEN drop (n - 1) xs
+
+GIVEN
+  a    IS A TYPE
+  f    IS A FUNCTION FROM a TO BOOLEAN
+  list IS A LIST OF a
+GIVETH A LIST OF a
+takeWhile f list MEANS
+  CONSIDER list
+  WHEN EMPTY            THEN EMPTY
+  WHEN x FOLLOWED BY xs THEN
+    IF f x
+      THEN x FOLLOWED BY takeWhile f xs
+      ELSE EMPTY
+
+GIVEN
+  a    IS A TYPE
+  f    IS A FUNCTION FROM a TO BOOLEAN
+  list IS A LIST OF a
+GIVETH A LIST OF a
+dropWhile f list MEANS
+  CONSIDER list
+  WHEN EMPTY            THEN EMPTY
+  WHEN x FOLLOWED BY xs THEN
+    IF f x
+      THEN dropWhile f xs
+      ELSE list
+
+GIVEN
+  list    IS A LIST OF BOOLEAN
+GIVETH A BOOLEAN
+and list MEANS
+  CONSIDER list
+  WHEN EMPTY            THEN TRUE
+  WHEN x FOLLOWED BY xs THEN x AND and xs
+
+GIVEN
+  list    IS A LIST OF BOOLEAN
+GIVETH A BOOLEAN
+or list MEANS
+  CONSIDER list
+  WHEN EMPTY            THEN FALSE
+  WHEN x FOLLOWED BY xs THEN x OR or xs
+
+GIVEN
+  a    IS A TYPE
+  f    IS A FUNCTION FROM a TO BOOLEAN
+  list IS A LIST OF a
+GIVETH A BOOLEAN
+all f list MEANS
+  CONSIDER list
+  WHEN EMPTY            THEN TRUE
+  WHEN x FOLLOWED BY xs THEN f x AND all f xs
+
+GIVEN
+  a    IS A TYPE
+  f    IS A FUNCTION FROM a TO BOOLEAN
+  list IS A LIST OF a
+GIVETH A BOOLEAN
+any f list MEANS
+  CONSIDER list
+  WHEN EMPTY            THEN FALSE
+  WHEN x FOLLOWED BY xs THEN f x OR any f xs
+
+GIVEN
+  list    IS A LIST OF NUMBER
+GIVETH A NUMBER
+sum list MEANS go 0 list
+  WHERE
+    go acc l MEANS
+      CONSIDER l
+      WHEN EMPTY THEN acc
+      WHEN x FOLLOWED BY xs THEN go (acc + x) xs
+
+GIVEN
+  list    IS A LIST OF NUMBER
+GIVETH A NUMBER
+product list MEANS go 1 list
+  WHERE
+    go acc l MEANS
+      CONSIDER l
+      WHEN EMPTY THEN acc
+      WHEN x FOLLOWED BY xs THEN go (acc * x) xs
+
+GIVEN
+  x IS A NUMBER
+GIVETH A BOOLEAN
+even x MEANS x MODULO 2 EQUALS 0
+
+GIVEN
+  x IS A NUMBER
+GIVETH A BOOLEAN
+odd x MEANS x MODULO 2 EQUALS 1
+
+GIVEN
+  x IS A NUMBER
+  y IS A NUMBER
+GIVETH A NUMBER
+max x y MEANS IF x >= y THEN x ELSE y
+
+GIVEN
+  x IS A NUMBER
+  y IS A NUMBER
+GIVETH A NUMBER
+min x y MEANS IF x <= y THEN x ELSE y
+
+GIVEN
+  x    IS A NUMBER
+  list IS A LIST OF NUMBER
+GIVETH A NUMBER
+maximum1 x list MEANS
+  CONSIDER list
+  WHEN EMPTY THEN x
+  WHEN y FOLLOWED BY ys THEN maximum1 (max x y) ys
+
+GIVEN
+  x    IS A NUMBER
+  list IS A LIST OF NUMBER
+GIVETH A NUMBER
+minimum1 x list MEANS
+  CONSIDER list
+  WHEN EMPTY THEN x
+  WHEN y FOLLOWED BY ys THEN minimum1 (min x y) ys
+
+GIVEN
+  list IS A LIST OF NUMBER
+GIVETH A NUMBER
+maximum list MEANS
+  CONSIDER list
+  WHEN x FOLLOWED BY xs THEN maximum1 x xs
+
+GIVEN
+  list IS A LIST OF NUMBER
+GIVETH A NUMBER
+minimum list MEANS
+  CONSIDER list
+  WHEN x FOLLOWED BY xs THEN minimum1 x xs
+
+GIVEN
+  list IS A LIST OF MAYBE NUMBER
+GIVETH A MAYBE NUMBER
+minimum list MEANS
+  CONSIDER list
+  WHEN x FOLLOWED BY xs THEN minimum1 x xs
+
+GIVEN
+  x    IS A MAYBE NUMBER
+  list IS A LIST OF MAYBE NUMBER
+GIVETH A MAYBE NUMBER
+minimum1 x list MEANS
+  CONSIDER list
+  WHEN EMPTY THEN x
+  WHEN y FOLLOWED BY ys THEN minimum1 (min x y) ys
+
+GIVEN
+  x IS A MAYBE NUMBER
+  y IS A MAYBE NUMBER
+GIVETH A MAYBE NUMBER
+min x y MEANS IF x <= y THEN x ELSE y
+
+GIVEN
+  list IS A LIST OF MAYBE NUMBER
+GIVETH A MAYBE NUMBER
+maximum list MEANS
+  CONSIDER list
+  WHEN x FOLLOWED BY xs THEN minimum1 x xs
+
+GIVEN
+  x    IS A MAYBE NUMBER
+  list IS A LIST OF MAYBE NUMBER
+GIVETH A MAYBE NUMBER
+maximum1 x list MEANS
+  CONSIDER list
+  WHEN EMPTY THEN x
+  WHEN y FOLLOWED BY ys THEN maximum1 (min x y) ys
+
+GIVEN
+  x IS A MAYBE NUMBER
+  y IS A MAYBE NUMBER
+GIVETH A MAYBE NUMBER
+max x y MEANS IF x >= y THEN x ELSE y
+
+
+GIVEN
+  low    IS A NUMBER
+  high   IS A NUMBER
+GIVETH A LIST OF NUMBER
+range low high MEANS
+  IF low > high
+    THEN EMPTY
+    ELSE low FOLLOWED BY range (low + 1) high
+
+GIVEN
+  a    IS A TYPE
+  cmp  IS A FUNCTION FROM a AND a TO BOOLEAN
+  x    IS AN a
+  list IS A LIST OF a
+GIVETH A LIST OF a
+insertBy cmp x list MEANS
+  CONSIDER list
+  WHEN EMPTY            THEN LIST x
+  WHEN y FOLLOWED BY ys THEN
+    IF cmp x y
+      THEN x FOLLOWED BY list
+      ELSE y FOLLOWED BY insertBy cmp x ys
+
+GIVEN
+  a    IS A TYPE
+  cmp  IS A FUNCTION FROM a AND a TO BOOLEAN
+  list IS A LIST OF a
+GIVETH A LIST OF a
+sortBy cmp list MEANS
+  CONSIDER list
+  WHEN EMPTY            THEN EMPTY
+  WHEN x FOLLOWED BY xs THEN insertBy cmp x (sortBy cmp xs)
+
+GIVEN
+  list IS A LIST OF NUMBER
+GIVETH A LIST OF NUMBER
+sort list MEANS
+  sortBy (GIVEN x, y YIELD x <= y) list
+
+GIVEN
+  a IS A TYPE
+  x    IS AN a
+  list IS A LIST OF a
+GIVETH A BOOLEAN
+elem x list MEANS
+  CONSIDER list
+  WHEN EMPTY THEN FALSE
+  WHEN y FOLLOWED BY ys THEN x EQUALS y OR elem x ys
+
+GIVEN
+  a       IS A TYPE
+  default IS AN a
+  x       IS A MAYBE a
+GIVETH AN a
+fromMaybe default x MEANS
+  CONSIDER x
+  WHEN NOTHING THEN default
+  WHEN JUST x  THEN x
+
+GIVEN
+  a       IS A TYPE
+  b       IS A TYPE
+  just    IS A FUNCTION FROM a TO b
+  nothing IS A b
+  x       IS A MAYBE a
+GIVETH A b
+maybe just nothing x MEANS
+  CONSIDER x
+  WHEN NOTHING THEN nothing
+  WHEN JUST x  THEN just x
+
+GIVEN
+  a       IS A TYPE
+  x       IS A MAYBE a
+  y       IS A MAYBE a
+GIVETH A MAYBE a
+orElse x y MEANS
+  CONSIDER x
+  WHEN NOTHING THEN y
+  WHEN JUST x  THEN JUST x
+
+GIVEN
+  a    IS A TYPE
+  list IS A LIST OF MAYBE a
+GIVETH A MAYBE a
+asum list MEANS
+  CONSIDER list
+  WHEN EMPTY THEN NOTHING
+  WHEN x FOLLOWED BY xs THEN
+    CONSIDER x
+    WHEN JUST y  THEN JUST y
+    WHEN NOTHING THEN asum xs
+
+GIVEN
+  a    IS A TYPE
+  list IS A LIST OF MAYBE a
+GIVETH A MAYBE a
+firstJust list MEANS asum list
+
+GIVEN
+  a       IS A TYPE
+  x       IS A MAYBE a
+GIVETH A LIST OF a
+maybeToList x MEANS
+  CONSIDER x
+  WHEN NOTHING THEN EMPTY
+  WHEN JUST x  THEN LIST x
+
+GIVEN
+  a       IS A TYPE
+  list    IS A LIST OF a
+GIVETH A MAYBE OF a
+listToMaybe list MEANS
+  CONSIDER list
+  WHEN EMPTY            THEN NOTHING
+  WHEN x FOLLOWED BY xs THEN JUST x
+
+GIVEN
+  a IS A TYPE
+  x IS A MAYBE a
+GIVETH A BOOLEAN
+isNothing x MEANS
+  CONSIDER x
+  WHEN NOTHING THEN TRUE
+  WHEN JUST y  THEN FALSE
+
+GIVEN
+  a IS A TYPE
+  x IS A MAYBE a
+GIVETH A BOOLEAN
+isJust x MEANS
+  CONSIDER x
+  WHEN NOTHING THEN FALSE
+  WHEN JUST y  THEN TRUE
+
+GIVEN
+  a    IS A TYPE
+  b    IS A TYPE
+  f    IS A FUNCTION FROM a TO MAYBE b
+  list IS A LIST OF a
+GIVETH A LIST OF b
+mapMaybe f list MEANS
+  CONSIDER list
+  WHEN EMPTY            THEN EMPTY
+  WHEN x FOLLOWED BY xs THEN
+    CONSIDER f x
+    WHEN NOTHING THEN mapMaybe f xs
+    WHEN JUST y  THEN y FOLLOWED BY mapMaybe f xs
+
+GIVEN
+  a    IS A TYPE
+  list IS A LIST OF MAYBE a
+GIVETH A LIST OF a
+catMaybes list MEANS
+  CONSIDER list
+  WHEN EMPTY            THEN EMPTY
+  WHEN x FOLLOWED BY xs THEN
+    CONSIDER x
+    WHEN NOTHING THEN catMaybes xs
+    WHEN JUST y  THEN y FOLLOWED BY catMaybes xs
+
+DECLARE PAIR OF a, b
+  HAS fst IS AN a
+      snd IS A  b
+
+
+// fmap for Pair
+// the type overloading isn't quite happy here
+// so we're going to call it pmap.
+// o for true typeclasses, then we could be proper functors.
+
+GIVEN
+  a    IS A TYPE
+  b    IS A TYPE
+  c    IS A TYPE
+  f    IS A FUNCTION FROM b TO c
+  p    IS A PAIR OF a, b
+GIVETH PAIR OF a, c
+pmap f p MEANS
+  CONSIDER p
+    WHEN PAIR OF k,   v
+    THEN PAIR OF k, f v
+
+
+
+
+
+
+
+GIVEN
+  a    IS A TYPE
+  b    IS A TYPE
+  c    IS A TYPE
+  f    IS A FUNCTION FROM b TO c
+  list IS A LIST OF PAIR OF a, b
+GIVETH A LIST OF PAIR OF a, c
+fmap f list MEANS
+  CONSIDER list
+  WHEN EMPTY                       THEN EMPTY
+  WHEN PAIR OF k, v FOLLOWED BY xs THEN
+    (PAIR OF k, f OF v) FOLLOWED BY (fmap f xs)
+
+
+GIVEN
+  a    IS A TYPE
+  b    IS A TYPE
+  key  IS AN a
+  list IS A LIST OF PAIR OF a, b
+GIVETH A MAYBE b
+lookup key list MEANS
+  CONSIDER list
+  WHEN EMPTY                       THEN NOTHING
+  WHEN PAIR OF k, v FOLLOWED BY xs THEN
+    IF key EQUALS k
+      THEN JUST v
+      ELSE lookup key xs
+
+GIVEN a IS A TYPE
+      b IS A TYPE
+      c IS A TYPE
+      op IS A FUNCTION FROM a AND b TO c
+      list1 IS A LIST OF a
+      list2 IS A LIST OF b
+GIVETH A LIST OF c
+zipWith op list1 list2 MEANS
+  CONSIDER list1
+    WHEN EMPTY THEN EMPTY
+    WHEN x FOLLOWED BY xs THEN
+      CONSIDER list2
+      WHEN EMPTY THEN EMPTY
+      WHEN y FOLLOWED BY ys THEN op x y FOLLOWED BY zipWith op xs ys
+
+GIVEN a IS A TYPE
+      b IS A TYPE
+      list1 IS A LIST OF a
+      list2 IS A LIST OF b
+GIVETH A LIST OF PAIR a b
+zip list1 list2 MEANS
+  zipWith PAIR list1 list2
+
+-- EITHER type is now a builtin (like MAYBE)
+
+GIVEN
+  a IS A TYPE
+  b IS A TYPE
+  c IS A TYPE
+  left  IS A FUNCTION FROM a TO c
+  right IS A FUNCTION FROM b TO c
+  x IS AN EITHER a b
+GIVETH A c
+either left right x MEANS
+  CONSIDER x
+  WHEN LEFT  a THEN left  a
+  WHEN RIGHT b THEN right b
+
+GIVEN
+  a IS A TYPE
+  f IS A FUNCTION FROM a TO BOOLEAN
+  list IS A LIST OF a
+GIVETH A PAIR OF A LIST a, A LIST a
+partition f list MEANS
+  CONSIDER list
+  WHEN EMPTY            THEN PAIR EMPTY EMPTY
+  WHEN x FOLLOWED BY xs THEN
+    CONSIDER partition f xs
+    WHEN PAIR ys zs THEN
+      IF f x
+        THEN PAIR OF x FOLLOWED BY ys, zs
+        ELSE PAIR OF ys, x FOLLOWED BY zs
+
+GIVEN
+  a IS A TYPE
+  op IS A FUNCTION FROM a AND a TO BOOLEAN
+  x IS AN a
+  list IS A LIST OF a
+GIVETH A LIST OF a
+deleteBy op x list MEANS go list
+  WHERE
+    go l MEANS
+      CONSIDER l
+        WHEN EMPTY            THEN EMPTY
+        WHEN y FOLLOWED BY ys THEN
+          IF op x y
+            THEN ys
+            ELSE y FOLLOWED BY go ys
+
+GIVEN
+  a IS A TYPE
+  op IS A FUNCTION FROM a AND a TO BOOLEAN
+  list IS A LIST OF a
+GIVETH A LIST OF a
+nubBy op list MEANS go list
+  WHERE
+    go l MEANS
+      CONSIDER l
+      WHEN EMPTY            THEN EMPTY
+      WHEN x FOLLOWED BY xs THEN x FOLLOWED BY deleteBy op x (go xs)
+
+GIVEN
+  a IS A TYPE
+  x IS AN a
+  list IS A LIST OF a
+GIVETH A LIST OF a
+delete x list MEANS
+  deleteBy (GIVEN y, z YIELD y EQUALS z) x list
+
+GIVEN
+  a IS A TYPE
+  list IS A LIST OF a
+GIVETH A LIST OF a
+nub list MEANS
+  nubBy (GIVEN x, y YIELD x EQUALS y) list
+
+-- polymorphic placeholder
+GIVEN
+  a IS A TYPE
+GIVETH AN a
+ASSUME TBD
+
+-- Comparison of nullable numbers
+GIVEN a IS A MAYBE NUMBER
+      b IS A MAYBE NUMBER
+GIVETH A BOOLEAN
+`__GEQ__` MEANS
+        CONSIDER a
+        WHEN NOTHING THEN FALSE
+        WHEN JUST x THEN CONSIDER b
+            WHEN NOTHING THEN FALSE
+            WHEN JUST y THEN (x AT LEAST y)
+
+GIVEN a IS A MAYBE NUMBER
+      b IS A MAYBE NUMBER
+GIVETH A BOOLEAN
+`__LEQ__` MEANS
+        CONSIDER a
+        WHEN NOTHING THEN FALSE
+        WHEN JUST x THEN CONSIDER b
+            WHEN NOTHING THEN FALSE
+            WHEN JUST y THEN (x AT MOST y)
+
+GIVEN a IS A MAYBE NUMBER
+      b IS A MAYBE NUMBER
+GIVETH A BOOLEAN
+`__LT__` MEANS
+        CONSIDER a
+        WHEN NOTHING THEN FALSE
+        WHEN JUST x THEN CONSIDER b
+            WHEN NOTHING THEN FALSE
+            WHEN JUST y THEN (x LESS THAN y)
+
+GIVEN a IS A MAYBE NUMBER
+      b IS A MAYBE NUMBER
+GIVETH A BOOLEAN
+`__GT__` MEANS
+        CONSIDER a
+        WHEN NOTHING THEN FALSE
+        WHEN JUST x THEN CONSIDER b
+            WHEN NOTHING THEN FALSE
+            WHEN JUST y THEN (x GREATER THAN y)
+
+-- a simple implementation of a Dictionary type
+GIVEN k IS A TYPE
+      v IS A TYPE
+GIVETH A TYPE
+DECLARE Dictionary k v
+    HAS contents IS A LIST OF PAIR OF k, v
+
+GIVEN  a IS A TYPE
+       b IS A TYPE
+       k IS AN a
+       v IS A  b 
+singleToDict MEANS  Dictionary WITH contents IS LIST (PAIR OF k, v)
+
+GIVEN k IS A TYPE
+      v IS A TYPE
+      pair IS A PAIR OF k, v
+pairToDict MEANS  Dictionary WITH contents IS LIST pair
+
+GIVEN k IS A TYPE
+      v IS A TYPE
+      pairs IS A LIST OF PAIR OF k, v
+listToDict MEANS  Dictionary WITH contents IS pairs
+
+fromList MEANS listToDict
+
+-- Dictionary: empty
+GIVEN k IS A TYPE
+      v IS A TYPE
+GIVETH A Dictionary k v
+emptyDict MEANS Dictionary WITH contents IS EMPTY
+
+-- Dictionary: singleton (alias for singleToDict)
+singleton MEANS singleToDict
+
+-- Dictionary: dictToList (extract contents)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      dict IS A Dictionary k v
+GIVETH A LIST OF PAIR OF k, v
+dictToList dict MEANS dict's contents
+
+-- Dictionary: dictKeys (extract all keys)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      dict IS A Dictionary k v
+GIVETH A LIST OF k
+dictKeys dict MEANS map fst (dict's contents)
+
+-- Dictionary: dictElems (extract all values)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      dict IS A Dictionary k v
+GIVETH A LIST OF v
+dictElems dict MEANS map snd (dict's contents)
+
+-- Dictionary: dictSize (count entries)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      dict IS A Dictionary k v
+GIVETH A NUMBER
+dictSize dict MEANS go 0 (dict's contents)
+  WHERE
+    go acc list MEANS
+      CONSIDER list
+      WHEN EMPTY THEN acc
+      WHEN x FOLLOWED BY xs THEN go (acc + 1) xs
+
+-- Dictionary: dictIsEmpty (test if empty)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      dict IS A Dictionary k v
+GIVETH A BOOLEAN
+dictIsEmpty dict MEANS null (dict's contents)
+
+-- Dictionary: lookup (query by key, returns MAYBE)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      key IS A k
+      dict IS A Dictionary k v
+GIVETH A MAYBE v
+dictLookup key dict MEANS lookup key (dict's contents)
+
+-- Dictionary: dictMember (test if key exists)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      key IS A k
+      dict IS A Dictionary k v
+GIVETH A BOOLEAN
+dictMember key dict MEANS isJust (dictLookup key dict)
+
+-- Dictionary: dictNotMember (test if key does not exist)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      key IS A k
+      dict IS A Dictionary k v
+GIVETH A BOOLEAN
+dictNotMember key dict MEANS NOT dictMember key dict
+
+-- Dictionary: dictFindWithDefault (lookup with default)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      default IS A v
+      key IS A k
+      dict IS A Dictionary k v
+GIVETH A v
+dictFindWithDefault default key dict MEANS fromMaybe default (dictLookup key dict)
+
+-- Dictionary: dictInsert (add or replace entry)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      key IS A k
+      value IS A v
+      dict IS A Dictionary k v
+GIVETH A Dictionary k v
+dictInsert key value dict MEANS Dictionary WITH contents IS go (dict's contents)
+  WHERE
+    go list MEANS
+      CONSIDER list
+      WHEN EMPTY THEN LIST (PAIR OF key, value)
+      WHEN PAIR OF k0, v0 FOLLOWED BY rest THEN
+        IF key EQUALS k0
+          THEN (PAIR OF key, value) FOLLOWED BY rest
+          ELSE (PAIR OF k0, v0) FOLLOWED BY go rest
+
+-- Dictionary: dictInsertWith (insert with combining function for existing values)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      combiner IS A FUNCTION FROM v AND v TO v
+      key IS A k
+      value IS A v
+      dict IS A Dictionary k v
+GIVETH A Dictionary k v
+dictInsertWith combiner key value dict MEANS Dictionary WITH contents IS go (dict's contents)
+  WHERE
+    go list MEANS
+      CONSIDER list
+      WHEN EMPTY THEN LIST (PAIR OF key, value)
+      WHEN PAIR OF k0, v0 FOLLOWED BY rest THEN
+        IF key EQUALS k0
+          THEN (PAIR OF key, combiner value v0) FOLLOWED BY rest
+          ELSE (PAIR OF k0, v0) FOLLOWED BY go rest
+
+-- Dictionary: dictDelete (remove entry by key)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      key IS A k
+      dict IS A Dictionary k v
+GIVETH A Dictionary k v
+dictDelete key dict MEANS Dictionary WITH contents IS go (dict's contents)
+  WHERE
+    go list MEANS
+      CONSIDER list
+      WHEN EMPTY THEN EMPTY
+      WHEN PAIR OF k0, v0 FOLLOWED BY rest THEN
+        IF key EQUALS k0
+          THEN rest
+          ELSE (PAIR OF k0, v0) FOLLOWED BY go rest
+
+-- Dictionary: dictAdjust (modify value at key if it exists)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      f IS A FUNCTION FROM v TO v
+      key IS A k
+      dict IS A Dictionary k v
+GIVETH A Dictionary k v
+dictAdjust f key dict MEANS Dictionary WITH contents IS go (dict's contents)
+  WHERE
+    go list MEANS
+      CONSIDER list
+      WHEN EMPTY THEN EMPTY
+      WHEN PAIR OF k0, v0 FOLLOWED BY rest THEN
+        IF key EQUALS k0
+          THEN (PAIR OF key, f v0) FOLLOWED BY rest
+          ELSE (PAIR OF k0, v0) FOLLOWED BY go rest
+
+-- Dictionary: dictUpdate (modify or delete value at key)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      f IS A FUNCTION FROM v TO MAYBE v
+      key IS A k
+      dict IS A Dictionary k v
+GIVETH A Dictionary k v
+dictUpdate f key dict MEANS Dictionary WITH contents IS go (dict's contents)
+  WHERE
+    go list MEANS
+      CONSIDER list
+      WHEN EMPTY THEN EMPTY
+      WHEN PAIR OF k0, v0 FOLLOWED BY rest THEN
+        IF key EQUALS k0
+          THEN CONSIDER f v0
+               WHEN NOTHING THEN rest
+               WHEN JUST newV THEN (PAIR OF key, newV) FOLLOWED BY rest
+          ELSE (PAIR OF k0, v0) FOLLOWED BY go rest
+
+-- Dictionary: dictUnion (left-biased union of two dictionaries)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      dict1 IS A Dictionary k v
+      dict2 IS A Dictionary k v
+GIVETH A Dictionary k v
+dictUnion dict1 dict2 MEANS
+  foldl (GIVEN acc, pair YIELD CONSIDER pair WHEN PAIR OF key, val THEN dictInsert key val acc)
+        dict2
+        (dict1's contents)
+
+-- Dictionary: dictUnionWith (union with combining function)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      combiner IS A FUNCTION FROM v AND v TO v
+      dict1 IS A Dictionary k v
+      dict2 IS A Dictionary k v
+GIVETH A Dictionary k v
+dictUnionWith combiner dict1 dict2 MEANS
+  foldl (GIVEN acc, pair YIELD
+           CONSIDER pair
+           WHEN PAIR OF key, val THEN dictInsertWith combiner key val acc)
+        dict2
+        (dict1's contents)
+
+-- Dictionary: mapDict (map over values)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      w IS A TYPE
+      f IS A FUNCTION FROM v TO w
+      dict IS A Dictionary k v
+GIVETH A Dictionary k w
+mapDict f dict MEANS Dictionary WITH contents IS map (GIVEN p YIELD CONSIDER p WHEN PAIR OF key, val THEN PAIR OF key, f val) (dict's contents)
+
+-- Dictionary: dictMapWithKey (map over values with access to key)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      w IS A TYPE
+      f IS A FUNCTION FROM k AND v TO w
+      dict IS A Dictionary k v
+GIVETH A Dictionary k w
+dictMapWithKey f dict MEANS Dictionary WITH contents IS map (GIVEN p YIELD CONSIDER p WHEN PAIR OF key, val THEN PAIR OF key, f key val) (dict's contents)
+
+-- Dictionary: filterDict (filter entries by value predicate)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      pred IS A FUNCTION FROM v TO BOOLEAN
+      dict IS A Dictionary k v
+GIVETH A Dictionary k v
+filterDict pred dict MEANS Dictionary WITH contents IS filter (GIVEN p YIELD CONSIDER p WHEN PAIR OF key, val THEN pred val) (dict's contents)
+
+-- Dictionary: dictFilterWithKey (filter entries by key-value predicate)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      pred IS A FUNCTION FROM k AND v TO BOOLEAN
+      dict IS A Dictionary k v
+GIVETH A Dictionary k v
+dictFilterWithKey pred dict MEANS Dictionary WITH contents IS filter (GIVEN p YIELD CONSIDER p WHEN PAIR OF key, val THEN pred key val) (dict's contents)
+
+-- Dictionary: foldrDict (right fold over values)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      r IS A TYPE
+      f IS A FUNCTION FROM v AND r TO r
+      z IS AN r
+      dict IS A Dictionary k v
+GIVETH AN r
+foldrDict f z dict MEANS foldr (GIVEN p, acc YIELD CONSIDER p WHEN PAIR OF key, val THEN f val acc) z (dict's contents)
+
+-- Dictionary: foldlDict (left fold over values)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      r IS A TYPE
+      f IS A FUNCTION FROM r AND v TO r
+      z IS AN r
+      dict IS A Dictionary k v
+GIVETH AN r
+foldlDict f z dict MEANS foldl (GIVEN acc, p YIELD CONSIDER p WHEN PAIR OF key, val THEN f acc val) z (dict's contents)
+
+-- Dictionary: dictFoldrWithKey (right fold with keys)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      r IS A TYPE
+      f IS A FUNCTION FROM k AND v AND r TO r
+      z IS AN r
+      dict IS A Dictionary k v
+GIVETH AN r
+dictFoldrWithKey f z dict MEANS foldr (GIVEN p, acc YIELD CONSIDER p WHEN PAIR OF key, val THEN f key val acc) z (dict's contents)
+
+-- Dictionary: dictFoldlWithKey (left fold with keys)
+GIVEN k IS A TYPE
+      v IS A TYPE
+      r IS A TYPE
+      f IS A FUNCTION FROM r AND k AND v TO r
+      z IS AN r
+      dict IS A Dictionary k v
+GIVETH AN r
+dictFoldlWithKey f z dict MEANS foldl (GIVEN acc, p YIELD CONSIDER p WHEN PAIR OF key, val THEN f acc key val) z (dict's contents)
+
+-- Grouping: insertValue (insert into grouped association list)
+-- Accumulates values for the same key into a list
+GIVEN k IS A TYPE
+      v IS A TYPE
+      key IS A k
+      value IS A v
+      dictPairs IS A LIST OF PAIR OF k, LIST OF v
+GIVETH A LIST OF PAIR OF k, LIST OF v
+insertValue key value dictPairs MEANS
+  CONSIDER dictPairs
+    WHEN EMPTY
+      THEN LIST (PAIR OF key, LIST value)
+    WHEN PAIR OF k0, vs FOLLOWED BY rest
+      THEN IF key EQUALS k0
+           THEN (PAIR OF k0, append vs (LIST value)) FOLLOWED BY rest
+           ELSE (PAIR OF k0, vs) FOLLOWED BY insertValue key value rest
+
+-- Grouping: groupPairs (group flat pairs by key)
+-- [(k,v)] -> [(k,[v])]
+GIVEN k IS A TYPE
+      v IS A TYPE
+      pairs IS A LIST OF PAIR OF k, v
+GIVETH A LIST OF PAIR OF k, LIST OF v
+groupPairs pairs MEANS go EMPTY pairs
+  WHERE
+    go acc list MEANS
+      CONSIDER list
+      WHEN EMPTY THEN acc
+      WHEN PAIR OF key, value FOLLOWED BY xs THEN go (insertValue key value acc) xs
+
+-- Grouping: fromListGrouped (create dictionary grouping by key)
+-- [(k,v)] -> Dictionary k [v]
+GIVEN k IS A TYPE
+      v IS A TYPE
+      pairs IS A LIST OF PAIR OF k, v
+GIVETH A Dictionary k (LIST OF v)
+fromListGrouped pairs MEANS Dictionary WITH contents IS groupPairs pairs
+
+-- Pair: mapSnd (map over second element - alias for pmap)
+mapSnd MEANS pmap
+
+-- Pair: mapPairs (map over second element of each pair - alias for fmap on pairs)
+-- Note: This is fmap specialized to List of Pairs
+mapPairs MEANS fmap
+
