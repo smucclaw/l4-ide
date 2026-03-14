@@ -692,16 +692,6 @@ jobs:
             | `jl4-service-linux-x64` | Decision service binary for Linux x86_64 |
             | `jl4-service-linux-x64.sha256` | SHA256 hash for binary verification |
 
-            Use with jl4-auth-proxy `defaults.json`:
-            ```json
-            {
-              "jl4Binary": {
-                "url": "https://github.com/smucclaw/l4-ide/releases/download/${{ steps.tag-name.outputs.tag }}/jl4-service-linux-x64",
-                "sha256": "<contents of jl4-service-linux-x64.sha256>"
-              }
-            }
-            ```
-
             ### WASM Binaries
 
             | File | Description |
