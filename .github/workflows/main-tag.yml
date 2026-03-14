@@ -622,8 +622,8 @@ jobs:
 
           # Collect jl4-service binary and SHA256
           if [ -d artifacts/jl4-service-linux-x64 ]; then
-            cp artifacts/jl4-service-linux-x64/bin/linux-x64/jl4-service release-artifacts/jl4-service-linux-x64
-            cp artifacts/jl4-service-linux-x64/bin/linux-x64/jl4-service.sha256 release-artifacts/jl4-service-linux-x64.sha256
+            cp artifacts/jl4-service-linux-x64/jl4-service release-artifacts/jl4-service-linux-x64
+            cp artifacts/jl4-service-linux-x64/jl4-service.sha256 release-artifacts/jl4-service-linux-x64.sha256
             echo "jl4-service SHA256: $(cat release-artifacts/jl4-service-linux-x64.sha256)"
           fi
 
