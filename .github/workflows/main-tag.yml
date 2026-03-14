@@ -145,7 +145,7 @@ jobs:
           retention-days: 90
 
   build-lsp-linux-x64:
-    name: Build jl4-lsp - Linux x64
+    name: Build jl4-lsp + jl4-service - Linux x64
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -173,7 +173,7 @@ jobs:
         run: |
           cabal update
           cabal configure --disable-tests --disable-documentation
-          cabal build exe:jl4-lsp --dry-run
+          cabal build exe:jl4-lsp exe:jl4-service --dry-run
 
       - name: Restore cached dependencies
         uses: actions/cache/restore@v4
@@ -187,7 +187,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.cache.outputs.cache-hit != 'true'
-        run: cabal build exe:jl4-lsp --only-dependencies
+        run: cabal build exe:jl4-lsp exe:jl4-service --only-dependencies
 
       - name: Save cached dependencies
         uses: actions/cache/save@v4
@@ -196,22 +196,40 @@ jobs:
           path: ${{ steps.setup.outputs.cabal-store }}
           key: ${{ steps.cache.outputs.cache-primary-key }}
 
-      - name: Build jl4-lsp
-        run: cabal build exe:jl4-lsp
+      - name: Build jl4-lsp and jl4-service
+        run: cabal build exe:jl4-lsp exe:jl4-service
 
-      - name: Copy and process binary
+      - name: Copy and process binaries
         run: |
           mkdir -p bin/linux-x64
           cp $(cabal list-bin exe:jl4-lsp) bin/linux-x64/jl4-lsp
           strip bin/linux-x64/jl4-lsp || true
           chmod +x bin/linux-x64/jl4-lsp
+
+          cp $(cabal list-bin exe:jl4-service) bin/linux-x64/jl4-service
+          strip bin/linux-x64/jl4-service || true
+          chmod +x bin/linux-x64/jl4-service
+
+          # Generate SHA256 for jl4-service
+          sha256sum bin/linux-x64/jl4-service | awk '{print $1}' > bin/linux-x64/jl4-service.sha256
+          echo "jl4-service SHA256: $(cat bin/linux-x64/jl4-service.sha256)"
+
           ls -lh bin/linux-x64/
 
-      - name: Upload binary artifact
+      - name: Upload LSP binary artifact
         uses: actions/upload-artifact@v4
         with:
           name: jl4-lsp-linux-x64
           path: bin/linux-x64/jl4-lsp
+          retention-days: 90
+
+      - name: Upload jl4-service artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jl4-service-linux-x64
+          path: |
+            bin/linux-x64/jl4-service
+            bin/linux-x64/jl4-service.sha256
           retention-days: 90
 
   build-lsp-linux-arm64:
@@ -602,6 +620,13 @@ jobs:
           find artifacts -name "jl4-core.mjs" -exec cp {} release-artifacts/ \;
           find artifacts -name "version.txt" -exec cp {} release-artifacts/wasm-version.txt \; 2>/dev/null || true
 
+          # Collect jl4-service binary and SHA256
+          if [ -d artifacts/jl4-service-linux-x64 ]; then
+            cp artifacts/jl4-service-linux-x64/bin/linux-x64/jl4-service release-artifacts/jl4-service-linux-x64
+            cp artifacts/jl4-service-linux-x64/bin/linux-x64/jl4-service.sha256 release-artifacts/jl4-service-linux-x64.sha256
+            echo "jl4-service SHA256: $(cat release-artifacts/jl4-service-linux-x64.sha256)"
+          fi
+
           echo "Release artifacts:"
           ls -la release-artifacts/
 
@@ -634,7 +659,8 @@ jobs:
 
           Artifacts included:
           - VSCode extensions (platform-specific, all-platforms, universal)
-          - WASM binaries (jl4-core.wasm, jl4-core.mjs)"
+          - WASM binaries (jl4-core.wasm, jl4-core.mjs)
+          - jl4-service binary (linux-x64) with SHA256"
           git push origin "${{ steps.tag-name.outputs.tag }}"
 
       - name: Upload artifacts to tag
@@ -658,6 +684,23 @@ jobs:
             | `linux-arm64` | Linux ARM64 |
             | `all-platforms` | Single VSIX with all platform binaries |
             | `universal` | No bundled binary (requires jl4-lsp on PATH) |
+
+            ### jl4-service (Decision Service)
+
+            | File | Description |
+            |------|-------------|
+            | `jl4-service-linux-x64` | Decision service binary for Linux x86_64 |
+            | `jl4-service-linux-x64.sha256` | SHA256 hash for binary verification |
+
+            Use with jl4-auth-proxy `defaults.json`:
+            ```json
+            {
+              "jl4Binary": {
+                "url": "https://github.com/smucclaw/l4-ide/releases/download/${{ steps.tag-name.outputs.tag }}/jl4-service-linux-x64",
+                "sha256": "<contents of jl4-service-linux-x64.sha256>"
+              }
+            }
+            ```
 
             ### WASM Binaries
 
