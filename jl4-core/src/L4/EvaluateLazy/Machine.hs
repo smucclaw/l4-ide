@@ -2003,6 +2003,8 @@ runBinOpEquals ValNil                  ValNil           = Backward $ valBool Tru
 runBinOpEquals (ValCons r1 rs1)        (ValCons r2 rs2) = do
   PushFrame (EqConstructor1 r2 [(rs1, rs2)])
   EvalRef r1
+runBinOpEquals ValNil                  (ValCons _ _)   = Backward $ ValBool False
+runBinOpEquals (ValCons _ _)           ValNil           = Backward $ ValBool False
 runBinOpEquals (ValConstructor n1 rs1) (ValConstructor n2 rs2)
   | sameResolved n1 n2 && length rs1 == length rs2 =
     let

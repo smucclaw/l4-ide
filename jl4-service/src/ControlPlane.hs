@@ -5,6 +5,10 @@ module ControlPlane (
   ControlPlaneApi,
   DeploymentStatusResponse (..),
   controlPlaneHandler,
+  -- Individual handlers (re-exported for short routes)
+  getDeploymentHandler,
+  putDeploymentHandler,
+  deleteDeploymentHandler,
 ) where
 
 import qualified BundleStore
@@ -35,6 +39,10 @@ import GHC.Generics (Generic)
 import Servant
 import Servant.Multipart
 import System.FilePath (splitDirectories)
+import Control.Exception (catch)
+import Data.Int (Int64)
+import GHC.Conc (setAllocationCounter, enableAllocationLimit)
+import GHC.IO.Exception (AllocationLimitExceeded (..))
 import System.Timeout (timeout)
 
 -- | Status returned in GET responses.
@@ -118,9 +126,22 @@ postDeploymentHandler multipart = do
         Map.insert deployId DeploymentPending
 
       let compileTimeoutMicros = cfg.compileTimeout * 1_000_000
+          compileMemLimitBytes = fromIntegral cfg.maxCompileMemoryMb * 1024 * 1024 :: Int64
 
       _ <- liftIO $ async $ do
-        mResult <- timeout compileTimeoutMicros $ compileBundle env.logger sourceMap
+        let compileLimited = do
+              setAllocationCounter compileMemLimitBytes
+              enableAllocationLimit
+              compileBundle env.logger sourceMap
+        mResult <- (timeout compileTimeoutMicros compileLimited)
+          `catch` \AllocationLimitExceeded -> do
+            logError env.logger "Compilation exceeded memory limit"
+              [ ("deploymentId", toJSON deployId.unDeploymentId)
+              , ("maxCompileMemoryMb", toJSON cfg.maxCompileMemoryMb)
+              ]
+            atomically $ modifyTVar' env.deploymentRegistry $
+              Map.insert deployId (DeploymentFailed "Compilation exceeded memory limit")
+            pure Nothing
         case mResult of
           Nothing -> do
             logError env.logger "Compilation timed out"
@@ -256,8 +277,15 @@ stateToResponse debugMode (DeploymentId did) = \case
 -- | Validate a deployment ID.
 -- Must be <= 36 characters (UUID length), alphanumeric + hyphens + underscores,
 -- and must not contain ".." sequences.
+-- | Reserved words that cannot be used as deployment IDs.
+-- These correspond to top-level route segments in the API.
+reservedWords :: [Text]
+reservedWords = ["health", "deployments"]
+
 validateDeploymentId :: Text -> AppM ()
 validateDeploymentId deployId = do
+  when (deployId `elem` reservedWords) $
+    throwError err400 { errBody = jsonError "Deployment ID is a reserved word" }
   when (Text.length deployId > 36) $
     throwError err400 { errBody = jsonError "Deployment ID exceeds maximum length of 36 characters" }
   when (Text.isInfixOf ".." deployId) $

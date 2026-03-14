@@ -382,23 +382,27 @@ type AppM = ReaderT AppEnv Handler
 
 -- | Response for GET /health.
 data HealthResponse = HealthResponse
-  { hrStatus      :: !Text
-  , hrDeployments :: !HealthDeploymentCounts
+  { hrStatus        :: !Text
+  , hrDeployments   :: !HealthDeploymentCounts
+  , hrInstanceToken :: !(Maybe Text)
+  -- ^ Opaque token for process identity verification by the auth proxy.
   }
   deriving stock (Show, Generic)
 
 instance ToJSON HealthResponse where
   toJSON hr =
-    Aeson.object
+    Aeson.object $
       [ "status" .= hr.hrStatus
       , "deployments" .= hr.hrDeployments
       ]
+      <> maybe [] (\t -> ["instanceToken" .= t]) hr.hrInstanceToken
 
 instance FromJSON HealthResponse where
   parseJSON = Aeson.withObject "HealthResponse" $ \o ->
     HealthResponse
       <$> o .: "status"
       <*> o .: "deployments"
+      <*> o .:? "instanceToken"
 
 -- | Deployment counts in health response.
 data HealthDeploymentCounts = HealthDeploymentCounts

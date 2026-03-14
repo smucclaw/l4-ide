@@ -4,9 +4,13 @@
 module DataPlane (
   DataPlaneApi,
   dataPlaneHandler,
+  ShortRoutes,
+  shortRoutesHandler,
 ) where
 
 import Backend.Api
+import ControlPlane (DeploymentStatusResponse, getDeploymentHandler, putDeploymentHandler, deleteDeploymentHandler)
+import Servant.Multipart
 import Backend.DecisionQueryPlan (CachedDecisionQuery, buildDecisionQueryCacheFromCompiled, queryPlan, QueryPlanResponse)
 import Backend.FunctionSchema (Parameter, Parameters(..))
 import Backend.Jl4 (CompiledModule (..), evaluateWithCompiledDeontic)
@@ -33,7 +37,7 @@ import Data.Scientific (Scientific)
 import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Text as Text
-import GHC.Conc (setAllocationCounter, enableAllocationLimit)
+import GHC.Conc (setAllocationCounter, getAllocationCounter, enableAllocationLimit)
 import GHC.IO.Exception (AllocationLimitExceeded (..))
 import Servant
 import System.FilePath ((<.>))
@@ -43,15 +47,39 @@ import System.Timeout (timeout)
 type DataPlaneApi =
   "deployments" :> Capture "deploymentId" Text :> DeploymentRoutes
 
+-- | Short routes: /{id} and /{id}/{fn}/... as aliases for the full paths.
+-- These MUST appear after HealthApi, ControlPlaneApi, and DataPlaneApi in ServiceApi
+-- so that literal prefixes like "health" and "deployments" match first.
+type ShortRoutes =
+  Capture "deploymentId" Text :> ShortDeploymentRoutes
+
+type ShortDeploymentRoutes =
+       -- GET /{id} → deployment status
+       Get '[JSON] DeploymentStatusResponse
+       -- PUT /{id} → replace deployment
+  :<|> MultipartForm Mem (MultipartData Mem) :> Verb 'PUT 202 '[JSON] DeploymentStatusResponse
+       -- DELETE /{id} → remove deployment
+  :<|> DeleteNoContent
+       -- GET /{id}/functions → list functions
+  :<|> "functions" :> Get '[JSON] [SimpleFunction]
+       -- GET /{id}/openapi.json → OpenAPI spec
+  :<|> "openapi.json" :> Get '[JSON] DeploymentMetadata
+       -- /{id}/{fn}/... → function routes
+  :<|> Capture "name" Text :> FunctionRoutes
+
 type DeploymentRoutes =
        "functions" :> Get '[JSON] [SimpleFunction]
   :<|> "functions" :> Capture "name" Text :> FunctionRoutes
   :<|> "openapi.json" :> Get '[JSON] DeploymentMetadata  -- Simplified; returns metadata for now
 
+-- | Evaluation responses include an X-Eval-Alloc-Bytes header reporting
+-- the GHC allocation bytes consumed by the evaluation.
+type EvalResponse a = Headers '[Header "X-Eval-Alloc-Bytes" Int64] a
+
 type FunctionRoutes =
        Get '[JSON] Function
-  :<|> "evaluation" :> Header "X-L4-Trace" Text :> QueryParam "trace" TraceLevel :> QueryParam "graphviz" Bool :> ReqBody '[JSON] FnArguments :> Post '[JSON] SimpleResponse
-  :<|> "evaluation" :> "batch" :> Header "X-L4-Trace" Text :> QueryParam "trace" TraceLevel :> QueryParam "graphviz" Bool :> ReqBody '[JSON] BatchRequest :> Post '[JSON] BatchResponse
+  :<|> "evaluation" :> Header "X-L4-Trace" Text :> QueryParam "trace" TraceLevel :> QueryParam "graphviz" Bool :> ReqBody '[JSON] FnArguments :> Post '[JSON] (EvalResponse SimpleResponse)
+  :<|> "evaluation" :> "batch" :> Header "X-L4-Trace" Text :> QueryParam "trace" TraceLevel :> QueryParam "graphviz" Bool :> ReqBody '[JSON] BatchRequest :> Post '[JSON] (EvalResponse BatchResponse)
   :<|> "query-plan" :> ReqBody '[JSON] FnArguments :> Post '[JSON] QueryPlanResponse
   :<|> "state-graphs" :> Get '[JSON] StateGraphListResponse
   :<|> "state-graphs" :> Capture "graphName" Text :> Get '[PlainText] Text
@@ -62,6 +90,18 @@ dataPlaneHandler deployIdText =
        listFunctionsHandler deployId
   :<|> functionRoutesHandler deployId
   :<|> openApiHandler deployId
+ where
+  deployId = DeploymentId deployIdText
+
+-- | Handler for short routes: /{id}/...
+shortRoutesHandler :: ServerT ShortRoutes AppM
+shortRoutesHandler deployIdText =
+       getDeploymentHandler deployIdText
+  :<|> putDeploymentHandler deployIdText
+  :<|> deleteDeploymentHandler deployIdText
+  :<|> listFunctionsHandler deployId
+  :<|> openApiHandler deployId
+  :<|> functionRoutesHandler deployId
  where
   deployId = DeploymentId deployIdText
 
@@ -127,7 +167,7 @@ evalFunctionHandler
   -> Maybe TraceLevel -- ?trace= query param
   -> Maybe Bool       -- ?graphviz= query param
   -> FnArguments
-  -> AppM SimpleResponse
+  -> AppM (EvalResponse SimpleResponse)
 evalFunctionHandler deployId fnName mTraceHeader mTraceParam mGraphViz fnArgs = do
   (fns, _meta) <- requireDeploymentReady deployId
   vf <- requireFunction fns fnName
@@ -137,7 +177,7 @@ evalFunctionHandler deployId fnName mTraceHeader mTraceParam mGraphViz fnArgs = 
       isDeontic = Map.member "startTime" paramMap
                   && Map.member "events" paramMap
 
-  case (isDeontic, fnArgs.startTime, fnArgs.events) of
+  (result, allocBytes) <- case (isDeontic, fnArgs.startTime, fnArgs.events) of
     -- Non-deontic function: reject deontic params
     (False, Just _, _) ->
       throwError err400 { errBody = jsonError "startTime and events are only valid for functions returning DEONTIC" }
@@ -156,6 +196,7 @@ evalFunctionHandler deployId fnName mTraceHeader mTraceParam mGraphViz fnArgs = 
       runDeonticEvaluatorFor vf fnArgs.fnEvalBackend (Map.toList fnArgs.fnArguments) st evts
         vf.fnImpl.deonticPartyType vf.fnImpl.deonticActionType
         mTraceHeader mTraceParam mGraphViz
+  pure $ addHeader allocBytes result
 
 -- | POST /deployments/{id}/functions/{fn}/evaluation/batch
 batchFunctionHandler
@@ -165,7 +206,7 @@ batchFunctionHandler
   -> Maybe TraceLevel -- ?trace= query param
   -> Maybe Bool       -- ?graphviz= query param
   -> BatchRequest
-  -> AppM BatchResponse
+  -> AppM (EvalResponse BatchResponse)
 batchFunctionHandler deployId fnName mTraceHeader mTraceParam mGraphViz batchArgs = do
   let traceLevel = determineTraceLevel mTraceHeader mTraceParam
       includeGraphViz = traceLevel == TraceFull && Maybe.fromMaybe False mGraphViz
@@ -175,7 +216,7 @@ batchFunctionHandler deployId fnName mTraceHeader mTraceParam mGraphViz batchArg
   -- Capture the environment before going concurrent
   env <- ask
 
-  -- Evaluate all cases in parallel
+  -- Evaluate all cases in parallel, collecting alloc bytes per case
   evalResults <- liftIO $ forConcurrently batchArgs.cases $ \inputCase -> do
     let args = Map.assocs $ fmap Just inputCase.attributes
     r <- runAppM env (runEvaluatorForDirect vf Nothing args outputFilter traceLevel includeGraphViz)
@@ -187,12 +228,13 @@ batchFunctionHandler deployId fnName mTraceHeader mTraceParam mGraphViz batchArg
     [] -> pure ()
 
   let
-    responses = [(rid, simpleResp) | (rid, Right simpleResp) <- evalResults]
+    responses = [(rid, simpleResp, alloc) | (rid, Right (simpleResp, alloc)) <- evalResults]
     nCases = length responses
+    totalAllocBytes = sum [alloc | (_, _, alloc) <- responses]
 
     successfulRuns =
       Maybe.mapMaybe
-        ( \(rid, simpleRes) -> case simpleRes of
+        ( \(rid, simpleRes, _) -> case simpleRes of
             SimpleResponse r -> Just (rid, r)
             SimpleError _ -> Nothing
         )
@@ -201,7 +243,7 @@ batchFunctionHandler deployId fnName mTraceHeader mTraceParam mGraphViz batchArg
     nSuccessful = length successfulRuns
     nIgnored = nCases - nSuccessful
 
-  pure $ BatchResponse
+  pure $ addHeader totalAllocBytes $ BatchResponse
     { cases =
         [ OutputCase
           { id = rid
@@ -305,7 +347,7 @@ openApiHandler deployId = do
 -- Evaluation helpers
 -- ----------------------------------------------------------------------------
 
--- | Run a function evaluator, returning SimpleResponse.
+-- | Run a function evaluator, returning SimpleResponse and alloc bytes.
 runEvaluatorFor
   :: ValidatedFunction
   -> Maybe EvalBackend
@@ -314,13 +356,13 @@ runEvaluatorFor
   -> Maybe Text       -- X-L4-Trace header
   -> Maybe TraceLevel -- ?trace= query param
   -> Maybe Bool       -- ?graphviz= query param
-  -> AppM SimpleResponse
+  -> AppM (SimpleResponse, Int64)
 runEvaluatorFor vf engine args outputFilter mTraceHeader mTraceParam mGraphViz = do
   let traceLevel = determineTraceLevel mTraceHeader mTraceParam
       includeGraphViz = traceLevel == TraceFull && Maybe.fromMaybe False mGraphViz
   runEvaluatorForDirect vf engine args outputFilter traceLevel includeGraphViz
 
--- | Core evaluator logic.
+-- | Core evaluator logic. Returns the response and GHC allocation bytes consumed.
 runEvaluatorForDirect
   :: ValidatedFunction
   -> Maybe EvalBackend
@@ -328,13 +370,13 @@ runEvaluatorForDirect
   -> Maybe (Set.Set Text)
   -> TraceLevel
   -> Bool
-  -> AppM SimpleResponse
+  -> AppM (SimpleResponse, Int64)
 runEvaluatorForDirect vf engine args outputFilter traceLevel includeGraphViz = do
   let evalBackend = Maybe.fromMaybe JL4 engine
   case Map.lookup evalBackend vf.fnEvaluator of
     Nothing -> throwError err500 { errBody = jsonError "No evaluator available for backend" }
     Just runFn -> do
-      evaluationResult <-
+      (evaluationResult, allocBytes) <-
         timeoutAction $
           runExceptT
             ( runFn.runFunction
@@ -344,8 +386,8 @@ runEvaluatorForDirect vf engine args outputFilter traceLevel includeGraphViz = d
                 includeGraphViz
             )
       case evaluationResult of
-        Left err -> pure $ SimpleError err
-        Right r -> pure $ SimpleResponse r
+        Left err -> pure (SimpleError err, allocBytes)
+        Right r -> pure (SimpleResponse r, allocBytes)
 
 -- | Run deontic evaluation with EVALTRACE.
 runDeonticEvaluatorFor
@@ -359,7 +401,7 @@ runDeonticEvaluatorFor
   -> Maybe Text       -- X-L4-Trace header
   -> Maybe TraceLevel -- ?trace= query param
   -> Maybe Bool       -- ?graphviz= query param
-  -> AppM SimpleResponse
+  -> AppM (SimpleResponse, Int64)
 runDeonticEvaluatorFor vf _engine args startTime events mPartyType mActionType mTraceHeader mTraceParam mGraphViz = do
   let traceLevel = determineTraceLevel mTraceHeader mTraceParam
       includeGraphViz = traceLevel == TraceFull && Maybe.fromMaybe False mGraphViz
@@ -371,7 +413,7 @@ runDeonticEvaluatorFor vf _engine args startTime events mPartyType mActionType m
   let fnDecl = toDecl vf.fnImpl
       filepath = Text.unpack vf.fnImpl.name <.> "l4"
 
-  evaluationResult <-
+  (evaluationResult, allocBytes) <-
     timeoutAction $
       runExceptT
         ( evaluateWithCompiledDeontic
@@ -388,8 +430,8 @@ runDeonticEvaluatorFor vf _engine args startTime events mPartyType mActionType m
         )
 
   case evaluationResult of
-    Left err -> pure $ SimpleError err
-    Right r -> pure $ SimpleResponse r
+    Left err -> pure (SimpleError err, allocBytes)
+    Right r -> pure (SimpleResponse r, allocBytes)
 
 -- | Run an AppM action in IO with a given environment.
 runAppM :: AppEnv -> AppM a -> IO (Either ServerError a)
@@ -397,7 +439,8 @@ runAppM env action = runHandler $ runReaderT action env
 
 -- | Timeout and memory-limited evaluation action.
 -- Uses configurable eval timeout and per-evaluation allocation limits.
-timeoutAction :: IO b -> AppM b
+-- Returns the result and the number of GHC allocation bytes consumed.
+timeoutAction :: IO b -> AppM (b, Int64)
 timeoutAction act = do
   cfg <- asks (.options)
   let timeoutMicros = cfg.evalTimeout * 1_000_000
@@ -406,12 +449,14 @@ timeoutAction act = do
     (timeout timeoutMicros $ do
       setAllocationCounter memLimitBytes
       enableAllocationLimit
-      act
+      r <- act
+      remaining <- getAllocationCounter
+      pure (r, memLimitBytes - remaining)
     ) `catch` \AllocationLimitExceeded ->
       pure Nothing
   case result of
     Nothing -> throwError err500 { errBody = jsonError "Evaluation resource limit exceeded" }
-    Just r -> pure r
+    Just x -> pure x
 
 -- ----------------------------------------------------------------------------
 -- Helpers

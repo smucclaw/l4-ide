@@ -81,7 +81,7 @@ jobs:
           retention-days: 90
 
   build-lsp-windows:
-    name: Build jl4-lsp - Windows x64
+    name: Build jl4-lsp + jl4-cli - Windows x64
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -101,7 +101,7 @@ jobs:
         run: |
           cabal update
           cabal configure --disable-tests --disable-documentation
-          cabal build exe:jl4-lsp --dry-run
+          cabal build exe:jl4-lsp exe:jl4-cli --dry-run
 
       - name: Restore cached dependencies
         uses: actions/cache/restore@v4
@@ -116,7 +116,7 @@ jobs:
       - name: Install dependencies
         if: steps.cache.outputs.cache-hit != 'true'
         shell: bash
-        run: cabal build exe:jl4-lsp --only-dependencies
+        run: cabal build exe:jl4-lsp exe:jl4-cli --only-dependencies
 
       - name: Save cached dependencies
         uses: actions/cache/save@v4
@@ -125,22 +125,23 @@ jobs:
           path: ${{ steps.setup.outputs.cabal-store }}
           key: ${{ steps.cache.outputs.cache-primary-key }}
 
-      - name: Build jl4-lsp
+      - name: Build jl4-lsp and jl4-cli
         shell: bash
-        run: cabal build exe:jl4-lsp
+        run: cabal build exe:jl4-lsp exe:jl4-cli
 
-      - name: Copy binary
+      - name: Copy binaries
         shell: bash
         run: |
           mkdir -p bin/win32-x64
           cp $(cabal list-bin exe:jl4-lsp) bin/win32-x64/jl4-lsp.exe
+          cp $(cabal list-bin exe:jl4-cli) bin/win32-x64/jl4-cli.exe
           ls -lh bin/win32-x64/
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
           name: jl4-lsp-win32-x64
-          path: bin/win32-x64/jl4-lsp.exe
+          path: bin/win32-x64/
           retention-days: 90
 
   build-lsp-linux-x64:
