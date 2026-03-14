@@ -16,7 +16,10 @@ import Data.Text (Text)
 import qualified Data.Text.Encoding as Text.Encoding
 import Control.Concurrent.Async (mapConcurrently_)
 import Control.Concurrent.STM (TVar, atomically, modifyTVar', newTVarIO, readTVarIO)
-import Control.Exception (finally)
+import Control.Exception (catch, finally)
+import Data.Int (Int64)
+import GHC.Conc (setAllocationCounter, enableAllocationLimit)
+import GHC.IO.Exception (AllocationLimitExceeded (..))
 import Control.Monad (forM_)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Reader (ReaderT (..), ask)
@@ -57,6 +60,7 @@ defaultMain = do
     , ("maxDeployments", toJSON options.maxDeployments)
     , ("maxConcurrentRequests", toJSON options.maxConcurrentRequests)
     , ("maxEvalMemoryMb", toJSON options.maxEvalMemoryMb)
+    , ("maxCompileMemoryMb", toJSON options.maxCompileMemoryMb)
     , ("evalTimeout", toJSON options.evalTimeout)
     , ("compileTimeout", toJSON options.compileTimeout)
     ]
@@ -101,6 +105,7 @@ loadAndRegister logger options registry store deployId = do
   (sources, storedMeta) <- BundleStore.loadBundle store deployId
 
   let compileTimeoutMicros = options.compileTimeout * 1_000_000
+      compileMemLimitMb = options.maxCompileMemoryMb
 
   -- Try fast path: load from CBOR cache
   mCbor <- BundleStore.loadBundleCbor logger store deployId
@@ -116,11 +121,11 @@ loadAndRegister logger options registry store deployId = do
             [ ("deploymentId", toJSON deployId)
             , ("error", toJSON err)
             ]
-          compileFreshAndCache logger compileTimeoutMicros store deployId sources
+          compileFreshAndCache logger compileTimeoutMicros compileMemLimitMb store deployId sources
     Nothing -> do
       logDebug logger "Compiling deployment"
         [("deploymentId", toJSON deployId)]
-      compileFreshAndCache logger compileTimeoutMicros store deployId sources
+      compileFreshAndCache logger compileTimeoutMicros compileMemLimitMb store deployId sources
 
   case result of
     Right (fns, meta) -> do
@@ -136,21 +141,33 @@ loadAndRegister logger options registry store deployId = do
         , ("error", toJSON err)
         ]
 
--- | Compile from source with timeout, and save CBOR cache for next restart.
+-- | Compile from source with timeout and memory limit, and save CBOR cache for next restart.
 compileFreshAndCache
   :: Logger
   -> Int  -- ^ timeout in microseconds
+  -> Int  -- ^ memory limit in MB
   -> BundleStore
   -> Text
   -> Map.Map FilePath Text
   -> IO (Either Text (Map.Map Text ValidatedFunction, DeploymentMetadata))
-compileFreshAndCache logger timeoutMicros store deployId sources = do
-  mResult <- timeout timeoutMicros $ compileBundle logger sources
+compileFreshAndCache logger timeoutMicros memLimitMb store deployId sources = do
+  let memLimitBytes = fromIntegral memLimitMb * 1024 * 1024 :: Int64
+      compileLimited = do
+        setAllocationCounter memLimitBytes
+        enableAllocationLimit
+        compileBundle logger sources
+  mResult <- (timeout timeoutMicros compileLimited)
+    `catch` \AllocationLimitExceeded -> do
+      logError logger "Compilation exceeded memory limit"
+        [ ("deploymentId", toJSON deployId)
+        , ("maxCompileMemoryMb", toJSON memLimitMb)
+        ]
+      pure Nothing
   case mResult of
     Nothing -> do
-      logError logger "Compilation timed out"
+      logError logger "Compilation timed out or exceeded memory limit"
         [("deploymentId", toJSON deployId)]
-      pure $ Left "Compilation timed out"
+      pure $ Left "Compilation timed out or exceeded memory limit"
     Just (Right (fns, meta, bundles)) -> do
       -- Save CBOR caches for fast restart
       mapM_ (BundleStore.saveBundleCbor store deployId) bundles

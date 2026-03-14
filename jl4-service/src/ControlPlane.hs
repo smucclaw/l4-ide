@@ -35,6 +35,10 @@ import GHC.Generics (Generic)
 import Servant
 import Servant.Multipart
 import System.FilePath (splitDirectories)
+import Control.Exception (catch)
+import Data.Int (Int64)
+import GHC.Conc (setAllocationCounter, enableAllocationLimit)
+import GHC.IO.Exception (AllocationLimitExceeded (..))
 import System.Timeout (timeout)
 
 -- | Status returned in GET responses.
@@ -118,9 +122,22 @@ postDeploymentHandler multipart = do
         Map.insert deployId DeploymentPending
 
       let compileTimeoutMicros = cfg.compileTimeout * 1_000_000
+          compileMemLimitBytes = fromIntegral cfg.maxCompileMemoryMb * 1024 * 1024 :: Int64
 
       _ <- liftIO $ async $ do
-        mResult <- timeout compileTimeoutMicros $ compileBundle env.logger sourceMap
+        let compileLimited = do
+              setAllocationCounter compileMemLimitBytes
+              enableAllocationLimit
+              compileBundle env.logger sourceMap
+        mResult <- (timeout compileTimeoutMicros compileLimited)
+          `catch` \AllocationLimitExceeded -> do
+            logError env.logger "Compilation exceeded memory limit"
+              [ ("deploymentId", toJSON deployId.unDeploymentId)
+              , ("maxCompileMemoryMb", toJSON cfg.maxCompileMemoryMb)
+              ]
+            atomically $ modifyTVar' env.deploymentRegistry $
+              Map.insert deployId (DeploymentFailed "Compilation exceeded memory limit")
+            pure Nothing
         case mResult of
           Nothing -> do
             logError env.logger "Compilation timed out"
