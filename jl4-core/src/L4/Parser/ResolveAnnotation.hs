@@ -265,10 +265,10 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (TypeDecl n) where
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (TypedName n) where
   addNlg a = extendNlgA a $ case a of
-    MkTypedName ann n ty -> do
+    MkTypedName ann n ty mExpr -> do
       n' <- addNlg n
       ty' <- addNlg ty
-      pure $ MkTypedName ann n' ty'
+      pure $ MkTypedName ann n' ty' mExpr
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (ConDecl n) where
   addNlg a = extendNlgA a $ case a of
@@ -657,10 +657,10 @@ instance HasDesc (ConDecl n) where
     MkConDecl ann name <$> traverse addDesc names
 
 instance HasDesc (TypedName n) where
-  addDesc name@(MkTypedName ann n ty) = do
+  addDesc name@(MkTypedName ann n ty mExpr) = do
     ty' <- addDesc ty
     ann' <- attachLeadingOrInlineDesc name ann
-    pure $ MkTypedName ann' n ty'
+    pure $ MkTypedName ann' n ty' mExpr
 
 instance HasDesc (Type' n) where
   addDesc = pure

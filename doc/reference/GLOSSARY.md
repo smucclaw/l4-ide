@@ -19,7 +19,7 @@ Keywords are reserved words that form the structure of L4 programs.
 | **GIVETH** / **GIVES** | Specifies function return type             | [GIVETH](functions/GIVETH.md)      |
 | **IN**                 | Used with LET for scoped bindings          | [LET](functions/LET.md)            |
 | **LET**                | Introduces a local binding                 | [LET](functions/LET.md)            |
-| **MEANS**              | Defines the body of a function or decision | [MEANS](functions/MEANS.md)        |
+| **MEANS**              | Defines the body of a function, decision, or computed field (method) | [MEANS](functions/MEANS.md)        |
 | **WHERE**              | Introduces local declarations              | [WHERE](functions/WHERE.md)        |
 | **YIELD**              | Creates anonymous functions (lambdas)      | [YIELD](functions/YIELD.md)        |
 
@@ -66,7 +66,7 @@ Keywords are reserved words that form the structure of L4 programs.
 | **ASSUME**     | Declares a variable of assumed type     | [ASSUME](types/ASSUME.md)          |
 | **DECLARE**    | Defines a type                          | [DECLARE](types/DECLARE.md)        |
 | **IS**         | Type assertion or definition            | [TYPE-KEYWORDS](types/keywords.md) |
-| **HAS**        | Record field declaration                | [TYPE-KEYWORDS](types/keywords.md) |
+| **HAS**        | Record field declaration (supports computed fields / methods via MEANS) | [TYPE-KEYWORDS](types/keywords.md) |
 | **LIST**       | List type or list literal               | [TYPE-KEYWORDS](types/keywords.md) |
 | **ONE OF**     | Used for enum types                     | [TYPE-KEYWORDS](types/keywords.md) |
 | **OF**         | Type application or constructor pattern | [TYPE-KEYWORDS](types/keywords.md) |
@@ -208,6 +208,7 @@ For complete documentation, see **[Syntax Reference](syntax/README.md)**.
 | **Directives**      | `#EVAL`, `#TRACE`, `#CHECK`, `#ASSERT`        |
 | **Ditto**           | `^` copy from previous line                   |
 | **Asyndetic**       | `...` (AND) and `..` (OR) implicit operators  |
+| **Computed Fields** | Derived attributes / methods via MEANS in HAS |
 | **Genitive**        | `'s` for record field access                  |
 | **Section Markers** | `§` for document sections                     |
 

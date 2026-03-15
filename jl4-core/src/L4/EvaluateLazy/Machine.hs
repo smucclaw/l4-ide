@@ -2266,7 +2266,7 @@ scanTypeDecl (SynonymDecl _ann _t) =
 
 scanConDecl :: ConDecl Resolved -> Machine [Resolved]
 scanConDecl (MkConDecl _ann n [])  = pure [n]
-scanConDecl (MkConDecl _ann n tns) = pure (n : ((\ (MkTypedName _ n' _) -> n') <$> tns))
+scanConDecl (MkConDecl _ann n tns) = pure (n : ((\ (MkTypedName _ n' _ _) -> n') <$> tns))
 
 evalSection :: Environment -> Section Resolved -> Machine [EvalDirective]
 evalSection env (MkSection _ann _mn _maka topdecls) =
@@ -2391,7 +2391,7 @@ evalConDecl env (MkConDecl _ann n tns) = do
   updateTerm env n (WHNF (ValUnappliedConstructor n))
   conRef <- ref (TypeCheck.getName n) n
   -- selectors (we need to create fresh names for the lambda abstractions so that every binder is unique)
-  traverse_ (\ (i, MkTypedName _ sn _t) -> do
+  traverse_ (\ (i, MkTypedName _ sn _t _) -> do
     arg    <- def (TypeCheck.getName n)
     argRef <- ref (TypeCheck.getName n) arg
     args <- traverse (def . TypeCheck.getName) tns

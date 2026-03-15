@@ -107,6 +107,7 @@ import Optics ((%~), (^.))
 import qualified Base.Set as Set
 import Data.Function (on)
 import Control.Exception (assert)
+import L4.Desugar (desugarComputedFields)
 
 mkInitialCheckState :: Substitution -> CheckState
 mkInitialCheckState substitution =
@@ -155,7 +156,7 @@ initialCheckEnv moduleUri = mkInitialCheckEnv moduleUri initialEnvironment initi
 
 doCheckProgramWithDependencies :: CheckState -> CheckEnv -> Module  Name -> CheckResult
 doCheckProgramWithDependencies checkState checkEnv program =
-  case runCheckUnique (checkProgram program) checkEnv checkState of
+  case runCheckUnique (checkProgram (desugarComputedFields program)) checkEnv checkState of
     (w, s) ->
       let
         (errs, (rprog, topEnv, localMixfixRegistry)) = runWith w
@@ -832,10 +833,10 @@ inferConDecl rappForm (MkConDecl ann n tns) = do
   pure (condecl, makeKnown dn conInfo : concat extends)
 
 typedNameOptionallyNamedType :: TypedName n -> OptionallyNamedType n
-typedNameOptionallyNamedType (MkTypedName _ n t) = MkOptionallyNamedType emptyAnno (Just n) t
+typedNameOptionallyNamedType (MkTypedName _ n t _) = MkOptionallyNamedType emptyAnno (Just n) t
 
 inferSelector :: AppForm Resolved -> TypedName Name -> Check (TypedName Resolved, [CheckInfo])
-inferSelector rappForm (MkTypedName ann n t) = do
+inferSelector rappForm (MkTypedName ann n t _mExpr) = do
   rt <- inferType t
   dn <- def n
   let selectorInfo = KnownTerm (forall' (view appFormArgs rappForm) (fun_ [appFormType rappForm] rt)) Selector
@@ -844,7 +845,9 @@ inferSelector rappForm (MkTypedName ann n t) = do
     Just desc -> for_ (rangeOf dn) $ \srcRange ->
       addDescForSrcRange srcRange (getDesc desc)
     Nothing -> pure ()
-  pure (MkTypedName ann dn rt, [makeKnown dn selectorInfo])
+  -- Note: computed fields (MEANS clause) are desugared before type checking,
+  -- so _mExpr is always Nothing here. We pass Nothing in the output.
+  pure (MkTypedName ann dn rt Nothing, [makeKnown dn selectorInfo])
 
 -- | Infers / checks a type to be of kind TYPE.
 inferType :: Type' Name -> Check (Type' Resolved)

@@ -39,6 +39,35 @@ DECLARE Shape IS ONE OF
   Rectangle HAS width IS A NUMBER, height IS A NUMBER
 ```
 
+### Computed Fields (Methods)
+
+Record fields can have a `MEANS` clause that defines a derived value — computed automatically from the record's other fields. These are analogous to **methods**, **calculated properties**, or **derived attributes** in other languages.
+
+```l4
+DECLARE Employee HAS
+    -- stored fields (primary attributes)
+    `name`             IS A STRING
+    `date of birth`    IS A NUMBER
+    `current year`     IS A NUMBER
+    -- computed fields (derived attributes)
+    `age`              IS A NUMBER
+        MEANS `current year` - `date of birth`
+    `adult`            IS A BOOLEAN
+        MEANS `age` >= 18
+```
+
+**Key points:**
+
+- Computed fields are accessed with `'s` just like stored fields: `employee's `age``
+- Computed fields may depend on other computed fields (chaining)
+- Computed fields may call external functions using OF syntax: `MEANS `f` OF `x`, `y``
+- Computed fields may use WHERE and LET/IN for local bindings
+- When constructing a record with WITH, only stored fields are supplied — computed fields are derived automatically
+
+**Style guide:** Group stored fields first, then computed fields, so readers see the primary data before the derived logic. Depart from this convention when expository clarity calls for a different ordering — for instance, placing a computed field immediately after the stored fields it depends on.
+
+**Example file:** [computed-fields-example.l4](computed-fields-example.l4)
+
 ### Type Synonyms
 
 Create an alias for an existing type:

@@ -54,6 +54,24 @@ circumference radius MEANS
     pi MEANS 3.14159
 ```
 
+### In Record Fields (Computed Fields / Methods)
+
+MEANS can also appear inside DECLARE HAS to define computed fields — derived attributes that are calculated automatically from other fields in the record:
+
+```l4
+DECLARE Person HAS
+    `birth year` IS A NUMBER
+    `as at year` IS A NUMBER
+    `age`        IS A NUMBER
+        MEANS `as at year` - `birth year`
+    `adult`      IS A BOOLEAN
+        MEANS `age` >= 18
+```
+
+The computed field's MEANS body can reference any sibling field by name. It can also call external functions (using OF for multi-argument calls), and use WHERE or LET/IN for local bindings.
+
+See **[DECLARE - Computed Fields](../types/DECLARE.md#computed-fields-methods)** for full documentation.
+
 ## Alternative Forms
 
 ### Using IS
