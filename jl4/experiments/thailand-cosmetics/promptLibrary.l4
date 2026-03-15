@@ -50,10 +50,20 @@ promptFalseOrExaggerated claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Is this claim FALSE (factually untrue) or EXAGGERATED (overstates\n",
     "truth beyond what evidence could support)?\n\n",
-    "Answer with:\n",
-    "- YES (violates 41.2.1 - prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // PROMPT 2: Article 41.2.2 - Misleading Scientific References
 promptMisleadingScientificRefs claimText MEANS
@@ -87,10 +97,20 @@ promptMisleadingScientificRefs claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this claim cite or use scientific/academic information in a way\n",
     "that could mislead consumers about the product's essential characteristics?\n\n",
-    "Answer with:\n",
-    "- YES (violates 41.2.2 - prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // PROMPT 3: Article 41.2.3 - Medicinal/Therapeutic Claims
 promptMedicinalTherapeutic claimText MEANS
@@ -123,10 +143,20 @@ promptMedicinalTherapeutic claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this claim imply the product prevents, treats, cures, or\n",
     "alleviates diseases or medical conditions?\n\n",
-    "Answer with:\n",
-    "- YES (violates 41.2.3 - prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // PROMPT 4: Article 41.2.4 - Sexual Enhancement Claims
 promptSexualEnhancement claimText MEANS
@@ -153,10 +183,20 @@ promptSexualEnhancement claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this claim state or imply effects on sexual potency, libido,\n",
     "performance, or aphrodisiac properties?\n\n",
-    "Answer with:\n",
-    "- YES (violates 41.2.4 - prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // PROMPT 5: Article 41.2.5 - Illegal/Immoral Content
 promptIllegalImmoral claimText MEANS
@@ -183,10 +223,20 @@ promptIllegalImmoral claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this claim promote, support, or encourage illegal activities,\n",
     "criminal behavior, or immoral conduct that degrades public morals?\n\n",
-    "Answer with:\n",
-    "- YES (violates 41.2.5 - prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // PROMPT 6: Article 41.2.6 - Social Division
 promptSocialDivision claimText MEANS
@@ -212,10 +262,20 @@ promptSocialDivision claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this claim cause or incite dissension, division, or disunity\n",
     "among people?\n\n",
-    "Answer with:\n",
-    "- YES (violates 41.2.6 - prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // PROMPT 7: Article 41.2.7 - Ministerial Regulations
 promptMinisterialRegulations claimText MEANS
@@ -241,10 +301,20 @@ promptMinisterialRegulations claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this claim violate specific ministerial regulations under the\n",
     "Cosmetics Act?\n\n",
-    "Answer with:\n",
-    "- YES (violates 41.2.7 - prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // PROMPT 8: Article 41.3 - Puffery Exemption
 promptPufferyExemption claimText MEANS
@@ -273,10 +343,20 @@ promptPufferyExemption claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Is this claim so UTTERLY UNREALISTIC that the general public obviously\n",
     "knows it's an exaggeration and would not rely upon it?\n\n",
-    "Answer with:\n",
-    "- YES (qualifies for puffery exemption) or NO (does not qualify)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // PROMPT 9: Article 42 - Harmful Advertising Conduct
 promptHarmfulConduct claimText MEANS
@@ -303,10 +383,20 @@ promptHarmfulConduct claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does the manner or content of this advertising cause harm to health,\n",
     "mentality, or morality, or cause distress or excessive inconvenience?\n\n",
-    "Answer with:\n",
-    "- YES (violates Article 42 - prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // ============================================================================
 // TIER 2: MANUAL-SPECIFIC PROMPTS (7 prompts - cross-cutting requirements)
@@ -334,10 +424,20 @@ promptIngredientSubstantiation claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this ingredient efficacy claim LACK proper substantiation\n",
     "documentation, OR is the ingredient present in insufficient quantity?\n\n",
-    "Answer with:\n",
-    "- YES (lacks substantiation - prohibited) or NO (properly substantiated - acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // PROMPT 11: Cosmetic Scope (Section 4.2)
 promptCosmeticScope claimText MEANS
@@ -364,10 +464,20 @@ promptCosmeticScope claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this claim EXCEED the scope of cosmetics by implying structural\n",
     "alteration, therapeutic effects, internal effects, or permanent changes?\n\n",
-    "Answer with:\n",
-    "- YES (exceeds scope - prohibited) or NO (within scope - acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // PROMPT 12: Comparative Advertising (Section 5)
 promptComparativeAdvertising claimText MEANS
@@ -390,10 +500,20 @@ promptComparativeAdvertising claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this comparative claim VIOLATE the rules by comparing with other\n",
     "companies' products, lacking evidence, or creating division?\n\n",
-    "Answer with:\n",
-    "- YES (violates comparative advertising rules - prohibited) or NO (complies - acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // PROMPT 13: Award/Certification (Section 6)
 promptAwardCertification claimText MEANS
@@ -416,10 +536,20 @@ promptAwardCertification claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this award/certification claim VIOLATE the rules by being\n",
     "unrelated, false, lacking proper attribution (body/year), or misleading?\n\n",
-    "Answer with:\n",
-    "- YES (violates award/certification rules - prohibited) or NO (complies - acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // PROMPT 14: Academic Statistics (Section 7)
 promptAcademicStatistics claimText MEANS
@@ -442,10 +572,20 @@ promptAcademicStatistics claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this academic/statistical claim LACK verifiability, misrepresent\n",
     "sources, or use irrelevant evidence?\n\n",
-    "Answer with:\n",
-    "- YES (violates academic/statistics rules - prohibited) or NO (proper use - acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // PROMPT 15: Monarchy Rules (Section 8)
 promptMonarchyRules claimText MEANS
@@ -466,10 +606,20 @@ promptMonarchyRules claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this claim FALSELY REFER to the monarchy without proper\n",
     "authorization, or inappropriately use royal references in advertising?\n\n",
-    "Answer with:\n",
-    "- YES (violates monarchy rules - prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // PROMPT 16: Giveaway/Contest (Section 9)
 promptGiveawayContest claimText MEANS
@@ -488,10 +638,20 @@ promptGiveawayContest claimText MEANS
     "Evaluate this advertising: ", claimText, "\n\n",
     "Question: Does this giveaway/sweepstakes/contest advertising LACK prior\n",
     "authorization or FAIL to clearly state required information?\n\n",
-    "Answer with:\n",
-    "- YES (violates giveaway rules - prohibited) or NO (complies - acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // ============================================================================
 // TIER 1: CATEGORY-SPECIFIC PROMPTS (Key categories - 10 prompts)
@@ -516,10 +676,20 @@ promptWhiteningNaturalTone claimText MEANS
     "Question: Does this claim imply ALTERATION of natural skin tone (physiological\n",
     "change, measurable change, or permanent change) rather than temporary cosmetic\n",
     "APPEARANCE?\n\n",
-    "Answer with:\n",
-    "- YES (prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // CATEGORY: Anti-Wrinkle Products
 promptAntiWrinkleStructural claimText MEANS
@@ -536,10 +706,20 @@ promptAntiWrinkleStructural claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this claim imply efficacy in PREVENTING or ALTERING structural\n",
     "changes from free radicals or aging?\n\n",
-    "Answer with:\n",
-    "- YES (prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // CATEGORY: Acne Products
 promptAcneTherapeuticClaims claimText MEANS
@@ -553,10 +733,20 @@ promptAcneTherapeuticClaims claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this claim imply therapeutic efficacy in PREVENTING, TREATING,\n",
     "or ELIMINATING acne?\n\n",
-    "Answer with:\n",
-    "- YES (prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // CATEGORY: Cleansing Products
 promptCleansingMicrobiological claimText MEANS
@@ -572,10 +762,20 @@ promptCleansingMicrobiological claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this claim state that the product kills, eliminates, or inhibits\n",
     "bacteria (microbiological efficacy beyond cosmetic cleansing)?\n\n",
-    "Answer with:\n",
-    "- YES (prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // CATEGORY: Sunscreen Products
 promptSunscreenUnrealistic claimText MEANS
@@ -590,10 +790,20 @@ promptSunscreenUnrealistic claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this claim suggest complete, absolute, or 100% UV protection\n",
     "that goes beyond realistic sunscreen capabilities?\n\n",
-    "Answer with:\n",
-    "- YES (prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // CATEGORY: Contouring/Firming Products
 promptContourBodyStructure claimText MEANS
@@ -624,10 +834,20 @@ promptContourBodyStructure claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this claim imply efficacy in ALTERING BODY FUNCTIONS OR STRUCTURE\n",
     "(metabolism, fat, circulation, size, cellulite), rather than just improving appearance?\n\n",
-    "Answer with:\n",
-    "- YES (violates contouring rules - prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // CATEGORY: Exfoliating Products
 promptExfoliateStructural claimText MEANS
@@ -659,10 +879,20 @@ promptExfoliateStructural claimText MEANS
     "Question: Does this claim imply efficacy in ALTERING SKIN STRUCTURE, stimulating\n",
     "formation (skin/collagen), or affecting underlying conditions, rather than just\n",
     "removing dead surface cells?\n\n",
-    "Answer with:\n",
-    "- YES (violates exfoliating rules - prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // CATEGORY: Cleansing Products - Medical Symbols
 promptCleansingMedicalSymbols claimText MEANS
@@ -692,10 +922,20 @@ promptCleansingMedicalSymbols claimText MEANS
     "Question: Does this advertising USE IMAGES, SYMBOLS, OR MARKS that could mislead\n",
     "consumers into thinking the product is medicinal (crosses, Rx, Red Cross, shields,\n",
     "germ-killing imagery, microbial structures)?\n\n",
-    "Answer with:\n",
-    "- YES (violates cleansing symbol rules - prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // CATEGORY: Anti-Dandruff Products
 promptDandruffTherapeutic claimText MEANS
@@ -724,10 +964,20 @@ promptDandruffTherapeutic claimText MEANS
     "Question: Does this claim imply therapeutic efficacy (ELIMINATING FUNGAL ITCH,\n",
     "TREATING INFLAMMATION, PERMANENTLY REMOVING DANDRUFF) rather than cosmetic\n",
     "cleansing during use?\n\n",
-    "Answer with:\n",
-    "- YES (violates anti-dandruff rules - prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // CATEGORY: Hair Care Products - Unspecified Hair Loss
 promptHaircareUnspecifiedLoss claimText MEANS
@@ -759,10 +1009,20 @@ promptHaircareUnspecifiedLoss claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this claim assert hair loss reduction WITHOUT SPECIFYING the\n",
     "cosmetic cause, or imply reducing loss from internal/medical factors?\n\n",
-    "Answer with:\n",
-    "- YES (violates hair care rules - prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // CATEGORY: Hair Care Products - Deep Nourishment
 promptHaircareDeepNourishment claimText MEANS
@@ -788,10 +1048,20 @@ promptHaircareDeepNourishment claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this claim imply DEEP NOURISHMENT TO HAIR ROOTS or effects on\n",
     "hair root structures in the dermis, rather than surface cosmetic conditioning?\n\n",
-    "Answer with:\n",
-    "- YES (violates hair care rules - prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // CATEGORY: Hair Treatment Products
 promptHairtreatNoDamage claimText MEANS
@@ -819,11 +1089,13 @@ promptHairtreatNoDamage claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this claim assert the product \"DOES NOT DAMAGE HAIR\" without\n",
     "either conditioning agents OR scientific data support?\n\n",
-    "Answer with:\n",
-    "- YES (violates hair treatment rules - prohibited) or NO (acceptable)\n",
-    "- UNKNOWN (cannot determine substantiation)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):\n",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}\n\n",
+    "Rules:\n",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable\n",
+    "- confidence: number 0-100\n",
+    "- reasoning: 1-2 sentence explanation\n",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // CATEGORY: Deodorant Products
 promptDeodorantGlandStructure claimText MEANS
@@ -854,10 +1126,20 @@ promptDeodorantGlandStructure claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this claim imply the product REDUCES SWEAT PRODUCTION or AFFECTS\n",
     "SWEAT GLAND STRUCTURE, rather than just controlling odor by reducing moisture?\n\n",
-    "Answer with:\n",
-    "- YES (violates deodorant rules - prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // CATEGORY: Perfume Products
 promptPerfumePsychoactive claimText MEANS
@@ -887,10 +1169,20 @@ promptPerfumePsychoactive claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this perfume claim imply PSYCHOACTIVE EFFECTS (stress/sleep/\n",
     "fatigue), HORMONAL EFFECTS, or SEXUAL ATTRACTION beyond just fragrance?\n\n",
-    "Answer with:\n",
-    "- YES (violates perfume rules - prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // CATEGORY: Nail Products
 promptNailTherapeuticGrowth claimText MEANS
@@ -917,10 +1209,20 @@ promptNailTherapeuticGrowth claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this claim imply effects on BODILY FUNCTIONS (faster nail growth)\n",
     "or DISEASE TREATMENT (nail fungus), rather than cosmetic care?\n\n",
-    "Answer with:\n",
-    "- YES (violates nail product rules - prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // CATEGORY: Oral Care - Toothpaste - Disease Claims
 promptToothpasteDiseaseClms claimText MEANS
@@ -950,10 +1252,20 @@ promptToothpasteDiseaseClms claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this toothpaste claim imply TREATING or PREVENTING DENTAL DISEASES\n",
     "(ulcers, fungal infections, gingivitis, bleeding gums)?\n\n",
-    "Answer with:\n",
-    "- YES (violates toothpaste rules - prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // CATEGORY: Oral Care - Toothpaste - Xylitol Claims
 promptToothpasteXylitolDecay claimText MEANS
@@ -974,10 +1286,20 @@ promptToothpasteXylitolDecay claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this xylitol-containing toothpaste claim \"PREVENTS TOOTH DECAY\"\n",
     "rather than \"uses sugar that does not cause tooth decay\"?\n\n",
-    "Answer with:\n",
-    "- YES (violates xylitol rules - prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // CATEGORY: Oral Care - Mouthwash - Disease Claims
 promptMouthwashDiseaseClms claimText MEANS
@@ -1003,10 +1325,20 @@ promptMouthwashDiseaseClms claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this mouthwash claim imply TREATING/PREVENTING DISEASES, WHITENING\n",
     "TEETH, or SUBSTITUTING FOR BRUSHING?\n\n",
-    "Answer with:\n",
-    "- YES (violates mouthwash rules - prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // CATEGORY: Oral Care - Mouthwash - Whitening Claims
 promptMouthwashWhiteningClms claimText MEANS
@@ -1028,10 +1360,20 @@ promptMouthwashWhiteningClms claimText MEANS
     "Reasoning: Mouthwash alone cannot whiten teeth without brushing/polishing action.\n\n",
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this mouthwash claim teeth WHITENING effects?\n\n",
-    "Answer with:\n",
-    "- YES (violates mouthwash whitening prohibition - prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // CATEGORY: Oral Care - Mouthwash - Substitute for Brushing
 promptMouthwashSubstitute claimText MEANS
@@ -1052,10 +1394,20 @@ promptMouthwashSubstitute claimText MEANS
     "Key distinction: Adjunct to brushing ✓ vs. substitute for brushing ✗\n\n",
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this mouthwash claim it can SUBSTITUTE FOR or REPLACE tooth brushing?\n\n",
-    "Answer with:\n",
-    "- YES (violates mouthwash rules - prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // CATEGORY: Oral Care - Mouthwash - Xylitol Claims
 promptMouthwashXylitolDecay claimText MEANS
@@ -1071,10 +1423,20 @@ promptMouthwashXylitolDecay claimText MEANS
     "  - \"prevents tooth decay\" (even with xylitol)\n\n",
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this xylitol-containing mouthwash claim \"PREVENTS TOOTH DECAY\"?\n\n",
-    "Answer with:\n",
-    "- YES (violates xylitol rules - prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // CATEGORY: Oral Care - Breath Spray - Disease Claims
 promptBreathsprayDiseaseClms claimText MEANS
@@ -1098,10 +1460,20 @@ promptBreathsprayDiseaseClms claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this breath spray claim TREATING/PREVENTING DISEASES (dental or\n",
     "respiratory), PREVENTING/KILLING GERMS, or WHITENING TEETH?\n\n",
-    "Answer with:\n",
-    "- YES (violates breath spray rules - prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // CATEGORY: Oral Care - Breath Spray - Germ Prevention
 promptBreathsprayGermPrevention claimText MEANS
@@ -1121,10 +1493,20 @@ promptBreathsprayGermPrevention claimText MEANS
     "  - Any germ prevention or killing claim\n\n",
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this breath spray claim PREVENTING or KILLING GERMS in the mouth?\n\n",
-    "Answer with:\n",
-    "- YES (violates breath spray rules - prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // CATEGORY: Oral Care - Dental Floss - Disease Prevention
 promptDentalflossDiseasePrevent claimText MEANS
@@ -1146,10 +1528,20 @@ promptDentalflossDiseasePrevent claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this dental floss claim TREATING or PREVENTING DENTAL DISEASES or\n",
     "TOOTH DECAY?\n\n",
-    "Answer with:\n",
-    "- YES (violates dental floss rules - prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // CATEGORY: Teeth Whitening Products
 promptTeethwhitenEnamelAbnormal claimText MEANS
@@ -1177,10 +1569,20 @@ promptTeethwhitenEnamelAbnormal claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this teeth whitening claim imply whitening teeth AFFECTED BY\n",
     "ENAMEL ABNORMALITIES, TETRACYCLINE, or FLUOROSIS?\n\n",
-    "Answer with:\n",
-    "- YES (violates teeth whitening rules - prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // CATEGORY: Hemp/CBD Products
 promptHempDiseaseTreatment claimText MEANS
@@ -1202,10 +1604,20 @@ promptHempDiseaseTreatment claimText MEANS
     "Key distinction: Cosmetic use consistent with registration ✓ vs. disease treatment ✗\n\n",
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this hemp/CBD cosmetic claim DISEASE TREATMENT?\n\n",
-    "Answer with:\n",
-    "- YES (violates hemp product rules - prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // CATEGORY: Anti-Blue Light Products
 promptBluelightDeepTissue claimText MEANS
@@ -1231,10 +1643,20 @@ promptBluelightDeepTissue claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this anti-blue light cosmetic claim protection AT LEVELS DEEPER\n",
     "THAN THE SKIN or AT THE CELLULAR LEVEL?\n\n",
-    "Answer with:\n",
-    "- YES (violates anti-blue light rules - prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // CATEGORY: Skin Balancing Products - pH Adjustment
 promptBalancePHAdjustment claimText MEANS
@@ -1261,10 +1683,20 @@ promptBalancePHAdjustment claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this skin balancing claim imply ADJUSTING SKIN pH or ALTERING\n",
     "ACID-BASE LEVELS?\n\n",
-    "Answer with:\n",
-    "- YES (violates skin balancing rules - prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // CATEGORY: Skin Balancing Products - Microbiome Claims
 promptBalanceMicrobiome claimText MEANS
@@ -1293,10 +1725,20 @@ promptBalanceMicrobiome claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this claim assert ADJUSTING, RESTORING, or CARING FOR skin\n",
     "microbiome balance, rather than just stating factual ingredient content?\n\n",
-    "Answer with:\n",
-    "- YES (violates microbiome rules - prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // CATEGORY: Natural Products
 promptNaturalFalseClaims claimText MEANS
@@ -1324,11 +1766,13 @@ promptNaturalFalseClaims claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this claim assert \"MADE FROM NATURAL INGREDIENTS\" or \"NO\n",
     "CHEMICAL ADDITIVES\" when the product CONTAINS CHEMICAL INGREDIENTS?\n\n",
-    "Answer with:\n",
-    "- YES (violates natural product rules - prohibited) or NO (acceptable)\n",
-    "- UNKNOWN (cannot determine formula)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):\n",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}\n\n",
+    "Rules:\n",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable\n",
+    "- confidence: number 0-100\n",
+    "- reasoning: 1-2 sentence explanation\n",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // CATEGORY: Detox Products
 promptDetoxTranslatedTerm claimText MEANS
@@ -1354,10 +1798,20 @@ promptDetoxTranslatedTerm claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this claim TRANSLATE or DESCRIBE \"DETOX\" as \"detoxifying,\"\n",
     "\"removing toxins,\" or similar meaning, rather than using the term as-is?\n\n",
-    "Answer with:\n",
-    "- YES (violates detox rules - prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // CATEGORY: Certified Products - Medical Symbols
 promptCertifiedMedicalSymbols claimText MEANS
@@ -1388,10 +1842,20 @@ promptCertifiedMedicalSymbols claimText MEANS
     "Question: Does this advertising USE SYMBOLS, LOGOS, OR MARKS suggesting MEDICAL\n",
     "TREATMENT (crosses, medical facility symbols, Rod of Asclepius) or the Red Cross\n",
     "symbol?\n\n",
-    "Answer with:\n",
-    "- YES (violates certified product symbol rules - prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // CATEGORY: Certified Products - Unregistered Medical Terms
 promptCertifiedMedicalTerms claimText MEANS
@@ -1416,10 +1880,20 @@ promptCertifiedMedicalTerms claimText MEANS
     "Question: Does this advertising USE MEDICAL TERMINOLOGY or SYMBOLS (diagnosis/\n",
     "treatment/cure/prevention, Rod of Asclepius, Hospital/Clinic) WITHOUT a clearly\n",
     "visible registered trademark ®?\n\n",
-    "Answer with:\n",
-    "- YES (violates certified product rules - prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // CATEGORY: Comparison/Sales Claims
 promptComparisonCompetitor claimText MEANS
@@ -1450,10 +1924,20 @@ promptComparisonCompetitor claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this comparison claim COMPARE WITH DIFFERENT PRODUCTS, DIFFERENT\n",
     "COMPANIES, or MENTION OTHER PRODUCT NAMES?\n\n",
-    "Answer with:\n",
-    "- YES (violates comparison rules - prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // CATEGORY: Statistical Claims
 promptStatisticalSatisfactionEfficacy claimText MEANS
@@ -1487,10 +1971,20 @@ promptStatisticalSatisfactionEfficacy claimText MEANS
     "Evaluate this claim: ", claimText, "\n\n",
     "Question: Does this statistical claim assert the product is EFFECTIVE based\n",
     "solely on SATISFACTION TEST RESULTS, rather than clinical efficacy testing?\n\n",
-    "Answer with:\n",
-    "- YES (violates statistical rules - prohibited) or NO (acceptable)\n",
-    "- Confidence: [0-100]%\n",
-    "- Reasoning: [1-2 sentences explaining your judgment]"
+    "IMPORTANT: Respond with ONLY valid JSON (no markdown, no code blocks):
+",
+    "{\"verdict\": true, \"confidence\": 85, \"reasoning\": \"Brief explanation\"}
+
+",
+    "Rules:
+",
+    "- verdict: true if claim VIOLATES this rule (prohibited), false if acceptable
+",
+    "- confidence: number 0-100
+",
+    "- reasoning: 1-2 sentence explanation
+",
+    "- NO markdown formatting, NO code blocks, ONLY the raw JSON object"
 
 // ============================================================================
 // PROMPT LIBRARY SUMMARY - ALL 51 PROMPTS COMPLETE
