@@ -25,7 +25,7 @@ DECLARE Person HAS
     `birth year`    IS A NUMBER
     `as at year`    IS A NUMBER          -- the "clock" is a stored input, not impure
     `age`           IS A NUMBER          -- computed from two stored fields
-        MEANS `years between` `birth year`, `as at year`
+        MEANS `years between` OF `birth year`, `as at year`
     `adult`         IS A BOOLEAN
         MEANS `age` >= 18
     `minor`         IS A BOOLEAN

@@ -22,9 +22,9 @@ DECLARE Employee HAS
     `monthly salary`     IS A NUMBER
     `current year`       IS A NUMBER
     `age`                IS A NUMBER
-        MEANS `years between` `date of birth`, `current year`
+        MEANS `years between` OF `date of birth`, `current year`
     `years of service`   IS A NUMBER
-        MEANS `years between` `date of employment`, `current year`
+        MEANS `years between` OF `date of employment`, `current year`
     `covered by Act`     IS A BOOLEAN
         MEANS `monthly salary` <= 4500
           AND `age` >= 16

@@ -516,7 +516,7 @@ conName :: ConDecl Resolved -> Text
 conName (MkConDecl _ name _) = nameText name
 
 fieldName :: TypedName Resolved -> Text
-fieldName (MkTypedName _ name _) = nameText name
+fieldName (MkTypedName _ name _ _) = nameText name
 
 isCurrencyName :: Text -> Bool
 isCurrencyName name =

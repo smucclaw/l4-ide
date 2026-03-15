@@ -121,7 +121,10 @@ instance LayoutPrinterWithName a => LayoutPrinter (OptionallyTypedName a) where
 
 instance LayoutPrinterWithName a => LayoutPrinter (TypedName a) where
   printWithLayout = \ case
-    MkTypedName _ a ty -> printWithLayout a <+> "IS" <+> printWithLayout ty
+    MkTypedName _ a ty Nothing -> printWithLayout a <+> "IS" <+> printWithLayout ty
+    MkTypedName _ a ty (Just meansExpr) ->
+      printWithLayout a <+> "IS" <+> printWithLayout ty <> line <>
+      indent 4 ("MEANS" <+> printWithLayout meansExpr)
 
 instance LayoutPrinterWithName a => LayoutPrinter (TypeSig a) where
   printWithLayout = \ case

@@ -64,13 +64,28 @@ f(record) = let s1 = record's s1; ... sN = record's sN in expr
 
 The existing projection machinery (`Proj` → `App`) then just calls this function. No evaluator changes needed beyond wiring up the synthetic function.
 
+## Comma Parsing
+
+No special handling was needed.  `parseAppArgs` (juxtaposition-based function
+application) does not consume commas — it never did need to, since L4 uses
+Haskell-style `f x y` for function application.  Commas are only consumed by
+explicit comma-separated contexts (OF, LIST, WITH, CONSIDER, CONCAT, HAS fields).
+
+This means `recordDecl'` keeps its `lsepBy ... TComma`, the colloquial form
+`DECLARE Foo HAS x IS A NUMBER, y IS A NUMBER` still works, and MEANS bodies
+can freely use any expression syntax.  No parser state flags are needed.
+
+See `specs/done/COMPUTED-FIELDS-COMMA-PARSING.md` for full design analysis.
+
 ## Test Files (committed)
 
 - `jl4/experiments/computed-fields-basic.l4` — simple boolean from number
 - `jl4/experiments/computed-fields-chain.l4` — computed depending on computed
 - `jl4/experiments/computed-fields-nested.l4` — nested record access
 - `jl4/experiments/computed-fields-external.l4` — calling top-level functions
+- `jl4/experiments/computed-fields-external-of.l4` — same but using OF syntax
 - `jl4/experiments/computed-fields-legal.l4` — Employment Act pattern
 - `jl4/experiments/computed-fields-age.l4` — age-from-birthdate snapshot
 - `jl4/experiments/computed-fields-cycle.l4` — should fail (cycle)
 - `jl4/experiments/computed-fields-override.l4` — should fail (constructor override)
+- `jl4/experiments/computed-fields-where-let.l4` — WHERE/LET/IN in MEANS, with commas

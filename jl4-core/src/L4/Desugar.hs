@@ -3,6 +3,9 @@ module L4.Desugar (
   --
   carameliseExpr,
   carameliseNode,
+  -- * Computed Fields
+  --
+  desugarComputedFields,
   ) where
 
 
@@ -189,3 +192,89 @@ builtinUnaryFunctions :: Map Text (Expr n -> Expr n)
 builtinUnaryFunctions = Map.fromList
   [ (rawNameToText $ rawName TypeCheck.notName, Not emptyAnno)
   ]
+
+-- ----------------------------------------------------------------------------
+-- Desugar Computed Fields
+-- ----------------------------------------------------------------------------
+
+-- | Desugar computed fields in DECLARE blocks into synthetic DECIDE declarations.
+--
+-- For each computed field @f IS A T MEANS expr@ on record @R@, generates:
+--
+-- @
+-- GIVEN _self IS A R
+-- GIVETH A T
+-- f _self MEANS LET s1 = _self\'s s1; ... IN expr
+-- @
+--
+-- where s1..sN are all sibling fields (excluding f itself).
+-- The original DECLARE retains only stored fields (without MEANS clauses).
+desugarComputedFields :: Module Name -> Module Name
+desugarComputedFields (MkModule ann imports section) =
+  MkModule ann imports (desugarCFSection section)
+
+desugarCFSection :: Section Name -> Section Name
+desugarCFSection (MkSection sAnn sMn sMaka topDecls) =
+  MkSection sAnn sMn sMaka (concatMap desugarCFTopDecl topDecls)
+
+desugarCFTopDecl :: TopDecl Name -> [TopDecl Name]
+desugarCFTopDecl (Declare dAnn decl) = desugarCFDeclare dAnn decl
+desugarCFTopDecl (Section sAnn section) = [Section sAnn (desugarCFSection section)]
+desugarCFTopDecl other = [other]
+
+desugarCFDeclare :: Anno -> Declare Name -> [TopDecl Name]
+desugarCFDeclare dAnn (MkDeclare declAnn tysig appForm (RecordDecl rAnn mCon tns))
+  | any isComputed tns =
+    let
+      storedFields = [tn | tn@(MkTypedName _ _ _ Nothing) <- tns]
+      syntheticDecides = mapMaybe (makeComputedDecide appForm tns) tns
+      newDeclare = Declare dAnn (MkDeclare declAnn tysig appForm (RecordDecl rAnn mCon storedFields))
+    in newDeclare : map (uncurry Decide) syntheticDecides
+desugarCFDeclare dAnn decl = [Declare dAnn decl]
+
+isComputed :: TypedName n -> Bool
+isComputed (MkTypedName _ _ _ (Just _)) = True
+isComputed _ = False
+
+-- | Generate a synthetic Decide for a computed field.
+--
+-- For @adult IS A BOOLEAN MEANS age >= 18@ on @DECLARE Person HAS name, age, adult@:
+--
+-- @
+-- GIVEN _self IS A Person
+-- GIVETH A BOOLEAN
+-- adult _self MEANS LET name = _self's name; age = _self's age IN age >= 18
+-- @
+makeComputedDecide :: AppForm Name -> [TypedName Name] -> TypedName Name -> Maybe (Anno, Decide Name)
+makeComputedDecide appForm allFields (MkTypedName fieldAnn fieldName fieldType (Just meansExpr)) =
+  let
+    -- Extract record name and type args from the DECLARE's AppForm
+    MkAppForm _ recordName typeArgs _ = appForm
+    -- Create a self parameter name
+    selfName = MkName emptyAnno (NormalName "_self")
+    -- Build the record type: RecordName arg1 arg2 ...
+    recordType = TyApp emptyAnno recordName (map (\n -> TyApp emptyAnno n []) typeArgs)
+    -- Type signature: GIVEN _self IS A <RecordType> GIVETH A <FieldType>
+    -- Use the field's annotation to preserve source range info
+    decideTypeSig = MkTypeSig fieldAnn
+      (MkGivenSig emptyAnno [MkOptionallyTypedName emptyAnno selfName (Just recordType)])
+      (Just (MkGivethSig emptyAnno fieldType))
+    -- App form: <fieldName> _self
+    decideAppForm = MkAppForm fieldAnn fieldName [selfName] Nothing
+    -- LET bindings for all sibling fields: sibName = _self's sibName
+    -- Each binding uses the sibling field's annotation so the type checker
+    -- can look up its scanned signature by source range.
+    siblingBindings =
+      [ LocalDecide sibAnn (MkDecide sibAnn
+          (MkTypeSig sibAnn (MkGivenSig emptyAnno []) Nothing)
+          (MkAppForm sibAnn sibName [] Nothing)
+          (Proj emptyAnno (Var emptyAnno selfName) sibName))
+      | MkTypedName sibAnn sibName _ _ <- allFields
+      , rawName sibName /= rawName fieldName  -- exclude the field being defined
+      ]
+    -- Body: LET <sibling bindings> IN <meansExpr>
+    body = case siblingBindings of
+      [] -> meansExpr
+      _  -> LetIn emptyAnno siblingBindings meansExpr
+  in Just (fieldAnn, MkDecide fieldAnn decideTypeSig decideAppForm body)
+makeComputedDecide _ _ _ = Nothing  -- stored field, no DECIDE needed

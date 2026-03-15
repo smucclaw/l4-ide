@@ -853,13 +853,15 @@ lsepBy1 pp sep =
     zipAnno p s = setAnno (fixAnnoSrcRange $ getAnno p <> mkSimpleEpaAnno (lexToEpa s)) p
 
 reqParam :: Parser (TypedName Name)
-reqParam =
+reqParam = do
+  current <- Lexer.indentLevel
   attachAnno $
     MkTypedName emptyAnno
       <$> annoHole name
       <*  annoLexeme separator
 --      <*  optional article
       <*> annoHole type'
+      <*> optional (annoLexeme (spacedKeyword_ TKMeans) *> annoHole (indentedExpr current))
 
 param :: Parser (OptionallyTypedName Name)
 param =
@@ -1536,6 +1538,13 @@ stringLit =
 
 -- | Parser for function application.
 --
+-- Tries two alternatives for the argument list:
+--
+--   1. __OF syntax__ – @f OF x, y@ – arguments are explicitly
+--      comma-separated via 'lsepBy1'.
+--
+--   2. __Juxtaposition__ – @f x y@ – arguments are parsed by
+--      'parseAppArgs' using indentation only.
 app :: Parser (Expr Name)
 app = do
   current <- Lexer.indentLevel
@@ -1548,6 +1557,19 @@ app = do
         <|> annoHole (parseAppArgs current fname)
     pure (App emptyAnno fname args)
 
+-- | Parse function arguments supplied by juxtaposition (without @OF@).
+--
+-- Each argument must be an atomic expression ('atomicExpr'') that is
+-- indented to the right of @current@ (the column of the enclosing
+-- expression).  Arguments are collected greedily: the parser keeps going
+-- as long as it can find indented atomic expressions.
+--
+-- Commas are never consumed here.  If you need comma-separated arguments,
+-- use the @OF@ syntax (@f OF x, y@) instead.
+--
+-- __Mixfix guard.__  On the first argument only, 'guardMixfixKeyword'
+-- checks that we are not about to consume a token that should be
+-- interpreted as a mixfix keyword on a continuation line.
 parseAppArgs :: Pos -> Name -> Parser [Expr Name]
 parseAppArgs current fname = go True
   where

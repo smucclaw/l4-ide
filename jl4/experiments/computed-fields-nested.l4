@@ -20,8 +20,9 @@ DECLARE Driver HAS
     `risk category`     IS A `Risk Category`
         MEANS IF `accident count` = 0
               THEN IF `has tickets` THEN `Medium Risk` ELSE `Low Risk`
-              ELSE IF `accident count` <= 2 THEN `High Risk`
-              ELSE `Uninsurable`
+              ELSE IF `accident count` <= 2
+                   THEN `High Risk`
+                   ELSE `Uninsurable`
 
 DECLARE Policy HAS
     `driver`         IS A Driver

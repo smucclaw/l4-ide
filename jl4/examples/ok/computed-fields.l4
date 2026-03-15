@@ -1,0 +1,196 @@
+-- Computed Fields: Comprehensive Test
+--
+-- Tests all aspects of the MEANS clause in DECLARE HAS fields:
+--   1. Basic computed fields (arithmetic, boolean, IF/THEN/ELSE)
+--   2. Chained dependencies (computed field depends on computed field)
+--   3. Calling external functions (via OF syntax)
+--   4. Nested record access (computed field reaches into nested record)
+--   5. WHERE and LET/IN inside MEANS bodies
+--   6. Same-line comma-separated stored fields alongside computed fields
+
+IMPORT prelude
+
+-- ═══════════════════════════════════════════════════════════
+-- 1. Basic computed fields
+-- ═══════════════════════════════════════════════════════════
+
+DECLARE Person HAS
+    `name`       IS A STRING
+    `birth year` IS A NUMBER
+    `as at year` IS A NUMBER
+    `age`        IS A NUMBER
+        MEANS `as at year` - `birth year`
+    `adult`      IS A BOOLEAN
+        MEANS `age` >= 18
+    `minor`      IS A BOOLEAN
+        MEANS NOT `adult`
+    `category`   IS A STRING
+        MEANS IF `age` < 13       THEN "child"
+              ELSE IF `age` < 18  THEN "teenager"
+                                  ELSE "adult"
+
+alice MEANS Person WITH
+    `name`       IS "Alice"
+    `birth year` IS 2001
+    `as at year` IS 2026
+
+bob MEANS Person WITH
+    `name`       IS "Bob"
+    `birth year` IS 2015
+    `as at year` IS 2026
+
+-- stored field access
+#EVAL alice's `name`       -- "Alice"
+#EVAL alice's `age`        -- 25
+
+-- computed field access: same 's syntax
+#EVAL alice's `adult`      -- TRUE
+#EVAL alice's `minor`      -- FALSE
+#EVAL alice's `category`   -- "adult"
+
+#EVAL bob's `age`          -- 11
+#EVAL bob's `adult`        -- FALSE
+#EVAL bob's `minor`        -- TRUE
+#EVAL bob's `category`     -- "child"
+
+-- ═══════════════════════════════════════════════════════════
+-- 2. Chained dependencies
+-- ═══════════════════════════════════════════════════════════
+
+DECLARE `Risk Category` IS ONE OF
+    `Low Risk`
+    `Medium Risk`
+    `High Risk`
+
+DECLARE Driver HAS
+    `name`           IS A STRING
+    `age`            IS A NUMBER
+    `years licensed` IS A NUMBER
+    `accident count` IS A NUMBER
+    `has tickets`    IS A BOOLEAN
+    `adult`          IS A BOOLEAN
+        MEANS `age` >= 18
+    `experienced`    IS A BOOLEAN
+        MEANS `years licensed` >= 2
+    `risk category`  IS A `Risk Category`
+        MEANS IF `accident count` = 0
+              THEN IF `has tickets` THEN `Medium Risk` ELSE `Low Risk`
+              ELSE `High Risk`
+    `eligible`       IS A BOOLEAN
+        MEANS `adult`
+          AND `experienced`
+          AND `accident count` <= 3
+
+safeDriver MEANS Driver WITH
+    `name`           IS "Safe"
+    `age`            IS 30
+    `years licensed` IS 5
+    `accident count` IS 0
+    `has tickets`    IS FALSE
+
+youngDriver MEANS Driver WITH
+    `name`           IS "Young"
+    `age`            IS 16
+    `years licensed` IS 0
+    `accident count` IS 0
+    `has tickets`    IS FALSE
+
+-- chained: eligible depends on adult and experienced
+#EVAL safeDriver's `eligible`       -- TRUE
+#EVAL safeDriver's `risk category`  -- Low Risk
+#EVAL youngDriver's `eligible`      -- FALSE  (not adult, not experienced)
+
+-- ═══════════════════════════════════════════════════════════
+-- 3. Calling external functions (OF syntax)
+-- ═══════════════════════════════════════════════════════════
+
+GIVEN `base` IS A NUMBER
+      `rate` IS A NUMBER
+GIVETH A NUMBER
+`apply rate` MEANS `base` * `rate` / 100
+
+DECLARE Account HAS
+    `holder`    IS A STRING
+    `balance`   IS A NUMBER
+    `rate`      IS A NUMBER
+    `interest`  IS A NUMBER
+        MEANS `apply rate` OF `balance`, `rate`
+    `projected` IS A NUMBER
+        MEANS `balance` + `interest`
+
+savings MEANS Account WITH
+    `holder`  IS "Alice"
+    `balance` IS 10000
+    `rate`    IS 5
+
+#EVAL savings's `interest`   -- 500.0
+#EVAL savings's `projected`  -- 10500.0
+
+-- ═══════════════════════════════════════════════════════════
+-- 4. Nested record access
+-- ═══════════════════════════════════════════════════════════
+
+DECLARE Policy HAS
+    `driver`        IS A Driver
+    `vehicle value` IS A NUMBER
+    `base premium`  IS A NUMBER
+        MEANS CONSIDER `driver`'s `risk category`
+              WHEN `Low Risk`    THEN `vehicle value` * 0.02
+              WHEN `Medium Risk` THEN `vehicle value` * 0.04
+              WHEN `High Risk`   THEN `vehicle value` * 0.08
+    `affordable`    IS A BOOLEAN
+        MEANS `base premium` <= 500
+    `valid`         IS A BOOLEAN
+        MEANS `driver`'s `adult`
+          AND `affordable`
+
+safePolicy MEANS Policy WITH
+    `driver`        IS safeDriver
+    `vehicle value` IS 20000
+
+#EVAL safePolicy's `base premium`  -- 400.0  (20000 * 0.02, Low Risk)
+#EVAL safePolicy's `affordable`    -- TRUE
+#EVAL safePolicy's `valid`         -- TRUE
+
+-- ═══════════════════════════════════════════════════════════
+-- 5. WHERE and LET/IN inside MEANS
+-- ═══════════════════════════════════════════════════════════
+
+GIVEN `x` IS A NUMBER
+GIVETH A NUMBER
+`square` MEANS `x` * `x`
+
+DECLARE Shape HAS
+    `width`      IS A NUMBER
+    `height`     IS A NUMBER
+    `area`       IS A NUMBER
+        MEANS `width` * `height`
+    `diag sq`    IS A NUMBER
+        MEANS `result`
+          WHERE
+            `w2` MEANS `square` `width`
+            `h2` MEANS `square` `height`
+            `result` MEANS `w2` + `h2`
+    `scaled`     IS A NUMBER
+        MEANS LET `factor` MEANS 2 IN `area` * `factor`
+
+rect MEANS Shape WITH
+    `width`  IS 3
+    `height` IS 4
+
+#EVAL rect's `area`      -- 12
+#EVAL rect's `diag sq`   -- 25  (9 + 16)
+#EVAL rect's `scaled`    -- 24  (12 * 2)
+
+-- ═══════════════════════════════════════════════════════════
+-- 6. Same-line comma-separated stored fields (colloquial form)
+--    coexisting with computed fields
+-- ═══════════════════════════════════════════════════════════
+
+DECLARE Point HAS x IS A NUMBER, y IS A NUMBER,
+    `distance from origin` IS A NUMBER
+        MEANS `square` `x` + `square` `y`
+
+origin MEANS Point WITH x IS 3, y IS 4
+
+#EVAL origin's `distance from origin`  -- 25  (9 + 16)

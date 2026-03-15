@@ -1,0 +1,34 @@
+{
+    "$defs": {
+        "Person": {
+            "properties": {
+                "as at year": {
+                    "$ref": "#/$defs/NUMBER"
+                },
+                "birth year": {
+                    "$ref": "#/$defs/NUMBER"
+                },
+                "name": {
+                    "$ref": "#/$defs/STRING"
+                }
+            },
+            "required": [
+                "name",
+                "birth year",
+                "as at year"
+            ],
+            "type": "object"
+        }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "_self": {
+            "$ref": "#/$defs/Person"
+        }
+    },
+    "required": [
+        "_self"
+    ],
+    "title": "age",
+    "type": "object"
+}
