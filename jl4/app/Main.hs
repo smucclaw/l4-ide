@@ -365,10 +365,13 @@ main = do
                           pure mEval
                         
                         let (status, output, diagnostics) = case mEvalRes of
-                              Nothing -> 
+                              Nothing ->
                                 ("error" :: Text, Aeson.Null, Aeson.toJSON evalErrs)
-                              Just evalResults ->
-                                ("success", Aeson.toJSON (map (Text.pack . show) evalResults), Aeson.Array mempty)
+                              Just evalResults
+                                | options.batchJson ->
+                                  ("success", Aeson.toJSON evalResults, Aeson.Array mempty)
+                                | otherwise ->
+                                  ("success", Aeson.toJSON (map (Text.pack . show) evalResults), Aeson.Array mempty)
                         
                         pure $ Aeson.object
                           [ "input" Aeson..= input
@@ -537,6 +540,7 @@ data Options = MkOptions
   , batchFormat :: Maybe Text
   , entrypoint :: Maybe Text
   , stateGraph :: Bool              -- Output state transition graph from regulative rules
+  , batchJson :: Bool               -- Output batch results as clean JSON instead of Show
   }
 
 optionsDescription :: Options.Parser Options
@@ -556,6 +560,7 @@ optionsDescription = MkOptions
   <*> optional (Options.strOption (long "format" <> short 'f' <> metavar "FORMAT" <> help "Input/output format (json|yaml|csv); required when reading from stdin"))
   <*> optional (Options.strOption (long "entrypoint" <> short 'e' <> metavar "FUNCTION" <> help "Name of @export function to call (defaults to @export default or first @export)"))
   <*> switch (long "state-graph" <> help "Output state transition graph from regulative rules as GraphViz DOT")
+  <*> switch (long "json" <> help "Output batch results as clean JSON values instead of Haskell Show representation")
 
 fixedNowReader :: ReadM UTCTime
 fixedNowReader =
