@@ -374,6 +374,26 @@ prettyEvalDirectiveResultWithFields fields (MkEvalDirectiveResult _range res mtr
         Nothing -> Text.empty
         Just t  -> "\n─────\n" <> prettyLayout t
 
+-- ----------------------------------------------------------------------------
+-- ToJSON instances for batch --json output
+-- ----------------------------------------------------------------------------
+
+instance Aeson.ToJSON EvalDirectiveResult where
+  toJSON (MkEvalDirectiveResult _range res _trace) = Aeson.object
+    [ "result" Aeson..= res
+    , "trace"  Aeson..= Aeson.Null
+    ]
+
+instance Aeson.ToJSON EvalDirectiveValue where
+  toJSON (Assertion b) = Aeson.object
+    [ "type"  Aeson..= ("assertion" :: Text)
+    , "value" Aeson..= b
+    ]
+  toJSON (Reduction (Right val)) = Aeson.toJSON val
+  toJSON (Reduction (Left exc)) = Aeson.object
+    [ "error" Aeson..= Text.unlines (prettyEvalException exc)
+    ]
+
 prettyEvalDirectiveValueWithFields :: ConstructorFieldNames -> EvalDirectiveValue -> Text
 prettyEvalDirectiveValueWithFields _fields (Assertion True)        = "assertion satisfied"
 prettyEvalDirectiveValueWithFields _fields (Assertion False)       = "assertion failed"
