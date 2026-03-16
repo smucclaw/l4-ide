@@ -1,0 +1,19 @@
+Parsing successful
+Typechecking successful
+Info | [Import Resolution] Resolving import: prelude from computed-fields-long-cycle.l4Debug | [Import Resolution] Checking VFS URIs: project:/prelude.l4, prelude.l4, prelude.l4Debug | [Import Resolution] VFS MISS: project:/prelude.l4Debug | [Import Resolution] VFS MISS: prelude.l4Debug | [Import Resolution] VFS MISS: prelude.l4Debug | [Import Resolution] Not in VFS, checking filesystem...Debug | [Import Resolution] Checking filesystem paths: /Users/mengwong/src/smucclaw/l4-ide/methods/jl4/./examples/not-ok/tc/prelude.l4, /Users/mengwong/src/smucclaw/l4-ide/methods/jl4/examples/not-ok/tc/prelude.l4, /Users/mengwong/src/smucclaw/l4-ide/methods/./jl4-core/./libraries/prelude.l4, /Users/mengwong/.local/share/jl4/libraries/prelude.l4, /Users/mengwong/src/smucclaw/l4-ide/methods/dist-newstyle/build/aarch64-osx/ghc-9.10.3/jl4-0.1/t/jl4-test/build/jl4-test/../../libraries/prelude.l4Info | [Import Resolution] Found on filesystem: /Users/mengwong/src/smucclaw/l4-ide/methods/./jl4-core/./libraries/prelude.l4Info | updateFileDiagnostics published different from new diagnostics - file diagnostics:
+File: computed-fields-long-cycle.l4
+  Hidden: no
+  Range: 6:9-6:12
+  Source: check
+  Severity: DiagnosticSeverity_Error
+  Code: <none>
+  Message:
+    Circular dependency detected between computed fields:
+
+      `a`
+      `b`
+      `c`
+
+    Computed fields cannot depend on each other in a cycle.
+    Break the cycle by making one of these a stored field
+    or restructuring the dependencies.

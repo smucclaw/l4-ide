@@ -1,0 +1,60 @@
+-- Computed Fields: Additional Edge Cases
+-- Tests for constants, arithmetic in computed fields, and cross-record access.
+
+IMPORT prelude
+
+-- Section 1: Constant computed field (no sibling dependencies)
+§ Constant
+
+DECLARE Config HAS
+    `name`    IS A STRING
+    `version` IS A NUMBER
+        MEANS 42
+
+DECIDE `cfg` IS Config WITH
+    `name` IS "test"
+
+#EVAL `cfg`'s `version`
+
+-- Section 2: Arithmetic in computed fields
+§ Arithmetic
+
+DECLARE NumPair HAS
+    `left value`  IS A NUMBER
+    `right value` IS A NUMBER
+    `total`       IS A NUMBER
+        MEANS `left value` + `right value`
+    `difference`  IS A NUMBER
+        MEANS `left value` - `right value`
+    `product`     IS A NUMBER
+        MEANS `left value` * `right value`
+
+DECIDE `pair` IS NumPair WITH
+    `left value` IS 10
+    `right value` IS 3
+
+#EVAL `pair`'s `total`
+#EVAL `pair`'s `difference`
+#EVAL `pair`'s `product`
+
+-- Section 3: Cross-record non-cyclic access (computed field reads another record's computed field)
+§ `Cross-record`
+
+DECLARE Inner HAS
+    `n`      IS A NUMBER
+    `double` IS A NUMBER
+        MEANS `n` * 2
+
+DECLARE Outer HAS
+    `inner`               IS AN Inner
+    `inner triple`        IS A NUMBER
+        MEANS `inner`'s `n` * 3
+    `uses inner computed` IS A NUMBER
+        MEANS `inner`'s `double` + 1
+
+DECIDE `myInner` IS Inner WITH `n` IS 5
+
+DECIDE `myOuter` IS Outer WITH `inner` IS `myInner`
+
+#EVAL `myOuter`'s `inner triple`
+#EVAL `myOuter`'s `uses inner computed`
