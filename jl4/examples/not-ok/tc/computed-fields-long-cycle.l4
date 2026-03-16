@@ -1,0 +1,10 @@
+-- Computed Fields: Long Cycle (SHOULD FAIL)
+-- Three-node cycle: a -> b -> c -> a
+DECLARE Bad HAS
+    `x` IS A NUMBER
+    `a` IS A NUMBER
+        MEANS `b` + 1
+    `b` IS A NUMBER
+        MEANS `c` + 1
+    `c` IS A NUMBER
+        MEANS `a` + 1

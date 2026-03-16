@@ -271,6 +271,7 @@ instance ToSemTokens () PosToken Resolved where
                 Just Local -> highlightFunction ty
                 Just Constructor -> withTokenType identIsCon
                 Just Selector -> withTokenType identIsSelector
+                Just ComputedSelector -> withTokenType identIsSelector
                 Nothing -> id
           TypeVariable ->
             withTokenType identIsTypeVar

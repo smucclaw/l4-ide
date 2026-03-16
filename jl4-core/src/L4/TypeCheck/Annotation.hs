@@ -318,7 +318,8 @@ nlgConDecl (MkConDecl ann n typedName) =
     <*> traverse nlgTypedName typedName
 
 nlgTypedName :: TypedName Resolved -> Check (TypedName Resolved)
-nlgTypedName (MkTypedName ann n ty) =
+nlgTypedName (MkTypedName ann n ty mExpr) =
   MkTypedName ann
     <$> resolveNlgAnnotationInResolved n
     <*> nlgType ty
+    <*> pure mExpr

@@ -105,7 +105,8 @@ data Type' n =
 type Kind = Int
 
 data TypedName n =
-  MkTypedName Anno n (Type' n)
+  MkTypedName Anno n (Type' n) (Maybe (Expr n))
+  -- ^ Nothing = stored field, Just expr = computed field (MEANS clause)
   deriving stock (GHC.Generic, Eq, Ord, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
@@ -471,6 +472,7 @@ data TermKind =
   | Local -- ^ a local variable (introduced by a lambda or pattern)
   | Constructor
   | Selector
+  | ComputedSelector -- ^ a computed field (MEANS clause), behaves like a selector but is derived
   deriving stock (Eq, Ord, Generic, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 

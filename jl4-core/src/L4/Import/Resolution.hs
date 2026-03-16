@@ -373,6 +373,7 @@ combineResolvedImports uri imports =
              , TypeCheck.declareDeclarations = Map.empty
              , TypeCheck.assumeDeclarations = Map.empty
              , TypeCheck.mixfixRegistry = Map.unionWith (<>) accEnv.mixfixRegistry r.mixfixRegistry
+             , TypeCheck.computedFields = Map.empty
              , TypeCheck.errorContext = TypeCheck.None
              , TypeCheck.sectionStack = []
              }

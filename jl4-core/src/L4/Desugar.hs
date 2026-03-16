@@ -3,11 +3,18 @@ module L4.Desugar (
   --
   carameliseExpr,
   carameliseNode,
+  -- * Computed Fields
+  --
+  desugarComputedFields,
+  detectComputedFieldCycles,
+  extractComputedFieldNames,
   ) where
 
 
 import           Base
+import           Data.Graph               (stronglyConnComp, SCC(..))
 import qualified Data.Map.Strict          as Map
+import qualified Data.Set                 as Set
 import           L4.Annotation            (HasAnno (..), emptyAnno)
 import           L4.Names
 import           L4.Syntax
@@ -189,3 +196,261 @@ builtinUnaryFunctions :: Map Text (Expr n -> Expr n)
 builtinUnaryFunctions = Map.fromList
   [ (rawNameToText $ rawName TypeCheck.notName, Not emptyAnno)
   ]
+
+-- ----------------------------------------------------------------------------
+-- Desugar Computed Fields
+-- ----------------------------------------------------------------------------
+
+-- | Desugar computed fields in DECLARE blocks into synthetic DECIDE declarations.
+--
+-- For each computed field @f IS A T MEANS expr@ on record @R@, generates:
+--
+-- @
+-- GIVEN _self IS A R
+-- GIVETH A T
+-- f _self MEANS LET s1 = _self\'s s1; ... IN expr
+-- @
+--
+-- where s1..sN are all sibling fields (excluding f itself).
+-- The original DECLARE retains only stored fields (without MEANS clauses).
+desugarComputedFields :: Module Name -> Module Name
+desugarComputedFields (MkModule ann imports section) =
+  MkModule ann imports (desugarCFSection section)
+
+desugarCFSection :: Section Name -> Section Name
+desugarCFSection (MkSection sAnn sMn sMaka topDecls) =
+  MkSection sAnn sMn sMaka (concatMap desugarCFTopDecl topDecls)
+
+desugarCFTopDecl :: TopDecl Name -> [TopDecl Name]
+desugarCFTopDecl (Declare dAnn decl) = desugarCFDeclare dAnn decl
+desugarCFTopDecl (Section sAnn section) = [Section sAnn (desugarCFSection section)]
+desugarCFTopDecl other = [other]
+
+desugarCFDeclare :: Anno -> Declare Name -> [TopDecl Name]
+desugarCFDeclare dAnn (MkDeclare declAnn tysig appForm (RecordDecl rAnn mCon tns))
+  | any isComputed tns =
+    let
+      -- Extract type parameters from the DECLARE's GIVEN (e.g., GIVEN a IS A TYPE)
+      MkTypeSig _ (MkGivenSig _ typeParams) _ = tysig
+      storedFields = [tn | tn@(MkTypedName _ _ _ Nothing) <- tns]
+      syntheticDecides = mapMaybe (makeComputedDecide appForm typeParams tns) tns
+      newDeclare = Declare dAnn (MkDeclare declAnn tysig appForm (RecordDecl rAnn mCon storedFields))
+    in newDeclare : map (uncurry Decide) syntheticDecides
+desugarCFDeclare dAnn decl = [Declare dAnn decl]
+
+isComputed :: TypedName n -> Bool
+isComputed (MkTypedName _ _ _ (Just _)) = True
+isComputed _ = False
+
+-- | Generate a synthetic Decide for a computed field.
+--
+-- For @adult IS A BOOLEAN MEANS age >= 18@ on @DECLARE Person HAS name, age, adult@:
+--
+-- @
+-- GIVEN _self IS A Person
+-- GIVETH A BOOLEAN
+-- adult _self MEANS _self's age >= 18
+-- @
+--
+-- Bare field references in the MEANS expression are rewritten to projections
+-- on @_self@.  This avoids introducing LET bindings that would create
+-- duplicate names in scope (the selector and the LET local), which causes
+-- ambiguity errors with polymorphic operators like @=@.
+makeComputedDecide :: AppForm Name -> [OptionallyTypedName Name] -> [TypedName Name] -> TypedName Name -> Maybe (Anno, Decide Name)
+makeComputedDecide appForm typeParams allFields (MkTypedName fieldAnn fieldName fieldType (Just meansExpr)) =
+  let
+    -- Extract record name and type args from the DECLARE's AppForm
+    MkAppForm _ recordName typeArgs _ = appForm
+    -- Create a self parameter name
+    selfName = MkName emptyAnno (NormalName "_self")
+    -- Build the record type: RecordName arg1 arg2 ...
+    recordType = TyApp emptyAnno recordName (map (\n -> TyApp emptyAnno n []) typeArgs)
+    -- Type signature: GIVEN <typeParams>, _self IS A <RecordType> GIVETH A <FieldType>
+    -- Prepend type parameters from the DECLARE so parameterized types work.
+    -- Use the field's annotation to preserve source range info.
+    selfParam = MkOptionallyTypedName emptyAnno selfName (Just recordType)
+    decideTypeSig = MkTypeSig fieldAnn
+      (MkGivenSig emptyAnno (typeParams ++ [selfParam]))
+      (Just (MkGivethSig emptyAnno fieldType))
+    -- App form: <fieldName> _self
+    decideAppForm = MkAppForm fieldAnn fieldName [selfName] Nothing
+    -- Sibling field names (excluding the field being defined)
+    siblingNames = Set.fromList
+      [ rawName sibName
+      | MkTypedName _ sibName _ _ <- allFields
+      , rawName sibName /= rawName fieldName
+      ]
+    -- Rewrite bare field references to _self's field projections
+    body = rewriteFieldRefs siblingNames selfName meansExpr
+  in Just (fieldAnn, MkDecide fieldAnn decideTypeSig decideAppForm body)
+makeComputedDecide _ _ _ _ = Nothing  -- stored field, no DECIDE needed
+
+-- | Rewrite bare variable references to field projections on a record.
+-- @rewriteFieldRefs fieldNames self expr@ replaces every @Var _ n@ where
+-- @rawName n ∈ fieldNames@ with @Proj _ (Var _ self) n@.
+-- Respects shadowing: binding forms (WHERE, LET, Lam) remove their bound
+-- names from the rewrite set before descending into their bodies.
+rewriteFieldRefs :: Set RawName -> Name -> Expr Name -> Expr Name
+rewriteFieldRefs fields self = go fields
+  where
+    go flds expr = case expr of
+      -- Variable/application: rewrite if it's a bare field reference
+      App ann n args
+        | null args && rawName n `Set.member` flds ->
+            Proj emptyAnno (Var emptyAnno self) n
+        | otherwise ->
+            App ann n (map (go flds) args)
+      -- Binary operators
+      And ann e1 e2       -> And ann (go flds e1) (go flds e2)
+      Or ann e1 e2        -> Or ann (go flds e1) (go flds e2)
+      RAnd ann e1 e2      -> RAnd ann (go flds e1) (go flds e2)
+      ROr ann e1 e2       -> ROr ann (go flds e1) (go flds e2)
+      Implies ann e1 e2   -> Implies ann (go flds e1) (go flds e2)
+      Equals ann e1 e2    -> Equals ann (go flds e1) (go flds e2)
+      Not ann e           -> Not ann (go flds e)
+      Plus ann e1 e2      -> Plus ann (go flds e1) (go flds e2)
+      Minus ann e1 e2     -> Minus ann (go flds e1) (go flds e2)
+      Times ann e1 e2     -> Times ann (go flds e1) (go flds e2)
+      DividedBy ann e1 e2 -> DividedBy ann (go flds e1) (go flds e2)
+      Modulo ann e1 e2    -> Modulo ann (go flds e1) (go flds e2)
+      Exponent ann e1 e2  -> Exponent ann (go flds e1) (go flds e2)
+      Cons ann e1 e2      -> Cons ann (go flds e1) (go flds e2)
+      Leq ann e1 e2       -> Leq ann (go flds e1) (go flds e2)
+      Geq ann e1 e2       -> Geq ann (go flds e1) (go flds e2)
+      Lt ann e1 e2        -> Lt ann (go flds e1) (go flds e2)
+      Gt ann e1 e2        -> Gt ann (go flds e1) (go flds e2)
+      -- Projection: rewrite the record expression, but NOT the field name
+      Proj ann e n        -> Proj ann (go flds e) n
+      -- Control flow
+      IfThenElse ann c t e -> IfThenElse ann (go flds c) (go flds t) (go flds e)
+      MultiWayIf ann gs e ->
+        MultiWayIf ann (map (goGuarded flds) gs) (go flds e)
+      Consider ann e bs   -> Consider ann (go flds e) (map (goBranch flds) bs)
+      -- Binding forms: remove bound names from the rewrite set
+      Where ann e locals  ->
+        let boundNames = localDeclNames locals
+            flds' = flds `Set.difference` boundNames
+        in Where ann (go flds' e) (map (goLocal flds') locals)
+      LetIn ann locals e  ->
+        let boundNames = localDeclNames locals
+            flds' = flds `Set.difference` boundNames
+        in LetIn ann (map (goLocal flds') locals) (go flds' e)
+      Lam ann sig e       ->
+        let boundNames = givenSigNames sig
+            flds' = flds `Set.difference` boundNames
+        in Lam ann sig (go flds' e)
+      -- Containers
+      List ann es         -> List ann (map (go flds) es)
+      Concat ann es       -> Concat ann (map (go flds) es)
+      Percent ann e       -> Percent ann (go flds e)
+      AsString ann e      -> AsString ann (go flds e)
+      -- Named application
+      AppNamed ann n nes order ->
+        AppNamed ann n (map (goNamed flds) nes) order
+      -- Leaf nodes and everything else: unchanged
+      Lit {} -> expr
+      Fetch ann e         -> Fetch ann (go flds e)
+      Env ann e           -> Env ann (go flds e)
+      Post ann u h b      -> Post ann (go flds u) (go flds h) (go flds b)
+      Breach ann mp mr    -> Breach ann (fmap (go flds) mp) (fmap (go flds) mr)
+      Event {}            -> expr  -- regulative events are complex; leave as-is
+      Regulative {}       -> expr  -- regulative rules: leave as-is
+      Inert {}            -> expr
+
+    goGuarded flds (MkGuardedExpr ann c e) =
+      MkGuardedExpr ann (go flds c) (go flds e)
+
+    goBranch flds (MkBranch ann lhs e) =
+      let flds' = flds `Set.difference` branchLhsNames lhs
+      in MkBranch ann lhs (go flds' e)
+
+    goLocal flds (LocalDecide ann d) =
+      let MkDecide dAnn ts af body = d
+      in LocalDecide ann (MkDecide dAnn ts af (go flds body))
+    goLocal _ ld = ld  -- LocalAssume: unchanged
+
+    goNamed flds (MkNamedExpr ann n e) = MkNamedExpr ann n (go flds e)
+
+    -- Extract names bound by local declarations
+    localDeclNames :: [LocalDecl Name] -> Set RawName
+    localDeclNames = Set.fromList . mapMaybe localName
+      where
+        localName (LocalDecide _ (MkDecide _ _ (MkAppForm _ n _ _) _)) = Just (rawName n)
+        localName _ = Nothing
+
+    -- Extract names bound by a GIVEN signature
+    givenSigNames :: GivenSig Name -> Set RawName
+    givenSigNames (MkGivenSig _ otns) =
+      Set.fromList [rawName (getName otn) | otn <- otns]
+
+    -- Extract names bound by a branch LHS (pattern)
+    branchLhsNames :: BranchLhs Name -> Set RawName
+    branchLhsNames (When _ pat) = patternNames pat
+    branchLhsNames (Otherwise _) = Set.empty
+
+    patternNames :: Pattern Name -> Set RawName
+    patternNames (PatApp _ _ pats) = Set.unions (map patternNames pats)
+    patternNames (PatVar _ n) = Set.singleton (rawName n)
+    patternNames _ = Set.empty
+
+-- ----------------------------------------------------------------------------
+-- Cycle Detection for Computed Fields
+-- ----------------------------------------------------------------------------
+
+-- | Detect cycles in computed field dependencies within DECLARE blocks.
+-- Returns a list of @(record type name, cycle of field names)@ for each cycle found.
+detectComputedFieldCycles :: Module Name -> [(Name, [Name])]
+detectComputedFieldCycles (MkModule _ _ section) = detectCFCSection section
+
+detectCFCSection :: Section Name -> [(Name, [Name])]
+detectCFCSection (MkSection _ _ _ topDecls) = concatMap detectCFCTopDecl topDecls
+
+detectCFCTopDecl :: TopDecl Name -> [(Name, [Name])]
+detectCFCTopDecl (Declare _ decl) = detectCFCDeclare decl
+detectCFCTopDecl (Section _ section) = detectCFCSection section
+detectCFCTopDecl _ = []
+
+detectCFCDeclare :: Declare Name -> [(Name, [Name])]
+detectCFCDeclare (MkDeclare _ _ appForm (RecordDecl _ _ tns))
+  | any isComputed tns =
+    let
+      MkAppForm _ recordName _ _ = appForm
+      -- All field names in this record (for filtering references)
+      allFieldRawNames = Set.fromList [rawName fn | MkTypedName _ fn _ _ <- tns]
+      -- Build SCC graph: (node=Name, key=RawName, deps=[RawName])
+      graphData =
+        [ (fn, rawName fn, Set.toList (exprFieldRefs allFieldRawNames e))
+        | MkTypedName _ fn _ (Just e) <- tns
+        ]
+    in [ (recordName, cyc) | CyclicSCC cyc <- stronglyConnComp graphData ]
+detectCFCDeclare _ = []
+
+-- | Extract field name references from a MEANS expression.
+-- Uses the 'Foldable' instance on 'Expr' to collect all names, then
+-- intersects with the set of known field names in the record.
+-- This is conservative (may over-approximate) but safe for cycle detection.
+exprFieldRefs :: Set RawName -> Expr Name -> Set RawName
+exprFieldRefs fieldNames expr =
+  Set.fromList [rawName n | n <- toList expr, rawName n `Set.member` fieldNames]
+
+-- ----------------------------------------------------------------------------
+-- Extract Computed Field Names
+-- ----------------------------------------------------------------------------
+
+-- | Extract a map from record type names to their computed field names.
+-- Runs on the original program (before desugaring) so computed fields
+-- are still visible in the AST.
+extractComputedFieldNames :: Module Name -> Map.Map RawName (Set RawName)
+extractComputedFieldNames (MkModule _ _ section) = extractCFNSection section
+
+extractCFNSection :: Section Name -> Map.Map RawName (Set RawName)
+extractCFNSection (MkSection _ _ _ topDecls) =
+  Map.unionsWith Set.union (map extractCFNTopDecl topDecls)
+
+extractCFNTopDecl :: TopDecl Name -> Map.Map RawName (Set RawName)
+extractCFNTopDecl (Declare _ (MkDeclare _ _ (MkAppForm _ recName _ _) (RecordDecl _ _ tns)))
+  | any isComputed tns =
+    let cfNames = Set.fromList [rawName fn | MkTypedName _ fn _ (Just _) <- tns]
+    in Map.singleton (rawName recName) cfNames
+extractCFNTopDecl (Section _ section) = extractCFNSection section
+extractCFNTopDecl _ = Map.empty

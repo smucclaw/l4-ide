@@ -1,0 +1,11 @@
+-- Computed Fields: Constructor Override (SHOULD FAIL)
+-- Supplying a computed field in a record constructor is not allowed.
+DECLARE Foo HAS
+    `x` IS A NUMBER
+    `y` IS A NUMBER
+        MEANS `x` + 1
+
+GIVETH A Foo
+DECIDE `test` IS Foo WITH
+    `x` IS 10
+    `y` IS 20

@@ -227,7 +227,7 @@ declareToJsonSchema ctx (MkDeclare ann _ _ typeDecl) =
            in (addDescToSchema schema desc, defs)
  where
   addField :: SchemaContext -> TypedName Resolved -> ([(Text, SchemaType, Bool)], Map Text SchemaType) -> ([(Text, SchemaType, Bool)], Map Text SchemaType)
-  addField ctx' (MkTypedName fieldAnn fieldName fieldTy) (acc, defs) =
+  addField ctx' (MkTypedName fieldAnn fieldName fieldTy _) (acc, defs) =
     let fieldNameText = resolvedToText fieldName
         fieldDesc = fmap getDesc (fieldAnn ^. annDesc)
         (fieldSchema, newDefs) = typeToJsonSchema ctx'{ctxCollectedDefs = defs} fieldTy
@@ -280,7 +280,7 @@ enumWithPayloads ctx' desc constructors =
      in (objSchema : acc, newDefs)
 
   addConField :: SchemaContext -> TypedName Resolved -> ([(Text, SchemaType, Bool)], Map Text SchemaType) -> ([(Text, SchemaType, Bool)], Map Text SchemaType)
-  addConField ctx'' (MkTypedName fieldAnn fieldName fieldTy) (acc, defs) =
+  addConField ctx'' (MkTypedName fieldAnn fieldName fieldTy _) (acc, defs) =
     let fieldNameText = resolvedToText fieldName
         fieldDesc = fmap getDesc (fieldAnn ^. annDesc)
         (fieldSchema, newDefs) = typeToJsonSchema ctx''{ctxCollectedDefs = defs} fieldTy

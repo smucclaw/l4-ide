@@ -1,0 +1,6 @@
+-- Computed Fields: Type Mismatch (SHOULD FAIL)
+-- MEANS expression type doesn't match declared field type.
+DECLARE Bad HAS
+    `x` IS A NUMBER
+    `y` IS A BOOLEAN
+        MEANS `x` + 1

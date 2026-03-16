@@ -1,0 +1,21 @@
+`alice` 's `name`
+`alice` 's `age`
+`alice` 's `adult`
+`alice` 's `minor`
+`alice` 's `category`
+`bob` 's `age`
+`bob` 's `adult`
+`bob` 's `minor`
+`bob` 's `category`
+`safeDriver` 's `eligible`
+`safeDriver` 's `risk category`
+`youngDriver` 's `eligible`
+`savings` 's `interest`
+`savings` 's `projected`
+`safePolicy` 's `base premium`
+`safePolicy` 's `affordable`
+`safePolicy` 's `valid`
+`rect` 's `area`
+`rect` 's `diag sq`
+`rect` 's `scaled`
+`origin` 's `distance from origin`
