@@ -472,6 +472,7 @@ data TermKind =
   | Local -- ^ a local variable (introduced by a lambda or pattern)
   | Constructor
   | Selector
+  | ComputedSelector -- ^ a computed field (MEANS clause), behaves like a selector but is derived
   deriving stock (Eq, Ord, Generic, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 

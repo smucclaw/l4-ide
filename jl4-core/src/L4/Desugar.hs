@@ -6,11 +6,15 @@ module L4.Desugar (
   -- * Computed Fields
   --
   desugarComputedFields,
+  detectComputedFieldCycles,
+  extractComputedFieldNames,
   ) where
 
 
 import           Base
+import           Data.Graph               (stronglyConnComp, SCC(..))
 import qualified Data.Map.Strict          as Map
+import qualified Data.Set                 as Set
 import           L4.Annotation            (HasAnno (..), emptyAnno)
 import           L4.Names
 import           L4.Syntax
@@ -278,3 +282,65 @@ makeComputedDecide appForm allFields (MkTypedName fieldAnn fieldName fieldType (
       _  -> LetIn emptyAnno siblingBindings meansExpr
   in Just (fieldAnn, MkDecide fieldAnn decideTypeSig decideAppForm body)
 makeComputedDecide _ _ _ = Nothing  -- stored field, no DECIDE needed
+
+-- ----------------------------------------------------------------------------
+-- Cycle Detection for Computed Fields
+-- ----------------------------------------------------------------------------
+
+-- | Detect cycles in computed field dependencies within DECLARE blocks.
+-- Returns a list of @(record type name, cycle of field names)@ for each cycle found.
+detectComputedFieldCycles :: Module Name -> [(Name, [Name])]
+detectComputedFieldCycles (MkModule _ _ section) = detectCFCSection section
+
+detectCFCSection :: Section Name -> [(Name, [Name])]
+detectCFCSection (MkSection _ _ _ topDecls) = concatMap detectCFCTopDecl topDecls
+
+detectCFCTopDecl :: TopDecl Name -> [(Name, [Name])]
+detectCFCTopDecl (Declare _ decl) = detectCFCDeclare decl
+detectCFCTopDecl (Section _ section) = detectCFCSection section
+detectCFCTopDecl _ = []
+
+detectCFCDeclare :: Declare Name -> [(Name, [Name])]
+detectCFCDeclare (MkDeclare _ _ appForm (RecordDecl _ _ tns))
+  | any isComputed tns =
+    let
+      MkAppForm _ recordName _ _ = appForm
+      -- All field names in this record (for filtering references)
+      allFieldRawNames = Set.fromList [rawName fn | MkTypedName _ fn _ _ <- tns]
+      -- Build SCC graph: (node=Name, key=RawName, deps=[RawName])
+      graphData =
+        [ (fn, rawName fn, Set.toList (exprFieldRefs allFieldRawNames e))
+        | MkTypedName _ fn _ (Just e) <- tns
+        ]
+    in [ (recordName, cyc) | CyclicSCC cyc <- stronglyConnComp graphData ]
+detectCFCDeclare _ = []
+
+-- | Extract field name references from a MEANS expression.
+-- Uses the 'Foldable' instance on 'Expr' to collect all names, then
+-- intersects with the set of known field names in the record.
+-- This is conservative (may over-approximate) but safe for cycle detection.
+exprFieldRefs :: Set RawName -> Expr Name -> Set RawName
+exprFieldRefs fieldNames expr =
+  Set.fromList [rawName n | n <- toList expr, rawName n `Set.member` fieldNames]
+
+-- ----------------------------------------------------------------------------
+-- Extract Computed Field Names
+-- ----------------------------------------------------------------------------
+
+-- | Extract a map from record type names to their computed field names.
+-- Runs on the original program (before desugaring) so computed fields
+-- are still visible in the AST.
+extractComputedFieldNames :: Module Name -> Map.Map RawName (Set RawName)
+extractComputedFieldNames (MkModule _ _ section) = extractCFNSection section
+
+extractCFNSection :: Section Name -> Map.Map RawName (Set RawName)
+extractCFNSection (MkSection _ _ _ topDecls) =
+  Map.unionsWith Set.union (map extractCFNTopDecl topDecls)
+
+extractCFNTopDecl :: TopDecl Name -> Map.Map RawName (Set RawName)
+extractCFNTopDecl (Declare _ (MkDeclare _ _ (MkAppForm _ recName _ _) (RecordDecl _ _ tns)))
+  | any isComputed tns =
+    let cfNames = Set.fromList [rawName fn | MkTypedName _ fn _ (Just _) <- tns]
+    in Map.singleton (rawName recName) cfNames
+extractCFNTopDecl (Section _ section) = extractCFNSection section
+extractCFNTopDecl _ = Map.empty

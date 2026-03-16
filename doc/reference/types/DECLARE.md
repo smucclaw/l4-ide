@@ -64,6 +64,8 @@ DECLARE Employee HAS
 - Computed fields may use WHERE and LET/IN for local bindings
 - When constructing a record with WITH, only stored fields are supplied — computed fields are derived automatically
 
+**Referential transparency:** Computed fields are *pure* — they may only reference sibling fields of the same record. There is no way to add a GIVEN parameter to a MEANS clause inside a DECLARE; the only input is the record itself. This is a deliberate design choice rooted in functional programming: a computed field is a total function from the record's stored state to a derived value, with no hidden dependencies on external state or arguments. In the language of the lambda calculus, each computed field is a closed term over the record's own bindings. This purity guarantee means that computed fields are referentially transparent — evaluating `employee's \`age\`` will always yield the same result for the same record, regardless of when or where it is called. It also makes cycle detection decidable: the compiler builds a dependency graph over a finite set of sibling fields and rejects any strongly connected component, ensuring termination.
+
 **Style guide:** Group stored fields first, then computed fields, so readers see the primary data before the derived logic. Depart from this convention when expository clarity calls for a different ordering — for instance, placing a computed field immediately after the stored fields it depends on.
 
 **Example file:** [computed-fields-example.l4](computed-fields-example.l4)

@@ -154,6 +154,27 @@ DECLARE Bad HAS
 
 The compiler builds a dependency graph of field references within MEANS clauses. If the graph contains a cycle, emit an error listing the cycle. This analysis happens during type checking.
 
+#### Cross-Record Cycles (Known Limitation)
+
+The compile-time cycle detection only covers **intra-record** cycles — fields within a single DECLARE that reference each other. **Cross-record** cycles through top-level bindings are not detected at compile time:
+
+```l4
+DECLARE Foo HAS
+    `x` IS A NUMBER MEANS `globalBar`'s `y`
+
+DECLARE Bar HAS
+    `n` IS A NUMBER
+    `y` IS A NUMBER MEANS `globalFoo`'s `x`
+
+DECIDE `globalFoo` IS Foo
+DECIDE `globalBar` IS Bar WITH `n` IS 42
+-- Evaluating globalFoo's x → globalBar's y → globalFoo's x → ∞
+```
+
+No circular data structure is required — the cycle flows through plain top-level definitions. These cycles are caught at **runtime** by L4's own blackhole detection in the lazy evaluator (`EvaluateLazy/Machine.hs`). Each thunk tracks which thread is evaluating it; if the same thread tries to force a thunk it is already evaluating, the evaluator raises a `BlackholeForced` exception rather than looping infinitely. This is L4's own mechanism (inspired by GHC's approach but implemented independently in the L4 evaluation machine), not a property of the Haskell background runtime.
+
+**Future work:** Ideally, cross-record cycles would also be detected at compile time. This would require building a global dependency graph that traces through field projections (`record's field`) and top-level bindings across DECLARE boundaries. Detecting all such cycles in full generality is undecidable (it reduces to the halting problem for arbitrary expressions), but common patterns — such as computed fields that project through known top-level definitions — could be caught with a conservative analysis. Such a global dependency graph would also serve as the foundation for **tree-shaking** (reachability analysis from entry points to prune unreachable code) and **dead code identification** (flagging definitions that no entry point can reach) — all three are different queries over the same underlying graph.
+
 ### Construction
 
 When constructing a record, computed fields are **omitted** from both positional (`OF`) and named (`WITH`) syntax:
@@ -378,11 +399,11 @@ When type-checking `OF` (positional) or `WITH` (named) record construction:
 
 **Estimated scope:** ~20-30 lines across TypeCheck and Desugar.
 
-### Phase 6: Tooling
+### Phase 6: Tooling ✅
 
-- **LSP (jl4-lsp):** Autocomplete for `record's ...` should include computed fields, perhaps with a visual indicator (e.g., italic or a `(computed)` annotation)
-- **Inspector/Visualizer:** Show computed fields distinctly from stored fields in type tooltips
-- **JSON Schema (jl4):** Computed fields should appear in output schemas but not input schemas
+- **LSP (jl4-lsp):** ✅ Computed field selectors are tagged with `ComputedSelector` (a new `TermKind` variant in `Syntax.hs`). In VS Code, they appear as fields (not functions) in autocomplete with a `(computed)` detail annotation, and receive the same semantic highlighting as stored field selectors. The `scanFunSigDecide` function in `TypeCheck.hs` checks the `computedFields` map in `CheckEnv` to determine whether a synthetic DECIDE is a computed field function.
+- **Inspector/Visualizer:** The `ComputedSelector` TermKind is available for future visualization enhancements (e.g., distinguishing computed from stored fields in type tooltips).
+- **JSON Schema (jl4):** The desugar-early strategy naturally excludes computed fields from JSON schemas, which is correct for input schemas (the primary use case — describing what data the web app collects). If a separate output schema concept is introduced in the future, computed fields should be included there, since API consumers would expect to see derived values in responses.
 
 ### Phase 7: Documentation and Examples
 
@@ -457,10 +478,10 @@ Add to `jl4/not-ok/`:
 
 1. **Can computed fields reference `GIVEN` parameters from an enclosing scope?** For example, if a record is constructed inside a `GIVEN`/`DECIDE` block, can a computed field see those bindings? Initial answer: no — computed fields should be self-contained, referencing only sibling fields and top-level definitions. This keeps the semantics clean and avoids capturing mutable context.
 
-2. **Should computed fields be visible in pattern matching?** If you `CONSIDER` a record `WHEN` matching fields, should you be able to match on a computed field? Initial answer: no — pattern matching should only destructure stored data. Computed fields are projections, not structure.
+2. **~~Should computed fields be visible in pattern matching?~~** **Decided: no.** Pattern matching (CONSIDER/WHEN) destructures stored data — it inspects how a value was constructed. Computed fields are projections, not structure, so they cannot appear in patterns. This is already enforced structurally: desugaring strips computed fields from the constructor, so attempting to match on one produces a `SuppliedComputedField` error. If a user needs to branch on computed field values, they should use `IF`/`THEN`/`ELSE`, or `BRANCH` (multi-way conditional with guard clauses), or synthesize a tuple or list from the computed values and match on that.
 
 3. **Serialization:** When a record with computed fields is serialized to JSON (e.g., for the decision service API), should computed fields be included in the output? Initial answer: yes, in output; no, in input schemas. This matches the "transparent to the caller" principle.
 
-4. **Interaction with ASSUME:** If a record type is introduced via `ASSUME` (unimplemented, just a type signature), can computed fields be assumed too? This would allow specifying a contract interface where some fields are "virtual."
+4. **~~Interaction with ASSUME:~~** **Decided: not applicable.** ASSUME introduces a name with a type signature (`MkAssume Anno (TypeSig n) (AppForm n) (Maybe (Type' n))`) but carries no `TypeDecl` — it cannot express record structure. Since computed fields are part of record structure (defined via DECLARE), they cannot appear in ASSUME. Moreover, even if ASSUME could express record structure, the distinction between computed and stored fields is inherently definitional — it comes from the presence of a MEANS clause, not from the type signature. An interface abstraction that could express "this field is derived" would require something like typeclasses or traits, which is a substantially larger language feature.
 
 5. **Mutable state (future):** The `purchase.l4` example uses `UPDATE seller's inv's item's count += 60`. If `ready` is a computed field on Party, it would automatically reflect inventory changes after an UPDATE — no manual recalculation needed. This is a powerful consequence of lazy evaluation but needs careful design once mutable state is formalized.

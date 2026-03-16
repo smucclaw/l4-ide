@@ -42,16 +42,19 @@ Outside `jl4-core/`:
 | 15 | `jl4-decision-service/src/Backend/FunctionSchema.hs` | 176, 180 | Add `_` to pattern |
 | 16 | `jl4-decision-service/src/Server.hs` | 964, 968 | Add `_` to pattern |
 
-## Recommended Implementation Order
+## Implementation Status
 
-1. **Syntax.hs** — add the field to `MkTypedName`
-2. **Fix all pattern matches** — items 3-6, 8-12, 14-16 above (mechanical: add `_` wildcard)
-3. **Parser.hs** — extend `reqParam` to optionally parse `MEANS expr`
-4. **Print.hs** — extend printer for the MEANS clause
-5. **TypeCheck.hs `inferSelector`** — type-check the MEANS expr with sibling fields in scope; cycle detection
-6. **EvaluateLazy/Machine.hs** — generate thunk-based selectors for computed fields
-7. **JsonSchema.hs `addField`** — exclude computed fields from input schemas, include in output
-8. **Record construction** — reject computed fields in `WITH`/`OF` (TypeCheck + Desugar)
+All phases complete:
+
+1. ✅ **Syntax.hs** — `MkTypedName` extended with `Maybe (Expr n)`; `ComputedSelector` added to `TermKind`
+2. ✅ **Parser.hs** — `reqParam` parses optional `MEANS expr`
+3. ✅ **Print.hs** — prints MEANS clause for computed fields
+4. ✅ **Desugar.hs** — `desugarComputedFields` (synthetic DECIDEs), `detectComputedFieldCycles` (intra-record SCC analysis), `extractComputedFieldNames` (for CheckEnv)
+5. ✅ **TypeCheck.hs** — cycle detection errors injected before type checking; `computedFields` map in `CheckEnv` for constructor rejection (`SuppliedComputedField` error); `scanFunSigDecide` tags synthetic DECIDEs as `ComputedSelector`
+6. ✅ **JsonSchema.hs** — computed fields naturally excluded from input schemas by desugar-early strategy
+7. ✅ **LSP** — `ComputedSelector` shown as Field with `(computed)` detail in completions; same semantic highlighting as stored selectors
+8. ✅ **Record construction** — computed fields rejected in `WITH`/`OF` with clear error message
+9. ✅ **Documentation** — DECLARE.md, MEANS.md, GLOSSARY.md updated; referential transparency paragraph added
 
 ## Strategy: Desugar Early (Recommended)
 
@@ -79,13 +82,21 @@ See `specs/done/COMPUTED-FIELDS-COMMA-PARSING.md` for full design analysis.
 
 ## Test Files (committed)
 
-- `jl4/experiments/computed-fields-basic.l4` — simple boolean from number
-- `jl4/experiments/computed-fields-chain.l4` — computed depending on computed
-- `jl4/experiments/computed-fields-nested.l4` — nested record access
-- `jl4/experiments/computed-fields-external.l4` — calling top-level functions
-- `jl4/experiments/computed-fields-external-of.l4` — same but using OF syntax
-- `jl4/experiments/computed-fields-legal.l4` — Employment Act pattern
-- `jl4/experiments/computed-fields-age.l4` — age-from-birthdate snapshot
-- `jl4/experiments/computed-fields-cycle.l4` — should fail (cycle)
-- `jl4/experiments/computed-fields-override.l4` — should fail (constructor override)
-- `jl4/experiments/computed-fields-where-let.l4` — WHERE/LET/IN in MEANS, with commas
+Golden tests (in `jl4/examples/`):
+- `ok/computed-fields.l4` — comprehensive tests (863 examples): basic, chained, external, nested, WHERE/LET/IN, colloquial commas
+- `not-ok/tc/computed-fields-cycle.l4` — mutual cycle (a → b → a)
+- `not-ok/tc/computed-fields-self-cycle.l4` — self-referencing cycle (a → a)
+- `not-ok/tc/computed-fields-override.l4` — supplying computed field in WITH constructor
+
+Experiment files (in `jl4/experiments/`):
+- `computed-fields-basic.l4` — simple boolean from number
+- `computed-fields-chain.l4` — computed depending on computed
+- `computed-fields-nested.l4` — nested record access
+- `computed-fields-external.l4` — calling top-level functions
+- `computed-fields-external-of.l4` — same but using OF syntax
+- `computed-fields-legal.l4` — Employment Act pattern
+- `computed-fields-age.l4` — age-from-birthdate snapshot
+- `computed-fields-cycle.l4` — should fail (cycle)
+- `computed-fields-override.l4` — should fail (constructor override)
+- `computed-fields-where-let.l4` — WHERE/LET/IN in MEANS, with commas
+- `carInsurance.l4` — rewritten to use computed fields as showcase
