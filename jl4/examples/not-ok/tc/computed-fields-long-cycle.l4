@@ -1,8 +1,5 @@
 -- Computed Fields: Long Cycle (SHOULD FAIL)
 -- Three-node cycle: a -> b -> c -> a
-
-IMPORT prelude
-
 DECLARE Bad HAS
     `x` IS A NUMBER
     `a` IS A NUMBER

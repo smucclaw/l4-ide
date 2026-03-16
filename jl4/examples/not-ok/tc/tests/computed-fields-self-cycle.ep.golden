@@ -1,8 +1,5 @@
 -- Computed Fields: Self-referencing Cycle (SHOULD FAIL)
 -- A computed field that references itself.
-
-IMPORT prelude
-
 DECLARE Bad HAS
     `x` IS A NUMBER
     `a` IS A NUMBER

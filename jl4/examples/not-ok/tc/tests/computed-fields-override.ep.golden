@@ -1,8 +1,5 @@
 -- Computed Fields: Constructor Override (SHOULD FAIL)
 -- Supplying a computed field in a record constructor is not allowed.
-
-IMPORT prelude
-
 DECLARE Foo HAS
     `x` IS A NUMBER
     `y` IS A NUMBER
