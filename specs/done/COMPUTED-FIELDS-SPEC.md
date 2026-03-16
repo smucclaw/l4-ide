@@ -485,3 +485,41 @@ Add to `jl4/not-ok/`:
 4. **~~Interaction with ASSUME:~~** **Decided: not applicable.** ASSUME introduces a name with a type signature (`MkAssume Anno (TypeSig n) (AppForm n) (Maybe (Type' n))`) but carries no `TypeDecl` — it cannot express record structure. Since computed fields are part of record structure (defined via DECLARE), they cannot appear in ASSUME. Moreover, even if ASSUME could express record structure, the distinction between computed and stored fields is inherently definitional — it comes from the presence of a MEANS clause, not from the type signature. An interface abstraction that could express "this field is derived" would require something like typeclasses or traits, which is a substantially larger language feature.
 
 5. **Mutable state (future):** The `purchase.l4` example uses `UPDATE seller's inv's item's count += 60`. If `ready` is a computed field on Party, it would automatically reflect inventory changes after an UPDATE — no manual recalculation needed. This is a powerful consequence of lazy evaluation but needs careful design once mutable state is formalized.
+
+## Known Follow-Up Work
+
+These items are not yet done. They are tracked here even though the core spec is complete.
+
+### Performance: Selective Sibling Binding
+
+The desugaring generates LET bindings for ALL sibling fields in every computed field's synthetic DECIDE. A record with 50 fields and 10 computed fields means each synthetic function gets 49 LET bindings, even if it only references 2 fields. The `exprFieldRefs` infrastructure already exists and could be used to bind only the fields actually referenced in the MEANS expression.
+
+### LSP: Go-to-Definition for Computed Fields
+
+When a user invokes "go to definition" on `person's \`adult\``, it should jump to the MEANS clause in the DECLARE, not to the synthetic DECIDE. The synthetic DECIDEs use `fieldAnn` from the original field, so the source range may already be correct — but this is untested and may need attention.
+
+### NLG: Natural Language Generation for Computed Fields
+
+The synthetic DECIDEs have a `_self` parameter. The natural language generation system may produce odd descriptions (e.g., "adult _self means..."). Verify that NLG handles computed field functions gracefully, or add special-casing for `ComputedSelector` term kind.
+
+### Query Planner Awareness
+
+`jl4-query-plan` may need awareness of computed fields for query optimization — e.g., knowing that a computed field is derivable from stored fields and need not be supplied as an input parameter.
+
+### Additional Test Cases
+
+The following tests would improve coverage but have not yet been written:
+
+| Test case | Location | Purpose |
+|-----------|----------|---------|
+| Type mismatch in MEANS | `not-ok/tc/` | MEANS expr type doesn't match declared field type |
+| Longer cycle chain (a → b → c → a) | `not-ok/tc/` | 3+ node cycle detection |
+| Positional constructor override (OF) | `not-ok/tc/` | Too many args when computed fields are stripped |
+| Parameterized type with computed fields | `ok/` | Generics + computed fields interaction |
+| Constant computed field (`MEANS 42`) | `ok/` | Degenerate case with no sibling dependencies |
+| Cross-record non-cyclic access | `ok/` | Computed field accessing another record's computed field |
+| Computed field in enum constructor | `ok/` or `not-ok/` | Does MEANS work inside `IS ONE OF` constructors? |
+
+### Cross-Record Cycle Detection
+
+See `specs/todo/GLOBAL-DEPENDENCY-GRAPH-SPEC.md` for the full specification of global dependency graph analysis, which would also enable dead code identification and tree-shaking.
