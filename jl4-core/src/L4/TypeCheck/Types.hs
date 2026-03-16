@@ -88,6 +88,10 @@ data CheckError =
   | DesugarAnnoRewritingError (Expr Name) HoleInfo
   | MixfixMatchErrorCheck Name MixfixMatchError
     -- ^ Error in mixfix pattern matching (function name, error details)
+  | CyclicComputedFields Name [Name]
+    -- ^ Circular dependency between computed fields (record name, cycle of field names)
+  | SuppliedComputedField Name
+    -- ^ Tried to supply a computed field in a record constructor (field name)
   deriving stock (Eq, Generic, Show)
   deriving anyclass NFData
 
@@ -308,6 +312,10 @@ data CheckEnv =
     , assumeDeclarations   :: !(Map SrcRange (DeclChecked (Assume Resolved)))
     , mixfixRegistry       :: !MixfixRegistry
     -- ^ Registry of mixfix functions indexed by their first keyword
+    , computedFields       :: !(Map RawName (Set RawName))
+    -- ^ Map from record type RawName to set of computed field RawNames.
+    -- Used to produce better error messages when a user tries to supply
+    -- a computed field in a record constructor.
     , errorContext         :: !CheckErrorContext
     , sectionStack         :: ![NonEmpty Text]
     }
@@ -852,6 +860,7 @@ extendEnv cis env =
     , declareDeclarations = e.declareDeclarations
     , assumeDeclarations = e.assumeDeclarations
     , mixfixRegistry = e.mixfixRegistry
+    , computedFields = e.computedFields
     , sectionStack = e.sectionStack
     }
     where

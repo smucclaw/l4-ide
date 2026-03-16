@@ -1,0 +1,27 @@
+-- Computed Fields: External function call using OF syntax
+-- Tests that multi-argument function calls in MEANS work with OF keyword.
+
+IMPORT prelude
+
+-- A top-level helper function
+GIVEN `base` IS A NUMBER
+      `rate` IS A NUMBER
+GIVETH A NUMBER
+`apply rate` MEANS `base` * `rate` / 100
+
+DECLARE Account HAS
+    `holder`       IS A STRING
+    `balance`      IS A NUMBER
+    `rate`         IS A NUMBER
+    `interest`     IS A NUMBER
+        MEANS `apply rate` OF `balance`, `rate`
+    `projected`    IS A NUMBER
+        MEANS `balance` + `interest`
+
+savings MEANS Account WITH
+    `holder`  IS "Alice"
+    `balance` IS 10000
+    `rate`    IS 5
+
+#EVAL savings's `interest`    -- 500.0   (10000 * 5 / 100)
+#EVAL savings's `projected`   -- 10500.0 (10000 + 500)

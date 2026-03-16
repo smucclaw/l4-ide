@@ -559,6 +559,7 @@ jl4Rules evalConfig rootDirectory recorder = do
             , assumeDeclarations = Map.empty
             , mixfixRegistry = Map.unionWith (<>) cEnv.mixfixRegistry tcRes.mixfixRegistry
             -- ^ Merge mixfix registries from imported modules so cross-module mixfix calls work
+            , computedFields = Map.empty
             , sectionStack = []
             }
         -- NOTE: we don't want to leak the inference variables from the substitution

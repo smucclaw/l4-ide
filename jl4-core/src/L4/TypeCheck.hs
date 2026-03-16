@@ -107,7 +107,7 @@ import Optics ((%~), (^.))
 import qualified Base.Set as Set
 import Data.Function (on)
 import Control.Exception (assert)
-import L4.Desugar (desugarComputedFields)
+import L4.Desugar (desugarComputedFields, detectComputedFieldCycles, extractComputedFieldNames)
 
 mkInitialCheckState :: Substitution -> CheckState
 mkInitialCheckState substitution =
@@ -131,6 +131,7 @@ mkInitialCheckEnv moduleUri environment entityInfo =
     , declareDeclarations = Map.empty
     , assumeDeclarations = Map.empty
     , mixfixRegistry = Map.empty
+    , computedFields = Map.empty
     , moduleUri
     , sectionStack = []
     }
@@ -156,13 +157,18 @@ initialCheckEnv moduleUri = mkInitialCheckEnv moduleUri initialEnvironment initi
 
 doCheckProgramWithDependencies :: CheckState -> CheckEnv -> Module  Name -> CheckResult
 doCheckProgramWithDependencies checkState checkEnv program =
-  case runCheckUnique (checkProgram (desugarComputedFields program)) checkEnv checkState of
+  let cycleErrors =
+        [ MkCheckErrorWithContext (CyclicComputedFields recName cycleFlds) (WhileCheckingDeclare recName None)
+        | (recName, cycleFlds) <- detectComputedFieldCycles program
+        ]
+      checkEnv' = checkEnv { computedFields = extractComputedFieldNames program }
+  in case runCheckUnique (checkProgram (desugarComputedFields program)) checkEnv' checkState of
     (w, s) ->
       let
         (errs, (rprog, topEnv, localMixfixRegistry)) = runWith w
       in
         -- might be nicer to be able to do this within the inferProgram call / at the end of it
-        case runCheckUnique (traverse applySubst errs) checkEnv s of
+        case runCheckUnique (traverse applySubst (cycleErrors ++ errs)) checkEnv s of
           (w', s') ->
             let (moreErrs, substErrs) = runWith w'
                 env = extendEnv topEnv checkEnv
@@ -206,8 +212,8 @@ withExtraMixfix mixfixAdds =
   local (updateMixfix mixfixAdds)
   where
     updateMixfix :: MixfixRegistry -> CheckEnv -> CheckEnv
-    updateMixfix adds (MkCheckEnv a b c d e f g reg h i) =
-      MkCheckEnv a b c d e f g (Map.union adds reg) h i
+    updateMixfix adds (MkCheckEnv a b c d e f g reg cf h i) =
+      MkCheckEnv a b c d e f g (Map.union adds reg) cf h i
 
 dedupCheckInfos :: [CheckInfo] -> [CheckInfo]
 dedupCheckInfos = go Set.empty []
@@ -1545,6 +1551,12 @@ supplyAppNamed  r onts (MkNamedExpr ann n e : nes) = do
 
 findOptionallyNamedType :: Name -> [(Int, OptionallyNamedType Resolved)] -> Check (Int, Resolved, Type' Resolved, [(Int, OptionallyNamedType Resolved)])
 findOptionallyNamedType n [] = do
+  -- Check if this is a computed field that was stripped during desugaring
+  cfMap <- asks (.computedFields)
+  let rn' = rawName n
+  case [() | (_recRn, flds) <- Map.toList cfMap, Set.member rn' flds] of
+    (_ : _) -> addError (SuppliedComputedField n)
+    []      -> pure ()
   v <- fresh (NormalName "v")
   rn <- outOfScope n v
   pure (0, rn, v, [])
@@ -2717,10 +2729,19 @@ scanFunSigDecide :: Decide Name -> Check FunTypeSig
 scanFunSigDecide d@(MkDecide _ tysig appForm _) = prune $
   errorContext (WhileCheckingDecide (getName appForm)) do
     (rappForm, rtysig, extendsTySig) <- checkTermAppFormTypeSigConsistency appForm tysig
+    -- Determine if this DECIDE is a synthetic computed field function
+    cfMap <- asks (.computedFields)
+    let funcRawName = rawName (getName appForm)
+        kind = if any (Set.member funcRawName) (Map.elems cfMap)
+               then ComputedSelector else Computable
     (ce, rt, result, extendsAppForm) <- extendKnownMany extendsTySig do
       inferTermAppForm rappForm rtysig
-    dty <- setAnnResolvedType rt (Just Computable) d
-    name <- withQualified (appFormHeads rappForm) ce
+    -- Override TermKind: use ComputedSelector for computed field functions
+    let ce' = case ce of
+          KnownTerm t _ -> KnownTerm t kind
+          other         -> other
+    dty <- setAnnResolvedType rt (Just kind) d
+    name <- withQualified (appFormHeads rappForm) ce'
     -- Extract mixfix pattern info by comparing AppForm against GIVEN parameters
     let mMixfix = extractMixfixInfo tysig appForm
     pure $ MkFunTypeSig
@@ -3142,6 +3163,22 @@ prettyCheckError (DesugarAnnoRewritingError context errorInfo) =
 prettyCheckError (CheckWarning warning) = prettyCheckWarning warning
 prettyCheckError (MixfixMatchErrorCheck funcName err) =
   prettyMixfixMatchError funcName err
+prettyCheckError (CyclicComputedFields _recName cycleFlds) =
+  [ "Circular dependency detected between computed fields:"
+  , ""
+  ] ++ map (\ n -> "  " <> quotedName n) cycleFlds ++
+  [ ""
+  , "Computed fields cannot depend on each other in a cycle."
+  , "Break the cycle by making one of these a stored field"
+  , "or restructuring the dependencies."
+  ]
+prettyCheckError (SuppliedComputedField fieldName) =
+  [ "The field " <> quotedName fieldName <> " is a computed field"
+  , "and cannot be supplied in a record constructor."
+  , ""
+  , "Computed fields are automatically derived from their MEANS expression."
+  , "Remove this field from the constructor."
+  ]
 
 -- | Pretty print mixfix match errors with helpful suggestions.
 prettyMixfixMatchError :: Name -> MixfixMatchError -> [Text]

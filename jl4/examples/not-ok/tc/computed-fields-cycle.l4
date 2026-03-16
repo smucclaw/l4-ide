@@ -1,0 +1,11 @@
+-- Computed Fields: Cycle Detection (SHOULD FAIL)
+-- This file should produce a compile-time error: circular dependency between computed fields.
+
+IMPORT prelude
+
+DECLARE Bad HAS
+    `x` IS A NUMBER
+    `a` IS A NUMBER
+        MEANS `b` + 1
+    `b` IS A NUMBER
+        MEANS `a` + 1
