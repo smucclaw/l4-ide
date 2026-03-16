@@ -1,0 +1,15 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+computed-fields-extra.l4:17:1-24:
+  42
+computed-fields-extra.l4:36:1-23:
+  13
+computed-fields-extra.l4:37:1-28:
+  7
+computed-fields-extra.l4:38:1-25:
+  30
+computed-fields-extra.l4:59:1-33:
+  15
+computed-fields-extra.l4:60:1-40:
+  11

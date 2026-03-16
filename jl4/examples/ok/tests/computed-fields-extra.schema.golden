@@ -1,0 +1,26 @@
+{
+    "$defs": {
+        "Config": {
+            "properties": {
+                "name": {
+                    "$ref": "#/$defs/STRING"
+                }
+            },
+            "required": [
+                "name"
+            ],
+            "type": "object"
+        }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "_self": {
+            "$ref": "#/$defs/Config"
+        }
+    },
+    "required": [
+        "_self"
+    ],
+    "title": "version",
+    "type": "object"
+}
