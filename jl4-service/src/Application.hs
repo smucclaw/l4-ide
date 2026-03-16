@@ -6,7 +6,7 @@ import BundleStore (BundleStore (..))
 import qualified BundleStore
 import Compiler (compileBundle, buildFromCborBundle)
 import ControlPlane (ControlPlaneApi, controlPlaneHandler)
-import DataPlane (DataPlaneApi, dataPlaneHandler)
+import DataPlane (DataPlaneApi, dataPlaneHandler, ShortRoutes, shortRoutesHandler)
 import Logging (Logger, logInfo, logWarn, logError, logDebug, newLogger)
 import Options (Options (..), buildOpts)
 import Types
@@ -16,10 +16,13 @@ import Data.Text (Text)
 import qualified Data.Text.Encoding as Text.Encoding
 import Control.Concurrent.Async (mapConcurrently_)
 import Control.Concurrent.STM (TVar, atomically, modifyTVar', newTVarIO, readTVarIO)
-import Control.Exception (finally)
+import Control.Exception (catch, finally)
+import Data.Int (Int64)
+import GHC.Conc (setAllocationCounter, enableAllocationLimit)
+import GHC.IO.Exception (AllocationLimitExceeded (..))
 import Control.Monad (forM_)
 import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Trans.Reader (ReaderT (..), asks)
+import Control.Monad.Trans.Reader (ReaderT (..), ask)
 import Data.IORef (newIORef, atomicModifyIORef')
 import qualified Data.Map.Strict as Map
 import Data.Time (getCurrentTime, diffUTCTime)
@@ -33,7 +36,7 @@ import Servant
 import System.Timeout (timeout)
 
 -- | Combined service API.
-type ServiceApi = HealthApi :<|> ControlPlaneApi :<|> DataPlaneApi
+type ServiceApi = HealthApi :<|> ControlPlaneApi :<|> DataPlaneApi :<|> ShortRoutes
 
 -- | Health check endpoint.
 type HealthApi = "health" :> Get '[JSON] HealthResponse
@@ -57,6 +60,7 @@ defaultMain = do
     , ("maxDeployments", toJSON options.maxDeployments)
     , ("maxConcurrentRequests", toJSON options.maxConcurrentRequests)
     , ("maxEvalMemoryMb", toJSON options.maxEvalMemoryMb)
+    , ("maxCompileMemoryMb", toJSON options.maxCompileMemoryMb)
     , ("evalTimeout", toJSON options.evalTimeout)
     , ("compileTimeout", toJSON options.compileTimeout)
     ]
@@ -101,6 +105,7 @@ loadAndRegister logger options registry store deployId = do
   (sources, storedMeta) <- BundleStore.loadBundle store deployId
 
   let compileTimeoutMicros = options.compileTimeout * 1_000_000
+      compileMemLimitMb = options.maxCompileMemoryMb
 
   -- Try fast path: load from CBOR cache
   mCbor <- BundleStore.loadBundleCbor logger store deployId
@@ -116,11 +121,11 @@ loadAndRegister logger options registry store deployId = do
             [ ("deploymentId", toJSON deployId)
             , ("error", toJSON err)
             ]
-          compileFreshAndCache logger compileTimeoutMicros store deployId sources
+          compileFreshAndCache logger compileTimeoutMicros compileMemLimitMb store deployId sources
     Nothing -> do
       logDebug logger "Compiling deployment"
         [("deploymentId", toJSON deployId)]
-      compileFreshAndCache logger compileTimeoutMicros store deployId sources
+      compileFreshAndCache logger compileTimeoutMicros compileMemLimitMb store deployId sources
 
   case result of
     Right (fns, meta) -> do
@@ -136,21 +141,33 @@ loadAndRegister logger options registry store deployId = do
         , ("error", toJSON err)
         ]
 
--- | Compile from source with timeout, and save CBOR cache for next restart.
+-- | Compile from source with timeout and memory limit, and save CBOR cache for next restart.
 compileFreshAndCache
   :: Logger
   -> Int  -- ^ timeout in microseconds
+  -> Int  -- ^ memory limit in MB
   -> BundleStore
   -> Text
   -> Map.Map FilePath Text
   -> IO (Either Text (Map.Map Text ValidatedFunction, DeploymentMetadata))
-compileFreshAndCache logger timeoutMicros store deployId sources = do
-  mResult <- timeout timeoutMicros $ compileBundle logger sources
+compileFreshAndCache logger timeoutMicros memLimitMb store deployId sources = do
+  let memLimitBytes = fromIntegral memLimitMb * 1024 * 1024 :: Int64
+      compileLimited = do
+        setAllocationCounter memLimitBytes
+        enableAllocationLimit
+        compileBundle logger sources
+  mResult <- (timeout timeoutMicros compileLimited)
+    `catch` \AllocationLimitExceeded -> do
+      logError logger "Compilation exceeded memory limit"
+        [ ("deploymentId", toJSON deployId)
+        , ("maxCompileMemoryMb", toJSON memLimitMb)
+        ]
+      pure Nothing
   case mResult of
     Nothing -> do
-      logError logger "Compilation timed out"
+      logError logger "Compilation timed out or exceeded memory limit"
         [("deploymentId", toJSON deployId)]
-      pure $ Left "Compilation timed out"
+      pure $ Left "Compilation timed out or exceeded memory limit"
     Just (Right (fns, meta, bundles)) -> do
       -- Save CBOR caches for fast restart
       mapM_ (BundleStore.saveBundleCbor store deployId) bundles
@@ -206,7 +223,7 @@ app env = serve (Proxy @ServiceApi) (serverT env)
 
 serverT :: AppEnv -> Server ServiceApi
 serverT env =
-  hoistServer (Proxy @ServiceApi) (nt env) (healthHandler :<|> controlPlaneHandler :<|> dataPlaneHandler)
+  hoistServer (Proxy @ServiceApi) (nt env) (healthHandler :<|> controlPlaneHandler :<|> dataPlaneHandler :<|> shortRoutesHandler)
  where
   nt :: AppEnv -> AppM a -> Handler a
   nt s x = runReaderT x s
@@ -214,7 +231,8 @@ serverT env =
 -- | GET /health — health check handler.
 healthHandler :: ServerT HealthApi AppM
 healthHandler = do
-  registry <- asks (.deploymentRegistry) >>= liftIO . readTVarIO
+  env <- ask
+  registry <- liftIO . readTVarIO $ env.deploymentRegistry
   let states = Map.elems registry
       nReady = length [() | DeploymentReady _ _ <- states]
       nCompiling = length [() | DeploymentPending <- states]
@@ -228,4 +246,5 @@ healthHandler = do
         , hdCompiling = nCompiling
         , hdFailed = nFailed
         }
+    , hrInstanceToken = env.options.instanceToken
     }

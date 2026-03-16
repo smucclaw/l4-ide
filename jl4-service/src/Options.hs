@@ -14,6 +14,7 @@ data Options = Options
   { port                  :: !Int
   , storePath             :: !FilePath
   , serverName            :: !(Maybe Text)
+  , instanceToken         :: !(Maybe Text)
   , lazyLoad              :: !Bool
   , debug                 :: !Bool
   , maxZipSize            :: !Int
@@ -21,6 +22,7 @@ data Options = Options
   , maxDeployments        :: !Int
   , maxConcurrentRequests :: !Int
   , maxEvalMemoryMb       :: !Int
+  , maxCompileMemoryMb    :: !Int
   , evalTimeout           :: !Int
   , compileTimeout        :: !Int
   }
@@ -32,6 +34,7 @@ buildOpts = do
   envPort       <- readEnvInt "JL4_PORT"
   envStorePath  <- lookupEnv "JL4_STORE_PATH"
   envServerName <- lookupEnv "JL4_SERVER_NAME"
+  envInstToken  <- lookupEnv "JL4_INSTANCE_TOKEN"
   envLazyLoad   <- readEnvBool "JL4_LAZY_LOAD"
   envDebug      <- readEnvBool "JL4_DEBUG"
   envMaxZip     <- readEnvInt "JL4_MAX_ZIP_SIZE"
@@ -39,6 +42,7 @@ buildOpts = do
   envMaxDeploy  <- readEnvInt "JL4_MAX_DEPLOYMENTS"
   envMaxConc    <- readEnvInt "JL4_MAX_CONCURRENT_REQUESTS"
   envMaxMem     <- readEnvInt "JL4_MAX_EVAL_MEMORY_MB"
+  envMaxCompMem <- readEnvInt "JL4_MAX_COMPILE_MEMORY_MB"
   envEvalTO     <- readEnvInt "JL4_EVAL_TIMEOUT"
   envCompTO     <- readEnvInt "JL4_COMPILE_TIMEOUT"
 
@@ -65,6 +69,14 @@ buildOpts = do
                       <> metavar "NAME"
                       <> maybe mempty value (Text.pack <$> envServerName)
                       <> help "Server name exposed in OpenAPI metadata (env: JL4_SERVER_NAME)"
+                  )
+              )
+        <*> optional
+              ( strOption
+                  ( long "instance-token"
+                      <> metavar "TOKEN"
+                      <> maybe mempty value (Text.pack <$> envInstToken)
+                      <> help "Opaque token returned in /health for process identity verification (env: JL4_INSTANCE_TOKEN)"
                   )
               )
         <*> ( switch
@@ -113,6 +125,13 @@ buildOpts = do
                   <> value (maybe 256 id envMaxMem)
                   <> showDefault
                   <> help "Maximum memory allocation per evaluation in MB (env: JL4_MAX_EVAL_MEMORY_MB)"
+              )
+        <*> option auto
+              ( long "max-compile-memory-mb"
+                  <> metavar "MB"
+                  <> value (maybe 256 id envMaxCompMem)
+                  <> showDefault
+                  <> help "Maximum memory allocation per compilation in MB (env: JL4_MAX_COMPILE_MEMORY_MB)"
               )
         <*> option auto
               ( long "eval-timeout"
