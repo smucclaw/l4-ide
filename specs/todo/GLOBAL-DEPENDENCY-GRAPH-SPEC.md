@@ -20,25 +20,25 @@ All three are different queries over the same graph.
 
 Every named definition is a node:
 
-| Node kind | Source |
-|-----------|--------|
-| Top-level function | `DECIDE f ...` / `MEANS` at top level |
-| Computed field | `DECLARE R HAS f IS A T MEANS expr` (desugared to synthetic DECIDE) |
-| Stored field selector | `DECLARE R HAS f IS A T` |
-| Type constructor | `DECLARE R HAS ...` / `DECLARE E IS ONE OF ...` |
-| ASSUME parameter | `ASSUME x IS A T` |
+| Node kind             | Source                                                              |
+| --------------------- | ------------------------------------------------------------------- |
+| Top-level function    | `DECIDE f ...` / `MEANS` at top level                               |
+| Computed field        | `DECLARE R HAS f IS A T MEANS expr` (desugared to synthetic DECIDE) |
+| Stored field selector | `DECLARE R HAS f IS A T`                                            |
+| Type constructor      | `DECLARE R HAS ...` / `DECLARE E IS ONE OF ...`                     |
+| ASSUME parameter      | `ASSUME x IS A T`                                                   |
 
 ### Edges
 
 A directed edge `A → B` means "evaluating A may require evaluating B":
 
-| Edge source | Edge target | How to detect |
-|-------------|-------------|---------------|
-| Function body | Variable reference | `Var`/`App` nodes in the expression |
-| Function body | Field projection | `Proj _ expr field` — edge to the selector `field` AND to whatever `expr` resolves to |
-| Computed field MEANS | Sibling field | Bare name reference (already detected by `exprFieldRefs`) |
-| Computed field MEANS | Top-level definition | `Var`/`App` referencing a global name |
-| Computed field MEANS | Nested projection | `expr's field` chains |
+| Edge source          | Edge target          | How to detect                                                                         |
+| -------------------- | -------------------- | ------------------------------------------------------------------------------------- |
+| Function body        | Variable reference   | `Var`/`App` nodes in the expression                                                   |
+| Function body        | Field projection     | `Proj _ expr field` — edge to the selector `field` AND to whatever `expr` resolves to |
+| Computed field MEANS | Sibling field        | Bare name reference (already detected by `exprFieldRefs`)                             |
+| Computed field MEANS | Top-level definition | `Var`/`App` referencing a global name                                                 |
+| Computed field MEANS | Nested projection    | `expr's field` chains                                                                 |
 
 ### Entry Points
 
@@ -103,12 +103,12 @@ New module `L4.DependencyGraph` in `jl4-core`. Depends on the resolved AST (`Mod
 
 ### Integration Points
 
-| Caller | Purpose |
-|--------|---------|
+| Caller                                            | Purpose                                                                        |
+| ------------------------------------------------- | ------------------------------------------------------------------------------ |
 | `TypeCheck.hs` / `doCheckProgramWithDependencies` | Run cycle detection after type checking; emit errors for computed-field cycles |
-| `jl4-lsp` / LSP Rules | Dead code warnings, grey-out unreachable definitions |
-| `JsonSchema.hs` | Tree-shake definitions not reachable from exported functions |
-| `EvaluateLazy` | Potentially skip evaluation of unreachable definitions |
+| `jl4-lsp` / LSP Rules                             | Dead code warnings, grey-out unreachable definitions                           |
+| `JsonSchema.hs`                                   | Tree-shake definitions not reachable from exported functions                   |
+| `EvaluateLazy`                                    | Potentially skip evaluation of unreachable definitions                         |
 
 ## Relation to Existing Code
 
@@ -118,13 +118,13 @@ New module `L4.DependencyGraph` in `jl4-core`. Depends on the resolved AST (`Mod
 
 ## Estimated Scope
 
-| Component | Effort |
-|-----------|--------|
-| `L4.DependencyGraph` module (graph building) | Medium — walk resolved AST, collect edges |
-| Cycle detection (cross-record) | Small — `stronglyConnComp` on the built graph |
-| Dead code warnings | Small — BFS from entry points |
-| LSP integration (grey-out) | Medium — wire into diagnostics |
-| Tree-shaking for JSON schema | Small — filter by reachable set |
+| Component                                    | Effort                                        |
+| -------------------------------------------- | --------------------------------------------- |
+| `L4.DependencyGraph` module (graph building) | Medium — walk resolved AST, collect edges     |
+| Cycle detection (cross-record)               | Small — `stronglyConnComp` on the built graph |
+| Dead code warnings                           | Small — BFS from entry points                 |
+| LSP integration (grey-out)                   | Medium — wire into diagnostics                |
+| Tree-shaking for JSON schema                 | Small — filter by reachable set               |
 
 ## Open Questions
 
