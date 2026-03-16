@@ -84,6 +84,7 @@
                 root-ssh-keys = [
                   "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIO2u9PR5FnBb8joGKHUVGqy9/cZu/iXIjgLpblkOF0H+ meng-and-ruslan"
                   "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIORxGnRHtCTqoh2IijZMfgC+0nExW2ujUybdG54u8wS4 mengwong@nixos"
+                  "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN/JtalP151kdUUTh2/wA25IabXrJNkFIuMCeMj6U6CL nye"
                 ];
               };
               environment.etc."my-deploy-marker" = {
