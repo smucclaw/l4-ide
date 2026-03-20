@@ -21,7 +21,7 @@ File: mixfix-wrong-keyword.l4
   Message:
     The function
 
-      myif (defined at mixfix-wrong-keyword.l4:8:1-7)
+      myif (predefined)
 
     expects 3 arguments,
     but you are applying it to 5 arguments here.
