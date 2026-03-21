@@ -43,12 +43,19 @@ loadAndRegister logger options registry store deployId = do
         [("deploymentId", toJSON deployId)]
       cborResult <- buildFromCborBundle logger bundle sources storedMeta
       case cborResult of
-        Right ok -> pure (Right ok)
+        Right ok@(fns, _meta)
+          | Map.null fns -> do
+              logWarn logger "CBOR rebuild produced no functions, deleting cache and recompiling"
+                [("deploymentId", toJSON deployId)]
+              BundleStore.deleteBundleCbor store deployId
+              compileFreshAndCache logger compileTimeoutMicros compileMemLimitMb store deployId sources
+          | otherwise -> pure (Right ok)
         Left err -> do
-          logWarn logger "CBOR rebuild failed, recompiling from source"
+          logWarn logger "CBOR rebuild failed, deleting cache and recompiling from source"
             [ ("deploymentId", toJSON deployId)
             , ("error", toJSON err)
             ]
+          BundleStore.deleteBundleCbor store deployId
           compileFreshAndCache logger compileTimeoutMicros compileMemLimitMb store deployId sources
     Nothing -> do
       logDebug logger "Compiling deployment"

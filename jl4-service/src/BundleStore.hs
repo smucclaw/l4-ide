@@ -10,6 +10,7 @@ module BundleStore (
   deleteBundle,
   saveBundleCbor,
   loadBundleCbor,
+  deleteBundleCbor,
 ) where
 
 import Codec.Serialise (Serialise, deserialiseOrFail, serialise)
@@ -211,6 +212,15 @@ deleteBundle (BundleStore root) deployId = do
   exists <- doesDirectoryExist deployDir
   if exists
     then removeDirectoryRecursive deployDir
+    else pure ()
+
+-- | Delete only the CBOR cache for a deployment, keeping sources intact.
+deleteBundleCbor :: BundleStore -> Text -> IO ()
+deleteBundleCbor (BundleStore root) deployId = do
+  let cborFile = root </> Text.unpack deployId </> "bundle.cbor"
+  exists <- doesFileExist cborFile
+  if exists
+    then removeFile cborFile
     else pure ()
 
 -- | Get the directory component of a file path.
