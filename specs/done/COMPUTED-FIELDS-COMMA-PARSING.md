@@ -21,7 +21,7 @@ DECLARE Person HAS
 Implementation uses a **desugar-early strategy**: before type checking,
 `desugarComputedFields` in `Desugar.hs` transforms each computed field into a
 synthetic top-level DECIDE declaration with a `_self` parameter, and wraps the
-MEANS body in LET bindings that project sibling fields from `_self`.  The record
+MEANS body in LET bindings that project sibling fields from `_self`. The record
 type retains all fields as stored; accessor calls are generated automatically.
 
 The parser change is small: `reqParam` (which parses each field in a
@@ -42,18 +42,18 @@ DECLARE HAS block) gains an optional `MEANS` clause parsed by
 
 All in `jl4/experiments/`:
 
-| File | What it tests |
-|------|--------------|
-| `computed-fields-basic.l4` | Inline arithmetic, boolean, IF/THEN/ELSE |
-| `computed-fields-chain.l4` | Field-depends-on-field chains |
-| `computed-fields-nested.l4` | Nested records with computed fields |
-| `computed-fields-external.l4` | MEANS calls top-level function |
-| `computed-fields-external-of.l4` | Same but using OF syntax |
-| `computed-fields-age.l4` | Multiple snapshots of same entity |
-| `computed-fields-legal.l4` | Legislative definitions (Employment Act) |
-| `computed-fields-cycle.l4` | Mutual recursion (expected: diverges) |
-| `computed-fields-override.l4` | Constructor overrides computed field |
-| `computed-fields-where-let.l4` | WHERE and LET/IN inside MEANS, with commas |
+| File                             | What it tests                              |
+| -------------------------------- | ------------------------------------------ |
+| `computed-fields-basic.l4`       | Inline arithmetic, boolean, IF/THEN/ELSE   |
+| `computed-fields-chain.l4`       | Field-depends-on-field chains              |
+| `computed-fields-nested.l4`      | Nested records with computed fields        |
+| `computed-fields-external.l4`    | MEANS calls top-level function             |
+| `computed-fields-external-of.l4` | Same but using OF syntax                   |
+| `computed-fields-age.l4`         | Multiple snapshots of same entity          |
+| `computed-fields-legal.l4`       | Legislative definitions (Employment Act)   |
+| `computed-fields-cycle.l4`       | Mutual recursion (expected: diverges)      |
+| `computed-fields-override.l4`    | Constructor overrides computed field       |
+| `computed-fields-where-let.l4`   | WHERE and LET/IN inside MEANS, with commas |
 
 ---
 
@@ -78,18 +78,18 @@ within the MEANS expression, or a field separator for `recordDecl'`?
 ### The key insight: juxtaposition doesn't need commas
 
 L4 follows the Haskell convention for function application: arguments are
-juxtaposed with spaces, not separated by commas.  `f a b` is the standard
+juxtaposed with spaces, not separated by commas. `f a b` is the standard
 form; `f OF a, b` is the explicit comma-separated alternative using the `OF`
 keyword.
 
 Once we recognised this, the solution was clear: **`parseAppArgs` should never
-consume commas**.  Commas are only meaningful in explicit comma-separated
+consume commas**. Commas are only meaningful in explicit comma-separated
 contexts (OF, LIST, WITH, CONSIDER, CONCAT), each of which has its own
 dedicated parser using `lsepBy`/`lsepBy1`.
 
 ### The fix
 
-Remove comma consumption from `parseAppArgs` entirely.  The function now
+Remove comma consumption from `parseAppArgs` entirely. The function now
 collects indented atomic expressions by juxtaposition only:
 
 ```haskell
@@ -107,12 +107,12 @@ parseAppArgs current fname = go True
       indented atomicExpr' current
 ```
 
-No context flags, no special cases.  This means:
+No context flags, no special cases. This means:
 
 - `recordDecl'` keeps its `lsepBy ... TComma` — the colloquial form
   `DECLARE Foo HAS x IS A NUMBER, y IS A NUMBER` continues to work.
 - MEANS expressions inside fields use juxtaposition (`f a b`) or OF syntax
-  (`f OF a, b`) for multi-argument calls.  Commas within OF/LIST/etc. are
+  (`f OF a, b`) for multi-argument calls. Commas within OF/LIST/etc. are
   correctly scoped by their own parsers.
 - No parser state or context-sensitivity is needed.
 
@@ -120,7 +120,7 @@ No context flags, no special cases.  This means:
 
 After `reqParam` parses a field including its MEANS expression, any commas
 that weren't consumed by a sub-parser (OF, LIST, etc.) remain in the token
-stream.  `lsepBy` in `recordDecl'` then claims these as field separators.
+stream. `lsepBy` in `recordDecl'` then claims these as field separators.
 
 This works because:
 
@@ -138,13 +138,13 @@ separated by indentation, and there's no comma to conflict with.
 Both approaches work because commas have a single, unambiguous meaning in
 each context:
 
-| Context | Separator | Comma role |
-|---------|-----------|-----------|
-| DECLARE HAS fields | `lsepBy ... TComma` | Field separator |
-| WHERE bindings | `many (indented ...)` | Not used |
-| OF arguments | `lsepBy1 ... TComma` | Argument separator |
-| LIST items | `lsepBy ... TComma` | Item separator |
-| Top-level decls | `lsepBy ... TSemicolon` | Not used |
+| Context            | Separator               | Comma role         |
+| ------------------ | ----------------------- | ------------------ |
+| DECLARE HAS fields | `lsepBy ... TComma`     | Field separator    |
+| WHERE bindings     | `many (indented ...)`   | Not used           |
+| OF arguments       | `lsepBy1 ... TComma`    | Argument separator |
+| LIST items         | `lsepBy ... TComma`     | Item separator     |
+| Top-level decls    | `lsepBy ... TSemicolon` | Not used           |
 
 ---
 

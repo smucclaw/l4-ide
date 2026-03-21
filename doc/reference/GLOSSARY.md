@@ -10,18 +10,18 @@ Keywords are reserved words that form the structure of L4 programs.
 
 ### Function Keywords
 
-| Keyword                | Purpose                                    | Reference                          |
-| ---------------------- | ------------------------------------------ | ---------------------------------- |
-| **AKA**                | Provides alternate names (aliases)         | [AKA](functions/AKA.md)            |
-| **DECIDE**             | Defines a decision function                | [DECIDE](functions/DECIDE.md)      |
-| **FUNCTION**           | Declares a function type                   | [TYPE-KEYWORDS](types/keywords.md) |
-| **GIVEN**              | Introduces function parameters             | [GIVEN](functions/GIVEN.md)        |
-| **GIVETH** / **GIVES** | Specifies function return type             | [GIVETH](functions/GIVETH.md)      |
-| **IN**                 | Used with LET for scoped bindings          | [LET](functions/LET.md)            |
-| **LET**                | Introduces a local binding                 | [LET](functions/LET.md)            |
+| Keyword                | Purpose                                                              | Reference                          |
+| ---------------------- | -------------------------------------------------------------------- | ---------------------------------- |
+| **AKA**                | Provides alternate names (aliases)                                   | [AKA](functions/AKA.md)            |
+| **DECIDE**             | Defines a decision function                                          | [DECIDE](functions/DECIDE.md)      |
+| **FUNCTION**           | Declares a function type                                             | [TYPE-KEYWORDS](types/keywords.md) |
+| **GIVEN**              | Introduces function parameters                                       | [GIVEN](functions/GIVEN.md)        |
+| **GIVETH** / **GIVES** | Specifies function return type                                       | [GIVETH](functions/GIVETH.md)      |
+| **IN**                 | Used with LET for scoped bindings                                    | [LET](functions/LET.md)            |
+| **LET**                | Introduces a local binding                                           | [LET](functions/LET.md)            |
 | **MEANS**              | Defines the body of a function, decision, or computed field (method) | [MEANS](functions/MEANS.md)        |
-| **WHERE**              | Introduces local declarations              | [WHERE](functions/WHERE.md)        |
-| **YIELD**              | Creates anonymous functions (lambdas)      | [YIELD](functions/YIELD.md)        |
+| **WHERE**              | Introduces local declarations                                        | [WHERE](functions/WHERE.md)        |
+| **YIELD**              | Creates anonymous functions (lambdas)                                | [YIELD](functions/YIELD.md)        |
 
 ### Control Flow Keywords
 
@@ -60,19 +60,19 @@ Keywords are reserved words that form the structure of L4 programs.
 
 ### Type Keywords
 
-| Keyword        | Purpose                                 | Reference                          |
-| -------------- | --------------------------------------- | ---------------------------------- |
-| **A** / **AN** | Type articles                           | [ARTICLES](types/A-AN.md)          |
-| **ASSUME**     | Declares a variable of assumed type     | [ASSUME](types/ASSUME.md)          |
-| **DECLARE**    | Defines a type                          | [DECLARE](types/DECLARE.md)        |
-| **IS**         | Type assertion or definition            | [TYPE-KEYWORDS](types/keywords.md) |
+| Keyword        | Purpose                                                                 | Reference                          |
+| -------------- | ----------------------------------------------------------------------- | ---------------------------------- |
+| **A** / **AN** | Type articles                                                           | [ARTICLES](types/A-AN.md)          |
+| **ASSUME**     | Declares a variable of assumed type                                     | [ASSUME](types/ASSUME.md)          |
+| **DECLARE**    | Defines a type                                                          | [DECLARE](types/DECLARE.md)        |
+| **IS**         | Type assertion or definition                                            | [TYPE-KEYWORDS](types/keywords.md) |
 | **HAS**        | Record field declaration (supports computed fields / methods via MEANS) | [TYPE-KEYWORDS](types/keywords.md) |
-| **LIST**       | List type or list literal               | [TYPE-KEYWORDS](types/keywords.md) |
-| **ONE OF**     | Used for enum types                     | [TYPE-KEYWORDS](types/keywords.md) |
-| **OF**         | Type application or constructor pattern | [TYPE-KEYWORDS](types/keywords.md) |
-| **TYPE**       | The kind of types                       | [TYPE-KEYWORDS](types/keywords.md) |
-| **WITH**       | Record construction with named fields   | [TYPE-KEYWORDS](types/keywords.md) |
-| **FOR ALL**    | Universal quantifier for polymorphism   | [FOR ALL](types/for-all.md)        |
+| **LIST**       | List type or list literal                                               | [TYPE-KEYWORDS](types/keywords.md) |
+| **ONE OF**     | Used for enum types                                                     | [TYPE-KEYWORDS](types/keywords.md) |
+| **OF**         | Type application or constructor pattern                                 | [TYPE-KEYWORDS](types/keywords.md) |
+| **TYPE**       | The kind of types                                                       | [TYPE-KEYWORDS](types/keywords.md) |
+| **WITH**       | Record construction with named fields                                   | [TYPE-KEYWORDS](types/keywords.md) |
+| **FOR ALL**    | Universal quantifier for polymorphism                                   | [FOR ALL](types/for-all.md)        |
 
 ### Regulative Keywords
 

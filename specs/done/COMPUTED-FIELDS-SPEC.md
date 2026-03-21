@@ -36,7 +36,7 @@ DECIDE `driver is an adult` IF driver's age >= 18
 
 1. **Discoverability** — nothing on the `Driver` type tells you that `adult` exists as a derivable property. You must grep the codebase.
 2. **No uniform access** — stored fields use `driver's age`, but computed properties use a different calling convention: `\`driver is an adult\`` as a standalone function. Callers must know which is which.
-3. **Legal isomorphism gap** — in legislation, definitions are co-located: *"'adult' means a person who has attained the age of 18 years"* appears in the same definitions section as other attributes of "person." Splitting them across the file breaks the structural parallel to legal text.
+3. **Legal isomorphism gap** — in legislation, definitions are co-located: _"'adult' means a person who has attained the age of 18 years"_ appears in the same definitions section as other attributes of "person." Splitting them across the file breaks the structural parallel to legal text.
 4. **No lazy self-reference** — a computed property cannot easily reference another computed property on the same record without manual plumbing.
 
 ### Desired State
@@ -127,6 +127,7 @@ Here `affordable` depends on `base premium` (computed), which depends on `risk c
 A computed field is indistinguishable from a stored field at the point of use. Both are accessed via `record's fieldName`. The only difference is internal: a stored field reads from the record's data, while a computed field evaluates its MEANS expression.
 
 This follows Bertrand Meyer's Uniform Access Principle (Eiffel) and is analogous to:
+
 - Python's `@property` decorator
 - Kotlin's `val x: Int get() = ...`
 - C#'s computed properties
@@ -137,6 +138,7 @@ This follows Bertrand Meyer's Uniform Access Principle (Eiffel) and is analogous
 Computed fields are **lazy thunks**, consistent with L4's existing lazy evaluator (`EvaluateLazy/Machine.hs`). A computed field's MEANS expression is evaluated at most once per record instance, on first access, and the result is memoized.
 
 Environment construction for a computed field `f` on record `R`:
+
 1. Bind all stored fields of `R` to their values
 2. Bind all computed fields of `R` (other than `f`) to lazy thunks
 3. Evaluate `f`'s MEANS expression in this environment
@@ -395,7 +397,7 @@ When type-checking `OF` (positional) or `WITH` (named) record construction:
 1. Partition fields into stored and computed
 2. For positional (`OF`): expect arguments only for stored fields, in declaration order
 3. For named (`WITH`): accept only stored field names; reject computed field names
-4. Emit clear error messages: *"field 'adult' is a computed field and cannot be supplied in a constructor"*
+4. Emit clear error messages: _"field 'adult' is a computed field and cannot be supplied in a constructor"_
 
 **Estimated scope:** ~20-30 lines across TypeCheck and Desugar.
 
@@ -432,6 +434,7 @@ In legal terms, you wouldn't allow someone to override a statutory definition.
 ### Why Lazy (Not Eager) Evaluation?
 
 Eager evaluation of all computed fields at construction time would:
+
 1. Force unnecessary computation (many fields may never be accessed)
 2. Require a topological sort of fields at construction time
 3. Break if a computed field depends on external state or functions with side effects (future concern)
@@ -441,6 +444,7 @@ Lazy evaluation is already L4's model and is the natural fit.
 ### Why Not Haskell-Style Typeclasses / Rust impl Blocks?
 
 Separate method blocks (`METHODS FOR Driver`) were considered (Option B in the design discussion). They were rejected because:
+
 1. Legal text co-locates definitions — splitting data from derived properties breaks legal isomorphism
 2. Discoverability suffers — users must look in two places
 3. "METHODS" is programmer jargon with no good legal equivalent
@@ -454,21 +458,21 @@ If future needs require open extension (adding methods to types defined in other
 
 Add to `jl4/ok/`:
 
-| File | Tests |
-|------|-------|
-| `computed-fields-basic.l4` | Simple computed field, access via `'s` |
-| `computed-fields-chain.l4` | Computed field depending on another computed field |
-| `computed-fields-nested.l4` | Computed field accessing nested record fields |
-| `computed-fields-external.l4` | Computed field calling top-level functions |
-| `computed-fields-construction.l4` | Record construction omitting computed fields |
+| File                              | Tests                                              |
+| --------------------------------- | -------------------------------------------------- |
+| `computed-fields-basic.l4`        | Simple computed field, access via `'s`             |
+| `computed-fields-chain.l4`        | Computed field depending on another computed field |
+| `computed-fields-nested.l4`       | Computed field accessing nested record fields      |
+| `computed-fields-external.l4`     | Computed field calling top-level functions         |
+| `computed-fields-construction.l4` | Record construction omitting computed fields       |
 
 Add to `jl4/not-ok/`:
 
-| File | Tests |
-|------|-------|
-| `computed-fields-cycle.l4` | Circular dependency between computed fields |
-| `computed-fields-type-mismatch.l4` | MEANS expression type doesn't match field type |
-| `computed-fields-override.l4` | Attempting to supply computed field in constructor |
+| File                               | Tests                                              |
+| ---------------------------------- | -------------------------------------------------- |
+| `computed-fields-cycle.l4`         | Circular dependency between computed fields        |
+| `computed-fields-type-mismatch.l4` | MEANS expression type doesn't match field type     |
+| `computed-fields-override.l4`      | Attempting to supply computed field in constructor |
 
 ### Property Tests
 
@@ -500,7 +504,7 @@ When a user invokes "go to definition" on `person's \`adult\``, it should jump t
 
 ### NLG: Natural Language Generation for Computed Fields
 
-The synthetic DECIDEs have a `_self` parameter. The natural language generation system may produce odd descriptions (e.g., "adult _self means..."). Verify that NLG handles computed field functions gracefully, or add special-casing for `ComputedSelector` term kind.
+The synthetic DECIDEs have a `_self` parameter. The natural language generation system may produce odd descriptions (e.g., "adult \_self means..."). Verify that NLG handles computed field functions gracefully, or add special-casing for `ComputedSelector` term kind.
 
 ### Query Planner Awareness
 
@@ -510,17 +514,17 @@ The synthetic DECIDEs have a `_self` parameter. The natural language generation 
 
 The following tests would improve coverage but have not yet been written:
 
-| Test case | Location | Status | Purpose |
-|-----------|----------|--------|---------|
-| Type mismatch in MEANS | `not-ok/tc/` | ✅ Done | MEANS expr type doesn't match declared field type |
-| Longer cycle chain (a → b → c → a) | `not-ok/tc/` | ✅ Done | 3+ node cycle detection |
-| Constant computed field (`MEANS 42`) | `ok/` | ✅ Done | Degenerate case with no sibling dependencies |
-| Cross-record non-cyclic access | `ok/` | ✅ Done | Computed field accessing another record's computed field |
-| Arithmetic in computed fields | `ok/` | ✅ Done | Multiple computed fields with +, -, * |
-| Positional constructor override (OF) | `not-ok/tc/` | Not done | Too many args when computed fields are stripped |
-| Parameterized type with computed fields | `ok/` | **Bug found** | Type parameters not propagated to synthetic DECIDEs |
-| Equality in computed fields | `ok/` | **Bug found** | `=` operator causes name ambiguity with sibling LET bindings |
-| Computed field in enum constructor | `ok/` or `not-ok/` | Not done | Does MEANS work inside `IS ONE OF` constructors? |
+| Test case                               | Location           | Status        | Purpose                                                      |
+| --------------------------------------- | ------------------ | ------------- | ------------------------------------------------------------ |
+| Type mismatch in MEANS                  | `not-ok/tc/`       | ✅ Done       | MEANS expr type doesn't match declared field type            |
+| Longer cycle chain (a → b → c → a)      | `not-ok/tc/`       | ✅ Done       | 3+ node cycle detection                                      |
+| Constant computed field (`MEANS 42`)    | `ok/`              | ✅ Done       | Degenerate case with no sibling dependencies                 |
+| Cross-record non-cyclic access          | `ok/`              | ✅ Done       | Computed field accessing another record's computed field     |
+| Arithmetic in computed fields           | `ok/`              | ✅ Done       | Multiple computed fields with +, -, \*                       |
+| Positional constructor override (OF)    | `not-ok/tc/`       | Not done      | Too many args when computed fields are stripped              |
+| Parameterized type with computed fields | `ok/`              | **Bug found** | Type parameters not propagated to synthetic DECIDEs          |
+| Equality in computed fields             | `ok/`              | **Bug found** | `=` operator causes name ambiguity with sibling LET bindings |
+| Computed field in enum constructor      | `ok/` or `not-ok/` | Not done      | Does MEANS work inside `IS ONE OF` constructors?             |
 
 ### Known Bugs Found During Testing
 

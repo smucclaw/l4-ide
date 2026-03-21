@@ -11,14 +11,14 @@ The `jl4-cli --batch` mode currently serializes evaluation results using Haskell
 
 ### What Already Exists
 
-| Component | Status | Notes |
-|-----------|--------|-------|
-| `jl4-cli --batch` mode | Exists | Accepts JSON input, evaluates `@export` functions |
-| Batch JSON response envelope | Exists | `status`, `output`, `input`, `diagnostics` fields |
-| `EvalDirectiveResult` type | Exists | Wraps evaluation results |
-| `NF` / `Value` types | Exists | Internal value representations in the evaluator |
-| `Show` instances for above | Exists | Used currently for serialization (the problem) |
-| `ToJSON` instances for above | Missing | **This is what needs to be built** |
+| Component                    | Status  | Notes                                             |
+| ---------------------------- | ------- | ------------------------------------------------- |
+| `jl4-cli --batch` mode       | Exists  | Accepts JSON input, evaluates `@export` functions |
+| Batch JSON response envelope | Exists  | `status`, `output`, `input`, `diagnostics` fields |
+| `EvalDirectiveResult` type   | Exists  | Wraps evaluation results                          |
+| `NF` / `Value` types         | Exists  | Internal value representations in the evaluator   |
+| `Show` instances for above   | Exists  | Used currently for serialization (the problem)    |
+| `ToJSON` instances for above | Missing | **This is what needs to be built**                |
 
 ---
 
@@ -31,7 +31,9 @@ When `jl4-cli --batch` evaluates an `@export` function, the response `"output"` 
 ```json
 {
   "status": "success",
-  "output": ["MkEvalDirectiveResult { result = Reduction (Right (MkNF (ValString \"hello\"))) }"],
+  "output": [
+    "MkEvalDirectiveResult { result = Reduction (Right (MkNF (ValString \"hello\"))) }"
+  ],
   "input": { "name": "Alice" },
   "diagnostics": []
 }
@@ -40,9 +42,11 @@ When `jl4-cli --batch` evaluates an `@export` function, the response `"output"` 
 ### Why this is a problem
 
 1. **Fragile parsing**: Consumers must regex-parse Haskell constructors. The current Python workaround looks like:
+
    ```python
    matches = re.findall(r'ValString "([^"]+)"', output_str)
    ```
+
    This breaks for strings containing escaped quotes, nested structures, or any change to the internal type representation.
 
 2. **Type information is lost**: There is no way to distinguish a number from a string without pattern-matching on `ValNumber` vs `ValString` textually.
@@ -61,18 +65,18 @@ Add `ToJSON` instances (from the `aeson` library) for the L4 value types, and us
 
 ### Value to JSON mapping
 
-| L4 Value | JSON Representation | Example |
-|----------|---------------------|---------|
-| `ValNumber (n % d)` | JSON number (`n/d` as `Double`) | `ValNumber (3 % 2)` -> `1.5` |
-| `ValString s` | JSON string | `ValString "hello"` -> `"hello"` |
-| `ValBool True` | JSON `true` | `ValBool True` -> `true` |
-| `ValBool False` | JSON `false` | `ValBool False` -> `false` |
-| `ValConstructor "JUST" [v]` | The JSON encoding of `v` (unwrap) | `JUST (ValNumber 42)` -> `42` |
-| `ValConstructor "NOTHING" []` | JSON `null` | `NOTHING` -> `null` |
-| `ValConstructor name []` (nullary/enum) | JSON string (the constructor name) | `APPROVED` -> `"APPROVED"` |
-| `ValConstructor name fields` (record) | JSON object with field names as keys | See below |
-| List (FOLLOWED BY / EMPTY chain) | JSON array | See below |
-| `ValDate d` | JSON string (ISO 8601 format) | `ValDate 2026-03-15` -> `"2026-03-15"` |
+| L4 Value                                | JSON Representation                  | Example                                |
+| --------------------------------------- | ------------------------------------ | -------------------------------------- |
+| `ValNumber (n % d)`                     | JSON number (`n/d` as `Double`)      | `ValNumber (3 % 2)` -> `1.5`           |
+| `ValString s`                           | JSON string                          | `ValString "hello"` -> `"hello"`       |
+| `ValBool True`                          | JSON `true`                          | `ValBool True` -> `true`               |
+| `ValBool False`                         | JSON `false`                         | `ValBool False` -> `false`             |
+| `ValConstructor "JUST" [v]`             | The JSON encoding of `v` (unwrap)    | `JUST (ValNumber 42)` -> `42`          |
+| `ValConstructor "NOTHING" []`           | JSON `null`                          | `NOTHING` -> `null`                    |
+| `ValConstructor name []` (nullary/enum) | JSON string (the constructor name)   | `APPROVED` -> `"APPROVED"`             |
+| `ValConstructor name fields` (record)   | JSON object with field names as keys | See below                              |
+| List (FOLLOWED BY / EMPTY chain)        | JSON array                           | See below                              |
+| `ValDate d`                             | JSON string (ISO 8601 format)        | `ValDate 2026-03-15` -> `"2026-03-15"` |
 
 ### Record encoding
 
@@ -113,7 +117,9 @@ becomes:
 ```json
 {
   "status": "success",
-  "output": ["MkEvalDirectiveResult { result = Reduction (Right (MkNF (ValString \"hello\"))) }"],
+  "output": [
+    "MkEvalDirectiveResult { result = Reduction (Right (MkNF (ValString \"hello\"))) }"
+  ],
   "input": { "name": "Alice" },
   "diagnostics": []
 }
@@ -229,12 +235,12 @@ Records require access to field names from the type checker. Options:
 
 These paths are approximate and should be confirmed against the current codebase:
 
-| File | Role |
-|------|------|
-| `jl4/app/Main.hs` | Batch mode entry point, response serialization |
-| `jl4-core/src/L4/Evaluate*.hs` | `Value`, `NF` type definitions |
-| `jl4-core/src/L4/Batch.hs` | Batch processing logic (if it exists as a separate module) |
-| `jl4-core/src/L4/Export.hs` | `@export` function handling, `EvalDirectiveResult` |
+| File                           | Role                                                       |
+| ------------------------------ | ---------------------------------------------------------- |
+| `jl4/app/Main.hs`              | Batch mode entry point, response serialization             |
+| `jl4-core/src/L4/Evaluate*.hs` | `Value`, `NF` type definitions                             |
+| `jl4-core/src/L4/Batch.hs`     | Batch processing logic (if it exists as a separate module) |
+| `jl4-core/src/L4/Export.hs`    | `@export` function handling, `EvalDirectiveResult`         |
 
 ---
 
