@@ -7,8 +7,9 @@ import Test.Hspec
 
 import Application (app)
 import Backend.Api
+import qualified BundleStore
 import BundleStore (initStore)
-import Compiler (compileBundle)
+import Compiler (compileBundle, computeVersion)
 import ControlPlane (DeploymentStatusResponse (..))
 import Logging (newLogger)
 import Options (Options (..))
@@ -614,6 +615,63 @@ spec = describe "integration" do
         resp <- httpLbs req mgr
         statusCode' resp `shouldBe` 404
 
+  describe "lazy-load (compile on first request)" do
+    it "GET /deployments/{id} compiles pending deployment and returns ready" do
+      withPendingService "lazy-get" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        req <- parseRequest (baseUrl <> "/deployments/lazy-get")
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 200
+        let mStatus = Aeson.decode (responseBody resp) :: Maybe DeploymentStatusResponse
+        case mStatus of
+          Just s -> s.dsStatus `shouldBe` "ready"
+          Nothing -> expectationFailure "Failed to decode deployment status response"
+
+    it "evaluation on pending deployment compiles and succeeds in one request" do
+      withPendingService "lazy-eval" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        resp <- evalFunction baseUrl mgr "lazy-eval" "compute_qualifies"
+          (Aeson.object
+            [ "fnArguments" Aeson..= Aeson.object
+                [ "walks" Aeson..= True
+                , "eats" Aeson..= True
+                , "drinks" Aeson..= True
+                ]
+            ])
+        assertSuccess resp \r ->
+          Map.lookup "value" r.fnResult `shouldBe` Just (FnLitBool True)
+
+    it "listing functions on pending deployment compiles and returns functions" do
+      withPendingService "lazy-fns" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        req <- parseRequest (baseUrl <> "/deployments/lazy-fns/functions")
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 200
+
+    it "GET /deployments lists pending deployments without triggering compilation" do
+      withPendingService "lazy-list" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        req <- parseRequest (baseUrl <> "/deployments")
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 200
+        let mList = Aeson.decode (responseBody resp) :: Maybe [DeploymentStatusResponse]
+        case mList of
+          Just ds -> do
+            length ds `shouldBe` 1
+            case ds of
+              (d:_) -> d.dsStatus `shouldBe` "pending"
+              [] -> expectationFailure "Expected at least one deployment"
+          Nothing -> expectationFailure "Failed to decode deployment list"
+
+    it "health endpoint shows pending count before compilation" do
+      withPendingService "lazy-health" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        req <- parseRequest (baseUrl <> "/health")
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 200
+        let body = decodeObject (responseBody resp)
+        lookupKey "deployments" body `shouldSatisfy` \case
+          Just (Aeson.Object dObj) ->
+            case Aeson.KeyMap.lookup "pending" dObj of
+              Just (Aeson.Number n) -> n >= 1
+              _ -> False
+          _ -> False
+
   describe "compiler" do
     it "compiles valid L4 sources" do
       logger <- newLogger False
@@ -648,6 +706,48 @@ mkBatchCase n = Aeson.object
   , "eats" Aeson..= True
   , "drinks" Aeson..= True
   ]
+
+-- | Save sources to the BundleStore and register as DeploymentPending,
+-- simulating a lazy-load restart. The sources exist on disk but are not compiled.
+withPendingService :: Text -> [(FilePath, Text)] -> (String -> Manager -> IO a) -> IO a
+withPendingService deployId sources act = do
+  resOrExc <- try (withPendingService' deployId sources act)
+  case resOrExc of
+    Left ioe ->
+      if isPermissionError ioe
+        then pendingWith ("Skipping integration test (cannot bind sockets): " <> show ioe) >> pure undefined
+        else do
+          expectationFailure (show ioe)
+          pure undefined
+    Right result -> pure result
+
+withPendingService' :: Text -> [(FilePath, Text)] -> (String -> Manager -> IO a) -> IO a
+withPendingService' deployId sources act = do
+  let tmpPath = "/tmp/jl4-service-test-" <> Text.unpack deployId
+  cleanDir tmpPath
+  store <- initStore tmpPath
+  logger <- newLogger False
+
+  -- Save sources to the BundleStore (so loadAndRegister can find them)
+  let sourceMap = Map.fromList sources
+      version = computeVersion sourceMap
+      storedMeta = BundleStore.StoredMetadata
+        { BundleStore.smFunctions = []
+        , BundleStore.smVersion = version
+        , BundleStore.smCreatedAt = "2026-01-01T00:00:00Z"
+        }
+  BundleStore.saveBundle store deployId sourceMap storedMeta
+
+  -- Register as Pending (not compiled)
+  registry <- newTVarIO $ Map.singleton (DeploymentId deployId) DeploymentPending
+  let env = MkAppEnv registry store Nothing logger testOptions
+
+  mgr <- newManager defaultManagerSettings
+  testWithApplication (pure $ app env) \port -> do
+    let baseUrl = "http://localhost:" <> show port
+    result <- act baseUrl mgr
+    cleanDir tmpPath
+    pure result
 
 -- | Compile sources and register them directly in the TVar,
 -- then run a test against the WAI app.

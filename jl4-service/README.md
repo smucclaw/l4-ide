@@ -82,7 +82,7 @@ DECIDE compute_qualifies IF walks AND eats AND drinks
 | ------ | --------- | ----------------------------------------- |
 | `GET`  | `/health` | Health check with deployment state counts |
 
-Returns `{"status":"healthy","deployments":{"total":N,"ready":N,"compiling":N,"failed":N}}`. Exempt from the concurrency limiter so orchestrator probes always succeed.
+Returns `{"status":"healthy","deployments":{"total":N,"ready":N,"pending":N,"compiling":N,"failed":N}}`. Exempt from the concurrency limiter so orchestrator probes always succeed.
 
 ### Control Plane
 
@@ -96,7 +96,7 @@ Manage deployment lifecycle.
 | `PUT`    | `/deployments/{id}` | Replace a deployment's bundle (old stays active until new compiles) |
 | `DELETE` | `/deployments/{id}` | Remove a deployment                                                 |
 
-Deployment states: `compiling` (202), `ready` (200), `failed` (200 with error).
+Deployment states: `pending` (lazy-load, compiles on first access), `compiling` (202), `ready` (200), `failed` (200 with error).
 
 **Validation rules:**
 
@@ -171,20 +171,20 @@ Returns which inputs are still needed, ranked by impact on the outcome.
 
 All options can also be set via environment variables. CLI arguments take precedence over environment variables.
 
-| Option                      | Env Var                       | Description                                                | Default          |
-| --------------------------- | ----------------------------- | ---------------------------------------------------------- | ---------------- |
-| `--port`, `-p`              | `JL4_PORT`                    | HTTP port                                                  | `8080`           |
-| `--store-path`              | `JL4_STORE_PATH`              | Directory for persisting deployment bundles                | `/tmp/jl4-store` |
-| `--server-name`, `-s`       | `JL4_SERVER_NAME`             | Server URL for OpenAPI metadata                            | -                |
-| `--lazy-load`               | `JL4_LAZY_LOAD`               | Compile deployments on first request instead of at startup | `false`          |
-| `--debug`                   | `JL4_DEBUG`                   | Enable debug mode (verbose errors, debug-level logs)       | `false`          |
-| `--max-zip-size`            | `JL4_MAX_ZIP_SIZE`            | Maximum zip upload size in bytes                           | `2097152` (2 MB) |
-| `--max-file-count`          | `JL4_MAX_FILE_COUNT`          | Maximum number of files per zip upload                     | `5096`           |
-| `--max-deployments`         | `JL4_MAX_DEPLOYMENTS`         | Maximum number of concurrent deployments                   | `1024`           |
-| `--max-concurrent-requests` | `JL4_MAX_CONCURRENT_REQUESTS` | Maximum concurrent requests (503 when exceeded)            | `20`             |
-| `--max-eval-memory-mb`      | `JL4_MAX_EVAL_MEMORY_MB`      | Per-evaluation allocation limit in MB                      | `256`            |
-| `--eval-timeout`            | `JL4_EVAL_TIMEOUT`            | Evaluation timeout in seconds                              | `60`             |
-| `--compile-timeout`         | `JL4_COMPILE_TIMEOUT`         | Compilation timeout in seconds                             | `60`             |
+| Option                      | Env Var                       | Description                                                                                                                               | Default          |
+| --------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `--port`, `-p`              | `JL4_PORT`                    | HTTP port                                                                                                                                 | `8080`           |
+| `--store-path`              | `JL4_STORE_PATH`              | Directory for persisting deployment bundles                                                                                               | `/tmp/jl4-store` |
+| `--server-name`, `-s`       | `JL4_SERVER_NAME`             | Server URL for OpenAPI metadata                                                                                                           | -                |
+| `--lazy-load`               | `JL4_LAZY_LOAD`               | Register deployments as pending on startup; compile synchronously on first access (first request is slower, subsequent requests are fast) | `false`          |
+| `--debug`                   | `JL4_DEBUG`                   | Enable debug mode (verbose errors, debug-level logs)                                                                                      | `false`          |
+| `--max-zip-size`            | `JL4_MAX_ZIP_SIZE`            | Maximum zip upload size in bytes                                                                                                          | `2097152` (2 MB) |
+| `--max-file-count`          | `JL4_MAX_FILE_COUNT`          | Maximum number of files per zip upload                                                                                                    | `5096`           |
+| `--max-deployments`         | `JL4_MAX_DEPLOYMENTS`         | Maximum number of concurrent deployments                                                                                                  | `1024`           |
+| `--max-concurrent-requests` | `JL4_MAX_CONCURRENT_REQUESTS` | Maximum concurrent requests (503 when exceeded)                                                                                           | `20`             |
+| `--max-eval-memory-mb`      | `JL4_MAX_EVAL_MEMORY_MB`      | Per-evaluation allocation limit in MB                                                                                                     | `256`            |
+| `--eval-timeout`            | `JL4_EVAL_TIMEOUT`            | Evaluation timeout in seconds                                                                                                             | `60`             |
+| `--compile-timeout`         | `JL4_COMPILE_TIMEOUT`         | Compilation timeout in seconds                                                                                                            | `60`             |
 
 Boolean env vars accept `1`, `true`, or `yes` (case-insensitive).
 
@@ -232,12 +232,12 @@ Deployments are stored on disk at `{store-path}/{deployment-id}/`:
     metadata.json
 ```
 
-On startup, the service scans the store directory and recompiles all deployments (or marks them pending with `--lazy-load`).
+On startup, the service scans the store directory and recompiles all deployments. With `--lazy-load`, deployments are registered as pending and compiled synchronously on first access (GET, evaluate, or list functions).
 
 ## Testing
 
 ```bash
-# Run jl4-service tests (70 tests)
+# Run jl4-service tests
 cabal test jl4-service-test
 
 # Run with pattern filter
@@ -269,6 +269,7 @@ jl4-service/
     Compiler.hs             -- Bundle compilation (typecheck + export discovery)
     ControlPlane.hs         -- POST/GET/PUT/DELETE /deployments
     DataPlane.hs            -- /deployments/{id}/functions/... evaluation handlers
+    DeploymentLoader.hs     -- Shared compilation logic (eager startup, lazy compile-on-access)
     Schema.hs               -- OpenAPI spec generation
     Backend/
       Api.hs                -- FnLiteral, ResponseWithReason, RunFunction

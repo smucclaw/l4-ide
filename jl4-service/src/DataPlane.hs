@@ -10,6 +10,7 @@ module DataPlane (
 
 import Backend.Api
 import ControlPlane (DeploymentStatusResponse, getDeploymentHandler, putDeploymentHandler, deleteDeploymentHandler)
+import DeploymentLoader (triggerCompilationIfPending)
 import Servant.Multipart
 import Backend.DecisionQueryPlan (CachedDecisionQuery, buildDecisionQueryCacheFromCompiled, queryPlan, QueryPlanResponse)
 import Backend.FunctionSchema (Parameter, Parameters(..))
@@ -119,6 +120,8 @@ functionRoutesHandler deployId fnName =
 -- ----------------------------------------------------------------------------
 
 -- | Require a deployment to be in Ready state.
+-- If the deployment is Pending (lazy-load), compiles it synchronously
+-- (first request is slower, subsequent requests are fast).
 -- In non-debug mode, error details are hidden.
 requireDeploymentReady :: DeploymentId -> AppM (Map Text ValidatedFunction, DeploymentMetadata)
 requireDeploymentReady deployId = do
@@ -126,8 +129,17 @@ requireDeploymentReady deployId = do
   registry <- asks (.deploymentRegistry) >>= liftIO . readTVarIO
   case Map.lookup deployId registry of
     Nothing -> throwError err404
-    Just DeploymentPending ->
-      throwError err503 { errBody = jsonError "Deployment has not been compiled yet" }
+    Just DeploymentPending -> do
+      triggerCompilationIfPending deployId
+      -- Re-read: compilation is synchronous, state is now Ready or Failed
+      registry' <- asks (.deploymentRegistry) >>= liftIO . readTVarIO
+      case Map.lookup deployId registry' of
+        Just (DeploymentReady fns meta) -> pure (fns, meta)
+        Just (DeploymentFailed msg) ->
+          if debugMode
+            then throwError err500 { errBody = jsonError ("Deployment compilation failed: " <> msg) }
+            else throwError err500 { errBody = jsonError "Deployment compilation failed" }
+        _ -> throwError err500 { errBody = jsonError "Deployment compilation did not complete" }
     Just DeploymentCompiling ->
       throwError err503 { errBody = jsonError "Deployment is still compiling" }
     Just (DeploymentFailed msg) ->
