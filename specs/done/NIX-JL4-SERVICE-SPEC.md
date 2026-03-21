@@ -20,10 +20,12 @@ Bring up `jl4-service` (the multi-tenant successor to `jl4-decision-service`) as
 ### 1. NixOS Module for jl4-service
 
 **Files:**
+
 - `nix/jl4-service/package.nix` — Haskell build via `callCabal2nix`
 - `nix/jl4-service/configuration.nix` — Systemd service, nginx proxy, pre-seed mechanism
 
 **Key design decisions:**
+
 - Runs on port 8003, proxied at `/service/` via nginx
 - `DynamicUser = true` with `StateDirectory = "jl4-service"` for sandboxed persistence at `/var/lib/jl4-service/store`
 - `ProtectSystem = "strict"` (not `"full"` like decision-service) because jl4-service needs a writable store
@@ -33,14 +35,17 @@ Bring up `jl4-service` (the multi-tenant successor to `jl4-decision-service`) as
 ### 2. Thailand Cosmetics Ruleset (`jl4/experiments/thailand-cosmetics/`)
 
 **Files:**
+
 - `article41-tribrid.l4` — Three-tier compliance evaluation (731 lines)
 - `prelude.l4` — Symlink to `jl4-core/libraries/prelude.l4` for import resolution
 
 **Exported functions:**
+
 - `evaluate sub-claim` (default) — Evaluates a single advertising claim through all 3 tiers
 - `evaluate full statement` — Evaluates a multi-claim statement with aggregated results
 
 **Architecture:**
+
 - **Tier 1:** Category-specific rules for 26 product categories (whitening, acne, sunscreen, etc.)
 - **Tier 2:** Manual-specific cross-cutting requirements (Sections 4-9: substantiation, comparative advertising, awards, statistics, monarchy, giveaways)
 - **Tier 3:** Core Article 41 prohibitions (7 types: false/exaggerated, misleading scientific, medicinal, sexual, immoral, divisive, ministerial) with puffery exemption
@@ -60,6 +65,7 @@ Extracted the hardcoded examples from `jl4-decision-service/src/Examples.hs` int
 ### 4. Legacy Decision Service Updates
 
 Also added `thailand-cosmetics` to `jl4-decision-service` sourcePaths across:
+
 - `nix/jl4-decision-service/configuration.nix`
 - `Dockerfile.jl4-decision-service`
 - `dev-start.sh`
