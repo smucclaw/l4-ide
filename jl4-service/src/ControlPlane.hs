@@ -13,6 +13,7 @@ module ControlPlane (
 
 import qualified BundleStore
 import Compiler (compileBundle, computeVersion)
+import DeploymentLoader (triggerCompilationIfPending)
 import Logging (logInfo, logWarn, logError)
 import Options (Options (..))
 import Types
@@ -48,7 +49,7 @@ import System.Timeout (timeout)
 -- | Status returned in GET responses.
 data DeploymentStatusResponse = DeploymentStatusResponse
   { dsId       :: !Text
-  , dsStatus   :: !Text    -- "compiling" | "ready" | "failed"
+  , dsStatus   :: !Text    -- "pending" | "compiling" | "ready" | "failed"
   , dsMetadata :: !(Maybe DeploymentMetadata)
   , dsError    :: !(Maybe Text)
   }
@@ -175,7 +176,9 @@ getDeploymentsHandler = do
   let debugMode = env.options.debug
   pure [stateToResponse debugMode did state | (did, state) <- Map.toList registry]
 
--- | GET /deployments/{id} — get deployment status
+-- | GET /deployments/{id} — get deployment status.
+-- If the deployment is Pending (lazy-load), compiles it synchronously
+-- before returning the response.
 getDeploymentHandler :: Text -> AppM DeploymentStatusResponse
 getDeploymentHandler deployIdText = do
   env <- asks id
@@ -183,6 +186,13 @@ getDeploymentHandler deployIdText = do
   registry <- liftIO $ readTVarIO env.deploymentRegistry
   case Map.lookup deployId registry of
     Nothing -> throwError err404
+    Just DeploymentPending -> do
+      triggerCompilationIfPending deployId
+      -- Re-read: compilation is synchronous, state is now Ready or Failed
+      registry' <- liftIO $ readTVarIO env.deploymentRegistry
+      case Map.lookup deployId registry' of
+        Nothing -> throwError err404
+        Just state' -> pure (stateToResponse env.options.debug deployId state')
     Just state -> pure (stateToResponse env.options.debug deployId state)
 
 -- | PUT /deployments/{id} — replace a deployment bundle

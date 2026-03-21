@@ -57,6 +57,7 @@ library
     Compiler
     ControlPlane
     DataPlane
+    DeploymentLoader
     Logging
     Options
     Schema
