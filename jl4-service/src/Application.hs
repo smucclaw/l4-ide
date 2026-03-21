@@ -235,7 +235,8 @@ healthHandler = do
   registry <- liftIO . readTVarIO $ env.deploymentRegistry
   let states = Map.elems registry
       nReady = length [() | DeploymentReady _ _ <- states]
-      nCompiling = length [() | DeploymentPending <- states]
+      nPending = length [() | DeploymentPending <- states]
+      nCompiling = length [() | DeploymentCompiling <- states]
       nFailed = length [() | DeploymentFailed _ <- states]
       nTotal = length states
   pure HealthResponse
@@ -243,6 +244,7 @@ healthHandler = do
     , hrDeployments = HealthDeploymentCounts
         { hdTotal = nTotal
         , hdReady = nReady
+        , hdPending = nPending
         , hdCompiling = nCompiling
         , hdFailed = nFailed
         }

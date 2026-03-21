@@ -123,7 +123,7 @@ postDeploymentHandler multipart = do
       liftIO $ BundleStore.saveBundle env.bundleStore (deployId.unDeploymentId) sourceMap storedMeta
 
       liftIO $ atomically $ modifyTVar' env.deploymentRegistry $
-        Map.insert deployId DeploymentPending
+        Map.insert deployId DeploymentCompiling
 
       let compileTimeoutMicros = cfg.compileTimeout * 1_000_000
           compileMemLimitBytes = fromIntegral cfg.maxCompileMemoryMb * 1024 * 1024 :: Int64
@@ -268,7 +268,8 @@ deleteDeploymentHandler deployIdText = do
 -- In non-debug mode, error details are hidden.
 stateToResponse :: Bool -> DeploymentId -> DeploymentState -> DeploymentStatusResponse
 stateToResponse debugMode (DeploymentId did) = \case
-  DeploymentPending -> DeploymentStatusResponse did "compiling" Nothing Nothing
+  DeploymentPending -> DeploymentStatusResponse did "pending" Nothing Nothing
+  DeploymentCompiling -> DeploymentStatusResponse did "compiling" Nothing Nothing
   DeploymentReady _ meta -> DeploymentStatusResponse did "ready" (Just meta) Nothing
   DeploymentFailed err ->
     let errorMsg = if debugMode then Just err else Just "Compilation failed"
