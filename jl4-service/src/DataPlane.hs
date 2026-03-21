@@ -127,6 +127,8 @@ requireDeploymentReady deployId = do
   case Map.lookup deployId registry of
     Nothing -> throwError err404
     Just DeploymentPending ->
+      throwError err503 { errBody = jsonError "Deployment has not been compiled yet" }
+    Just DeploymentCompiling ->
       throwError err503 { errBody = jsonError "Deployment is still compiling" }
     Just (DeploymentFailed msg) ->
       if debugMode

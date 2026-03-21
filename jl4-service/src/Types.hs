@@ -56,6 +56,8 @@ newtype DeploymentId = DeploymentId { unDeploymentId :: Text }
 -- | Runtime state of a deployment.
 data DeploymentState
   = DeploymentPending
+  -- ^ Registered but not yet compiled (lazy-load mode).
+  | DeploymentCompiling
   -- ^ Bundle is being compiled in a background thread.
   | DeploymentReady !(Map Text ValidatedFunction) !DeploymentMetadata
   -- ^ Compiled and ready to serve evaluation requests.
@@ -408,6 +410,7 @@ instance FromJSON HealthResponse where
 data HealthDeploymentCounts = HealthDeploymentCounts
   { hdTotal     :: !Int
   , hdReady     :: !Int
+  , hdPending   :: !Int
   , hdCompiling :: !Int
   , hdFailed    :: !Int
   }
@@ -418,6 +421,7 @@ instance ToJSON HealthDeploymentCounts where
     Aeson.object
       [ "total" .= hd.hdTotal
       , "ready" .= hd.hdReady
+      , "pending" .= hd.hdPending
       , "compiling" .= hd.hdCompiling
       , "failed" .= hd.hdFailed
       ]
@@ -427,6 +431,7 @@ instance FromJSON HealthDeploymentCounts where
     HealthDeploymentCounts
       <$> o .: "total"
       <*> o .: "ready"
+      <*> o .:? "pending" .!= 0
       <*> o .: "compiling"
       <*> o .: "failed"
 
