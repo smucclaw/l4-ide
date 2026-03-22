@@ -6,7 +6,7 @@ import qualified BundleStore
 import ControlPlane (ControlPlaneApi, controlPlaneHandler)
 import DataPlane (DataPlaneApi, dataPlaneHandler, ShortRoutes, shortRoutesHandler)
 import DeploymentLoader (loadAndRegister)
-import Logging (Logger, logInfo, newLogger)
+import Logging (Logger, logInfo, logError, newLogger)
 import Options (Options (..), buildOpts)
 import Types
 
@@ -14,7 +14,7 @@ import Data.Aeson (toJSON)
 import qualified Data.Text.Encoding as Text.Encoding
 import Control.Concurrent.Async (mapConcurrently_)
 import Control.Concurrent.STM (atomically, modifyTVar', newTVarIO, readTVarIO)
-import Control.Exception (finally)
+import Control.Exception (SomeException, finally, displayException)
 import Control.Monad (forM_)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Reader (ReaderT (..), ask)
@@ -22,9 +22,10 @@ import Data.IORef (newIORef, atomicModifyIORef')
 import qualified Data.Map.Strict as Map
 import Data.Time (getCurrentTime, diffUTCTime)
 import Network.HTTP.Types.Status (statusCode)
-import Network.Wai (Middleware, requestMethod, rawPathInfo, responseStatus, pathInfo, responseLBS)
+import Network.Wai (Middleware, Request, requestMethod, rawPathInfo, responseStatus, pathInfo, responseLBS)
 import Network.HTTP.Types (status503)
-import Network.Wai.Handler.Warp (defaultSettings, runSettings, setHost, setPort)
+import Network.Wai.Handler.Warp (defaultSettings, runSettings, setHost, setPort, setOnException, setOnExceptionResponse, exceptionResponseForDebug)
+import Network.Wai.Handler.Warp (defaultShouldDisplayException)
 import Network.Wai.Middleware.Cors (cors, simpleCorsResourcePolicy, corsMethods, corsRequestHeaders)
 import Options.Applicative (execParser)
 import Servant
@@ -85,7 +86,17 @@ defaultMain = do
   -- Build middleware stack
   concLimiter <- concurrencyLimiter options.maxConcurrentRequests
   let middleware = concLimiter . requestLogMiddleware logger . corsMiddleware
-      settings = setHost "*" $ setPort port defaultSettings
+      onExc :: Maybe Request -> SomeException -> IO ()
+      onExc _req exc =
+        if defaultShouldDisplayException exc
+        then logError logger "Unhandled exception"
+               [("error", toJSON (displayException exc))]
+        else pure ()
+      settings = setHost "*"
+               $ setPort port
+               $ setOnException onExc
+               $ (if debug then setOnExceptionResponse (\_exc -> exceptionResponseForDebug _exc) else id)
+               $ defaultSettings
 
   logInfo logger "Server ready"
     [("port", toJSON port)]
