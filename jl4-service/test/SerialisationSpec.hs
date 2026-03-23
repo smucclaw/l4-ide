@@ -57,18 +57,18 @@ spec :: SpecWith ()
 spec = describe "CBOR serialisation" do
   describe "SerializedBundle round-trip" do
     it "compileBundle produces non-empty SerializedBundle list" do
-      logger <- newLogger False
+      logger <- newLogger False Nothing
       let sources = Map.singleton "qualifies.l4" qualifiesJL4
-      result <- compileBundle logger sources
+      result <- compileBundle logger "test" sources
       case result of
         Left err -> expectationFailure ("Compilation failed: " <> Text.unpack err)
         Right (_fns, _meta, bundles) -> do
           length bundles `shouldSatisfy` (> 0)
 
     it "SerializedBundle survives CBOR encode/decode round-trip" do
-      logger <- newLogger False
+      logger <- newLogger False Nothing
       let sources = Map.singleton "qualifies.l4" qualifiesJL4
-      result <- compileBundle logger sources
+      result <- compileBundle logger "test" sources
       case result of
         Left err -> expectationFailure ("Compilation failed: " <> Text.unpack err)
         Right (_fns, _meta, bundles) -> do
@@ -81,7 +81,7 @@ spec = describe "CBOR serialisation" do
                 -- Verify the module still has the same exports
                 -- (we can't compare directly since Anno_ is stripped,
                 -- but we can rebuild functions from it)
-                rebuildResult <- buildFromCborBundle logger decoded sources
+                rebuildResult <- buildFromCborBundle logger "test" decoded sources
                   (StoredMetadata [] (computeVersion sources) "2025-01-01T00:00:00Z")
                 case rebuildResult of
                   Left rebuildErr -> expectationFailure ("Rebuild from decoded CBOR failed: " <> Text.unpack rebuildErr)
@@ -91,13 +91,13 @@ spec = describe "CBOR serialisation" do
 
   describe "BundleStore CBOR persistence" do
     it "saveBundleCbor and loadBundleCbor round-trip" do
-      logger <- newLogger False
+      logger <- newLogger False Nothing
       withTempStore $ \store -> do
         let sources = Map.singleton "qualifies.l4" qualifiesJL4
             meta = StoredMetadata [] "v1" "2025-01-01T00:00:00Z"
         saveBundle store "cbor-test" sources meta
 
-        result <- compileBundle logger sources
+        result <- compileBundle logger "test" sources
         case result of
           Left err -> expectationFailure ("Compilation failed: " <> Text.unpack err)
           Right (_fns, _meta, bundles) -> do
@@ -107,13 +107,13 @@ spec = describe "CBOR serialisation" do
             isJust loaded `shouldBe` True
 
     it "loadBundleCbor returns Nothing for non-existent deployment" do
-      logger <- newLogger False
+      logger <- newLogger False Nothing
       withTempStore $ \store -> do
         loaded <- loadBundleCbor logger store "nonexistent"
         isNothing loaded `shouldBe` True
 
     it "loadBundleCbor returns Nothing for corrupt CBOR data" do
-      logger <- newLogger False
+      logger <- newLogger False Nothing
       withTempStore $ \store -> do
         let sources = Map.singleton "qualifies.l4" qualifiesJL4
             meta = StoredMetadata [] "v1" "2025-01-01T00:00:00Z"
@@ -128,13 +128,13 @@ spec = describe "CBOR serialisation" do
         isNothing loaded `shouldBe` True
 
     it "saveBundleCbor overwrites existing CBOR atomically" do
-      logger <- newLogger False
+      logger <- newLogger False Nothing
       withTempStore $ \store -> do
         let sources = Map.singleton "qualifies.l4" qualifiesJL4
             meta = StoredMetadata [] "v1" "2025-01-01T00:00:00Z"
         saveBundle store "overwrite-test" sources meta
 
-        result <- compileBundle logger sources
+        result <- compileBundle logger "test" sources
         case result of
           Left err -> expectationFailure ("Compilation failed: " <> Text.unpack err)
           Right (_fns, _meta, bundles) -> do
@@ -147,15 +147,15 @@ spec = describe "CBOR serialisation" do
 
   describe "buildFromCborBundle" do
     it "produces the same function names as compileBundle" do
-      logger <- newLogger False
+      logger <- newLogger False Nothing
       let sources = Map.singleton "qualifies.l4" qualifiesJL4
-      result <- compileBundle logger sources
+      result <- compileBundle logger "test" sources
       case result of
         Left err -> expectationFailure ("Compilation failed: " <> Text.unpack err)
         Right (compiledFns, _meta, bundles) -> do
           -- Rebuild from CBOR
           let storedMeta = StoredMetadata [] (computeVersion sources) "2025-01-01T00:00:00Z"
-          rebuiltResults <- mapM (\b -> buildFromCborBundle logger b sources storedMeta) bundles
+          rebuiltResults <- mapM (\b -> buildFromCborBundle logger "test" b sources storedMeta) bundles
           let rebuiltFns = mconcat [fns | Right (fns, _) <- rebuiltResults]
 
           -- Same function names
@@ -214,7 +214,7 @@ spec = describe "CBOR serialisation" do
 
   describe "full restart simulation" do
     it "compile → save CBOR → load CBOR → rebuild → evaluate" do
-      logger <- newLogger False
+      logger <- newLogger False Nothing
       let sources = Map.singleton "qualifies.l4" qualifiesJL4
           deployId' = "restart-sim"
       withTempStore $ \store -> do
@@ -222,7 +222,7 @@ spec = describe "CBOR serialisation" do
         saveBundle store deployId' sources meta
 
         -- Step 1: Compile from source (initial deployment)
-        result <- compileBundle logger sources
+        result <- compileBundle logger "test" sources
         case result of
           Left err -> expectationFailure ("Compilation failed: " <> Text.unpack err)
           Right (_fns, _meta, bundles) -> do
@@ -236,7 +236,7 @@ spec = describe "CBOR serialisation" do
               Just bundle -> do
                 -- Step 4: Rebuild from CBOR (as Application.hs does)
                 (loadedSources, storedMeta) <- loadBundle store deployId'
-                rebuildResult <- buildFromCborBundle logger bundle loadedSources storedMeta
+                rebuildResult <- buildFromCborBundle logger "test" bundle loadedSources storedMeta
                 case rebuildResult of
                   Left err -> expectationFailure ("Rebuild from CBOR failed: " <> Text.unpack err)
                   Right (fns, rebuildMeta) -> do
@@ -262,14 +262,14 @@ spec = describe "CBOR serialisation" do
                         Map.lookup "value" r.fnResult `shouldBe` Just (FnLitBool True)
 
     it "deleteBundle also removes CBOR cache" do
-      logger <- newLogger False
+      logger <- newLogger False Nothing
       let sources = Map.singleton "qualifies.l4" qualifiesJL4
           deployId' = "delete-cbor"
       withTempStore $ \store -> do
         let meta = StoredMetadata [] (computeVersion sources) "2025-01-01T00:00:00Z"
         saveBundle store deployId' sources meta
 
-        result <- compileBundle logger sources
+        result <- compileBundle logger "test" sources
         case result of
           Left err -> expectationFailure ("Compilation failed: " <> Text.unpack err)
           Right (_fns, _meta, bundles) -> do
@@ -288,7 +288,7 @@ spec = describe "CBOR serialisation" do
 
   describe "HTTP control plane with CBOR" do
     it "deploy via POST, then verify CBOR was saved" do
-      logger <- newLogger False
+      logger <- newLogger False Nothing
       withEmptyService $ \baseUrl mgr store -> do
         -- Deploy via multipart POST
         let zipBytes = createZipBundle [("qualifies.l4", qualifiesJL4)]
@@ -336,13 +336,13 @@ withTempStore action = do
 -- This simulates a restart: compile → serialize → deserialize → serve.
 withCborRebuiltService :: Text -> Map FilePath Text -> (String -> Manager -> IO a) -> IO a
 withCborRebuiltService deployId sources act = do
-  logger <- newLogger False
+  logger <- newLogger False Nothing
   let tmpPath = "/tmp/jl4-service-test-" <> Text.unpack deployId
   cleanDir tmpPath
   store <- initStore tmpPath
 
   -- Compile from source
-  result <- compileBundle logger sources
+  result <- compileBundle logger "test" sources
   (_fns, meta, bundles) <- case result of
     Left err -> fail ("Test setup: compilation failed: " <> Text.unpack err)
     Right r -> pure r
@@ -355,7 +355,7 @@ withCborRebuiltService deployId sources act = do
     case deserialiseOrFail encoded of
       Left err -> fail ("CBOR decode failed: " <> show err)
       Right decoded -> do
-        rebuildResult <- buildFromCborBundle logger decoded sources storedMeta
+        rebuildResult <- buildFromCborBundle logger "test" decoded sources storedMeta
         case rebuildResult of
           Left err -> fail ("Rebuild failed: " <> Text.unpack err)
           Right (rebuiltFns', _) -> pure rebuiltFns'
@@ -375,7 +375,7 @@ withCborRebuiltService deployId sources act = do
 -- | Start a service with an empty deployment registry, exposing the store.
 withEmptyService :: (String -> Manager -> BundleStore -> IO a) -> IO a
 withEmptyService act = do
-  logger <- newLogger False
+  logger <- newLogger False Nothing
   let tmpPath = "/tmp/jl4-service-test-cbor-empty"
   cleanDir tmpPath
   store <- initStore tmpPath

@@ -42,7 +42,7 @@ defaultMain = do
   optsInfo <- buildOpts
   options@Options{port, storePath, lazyLoad, debug} <- execParser optsInfo
 
-  logger <- newLogger debug
+  logger <- newLogger debug options.instanceToken
 
   -- Log effective configuration
   logInfo logger "Starting jl4-service"

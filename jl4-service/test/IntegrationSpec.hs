@@ -674,9 +674,9 @@ spec = describe "integration" do
 
   describe "compiler" do
     it "compiles valid L4 sources" do
-      logger <- newLogger False
+      logger <- newLogger False Nothing
       let sources = Map.singleton "qualifies.l4" qualifiesJL4
-      result <- compileBundle logger sources
+      result <- compileBundle logger "test" sources
       case result of
         Left err -> expectationFailure ("Compilation failed: " <> Text.unpack err)
         Right (fns, meta, _bundles) -> do
@@ -685,9 +685,9 @@ spec = describe "integration" do
           Text.length meta.metaVersion `shouldBe` 64  -- SHA-256 hex
 
     it "rejects empty bundles" do
-      logger <- newLogger False
+      logger <- newLogger False Nothing
       let sources = Map.empty :: Map FilePath Text
-      result <- compileBundle logger sources
+      result <- compileBundle logger "test" sources
       case result of
         Left err -> err `shouldBe` "No .l4 files found in bundle"
         Right _ -> expectationFailure "Expected compilation to fail for empty bundle"
@@ -726,7 +726,7 @@ withPendingService' deployId sources act = do
   let tmpPath = "/tmp/jl4-service-test-" <> Text.unpack deployId
   cleanDir tmpPath
   store <- initStore tmpPath
-  logger <- newLogger False
+  logger <- newLogger False Nothing
 
   -- Save sources to the BundleStore (so loadAndRegister can find them)
   let sourceMap = Map.fromList sources
@@ -768,11 +768,11 @@ withServiceFromSources' deployId sources act = do
   let tmpPath = "/tmp/jl4-service-test-" <> Text.unpack deployId
   cleanDir tmpPath
   store <- initStore tmpPath
-  logger <- newLogger False
+  logger <- newLogger False Nothing
 
   -- Compile the bundle directly
   let sourceMap = Map.fromList sources
-  result <- compileBundle logger sourceMap
+  result <- compileBundle logger "test" sourceMap
   (fns, meta) <- case result of
     Left err -> fail ("Test setup: compilation failed: " <> Text.unpack err)
     Right (f, m, _bundles) -> pure (f, m)
@@ -806,7 +806,7 @@ withEmptyService' act = do
   let tmpPath = "/tmp/jl4-service-test-empty"
   cleanDir tmpPath
   store <- initStore tmpPath
-  logger <- newLogger False
+  logger <- newLogger False Nothing
   registry <- newTVarIO Map.empty
   let env = MkAppEnv registry store Nothing logger testOptions
 
