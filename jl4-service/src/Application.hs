@@ -6,7 +6,7 @@ import qualified BundleStore
 import ControlPlane (ControlPlaneApi, controlPlaneHandler)
 import DataPlane (DataPlaneApi, dataPlaneHandler, ShortRoutes, shortRoutesHandler)
 import DeploymentLoader (loadAndRegister)
-import Logging (Logger, logInfo, logError, newLogger)
+import Logging (Logger, logInfo, logDebug, logError, newLogger)
 import Options (Options (..), buildOpts)
 import Types
 
@@ -110,18 +110,23 @@ corsMiddleware = cors (const $ Just simpleCorsResourcePolicy
   })
 
 -- | Structured request logging middleware.
+-- Health checks and CORS preflight requests are logged at DEBUG level only.
 requestLogMiddleware :: Logger -> Middleware
 requestLogMiddleware logger baseApp req sendResp = do
   start <- getCurrentTime
   baseApp req $ \res -> do
     elapsed <- diffUTCTime <$> getCurrentTime <*> pure start
     let durationMs = realToFrac elapsed * 1000 :: Double
-    logInfo logger "http_request"
-      [ ("method", toJSON (Text.Encoding.decodeUtf8 (requestMethod req)))
-      , ("path", toJSON (Text.Encoding.decodeUtf8 (rawPathInfo req)))
-      , ("status", toJSON (statusCode (responseStatus res)))
-      , ("duration_ms", toJSON durationMs)
-      ]
+        fields =
+          [ ("method", toJSON (Text.Encoding.decodeUtf8 (requestMethod req)))
+          , ("path", toJSON (Text.Encoding.decodeUtf8 (rawPathInfo req)))
+          , ("status", toJSON (statusCode (responseStatus res)))
+          , ("duration_ms", toJSON durationMs)
+          ]
+        isHealth = pathInfo req == ["health"]
+        isCors = requestMethod req == "OPTIONS"
+        logFn = if isHealth || isCors then logDebug else logInfo
+    logFn logger "http_request" fields
     sendResp res
 
 -- | Concurrency limiter middleware.

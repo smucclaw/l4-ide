@@ -47,9 +47,10 @@ import System.FilePath (takeExtension)
 -- 5. Build metadata with SHA-256 version
 compileBundle
   :: Logger
+  -> Text  -- ^ deployment ID for logging
   -> Map FilePath Text
   -> IO (Either Text (Map Text ValidatedFunction, DeploymentMetadata, [SerializedBundle]))
-compileBundle logger sources = do
+compileBundle logger deployId sources = do
   let l4Files = Map.toList $ Map.filterWithKey (\k _ -> takeExtension k == ".l4") sources
   if null l4Files
     then pure $ Left "No .l4 files found in bundle"
@@ -59,7 +60,7 @@ compileBundle logger sources = do
 
       -- Try each file for exported functions
       results <- forM l4Files $ \(filepath, content) ->
-        compileSingleFile logger filepath content moduleContext
+        compileSingleFile logger deployId filepath content moduleContext
 
       let allFunctions = concatMap (either (const []) fst) results
           allBundles = concatMap (either (const []) snd) results
@@ -83,7 +84,8 @@ compileBundle logger sources = do
 
           unless (null allFunctions) $
             logInfo logger "Compilation complete"
-              [ ("functionCount", toJSON (length allFunctions))
+              [ ("deploymentId", toJSON deployId)
+              , ("functionCount", toJSON (length allFunctions))
               ]
 
           pure $ Right (fnMap, meta, allBundles)
@@ -93,18 +95,20 @@ compileBundle logger sources = do
 -- (if typechecking succeeded and there were exports).
 compileSingleFile
   :: Logger
+  -> Text  -- ^ deployment ID for logging
   -> FilePath
   -> Text
   -> ModuleContext
   -> IO (Either Text ([ValidatedFunction], [SerializedBundle]))
-compileSingleFile logger filepath content moduleContext = do
+compileSingleFile logger deployId filepath content moduleContext = do
   -- Typecheck the module
   (errs, mTcRes) <- typecheckModule filepath content moduleContext
   case mTcRes of
     Nothing -> do
       unless (null errs) $
         logWarn logger "Typecheck failed"
-          [ ("file", toJSON filepath)
+          [ ("deploymentId", toJSON deployId)
+          , ("file", toJSON filepath)
           , ("errors", toJSON errs)
           ]
       pure $ Left (Text.intercalate "\n" errs)
@@ -139,7 +143,8 @@ compileSingleFile logger filepath content moduleContext = do
                 }
 
           logInfo logger "Found exports"
-            [ ("file", toJSON filepath)
+            [ ("deploymentId", toJSON deployId)
+            , ("file", toJSON filepath)
             , ("exportCount", toJSON (length fns))
             ]
           pure $ Right (fns, [bundle])
@@ -152,11 +157,12 @@ compileSingleFile logger filepath content moduleContext = do
 -- needs to be rebuilt (which requires the sources).
 buildFromCborBundle
   :: Logger
+  -> Text  -- ^ deployment ID for logging
   -> SerializedBundle
   -> Map FilePath Text       -- ^ source files (for import resolution and eval)
   -> StoredMetadata          -- ^ persisted metadata
   -> IO (Either Text (Map Text ValidatedFunction, DeploymentMetadata))
-buildFromCborBundle logger bundle sources storedMeta = do
+buildFromCborBundle logger deployId bundle sources storedMeta = do
   let resolvedModule = bundle.sbModule
       env = bundle.sbEnvironment
       ei = bundle.sbEntityInfo
@@ -228,7 +234,8 @@ buildFromCborBundle logger bundle sources storedMeta = do
                 }
 
           logInfo logger "Rebuilt functions from CBOR cache"
-            [ ("functionCount", toJSON (length validFns))
+            [ ("deploymentId", toJSON deployId)
+            , ("functionCount", toJSON (length validFns))
             ]
           pure $ Right (fnMap, meta)
 
