@@ -109,8 +109,7 @@ corsMiddleware = cors (const $ Just simpleCorsResourcePolicy
   , corsRequestHeaders = ["content-type", "authorization"]
   })
 
--- | Structured request logging middleware.
--- Health checks and CORS preflight requests are logged at DEBUG level only.
+-- | Structured request logging middleware (debug level only).
 requestLogMiddleware :: Logger -> Middleware
 requestLogMiddleware logger baseApp req sendResp = do
   start <- getCurrentTime
@@ -123,10 +122,7 @@ requestLogMiddleware logger baseApp req sendResp = do
           , ("status", toJSON (statusCode (responseStatus res)))
           , ("duration_ms", toJSON durationMs)
           ]
-        isHealth = pathInfo req == ["health"]
-        isCors = requestMethod req == "OPTIONS"
-        logFn = if isHealth || isCors then logDebug else logInfo
-    logFn logger "http_request" fields
+    logDebug logger "http_request" fields
     sendResp res
 
 -- | Concurrency limiter middleware.
