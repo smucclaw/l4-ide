@@ -8,7 +8,7 @@ module Logging (
   logError,
 ) where
 
-import Data.Aeson (Value, encode, object, toJSON, (.=))
+import Data.Aeson (Value, encode, object, (.=))
 import qualified Data.Aeson.Key as Key
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import Data.IORef (IORef, newIORef, atomicModifyIORef')
@@ -22,25 +22,18 @@ data LogLevel = LevelDebug | LevelInfo | LevelWarn | LevelError
 
 -- | Structured JSON logger.
 -- Thread-safe via IORef serialization of writes.
--- Base fields are included in every log entry automatically.
 data Logger = Logger
-  { logMinLevel  :: !LogLevel
-  , logLock      :: !(IORef ())
-  , logBaseFields :: ![(Text, Value)]
+  { logMinLevel :: !LogLevel
+  , logLock     :: !(IORef ())
   }
 
 -- | Create a logger. Debug mode enables DEBUG level; otherwise INFO and above.
--- An optional instance token is included in every log entry when present.
-newLogger :: Bool -> Maybe Text -> IO Logger
-newLogger debugMode mInstanceToken = do
+newLogger :: Bool -> IO Logger
+newLogger debugMode = do
   lock <- newIORef ()
-  let baseFields = case mInstanceToken of
-        Just tok -> [("instanceToken", toJSON tok)]
-        Nothing  -> []
   pure Logger
     { logMinLevel = if debugMode then LevelDebug else LevelInfo
     , logLock = lock
-    , logBaseFields = baseFields
     }
 
 -- | Log at DEBUG level.
@@ -69,7 +62,7 @@ logMsg level logger msg fields
             [ "time" .= show now
             , "level" .= levelText level
             , "msg" .= msg
-            ] <> [(Key.fromText k, v) | (k, v) <- logger.logBaseFields <> fields]
+            ] <> [(Key.fromText k, v) | (k, v) <- fields]
           line = encode entry <> "\n"
       -- Serialize writes to prevent interleaved output
       atomicModifyIORef' logger.logLock $ \() ->
