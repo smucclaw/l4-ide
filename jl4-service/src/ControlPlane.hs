@@ -85,6 +85,9 @@ postDeploymentHandler multipart = do
       pure (DeploymentId idText)
     _ -> liftIO $ DeploymentId . Text.pack . UUID.toString <$> nextRandom
 
+  liftIO $ logInfo env.logger "Deployment created"
+    [("deploymentId", toJSON deployId.unDeploymentId)]
+
   -- Extract zip from multipart file
   sourceMap <- extractSourcesFromMultipart multipart
 
@@ -133,7 +136,7 @@ postDeploymentHandler multipart = do
         let compileLimited = do
               setAllocationCounter compileMemLimitBytes
               enableAllocationLimit
-              compileBundle env.logger sourceMap
+              compileBundle env.logger deployId.unDeploymentId sourceMap
         mResult <- (timeout compileTimeoutMicros compileLimited)
           `catch` \AllocationLimitExceeded -> do
             logError env.logger "Compilation exceeded memory limit"
@@ -172,6 +175,7 @@ postDeploymentHandler multipart = do
 getDeploymentsHandler :: AppM [DeploymentStatusResponse]
 getDeploymentsHandler = do
   env <- asks id
+  liftIO $ logInfo env.logger "Deployments listed" []
   registry <- liftIO $ readTVarIO env.deploymentRegistry
   let debugMode = env.options.debug
   pure [stateToResponse debugMode did state | (did, state) <- Map.toList registry]
@@ -183,6 +187,8 @@ getDeploymentHandler :: Text -> AppM DeploymentStatusResponse
 getDeploymentHandler deployIdText = do
   env <- asks id
   let deployId = DeploymentId deployIdText
+  liftIO $ logInfo env.logger "Deployment retrieved"
+    [("deploymentId", toJSON deployIdText)]
   registry <- liftIO $ readTVarIO env.deploymentRegistry
   case Map.lookup deployId registry of
     Nothing -> throwError err404
@@ -200,6 +206,9 @@ putDeploymentHandler :: Text -> MultipartData Mem -> AppM DeploymentStatusRespon
 putDeploymentHandler deployIdText multipart = do
   env <- asks id
   let deployId = DeploymentId deployIdText
+
+  liftIO $ logInfo env.logger "Deployment updated"
+    [("deploymentId", toJSON deployIdText)]
 
   validateDeploymentId deployIdText
 
@@ -227,7 +236,7 @@ putDeploymentHandler deployIdText multipart = do
 
   -- Compile in background; old version stays active until new compilation completes
   _ <- liftIO $ async $ do
-    mResult <- timeout compileTimeoutMicros $ compileBundle env.logger sourceMap
+    mResult <- timeout compileTimeoutMicros $ compileBundle env.logger deployId.unDeploymentId sourceMap
     case mResult of
       Nothing ->
         logError env.logger "PUT compilation timed out"

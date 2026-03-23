@@ -17,6 +17,7 @@ import Backend.FunctionSchema (Parameter, Parameters(..))
 import Backend.Jl4 (CompiledModule (..), evaluateWithCompiledDeontic)
 import qualified L4.StateGraph as StateGraph
 import Compiler (toDecl)
+import Logging (logInfo)
 import Options (Options (..))
 import Types
 
@@ -163,12 +164,20 @@ requireFunction fns fnName =
 -- | GET /deployments/{id}/functions
 listFunctionsHandler :: DeploymentId -> AppM [SimpleFunction]
 listFunctionsHandler deployId = do
+  logger <- asks (.logger)
+  liftIO $ logInfo logger "Functions listed"
+    [("deploymentId", Aeson.toJSON deployId.unDeploymentId)]
   (fns, _meta) <- requireDeploymentReady deployId
   pure [SimpleFunction fn.fnImpl.name fn.fnImpl.description | fn <- Map.elems fns]
 
 -- | GET /deployments/{id}/functions/{fn}
 getFunctionHandler :: DeploymentId -> Text -> AppM Function
 getFunctionHandler deployId fnName = do
+  logger <- asks (.logger)
+  liftIO $ logInfo logger "Function retrieved"
+    [ ("deploymentId", Aeson.toJSON deployId.unDeploymentId)
+    , ("functionName", Aeson.toJSON fnName)
+    ]
   (fns, _meta) <- requireDeploymentReady deployId
   vf <- requireFunction fns fnName
   pure vf.fnImpl
@@ -183,6 +192,11 @@ evalFunctionHandler
   -> FnArguments
   -> AppM (EvalResponse SimpleResponse)
 evalFunctionHandler deployId fnName mTraceHeader mTraceParam mGraphViz fnArgs = do
+  logger <- asks (.logger)
+  liftIO $ logInfo logger "Function evaluated"
+    [ ("deploymentId", Aeson.toJSON deployId.unDeploymentId)
+    , ("functionName", Aeson.toJSON fnName)
+    ]
   (fns, _meta) <- requireDeploymentReady deployId
   vf <- requireFunction fns fnName
 
@@ -222,6 +236,11 @@ batchFunctionHandler
   -> BatchRequest
   -> AppM (EvalResponse BatchResponse)
 batchFunctionHandler deployId fnName mTraceHeader mTraceParam mGraphViz batchArgs = do
+  logger <- asks (.logger)
+  liftIO $ logInfo logger "Batch evaluated"
+    [ ("deploymentId", Aeson.toJSON deployId.unDeploymentId)
+    , ("functionName", Aeson.toJSON fnName)
+    ]
   let traceLevel = determineTraceLevel mTraceHeader mTraceParam
       includeGraphViz = traceLevel == TraceFull && Maybe.fromMaybe False mGraphViz
   (fns, _meta) <- requireDeploymentReady deployId
@@ -289,6 +308,11 @@ batchFunctionHandler deployId fnName mTraceHeader mTraceParam mGraphViz batchArg
 -- | POST /deployments/{id}/functions/{fn}/query-plan
 queryPlanHandler' :: DeploymentId -> Text -> FnArguments -> AppM QueryPlanResponse
 queryPlanHandler' deployId fnName fnArgs = do
+  logger <- asks (.logger)
+  liftIO $ logInfo logger "Query plan generated"
+    [ ("deploymentId", Aeson.toJSON deployId.unDeploymentId)
+    , ("functionName", Aeson.toJSON fnName)
+    ]
   (fns, _meta) <- requireDeploymentReady deployId
   vf <- requireFunction fns fnName
 
@@ -326,6 +350,11 @@ storeDecisionQueryCache deployId fnName cache = do
 -- | GET /deployments/{id}/functions/{fn}/state-graphs
 listStateGraphsHandler :: DeploymentId -> Text -> AppM StateGraphListResponse
 listStateGraphsHandler deployId fnName = do
+  logger <- asks (.logger)
+  liftIO $ logInfo logger "State graphs listed"
+    [ ("deploymentId", Aeson.toJSON deployId.unDeploymentId)
+    , ("functionName", Aeson.toJSON fnName)
+    ]
   (fns, _meta) <- requireDeploymentReady deployId
   vf <- requireFunction fns fnName
   case vf.fnCompiled of
@@ -339,6 +368,12 @@ listStateGraphsHandler deployId fnName = do
 -- | GET /deployments/{id}/functions/{fn}/state-graphs/{graphName}
 getStateGraphDotHandler :: DeploymentId -> Text -> Text -> AppM Text
 getStateGraphDotHandler deployId fnName graphName = do
+  logger <- asks (.logger)
+  liftIO $ logInfo logger "State graph retrieved"
+    [ ("deploymentId", Aeson.toJSON deployId.unDeploymentId)
+    , ("functionName", Aeson.toJSON fnName)
+    , ("graphName", Aeson.toJSON graphName)
+    ]
   (fns, _meta) <- requireDeploymentReady deployId
   vf <- requireFunction fns fnName
   case vf.fnCompiled of
@@ -354,6 +389,9 @@ getStateGraphDotHandler deployId fnName graphName = do
 -- | GET /deployments/{id}/openapi.json
 openApiHandler :: DeploymentId -> AppM DeploymentMetadata
 openApiHandler deployId = do
+  logger <- asks (.logger)
+  liftIO $ logInfo logger "OpenAPI spec retrieved"
+    [("deploymentId", Aeson.toJSON deployId.unDeploymentId)]
   (_fns, meta) <- requireDeploymentReady deployId
   pure meta
 

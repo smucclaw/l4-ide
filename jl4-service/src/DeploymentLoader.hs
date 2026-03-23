@@ -41,7 +41,7 @@ loadAndRegister logger options registry store deployId = do
     Just bundle -> do
       logDebug logger "Loading deployment from CBOR cache"
         [("deploymentId", toJSON deployId)]
-      cborResult <- buildFromCborBundle logger bundle sources storedMeta
+      cborResult <- buildFromCborBundle logger deployId bundle sources storedMeta
       case cborResult of
         Right ok@(fns, _meta)
           | Map.null fns -> do
@@ -113,7 +113,7 @@ compileFreshAndCache logger timeoutMicros memLimitMb store deployId sources = do
       compileLimited = do
         setAllocationCounter memLimitBytes
         enableAllocationLimit
-        compileBundle logger sources
+        compileBundle logger deployId sources
   mResult <- (timeout timeoutMicros compileLimited)
     `catch` \AllocationLimitExceeded -> do
       logError logger "Compilation exceeded memory limit"
