@@ -674,7 +674,7 @@ spec = describe "integration" do
 
   describe "compiler" do
     it "compiles valid L4 sources" do
-      logger <- newLogger False Nothing
+      logger <- newLogger False
       let sources = Map.singleton "qualifies.l4" qualifiesJL4
       result <- compileBundle logger "test" sources
       case result of
@@ -685,7 +685,7 @@ spec = describe "integration" do
           Text.length meta.metaVersion `shouldBe` 64  -- SHA-256 hex
 
     it "rejects empty bundles" do
-      logger <- newLogger False Nothing
+      logger <- newLogger False
       let sources = Map.empty :: Map FilePath Text
       result <- compileBundle logger "test" sources
       case result of
@@ -726,7 +726,7 @@ withPendingService' deployId sources act = do
   let tmpPath = "/tmp/jl4-service-test-" <> Text.unpack deployId
   cleanDir tmpPath
   store <- initStore tmpPath
-  logger <- newLogger False Nothing
+  logger <- newLogger False
 
   -- Save sources to the BundleStore (so loadAndRegister can find them)
   let sourceMap = Map.fromList sources
@@ -768,7 +768,7 @@ withServiceFromSources' deployId sources act = do
   let tmpPath = "/tmp/jl4-service-test-" <> Text.unpack deployId
   cleanDir tmpPath
   store <- initStore tmpPath
-  logger <- newLogger False Nothing
+  logger <- newLogger False
 
   -- Compile the bundle directly
   let sourceMap = Map.fromList sources
@@ -806,7 +806,7 @@ withEmptyService' act = do
   let tmpPath = "/tmp/jl4-service-test-empty"
   cleanDir tmpPath
   store <- initStore tmpPath
-  logger <- newLogger False Nothing
+  logger <- newLogger False
   registry <- newTVarIO Map.empty
   let env = MkAppEnv registry store Nothing logger testOptions
 

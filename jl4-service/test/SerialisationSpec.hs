@@ -57,7 +57,7 @@ spec :: SpecWith ()
 spec = describe "CBOR serialisation" do
   describe "SerializedBundle round-trip" do
     it "compileBundle produces non-empty SerializedBundle list" do
-      logger <- newLogger False Nothing
+      logger <- newLogger False
       let sources = Map.singleton "qualifies.l4" qualifiesJL4
       result <- compileBundle logger "test" sources
       case result of
@@ -66,7 +66,7 @@ spec = describe "CBOR serialisation" do
           length bundles `shouldSatisfy` (> 0)
 
     it "SerializedBundle survives CBOR encode/decode round-trip" do
-      logger <- newLogger False Nothing
+      logger <- newLogger False
       let sources = Map.singleton "qualifies.l4" qualifiesJL4
       result <- compileBundle logger "test" sources
       case result of
@@ -91,7 +91,7 @@ spec = describe "CBOR serialisation" do
 
   describe "BundleStore CBOR persistence" do
     it "saveBundleCbor and loadBundleCbor round-trip" do
-      logger <- newLogger False Nothing
+      logger <- newLogger False
       withTempStore $ \store -> do
         let sources = Map.singleton "qualifies.l4" qualifiesJL4
             meta = StoredMetadata [] "v1" "2025-01-01T00:00:00Z"
@@ -107,13 +107,13 @@ spec = describe "CBOR serialisation" do
             isJust loaded `shouldBe` True
 
     it "loadBundleCbor returns Nothing for non-existent deployment" do
-      logger <- newLogger False Nothing
+      logger <- newLogger False
       withTempStore $ \store -> do
         loaded <- loadBundleCbor logger store "nonexistent"
         isNothing loaded `shouldBe` True
 
     it "loadBundleCbor returns Nothing for corrupt CBOR data" do
-      logger <- newLogger False Nothing
+      logger <- newLogger False
       withTempStore $ \store -> do
         let sources = Map.singleton "qualifies.l4" qualifiesJL4
             meta = StoredMetadata [] "v1" "2025-01-01T00:00:00Z"
@@ -128,7 +128,7 @@ spec = describe "CBOR serialisation" do
         isNothing loaded `shouldBe` True
 
     it "saveBundleCbor overwrites existing CBOR atomically" do
-      logger <- newLogger False Nothing
+      logger <- newLogger False
       withTempStore $ \store -> do
         let sources = Map.singleton "qualifies.l4" qualifiesJL4
             meta = StoredMetadata [] "v1" "2025-01-01T00:00:00Z"
@@ -147,7 +147,7 @@ spec = describe "CBOR serialisation" do
 
   describe "buildFromCborBundle" do
     it "produces the same function names as compileBundle" do
-      logger <- newLogger False Nothing
+      logger <- newLogger False
       let sources = Map.singleton "qualifies.l4" qualifiesJL4
       result <- compileBundle logger "test" sources
       case result of
@@ -214,7 +214,7 @@ spec = describe "CBOR serialisation" do
 
   describe "full restart simulation" do
     it "compile → save CBOR → load CBOR → rebuild → evaluate" do
-      logger <- newLogger False Nothing
+      logger <- newLogger False
       let sources = Map.singleton "qualifies.l4" qualifiesJL4
           deployId' = "restart-sim"
       withTempStore $ \store -> do
@@ -262,7 +262,7 @@ spec = describe "CBOR serialisation" do
                         Map.lookup "value" r.fnResult `shouldBe` Just (FnLitBool True)
 
     it "deleteBundle also removes CBOR cache" do
-      logger <- newLogger False Nothing
+      logger <- newLogger False
       let sources = Map.singleton "qualifies.l4" qualifiesJL4
           deployId' = "delete-cbor"
       withTempStore $ \store -> do
@@ -288,7 +288,7 @@ spec = describe "CBOR serialisation" do
 
   describe "HTTP control plane with CBOR" do
     it "deploy via POST, then verify CBOR was saved" do
-      logger <- newLogger False Nothing
+      logger <- newLogger False
       withEmptyService $ \baseUrl mgr store -> do
         -- Deploy via multipart POST
         let zipBytes = createZipBundle [("qualifies.l4", qualifiesJL4)]
@@ -336,7 +336,7 @@ withTempStore action = do
 -- This simulates a restart: compile → serialize → deserialize → serve.
 withCborRebuiltService :: Text -> Map FilePath Text -> (String -> Manager -> IO a) -> IO a
 withCborRebuiltService deployId sources act = do
-  logger <- newLogger False Nothing
+  logger <- newLogger False
   let tmpPath = "/tmp/jl4-service-test-" <> Text.unpack deployId
   cleanDir tmpPath
   store <- initStore tmpPath
@@ -375,7 +375,7 @@ withCborRebuiltService deployId sources act = do
 -- | Start a service with an empty deployment registry, exposing the store.
 withEmptyService :: (String -> Manager -> BundleStore -> IO a) -> IO a
 withEmptyService act = do
-  logger <- newLogger False Nothing
+  logger <- newLogger False
   let tmpPath = "/tmp/jl4-service-test-cbor-empty"
   cleanDir tmpPath
   store <- initStore tmpPath
