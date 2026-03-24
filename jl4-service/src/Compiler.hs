@@ -74,7 +74,7 @@ compileBundle logger deployId sources = do
 
           -- Build metadata
           now <- getCurrentTime
-          let summaries = [FunctionSummary fn.fnImpl.name fn.fnImpl.description fn.fnImpl.parameters | fn <- allFunctions]
+          let summaries = [FunctionSummary { fsName = fn.fnImpl.name, fsDescription = fn.fnImpl.description, fsParameters = fn.fnImpl.parameters, fsReturnType = fn.fnImpl.returnType, fsSection = Nothing, fsIsDeontic = fn.fnImpl.isDeontic } | fn <- allFunctions]
               version = computeVersion sources
               meta = DeploymentMetadata
                 { metaFunctions = summaries
@@ -225,7 +225,7 @@ buildFromCborBundle logger deployId bundle sources storedMeta = do
 
           -- Reconstruct DeploymentMetadata from stored metadata
           now <- getCurrentTime
-          let summaries = [FunctionSummary fn.fnImpl.name fn.fnImpl.description fn.fnImpl.parameters | fn <- validFns]
+          let summaries = [FunctionSummary { fsName = fn.fnImpl.name, fsDescription = fn.fnImpl.description, fsParameters = fn.fnImpl.parameters, fsReturnType = fn.fnImpl.returnType, fsSection = Nothing, fsIsDeontic = fn.fnImpl.isDeontic } | fn <- validFns]
               version = storedMeta.smVersion
               meta = DeploymentMetadata
                 { metaFunctions = summaries
@@ -299,6 +299,8 @@ exportToFunction resolvedModule implicitParams export =
     , supportedEvalBackend = [JL4]
     , deonticPartyType = mPartyType
     , deonticActionType = mActionType
+    , returnType = returnTypeDisplay export.exportReturnType
+    , isDeontic = isDeontic
     }
 
 -- | Build Parameters from ExportedParam list.
@@ -350,6 +352,15 @@ extractDeonticTypeNames ty@(TyApp _ _ [partyTy, actionTy])
     typeName (TyApp _ n _) = rawNameToText (rawName (getActual n))
     typeName _ = "Unknown"
 extractDeonticTypeNames _ = Nothing
+
+-- | Display the return type of an exported function as a user-facing string.
+returnTypeDisplay :: Maybe (Type' Resolved) -> Text
+returnTypeDisplay Nothing = "unknown"
+returnTypeDisplay (Just ty)
+  | isDeonticType ty = "DEONTIC"
+  | otherwise = case ty of
+      TyApp _ n _ -> Text.toUpper (rawNameToText (rawName (getActual n)))
+      _ -> "unknown"
 
 -- | Compute SHA-256 version from sorted source contents.
 computeVersion :: Map FilePath Text -> Text

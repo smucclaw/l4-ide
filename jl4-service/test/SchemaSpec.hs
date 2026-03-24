@@ -111,7 +111,7 @@ instance Arbitrary Parameter where
           <*> Q.resize (n `div` 4) arbitrary
 
 instance Arbitrary Function where
-  arbitrary = Types.Function <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+  arbitrary = Types.Function <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
 
 instance Arbitrary EvalBackend where
   arbitrary = Q.chooseEnum (minBound, maxBound)
@@ -227,7 +227,7 @@ instance Arbitrary DeploymentMetadata where
     <*> pure (UTCTime (fromGregorian 2025 1 1) 0)
 
 instance Arbitrary FunctionSummary where
-  arbitrary = FunctionSummary <$> arbitrary <*> arbitrary <*> arbitrary
+  arbitrary = FunctionSummary <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
 
 instance Arbitrary DeploymentStatusResponse where
   arbitrary = DeploymentStatusResponse

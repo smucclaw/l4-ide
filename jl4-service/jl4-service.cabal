@@ -62,6 +62,7 @@ library
     Options
     Schema
     Types
+    WebMCPPage
 
   build-depends:
     -- Core L4 packages
@@ -77,6 +78,7 @@ library
     warp,
     wai,
     wai-cors,
+    http-media,
     http-types,
     -- JSON / data
     aeson,

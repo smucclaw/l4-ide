@@ -10,7 +10,8 @@ import Logging (Logger, logInfo, logDebug, logError, newLogger)
 import Options (Options (..), buildOpts)
 import Types
 
-import Data.Aeson (toJSON)
+import Data.Aeson (toJSON, (.=))
+import qualified Data.Aeson as Aeson
 import qualified Data.Text.Encoding as Text.Encoding
 import Control.Concurrent.Async (mapConcurrently_)
 import Control.Concurrent.STM (atomically, modifyTVar', newTVarIO, readTVarIO)
@@ -31,10 +32,13 @@ import Options.Applicative (execParser)
 import Servant
 
 -- | Combined service API.
-type ServiceApi = HealthApi :<|> ControlPlaneApi :<|> DataPlaneApi :<|> ShortRoutes
+type ServiceApi = HealthApi :<|> WellKnownApi :<|> ControlPlaneApi :<|> DataPlaneApi :<|> ShortRoutes
 
 -- | Health check endpoint.
 type HealthApi = "health" :> Get '[JSON] HealthResponse
+
+-- | .well-known/webmcp discovery manifest.
+type WellKnownApi = ".well-known" :> "webmcp" :> Get '[JSON] Aeson.Value
 
 -- | Main entry point.
 defaultMain :: IO ()
@@ -151,7 +155,7 @@ app env = serve (Proxy @ServiceApi) (serverT env)
 
 serverT :: AppEnv -> Server ServiceApi
 serverT env =
-  hoistServer (Proxy @ServiceApi) (nt env) (healthHandler :<|> controlPlaneHandler :<|> dataPlaneHandler :<|> shortRoutesHandler)
+  hoistServer (Proxy @ServiceApi) (nt env) (healthHandler :<|> wellKnownHandler :<|> controlPlaneHandler :<|> dataPlaneHandler :<|> shortRoutesHandler)
  where
   nt :: AppEnv -> AppM a -> Handler a
   nt s x = runReaderT x s
@@ -178,3 +182,22 @@ healthHandler = do
         }
     , hrInstanceToken = env.options.instanceToken
     }
+
+-- | GET /.well-known/webmcp — discovery manifest for WebMCP crawlers.
+wellKnownHandler :: ServerT WellKnownApi AppM
+wellKnownHandler = do
+  env <- ask
+  registry <- liftIO . readTVarIO $ env.deploymentRegistry
+  let readyDeployments =
+        [ Aeson.object
+            [ "id" .= did.unDeploymentId
+            , "url" .= ("/deployments/" <> did.unDeploymentId <> "/agent")
+            , "scriptUrl" .= ("/deployments/" <> did.unDeploymentId <> "/webmcp.js")
+            , "functions" .= length meta.metaFunctions
+            ]
+        | (did, DeploymentReady _ meta) <- Map.toList registry
+        ]
+  pure $ Aeson.object
+    [ "version" .= ("draft" :: String)
+    , "deployments" .= readyDeployments
+    ]

@@ -79,6 +79,12 @@ data FunctionSummary = FunctionSummary
   { fsName        :: !Text
   , fsDescription :: !Text
   , fsParameters  :: !Parameters
+  , fsReturnType  :: !Text
+  -- ^ Display name of the return type (e.g. "BOOLEAN", "NUMBER", "DEONTIC").
+  , fsSection     :: !(Maybe Text)
+  -- ^ L4 section header (§§) this function belongs to.
+  , fsIsDeontic   :: !Bool
+  -- ^ Whether this function returns a DEONTIC (needs startTime + events params).
   }
   deriving stock (Show, Generic)
   deriving anyclass (FromJSON, ToJSON)
@@ -133,6 +139,10 @@ data Function = Function
   -- ^ Type name for the party parameter of a DEONTIC function (e.g. "Party", "Driver")
   , deonticActionType     :: !(Maybe Text)
   -- ^ Type name for the action parameter of a DEONTIC function (e.g. "Contract Action")
+  , returnType            :: !Text
+  -- ^ Display name of the return type (e.g. "BOOLEAN", "NUMBER", "DEONTIC").
+  , isDeontic             :: !Bool
+  -- ^ Whether this function returns a DEONTIC (needs startTime + events params).
   }
   deriving stock (Show, Read, Ord, Eq, Generic)
 
@@ -146,6 +156,8 @@ instance ToJSON Function where
             , "description" .= Aeson.String fn.description
             , "parameters" .= fn.parameters
             , "supportedBackends" .= fn.supportedEvalBackend
+            , "returnType" .= fn.returnType
+            , "isDeontic" .= fn.isDeontic
             ] <>
             maybe [] (\pt -> ["deonticPartyType" .= pt]) fn.deonticPartyType <>
             maybe [] (\at -> ["deonticActionType" .= at]) fn.deonticActionType)
@@ -168,6 +180,8 @@ instance FromJSON Function where
             <*> p .: "supportedBackends"
             <*> p .:? "deonticPartyType"
             <*> p .:? "deonticActionType"
+            <*> p .:? "returnType" .!= "unknown"
+            <*> p .:? "isDeontic" .!= False
       )
       props
 
