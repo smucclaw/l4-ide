@@ -11,6 +11,7 @@ module DataPlane (
 import Backend.Api
 import ControlPlane (DeploymentStatusResponse, getDeploymentHandler, putDeploymentHandler, deleteDeploymentHandler)
 import DeploymentLoader (triggerCompilationIfPending)
+import WebMCPPage (RawHtml, RawJs, HTML, JavaScript, renderAgentPage, renderWebMCPScript)
 import Servant.Multipart
 import Backend.DecisionQueryPlan (CachedDecisionQuery, buildDecisionQueryCacheFromCompiled, queryPlan, QueryPlanResponse)
 import Backend.FunctionSchema (Parameter, Parameters(..))
@@ -66,6 +67,10 @@ type ShortDeploymentRoutes =
   :<|> "functions" :> Get '[JSON] [SimpleFunction]
        -- GET /{id}/openapi.json → OpenAPI spec
   :<|> "openapi.json" :> Get '[JSON] DeploymentMetadata
+       -- GET /{id}/webmcp.js → WebMCP script
+  :<|> "webmcp.js" :> Get '[JavaScript] RawJs
+       -- GET /{id}/agent → WebMCP agent page
+  :<|> "agent" :> Get '[HTML] RawHtml
        -- /{id}/{fn}/... → function routes
   :<|> Capture "name" Text :> FunctionRoutes
 
@@ -73,6 +78,8 @@ type DeploymentRoutes =
        "functions" :> Get '[JSON] [SimpleFunction]
   :<|> "functions" :> Capture "name" Text :> FunctionRoutes
   :<|> "openapi.json" :> Get '[JSON] DeploymentMetadata  -- Simplified; returns metadata for now
+  :<|> "webmcp.js" :> Get '[JavaScript] RawJs
+  :<|> "agent" :> Get '[HTML] RawHtml
 
 -- | Evaluation responses include an X-Eval-Alloc-Bytes header reporting
 -- the GHC allocation bytes consumed by the evaluation.
@@ -92,6 +99,8 @@ dataPlaneHandler deployIdText =
        listFunctionsHandler deployId
   :<|> functionRoutesHandler deployId
   :<|> openApiHandler deployId
+  :<|> webmcpScriptHandler deployId
+  :<|> agentPageHandler deployId
  where
   deployId = DeploymentId deployIdText
 
@@ -103,6 +112,8 @@ shortRoutesHandler deployIdText =
   :<|> deleteDeploymentHandler deployIdText
   :<|> listFunctionsHandler deployId
   :<|> openApiHandler deployId
+  :<|> webmcpScriptHandler deployId
+  :<|> agentPageHandler deployId
   :<|> functionRoutesHandler deployId
  where
   deployId = DeploymentId deployIdText
@@ -394,6 +405,16 @@ openApiHandler deployId = do
     [("deploymentId", Aeson.toJSON deployId.unDeploymentId)]
   (_fns, meta) <- requireDeploymentReady deployId
   pure meta
+
+-- | GET /deployments/{id}/webmcp.js
+webmcpScriptHandler :: DeploymentId -> AppM RawJs
+webmcpScriptHandler deployId =
+  pure $ renderWebMCPScript deployId.unDeploymentId
+
+-- | GET /deployments/{id}/agent
+agentPageHandler :: DeploymentId -> AppM RawHtml
+agentPageHandler deployId =
+  pure $ renderAgentPage deployId.unDeploymentId
 
 -- ----------------------------------------------------------------------------
 -- Evaluation helpers
