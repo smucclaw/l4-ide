@@ -23,22 +23,28 @@ import Data.IORef (newIORef, atomicModifyIORef')
 import qualified Data.Map.Strict as Map
 import Data.Time (getCurrentTime, diffUTCTime)
 import Network.HTTP.Types.Status (statusCode)
-import Network.Wai (Middleware, Request, requestMethod, rawPathInfo, responseStatus, pathInfo, responseLBS)
-import Network.HTTP.Types (status503, mkStatus)
+import Network.Wai (Middleware, Request, requestMethod, rawPathInfo, responseStatus, pathInfo, responseLBS, requestHeaders)
+import Network.HTTP.Types (status503, mkStatus, ok200)
+import qualified Data.ByteString as BS
 import Network.Wai.Handler.Warp (defaultSettings, runSettings, setHost, setPort, setOnException, setOnExceptionResponse)
 import Network.Wai.Handler.Warp (defaultShouldDisplayException)
 import Network.Wai.Middleware.Cors (cors, simpleCorsResourcePolicy, corsMethods, corsRequestHeaders)
 import Options.Applicative (execParser)
 import Servant
 
+import WebMCPPage (RawJs, JavaScript, renderExplorerPageBS, renderOrgWebMCPScript)
+
 -- | Combined service API.
-type ServiceApi = HealthApi :<|> WellKnownApi :<|> ControlPlaneApi :<|> DataPlaneApi :<|> ShortRoutes
+type ServiceApi = HealthApi :<|> WellKnownApi :<|> WebMCPApi :<|> ControlPlaneApi :<|> DataPlaneApi :<|> ShortRoutes
 
 -- | Health check endpoint.
 type HealthApi = "health" :> Get '[JSON] HealthResponse
 
 -- | .well-known/webmcp discovery manifest.
 type WellKnownApi = ".well-known" :> "webmcp" :> Get '[JSON] Aeson.Value
+
+-- | Org-wide WebMCP script endpoint.
+type WebMCPApi = "webmcp.js" :> Get '[JavaScript] RawJs
 
 -- | Main entry point.
 defaultMain :: IO ()
@@ -89,7 +95,7 @@ defaultMain = do
 
   -- Build middleware stack
   concLimiter <- concurrencyLimiter options.maxConcurrentRequests
-  let middleware = concLimiter . requestLogMiddleware logger . corsMiddleware
+  let middleware = concLimiter . requestLogMiddleware logger . corsMiddleware . explorerMiddleware
       onExc :: Maybe Request -> SomeException -> IO ()
       onExc _req exc =
         if defaultShouldDisplayException exc || debug
@@ -159,7 +165,7 @@ app env = serve (Proxy @ServiceApi) (serverT env)
 
 serverT :: AppEnv -> Server ServiceApi
 serverT env =
-  hoistServer (Proxy @ServiceApi) (nt env) (healthHandler :<|> wellKnownHandler :<|> controlPlaneHandler :<|> dataPlaneHandler :<|> shortRoutesHandler)
+  hoistServer (Proxy @ServiceApi) (nt env) (healthHandler :<|> wellKnownHandler :<|> webmcpHandler :<|> controlPlaneHandler :<|> dataPlaneHandler :<|> shortRoutesHandler)
  where
   nt :: AppEnv -> AppM a -> Handler a
   nt s x = runReaderT x s
@@ -195,13 +201,32 @@ wellKnownHandler = do
   let readyDeployments =
         [ Aeson.object
             [ "id" .= did.unDeploymentId
-            , "url" .= ("/deployments/" <> did.unDeploymentId <> "/agent")
-            , "scriptUrl" .= ("/deployments/" <> did.unDeploymentId <> "/webmcp.js")
             , "functions" .= length meta.metaFunctions
             ]
         | (did, DeploymentReady _ meta) <- Map.toList registry
         ]
   pure $ Aeson.object
     [ "version" .= ("draft" :: String)
+    , "script" .= ("/webmcp.js" :: String)
     , "deployments" .= readyDeployments
     ]
+
+-- | GET /webmcp.js — org-wide WebMCP script.
+webmcpHandler :: ServerT WebMCPApi AppM
+webmcpHandler = pure renderOrgWebMCPScript
+
+-- | Middleware: serve the deployment explorer page on GET / with Accept: text/html.
+explorerMiddleware :: Middleware
+explorerMiddleware baseApp req sendResp
+  | requestMethod req == "GET"
+  , rawPathInfo req == "/"
+  , acceptsHtml (requestHeaders req)
+  = sendResp $ responseLBS ok200
+      [("Content-Type", "text/html; charset=utf-8")]
+      renderExplorerPageBS
+  | otherwise = baseApp req sendResp
+ where
+  acceptsHtml headers =
+    case lookup "Accept" headers of
+      Just accept -> "text/html" `BS.isInfixOf` accept
+      Nothing -> False

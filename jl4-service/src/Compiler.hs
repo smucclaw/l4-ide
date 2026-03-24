@@ -360,7 +360,10 @@ returnTypeDisplay (Just ty)
   | isDeonticType ty = "DEONTIC"
   | otherwise = case ty of
       TyApp _ n _ -> Text.toUpper (rawNameToText (rawName (getActual n)))
-      _ -> "unknown"
+      Type _ -> "TYPE"
+      Fun{} -> "FUNCTION"
+      Forall _ _ inner -> returnTypeDisplay (Just inner)
+      InfVar{} -> "unknown"
 
 -- | Compute SHA-256 version from sorted source contents.
 computeVersion :: Map FilePath Text -> Text
