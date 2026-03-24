@@ -63,13 +63,15 @@ spec = describe "BundleStore" do
       it "removes a deployment from disk" \store -> do
         let meta = StoredMetadata [] "v1" "2025-01-01T00:00:00Z"
         saveBundle store "to-delete" (Map.singleton "main.l4" "DECIDE f IS TRUE") meta
-        deleteBundle store "to-delete"
+        ok <- deleteBundle store "to-delete"
+        ok `shouldBe` True
         deployIds <- listDeployments store
         deployIds `shouldNotContain` ["to-delete"]
 
       it "is idempotent for non-existent deployments" \store -> do
         -- Should not throw
-        deleteBundle store "nonexistent"
+        ok <- deleteBundle store "nonexistent"
+        ok `shouldBe` True
 
 -- | Create a temp store, run the test, then clean up.
 withTempStore :: (BundleStore -> IO ()) -> IO ()

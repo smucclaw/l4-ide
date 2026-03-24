@@ -14,6 +14,7 @@ module BundleStore (
 ) where
 
 import Codec.Serialise (Serialise, deserialiseOrFail, serialise)
+import Control.Exception (IOException, catch)
 import Data.Aeson (FromJSON, ToJSON, eitherDecodeFileStrict', encodeFile, toJSON)
 import qualified Data.ByteString.Lazy as LBS
 import Data.Map.Strict (Map)
@@ -206,13 +207,17 @@ listDeployments (BundleStore root) = do
       pure (map Text.pack validEntries)
 
 -- | Delete a deployment's directory from the store.
-deleteBundle :: BundleStore -> Text -> IO ()
+-- Returns False if removal failed (e.g. EFS/NFS race with stale files).
+deleteBundle :: BundleStore -> Text -> IO Bool
 deleteBundle (BundleStore root) deployId = do
   let deployDir = root </> Text.unpack deployId
   exists <- doesDirectoryExist deployDir
   if exists
-    then removeDirectoryRecursive deployDir
-    else pure ()
+    then do
+      removeDirectoryRecursive deployDir
+      pure True
+    `catch` \(_ :: IOException) -> pure False
+  else pure True
 
 -- | Delete only the CBOR cache for a deployment, keeping sources intact.
 deleteBundleCbor :: BundleStore -> Text -> IO ()

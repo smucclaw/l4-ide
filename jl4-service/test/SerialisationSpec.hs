@@ -280,7 +280,7 @@ spec = describe "CBOR serialisation" do
             isJust mCbor `shouldBe` True
 
             -- Delete entire deployment
-            deleteBundle store deployId'
+            _ <- deleteBundle store deployId'
 
             -- CBOR should be gone too (directory deleted)
             mCbor2 <- loadBundleCbor logger store deployId'
