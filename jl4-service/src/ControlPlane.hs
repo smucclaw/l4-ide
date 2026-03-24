@@ -270,14 +270,18 @@ deleteDeploymentHandler deployIdText = do
   case Map.lookup deployId registry of
     Nothing -> throwError err404
     Just _ -> do
-      liftIO $ atomically $ modifyTVar' env.deploymentRegistry $
-        Map.delete deployId
-      liftIO $ BundleStore.deleteBundle env.bundleStore (deployId.unDeploymentId)
-
-      liftIO $ logInfo env.logger "Deployment deleted"
-        [("deploymentId", toJSON deployId.unDeploymentId)]
-
-      pure NoContent
+      ok <- liftIO $ BundleStore.deleteBundle env.bundleStore (deployId.unDeploymentId)
+      if ok
+        then do
+          liftIO $ atomically $ modifyTVar' env.deploymentRegistry $
+            Map.delete deployId
+          liftIO $ logInfo env.logger "Deployment deleted"
+            [("deploymentId", toJSON deployId.unDeploymentId)]
+          pure NoContent
+        else do
+          liftIO $ logWarn env.logger "Deployment directory not fully removed, retry later"
+            [("deploymentId", toJSON deployId.unDeploymentId)]
+          throwError err409 { errBody = jsonError "Could not remove deployment files — retry later" }
 
 -- ----------------------------------------------------------------------------
 -- Helpers
