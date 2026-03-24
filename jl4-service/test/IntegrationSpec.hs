@@ -368,6 +368,29 @@ spec = describe "integration" do
         let body = decodeObject (responseBody resp)
         lookupArrayLength "metaFunctions" body `shouldSatisfy` maybe False (> 0)
 
+    it "returns org-wide metadata via /openapi.json" do
+      withServiceFromSources "org-openapi" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        req <- parseRequest (baseUrl <> "/openapi.json")
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 200
+        let body = decodeObject (responseBody resp)
+        lookupArrayLength "functions" body `shouldSatisfy` maybe False (> 0)
+
+    it "filters org-wide openapi.json by scope" do
+      withServiceFromSources "scope-test" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        -- With matching scope
+        req1 <- parseRequest (baseUrl <> "/openapi.json?scope=scope-test/*")
+        resp1 <- httpLbs req1 mgr
+        statusCode' resp1 `shouldBe` 200
+        let body1 = decodeObject (responseBody resp1)
+        lookupArrayLength "functions" body1 `shouldSatisfy` maybe False (> 0)
+        -- With non-matching scope
+        req2 <- parseRequest (baseUrl <> "/openapi.json?scope=nonexistent/*")
+        resp2 <- httpLbs req2 mgr
+        statusCode' resp2 `shouldBe` 200
+        let body2 = decodeObject (responseBody resp2)
+        lookupArrayLength "functions" body2 `shouldBe` Just 0
+
   describe "deontic evaluation" do
     it "evaluates a deontic function to FULFILLED with all events" do
       withServiceFromSources "deontic-ok" [("contract.l4", deonticExportJL4)] \baseUrl mgr -> do

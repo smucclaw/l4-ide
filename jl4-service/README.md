@@ -171,11 +171,16 @@ Returns which inputs are still needed, ranked by impact on the outcome.
 
 Deployments are automatically WebMCP-compatible. Browser AI agents can discover and call deployed L4 rules as structured tools.
 
-| Method | Endpoint              | Description                                           |
-| ------ | --------------------- | ----------------------------------------------------- |
-| `GET`  | `/` (browser)         | Deployment explorer — lists all deployments/functions |
-| `GET`  | `/webmcp.js`          | Org-wide JS that registers WebMCP tools               |
-| `GET`  | `/.well-known/webmcp` | Discovery manifest listing all deployments            |
+| Method | Endpoint                         | Description                                           |
+| ------ | -------------------------------- | ----------------------------------------------------- |
+| `GET`  | `/` (browser)                    | Deployment explorer — lists all deployments/functions |
+| `GET`  | `/openapi.json`                  | Org-wide metadata (all deployments, all functions)    |
+| `GET`  | `/openapi.json?scope=deploy/*`   | Filtered by deployment/function scope                 |
+| `GET`  | `/deployments/{id}/openapi.json` | Single deployment metadata (existing)                 |
+| `GET`  | `/webmcp.js`                     | Org-wide JS that registers WebMCP tools               |
+| `GET`  | `/.well-known/webmcp`            | Discovery manifest listing all deployments            |
+
+The `/openapi.json` endpoint serves cached metadata even for pending (lazy-loaded) deployments, so it works immediately after a restart without triggering compilation.
 
 The script registers **3 discovery tools** (`search_rules`, `get_rule_schema`, `evaluate_rule`) that work across all deployments. Direct per-function tools are also registered when the function count is small enough (≤ 20).
 

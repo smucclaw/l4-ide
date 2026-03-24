@@ -11,6 +11,8 @@ module BundleStore (
   saveBundleCbor,
   loadBundleCbor,
   deleteBundleCbor,
+  saveMetadataCache,
+  loadMetadataCache,
 ) where
 
 import Codec.Serialise (Serialise, deserialiseOrFail, serialise)
@@ -227,6 +229,32 @@ deleteBundleCbor (BundleStore root) deployId = do
   if exists
     then removeFile cborFile
     else pure ()
+
+-- | Save the full DeploymentMetadata as a JSON cache after successful compilation.
+-- This allows serving metadata for pending/lazy-loaded deployments without recompilation.
+saveMetadataCache :: BundleStore -> Text -> LBS.ByteString -> IO ()
+saveMetadataCache (BundleStore root) deployId metaJson = do
+  let cacheFile = root </> Text.unpack deployId </> "openapi-cache.json"
+      tmpFile = cacheFile <> ".tmp"
+  LBS.writeFile tmpFile metaJson
+  exists <- doesFileExist cacheFile
+  if exists
+    then do
+      removeFile cacheFile
+      renameFile tmpFile cacheFile
+    else
+      renameFile tmpFile cacheFile
+
+-- | Try to load the cached DeploymentMetadata for a deployment.
+-- Returns the raw JSON ByteString (caller decodes as DeploymentMetadata).
+loadMetadataCache :: BundleStore -> Text -> IO (Maybe LBS.ByteString)
+loadMetadataCache (BundleStore root) deployId = do
+  let cacheFile = root </> Text.unpack deployId </> "openapi-cache.json"
+  exists <- doesFileExist cacheFile
+  if not exists
+    then pure Nothing
+    else (Just <$> LBS.readFile cacheFile)
+      `catch` \(_ :: IOException) -> pure Nothing
 
 -- | Get the directory component of a file path.
 takeDirectory :: FilePath -> FilePath

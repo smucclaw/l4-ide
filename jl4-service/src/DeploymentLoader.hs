@@ -17,6 +17,7 @@ import Control.Concurrent.STM (TVar, atomically, modifyTVar', readTVar)
 import Control.Exception (catch)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Reader (asks)
+import qualified Data.Aeson as Aeson
 import Data.Aeson (toJSON)
 import Data.Int (Int64)
 import qualified Data.Map.Strict as Map
@@ -66,6 +67,9 @@ loadAndRegister logger options registry store deployId = do
     Right (fns, meta) -> do
       atomically $ modifyTVar' registry $
         Map.insert (DeploymentId deployId) (DeploymentReady fns meta)
+      -- Cache the full metadata to disk so it survives restarts
+      -- and is available for pending/lazy-loaded deployments.
+      BundleStore.saveMetadataCache store deployId (Aeson.encode meta)
       logInfo logger "Deployment ready"
         [("deploymentId", toJSON deployId)]
     Left err -> do
