@@ -24,8 +24,8 @@ import qualified Data.Map.Strict as Map
 import Data.Time (getCurrentTime, diffUTCTime)
 import Network.HTTP.Types.Status (statusCode)
 import Network.Wai (Middleware, Request, requestMethod, rawPathInfo, responseStatus, pathInfo, responseLBS)
-import Network.HTTP.Types (status503)
-import Network.Wai.Handler.Warp (defaultSettings, runSettings, setHost, setPort, setOnException, setOnExceptionResponse, exceptionResponseForDebug)
+import Network.HTTP.Types (status503, mkStatus)
+import Network.Wai.Handler.Warp (defaultSettings, runSettings, setHost, setPort, setOnException, setOnExceptionResponse)
 import Network.Wai.Handler.Warp (defaultShouldDisplayException)
 import Network.Wai.Middleware.Cors (cors, simpleCorsResourcePolicy, corsMethods, corsRequestHeaders)
 import Options.Applicative (execParser)
@@ -92,14 +92,18 @@ defaultMain = do
   let middleware = concLimiter . requestLogMiddleware logger . corsMiddleware
       onExc :: Maybe Request -> SomeException -> IO ()
       onExc _req exc =
-        if defaultShouldDisplayException exc
+        if defaultShouldDisplayException exc || debug
         then logError logger "Unhandled exception"
                [("error", toJSON (displayException exc))]
         else pure ()
+      onExcResponse _exc =
+               responseLBS (mkStatus 500 "Internal Server Error")
+                      [("Content-Type", "application/json")]
+                      "{\"error\":\"Internal server error\"}"
       settings = setHost "*"
                $ setPort port
                $ setOnException onExc
-               $ (if debug then setOnExceptionResponse (\_exc -> exceptionResponseForDebug _exc) else id)
+               $ setOnExceptionResponse onExcResponse
                $ defaultSettings
 
   logInfo logger "Server ready"
