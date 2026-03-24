@@ -171,31 +171,35 @@ Returns which inputs are still needed, ranked by impact on the outcome.
 
 Deployments are automatically WebMCP-compatible. Browser AI agents can discover and call deployed L4 rules as structured tools.
 
-| Method | Endpoint                      | Description                                    |
-| ------ | ----------------------------- | ---------------------------------------------- |
-| `GET`  | `/deployments/{id}/agent`     | HTML page with WebMCP tools (human + AI agent) |
-| `GET`  | `/deployments/{id}/webmcp.js` | Standalone JS that registers WebMCP tools      |
-| `GET`  | `/.well-known/webmcp`         | Discovery manifest listing all deployments     |
+| Method | Endpoint              | Description                                           |
+| ------ | --------------------- | ----------------------------------------------------- |
+| `GET`  | `/` (browser)         | Deployment explorer — lists all deployments/functions |
+| `GET`  | `/webmcp.js`          | Org-wide JS that registers WebMCP tools               |
+| `GET`  | `/.well-known/webmcp` | Discovery manifest listing all deployments            |
 
-Each deployment page registers **two sets of tools**:
-
-- **3 discovery tools** (`search_rules`, `get_rule_schema`, `evaluate_rule`) — for search-first exploration of large rule sets
-- **N direct tools** (one per deployed function) — for agents that already know which rule to call
+The script registers **3 discovery tools** (`search_rules`, `get_rule_schema`, `evaluate_rule`) that work across all deployments. Direct per-function tools are also registered when the function count is small enough (≤ 20).
 
 #### Embedding on Third-Party Websites
 
 ```html
-<!-- Public deployment -->
-<script src="https://rules.example.com/deployments/abc123/webmcp.js"></script>
+<!-- All deployments, all functions -->
+<script src="https://your-host/webmcp.js"></script>
 
-<!-- Gated deployment with API key -->
+<!-- Scoped to specific deployments/functions -->
 <script
-  src="https://rules.example.com/deployments/abc123/webmcp.js"
-  data-api-key="sk_live_xxx"
+  src="https://your-host/webmcp.js"
+  data-scope="sell-scenario/*, safe-valuation/effective-sale-price"
 ></script>
+
+<!-- With API key for cross-origin auth -->
+<script src="https://your-host/webmcp.js" data-api-key="sk_live_xxx"></script>
 ```
 
-**Required permissions:** The API key needs `l4:read` for tool discovery and `l4:evaluate` to execute rules. Without `l4:evaluate`, tools register but evaluation calls return 403.
+**Configuration attributes:**
+
+- `data-scope` — Filter deployments/functions: `deploy/*` (all in deploy), `deploy/fn` (one function), comma-separated
+- `data-tools` — Registration mode: `auto` (default), `discovery`, `direct`, `all`
+- `data-api-key` — API key for cloud-hosted deployments on [Legalese Cloud](https://legalese.cloud). Not needed for self-hosted instances.
 
 ## CLI Options
 
@@ -301,7 +305,7 @@ jl4-service/
     DataPlane.hs            -- /deployments/{id}/functions/... evaluation handlers
     DeploymentLoader.hs     -- Shared compilation logic (eager startup, lazy compile-on-access)
     Schema.hs               -- OpenAPI spec generation
-    WebMCPPage.hs           -- WebMCP agent page + JS generation
+    WebMCPPage.hs           -- WebMCP deployment explorer + org-wide JS generation
     Backend/
       Api.hs                -- FnLiteral, ResponseWithReason, RunFunction
       Jl4.hs                -- L4 typechecking and evaluation via Shake rules
