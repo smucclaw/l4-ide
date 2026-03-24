@@ -12,6 +12,8 @@ import Types
 
 import Data.Aeson (toJSON, (.=))
 import qualified Data.Aeson as Aeson
+import Data.Text (Text)
+import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text.Encoding
 import Control.Concurrent.Async (mapConcurrently_)
 import Control.Concurrent.STM (atomically, modifyTVar', newTVarIO, readTVarIO)
@@ -35,13 +37,16 @@ import Servant
 import WebMCPPage (RawJs, JavaScript, renderExplorerPageBS, renderOrgWebMCPScript)
 
 -- | Combined service API.
-type ServiceApi = HealthApi :<|> WellKnownApi :<|> WebMCPApi :<|> ControlPlaneApi :<|> DataPlaneApi :<|> ShortRoutes
+type ServiceApi = HealthApi :<|> WellKnownApi :<|> OrgOpenApiRoute :<|> WebMCPApi :<|> ControlPlaneApi :<|> DataPlaneApi :<|> ShortRoutes
 
 -- | Health check endpoint.
 type HealthApi = "health" :> Get '[JSON] HealthResponse
 
 -- | .well-known/webmcp discovery manifest.
 type WellKnownApi = ".well-known" :> "webmcp" :> Get '[JSON] Aeson.Value
+
+-- | Org-wide OpenAPI metadata (all deployments, optionally filtered by scope).
+type OrgOpenApiRoute = "openapi.json" :> QueryParam "scope" Text :> Get '[JSON] Aeson.Value
 
 -- | Org-wide WebMCP script endpoint.
 type WebMCPApi = "webmcp.js" :> Get '[JavaScript] RawJs
@@ -165,7 +170,7 @@ app env = serve (Proxy @ServiceApi) (serverT env)
 
 serverT :: AppEnv -> Server ServiceApi
 serverT env =
-  hoistServer (Proxy @ServiceApi) (nt env) (healthHandler :<|> wellKnownHandler :<|> webmcpHandler :<|> controlPlaneHandler :<|> dataPlaneHandler :<|> shortRoutesHandler)
+  hoistServer (Proxy @ServiceApi) (nt env) (healthHandler :<|> wellKnownHandler :<|> orgOpenApiHandler :<|> webmcpHandler :<|> controlPlaneHandler :<|> dataPlaneHandler :<|> shortRoutesHandler)
  where
   nt :: AppEnv -> AppM a -> Handler a
   nt s x = runReaderT x s
@@ -210,6 +215,59 @@ wellKnownHandler = do
     , "script" .= ("/webmcp.js" :: String)
     , "deployments" .= readyDeployments
     ]
+
+-- | GET /openapi.json — org-wide metadata across all deployments.
+-- Optional ?scope= parameter filters by deployment/function.
+-- Serves from in-memory registry for ready deployments, disk cache for pending ones.
+orgOpenApiHandler :: ServerT OrgOpenApiRoute AppM
+orgOpenApiHandler mScope = do
+  env <- ask
+  registry <- liftIO . readTVarIO $ env.deploymentRegistry
+  let store = env.bundleStore
+
+  -- Collect metadata for all deployments (ready from memory, pending from cache)
+  allEntries <- liftIO $ fmap concat $ mapM (\(did, state) -> do
+    mMeta <- case state of
+      DeploymentReady _ meta -> pure (Just meta)
+      _ -> do
+        mBytes <- BundleStore.loadMetadataCache store did.unDeploymentId
+        case mBytes of
+          Just bytes -> case Aeson.eitherDecode bytes of
+            Right meta -> pure (Just meta)
+            Left _ -> pure Nothing
+          Nothing -> pure Nothing
+    pure $ case mMeta of
+      Nothing -> []
+      Just meta ->
+        [ Aeson.object
+          [ "deployment" .= did.unDeploymentId
+          , "name" .= fn.fsName
+          , "description" .= fn.fsDescription
+          , "parameters" .= fn.fsParameters
+          , "returnType" .= fn.fsReturnType
+          , "isDeontic" .= fn.fsIsDeontic
+          ]
+        | fn <- meta.metaFunctions
+        , matchesScope mScope did.unDeploymentId fn.fsName
+        ]
+    ) (Map.toList registry)
+
+  pure $ Aeson.object
+    [ "functions" .= allEntries
+    ]
+
+-- | Check if a deployment/function matches the scope filter.
+matchesScope :: Maybe Text -> Text -> Text -> Bool
+matchesScope Nothing _ _ = True
+matchesScope (Just scope) deployId fnName =
+  any matchPattern (Text.splitOn "," scope)
+ where
+  matchPattern pat =
+    let trimmed = Text.strip pat
+        (depPat, rest) = Text.breakOn "/" trimmed
+        fnPat = if Text.null rest then "*" else Text.drop 1 rest
+    in (depPat == "*" || depPat == deployId)
+       && (fnPat == "*" || fnPat == fnName)
 
 -- | GET /webmcp.js — org-wide WebMCP script.
 webmcpHandler :: ServerT WebMCPApi AppM
