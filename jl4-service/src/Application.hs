@@ -100,7 +100,7 @@ defaultMain = do
 
   -- Build middleware stack
   concLimiter <- concurrencyLimiter options.maxConcurrentRequests
-  let middleware = concLimiter . requestLogMiddleware logger . corsMiddleware . explorerMiddleware
+  let middleware = concLimiter . requestLogMiddleware logger . corsMiddleware . explorerMiddleware logger
       onExc :: Maybe Request -> SomeException -> IO ()
       onExc _req exc =
         if defaultShouldDisplayException exc || debug
@@ -210,6 +210,7 @@ wellKnownHandler = do
             ]
         | (did, DeploymentReady _ meta) <- Map.toList registry
         ]
+  liftIO $ logInfo env.logger "WebMCP manifest served" []
   pure $ Aeson.object
     [ "version" .= ("draft" :: String)
     , "script" .= ("/webmcp.js" :: String)
@@ -222,6 +223,8 @@ wellKnownHandler = do
 orgOpenApiHandler :: ServerT OrgOpenApiRoute AppM
 orgOpenApiHandler mScope = do
   env <- ask
+  liftIO $ logInfo env.logger "OpenAPI schema requested"
+    [("scope", toJSON mScope)]
   registry <- liftIO . readTVarIO $ env.deploymentRegistry
   let store = env.bundleStore
 
@@ -271,17 +274,22 @@ matchesScope (Just scope) deployId fnName =
 
 -- | GET /webmcp.js — org-wide WebMCP script.
 webmcpHandler :: ServerT WebMCPApi AppM
-webmcpHandler = pure renderOrgWebMCPScript
+webmcpHandler = do
+  env <- ask
+  liftIO $ logInfo env.logger "WebMCP script served" []
+  pure renderOrgWebMCPScript
 
 -- | Middleware: serve the deployment explorer page on GET / with Accept: text/html.
-explorerMiddleware :: Middleware
-explorerMiddleware baseApp req sendResp
+explorerMiddleware :: Logger -> Middleware
+explorerMiddleware logger baseApp req sendResp
   | requestMethod req == "GET"
   , rawPathInfo req == "/"
   , acceptsHtml (requestHeaders req)
-  = sendResp $ responseLBS ok200
-      [("Content-Type", "text/html; charset=utf-8")]
-      renderExplorerPageBS
+  = do
+      logInfo logger "Explorer page served" []
+      sendResp $ responseLBS ok200
+        [("Content-Type", "text/html; charset=utf-8")]
+        renderExplorerPageBS
   | otherwise = baseApp req sendResp
  where
   acceptsHtml headers =
