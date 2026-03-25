@@ -14,7 +14,7 @@ import Options (Options (..))
 import Types
 
 import Control.Concurrent.STM (TVar, atomically, modifyTVar', readTVar)
-import Control.Exception (catch)
+import Control.Exception (SomeException, catch, displayException)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Reader (asks)
 import qualified Data.Aeson as Aeson
@@ -22,6 +22,7 @@ import Data.Aeson (toJSON)
 import Data.Int (Int64)
 import qualified Data.Map.Strict as Map
 import Data.Text (Text)
+import qualified Data.Text as Text
 import GHC.Conc (setAllocationCounter, enableAllocationLimit)
 import GHC.IO.Exception (AllocationLimitExceeded (..))
 import System.Timeout (timeout)
@@ -101,6 +102,13 @@ triggerCompilationIfPending deployId = do
     True -> do
       let DeploymentId did = deployId
       loadAndRegister env.logger env.options env.deploymentRegistry env.bundleStore did
+        `catch` \(e :: SomeException) -> do
+          logError env.logger "Compilation threw an exception"
+            [ ("deploymentId", toJSON did)
+            , ("error", toJSON (displayException e))
+            ]
+          atomically $ modifyTVar' env.deploymentRegistry $
+            Map.insert deployId (DeploymentFailed (Text.pack (displayException e)))
     False -> pure ()
 
 -- | Compile from source with timeout and memory limit, and save CBOR cache for next restart.
