@@ -281,7 +281,7 @@ renderOrgWebMCPScript = RawJs $ LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text
   , "        var words = (args.query || '').toLowerCase().split(/\\s+/).filter(Boolean);"
   , "        var matches = index.filter(function(fn) {"
   , "          var hay = (fn.name + ' ' + fn.description + ' ' + fn.deployment + ' ' + fn.parameterNames.join(' ')).toLowerCase();"
-  , "          return words.every(function(w) { return hay.indexOf(w) >= 0; });"
+  , "          return words.every(function(w) { return hay.split(/\\s+/).some(function(t) { return t.indexOf(w) === 0 || w.indexOf(t) === 0; }); });"
   , "        });"
   , "        return { content: [{ type: 'text', text: JSON.stringify(matches, null, 2) }] };"
   , "      }"
