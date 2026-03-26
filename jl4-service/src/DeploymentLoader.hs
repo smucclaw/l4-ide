@@ -22,7 +22,6 @@ import Data.Aeson (toJSON)
 import Data.Int (Int64)
 import qualified Data.Map.Strict as Map
 import Data.Text (Text)
-import qualified Data.Text as Text
 import GHC.Conc (setAllocationCounter, enableAllocationLimit)
 import GHC.IO.Exception (AllocationLimitExceeded (..))
 import System.Timeout (timeout)
@@ -68,9 +67,14 @@ loadAndRegister logger options registry store deployId = do
     Right (fns, meta) -> do
       atomically $ modifyTVar' registry $
         Map.insert (DeploymentId deployId) (DeploymentReady fns meta)
-      -- Cache the full metadata to disk so it survives restarts
-      -- and is available for pending/lazy-loaded deployments.
+      -- Cache the full metadata to disk so it survives restarts.
+      -- This is optional — a write failure must not fail the deployment.
       BundleStore.saveMetadataCache store deployId (Aeson.encode meta)
+        `catch` \(e :: SomeException) ->
+          logWarn logger "Failed to save metadata cache (non-fatal)"
+            [ ("deploymentId", toJSON deployId)
+            , ("error", toJSON (displayException e))
+            ]
       logInfo logger "Deployment ready"
         [("deploymentId", toJSON deployId)]
     Left err -> do
@@ -108,7 +112,7 @@ triggerCompilationIfPending deployId = do
             , ("error", toJSON (displayException e))
             ]
           atomically $ modifyTVar' env.deploymentRegistry $
-            Map.insert deployId (DeploymentFailed (Text.pack (displayException e)))
+            Map.insert deployId (DeploymentFailed "Compilation failed unexpectedly")
     False -> pure ()
 
 -- | Compile from source with timeout and memory limit, and save CBOR cache for next restart.
