@@ -10,12 +10,12 @@
 `the day of` with `meeting time`
 `the month of` with `meeting time`
 `the year of` with `meeting time`
-`Datetime to serial` with `meeting time`
-`is afternoon` with `meeting time`
-`is morning` with `start of day`
+`_ Datetime to serial` with `meeting time`
+`_ is afternoon` with `meeting time`
+`_ is morning` with `start of day`
 `at midnight` with `meeting time`
 `at noon` with `meeting time`
-`at` with `meeting time` and `TIME_FROM_HMS` with 15, 0 and 0
+`_ at _` with `meeting time` and `TIME_FROM_HMS` with 15, 0 and 0
 `the earlier of` with `meeting time` and `deadline`
 `the later of` with `meeting time` and `deadline`
 `meeting before deadline`

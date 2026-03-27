@@ -1,0 +1,21 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "category": {
+            "$ref": "#/$defs/STRING"
+        },
+        "country": {
+            "$ref": "#/$defs/STRING"
+        },
+        "itemPrice": {
+            "$ref": "#/$defs/NUMBER"
+        }
+    },
+    "required": [
+        "category",
+        "itemPrice",
+        "country"
+    ],
+    "title": "tax on",
+    "type": "object"
+}

@@ -1,0 +1,40 @@
+-- GST / VAT in different countries
+
+GIVEN category  IS A STRING
+      itemPrice IS A NUMBER
+      country   IS A STRING
+`tax on` category `item costing` itemPrice `as GST in` country MEANS
+  itemPrice TIMES rate / 100
+  WHERE
+   rate MEANS
+    BRANCH
+     IF category = "food"    AND country = "SG"     THEN 9
+     IF ^        ^ ^         ^   ^       ^     "CA" THEN 14
+     IF ^        ^ "grocery" ^   ^       ^ "SG"     THEN 9
+     IF ^        ^ ^         ^   ^       ^     "CA" THEN 0
+     IF ^   = "junk food"    ^   ^       ^     "CA" THEN 5
+     IF                          ^       ^     "SG" THEN 9
+     OTHERWISE 0
+
+#EVAL `tax on` "grocery" `item costing` 100 `as GST in` "SG"
+
+-- if the program stops here, we're good.
+-- but if we distinguish "GST" vs "VAT" in a related function below, things break.
+
+GIVEN category  IS A STRING
+      itemPrice IS A NUMBER
+      country   IS A STRING
+`tax on` category `item costing` itemPrice `as VAT in` country MEANS
+  itemPrice TIMES rate / 100
+  WHERE
+   rate MEANS
+    BRANCH
+     IF category = "food"    AND country = "UK"     THEN 20
+     IF ^        ^ ^         ^   ^       ^     "EU" THEN 7
+     IF ^        ^ "grocery" ^   ^       ^ "UK"     THEN 0
+     IF ^        ^ ^         ^   ^       ^     "EU" THEN 5
+     IF ^   = "junk food"    ^   ^       ^     "UK" THEN 20
+     IF                          ^       ^     "SG" THEN 9
+     OTHERWISE 0
+
+#EVAL `tax on` "grocery" `item costing` 100 `as VAT in` "SG"
