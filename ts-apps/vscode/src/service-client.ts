@@ -86,6 +86,16 @@ export class ServiceClient {
   }
 
   /**
+   * Get deployment status (lightweight, no function schemas).
+   */
+  async getDeploymentStatus(deploymentId: string): Promise<DeployResponse> {
+    const encodedId = encodeURIComponent(deploymentId)
+    const resp = await this.request(`/deployments/${encodedId}`)
+    if (!resp.ok) await throwWithBody(resp, `GET /deployments/${encodedId}`)
+    return (await resp.json()) as DeployResponse
+  }
+
+  /**
    * Delete (undeploy) a deployment.
    */
   async undeploy(deploymentId: string): Promise<void> {

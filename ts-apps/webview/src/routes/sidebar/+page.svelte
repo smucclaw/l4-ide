@@ -16,6 +16,7 @@
     RequestSidebarDeploy,
     RequestSidebarUndeploy,
     GetSidebarDeploymentOpenApi,
+    GetSidebarDeploymentStatus,
     ShowNotification,
     type WebviewFrontendIsReadyMessage,
     type ExportedFunctionInfo,
@@ -59,7 +60,7 @@
   let deploymentsLoading: boolean = $state(false)
   let undeployingId: string | null = $state(null)
   let collapsedDeployments: Set<string> = $state(new Set())
-  let confirmingUndeployId: string | null = $state(null)
+  let undeployConfirm: SidebarDeploymentInfo | null = $state(null)
 
   function toggleDeploymentCollapse(deploymentId: string) {
     const next = new Set(collapsedDeployments)
@@ -107,6 +108,8 @@
 
   function actionLabel(conn: GetSidebarConnectionStatusResponse): string {
     if (conn.status === 'connected') {
+      if (undeployingId) return 'Removing...'
+      if (undeployConfirm) return 'Undeploy Now'
       if (deploying) return 'Deploying...'
       if (verifying) return 'Verifying...'
       if (deployView === 'breaking-warning') return 'Deploy Anyway'
@@ -118,11 +121,17 @@
     return conn.serviceUrl ? 'Connect' : 'Sign in with Legalese Cloud'
   }
 
+  function isActionDanger(): boolean {
+    return deployView === 'breaking-warning' || undeployConfirm !== null
+  }
+
   function isActionDisabled(): boolean {
-    if (deploying || verifying) return true
+    if (deploying || verifying || undeployingId) return true
     // Connect / Sign in are never disabled
     if (connectionStatus.status !== 'connected') return false
-    // Disable on deployments tab or during deploying
+    // Undeploy confirm is always enabled
+    if (undeployConfirm) return false
+    // Disable on deployments tab
     if (activeTab === 'deployments') return true
     if (deployView === 'preview' && functions.length === 0) return true
     return false
@@ -343,27 +352,42 @@
         { deploymentId, fileUri: activeFileUri }
       )
       if (result.success) {
-        // Poll until the deployment appears in /openapi.json (compilation is async)
+        // Poll lightweight status endpoint until ready/failed
         const did = result.deploymentId ?? deploymentId
-        let found = false
-        for (let i = 0; i < 30; i++) {
-          await new Promise((r) => setTimeout(r, 2000))
-          await fetchDeployments()
-          if (deployments.some((d) => d.deploymentId === did)) {
-            found = true
-            break
+        let status = 'compiling'
+        let error: string | undefined
+        for (let i = 0; i < 60; i++) {
+          await new Promise((r) => setTimeout(r, 1000))
+          try {
+            const resp = await messenger.sendRequest(
+              GetSidebarDeploymentStatus,
+              HOST_EXTENSION,
+              { deploymentId: did }
+            )
+            status = resp.status
+            error = resp.error
+            if (status === 'ready' || status === 'failed') break
+          } catch {
+            // ignore transient errors
           }
         }
         deploying = false
         deployView = 'preview'
-        activeTab = 'deployments'
-        if (found) {
+        if (status === 'ready') {
+          await fetchDeployments()
+          activeTab = 'deployments'
           notify('info', `Deployed "${did}" successfully.`)
+        } else if (status === 'failed') {
+          notify(
+            'error',
+            `Deploy "${did}" failed: ${error ?? 'compilation error'}`
+          )
         } else {
           notify(
             'warning',
             `Deployed "${did}" — still compiling. Refresh later.`
           )
+          activeTab = 'deployments'
         }
       } else {
         notify('error', result.error ?? 'Deploy failed')
@@ -392,17 +416,18 @@
     }
   }
 
-  function requestUndeploy(deploymentId: string) {
-    confirmingUndeployId = deploymentId
+  function requestUndeploy(dep: SidebarDeploymentInfo) {
+    undeployConfirm = dep
   }
 
   function cancelUndeploy() {
-    confirmingUndeployId = null
+    undeployConfirm = null
   }
 
-  async function handleUndeploy(deploymentId: string) {
-    if (!messenger) return
-    confirmingUndeployId = null
+  async function handleUndeploy() {
+    if (!messenger || !undeployConfirm) return
+    const deploymentId = undeployConfirm.deploymentId
+    undeployConfirm = null
     undeployingId = deploymentId
     try {
       const result = await messenger.sendRequest(
@@ -430,7 +455,9 @@
 
   function handleAction() {
     if (connectionStatus.status === 'connected') {
-      if (deployView === 'breaking-warning') {
+      if (undeployConfirm) {
+        handleUndeploy()
+      } else if (deployView === 'breaking-warning') {
         deployAnyway()
       } else if (deployView === 'deploy-form') {
         continueDeploy()
@@ -696,6 +723,26 @@
           </div>
         {/if}
       {/if}
+    {:else if undeployConfirm}
+      <div class="breaking-warning">
+        <button class="back-btn" onclick={cancelUndeploy}
+          >&larr; Back to deployments</button
+        >
+        <div class="warning-header">
+          &#9888; This will break existing integrations
+        </div>
+        <div class="warning-body">
+          <p class="warning-desc">
+            Removing <strong>{undeployConfirm.deploymentId}</strong> will permanently
+            delete the following rules:
+          </p>
+          <ul class="breaking-list">
+            {#each undeployConfirm.functions as func}
+              <li><span class="breaking-ident">{func.name}</span></li>
+            {/each}
+          </ul>
+        </div>
+      </div>
     {:else if !connectionStatus.connected}
       <div class="empty-state">
         <p class="hint">Connect to a service to view deployments.</p>
@@ -717,11 +764,7 @@
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
             class="deployment-header"
-            onclick={(e) => {
-              const target = e.target as HTMLElement
-              if (!target.closest('.undeploy-actions'))
-                toggleDeploymentCollapse(dep.deploymentId)
-            }}
+            onclick={() => toggleDeploymentCollapse(dep.deploymentId)}
           >
             <span
               class="chevron"
@@ -732,29 +775,17 @@
             <span class="deployment-fn-count">
               {dep.functions.length} rule{dep.functions.length !== 1 ? 's' : ''}
             </span>
-            <span class="undeploy-actions">
-              {#if confirmingUndeployId === dep.deploymentId}
-                <button
-                  class="confirm-undeploy-btn"
-                  onclick={() => handleUndeploy(dep.deploymentId)}
-                  >Remove</button
-                >
-                <button class="cancel-undeploy-btn" onclick={cancelUndeploy}
-                  >Cancel</button
-                >
-              {:else}
-                <button
-                  class="undeploy-btn"
-                  disabled={undeployingId === dep.deploymentId}
-                  onclick={() => requestUndeploy(dep.deploymentId)}
-                  title="Undeploy"
-                >
-                  {undeployingId === dep.deploymentId
-                    ? 'Removing...'
-                    : 'Undeploy'}
-                </button>
-              {/if}
-            </span>
+            <button
+              class="undeploy-btn"
+              disabled={undeployingId === dep.deploymentId}
+              onclick={(e: MouseEvent) => {
+                e.stopPropagation()
+                requestUndeploy(dep)
+              }}
+              title="Undeploy"
+            >
+              {undeployingId === dep.deploymentId ? 'Removing...' : 'Undeploy'}
+            </button>
           </div>
           {#if !collapsedDeployments.has(dep.deploymentId)}
             {#if dep.functions.length > 0}
@@ -844,7 +875,7 @@
     </div>
     <button
       class="action-btn"
-      class:action-btn-danger={deployView === 'breaking-warning'}
+      class:action-btn-danger={isActionDanger()}
       onclick={handleAction}
       disabled={isActionDisabled()}
     >
@@ -1168,42 +1199,6 @@
     font-family: var(--vscode-editor-font-family, monospace);
     font-size: 0.92em;
     color: var(--l4-tok-identifier, #4ec9b0);
-  }
-
-  /* Undeploy confirm actions */
-  .undeploy-actions {
-    margin-left: auto;
-    display: flex;
-    gap: 4px;
-    flex-shrink: 0;
-  }
-
-  .confirm-undeploy-btn {
-    font-size: 0.85em;
-    padding: 1px 6px;
-    border: none;
-    border-radius: 3px;
-    background: #a33;
-    color: #fff;
-    cursor: pointer;
-  }
-
-  .confirm-undeploy-btn:hover {
-    background: #c44;
-  }
-
-  .cancel-undeploy-btn {
-    font-size: 0.85em;
-    padding: 1px 6px;
-    border: none;
-    border-radius: 3px;
-    background: none;
-    color: var(--vscode-descriptionForeground);
-    cursor: pointer;
-  }
-
-  .cancel-undeploy-btn:hover {
-    color: var(--vscode-foreground);
   }
 
   .deployments-list {

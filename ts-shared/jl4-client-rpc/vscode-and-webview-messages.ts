@@ -230,6 +230,19 @@ export const RequestSidebarUndeploy: RequestType<
   method: 'requestSidebarUndeploy',
 }
 
+/** Sidebar polls deployment compilation status */
+export interface SidebarDeploymentStatusResponse {
+  status: 'pending' | 'compiling' | 'ready' | 'failed'
+  error?: string
+}
+
+export const GetSidebarDeploymentStatus: RequestType<
+  { deploymentId: string },
+  SidebarDeploymentStatusResponse
+> = {
+  method: 'getSidebarDeploymentStatus',
+}
+
 /** Sidebar requests deployment OpenAPI spec (for breaking change detection) */
 export const GetSidebarDeploymentOpenApi: RequestType<
   { deploymentId: string },

@@ -15,6 +15,7 @@ import {
   RequestSidebarDeploy,
   RequestSidebarUndeploy,
   GetSidebarDeploymentOpenApi,
+  GetSidebarDeploymentStatus,
   RequestOpenServiceUrl,
   RequestOpenConsole,
   RequestDisconnect,
@@ -313,6 +314,22 @@ export function initializeSidebarMessenger(
         `[sidebar] Error fetching deployment OpenAPI: ${err instanceof Error ? err.message : String(err)}`
       )
       return { openapi: null }
+    }
+  })
+
+  // Poll deployment compilation status (lightweight, no schemas)
+  messenger.onRequest(GetSidebarDeploymentStatus, async (params) => {
+    try {
+      const resp = await serviceClient.getDeploymentStatus(params.deploymentId)
+      return {
+        status: resp.dsStatus as 'pending' | 'compiling' | 'ready' | 'failed',
+        error: resp.dsError,
+      }
+    } catch (err) {
+      return {
+        status: 'failed' as const,
+        error: err instanceof Error ? err.message : String(err),
+      }
     }
   })
 
