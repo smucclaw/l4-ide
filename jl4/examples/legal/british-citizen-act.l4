@@ -103,8 +103,8 @@ GIVEN a IS A NUMBER
 
 §§ `Expanded version`
 
-@export Determine if a person is a British Citizen
-GIVEN p IS A Person @desc Attributes of Person in question
+@export Determine if a person is a British Citizen and totally do everything they ever wanted.
+GIVEN p IS A Person @desc Attributes of Person in question and everything we should ever know about this person is here.
       a IS A BOOLEAN
 GIVETH A BOOLEAN
 DECIDE `is a British citizen if anything` IF
