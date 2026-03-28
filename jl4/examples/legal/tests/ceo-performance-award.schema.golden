@@ -1,6 +1,130 @@
 {
+    "$defs": {
+        "CEO Award State": {
+            "properties": {
+                "CEO Succession Framework": {
+                    "$ref": "#/$defs/BOOLEAN"
+                },
+                "Covered Event Occurred": {
+                    "$ref": "#/$defs/BOOLEAN"
+                },
+                "Covered Event Type": {
+                    "$ref": "#/$defs/MAYBE"
+                },
+                "Current Date": {
+                    "$ref": "#/$defs/DATE"
+                },
+                "Earned Dates": {
+                    "$ref": "#/$defs/LIST"
+                },
+                "Earned Tranches": {
+                    "$ref": "#/$defs/LIST"
+                },
+                "HSR Waiting Period Expired": {
+                    "$ref": "#/$defs/BOOLEAN"
+                },
+                "Musk Service Status": {
+                    "$ref": "#/$defs/Service Status"
+                },
+                "Performance Metrics": {
+                    "$ref": "#/$defs/Tesla Performance Metrics"
+                },
+                "Shareholder Approval Received": {
+                    "$ref": "#/$defs/BOOLEAN"
+                },
+                "Termination Reason": {
+                    "$ref": "#/$defs/MAYBE"
+                }
+            },
+            "required": [
+                "Musk Service Status",
+                "Current Date",
+                "Performance Metrics",
+                "Earned Tranches",
+                "Earned Dates",
+                "CEO Succession Framework",
+                "Termination Reason",
+                "Covered Event Occurred",
+                "Covered Event Type",
+                "HSR Waiting Period Expired",
+                "Shareholder Approval Received"
+            ],
+            "type": "object"
+        },
+        "Service Status": {
+            "enum": [
+                "Chief Executive Officer",
+                "Executive Officer Product Development",
+                "Not In Eligible Service"
+            ],
+            "type": "string"
+        },
+        "Tesla Performance Metrics": {
+            "properties": {
+                "Active FSD Subscriptions": {
+                    "$ref": "#/$defs/NUMBER"
+                },
+                "Bots Delivered": {
+                    "$ref": "#/$defs/NUMBER"
+                },
+                "Current Adjusted EBITDA": {
+                    "$ref": "#/$defs/NUMBER"
+                },
+                "Current Market Cap": {
+                    "$ref": "#/$defs/NUMBER"
+                },
+                "Last Closing Price": {
+                    "$ref": "#/$defs/NUMBER"
+                },
+                "One Year Avg Market Cap": {
+                    "$ref": "#/$defs/NUMBER"
+                },
+                "Outstanding Shares": {
+                    "$ref": "#/$defs/NUMBER"
+                },
+                "Per Share Consideration": {
+                    "$ref": "#/$defs/MAYBE"
+                },
+                "Robotaxis In Operation": {
+                    "$ref": "#/$defs/NUMBER"
+                },
+                "Six Month Avg Market Cap": {
+                    "$ref": "#/$defs/NUMBER"
+                },
+                "Tesla Vehicles Delivered": {
+                    "$ref": "#/$defs/NUMBER"
+                },
+                "Thirty Day Avg Market Cap": {
+                    "$ref": "#/$defs/NUMBER"
+                }
+            },
+            "required": [
+                "Current Market Cap",
+                "Six Month Avg Market Cap",
+                "Thirty Day Avg Market Cap",
+                "One Year Avg Market Cap",
+                "Tesla Vehicles Delivered",
+                "Active FSD Subscriptions",
+                "Bots Delivered",
+                "Robotaxis In Operation",
+                "Current Adjusted EBITDA",
+                "Outstanding Shares",
+                "Last Closing Price",
+                "Per Share Consideration"
+            ],
+            "type": "object"
+        }
+    },
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "properties": {},
-    "title": "Grant Date",
+    "description": "Check what service requiremends apply",
+    "properties": {
+        "award state": {
+            "$ref": "#/$defs/CEO Award State"
+        }
+    },
+    "required": [
+        "award state"
+    ],
+    "title": "Eligible Service Requirement",
     "type": "object"
 }
