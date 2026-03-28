@@ -25,6 +25,8 @@ BNA_commencement    MEANS Date OF 1983, 1, 1  -- of the main British Nationality
 DECLARE Place
   HAS `English name` IS A STRING
 
+
+@export
 GIVEN p IS A Place
 GIVETH A BOOLEAN
 @ref url: https://www.legislation.gov.uk/ukpga/1981/61/schedule/6

@@ -928,7 +928,8 @@
       {/if}
       <span class="file-info">
         {#if functions.length > 0}
-          {functions.length} rule{functions.length !== 1 ? 's' : ''} in {activeFileName}
+          {functions.length} rule{functions.length !== 1 ? 's' : ''} exported in
+          {activeFileName}
         {:else if activeFileName}
           No exported rules in {activeFileName}
         {:else}
