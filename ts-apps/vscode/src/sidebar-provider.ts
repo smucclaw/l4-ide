@@ -407,7 +407,7 @@ export function initializeSidebarMessenger(
   // Open the service URL in the browser
   // For Legalese Cloud sessions, route through /auth/redirect to set the cookie
   messenger.onNotification(RequestOpenServiceUrl, async () => {
-    const url = auth.getServiceUrl()
+    const url = auth.getEffectiveServiceUrl()
     if (!url) return
 
     if (auth.isLegaleseCloudSession()) {
