@@ -19,7 +19,7 @@ import Backend.Jl4 as Jl4
 import Backend.Api
 import Compiler (toDecl)
 import Types
-import Backend.FunctionSchema (Parameters (..), Parameter (..))
+import L4.FunctionSchema (Parameters (..), Parameter (..))
 
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except

@@ -1,7 +1,7 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Backend.FunctionSchema (
+module L4.FunctionSchema (
   Parameters (..),
   Parameter (..),
   declaresFromModule,

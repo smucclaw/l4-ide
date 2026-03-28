@@ -64,6 +64,8 @@ import LSP.L4.Actions
 import qualified LSP.L4.Inspector as Inspector
 import L4.EvaluateLazy (EvalConfig)
 import qualified L4.EvaluateLazy as EL
+import qualified L4.Export as Export
+import qualified L4.FunctionSchema as FSchema
 
 data ReactorMessage
   = ReactorNotification (IO ())
@@ -556,6 +558,45 @@ handlers evalConfig recorder =
                     , _message = "No directive result found at the given position"
                     , _xdata = Nothing
                     }
+
+    , requestHandler (SMethod_CustomMethod (Proxy @Inspector.GetExportedFunctionsMethodName)) $ \_ide params -> do
+        let parseParams :: Aeson.Value -> Maybe Inspector.GetExportedFunctionsParams
+            parseParams v = case Aeson.fromJSON v of
+              Aeson.Success p -> Just p
+              _               -> Nothing
+
+        case parseParams params of
+          Nothing -> pure $ Left $ TResponseError
+            { _code = InR ErrorCodes_InvalidParams
+            , _message = "Failed to parse getExportedFunctions params"
+            , _xdata = Nothing
+            }
+          Just reqParams -> do
+            let nuri = toNormalizedUri reqParams.verDocId._uri
+
+            mTcResult <- liftIO $ runAction "l4/getExportedFunctions" _ide $
+              use TypeCheck nuri
+
+            case mTcResult of
+              Nothing -> pure $ Left $ TResponseError
+                { _code = InR ErrorCodes_InvalidRequest
+                , _message = "No type check result available"
+                , _xdata = Nothing
+                }
+              Just tcResult -> do
+                let exports = Export.getExportedFunctions tcResult.module'
+                    declares = FSchema.declaresFromModule tcResult.module'
+                    summaries = map (Inspector.exportedFunctionToSummary declares) exports
+                    -- Collect transitive import URIs from the dependency tree
+                    collectImportUris tc = case tc.module' of
+                      MkModule _ depUri _ ->
+                        fromNormalizedUri depUri : concatMap collectImportUris tc.dependencies
+                    importUris = map getUri $ concatMap collectImportUris tcResult.dependencies
+                    response = Inspector.GetExportedFunctionsResponse
+                      { functions = summaries
+                      , importedFiles = importUris
+                      }
+                pure $ Right $ Aeson.toJSON response
     ]
 
 activeFileDiagnosticsInRange :: ShakeExtras -> NormalizedUri -> Range -> STM [FileDiagnostic]

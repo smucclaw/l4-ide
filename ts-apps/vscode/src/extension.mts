@@ -37,6 +37,13 @@ import {
   type DecisionServiceClient,
 } from './decision-service-client.js'
 import { cmdRenderResult } from './commands.js'
+import {
+  SidebarProvider,
+  SIDEBAR_WEBVIEW_TYPE,
+  initializeSidebarMessenger,
+} from './sidebar-provider.js'
+import { AuthManager } from './auth.js'
+import { ServiceClient } from './service-client.js'
 
 /***********************************************
      decode for RenderAsLadderInfo
@@ -512,6 +519,74 @@ export async function activate(context: ExtensionContext) {
     })
   )
 
+  // Initialize auth + service client
+  const auth = new AuthManager(context.secrets, outputChannel)
+  const serviceClient = new ServiceClient(auth)
+
+  // Register URI handler for legalese.cloud login callback
+  context.subscriptions.push(
+    vscode.window.registerUriHandler({
+      handleUri: (uri) => auth.handleAuthCallback(uri),
+    })
+  )
+  context.subscriptions.push(auth)
+
+  // Initialize sidebar
+  const sidebarMessenger = new Messenger({ debugLog: true })
+  initializeSidebarMessenger(
+    sidebarMessenger,
+    client,
+    auth,
+    serviceClient,
+    outputChannel
+  )
+
+  const sidebarProvider = new SidebarProvider(
+    context,
+    client,
+    sidebarMessenger,
+    auth,
+    serviceClient,
+    outputChannel
+  )
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(
+      SIDEBAR_WEBVIEW_TYPE,
+      sidebarProvider,
+      { webviewOptions: { retainContextWhenHidden: true } }
+    )
+  )
+
+  // Refresh sidebar token colors on theme change (alongside panels)
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveColorTheme(() => {
+      sidebarProvider.refreshTokenColors()
+    })
+  )
+
+  // Push active L4 file to sidebar when editor changes
+  function notifySidebarActiveFile(editor: vscode.TextEditor | undefined) {
+    if (editor && editor.document.languageId === 'l4') {
+      sidebarProvider.notifyActiveFile(
+        editor.document.uri.toString(),
+        editor.document.version
+      )
+    } else {
+      sidebarProvider.clearActiveFile()
+    }
+  }
+
+  // When the sidebar webview first loads, send the current active file
+  sidebarMessenger.onNotification(WebviewFrontendIsReadyNotification, () => {
+    outputChannel.appendLine('[sidebar] Webview is ready')
+    notifySidebarActiveFile(vscode.window.activeTextEditor)
+    sidebarProvider.refreshTokenColors()
+  })
+
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveTextEditor(notifySidebarActiveFile)
+  )
+
   // Start the client. This will also launch the server
   await client.start()
 
@@ -531,7 +606,14 @@ export async function activate(context: ExtensionContext) {
           lineContent: string
         }>
       }) => {
-        // Only update if the inspector panel is open
+        // Refresh sidebar — the LSP just finished compiling this file,
+        // so exported functions may have changed
+        const editor = vscode.window.activeTextEditor
+        if (editor && editor.document.uri.toString() === params.uri) {
+          notifySidebarActiveFile(editor)
+        }
+
+        // Only update inspector if the panel is open
         const panel = inspectorPanelManager.getPanel()
         if (!panel) return
 

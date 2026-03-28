@@ -50,7 +50,6 @@ library
     Backend.CodeGen
     Backend.DecisionQueryPlan
     Backend.DirectiveFilter
-    Backend.FunctionSchema
     Backend.Jl4
     Backend.MaybeLift
     BundleStore
@@ -144,6 +143,7 @@ test-suite jl4-service-test
     hspec,
     http-client,
     http-types,
+    jl4-core,
     jl4-service,
     QuickCheck,
     quickcheck-instances,
