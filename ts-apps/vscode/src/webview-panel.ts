@@ -13,7 +13,7 @@ export interface PanelConfig {
   viewType: string
   title: string
   position: vscode.ViewColumn
-  /** Subpath within the webview static dir (e.g. 'inspector'). Defaults to root. */
+  /** Subpath within the webview static dir. Defaults to root. */
   htmlSubpath?: string
   /** Callback when the panel is disposed */
   onDispose?: (ownUri: string) => Promise<void>
