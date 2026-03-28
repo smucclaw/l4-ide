@@ -1,7 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte'
   import type { Messenger } from 'vscode-messenger-webview'
-  import { HOST_EXTENSION } from 'vscode-messenger-common'
   import {
     AddInspectorResult,
     RemoveInspectorResult,

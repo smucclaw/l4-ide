@@ -2,7 +2,7 @@
   import { marked } from 'marked'
   import type { Messenger } from 'vscode-messenger-webview'
   import { HOST_EXTENSION } from 'vscode-messenger-common'
-  import { RequestOpenUrl, RequestNewL4File } from 'jl4-client-rpc'
+  import { RequestNewL4File } from 'jl4-client-rpc'
   import { colorize } from '@repo/l4-highlight'
 
   let { messenger }: { messenger: InstanceType<typeof Messenger> | null } =
