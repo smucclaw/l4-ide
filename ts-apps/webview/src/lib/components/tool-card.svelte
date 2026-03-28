@@ -192,9 +192,6 @@
     font-size: 0.88em;
     color: var(--vscode-descriptionForeground);
     background: var(--vscode-sideBarSectionHeader-background, #252526);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   .card-body {

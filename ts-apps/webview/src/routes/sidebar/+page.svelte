@@ -39,11 +39,11 @@
   let menuOpen: boolean = $state(false)
 
   // Deploy flow state
-  type DeployView = 'preview' | 'deploy-form' | 'breaking-warning' | 'deploying'
+  type DeployView = 'preview' | 'deploy-form' | 'breaking-warning'
   let deployView: DeployView = $state('preview')
   let deploymentIdInput: string = $state('')
   let deploymentIdError: string = $state('')
-  let breakingChanges: string[] = $state([])
+  let breakingChanges: BreakingChange[] = $state([])
   let deploying: boolean = $state(false)
 
   function notify(type: 'info' | 'warning' | 'error', message: string) {
@@ -122,7 +122,6 @@
     if (connectionStatus.status !== 'connected') return false
     // Disable on deployments tab or during deploying
     if (activeTab === 'deployments') return true
-    if (deployView === 'deploying') return true
     if (deployView === 'preview' && functions.length === 0) return true
     return false
   }
@@ -190,12 +189,24 @@
     return []
   }
 
+  /** A segment of a breaking change message: either plain text or an identifier. */
+  type ChangeSegment = { text: string; ident?: boolean }
+  type BreakingChange = ChangeSegment[]
+
+  function ident(name: string): ChangeSegment {
+    const needsBackticks = /\s/.test(name)
+    return { text: needsBackticks ? `\`${name}\`` : name, ident: true }
+  }
+  function txt(text: string): ChangeSegment {
+    return { text }
+  }
+
   /** Detect breaking changes between local functions and a remote deployment's OpenAPI. */
   function detectBreakingChanges(
     localFns: ExportedFunctionInfo[],
     remoteOpenApi: Record<string, unknown>
-  ): string[] {
-    const changes: string[] = []
+  ): BreakingChange[] {
+    const changes: BreakingChange[] = []
     const remoteFns = normalizeRemoteFunctions(remoteOpenApi)
     const remoteByName = new Map(remoteFns.map((f) => [f.name, f]))
 
@@ -209,9 +220,13 @@
         local.returnType &&
         remote.returnType !== local.returnType
       ) {
-        changes.push(
-          `${local.name}: return type changed from ${remote.returnType} to ${local.returnType}`
-        )
+        changes.push([
+          ident(local.name),
+          txt(' return type changed from '),
+          ident(remote.returnType),
+          txt(' to '),
+          ident(local.returnType),
+        ])
       }
 
       const remoteProps = remote.parameters?.properties ?? {}
@@ -222,14 +237,23 @@
       // Removed params
       for (const name of Object.keys(remoteProps)) {
         if (!(name in localProps)) {
-          changes.push(`${local.name}: parameter "${name}" removed`)
+          changes.push([
+            ident(local.name),
+            txt(' parameter '),
+            ident(name),
+            txt(' removed'),
+          ])
         }
       }
 
       // New required params
       for (const name of localRequired) {
         if (!remoteRequired.has(name) && !(name in remoteProps)) {
-          changes.push(`${local.name}: new required parameter "${name}"`)
+          changes.push([
+            ident(local.name),
+            txt(' new required parameter '),
+            ident(name),
+          ])
         }
       }
 
@@ -242,9 +266,15 @@
           localParam.type &&
           remoteParam.type !== localParam.type
         ) {
-          changes.push(
-            `${local.name}: parameter "${name}" type changed from ${remoteParam.type} to ${localParam.type}`
-          )
+          changes.push([
+            ident(local.name),
+            txt(' parameter '),
+            ident(name),
+            txt(' type changed from '),
+            ident(remoteParam.type),
+            txt(' to '),
+            ident(localParam.type),
+          ])
         }
       }
     }
@@ -252,7 +282,7 @@
     // Removed functions
     for (const remote of remoteFns) {
       if (!localFns.find((f) => f.name === remote.name)) {
-        changes.push(`Rule "${remote.name}" removed`)
+        changes.push([txt('rule '), ident(remote.name), txt(' removed')])
       }
     }
 
@@ -300,7 +330,6 @@
 
   async function executeDeploy(deploymentId: string) {
     if (!messenger || !activeFileUri) return
-    deployView = 'deploying'
     deploying = true
     try {
       const result = await messenger.sendRequest(
@@ -309,17 +338,35 @@
         { deploymentId, fileUri: activeFileUri }
       )
       if (result.success) {
-        notify('info', `Deployed "${result.deploymentId}" successfully.`)
-        await fetchDeployments()
+        // Poll until the deployment appears in /openapi.json (compilation is async)
+        const did = result.deploymentId ?? deploymentId
+        let found = false
+        for (let i = 0; i < 30; i++) {
+          await new Promise((r) => setTimeout(r, 2000))
+          await fetchDeployments()
+          if (deployments.some((d) => d.deploymentId === did)) {
+            found = true
+            break
+          }
+        }
+        deploying = false
+        deployView = 'preview'
         activeTab = 'deployments'
+        if (found) {
+          notify('info', `Deployed "${did}" successfully.`)
+        } else {
+          notify(
+            'warning',
+            `Deployed "${did}" — still compiling. Refresh later.`
+          )
+        }
       } else {
         notify('error', result.error ?? 'Deploy failed')
+        deploying = false
       }
     } catch (err) {
       notify('error', err instanceof Error ? err.message : 'Deploy failed')
-    } finally {
       deploying = false
-      deployView = 'preview'
     }
   }
 
@@ -502,6 +549,9 @@
         const version = msg.version as number
         activeFileUri = uri
         activeFileName = displayFileName(uri)
+        if (deployView !== 'preview') {
+          deployView = 'preview'
+        }
         loading = true
         messenger
           ?.sendRequest(GetSidebarExportedFunctions, HOST_EXTENSION, {
@@ -542,10 +592,7 @@
     <button
       class="tab"
       class:active={activeTab === 'deployments'}
-      onclick={() => {
-        activeTab = 'deployments'
-        fetchDeployments()
-      }}
+      onclick={() => (activeTab = 'deployments')}
     >
       Deployments
     </button>
@@ -568,7 +615,7 @@
               class="form-input"
               type="text"
               bind:value={deploymentIdInput}
-              placeholder="my-deployment"
+              placeholder="Deployment name"
               maxlength="36"
             />
             {#if deploymentIdError}
@@ -603,21 +650,26 @@
           <button class="back-btn" onclick={() => (deployView = 'deploy-form')}
             >&larr; Cancel deployment</button
           >
-          <div class="warning-header">Breaking changes detected</div>
+          <div class="warning-header">&#9888; Breaking changes detected</div>
           <div class="warning-body">
             <p class="warning-desc">
-              Updating <strong>{deploymentIdInput}</strong> may break existing integrations:
+              Deploying the following rules in <strong
+                >{deploymentIdInput}</strong
+              > may break existing integrations:
             </p>
             <ul class="breaking-list">
               {#each breakingChanges as change}
-                <li>{change}</li>
+                <li>
+                  {#if change[0]?.ident}<span class="breaking-ident"
+                      >{change[0].text}</span
+                    ><br />{/if}
+                  {#each change.slice(change[0]?.ident ? 1 : 0) as seg}{#if seg.ident}<span
+                        class="breaking-ident">{seg.text}</span
+                      >{:else}<span>{seg.text}</span>{/if}{/each}
+                </li>
               {/each}
             </ul>
           </div>
-        </div>
-      {:else if deployView === 'deploying'}
-        <div class="empty-state">
-          <p class="hint">Deploying to {deploymentIdInput}...</p>
         </div>
       {:else}
         <!-- Normal preview -->
@@ -860,6 +912,7 @@
 
   .empty-state .hint {
     font-size: 0.95em;
+    line-height: 1.2;
     max-width: 200px;
   }
 
@@ -964,6 +1017,7 @@
   .breaking-warning {
     padding: 4px 0;
     font-size: 1em;
+    line-height: 1.2;
   }
 
   .back-btn {
@@ -986,6 +1040,7 @@
 
   .form-label {
     display: block;
+    font-size: 0.85em;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--vscode-descriptionForeground);
@@ -1016,7 +1071,7 @@
   .existing-deployments {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 5px;
   }
 
   .existing-dep-btn {
@@ -1042,6 +1097,7 @@
   }
 
   .existing-dep-count {
+    font-size: 0.85em;
     color: var(--vscode-descriptionForeground);
     opacity: 0.6;
   }
@@ -1059,22 +1115,28 @@
   .warning-header {
     font-weight: 600;
     color: #cca700;
-    margin-bottom: 6px;
+    margin-bottom: 10px;
   }
 
   .warning-desc {
-    margin: 0 0 6px 0;
+    margin: 0 0 10px 0;
+    color: var(--vscode-foreground);
   }
 
   .breaking-list {
-    font-family: var(--vscode-editor-font-family, monospace);
     padding-left: 16px;
     margin: 0;
-    color: var(--vscode-descriptionForeground);
+    color: var(--vscode-foreground);
   }
 
   .breaking-list li {
-    margin-bottom: 3px;
+    margin-bottom: 10px;
+  }
+
+  .breaking-ident {
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 0.92em;
+    color: var(--l4-tok-identifier, #4ec9b0);
   }
 
   /* Undeploy confirm actions */
