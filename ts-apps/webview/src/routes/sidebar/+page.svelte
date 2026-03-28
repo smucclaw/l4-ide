@@ -66,6 +66,13 @@
   let collapsedDeployments: Set<string> = $state(new Set())
   let undeployConfirm: SidebarDeploymentInfo | null = $state(null)
 
+  // Reset undeploy confirmation when leaving the deployments tab
+  $effect(() => {
+    if (activeTab !== 'deployments') {
+      undeployConfirm = null
+    }
+  })
+
   function toggleDeploymentCollapse(deploymentId: string) {
     const next = new Set(collapsedDeployments)
     if (next.has(deploymentId)) next.delete(deploymentId)
@@ -593,6 +600,7 @@
         functions = []
         loading = false
         if (deployView !== 'preview') deployView = 'preview'
+        undeployConfirm = null
       }
 
       if (msg?.type === 'l4-sidebar-active-file') {
@@ -603,6 +611,7 @@
         if (deployView !== 'preview') {
           deployView = 'preview'
         }
+        undeployConfirm = null
         loading = true
         messenger
           ?.sendRequest(GetSidebarExportedFunctions, HOST_EXTENSION, {
