@@ -271,6 +271,19 @@ export const RequestDisconnect: NotificationType<void> = {
   method: 'requestDisconnect',
 }
 
+/** Sidebar asks extension to open L4 code as a new untitled file */
+export const RequestNewL4File: NotificationType<{ content: string }> = {
+  method: 'requestNewL4File',
+}
+
+/** Sidebar requests markdown content for the docs tab */
+export const GetSidebarDocsContent: RequestType<
+  { url: string },
+  { markdown: string }
+> = {
+  method: 'getSidebarDocsContent',
+}
+
 /** Sidebar asks extension to refresh deployments */
 export const RequestRefreshDeployments: NotificationType<void> = {
   method: 'requestRefreshDeployments',

@@ -346,7 +346,7 @@
     <div class="empty-state">
       <p class="hint">
         Click "Track result" above an #EVAL, #EVALTRACE, #CHECK, or #ASSERT
-        directive to add it here.
+        directive to add it here
       </p>
     </div>
   {:else}

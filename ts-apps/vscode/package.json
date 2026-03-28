@@ -46,7 +46,7 @@
   ],
   "contributes": {
     "viewsContainers": {
-      "activitybar": [
+      "secondarySidebar": [
         {
           "id": "l4-sidebar",
           "title": "L4",

@@ -156,10 +156,11 @@ export function getWebviewContent(
   }
 
   const tokenCSS = tokenColorsToCSS(getTokenColors())
+  const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} https:; font-src ${webview.cspSource}; connect-src https://legalese.com;">`
 
   const postprocessedWebviewHtml = html.replace(
     '<head>',
-    `<head><base href="${compatibleBasePath}/">${tokenCSS}`
+    `<head><base href="${compatibleBasePath}/">${csp}${tokenCSS}`
   )
 
   return postprocessedWebviewHtml
