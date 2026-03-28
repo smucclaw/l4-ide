@@ -1,9 +1,12 @@
 <script lang="ts">
   import type { ExportedFunctionInfo, FunctionParameter } from 'jl4-client-rpc'
 
-  let { func }: { func: ExportedFunctionInfo } = $props()
+  let {
+    func,
+    initialExpanded = false,
+  }: { func: ExportedFunctionInfo; initialExpanded?: boolean } = $props()
 
-  let expanded = $state(false)
+  let expanded = $state(initialExpanded)
 
   function toggle() {
     expanded = !expanded

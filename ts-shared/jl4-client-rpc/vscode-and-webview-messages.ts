@@ -251,6 +251,11 @@ export const GetSidebarDeploymentOpenApi: RequestType<
   method: 'getSidebarDeploymentOpenApi',
 }
 
+/** Sidebar asks extension to open a URL in the browser */
+export const RequestOpenUrl: NotificationType<{ url: string }> = {
+  method: 'requestOpenUrl',
+}
+
 /** Sidebar asks extension to open the service URL in browser */
 export const RequestOpenServiceUrl: NotificationType<void> = {
   method: 'requestOpenServiceUrl',

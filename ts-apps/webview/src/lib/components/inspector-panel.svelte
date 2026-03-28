@@ -1,18 +1,18 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte'
-  import { Messenger } from 'vscode-messenger-webview'
+  import { tick } from 'svelte'
+  import type { Messenger } from 'vscode-messenger-webview'
   import { HOST_EXTENSION } from 'vscode-messenger-common'
   import {
     AddInspectorResult,
     RemoveInspectorResult,
     SyncInspectorResults,
-    WebviewFrontendIsReadyNotification,
     type AddInspectorResultMessage,
     type SyncInspectorResultsMessage,
-    type WebviewFrontendIsReadyMessage,
   } from 'jl4-client-rpc'
-  import type { WebviewApi } from 'vscode-webview'
   import { colorize, escapeHtml } from '@repo/l4-highlight'
+
+  let { messenger }: { messenger: InstanceType<typeof Messenger> | null } =
+    $props()
 
   interface ResultSection {
     renderKey: number
@@ -31,6 +31,30 @@
   let nextRenderKey = 0
   let sections: ResultSection[] = $state([])
   let collapsedFiles: Set<string> = $state(new Set())
+  let registered = false
+
+  // Register messenger handlers when messenger becomes available
+  $effect(() => {
+    if (messenger && !registered) {
+      registered = true
+
+      messenger.onRequest(
+        AddInspectorResult,
+        async (msg: AddInspectorResultMessage) => {
+          const action = addOrScrollToResult(msg)
+          return { $type: action }
+        }
+      )
+
+      messenger.onNotification(RemoveInspectorResult, (msg) => {
+        removeSection(msg.directiveId)
+      })
+
+      messenger.onNotification(SyncInspectorResults, (msg) => {
+        syncSections(msg)
+      })
+    }
+  })
 
   // ---------------------------------------------------------------------------
   // directiveId helpers — format is "uri:line:col" where uri may contain colons
@@ -97,7 +121,6 @@
     const existing = sections.find((s) => s.directiveId === msg.directiveId)
     if (existing) {
       if (existing.stale) {
-        // Re-activate the stale section with fresh data
         sections = sections.map((s) =>
           s.directiveId === msg.directiveId
             ? {
@@ -158,27 +181,10 @@
     return 'ok' as const
   }
 
-  /**
-   * Sync open sections against a fresh batch of results from the LSP.
-   *
-   * When `msg.uri` is set, only sections belonging to that file are synced;
-   * sections from other files are left untouched.
-   *
-   * Pass 1 (PRIMARY) – content-based matching.
-   * Pass 2 (FALLBACK) – positional match by directiveId.
-   * Unmatched sections become stale.
-   */
   function syncSections(msg: SyncInspectorResultsMessage) {
     const results = msg.results
-
-    // Derive the file URI to scope the sync.
-    // Primary: extract from the results' directiveIds (always reliable since they
-    // include the URI). Fallback: msg.uri (needed when results is empty).
-    // Without a URI, sync affects all sections (backward compat).
     const syncUri =
       results.length > 0 ? parseFileUri(results[0].directiveId) : msg.uri
-
-    // Scope: only sync sections belonging to the notified file
     const toSync = syncUri
       ? sections.filter((s) => s.fileUri === syncUri)
       : sections
@@ -209,7 +215,6 @@
     const remappings = new Map<string, RemapEntry>()
     const matchedResultIds = new Set<string>()
 
-    // Pass 1 (PRIMARY): content-based matching
     const sectionsByContent = Map.groupBy(toSync, (s) => s.lineContent)
     const resultsByContent = Map.groupBy(results, (r) => r.lineContent)
 
@@ -257,7 +262,6 @@
       }
     }
 
-    // Pass 2 (FALLBACK): positional match by directiveId (same line:col)
     for (const s of toSync) {
       if (s.stale || remappings.has(s.directiveId)) continue
       const positionalMatch = results.find(
@@ -278,7 +282,6 @@
       }
     }
 
-    // Apply remappings; unmatched sections become stale
     const synced = toSync.map((s) => {
       const remap = remappings.get(s.directiveId)
       if (remap) {
@@ -336,49 +339,6 @@
       ])
     )
   )
-
-  onMount(() => {
-    // eslint-disable-next-line no-undef
-    const vsCodeApi: WebviewApi<null> = acquireVsCodeApi()
-    const messenger = new Messenger(vsCodeApi, { debugLog: true })
-
-    messenger.sendNotification(
-      WebviewFrontendIsReadyNotification,
-      HOST_EXTENSION,
-      { $type: 'webviewReady' } as WebviewFrontendIsReadyMessage
-    )
-
-    messenger.onRequest(
-      AddInspectorResult,
-      async (msg: AddInspectorResultMessage) => {
-        const action = addOrScrollToResult(msg)
-        return { $type: action }
-      }
-    )
-
-    messenger.onNotification(RemoveInspectorResult, (msg) => {
-      removeSection(msg.directiveId)
-    })
-
-    messenger.onNotification(SyncInspectorResults, (msg) => {
-      syncSections(msg)
-    })
-
-    messenger.start()
-
-    // Listen for token color updates from the extension host (theme changes)
-    window.addEventListener('message', (event) => {
-      const msg = event.data
-      if (msg?.type === 'l4-token-colors' && msg.colors) {
-        const root = document.documentElement
-        for (const [key, value] of Object.entries(
-          msg.colors as Record<string, string>
-        )) {
-          root.style.setProperty(`--l4-tok-${key}`, value)
-        }
-      }
-    })
-  })
 </script>
 
 <div class="inspector-panel">
@@ -465,13 +425,7 @@
 
 <style>
   .inspector-panel {
-    font-family: var(--vscode-font-family, sans-serif);
-    font-size: var(--vscode-font-size, 13px);
-    color: var(--vscode-foreground);
-    background: var(--vscode-panel-background);
-    padding: 8px;
-    overflow-y: auto;
-    height: 100vh;
+    padding: 0;
   }
 
   .empty-state {
@@ -479,15 +433,14 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    height: 60vh;
-    opacity: 0.6;
+    height: 40vh;
     text-align: center;
+    color: var(--vscode-descriptionForeground);
   }
 
   .empty-state .hint {
-    font-size: 0.9em;
-    margin-top: 4px;
-    opacity: 0.7;
+    font-size: 0.95em;
+    line-height: 1.2;
     max-width: 200px;
   }
 
@@ -503,7 +456,7 @@
     border-radius: 4px;
     cursor: default;
     user-select: none;
-    font-size: 0.85em;
+    font-size: 0.92em;
     font-weight: 500;
   }
 
@@ -563,7 +516,7 @@
     color: var(--vscode-foreground);
     cursor: pointer;
     padding: 0;
-    font-size: 10px;
+    font-size: 11px;
     display: flex;
     align-items: center;
     flex-shrink: 0;
@@ -583,7 +536,7 @@
 
   .source-location {
     font-family: var(--vscode-editor-font-family, monospace);
-    font-size: 0.78em;
+    font-size: 0.85em;
     color: var(--vscode-descriptionForeground);
     opacity: 0.7;
     flex-shrink: 0;
@@ -591,7 +544,7 @@
 
   .directive-label {
     font-family: var(--vscode-editor-font-family, monospace);
-    font-size: 0.82em;
+    font-size: 0.88em;
     color: var(--vscode-foreground);
     white-space: nowrap;
     overflow: hidden;
@@ -633,8 +586,6 @@
     tab-size: 2;
   }
 
-  /* Token colors — injected by the extension host from the active VS Code color theme
-     via --l4-tok-* CSS custom properties. Fallbacks match VS Code Default Dark+. */
   :global(.tok-keyword) {
     color: var(--l4-tok-keyword, #569cd6);
   }

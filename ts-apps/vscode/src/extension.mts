@@ -23,7 +23,6 @@ import {
   RenderAsLadder,
   WebviewFrontendIsReadyNotification,
   AddInspectorResult,
-  RemoveInspectorResult,
   SyncInspectorResults,
   ToggleSimplify,
   EvalDirectiveResultRequestType,
@@ -40,6 +39,7 @@ import { cmdRenderResult } from './commands.js'
 import {
   SidebarProvider,
   SIDEBAR_WEBVIEW_TYPE,
+  sidebarWebviewFrontend,
   initializeSidebarMessenger,
 } from './sidebar-provider.js'
 import { AuthManager } from './auth.js'
@@ -69,24 +69,9 @@ const PANEL_CONFIG: PanelConfig = {
   position: vscode.ViewColumn.Beside,
 }
 
-const INSPECTOR_PANEL_CONFIG: PanelConfig = {
-  viewType: 'l4Inspector',
-  title: 'L4 Inspector',
-  position: vscode.ViewColumn.Beside,
-  htmlSubpath: 'inspector',
-  onDispose: async () => {
-    // No special cleanup needed for inspector
-  },
-}
-
 const vizWebviewFrontend: WebviewTypeMessageParticipant = {
   type: 'webview',
   webviewType: 'l4Viz',
-}
-
-const inspectorWebviewFrontend: WebviewTypeMessageParticipant = {
-  type: 'webview',
-  webviewType: 'l4Inspector',
 }
 
 /***************************************
@@ -182,29 +167,6 @@ function initializeWebviewMessenger(
   })
 
   return webviewMessenger
-}
-
-/***************************************
-      Set up inspector messenger
-****************************************/
-
-function initializeInspectorMessenger(
-  outputChannel: vscode.OutputChannel,
-  panelManager: PanelManager,
-  onSectionRemoved: (directiveId: string) => void
-) {
-  const inspectorMessenger = new Messenger({ debugLog: true })
-
-  inspectorMessenger.onNotification(WebviewFrontendIsReadyNotification, () => {
-    panelManager.markFrontendAsReady()
-    outputChannel.appendLine(`Ext: Inspector frontend is ready`)
-  })
-
-  inspectorMessenger.onNotification(RemoveInspectorResult, (msg) => {
-    onSectionRemoved(msg.directiveId)
-  })
-
-  return inspectorMessenger
 }
 
 /***************************************
@@ -319,9 +281,8 @@ export async function activate(context: ExtensionContext) {
     },
   }
 
-  // Initialize panelManager and webviewMessenger
+  // Initialize panelManager and webviewMessenger (for ladder visualization)
   const panelManager = new PanelManager(PANEL_CONFIG)
-  const inspectorPanelManager = new PanelManager(INSPECTOR_PANEL_CONFIG)
   const webviewMessenger = initializeWebviewMessenger(
     outputChannel,
     panelManager
@@ -334,12 +295,6 @@ export async function activate(context: ExtensionContext) {
     string,
     { uri: string; srcPos: SrcPos; directiveType: string; lineContent: string }
   >()
-
-  const inspectorMessenger = initializeInspectorMessenger(
-    outputChannel,
-    inspectorPanelManager,
-    (directiveId) => openInspectorSections.delete(directiveId)
-  )
 
   const clientOptions: LanguageClientOptions = {
     documentSelector: [{ scheme: 'file', language: langId, pattern: '**/*' }],
@@ -471,24 +426,14 @@ export async function activate(context: ExtensionContext) {
             lineContent,
           })
 
-          // Create/reveal the inspector panel
-          if (editor) {
-            inspectorPanelManager.render(context, editor.document.uri)
-          } else {
-            inspectorPanelManager.render(
-              context,
-              vscode.Uri.parse(verDocId.uri)
-            )
-          }
-          inspectorMessenger.registerWebviewPanel(
-            inspectorPanelManager.getPanel()
-          )
-          await inspectorPanelManager.getWebviewFrontendIsReadyPromise()
+          // Reveal the sidebar and switch to the inspector tab
+          await sidebarProvider.revealSidebar()
+          sidebarProvider.switchToTab('inspector')
 
-          // Send the result to the inspector webview
-          const response = await inspectorMessenger.sendRequest(
+          // Send the result to the inspector via the sidebar messenger
+          const response = await sidebarMessenger.sendRequest(
             AddInspectorResult,
-            inspectorWebviewFrontend,
+            sidebarWebviewFrontend,
             {
               directiveId,
               srcPos,
@@ -515,7 +460,6 @@ export async function activate(context: ExtensionContext) {
   context.subscriptions.push(
     vscode.window.onDidChangeActiveColorTheme(() => {
       panelManager.refreshTokenColors()
-      inspectorPanelManager.refreshTokenColors()
     })
   )
 
@@ -538,7 +482,8 @@ export async function activate(context: ExtensionContext) {
     client,
     auth,
     serviceClient,
-    outputChannel
+    outputChannel,
+    (directiveId) => openInspectorSections.delete(directiveId)
   )
 
   const sidebarProvider = new SidebarProvider(
@@ -613,9 +558,8 @@ export async function activate(context: ExtensionContext) {
           notifySidebarActiveFile(editor)
         }
 
-        // Only update inspector if the panel is open
-        const panel = inspectorPanelManager.getPanel()
-        if (!panel) return
+        // Only update inspector if the sidebar is open
+        if (!sidebarProvider.getView()) return
 
         // Prepend the URI so directiveIds match the VS Code webview's "uri:line:col" format
         const results = params.results.map((r) => ({
@@ -623,9 +567,9 @@ export async function activate(context: ExtensionContext) {
           directiveId: `${params.uri}:${r.directiveId}`,
         }))
 
-        inspectorMessenger.sendNotification(
+        sidebarMessenger.sendNotification(
           SyncInspectorResults,
-          inspectorWebviewFrontend,
+          sidebarWebviewFrontend,
           {
             uri: params.uri,
             results,

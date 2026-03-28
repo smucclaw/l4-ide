@@ -1,6 +1,6 @@
-# L4 Rules-as-code Language Support
+# L4 Rules-as-code Language Support and Tools
 
-Language support for L4 rules-as-code functional programming language with syntax highlighting, IntelliSense, and ladder diagram visualization.
+Language support for L4 rules-as-code with syntax highlighting, IntelliSense, ladder diagram visualization, result inspection, and cloud deployment.
 
 Documentation: https://legalese.com/l4
 
@@ -16,6 +16,16 @@ Documentation: https://legalese.com/l4
   - Real-time updates as you edit your code
   - Visual representation of logical relationships
   - Interactive exploration of rule structures
+- **Result Inspector**: Live evaluation results for `#EVAL`, `#EVALTRACE`, `#CHECK`, and `#ASSERT` directives
+  - Click "Track result" above a directive to add it to the inspector
+  - Results update automatically as you edit your code
+  - Collapsible sections grouped by file
+  - Syntax-highlighted output
+- **Cloud Deploy**: Deploy L4 rules as REST APIs from the sidebar
+  - Deploy Preview tab shows exported functions with parameter schemas
+  - Breaking change detection when updating existing deployments
+  - Deployments tab lists active deployments with full function metadata
+  - Supports Legalese Cloud (browser login) and self-hosted jl4-service (API key)
 
 ## What is L4?
 
@@ -24,7 +34,7 @@ L4 is a domain-specific language designed for expressing legal logic and rules i
 - Write legal rules in a structured, unambiguous format
 - Visualize complex legal logic through ladder diagrams
 - Validate legal reasoning through formal methods
-- Generate executable code from legal specifications
+- Deploy rules as REST APIs for integration with other systems
 
 ## Getting Started
 
@@ -50,13 +60,28 @@ Alternatively, specify the path manually in VS Code settings:
 }
 ```
 
-#### macOS Security Note
+## Using the Sidebar
 
-On first run, macOS may block the bundled binary. To allow it, run:
+The L4 sidebar is accessible via the L4 icon in the activity bar. It has three tabs:
 
-```bash
-xattr -dr com.apple.quarantine ~/.vscode/extensions/legalese.l4-vscode-*/bin/darwin-*/jl4-lsp
-```
+### Result Inspector
+
+- Open an L4 file with `#EVAL`, `#CHECK`, or `#ASSERT` directives
+- Click "Track result" in the CodeLens above a directive
+- The sidebar switches to the Result Inspector tab and shows the evaluation result
+- Results update live as you edit code
+
+### Deploy Preview
+
+- Shows exported functions from the active L4 file with their parameter schemas, types, and descriptions
+- Updates automatically as you edit
+- Click "Deploy" to start the deployment flow
+
+### Deployments
+
+- Lists active deployments with their functions (sourced from the service's OpenAPI spec)
+- Expand a deployment to see its function schemas
+- Undeploy with confirmation
 
 ## Using the Visualization
 
@@ -64,6 +89,26 @@ xattr -dr com.apple.quarantine ~/.vscode/extensions/legalese.l4-vscode-*/bin/dar
 2. Look for "Visualize" or "Simplify and visualize" codelens above L4 expressions
 3. Click on the codelens to open the ladder diagram visualization
 4. The diagram will update automatically as you edit your code
+
+## Cloud Deploy Setup
+
+### Legalese Cloud
+
+No configuration needed. Click "Sign in with Legalese Cloud" in the sidebar footer to authenticate via browser.
+
+Legalese Cloud is a service provided by Legalese Pte. Ltd.
+More info at https://legalese.cloud
+
+### Self-hosted jl4-service
+
+Configure the service URL and API key in VS Code settings:
+
+```json
+{
+  "jl4.serviceUrl": "http://localhost:8080",
+  "jl4.serviceApiKey": "sk_..."
+}
+```
 
 ## Example L4 Code
 
@@ -91,10 +136,10 @@ DECIDE `can vote` p IF
 
 ## Configuration
 
-The extension provides several configuration options:
-
 - `jl4.serverExecutablePath`: Path to the jl4-lsp executable
 - `jl4.trace.server`: Enable server communication tracing (off/messages/verbose)
+- `jl4.serviceUrl`: URL of the jl4-service for deploying rules (leave empty for Legalese Cloud)
+- `jl4.serviceApiKey`: API key for authenticating with a self-hosted jl4-service
 
 ## Contributing
 

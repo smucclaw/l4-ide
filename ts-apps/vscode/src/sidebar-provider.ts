@@ -16,11 +16,13 @@ import {
   RequestSidebarUndeploy,
   GetSidebarDeploymentOpenApi,
   GetSidebarDeploymentStatus,
+  RequestOpenUrl,
   RequestOpenServiceUrl,
   RequestOpenConsole,
   RequestDisconnect,
   RequestRefreshDeployments,
   ShowNotification,
+  RemoveInspectorResult,
   SidebarConnectionStatusChanged,
   type GetSidebarConnectionStatusResponse,
 } from 'jl4-client-rpc'
@@ -118,6 +120,18 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       type: 'l4-sidebar-clear-file',
     })
   }
+
+  async revealSidebar() {
+    await vscode.commands.executeCommand(`${SIDEBAR_WEBVIEW_TYPE}.focus`)
+  }
+
+  switchToTab(tab: string) {
+    if (!this.view) return
+    this.view.webview.postMessage({
+      type: 'l4-sidebar-switch-tab',
+      tab,
+    })
+  }
 }
 
 /** Shape of a function entry in the org-wide /openapi.json response. */
@@ -142,7 +156,8 @@ export function initializeSidebarMessenger(
   client: VSCodeL4LanguageClient,
   auth: AuthManager,
   serviceClient: ServiceClient,
-  outputChannel: vscode.OutputChannel
+  outputChannel: vscode.OutputChannel,
+  onInspectorSectionRemoved?: (directiveId: string) => void
 ) {
   // Handle exported functions request from sidebar
   messenger.onRequest(GetSidebarExportedFunctions, async (params) => {
@@ -333,12 +348,27 @@ export function initializeSidebarMessenger(
     }
   })
 
+  // Open an arbitrary URL in the browser
+  messenger.onNotification(RequestOpenUrl, (params) => {
+    vscode.env.openExternal(vscode.Uri.parse(params.url))
+  })
+
   // Open the service URL in the browser
-  messenger.onNotification(RequestOpenServiceUrl, () => {
+  // For Legalese Cloud sessions, route through /auth/redirect to set the cookie
+  messenger.onNotification(RequestOpenServiceUrl, async () => {
     const url = auth.getServiceUrl()
-    if (url) {
-      vscode.env.openExternal(vscode.Uri.parse(url))
+    if (!url) return
+
+    if (auth.isLegaleseCloudSession()) {
+      const session = await auth.getSessionToken()
+      if (session) {
+        const redirectUrl = `https://legalese.cloud/auth/redirect?token=${encodeURIComponent(session)}&redirect_to=${encodeURIComponent(url)}`
+        vscode.env.openExternal(vscode.Uri.parse(redirectUrl))
+        return
+      }
     }
+
+    vscode.env.openExternal(vscode.Uri.parse(url))
   })
 
   // Open Legalese Cloud Console with session token
@@ -374,6 +404,11 @@ export function initializeSidebarMessenger(
         vscode.window.showErrorMessage(params.message)
         break
     }
+  })
+
+  // Track when the webview removes an inspector result section
+  messenger.onNotification(RemoveInspectorResult, (msg) => {
+    onInspectorSectionRemoved?.(msg.directiveId)
   })
 }
 

@@ -8,6 +8,7 @@
     GetSidebarConnectionStatus,
     RequestSidebarLogin,
     RequestSidebarLogout,
+    RequestOpenUrl,
     RequestOpenServiceUrl,
     RequestOpenConsole,
     RequestDisconnect,
@@ -25,6 +26,7 @@
   } from 'jl4-client-rpc'
   import type { WebviewApi } from 'vscode-webview'
   import ToolCard from '$lib/components/tool-card.svelte'
+  import InspectorPanel from '$lib/components/inspector-panel.svelte'
 
   let functions: ExportedFunctionInfo[] = $state([])
   let activeFileUri: string = $state('')
@@ -36,7 +38,7 @@
     isLegaleseCloud: true,
   })
   let loading: boolean = $state(false)
-  let activeTab: 'preview' | 'deployments' = $state('preview')
+  let activeTab: 'inspector' | 'preview' | 'deployments' = $state('inspector')
   let menuOpen: boolean = $state(false)
 
   // Deploy flow state
@@ -131,8 +133,8 @@
     if (connectionStatus.status !== 'connected') return false
     // Undeploy confirm is always enabled
     if (undeployConfirm) return false
-    // Disable on deployments tab
-    if (activeTab === 'deployments') return true
+    // Disable on non-deploy tabs
+    if (activeTab === 'deployments' || activeTab === 'inspector') return true
     if (deployView === 'preview' && functions.length === 0) return true
     return false
   }
@@ -490,6 +492,12 @@
     }
   }
 
+  function openDocumentation() {
+    messenger?.sendNotification(RequestOpenUrl, HOST_EXTENSION, {
+      url: 'https://legalese.com/l4',
+    })
+  }
+
   function openServiceUrl() {
     messenger?.sendNotification(
       RequestOpenServiceUrl,
@@ -568,6 +576,10 @@
         }
       }
 
+      if (msg?.type === 'l4-sidebar-switch-tab') {
+        activeTab = msg.tab as typeof activeTab
+      }
+
       if (msg?.type === 'l4-sidebar-clear-file') {
         activeFileUri = ''
         activeFileName = ''
@@ -616,6 +628,13 @@
   <div class="tab-bar">
     <button
       class="tab"
+      class:active={activeTab === 'inspector'}
+      onclick={() => (activeTab = 'inspector')}
+    >
+      Result Inspector
+    </button>
+    <button
+      class="tab"
       class:active={activeTab === 'preview'}
       onclick={() => (activeTab = 'preview')}
     >
@@ -631,7 +650,9 @@
   </div>
 
   <div class="tab-content">
-    {#if activeTab === 'preview'}
+    {#if activeTab === 'inspector'}
+      <InspectorPanel {messenger} />
+    {:else if activeTab === 'preview'}
       {#if deployView === 'deploy-form'}
         <!-- Deploy popover -->
         <div class="deploy-form">
@@ -718,7 +739,7 @@
         {:else}
           <div class="functions-list">
             {#each functions as func (func.name)}
-              <ToolCard {func} />
+              <ToolCard {func} initialExpanded={functions.length <= 8} />
             {/each}
           </div>
         {/if}
@@ -796,7 +817,7 @@
           {#if !collapsedDeployments.has(dep.deploymentId)}
             {#if dep.functions.length > 0}
               {#each dep.functions as func (func.name)}
-                <ToolCard {func} />
+                <ToolCard {func} initialExpanded={dep.functions.length <= 8} />
               {/each}
             {:else}
               <div class="deployment-empty">No rules</div>
@@ -837,6 +858,10 @@
           </button>
           {#if menuOpen}
             <div class="dropdown-menu">
+              <button class="menu-item" onclick={menuAction(openDocumentation)}>
+                L4 Documentation
+              </button>
+              <div class="menu-separator"></div>
               {#if connectionStatus.serviceUrl}
                 <button class="menu-item" onclick={menuAction(openServiceUrl)}>
                   Visit {connectionStatus.serviceUrl}
@@ -951,8 +976,8 @@
     align-items: center;
     justify-content: center;
     height: 40vh;
-    opacity: 0.6;
     text-align: center;
+    color: var(--vscode-descriptionForeground);
   }
 
   .empty-state .hint {
