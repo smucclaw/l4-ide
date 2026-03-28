@@ -883,7 +883,13 @@
                   Visit {connectionStatus.serviceUrl}
                 </button>
               {/if}
-              <button class="menu-item" onclick={menuAction(fetchDeployments)}>
+              <button
+                class="menu-item"
+                onclick={menuAction(() => {
+                  fetchDeployments()
+                  activeTab = 'deployments'
+                })}
+              >
                 Refresh Deployments
               </button>
               {#if !connectionStatus.isLegaleseCloud}
