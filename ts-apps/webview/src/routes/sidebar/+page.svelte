@@ -44,6 +44,7 @@
   let deploymentIdInput: string = $state('')
   let deploymentIdError: string = $state('')
   let breakingChanges: BreakingChange[] = $state([])
+  let verifying: boolean = $state(false)
   let deploying: boolean = $state(false)
 
   function notify(type: 'info' | 'warning' | 'error', message: string) {
@@ -107,6 +108,7 @@
   function actionLabel(conn: GetSidebarConnectionStatusResponse): string {
     if (conn.status === 'connected') {
       if (deploying) return 'Deploying...'
+      if (verifying) return 'Verifying...'
       if (deployView === 'breaking-warning') return 'Deploy Anyway'
       if (deployView === 'deploy-form') return 'Deploy Now'
       return 'Deploy'
@@ -117,7 +119,7 @@
   }
 
   function isActionDisabled(): boolean {
-    if (deploying) return true
+    if (deploying || verifying) return true
     // Connect / Sign in are never disabled
     if (connectionStatus.status !== 'connected') return false
     // Disable on deployments tab or during deploying
@@ -298,6 +300,7 @@
       return
     }
     deploymentIdError = ''
+    verifying = true
 
     // Check for breaking changes if deployment exists
     try {
@@ -313,6 +316,7 @@
         )
         if (changes.length > 0) {
           breakingChanges = changes
+          verifying = false
           deployView = 'breaking-warning'
           return
         }
@@ -321,6 +325,7 @@
       // Deployment doesn't exist yet — no breaking changes
     }
 
+    verifying = false
     await executeDeploy(id)
   }
 
@@ -765,6 +770,9 @@
     {/if}
   </div>
 
+  {#if verifying || deploying}
+    <div class="progress-bar"><div class="progress-bar-fill"></div></div>
+  {/if}
   <div class="status-footer">
     <div class="footer-info">
       {#if connectionStatus.connected}
@@ -921,6 +929,29 @@
     flex-direction: column;
   }
 
+  .progress-bar {
+    flex-shrink: 0;
+    height: 2px;
+    overflow: hidden;
+    background: var(--vscode-panel-border, #444);
+  }
+
+  .progress-bar-fill {
+    height: 100%;
+    width: 40%;
+    background: var(--vscode-progressBar-background, #0e70c0);
+    animation: progress-sweep 1.2s ease-in-out infinite;
+  }
+
+  @keyframes progress-sweep {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(350%);
+    }
+  }
+
   .status-footer {
     flex-shrink: 0;
     padding: 6px 8px;
@@ -997,14 +1028,14 @@
     font-size: 0.88em;
     border-radius: 3px;
     border: none;
-    background: var(--vscode-button-background, #0e639c);
-    color: var(--vscode-button-foreground, #fff);
+    background: #c8376a;
+    color: #fff;
     cursor: pointer;
     white-space: nowrap;
   }
 
   .action-btn:hover:not(:disabled) {
-    background: var(--vscode-button-hoverBackground, #1177bb);
+    background: #d94d7e;
   }
 
   .action-btn:disabled {
