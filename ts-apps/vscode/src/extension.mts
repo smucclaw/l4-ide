@@ -426,8 +426,9 @@ export async function activate(context: ExtensionContext) {
             lineContent,
           })
 
-          // Reveal the sidebar and switch to the inspector tab
+          // Reveal the sidebar, wait for it to be ready, then switch to inspector
           await sidebarProvider.revealSidebar()
+          await sidebarProvider.waitUntilReady()
           sidebarProvider.switchToTab('inspector')
 
           // Send the result to the inspector via the sidebar messenger
@@ -488,17 +489,14 @@ export async function activate(context: ExtensionContext) {
 
   const sidebarProvider = new SidebarProvider(
     context,
-    client,
     sidebarMessenger,
     auth,
-    serviceClient,
     outputChannel
   )
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(
       SIDEBAR_WEBVIEW_TYPE,
-      sidebarProvider,
-      { webviewOptions: { retainContextWhenHidden: true } }
+      sidebarProvider
     )
   )
 
@@ -524,6 +522,7 @@ export async function activate(context: ExtensionContext) {
   // When the sidebar webview first loads, send the current active file
   sidebarMessenger.onNotification(WebviewFrontendIsReadyNotification, () => {
     outputChannel.appendLine('[sidebar] Webview is ready')
+    sidebarProvider.markReady()
     notifySidebarActiveFile(vscode.window.activeTextEditor)
     sidebarProvider.refreshTokenColors()
   })

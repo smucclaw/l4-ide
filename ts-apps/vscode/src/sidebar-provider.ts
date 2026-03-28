@@ -16,6 +16,8 @@ import {
   RequestSidebarUndeploy,
   GetSidebarDeploymentOpenApi,
   GetSidebarDeploymentStatus,
+  GetSidebarDocsContent,
+  RequestNewL4File,
   RequestOpenUrl,
   RequestOpenServiceUrl,
   RequestOpenConsole,
@@ -37,15 +39,19 @@ export const sidebarWebviewFrontend: WebviewTypeMessageParticipant = {
 
 export class SidebarProvider implements vscode.WebviewViewProvider {
   private view: vscode.WebviewView | undefined
+  private ready = false
+  private readyResolve: (() => void) | undefined
+  private readyPromise: Promise<void>
 
   constructor(
     private readonly context: vscode.ExtensionContext,
-    private readonly client: VSCodeL4LanguageClient,
     private readonly messenger: Messenger,
     private readonly auth: AuthManager,
-    private readonly serviceClient: ServiceClient,
     private readonly outputChannel: vscode.OutputChannel
   ) {
+    this.readyPromise = new Promise((resolve) => {
+      this.readyResolve = resolve
+    })
     // Forward auth state changes to the sidebar webview
     auth.onDidChange((state) => {
       if (this.view) {
@@ -72,6 +78,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _token: vscode.CancellationToken
   ): void {
+    this.outputChannel.appendLine(
+      `[sidebar] resolveWebviewView called (visible=${webviewView.visible})`
+    )
     this.view = webviewView
 
     webviewView.webview.options = {
@@ -79,6 +88,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       localResourceRoots: [this.context.extensionUri],
     }
 
+    // Clear then set HTML fresh — forces a full reload when restoring
+    // from the secondary sidebar or after extension restart
+    webviewView.webview.html = ''
     webviewView.webview.html = getWebviewContent(
       this.context,
       webviewView.webview,
@@ -88,8 +100,22 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     this.messenger.registerWebviewView(webviewView)
 
     webviewView.onDidDispose(() => {
+      this.outputChannel.appendLine('[sidebar] webview disposed')
       this.view = undefined
+      this.ready = false
+      this.readyPromise = new Promise((resolve) => {
+        this.readyResolve = resolve
+      })
     })
+  }
+
+  markReady() {
+    this.ready = true
+    this.readyResolve?.()
+  }
+
+  async waitUntilReady(): Promise<void> {
+    return this.readyPromise
   }
 
   getView(): vscode.WebviewView | undefined {
@@ -332,6 +358,22 @@ export function initializeSidebarMessenger(
     }
   })
 
+  // Fetch markdown content for the docs tab
+  messenger.onRequest(GetSidebarDocsContent, async (params) => {
+    try {
+      const resp = await fetch(params.url, {
+        signal: AbortSignal.timeout(10000),
+      })
+      if (!resp.ok)
+        return { markdown: `# Error\n\nFailed to load: ${resp.status}` }
+      return { markdown: await resp.text() }
+    } catch (err) {
+      return {
+        markdown: `# Error\n\nCould not load documentation: ${err instanceof Error ? err.message : String(err)}`,
+      }
+    }
+  })
+
   // Poll deployment compilation status (lightweight, no schemas)
   messenger.onRequest(GetSidebarDeploymentStatus, async (params) => {
     try {
@@ -346,6 +388,15 @@ export function initializeSidebarMessenger(
         error: err instanceof Error ? err.message : String(err),
       }
     }
+  })
+
+  // Open L4 code as a new untitled file in the editor
+  messenger.onNotification(RequestNewL4File, async (params) => {
+    const doc = await vscode.workspace.openTextDocument({
+      language: 'l4',
+      content: params.content,
+    })
+    await vscode.window.showTextDocument(doc)
   })
 
   // Open an arbitrary URL in the browser

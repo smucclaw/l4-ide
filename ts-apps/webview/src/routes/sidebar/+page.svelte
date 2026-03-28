@@ -27,6 +27,7 @@
   import type { WebviewApi } from 'vscode-webview'
   import ToolCard from '$lib/components/tool-card.svelte'
   import InspectorPanel from '$lib/components/inspector-panel.svelte'
+  import DocsPanel from '$lib/components/docs-panel.svelte'
 
   let functions: ExportedFunctionInfo[] = $state([])
   let activeFileUri: string = $state('')
@@ -38,7 +39,8 @@
     isLegaleseCloud: true,
   })
   let loading: boolean = $state(false)
-  let activeTab: 'inspector' | 'preview' | 'deployments' = $state('inspector')
+  let activeTab: 'docs' | 'inspector' | 'preview' | 'deployments' =
+    $state('docs')
   let menuOpen: boolean = $state(false)
 
   // Deploy flow state
@@ -134,7 +136,12 @@
     // Undeploy confirm is always enabled
     if (undeployConfirm) return false
     // Disable on non-deploy tabs
-    if (activeTab === 'deployments' || activeTab === 'inspector') return true
+    if (
+      activeTab === 'deployments' ||
+      activeTab === 'inspector' ||
+      activeTab === 'docs'
+    )
+      return true
     if (deployView === 'preview' && functions.length === 0) return true
     return false
   }
@@ -628,17 +635,24 @@
   <div class="tab-bar">
     <button
       class="tab"
+      class:active={activeTab === 'docs'}
+      onclick={() => (activeTab = 'docs')}
+    >
+      Docs
+    </button>
+    <button
+      class="tab"
       class:active={activeTab === 'inspector'}
       onclick={() => (activeTab = 'inspector')}
     >
-      Result Inspector
+      Inspector
     </button>
     <button
       class="tab"
       class:active={activeTab === 'preview'}
       onclick={() => (activeTab = 'preview')}
     >
-      Deploy Preview
+      Deploy
     </button>
     <button
       class="tab"
@@ -650,7 +664,9 @@
   </div>
 
   <div class="tab-content">
-    {#if activeTab === 'inspector'}
+    {#if activeTab === 'docs'}
+      <DocsPanel {messenger} />
+    {:else if activeTab === 'inspector'}
       <InspectorPanel {messenger} />
     {:else if activeTab === 'preview'}
       {#if deployView === 'deploy-form'}
@@ -859,7 +875,7 @@
           {#if menuOpen}
             <div class="dropdown-menu">
               <button class="menu-item" onclick={menuAction(openDocumentation)}>
-                L4 Documentation
+                Open L4 Docs website
               </button>
               <div class="menu-separator"></div>
               {#if connectionStatus.serviceUrl}
@@ -967,7 +983,7 @@
   .tab-content {
     flex: 1;
     overflow-y: auto;
-    padding: 8px;
+    padding: 16px;
   }
 
   .empty-state {
@@ -1016,7 +1032,7 @@
 
   .status-footer {
     flex-shrink: 0;
-    padding: 6px 8px;
+    padding: 16px;
     border-top: 1px solid var(--vscode-panel-border, #444);
     background: var(--vscode-sideBar-background);
     display: flex;
