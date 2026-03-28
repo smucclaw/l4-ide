@@ -107,7 +107,9 @@
       {/if}
 
       {#if func.returnType}
-        <div class="returns-separator"></div>
+        {#if paramCount > 0}
+          <div class="returns-separator"></div>
+        {/if}
         <div class="section-label">Returns</div>
         <div class="return-info">
           <span class="param-type">{func.returnType}</span>
