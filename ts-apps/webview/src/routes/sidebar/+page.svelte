@@ -80,7 +80,7 @@
     collapsedDeployments = next
   }
 
-  let messenger: InstanceType<typeof Messenger> | null = null
+  let messenger: InstanceType<typeof Messenger> | null = $state(null)
 
   function displayFileName(uri: string): string {
     const decoded = decodeURIComponent(uri.replace(/^file:\/\//, ''))
@@ -702,6 +702,7 @@
           </div>
           {#if deployments.length > 0}
             <div class="form-group">
+              <!-- svelte-ignore a11y_label_has_associated_control -->
               <label class="form-label">Or replace existing</label>
               <div class="existing-deployments">
                 {#each deployments as dep (dep.deploymentId)}
