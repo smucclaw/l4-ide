@@ -6,6 +6,7 @@
     initialExpanded = false,
   }: { func: ExportedFunctionInfo; initialExpanded?: boolean } = $props()
 
+  // svelte-ignore state_referenced_locally
   let expanded = $state(initialExpanded)
 
   function toggle() {

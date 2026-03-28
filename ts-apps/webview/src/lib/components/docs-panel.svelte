@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { marked } from 'marked'
+  import { marked, type Token } from 'marked'
   import type { Messenger } from 'vscode-messenger-webview'
   import { HOST_EXTENSION } from 'vscode-messenger-common'
   import { RequestNewL4File } from 'jl4-client-rpc'
@@ -39,7 +39,7 @@
   // Resolve URLs in the token tree before rendering (avoids <base> interference).
   // Internal docs links use data-href instead of href to prevent VSCode from
   // intercepting the click and opening the browser.
-  function walkTokens(token: marked.Token) {
+  function walkTokens(token: Token) {
     if ('href' in token && typeof token.href === 'string') {
       token.href = resolveUrl(token.href)
     }
@@ -536,6 +536,7 @@
     font-size: 0.82em;
     color: var(--vscode-descriptionForeground);
     display: -webkit-box;
+    line-clamp: 2;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
