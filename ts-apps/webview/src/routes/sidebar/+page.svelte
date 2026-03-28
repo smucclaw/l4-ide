@@ -745,7 +745,13 @@
       </div>
     {:else if !connectionStatus.connected}
       <div class="empty-state">
-        <p class="hint">Connect to a service to view deployments.</p>
+        <p class="hint">
+          {#if connectionStatus.serviceUrl}
+            Connect to {stripProtocol(connectionStatus.serviceUrl)} to view deployments.
+          {:else}
+            Sign in with Legalese Cloud to view your deployments.
+          {/if}
+        </p>
       </div>
     {:else if deploymentsLoading}
       <div class="empty-state">
