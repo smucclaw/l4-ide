@@ -10,7 +10,7 @@ import Test.QuickCheck.Instances ()
 
 import Backend.Api
 import Backend.DecisionQueryPlan (QueryAtom (..), QueryOutcome (..), QueryImpact (..), QueryInput (..), QueryAsk (..), QueryPlanResponse (..))
-import Backend.FunctionSchema (Parameters (..), Parameter (..))
+import L4.FunctionSchema (Parameters (..), Parameter (..))
 import ControlPlane (DeploymentStatusResponse (..))
 import qualified Data.Map as Map
 import qualified Data.Text as Text

@@ -103,14 +103,16 @@ GIVEN a IS A NUMBER
 
 §§ `Expanded version`
 
-GIVEN p IS A Person
+@export Determine if a person is a British Citizen
+GIVEN p IS A Person @desc Attributes of Person in question
+      a IS A BOOLEAN
 GIVETH A BOOLEAN
-DECIDE `is a British citizen` IF
+DECIDE `is a British citizen if anything` IF
          `is born in the United Kingdom after commencement` p
       OR `is born in a qualifying territory after the appointed day` p
   AND -- when the person is born ...
-            `is a British citizen` OF `father of` p
-         OR `is a British citizen` OF `mother of` p
+            `is a British citizen if anything` OF `father of` p, a
+         OR `is a British citizen if anything` OF `mother of` p, a
       OR    `is settled in the United Kingdom` OF `father of` p
          OR `is settled in the United Kingdom` OF `mother of` p
       OR    `is settled in the qualifying territory in which the person is born` OF `father of` p
@@ -124,8 +126,8 @@ DECIDE `is a British citizen (local)` IS
          `is born in the United Kingdom after commencement` p
       OR `is born in a qualifying territory after the appointed day` p
   AND -- when the person is born ...
-         `father or mother` `is a British citizen`
-      OR `father or mother` `is settled in the United Kingdom`
+         -- `father or mother` `is a British citizen if anything`
+         `father or mother` `is settled in the United Kingdom`
       OR `father or mother` `is settled in the qualifying territory in which the person is born`
       WHERE
         `father or mother` property MEANS

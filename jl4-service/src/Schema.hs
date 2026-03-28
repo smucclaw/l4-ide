@@ -11,7 +11,7 @@ module Schema (
 
 import Backend.Api
 import Backend.DecisionQueryPlan (QueryPlanResponse, QueryAtom, QueryOutcome, QueryImpact, QueryInput, QueryAsk)
-import Backend.FunctionSchema (Parameters (..), Parameter (..))
+import L4.FunctionSchema (Parameters (..), Parameter (..))
 import Types
 
 import Control.Lens hiding ((.=))

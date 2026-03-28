@@ -28,7 +28,7 @@ module Types (
 
 import Backend.Api (EvalBackend, FnLiteral, RunFunction, EvaluatorError, ResponseWithReason, GraphVizResponse)
 import Backend.DecisionQueryPlan (CachedDecisionQuery)
-import Backend.FunctionSchema (Parameters)
+import L4.FunctionSchema (Parameters)
 import Backend.Jl4 (CompiledModule)
 import BundleStore (BundleStore)
 import Control.Concurrent.STM (TVar)
