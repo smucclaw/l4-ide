@@ -33,7 +33,7 @@ export class ServiceClient {
   constructor(private readonly auth: AuthManager) {}
 
   private async request(path: string, init?: RequestInit): Promise<Response> {
-    const serviceUrl = this.auth.getServiceUrl()
+    const serviceUrl = this.auth.getEffectiveServiceUrl()
     if (!serviceUrl) {
       throw new Error(
         'No service URL configured. Set jl4.serviceUrl in settings.'

@@ -30,6 +30,7 @@ export class AuthManager {
 
   private cachedState: ConnectionState | undefined
   private manuallyDisconnected = false
+  private cloudOrgSlug: string | undefined
   private readonly disposables: vscode.Disposable[] = []
 
   constructor(
@@ -66,26 +67,39 @@ export class AuthManager {
   }
 
   /**
-   * Whether the user authenticated via Legalese Cloud browser login
-   * (as opposed to a manually configured API key).
+   * Whether the user is in Legalese Cloud mode (no serviceUrl configured,
+   * authenticated via browser login with a session token).
+   * A configured serviceUrl (even *.legalese.cloud) is always "self-hosted" mode
+   * and uses API key auth, not session auth.
    */
   isLegaleseCloudSession(): boolean {
-    if (this.getApiKeyFromSettings()) return false
-    return true
+    return !this.getServiceUrl()
   }
 
   async getAuthHeaders(): Promise<Record<string, string>> {
-    const settingsKey = this.getApiKeyFromSettings()
-    if (settingsKey) {
-      return { Authorization: `Bearer ${settingsKey}` }
-    }
+    // Use API key if explicitly configured in settings
+    const apiKey = this.getApiKeyFromSettings()
+    if (apiKey) return { Authorization: `Bearer ${apiKey}` }
 
+    // Otherwise use session token (for Legalese Cloud browser login)
     const session = await this.secrets.get(SECRET_KEY_SESSION)
-    if (session) {
-      return { Authorization: `Bearer ${session}` }
-    }
+    if (session) return { Authorization: `Bearer ${session}` }
 
     return {}
+  }
+
+  /**
+   * The effective service URL.
+   * If serviceUrl is configured in settings, use that.
+   * If in Legalese Cloud mode with an org slug, derive from the slug.
+   */
+  getEffectiveServiceUrl(): string {
+    const configured = this.getServiceUrl()
+    if (configured) return configured
+    if (this.cloudOrgSlug) {
+      return `https://${this.cloudOrgSlug}.${LEGALESE_CLOUD_DOMAIN}`
+    }
+    return ''
   }
 
   async getSessionToken(): Promise<string | undefined> {
@@ -99,17 +113,12 @@ export class AuthManager {
   }
 
   /**
-   * Sign out / disconnect. Clears session token.
-   * For legalese.cloud, also clears the auto-set serviceUrl.
+   * Sign out (Legalese Cloud) or disconnect (configured service URL).
+   * Clears session token. Never touches the serviceUrl setting.
    */
   async logout(): Promise<void> {
-    const wasCloud = this.isLegaleseCloudSession()
     await this.secrets.delete(SECRET_KEY_SESSION)
-    if (wasCloud) {
-      await vscode.workspace
-        .getConfiguration('jl4')
-        .update('serviceUrl', undefined, vscode.ConfigurationTarget.Workspace)
-    }
+    this.cloudOrgSlug = undefined
     this.manuallyDisconnected = true
     this.cachedState = undefined
     const state = await this.getConnectionState()
@@ -158,6 +167,7 @@ export class AuthManager {
     this.outputChannel.appendLine('[auth] Received session token from callback')
     await this.setSessionToken(token)
 
+    // Resolve the org name for the notification message
     try {
       const resp = await fetch(
         `https://${LEGALESE_CLOUD_DOMAIN}/auth/session`,
@@ -170,14 +180,11 @@ export class AuthManager {
         const session = (await resp.json()) as {
           organization?: { slug: string; name: string }
         }
-        if (session.organization?.slug) {
-          const orgUrl = `https://${session.organization.slug}.${LEGALESE_CLOUD_DOMAIN}`
+        if (session.organization) {
+          this.cloudOrgSlug = session.organization.slug
           this.outputChannel.appendLine(
-            `[auth] Resolved org: ${session.organization.name} (${orgUrl})`
+            `[auth] Resolved org: ${session.organization.name} (${session.organization.slug})`
           )
-          await vscode.workspace
-            .getConfiguration('jl4')
-            .update('serviceUrl', orgUrl, vscode.ConfigurationTarget.Workspace)
           this.invalidateAndNotify()
           vscode.window.showInformationMessage(
             `Signed in to ${session.organization.name} on Legalese Cloud.`
@@ -199,7 +206,7 @@ export class AuthManager {
   async getConnectionState(): Promise<ConnectionState> {
     if (this.cachedState) return this.cachedState
 
-    const serviceUrl = this.getServiceUrl()
+    const serviceUrl = this.getEffectiveServiceUrl()
 
     this.outputChannel.appendLine(
       `[auth] getConnectionState: serviceUrl=${JSON.stringify(serviceUrl)} disconnected=${this.manuallyDisconnected}`

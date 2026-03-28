@@ -496,7 +496,8 @@ export async function activate(context: ExtensionContext) {
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(
       SIDEBAR_WEBVIEW_TYPE,
-      sidebarProvider
+      sidebarProvider,
+      { webviewOptions: { retainContextWhenHidden: true } }
     )
   )
 
