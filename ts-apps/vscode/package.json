@@ -1,7 +1,7 @@
 {
   "name": "l4-vscode",
   "displayName": "L4 Rules-as-code",
-  "description": "Language support for L4 rules-as-code with syntax highlighting, IntelliSense, and ladder diagram visualization",
+  "description": "Write, test, and deploy legal rules as executable code — with syntax highlighting, IntelliSense, ladder diagrams, and one-click cloud deployment",
   "license": "Apache-2.0",
   "version": "1.3.0",
   "publisher": "legalese",
@@ -172,7 +172,7 @@
   "scripts": {
     "vscode:prepublish": "npm run lint && npm run bundle-esbuild",
     "build": "npm run clean && npm run prepare:webview && tsc -b tsconfig.json && npm run bundle-esbuild",
-    "prepare:webview": "mkdir -p ./static/webview && cp -r ../webview/build/* ./static/webview/",
+    "prepare:webview": "rm -rf ./static/webview && mkdir -p ./static/webview && cp -r ../webview/build/* ./static/webview/",
     "bundle-esbuild": "node scripts/build.mjs",
     "test": "tsc -b tsconfig.json && node --test out/unit-tests/*.test.js",
     "package": "npm run lint && npx vsce package",
