@@ -21,7 +21,7 @@ module Backend.DecisionQueryPlan (
 
 import Base
 import qualified Backend.BooleanDecisionQuery as BDQ
-import Backend.FunctionSchema (Parameter (..), Parameters (..), parametersFromDecideWithErrors)
+import L4.FunctionSchema (Parameter (..), Parameters (..), parametersFromDecideWithErrors)
 import Backend.Jl4 (CompiledModule (..))
 import Data.Aeson (FromJSON, ToJSON, (.=), object)
 import qualified Data.Aeson as Aeson

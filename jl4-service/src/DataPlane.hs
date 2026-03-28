@@ -14,7 +14,7 @@ import ControlPlane (DeploymentStatusResponse, getDeploymentHandler, putDeployme
 import DeploymentLoader (triggerCompilationIfPending)
 import Servant.Multipart
 import Backend.DecisionQueryPlan (CachedDecisionQuery, buildDecisionQueryCacheFromCompiled, queryPlan, QueryPlanResponse)
-import Backend.FunctionSchema (Parameter, Parameters(..))
+import L4.FunctionSchema (Parameter, Parameters(..))
 import Backend.Jl4 (CompiledModule (..), evaluateWithCompiledDeontic)
 import qualified L4.StateGraph as StateGraph
 import Compiler (toDecl)

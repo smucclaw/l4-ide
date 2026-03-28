@@ -9,7 +9,7 @@ import qualified Backend.Jl4 as Jl4
 import Backend.Jl4 (ModuleContext, CompiledModule(..), typecheckModule, buildImportEnvironment, getFunctionDefinition)
 import Backend.Api (EvalBackend (..), FunctionDeclaration (..))
 import Backend.CodeGen (isDeonticType)
-import Backend.FunctionSchema (Parameters (..), Parameter (..), typeToParameter, declaresFromModule)
+import L4.FunctionSchema (Parameters (..), Parameter (..), typeToParameter, declaresFromModule)
 import BundleStore (SerializedBundle (..), StoredMetadata (..))
 import Types
 import Control.Monad (forM, unless)

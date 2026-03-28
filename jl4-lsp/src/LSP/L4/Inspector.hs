@@ -19,7 +19,12 @@ import GHC.TypeLits (Symbol)
 import Language.LSP.Protocol.Types as LSP
 import L4.Parser.SrcSpan (SrcPos(..), SrcRange(..))
 import L4.Print (prettyLayout, ConstructorFieldNames)
-import L4.Syntax (getActual)
+import L4.Syntax (getActual, Declare, Resolved)
+
+import qualified L4.Export as Export
+import qualified L4.FunctionSchema as FSchema
+import qualified Data.Map.Strict as Map
+import qualified Data.Set as Set
 
 import qualified L4.EvaluateLazy as EL
 import qualified L4.Evaluate.ValueLazy as Val
@@ -232,3 +237,117 @@ evalDirectiveToUpdateItem fields getLineContent (EL.MkEvalDirectiveResult (Just 
     , lineContent = getLineContent lineNo
     }
 evalDirectiveToUpdateItem _ _ _ = Nothing
+
+------------------------------------------------------
+-- l4/getExportedFunctions method name
+------------------------------------------------------
+
+type GetExportedFunctionsMethodName :: Symbol
+type GetExportedFunctionsMethodName = "l4/getExportedFunctions"
+
+------------------------------------------------------
+-- Request params
+------------------------------------------------------
+
+data GetExportedFunctionsParams = GetExportedFunctionsParams
+  { verDocId :: LSP.VersionedTextDocumentIdentifier
+  }
+  deriving stock (Eq, Show, Generic)
+
+instance ToJSON GetExportedFunctionsParams where
+  toJSON p = object
+    [ "verDocId" .= p.verDocId
+    ]
+
+instance FromJSON GetExportedFunctionsParams where
+  parseJSON = withObject "GetExportedFunctionsParams" $ \obj ->
+    GetExportedFunctionsParams <$> obj .: "verDocId"
+
+------------------------------------------------------
+-- Response types
+------------------------------------------------------
+
+data ExportedFunctionSummary = ExportedFunctionSummary
+  { name :: !Text
+  , description :: !Text
+  , isDefault :: !Bool
+  , returnType :: !Text
+  , isDeontic :: !Bool
+  , parameters :: !FSchema.Parameters
+  }
+  deriving stock (Eq, Show, Generic)
+
+instance ToJSON ExportedFunctionSummary where
+  toJSON f = object
+    [ "name" .= f.name
+    , "description" .= f.description
+    , "isDefault" .= f.isDefault
+    , "returnType" .= f.returnType
+    , "isDeontic" .= f.isDeontic
+    , "parameters" .= f.parameters
+    ]
+
+data GetExportedFunctionsResponse = GetExportedFunctionsResponse
+  { functions :: [ExportedFunctionSummary]
+  , importedFiles :: [Text]
+  }
+  deriving stock (Eq, Show, Generic)
+
+instance ToJSON GetExportedFunctionsResponse where
+  toJSON r = object
+    [ "functions" .= r.functions
+    , "importedFiles" .= r.importedFiles
+    ]
+
+------------------------------------------------------
+-- Converting ExportedFunction to ExportedFunctionSummary
+------------------------------------------------------
+
+-- | Convert an 'Export.ExportedFunction' to an 'ExportedFunctionSummary'
+-- using the shared FunctionSchema logic from jl4-core.
+exportedFunctionToSummary
+  :: Map.Map Text (Declare Resolved)
+  -> Export.ExportedFunction
+  -> ExportedFunctionSummary
+exportedFunctionToSummary declares ef =
+  let
+    mkParam :: Export.ExportedParam -> (Text, FSchema.Parameter)
+    mkParam ep =
+      let base = case ep.paramType of
+            Nothing -> FSchema.Parameter
+              { parameterType = "object"
+              , parameterAlias = Nothing
+              , parameterFormat = Nothing
+              , parameterEnum = []
+              , parameterDescription = ""
+              , parameterProperties = Nothing
+              , parameterPropertyOrder = Nothing
+              , parameterItems = Nothing
+              }
+            Just ty -> FSchema.typeToParameter declares Set.empty ty
+          desc = case ep.paramDescription of
+            Just d  -> d
+            Nothing -> base.parameterDescription
+      in (ep.paramName, base { FSchema.parameterDescription = desc })
+
+    paramPairs = map mkParam ef.exportParams
+    params = FSchema.MkParameters
+      { parameterMap = Map.fromList paramPairs
+      , required = map fst paramPairs
+      }
+
+    retType = case ef.exportReturnType of
+      Nothing -> "unknown"
+      Just ty -> prettyLayout ty
+
+    -- Deontic detection: check if return type pretty-prints as containing "DEONTIC"
+    isDeontic' = "DEONTIC" `Text.isInfixOf` Text.toUpper retType
+  in
+    ExportedFunctionSummary
+      { name = ef.exportName
+      , description = ef.exportDescription
+      , isDefault = ef.exportIsDefault
+      , returnType = retType
+      , isDeontic = isDeontic'
+      , parameters = params
+      }

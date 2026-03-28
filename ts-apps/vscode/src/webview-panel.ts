@@ -13,7 +13,7 @@ export interface PanelConfig {
   viewType: string
   title: string
   position: vscode.ViewColumn
-  /** Subpath within the webview static dir (e.g. 'inspector'). Defaults to root. */
+  /** Subpath within the webview static dir. Defaults to root. */
   htmlSubpath?: string
   /** Callback when the panel is disposed */
   onDispose?: (ownUri: string) => Promise<void>
@@ -65,7 +65,7 @@ export class PanelManager {
       )
       this.#panel.webview.html = getWebviewContent(
         context,
-        this.#panel,
+        this.#panel.webview,
         this.config.htmlSubpath
       )
 
@@ -122,9 +122,15 @@ export class PanelManager {
 const STATIC_ASSETS_DIR = 'static'
 const WEBVIEW_DIR = 'webview'
 
-function getWebviewContent(
+/**
+ * Build the HTML content for a webview.
+ * Accepts a `vscode.Webview` (the common interface shared by both
+ * `WebviewPanel.webview` and `WebviewView.webview`) so it works
+ * for both panels and the sidebar.
+ */
+export function getWebviewContent(
   context: vscode.ExtensionContext,
-  panel: vscode.WebviewPanel,
+  webview: vscode.Webview,
   htmlSubpath?: string
 ): string {
   const basePath = vscode.Uri.joinPath(
@@ -133,15 +139,8 @@ function getWebviewContent(
     WEBVIEW_DIR,
     ...(htmlSubpath ? [htmlSubpath] : [])
   )
-  const compatibleBasePath = panel.webview.asWebviewUri(basePath)
+  const compatibleBasePath = webview.asWebviewUri(basePath)
 
-  /* Add the <base> tag so that relative paths work
-  (TODO: Test that this actually works...)
-
-  References:
-    * https://github.com/bscotch/stitch/blob/76f65a626a6ebd825af5b172b5338a8dee6e947d/packages/vscode/src/webview.igor.mts#L64
-    * https://medium.com/@ashleyluu87/data-flow-from-vs-code-extension-webview-panel-react-components-2f94b881467e
-  */
   let html: string
   if (htmlSubpath) {
     const htmlPath = path.join(
@@ -157,10 +156,11 @@ function getWebviewContent(
   }
 
   const tokenCSS = tokenColorsToCSS(getTokenColors())
+  const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} https:; font-src ${webview.cspSource}; connect-src https://legalese.com;">`
 
   const postprocessedWebviewHtml = html.replace(
     '<head>',
-    `<head><base href="${compatibleBasePath}/">${tokenCSS}`
+    `<head><base href="${compatibleBasePath}/">${csp}${tokenCSS}`
   )
 
   return postprocessedWebviewHtml
