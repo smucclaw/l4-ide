@@ -555,19 +555,15 @@ Future syntax could include:
   GIVEN report IS A ReportInput
   generateReport report MEANS ...
 
-## Implicit Default Export Behavior (December 2024)
+## Export Behavior (Updated March 2026)
 
-**Phase 5 — Implicit Default Exports** was added to `jl4-core/src/L4/Export.hs:getExportedFunctions`:
+Only explicit `@export` annotations are recognized. Files without any `@export` annotation export nothing.
 
-1. **Files with no `@export` annotations**: Automatically export the topmost function as a default export
-2. **Files with `@export` but no `@export default`**: Automatically mark the topmost exported function as default
-
-This allows simple single-function files (like `jl4/experiments/cubed-postfix.l4`) to be exported without explicit annotations, while respecting explicit annotations when present.
+When multiple `@export` annotations exist but none is marked `@export default`, the topmost exported function is automatically marked as default.
 
 **Test files:**
 
-- `jl4/examples/ok/export-implicit-default.l4` - Implicit default behavior
-- `jl4/examples/ok/export-no-explicit-default.l4` - Auto-selection of topmost export
+- `jl4/examples/ok/export-no-explicit-default.l4` - Auto-selection of topmost export as default
 - `jl4/examples/ok/export-explicit-default.l4` - Explicit default respected
 
-**Implementation**: L4/Export.hs:92-135
+**Implementation**: L4/Export.hs:getExportedFunctions

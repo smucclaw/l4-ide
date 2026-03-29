@@ -1,17 +1,1 @@
-{
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "properties": {
-        "acc": {
-            "type": "string"
-        },
-        "l": {
-            "type": "string"
-        }
-    },
-    "required": [
-        "acc",
-        "l"
-    ],
-    "title": "go",
-    "type": "object"
-}
+No @export annotations found in file

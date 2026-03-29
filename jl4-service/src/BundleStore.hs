@@ -25,6 +25,7 @@ import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text.IO
 import GHC.Generics (Generic)
+import L4.Export (ExportedFunction)
 import L4.Syntax (Module, Resolved)
 import L4.TypeCheck.Types (Environment, EntityInfo)
 import Logging (Logger, logWarn)
@@ -69,6 +70,7 @@ data SerializedBundle = SerializedBundle
   { sbModule      :: !(Module Resolved)
   , sbEnvironment :: !Environment     -- ^ Map RawName [Unique]
   , sbEntityInfo  :: !EntityInfo      -- ^ Map Unique (Name, CheckEntity)
+  , sbExports     :: ![ExportedFunction]  -- ^ Exported functions (annotations are stripped in CBOR, so these are stored explicitly)
   }
   deriving stock (Generic)
   deriving anyclass (Serialise)

@@ -1,17 +1,1 @@
-{
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "properties": {
-        "base": {
-            "$ref": "#/$defs/DATE"
-        },
-        "days": {
-            "$ref": "#/$defs/NUMBER"
-        }
-    },
-    "required": [
-        "base",
-        "days"
-    ],
-    "title": "add days",
-    "type": "object"
-}
+No @export annotations found in file

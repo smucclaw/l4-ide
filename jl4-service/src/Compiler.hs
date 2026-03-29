@@ -140,6 +140,7 @@ compileSingleFile logger deployId filepath content moduleContext = do
                 { sbModule = resolvedModule
                 , sbEnvironment = env
                 , sbEntityInfo = ei
+                , sbExports = exports
                 }
 
           logInfo logger "Found exports"
@@ -168,8 +169,9 @@ buildFromCborBundle logger deployId bundle sources storedMeta = do
       ei = bundle.sbEntityInfo
       moduleContext = sources
 
-  -- Discover exported functions from the deserialized module
-  let exports = getExportedFunctions resolvedModule
+  -- Use the full exported functions stored in the bundle (annotations are stripped
+  -- in CBOR, so getExportedFunctions on the deserialized module would return []).
+  let exports = bundle.sbExports
 
   if null exports
     then pure $ Left "No exported functions found in CBOR bundle"

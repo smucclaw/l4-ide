@@ -16,6 +16,7 @@ module L4.Export (
 
 import Base
 
+import Codec.Serialise (Serialise)
 import Control.Applicative ((<|>))
 import qualified Base.Text as Text
 import Data.Char (isSpace)
@@ -37,7 +38,8 @@ data ExportedFunction = ExportedFunction
   , exportReturnType :: !(Maybe (Type' Resolved))
   , exportDecide :: !(Decide Resolved)
   }
-  deriving stock (Eq, Show)
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (Serialise)
 
 data ExportedParam = ExportedParam
   { paramName :: !Text
@@ -45,7 +47,8 @@ data ExportedParam = ExportedParam
   , paramDescription :: !(Maybe Text)
   , paramRequired :: !Bool
   }
-  deriving stock (Eq, Show)
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (Serialise)
 
 data DescFlags = DescFlags
   { isDefault :: !Bool
@@ -100,12 +103,9 @@ getExportedFunctions mod'@(MkModule _ _ section) =
   let typeDescMap = buildTypeDescMap mod'
       assumes = assumesFromModule mod'
       explicitExports = collectSection typeDescMap assumes section
-      allDecides = collectAllDecides section
   in case explicitExports of
-    -- No explicit exports: export the topmost function as default
-    [] -> case allDecides of
-      (firstDecide : _) -> maybeToList (buildImplicitDefaultFunction typeDescMap assumes firstDecide)
-      [] -> []
+    -- No explicit exports: return nothing (only explicit @export annotations count)
+    [] -> []
     -- Has explicit exports but no default: mark the topmost as default
     _ | not (any (\ef -> ef.exportIsDefault) explicitExports) ->
         case explicitExports of
@@ -121,27 +121,6 @@ getExportedFunctions mod'@(MkModule _ _ section) =
     Section _ sub -> collectSection tdm assumes' sub
     _ -> []
 
-  -- Collect all Decide declarations in source order
-  collectAllDecides (MkSection _ _ _ decls) =
-    decls >>= \ case
-      Decide _ dec -> [dec]
-      Section _ sub -> collectAllDecides sub
-      _ -> []
-
-  -- Build an implicit default export for a function without @export
-  buildImplicitDefaultFunction tdm assumes' decide@(MkDecide _ tySig appForm _) =
-    let desc = getAnno decide ^. annDesc
-        description = maybe "" getDesc desc
-        givenParams = extractParams tdm tySig
-        assumedParams = extractAssumedDependencies tdm assumes' decide
-    in Just ExportedFunction
-        { exportName = resolvedToText (extractAppFormName appForm)
-        , exportDescription = description
-        , exportIsDefault = True
-        , exportParams = givenParams <> assumedParams
-        , exportReturnType = extractReturnType tySig
-        , exportDecide = decide
-        }
 
 getDefaultFunction :: Module Resolved -> Maybe ExportedFunction
 getDefaultFunction =
