@@ -976,7 +976,7 @@
     padding: 6px 8px;
     background: none;
     border: none;
-    border-bottom: 2px solid transparent;
+    border-bottom: 1px solid transparent;
     color: var(--vscode-foreground);
     cursor: pointer;
     font-size: 0.92em;
@@ -990,7 +990,7 @@
 
   .tab.active {
     opacity: 1;
-    border-bottom-color: var(--vscode-focusBorder, #007fd4);
+    border-bottom-color: #c8376a;
   }
 
   .tab-content {
@@ -1186,7 +1186,7 @@
   }
 
   .form-input:focus {
-    border-color: var(--vscode-focusBorder, #007fd4);
+    border-color: #c8376a;
   }
 
   .form-error {
@@ -1218,8 +1218,8 @@
   }
 
   .existing-dep-btn.selected {
-    border-color: var(--vscode-focusBorder, #007fd4);
-    background: var(--vscode-list-activeSelectionBackground, #094771);
+    border-color: #c8376a;
+    background: rgba(200, 55, 106, 0.1);
   }
 
   .existing-dep-count {
