@@ -107,12 +107,12 @@ curl https://dev.jl4.legalese.com/service/deployments/thailand-cosmetics/functio
 # Evaluate compute_qualifies
 curl -X POST https://dev.jl4.legalese.com/service/deployments/classic/functions/compute_qualifies/evaluation \
   -H "Content-Type: application/json" \
-  -d '{"fnArguments":{"walks":true,"eats":true,"drinks":false}}'
+  -d '{"arguments":{"walks":true,"eats":true,"drinks":false}}'
 
 # Evaluate thailand cosmetics sub-claim
 curl -X POST 'https://dev.jl4.legalese.com/service/deployments/thailand-cosmetics/functions/evaluate%20sub-claim/evaluation' \
   -H "Content-Type: application/json" \
-  -d '{"fnArguments":{"input":{...},"statement category":null}}'
+  -d '{"arguments":{"input":{...},"statement category":null}}'
 ```
 
 ## Next Steps

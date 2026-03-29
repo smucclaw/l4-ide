@@ -1,10 +1,10 @@
 import type { AuthManager } from './auth.js'
 
 export interface DeployResponse {
-  dsId: string
-  dsStatus: string
-  dsMetadata?: unknown
-  dsError?: string
+  id: string
+  status: string
+  metadata?: unknown
+  error?: string
 }
 
 export interface ServiceHealth {

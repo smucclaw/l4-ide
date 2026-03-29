@@ -27,7 +27,7 @@
 ### Test 1a: No bindings
 ```bash
 curl -X POST 'http://localhost:8001/functions/simple%20and%20result/query-plan' \
-  -H 'Content-Type: application/json' -d '{"fnArguments": {}}'
+  -H 'Content-Type: application/json' -d '{"arguments": {}}'
 ```
 
 **Result:** ✅ **PASS**
@@ -40,7 +40,7 @@ curl -X POST 'http://localhost:8001/functions/simple%20and%20result/query-plan' 
 ### Test 1b: a=false (short-circuit)
 ```bash
 curl -X POST 'http://localhost:8001/functions/simple%20and%20result/query-plan' \
-  -H 'Content-Type: application/json' -d '{"fnArguments": {"a": false}}'
+  -H 'Content-Type: application/json' -d '{"arguments": {"a": false}}'
 ```
 
 **Result:** ✅ **PASS**
@@ -53,7 +53,7 @@ curl -X POST 'http://localhost:8001/functions/simple%20and%20result/query-plan' 
 ### Test 1c: a=true (still need b)
 ```bash
 curl -X POST 'http://localhost:8001/functions/simple%20and%20result/query-plan' \
-  -H 'Content-Type: application/json' -d '{"fnArguments": {"a": true}}'
+  -H 'Content-Type: application/json' -d '{"arguments": {"a": true}}'
 ```
 
 **Result:** ✅ **PASS**
@@ -73,7 +73,7 @@ curl -X POST 'http://localhost:8001/functions/simple%20and%20result/query-plan' 
 ### Test 2a: a=true (short-circuit)
 ```bash
 curl -X POST 'http://localhost:8001/functions/simple%20or%20result/query-plan' \
-  -H 'Content-Type: application/json' -d '{"fnArguments": {"a": true}}'
+  -H 'Content-Type: application/json' -d '{"arguments": {"a": true}}'
 ```
 
 **Result:** ✅ **PASS**
@@ -92,7 +92,7 @@ curl -X POST 'http://localhost:8001/functions/simple%20or%20result/query-plan' \
 ### Test 3a: Left branch succeeds
 ```bash
 curl -X POST 'http://localhost:8001/functions/either%20branch%20succeeds/query-plan' \
-  -H 'Content-Type: application/json' -d '{"fnArguments": {"a": true, "b": true}}'
+  -H 'Content-Type: application/json' -d '{"arguments": {"a": true, "b": true}}'
 ```
 
 **Result:** ✅ **PASS**
@@ -105,7 +105,7 @@ curl -X POST 'http://localhost:8001/functions/either%20branch%20succeeds/query-p
 ### Test 3b: Left branch fails (a=false)
 ```bash
 curl -X POST 'http://localhost:8001/functions/either%20branch%20succeeds/query-plan' \
-  -H 'Content-Type: application/json' -d '{"fnArguments": {"a": false}}'
+  -H 'Content-Type: application/json' -d '{"arguments": {"a": false}}'
 ```
 
 **Result:** ✅ **PASS**
@@ -126,7 +126,7 @@ curl -X POST 'http://localhost:8001/functions/either%20branch%20succeeds/query-p
 ### Test 4a: Age 21+
 ```bash
 curl -X POST 'http://localhost:8001/functions/may%20purchase%20alcohol/query-plan' \
-  -H 'Content-Type: application/json' -d '{"fnArguments": {"age_21_plus": true}}'
+  -H 'Content-Type: application/json' -d '{"arguments": {"age_21_plus": true}}'
 ```
 
 **Result:** ⚠️ **NEEDS INVESTIGATION**
@@ -242,14 +242,14 @@ curl -s 'http://localhost:8001/functions/<FUNCTION_NAME>' | jq '.'
 ```bash
 curl -s -X POST 'http://localhost:8001/functions/<FUNCTION_NAME>/query-plan' \
   -H 'Content-Type: application/json' \
-  -d '{"fnArguments": {}}' | jq '.'
+  -d '{"arguments": {}}' | jq '.'
 ```
 
 ### Query Plan (With Bindings)
 ```bash
 curl -s -X POST 'http://localhost:8001/functions/<FUNCTION_NAME>/query-plan' \
   -H 'Content-Type: application/json' \
-  -d '{"fnArguments": {"var_name": true}}' | jq '.'
+  -d '{"arguments": {"var_name": true}}' | jq '.'
 ```
 
 ### Useful jq Filters

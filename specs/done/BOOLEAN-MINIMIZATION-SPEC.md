@@ -279,7 +279,7 @@ POST /functions/{name}/partial-evaluation
 Content-Type: application/json
 
 {
-  "fnArguments": {
+  "arguments": {
     "age": 30
     // Other fields simply omitted - not provided yet
   }
@@ -303,10 +303,10 @@ Simply omit fields that aren't known yet:
 
 ```json
 // User only knows their age
-{ "fnArguments": { "age": 30 } }
+{ "arguments": { "age": 30 } }
 
 // After learning marital status
-{ "fnArguments": { "age": 30, "married": false } }
+{ "arguments": { "age": 30, "married": false } }
 ```
 
 The implementation treats missing fields as `NOTHING` (unknown):
@@ -324,7 +324,7 @@ For cases where "I don't know" is different from "not asked yet":
 
 ```json
 {
-  "fnArguments": {
+  "arguments": {
     "age": 30,
     "married": { "_unknown": true }, // User says "I don't know"
     "spousal_approval": null // Treated same as omitted
@@ -338,7 +338,7 @@ Full explicit control:
 
 ```json
 {
-  "fnArguments": {
+  "arguments": {
     "age": { "_value": 30 }, // Known value
     "married": { "_unknown": true }, // Explicitly unknown
     "spousal_approval": { "_notAsked": true } // Not yet queried
@@ -713,7 +713,7 @@ f(adult,M,S,B,P,E) = (adult ∧ (¬M ∨ S ∨ B)) ∨ (¬adult ∧ (P ∨ E))
 **Request:**
 
 ```json
-{ "fnArguments": {} }
+{ "arguments": {} }
 ```
 
 **Analysis:**
@@ -752,7 +752,7 @@ f(adult,M,S,B,P,E) = (adult ∧ (¬M ∨ S ∨ B)) ∨ (¬adult ∧ (P ∨ E))
 **Request:**
 
 ```json
-{ "fnArguments": { "age": 30 } }
+{ "arguments": { "age": 30 } }
 ```
 
 **Analysis:**
@@ -822,7 +822,7 @@ f(adult,M,S,B,P,E) = (adult ∧ (¬M ∨ S ∨ B)) ∨ (¬adult ∧ (P ∨ E))
 **Request:**
 
 ```json
-{ "fnArguments": { "age": 30, "married": false } }
+{ "arguments": { "age": 30, "married": false } }
 ```
 
 **Analysis:**
@@ -854,7 +854,7 @@ f(adult,M,S,B,P,E) = (adult ∧ (¬M ∨ S ∨ B)) ∨ (¬adult ∧ (P ∨ E))
 
 ```json
 {
-  "fnArguments": {
+  "arguments": {
     "age": 30,
     "married": true,
     "beer_only": false,
@@ -886,7 +886,7 @@ f(adult,M,S,B,P,E) = (adult ∧ (¬M ∨ S ∨ B)) ∨ (¬adult ∧ (P ∨ E))
 **Request:**
 
 ```json
-{ "fnArguments": { "age": 19 } }
+{ "arguments": { "age": 19 } }
 ```
 
 **Analysis:**
@@ -967,7 +967,7 @@ Equivalently: `covered = animals ∧ ¬contents_birds ∧ (¬ensuing ∨ exclusi
 
 ```json
 {
-  "fnArguments": {
+  "arguments": {
     "i": {
       "Loss or Damage.caused by rodents": false,
       "Loss or Damage.caused by insects": false,

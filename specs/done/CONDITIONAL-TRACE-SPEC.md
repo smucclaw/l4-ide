@@ -92,12 +92,12 @@ X-L4-Trace: none | full
 # No trace (result only)
 curl -X POST /functions/myFunc/evaluation \
   -H "X-L4-Trace: none" \
-  -d '{"fnArguments": {"x": 5}}'
+  -d '{"arguments": {"x": 5}}'
 
 # Full trace (opt-in)
 curl -X POST /functions/myFunc/evaluation \
   -H "X-L4-Trace: full" \
-  -d '{"fnArguments": {"x": 5}}'
+  -d '{"arguments": {"x": 5}}'
 ```
 
 **Pros:**
@@ -132,7 +132,7 @@ POST /functions/myFunc/evaluation?trace=full
 
 ```json
 {
-  "fnArguments": { "x": 5 },
+  "arguments": { "x": 5 },
   "trace": "none"
 }
 ```
@@ -499,12 +499,12 @@ Clients wanting full traces now opt in explicitly:
 ```bash
 # Default (no trace)
 curl -X POST /functions/myFunc/evaluation \
-  -d '{"fnArguments": {"x": 5}}'
+  -d '{"arguments": {"x": 5}}'
 
 # Opt-in to trace detail
 curl -X POST /functions/myFunc/evaluation \
   -H "X-L4-Trace: full" \
-  -d '{"fnArguments": {"x": 5}}'
+  -d '{"arguments": {"x": 5}}'
 ```
 
 ## Future Extensions

@@ -620,7 +620,7 @@ cabal run jl4-cli -- --graphviz test.l4 | dot -Tsvg > trace.svg
 ```bash
 curl -s -X POST 'http://localhost:8081/functions/compute_qualifies/evaluation?trace=full&graphviz=true' \
   -H 'Content-Type: application/json' \
-  -d '{"fnEvalBackend":"JL4","fnArguments":{"walks": true}}' | jq '.graphviz'
+  -d '{"evalBackend":"JL4","arguments":{"walks": true}}' | jq '.graphviz'
 ```
 
 **Next up:** finalize documentation/UX polish (README + OpenAPI, CLI examples) and consider batch image endpoints or caching strategies now that DOT output is consistent across single and batched evaluations.
@@ -1062,26 +1062,26 @@ cabal run jl4-decision-service-exe -- --port 8081
 # GraphViz enabled (trace=full required)
 curl -s -X POST 'http://localhost:8081/functions/compute_qualifies/evaluation?trace=full&graphviz=true' \
   -H 'Content-Type: application/json' \
-  -d '{"fnEvalBackend":"JL4","fnArguments":{"walks":true,"eats":true,"drinks":true}}' \
+  -d '{"evalBackend":"JL4","arguments":{"walks":true,"eats":true,"drinks":true}}' \
   | jq '.contents.graphviz.dot | length'
 
 # GraphViz suppressed when trace=none
 curl -s -X POST 'http://localhost:8081/functions/compute_qualifies/evaluation?trace=none&graphviz=true' \
   -H 'Content-Type: application/json' \
-  -d '{"fnEvalBackend":"JL4","fnArguments":{"walks":true,"eats":true,"drinks":true}}' \
+  -d '{"evalBackend":"JL4","arguments":{"walks":true,"eats":true,"drinks":true}}' \
   | jq '.contents.graphviz'
 
 # PNG endpoint
 curl -s -o /tmp/trace.png \
   -X POST 'http://localhost:8081/functions/compute_qualifies/evaluation/trace.png?trace=full' \
   -H 'Content-Type: application/json' \
-  -d '{"fnEvalBackend":"JL4","fnArguments":{"walks":true,"eats":true,"drinks":true}}'
+  -d '{"evalBackend":"JL4","arguments":{"walks":true,"eats":true,"drinks":true}}'
 
 # SVG endpoint
 curl -s -o /tmp/trace.svg \
   -X POST 'http://localhost:8081/functions/compute_qualifies/evaluation/trace.svg?trace=full' \
   -H 'Content-Type: application/json' \
-  -d '{"fnEvalBackend":"JL4","fnArguments":{"walks":true,"eats":true,"drinks":true}}'
+  -d '{"evalBackend":"JL4","arguments":{"walks":true,"eats":true,"drinks":true}}'
 
 # Batch GraphViz (per-case @graphviz attribute)
 curl -s -X POST 'http://localhost:8081/functions/compute_qualifies/batch?trace=full&graphviz=true' \

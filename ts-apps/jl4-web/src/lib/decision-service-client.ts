@@ -25,8 +25,8 @@ type FunctionImplementation = {
 }
 
 type FnArguments = {
-  fnEvalBackend: EvalBackend | null
-  fnArguments: Record<string, unknown>
+  evalBackend: EvalBackend | null
+  arguments: Record<string, unknown>
 }
 
 function emptyParameters(): Parameters {
@@ -102,8 +102,8 @@ export async function fetchQueryPlan(
   const url = `${client.baseUrl}/functions/${encodedName}/query-plan`
 
   const args: FnArguments = {
-    fnEvalBackend: null,
-    fnArguments: bindings,
+    evalBackend: null,
+    arguments: bindings,
   }
 
   const resp = await fetch(url, {

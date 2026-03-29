@@ -181,28 +181,12 @@
     }
     returnType?: string
   }> {
-    // Per-deployment: { metaFunctions: [{ fsName, fsParameters, fsReturnType, ... }] }
-    const meta = remoteOpenApi.metaFunctions as
+    // Per-deployment: { functions: [{ name, parameters, returnType, ... }] }
+    const meta = remoteOpenApi.functions as
       | Array<Record<string, unknown>>
       | undefined
     if (meta) {
       return meta.map((f) => ({
-        name: (f.fsName as string) ?? '',
-        parameters: f.fsParameters as
-          | {
-              properties?: Record<string, { type?: string }>
-              required?: string[]
-            }
-          | undefined,
-        returnType: (f.fsReturnType as string) ?? '',
-      }))
-    }
-    // Org-wide fallback: { functions: [{ name, parameters, returnType, ... }] }
-    const fns = remoteOpenApi.functions as
-      | Array<Record<string, unknown>>
-      | undefined
-    if (fns) {
-      return fns.map((f) => ({
         name: (f.name as string) ?? '',
         parameters: f.parameters as
           | {

@@ -193,7 +193,7 @@ defaultMain = do
 # Should succeed with modular files
 curl -X POST "http://localhost:8080/functions/evaluate%20cosmetics%20claim/evaluation" \
   -H "Content-Type: application/json" \
-  -d '{"fnEvalBackend":"jl4","fnArguments":{"claim_text":"test","test_type":3}}'
+  -d '{"evalBackend":"jl4","arguments":{"claim_text":"test","test_type":3}}'
 
 # Expected: Successful evaluation (not IMPORT error)
 ```

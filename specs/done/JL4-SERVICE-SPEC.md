@@ -292,8 +292,8 @@ data ResponseWithReason = ResponseWithReason
   }
 ```
 
-The field is renamed `values` → `fnResult` to match the `fn`-prefixed input convention
-(`fnArguments`, `fnEvalBackend`). The type changes from `[(Text, FnLiteral)]` to
+The field is renamed `values` → `fnResult` and the JSON key is serialized as `result`
+(matching the clean key convention: `arguments`, `evalBackend`, `result`). The type changes from `[(Text, FnLiteral)]` to
 `Map Text FnLiteral` so the output serializes as a JSON object (same style as input).
 
 Construction sites in `Backend.Jl4` (two locations):
@@ -310,10 +310,10 @@ The wire format becomes symmetric:
 
 ```json
 // request
-{ "fnArguments": { "income": 60000, "is_citizen": true } }
+{ "arguments": { "income": 60000, "is_citizen": true } }
 
 // response
-{ "fnResult": { "result": true }, "reasoning": { ... }, "graphviz": null }
+{ "result": { "result": true }, "reasoning": { ... }, "graphviz": null }
 ```
 
 ---
@@ -350,7 +350,7 @@ curl http://localhost:8080/deployments/my-rules
 # Evaluate
 curl -X POST http://localhost:8080/deployments/my-rules/functions/is-eligible/evaluation \
   -H "Content-Type: application/json" \
-  -d '{"fnArguments": {"income": 60000}}'
+  -d '{"arguments": {"income": 60000}}'
 
 # Replace bundle
 curl -X PUT http://localhost:8080/deployments/my-rules \

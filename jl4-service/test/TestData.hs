@@ -175,6 +175,7 @@ DECLARE Person HAS
     name IS A STRING
     age IS A NUMBER
 
+@export
 GIVEN n IS A STRING
       a IS A NUMBER
 GIVETH A Person
@@ -191,6 +192,7 @@ DECLARE Result HAS
     label IS A STRING
     extra_provided IS A BOOLEAN
 
+@export
 GIVEN label IS A STRING
       extra IS A MAYBE STRING
 GIVETH A Result

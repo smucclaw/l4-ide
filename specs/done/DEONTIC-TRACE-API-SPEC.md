@@ -72,7 +72,7 @@ The existing `FnArguments` type gains two optional fields:
 
 ```json
 {
-  "fnArguments": {
+  "arguments": {
     "patron": { "NaturalPerson": { "name": "John Doe" } },
     "company": { "Restaurant": { "name": "EatAtJoes, Inc." } },
     "symtab": {
@@ -132,13 +132,13 @@ The existing `FnArguments` type gains two optional fields:
 
 ### Response Schema
 
-The response uses the **existing `ResponseWithReason` structure** — deontic results are serialized as structured `FnLiteral` values in `fnResult`, just like any other return type.
+The response uses the **existing `ResponseWithReason` structure** — deontic results are serialized as structured `FnLiteral` values in `result`, just like any other return type.
 
 #### Case 1: FULFILLED
 
 ```json
 {
-  "fnResult": {
+  "result": {
     "value": "FULFILLED"
   },
   "reasoning": { "payload": { ... } },
@@ -150,7 +150,7 @@ The response uses the **existing `ResponseWithReason` structure** — deontic re
 
 ```json
 {
-  "fnResult": {
+  "result": {
     "value": {
       "BREACH": {
         "reason": "deadline_missed",
@@ -170,7 +170,7 @@ The response uses the **existing `ResponseWithReason` structure** — deontic re
 
 ```json
 {
-  "fnResult": {
+  "result": {
     "value": {
       "OBLIGATION": {
         "party": { "NaturalPerson": { "name": "John Doe" } },
@@ -189,7 +189,7 @@ The response uses the **existing `ResponseWithReason` structure** — deontic re
 
 ```json
 {
-  "fnResult": {
+  "result": {
     "value": {
       "OBLIGATION": {
         "party": { "NaturalPerson": { "name": "John Doe" } },
@@ -208,9 +208,9 @@ This is the "show me the first thing this contract expects" case. The function i
 
 #### Why This Response Shape Works
 
-- **Consistent**: Same `ResponseWithReason` envelope for all function types. Callers inspect `fnResult.value` to determine the result type, just as they would for any other function.
+- **Consistent**: Same `ResponseWithReason` envelope for all function types. Callers inspect `result.value` to determine the result type, just as they would for any other function.
 - **Self-describing**: The outer key (`"FULFILLED"`, `"BREACH"`, `"OBLIGATION"`) tells you the contract state. No new response types or endpoints.
-- **Backward-compatible**: Non-deontic functions continue to return `{ "fnResult": { "value": true } }` etc. No change.
+- **Backward-compatible**: Non-deontic functions continue to return `{ "result": { "value": true } }` etc. No change.
 
 ---
 
@@ -244,7 +244,7 @@ data TraceEvent = TraceEvent
   deriving anyclass (FromJSON, ToJSON)
 ```
 
-Because `startTime` and `events` are `Maybe`, existing callers sending `{ "fnArguments": { ... } }` continue to work — the new fields default to `Nothing`.
+Because `startTime` and `events` are `Maybe`, existing callers sending `{ "arguments": { ... } }` continue to work — the new fields default to `Nothing`.
 
 #### Step 1.2: Detect Deontic Functions
 
@@ -502,7 +502,7 @@ Phase 1 returns minimal obligation info. Phase 2 adds:
 
   ```json
   {
-    "fnResult": {
+    "result": {
       "value": {
         "OBLIGATION": {
           "operator": "AND",
@@ -592,31 +592,31 @@ Using the `restaurant1.l4` example (adapted for test data):
 1. **All events present → FULFILLED**
 
    ```
-   POST /evaluation with all 5 events → { "fnResult": { "value": "FULFILLED" } }
+   POST /evaluation with all 5 events → { "result": { "value": "FULFILLED" } }
    ```
 
 2. **Missing final event → OBLIGATION (residual)**
 
    ```
-   POST /evaluation with 4 events (no pay) → { "fnResult": { "value": { "OBLIGATION": { "party": ..., "modal": "MUST", "action": "pay ..." } } } }
+   POST /evaluation with 4 events (no pay) → { "result": { "value": { "OBLIGATION": { "party": ..., "modal": "MUST", "action": "pay ..." } } } }
    ```
 
 3. **Late event → BREACH**
 
    ```
-   POST /evaluation with pay AT 400 (exceeds WITHIN 10) → { "fnResult": { "value": { "BREACH": { ... } } } }
+   POST /evaluation with pay AT 400 (exceeds WITHIN 10) → { "result": { "value": { "BREACH": { ... } } } }
    ```
 
 4. **Wrong amount → OBLIGATION (unmatched action)**
 
    ```
-   POST /evaluation with pay 11 instead of 12 → { "fnResult": { "value": { "OBLIGATION": { ... } } } }
+   POST /evaluation with pay 11 instead of 12 → { "result": { "value": { "OBLIGATION": { ... } } } }
    ```
 
 5. **Empty events → initial OBLIGATION**
 
    ```
-   POST /evaluation with events: [] → { "fnResult": { "value": { "OBLIGATION": { "party": ..., "modal": "MUST", "action": "order beer ..." } } } }
+   POST /evaluation with events: [] → { "result": { "value": { "OBLIGATION": { "party": ..., "modal": "MUST", "action": "order beer ..." } } } }
    ```
 
 6. **No events field at all, deontic function → initial OBLIGATION**
@@ -644,14 +644,14 @@ Using the `saleContractJL4` test data already in `TestData.hs`:
 ### Backward Compatibility Tests
 
 13. **Existing non-deontic evaluation** — verify all existing integration tests continue to pass unchanged
-14. **Request without new fields** — verify `{ "fnArguments": { ... } }` without `startTime`/`events` works exactly as before
+14. **Request without new fields** — verify `{ "arguments": { ... } }` without `startTime`/`events` works exactly as before
 
 ---
 
 ## Backward Compatibility
 
 - **No breaking changes** — `startTime` and `events` are optional fields that default to `Nothing`
-- Existing callers sending `{ "fnArguments": { ... } }` are completely unaffected
+- Existing callers sending `{ "arguments": { ... } }` are completely unaffected
 - The `/evaluation` endpoint, the `/evaluation/batch` endpoint, and all other endpoints remain unchanged in their existing behaviour
 - The `/state-graphs` endpoints are unaffected
 
@@ -679,7 +679,7 @@ Using the `saleContractJL4` test data already in `TestData.hs`:
 
 This is the common case (see `restaurant1.l4` — the contract functions take `patron`, `company`, `symtab` as GIVEN parameters). The wrapper must:
 
-1. Decode `fnArguments` into the GIVEN parameter types (existing logic)
+1. Decode `arguments` into the GIVEN parameter types (existing logic)
 2. Construct the function call with those arguments
 3. Wrap the function call in `EVALTRACE ... startTime events`
 
@@ -726,7 +726,7 @@ curl -X POST \
   'http://localhost:8080/deployments/restaurant/functions/order%20beer/evaluation' \
   -H 'Content-Type: application/json' \
   -d '{
-    "fnArguments": {
+    "arguments": {
       "patron": { "NaturalPerson": { "name": "John Doe" } },
       "company": { "Restaurant": { "name": "EatAtJoes, Inc." } },
       "symtab": { "Symbol Table": { "bill": 0, "beers": 0, "potatoes": 0, "log": ["", "nothing has happened yet"] } }
@@ -738,7 +738,7 @@ Response — what the contract expects first:
 
 ```json
 {
-  "fnResult": {
+  "result": {
     "value": {
       "OBLIGATION": {
         "party": { "NaturalPerson": { "name": "John Doe" } },
@@ -760,7 +760,7 @@ curl -X POST \
   'http://localhost:8080/deployments/restaurant/functions/order%20beer/evaluation?trace=full' \
   -H 'Content-Type: application/json' \
   -d '{
-    "fnArguments": {
+    "arguments": {
       "patron": { "NaturalPerson": { "name": "John Doe" } },
       "company": { "Restaurant": { "name": "EatAtJoes, Inc." } },
       "symtab": { "Symbol Table": { "bill": 0, "beers": 0, "potatoes": 0, "log": ["", "nothing has happened yet"] } }
@@ -785,7 +785,7 @@ Response:
 
 ```json
 {
-  "fnResult": {
+  "result": {
     "value": "FULFILLED"
   },
   "reasoning": { "payload": { ... } },
@@ -799,7 +799,7 @@ Same call but remove the last event:
 
 ```json
 {
-  "fnResult": {
+  "result": {
     "value": {
       "OBLIGATION": {
         "party": { "NaturalPerson": { "name": "John Doe" } },
@@ -819,7 +819,7 @@ Change last event to `"at": 400`:
 
 ```json
 {
-  "fnResult": {
+  "result": {
     "value": {
       "BREACH": {
         "reason": "deadline_missed",

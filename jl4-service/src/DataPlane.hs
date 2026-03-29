@@ -389,7 +389,7 @@ getStateGraphDotHandler deployId fnName graphName = do
 
 -- | GET /deployments/{id}/openapi.json
 -- Serves from in-memory registry if ready, or from disk cache if pending/compiling.
--- Only triggers compilation as a last resort (no cache available).
+-- Never triggers compilation — only evaluation endpoints should do that.
 openApiHandler :: DeploymentId -> AppM DeploymentMetadata
 openApiHandler deployId = do
   logger <- asks (.logger)
@@ -398,24 +398,16 @@ openApiHandler deployId = do
   registry <- asks (.deploymentRegistry) >>= liftIO . readTVarIO
   case Map.lookup deployId registry of
     Just (DeploymentReady _fns meta) -> pure meta
-    Just DeploymentPending -> serveCachedOrCompile deployId
+    Just DeploymentPending -> serveCachedOrFail deployId
     Just DeploymentCompiling -> serveCachedOrFail deployId
     Just (DeploymentFailed _) -> serveCachedOrFail deployId
     Nothing -> throwError err404
  where
-  serveCachedOrCompile did = do
-    cached <- tryLoadCachedMeta did
-    case cached of
-      Just meta -> pure meta
-      Nothing -> do
-        -- No cache — must compile to generate metadata
-        (_fns, meta) <- requireDeploymentReady did
-        pure meta
   serveCachedOrFail did = do
     cached <- tryLoadCachedMeta did
     case cached of
       Just meta -> pure meta
-      Nothing -> throwError err503 { errBody = jsonError "Deployment is compiling and no cached metadata available" }
+      Nothing -> throwError err503 { errBody = jsonError "Deployment is pending and no cached metadata available" }
   tryLoadCachedMeta did = do
     store <- asks (.bundleStore)
     mBytes <- liftIO $ BundleStore.loadMetadataCache store did.unDeploymentId

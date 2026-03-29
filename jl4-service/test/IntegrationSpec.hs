@@ -46,7 +46,7 @@ spec = describe "integration" do
       withServiceFromSources "eval-true" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
         resp <- evalFunction baseUrl mgr "eval-true" "compute_qualifies"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "walks" Aeson..= True
                 , "eats" Aeson..= True
                 , "drinks" Aeson..= True
@@ -59,7 +59,7 @@ spec = describe "integration" do
       withServiceFromSources "eval-false" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
         resp <- evalFunction baseUrl mgr "eval-false" "compute_qualifies"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "walks" Aeson..= False
                 , "eats" Aeson..= False
                 , "drinks" Aeson..= False
@@ -91,7 +91,7 @@ spec = describe "integration" do
       withServiceFromSources "record-named" [("record.l4", recordJL4)] \baseUrl mgr -> do
         resp <- evalFunction baseUrl mgr "record-named" "make_person"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "n" Aeson..= ("Alice" :: Text)
                 , "a" Aeson..= (30 :: Int)
                 ]
@@ -112,7 +112,7 @@ spec = describe "integration" do
       withServiceFromSources "maybe-null" [("maybe.l4", maybeParamJL4)] \baseUrl mgr -> do
         resp <- evalFunction baseUrl mgr "maybe-null" "with_maybe"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "label" Aeson..= ("test" :: Text)
                 , "extra" Aeson..= Aeson.Null
                 ]
@@ -132,7 +132,7 @@ spec = describe "integration" do
       withServiceFromSources "maybe-just" [("maybe.l4", maybeParamJL4)] \baseUrl mgr -> do
         resp <- evalFunction baseUrl mgr "maybe-just" "with_maybe"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "label" Aeson..= ("test" :: Text)
                 , "extra" Aeson..= ("hello" :: Text)
                 ]
@@ -224,7 +224,7 @@ spec = describe "integration" do
     it "returns a query plan with no bindings" do
       withServiceFromSources "qp-empty" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
         resp <- queryPlan' baseUrl mgr "qp-empty" "compute_qualifies"
-          (Aeson.object ["fnArguments" Aeson..= Aeson.object []])
+          (Aeson.object ["arguments" Aeson..= Aeson.object []])
         statusCode' resp `shouldBe` 200
         let body = decodeObject (responseBody resp)
         lookupKey "determined" body `shouldBe` Just Aeson.Null
@@ -235,7 +235,7 @@ spec = describe "integration" do
       withServiceFromSources "qp-all-true" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
         resp <- queryPlan' baseUrl mgr "qp-all-true" "compute_qualifies"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "walks" Aeson..= True
                 , "eats" Aeson..= True
                 , "drinks" Aeson..= True
@@ -250,7 +250,7 @@ spec = describe "integration" do
       withServiceFromSources "qp-one-false" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
         resp <- queryPlan' baseUrl mgr "qp-one-false" "compute_qualifies"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "walks" Aeson..= False
                 ]
             ])
@@ -262,7 +262,7 @@ spec = describe "integration" do
       withServiceFromSources "qp-partial" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
         resp <- queryPlan' baseUrl mgr "qp-partial" "compute_qualifies"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "walks" Aeson..= True
                 , "eats" Aeson..= True
                 ]
@@ -276,13 +276,13 @@ spec = describe "integration" do
       withServiceFromSources "qp-cache" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
         -- First request builds the cache
         resp1 <- queryPlan' baseUrl mgr "qp-cache" "compute_qualifies"
-          (Aeson.object ["fnArguments" Aeson..= Aeson.object []])
+          (Aeson.object ["arguments" Aeson..= Aeson.object []])
         statusCode' resp1 `shouldBe` 200
 
         -- Second request should use the cached version
         resp2 <- queryPlan' baseUrl mgr "qp-cache" "compute_qualifies"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "walks" Aeson..= True
                 , "eats" Aeson..= True
                 , "drinks" Aeson..= True
@@ -295,7 +295,7 @@ spec = describe "integration" do
     it "returns 404 for unknown function" do
       withServiceFromSources "qp-404" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
         resp <- queryPlan' baseUrl mgr "qp-404" "no_such_fn"
-          (Aeson.object ["fnArguments" Aeson..= Aeson.object []])
+          (Aeson.object ["arguments" Aeson..= Aeson.object []])
         statusCode' resp `shouldBe` 404
 
   describe "evaluation with trace" do
@@ -304,7 +304,7 @@ spec = describe "integration" do
         req <- buildJsonPost
           (baseUrl <> "/deployments/trace-full/functions/compute_qualifies/evaluation?trace=full")
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "walks" Aeson..= True
                 , "eats" Aeson..= True
                 , "drinks" Aeson..= True
@@ -321,7 +321,7 @@ spec = describe "integration" do
         req <- buildJsonPost
           (baseUrl <> "/deployments/trace-gv/functions/compute_qualifies/evaluation?trace=full&graphviz=true")
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "walks" Aeson..= True
                 , "eats" Aeson..= True
                 , "drinks" Aeson..= True
@@ -340,7 +340,7 @@ spec = describe "integration" do
         req <- buildJsonPost
           (baseUrl <> "/deployments/trace-none/functions/compute_qualifies/evaluation?trace=none")
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "walks" Aeson..= True
                 , "eats" Aeson..= True
                 , "drinks" Aeson..= True
@@ -396,7 +396,7 @@ spec = describe "integration" do
       withServiceFromSources "deontic-ok" [("contract.l4", deonticExportJL4)] \baseUrl mgr -> do
         resp <- evalFunction baseUrl mgr "deontic-ok" "the sale contract"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object []
+            [ "arguments" Aeson..= Aeson.object []
             , "startTime" Aeson..= (0 :: Int)
             , "events" Aeson..=
                 [ Aeson.object ["party" Aeson..= ("the seller" :: Text), "action" Aeson..= ("deliver the goods" :: Text), "at" Aeson..= (5 :: Int)]
@@ -410,7 +410,7 @@ spec = describe "integration" do
       withServiceFromSources "deontic-init" [("contract.l4", deonticExportJL4)] \baseUrl mgr -> do
         resp <- evalFunction baseUrl mgr "deontic-init" "the sale contract"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object []
+            [ "arguments" Aeson..= Aeson.object []
             , "startTime" Aeson..= (0 :: Int)
             , "events" Aeson..= ([] :: [Aeson.Value])
             ])
@@ -427,7 +427,7 @@ spec = describe "integration" do
       withServiceFromSources "deontic-partial" [("contract.l4", deonticExportJL4)] \baseUrl mgr -> do
         resp <- evalFunction baseUrl mgr "deontic-partial" "the sale contract"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object []
+            [ "arguments" Aeson..= Aeson.object []
             , "startTime" Aeson..= (0 :: Int)
             , "events" Aeson..=
                 [ Aeson.object ["party" Aeson..= ("the seller" :: Text), "action" Aeson..= ("deliver the goods" :: Text), "at" Aeson..= (5 :: Int)]
@@ -446,7 +446,7 @@ spec = describe "integration" do
       withServiceFromSources "deontic-err" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
         req <- buildJsonPost (baseUrl <> "/deployments/deontic-err/functions/compute_qualifies/evaluation")
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object ["walks" Aeson..= True, "eats" Aeson..= True, "drinks" Aeson..= True]
+            [ "arguments" Aeson..= Aeson.object ["walks" Aeson..= True, "eats" Aeson..= True, "drinks" Aeson..= True]
             , "startTime" Aeson..= (0 :: Int)
             , "events" Aeson..= ([] :: [Aeson.Value])
             ])
@@ -459,7 +459,7 @@ spec = describe "integration" do
       withServiceFromSources "deontic-no-st" [("contract.l4", deonticExportJL4)] \baseUrl mgr -> do
         req <- buildJsonPost (baseUrl <> "/deployments/deontic-no-st/functions/the%20sale%20contract/evaluation")
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object []
+            [ "arguments" Aeson..= Aeson.object []
             , "events" Aeson..= ([] :: [Aeson.Value])
             ])
         resp <- httpLbs req mgr
@@ -471,7 +471,7 @@ spec = describe "integration" do
       withServiceFromSources "deontic-no-ev" [("contract.l4", deonticExportJL4)] \baseUrl mgr -> do
         req <- buildJsonPost (baseUrl <> "/deployments/deontic-no-ev/functions/the%20sale%20contract/evaluation")
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object []
+            [ "arguments" Aeson..= Aeson.object []
             , "startTime" Aeson..= (0 :: Int)
             ])
         resp <- httpLbs req mgr
@@ -504,7 +504,7 @@ spec = describe "integration" do
       withServiceFromSources "deontic-rec-ok" [("seatbelt.l4", deonticRecordPartyJL4)] \baseUrl mgr -> do
         resp <- evalFunction baseUrl mgr "deontic-rec-ok" "Seatbelt Requirement"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "car" Aeson..= Aeson.object ["number of wheels" Aeson..= (4 :: Int)]
                 , "driver" Aeson..= Aeson.object ["name" Aeson..= ("Alice" :: Text)]
                 ]
@@ -521,7 +521,7 @@ spec = describe "integration" do
       withServiceFromSources "deontic-rec-obl" [("seatbelt.l4", deonticRecordPartyJL4)] \baseUrl mgr -> do
         resp <- evalFunction baseUrl mgr "deontic-rec-obl" "Seatbelt Requirement"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "car" Aeson..= Aeson.object ["number of wheels" Aeson..= (4 :: Int)]
                 , "driver" Aeson..= Aeson.object ["name" Aeson..= ("Alice" :: Text)]
                 ]
@@ -543,7 +543,7 @@ spec = describe "integration" do
       withServiceFromSources "deontic-rec-3w" [("seatbelt.l4", deonticRecordPartyJL4)] \baseUrl mgr -> do
         resp <- evalFunction baseUrl mgr "deontic-rec-3w" "Seatbelt Requirement"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "car" Aeson..= Aeson.object ["number of wheels" Aeson..= (3 :: Int)]
                 , "driver" Aeson..= Aeson.object ["name" Aeson..= ("Bob" :: Text)]
                 ]
@@ -653,7 +653,7 @@ spec = describe "integration" do
       withPendingService "lazy-eval" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
         resp <- evalFunction baseUrl mgr "lazy-eval" "compute_qualifies"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "walks" Aeson..= True
                 , "eats" Aeson..= True
                 , "drinks" Aeson..= True
@@ -755,8 +755,7 @@ withPendingService' deployId sources act = do
   let sourceMap = Map.fromList sources
       version = computeVersion sourceMap
       storedMeta = BundleStore.StoredMetadata
-        { BundleStore.smFunctions = []
-        , BundleStore.smVersion = version
+        { BundleStore.smVersion = version
         , BundleStore.smCreatedAt = "2026-01-01T00:00:00Z"
         }
   BundleStore.saveBundle store deployId sourceMap storedMeta

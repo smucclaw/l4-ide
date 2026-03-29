@@ -78,6 +78,7 @@ defaultMain = do
   logInfo logger "Initializing bundle store"
     [("path", toJSON storePath)]
   store <- BundleStore.initStore storePath
+  BundleStore.cleanupStore logger store
   registry <- newTVarIO Map.empty
   let env = MkAppEnv registry store options.serverName logger options
 

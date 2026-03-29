@@ -82,7 +82,7 @@ spec = describe "CBOR serialisation" do
                 -- (we can't compare directly since Anno_ is stripped,
                 -- but we can rebuild functions from it)
                 rebuildResult <- buildFromCborBundle logger "test" decoded sources
-                  (StoredMetadata [] (computeVersion sources) "2025-01-01T00:00:00Z")
+                  (StoredMetadata (computeVersion sources) "2025-01-01T00:00:00Z")
                 case rebuildResult of
                   Left rebuildErr -> expectationFailure ("Rebuild from decoded CBOR failed: " <> Text.unpack rebuildErr)
                   Right (fns, _meta') -> do
@@ -94,7 +94,7 @@ spec = describe "CBOR serialisation" do
       logger <- newLogger False
       withTempStore $ \store -> do
         let sources = Map.singleton "qualifies.l4" qualifiesJL4
-            meta = StoredMetadata [] "v1" "2025-01-01T00:00:00Z"
+            meta = StoredMetadata "v1" "2025-01-01T00:00:00Z"
         saveBundle store "cbor-test" sources meta
 
         result <- compileBundle logger "test" sources
@@ -116,7 +116,7 @@ spec = describe "CBOR serialisation" do
       logger <- newLogger False
       withTempStore $ \store -> do
         let sources = Map.singleton "qualifies.l4" qualifiesJL4
-            meta = StoredMetadata [] "v1" "2025-01-01T00:00:00Z"
+            meta = StoredMetadata "v1" "2025-01-01T00:00:00Z"
         saveBundle store "corrupt-test" sources meta
 
         -- Write garbage to bundle.cbor
@@ -131,7 +131,7 @@ spec = describe "CBOR serialisation" do
       logger <- newLogger False
       withTempStore $ \store -> do
         let sources = Map.singleton "qualifies.l4" qualifiesJL4
-            meta = StoredMetadata [] "v1" "2025-01-01T00:00:00Z"
+            meta = StoredMetadata "v1" "2025-01-01T00:00:00Z"
         saveBundle store "overwrite-test" sources meta
 
         result <- compileBundle logger "test" sources
@@ -154,7 +154,7 @@ spec = describe "CBOR serialisation" do
         Left err -> expectationFailure ("Compilation failed: " <> Text.unpack err)
         Right (compiledFns, _meta, bundles) -> do
           -- Rebuild from CBOR
-          let storedMeta = StoredMetadata [] (computeVersion sources) "2025-01-01T00:00:00Z"
+          let storedMeta = StoredMetadata (computeVersion sources) "2025-01-01T00:00:00Z"
           rebuiltResults <- mapM (\b -> buildFromCborBundle logger "test" b sources storedMeta) bundles
           let rebuiltFns = mconcat [fns | Right (fns, _) <- rebuiltResults]
 
@@ -175,7 +175,7 @@ spec = describe "CBOR serialisation" do
       withCborRebuiltService "cbor-eval-true" sources $ \baseUrl mgr -> do
         resp <- evalFunction baseUrl mgr "cbor-eval-true" "compute_qualifies"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "walks" Aeson..= True
                 , "eats" Aeson..= True
                 , "drinks" Aeson..= True
@@ -189,7 +189,7 @@ spec = describe "CBOR serialisation" do
       withCborRebuiltService "cbor-eval-false" sources $ \baseUrl mgr -> do
         resp <- evalFunction baseUrl mgr "cbor-eval-false" "compute_qualifies"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "walks" Aeson..= False
                 , "eats" Aeson..= False
                 , "drinks" Aeson..= False
@@ -203,7 +203,7 @@ spec = describe "CBOR serialisation" do
       withCborRebuiltService "cbor-eval-mixed" sources $ \baseUrl mgr -> do
         resp <- evalFunction baseUrl mgr "cbor-eval-mixed" "compute_qualifies"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "walks" Aeson..= True
                 , "eats" Aeson..= False
                 , "drinks" Aeson..= True
@@ -218,7 +218,7 @@ spec = describe "CBOR serialisation" do
       let sources = Map.singleton "qualifies.l4" qualifiesJL4
           deployId' = "restart-sim"
       withTempStore $ \store -> do
-        let meta = StoredMetadata [] (computeVersion sources) "2025-01-01T00:00:00Z"
+        let meta = StoredMetadata (computeVersion sources) "2025-01-01T00:00:00Z"
         saveBundle store deployId' sources meta
 
         -- Step 1: Compile from source (initial deployment)
@@ -252,7 +252,7 @@ spec = describe "CBOR serialisation" do
                       let baseUrl = "http://localhost:" <> show port'
                       resp <- evalFunction baseUrl mgrLocal deployId' "compute_qualifies"
                         (Aeson.object
-                          [ "fnArguments" Aeson..= Aeson.object
+                          [ "arguments" Aeson..= Aeson.object
                               [ "walks" Aeson..= True
                               , "eats" Aeson..= True
                               , "drinks" Aeson..= True
@@ -266,7 +266,7 @@ spec = describe "CBOR serialisation" do
       let sources = Map.singleton "qualifies.l4" qualifiesJL4
           deployId' = "delete-cbor"
       withTempStore $ \store -> do
-        let meta = StoredMetadata [] (computeVersion sources) "2025-01-01T00:00:00Z"
+        let meta = StoredMetadata (computeVersion sources) "2025-01-01T00:00:00Z"
         saveBundle store deployId' sources meta
 
         result <- compileBundle logger "test" sources
@@ -306,7 +306,7 @@ spec = describe "CBOR serialisation" do
         -- Evaluate via the normally-compiled service
         resp <- evalFunction baseUrl mgr "cbor-http" "compute_qualifies"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "walks" Aeson..= True
                 , "eats" Aeson..= True
                 , "drinks" Aeson..= True
@@ -348,7 +348,7 @@ withCborRebuiltService deployId sources act = do
     Right r -> pure r
 
   -- Serialize and deserialize (simulating restart)
-  let storedMeta = StoredMetadata [] (computeVersion sources) "2025-01-01T00:00:00Z"
+  let storedMeta = StoredMetadata (computeVersion sources) "2025-01-01T00:00:00Z"
   rebuiltFns <- fmap mconcat $ mapM (\bundle -> do
     -- Encode to CBOR bytes, then decode back
     let encoded = serialise bundle

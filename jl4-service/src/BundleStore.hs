@@ -1,9 +1,9 @@
 module BundleStore (
   BundleStore (..),
   StoredMetadata (..),
-  StoredFunctionSummary (..),
   SerializedBundle (..),
   initStore,
+  cleanupStore,
   saveBundle,
   loadBundle,
   listDeployments,
@@ -18,6 +18,7 @@ module BundleStore (
 import Codec.Serialise (Serialise, deserialiseOrFail, serialise)
 import Control.Exception (IOException, catch)
 import Data.Aeson (FromJSON, ToJSON, eitherDecodeFileStrict', encodeFile, toJSON)
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
@@ -25,9 +26,11 @@ import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text.IO
 import GHC.Generics (Generic)
+import L4.Export (ExportedFunction)
 import L4.Syntax (Module, Resolved)
 import L4.TypeCheck.Types (Environment, EntityInfo)
-import Logging (Logger, logWarn)
+import Data.List (isSuffixOf)
+import Logging (Logger, logInfo, logWarn)
 import System.Directory
   ( createDirectoryIfMissing
   , doesDirectoryExist
@@ -48,16 +51,8 @@ newtype BundleStore = BundleStore { storePath :: FilePath }
 -- This is the on-disk representation; it matches 'Types.DeploymentMetadata'
 -- but is kept here to avoid circular imports.
 data StoredMetadata = StoredMetadata
-  { smFunctions :: ![StoredFunctionSummary]
-  , smVersion   :: !Text
+  { smVersion   :: !Text
   , smCreatedAt :: !Text  -- UTCTime serialized as ISO-8601 string
-  }
-  deriving stock (Show, Generic)
-  deriving anyclass (FromJSON, ToJSON)
-
-data StoredFunctionSummary = StoredFunctionSummary
-  { sfName        :: !Text
-  , sfDescription :: !Text
   }
   deriving stock (Show, Generic)
   deriving anyclass (FromJSON, ToJSON)
@@ -69,6 +64,7 @@ data SerializedBundle = SerializedBundle
   { sbModule      :: !(Module Resolved)
   , sbEnvironment :: !Environment     -- ^ Map RawName [Unique]
   , sbEntityInfo  :: !EntityInfo      -- ^ Map Unique (Name, CheckEntity)
+  , sbExports     :: ![ExportedFunction]  -- ^ Exported functions (annotations are stripped in CBOR, so these are stored explicitly)
   }
   deriving stock (Generic)
   deriving anyclass (Serialise)
@@ -78,6 +74,28 @@ initStore :: FilePath -> IO BundleStore
 initStore path = do
   createDirectoryIfMissing True path
   pure (BundleStore path)
+
+-- | Clean up stale .tmp directories left behind by interrupted deploys.
+-- NFS .nfs* files are not cleaned here — they disappear automatically
+-- once the process holding the file handle restarts.
+cleanupStore :: Logger -> BundleStore -> IO ()
+cleanupStore logger (BundleStore root) = do
+  exists <- doesDirectoryExist root
+  if not exists then pure ()
+  else do
+    entries <- listDirectory root
+    let tmpDirs = filter (".tmp" `isSuffixOf`) entries
+    mapM_ (\d -> do
+      let path = root </> d
+      removeDirectoryRecursive path
+        `catch` \(e :: IOException) ->
+          logWarn logger "Failed to clean up tmp directory"
+            [("path", toJSON d), ("error", toJSON (show e))]
+      ) tmpDirs
+    if not (null tmpDirs)
+      then logInfo logger "Cleaned up stale tmp directories"
+             [("count", toJSON (length tmpDirs))]
+      else pure ()
 
 -- | Atomically save bundle sources and metadata.
 -- Uses a temp directory + rename for crash safety.
@@ -163,7 +181,9 @@ loadBundleCbor logger (BundleStore root) deployId = do
   if not exists
     then pure Nothing
     else do
-      bytes <- LBS.readFile cborFile
+      -- Read strictly to ensure the file handle is closed immediately.
+      -- Lazy readFile leaks the fd when the deserialized data is kept alive.
+      bytes <- LBS.fromStrict <$> BS.readFile cborFile
       case deserialiseOrFail bytes of
         Left _err -> do
           logWarn logger "Corrupt bundle.cbor, will recompile"
@@ -253,7 +273,7 @@ loadMetadataCache (BundleStore root) deployId = do
   exists <- doesFileExist cacheFile
   if not exists
     then pure Nothing
-    else (Just <$> LBS.readFile cacheFile)
+    else (Just . LBS.fromStrict <$> BS.readFile cacheFile)
       `catch` \(_ :: IOException) -> pure Nothing
 
 -- | Get the directory component of a file path.

@@ -18,6 +18,7 @@ import Logging (logInfo, logWarn, logError)
 import Options (Options (..))
 import Types
 
+import Control.Applicative ((<|>))
 import Control.Concurrent.Async (async)
 import Control.Concurrent.STM (atomically, modifyTVar', readTVarIO)
 import Control.Monad (when)
@@ -54,7 +55,21 @@ data DeploymentStatusResponse = DeploymentStatusResponse
   , dsError    :: !(Maybe Text)
   }
   deriving stock (Show, Generic)
-  deriving anyclass (FromJSON, ToJSON)
+
+instance ToJSON DeploymentStatusResponse where
+  toJSON ds = Aeson.object $
+    [ "id"       .= ds.dsId
+    , "status"   .= ds.dsStatus
+    ] <> maybe [] (\m -> ["metadata" .= m]) ds.dsMetadata
+      <> maybe [] (\e -> ["error" .= e]) ds.dsError
+
+instance FromJSON DeploymentStatusResponse where
+  parseJSON = Aeson.withObject "DeploymentStatusResponse" $ \o ->
+    DeploymentStatusResponse
+      <$> (o Aeson..: "id"       <|> o Aeson..: "dsId")
+      <*> (o Aeson..: "status"   <|> o Aeson..: "dsStatus")
+      <*> (o Aeson..:? "metadata" <|> o Aeson..:? "dsMetadata")
+      <*> (o Aeson..:? "error"    <|> o Aeson..:? "dsError")
 
 -- | The control plane API for managing deployments.
 type ControlPlaneApi =
@@ -119,8 +134,7 @@ postDeploymentHandler multipart = do
       -- Normal path: save, register as pending, compile async
       now <- liftIO getCurrentTime
       let storedMeta = BundleStore.StoredMetadata
-            { BundleStore.smFunctions = []
-            , BundleStore.smVersion = version
+            { BundleStore.smVersion = version
             , BundleStore.smCreatedAt = Text.pack (show now)
             }
 
@@ -225,8 +239,7 @@ putDeploymentHandler deployIdText multipart = do
   now <- liftIO getCurrentTime
   let version = computeVersion sourceMap
       storedMeta = BundleStore.StoredMetadata
-        { BundleStore.smFunctions = []
-        , BundleStore.smVersion = version
+        { BundleStore.smVersion = version
         , BundleStore.smCreatedAt = Text.pack (show now)
         }
 
