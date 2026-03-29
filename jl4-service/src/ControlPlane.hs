@@ -119,8 +119,7 @@ postDeploymentHandler multipart = do
       -- Normal path: save, register as pending, compile async
       now <- liftIO getCurrentTime
       let storedMeta = BundleStore.StoredMetadata
-            { BundleStore.smFunctions = []
-            , BundleStore.smVersion = version
+            { BundleStore.smVersion = version
             , BundleStore.smCreatedAt = Text.pack (show now)
             }
 
@@ -225,8 +224,7 @@ putDeploymentHandler deployIdText multipart = do
   now <- liftIO getCurrentTime
   let version = computeVersion sourceMap
       storedMeta = BundleStore.StoredMetadata
-        { BundleStore.smFunctions = []
-        , BundleStore.smVersion = version
+        { BundleStore.smVersion = version
         , BundleStore.smCreatedAt = Text.pack (show now)
         }
 

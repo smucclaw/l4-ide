@@ -755,8 +755,7 @@ withPendingService' deployId sources act = do
   let sourceMap = Map.fromList sources
       version = computeVersion sourceMap
       storedMeta = BundleStore.StoredMetadata
-        { BundleStore.smFunctions = []
-        , BundleStore.smVersion = version
+        { BundleStore.smVersion = version
         , BundleStore.smCreatedAt = "2026-01-01T00:00:00Z"
         }
   BundleStore.saveBundle store deployId sourceMap storedMeta
