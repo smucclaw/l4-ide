@@ -598,7 +598,7 @@
 
   .markdown-body :global(a),
   .markdown-body :global(.doc-link) {
-    color: var(--vscode-textLink-foreground, #3794ff);
+    color: #c8376a;
     text-decoration: none;
     cursor: pointer;
   }
@@ -711,6 +711,11 @@
   .markdown-body :global(img) {
     max-width: 100%;
     height: auto;
+  }
+
+  .markdown-body :global(img[src$='l4.svg']) {
+    max-width: 160px;
+    max-height: 160px;
   }
 
   .markdown-body :global(strong) {
