@@ -613,18 +613,13 @@
     font-size: 0.9em;
     padding: 1px 4px;
     border-radius: 3px;
-    background: var(
-      --vscode-textCodeBlock-background,
-      rgba(255, 255, 255, 0.06)
-    );
+    background: var(--vscode-editor-background, #1e1e1e);
     color: var(--l4-tok-identifier, #4ec9b0);
   }
 
   .markdown-body :global(pre) {
-    background: var(
-      --vscode-textCodeBlock-background,
-      rgba(255, 255, 255, 0.06)
-    );
+    background: var(--vscode-editor-background, #1e1e1e);
+    border: 1px solid var(--vscode-panel-border, #444);
     border-radius: 4px;
     padding: 10px 12px;
     overflow-x: auto;
