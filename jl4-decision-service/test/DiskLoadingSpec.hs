@@ -16,7 +16,7 @@ import qualified Examples
 
 spec :: Spec
 spec = describe "disk loading" do
-  it "prefers YAML sidecar over implicit default export" do
+  it "loads function from YAML sidecar when L4 has no @export" do
     withTempDir \dir -> do
       let
         l4Path = dir </> "example.l4"
