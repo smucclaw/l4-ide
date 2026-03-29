@@ -10,6 +10,7 @@ module Backend.Api (
   StateGraphListResponse (..),
 ) where
 
+import Control.Applicative ((<|>))
 import Control.Monad.Trans.Except (ExceptT)
 import Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Aeson
@@ -123,7 +124,21 @@ data FnArguments = FnArguments
   , events :: Maybe [TraceEvent]
   }
   deriving stock (Show, Read, Ord, Eq, Generic)
-  deriving anyclass (FromJSON, ToJSON)
+
+instance ToJSON FnArguments where
+  toJSON fa = Aeson.object $
+    [ "arguments" .= fa.fnArguments ]
+    <> maybe [] (\b -> ["evalBackend" .= b]) fa.fnEvalBackend
+    <> maybe [] (\t -> ["startTime" .= t]) fa.startTime
+    <> maybe [] (\e -> ["events" .= e]) fa.events
+
+instance FromJSON FnArguments where
+  parseJSON = Aeson.withObject "FnArguments" $ \o ->
+    FnArguments
+      <$> (o .:? "evalBackend"  <|> o .:? "fnEvalBackend")
+      <*> (o .: "arguments"     <|> o .: "fnArguments")
+      <*> o .:? "startTime"
+      <*> o .:? "events"
 
 -- | A single event for deontic trace evaluation.
 -- Maps to the L4 EVENT constructor: EVENT party action timestamp
@@ -176,15 +191,27 @@ newtype GraphVizResponse = GraphVizResponse
   deriving anyclass (FromJSON, ToJSON, ToSchema)
 
 -- | Evaluation result with symmetric JSON serialization.
--- The output uses 'fnResult' (a JSON object) to mirror the input 'fnArguments'.
+-- The output uses 'result' (a JSON object) to mirror the input 'arguments'.
 data ResponseWithReason = ResponseWithReason
   { fnResult :: Map Text FnLiteral
-  -- ^ Result values as a JSON object, mirrors fnArguments input convention.
+  -- ^ Result values as a JSON object, mirrors arguments input convention.
   , reasoning :: Reasoning
   , graphviz :: Maybe GraphVizResponse
   }
   deriving (Show, Read, Ord, Eq, Generic)
-  deriving anyclass (FromJSON, ToJSON)
+
+instance ToJSON ResponseWithReason where
+  toJSON rwr = Aeson.object $
+    [ "result"    .= rwr.fnResult
+    , "reasoning" .= rwr.reasoning
+    ] <> maybe [] (\g -> ["graphviz" .= g]) rwr.graphviz
+
+instance FromJSON ResponseWithReason where
+  parseJSON = Aeson.withObject "ResponseWithReason" $ \o ->
+    ResponseWithReason
+      <$> (o .: "result"    <|> o .: "fnResult")
+      <*> o .: "reasoning"
+      <*> o .:? "graphviz"
 
 -- | Wrap our reasoning into a top-level field.
 newtype Reasoning = Reasoning

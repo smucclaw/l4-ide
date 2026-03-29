@@ -31,6 +31,7 @@ import Backend.DecisionQueryPlan (CachedDecisionQuery)
 import L4.FunctionSchema (Parameters)
 import Backend.Jl4 (CompiledModule)
 import BundleStore (BundleStore)
+import Control.Applicative ((<|>))
 import Control.Concurrent.STM (TVar)
 import Control.Monad.Trans.Reader (ReaderT)
 import Data.Aeson as Aeson
@@ -72,7 +73,20 @@ data DeploymentMetadata = DeploymentMetadata
   , metaCreatedAt :: !UTCTime
   }
   deriving stock (Show, Generic)
-  deriving anyclass (FromJSON, ToJSON)
+
+instance ToJSON DeploymentMetadata where
+  toJSON dm = Aeson.object
+    [ "functions" .= dm.metaFunctions
+    , "version"   .= dm.metaVersion
+    , "createdAt" .= dm.metaCreatedAt
+    ]
+
+instance FromJSON DeploymentMetadata where
+  parseJSON = Aeson.withObject "DeploymentMetadata" $ \o ->
+    DeploymentMetadata
+      <$> (o .: "functions"  <|> o .: "metaFunctions")
+      <*> (o .: "version"    <|> o .: "metaVersion")
+      <*> (o .: "createdAt"  <|> o .: "metaCreatedAt")
 
 -- | Summary of a single exported function within a deployment.
 data FunctionSummary = FunctionSummary
@@ -87,7 +101,26 @@ data FunctionSummary = FunctionSummary
   -- ^ Whether this function returns a DEONTIC (needs startTime + events params).
   }
   deriving stock (Show, Generic)
-  deriving anyclass (FromJSON, ToJSON)
+
+instance ToJSON FunctionSummary where
+  toJSON fs = Aeson.object
+    [ "name"        .= fs.fsName
+    , "description" .= fs.fsDescription
+    , "parameters"  .= fs.fsParameters
+    , "returnType"  .= fs.fsReturnType
+    , "section"     .= fs.fsSection
+    , "isDeontic"   .= fs.fsIsDeontic
+    ]
+
+instance FromJSON FunctionSummary where
+  parseJSON = Aeson.withObject "FunctionSummary" $ \o ->
+    FunctionSummary
+      <$> (o .: "name"        <|> o .: "fsName")
+      <*> (o .: "description" <|> o .: "fsDescription")
+      <*> (o .: "parameters"  <|> o .: "fsParameters")
+      <*> (o .: "returnType"  <|> o .: "fsReturnType")
+      <*> (o .:? "section"    <|> o .:? "fsSection")
+      <*> (o .: "isDeontic"   <|> o .: "fsIsDeontic")
 
 -- | A compiled and ready-to-evaluate function.
 data ValidatedFunction = ValidatedFunction

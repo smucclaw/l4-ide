@@ -318,9 +318,9 @@ export function initializeSidebarMessenger(
         isUpdate
       )
       outputChannel.appendLine(
-        `[sidebar] Deploy succeeded: ${result.dsId} (${result.dsStatus})`
+        `[sidebar] Deploy succeeded: ${result.id} (${result.status})`
       )
-      return { success: true, deploymentId: result.dsId }
+      return { success: true, deploymentId: result.id }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       outputChannel.appendLine(`[sidebar] Deploy failed: ${msg}`)
@@ -379,8 +379,8 @@ export function initializeSidebarMessenger(
     try {
       const resp = await serviceClient.getDeploymentStatus(params.deploymentId)
       return {
-        status: resp.dsStatus as 'pending' | 'compiling' | 'ready' | 'failed',
-        error: resp.dsError,
+        status: resp.status as 'pending' | 'compiling' | 'ready' | 'failed',
+        error: resp.error,
       }
     } catch (err) {
       return {

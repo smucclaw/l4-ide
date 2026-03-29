@@ -182,7 +182,7 @@ After user says "I don't know" for married:
 
 ```json
 {
-  "fnArguments": {
+  "arguments": {
     "age": 30,
     "married": null,
     "has_approval": { "_notProvided": true }
@@ -203,14 +203,14 @@ For simpler integration, use field presence:
 
 ```json
 {
-  "fnArguments": {
+  "arguments": {
     "age": 30
   },
   "explicitUnknowns": ["married"]
 }
 ```
 
-- Present in `fnArguments` → `Right (Just value)`
+- Present in `arguments` → `Right (Just value)`
 - Present in `explicitUnknowns` → `Right Nothing`
 - Absent from both → `Left _` (use TYPICALLY if available)
 

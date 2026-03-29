@@ -19,8 +19,8 @@ export type EvaluationResult = {
 }
 
 type FnArguments = {
-  fnEvalBackend: 'jl4' | null
-  fnArguments: Record<string, unknown>
+  evalBackend: 'jl4' | null
+  arguments: Record<string, unknown>
 }
 
 async function throwWithResponseBody(
@@ -71,8 +71,8 @@ export async function fetchQueryPlan(
   const url = `${client.baseUrl}/functions/${encodedName}/query-plan`
 
   const args: FnArguments = {
-    fnEvalBackend: null,
-    fnArguments: bindings,
+    evalBackend: null,
+    arguments: bindings,
   }
 
   const resp = await fetch(url, {
@@ -99,8 +99,8 @@ export async function evaluateFunction(
   const url = `${client.baseUrl}/functions/${encodedName}/evaluation${traceParam}`
 
   const payload: FnArguments = {
-    fnEvalBackend: 'jl4',
-    fnArguments: args,
+    evalBackend: 'jl4',
+    arguments: args,
   }
 
   const resp = await fetch(url, {
@@ -148,8 +148,8 @@ export async function fetchGraphviz(
   const url = `${client.baseUrl}/functions/${encodedName}/evaluation/${extension}?trace=full`
 
   const args: FnArguments = {
-    fnEvalBackend: 'jl4',
-    fnArguments: bindings,
+    evalBackend: 'jl4',
+    arguments: bindings,
   }
 
   const resp = await fetch(url, {
