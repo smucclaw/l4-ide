@@ -24,20 +24,11 @@
 
 The solution leverages `L4.Export.getExportedFunctions` to extract metadata from the type-checked module, providing robust parsing through the compiler's AST rather than text-based parsing.
 
-### December 2024: Implicit Default Export Logic
+### March 2026: Explicit Exports Only
 
-**Implicit Default Export Logic** was implemented in `jl4-core/src/L4/Export.hs`:
+The implicit default export behavior was removed. Only explicit `@export` annotations are recognized — files without any `@export` annotation export nothing.
 
-1. **No explicit exports**: Files without `@export` annotations now automatically export their topmost function as the default export
-2. **Exports without explicit default**: When a file has `@export` annotations but none marked with `default`, the topmost exported function is automatically marked as default
-
-This allows simple files like `jl4/experiments/cubed-postfix.l4` to be exportable without requiring explicit `@export` annotations.
-
-**Test files created:**
-
-- `jl4/examples/ok/export-implicit-default.l4` - Tests implicit default behavior
-- `jl4/examples/ok/export-no-explicit-default.l4` - Tests auto-selection of topmost export as default
-- `jl4/examples/ok/export-explicit-default.l4` - Tests explicit default is respected
+When multiple `@export` annotations exist but none is marked `@export default`, the topmost exported function is automatically marked as default.
 
 ## Problem Statement
 
