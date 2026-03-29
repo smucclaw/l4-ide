@@ -58,7 +58,7 @@ curl -X POST http://localhost:8080/deployments \
 
 # Poll until ready
 curl http://localhost:8080/deployments/my-rules
-# Returns {"dsId":"my-rules","dsStatus":"ready",...}
+# Returns {"id":"my-rules","status":"ready",...}
 ```
 
 If you omit the `id` field, a UUID is generated automatically.
@@ -125,7 +125,7 @@ Evaluate functions within a deployment.
 ```bash
 curl -X POST http://localhost:8080/deployments/my-rules/functions/compute_qualifies/evaluation \
   -H "Content-Type: application/json" \
-  -d '{"fnArguments":{"walks": true, "drinks": true, "eats": true}}'
+  -d '{"arguments":{"walks": true, "drinks": true, "eats": true}}'
 ```
 
 #### Trace Output
@@ -135,7 +135,7 @@ Include execution traces with `?trace=full` or the `X-L4-Trace: full` header. Ad
 ```bash
 curl -X POST 'http://localhost:8080/deployments/my-rules/functions/compute_qualifies/evaluation?trace=full&graphviz=true' \
   -H "Content-Type: application/json" \
-  -d '{"fnArguments":{"walks": true, "drinks": true, "eats": true}}'
+  -d '{"arguments":{"walks": true, "drinks": true, "eats": true}}'
 ```
 
 ### Batch Evaluation
@@ -162,7 +162,7 @@ Build interactive questionnaires by asking only the questions that still matter:
 ```bash
 curl -X POST http://localhost:8080/deployments/my-rules/functions/compute_qualifies/query-plan \
   -H "Content-Type: application/json" \
-  -d '{"fnArguments":{"walks": true}}'
+  -d '{"arguments":{"walks": true}}'
 ```
 
 Returns which inputs are still needed, ranked by impact on the outcome.

@@ -105,13 +105,13 @@ The header takes precedence if both are provided. Valid values are `none` (defau
 # Using query parameter
 curl -X POST 'http://localhost:8081/functions/compute_qualifies/evaluation?trace=full' \
   -H 'Content-Type: application/json' \
-  -d '{"fnArguments":{"walks": true, "drinks": true, "eats": true}}'
+  -d '{"arguments":{"walks": true, "drinks": true, "eats": true}}'
 
 # Using header
 curl -X POST 'http://localhost:8081/functions/compute_qualifies/evaluation' \
   -H 'Content-Type: application/json' \
   -H 'X-L4-Trace: full' \
-  -d '{"fnArguments":{"walks": true, "drinks": true, "eats": true}}'
+  -d '{"arguments":{"walks": true, "drinks": true, "eats": true}}'
 ```
 
 ### Visualizing Evaluation Traces
@@ -122,7 +122,7 @@ New to L4? You can now see how your logic flows by asking the decision service f
 curl -s \
   'http://localhost:8081/functions/compute_qualifies/evaluation?trace=full&graphviz=true' \
   -H 'Content-Type: application/json' \
-  -d '{"fnEvalBackend":"JL4","fnArguments":{"walks": true, "drinks": true, "eats": true}}' \
+  -d '{"evalBackend":"JL4","arguments":{"walks": true, "drinks": true, "eats": true}}' \
   | jq '.contents.graphviz'
 ```
 
@@ -143,13 +143,13 @@ If you prefer pictures, the service can render the same trace as PNG or SVG when
 curl -s \
   'http://localhost:8081/functions/compute_qualifies/evaluation/trace.png?trace=full' \
   -H 'Content-Type: application/json' \
-  -d '{"fnEvalBackend":"JL4","fnArguments":{"walks": true}}' > qualifies.png
+  -d '{"evalBackend":"JL4","arguments":{"walks": true}}' > qualifies.png
 
 # SVG (easy to open in a browser)
 curl -s \
   'http://localhost:8081/functions/compute_qualifies/evaluation/trace.svg?trace=full' \
   -H 'Content-Type: application/json' \
-  -d '{"fnEvalBackend":"JL4","fnArguments":{"walks": true}}' > qualifies.svg
+  -d '{"evalBackend":"JL4","arguments":{"walks": true}}' > qualifies.svg
 ```
 
 The PNG/SVG endpoints simply rerun the same evaluation on demand, keeping the primary `/evaluation` response pure (no cached blobs to invalidate, no race conditions to juggle). If the image routes ever feel slow you can always fall back to the `dot` text and render locally.
@@ -187,7 +187,7 @@ The query plan endpoint helps build interactive questionnaires by analyzing whic
 ```bash
 curl -X POST 'http://localhost:8081/functions/compute_qualifies/query-plan' \
   -H 'Content-Type: application/json' \
-  -d '{"fnArguments":{"walks": true}}' | jq '.asks[:3]'
+  -d '{"arguments":{"walks": true}}' | jq '.asks[:3]'
 ```
 
 The response includes:
@@ -324,12 +324,12 @@ The decision service can retrieve L4 programs from an external CRUD backend usin
 # Access a function by UUID (fetched from CRUD backend)
 curl -X POST 'http://localhost:8081/functions/b52992ed-39fd-4226-bad2-2deee2473881/evaluation' \
   -H 'Content-Type: application/json' \
-  -d '{"fnArguments":{"x": 5}}'
+  -d '{"arguments":{"x": 5}}'
 
 # UUID with explicit function name
 curl -X POST 'http://localhost:8081/functions/b52992ed-39fd-4226-bad2-2deee2473881:my_function/evaluation' \
   -H 'Content-Type: application/json' \
-  -d '{"fnArguments":{"x": 5}}'
+  -d '{"arguments":{"x": 5}}'
 ```
 
 When a UUID is provided, the service contacts the CRUD backend to fetch the L4 source, typechecks it, and exposes the exported functions.

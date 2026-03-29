@@ -175,7 +175,7 @@ spec = describe "CBOR serialisation" do
       withCborRebuiltService "cbor-eval-true" sources $ \baseUrl mgr -> do
         resp <- evalFunction baseUrl mgr "cbor-eval-true" "compute_qualifies"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "walks" Aeson..= True
                 , "eats" Aeson..= True
                 , "drinks" Aeson..= True
@@ -189,7 +189,7 @@ spec = describe "CBOR serialisation" do
       withCborRebuiltService "cbor-eval-false" sources $ \baseUrl mgr -> do
         resp <- evalFunction baseUrl mgr "cbor-eval-false" "compute_qualifies"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "walks" Aeson..= False
                 , "eats" Aeson..= False
                 , "drinks" Aeson..= False
@@ -203,7 +203,7 @@ spec = describe "CBOR serialisation" do
       withCborRebuiltService "cbor-eval-mixed" sources $ \baseUrl mgr -> do
         resp <- evalFunction baseUrl mgr "cbor-eval-mixed" "compute_qualifies"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "walks" Aeson..= True
                 , "eats" Aeson..= False
                 , "drinks" Aeson..= True
@@ -252,7 +252,7 @@ spec = describe "CBOR serialisation" do
                       let baseUrl = "http://localhost:" <> show port'
                       resp <- evalFunction baseUrl mgrLocal deployId' "compute_qualifies"
                         (Aeson.object
-                          [ "fnArguments" Aeson..= Aeson.object
+                          [ "arguments" Aeson..= Aeson.object
                               [ "walks" Aeson..= True
                               , "eats" Aeson..= True
                               , "drinks" Aeson..= True
@@ -306,7 +306,7 @@ spec = describe "CBOR serialisation" do
         -- Evaluate via the normally-compiled service
         resp <- evalFunction baseUrl mgr "cbor-http" "compute_qualifies"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "walks" Aeson..= True
                 , "eats" Aeson..= True
                 , "drinks" Aeson..= True
