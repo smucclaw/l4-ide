@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 module L4.Export (
   ExportedFunction (..),
   ExportedParam (..),
@@ -16,7 +17,9 @@ module L4.Export (
 
 import Base
 
+#if defined(SERIALISE_ENABLED)
 import Codec.Serialise (Serialise)
+#endif
 import Control.Applicative ((<|>))
 import qualified Base.Text as Text
 import Data.Char (isSpace)
@@ -39,7 +42,9 @@ data ExportedFunction = ExportedFunction
   , exportDecide :: !(Decide Resolved)
   }
   deriving stock (Eq, Show, Generic)
+#if defined(SERIALISE_ENABLED)
   deriving anyclass (Serialise)
+#endif
 
 data ExportedParam = ExportedParam
   { paramName :: !Text
@@ -48,7 +53,9 @@ data ExportedParam = ExportedParam
   , paramRequired :: !Bool
   }
   deriving stock (Eq, Show, Generic)
+#if defined(SERIALISE_ENABLED)
   deriving anyclass (Serialise)
+#endif
 
 data DescFlags = DescFlags
   { isDefault :: !Bool
