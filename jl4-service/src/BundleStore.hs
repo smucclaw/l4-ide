@@ -1,7 +1,6 @@
 module BundleStore (
   BundleStore (..),
   StoredMetadata (..),
-  StoredFunctionSummary (..),
   SerializedBundle (..),
   initStore,
   saveBundle,
@@ -49,16 +48,8 @@ newtype BundleStore = BundleStore { storePath :: FilePath }
 -- This is the on-disk representation; it matches 'Types.DeploymentMetadata'
 -- but is kept here to avoid circular imports.
 data StoredMetadata = StoredMetadata
-  { smFunctions :: ![StoredFunctionSummary]
-  , smVersion   :: !Text
+  { smVersion   :: !Text
   , smCreatedAt :: !Text  -- UTCTime serialized as ISO-8601 string
-  }
-  deriving stock (Show, Generic)
-  deriving anyclass (FromJSON, ToJSON)
-
-data StoredFunctionSummary = StoredFunctionSummary
-  { sfName        :: !Text
-  , sfDescription :: !Text
   }
   deriving stock (Show, Generic)
   deriving anyclass (FromJSON, ToJSON)
