@@ -1,0 +1,40 @@
+-- insurance-premium.l4
+-- Example: Exporting functions for deployment
+
+§ `Insurance Premium Calculator`
+
+DECLARE Applicant
+    HAS `age` IS A NUMBER
+        `risk score` IS A NUMBER
+        `is existing customer` IS A BOOLEAN
+
+-- The primary function, marked as the default export
+@export default Calculate the insurance premium for an applicant
+GIVEN applicant IS A Applicant @desc The applicant's details
+GIVETH A NUMBER
+DECIDE `calculate premium` IS
+    IF applicant's `risk score` > 0.7
+    THEN applicant's `age` * 100
+    ELSE IF applicant's `is existing customer`
+         THEN applicant's `age` * 40
+         ELSE applicant's `age` * 60
+
+-- A secondary exported function
+@export Check whether the applicant qualifies for a discount
+GIVEN applicant IS A Applicant @desc The applicant to check
+GIVETH A BOOLEAN
+DECIDE `qualifies for discount` IF
+    applicant's `is existing customer`
+    AND applicant's `risk score` <= 0.5
+
+-- Internal helper — not exported (no @export annotation)
+GIVEN applicant IS A Applicant
+GIVETH A NUMBER
+`base rate` applicant MEANS
+    IF applicant's `age` < 30 THEN 50 ELSE 80
+
+-- Test data
+`test applicant` MEANS Applicant 35 0.4 TRUE
+
+#EVAL `calculate premium` `test applicant`
+#EVAL `qualifies for discount` `test applicant`

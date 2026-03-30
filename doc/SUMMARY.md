@@ -26,6 +26,8 @@
 - [Overview](tutorials/README.md)
 - [Getting Started](tutorials/getting-started/first-l4-file.md)
 - [LLM Integration](tutorials/llm-integration/llm-getting-started.md)
+- [Exporting Functions for Deployment](tutorials/deploying-functions/exporting-functions-for-deployment.md)
+- [Natural Language Functions](tutorials/natural-language-functions/natural-language-functions.md)
 
 ## Concepts
 
