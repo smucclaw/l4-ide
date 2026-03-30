@@ -3,6 +3,7 @@
 *.actual
 build
 .continue
+.claude
 # Build Outputs
 ## Built Visual Studio Code Extensions
 .cabal
