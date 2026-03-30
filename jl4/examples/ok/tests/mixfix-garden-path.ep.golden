@@ -1,5 +1,6 @@
 -- GST / VAT in different countries
 
+@export
 GIVEN category  IS A STRING
       itemPrice IS A NUMBER
       country   IS A STRING

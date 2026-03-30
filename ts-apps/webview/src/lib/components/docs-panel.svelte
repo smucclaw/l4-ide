@@ -48,6 +48,15 @@
 
   // Custom renderer
   const renderer = new marked.Renderer()
+  renderer.heading = ({ text, depth, tokens }) => {
+    const id = text
+      .toLowerCase()
+      .replace(/[^\w\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/^-+|-+$/g, '')
+    const inner = renderer.parser!.parseInline(tokens)
+    return `<h${depth} id="${id}">${inner}</h${depth}>`
+  }
   renderer.link = ({ href, title, tokens }) => {
     const resolved = resolveUrl(href)
     const titleAttr = title ? ` title="${title}"` : ''
@@ -95,22 +104,23 @@
       }
       const markdown = await resp.text()
       html = await marked.parse(markdown, { renderer, walkTokens })
-
-      // Scroll to anchor if present
-      const hashIdx = url.indexOf('#')
-      if (hashIdx !== -1) {
-        const anchor = url.slice(hashIdx + 1)
-        await tick()
-        requestAnimationFrame(() => {
-          document
-            .getElementById(anchor)
-            ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        })
-      }
     } catch (err) {
       html = `<p>Could not load documentation: ${err instanceof Error ? err.message : String(err)}</p>`
     } finally {
       loading = false
+    }
+
+    // Scroll to anchor if present — must happen after loading = false
+    // so the {#if loading} block has swapped to show the rendered HTML
+    const hashIdx = url.indexOf('#')
+    if (hashIdx !== -1) {
+      const anchor = url.slice(hashIdx + 1)
+      await tick()
+      requestAnimationFrame(() => {
+        document
+          .getElementById(anchor)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      })
     }
   }
 
