@@ -294,6 +294,7 @@ When something doesn't work:
 1. **[Advanced Course](../advanced/README.md)** - Complex patterns, real legislation, multi-instrument integration
 
 2. **[Tutorials](../../tutorials/README.md)** - Task-focused guides:
+
    - Building web forms
    - LLM integration
    - Contract automation

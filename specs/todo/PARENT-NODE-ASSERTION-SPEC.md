@@ -216,19 +216,23 @@ The query planner needs to:
 ## Open Questions
 
 1. **Should parent assertions persist across page reload?**
+
    - Currently bindings are in local state
    - If we add session persistence, include assertions?
 
 2. **How to handle assertions on deeply nested nodes?**
+
    - Allow assertion at any level?
    - Or only on "meaningful" groupings (named sub-expressions)?
 
 3. **Should we distinguish "I know this is true" vs "Assume this is true"?**
+
    - Former: user has actual knowledge
    - Latter: hypothetical exploration
    - Different UI treatment?
 
 4. **What about negation?**
+
    - `Not(A)` where A is a complex expression
    - Asserting `Not = True` means the inner expression is false
    - UI implications?

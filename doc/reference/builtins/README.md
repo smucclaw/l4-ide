@@ -112,20 +112,19 @@ These operators are always available without import.
 
 ### String Operations
 
-| Function           | Signature                           | Description                                                                                                  |
-| ------------------ | ----------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `CONCAT x, y, ...` | `STRING → ... → STRING`             | Concatenate multiple strings                                                                                 |
-| `CONTAINS`         | `STRING → STRING → BOOLEAN`         | Substring test                                                                                               |
-| `STARTS WITH`      | `STRING → STRING → BOOLEAN`         | Prefix test                                                                                                  |
-| `ENDS WITH`        | `STRING → STRING → BOOLEAN`         | Suffix test                                                                                                  |
-| `INDEXOF`          | `STRING → STRING → NUMBER`          | Find position of substring                                                                                   |
-| `SPLIT`            | `STRING → STRING → LIST OF STRING`  | Split by delimiter                                                                                           |
-| `CHARAT`           | `STRING → NUMBER → STRING`          | Character at index                                                                                           |
-| `SUBSTRING`        | `STRING → NUMBER → NUMBER → STRING` | Substring (str, start, length)                                                                               |
-| `STRINGLENGTH`     | `STRING → NUMBER`                   | String length                                                                                                |
-| `TOUPPER`          | `STRING → STRING`                   | Convert to uppercase                                                                                         |
-| `TOLOWER`          | `STRING → STRING`                   | Convert to lowercase                                                                                         |
-| `APPEND`           | `STRING → STRING → STRING`          | Binary concatenation (infix). **Note:** lowercase `append` is a different function for lists -- see prelude. |
+| Function           | Signature                           | Description                    |
+| ------------------ | ----------------------------------- | ------------------------------ |
+| `CONCAT x, y, ...` | `STRING → ... → STRING`             | Concatenate multiple strings   |
+| `CONTAINS`         | `STRING → STRING → BOOLEAN`         | Substring test                 |
+| `STARTS WITH`      | `STRING → STRING → BOOLEAN`         | Prefix test                    |
+| `ENDS WITH`        | `STRING → STRING → BOOLEAN`         | Suffix test                    |
+| `INDEXOF`          | `STRING → STRING → NUMBER`          | Find position of substring     |
+| `SPLIT`            | `STRING → STRING → LIST OF STRING`  | Split by delimiter             |
+| `CHARAT`           | `STRING → NUMBER → STRING`          | Character at index             |
+| `SUBSTRING`        | `STRING → NUMBER → NUMBER → STRING` | Substring (str, start, length) |
+| `STRINGLENGTH`     | `STRING → NUMBER`                   | String length                  |
+| `TOUPPER`          | `STRING → STRING`                   | Convert to uppercase           |
+| `TOLOWER`          | `STRING → STRING`                   | Convert to lowercase           |
 
 ### List Construction
 

@@ -588,6 +588,7 @@ curl -X POST http://localhost:8001/evaluate \
 **#EVAL vs #EVALTRACE**:
 
 - `#EVAL expr` - "Evaluate this and show the result"
+
   - Author hint: "This is just a calculation, trace not expected to be interesting"
   - Runtime: Tool decides whether to collect trace (usually no)
 

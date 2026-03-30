@@ -1151,6 +1151,7 @@ classification:
 ### Near-term
 
 - **Explanation generation**: Generate natural language explanations for classifications
+
   - "This contract is classified as ANN (Annuity) because:
     - Party A has unidirectional outgoing obligations to Party B
     - The obligation amount decreases recursively (amortization pattern)
@@ -1164,11 +1165,13 @@ classification:
 ### Medium-term
 
 - **Machine learning augmentation**: Train ML models to refine archetype boundaries
+
   - Use extracted essence features as input vectors
   - Learn from corpus of correctly classified contracts
   - Identify new contract patterns that don't fit existing archetypes
 
 - **Contract synthesis**: Given an archetype, generate valid L4 contract skeletons
+
   - Inverse of classification: archetype → essence → L4 skeleton
   - Useful for contract drafting assistance
 
@@ -1180,10 +1183,12 @@ classification:
 ### Long-term
 
 - **Temporal logic verification**: Use model checking to verify contract properties
+
   - "Can this contract reach a state where both parties have unfulfilled obligations?"
   - "Is it possible for the debt to never be repaid?"
 
 - **Cross-jurisdictional mapping**: Map structural qualia to different legal frameworks
+
   - Same essence, different terminology across jurisdictions
   - Regulatory compliance checking by structure rather than labels
 

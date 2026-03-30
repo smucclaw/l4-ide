@@ -542,16 +542,19 @@ Sample L4 programs:
 ### Categories of Errors
 
 1. **File errors**:
+
    - Batch file not found
    - L4 file not found
    - Unable to parse batch file (malformed JSON/YAML/CSV)
 
 2. **Schema errors**:
+
    - No entrypoint found
    - Multiple entrypoints without default
    - Ambiguous entrypoint specification
 
 3. **Validation errors**:
+
    - Missing required field
    - Type mismatch
    - Coercion failure
@@ -669,6 +672,7 @@ For production use, consider tracking:
 In a future version, consider:
 
 1. **Resource limits**: Prevent DOS by limiting:
+
    - Maximum file size (e.g., 100MB)
    - Maximum records per batch (e.g., 100,000)
    - Maximum execution time per record (e.g., 10 seconds)

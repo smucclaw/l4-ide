@@ -52,11 +52,13 @@ L4 distinguishes between **type constructors** and **value constructors** (data 
 #### Value Constructors (Data Constructors)
 
 - **`Date` function** (in `daydate.l4`) - **Recommended** way to construct DATE values
+
   - `Date 15 3 1990` - from day, month, year
   - `Date 738000` - from serial number
   - `Date someDate` - identity/normalization
 
 - **`DATE` function** (in `date-compat.l4`) - Legacy compatibility constructor
+
   - `DATE 28 6 1971` - backwards compatible with old record syntax
   - `DATE 738000` - from serial number
 

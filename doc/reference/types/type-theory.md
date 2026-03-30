@@ -242,6 +242,6 @@ Mutual recursion (multiple functions referencing each other in the same WHERE bl
 ## See Also
 
 - **[Types Reference](README.md)** -- Practical guide to all L4 types
-- **[Algebraic Types](../../concepts/algebraic-types.md)** -- Conceptual explanation of product and sum types
+- **[Algebraic Types](../../concepts/type-system/algebraic-types.md)** -- Conceptual explanation of product and sum types
 - **[Regulative Rules](../regulative/README.md)** -- MUST, MAY, SHANT and regulative rule structure
 - **[GLOSSARY](../GLOSSARY.md)** -- Complete language feature index

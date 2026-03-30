@@ -278,18 +278,21 @@ _Priority:_ **P2 - Post-Sprint Week 3-4**
 **Deliverables:**
 
 1. **One-Click Setup Scripts** (8 hours)
+
    - `./setup.sh` installs everything (GHCup, cabal, npm, jl4-lsp)
    - Platform detection (macOS/Linux/Windows)
    - Interactive prompts with defaults
    - Idempotent (safe to re-run)
 
 2. **Docker Compose for Full Stack** (6 hours)
+
    - Single `docker-compose up` launches all services
    - LSP, decision-service, websessions, jl4-web, l4-wizard
    - Persistent volumes for database
    - Health checks
 
 3. **Template Gallery** (10 hours)
+
    - 5-10 pre-built examples (insurance, rental, employment, parking, citizenship)
    - Each with: L4 code + YAML test data + README
    - Deployed to l4-wizard with "Try This Example" buttons
@@ -313,18 +316,21 @@ _Priority:_ **P2 - Post-Sprint Week 3-4**
 **Deliverables:**
 
 1. **LSP: WHERE Indentation Diagnostic** (8 hours)
+
    - Implements [Issue #708](https://github.com/smucclaw/l4-ide/issues/708)
    - Warning: "WHERE clause may attach to wrong expression due to indentation"
    - Suggests fix: "Add blank line or indent WHERE under target expression"
    - Files: `jl4-lsp/src/LSP/L4/Diagnostics.hs`
 
 2. **LSP: Common Mixfix Error Hints** (6 hours)
+
    - Detect: operator used before defined
    - Detect: ambiguous mixfix parse
    - Suggest: "Did you mean `operator _` (postfix)?"
    - Files: `jl4-lsp/src/LSP/L4/Diagnostics.hs`
 
 3. **Improved Golden Test Documentation** (3 hours)
+
    - Explain "fail first time, pass second" behavior
    - Add `--accept-golden` flag for intentional updates
    - Location: `doc/dev/TESTING.md`
@@ -347,6 +353,7 @@ _Priority:_ **P2 - Post-Sprint Week 3-4**
 **Deliverables:**
 
 1. **Auto-Deploy to Dev on Main Merge** (6 hours)
+
    - Implements [Issue #628](https://github.com/smucclaw/l4-ide/issues/628)
    - GitHub Actions workflow triggers `nixos-rebuild` on dev server
    - SSH key authentication
@@ -354,6 +361,7 @@ _Priority:_ **P2 - Post-Sprint Week 3-4**
    - Files: `.github/workflows/deploy-dev.yml`
 
 2. **Release Artifact Automation** (8 hours)
+
    - Extends [Issue #629](https://github.com/smucclaw/l4-ide/issues/629) work (CLOSED - 80% done)
    - Attach static binaries to GitHub releases
    - Windows: jl4-lsp.exe, jl4-cli.exe
@@ -362,6 +370,7 @@ _Priority:_ **P2 - Post-Sprint Week 3-4**
    - Files: `.github/workflows/*-release.yml`
 
 3. **Production Monitoring Setup** (10 hours)
+
    - Health check endpoints: `/health`, `/metrics`
    - Prometheus metrics export
    - Grafana dashboard (requests/sec, latency, errors)
@@ -385,6 +394,7 @@ _Priority:_ **P2 - Post-Sprint Week 3-4**
 **Deliverables:**
 
 1. **Pattern Library** (12 hours)
+
    - 15-20 common legal constructs as templates
    - Eligibility rules, fee calculations, temporal conditions
    - Multi-party obligations, breach scenarios
@@ -392,6 +402,7 @@ _Priority:_ **P2 - Post-Sprint Week 3-4**
    - Location: `doc/patterns/`
 
 2. **Quick Integration Guide** (6 hours)
+
    - "15 minutes to first API call"
    - curl examples for all endpoints
    - Postman collection download
@@ -399,6 +410,7 @@ _Priority:_ **P2 - Post-Sprint Week 3-4**
    - Location: `doc/integration/QUICKSTART.md`
 
 3. **End-User Guide for l4-wizard** (8 hours)
+
    - Targeted at non-developers using L4 apps
    - "Understanding Decision Explanations"
    - "How to Read Ladder Diagrams"
@@ -620,21 +632,25 @@ _Priority:_ **P2 - Post-Sprint Week 3-4**
 ### Resolved
 
 1. **Create marketecture document?** ✅ YES
+
    - Decision: `doc/MARKETECTURE.md` created
    - Rationale: Answers "what can I do with L4?" upfront
    - Impact: Clear value proposition for all stakeholders
 
 2. **Move BREACH spec to done?** ✅ YES
+
    - Decision: Moved to `doc/dev/specs/done/`
    - Rationale: PR #726 fully implemented feature
    - Impact: Accurate status tracking
 
 3. **Close issue #634?** ✅ YES
+
    - Decision: Closed with implementation details
    - Rationale: BREACH syntax fully working
    - Impact: Accurate issue tracking
 
 4. **Close issue #629?** ✅ YES (user decision)
+
    - Decision: User closed directly
    - Note: ~80% done, release artifacts still needed
 
@@ -646,6 +662,7 @@ _Priority:_ **P2 - Post-Sprint Week 3-4**
 ### Pending
 
 1. **Invest in chatbot UI (Module A10)?**
+
    - Current: Infrastructure complete, UI planned
    - Options:
      - A. Build now (pre-demo)
@@ -655,6 +672,7 @@ _Priority:_ **P2 - Post-Sprint Week 3-4**
    - Trade-off: Demo shows potential, post-work delivers polish
 
 2. **Docker vs NixOS for deployment?**
+
    - Current: NixOS for prod, no Docker option
    - Options:
      - A. Add Docker Compose (broader adoption)
@@ -664,6 +682,7 @@ _Priority:_ **P2 - Post-Sprint Week 3-4**
    - Trade-off: More work but lowers barrier to entry
 
 3. **Web-based ingestion tool?**
+
    - Current: Claude Code plugin (requires license)
    - Options:
      - A. Build web tool (paste PDF → extract L4)

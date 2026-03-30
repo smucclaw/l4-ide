@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte'
   import { marked, type Token } from 'marked'
   import type { Messenger } from 'vscode-messenger-webview'
   import { HOST_EXTENSION } from 'vscode-messenger-common'
@@ -99,6 +100,7 @@
       const hashIdx = url.indexOf('#')
       if (hashIdx !== -1) {
         const anchor = url.slice(hashIdx + 1)
+        await tick()
         requestAnimationFrame(() => {
           document
             .getElementById(anchor)

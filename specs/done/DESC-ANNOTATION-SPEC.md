@@ -160,11 +160,13 @@ Show `@desc` content in hover tooltips when users hover over identifiers. Priori
 Following the `nlgMap` pattern, we add a parallel `descMap :: RangeMap Text` to the type-checking infrastructure:
 
 1. **Type definitions** (`L4/TypeCheck/Types.hs`):
+
    - `type DescMap = RangeMap Text`
    - `descMap :: !DescMap` field in `CheckState`
    - `addDescForSrcRange :: SrcRange -> Text -> Check ()` helper
 
 2. **LSP integration** (`LSP/L4/Rules.hs`, `LSP/L4/Actions.hs`):
+
    - `descMap :: TypeCheck.DescMap` field in `TypeCheckResult`
    - `typeHover` queries `descMap` alongside `infoMap` and `nlgMap`
    - `infoToHover` renders desc below type signature

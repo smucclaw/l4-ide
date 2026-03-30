@@ -125,10 +125,12 @@ find (GIVEN p YIELD p's age >= 18) `applicants`
 These topics should be introduced:
 
 1. **Module A5: Recursive Logic** (if needed)
+
    - Focus on legal scenarios where recursion is natural
    - Emphasize when to use recursion vs iteration
 
 2. **Module A6: Higher-Order Functions and Bulk Processing**
+
    - Introduce map/filter/fold
    - Show how to process lists of entities uniformly
    - Connect to real-world compliance and reporting needs
