@@ -2,7 +2,7 @@ import * as vscode from 'vscode'
 import type { Messenger } from 'vscode-messenger'
 import type { WebviewTypeMessageParticipant } from 'vscode-messenger-common'
 import type { VSCodeL4LanguageClient } from './vscode-l4-language-client.js'
-import type { AuthManager } from './auth.js'
+import { type AuthManager, LEGALESE_CLOUD_DOMAIN } from './auth.js'
 import type { ServiceClient } from './service-client.js'
 import { getWebviewContent } from './webview-panel.js'
 import {
@@ -413,7 +413,7 @@ export function initializeSidebarMessenger(
     if (auth.isLegaleseCloudSession()) {
       const session = await auth.getSessionToken()
       if (session) {
-        const redirectUrl = `https://legalese.cloud/auth/redirect?token=${encodeURIComponent(session)}&redirect_to=${encodeURIComponent(url)}`
+        const redirectUrl = `https://${LEGALESE_CLOUD_DOMAIN}/auth/redirect?token=${encodeURIComponent(session)}&redirect_to=${encodeURIComponent(url)}`
         vscode.env.openExternal(vscode.Uri.parse(redirectUrl))
         return
       }

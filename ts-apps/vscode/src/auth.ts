@@ -13,7 +13,7 @@ export interface ConnectionState {
   error?: string
 }
 
-const LEGALESE_CLOUD_DOMAIN = 'legalese.cloud'
+export const LEGALESE_CLOUD_DOMAIN = 'legalese.cloud'
 const SECRET_KEY_SESSION = 'l4.sessionToken'
 
 /**
@@ -270,8 +270,13 @@ export class AuthManager {
     let result: ConnectionState
     try {
       const headers = await this.getAuthHeaders()
+      // Legalese Cloud: check health on the service domain (org may be idle/suspended).
+      // Direct jl4-service connection: use /health.
+      const healthUrl = this.isLegaleseCloudSession()
+        ? `https://${LEGALESE_CLOUD_DOMAIN}/service/health?org=${encodeURIComponent(this.cloudOrgSlug!)}`
+        : `${serviceUrl.replace(/\/$/, '')}/health`
       const [resp] = await Promise.all([
-        fetch(`${serviceUrl.replace(/\/$/, '')}/service/health`, {
+        fetch(healthUrl, {
           headers,
           signal: AbortSignal.timeout(5000),
         }),

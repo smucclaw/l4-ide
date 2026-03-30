@@ -130,8 +130,8 @@ export class ServiceClient {
    * Health check.
    */
   async getHealth(): Promise<ServiceHealth> {
-    const resp = await this.request('/service/health')
-    if (!resp.ok) await throwWithBody(resp, 'GET /service/health')
+    const resp = await this.request('/health')
+    if (!resp.ok) await throwWithBody(resp, 'GET /health')
     return (await resp.json()) as ServiceHealth
   }
 }
