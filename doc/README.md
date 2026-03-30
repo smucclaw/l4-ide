@@ -1,4 +1,4 @@
-![L4 Logo](./l4.png)
+![L4 Logo](./l4.svg)
 
 # L4 Language Documentation
 

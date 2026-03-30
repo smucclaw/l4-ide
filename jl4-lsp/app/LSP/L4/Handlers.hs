@@ -64,6 +64,8 @@ import LSP.L4.Actions
 import qualified LSP.L4.Inspector as Inspector
 import L4.EvaluateLazy (EvalConfig)
 import qualified L4.EvaluateLazy as EL
+import qualified L4.Export as Export
+import qualified L4.FunctionSchema as FSchema
 
 data ReactorMessage
   = ReactorNotification (IO ())
@@ -447,6 +449,187 @@ handlers evalConfig recorder =
 
         let locs = map (\range -> Location (fromNormalizedUri range.moduleUri) (srcRangeToLspRange (Just range))) $ lookupReference pos refs
         pure (Right (InL locs))
+    , requestHandler SMethod_TextDocumentDocumentSymbol $ \ide params -> do
+        let uri = params ^. J.textDocument . J.uri
+            nuri = toNormalizedUri uri
+
+        mTypeCheck <- liftIO $ runAction "documentSymbol" ide $
+          useWithStale TypeCheck nuri
+
+        let docSymbols = case mTypeCheck of
+              Nothing -> []
+              Just (typeCheck, _positionMapping) ->
+                let MkModule _ moduleNuri section = typeCheck.module'
+                    subst = typeCheck.substitution
+                    entInfo = typeCheck.entityInfo
+                in sectionToSymbols moduleNuri subst entInfo section
+
+            sectionToSymbols :: NormalizedUri -> Substitution -> EntityInfo -> Section Resolved -> [DocumentSymbol]
+            sectionToSymbols moduleNuri subst entInfo (MkSection _ _ _ topDecls) =
+              concatMap (topDeclToSymbol moduleNuri subst entInfo) topDecls
+
+            topDeclToSymbol :: NormalizedUri -> Substitution -> EntityInfo -> TopDecl Resolved -> [DocumentSymbol]
+            topDeclToSymbol moduleNuri subst entInfo = \case
+              Section _ s@(MkSection _ mName _ _) ->
+                case rangeOfNode s of
+                  Just rng ->
+                    let name = maybe "§" (nameToText . getOriginal) mName
+                        lspRange = srcRangeToLspRange (Just rng)
+                        selRange = maybe lspRange nameSelRange mName
+                    in [ DocumentSymbol
+                          { _name = name
+                          , _detail = Nothing
+                          , _kind = SymbolKind_Namespace
+                          , _tags = Nothing
+                          , _deprecated = Nothing
+                          , _range = lspRange
+                          , _selectionRange = selRange
+                          , _children = Just $ sectionToSymbols moduleNuri subst entInfo s
+                          }
+                       ]
+                  Nothing -> sectionToSymbols moduleNuri subst entInfo s
+
+              Declare _ decl@(MkDeclare _ _ (MkAppForm _ n _ _) typeDecl) ->
+                case rangeOfNode decl of
+                  Just rng ->
+                    let lspRange = srcRangeToLspRange (Just rng)
+                        selRange = nameSelRange n
+                        originalName = nameToText (getOriginal n)
+                    in case typeDecl of
+                      RecordDecl{} ->
+                        [ mkSymbol originalName Nothing SymbolKind_TypeParameter lspRange selRange ]
+                      EnumDecl _ cons ->
+                        let children = map (conDeclToSymbol originalName lspRange) cons
+                        in [ mkSymbolWithChildren originalName Nothing SymbolKind_Enum lspRange selRange children ]
+                      SynonymDecl _ ty ->
+                        let detail = prettyLayout ty
+                        in [ mkSymbol originalName (Just detail) SymbolKind_Variable lspRange selRange ]
+                  Nothing -> []
+
+              Decide _ decide@(MkDecide _ (MkTypeSig _ (MkGivenSig _ givenParams) _) (MkAppForm _ n _ _) body) ->
+                case rangeOfNode decide of
+                  Just rng ->
+                    let lspRange = srcRangeToLspRange (Just rng)
+                        selRange = nameSelRange n
+                        detail = inferredReturnType moduleNuri subst entInfo n
+                        isDeontic = case body of
+                          Regulative{} -> True
+                          _ -> case detail of
+                            Just t  -> "DEONTIC" `Text.isPrefixOf` t
+                            Nothing -> False
+                        kind = if isDeontic then SymbolKind_Event else SymbolKind_Function
+                        paramChildren = map (givenParamToSymbol lspRange) givenParams
+                    in [ mkSymbolWithChildren (nameToText (getOriginal n)) detail kind lspRange selRange paramChildren ]
+                  Nothing -> []
+
+              Assume _ assume@(MkAssume _ _ (MkAppForm _ n _ _) mTy) ->
+                case rangeOfNode assume of
+                  Just rng ->
+                    let lspRange = srcRangeToLspRange (Just rng)
+                        selRange = nameSelRange n
+                        detail = fmap prettyLayout mTy
+                    in [ mkSymbol (nameToText (getOriginal n)) detail SymbolKind_Variable lspRange selRange ]
+                  Nothing -> []
+
+              Directive _ d ->
+                case rangeOfNode d of
+                  Just rng ->
+                    let lspRange = srcRangeToLspRange (Just rng)
+                        (label, dExpr) = case d of
+                          LazyEval _ e      -> ("#EVAL", e)
+                          LazyEvalTrace _ e -> ("#EVALTRACE", e)
+                          Check _ e         -> ("#CHECK", e)
+                          Contract _ e _ _  -> ("#CHECK", e)
+                          Assert _ e        -> ("#ASSERT", e)
+                        detail = prettyLayout dExpr
+                    in [ mkSymbol label (Just detail) SymbolKind_Operator lspRange lspRange ]
+                  Nothing -> []
+
+              Import _ imp@(MkImport _ n _) ->
+                case rangeOfNode imp of
+                  Just rng ->
+                    let lspRange = srcRangeToLspRange (Just rng)
+                        selRange = nameSelRange n
+                    in [ mkSymbol (nameToText (getOriginal n)) Nothing SymbolKind_File lspRange selRange ]
+                  Nothing -> []
+
+              _ -> []
+
+            nameSelRange :: Resolved -> LSP.Range
+            nameSelRange n = srcRangeToLspRange (rangeOf (getOriginal n))
+
+            inferredReturnType :: NormalizedUri -> Substitution -> EntityInfo -> Resolved -> Maybe Text
+            inferredReturnType moduleNuri subst entInfo n =
+              case Map.lookup (getUnique n) entInfo of
+                Just (_, KnownTerm ty _) ->
+                  let resolved = applyFinalSubstitution subst moduleNuri ty
+                      retTy = case resolved of
+                        Fun _ _ ret -> ret
+                        other       -> other
+                  in Just (prettyLayout retTy)
+                _ -> Nothing
+
+            mkSymbol :: Text -> Maybe Text -> SymbolKind -> LSP.Range -> LSP.Range -> DocumentSymbol
+            mkSymbol name detail kind range selRange = mkSymbolWithChildren name detail kind range selRange []
+
+            mkSymbolWithChildren :: Text -> Maybe Text -> SymbolKind -> LSP.Range -> LSP.Range -> [DocumentSymbol] -> DocumentSymbol
+            mkSymbolWithChildren name detail kind range selRange children = DocumentSymbol
+              { _name = name
+              , _detail = detail
+              , _kind = kind
+              , _tags = Nothing
+              , _deprecated = Nothing
+              , _range = range
+              , _selectionRange = clampRange range selRange
+              , _children = case children of
+                  [] -> Nothing
+                  cs -> Just cs
+              }
+
+            conDeclToSymbol :: Text -> LSP.Range -> ConDecl Resolved -> DocumentSymbol
+            conDeclToSymbol _enumName parentRange (MkConDecl _ n _) =
+              let variantName = nameToText (getOriginal n)
+                  selRange = nameSelRange n
+              in mkSymbol variantName Nothing SymbolKind_EnumMember parentRange selRange
+
+            givenParamToSymbol :: LSP.Range -> OptionallyTypedName Resolved -> DocumentSymbol
+            givenParamToSymbol parentRange (MkOptionallyTypedName _ n mTy) =
+              let paramName = nameToText (getOriginal n)
+                  selRange = nameSelRange n
+                  (detail, kind) = case mTy of
+                    Nothing -> (Nothing, SymbolKind_Variable)
+                    Just ty ->
+                      let tyText = prettyLayout ty
+                      in (Just tyText, typeToSymbolKind tyText)
+              in mkSymbol paramName detail kind parentRange selRange
+
+            typeToSymbolKind :: Text -> SymbolKind
+            typeToSymbolKind tyText
+              | tyText == "BOOLEAN"                       = SymbolKind_Boolean
+              | tyText `elem` ["NUMBER", "INTEGER"]       = SymbolKind_Number
+              | tyText `elem` ["STRING", "TEXT"]           = SymbolKind_String
+              | "LIST" `Text.isPrefixOf` tyText           = SymbolKind_Array
+              | Just inner <- Text.stripPrefix "MAYBE OF " tyText = typeToSymbolKind inner
+              | Just inner <- Text.stripPrefix "MAYBE " tyText = typeToSymbolKind inner
+              | otherwise                                 = SymbolKind_TypeParameter
+
+            -- | Ensure selectionRange is contained within fullRange (LSP requirement).
+            -- Falls back to fullRange if selectionRange is not contained.
+            clampRange :: LSP.Range -> LSP.Range -> LSP.Range
+            clampRange full sel
+              | containsRange full sel = sel
+              | otherwise = full
+
+            containsRange :: LSP.Range -> LSP.Range -> Bool
+            containsRange (LSP.Range fStart fEnd) (LSP.Range sStart sEnd) =
+              posLeq fStart sStart && posLeq sEnd fEnd
+
+            posLeq :: LSP.Position -> LSP.Position -> Bool
+            posLeq a b = a._line < b._line || (a._line == b._line && a._character <= b._character)
+
+
+
+        pure (Right (InR (InL docSymbols)))
 
     -- custom requests
     , requestHandler (SMethod_CustomMethod (Proxy @Ladder.EvalAppMethodName)) $ \ide params ->
@@ -556,6 +739,51 @@ handlers evalConfig recorder =
                     , _message = "No directive result found at the given position"
                     , _xdata = Nothing
                     }
+
+    , requestHandler (SMethod_CustomMethod (Proxy @Inspector.GetExportedFunctionsMethodName)) $ \_ide params -> do
+        let parseParams :: Aeson.Value -> Maybe Inspector.GetExportedFunctionsParams
+            parseParams v = case Aeson.fromJSON v of
+              Aeson.Success p -> Just p
+              _               -> Nothing
+
+        case parseParams params of
+          Nothing -> pure $ Left $ TResponseError
+            { _code = InR ErrorCodes_InvalidParams
+            , _message = "Failed to parse getExportedFunctions params"
+            , _xdata = Nothing
+            }
+          Just reqParams -> do
+            let nuri = toNormalizedUri reqParams.verDocId._uri
+
+            mTcResult <- liftIO $ runAction "l4/getExportedFunctions" _ide $
+              use TypeCheck nuri
+
+            case mTcResult of
+              Nothing -> pure $ Left $ TResponseError
+                { _code = InR ErrorCodes_InvalidRequest
+                , _message = "No type check result available"
+                , _xdata = Nothing
+                }
+              Just tcResult -> do
+                let -- Collect exports from this module and all transitive imports
+                    collectExports tc =
+                      let mod' = tc.module'
+                          declares = FSchema.declaresFromModule mod'
+                          exps = Export.getExportedFunctions mod'
+                          here = map (Inspector.exportedFunctionToSummary declares) exps
+                          imported = concatMap collectExports tc.dependencies
+                      in here <> imported
+                    summaries = collectExports tcResult
+                    -- Collect transitive import URIs from the dependency tree
+                    collectImportUris tc = case tc.module' of
+                      MkModule _ depUri _ ->
+                        fromNormalizedUri depUri : concatMap collectImportUris tc.dependencies
+                    importUris = map getUri $ concatMap collectImportUris tcResult.dependencies
+                    response = Inspector.GetExportedFunctionsResponse
+                      { functions = summaries
+                      , importedFiles = importUris
+                      }
+                pure $ Right $ Aeson.toJSON response
     ]
 
 activeFileDiagnosticsInRange :: ShakeExtras -> NormalizedUri -> Range -> STM [FileDiagnostic]

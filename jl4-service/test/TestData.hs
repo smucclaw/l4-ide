@@ -19,7 +19,7 @@ import Backend.Jl4 as Jl4
 import Backend.Api
 import Compiler (toDecl)
 import Types
-import Backend.FunctionSchema (Parameters (..), Parameter (..))
+import L4.FunctionSchema (Parameters (..), Parameter (..))
 
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except
@@ -60,6 +60,8 @@ rodentAndVerminFunction = do
         , supportedEvalBackend = [JL4]
         , deonticPartyType = Nothing
         , deonticActionType = Nothing
+        , returnType = "BOOLEAN"
+        , isDeontic = False
         }
   (runFn, mCompiled) <- liftIO $ Jl4.createFunction "vermin_and_rodent.l4" (toDecl fnDecl) rodentAndVerminJL4 Map.empty
   pure $
@@ -133,6 +135,8 @@ constantFunction = do
         , supportedEvalBackend = [JL4]
         , deonticPartyType = Nothing
         , deonticActionType = Nothing
+        , returnType = "NUMBER"
+        , isDeontic = False
         }
   (runFn, mCompiled) <- liftIO $ Jl4.createFunction "the_answer.l4" (toDecl fnDecl) constantJL4 Map.empty
   pure $
@@ -171,6 +175,7 @@ DECLARE Person HAS
     name IS A STRING
     age IS A NUMBER
 
+@export
 GIVEN n IS A STRING
       a IS A NUMBER
 GIVETH A Person
@@ -187,6 +192,7 @@ DECLARE Result HAS
     label IS A STRING
     extra_provided IS A BOOLEAN
 
+@export
 GIVEN label IS A STRING
       extra IS A MAYBE STRING
 GIVETH A Result

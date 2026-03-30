@@ -7,8 +7,9 @@ import Test.Hspec
 
 import Application (app)
 import Backend.Api
+import qualified BundleStore
 import BundleStore (initStore)
-import Compiler (compileBundle)
+import Compiler (compileBundle, computeVersion)
 import ControlPlane (DeploymentStatusResponse (..))
 import Logging (newLogger)
 import Options (Options (..))
@@ -45,7 +46,7 @@ spec = describe "integration" do
       withServiceFromSources "eval-true" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
         resp <- evalFunction baseUrl mgr "eval-true" "compute_qualifies"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "walks" Aeson..= True
                 , "eats" Aeson..= True
                 , "drinks" Aeson..= True
@@ -58,7 +59,7 @@ spec = describe "integration" do
       withServiceFromSources "eval-false" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
         resp <- evalFunction baseUrl mgr "eval-false" "compute_qualifies"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "walks" Aeson..= False
                 , "eats" Aeson..= False
                 , "drinks" Aeson..= False
@@ -90,7 +91,7 @@ spec = describe "integration" do
       withServiceFromSources "record-named" [("record.l4", recordJL4)] \baseUrl mgr -> do
         resp <- evalFunction baseUrl mgr "record-named" "make_person"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "n" Aeson..= ("Alice" :: Text)
                 , "a" Aeson..= (30 :: Int)
                 ]
@@ -111,7 +112,7 @@ spec = describe "integration" do
       withServiceFromSources "maybe-null" [("maybe.l4", maybeParamJL4)] \baseUrl mgr -> do
         resp <- evalFunction baseUrl mgr "maybe-null" "with_maybe"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "label" Aeson..= ("test" :: Text)
                 , "extra" Aeson..= Aeson.Null
                 ]
@@ -131,7 +132,7 @@ spec = describe "integration" do
       withServiceFromSources "maybe-just" [("maybe.l4", maybeParamJL4)] \baseUrl mgr -> do
         resp <- evalFunction baseUrl mgr "maybe-just" "with_maybe"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "label" Aeson..= ("test" :: Text)
                 , "extra" Aeson..= ("hello" :: Text)
                 ]
@@ -223,7 +224,7 @@ spec = describe "integration" do
     it "returns a query plan with no bindings" do
       withServiceFromSources "qp-empty" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
         resp <- queryPlan' baseUrl mgr "qp-empty" "compute_qualifies"
-          (Aeson.object ["fnArguments" Aeson..= Aeson.object []])
+          (Aeson.object ["arguments" Aeson..= Aeson.object []])
         statusCode' resp `shouldBe` 200
         let body = decodeObject (responseBody resp)
         lookupKey "determined" body `shouldBe` Just Aeson.Null
@@ -234,7 +235,7 @@ spec = describe "integration" do
       withServiceFromSources "qp-all-true" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
         resp <- queryPlan' baseUrl mgr "qp-all-true" "compute_qualifies"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "walks" Aeson..= True
                 , "eats" Aeson..= True
                 , "drinks" Aeson..= True
@@ -249,7 +250,7 @@ spec = describe "integration" do
       withServiceFromSources "qp-one-false" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
         resp <- queryPlan' baseUrl mgr "qp-one-false" "compute_qualifies"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "walks" Aeson..= False
                 ]
             ])
@@ -261,7 +262,7 @@ spec = describe "integration" do
       withServiceFromSources "qp-partial" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
         resp <- queryPlan' baseUrl mgr "qp-partial" "compute_qualifies"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "walks" Aeson..= True
                 , "eats" Aeson..= True
                 ]
@@ -275,13 +276,13 @@ spec = describe "integration" do
       withServiceFromSources "qp-cache" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
         -- First request builds the cache
         resp1 <- queryPlan' baseUrl mgr "qp-cache" "compute_qualifies"
-          (Aeson.object ["fnArguments" Aeson..= Aeson.object []])
+          (Aeson.object ["arguments" Aeson..= Aeson.object []])
         statusCode' resp1 `shouldBe` 200
 
         -- Second request should use the cached version
         resp2 <- queryPlan' baseUrl mgr "qp-cache" "compute_qualifies"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "walks" Aeson..= True
                 , "eats" Aeson..= True
                 , "drinks" Aeson..= True
@@ -294,7 +295,7 @@ spec = describe "integration" do
     it "returns 404 for unknown function" do
       withServiceFromSources "qp-404" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
         resp <- queryPlan' baseUrl mgr "qp-404" "no_such_fn"
-          (Aeson.object ["fnArguments" Aeson..= Aeson.object []])
+          (Aeson.object ["arguments" Aeson..= Aeson.object []])
         statusCode' resp `shouldBe` 404
 
   describe "evaluation with trace" do
@@ -303,7 +304,7 @@ spec = describe "integration" do
         req <- buildJsonPost
           (baseUrl <> "/deployments/trace-full/functions/compute_qualifies/evaluation?trace=full")
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "walks" Aeson..= True
                 , "eats" Aeson..= True
                 , "drinks" Aeson..= True
@@ -320,7 +321,7 @@ spec = describe "integration" do
         req <- buildJsonPost
           (baseUrl <> "/deployments/trace-gv/functions/compute_qualifies/evaluation?trace=full&graphviz=true")
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "walks" Aeson..= True
                 , "eats" Aeson..= True
                 , "drinks" Aeson..= True
@@ -339,7 +340,7 @@ spec = describe "integration" do
         req <- buildJsonPost
           (baseUrl <> "/deployments/trace-none/functions/compute_qualifies/evaluation?trace=none")
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "walks" Aeson..= True
                 , "eats" Aeson..= True
                 , "drinks" Aeson..= True
@@ -367,12 +368,35 @@ spec = describe "integration" do
         let body = decodeObject (responseBody resp)
         lookupArrayLength "metaFunctions" body `shouldSatisfy` maybe False (> 0)
 
+    it "returns org-wide metadata via /openapi.json" do
+      withServiceFromSources "org-openapi" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        req <- parseRequest (baseUrl <> "/openapi.json")
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 200
+        let body = decodeObject (responseBody resp)
+        lookupArrayLength "functions" body `shouldSatisfy` maybe False (> 0)
+
+    it "filters org-wide openapi.json by scope" do
+      withServiceFromSources "scope-test" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        -- With matching scope
+        req1 <- parseRequest (baseUrl <> "/openapi.json?scope=scope-test/*")
+        resp1 <- httpLbs req1 mgr
+        statusCode' resp1 `shouldBe` 200
+        let body1 = decodeObject (responseBody resp1)
+        lookupArrayLength "functions" body1 `shouldSatisfy` maybe False (> 0)
+        -- With non-matching scope
+        req2 <- parseRequest (baseUrl <> "/openapi.json?scope=nonexistent/*")
+        resp2 <- httpLbs req2 mgr
+        statusCode' resp2 `shouldBe` 200
+        let body2 = decodeObject (responseBody resp2)
+        lookupArrayLength "functions" body2 `shouldBe` Just 0
+
   describe "deontic evaluation" do
     it "evaluates a deontic function to FULFILLED with all events" do
       withServiceFromSources "deontic-ok" [("contract.l4", deonticExportJL4)] \baseUrl mgr -> do
         resp <- evalFunction baseUrl mgr "deontic-ok" "the sale contract"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object []
+            [ "arguments" Aeson..= Aeson.object []
             , "startTime" Aeson..= (0 :: Int)
             , "events" Aeson..=
                 [ Aeson.object ["party" Aeson..= ("the seller" :: Text), "action" Aeson..= ("deliver the goods" :: Text), "at" Aeson..= (5 :: Int)]
@@ -386,7 +410,7 @@ spec = describe "integration" do
       withServiceFromSources "deontic-init" [("contract.l4", deonticExportJL4)] \baseUrl mgr -> do
         resp <- evalFunction baseUrl mgr "deontic-init" "the sale contract"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object []
+            [ "arguments" Aeson..= Aeson.object []
             , "startTime" Aeson..= (0 :: Int)
             , "events" Aeson..= ([] :: [Aeson.Value])
             ])
@@ -403,7 +427,7 @@ spec = describe "integration" do
       withServiceFromSources "deontic-partial" [("contract.l4", deonticExportJL4)] \baseUrl mgr -> do
         resp <- evalFunction baseUrl mgr "deontic-partial" "the sale contract"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object []
+            [ "arguments" Aeson..= Aeson.object []
             , "startTime" Aeson..= (0 :: Int)
             , "events" Aeson..=
                 [ Aeson.object ["party" Aeson..= ("the seller" :: Text), "action" Aeson..= ("deliver the goods" :: Text), "at" Aeson..= (5 :: Int)]
@@ -422,7 +446,7 @@ spec = describe "integration" do
       withServiceFromSources "deontic-err" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
         req <- buildJsonPost (baseUrl <> "/deployments/deontic-err/functions/compute_qualifies/evaluation")
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object ["walks" Aeson..= True, "eats" Aeson..= True, "drinks" Aeson..= True]
+            [ "arguments" Aeson..= Aeson.object ["walks" Aeson..= True, "eats" Aeson..= True, "drinks" Aeson..= True]
             , "startTime" Aeson..= (0 :: Int)
             , "events" Aeson..= ([] :: [Aeson.Value])
             ])
@@ -435,7 +459,7 @@ spec = describe "integration" do
       withServiceFromSources "deontic-no-st" [("contract.l4", deonticExportJL4)] \baseUrl mgr -> do
         req <- buildJsonPost (baseUrl <> "/deployments/deontic-no-st/functions/the%20sale%20contract/evaluation")
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object []
+            [ "arguments" Aeson..= Aeson.object []
             , "events" Aeson..= ([] :: [Aeson.Value])
             ])
         resp <- httpLbs req mgr
@@ -447,7 +471,7 @@ spec = describe "integration" do
       withServiceFromSources "deontic-no-ev" [("contract.l4", deonticExportJL4)] \baseUrl mgr -> do
         req <- buildJsonPost (baseUrl <> "/deployments/deontic-no-ev/functions/the%20sale%20contract/evaluation")
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object []
+            [ "arguments" Aeson..= Aeson.object []
             , "startTime" Aeson..= (0 :: Int)
             ])
         resp <- httpLbs req mgr
@@ -480,7 +504,7 @@ spec = describe "integration" do
       withServiceFromSources "deontic-rec-ok" [("seatbelt.l4", deonticRecordPartyJL4)] \baseUrl mgr -> do
         resp <- evalFunction baseUrl mgr "deontic-rec-ok" "Seatbelt Requirement"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "car" Aeson..= Aeson.object ["number of wheels" Aeson..= (4 :: Int)]
                 , "driver" Aeson..= Aeson.object ["name" Aeson..= ("Alice" :: Text)]
                 ]
@@ -497,7 +521,7 @@ spec = describe "integration" do
       withServiceFromSources "deontic-rec-obl" [("seatbelt.l4", deonticRecordPartyJL4)] \baseUrl mgr -> do
         resp <- evalFunction baseUrl mgr "deontic-rec-obl" "Seatbelt Requirement"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "car" Aeson..= Aeson.object ["number of wheels" Aeson..= (4 :: Int)]
                 , "driver" Aeson..= Aeson.object ["name" Aeson..= ("Alice" :: Text)]
                 ]
@@ -519,7 +543,7 @@ spec = describe "integration" do
       withServiceFromSources "deontic-rec-3w" [("seatbelt.l4", deonticRecordPartyJL4)] \baseUrl mgr -> do
         resp <- evalFunction baseUrl mgr "deontic-rec-3w" "Seatbelt Requirement"
           (Aeson.object
-            [ "fnArguments" Aeson..= Aeson.object
+            [ "arguments" Aeson..= Aeson.object
                 [ "car" Aeson..= Aeson.object ["number of wheels" Aeson..= (3 :: Int)]
                 , "driver" Aeson..= Aeson.object ["name" Aeson..= ("Bob" :: Text)]
                 ]
@@ -614,11 +638,68 @@ spec = describe "integration" do
         resp <- httpLbs req mgr
         statusCode' resp `shouldBe` 404
 
+  describe "lazy-load (compile on first request)" do
+    it "GET /deployments/{id} compiles pending deployment and returns ready" do
+      withPendingService "lazy-get" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        req <- parseRequest (baseUrl <> "/deployments/lazy-get")
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 200
+        let mStatus = Aeson.decode (responseBody resp) :: Maybe DeploymentStatusResponse
+        case mStatus of
+          Just s -> s.dsStatus `shouldBe` "ready"
+          Nothing -> expectationFailure "Failed to decode deployment status response"
+
+    it "evaluation on pending deployment compiles and succeeds in one request" do
+      withPendingService "lazy-eval" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        resp <- evalFunction baseUrl mgr "lazy-eval" "compute_qualifies"
+          (Aeson.object
+            [ "arguments" Aeson..= Aeson.object
+                [ "walks" Aeson..= True
+                , "eats" Aeson..= True
+                , "drinks" Aeson..= True
+                ]
+            ])
+        assertSuccess resp \r ->
+          Map.lookup "value" r.fnResult `shouldBe` Just (FnLitBool True)
+
+    it "listing functions on pending deployment compiles and returns functions" do
+      withPendingService "lazy-fns" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        req <- parseRequest (baseUrl <> "/deployments/lazy-fns/functions")
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 200
+
+    it "GET /deployments lists pending deployments without triggering compilation" do
+      withPendingService "lazy-list" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        req <- parseRequest (baseUrl <> "/deployments")
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 200
+        let mList = Aeson.decode (responseBody resp) :: Maybe [DeploymentStatusResponse]
+        case mList of
+          Just ds -> do
+            length ds `shouldBe` 1
+            case ds of
+              (d:_) -> d.dsStatus `shouldBe` "pending"
+              [] -> expectationFailure "Expected at least one deployment"
+          Nothing -> expectationFailure "Failed to decode deployment list"
+
+    it "health endpoint shows pending count before compilation" do
+      withPendingService "lazy-health" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        req <- parseRequest (baseUrl <> "/health")
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 200
+        let body = decodeObject (responseBody resp)
+        lookupKey "deployments" body `shouldSatisfy` \case
+          Just (Aeson.Object dObj) ->
+            case Aeson.KeyMap.lookup "pending" dObj of
+              Just (Aeson.Number n) -> n >= 1
+              _ -> False
+          _ -> False
+
   describe "compiler" do
     it "compiles valid L4 sources" do
       logger <- newLogger False
       let sources = Map.singleton "qualifies.l4" qualifiesJL4
-      result <- compileBundle logger sources
+      result <- compileBundle logger "test" sources
       case result of
         Left err -> expectationFailure ("Compilation failed: " <> Text.unpack err)
         Right (fns, meta, _bundles) -> do
@@ -629,7 +710,7 @@ spec = describe "integration" do
     it "rejects empty bundles" do
       logger <- newLogger False
       let sources = Map.empty :: Map FilePath Text
-      result <- compileBundle logger sources
+      result <- compileBundle logger "test" sources
       case result of
         Left err -> err `shouldBe` "No .l4 files found in bundle"
         Right _ -> expectationFailure "Expected compilation to fail for empty bundle"
@@ -648,6 +729,47 @@ mkBatchCase n = Aeson.object
   , "eats" Aeson..= True
   , "drinks" Aeson..= True
   ]
+
+-- | Save sources to the BundleStore and register as DeploymentPending,
+-- simulating a lazy-load restart. The sources exist on disk but are not compiled.
+withPendingService :: Text -> [(FilePath, Text)] -> (String -> Manager -> IO a) -> IO a
+withPendingService deployId sources act = do
+  resOrExc <- try (withPendingService' deployId sources act)
+  case resOrExc of
+    Left ioe ->
+      if isPermissionError ioe
+        then pendingWith ("Skipping integration test (cannot bind sockets): " <> show ioe) >> pure undefined
+        else do
+          expectationFailure (show ioe)
+          pure undefined
+    Right result -> pure result
+
+withPendingService' :: Text -> [(FilePath, Text)] -> (String -> Manager -> IO a) -> IO a
+withPendingService' deployId sources act = do
+  let tmpPath = "/tmp/jl4-service-test-" <> Text.unpack deployId
+  cleanDir tmpPath
+  store <- initStore tmpPath
+  logger <- newLogger False
+
+  -- Save sources to the BundleStore (so loadAndRegister can find them)
+  let sourceMap = Map.fromList sources
+      version = computeVersion sourceMap
+      storedMeta = BundleStore.StoredMetadata
+        { BundleStore.smVersion = version
+        , BundleStore.smCreatedAt = "2026-01-01T00:00:00Z"
+        }
+  BundleStore.saveBundle store deployId sourceMap storedMeta
+
+  -- Register as Pending (not compiled)
+  registry <- newTVarIO $ Map.singleton (DeploymentId deployId) DeploymentPending
+  let env = MkAppEnv registry store Nothing logger testOptions
+
+  mgr <- newManager defaultManagerSettings
+  testWithApplication (pure $ app env) \port -> do
+    let baseUrl = "http://localhost:" <> show port
+    result <- act baseUrl mgr
+    cleanDir tmpPath
+    pure result
 
 -- | Compile sources and register them directly in the TVar,
 -- then run a test against the WAI app.
@@ -672,7 +794,7 @@ withServiceFromSources' deployId sources act = do
 
   -- Compile the bundle directly
   let sourceMap = Map.fromList sources
-  result <- compileBundle logger sourceMap
+  result <- compileBundle logger "test" sourceMap
   (fns, meta) <- case result of
     Left err -> fail ("Test setup: compilation failed: " <> Text.unpack err)
     Right (f, m, _bundles) -> pure (f, m)

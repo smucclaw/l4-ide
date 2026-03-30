@@ -11,7 +11,7 @@ module Schema (
 
 import Backend.Api
 import Backend.DecisionQueryPlan (QueryPlanResponse, QueryAtom, QueryOutcome, QueryImpact, QueryInput, QueryAsk)
-import Backend.FunctionSchema (Parameters (..), Parameter (..))
+import L4.FunctionSchema (Parameters (..), Parameter (..))
 import Types
 
 import Control.Lens hiding ((.=))
@@ -110,8 +110,41 @@ instance ToSchema ReasoningTree
 instance ToSchema ReasonNode
 instance ToSchema FnArguments
 instance ToSchema TraceEvent
-instance ToSchema DeploymentMetadata
-instance ToSchema FunctionSummary
+instance ToSchema DeploymentMetadata where
+  declareNamedSchema _ = do
+    fnsRef <- declareSchemaRef (Proxy @[FunctionSummary])
+    textRef <- declareSchemaRef (Proxy @Text)
+    timeRef <- declareSchemaRef (Proxy @Text) -- UTCTime serialises as text
+    pure $
+      NamedSchema (Just "DeploymentMetadata") $
+        mempty
+          & type_ ?~ OpenApiObject
+          & properties
+            .~ [ ("functions", fnsRef)
+               , ("version", textRef)
+               , ("createdAt", timeRef)
+               ]
+          & required .~ ["functions", "version", "createdAt"]
+
+instance ToSchema FunctionSummary where
+  declareNamedSchema _ = do
+    textRef <- declareSchemaRef (Proxy @Text)
+    mTextRef <- declareSchemaRef (Proxy @(Maybe Text))
+    boolRef <- declareSchemaRef (Proxy @Bool)
+    paramsRef <- declareSchemaRef (Proxy @Parameters)
+    pure $
+      NamedSchema (Just "FunctionSummary") $
+        mempty
+          & type_ ?~ OpenApiObject
+          & properties
+            .~ [ ("name", textRef)
+               , ("description", textRef)
+               , ("parameters", paramsRef)
+               , ("returnType", textRef)
+               , ("section", mTextRef)
+               , ("isDeontic", boolRef)
+               ]
+          & required .~ ["name", "description", "parameters", "returnType", "isDeontic"]
 
 instance ToSchema VizExpr.RenderAsLadderInfo where
   declareNamedSchema _ =

@@ -23,8 +23,7 @@ spec = describe "BundleStore" do
               , ("helper.l4", "DECIDE g IS FALSE")
               ]
             meta = StoredMetadata
-              { smFunctions = [StoredFunctionSummary "f" "a function"]
-              , smVersion = "abc123"
+              { smVersion = "abc123"
               , smCreatedAt = "2025-01-01T00:00:00Z"
               }
         saveBundle store "test-deploy" sources meta
@@ -32,13 +31,12 @@ spec = describe "BundleStore" do
         loadedSources `shouldBe` sources
         loadedMeta.smVersion `shouldBe` "abc123"
         loadedMeta.smCreatedAt `shouldBe` "2025-01-01T00:00:00Z"
-        length loadedMeta.smFunctions `shouldBe` 1
 
       it "overwrites existing deployment atomically" \store -> do
         let sources1 = Map.singleton "main.l4" "DECIDE f IS TRUE"
             sources2 = Map.singleton "main.l4" "DECIDE f IS FALSE"
-            meta1 = StoredMetadata [] "v1" "2025-01-01T00:00:00Z"
-            meta2 = StoredMetadata [] "v2" "2025-01-02T00:00:00Z"
+            meta1 = StoredMetadata "v1" "2025-01-01T00:00:00Z"
+            meta2 = StoredMetadata "v2" "2025-01-02T00:00:00Z"
         saveBundle store "deploy-overwrite" sources1 meta1
         saveBundle store "deploy-overwrite" sources2 meta2
         (loadedSources, loadedMeta) <- loadBundle store "deploy-overwrite"
@@ -47,7 +45,7 @@ spec = describe "BundleStore" do
 
     describe "listDeployments" do
       it "lists saved deployments" \store -> do
-        let meta = StoredMetadata [] "v1" "2025-01-01T00:00:00Z"
+        let meta = StoredMetadata "v1" "2025-01-01T00:00:00Z"
         saveBundle store "deploy-a" (Map.singleton "a.l4" "DECIDE a IS TRUE") meta
         saveBundle store "deploy-b" (Map.singleton "b.l4" "DECIDE b IS TRUE") meta
         deployIds <- listDeployments store
@@ -61,15 +59,17 @@ spec = describe "BundleStore" do
 
     describe "deleteBundle" do
       it "removes a deployment from disk" \store -> do
-        let meta = StoredMetadata [] "v1" "2025-01-01T00:00:00Z"
+        let meta = StoredMetadata "v1" "2025-01-01T00:00:00Z"
         saveBundle store "to-delete" (Map.singleton "main.l4" "DECIDE f IS TRUE") meta
-        deleteBundle store "to-delete"
+        ok <- deleteBundle store "to-delete"
+        ok `shouldBe` True
         deployIds <- listDeployments store
         deployIds `shouldNotContain` ["to-delete"]
 
       it "is idempotent for non-existent deployments" \store -> do
         -- Should not throw
-        deleteBundle store "nonexistent"
+        ok <- deleteBundle store "nonexistent"
+        ok `shouldBe` True
 
 -- | Create a temp store, run the test, then clean up.
 withTempStore :: (BundleStore -> IO ()) -> IO ()

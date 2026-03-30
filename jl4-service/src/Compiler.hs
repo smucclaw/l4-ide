@@ -9,7 +9,7 @@ import qualified Backend.Jl4 as Jl4
 import Backend.Jl4 (ModuleContext, CompiledModule(..), typecheckModule, buildImportEnvironment, getFunctionDefinition)
 import Backend.Api (EvalBackend (..), FunctionDeclaration (..))
 import Backend.CodeGen (isDeonticType)
-import Backend.FunctionSchema (Parameters (..), Parameter (..), typeToParameter, declaresFromModule)
+import L4.FunctionSchema (Parameters (..), Parameter (..), typeToParameter, declaresFromModule)
 import BundleStore (SerializedBundle (..), StoredMetadata (..))
 import Types
 import Control.Monad (forM, unless)
@@ -47,9 +47,10 @@ import System.FilePath (takeExtension)
 -- 5. Build metadata with SHA-256 version
 compileBundle
   :: Logger
+  -> Text  -- ^ deployment ID for logging
   -> Map FilePath Text
   -> IO (Either Text (Map Text ValidatedFunction, DeploymentMetadata, [SerializedBundle]))
-compileBundle logger sources = do
+compileBundle logger deployId sources = do
   let l4Files = Map.toList $ Map.filterWithKey (\k _ -> takeExtension k == ".l4") sources
   if null l4Files
     then pure $ Left "No .l4 files found in bundle"
@@ -59,7 +60,7 @@ compileBundle logger sources = do
 
       -- Try each file for exported functions
       results <- forM l4Files $ \(filepath, content) ->
-        compileSingleFile logger filepath content moduleContext
+        compileSingleFile logger deployId filepath content moduleContext
 
       let allFunctions = concatMap (either (const []) fst) results
           allBundles = concatMap (either (const []) snd) results
@@ -73,7 +74,7 @@ compileBundle logger sources = do
 
           -- Build metadata
           now <- getCurrentTime
-          let summaries = [FunctionSummary fn.fnImpl.name fn.fnImpl.description fn.fnImpl.parameters | fn <- allFunctions]
+          let summaries = [FunctionSummary { fsName = fn.fnImpl.name, fsDescription = fn.fnImpl.description, fsParameters = fn.fnImpl.parameters, fsReturnType = fn.fnImpl.returnType, fsSection = Nothing, fsIsDeontic = fn.fnImpl.isDeontic } | fn <- allFunctions]
               version = computeVersion sources
               meta = DeploymentMetadata
                 { metaFunctions = summaries
@@ -83,7 +84,8 @@ compileBundle logger sources = do
 
           unless (null allFunctions) $
             logInfo logger "Compilation complete"
-              [ ("functionCount", toJSON (length allFunctions))
+              [ ("deploymentId", toJSON deployId)
+              , ("functionCount", toJSON (length allFunctions))
               ]
 
           pure $ Right (fnMap, meta, allBundles)
@@ -93,18 +95,20 @@ compileBundle logger sources = do
 -- (if typechecking succeeded and there were exports).
 compileSingleFile
   :: Logger
+  -> Text  -- ^ deployment ID for logging
   -> FilePath
   -> Text
   -> ModuleContext
   -> IO (Either Text ([ValidatedFunction], [SerializedBundle]))
-compileSingleFile logger filepath content moduleContext = do
+compileSingleFile logger deployId filepath content moduleContext = do
   -- Typecheck the module
   (errs, mTcRes) <- typecheckModule filepath content moduleContext
   case mTcRes of
     Nothing -> do
       unless (null errs) $
         logWarn logger "Typecheck failed"
-          [ ("file", toJSON filepath)
+          [ ("deploymentId", toJSON deployId)
+          , ("file", toJSON filepath)
           , ("errors", toJSON errs)
           ]
       pure $ Left (Text.intercalate "\n" errs)
@@ -136,10 +140,12 @@ compileSingleFile logger filepath content moduleContext = do
                 { sbModule = resolvedModule
                 , sbEnvironment = env
                 , sbEntityInfo = ei
+                , sbExports = exports
                 }
 
           logInfo logger "Found exports"
-            [ ("file", toJSON filepath)
+            [ ("deploymentId", toJSON deployId)
+            , ("file", toJSON filepath)
             , ("exportCount", toJSON (length fns))
             ]
           pure $ Right (fns, [bundle])
@@ -152,18 +158,20 @@ compileSingleFile logger filepath content moduleContext = do
 -- needs to be rebuilt (which requires the sources).
 buildFromCborBundle
   :: Logger
+  -> Text  -- ^ deployment ID for logging
   -> SerializedBundle
   -> Map FilePath Text       -- ^ source files (for import resolution and eval)
   -> StoredMetadata          -- ^ persisted metadata
   -> IO (Either Text (Map Text ValidatedFunction, DeploymentMetadata))
-buildFromCborBundle logger bundle sources storedMeta = do
+buildFromCborBundle logger deployId bundle sources storedMeta = do
   let resolvedModule = bundle.sbModule
       env = bundle.sbEnvironment
       ei = bundle.sbEntityInfo
       moduleContext = sources
 
-  -- Discover exported functions from the deserialized module
-  let exports = getExportedFunctions resolvedModule
+  -- Use the full exported functions stored in the bundle (annotations are stripped
+  -- in CBOR, so getExportedFunctions on the deserialized module would return []).
+  let exports = bundle.sbExports
 
   if null exports
     then pure $ Left "No exported functions found in CBOR bundle"
@@ -219,7 +227,7 @@ buildFromCborBundle logger bundle sources storedMeta = do
 
           -- Reconstruct DeploymentMetadata from stored metadata
           now <- getCurrentTime
-          let summaries = [FunctionSummary fn.fnImpl.name fn.fnImpl.description fn.fnImpl.parameters | fn <- validFns]
+          let summaries = [FunctionSummary { fsName = fn.fnImpl.name, fsDescription = fn.fnImpl.description, fsParameters = fn.fnImpl.parameters, fsReturnType = fn.fnImpl.returnType, fsSection = Nothing, fsIsDeontic = fn.fnImpl.isDeontic } | fn <- validFns]
               version = storedMeta.smVersion
               meta = DeploymentMetadata
                 { metaFunctions = summaries
@@ -228,7 +236,8 @@ buildFromCborBundle logger bundle sources storedMeta = do
                 }
 
           logInfo logger "Rebuilt functions from CBOR cache"
-            [ ("functionCount", toJSON (length validFns))
+            [ ("deploymentId", toJSON deployId)
+            , ("functionCount", toJSON (length validFns))
             ]
           pure $ Right (fnMap, meta)
 
@@ -292,6 +301,8 @@ exportToFunction resolvedModule implicitParams export =
     , supportedEvalBackend = [JL4]
     , deonticPartyType = mPartyType
     , deonticActionType = mActionType
+    , returnType = returnTypeDisplay export.exportReturnType
+    , isDeontic = isDeontic
     }
 
 -- | Build Parameters from ExportedParam list.
@@ -343,6 +354,18 @@ extractDeonticTypeNames ty@(TyApp _ _ [partyTy, actionTy])
     typeName (TyApp _ n _) = rawNameToText (rawName (getActual n))
     typeName _ = "Unknown"
 extractDeonticTypeNames _ = Nothing
+
+-- | Display the return type of an exported function as a user-facing string.
+returnTypeDisplay :: Maybe (Type' Resolved) -> Text
+returnTypeDisplay Nothing = "unknown"
+returnTypeDisplay (Just ty)
+  | isDeonticType ty = "DEONTIC"
+  | otherwise = case ty of
+      TyApp _ n _ -> Text.toUpper (rawNameToText (rawName (getActual n)))
+      Type _ -> "TYPE"
+      Fun{} -> "FUNCTION"
+      Forall _ _ inner -> returnTypeDisplay (Just inner)
+      InfVar{} -> "unknown"
 
 -- | Compute SHA-256 version from sorted source contents.
 computeVersion :: Map FilePath Text -> Text

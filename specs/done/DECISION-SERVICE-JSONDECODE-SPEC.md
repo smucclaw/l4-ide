@@ -112,7 +112,7 @@ isOlderThan p threshold MEANS p's age >= threshold
 ```json
 POST /functions/isOlderThan/evaluation
 {
-  "fnArguments": {
+  "arguments": {
     "p": { "name": "Alice", "age": 25 },
     "threshold": 18
   }

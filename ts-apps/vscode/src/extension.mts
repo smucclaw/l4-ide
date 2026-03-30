@@ -23,7 +23,6 @@ import {
   RenderAsLadder,
   WebviewFrontendIsReadyNotification,
   AddInspectorResult,
-  RemoveInspectorResult,
   SyncInspectorResults,
   ToggleSimplify,
   EvalDirectiveResultRequestType,
@@ -37,6 +36,14 @@ import {
   type DecisionServiceClient,
 } from './decision-service-client.js'
 import { cmdRenderResult } from './commands.js'
+import {
+  SidebarProvider,
+  SIDEBAR_WEBVIEW_TYPE,
+  sidebarWebviewFrontend,
+  initializeSidebarMessenger,
+} from './sidebar-provider.js'
+import { AuthManager } from './auth.js'
+import { ServiceClient } from './service-client.js'
 
 /***********************************************
      decode for RenderAsLadderInfo
@@ -62,24 +69,9 @@ const PANEL_CONFIG: PanelConfig = {
   position: vscode.ViewColumn.Beside,
 }
 
-const INSPECTOR_PANEL_CONFIG: PanelConfig = {
-  viewType: 'l4Inspector',
-  title: 'L4 Inspector',
-  position: vscode.ViewColumn.Beside,
-  htmlSubpath: 'inspector',
-  onDispose: async () => {
-    // No special cleanup needed for inspector
-  },
-}
-
 const vizWebviewFrontend: WebviewTypeMessageParticipant = {
   type: 'webview',
   webviewType: 'l4Viz',
-}
-
-const inspectorWebviewFrontend: WebviewTypeMessageParticipant = {
-  type: 'webview',
-  webviewType: 'l4Inspector',
 }
 
 /***************************************
@@ -178,29 +170,6 @@ function initializeWebviewMessenger(
 }
 
 /***************************************
-      Set up inspector messenger
-****************************************/
-
-function initializeInspectorMessenger(
-  outputChannel: vscode.OutputChannel,
-  panelManager: PanelManager,
-  onSectionRemoved: (directiveId: string) => void
-) {
-  const inspectorMessenger = new Messenger({ debugLog: true })
-
-  inspectorMessenger.onNotification(WebviewFrontendIsReadyNotification, () => {
-    panelManager.markFrontendAsReady()
-    outputChannel.appendLine(`Ext: Inspector frontend is ready`)
-  })
-
-  inspectorMessenger.onNotification(RemoveInspectorResult, (msg) => {
-    onSectionRemoved(msg.directiveId)
-  })
-
-  return inspectorMessenger
-}
-
-/***************************************
       Find bundled binary
 ****************************************/
 
@@ -296,7 +265,7 @@ function findBundledBinary(
 
 export async function activate(context: ExtensionContext) {
   const langId = 'l4'
-  const langName = 'jl4 LSP'
+  const langName = 'L4'
   const outputChannel: vscode.OutputChannel = window.createOutputChannel(
     langName,
     langId
@@ -312,9 +281,8 @@ export async function activate(context: ExtensionContext) {
     },
   }
 
-  // Initialize panelManager and webviewMessenger
+  // Initialize panelManager and webviewMessenger (for ladder visualization)
   const panelManager = new PanelManager(PANEL_CONFIG)
-  const inspectorPanelManager = new PanelManager(INSPECTOR_PANEL_CONFIG)
   const webviewMessenger = initializeWebviewMessenger(
     outputChannel,
     panelManager
@@ -327,12 +295,6 @@ export async function activate(context: ExtensionContext) {
     string,
     { uri: string; srcPos: SrcPos; directiveType: string; lineContent: string }
   >()
-
-  const inspectorMessenger = initializeInspectorMessenger(
-    outputChannel,
-    inspectorPanelManager,
-    (directiveId) => openInspectorSections.delete(directiveId)
-  )
 
   const clientOptions: LanguageClientOptions = {
     documentSelector: [{ scheme: 'file', language: langId, pattern: '**/*' }],
@@ -464,24 +426,15 @@ export async function activate(context: ExtensionContext) {
             lineContent,
           })
 
-          // Create/reveal the inspector panel
-          if (editor) {
-            inspectorPanelManager.render(context, editor.document.uri)
-          } else {
-            inspectorPanelManager.render(
-              context,
-              vscode.Uri.parse(verDocId.uri)
-            )
-          }
-          inspectorMessenger.registerWebviewPanel(
-            inspectorPanelManager.getPanel()
-          )
-          await inspectorPanelManager.getWebviewFrontendIsReadyPromise()
+          // Reveal the sidebar, wait for it to be ready, then switch to inspector
+          await sidebarProvider.revealSidebar()
+          await sidebarProvider.waitUntilReady()
+          sidebarProvider.switchToTab('inspector')
 
-          // Send the result to the inspector webview
-          const response = await inspectorMessenger.sendRequest(
+          // Send the result to the inspector via the sidebar messenger
+          const response = await sidebarMessenger.sendRequest(
             AddInspectorResult,
-            inspectorWebviewFrontend,
+            sidebarWebviewFrontend,
             {
               directiveId,
               srcPos,
@@ -508,8 +461,75 @@ export async function activate(context: ExtensionContext) {
   context.subscriptions.push(
     vscode.window.onDidChangeActiveColorTheme(() => {
       panelManager.refreshTokenColors()
-      inspectorPanelManager.refreshTokenColors()
     })
+  )
+
+  // Initialize auth + service client
+  const auth = new AuthManager(context.secrets, outputChannel)
+  const serviceClient = new ServiceClient(auth)
+
+  // Register URI handler for legalese.cloud login callback
+  context.subscriptions.push(
+    vscode.window.registerUriHandler({
+      handleUri: (uri) => auth.handleAuthCallback(uri),
+    })
+  )
+  context.subscriptions.push(auth)
+
+  // Initialize sidebar
+  const sidebarMessenger = new Messenger({ debugLog: true })
+  initializeSidebarMessenger(
+    sidebarMessenger,
+    client,
+    auth,
+    serviceClient,
+    outputChannel,
+    (directiveId) => openInspectorSections.delete(directiveId)
+  )
+
+  const sidebarProvider = new SidebarProvider(
+    context,
+    sidebarMessenger,
+    auth,
+    outputChannel
+  )
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(
+      SIDEBAR_WEBVIEW_TYPE,
+      sidebarProvider,
+      { webviewOptions: { retainContextWhenHidden: true } }
+    )
+  )
+
+  // Refresh sidebar token colors on theme change (alongside panels)
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveColorTheme(() => {
+      sidebarProvider.refreshTokenColors()
+    })
+  )
+
+  // Push active L4 file to sidebar when editor changes
+  function notifySidebarActiveFile(editor: vscode.TextEditor | undefined) {
+    if (editor && editor.document.languageId === 'l4') {
+      sidebarProvider.notifyActiveFile(
+        editor.document.uri.toString(),
+        editor.document.version
+      )
+    } else {
+      sidebarProvider.clearActiveFile()
+    }
+  }
+
+  // When the sidebar webview first loads, send the current active file
+  sidebarMessenger.onNotification(WebviewFrontendIsReadyNotification, () => {
+    outputChannel.appendLine('[sidebar] Webview is ready')
+    sidebarProvider.markReady()
+    notifySidebarActiveFile(vscode.window.activeTextEditor)
+    sidebarProvider.refreshTokenColors()
+  })
+
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveTextEditor(notifySidebarActiveFile)
   )
 
   // Start the client. This will also launch the server
@@ -531,9 +551,15 @@ export async function activate(context: ExtensionContext) {
           lineContent: string
         }>
       }) => {
-        // Only update if the inspector panel is open
-        const panel = inspectorPanelManager.getPanel()
-        if (!panel) return
+        // Refresh sidebar — the LSP just finished compiling this file,
+        // so exported functions may have changed
+        const editor = vscode.window.activeTextEditor
+        if (editor && editor.document.uri.toString() === params.uri) {
+          notifySidebarActiveFile(editor)
+        }
+
+        // Only update inspector if the sidebar is open
+        if (!sidebarProvider.getView()) return
 
         // Prepend the URI so directiveIds match the VS Code webview's "uri:line:col" format
         const results = params.results.map((r) => ({
@@ -541,9 +567,9 @@ export async function activate(context: ExtensionContext) {
           directiveId: `${params.uri}:${r.directiveId}`,
         }))
 
-        inspectorMessenger.sendNotification(
+        sidebarMessenger.sendNotification(
           SyncInspectorResults,
-          inspectorWebviewFrontend,
+          sidebarWebviewFrontend,
           {
             uri: params.uri,
             results,

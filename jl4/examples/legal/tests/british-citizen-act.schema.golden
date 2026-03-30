@@ -1,6 +1,19 @@
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "properties": {},
-    "title": "British Overseas Territories",
+    "description": "Determine if a person is a British Citizen and totally do everything they ever wanted.",
+    "properties": {
+        "a": {
+            "$ref": "#/$defs/BOOLEAN"
+        },
+        "p": {
+            "$ref": "#/$defs/Person",
+            "description": " Attributes of Person in question and everything we should ever know about this person is here."
+        }
+    },
+    "required": [
+        "p",
+        "a"
+    ],
+    "title": "is a British citizen if anything",
     "type": "object"
 }

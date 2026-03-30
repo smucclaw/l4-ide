@@ -28,9 +28,10 @@ module Types (
 
 import Backend.Api (EvalBackend, FnLiteral, RunFunction, EvaluatorError, ResponseWithReason, GraphVizResponse)
 import Backend.DecisionQueryPlan (CachedDecisionQuery)
-import Backend.FunctionSchema (Parameters)
+import L4.FunctionSchema (Parameters)
 import Backend.Jl4 (CompiledModule)
 import BundleStore (BundleStore)
+import Control.Applicative ((<|>))
 import Control.Concurrent.STM (TVar)
 import Control.Monad.Trans.Reader (ReaderT)
 import Data.Aeson as Aeson
@@ -56,6 +57,8 @@ newtype DeploymentId = DeploymentId { unDeploymentId :: Text }
 -- | Runtime state of a deployment.
 data DeploymentState
   = DeploymentPending
+  -- ^ Registered but not yet compiled (lazy-load mode).
+  | DeploymentCompiling
   -- ^ Bundle is being compiled in a background thread.
   | DeploymentReady !(Map Text ValidatedFunction) !DeploymentMetadata
   -- ^ Compiled and ready to serve evaluation requests.
@@ -70,16 +73,54 @@ data DeploymentMetadata = DeploymentMetadata
   , metaCreatedAt :: !UTCTime
   }
   deriving stock (Show, Generic)
-  deriving anyclass (FromJSON, ToJSON)
+
+instance ToJSON DeploymentMetadata where
+  toJSON dm = Aeson.object
+    [ "functions" .= dm.metaFunctions
+    , "version"   .= dm.metaVersion
+    , "createdAt" .= dm.metaCreatedAt
+    ]
+
+instance FromJSON DeploymentMetadata where
+  parseJSON = Aeson.withObject "DeploymentMetadata" $ \o ->
+    DeploymentMetadata
+      <$> (o .: "functions"  <|> o .: "metaFunctions")
+      <*> (o .: "version"    <|> o .: "metaVersion")
+      <*> (o .: "createdAt"  <|> o .: "metaCreatedAt")
 
 -- | Summary of a single exported function within a deployment.
 data FunctionSummary = FunctionSummary
   { fsName        :: !Text
   , fsDescription :: !Text
   , fsParameters  :: !Parameters
+  , fsReturnType  :: !Text
+  -- ^ Display name of the return type (e.g. "BOOLEAN", "NUMBER", "DEONTIC").
+  , fsSection     :: !(Maybe Text)
+  -- ^ L4 section header (§§) this function belongs to.
+  , fsIsDeontic   :: !Bool
+  -- ^ Whether this function returns a DEONTIC (needs startTime + events params).
   }
   deriving stock (Show, Generic)
-  deriving anyclass (FromJSON, ToJSON)
+
+instance ToJSON FunctionSummary where
+  toJSON fs = Aeson.object
+    [ "name"        .= fs.fsName
+    , "description" .= fs.fsDescription
+    , "parameters"  .= fs.fsParameters
+    , "returnType"  .= fs.fsReturnType
+    , "section"     .= fs.fsSection
+    , "isDeontic"   .= fs.fsIsDeontic
+    ]
+
+instance FromJSON FunctionSummary where
+  parseJSON = Aeson.withObject "FunctionSummary" $ \o ->
+    FunctionSummary
+      <$> (o .: "name"        <|> o .: "fsName")
+      <*> (o .: "description" <|> o .: "fsDescription")
+      <*> (o .: "parameters"  <|> o .: "fsParameters")
+      <*> (o .: "returnType"  <|> o .: "fsReturnType")
+      <*> (o .:? "section"    <|> o .:? "fsSection")
+      <*> (o .: "isDeontic"   <|> o .: "fsIsDeontic")
 
 -- | A compiled and ready-to-evaluate function.
 data ValidatedFunction = ValidatedFunction
@@ -131,6 +172,10 @@ data Function = Function
   -- ^ Type name for the party parameter of a DEONTIC function (e.g. "Party", "Driver")
   , deonticActionType     :: !(Maybe Text)
   -- ^ Type name for the action parameter of a DEONTIC function (e.g. "Contract Action")
+  , returnType            :: !Text
+  -- ^ Display name of the return type (e.g. "BOOLEAN", "NUMBER", "DEONTIC").
+  , isDeontic             :: !Bool
+  -- ^ Whether this function returns a DEONTIC (needs startTime + events params).
   }
   deriving stock (Show, Read, Ord, Eq, Generic)
 
@@ -144,6 +189,8 @@ instance ToJSON Function where
             , "description" .= Aeson.String fn.description
             , "parameters" .= fn.parameters
             , "supportedBackends" .= fn.supportedEvalBackend
+            , "returnType" .= fn.returnType
+            , "isDeontic" .= fn.isDeontic
             ] <>
             maybe [] (\pt -> ["deonticPartyType" .= pt]) fn.deonticPartyType <>
             maybe [] (\at -> ["deonticActionType" .= at]) fn.deonticActionType)
@@ -166,6 +213,8 @@ instance FromJSON Function where
             <*> p .: "supportedBackends"
             <*> p .:? "deonticPartyType"
             <*> p .:? "deonticActionType"
+            <*> p .:? "returnType" .!= "unknown"
+            <*> p .:? "isDeontic" .!= False
       )
       props
 
@@ -408,6 +457,7 @@ instance FromJSON HealthResponse where
 data HealthDeploymentCounts = HealthDeploymentCounts
   { hdTotal     :: !Int
   , hdReady     :: !Int
+  , hdPending   :: !Int
   , hdCompiling :: !Int
   , hdFailed    :: !Int
   }
@@ -418,6 +468,7 @@ instance ToJSON HealthDeploymentCounts where
     Aeson.object
       [ "total" .= hd.hdTotal
       , "ready" .= hd.hdReady
+      , "pending" .= hd.hdPending
       , "compiling" .= hd.hdCompiling
       , "failed" .= hd.hdFailed
       ]
@@ -427,6 +478,7 @@ instance FromJSON HealthDeploymentCounts where
     HealthDeploymentCounts
       <$> o .: "total"
       <*> o .: "ready"
+      <*> o .:? "pending" .!= 0
       <*> o .: "compiling"
       <*> o .: "failed"
 

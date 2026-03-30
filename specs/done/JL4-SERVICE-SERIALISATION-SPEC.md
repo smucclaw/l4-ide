@@ -202,7 +202,7 @@ pkill jl4-service && cabal run jl4-service -- --store-path /tmp/jl4-store
 
 # Verify evaluation still works
 curl -X POST http://localhost:8080/deployments/test/functions/is-eligible/evaluation \
-  -d '{"fnArguments": {"income": 60000}}'
+  -d '{"arguments": {"income": 60000}}'
 
 # Delete CBOR to force source fallback
 rm /tmp/jl4-store/test/bundle.cbor

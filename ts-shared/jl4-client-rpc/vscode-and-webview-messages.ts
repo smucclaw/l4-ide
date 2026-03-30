@@ -140,6 +140,171 @@ export interface ClientRequestParams<P extends object, R> {
   params: P
 }
 
+/*************************************************************
+            Deploy Sidebar Messages
+**************************************************************/
+
+import type {
+  ExportedFunctionInfo,
+  GetExportedFunctionsParams,
+  GetExportedFunctionsResponse,
+} from './custom-protocol.js'
+
+/** Sidebar asks extension for exported functions from the active file */
+export const GetSidebarExportedFunctions: RequestType<
+  GetExportedFunctionsParams,
+  GetExportedFunctionsResponse
+> = {
+  method: 'getSidebarExportedFunctions',
+}
+
+/** Connection status response from extension to sidebar */
+export interface GetSidebarConnectionStatusResponse {
+  serviceUrl: string
+  connected: boolean
+  status: 'connected' | 'not-configured' | 'connecting' | 'error'
+  isLegaleseCloud: boolean
+  error?: string
+}
+
+/** Sidebar asks extension for current connection status */
+export const GetSidebarConnectionStatus: RequestType<
+  void,
+  GetSidebarConnectionStatusResponse
+> = {
+  method: 'getSidebarConnectionStatus',
+}
+
+/** Sidebar requests login flow */
+export const RequestSidebarLogin: NotificationType<void> = {
+  method: 'requestSidebarLogin',
+}
+
+/** Sidebar requests logout */
+export const RequestSidebarLogout: NotificationType<void> = {
+  method: 'requestSidebarLogout',
+}
+
+/** Deployment info derived from /openapi.json */
+export interface SidebarDeploymentInfo {
+  deploymentId: string
+  functions: ExportedFunctionInfo[]
+}
+
+/** Sidebar requests list of deployments */
+export const ListSidebarDeployments: RequestType<
+  void,
+  { deployments: SidebarDeploymentInfo[] }
+> = {
+  method: 'listSidebarDeployments',
+}
+
+/** Sidebar requests deploy */
+export interface SidebarDeployParams {
+  deploymentId: string
+  fileUri: string
+}
+
+export interface SidebarDeployResponse {
+  success: boolean
+  deploymentId?: string
+  error?: string
+}
+
+export const RequestSidebarDeploy: RequestType<
+  SidebarDeployParams,
+  SidebarDeployResponse
+> = {
+  method: 'requestSidebarDeploy',
+}
+
+/** Sidebar requests undeploy */
+export interface SidebarUndeployParams {
+  deploymentId: string
+}
+
+export const RequestSidebarUndeploy: RequestType<
+  SidebarUndeployParams,
+  { success: boolean; error?: string }
+> = {
+  method: 'requestSidebarUndeploy',
+}
+
+/** Sidebar polls deployment compilation status */
+export interface SidebarDeploymentStatusResponse {
+  status: 'pending' | 'compiling' | 'ready' | 'failed'
+  error?: string
+}
+
+export const GetSidebarDeploymentStatus: RequestType<
+  { deploymentId: string },
+  SidebarDeploymentStatusResponse
+> = {
+  method: 'getSidebarDeploymentStatus',
+}
+
+/** Sidebar requests deployment OpenAPI spec (for breaking change detection) */
+export const GetSidebarDeploymentOpenApi: RequestType<
+  { deploymentId: string },
+  { openapi: unknown }
+> = {
+  method: 'getSidebarDeploymentOpenApi',
+}
+
+/** Sidebar asks extension to open a URL in the browser */
+export const RequestOpenUrl: NotificationType<{ url: string }> = {
+  method: 'requestOpenUrl',
+}
+
+/** Sidebar asks extension to open the service URL in browser */
+export const RequestOpenServiceUrl: NotificationType<void> = {
+  method: 'requestOpenServiceUrl',
+}
+
+/** Sidebar asks extension to open Legalese Cloud Console */
+export const RequestOpenConsole: NotificationType<void> = {
+  method: 'requestOpenConsole',
+}
+
+/** Sidebar asks extension to disconnect (clear credentials + service URL) */
+export const RequestDisconnect: NotificationType<void> = {
+  method: 'requestDisconnect',
+}
+
+/** Sidebar asks extension to open L4 code as a new untitled file */
+export const RequestNewL4File: NotificationType<{ content: string }> = {
+  method: 'requestNewL4File',
+}
+
+/** Sidebar requests markdown content for the docs tab */
+export const GetSidebarDocsContent: RequestType<
+  { url: string },
+  { markdown: string }
+> = {
+  method: 'getSidebarDocsContent',
+}
+
+/** Sidebar asks extension to refresh deployments */
+export const RequestRefreshDeployments: NotificationType<void> = {
+  method: 'requestRefreshDeployments',
+}
+
+/** Sidebar asks extension to show a VSCode notification */
+export interface ShowNotificationParams {
+  type: 'info' | 'warning' | 'error'
+  message: string
+}
+
+export const ShowNotification: NotificationType<ShowNotificationParams> = {
+  method: 'showNotification',
+}
+
+/** Extension pushes connection status changes to sidebar */
+export const SidebarConnectionStatusChanged: NotificationType<GetSidebarConnectionStatusResponse> =
+  {
+    method: 'sidebarConnectionStatusChanged',
+  }
+
 /*******************************************************************************
  Convert between L4 RPC types and vscode-messenger's Request/Notification types
 ********************************************************************************/

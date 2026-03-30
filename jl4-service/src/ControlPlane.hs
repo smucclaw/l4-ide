@@ -13,10 +13,12 @@ module ControlPlane (
 
 import qualified BundleStore
 import Compiler (compileBundle, computeVersion)
+import DeploymentLoader (triggerCompilationIfPending)
 import Logging (logInfo, logWarn, logError)
 import Options (Options (..))
 import Types
 
+import Control.Applicative ((<|>))
 import Control.Concurrent.Async (async)
 import Control.Concurrent.STM (atomically, modifyTVar', readTVarIO)
 import Control.Monad (when)
@@ -48,12 +50,26 @@ import System.Timeout (timeout)
 -- | Status returned in GET responses.
 data DeploymentStatusResponse = DeploymentStatusResponse
   { dsId       :: !Text
-  , dsStatus   :: !Text    -- "compiling" | "ready" | "failed"
+  , dsStatus   :: !Text    -- "pending" | "compiling" | "ready" | "failed"
   , dsMetadata :: !(Maybe DeploymentMetadata)
   , dsError    :: !(Maybe Text)
   }
   deriving stock (Show, Generic)
-  deriving anyclass (FromJSON, ToJSON)
+
+instance ToJSON DeploymentStatusResponse where
+  toJSON ds = Aeson.object $
+    [ "id"       .= ds.dsId
+    , "status"   .= ds.dsStatus
+    ] <> maybe [] (\m -> ["metadata" .= m]) ds.dsMetadata
+      <> maybe [] (\e -> ["error" .= e]) ds.dsError
+
+instance FromJSON DeploymentStatusResponse where
+  parseJSON = Aeson.withObject "DeploymentStatusResponse" $ \o ->
+    DeploymentStatusResponse
+      <$> (o Aeson..: "id"       <|> o Aeson..: "dsId")
+      <*> (o Aeson..: "status"   <|> o Aeson..: "dsStatus")
+      <*> (o Aeson..:? "metadata" <|> o Aeson..:? "dsMetadata")
+      <*> (o Aeson..:? "error"    <|> o Aeson..:? "dsError")
 
 -- | The control plane API for managing deployments.
 type ControlPlaneApi =
@@ -83,6 +99,9 @@ postDeploymentHandler multipart = do
       validateDeploymentId idText
       pure (DeploymentId idText)
     _ -> liftIO $ DeploymentId . Text.pack . UUID.toString <$> nextRandom
+
+  liftIO $ logInfo env.logger "Deployment created"
+    [("deploymentId", toJSON deployId.unDeploymentId)]
 
   -- Extract zip from multipart file
   sourceMap <- extractSourcesFromMultipart multipart
@@ -115,15 +134,14 @@ postDeploymentHandler multipart = do
       -- Normal path: save, register as pending, compile async
       now <- liftIO getCurrentTime
       let storedMeta = BundleStore.StoredMetadata
-            { BundleStore.smFunctions = []
-            , BundleStore.smVersion = version
+            { BundleStore.smVersion = version
             , BundleStore.smCreatedAt = Text.pack (show now)
             }
 
       liftIO $ BundleStore.saveBundle env.bundleStore (deployId.unDeploymentId) sourceMap storedMeta
 
       liftIO $ atomically $ modifyTVar' env.deploymentRegistry $
-        Map.insert deployId DeploymentPending
+        Map.insert deployId DeploymentCompiling
 
       let compileTimeoutMicros = cfg.compileTimeout * 1_000_000
           compileMemLimitBytes = fromIntegral cfg.maxCompileMemoryMb * 1024 * 1024 :: Int64
@@ -132,7 +150,7 @@ postDeploymentHandler multipart = do
         let compileLimited = do
               setAllocationCounter compileMemLimitBytes
               enableAllocationLimit
-              compileBundle env.logger sourceMap
+              compileBundle env.logger deployId.unDeploymentId sourceMap
         mResult <- (timeout compileTimeoutMicros compileLimited)
           `catch` \AllocationLimitExceeded -> do
             logError env.logger "Compilation exceeded memory limit"
@@ -171,18 +189,30 @@ postDeploymentHandler multipart = do
 getDeploymentsHandler :: AppM [DeploymentStatusResponse]
 getDeploymentsHandler = do
   env <- asks id
+  liftIO $ logInfo env.logger "Deployments listed" []
   registry <- liftIO $ readTVarIO env.deploymentRegistry
   let debugMode = env.options.debug
   pure [stateToResponse debugMode did state | (did, state) <- Map.toList registry]
 
--- | GET /deployments/{id} — get deployment status
+-- | GET /deployments/{id} — get deployment status.
+-- If the deployment is Pending (lazy-load), compiles it synchronously
+-- before returning the response.
 getDeploymentHandler :: Text -> AppM DeploymentStatusResponse
 getDeploymentHandler deployIdText = do
   env <- asks id
   let deployId = DeploymentId deployIdText
+  liftIO $ logInfo env.logger "Deployment retrieved"
+    [("deploymentId", toJSON deployIdText)]
   registry <- liftIO $ readTVarIO env.deploymentRegistry
   case Map.lookup deployId registry of
     Nothing -> throwError err404
+    Just DeploymentPending -> do
+      triggerCompilationIfPending deployId
+      -- Re-read: compilation is synchronous, state is now Ready or Failed
+      registry' <- liftIO $ readTVarIO env.deploymentRegistry
+      case Map.lookup deployId registry' of
+        Nothing -> throwError err404
+        Just state' -> pure (stateToResponse env.options.debug deployId state')
     Just state -> pure (stateToResponse env.options.debug deployId state)
 
 -- | PUT /deployments/{id} — replace a deployment bundle
@@ -190,6 +220,9 @@ putDeploymentHandler :: Text -> MultipartData Mem -> AppM DeploymentStatusRespon
 putDeploymentHandler deployIdText multipart = do
   env <- asks id
   let deployId = DeploymentId deployIdText
+
+  liftIO $ logInfo env.logger "Deployment updated"
+    [("deploymentId", toJSON deployIdText)]
 
   validateDeploymentId deployIdText
 
@@ -206,8 +239,7 @@ putDeploymentHandler deployIdText multipart = do
   now <- liftIO getCurrentTime
   let version = computeVersion sourceMap
       storedMeta = BundleStore.StoredMetadata
-        { BundleStore.smFunctions = []
-        , BundleStore.smVersion = version
+        { BundleStore.smVersion = version
         , BundleStore.smCreatedAt = Text.pack (show now)
         }
 
@@ -217,7 +249,7 @@ putDeploymentHandler deployIdText multipart = do
 
   -- Compile in background; old version stays active until new compilation completes
   _ <- liftIO $ async $ do
-    mResult <- timeout compileTimeoutMicros $ compileBundle env.logger sourceMap
+    mResult <- timeout compileTimeoutMicros $ compileBundle env.logger deployId.unDeploymentId sourceMap
     case mResult of
       Nothing ->
         logError env.logger "PUT compilation timed out"
@@ -251,14 +283,18 @@ deleteDeploymentHandler deployIdText = do
   case Map.lookup deployId registry of
     Nothing -> throwError err404
     Just _ -> do
-      liftIO $ atomically $ modifyTVar' env.deploymentRegistry $
-        Map.delete deployId
-      liftIO $ BundleStore.deleteBundle env.bundleStore (deployId.unDeploymentId)
-
-      liftIO $ logInfo env.logger "Deployment deleted"
-        [("deploymentId", toJSON deployId.unDeploymentId)]
-
-      pure NoContent
+      ok <- liftIO $ BundleStore.deleteBundle env.bundleStore (deployId.unDeploymentId)
+      if ok
+        then do
+          liftIO $ atomically $ modifyTVar' env.deploymentRegistry $
+            Map.delete deployId
+          liftIO $ logInfo env.logger "Deployment deleted"
+            [("deploymentId", toJSON deployId.unDeploymentId)]
+          pure NoContent
+        else do
+          liftIO $ logWarn env.logger "Deployment directory not fully removed, retry later"
+            [("deploymentId", toJSON deployId.unDeploymentId)]
+          throwError err409 { errBody = jsonError "Could not remove deployment files — retry later" }
 
 -- ----------------------------------------------------------------------------
 -- Helpers
@@ -268,7 +304,8 @@ deleteDeploymentHandler deployIdText = do
 -- In non-debug mode, error details are hidden.
 stateToResponse :: Bool -> DeploymentId -> DeploymentState -> DeploymentStatusResponse
 stateToResponse debugMode (DeploymentId did) = \case
-  DeploymentPending -> DeploymentStatusResponse did "compiling" Nothing Nothing
+  DeploymentPending -> DeploymentStatusResponse did "pending" Nothing Nothing
+  DeploymentCompiling -> DeploymentStatusResponse did "compiling" Nothing Nothing
   DeploymentReady _ meta -> DeploymentStatusResponse did "ready" (Just meta) Nothing
   DeploymentFailed err ->
     let errorMsg = if debugMode then Just err else Just "Compilation failed"

@@ -2,24 +2,22 @@
 
 module Application (defaultMain, app) where
 
-import BundleStore (BundleStore (..))
 import qualified BundleStore
-import Compiler (compileBundle, buildFromCborBundle)
 import ControlPlane (ControlPlaneApi, controlPlaneHandler)
 import DataPlane (DataPlaneApi, dataPlaneHandler, ShortRoutes, shortRoutesHandler)
-import Logging (Logger, logInfo, logWarn, logError, logDebug, newLogger)
+import DeploymentLoader (loadAndRegister)
+import Logging (Logger, logInfo, logDebug, logError, newLogger)
 import Options (Options (..), buildOpts)
 import Types
 
-import Data.Aeson (toJSON)
+import Data.Aeson (toJSON, (.=))
+import qualified Data.Aeson as Aeson
 import Data.Text (Text)
+import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text.Encoding
 import Control.Concurrent.Async (mapConcurrently_)
-import Control.Concurrent.STM (TVar, atomically, modifyTVar', newTVarIO, readTVarIO)
-import Control.Exception (catch, finally)
-import Data.Int (Int64)
-import GHC.Conc (setAllocationCounter, enableAllocationLimit)
-import GHC.IO.Exception (AllocationLimitExceeded (..))
+import Control.Concurrent.STM (atomically, modifyTVar', newTVarIO, readTVarIO)
+import Control.Exception (SomeException, finally, displayException)
 import Control.Monad (forM_)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Reader (ReaderT (..), ask)
@@ -27,19 +25,31 @@ import Data.IORef (newIORef, atomicModifyIORef')
 import qualified Data.Map.Strict as Map
 import Data.Time (getCurrentTime, diffUTCTime)
 import Network.HTTP.Types.Status (statusCode)
-import Network.Wai (Middleware, requestMethod, rawPathInfo, responseStatus, pathInfo, responseLBS)
-import Network.HTTP.Types (status503)
-import Network.Wai.Handler.Warp (defaultSettings, runSettings, setHost, setPort)
+import Network.Wai (Middleware, Request, requestMethod, rawPathInfo, responseStatus, pathInfo, responseLBS, requestHeaders)
+import Network.HTTP.Types (status503, mkStatus, ok200)
+import qualified Data.ByteString as BS
+import Network.Wai.Handler.Warp (defaultSettings, runSettings, setHost, setPort, setOnException, setOnExceptionResponse)
+import Network.Wai.Handler.Warp (defaultShouldDisplayException)
 import Network.Wai.Middleware.Cors (cors, simpleCorsResourcePolicy, corsMethods, corsRequestHeaders)
 import Options.Applicative (execParser)
 import Servant
-import System.Timeout (timeout)
+
+import WebMCPPage (RawJs, JavaScript, renderExplorerPageBS, renderOrgWebMCPScript)
 
 -- | Combined service API.
-type ServiceApi = HealthApi :<|> ControlPlaneApi :<|> DataPlaneApi :<|> ShortRoutes
+type ServiceApi = HealthApi :<|> WellKnownApi :<|> OrgOpenApiRoute :<|> WebMCPApi :<|> ControlPlaneApi :<|> DataPlaneApi :<|> ShortRoutes
 
 -- | Health check endpoint.
 type HealthApi = "health" :> Get '[JSON] HealthResponse
+
+-- | .well-known/webmcp discovery manifest.
+type WellKnownApi = ".well-known" :> "webmcp" :> Get '[JSON] Aeson.Value
+
+-- | Org-wide OpenAPI metadata (all deployments, optionally filtered by scope).
+type OrgOpenApiRoute = "openapi.json" :> QueryParam "scope" Text :> Get '[JSON] Aeson.Value
+
+-- | Org-wide WebMCP script endpoint.
+type WebMCPApi = "webmcp.js" :> Get '[JavaScript] RawJs
 
 -- | Main entry point.
 defaultMain :: IO ()
@@ -68,6 +78,7 @@ defaultMain = do
   logInfo logger "Initializing bundle store"
     [("path", toJSON storePath)]
   store <- BundleStore.initStore storePath
+  BundleStore.cleanupStore logger store
   registry <- newTVarIO Map.empty
   let env = MkAppEnv registry store options.serverName logger options
 
@@ -90,90 +101,26 @@ defaultMain = do
 
   -- Build middleware stack
   concLimiter <- concurrencyLimiter options.maxConcurrentRequests
-  let middleware = concLimiter . requestLogMiddleware logger . corsMiddleware
-      settings = setHost "*" $ setPort port defaultSettings
+  let middleware = concLimiter . requestLogMiddleware logger . corsMiddleware . explorerMiddleware logger
+      onExc :: Maybe Request -> SomeException -> IO ()
+      onExc _req exc =
+        if defaultShouldDisplayException exc || debug
+        then logError logger "Unhandled exception"
+               [("error", toJSON (displayException exc))]
+        else pure ()
+      onExcResponse _exc =
+               responseLBS (mkStatus 500 "Internal Server Error")
+                      [("Content-Type", "application/json")]
+                      "{\"error\":\"Internal server error\"}"
+      settings = setHost "*"
+               $ setPort port
+               $ setOnException onExc
+               $ setOnExceptionResponse onExcResponse
+               $ defaultSettings
 
   logInfo logger "Server ready"
     [("port", toJSON port)]
   runSettings settings (middleware $ app env)
-
--- | Load a deployment from the store and register it.
--- Tries the fast CBOR cache path first; falls back to full recompilation.
-loadAndRegister :: Logger -> Options -> TVar (Map.Map DeploymentId DeploymentState) -> BundleStore -> Text -> IO ()
-loadAndRegister logger options registry store deployId = do
-  -- Load sources and metadata (always needed)
-  (sources, storedMeta) <- BundleStore.loadBundle store deployId
-
-  let compileTimeoutMicros = options.compileTimeout * 1_000_000
-      compileMemLimitMb = options.maxCompileMemoryMb
-
-  -- Try fast path: load from CBOR cache
-  mCbor <- BundleStore.loadBundleCbor logger store deployId
-  result <- case mCbor of
-    Just bundle -> do
-      logDebug logger "Loading deployment from CBOR cache"
-        [("deploymentId", toJSON deployId)]
-      cborResult <- buildFromCborBundle logger bundle sources storedMeta
-      case cborResult of
-        Right ok -> pure (Right ok)
-        Left err -> do
-          logWarn logger "CBOR rebuild failed, recompiling from source"
-            [ ("deploymentId", toJSON deployId)
-            , ("error", toJSON err)
-            ]
-          compileFreshAndCache logger compileTimeoutMicros compileMemLimitMb store deployId sources
-    Nothing -> do
-      logDebug logger "Compiling deployment"
-        [("deploymentId", toJSON deployId)]
-      compileFreshAndCache logger compileTimeoutMicros compileMemLimitMb store deployId sources
-
-  case result of
-    Right (fns, meta) -> do
-      atomically $ modifyTVar' registry $
-        Map.insert (DeploymentId deployId) (DeploymentReady fns meta)
-      logInfo logger "Deployment ready"
-        [("deploymentId", toJSON deployId)]
-    Left err -> do
-      atomically $ modifyTVar' registry $
-        Map.insert (DeploymentId deployId) (DeploymentFailed err)
-      logError logger "Deployment failed"
-        [ ("deploymentId", toJSON deployId)
-        , ("error", toJSON err)
-        ]
-
--- | Compile from source with timeout and memory limit, and save CBOR cache for next restart.
-compileFreshAndCache
-  :: Logger
-  -> Int  -- ^ timeout in microseconds
-  -> Int  -- ^ memory limit in MB
-  -> BundleStore
-  -> Text
-  -> Map.Map FilePath Text
-  -> IO (Either Text (Map.Map Text ValidatedFunction, DeploymentMetadata))
-compileFreshAndCache logger timeoutMicros memLimitMb store deployId sources = do
-  let memLimitBytes = fromIntegral memLimitMb * 1024 * 1024 :: Int64
-      compileLimited = do
-        setAllocationCounter memLimitBytes
-        enableAllocationLimit
-        compileBundle logger sources
-  mResult <- (timeout timeoutMicros compileLimited)
-    `catch` \AllocationLimitExceeded -> do
-      logError logger "Compilation exceeded memory limit"
-        [ ("deploymentId", toJSON deployId)
-        , ("maxCompileMemoryMb", toJSON memLimitMb)
-        ]
-      pure Nothing
-  case mResult of
-    Nothing -> do
-      logError logger "Compilation timed out or exceeded memory limit"
-        [("deploymentId", toJSON deployId)]
-      pure $ Left "Compilation timed out or exceeded memory limit"
-    Just (Right (fns, meta, bundles)) -> do
-      -- Save CBOR caches for fast restart
-      mapM_ (BundleStore.saveBundleCbor store deployId) bundles
-      pure $ Right (fns, meta)
-    Just (Left err) ->
-      pure $ Left err
 
 -- | CORS middleware — same policy as jl4-decision-service.
 corsMiddleware :: Middleware
@@ -182,19 +129,20 @@ corsMiddleware = cors (const $ Just simpleCorsResourcePolicy
   , corsRequestHeaders = ["content-type", "authorization"]
   })
 
--- | Structured request logging middleware.
+-- | Structured request logging middleware (debug level only).
 requestLogMiddleware :: Logger -> Middleware
 requestLogMiddleware logger baseApp req sendResp = do
   start <- getCurrentTime
   baseApp req $ \res -> do
     elapsed <- diffUTCTime <$> getCurrentTime <*> pure start
     let durationMs = realToFrac elapsed * 1000 :: Double
-    logInfo logger "http_request"
-      [ ("method", toJSON (Text.Encoding.decodeUtf8 (requestMethod req)))
-      , ("path", toJSON (Text.Encoding.decodeUtf8 (rawPathInfo req)))
-      , ("status", toJSON (statusCode (responseStatus res)))
-      , ("duration_ms", toJSON durationMs)
-      ]
+        fields =
+          [ ("method", toJSON (Text.Encoding.decodeUtf8 (requestMethod req)))
+          , ("path", toJSON (Text.Encoding.decodeUtf8 (rawPathInfo req)))
+          , ("status", toJSON (statusCode (responseStatus res)))
+          , ("duration_ms", toJSON durationMs)
+          ]
+    logDebug logger "http_request" fields
     sendResp res
 
 -- | Concurrency limiter middleware.
@@ -223,7 +171,7 @@ app env = serve (Proxy @ServiceApi) (serverT env)
 
 serverT :: AppEnv -> Server ServiceApi
 serverT env =
-  hoistServer (Proxy @ServiceApi) (nt env) (healthHandler :<|> controlPlaneHandler :<|> dataPlaneHandler :<|> shortRoutesHandler)
+  hoistServer (Proxy @ServiceApi) (nt env) (healthHandler :<|> wellKnownHandler :<|> orgOpenApiHandler :<|> webmcpHandler :<|> controlPlaneHandler :<|> dataPlaneHandler :<|> shortRoutesHandler)
  where
   nt :: AppEnv -> AppM a -> Handler a
   nt s x = runReaderT x s
@@ -235,7 +183,8 @@ healthHandler = do
   registry <- liftIO . readTVarIO $ env.deploymentRegistry
   let states = Map.elems registry
       nReady = length [() | DeploymentReady _ _ <- states]
-      nCompiling = length [() | DeploymentPending <- states]
+      nPending = length [() | DeploymentPending <- states]
+      nCompiling = length [() | DeploymentCompiling <- states]
       nFailed = length [() | DeploymentFailed _ <- states]
       nTotal = length states
   pure HealthResponse
@@ -243,8 +192,108 @@ healthHandler = do
     , hrDeployments = HealthDeploymentCounts
         { hdTotal = nTotal
         , hdReady = nReady
+        , hdPending = nPending
         , hdCompiling = nCompiling
         , hdFailed = nFailed
         }
     , hrInstanceToken = env.options.instanceToken
     }
+
+-- | GET /.well-known/webmcp — discovery manifest for WebMCP crawlers.
+wellKnownHandler :: ServerT WellKnownApi AppM
+wellKnownHandler = do
+  env <- ask
+  registry <- liftIO . readTVarIO $ env.deploymentRegistry
+  let readyDeployments =
+        [ Aeson.object
+            [ "id" .= did.unDeploymentId
+            , "functions" .= length meta.metaFunctions
+            ]
+        | (did, DeploymentReady _ meta) <- Map.toList registry
+        ]
+  liftIO $ logInfo env.logger "WebMCP manifest served" []
+  pure $ Aeson.object
+    [ "version" .= ("draft" :: String)
+    , "script" .= ("/webmcp.js" :: String)
+    , "deployments" .= readyDeployments
+    ]
+
+-- | GET /openapi.json — org-wide metadata across all deployments.
+-- Optional ?scope= parameter filters by deployment/function.
+-- Serves from in-memory registry for ready deployments, disk cache for pending ones.
+orgOpenApiHandler :: ServerT OrgOpenApiRoute AppM
+orgOpenApiHandler mScope = do
+  env <- ask
+  liftIO $ logInfo env.logger "OpenAPI schema requested"
+    [("scope", toJSON mScope)]
+  registry <- liftIO . readTVarIO $ env.deploymentRegistry
+  let store = env.bundleStore
+
+  -- Collect metadata for all deployments (ready from memory, pending from cache)
+  allEntries <- liftIO $ fmap concat $ mapM (\(did, state) -> do
+    mMeta <- case state of
+      DeploymentReady _ meta -> pure (Just meta)
+      _ -> do
+        mBytes <- BundleStore.loadMetadataCache store did.unDeploymentId
+        case mBytes of
+          Just bytes -> case Aeson.eitherDecode bytes of
+            Right meta -> pure (Just meta)
+            Left _ -> pure Nothing
+          Nothing -> pure Nothing
+    pure $ case mMeta of
+      Nothing -> []
+      Just meta ->
+        [ Aeson.object
+          [ "deployment" .= did.unDeploymentId
+          , "name" .= fn.fsName
+          , "description" .= fn.fsDescription
+          , "parameters" .= fn.fsParameters
+          , "returnType" .= fn.fsReturnType
+          , "isDeontic" .= fn.fsIsDeontic
+          ]
+        | fn <- meta.metaFunctions
+        , matchesScope mScope did.unDeploymentId fn.fsName
+        ]
+    ) (Map.toList registry)
+
+  pure $ Aeson.object
+    [ "functions" .= allEntries
+    ]
+
+-- | Check if a deployment/function matches the scope filter.
+matchesScope :: Maybe Text -> Text -> Text -> Bool
+matchesScope Nothing _ _ = True
+matchesScope (Just scope) deployId fnName =
+  any matchPattern (Text.splitOn "," scope)
+ where
+  matchPattern pat =
+    let trimmed = Text.strip pat
+        (depPat, rest) = Text.breakOn "/" trimmed
+        fnPat = if Text.null rest then "*" else Text.drop 1 rest
+    in (depPat == "*" || depPat == deployId)
+       && (fnPat == "*" || fnPat == fnName)
+
+-- | GET /webmcp.js — org-wide WebMCP script.
+webmcpHandler :: ServerT WebMCPApi AppM
+webmcpHandler = do
+  env <- ask
+  liftIO $ logInfo env.logger "WebMCP script served" []
+  pure renderOrgWebMCPScript
+
+-- | Middleware: serve the deployment explorer page on GET / with Accept: text/html.
+explorerMiddleware :: Logger -> Middleware
+explorerMiddleware logger baseApp req sendResp
+  | requestMethod req == "GET"
+  , rawPathInfo req == "/"
+  , acceptsHtml (requestHeaders req)
+  = do
+      logInfo logger "Explorer page served" []
+      sendResp $ responseLBS ok200
+        [("Content-Type", "text/html; charset=utf-8")]
+        renderExplorerPageBS
+  | otherwise = baseApp req sendResp
+ where
+  acceptsHtml headers =
+    case lookup "Accept" headers of
+      Just accept -> "text/html" `BS.isInfixOf` accept
+      Nothing -> False
