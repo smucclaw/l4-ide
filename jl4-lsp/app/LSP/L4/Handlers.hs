@@ -519,7 +519,8 @@ handlers evalConfig recorder =
                             Nothing -> False
                         kind = if isDeontic then SymbolKind_Event else SymbolKind_Function
                         paramChildren = map (givenParamToSymbol lspRange) givenParams
-                    in [ mkSymbolWithChildren (nameToText (getOriginal n)) detail kind lspRange selRange paramChildren ]
+                        localChildren = concatMap (localDeclToSymbol moduleNuri subst entInfo lspRange) (collectLocals body)
+                    in [ mkSymbolWithChildren (nameToText (getOriginal n)) detail kind lspRange selRange (paramChildren <> localChildren) ]
                   Nothing -> []
 
               Assume _ assume@(MkAssume _ _ (MkAppForm _ n _ _) mTy) ->
@@ -527,8 +528,12 @@ handlers evalConfig recorder =
                   Just rng ->
                     let lspRange = srcRangeToLspRange (Just rng)
                         selRange = nameSelRange n
-                        detail = fmap prettyLayout mTy
-                    in [ mkSymbol (nameToText (getOriginal n)) detail SymbolKind_Variable lspRange selRange ]
+                        (detail, kind) = case mTy of
+                          Nothing -> (Nothing, SymbolKind_Variable)
+                          Just ty ->
+                            let tyText = prettyLayout ty
+                            in (Just tyText, typeToSymbolKind tyText)
+                    in [ mkSymbol (nameToText (getOriginal n)) detail kind lspRange selRange ]
                   Nothing -> []
 
               Directive _ d ->
@@ -611,7 +616,39 @@ handlers evalConfig recorder =
               | "LIST" `Text.isPrefixOf` tyText           = SymbolKind_Array
               | Just inner <- Text.stripPrefix "MAYBE OF " tyText = typeToSymbolKind inner
               | Just inner <- Text.stripPrefix "MAYBE " tyText = typeToSymbolKind inner
+              | "FUNCTION" `Text.isPrefixOf` tyText        = SymbolKind_Field
               | otherwise                                 = SymbolKind_TypeParameter
+
+            collectLocals :: Expr Resolved -> [LocalDecl Resolved]
+            collectLocals (Where _ _ locals)  = locals
+            collectLocals (LetIn _ locals _)  = locals
+            collectLocals _                   = []
+
+            localDeclToSymbol :: NormalizedUri -> Substitution -> EntityInfo -> LSP.Range -> LocalDecl Resolved -> [DocumentSymbol]
+            localDeclToSymbol moduleNuri subst entInfo parentRange = \case
+              LocalDecide _ decide@(MkDecide _ (MkTypeSig _ (MkGivenSig _ givenParams) _) (MkAppForm _ n _ _) localBody) ->
+                case rangeOfNode decide of
+                  Just rng ->
+                    let lspRange = srcRangeToLspRange (Just rng)
+                        selRange = nameSelRange n
+                        detail = inferredReturnType moduleNuri subst entInfo n
+                        isDeontic = case localBody of
+                          Regulative{} -> True
+                          _ -> case detail of
+                            Just t  -> "DEONTIC" `Text.isPrefixOf` t
+                            Nothing -> False
+                        kind = if isDeontic then SymbolKind_Event else SymbolKind_Function
+                        paramChildren = map (givenParamToSymbol lspRange) givenParams
+                        nestedLocals = concatMap (localDeclToSymbol moduleNuri subst entInfo lspRange) (collectLocals localBody)
+                    in [ mkSymbolWithChildren (nameToText (getOriginal n)) detail kind parentRange selRange (paramChildren <> nestedLocals) ]
+                  Nothing -> []
+              LocalAssume _ assume@(MkAssume _ _ (MkAppForm _ n _ _) mTy) ->
+                case rangeOfNode assume of
+                  Just _ ->
+                    let selRange = nameSelRange n
+                        detail = fmap prettyLayout mTy
+                    in [ mkSymbol (nameToText (getOriginal n)) detail SymbolKind_Variable parentRange selRange ]
+                  Nothing -> []
 
             -- | Ensure selectionRange is contained within fullRange (LSP requirement).
             -- Falls back to fullRange if selectionRange is not contained.

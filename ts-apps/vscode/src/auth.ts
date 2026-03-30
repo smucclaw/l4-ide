@@ -38,16 +38,24 @@ export class AuthManager {
     private readonly outputChannel: vscode.OutputChannel
   ) {
     this.disposables.push(
-      vscode.workspace.onDidChangeConfiguration((e) => {
+      vscode.workspace.onDidChangeConfiguration(async (e) => {
         if (
           e.affectsConfiguration('jl4.serviceUrl') ||
           e.affectsConfiguration('jl4.serviceApiKey')
         ) {
           this.outputChannel.appendLine(
-            '[auth] Settings changed, refreshing connection state'
+            '[auth] Settings changed, disconnecting and refreshing connection state'
           )
+          await this.secrets.delete(SECRET_KEY_SESSION)
+          this.cloudOrgSlug = undefined
           this.manuallyDisconnected = false
-          this.invalidateAndNotify()
+          this.cachedState = undefined
+          // If a service URL is now set, attempt to connect automatically
+          if (this.getServiceUrl()) {
+            await this.verifyConnection()
+          } else {
+            this.invalidateAndNotify()
+          }
         }
       })
     )
@@ -109,7 +117,7 @@ export class AuthManager {
   async setSessionToken(token: string): Promise<void> {
     await this.secrets.store(SECRET_KEY_SESSION, token)
     this.manuallyDisconnected = false
-    this.invalidateAndNotify()
+    this.cachedState = undefined
   }
 
   /**
@@ -167,7 +175,8 @@ export class AuthManager {
     this.outputChannel.appendLine('[auth] Received session token from callback')
     await this.setSessionToken(token)
 
-    // Resolve the org name for the notification message
+    // Resolve the org slug, then verify the connection.
+    // Success/failure is communicated via the sidebar status — no VS Code notifications.
     try {
       const resp = await fetch(
         `https://${LEGALESE_CLOUD_DOMAIN}/auth/session`,
@@ -185,11 +194,6 @@ export class AuthManager {
           this.outputChannel.appendLine(
             `[auth] Resolved org: ${session.organization.name} (${session.organization.slug})`
           )
-          this.invalidateAndNotify()
-          vscode.window.showInformationMessage(
-            `Signed in to ${session.organization.name} on Legalese Cloud.`
-          )
-          return
         }
       }
     } catch (err) {
@@ -198,9 +202,7 @@ export class AuthManager {
       )
     }
 
-    vscode.window.showInformationMessage(
-      'Successfully signed in to Legalese Cloud.'
-    )
+    await this.verifyConnection()
   }
 
   async getConnectionState(): Promise<ConnectionState> {
@@ -221,10 +223,11 @@ export class AuthManager {
         connected: false,
       }
     } else {
+      // Have a URL but haven't verified yet — report as connecting
       state = {
-        status: 'connected',
+        status: 'connecting',
         serviceUrl,
-        connected: true,
+        connected: false,
       }
     }
 
@@ -232,56 +235,139 @@ export class AuthManager {
     return state
   }
 
+  /**
+   * Verify the connection by hitting /service/health.
+   * Only returns 'connected' if that request succeeds with a 200.
+   */
   async verifyConnection(): Promise<ConnectionState> {
     this.cachedState = undefined
-    const state = await this.getConnectionState()
-    if (!state.connected) return state
+    const serviceUrl = this.getEffectiveServiceUrl()
 
+    if (this.manuallyDisconnected || !serviceUrl) {
+      const state: ConnectionState = {
+        status: 'not-configured',
+        serviceUrl,
+        connected: false,
+      }
+      this.cachedState = state
+      this.onDidChangeEmitter.fire(state)
+      return state
+    }
+
+    // Emit connecting state while we verify
+    const connectingState: ConnectionState = {
+      status: 'connecting',
+      serviceUrl,
+      connected: false,
+    }
+    this.cachedState = connectingState
+    this.onDidChangeEmitter.fire(connectingState)
+
+    // Run health check and a minimum delay in parallel so the
+    // "Connecting..." state is visible for at least 1 second.
+    const minDelay = new Promise((r) => setTimeout(r, 1000))
+
+    let result: ConnectionState
     try {
       const headers = await this.getAuthHeaders()
-      const resp = await fetch(`${state.serviceUrl}/service/health`, {
-        headers,
-        signal: AbortSignal.timeout(5000),
-      })
+      const [resp] = await Promise.all([
+        fetch(`${serviceUrl.replace(/\/$/, '')}/service/health`, {
+          headers,
+          signal: AbortSignal.timeout(5000),
+        }),
+        minDelay,
+      ])
 
       if (resp.ok) {
-        const verified: ConnectionState = { ...state, status: 'connected' }
-        this.cachedState = verified
-        this.onDidChangeEmitter.fire(verified)
-        return verified
-      }
-
-      if (resp.status === 401 || resp.status === 403) {
-        const errorState: ConnectionState = {
-          ...state,
+        result = { status: 'connected', serviceUrl, connected: true }
+      } else if (resp.status === 401 || resp.status === 403) {
+        result = {
           status: 'error',
+          serviceUrl,
           connected: false,
           error: 'Authentication failed. Check your API key or re-login.',
         }
-        this.cachedState = errorState
-        this.onDidChangeEmitter.fire(errorState)
-        return errorState
+      } else {
+        result = {
+          status: 'error',
+          serviceUrl,
+          connected: false,
+          error: `Service responded with ${resp.status}`,
+        }
+      }
+    } catch {
+      await minDelay
+      result = {
+        status: 'error',
+        serviceUrl,
+        connected: false,
+        error: `Could not connect to ${serviceUrl}`,
+      }
+    }
+
+    this.cachedState = result
+    this.onDidChangeEmitter.fire(result)
+    return result
+  }
+
+  /**
+   * Auto-connect on startup.
+   * If a service URL is configured, verify connectivity.
+   * If in Legalese Cloud mode with a stored session token, resolve the org and verify.
+   */
+  async initialize(): Promise<void> {
+    const serviceUrl = this.getServiceUrl()
+
+    if (serviceUrl) {
+      this.outputChannel.appendLine(
+        '[auth] Service URL configured, attempting auto-connect'
+      )
+      await this.verifyConnection()
+      return
+    }
+
+    // Legalese Cloud: check for existing session token
+    const token = await this.secrets.get(SECRET_KEY_SESSION)
+    if (token) {
+      this.outputChannel.appendLine(
+        '[auth] Found stored session token, verifying Legalese Cloud session'
+      )
+      try {
+        const resp = await fetch(
+          `https://${LEGALESE_CLOUD_DOMAIN}/auth/session`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            signal: AbortSignal.timeout(10000),
+          }
+        )
+        if (resp.ok) {
+          const session = (await resp.json()) as {
+            organization?: { slug: string; name: string }
+          }
+          if (session.organization) {
+            this.cloudOrgSlug = session.organization.slug
+            this.outputChannel.appendLine(
+              `[auth] Restored org: ${session.organization.name} (${session.organization.slug})`
+            )
+          }
+        } else if (resp.status === 401 || resp.status === 403) {
+          this.outputChannel.appendLine(
+            '[auth] Stored session token is invalid, clearing'
+          )
+          await this.secrets.delete(SECRET_KEY_SESSION)
+          this.invalidateAndNotify()
+          return
+        }
+      } catch (err) {
+        this.outputChannel.appendLine(
+          `[auth] Failed to verify session: ${err instanceof Error ? err.message : String(err)}`
+        )
       }
 
-      const errorState: ConnectionState = {
-        ...state,
-        status: 'error',
-        connected: false,
-        error: `Service responded with ${resp.status}`,
+      // If we resolved an org slug, verify by fetching deployments
+      if (this.cloudOrgSlug) {
+        await this.verifyConnection()
       }
-      this.cachedState = errorState
-      this.onDidChangeEmitter.fire(errorState)
-      return errorState
-    } catch (err) {
-      const errorState: ConnectionState = {
-        ...state,
-        status: 'error',
-        connected: false,
-        error: err instanceof Error ? err.message : 'Connection failed',
-      }
-      this.cachedState = errorState
-      this.onDidChangeEmitter.fire(errorState)
-      return errorState
     }
   }
 
