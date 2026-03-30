@@ -41,7 +41,7 @@ import GHC.Generics (Generic)
 import Servant
 import Servant.Multipart
 import System.FilePath (splitDirectories)
-import Control.Exception (catch)
+import Control.Exception (SomeException, catch, displayException)
 import Data.Int (Int64)
 import GHC.Conc (setAllocationCounter, enableAllocationLimit)
 import GHC.IO.Exception (AllocationLimitExceeded (..))
@@ -168,6 +168,12 @@ postDeploymentHandler multipart = do
               Map.insert deployId (DeploymentFailed "Compilation timed out")
           Just (Right (fns, meta, bundles)) -> do
             mapM_ (BundleStore.saveBundleCbor env.bundleStore (deployId.unDeploymentId)) bundles
+            BundleStore.saveMetadataCache env.bundleStore (deployId.unDeploymentId) (Aeson.encode meta)
+              `catch` \(e :: SomeException) ->
+                logWarn env.logger "Failed to save metadata cache (non-fatal)"
+                  [ ("deploymentId", toJSON deployId.unDeploymentId)
+                  , ("error", toJSON (displayException e))
+                  ]
             atomically $ modifyTVar' env.deploymentRegistry $
               Map.insert deployId (DeploymentReady fns meta)
           Just (Left err) -> do
@@ -257,6 +263,12 @@ putDeploymentHandler deployIdText multipart = do
       Just (Right (fns, meta, bundles)) -> do
         -- Save CBOR cache for fast restart
         mapM_ (BundleStore.saveBundleCbor env.bundleStore (deployId.unDeploymentId)) bundles
+        BundleStore.saveMetadataCache env.bundleStore (deployId.unDeploymentId) (Aeson.encode meta)
+          `catch` \(e :: SomeException) ->
+            logWarn env.logger "Failed to save metadata cache (non-fatal)"
+              [ ("deploymentId", toJSON deployId.unDeploymentId)
+              , ("error", toJSON (displayException e))
+              ]
         atomically $ modifyTVar' env.deploymentRegistry $
           Map.insert deployId (DeploymentReady fns meta)
       Just (Left err) ->

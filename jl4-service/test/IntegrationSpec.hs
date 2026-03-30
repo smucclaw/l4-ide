@@ -366,7 +366,7 @@ spec = describe "integration" do
         resp <- httpLbs req mgr
         statusCode' resp `shouldBe` 200
         let body = decodeObject (responseBody resp)
-        lookupArrayLength "metaFunctions" body `shouldSatisfy` maybe False (> 0)
+        lookupArrayLength "functions" body `shouldSatisfy` maybe False (> 0)
 
     it "returns org-wide metadata via /openapi.json" do
       withServiceFromSources "org-openapi" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
