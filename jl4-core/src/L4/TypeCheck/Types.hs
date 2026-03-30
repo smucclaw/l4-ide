@@ -15,6 +15,7 @@ import L4.Syntax
 import L4.TypeCheck.With
 import qualified L4.Utils.IntervalMap as IV
 import L4.Mixfix (MixfixInfo(..))
+import qualified Base.Set as Set
 
 import Control.Applicative
 import qualified Data.Map.Strict as Map
@@ -297,9 +298,50 @@ data DeclChecked a = MkDeclChecked
 
 type DeclareOrAssume = Either (Declare Resolved) (Assume Resolved)
 
--- | Registry of mixfix functions, indexed by their first keyword.
--- This enables efficient lookup when type-checking potential mixfix applications.
-type MixfixRegistry = Map RawName [FunTypeSig]
+-- | Registry of mixfix functions, indexed by their canonical name.
+-- The canonical name encodes the full mixfix pattern with @_@ for parameter slots,
+-- e.g. @"tax on _ item costing _ as GST in _"@.
+-- This enables unambiguous lookup even when multiple functions share the same first keyword.
+--
+-- The registry also maintains a secondary index from first keyword to canonical names,
+-- and a set of all keywords, for efficient call-site resolution.
+data MixfixRegistry = MkMixfixRegistry
+  { byCanonicalName :: !(Map RawName [FunTypeSig])
+    -- ^ Primary index: canonical name -> function signatures
+  , byFirstKeyword  :: !(Map RawName [RawName])
+    -- ^ Secondary index: first keyword -> list of canonical names
+  , keywordUniverse :: !(Set RawName)
+    -- ^ All keywords appearing in any registered mixfix function
+  }
+  deriving (Show, Eq, Generic)
+  deriving anyclass (NFData)
+
+emptyMixfixRegistry :: MixfixRegistry
+emptyMixfixRegistry = MkMixfixRegistry Map.empty Map.empty Set.empty
+
+-- | Merge two registries (used when combining scopes).
+unionMixfixRegistry :: MixfixRegistry -> MixfixRegistry -> MixfixRegistry
+unionMixfixRegistry r1 r2 = MkMixfixRegistry
+  { byCanonicalName = Map.unionWith (++) r1.byCanonicalName r2.byCanonicalName
+  , byFirstKeyword  = Map.unionWith (++) r1.byFirstKeyword r2.byFirstKeyword
+  , keywordUniverse = Set.union r1.keywordUniverse r2.keywordUniverse
+  }
+
+-- | Check if a given raw name is a known mixfix keyword in this registry.
+isRegisteredKeyword :: RawName -> MixfixRegistry -> Bool
+isRegisteredKeyword kw reg = kw `Set.member` reg.keywordUniverse
+
+-- | Look up candidate function signatures by first keyword.
+-- Returns all signatures whose mixfix pattern starts with the given keyword.
+lookupByFirstKeyword :: RawName -> MixfixRegistry -> [FunTypeSig]
+lookupByFirstKeyword kw reg =
+  case Map.lookup kw reg.byFirstKeyword of
+    Nothing -> []
+    Just canonNames -> concatMap (\cn -> fromMaybe [] $ Map.lookup cn reg.byCanonicalName) canonNames
+
+-- | Look up function signatures by canonical name (direct, unambiguous lookup).
+lookupByCanonicalName :: RawName -> MixfixRegistry -> [FunTypeSig]
+lookupByCanonicalName cn reg = fromMaybe [] $ Map.lookup cn reg.byCanonicalName
 
 data CheckEnv =
   MkCheckEnv

@@ -4,10 +4,13 @@ module L4.Mixfix
   , extractMixfixInfo
   , givenParamNames
   , firstKeyword
+  , canonicalMixfixName
+  , buildCanonicalNameFromKeywords
   ) where
 
 import Base
 import qualified Base.Set as Set
+import qualified Base.Text as Text
 import L4.Syntax
 
 -- | A token in a mixfix pattern, representing either a keyword (part of the function name)
@@ -108,3 +111,40 @@ extractMixfixInfo tysig appForm =
 firstKeyword :: MixfixInfo -> Maybe RawName
 firstKeyword MkMixfixInfo {pattern = toks} =
   listToMaybe [kw | MixfixKeyword kw <- toks]
+
+-- | Build the canonical name for a mixfix function from its pattern.
+-- Following the Agda/OBJ convention, parameter slots are replaced with @_@.
+--
+-- Examples:
+--   @[Kw "tax on", Param, Kw "item costing", Param, Kw "as GST in", Param]@
+--   becomes @"tax on _ item costing _ as GST in _"@
+--
+--   @[Param, Kw "is eligible for", Param]@
+--   becomes @"_ is eligible for _"@
+canonicalMixfixName :: MixfixInfo -> RawName
+canonicalMixfixName info =
+  NormalName $ Text.intercalate " " $ map tokenToText info.pattern
+  where
+    tokenToText :: MixfixPatternToken -> Text
+    tokenToText (MixfixKeyword kw) = rawNameToText kw
+    tokenToText (MixfixParam _)    = "_"
+
+-- | Build a canonical name from a list of keywords observed at a call site,
+-- inferring the parameter positions from the pattern structure.
+-- The first keyword is passed separately (it was used for the initial registry lookup).
+--
+-- For a keyword-first pattern with keywords [kw1, kw2, kw3]:
+--   produces @"kw1 _ kw2 _ kw3 _"@
+--
+-- For a param-first pattern with keywords [kw1, kw2]:
+--   produces @"_ kw1 _ kw2 _"@
+--
+-- This is used at call sites to reconstruct the canonical name from the
+-- keywords found in the expression, enabling direct registry lookup.
+buildCanonicalNameFromKeywords :: Bool -> [RawName] -> RawName
+buildCanonicalNameFromKeywords paramFirst keywords =
+  NormalName $ Text.intercalate " " parts
+  where
+    parts
+      | paramFirst = concatMap (\kw -> ["_", rawNameToText kw]) keywords ++ ["_"]
+      | otherwise  = concatMap (\kw -> [rawNameToText kw, "_"]) keywords
