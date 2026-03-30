@@ -10,6 +10,10 @@
 - [Wedding Vows](getting-started/wedding-vows.md)
 - [Common Patterns](getting-started/common-patterns.md)
 
+## Deployment
+
+- [Exporting Functions for Deployment](deploying-functions/exporting-functions-for-deployment.md)
+
 ## Natural Language
 
 - [Using Infix, Postfix, and Mixfix Functions](natural-language-functions/natural-language-functions.md)

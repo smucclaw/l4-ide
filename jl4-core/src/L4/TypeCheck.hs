@@ -92,7 +92,7 @@ import L4.TypeCheck.Types as X
 import L4.TypeCheck.Unify
 import L4.TypeCheck.With as X
 import qualified L4.Utils.IntervalMap as IV
-import L4.Mixfix (MixfixInfo(..), MixfixPatternToken(..), extractMixfixInfo)
+import L4.Mixfix (MixfixInfo(..), MixfixPatternToken(..), extractMixfixInfo, canonicalMixfixName, firstKeyword)
 
 import Control.Applicative
 import Data.Monoid
@@ -130,7 +130,7 @@ mkInitialCheckEnv moduleUri environment entityInfo =
     , declTypeSigs = Map.empty
     , declareDeclarations = Map.empty
     , assumeDeclarations = Map.empty
-    , mixfixRegistry = Map.empty
+    , mixfixRegistry = emptyMixfixRegistry
     , computedFields = Map.empty
     , moduleUri
     , sectionStack = []
@@ -174,7 +174,7 @@ doCheckProgramWithDependencies checkState checkEnv program =
                 env = extendEnv topEnv checkEnv
                 -- Combine mixfix registry from imports with this module's local definitions
                 -- so importing modules can use mixfix functions defined here
-                combinedMixfixRegistry = Map.union localMixfixRegistry env.mixfixRegistry
+                combinedMixfixRegistry = unionMixfixRegistry localMixfixRegistry env.mixfixRegistry
             in MkCheckResult
               { program = rprog
               , errors = substErrs ++ moreErrs
@@ -202,7 +202,7 @@ withDecides :: [FunTypeSig] -> Check a -> Check a
 withDecides rdecides =
   extendKnownMany topDecides . local \s -> s
     { functionTypeSigs = Map.fromList $ mapMaybe (\d -> (,d) <$> rangeOf d.anno) rdecides
-    , mixfixRegistry = Map.union (buildMixfixRegistry rdecides) s.mixfixRegistry
+    , mixfixRegistry = unionMixfixRegistry (buildMixfixRegistry rdecides) s.mixfixRegistry
     }
   where
     topDecides = fmap (.name) rdecides
@@ -213,7 +213,7 @@ withExtraMixfix mixfixAdds =
   where
     updateMixfix :: MixfixRegistry -> CheckEnv -> CheckEnv
     updateMixfix adds (MkCheckEnv a b c d e f g reg cf h i) =
-      MkCheckEnv a b c d e f g (Map.union adds reg) cf h i
+      MkCheckEnv a b c d e f g (unionMixfixRegistry adds reg) cf h i
 
 dedupCheckInfos :: [CheckInfo] -> [CheckInfo]
 dedupCheckInfos = go Set.empty []
@@ -231,14 +231,22 @@ dedupCheckInfos = go Set.empty []
 -- The registry maps from the first keyword of each mixfix function to the list
 -- of FunTypeSigs that have that keyword, enabling efficient lookup at call sites.
 buildMixfixRegistry :: [FunTypeSig] -> MixfixRegistry
-buildMixfixRegistry sigs = Map.fromListWith (++) $ mapMaybe toEntry sigs
+buildMixfixRegistry sigs =
+  let entries = mapMaybe toEntry sigs
+      byCanon = Map.fromListWith (++) [(cn, [s]) | (cn, _fk, _kws, s) <- entries]
+      byFirst = Map.fromListWith (++) [(fk, [cn]) | (cn, Just fk, _kws, _s) <- entries]
+      kwSet   = Set.fromList [kw | (_cn, _fk, kws, _s) <- entries, kw <- kws]
+  in MkMixfixRegistry byCanon byFirst kwSet
   where
-    toEntry :: FunTypeSig -> Maybe (RawName, [FunTypeSig])
+    toEntry :: FunTypeSig -> Maybe (RawName, Maybe RawName, [RawName], FunTypeSig)
     toEntry sig = case sig.mixfixInfo of
       Nothing -> Nothing
-      Just info -> case info.keywords of
-        []    -> Nothing  -- No keywords, shouldn't happen for valid mixfix
-        (k:_) -> Just (k, [sig])  -- Index by first keyword
+      Just info ->
+        Just ( canonicalMixfixName info
+             , firstKeyword info
+             , info.keywords
+             , sig
+             )
 
 withDeclares :: [DeclChecked DeclareOrAssume] -> Check a -> Check a
 withDeclares rdecls =
@@ -2263,13 +2271,15 @@ tryMatchMixfixCall funcName args = do
       funcNameInScope <- lookupRawNameInEnvironment (rawName funcName)
       let isCallable = any isCallableEntity funcNameInScope
       case (not isCallable, getExprName l) of
-        (True, Just potentialOpName) | Map.member (rawName potentialOpName) registry -> do
+        (True, Just potentialOpName) | isRegisteredKeyword (rawName potentialOpName) registry -> do
           -- funcName is NOT a known function, but l is a registered mixfix keyword!
           -- Reinterpret: App funcName [l, r] -> potentialOp applied to [funcName, r]
           -- For infix: `plus` applied to [x, y]
           let opRawName = rawName potentialOpName
-          case Map.lookup opRawName registry of
-            Just sigs -> do
+              sigs = lookupByFirstKeyword opRawName registry
+          case sigs of
+            [] -> tryFlatteningApproach registry
+            _ -> do
               -- Create args as [funcName-as-expr, r]
               let funcAsExpr = App (getAnno funcName) funcName []
                   newArgs = [funcAsExpr, r]
@@ -2277,9 +2287,8 @@ tryMatchMixfixCall funcName args = do
               -- because we've already identified the keyword and just need to match args to params
               let result = tryMatchParamPositions newArgs sigs
               case result of
-                Just restructuredArgs -> pure $ Just (opRawName, restructuredArgs, Nothing)
+                Just (canonName, restructuredArgs) -> pure $ Just (canonName, restructuredArgs, Nothing)
                 Nothing -> tryFlatteningApproach registry  -- Fall through to original logic
-            Nothing -> tryFlatteningApproach registry
         _ -> tryFlatteningApproach registry
 
     -- Multi-arg case: App funcName [kw1, arg1, kw2, arg2, ...]
@@ -2289,12 +2298,14 @@ tryMatchMixfixCall funcName args = do
       funcNameInScope <- lookupRawNameInEnvironment (rawName funcName)
       let isCallable = any isCallableEntity funcNameInScope
       case (not isCallable, getExprName firstArg) of
-        (True, Just potentialOpName) | Map.member (rawName potentialOpName) registry -> do
+        (True, Just potentialOpName) | isRegisteredKeyword (rawName potentialOpName) registry -> do
           -- funcName is NOT callable, and firstArg is a registered mixfix keyword
           -- Reinterpret as mixfix: funcName becomes first param, firstArg is the function
           let opRawName = rawName potentialOpName
-          case Map.lookup opRawName registry of
-            Just sigs -> do
+              sigs = lookupByFirstKeyword opRawName registry
+          case sigs of
+            [] -> tryRegularMatch
+            _ -> do
               -- funcName is the first param, restArgs are [arg1, kw2, arg2, ...]
               let funcAsExpr = App (getAnno funcName) funcName []
                   -- Build the new args: [funcAsExpr, arg1, Var kw2, arg2, ...]
@@ -2303,9 +2314,8 @@ tryMatchMixfixCall funcName args = do
               -- Try to match against the mixfix pattern
               result <- tryMatchAnyPattern opRawName newArgs sigs
               case result of
-                Just (restructuredArgs, mErr) -> pure $ Just (opRawName, restructuredArgs, mErr)
+                Just (canonName, restructuredArgs, mErr) -> pure $ Just (canonName, restructuredArgs, mErr)
                 Nothing -> tryRegularMatch
-            Nothing -> tryRegularMatch
         _ -> tryRegularMatch
 
     _ -> tryRegularMatch
@@ -2319,21 +2329,22 @@ tryMatchMixfixCall funcName args = do
           flattened = flattenBinaryMixfixApp funcName arg0 arg1
       case findFirstKeyword flattened of
         Just firstKw ->
-          case Map.lookup firstKw registry of
-            Just sigs ->
-              -- For param-first patterns, the firstKw IS the function name
-              fmap (fmap (\r -> (firstKw, r, Nothing))) $ tryMatchFlattenedPattern firstKw flattened sigs
-            Nothing -> tryRegularMatch  -- First keyword not registered
+          let sigs = lookupByFirstKeyword firstKw registry
+          in case sigs of
+            [] -> tryRegularMatch
+            _ ->
+              fmap (fmap (\(canonName, r) -> (canonName, r, Nothing))) $ tryMatchFlattenedPattern firstKw flattened sigs
         Nothing -> tryRegularMatch  -- No keywords found (shouldn't happen)
 
     tryRegularMatch = do
       registry <- asks (.mixfixRegistry)
       let funcRawName = rawName funcName
-      case Map.lookup funcRawName registry of
-        Nothing -> pure Nothing  -- Not a registered mixfix function
-        Just sigs -> do
-          result <- tryMatchAnyPattern funcRawName args sigs
-          pure $ fmap (\(restructuredArgs, mErr) -> (funcRawName, restructuredArgs, mErr)) result
+      -- Try direct canonical name lookup first (for keyword-first patterns
+      -- where funcName IS the canonical name or first keyword)
+      let sigsByFirstKw = lookupByFirstKeyword funcRawName registry
+      case sigsByFirstKw of
+        [] -> pure Nothing  -- Not a registered mixfix function
+        sigs -> tryMatchAnyPattern funcRawName args sigs
 
 -- | Extract a Name from an Expr if it's a simple variable or nullary application.
 -- Used to check if an expression could be a mixfix keyword.
@@ -2354,8 +2365,9 @@ reinterpretPostfixAppIfNeeded operandName args =
       | Just kwName <- getExprName kwExpr -> do
           registry <- asks (.mixfixRegistry)
           let kwRaw = rawName kwName
-          case Map.lookup kwRaw registry of
-            Just sigs | any isPostfixMixfix sigs -> do
+              sigs = lookupByFirstKeyword kwRaw registry
+          case sigs of
+            _ | not (null sigs) && any isPostfixMixfix sigs -> do
               funcNameInScope <- lookupRawNameInEnvironment (rawName operandName)
               let isCallable = any isCallableEntity funcNameInScope
               if isCallable
@@ -2395,16 +2407,27 @@ isFunctionType _ = False
 -- - Just (restructuredArgs, Nothing) on successful match
 -- - Just (args, Just error) on partial match with error (use original args + report error)
 -- - Nothing if no pattern matches at all
-tryMatchAnyPattern :: RawName -> [Expr Name] -> [FunTypeSig] -> Check (Maybe ([Expr Name], Maybe MixfixMatchError))
-tryMatchAnyPattern _ _ [] = pure Nothing
-tryMatchAnyPattern funcRawName args (sig:sigs) =
-  case sig.mixfixInfo of
-    Nothing -> tryMatchAnyPattern funcRawName args sigs  -- Not actually mixfix
-    Just info ->
-      case matchMixfixPattern funcRawName args info of
-        MixfixSuccess restructuredArgs -> pure (Just (restructuredArgs, Nothing))
-        MixfixError err -> pure (Just (args, Just err))  -- Return error but keep original args
-        MixfixNoMatch -> tryMatchAnyPattern funcRawName args sigs
+-- | Returns: Just (canonicalName, restructuredArgs, maybeError) or Nothing
+tryMatchAnyPattern :: RawName -> [Expr Name] -> [FunTypeSig] -> Check (Maybe (RawName, [Expr Name], Maybe MixfixMatchError))
+tryMatchAnyPattern funcRawName args sigs = go sigs Nothing
+  where
+    go [] bestErr = pure $ case bestErr of
+      Nothing -> Nothing  -- No pattern matched at all
+      Just err -> Just (funcRawName, args, Just err)  -- Report the best error from partial matches
+    go (sig:rest) bestErr =
+      case sig.mixfixInfo of
+        Nothing -> go rest bestErr  -- Not actually mixfix
+        Just info ->
+          case matchMixfixPattern funcRawName args info of
+            MixfixSuccess restructuredArgs ->
+              -- Return the canonical name so the caller can resolve the right function
+              pure (Just (canonicalMixfixName info, restructuredArgs, Nothing))
+            MixfixError err ->
+              -- Don't short-circuit! Keep trying other candidates.
+              -- A WrongKeyword error from one candidate just means this isn't the right
+              -- function — another candidate with different keywords may match.
+              go rest (bestErr <|> Just err)
+            MixfixNoMatch -> go rest bestErr
 
 -- | Match a list of expressions against a mixfix pattern.
 --
@@ -2614,15 +2637,16 @@ findFirstKeyword [] = Nothing
 findFirstKeyword (Right kw : _) = Just kw
 findFirstKeyword (Left _ : rest) = findFirstKeyword rest
 
--- | Try to match a flattened expression list against any registered pattern
-tryMatchFlattenedPattern :: RawName -> [Either (Expr Name) RawName] -> [FunTypeSig] -> Check (Maybe [Expr Name])
+-- | Try to match a flattened expression list against any registered pattern.
+-- Returns (canonicalName, restructuredArgs) on success.
+tryMatchFlattenedPattern :: RawName -> [Either (Expr Name) RawName] -> [FunTypeSig] -> Check (Maybe (RawName, [Expr Name]))
 tryMatchFlattenedPattern _ _ [] = pure Nothing
 tryMatchFlattenedPattern firstKw flattened (sig:sigs) =
   case sig.mixfixInfo of
     Nothing -> tryMatchFlattenedPattern firstKw flattened sigs
     Just info ->
       case matchFlattenedPattern info.pattern flattened of
-        Just args -> pure (Just args)
+        Just args -> pure (Just (canonicalMixfixName info, args))
         Nothing -> tryMatchFlattenedPattern firstKw flattened sigs
 
 -- | Check if a Name could be a mixfix keyword.
@@ -2685,14 +2709,15 @@ matchParamPositions pattern args =
      else Nothing
 
 -- | Try to match args against any signature's param positions.
-tryMatchParamPositions :: [Expr Name] -> [FunTypeSig] -> Maybe [Expr Name]
+-- | Returns (canonicalName, restructuredArgs) on success.
+tryMatchParamPositions :: [Expr Name] -> [FunTypeSig] -> Maybe (RawName, [Expr Name])
 tryMatchParamPositions _ [] = Nothing
 tryMatchParamPositions args (sig:sigs) =
   case sig.mixfixInfo of
     Nothing -> tryMatchParamPositions args sigs
     Just info ->
       case matchParamPositions info.pattern args of
-        Just result -> Just result
+        Just result -> Just (canonicalMixfixName info, result)
         Nothing -> tryMatchParamPositions args sigs
 
 scanFunSigModule :: Module Name -> Check [FunTypeSig]
@@ -2744,12 +2769,23 @@ scanFunSigDecide d@(MkDecide _ tysig appForm _) = prune $
     name <- withQualified (appFormHeads rappForm) ce'
     -- Extract mixfix pattern info by comparing AppForm against GIVEN parameters
     let mMixfix = extractMixfixInfo tysig appForm
+    -- For mixfix functions, also register under the canonical name
+    -- (e.g., "tax on _ item costing _ as GST in _") as an alias.
+    -- This enables unambiguous resolution when multiple mixfix functions
+    -- share the same first keyword.
+    name' <- case (mMixfix, name.names) of
+      (Just info, origResolved:_) -> do
+        let canonName = canonicalMixfixName info
+            canonNameNode = MkName emptyAnno canonName
+        canonResolved <- defAka origResolved canonNameNode
+        pure name { names = name.names ++ [canonResolved] }
+      _ -> pure name
     pure $ MkFunTypeSig
       { anno = getAnno dty
       , rtysig
       , rappForm
       , resultType = result
-      , name = name
+      , name = name'
       , arguments = extendsTySig <> extendsAppForm
       , mixfixInfo = mMixfix
       }
@@ -2766,12 +2802,20 @@ scanFunSigAssume a@(MkAssume _ tysig appForm mt) = do
     name <- withQualified (appFormHeads rappForm) ce
     -- Extract mixfix pattern info by comparing AppForm against GIVEN parameters
     let mMixfix = extractMixfixInfo tysig' appForm
+    -- For mixfix functions, also register under the canonical name
+    name' <- case (mMixfix, name.names) of
+      (Just info, origResolved:_) -> do
+        let canonName = canonicalMixfixName info
+            canonNameNode = MkName emptyAnno canonName
+        canonResolved <- defAka origResolved canonNameNode
+        pure name { names = name.names ++ [canonResolved] }
+      _ -> pure name
     pure $ Just $ MkFunTypeSig
       { anno = getAnno aty
       , rtysig
       , rappForm = rappForm
       , resultType = result
-      , name
+      , name = name'
       , arguments = extendsTySig <> extendsAppForm
       , mixfixInfo = mMixfix
       }

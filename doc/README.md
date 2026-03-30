@@ -71,6 +71,10 @@ Task-focused guides for specific goals:
 - [Wedding Vows Example](tutorials/getting-started/wedding-vows.md) - Fun intro to regulative rules (20 min)
 - [Common Patterns](tutorials/getting-started/common-patterns.md) - Quick reference (30 min)
 
+### Deployment and Legalese Cloud
+
+- [Exporting Functions for Deployment](tutorials/deploying-functions/exporting-functions-for-deployment.md) - Deploy L4 rules as REST APIs and use with WebMCP (30 min)
+
 ### LLM Integration
 
 - [Getting Started with LLM](tutorials/llm-integration/llm-getting-started.md) - Hybrid AI + formal reasoning

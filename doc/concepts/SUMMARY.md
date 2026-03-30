@@ -5,6 +5,7 @@
 ## Language Design
 
 - [Design Principles](language-design/principles.md)
+- [Linguistic Syntax](language-design/linguistic-syntax.md)
 
 ## Legal Modeling
 

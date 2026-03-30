@@ -35,9 +35,10 @@
   let connectionStatus: GetSidebarConnectionStatusResponse = $state({
     serviceUrl: '',
     connected: false,
-    status: 'not-configured',
-    isLegaleseCloud: true,
+    status: 'connecting',
+    isLegaleseCloud: false,
   })
+  let initialized: boolean = $state(false)
   let loading: boolean = $state(false)
   let activeTab: 'docs' | 'inspector' | 'preview' | 'deployments' =
     $state('docs')
@@ -107,6 +108,7 @@
   }
 
   function statusLabel(conn: GetSidebarConnectionStatusResponse): string {
+    if (!initialized) return 'Initializing...'
     if (conn.status === 'connected')
       return `Connected to ${stripProtocol(conn.serviceUrl)}`
     if (conn.status === 'connecting')
@@ -128,7 +130,7 @@
       return 'Deploy'
     }
     if (conn.status === 'connecting') return 'Connecting...'
-    if (conn.status === 'error') return 'Reconnect'
+    if (conn.status === 'error') return 'Connect'
     return conn.serviceUrl ? 'Connect' : 'Sign in with Legalese Cloud'
   }
 
@@ -138,6 +140,8 @@
 
   function isActionDisabled(): boolean {
     if (deploying || verifying || undeployingId) return true
+    // Disable while connecting
+    if (connectionStatus.status === 'connecting') return true
     // Connect / Sign in are never disabled
     if (connectionStatus.status !== 'connected') return false
     // Undeploy confirm is always enabled
@@ -548,6 +552,7 @@
 
     messenger.onNotification(SidebarConnectionStatusChanged, (status) => {
       connectionStatus = status
+      initialized = true
       if (status.connected) fetchDeployments()
     })
 
@@ -560,6 +565,7 @@
     )
 
     refreshConnectionStatus().then(() => {
+      initialized = true
       if (connectionStatus.connected) fetchDeployments()
     })
 
@@ -781,7 +787,9 @@
       {:else if !connectionStatus.connected}
         <div class="empty-state">
           <p class="hint">
-            {#if connectionStatus.serviceUrl}
+            {#if !initialized}
+              &nbsp;
+            {:else if connectionStatus.serviceUrl}
               Connect to {stripProtocol(connectionStatus.serviceUrl)} to view deployments.
             {:else}
               Sign in with Legalese Cloud to view your deployments.
@@ -933,14 +941,16 @@
         {/if}
       </span>
     </div>
-    <button
-      class="action-btn"
-      class:action-btn-danger={isActionDanger()}
-      onclick={handleAction}
-      disabled={isActionDisabled()}
-    >
-      {actionLabel(connectionStatus)}
-    </button>
+    {#if initialized}
+      <button
+        class="action-btn"
+        class:action-btn-danger={isActionDanger()}
+        onclick={handleAction}
+        disabled={isActionDisabled()}
+      >
+        {actionLabel(connectionStatus)}
+      </button>
+    {/if}
   </div>
 </div>
 

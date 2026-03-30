@@ -8,6 +8,10 @@ The L4 language reference provides precise technical documentation for all langu
 
 Master index linking to all language features - start here to find what you need.
 
+### [Cross-Language Cheat Sheet](cheat-sheet.md)
+
+Quick translation guide mapping constructs from Python, JavaScript, Java, Haskell, and SQL to their L4 equivalents.
+
 ### Language Components
 
 #### [Functions](functions/README.md)

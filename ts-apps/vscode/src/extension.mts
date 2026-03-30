@@ -476,6 +476,9 @@ export async function activate(context: ExtensionContext) {
   )
   context.subscriptions.push(auth)
 
+  // Auto-connect on startup (runs in background, doesn't block activation)
+  auth.initialize()
+
   // Initialize sidebar
   const sidebarMessenger = new Messenger({ debugLog: true })
   initializeSidebarMessenger(

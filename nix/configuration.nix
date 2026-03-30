@@ -7,6 +7,7 @@
     ./jl4-service/configuration.nix
     ./jl4-websessions/configuration.nix
     ./l4-wizard/configuration.nix
+    ./fibo-sparql/configuration.nix
     ./module.nix
   ];
 

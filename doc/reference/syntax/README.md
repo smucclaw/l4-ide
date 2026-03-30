@@ -99,37 +99,88 @@ Example: `@export "public_api"`
 
 ## Directives
 
-Compiler commands for testing and evaluation.
+Compiler commands for testing and evaluation. Directives begin with `#` and appear at the top level of a file.
 
 ### #EVAL
 
-Evaluate and print expression.
+Evaluate an expression and display the result. Used for testing functions and inspecting computed values.
 
-**Example:** [directive-example.l4](directive-example.l4)
+**Syntax:**
+
+```l4
+#EVAL expression
+```
+
+**Examples:**
+
+```l4
+#EVAL `is adult` 21        -- evaluates to TRUE
+#EVAL `tax owed` 75000     -- evaluates to the computed number
+#EVAL 2 PLUS 2             -- evaluates to 4
+```
+
+**See also:** [directive-example.l4](directive-example.l4)
 
 ### #EVALTRACE
 
-Evaluate with execution trace.
+Evaluate an expression and display the full execution trace, showing each step of the evaluation.
 
-Example: `#EVALTRACE complexCalculation`
+**Syntax:**
+
+```l4
+#EVALTRACE expression
+```
 
 ### #TRACE
 
-Generate state graph traces.
+Evaluate a deontic (regulative) expression and display the obligation trace. Shows the sequence of obligations, which parties must act, deadlines, and the resulting state (FULFILLED or BREACH).
 
-Example: `#TRACE contractStateMachine`
+**Syntax:**
+
+```l4
+#TRACE deonticExpression AT startTime WITH
+  PARTY partyName DOES action AT eventTime
+  ...
+```
+
+**Examples:**
+
+```l4
+#TRACE paymentObligation AT 0 WITH
+  PARTY Alice DOES pay 100 AT 15
+
+#TRACE saleContract AT 0 WITH
+  PARTY Seller DOES delivery AT 2
+  PARTY Buyer DOES payment 100 AT 5
+```
+
+**See also:** [Regulative Rules](../regulative/README.md) for the deontic keywords used with #TRACE
 
 ### #CHECK
 
-Type check expression.
+Type check an expression without evaluating it.
 
-Example: `#CHECK age > 18`
+**Syntax:**
+
+```l4
+#CHECK expression
+```
 
 ### #ASSERT
 
-Assert truth value (for testing).
+Assert that an expression evaluates to TRUE. Used for automated testing.
 
-Example: `#ASSERT 2 PLUS 2 EQUALS 4`
+**Syntax:**
+
+```l4
+#ASSERT expression
+```
+
+**Example:**
+
+```l4
+#ASSERT 2 PLUS 2 EQUALS 4
+```
 
 ---
 
@@ -149,6 +200,51 @@ Copy from line above using `^`.
 
 ---
 
+### OF (Positional Argument Syntax)
+
+Multi-purpose structural keyword that introduces comma-separated argument lists. Without OF, arguments must be space-separated on the same line or indented on subsequent lines.
+
+**Contexts where OF appears:**
+
+| Context              | Example                      |
+| -------------------- | ---------------------------- |
+| Function application | `add OF 3, 4`                |
+| Sum type declaration | `IS ONE OF Red, Green, Blue` |
+| Type constructor     | `LIST OF Person`             |
+| Record construction  | `Pair OF 10, 20`             |
+| Pattern matching     | `WHEN Pair OF x, y THEN ...` |
+
+**Examples:**
+
+```l4
+-- With OF: comma-separated args on one line
+result1 MEANS add OF 3, 4
+result2 MEANS foldr OF add, 0, numbers
+
+-- Without OF: space-separated on same line
+result3 MEANS add 3 4
+```
+
+OF is optional in function application -- `add OF 3, 4` and `add 3 4` are equivalent. But for multi-argument calls, OF with commas is often clearer than relying on whitespace parsing.
+
+**See also:** [Types reference](../types/keywords.md) for OF in type contexts
+
+---
+
+### TO (Function Type Syntax)
+
+Used in function type annotations to separate input types from the return type.
+
+**Syntax:**
+
+```l4
+FUNCTION FROM Type1 AND Type2 TO ReturnType
+```
+
+**Note:** `TO` is a reserved keyword used only in function type annotations. In deontic rules, `to` appearing in an action (e.g. `deliver goods to buyer`) is part of the mixfix expression, not the TO keyword.
+
+---
+
 ### Genitive
 
 Record field access using `'s`.
@@ -157,18 +253,42 @@ Record field access using `'s`.
 
 ---
 
-### Section Markers
+### Section Markers (§)
 
-Organize code into sections using `§`.
+Organize code into named, nested scopes using `§`, similar to sections in legislation. Definitions in different sections do not shadow each other; the compiler creates fully qualified name bindings for disambiguation.
+
+**Levels:**
+
+- `§` -- Top-level section
+- `§§` -- Subsection
+- `§§§` -- Sub-subsection
 
 **Example:** [section-example.l4](section-example.l4)
 
-**Features:**
+**Qualified access:** When the same name exists in multiple sections, consumers must qualify to disambiguate. This parallels how legislation scopes definitions ("for purposes of subsection 2, X means ...").
 
-- `§` - Section
-- `§§` - Subsection
-- `§§§` - Sub-subsection
-- Optional section names
+```l4
+§ `Part VII`
+
+§§ `Subsection 2`
+`age of majority` MEANS 18
+
+§§ `Subsection 3`
+`age of majority` MEANS 21
+
+-- Consumer must qualify:
+DECIDE `is adult under sub 2` IF
+    age >= `Part VII`'s `Subsection 2`'s `age of majority`
+```
+
+**Section aliases:** Use AKA to create shorter names for qualified references:
+
+```l4
+§ `Definitions for Part VII` AKA defs
+  taxableIncome MEANS 50000
+
+result MEANS defs.taxableIncome   -- via alias
+```
 
 ---
 

@@ -78,22 +78,26 @@ Keywords are reserved words that form the structure of L4 programs.
 
 For expressing legal obligations, permissions, and prohibitions.
 
-| Keyword      | Purpose                            | Reference                          |
-| ------------ | ---------------------------------- | ---------------------------------- |
-| **PARTY**    | Declares a legal party             | [PARTY](regulative/PARTY.md)       |
-| **MUST**     | Obligation (deontic necessity)     | [MUST](regulative/MUST.md)         |
-| **MAY**      | Permission (deontic possibility)   | [MAY](regulative/MAY.md)           |
-| **SHANT**    | Prohibition                        | [SHANT](regulative/SHANT.md)       |
-| **DO**       | Optionality (deontic possibility)  | [REGULATIVE](regulative/README.md) |
-| **DOES**     | Action verb in directive           | [REGUALTIVE](regulative/README.md) |
-| **EXACTLY**  | Exact match/precision modifier     | [REGULATIVE](regulative/README.md) |
-| **WITHIN**   | Temporal deadline                  | [REGULATIVE](regulative/README.md) |
-| **HENCE**    | Consequence (then)                 | [REGULATIVE](regulative/README.md) |
-| **LEST**     | Negative consequence (else)        | [REGULATIVE](regulative/README.md) |
-| **BREACH**   | Violation of obligation            | [REGULATIVE](regulative/README.md) |
-| **BECAUSE**  | Justification or reason for breach | [BECAUSE](regulative/BECAUSE.md)   |
-| **PROVIDED** | Condition or proviso               | [REGULATIVE](regulative/README.md) |
-| **AT**       | Temporal specification             | [REGULATIVE](regulative/README.md) |
+| Keyword       | Purpose                               | Reference                          |
+| ------------- | ------------------------------------- | ---------------------------------- |
+| **PARTY**     | Declares a legal party                | [PARTY](regulative/PARTY.md)       |
+| **MUST**      | Obligation (deontic necessity)        | [MUST](regulative/MUST.md)         |
+| **MAY**       | Permission (deontic possibility)      | [MAY](regulative/MAY.md)           |
+| **SHANT**     | Prohibition                           | [SHANT](regulative/SHANT.md)       |
+| **DO**        | Optionality (deontic possibility)     | [REGULATIVE](regulative/README.md) |
+| **DOES**      | Action verb in directive              | [REGULATIVE](regulative/README.md) |
+| **EXACTLY**   | Exact value matching on action        | [REGULATIVE](regulative/README.md) |
+| **WITHIN**    | Temporal deadline (relative)          | [REGULATIVE](regulative/README.md) |
+| **HENCE**     | Consequence on fulfillment            | [REGULATIVE](regulative/README.md) |
+| **LEST**      | Consequence on breach                 | [REGULATIVE](regulative/README.md) |
+| **BREACH**    | Terminal violation state              | [REGULATIVE](regulative/README.md) |
+| **FULFILLED** | Terminal success state                | [REGULATIVE](regulative/README.md) |
+| **BECAUSE**   | Justification or reason for breach    | [BECAUSE](regulative/BECAUSE.md)   |
+| **PROVIDED**  | Guard condition on action             | [REGULATIVE](regulative/README.md) |
+| **AT**        | Temporal specification                | [REGULATIVE](regulative/README.md) |
+| **RAND**      | Parallel AND of obligations           | [REGULATIVE](regulative/README.md) |
+| **ROR**       | Parallel OR of obligations            | [REGULATIVE](regulative/README.md) |
+| **BEFORE**    | Temporal deadline (absolute, planned) | [REGULATIVE](regulative/README.md) |
 
 ### Arithmetic Keywords
 
@@ -108,10 +112,12 @@ For expressing legal obligations, permissions, and prohibitions.
 
 ### Other Keywords
 
-| Keyword         | Purpose                               | Reference                         |
-| --------------- | ------------------------------------- | --------------------------------- |
-| **IMPORT**      | Imports definitions from another file | [IMPORT](libraries/IMPORT.md)     |
-| **TIMEZONE IS** | Sets document timezone (IANA name)    | [timezone](libraries/timezone.md) |
+| Keyword         | Purpose                               | Reference                          |
+| --------------- | ------------------------------------- | ---------------------------------- |
+| **IMPORT**      | Imports definitions from another file | [IMPORT](libraries/IMPORT.md)      |
+| **TIMEZONE IS** | Sets document timezone (IANA name)    | [timezone](libraries/timezone.md)  |
+| **TO**          | Function type return separator        | [SYNTAX](syntax/README.md)         |
+| **OF**          | Positional argument / type syntax     | [TYPE-KEYWORDS](types/keywords.md) |
 
 ---
 

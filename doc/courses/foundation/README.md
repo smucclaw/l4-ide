@@ -70,14 +70,14 @@ Handle conditional logic and pattern matching.
 
 ---
 
-### [Module 4: Functions](module-4-functions.md)
+### [Module 4: Decision Logic](module-4-decision-logic.md)
 
-Define reusable legal rules and computations.
+Express constitutive rules - legal determinations of facts, eligibility, and classifications.
 
-- Function signatures with GIVETH
-- Simple functions with MEANS
-- Decision functions with DECIDE
-- Local definitions with WHERE
+- Distinguishing constitutive vs regulative rules
+- Eligibility determinations with DECIDE
+- Computations and definitions with MEANS
+- Breaking down complex logic with WHERE
 
 **Time:** 60 minutes
 
