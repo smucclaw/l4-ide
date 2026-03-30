@@ -2,6 +2,7 @@
 
 - [Reference Home](README.md)
 - [Language Glossary](GLOSSARY.md)
+- [Cross-Language Cheat Sheet](cheat-sheet.md)
 
 ## Language Basics
 

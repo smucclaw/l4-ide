@@ -289,6 +289,7 @@ DECIDE `the person is eligible for the position` IF
 Write a function that categorizes an amount as "small" (< 100), "medium" (100-999), or "large" (>= 1000). Use `BRANCH` for the multi-way decision.
 
 **Hint:**
+
 ```l4
 GIVEN amount IS A NUMBER
 GIVETH A STRING
@@ -348,18 +349,18 @@ Functions like `all`, `any`, `filter`, `map` require `IMPORT prelude`.
 
 ## Summary
 
-| Concept          | Syntax                                           |
-| ---------------- | ------------------------------------------------ |
-| Conditional      | `IF condition THEN result1 ELSE result2`         |
-| Multi-way        | `BRANCH IF cond1 THEN res1 ... OTHERWISE resN`   |
-| Pattern match    | `CONSIDER expr WHEN pattern THEN result`         |
-| List destructure | `WHEN first FOLLOWED BY rest THEN ...`           |
-| Boolean AND      | `condition1 AND condition2`                      |
-| Boolean OR       | `condition1 OR condition2`                       |
-| Boolean NOT      | `NOT condition`                                  |
-| Check all        | `all (GIVEN x YIELD condition) list`             |
-| Check any        | `any (GIVEN x YIELD condition) list`             |
-| List membership  | `elem item list`                                 |
+| Concept          | Syntax                                         |
+| ---------------- | ---------------------------------------------- |
+| Conditional      | `IF condition THEN result1 ELSE result2`       |
+| Multi-way        | `BRANCH IF cond1 THEN res1 ... OTHERWISE resN` |
+| Pattern match    | `CONSIDER expr WHEN pattern THEN result`       |
+| List destructure | `WHEN first FOLLOWED BY rest THEN ...`         |
+| Boolean AND      | `condition1 AND condition2`                    |
+| Boolean OR       | `condition1 OR condition2`                     |
+| Boolean NOT      | `NOT condition`                                |
+| Check all        | `all (GIVEN x YIELD condition) list`           |
+| Check any        | `any (GIVEN x YIELD condition) list`           |
+| List membership  | `elem item list`                               |
 
 ---
 

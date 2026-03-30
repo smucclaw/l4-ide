@@ -5,6 +5,7 @@ These topics were removed from Foundation Module 4 (Decision Logic) as they are 
 ## Recursion
 
 ### Concepts to Cover
+
 - Recursive function definitions
 - Base cases and recursive cases
 - List recursion patterns
@@ -13,6 +14,7 @@ These topics were removed from Foundation Module 4 (Decision Logic) as they are 
 ### Examples to Include
 
 **Factorial** (classic recursion):
+
 ```l4
 GIVEN n IS A NUMBER
 GIVETH A NUMBER
@@ -23,6 +25,7 @@ GIVETH A NUMBER
 ```
 
 **List recursion**:
+
 ```l4
 GIVEN numbers IS A LIST OF NUMBER
 GIVETH A NUMBER
@@ -33,6 +36,7 @@ GIVETH A NUMBER
 ```
 
 ### Legal Use Cases for Recursion
+
 - Processing hierarchical organizational structures
 - Calculating cumulative effects over time periods
 - Traversing chains of contracts or amendments
@@ -43,6 +47,7 @@ GIVETH A NUMBER
 ## Higher-Order Functions
 
 ### Concepts to Cover
+
 - Functions as first-class values
 - Functions that take functions as parameters
 - Anonymous functions (lambdas) with GIVEN...YIELD
@@ -51,6 +56,7 @@ GIVETH A NUMBER
 ### Examples to Include
 
 **Lambda functions**:
+
 ```l4
 -- Double each number
 map (GIVEN n YIELD n * 2) (LIST 1, 2, 3)
@@ -62,6 +68,7 @@ filter (GIVEN n YIELD n > 0) (LIST -1, 2, -3, 4)
 ```
 
 **Using prelude functions**:
+
 ```l4
 IMPORT prelude
 
@@ -76,6 +83,7 @@ find (GIVEN p YIELD p's age >= 18) `applicants`
 ```
 
 ### Legal Use Cases for Higher-Order Functions
+
 - Bulk compliance checking (all parties meet requirement)
 - Finding exceptions (any party violates condition)
 - Batch processing applications
@@ -87,11 +95,13 @@ find (GIVEN p YIELD p's age >= 18) `applicants`
 ## Function Composition
 
 ### Concepts to Cover
+
 - Composing multiple decisions/computations
 - Pipeline style processing
 - Building complex decisions from simple ones
 
 ### Examples
+
 ```l4
 -- Compose eligibility checks
 `fully qualified` MEANS
@@ -103,6 +113,7 @@ find (GIVEN p YIELD p's age >= 18) `applicants`
 ## Advanced Pattern Matching
 
 ### Concepts to Cover
+
 - Nested CONSIDER patterns
 - Pattern matching on complex types
 - Guards in pattern matching

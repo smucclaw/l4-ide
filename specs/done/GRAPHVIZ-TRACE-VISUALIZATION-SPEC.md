@@ -795,12 +795,10 @@ POST /functions/myFunc/batch?trace=full&graphviz=true
 **Files to Modify:**
 
 1. **`jl4-decision-service/src/Backend/Api.hs`**
-
    - Add `graphviz :: Maybe GraphVizResponse` field to `ResponseWithReason`
    - Update JSON instances (automatic via deriving)
 
 2. **`jl4-decision-service/src/Backend/Jl4.hs`**
-
    - Import `L4.EvaluateLazy.GraphViz`
    - Modify `evaluateWithCompiled` to accept boolean flag for GraphViz generation
    - When `trace=full AND graphviz=true`:
@@ -842,7 +840,6 @@ POST /functions/myFunc/batch?trace=full&graphviz=true
    ```
 
 4. **`jl4-decision-service/src/Server.hs`**
-
    - Add routes for `POST /functions/:name/evaluation/trace.png`
    - Add routes for `POST /functions/:name/evaluation/trace.svg`
    - Parse `graphviz` query parameter in evaluation handlers
@@ -998,11 +995,9 @@ curl -X POST 'http://localhost:8081/functions/myFunc/evaluation/trace.png?trace=
 #### Documentation Updates
 
 1. **`jl4-decision-service/README.md`**
-
    - ~~Add section: "Trace Visualization"~~ ✅ (2025-02-16) — includes `graphviz` flag, PNG/SVG endpoints, batch `@graphviz`, install hint, and a “What am I looking at?” primer.
 
 2. **Swagger/OpenAPI Spec**
-
    - ~~Add `graphviz` query parameter to evaluation endpoints~~ ✅ (documented via parameter descriptions + default=false note)
    - ~~Add `/functions/{name}/evaluation/trace.png` endpoint~~ ✅ (Servant schema already exposed; OpenAPI now advertises `image/png` response)
    - ~~Add `/functions/{name}/evaluation/trace.svg` endpoint~~ ✅
@@ -1648,7 +1643,6 @@ The design achieves strong modularity:
 The REPL integration (Phase 3) maintains modularity by:
 
 1. **Separation of concerns:**
-
    - GraphViz module: trace → DOT conversion
    - REPL module: command parsing, evaluation, output handling
    - External tools: DOT → image rendering
@@ -1661,7 +1655,6 @@ The REPL integration (Phase 3) maintains modularity by:
    ```
 
 3. **Pluggable output:**
-
    - REPL can add new output formats without touching GraphViz
    - GraphViz can be improved without touching REPL
 

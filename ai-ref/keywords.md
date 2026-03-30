@@ -183,11 +183,12 @@ WHEN Closed THEN "stopped"
 ```
 
 **Patterns:**
+
 - Constructor: `WHEN Active THEN ...`
 - Constructor + arg: `WHEN Suspended x THEN ...`
 - List empty: `WHEN EMPTY THEN ...`
 - List cons: `WHEN head FOLLOWED BY tail THEN ...`
-- Maybe: `WHEN Nothing THEN ...` / `WHEN Just x THEN ...`
+- Maybe: `WHEN NOTHING THEN ...` / `WHEN JUST x THEN ...`
 
 ---
 
@@ -223,7 +224,7 @@ DECIDE bracket IS
 ## DECLARE
 
 **Syntax:** `DECLARE TypeName HAS field1 IS A Type1, ...` (record)
-         `DECLARE TypeName IS ONE OF Ctor1, Ctor2 HAS field IS A Type, ...` (sum)
+`DECLARE TypeName IS ONE OF Ctor1, Ctor2 HAS field IS A Type, ...` (sum)
 **Semantics:** Algebraic data type definition
 **Haskell:** `data TypeName = TypeName { field1 :: Type1, ... }` or `data TypeName = Ctor1 | Ctor2 Type`
 
@@ -364,12 +365,12 @@ GIVETH A BOOLEAN
 **Syntax:** `... HENCE continuation`
 **Semantics:** What happens on the "success" path of a deonton. The meaning of "success" depends on the deontic modal:
 
-| Modal | HENCE triggers when... | Default if omitted |
-|-------|------------------------|-------------------|
-| `DO` | action is taken | *(required)* |
-| `MUST` | action is taken | `FULFILLED` |
-| `MAY` | action is taken | `FULFILLED` |
-| `SHANT` | deadline passes (prohibition respected) | `FULFILLED` |
+| Modal   | HENCE triggers when...                  | Default if omitted |
+| ------- | --------------------------------------- | ------------------ |
+| `DO`    | action is taken                         | _(required)_       |
+| `MUST`  | action is taken                         | `FULFILLED`        |
+| `MAY`   | action is taken                         | `FULFILLED`        |
+| `SHANT` | deadline passes (prohibition respected) | `FULFILLED`        |
 
 **See Also:** LEST (the "failure" path), DO, MUST, MAY, SHANT
 
@@ -436,12 +437,12 @@ result MEANS
 **Syntax:** `... LEST continuation`
 **Semantics:** What happens on the "failure" path of a deonton. The meaning of "failure" depends on the deontic modal:
 
-| Modal | LEST triggers when... | Default if omitted |
-|-------|----------------------|-------------------|
-| `DO` | deadline passes | *(required)* |
-| `MUST` | deadline passes without action | `BREACH` |
-| `MAY` | deadline passes (permission not exercised) | `FULFILLED` |
-| `SHANT` | action is taken (prohibition violated) | `BREACH` |
+| Modal   | LEST triggers when...                      | Default if omitted |
+| ------- | ------------------------------------------ | ------------------ |
+| `DO`    | deadline passes                            | _(required)_       |
+| `MUST`  | deadline passes without action             | `BREACH`           |
+| `MAY`   | deadline passes (permission not exercised) | `FULFILLED`        |
+| `SHANT` | action is taken (prohibition violated)     | `BREACH`           |
 
 **See Also:** HENCE (the "success" path), DO, MUST, MAY, SHANT
 
@@ -450,7 +451,7 @@ PARTY buyer MUST pay WITHIN 30
 LEST PARTY buyer MUST `pay with penalty`
 ```
 
-**Note:** SHANT flips the polarity — for prohibitions, the *action happening* is the failure case (LEST), while the *deadline passing without action* is success (HENCE).
+**Note:** SHANT flips the polarity — for prohibitions, the _action happening_ is the failure case (LEST), while the _deadline passing without action_ is success (HENCE).
 
 ---
 
@@ -474,8 +475,8 @@ all (GIVEN n YIELD n > 0) numbers
 **Type:** `MAYBE Type`
 **Semantics:** Optional value type
 **Haskell:** `Maybe Type`
-**Values:** `Nothing` or `Just value`
-**Pattern match:** `WHEN Nothing THEN ...` / `WHEN Just x THEN ...`
+**Values:** `NOTHING` or `JUST value`
+**Pattern match:** `WHEN NOTHING THEN ...` / `WHEN JUST x THEN ...`
 
 ```l4
 DECLARE Person HAS
@@ -483,8 +484,8 @@ DECLARE Person HAS
     email IS A MAYBE STRING
 
 CONSIDER person's email
-WHEN Nothing THEN "no email"
-WHEN Just addr THEN addr
+WHEN NOTHING THEN "no email"
+WHEN JUST addr THEN addr
 ```
 
 ---
@@ -562,14 +563,14 @@ WITHIN 5 days
 
 **Contexts where OF appears:**
 
-| Context | Syntax | Example |
-|---------|--------|---------|
-| Sum type declaration | `IS ONE OF` | `DECLARE Color IS ONE OF Red, Green, Blue` |
-| Type constructor | `LIST OF Type` | `field IS A LIST OF Person` |
-| Record construction (positional) | `Type OF val1, val2` | `Pair OF 10, 20` |
-| Function application | `fname OF arg1, arg2` | `add OF 3, 4` |
-| Pattern matching | `Constructor OF pat1, pat2` | `WHEN Pair OF x, y THEN ...` |
-| Function type | `FUNCTION FROM T1 TO T2` | (OF not used here, but related) |
+| Context                          | Syntax                      | Example                                    |
+| -------------------------------- | --------------------------- | ------------------------------------------ |
+| Sum type declaration             | `IS ONE OF`                 | `DECLARE Color IS ONE OF Red, Green, Blue` |
+| Type constructor                 | `LIST OF Type`              | `field IS A LIST OF Person`                |
+| Record construction (positional) | `Type OF val1, val2`        | `Pair OF 10, 20`                           |
+| Function application             | `fname OF arg1, arg2`       | `add OF 3, 4`                              |
+| Pattern matching                 | `Constructor OF pat1, pat2` | `WHEN Pair OF x, y THEN ...`               |
+| Function type                    | `FUNCTION FROM T1 TO T2`    | (OF not used here, but related)            |
 
 **Key insight:** OF enables comma-separated arguments on the same line. Without OF, you must use space-separated arguments or indented continuation lines.
 
@@ -655,6 +656,7 @@ ROR
 ```
 
 **RAND vs ROR summary:**
+
 - `A RAND B` = both A and B must succeed (like logical AND for obligations)
 - `A ROR B` = either A or B succeeding suffices (like logical OR for obligations)
 - RAND binds tighter than ROR, so `A ROR B RAND C` means `A ROR (B RAND C)`
@@ -710,6 +712,7 @@ DECIDE `is adult for purposes of subsection 3` IF
 **Note:** Sections provide namespacing, not lexical scoping. A function defined inside a section does NOT automatically prefer its own section's bindings — if the same name exists in multiple sections, you must always qualify. Dot notation also works: `` `Part VII`.`Subsection 2`.`age of majority` ``.
 
 **Section aliases (AKA):** Provide shorter names for qualified references:
+
 ```l4
 § `Definitions for Part VII` AKA defs
   taxableIncome MEANS 50000
@@ -733,13 +736,13 @@ result MEANS defs.taxableIncome   -- via alias
 
 L4 provides both symbolic and keyword forms for arithmetic. All keyword forms are uppercase. Keyword and symbol forms are interchangeable.
 
-| Keyword(s) | Symbol | Meaning | Precedence |
-|------------|--------|---------|------------|
-| `TIMES` | `*` | Multiplication | 7 (highest) |
-| `DIVIDED BY` | `/` | Division | 7 |
-| `MODULO` | — | Remainder | 7 |
-| `PLUS` | `+` | Addition | 6 |
-| `MINUS` | `-` | Subtraction | 6 |
+| Keyword(s)   | Symbol | Meaning        | Precedence  |
+| ------------ | ------ | -------------- | ----------- |
+| `TIMES`      | `*`    | Multiplication | 7 (highest) |
+| `DIVIDED BY` | `/`    | Division       | 7           |
+| `MODULO`     | —      | Remainder      | 7           |
+| `PLUS`       | `+`    | Addition       | 6           |
+| `MINUS`      | `-`    | Subtraction    | 6           |
 
 **Note:** `DIVIDED BY` is two keywords (`DIVIDED` + `BY`). `+` works for numbers only, not strings (use CONCAT or APPEND for strings).
 
@@ -753,15 +756,15 @@ remainder MEANS n MODULO 2
 
 ## Comparison Operators
 
-| Keyword(s) | Symbol | Meaning | Precedence |
-|------------|--------|---------|------------|
-| `EQUALS` | `=` | Equality | 4 |
-| `GREATER THAN` | `>` | Greater than | 4 |
-| `ABOVE` | — | Synonym for `>` | 4 |
-| `LESS THAN` | `<` | Less than | 4 |
-| `BELOW` | — | Synonym for `<` | 4 |
-| `AT LEAST` | `>=` | Greater or equal | 4 |
-| `AT MOST` | `<=` | Less or equal | 4 |
+| Keyword(s)     | Symbol | Meaning          | Precedence |
+| -------------- | ------ | ---------------- | ---------- |
+| `EQUALS`       | `=`    | Equality         | 4          |
+| `GREATER THAN` | `>`    | Greater than     | 4          |
+| `ABOVE`        | —      | Synonym for `>`  | 4          |
+| `LESS THAN`    | `<`    | Less than        | 4          |
+| `BELOW`        | —      | Synonym for `<`  | 4          |
+| `AT LEAST`     | `>=`   | Greater or equal | 4          |
+| `AT MOST`      | `<=`   | Less or equal    | 4          |
 
 **Note:** L4 uses `=` for equality (NOT `==`). `ABOVE`/`BELOW` are semantic synonyms for `GREATER THAN`/`LESS THAN`, useful for natural-language readability in legal contexts (e.g. "income ABOVE threshold").
 
@@ -880,7 +883,7 @@ DECIDE `is eligible` IF
 
 **Syntax:** Parameters interspersed with identifier words in MEANS/DECIDE line
 **Semantics:** Infix/postfix function application without special delimiters
-**Haskell:** Backtick infix: `` a `f` b ``
+**Haskell:** Backtick infix: ``a `f` b``
 **Use:** Natural language readability for legal rules
 
 ```l4
@@ -904,7 +907,7 @@ mom and dad `have a baby named` kid MEANS
 They serve different purposes:
 
 |                | IF (outside)                      | PROVIDED (inside)                                        |
-|----------------|-----------------------------------|----------------------------------------------------------|
+| -------------- | --------------------------------- | -------------------------------------------------------- |
 | **Controls**   | Whether the obligation **exists** | Which events **satisfy** the obligation                  |
 | **When false** | No obligation arises              | Obligation exists but event doesn't count as fulfillment |
 | **Analogy**    | Precondition / applicability test | Pattern match guard / filter                             |
@@ -937,13 +940,14 @@ Here, IF tests whether money is still owed (no obligation if fully paid). PROVID
 The defaults depend on which deontic modal you use. MUST/MAY/SHANT are syntactic sugar over the primitive `DO`, which requires both HENCE and LEST explicitly:
 
 | Modal   | HENCE triggers  | Default HENCE | LEST triggers   | Default LEST |
-|---------|-----------------|---------------|-----------------|--------------|
-| `DO`    | action taken    | *(required)*  | deadline passes | *(required)* |
+| ------- | --------------- | ------------- | --------------- | ------------ |
+| `DO`    | action taken    | _(required)_  | deadline passes | _(required)_ |
 | `MUST`  | action taken    | `FULFILLED`   | deadline passes | `BREACH`     |
 | `MAY`   | action taken    | `FULFILLED`   | deadline passes | `FULFILLED`  |
 | `SHANT` | deadline passes | `FULFILLED`   | action taken    | `BREACH`     |
 
 Key observations:
+
 - **SHANT flips polarity:** For prohibitions, success = nothing happened; failure = action was taken.
 - **MAY never breaches:** Both paths lead to FULFILLED — the party is merely permitted, not obligated.
 - **DO is neutral:** No default moral weight; you must specify both outcomes explicitly.
@@ -957,7 +961,7 @@ Key observations:
 
 **Formal methods:** modal logic, deontic logic, temporal logic, constitutive rule, regulative rule, obligation, permission, prohibition, formal verification, model checking, property assertion, Hohfeld, Searle, LegalRuleML, Hvitved, CSL, contract specification language, subcontract conjunction, subcontract disjunction, parallel composition, concurrency
 
-**Haskell correspondence:** case expression → CONSIDER, where clause → WHERE, let-in → LET...IN, data declaration → DECLARE, Maybe monad → MAYBE, guards → BRANCH, pattern matching → CONSIDER/WHEN, type class → (not yet), do-notation → (not yet), record syntax → DECLARE HAS, record access → 's genitive/possessive
+**Haskell correspondence:** case expression → CONSIDER, where clause → WHERE, let-in → LET...IN, data declaration → DECLARE, Maybe monad → MAYBE (constructors: NOTHING/JUST, not Nothing/Just), guards → BRANCH, pattern matching → CONSIDER/WHEN, type class → (not yet), do-notation → (not yet), record syntax → DECLARE HAS, record access → 's genitive/possessive
 
 **Other language mappings:** struct/class/interface → DECLARE HAS, enum/union/variant/tagged union → IS ONE OF, def/fn/function/method → MEANS or DECIDE, switch/case/match → CONSIDER or BRANCH, if-else/ternary/conditional → IF THEN ELSE, lambda/arrow function/(x) => → GIVEN...YIELD, let/const/var → WHERE or LET...IN, null/nil/None/undefined/optional → MAYBE, array/list/vector/sequence → LIST OF, dot notation/property access/.field → 's genitive/possessive, string concat/join/+ → CONCAT, modulo/remainder/% → MODULO, toString/str/show/cast → TOSTRING, import/require/include/use → IMPORT, namespace/module/package/scope → § sections
 
@@ -967,7 +971,7 @@ Key observations:
 
 **Legal/compliance:** shall, must, may, may not, shall not, obligation, permission, prohibition, entitlement, deadline, penalty, breach, fulfillment, liability, indemnity, contract, legislation, regulation, statutory instrument, rules as code, computational law
 
-**Arithmetic operators:** PLUS (+), MINUS (-), TIMES (*), DIVIDED BY (/), MODULO (%), EQUALS (=), GREATER THAN (>), LESS THAN (<), AT LEAST (>=), AT MOST (<=), ABOVE (> synonym), BELOW (< synonym)
+**Arithmetic operators:** PLUS (+), MINUS (-), TIMES (\*), DIVIDED BY (/), MODULO (%), EQUALS (=), GREATER THAN (>), LESS THAN (<), AT LEAST (>=), AT MOST (<=), ABOVE (> synonym), BELOW (< synonym)
 
 **Boolean operators:** AND (&&), OR (||), NOT (!), IMPLIES (=>), UNLESS (AND NOT)
 

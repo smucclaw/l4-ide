@@ -44,14 +44,12 @@ Risks include the brittle AnnoParser lookahead rules and multi-line patterns sti
 To unblock the roadmap above we audited the current parser to understand where mixfix-aware lookahead could live without breaking annotation handling:
 
 1. **Entry points and responsibilities**
-
    - `indentedExpr` / `singleLineExpr` (jl4-core/src/L4/Parser.hs:818, 850) always begin by calling `mixfixChainExpr`, so every expression already passes through the mixfix collector before operator precedence is resolved.
    - `mixfixChainExpr` (line 1186) wraps `baseExpr`, then repeatedly captures `(keyword, expr)` pairs as long as the keyword lives on the same line as the preceding operand. It does _not_ consult the mixfix registry; every identifier that “looks” like a keyword is accepted and left for the type checker to validate.
    - `baseExpr` / `atomicExpr` (lines 1184, 1320) are both wrapped in `postfixPWithLine mixfixPostfixOp regularPostfixOperator`, so postfix mixfix tokens are intercepted before the general postfix parser sees them.
    - `app` (line 1345) is the greedy consumer that triggered the original bug: it parses a leading name, then arguments via `atomicExpr'`. Because `atomicExpr'` lacks postfix handling, bare identifiers such as `squared` are happily consumed as additional arguments.
 
 2. **Control / data flow observations**
-
    - All of the functions above lift `Parser` actions into `AnnoParser` via `attachAnno`. Any lookahead we add must occur _before_ the annotation wrappers fire, otherwise we end up juggling `AnnoParser` vs `Parser` types (the issue that stalled previous attempts).
    - `mixfixPostfixOp` (lines 1143-1178) already performs the necessary same-line lookahead: it peeks at the next token’s `range.start.line`, ensures it matches `exprEndLine`, and `notFollowedBy` another same-line expression. This is the model to reuse for the general mixfix case.
    - Expression continuations (`expressionCont`, line 1063) are wrapped in `try`, so if we add additional failure conditions the parser cleanly backtracks to let `mixfixChainExpr` or `app` take over.

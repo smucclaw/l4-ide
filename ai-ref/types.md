@@ -15,25 +15,25 @@ Type theory foundations and FP correspondence.
 
 ## Primitive Types
 
-| L4 Type | Description | Haskell | Coercion from STRING |
-|---------|-------------|---------|---------------------|
-| BOOLEAN | TRUE/FALSE (not True/true) | Bool | - |
-| NUMBER | Numeric values | Rational/Double | - |
-| STRING | Text | String/Text | - |
-| DATE | Calendar dates (YYYY-MM-DD) | Day | TODATE |
-| TIME | Time of day (HH:MM:SS or HH:MM) | TimeOfDay | TOTIME |
-| DATETIME | Date+time+tz (ISO-8601) | UTCTime + TZ | TODATETIME |
+| L4 Type  | Description                     | Haskell         | Coercion from STRING |
+| -------- | ------------------------------- | --------------- | -------------------- |
+| BOOLEAN  | TRUE/FALSE (not True/true)      | Bool            | -                    |
+| NUMBER   | Numeric values                  | Rational/Double | -                    |
+| STRING   | Text                            | String/Text     | -                    |
+| DATE     | Calendar dates (YYYY-MM-DD)     | Day             | TODATE               |
+| TIME     | Time of day (HH:MM:SS or HH:MM) | TimeOfDay       | TOTIME               |
+| DATETIME | Date+time+tz (ISO-8601)         | UTCTime + TZ    | TODATETIME           |
 
 ---
 
 ## Type Constructors
 
-| L4 | Description | Haskell | Type Theory |
-|-----|-------------|---------|-------------|
-| LIST OF T | Homogeneous list | [T] | μX. 1 + T × X (inductive) |
-| MAYBE T | Optional value | Maybe T | 1 + T (option type) |
-| T1 -> T2 | Function type | T1 -> T2 | Arrow type (→) |
-| DEONTIC | Effect wrapper | Custom monad | Modal type (□, ◇) |
+| L4        | Description      | Haskell      | Type Theory               |
+| --------- | ---------------- | ------------ | ------------------------- |
+| LIST OF T | Homogeneous list | [T]          | μX. 1 + T × X (inductive) |
+| MAYBE T   | Optional value   | Maybe T      | 1 + T (option type)       |
+| T1 -> T2  | Function type    | T1 -> T2     | Arrow type (→)            |
+| DEONTIC   | Effect wrapper   | Custom monad | Modal type (□, ◇)         |
 
 ---
 
@@ -82,18 +82,18 @@ f MEANS expression
 
 ## Type Correspondence Table
 
-| L4 Construct | Type | Haskell | Other Languages | Category Theory |
-|--------------|------|---------|-----------------|----------------|
-| `DECLARE T HAS ...` | Product | `data T = T { ... }` | struct/class/interface | Product (×) |
-| `IS ONE OF` | Sum | `data T = A \| B` | enum/union/variant/sealed class | Coproduct (+) |
-| `GIVEN...GIVETH` | Arrow | `a -> b` | function signature/def/fn | Exponential (B^A) |
-| `MAYBE T` | Option | `Maybe T` | Optional/null/nil/None/? | T + 1 |
-| `LIST OF T` | List | `[T]` | Array/List/Vec/Sequence | Free monoid |
-| `CONSIDER` | Match | `case...of` | switch/case/match/when | Catamorphism |
-| `BRANCH` | Guards | `\| cond = ...` | if-elseif chain/cond | - |
-| `WHERE` / `LET...IN` | Binding | `where` / `let...in` | let/const/var/local | Substitution |
-| `DEONTIC` | Effect | Custom monad | - (domain-specific) | Kleisli category |
-| `'s` genitive / possessive | Accessor | Record field / lens | dot notation / .field | Projection (π) |
+| L4 Construct               | Type     | Haskell              | Other Languages                 | Category Theory   |
+| -------------------------- | -------- | -------------------- | ------------------------------- | ----------------- |
+| `DECLARE T HAS ...`        | Product  | `data T = T { ... }` | struct/class/interface          | Product (×)       |
+| `IS ONE OF`                | Sum      | `data T = A \| B`    | enum/union/variant/sealed class | Coproduct (+)     |
+| `GIVEN...GIVETH`           | Arrow    | `a -> b`             | function signature/def/fn       | Exponential (B^A) |
+| `MAYBE T`                  | Option   | `Maybe T`            | Optional/null/nil/None/?        | T + 1             |
+| `LIST OF T`                | List     | `[T]`                | Array/List/Vec/Sequence         | Free monoid       |
+| `CONSIDER`                 | Match    | `case...of`          | switch/case/match/when          | Catamorphism      |
+| `BRANCH`                   | Guards   | `\| cond = ...`      | if-elseif chain/cond            | -                 |
+| `WHERE` / `LET...IN`       | Binding  | `where` / `let...in` | let/const/var/local             | Substitution      |
+| `DEONTIC`                  | Effect   | Custom monad         | - (domain-specific)             | Kleisli category  |
+| `'s` genitive / possessive | Accessor | Record field / lens  | dot notation / .field           | Projection (π)    |
 
 ---
 
@@ -109,8 +109,8 @@ WHEN x FOLLOWED BY xs         -- (x:xs) :: [T]
 ### Maybe Patterns
 
 ```l4
-WHEN Nothing                  -- Nothing :: Maybe T
-WHEN Just x                   -- Just x :: Maybe T
+WHEN NOTHING                  -- NOTHING :: Maybe T
+WHEN JUST x                   -- JUST x :: Maybe T
 ```
 
 ### Constructor Patterns
@@ -170,10 +170,12 @@ WHEN ConstructorName x y      -- N-ary constructor
 **Bidirectional:** Mix of inference and checking modes
 
 **Checking mode:**
+
 - Function definitions (signature provided)
 - Branches must match declared type
 
 **Inference mode:**
+
 - Expressions without explicit type
 - Field access, operators
 - Bottom-up propagation
@@ -183,6 +185,7 @@ WHEN ConstructorName x y      -- N-ary constructor
 ## Polymorphism
 
 **Parametric polymorphism:** Supported in prelude functions
+
 ```haskell
 -- In Haskell land
 map :: (a -> b) -> [a] -> [b]
@@ -190,6 +193,7 @@ filter :: (a -> Bool) -> [a] -> [a]
 ```
 
 **L4 usage:** Type variables implicit in prelude
+
 ```l4
 map (GIVEN x YIELD x * 2) numbers  -- Inferred
 ```
@@ -199,16 +203,19 @@ map (GIVEN x YIELD x * 2) numbers  -- Inferred
 ## DEONTIC Type (Effect System)
 
 **Semantics:** Modal logic operators
+
 - `MUST` ≈ necessity (□)
 - `MAY` ≈ possibility (◇)
 - `SHANT` ≈ forbidden (¬□)
 
 **Type signature:**
+
 ```l4
 GIVETH A DEONTIC
 ```
 
 **Composition:**
+
 - Sequential: HENCE
 - Alternative: LEST
 - Conditional: IF guard
@@ -220,6 +227,7 @@ GIVETH A DEONTIC
 ## Type Errors
 
 **Common errors:**
+
 - Type mismatch in branches
 - Undefined field access
 - Arity mismatch in application
@@ -239,6 +247,7 @@ GIVETH A DEONTIC
 
 **Implicit:** `()` not exposed in syntax
 **Use:** Nullary constructors effectively unit
+
 ```l4
 DECLARE Status IS ONE OF Active | Closed
 -- Active :: Status (nullary, implicitly Active :: () -> Status)
@@ -250,6 +259,7 @@ DECLARE Status IS ONE OF Active | Closed
 
 **Strategy:** Call-by-need (Haskell-style)
 **Implications:**
+
 - Infinite lists possible (with care)
 - WHERE bindings evaluated lazily
 - Short-circuit boolean ops (AND, OR)
@@ -278,6 +288,7 @@ f MEANS ...
 ## Advanced: Fixed Points
 
 **Recursion:** Via letrec semantics in WHERE
+
 ```l4
 factorial MEANS
     IF n <= 1 THEN 1

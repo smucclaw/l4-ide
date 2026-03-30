@@ -45,6 +45,7 @@ DECLARE TypeName IS ONE OF
 ```
 
 **Sum type constructors can have their own fields (multi-line for readability):**
+
 ```l4
 DECLARE Status IS ONE OF
     Active
@@ -55,6 +56,7 @@ DECLARE Status IS ONE OF
 ```
 
 **Pattern match:**
+
 ```l4
 CONSIDER value
 WHEN Constructor1 THEN result1
@@ -197,6 +199,7 @@ elem targetValue items
 ```
 
 **Field access in quantifiers:** Wrap in parens
+
 ```l4
 all (GIVEN g YIELD g's age >= 18) (charity's governors)
 ```
@@ -207,8 +210,8 @@ all (GIVEN g YIELD g's age >= 18) (charity's governors)
 
 ```l4
 CONSIDER maybeValue
-WHEN Nothing THEN defaultResult
-WHEN Just actualValue THEN processActualValue
+WHEN NOTHING THEN defaultResult
+WHEN JUST actualValue THEN processActualValue
 ```
 
 ---
@@ -326,7 +329,7 @@ map (GIVEN p YIELD p's age) people
 ## Exhaustive Sum Type Match
 
 ```l4
-DECLARE TrafficLight IS ONE OF Red | Yellow | Green
+DECLARE TrafficLight IS ONE OF Red, Yellow, Green
 
 GIVEN light IS A TrafficLight
 GIVETH A STRING
@@ -602,7 +605,7 @@ TIME             -- HH:MM:SS (IMPORT time)
 DATETIME         -- ISO-8601 with timezone (IMPORT datetime)
 DEONTIC          -- obligation/permission/prohibition effect
 LIST OF T        -- homogeneous list (IMPORT prelude for operations)
-MAYBE T          -- optional: Nothing or Just value
+MAYBE T          -- optional: NOTHING or JUST value
 CustomType       -- user-defined via DECLARE
 ```
 

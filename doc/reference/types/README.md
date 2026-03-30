@@ -2,6 +2,8 @@
 
 L4's type system provides strong static typing with type inference, algebraic data types, and polymorphism. This reference documents all types available in L4.
 
+L4 uses a Hindley-Milner-style type system with bidirectional type checking, algebraic data types, and lazy (call-by-need) evaluation. The core is pure functional, with DEONTIC as an effect type for regulative rules.
+
 ## Overview
 
 L4's type system is inspired by functional programming languages like Haskell and includes:
@@ -107,6 +109,25 @@ Two-element product type from prelude.
 - Used in key-value data structures
 - Tuple-like functionality
 - **Examples:** Coordinates, key-value pairs, associations
+
+---
+
+## Type Correspondence
+
+How L4 types map to concepts in other languages and type theory:
+
+| L4 Construct      | Type Theory | Haskell             | Other Languages                 | Category Theory   |
+| ----------------- | ----------- | ------------------- | ------------------------------- | ----------------- |
+| DECLARE T HAS ... | Product     | data T = T { ... }  | struct/class/interface          | Product (x)       |
+| IS ONE OF         | Sum         | data T = A \| B     | enum/union/variant/sealed class | Coproduct (+)     |
+| GIVEN...GIVETH    | Arrow       | a -> b              | function signature/def/fn       | Exponential (B^A) |
+| MAYBE T           | Option      | Maybe T             | Optional/null/nil/None/?        | T + 1             |
+| LIST OF T         | List        | [T]                 | Array/List/Vec/Sequence         | Free monoid       |
+| CONSIDER          | Match       | case...of           | switch/case/match/when          | Catamorphism      |
+| BRANCH            | Guards      | \| cond = ...       | if-elseif chain/cond            | -                 |
+| WHERE / LET...IN  | Binding     | where / let...in    | let/const/var/local             | Substitution      |
+| DEONTIC           | Effect      | Custom monad        | - (domain-specific)             | Kleisli category  |
+| 's genitive       | Accessor    | Record field / lens | dot notation / .field           | Projection        |
 
 ---
 
@@ -290,8 +311,11 @@ TYPE
   │   ├─ PAIR OF a, b
   │   └─ Dictionary k v
   │
-  └─ Function Types
-      └─ FUNCTION FROM args TO result
+  ├─ Function Types
+  │   └─ FUNCTION FROM args TO result
+  │
+  └─ Effect Types
+      └─ DEONTIC (MUST / MAY / SHANT)
 ```
 
 ---
@@ -323,4 +347,5 @@ TYPE
 - **[GLOSSARY](../GLOSSARY.md)** - Complete language index
 - **[Functions](../functions/README.md)** - Function keywords
 - **[Operators](../operators/README.md)** - Operations on types
+- **[Type Theory](type-theory.md)** - Formal type inference rules, bidirectional checking, and advanced type system details
 - **[Specifications](https://github.com/smucclaw/l4-ide/tree/main/specs)** - Technical specifications

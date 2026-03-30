@@ -21,11 +21,13 @@ By the end of this module, you will be able to:
 Legal systems contain two types of rules:
 
 **Regulative rules** (Module 1 and 5) specify what parties **must**, **may**, or **must not** do:
+
 - "The applicant **must** submit documentation **within** 30 days"
 - "The landlord **may** terminate the lease if rent is unpaid"
 - "The seller **shall not** disclose confidential information"
 
 **Constitutive rules** (this module) determine **facts**, **classifications**, and **eligibility**:
+
 - "An applicant **is eligible** if they are a citizen and over 18"
 - "The tax owed **is** 20% of gross income minus deductions"
 - "A person **is a resident** if they have lived here for 183 days or more"
@@ -58,6 +60,7 @@ In natural language, legal rules often have implicit dependencies:
 > "The applicant is eligible if they are a resident."
 
 **Questions immediately arise:**
+
 - What makes someone a resident?
 - How long must they have resided?
 - Where must they reside?
@@ -102,6 +105,7 @@ DECIDE `the person is eligible` IF ...
 ```
 
 The function signature **documents the complete set of factors** that affect the decision. This makes legal rules:
+
 - **Auditable**: You can trace exactly what information influenced a decision
 - **Testable**: You know exactly what inputs to vary in your test scenarios
 - **Maintainable**: When requirements change, you know what dependencies need updating
@@ -151,6 +155,7 @@ DECIDE `the applicant is eligible for benefits` IF
 ```
 
 **Key points:**
+
 - Use **DECIDE IF** for yes/no questions
 - Use backticks for natural language identifiers
 - Conditions follow IF, connected by AND/OR/NOT
@@ -268,6 +273,7 @@ GIVETH A NUMBER
 ```
 
 **Benefits:**
+
 - Makes complex formulas readable
 - Gives meaningful names to intermediate values
 - Matches how legal documents explain calculations
@@ -321,6 +327,7 @@ DECIDE `the applicant is eligible for housing benefit` IF
 ```
 
 **Notice:**
+
 - Natural language identifiers with backticks
 - WHERE breaks down the eligibility logic
 - Each condition has a clear name
@@ -401,12 +408,14 @@ DECIDE `the party may terminate` IF
 ## Function Signatures
 
 Every decision or computation needs a **type signature** that declares:
+
 1. **Inputs** (GIVEN): What information is needed
 2. **Output** (GIVETH): What type of result is produced
 
 ### Common Patterns
 
 **Boolean decisions** (yes/no questions):
+
 ```l4
 GIVEN `the person` IS A Person
 GIVETH A BOOLEAN
@@ -414,6 +423,7 @@ DECIDE `the person is eligible` IF ...
 ```
 
 **Classification** (categorizing into types):
+
 ```l4
 GIVEN `the entity` IS AN Entity
 GIVETH A STRING
@@ -421,6 +431,7 @@ DECIDE `the entity type` IS ...
 ```
 
 **Computation** (calculating a value):
+
 ```l4
 GIVEN `the income` IS A NUMBER
 GIVETH A NUMBER
@@ -428,6 +439,7 @@ GIVETH A NUMBER
 ```
 
 **Multiple inputs**:
+
 ```l4
 GIVEN `the applicant` IS A Person
       `the application date` IS A DATE
@@ -454,6 +466,7 @@ DECIDE `qualifies for senior discount` IF
 ### Exercise 2: Multi-Condition Eligibility
 
 A person qualifies for a student loan if they:
+
 - Are between 18 and 35 years old
 - Are enrolled in an accredited institution
 - Have no prior loan defaults
@@ -463,6 +476,7 @@ Write the decision logic.
 ### Exercise 3: Tax Bracket Classification
 
 Write a decision that classifies income into tax brackets:
+
 - Income < $10,000: "exempt"
 - Income $10,000-$50,000: "standard"
 - Income > $50,000: "higher rate"
@@ -470,6 +484,7 @@ Write a decision that classifies income into tax brackets:
 ### Exercise 4: Calculation with WHERE
 
 Write a computation for net income that:
+
 - Starts with gross income
 - Subtracts standard deduction (calculated as 10% of gross, minimum $1000)
 - Subtracts itemized deductions
@@ -565,16 +580,17 @@ DECIDE `the net amount` IS gross - deductions
 
 ## Summary
 
-| Concept              | Use for                           | Syntax                                   |
-| -------------------- | --------------------------------- | ---------------------------------------- |
-| DECIDE IF            | Yes/no questions, eligibility     | `DECIDE name IF condition`               |
-| DECIDE IS            | Classification, value assignment  | `DECIDE name IS expression`              |
-| MEANS                | Definitions, computations         | `name MEANS expression`                  |
+| Concept              | Use for                           | Syntax                                    |
+| -------------------- | --------------------------------- | ----------------------------------------- |
+| DECIDE IF            | Yes/no questions, eligibility     | `DECIDE name IF condition`                |
+| DECIDE IS            | Classification, value assignment  | `DECIDE name IS expression`               |
+| MEANS                | Definitions, computations         | `name MEANS expression`                   |
 | BRANCH               | Multi-way classification          | `BRANCH IF cond1 THEN val1 ... OTHERWISE` |
-| WHERE                | Breaking down complex logic       | `expression WHERE helpers`               |
-| GIVEN ... GIVETH ... | Type signature (always required!) | `GIVEN inputs GIVETH OutputType name...` |
+| WHERE                | Breaking down complex logic       | `expression WHERE helpers`                |
+| GIVEN ... GIVETH ... | Type signature (always required!) | `GIVEN inputs GIVETH OutputType name...`  |
 
 **Key principles:**
+
 - Write code that reads like legal text
 - Use backticks liberally for natural language
 - Use WHERE to make complex logic transparent

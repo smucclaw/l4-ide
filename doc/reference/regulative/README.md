@@ -20,13 +20,27 @@ Regulative keywords express legal obligations, permissions, prohibitions, and th
 | Keyword               | Purpose                           |
 | --------------------- | --------------------------------- |
 | [PARTY](PARTY.md)     | Who has the obligation/permission |
-| WITHIN                | Temporal deadline                 |
+| WITHIN                | Temporal deadline (relative)      |
 | HENCE                 | Consequence on fulfillment        |
 | LEST                  | Consequence on breach             |
-| PROVIDED              | Guard condition                   |
-| BREACH                | Explicit violation marker         |
+| PROVIDED              | Guard condition on action         |
+| EXACTLY               | Exact value matching on action    |
+| BREACH                | Terminal violation state          |
 | [BECAUSE](BECAUSE.md) | Reason for breach                 |
-| FULFILLED             | Successfully completed            |
+| FULFILLED             | Terminal success state            |
+
+### Parallel Obligation Combinators
+
+| Keyword | Purpose                               |
+| ------- | ------------------------------------- |
+| RAND    | Parallel AND -- all must be fulfilled |
+| ROR     | Parallel OR -- any one sufficient     |
+
+### Planned Keywords
+
+| Keyword | Purpose                      | Status          |
+| ------- | ---------------------------- | --------------- |
+| BEFORE  | Temporal deadline (absolute) | Not implemented |
 
 ## Basic Rule Structure
 
@@ -50,12 +64,20 @@ paymentObligation MEANS
 
 ## WITHIN (Temporal Deadline)
 
-Specifies when an action must/may be performed.
+Specifies a relative time duration within which an action must/may be performed.
 
 ### Syntax
 
 ```l4
-WITHIN timeUnits
+PARTY ...
+MUST action
+WITHIN duration
+```
+
+The duration can optionally be anchored to an event with `OF`:
+
+```l4
+WITHIN 5 days OF notice
 ```
 
 ### Examples
@@ -63,11 +85,27 @@ WITHIN timeUnits
 ```l4
 -- Simple deadline
 PARTY Alice MUST pay 100 WITHIN 30
+
+-- Anchored to an event
+PARTY Seller MUST deliver WITHIN 5 days OF `order confirmation`
 ```
+
+### See Also
+
+- **BEFORE** (planned, not yet implemented -- will support absolute deadlines)
 
 ## HENCE (Fulfillment Consequence)
 
-Specifies what happens when the obligation is fulfilled.
+Specifies what happens on the "success" path of a deontic rule. Chains obligations sequentially so that fulfilling one triggers the next.
+
+The meaning of "success" depends on the deontic modal:
+
+| Modal   | HENCE triggers when...                  | Default if omitted |
+| ------- | --------------------------------------- | ------------------ |
+| `DO`    | action is taken                         | _(required)_       |
+| `MUST`  | action is taken                         | `FULFILLED`        |
+| `MAY`   | action is taken                         | `FULFILLED`        |
+| `SHANT` | deadline passes (prohibition respected) | `FULFILLED`        |
 
 ### Syntax
 
@@ -90,11 +128,33 @@ HENCE (
   MUST deliver "goods"
   WITHIN 14
 )
+
+-- Explicit fulfillment
+PARTY Seller
+MUST deliver
+WITHIN 14
+HENCE FULFILLED
 ```
+
+### See Also
+
+- **LEST** -- the "failure" path counterpart
+- **FULFILLED** -- terminal success state
 
 ## LEST (Breach Consequence)
 
-Specifies what happens when the obligation is breached.
+Specifies what happens on the "failure" path of a deontic rule. Typically used for penalty clauses or fallback obligations.
+
+The meaning of "failure" depends on the deontic modal:
+
+| Modal   | LEST triggers when...                      | Default if omitted |
+| ------- | ------------------------------------------ | ------------------ |
+| `DO`    | deadline passes                            | _(required)_       |
+| `MUST`  | deadline passes without action             | `BREACH`           |
+| `MAY`   | deadline passes (permission not exercised) | `FULFILLED`        |
+| `SHANT` | action is taken (prohibition violated)     | `BREACH`           |
+
+Note that SHANT flips the polarity: for prohibitions, the action happening is the failure case (LEST), while the deadline passing without action is the success case (HENCE).
 
 ### Syntax
 
@@ -125,14 +185,21 @@ LEST (
 )
 ```
 
+### See Also
+
+- **HENCE** -- the "success" path counterpart
+- **BREACH** -- terminal failure state
+
 ## PROVIDED (Guard Condition)
 
-Adds a condition to an action.
+Adds a guard condition to a deontic action. After an event matches the action pattern, the PROVIDED expression is evaluated. If it returns FALSE, the match is rejected and the system tries the next event. Defaults to TRUE if omitted.
+
+Think of it as a pattern-match guard: the action shape must match first, then the guard condition is checked.
 
 ### Syntax
 
 ```l4
-MUST action parameter PROVIDED parameter-condition
+MUST action parameter PROVIDED condition
 ```
 
 ### Examples
@@ -142,31 +209,49 @@ MUST action parameter PROVIDED parameter-condition
 PARTY Bob
 MUST payment price PROVIDED price >= 20
 WITHIN 3
+
+-- Guard on transferred amount
+PARTY borrower
+MUST `Amount Transferred`
+  PROVIDED `is money at least equal` `Amount Transferred` `Payment Due`
 ```
 
-## EXACTLY (Guard Condition)
+### See Also
 
-Used in pattern matching for exact value matches, especially in regulative rules.
-`price EXACTLY 20` is equivalent to `price PROVIDED price EQUALS 20`
+- **EXACTLY** -- controls pattern vs equality matching of the action itself
+
+## EXACTLY (Exact Action Matching)
+
+Changes how the action is matched against incoming events during contract execution. Without EXACTLY, the action is a pattern (matched structurally, like WHEN in CONSIDER -- can bind variables). With EXACTLY, the action is an expression that is evaluated to a value and compared for equality against the event.
 
 ### Syntax
 
 ```l4
-MUST action parameter EXACTLY value
+MUST EXACTLY expression
 ```
 
 ### Examples
 
 ```l4
--- In regulative rules
+-- Without EXACTLY: "pay" is a pattern, matches any pay-shaped event
+PARTY buyer MUST pay
+
+-- With EXACTLY: expression is evaluated, event must equal the result
+PARTY lender MUST EXACTLY send capital to borrower
+
+-- Exact value match
 PARTY Alice
 MUST pay price EXACTLY 100
 WITHIN 30
 ```
 
-## BREACH
+### See Also
 
-Explicit marker that a rule violation has occurred.
+- **PROVIDED** -- guard condition evaluated after the pattern matches
+
+## BREACH (Terminal Violation State)
+
+Terminal deontic value indicating that an obligation has been violated. Used as the consequence in LEST clauses. Can optionally specify the responsible party and a reason.
 
 ### Syntax
 
@@ -195,13 +280,120 @@ LEST BREACH BY Seller BECAUSE "failed to deliver within 14 days"
 
 See **[BECAUSE](BECAUSE.md)** for detailed documentation on breach reasons.
 
-## FULFILLED
+### See Also
 
-Marks successful completion of a contract.
+- **LEST** -- the clause where BREACH typically appears
+- **FULFILLED** -- the success counterpart
+
+## FULFILLED (Terminal Success State)
+
+Terminal deontic value indicating that all obligations have been satisfied and no further action is needed. Commonly used as the consequence in HENCE clauses, and as the base case in conditional deontic rules.
+
+### Syntax
 
 ```l4
 HENCE FULFILLED
 ```
+
+### Examples
+
+```l4
+-- After successful delivery
+PARTY Seller
+MUST deliver
+WITHIN 14
+HENCE FULFILLED
+
+-- Base case in conditional rule
+IF NOT `conditions precedent are met`
+THEN FULFILLED
+ELSE PARTY lender MUST ...
+```
+
+### See Also
+
+- **HENCE** -- the clause where FULFILLED typically appears
+- **BREACH** -- the failure counterpart
+
+## RAND (Parallel AND of Obligations)
+
+Parallel conjunction of deontic obligations. ALL component obligations must be fulfilled for the compound to be fulfilled. If either side breaches, the whole compound breaches (short-circuit).
+
+In concurrency theory terms, this is parallel composition where all threads must complete successfully.
+
+### Syntax
+
+```l4
+deonton1 RAND deonton2
+```
+
+### Examples
+
+```l4
+-- Both obligations must be fulfilled
+(PARTY seller MUST deliver WITHIN 14 HENCE FULFILLED LEST BREACH)
+RAND
+(PARTY buyer MUST pay WITHIN 30 HENCE FULFILLED LEST BREACH)
+```
+
+### See Also
+
+- **ROR** -- disjunctive choice (any one sufficient)
+- **HENCE**, **LEST** -- consequence clauses within each component
+
+---
+
+## ROR (Parallel OR of Obligations)
+
+Disjunctive choice between deontic obligations. EITHER obligation being fulfilled suffices for the compound to be fulfilled. If either side fulfills, the whole compound fulfills (short-circuit).
+
+In concurrency theory terms, this is a race where the first to complete determines the outcome.
+
+### Syntax
+
+```l4
+deonton1 ROR deonton2
+```
+
+### Precedence
+
+RAND binds tighter than ROR, so `A ROR B RAND C` means `A ROR (B RAND C)`.
+
+### Examples
+
+```l4
+-- Either obligation can fulfill the contract
+(PARTY seller MUST ship WITHIN 14 HENCE FULFILLED LEST BREACH)
+ROR
+(PARTY seller MUST `arrange pickup` WITHIN 7 HENCE FULFILLED LEST BREACH)
+```
+
+### See Also
+
+- **RAND** -- parallel conjunction (all must be fulfilled)
+- **HENCE**, **LEST** -- consequence clauses within each component
+
+---
+
+## BEFORE (NOT YET IMPLEMENTED)
+
+Planned temporal keyword for specifying absolute deadlines in deontic rules (as opposed to WITHIN, which specifies relative durations).
+
+**Status:** Planned but not yet in the parser. Use WITHIN for relative durations in the meantime.
+
+### Intended Syntax
+
+```l4
+PARTY ...
+MUST action
+BEFORE deadline
+```
+
+### See Also
+
+- **WITHIN** -- implemented, for relative durations
+
+---
 
 ## Testing with #TRACE
 

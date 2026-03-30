@@ -677,7 +677,6 @@ If code generation becomes a bottleneck, cache generated wrappers keyed by (func
 ### Key Deviations from Spec
 
 1. **Identifier Naming:** L4 lexer doesn't allow identifiers starting with underscore. Changed:
-
    - `__InputArgs` → `InputArgs`
    - `__decodeArgs` → `decodeArgs`
    - `__inputJson` → `inputJson`
@@ -704,7 +703,6 @@ If code generation becomes a bottleneck, cache generated wrappers keyed by (func
    The Haskell handler unwraps the `JUST` constructor to extract the actual result, or detects the `NOTHING` constructor as a decode error.
 
 4. **Field Access Syntax:** Parentheses required around field access in function calls:
-
    - `args's walks` → `(args's walks)`
 
 5. **Conditional Trace Support:** Integrated with X-L4-Trace header and ?trace= query parameter from Item 1. The `TraceLevel` parameter controls whether `#EVAL` or `#EVALTRACE` is generated.

@@ -21,7 +21,8 @@ Uses: automated extraction and refinement into operational runtimes, e.g. code-g
 ## Quick Syntax
 
 L4's standard library defines lists and dictionaries, and some other utility functions expected in the FP paradigm.
-``` l4
+
+```l4
 IMPORT prelude
 ```
 
@@ -55,8 +56,7 @@ identifier2 param1 param2 MEANS some expression
 
 Similar to Haskell's infix and postfix syntax for function application, L4 supports mixfix syntax, without requiring backticks to indicate infix positions:
 
-
-``` l4
+```l4
 -- infix/mixfix syntax
 GIVEN mom IS A STRING
       dad IS A STRING
@@ -74,8 +74,10 @@ mom and dad `have a baby named` kid MEANS
 
 
 ```
+
 Decisions tend to work with booleans, but can operate against, and return, any type. "DECIDE ... IF" and "DECIDE ... IS" are alternative forms for human readability.
-``` l4
+
+```l4
 
 -- Decisions (boolean predicates)
 -- type inference allows omission of the GIVETH return type
@@ -95,7 +97,7 @@ The caret operator means "the token in this position from the previous line", an
 
 An apostrophe s (`'s`) — the Saxon genitive / possessive clitic — means record dereference.
 
-``` l4
+```l4
 
 -- while L4's operator precedence follows standard conventions, for clarity, operators within a sub-expression, at a certain indentation depth, should be the same.
 GIVEN p IS A BOOLEAN
@@ -107,7 +109,7 @@ GIVEN p IS A BOOLEAN
       OR  q ^      FALSE
  UNLESS   p EQUALS q AND p EQUALS NOT q
 -- equivalent to (p || ! p) && (q || ! q) && ! (p == q && p == ! q)
- 
+
 -- Pattern matching / destructuring
 CONSIDER value
 WHEN Constructor args THEN result
@@ -148,3 +150,4 @@ DECLARE Person
 ## For Humans
 
 See [doc/](../doc/) for narrative tutorials and learning paths.
+w

@@ -517,13 +517,11 @@ Keep the new AST node but desugar to `CONSIDER`/`WHEN` before evaluation:
 ### Phase 1: MVP via Desugaring (Approach 1)
 
 1. **Parser changes** (~200 LOC):
-
    - Recognize multiple `DECIDE` clauses with same name
    - Parse literal/constructor patterns in parameter position
    - Group clauses together
 
 2. **Desugaring pass** (~300 LOC):
-
    - Transform multi-clause functions to single clause with `CONSIDER`
    - Handle nested patterns via nested `CONSIDER`
    - Preserve source locations for error messages

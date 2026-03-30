@@ -15,7 +15,7 @@ Legislation routinely uses the phrase "for purposes of this subsection" to defin
 whose scope is limited to the enclosing subsection. Within that subsection, the defined
 term is used without qualification -- nobody writes "this subsection's X" every time
 they refer to X. Qualification is only needed when referring to a term defined in a
-*different* section.
+_different_ section.
 
 This convention is the legal equivalent of **lexical scoping** in programming languages.
 A variable defined in a block is directly accessible within that block; outer definitions
@@ -24,7 +24,7 @@ of the same name are shadowed; cross-scope access requires explicit qualificatio
 ### 1.2 The Problem
 
 Currently, L4's section system generates qualified names for all definitions inside
-sections. When the same `RawName` is defined in two different sections, *any* unqualified
+sections. When the same `RawName` is defined in two different sections, _any_ unqualified
 reference to that name -- even from within the same section -- triggers an
 `AmbiguousTermError` or `AmbiguousTypeError`. The compiler reports "multiple definitions,
 cannot choose" and requires full qualification everywhere.
@@ -335,6 +335,7 @@ ensures that:
 - Expression inference knows the current section for resolution priority
 
 **Files to modify:**
+
 - `scanTyDeclSection` (~line 2138): Add `pushSection` call, mirroring `scanFunSigSection`
 - `inferSection` (~line 437): Add `pushSection` call
 
@@ -343,10 +344,10 @@ receive qualified name variants because `scanTyDeclSection` skips `pushSection`.
 
 ### 4.3 File Summary
 
-| File | Changes |
-|------|---------|
-| `jl4-core/src/L4/TypeCheck/Types.hs` | Add section path to `Environment` or `CheckEnv` |
-| `jl4-core/src/L4/TypeCheck.hs` | Modify `resolveTerm'`, `resolveType` to prefer local; add `pushSection` to `scanTyDeclSection` and `inferSection`; modify `withQualified`/`extendEnv` to store section path |
+| File                                 | Changes                                                                                                                                                                     |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `jl4-core/src/L4/TypeCheck/Types.hs` | Add section path to `Environment` or `CheckEnv`                                                                                                                             |
+| `jl4-core/src/L4/TypeCheck.hs`       | Modify `resolveTerm'`, `resolveType` to prefer local; add `pushSection` to `scanTyDeclSection` and `inferSection`; modify `withQualified`/`extendEnv` to store section path |
 
 ---
 
@@ -442,7 +443,7 @@ Existing code that relies on the current flat scoping could theoretically break 
 1. A program has the same name defined in two sections, AND
 2. A reference to that name appears inside one of those sections, AND
 3. The reference currently resolves successfully via type-directed disambiguation to the
-   *other* section's binding (not the local one)
+   _other_ section's binding (not the local one)
 
 This scenario is extremely unlikely in practice. It would mean the programmer intentionally
 uses a foreign section's binding via type inference while ignoring the identically-named
@@ -551,7 +552,7 @@ pass without modification.
 3. **Performance:** The proximity computation adds a comparison of section path lists at
    each name resolution. For typical programs with shallow nesting (2-3 levels), this is
    negligible. For pathological cases with deeply nested sections, the overhead is bounded
-   by O(depth * candidates). Confirm this is acceptable.
+   by O(depth \* candidates). Confirm this is acceptable.
 
 4. **IDE impact:** The LSP server uses the same type checker. Section-aware resolution
    will automatically propagate to IDE features (go-to-definition, hover, autocomplete).
@@ -594,14 +595,14 @@ Add a `ResolveSectionScope` pass that runs after the current desugaring steps.
 
 ## 10. Summary
 
-| Aspect | Current | Proposed |
-|--------|---------|----------|
-| Same-section reference | Ambiguous if name exists elsewhere | Resolves to local binding |
-| Parent-section reference | Ambiguous if name exists elsewhere | Resolves to nearest ancestor |
-| Cross-section reference | Must qualify | Must qualify (unchanged) |
-| Fully qualified reference | Works | Works (unchanged) |
-| No-collision reference | Works | Works (unchanged) |
-| Backward compatibility | N/A | No breakage for well-written code |
+| Aspect                    | Current                            | Proposed                          |
+| ------------------------- | ---------------------------------- | --------------------------------- |
+| Same-section reference    | Ambiguous if name exists elsewhere | Resolves to local binding         |
+| Parent-section reference  | Ambiguous if name exists elsewhere | Resolves to nearest ancestor      |
+| Cross-section reference   | Must qualify                       | Must qualify (unchanged)          |
+| Fully qualified reference | Works                              | Works (unchanged)                 |
+| No-collision reference    | Works                              | Works (unchanged)                 |
+| Backward compatibility    | N/A                                | No breakage for well-written code |
 
 The change brings L4's section scoping in line with both legal drafting convention and
 programming language best practices, making unqualified names resolve to the nearest

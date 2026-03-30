@@ -243,19 +243,16 @@ BDD size is **extremely sensitive** to variable ordering.
 L4 already has:
 
 1. **Boolean expression representation** (`L4.Syntax`)
-
    - `And`, `Or`, `Not`, `Implies` constructors
    - `Expr Resolved` with full type information
 
 2. **Boolean transformations** (`L4.Transform`)
-
    - `simplify` - converts to CNF via NNF
    - `nnf` - negation normal form
    - `cnf` - conjunctive normal form
    - `neg` - push negation inward
 
 3. **Partial value handling** (`Backend/Api.hs`)
-
    - `FnUnknown` - missing/null value
    - `FnUncertain` - explicitly uncertain
 

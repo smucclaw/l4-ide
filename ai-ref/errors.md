@@ -11,6 +11,7 @@ Quick diagnostic patterns for frequent errors.
 **Cause:** Fragile indentation in nested IF/THEN/ELSE
 
 **Example (wrong):**
+
 ```l4
 result MEANS
     IF a THEN 1
@@ -20,6 +21,7 @@ result MEANS
 ```
 
 **Fix:** Use BRANCH
+
 ```l4
 result MEANS
     BRANCH
@@ -52,6 +54,7 @@ result MEANS
 **Cause:** BRANCH/IF/CONSIDER branches have different types
 
 **Wrong:**
+
 ```l4
 result MEANS
     BRANCH
@@ -61,6 +64,7 @@ result MEANS
 ```
 
 **Fix:** Make all branches same type
+
 ```l4
 result MEANS
     BRANCH
@@ -88,12 +92,14 @@ result MEANS
 **Cause:** Library not in search path
 
 **Search order:**
+
 1. VFS (virtual filesystem)
 2. Relative to current file
 3. XDG directory (~/.local/share/jl4/libraries/)
 4. Bundled libraries
 
 **Fix:**
+
 - Check spelling
 - Install to ~/.local/share/jl4/libraries/
 - Use relative path: `IMPORT ./localfile`
@@ -134,11 +140,13 @@ OTHERWISE "unknown"  -- Catches Suspended
 **Symptom:** Parse error when using field access in function call
 
 **Wrong:**
+
 ```l4
 all (GIVEN g YIELD g's age >= 18) charity's governors
 ```
 
 **Fix:** Wrap field access in parens
+
 ```l4
 all (GIVEN g YIELD g's age >= 18) (charity's governors)
 ```
@@ -176,11 +184,13 @@ all (GIVEN g YIELD g's age >= 18) (charity's governors)
 **Cause:** Definition references itself without base case
 
 **Wrong:**
+
 ```l4
 x MEANS x + 1
 ```
 
 **Fix:** Ensure recursion has base case
+
 ```l4
 factorial MEANS
     IF n <= 1 THEN 1  -- Base case
@@ -226,6 +236,7 @@ factorial MEANS
 **General:** L4 is layout-sensitive (like Python/Haskell)
 
 **Rules:**
+
 - Continuation lines of a subexpression must be indented more deeply than the line that introduced them
 - Use spaces, not tabs
 - WHERE bindings align vertically
@@ -234,18 +245,21 @@ factorial MEANS
 **Common gotcha:** If MEANS is indented too deeply, the body appears to be at the same or lower indent level, confusing the parser.
 
 **Wrong:**
+
 ```l4
         result MEANS
     x + y           -- ERROR: body is less indented than MEANS
 ```
 
 **Fix:**
+
 ```l4
 result MEANS
     x + y           -- body is indented relative to definition
 ```
 
 **Another gotcha:** Multi-line function arguments without OF must be indented more deeply than the function name:
+
 ```l4
 -- WRONG: bare values on continuation lines confuse the parser
 r MEANS triple
@@ -267,6 +281,7 @@ r MEANS triple OF 100, 200, 300
 **Optional:** Type inference works without annotations
 
 **Benefits of explicit types:**
+
 - Self-documentation
 - Better error messages
 - Type checking clarity
@@ -283,12 +298,14 @@ r MEANS triple OF 100, 200, 300
 **Cause:** L4 does NOT use Haskell-style pipe `|` separators in sum types. Use commas or newlines.
 
 **Wrong:**
+
 ```l4
 DECLARE Color IS ONE OF
     Red | Green | Blue
 ```
 
 **Fix:**
+
 ```l4
 DECLARE Color IS ONE OF Red, Green, Blue
 
@@ -308,12 +325,14 @@ DECLARE Color IS ONE OF
 **Cause:** Sum type constructors with fields require HAS, not positional bare types
 
 **Wrong:**
+
 ```l4
 DECLARE Shape IS ONE OF
     Circle NUMBER           -- ERROR: expecting HAS
 ```
 
 **Fix:**
+
 ```l4
 DECLARE Shape IS ONE OF
     Circle HAS radius IS A NUMBER
@@ -327,18 +346,20 @@ DECLARE Shape IS ONE OF
 
 **Cause:** Prelude defines two different functions with the same spelling but different case:
 
-| Function | Type | Purpose |
-|----------|------|---------|
-| `APPEND` (uppercase, infix) | `STRING -> STRING -> STRING` | String concatenation (`x APPEND y` = `CONCAT x, y`) |
-| `append` (lowercase, prefix) | `LIST OF a -> LIST OF a -> LIST OF a` | List concatenation |
+| Function                     | Type                                  | Purpose                                             |
+| ---------------------------- | ------------------------------------- | --------------------------------------------------- |
+| `APPEND` (uppercase, infix)  | `STRING -> STRING -> STRING`          | String concatenation (`x APPEND y` = `CONCAT x, y`) |
+| `append` (lowercase, prefix) | `LIST OF a -> LIST OF a -> LIST OF a` | List concatenation                                  |
 
 **Wrong:**
+
 ```l4
 append "hello" "world"       -- Type error: expects lists, not strings
 "hello" APPEND LIST 1, 2, 3  -- Type error: expects strings, not lists
 ```
 
 **Fix:**
+
 ```l4
 "hello" APPEND " world"      -- String concat (uppercase, infix)
 append (LIST 1, 2) (LIST 3)  -- List concat (lowercase, prefix)
@@ -350,4 +371,4 @@ append (LIST 1, 2) (LIST 3)  -- List concat (lowercase, prefix)
 
 **Error types:** parse error, type mismatch, type error, pattern match, indentation error, scope error, recursion, stack overflow, import error, module not found, field access, arity mismatch, boolean literal, equality operator, undefined variable, exhaustive match, circular definition
 
-**Common confusions from other languages:** == should be = (equality), True/true should be TRUE (boolean), False/false should be FALSE, % should be MODULO, . (dot) should be 's (genitive/possessive), ++ should be CONCAT, def/fn/function should be MEANS or DECIDE, return (not needed, expression-based), ; (not needed, layout-sensitive), { } (not needed, indentation-based), null/nil should be Nothing (MAYBE type), | (pipe) should be comma or newline (sum type separators), Data Constructor Type should be Constructor HAS field IS A Type (sum type payloads)
+**Common confusions from other languages:** == should be = (equality), True/true should be TRUE (boolean), False/false should be FALSE, % should be MODULO, . (dot) should be 's (genitive/possessive), ++ should be CONCAT, def/fn/function should be MEANS or DECIDE, return (not needed, expression-based), ; (not needed, layout-sensitive), { } (not needed, indentation-based), null/nil/None should be NOTHING (MAYBE type), Nothing/Just should be NOTHING/JUST (uppercase), | (pipe) should be comma or newline (sum type separators), Data Constructor Type should be Constructor HAS field IS A Type (sum type payloads)

@@ -22,10 +22,11 @@ Unlike reference docs (which tell you **what** things are) or tutorials (which s
 The philosophy and principles behind L4's design
 
 - **[Principles](language-design/principles.md)** - Core design principles of L4
+- **[Linguistic Syntax](language-design/linguistic-syntax.md)** - How L4 borrows from natural language linguistics
 
 **Key Ideas:** Human-readable code, legal text fidelity, accessibility for non-programmers
 
-_More topics planned: Layout Sensitivity, Legal Isomorphism, Scope_
+_More topics planned: Layout Sensitivity, Scope_
 
 ---
 

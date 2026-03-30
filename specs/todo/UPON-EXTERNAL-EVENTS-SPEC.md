@@ -513,13 +513,11 @@ UPON can be implemented independently of first-class obligations (HOMOICONICITY-
 ### Phase 1: Basic UPON Support (Standalone)
 
 1. **Add Environment to party system**
-
    - Built-in party constant
    - Type-level restriction preventing MUST/SHANT
    - Trace support for Environment events
 
 2. **Implement UPON desugaring**
-
    - Parser support for `UPON expr`
    - Desugar to `PARTY Environment MAY expr HENCE ...`
    - Type check the desugared form
@@ -533,7 +531,6 @@ UPON can be implemented independently of first-class obligations (HOMOICONICITY-
 ### Phase 2: Parameterized Events
 
 1. **Event parameters**
-
    - `UPON event WITH param = value`
    - Parameters available in rule body
 
@@ -547,7 +544,6 @@ UPON can be implemented independently of first-class obligations (HOMOICONICITY-
 These are optional extensions for formal verification:
 
 1. **Event Calculus integration**
-
    - Track what fluents each event initiates/terminates
    - HoldsAt queries for decision service
 

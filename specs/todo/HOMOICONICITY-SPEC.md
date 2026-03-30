@@ -917,12 +917,10 @@ MAY POWER
 ### Phase 1: Deontic Values (Foundation)
 
 1. **Add `DEONTIC` type to type system** (internal Haskell: `Deonton`)
-
    - Parameterized by action type
    - Include all required fields (obligor, obligee, action, deadline, status)
 
 2. **Add deontic literals/constructors**
-
    - Parser support for `DEONTIC FROM ... TO ... DO ... BY ...`
    - Type checking for deontic construction
 
@@ -935,7 +933,6 @@ MAY POWER
 ### Phase 2: Deontic Collections
 
 1. **Collection operations**
-
    - `FILTER deontics BY condition`
    - `MAP function deontics`
    - `SUM/COUNT` aggregations
@@ -950,12 +947,10 @@ MAY POWER
 ### Phase 3: Automatic Effects
 
 1. **New `AUTOMATICALLY WHEN ... THEN ...` syntax**
-
    - Parser support
    - Distinct from party obligations
 
 2. **Effect evaluation**
-
    - `CREATE`, `CANCEL`, `MODIFY` primitives
    - Atomic effect execution
    - Condition checking against current state
@@ -969,7 +964,6 @@ MAY POWER
 ### Phase 4: Type Safety for Effects
 
 1. **Effect typing**
-
    - Track what effects a rule can have
    - Validate effect compatibility
 
@@ -982,19 +976,16 @@ MAY POWER
 ### Phase 5: Procure Deontics
 
 1. **Procure syntax and parsing**
-
    - `MUST PROCURE (PARTY x MUST ...)` nested syntax
    - Effort level modifiers `STRICT`, `BEST EFFORTS`, `REASONABLE EFFORTS`
    - Nested procure for multi-tier scenarios
 
 2. **Procure deontic type**
-
    - `ProcureDeonton` as specialized `Deonton` subtype
    - Link to underlying deontic position
    - Effort level tracking
 
 3. **Procure-specific HENCE/LEST semantics**
-
    - Discharge on underlying performance
    - Breach propagation based on effort level
    - Best efforts evaluation hooks
@@ -1009,19 +1000,16 @@ MAY POWER
 ### Phase 6: Contract Continuation (YIELDS)
 
 1. **YIELDS syntax and parsing**
-
    - `YIELDS Contract WITH ...` clause
    - Multiple yields (list of contracts)
    - Conditional yields in LEST branches
 
 2. **Contract as first-class value**
-
    - `Contract` type representing executable specifications
    - Contract literals/constructors
    - Contract introspection (parties, obligations, terms)
 
 3. **Termination semantics**
-
    - `YIELDS` as terminal (like FULFILLED/BREACH)
    - Parent contract cleanup on yield
    - Yielded contract as return value
