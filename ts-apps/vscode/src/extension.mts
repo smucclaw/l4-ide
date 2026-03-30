@@ -265,7 +265,7 @@ function findBundledBinary(
 
 export async function activate(context: ExtensionContext) {
   const langId = 'l4'
-  const langName = 'jl4 LSP'
+  const langName = 'L4'
   const outputChannel: vscode.OutputChannel = window.createOutputChannel(
     langName,
     langId
