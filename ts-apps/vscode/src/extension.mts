@@ -469,9 +469,10 @@ export async function activate(context: ExtensionContext) {
   const auth = new AuthManager(context.secrets, outputChannel)
   const serviceClient = new ServiceClient(auth)
 
-  // Initialize local MCP proxy (auto-starts when service has MCP support)
+  // Start local MCP proxy — always running, returns empty tools when disconnected
   const mcpProxy = new McpProxy(auth, outputChannel)
   context.subscriptions.push(mcpProxy)
+  mcpProxy.start()
 
   // Register URI handler for legalese.cloud login callback
   context.subscriptions.push(
@@ -492,8 +493,7 @@ export async function activate(context: ExtensionContext) {
     auth,
     serviceClient,
     outputChannel,
-    (directiveId) => openInspectorSections.delete(directiveId),
-    () => mcpProxy.refresh()
+    (directiveId) => openInspectorSections.delete(directiveId)
   )
 
   const sidebarProvider = new SidebarProvider(

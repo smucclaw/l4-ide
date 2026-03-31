@@ -5,16 +5,19 @@ import type { AuthManager } from './auth.js'
 /**
  * Local MCP proxy server.
  *
- * Runs on localhost, accepts unauthenticated MCP JSON-RPC requests, and
- * forwards them to the remote jl4-service with the user's credentials.
- * This lets AI tools (Copilot, Cursor, Claude Desktop) access L4 rules
- * without needing their own auth configuration.
+ * Starts on extension activation and stays running for the lifetime of
+ * the extension.  Registers with VS Code's MCP system so AI tools
+ * (Copilot, Cursor, etc.) discover it automatically.
+ *
+ * When connected to a jl4-service, forwards MCP JSON-RPC requests with
+ * the user's credentials. When disconnected or unauthenticated, returns
+ * an empty tool list so the server stays registered but inert.
  */
 export class McpProxy implements vscode.Disposable {
   private server: http.Server | null = null
   private port: number = 0
-  private outputChannel: vscode.OutputChannel
   private mcpRegistration: vscode.Disposable | undefined
+  private outputChannel: vscode.OutputChannel
 
   constructor(
     private readonly auth: AuthManager,
@@ -23,36 +26,8 @@ export class McpProxy implements vscode.Disposable {
     this.outputChannel = outputChannel
   }
 
-  /**
-   * Check if the remote jl4-service has MCP support and start/stop
-   * the local proxy accordingly. Call this whenever deployments change.
-   */
-  async refresh(): Promise<void> {
-    const serviceUrl = this.auth.getEffectiveServiceUrl()
-    if (!serviceUrl) {
-      this.stop()
-      return
-    }
-
-    try {
-      const headers = await this.auth.getAuthHeaders()
-      const resp = await fetch(`${serviceUrl}/.well-known/mcp/manifest`, {
-        headers,
-      })
-      if (resp.ok) {
-        if (!this.server) {
-          await this.start()
-        }
-      } else {
-        this.stop()
-      }
-    } catch {
-      this.stop()
-    }
-  }
-
-  /** Start the local HTTP server. */
-  private async start(): Promise<void> {
+  /** Start the proxy and register with VS Code. Call once on activation. */
+  async start(): Promise<void> {
     if (this.server) return
 
     this.server = http.createServer((req, res) => {
@@ -71,11 +46,11 @@ export class McpProxy implements vscode.Disposable {
     })
 
     this.outputChannel.appendLine(
-      `[mcp-proxy] Local MCP server started on http://127.0.0.1:${this.port}/.mcp`
+      `[mcp-proxy] Started on http://127.0.0.1:${this.port}/.mcp`
     )
 
     // Register with VS Code's MCP system so Copilot and other
-    // VS Code AI extensions can discover the server automatically.
+    // AI extensions discover the server automatically.
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const lm = vscode.lm as any
@@ -91,17 +66,6 @@ export class McpProxy implements vscode.Disposable {
     }
   }
 
-  /** Stop the local HTTP server. */
-  stop(): void {
-    if (!this.server) return
-    this.mcpRegistration?.dispose()
-    this.mcpRegistration = undefined
-    this.server.close()
-    this.server = null
-    this.port = 0
-    this.outputChannel.appendLine('[mcp-proxy] Local MCP server stopped')
-  }
-
   /** The local MCP endpoint URL, or undefined if not running. */
   getLocalUrl(): string | undefined {
     if (!this.server || !this.port) return undefined
@@ -113,7 +77,6 @@ export class McpProxy implements vscode.Disposable {
     req: http.IncomingMessage,
     res: http.ServerResponse
   ): void {
-    // Only accept POST /.mcp
     if (req.method !== 'POST' || !req.url?.startsWith('/.mcp')) {
       res.writeHead(404, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ error: 'Not found' }))
@@ -124,47 +87,111 @@ export class McpProxy implements vscode.Disposable {
     req.on('data', (chunk: Buffer) => chunks.push(chunk))
     req.on('end', () => {
       const body = Buffer.concat(chunks).toString('utf-8')
-      this.forward(body, req.url ?? '/.mcp')
+      this.dispatch(body)
         .then((result) => {
           res.writeHead(200, { 'Content-Type': 'application/json' })
           res.end(result)
         })
         .catch((err) => {
           this.outputChannel.appendLine(
-            `[mcp-proxy] Forward error: ${err instanceof Error ? err.message : String(err)}`
+            `[mcp-proxy] Error: ${err instanceof Error ? err.message : String(err)}`
           )
-          res.writeHead(502, { 'Content-Type': 'application/json' })
+          res.writeHead(200, { 'Content-Type': 'application/json' })
           res.end(
             JSON.stringify({
               jsonrpc: '2.0',
-              error: { code: -32603, message: 'Failed to reach service' },
+              error: { code: -32603, message: 'Internal error' },
             })
           )
         })
     })
   }
 
-  /** Forward a JSON-RPC request to the remote jl4-service. */
-  private async forward(body: string, path: string): Promise<string> {
+  /**
+   * Dispatch a JSON-RPC request. If connected to a service, forward it.
+   * Otherwise handle locally with empty/error responses.
+   */
+  private async dispatch(body: string): Promise<string> {
     const serviceUrl = this.auth.getEffectiveServiceUrl()
-    if (!serviceUrl) {
-      throw new Error('No service URL')
+
+    // If connected, forward to the remote service
+    if (serviceUrl) {
+      try {
+        const headers = await this.auth.getAuthHeaders()
+        const resp = await fetch(`${serviceUrl}/.mcp`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...headers },
+          body,
+        })
+        return await resp.text()
+      } catch {
+        // Service unreachable — fall through to local handling
+      }
     }
 
-    const headers = await this.auth.getAuthHeaders()
-    const resp = await fetch(`${serviceUrl}${path}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...headers,
-      },
-      body,
-    })
+    // Not connected or service unreachable — handle locally
+    return this.handleLocally(body)
+  }
 
-    return resp.text()
+  /** Handle requests locally when no service is available. */
+  private handleLocally(body: string): string {
+    let parsed: { id?: unknown; method?: string }
+    try {
+      parsed = JSON.parse(body)
+    } catch {
+      return JSON.stringify({
+        jsonrpc: '2.0',
+        error: { code: -32700, message: 'Parse error' },
+      })
+    }
+
+    const id = parsed.id ?? null
+
+    switch (parsed.method) {
+      case 'initialize':
+        return JSON.stringify({
+          jsonrpc: '2.0',
+          id,
+          result: {
+            protocolVersion: '2025-03-26',
+            serverInfo: { name: 'L4 Legal Rules', version: '1.0.0' },
+            capabilities: { tools: {} },
+          },
+        })
+
+      case 'notifications/initialized':
+        return JSON.stringify({ jsonrpc: '2.0', id, result: {} })
+
+      case 'tools/list':
+        return JSON.stringify({ jsonrpc: '2.0', id, result: { tools: [] } })
+
+      case 'tools/call':
+        return JSON.stringify({
+          jsonrpc: '2.0',
+          id,
+          error: {
+            code: -32002,
+            message: 'Not connected to L4 service',
+          },
+        })
+
+      default:
+        return JSON.stringify({
+          jsonrpc: '2.0',
+          id,
+          error: { code: -32601, message: 'Method not found' },
+        })
+    }
   }
 
   dispose(): void {
-    this.stop()
+    this.mcpRegistration?.dispose()
+    this.mcpRegistration = undefined
+    if (this.server) {
+      this.server.close()
+      this.server = null
+      this.port = 0
+      this.outputChannel.appendLine('[mcp-proxy] Stopped')
+    }
   }
 }

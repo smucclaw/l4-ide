@@ -183,8 +183,7 @@ export function initializeSidebarMessenger(
   auth: AuthManager,
   serviceClient: ServiceClient,
   outputChannel: vscode.OutputChannel,
-  onInspectorSectionRemoved?: (directiveId: string) => void,
-  onDeploymentsRefreshed?: () => void
+  onInspectorSectionRemoved?: (directiveId: string) => void
 ) {
   // Handle exported functions request from sidebar
   messenger.onRequest(GetSidebarExportedFunctions, async (params) => {
@@ -227,7 +226,6 @@ export function initializeSidebarMessenger(
   messenger.onNotification(RequestSidebarLogout, async () => {
     outputChannel.appendLine(`[sidebar] Logout requested`)
     await auth.logout()
-    onDeploymentsRefreshed?.() // stops MCP proxy (no service URL after logout)
   })
 
   // Handle list deployments request.
@@ -248,9 +246,6 @@ export function initializeSidebarMessenger(
         if (existing) existing.push(fn)
         else funcsByDeployment.set(fn.deployment, [fn])
       }
-
-      // Notify that deployments were refreshed (triggers MCP proxy check)
-      onDeploymentsRefreshed?.()
 
       return {
         deployments: Array.from(funcsByDeployment, ([deploymentId, fns]) => ({
@@ -440,7 +435,6 @@ export function initializeSidebarMessenger(
   messenger.onNotification(RequestDisconnect, async () => {
     outputChannel.appendLine(`[sidebar] Disconnect requested`)
     await auth.logout()
-    onDeploymentsRefreshed?.() // stops MCP proxy
   })
 
   // Refresh deployments — handled on the sidebar side by re-requesting
