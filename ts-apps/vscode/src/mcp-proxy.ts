@@ -115,7 +115,7 @@ export class McpProxy implements vscode.Disposable {
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(
         JSON.stringify({
-          name: 'L4 Legal Rules',
+          name: 'L4 Tools',
           status: serviceUrl ? 'connected' : 'disconnected',
           serviceUrl: serviceUrl || null,
         })

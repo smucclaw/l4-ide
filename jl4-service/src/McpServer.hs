@@ -64,7 +64,7 @@ handleMethod _mScope reqId "initialize" _params =
   pure $ jsonRpcResult reqId $ Aeson.object
     [ "protocolVersion" .= ("2025-03-26" :: Text)
     , "serverInfo" .= Aeson.object
-        [ "name" .= ("L4 Legal Rules" :: Text)
+        [ "name" .= ("L4 Tools" :: Text)
         , "version" .= ("1.0.0" :: Text)
         ]
     , "capabilities" .= Aeson.object
