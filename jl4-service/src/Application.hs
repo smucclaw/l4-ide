@@ -38,7 +38,7 @@ import Servant
 import WebMCPPage (RawJs, JavaScript, renderExplorerPageBS, renderOrgWebMCPScript)
 
 -- | Combined service API.
-type ServiceApi = HealthApi :<|> WellKnownApi :<|> McpManifestApi :<|> OrgOpenApiRoute :<|> WebMCPApi :<|> McpApi :<|> McpScopedApi :<|> McpScopedLongApi :<|> ControlPlaneApi :<|> DataPlaneApi :<|> ShortRoutes
+type ServiceApi = HealthApi :<|> WellKnownApi :<|> McpDiscoveryApi :<|> McpManifestApi :<|> OrgOpenApiRoute :<|> WebMCPApi :<|> McpApi :<|> McpScopedApi :<|> McpScopedLongApi :<|> ControlPlaneApi :<|> DataPlaneApi :<|> ShortRoutes
 
 -- | Health check endpoint.
 type HealthApi = "health" :> Get '[JSON] HealthResponse
@@ -53,7 +53,12 @@ type OrgOpenApiRoute = "openapi.json" :> QueryParam "scope" Text :> Get '[JSON] 
 -- RESERVED_SEGMENTS: .webmcp is a reserved path prefix (do not allow as deployment ID).
 type WebMCPApi = ".webmcp" :> "embed.js" :> Get '[JavaScript] RawJs
 
+-- | MCP discovery endpoint (/.well-known/mcp).
+-- Primary discovery endpoint per MCP spec - returns server metadata and capabilities.
+type McpDiscoveryApi = ".well-known" :> "mcp" :> Get '[JSON] Aeson.Value
+
 -- | MCP manifest endpoint (/.well-known/mcp/manifest).
+-- Legacy/alternative discovery endpoint.
 type McpManifestApi = ".well-known" :> "mcp" :> "manifest" :> Get '[JSON] Aeson.Value
 
 -- | MCP JSON-RPC endpoint (org-wide, no deployment scope).
@@ -185,7 +190,7 @@ app env = serve (Proxy @ServiceApi) (serverT env)
 
 serverT :: AppEnv -> Server ServiceApi
 serverT env =
-  hoistServer (Proxy @ServiceApi) (nt env) (healthHandler :<|> wellKnownHandler :<|> mcpManifestHandler :<|> orgOpenApiHandler :<|> webmcpHandler :<|> mcpRootHandler :<|> mcpScopedHandler :<|> mcpScopedLongHandler :<|> controlPlaneHandler :<|> dataPlaneHandler :<|> shortRoutesHandler)
+  hoistServer (Proxy @ServiceApi) (nt env) (healthHandler :<|> wellKnownHandler :<|> mcpDiscoveryHandler :<|> mcpManifestHandler :<|> orgOpenApiHandler :<|> webmcpHandler :<|> mcpRootHandler :<|> mcpScopedHandler :<|> mcpScopedLongHandler :<|> controlPlaneHandler :<|> dataPlaneHandler :<|> shortRoutesHandler)
  where
   nt :: AppEnv -> AppM a -> Handler a
   nt s x = runReaderT x s
@@ -265,7 +270,26 @@ webmcpHandler = do
   liftIO $ logInfo env.logger "WebMCP script served" []
   pure renderOrgWebMCPScript
 
--- | GET /.well-known/mcp/manifest — MCP discovery manifest.
+-- | GET /.well-known/mcp — MCP discovery endpoint.
+-- Returns server metadata, capabilities, and endpoint information per MCP spec.
+mcpDiscoveryHandler :: ServerT McpDiscoveryApi AppM
+mcpDiscoveryHandler = do
+  env <- ask
+  liftIO $ logInfo env.logger "MCP discovery endpoint accessed" []
+  pure $ Aeson.object
+    [ "name" .= ("L4 Rules Engine" :: Text)
+    , "version" .= ("1.0.0" :: Text)
+    , "protocol_version" .= ("2025-03-26" :: Text)
+    , "capabilities" .= Aeson.object
+        [ "tools" .= Aeson.object []
+        ]
+    , "endpoints" .= Aeson.object
+        [ "mcp" .= ("/.mcp" :: Text)
+        , "manifest" .= ("/.well-known/mcp/manifest" :: Text)
+        ]
+    ]
+
+-- | GET /.well-known/mcp/manifest — MCP manifest (legacy/alternative).
 mcpManifestHandler :: ServerT McpManifestApi AppM
 mcpManifestHandler = do
   pure $ Aeson.object
