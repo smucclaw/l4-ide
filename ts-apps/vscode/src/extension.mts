@@ -542,7 +542,16 @@ export async function activate(context: ExtensionContext) {
   )
 
   // Start the client. This will also launch the server
-  await client.start()
+  try {
+    await client.start()
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    outputChannel.appendLine(`[client] Couldn't connect to jl4-lsp: ${msg}`)
+    vscode.window.showWarningMessage(
+      `Couldn't connect to jl4-lsp. L4 language features are unavailable. Set jl4.serverExecutablePath in settings or install jl4-lsp on your PATH.`
+    )
+    return
+  }
 
   // After evaluation completes, the LSP sends l4/directiveResultsUpdated with all
   // current directive results. Forward them to the inspector webview as SyncInspectorResults.
