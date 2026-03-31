@@ -5,8 +5,8 @@ module McpServer (
   mcpHandler,
 ) where
 
-import qualified BundleStore
 import Logging (logInfo, logWarn)
+import Shared (collectMetadataEntries)
 import Types
 
 import Control.Monad.IO.Class (liftIO)
@@ -22,6 +22,8 @@ import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map)
 import Data.Text (Text)
 import qualified Data.Text as Text
+import qualified Data.Aeson.Key as Aeson.Key
+import L4.FunctionSchema (Parameters (..), Parameter (..))
 import qualified Data.Text.Encoding as Text.Encoding
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Maybe as Maybe
@@ -105,50 +107,10 @@ buildToolList mScope = do
   pure [ Aeson.object
     [ "name" .= tn
     , "description" .= (fn.fsDescription <> " [" <> deployId <> "/" <> fn.fsName <> "]")
-    , "inputSchema" .= fn.fsParameters
+    , "inputSchema" .= sanitizeParameters fn.fsParameters
     ]
     | (tn, deployId, fn) <- toolNames
     ]
-
--- | Collect metadata entries from all deployments, optionally filtered by scope.
--- Returns a list of (deploymentId, FunctionSummary) pairs.
-collectMetadataEntries :: Maybe Text -> AppM [(Text, FunctionSummary)]
-collectMetadataEntries mScope = do
-  env <- ask
-  registry <- liftIO . readTVarIO $ env.deploymentRegistry
-  let store = env.bundleStore
-
-  liftIO $ fmap concat $ mapM (\(did, state) -> do
-    mMeta <- case state of
-      DeploymentReady _ meta -> pure (Just meta)
-      _ -> do
-        mBytes <- BundleStore.loadMetadataCache store did.unDeploymentId
-        case mBytes of
-          Just bytes -> case Aeson.eitherDecode bytes of
-            Right meta -> pure (Just meta)
-            Left _ -> pure Nothing
-          Nothing -> pure Nothing
-    pure $ case mMeta of
-      Nothing -> []
-      Just meta ->
-        [ (did.unDeploymentId, fn)
-        | fn <- meta.metaFunctions
-        , matchesScope mScope did.unDeploymentId fn.fsName
-        ]
-    ) (Map.toList registry)
-
--- | Check if a deployment/function matches the scope filter.
-matchesScope :: Maybe Text -> Text -> Text -> Bool
-matchesScope Nothing _ _ = True
-matchesScope (Just scope) deployId fnName =
-  any matchPattern (Text.splitOn "," scope)
- where
-  matchPattern pat =
-    let trimmed = Text.strip pat
-        (depPat, rest) = Text.breakOn "/" trimmed
-        fnPat = if Text.null rest then "*" else Text.drop 1 rest
-    in (depPat == "*" || depPat == deployId)
-       && (fnPat == "*" || fnPat == fnName)
 
 -- | Sanitize a name for use as a tool name.
 sanitizeName :: Int -> Text -> Text
@@ -207,7 +169,7 @@ callTool mScope reqId toolName arguments = do
   -- Build the tool lookup map from current metadata
   entries <- collectMetadataEntries mScope
   let toolMap = Map.fromList
-        [ (tn, (deployId, fn.fsName))
+        [ (tn, (deployId, fn.fsName, fn.fsParameters))
         | (tn, deployId, fn) <- buildToolNames entries
         ]
 
@@ -216,16 +178,18 @@ callTool mScope reqId toolName arguments = do
       liftIO $ logWarn env.logger "MCP tool not found"
         [("toolName", Aeson.toJSON toolName)]
       pure $ jsonRpcError reqId (-32602) ("Unknown tool: " <> toolName)
-    Just (deployId, fnName) -> do
+    Just (deployId, fnName, params) -> do
       liftIO $ logInfo env.logger "MCP tool called"
         [ ("toolName", Aeson.toJSON toolName)
         , ("deploymentId", Aeson.toJSON deployId)
         , ("functionName", Aeson.toJSON fnName)
         ]
-      -- Parse arguments into FnLiteral values expected by the evaluator
+      -- Build reverse mapping: sanitized property key -> original L4 name
+      let reverseMap = buildPropertyReverseMap params
+      -- Parse arguments and remap sanitized keys back to original L4 names
       let argPairs = case arguments of
             Aeson.Object obj ->
-              [ (k, parseFnLiteral v)
+              [ (Map.findWithDefault k k reverseMap, parseFnLiteral v)
               | (k, v) <- Map.toList (Aeson.KeyMap.toMapText obj)
               ]
             _ -> []
@@ -289,6 +253,73 @@ runMcpEvaluation vf args = do
         Just (Right rwr) ->
           let encoded = Aeson.encode (SimpleResponse rwr)
           in pure $ Right (Text.Encoding.decodeUtf8 (LBS.toStrict encoded))
+
+-- ----------------------------------------------------------------------------
+-- Parameter name sanitization
+-- ----------------------------------------------------------------------------
+
+-- | Sanitize a property name for use as a JSON property key in MCP tool schemas.
+-- Replaces special characters (spaces, backticks, etc.) with hyphens and
+-- collapses consecutive hyphens. Preserves alphanumeric, underscore, dot, and hyphen.
+-- Uses the same replacement character as 'sanitizeName' for consistency.
+sanitizePropertyName :: Text -> Text
+sanitizePropertyName name =
+  let s = Text.map (\c -> if isAlphaNum c || c == '_' || c == '.' || c == '-' then c else '-') name
+      s' = collapseHyphens $ Text.dropWhile (== '-') $ Text.dropWhileEnd (== '-') s
+  in if Text.null s' then "_unnamed" else s'
+ where
+  collapseHyphens t =
+    let collapsed = Text.replace "--" "-" t
+    in if collapsed == t then t else collapseHyphens collapsed
+
+-- | Sanitize all property names in a Parameters schema for MCP compatibility.
+-- MCP tool schemas require property names to be simple identifiers.
+-- This recursively sanitizes property names in nested object types.
+sanitizeParameters :: Parameters -> Aeson.Value
+sanitizeParameters (MkParameters props reqProps) =
+  Aeson.object
+    [ "type" .= ("object" :: Text)
+    , "properties" .= Aeson.object
+        [ (Aeson.Key.fromText (sanitizePropertyName k), sanitizeParameterValue v)
+        | (k, v) <- Map.toList props
+        ]
+    , "required" .= map sanitizePropertyName reqProps
+    ]
+
+-- | Sanitize a Parameter value, recursively sanitizing nested properties.
+sanitizeParameterValue :: Parameter -> Aeson.Value
+sanitizeParameterValue p =
+  Aeson.object $
+    [ "type" .= p.parameterType
+    , "alias" .= p.parameterAlias
+    , "enum" .= p.parameterEnum
+    , "description" .= p.parameterDescription
+    ]
+    ++ case p.parameterFormat of
+        Nothing -> []
+        Just fmt -> ["format" .= fmt]
+    ++ case p.parameterProperties of
+        Nothing -> []
+        Just nested -> ["properties" .= Aeson.object
+          [ (Aeson.Key.fromText (sanitizePropertyName nk), sanitizeParameterValue nv)
+          | (nk, nv) <- Map.toList nested
+          ]]
+    ++ case p.parameterPropertyOrder of
+        Nothing -> []
+        Just ord -> ["propertyOrder" .= map sanitizePropertyName ord]
+    ++ case p.parameterItems of
+        Nothing -> []
+        Just items -> ["items" .= sanitizeParameterValue items]
+
+-- | Build a reverse mapping from sanitized property names back to original L4 names.
+-- Only includes entries where the sanitized name differs from the original.
+buildPropertyReverseMap :: Parameters -> Map Text Text
+buildPropertyReverseMap (MkParameters props _) =
+  Map.fromList
+    [ (sanitizePropertyName k, k)
+    | k <- Map.keys props
+    , sanitizePropertyName k /= k
+    ]
 
 -- ----------------------------------------------------------------------------
 -- JSON-RPC helpers

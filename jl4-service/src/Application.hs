@@ -9,12 +9,12 @@ import McpServer (mcpHandler)
 import DeploymentLoader (loadAndRegister)
 import Logging (Logger, logInfo, logDebug, logError, newLogger)
 import Options (Options (..), buildOpts)
+import Shared (collectMetadataEntries)
 import Types
 
 import Data.Aeson (toJSON, (.=))
 import qualified Data.Aeson as Aeson
 import Data.Text (Text)
-import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text.Encoding
 import Control.Concurrent.Async (mapConcurrently_)
 import Control.Concurrent.STM (atomically, modifyTVar', newTVarIO, readTVarIO)
@@ -240,52 +240,23 @@ orgOpenApiHandler mScope = do
   env <- ask
   liftIO $ logInfo env.logger "OpenAPI schema requested"
     [("scope", toJSON mScope)]
-  registry <- liftIO . readTVarIO $ env.deploymentRegistry
-  let store = env.bundleStore
 
-  -- Collect metadata for all deployments (ready from memory, pending from cache)
-  allEntries <- liftIO $ fmap concat $ mapM (\(did, state) -> do
-    mMeta <- case state of
-      DeploymentReady _ meta -> pure (Just meta)
-      _ -> do
-        mBytes <- BundleStore.loadMetadataCache store did.unDeploymentId
-        case mBytes of
-          Just bytes -> case Aeson.eitherDecode bytes of
-            Right meta -> pure (Just meta)
-            Left _ -> pure Nothing
-          Nothing -> pure Nothing
-    pure $ case mMeta of
-      Nothing -> []
-      Just meta ->
+  entries <- collectMetadataEntries mScope
+  let allEntries =
         [ Aeson.object
-          [ "deployment" .= did.unDeploymentId
+          [ "deployment" .= deployId
           , "name" .= fn.fsName
           , "description" .= fn.fsDescription
           , "parameters" .= fn.fsParameters
           , "returnType" .= fn.fsReturnType
           , "isDeontic" .= fn.fsIsDeontic
           ]
-        | fn <- meta.metaFunctions
-        , matchesScope mScope did.unDeploymentId fn.fsName
+        | (deployId, fn) <- entries
         ]
-    ) (Map.toList registry)
 
   pure $ Aeson.object
     [ "functions" .= allEntries
     ]
-
--- | Check if a deployment/function matches the scope filter.
-matchesScope :: Maybe Text -> Text -> Text -> Bool
-matchesScope Nothing _ _ = True
-matchesScope (Just scope) deployId fnName =
-  any matchPattern (Text.splitOn "," scope)
- where
-  matchPattern pat =
-    let trimmed = Text.strip pat
-        (depPat, rest) = Text.breakOn "/" trimmed
-        fnPat = if Text.null rest then "*" else Text.drop 1 rest
-    in (depPat == "*" || depPat == deployId)
-       && (fnPat == "*" || fnPat == fnName)
 
 -- | GET /.webmcp/embed.js — org-wide WebMCP script.
 webmcpHandler :: ServerT WebMCPApi AppM
