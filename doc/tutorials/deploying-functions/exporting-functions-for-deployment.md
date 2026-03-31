@@ -120,7 +120,7 @@ Once a deployment is **Ready**, its functions are available as REST endpoints. Y
 
 ### List available functions
 
-Here are some was how to use the REST API from your command line:
+Here are some ways you can use the REST API from your command line:
 
 ```bash
 curl https://{your-org}.legalese.cloud/deployments/insurance-premium/functions

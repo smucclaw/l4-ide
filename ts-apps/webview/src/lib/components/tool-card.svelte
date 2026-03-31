@@ -54,7 +54,11 @@
       >
     {/if}
     {#if func.returnType}
-      <span class="return-type">{func.returnType}</span>
+      <span class="return-type"
+        >{func.returnType.startsWith('MAYBE')
+          ? func.returnType.split(' ').slice(0, 2).join(' ')
+          : func.returnType.split(' ')[0]}</span
+      >
     {/if}
   </button>
 
@@ -114,9 +118,6 @@
         <div class="section-label">Returns</div>
         <div class="return-info">
           <span class="param-type">{func.returnType}</span>
-          {#if func.isDeontic}
-            <span class="badge deontic-badge">deontic</span>
-          {/if}
         </div>
       {/if}
     </div>
@@ -302,11 +303,6 @@
     padding: 0;
     color: var(--vscode-descriptionForeground);
     opacity: 0.5;
-  }
-
-  .deontic-badge {
-    background: rgba(197, 134, 192, 0.15);
-    color: #c586c0;
   }
 
   .return-info {
