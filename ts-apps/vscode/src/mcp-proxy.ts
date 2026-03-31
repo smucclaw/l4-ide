@@ -14,6 +14,7 @@ export class McpProxy implements vscode.Disposable {
   private server: http.Server | null = null
   private port: number = 0
   private outputChannel: vscode.OutputChannel
+  private mcpRegistration: vscode.Disposable | undefined
 
   constructor(
     private readonly auth: AuthManager,
@@ -72,11 +73,29 @@ export class McpProxy implements vscode.Disposable {
     this.outputChannel.appendLine(
       `[mcp-proxy] Local MCP server started on http://127.0.0.1:${this.port}/.mcp`
     )
+
+    // Register with VS Code's MCP system so Copilot and other
+    // VS Code AI extensions can discover the server automatically.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const lm = vscode.lm as any
+      if (typeof lm?.registerMcpServerDefinition === 'function') {
+        this.mcpRegistration = lm.registerMcpServerDefinition({
+          label: 'L4 Legal Rules',
+          url: `http://127.0.0.1:${this.port}/.mcp`,
+        })
+        this.outputChannel.appendLine('[mcp-proxy] Registered with VS Code MCP')
+      }
+    } catch {
+      // API not available in this VS Code version — proxy still works via URL
+    }
   }
 
   /** Stop the local HTTP server. */
   stop(): void {
     if (!this.server) return
+    this.mcpRegistration?.dispose()
+    this.mcpRegistration = undefined
     this.server.close()
     this.server = null
     this.port = 0

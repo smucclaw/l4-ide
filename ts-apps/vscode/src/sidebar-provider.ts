@@ -227,6 +227,7 @@ export function initializeSidebarMessenger(
   messenger.onNotification(RequestSidebarLogout, async () => {
     outputChannel.appendLine(`[sidebar] Logout requested`)
     await auth.logout()
+    onDeploymentsRefreshed?.() // stops MCP proxy (no service URL after logout)
   })
 
   // Handle list deployments request.
@@ -439,6 +440,7 @@ export function initializeSidebarMessenger(
   messenger.onNotification(RequestDisconnect, async () => {
     outputChannel.appendLine(`[sidebar] Disconnect requested`)
     await auth.logout()
+    onDeploymentsRefreshed?.() // stops MCP proxy
   })
 
   // Refresh deployments — handled on the sidebar side by re-requesting
