@@ -477,7 +477,13 @@ export async function activate(context: ExtensionContext) {
   // Register URI handler for legalese.cloud login callback
   context.subscriptions.push(
     vscode.window.registerUriHandler({
-      handleUri: (uri) => auth.handleAuthCallback(uri),
+      handleUri: async (uri: vscode.Uri) => {
+        await auth.handleAuthCallback(uri)
+        // After successful login, offer to set up Claude Code integration
+        if (auth.getEffectiveServiceUrl()) {
+          mcpProxy.offerClaudeCodeSetup()
+        }
+      },
     })
   )
   context.subscriptions.push(auth)

@@ -1,4 +1,7 @@
 import * as http from 'node:http'
+import * as fs from 'node:fs'
+import * as path from 'node:path'
+import * as os from 'node:os'
 import * as vscode from 'vscode'
 import type { AuthManager } from './auth.js'
 
@@ -181,6 +184,58 @@ export class McpProxy implements vscode.Disposable {
           id,
           error: { code: -32601, message: 'Method not found' },
         })
+    }
+  }
+
+  /**
+   * If Claude Code's config exists (~/.claude.json), offer to add the
+   * local MCP proxy so Claude Code can access L4 tools automatically.
+   */
+  async offerClaudeCodeSetup(): Promise<void> {
+    if (!this.port) return
+
+    const claudeConfigPath = path.join(os.homedir(), '.claude.json')
+    try {
+      fs.accessSync(claudeConfigPath, fs.constants.R_OK)
+    } catch {
+      return // Claude Code not installed
+    }
+
+    // Check if already configured
+    try {
+      const raw = fs.readFileSync(claudeConfigPath, 'utf-8')
+      const config = JSON.parse(raw)
+      if (config?.mcpServers?.['l4-rules']) return // already set up
+    } catch {
+      return // can't parse config
+    }
+
+    const action = await vscode.window.showInformationMessage(
+      'Add L4 Tools to Claude Code?',
+      'Yes',
+      'No'
+    )
+    if (action !== 'Yes') return
+
+    try {
+      const raw = fs.readFileSync(claudeConfigPath, 'utf-8')
+      const config = JSON.parse(raw)
+      if (!config.mcpServers) config.mcpServers = {}
+      config.mcpServers['l4-rules'] = {
+        type: 'http',
+        url: `http://127.0.0.1:${this.port}/.mcp`,
+      }
+      fs.writeFileSync(claudeConfigPath, JSON.stringify(config, null, 2))
+      this.outputChannel.appendLine(
+        '[mcp-proxy] Added l4-rules to ~/.claude.json'
+      )
+      vscode.window.showInformationMessage(
+        'L4 tools added to Claude Code. Restart Claude Code to pick up the change.'
+      )
+    } catch (err) {
+      this.outputChannel.appendLine(
+        `[mcp-proxy] Failed to update ~/.claude.json: ${err instanceof Error ? err.message : String(err)}`
+      )
     }
   }
 
