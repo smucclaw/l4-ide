@@ -10,6 +10,7 @@ module LSP.Core.IdeConfiguration
   , modifyWorkspaceFolders
   , modifyClientSettings
   , getClientSettings
+  , getClientSettingsIO
   )
 where
 
@@ -105,3 +106,10 @@ isWorkspaceFile uri =
 
 getClientSettings :: Action (Maybe Value)
 getClientSettings = unhashed . clientSettings <$> getIdeConfiguration
+
+-- | Get client settings directly from IdeState (for use in IO, not Action)
+getClientSettingsIO :: IdeState -> IO (Maybe Value)
+getClientSettingsIO ide = do
+  IdeConfigurationVar var <- getIdeGlobalState ide
+  config <- readVar var
+  pure $ unhashed config.clientSettings

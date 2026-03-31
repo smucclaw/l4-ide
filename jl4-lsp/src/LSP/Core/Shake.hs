@@ -837,8 +837,11 @@ newSession recorder extras@ShakeExtras{..} vfsMod shakeDb acts = do
           res <- try @SomeException $
             restore $ shakeRunDatabaseForKeys (fmap toListKeySet allPendingKeys) shakeDb keysActs
           return $ do
+              -- Filter out AsyncCancelled - it's expected behavior when builds are cancelled,
+              -- not an error worth logging (especially with GHC 9.10+ verbose backtraces)
               let exception =
                     case res of
+                      Left e | Just AsyncCancelled <- fromException e -> Nothing
                       Left e -> Just e
                       _      -> Nothing
               logWith recorder Debug $ LogBuildSessionFinish exception

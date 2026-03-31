@@ -72,22 +72,82 @@ export class McpProxy implements vscode.Disposable {
 
     // Register with VS Code's MCP system so Copilot and other
     // AI extensions discover the server automatically.
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const lm = vscode.lm as any
-      if (typeof lm?.registerMcpServerDefinition === 'function') {
-        this.mcpRegistration = lm.registerMcpServerDefinition({
-          label: 'L4 Tools',
-          url: `http://127.0.0.1:${this.port}/mcp`,
-        })
-        this.outputChannel.appendLine('[mcp-proxy] Registered with VS Code MCP')
-      }
-    } catch {
-      // API not available in this VS Code version — proxy still works via URL
-    }
+    this.registerWithVSCode()
 
     // If Claude Code already has l4-rules configured, update the port
     this.updateClaudeCodePort()
+  }
+
+  /**
+   * Register the MCP server with VS Code's language model API.
+   * Uses the registerMcpServerDefinitionProvider API (VS Code 1.99+).
+   */
+  private registerWithVSCode(): void {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const lm = vscode.lm as any
+    if (!lm) {
+      this.outputChannel.appendLine('[mcp-proxy] vscode.lm API not available')
+      return
+    }
+
+    const mcpUrl = `http://127.0.0.1:${this.port}/mcp`
+
+    // VS Code 1.99+ uses registerMcpServerDefinitionProvider
+    // The provider ID must match the one declared in package.json contributes.mcpServerDefinitionProviders
+    if (typeof lm.registerMcpServerDefinitionProvider === 'function') {
+      try {
+        // Check if McpHttpServerDefinition class exists
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const McpHttpServerDefinition = (vscode as any).McpHttpServerDefinition
+        if (McpHttpServerDefinition) {
+          this.mcpRegistration = lm.registerMcpServerDefinitionProvider(
+            'l4-tools',
+            {
+              provideMcpServerDefinitions: () => {
+                return [
+                  new McpHttpServerDefinition({
+                    label: 'L4 Tools',
+                    uri: mcpUrl,
+                  }),
+                ]
+              },
+            }
+          )
+          this.outputChannel.appendLine(
+            '[mcp-proxy] Registered with VS Code MCP (McpHttpServerDefinition)'
+          )
+          return
+        }
+
+        // Fallback: try with plain object if class doesn't exist
+        this.mcpRegistration = lm.registerMcpServerDefinitionProvider(
+          'l4-tools',
+          {
+            provideMcpServerDefinitions: () => {
+              return [
+                {
+                  label: 'L4 Tools',
+                  type: 'http',
+                  uri: mcpUrl,
+                },
+              ]
+            },
+          }
+        )
+        this.outputChannel.appendLine(
+          '[mcp-proxy] Registered with VS Code MCP (plain object)'
+        )
+        return
+      } catch (err) {
+        this.outputChannel.appendLine(
+          `[mcp-proxy] registerMcpServerDefinitionProvider failed: ${err instanceof Error ? err.message : String(err)}`
+        )
+      }
+    }
+
+    this.outputChannel.appendLine(
+      `[mcp-proxy] VS Code MCP API not available - server accessible at ${mcpUrl}`
+    )
   }
 
   /** The local MCP endpoint URL, or undefined if not running. */
