@@ -226,7 +226,7 @@ renderOrgWebMCPScript = RawJs $ LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text
   , ""
   , "  // Build unique tool names: function-name only, with .deployment-prefix on collision"
   , "  function buildToolNames(fns) {"
-  , "    var MAX = 64;"
+  , "    var MAX = 60;"
   , "    // Group by sanitized function name to detect collisions"
   , "    var groups = {};"
   , "    fns.forEach(function(fn) {"
