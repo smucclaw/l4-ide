@@ -67,7 +67,7 @@ export class McpProxy implements vscode.Disposable {
     }
 
     this.outputChannel.appendLine(
-      `[mcp-proxy] Started on http://127.0.0.1:${this.port}/.mcp`
+      `[mcp-proxy] Started on http://127.0.0.1:${this.port}/mcp`
     )
 
     // Register with VS Code's MCP system so Copilot and other
@@ -77,8 +77,8 @@ export class McpProxy implements vscode.Disposable {
       const lm = vscode.lm as any
       if (typeof lm?.registerMcpServerDefinition === 'function') {
         this.mcpRegistration = lm.registerMcpServerDefinition({
-          label: 'L4 Legal Rules',
-          url: `http://127.0.0.1:${this.port}/.mcp`,
+          label: 'L4 Tools',
+          url: `http://127.0.0.1:${this.port}/mcp`,
         })
         this.outputChannel.appendLine('[mcp-proxy] Registered with VS Code MCP')
       }
@@ -93,7 +93,7 @@ export class McpProxy implements vscode.Disposable {
   /** The local MCP endpoint URL, or undefined if not running. */
   getLocalUrl(): string | undefined {
     if (!this.server || !this.port) return undefined
-    return `http://127.0.0.1:${this.port}/.mcp`
+    return `http://127.0.0.1:${this.port}/mcp`
   }
 
   /** Handle an incoming HTTP request. */
@@ -101,12 +101,35 @@ export class McpProxy implements vscode.Disposable {
     req: http.IncomingMessage,
     res: http.ServerResponse
   ): void {
-    if (req.method !== 'POST' || !req.url?.startsWith('/.mcp')) {
+    const isMcpPath = req.url === '/mcp' || req.url?.startsWith('/mcp?')
+
+    if (!isMcpPath) {
       res.writeHead(404, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ error: 'Not found' }))
       return
     }
 
+    // GET /mcp — lightweight health check
+    if (req.method === 'GET') {
+      const serviceUrl = this.auth.getEffectiveServiceUrl()
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(
+        JSON.stringify({
+          name: 'L4 Tools',
+          status: serviceUrl ? 'connected' : 'disconnected',
+          serviceUrl: serviceUrl || null,
+        })
+      )
+      return
+    }
+
+    if (req.method !== 'POST') {
+      res.writeHead(405, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'Method not allowed' }))
+      return
+    }
+
+    // POST /mcp — MCP JSON-RPC
     const chunks: Buffer[] = []
     req.on('data', (chunk: Buffer) => chunks.push(chunk))
     req.on('end', () => {
@@ -147,7 +170,9 @@ export class McpProxy implements vscode.Disposable {
           headers: { 'Content-Type': 'application/json', ...headers },
           body,
         })
-        return await resp.text()
+        const text = await resp.text()
+        if (resp.ok && text) return text
+        // Empty or error response — fall through to local handling
       } catch {
         // Service unreachable — fall through to local handling
       }
@@ -178,7 +203,7 @@ export class McpProxy implements vscode.Disposable {
           id,
           result: {
             protocolVersion: '2025-03-26',
-            serverInfo: { name: 'L4 Legal Rules', version: '1.0.0' },
+            serverInfo: { name: 'L4 Tools', version: '1.3.0' },
             capabilities: { tools: {} },
           },
         })
@@ -220,7 +245,7 @@ export class McpProxy implements vscode.Disposable {
       const config = JSON.parse(raw)
       const existing = config?.mcpServers?.['l4-rules']
       if (!existing) return // not configured — don't touch
-      const newUrl = `http://127.0.0.1:${this.port}/.mcp`
+      const newUrl = `http://127.0.0.1:${this.port}/mcp`
       if (existing.url === newUrl) return // already correct
       config.mcpServers['l4-rules'] = { ...existing, url: newUrl }
       fs.writeFileSync(claudeConfigPath, JSON.stringify(config, null, 2))
@@ -279,7 +304,7 @@ export class McpProxy implements vscode.Disposable {
       if (!config.mcpServers) config.mcpServers = {}
       config.mcpServers['l4-rules'] = {
         type: 'http',
-        url: `http://127.0.0.1:${this.port}/.mcp`,
+        url: `http://127.0.0.1:${this.port}/mcp`,
       }
       fs.writeFileSync(claudeConfigPath, JSON.stringify(config, null, 2))
       this.outputChannel.appendLine(
