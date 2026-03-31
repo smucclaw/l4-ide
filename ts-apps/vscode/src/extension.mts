@@ -13,6 +13,7 @@ import type { PanelConfig } from './webview-panel.js'
 import { PanelManager } from './webview-panel.js'
 
 import { VSCodeL4LanguageClient } from './vscode-l4-language-client.js'
+import { McpProxy } from './mcp-proxy.js'
 
 import { RenderAsLadderInfo, VersionedDocId } from '@repo/viz-expr'
 import { Schema } from 'effect'
@@ -468,6 +469,10 @@ export async function activate(context: ExtensionContext) {
   const auth = new AuthManager(context.secrets, outputChannel)
   const serviceClient = new ServiceClient(auth)
 
+  // Initialize local MCP proxy (auto-starts when service has MCP support)
+  const mcpProxy = new McpProxy(auth, outputChannel)
+  context.subscriptions.push(mcpProxy)
+
   // Register URI handler for legalese.cloud login callback
   context.subscriptions.push(
     vscode.window.registerUriHandler({
@@ -487,7 +492,8 @@ export async function activate(context: ExtensionContext) {
     auth,
     serviceClient,
     outputChannel,
-    (directiveId) => openInspectorSections.delete(directiveId)
+    (directiveId) => openInspectorSections.delete(directiveId),
+    () => mcpProxy.refresh()
   )
 
   const sidebarProvider = new SidebarProvider(

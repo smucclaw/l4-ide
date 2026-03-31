@@ -183,7 +183,8 @@ export function initializeSidebarMessenger(
   auth: AuthManager,
   serviceClient: ServiceClient,
   outputChannel: vscode.OutputChannel,
-  onInspectorSectionRemoved?: (directiveId: string) => void
+  onInspectorSectionRemoved?: (directiveId: string) => void,
+  onDeploymentsRefreshed?: () => void
 ) {
   // Handle exported functions request from sidebar
   messenger.onRequest(GetSidebarExportedFunctions, async (params) => {
@@ -246,6 +247,9 @@ export function initializeSidebarMessenger(
         if (existing) existing.push(fn)
         else funcsByDeployment.set(fn.deployment, [fn])
       }
+
+      // Notify that deployments were refreshed (triggers MCP proxy check)
+      onDeploymentsRefreshed?.()
 
       return {
         deployments: Array.from(funcsByDeployment, ([deploymentId, fns]) => ({
