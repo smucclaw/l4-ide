@@ -147,7 +147,9 @@ export class McpProxy implements vscode.Disposable {
           headers: { 'Content-Type': 'application/json', ...headers },
           body,
         })
-        return await resp.text()
+        const text = await resp.text()
+        if (resp.ok && text) return text
+        // Empty or error response — fall through to local handling
       } catch {
         // Service unreachable — fall through to local handling
       }
