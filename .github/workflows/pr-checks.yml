@@ -127,23 +127,8 @@ jobs:
           cabal-version: "latest"
           cabal-update: true
 
-      - name: Configure the build
-        run: |
-          cabal update
-          cabal configure --enable-tests --enable-benchmarks --disable-documentation
-          cabal build all --dry-run
-
-      # Cache both dependencies AND build artifacts
-      - name: Restore cached dependencies
-        uses: actions/cache/restore@v4
-        id: deps-cache
-        env:
-          key: ${{ runner.os }}-ghc-${{ steps.setup.outputs.ghc-version }}-cabal-${{ steps.setup.outputs.cabal-version }}
-        with:
-          path: ${{ steps.setup.outputs.cabal-store }}
-          key: ${{ env.key }}-plan-${{ hashFiles('**/plan.json') }}
-          restore-keys: ${{ env.key }}-
-
+      # Restore caches BEFORE configure so cabal can plan incrementally
+      # on top of existing build state rather than starting fresh.
       - name: Restore cached build artifacts
         uses: actions/cache/restore@v4
         id: build-cache
@@ -152,6 +137,22 @@ jobs:
           key: ${{ runner.os }}-ghc-${{ steps.setup.outputs.ghc-version }}-dist-${{ hashFiles('**/*.hs', '**/*.cabal') }}
           restore-keys: |
             ${{ runner.os }}-ghc-${{ steps.setup.outputs.ghc-version }}-dist-
+
+      - name: Restore cached dependencies
+        uses: actions/cache/restore@v4
+        id: deps-cache
+        env:
+          key: ${{ runner.os }}-ghc-${{ steps.setup.outputs.ghc-version }}-cabal-${{ steps.setup.outputs.cabal-version }}
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: ${{ env.key }}-plan-${{ hashFiles('**/*.cabal', 'cabal.project') }}
+          restore-keys: ${{ env.key }}-
+
+      - name: Configure the build
+        run: |
+          cabal update
+          cabal configure --enable-tests --enable-benchmarks --disable-documentation
+          cabal build all --dry-run
 
       - name: Install dependencies
         if: steps.deps-cache.outputs.cache-hit != 'true'
@@ -169,7 +170,7 @@ jobs:
 
       - name: Save cached build artifacts
         uses: actions/cache/save@v4
-        if: always()
+        if: success()
         with:
           path: dist-newstyle
           key: ${{ runner.os }}-ghc-${{ steps.setup.outputs.ghc-version }}-dist-${{ hashFiles('**/*.hs', '**/*.cabal') }}

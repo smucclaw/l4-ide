@@ -58,8 +58,10 @@ library
     DataPlane
     DeploymentLoader
     Logging
+    McpServer
     Options
     Schema
+    Shared
     Types
     WebMCPPage
 

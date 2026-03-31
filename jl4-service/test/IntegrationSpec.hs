@@ -313,8 +313,8 @@ spec = describe "integration" do
         resp <- httpLbs req mgr
         assertSuccess resp \r -> do
           -- trace=full should produce a non-trivial reasoning tree
-          let Reasoning tree = r.reasoning
-          show tree `shouldSatisfy` (not . null)
+          let ResponseWithReason{reasoning = tree} = r
+          isEmptyReasoning tree `shouldBe` False
 
     it "includes graphviz DOT when trace=full and graphviz=true" do
       withServiceFromSources "trace-gv" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do

@@ -120,7 +120,7 @@ Once a deployment is **Ready**, its functions are available as REST endpoints. Y
 
 ### List available functions
 
-Here are some was how to use the REST API from your command line:
+Here are some ways you can use the REST API from your command line:
 
 ```bash
 curl https://{your-org}.legalese.cloud/deployments/insurance-premium/functions
@@ -172,24 +172,66 @@ This returns which inputs are still needed, ranked by their impact on the result
 
 ---
 
-## Step 6: Expose to AI Agents with WebMCP
+## Step 6: Expose to AI Agents
 
-Once deployed, your L4 functions are automatically available as [WebMCP](https://webmachinelearning.github.io/webmcp/) tools. WebMCP is a W3C standard that lets websites expose structured tools to browser-based AI agents — no scraping or DOM inspection required.
+Once deployed, your L4 functions are automatically available to AI agents through two complementary protocols: **MCP** for server-side tool use and **WebMCP** for browser-based agents.
+
+### MCP (Model Context Protocol)
+
+The L4 service includes a built-in [MCP](https://modelcontextprotocol.io/) server that exposes your deployed functions as structured tools over JSON-RPC 2.0. LLM tool-use clients, agent frameworks, and IDE extensions can connect to it directly — no browser required.
+
+**Discover available tools:**
+
+```bash
+curl -X POST https://{your-org}.legalese.cloud/.mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
+
+**Call a tool:**
+
+```bash
+curl -X POST https://{your-org}.legalese.cloud/.mcp \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "tools/call",
+    "params": {
+      "name": "calculate-premium",
+      "arguments": {
+        "applicant": {
+          "age": 35,
+          "risk-score": 0.4,
+          "is-existing-customer": true
+        }
+      }
+    }
+  }'
+```
+
+You can also scope MCP to a single deployment by posting to `/{deployment-id}/.mcp` instead of `/.mcp`.
+
+The service logs every MCP tool call as structured JSON — the same format used for REST API requests — so you can monitor agent activity in your log aggregator alongside regular API traffic.
+
+### WebMCP (Browser AI Agents)
+
+[WebMCP](https://webmachinelearning.github.io/webmcp/) is a W3C standard that lets websites expose structured tools to browser-based AI agents — no scraping or DOM inspection required.
 
 The L4 service provides a JavaScript snippet you can embed on any web page:
 
 ```html
 <!-- Expose all deployed functions as WebMCP tools -->
-<script src="https://{your-org}.legalese.cloud/webmcp.js"></script>
+<script src="https://{your-org}.legalese.cloud/.webmcp/embed.js"></script>
 
 <!-- Scope to specific deployments -->
 <script
-  src="https://your-service/webmcp.js"
+  src="https://{your-org}.legalese.cloud/.webmcp/embed.js"
   data-scope="insurance-premium/*"
 ></script>
 ```
 
-The script registers discovery tools (`search_rules`, `get_rule_schema`, `evaluate_rule`) that AI agents can call to find and invoke your L4 rules. When the number of functions is small (≤ 20), direct per-function tools are also registered.
+The script registers discovery tools (`search_rules`, `get_rule_schema`, `evaluate_rule`) that browser AI agents can call to find and invoke your L4 rules. When the number of functions is small (≤ 20), direct per-function tools are also registered.
 
 You can explore your deployments and grab the embed snippet from the service's built-in deployment explorer at the service root URL.
 
@@ -204,7 +246,7 @@ You can explore your deployments and grab the embed snippet from the service's b
 | Preview  | Check the Deploy tab in VS Code                          |
 | Deploy   | Click Deploy, choose a name, confirm                     |
 | Manage   | Use the Deployments tab to inspect and undeploy          |
-| Call     | Use the REST API or embed WebMCP on a web page           |
+| Call     | Use the REST API, MCP, or embed WebMCP on a web page     |
 
 ---
 

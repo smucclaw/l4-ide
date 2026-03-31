@@ -167,9 +167,51 @@ curl -X POST http://localhost:8080/deployments/my-rules/functions/compute_qualif
 
 Returns which inputs are still needed, ranked by impact on the outcome.
 
-### WebMCP (AI Agent Integration)
+### MCP (Model Context Protocol)
 
-Deployments are automatically WebMCP-compatible. Browser AI agents can discover and call deployed L4 rules as structured tools.
+The service exposes an [MCP](https://modelcontextprotocol.io/) JSON-RPC 2.0 endpoint that AI agents and LLM tool-use clients can call directly. MCP provides structured tool discovery and invocation without requiring browser integration.
+
+| Method | Endpoint                    | Description                                               |
+| ------ | --------------------------- | --------------------------------------------------------- |
+| `GET`  | `/.well-known/mcp/manifest` | MCP discovery manifest (version, capabilities, endpoints) |
+| `POST` | `/.mcp`                     | Org-wide MCP JSON-RPC endpoint (all deployments)          |
+| `POST` | `/{id}/.mcp`                | Deployment-scoped MCP endpoint (short route)              |
+| `POST` | `/deployments/{id}/.mcp`    | Deployment-scoped MCP endpoint (canonical route)          |
+
+The org-wide endpoint (`/.mcp`) exposes tools from all deployments. The scoped endpoints (`/{id}/.mcp`) restrict tool visibility to a single deployment.
+
+#### MCP Discovery
+
+```bash
+# Fetch the MCP manifest
+curl http://localhost:8080/.well-known/mcp/manifest
+# {"version":"2025-03-26","capabilities":{"tools":true},"endpoints":{"mcp":"/.mcp"}}
+```
+
+#### MCP JSON-RPC
+
+Send standard JSON-RPC 2.0 requests to the `/.mcp` endpoint. The service supports `tools/list` (discover available tools) and `tools/call` (invoke a tool):
+
+```bash
+# List available tools
+curl -X POST http://localhost:8080/.mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+
+# Call a tool
+curl -X POST http://localhost:8080/.mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"my-rules/compute_qualifies","arguments":{"walks":true,"eats":true,"drinks":true}}}'
+
+# Scoped to a single deployment
+curl -X POST http://localhost:8080/my-rules/.mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
+
+### WebMCP (Browser AI Agent Integration)
+
+Deployments are automatically [WebMCP](https://webmachinelearning.github.io/webmcp/)-compatible. Browser AI agents can discover and call deployed L4 rules as structured tools via a JavaScript snippet.
 
 | Method | Endpoint                         | Description                                           |
 | ------ | -------------------------------- | ----------------------------------------------------- |
@@ -177,27 +219,32 @@ Deployments are automatically WebMCP-compatible. Browser AI agents can discover 
 | `GET`  | `/openapi.json`                  | Org-wide metadata (all deployments, all functions)    |
 | `GET`  | `/openapi.json?scope=deploy/*`   | Filtered by deployment/function scope                 |
 | `GET`  | `/deployments/{id}/openapi.json` | Single deployment metadata (existing)                 |
-| `GET`  | `/webmcp.js`                     | Org-wide JS that registers WebMCP tools               |
+| `GET`  | `/.webmcp/embed.js`              | Org-wide JS that registers WebMCP tools               |
 | `GET`  | `/.well-known/webmcp`            | Discovery manifest listing all deployments            |
 
 The `/openapi.json` endpoint serves cached metadata even for pending (lazy-loaded) deployments, so it works immediately after a restart without triggering compilation.
 
 The script registers **3 discovery tools** (`search_rules`, `get_rule_schema`, `evaluate_rule`) that work across all deployments. Direct per-function tools are also registered when the function count is small enough (≤ 20).
 
+> **Note:** The legacy path `/webmcp.js` is redirected to `/.webmcp/embed.js` with a 301. Update existing embeds when convenient.
+
 #### Embedding on Third-Party Websites
 
 ```html
 <!-- All deployments, all functions -->
-<script src="https://your-host/webmcp.js"></script>
+<script src="https://your-host/.webmcp/embed.js"></script>
 
 <!-- Scoped to specific deployments/functions -->
 <script
-  src="https://your-host/webmcp.js"
+  src="https://your-host/.webmcp/embed.js"
   data-scope="sell-scenario/*, safe-valuation/effective-sale-price"
 ></script>
 
 <!-- With API key for cross-origin auth -->
-<script src="https://your-host/webmcp.js" data-api-key="sk_live_xxx"></script>
+<script
+  src="https://your-host/.webmcp/embed.js"
+  data-api-key="sk_live_xxx"
+></script>
 ```
 
 **Configuration attributes:**
@@ -309,7 +356,9 @@ jl4-service/
     ControlPlane.hs         -- POST/GET/PUT/DELETE /deployments
     DataPlane.hs            -- /deployments/{id}/functions/... evaluation handlers
     DeploymentLoader.hs     -- Shared compilation logic (eager startup, lazy compile-on-access)
+    McpServer.hs            -- MCP JSON-RPC 2.0 handler (tools/list, tools/call)
     Schema.hs               -- OpenAPI spec generation
+    Shared.hs               -- Shared utilities (scope matching, metadata collection, JSON errors)
     WebMCPPage.hs           -- WebMCP deployment explorer + org-wide JS generation
     Backend/
       Api.hs                -- FnLiteral, ResponseWithReason, RunFunction

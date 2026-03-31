@@ -869,36 +869,24 @@ mkNormalName = NormalName
 -- ----------------------------------------------------------------------------
 
 buildReasoningTree :: Maybe EvalTrace -> Reasoning
-buildReasoningTree xs =
+buildReasoningTree Nothing  = emptyReasoning
+buildReasoningTree (Just t) = traceToReasoning t
+
+traceToReasoning :: EvalTrace -> Reasoning
+traceToReasoning (Trace lbl [] val) =
   Reasoning
-    { payload = toReasoningTree xs
-    }
-
-toReasoningTree :: Maybe EvalTrace -> ReasoningTree
-toReasoningTree Nothing  = ReasoningTree (ReasonNode [] []) []
-toReasoningTree (Just t) = toReasoningTree' t
-
-toReasoningTree' :: EvalTrace -> ReasoningTree
-toReasoningTree' (Trace lbl [] val) =
-  ReasoningTree
-    { payload =
-        ReasonNode
-          { exampleCode = labelExample lbl
-          , explanation = [resultLine val]
-          }
+    { exampleCode = labelExample lbl
+    , explanation = [resultLine val]
     , children = []
     }
-toReasoningTree' (Trace lbl [(expr, children)] val) =
-  ReasoningTree
-    { payload =
-        ReasonNode
-          { exampleCode = labelExample lbl <> [Print.prettyLayout expr]
-          , explanation = [resultLine val]
-          }
-    , children = fmap toReasoningTree' children
+traceToReasoning (Trace lbl [(expr, kids)] val) =
+  Reasoning
+    { exampleCode = labelExample lbl <> [Print.prettyLayout expr]
+    , explanation = [resultLine val]
+    , children = fmap traceToReasoning kids
     }
-toReasoningTree' (Trace lbl ((expr, children) : rest) val) =
-  toReasoningTree' (Trace lbl [(expr, children ++ [Trace lbl rest val])] val)
+traceToReasoning (Trace lbl ((expr, kids) : rest) val) =
+  traceToReasoning (Trace lbl [(expr, kids ++ [Trace lbl rest val])] val)
 
 labelExample :: Maybe Resolved -> [Text]
 labelExample = maybe [] (\resolved -> [nameToText (getOriginal resolved)])

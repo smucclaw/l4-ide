@@ -20,10 +20,10 @@ import qualified L4.StateGraph as StateGraph
 import Compiler (toDecl)
 import Logging (logInfo)
 import Options (Options (..))
+import Shared (jsonError)
 import Types
 
 import qualified Data.Aeson as Aeson
-import Data.Aeson ((.=), object)
 import Data.Int (Int64)
 import Control.Concurrent.Async (forConcurrently)
 import Control.Concurrent.STM (atomically, modifyTVar', readTVarIO)
@@ -31,7 +31,6 @@ import Control.Exception (catch)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Reader (runReaderT, asks, ask)
-import qualified Data.ByteString.Lazy as LBS
 import Data.List (find)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
@@ -544,6 +543,3 @@ determineTraceLevel mHeader mParam =
     Just "none" -> TraceNone
     _ -> maybe TraceNone id mParam
 
--- | Encode an error message as a JSON object: {"error": "..."}
-jsonError :: Text -> LBS.ByteString
-jsonError msg = Aeson.encode $ object ["error" .= msg]

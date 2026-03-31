@@ -5,15 +5,16 @@ module Application (defaultMain, app) where
 import qualified BundleStore
 import ControlPlane (ControlPlaneApi, controlPlaneHandler)
 import DataPlane (DataPlaneApi, dataPlaneHandler, ShortRoutes, shortRoutesHandler)
+import McpServer (mcpHandler)
 import DeploymentLoader (loadAndRegister)
 import Logging (Logger, logInfo, logDebug, logError, newLogger)
 import Options (Options (..), buildOpts)
+import Shared (collectMetadataEntries)
 import Types
 
 import Data.Aeson (toJSON, (.=))
 import qualified Data.Aeson as Aeson
 import Data.Text (Text)
-import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text.Encoding
 import Control.Concurrent.Async (mapConcurrently_)
 import Control.Concurrent.STM (atomically, modifyTVar', newTVarIO, readTVarIO)
@@ -37,7 +38,7 @@ import Servant
 import WebMCPPage (RawJs, JavaScript, renderExplorerPageBS, renderOrgWebMCPScript)
 
 -- | Combined service API.
-type ServiceApi = HealthApi :<|> WellKnownApi :<|> OrgOpenApiRoute :<|> WebMCPApi :<|> ControlPlaneApi :<|> DataPlaneApi :<|> ShortRoutes
+type ServiceApi = HealthApi :<|> WellKnownApi :<|> McpManifestApi :<|> OrgOpenApiRoute :<|> WebMCPApi :<|> McpApi :<|> McpScopedApi :<|> McpScopedLongApi :<|> ControlPlaneApi :<|> DataPlaneApi :<|> ShortRoutes
 
 -- | Health check endpoint.
 type HealthApi = "health" :> Get '[JSON] HealthResponse
@@ -49,7 +50,20 @@ type WellKnownApi = ".well-known" :> "webmcp" :> Get '[JSON] Aeson.Value
 type OrgOpenApiRoute = "openapi.json" :> QueryParam "scope" Text :> Get '[JSON] Aeson.Value
 
 -- | Org-wide WebMCP script endpoint.
-type WebMCPApi = "webmcp.js" :> Get '[JavaScript] RawJs
+-- RESERVED_SEGMENTS: .webmcp is a reserved path prefix (do not allow as deployment ID).
+type WebMCPApi = ".webmcp" :> "embed.js" :> Get '[JavaScript] RawJs
+
+-- | MCP manifest endpoint (/.well-known/mcp/manifest).
+type McpManifestApi = ".well-known" :> "mcp" :> "manifest" :> Get '[JSON] Aeson.Value
+
+-- | MCP JSON-RPC endpoint (org-wide, no deployment scope).
+type McpApi = ".mcp" :> ReqBody '[JSON] Aeson.Value :> Post '[JSON] Aeson.Value
+
+-- | MCP JSON-RPC endpoint scoped to a deployment (short route).
+type McpScopedApi = Capture "deploymentId" Text :> ".mcp" :> ReqBody '[JSON] Aeson.Value :> Post '[JSON] Aeson.Value
+
+-- | MCP JSON-RPC endpoint scoped to a deployment (long route).
+type McpScopedLongApi = "deployments" :> Capture "deploymentId" Text :> ".mcp" :> ReqBody '[JSON] Aeson.Value :> Post '[JSON] Aeson.Value
 
 -- | Main entry point.
 defaultMain :: IO ()
@@ -171,7 +185,7 @@ app env = serve (Proxy @ServiceApi) (serverT env)
 
 serverT :: AppEnv -> Server ServiceApi
 serverT env =
-  hoistServer (Proxy @ServiceApi) (nt env) (healthHandler :<|> wellKnownHandler :<|> orgOpenApiHandler :<|> webmcpHandler :<|> controlPlaneHandler :<|> dataPlaneHandler :<|> shortRoutesHandler)
+  hoistServer (Proxy @ServiceApi) (nt env) (healthHandler :<|> wellKnownHandler :<|> mcpManifestHandler :<|> orgOpenApiHandler :<|> webmcpHandler :<|> mcpRootHandler :<|> mcpScopedHandler :<|> mcpScopedLongHandler :<|> controlPlaneHandler :<|> dataPlaneHandler :<|> shortRoutesHandler)
  where
   nt :: AppEnv -> AppM a -> Handler a
   nt s x = runReaderT x s
@@ -214,7 +228,7 @@ wellKnownHandler = do
   liftIO $ logInfo env.logger "WebMCP manifest served" []
   pure $ Aeson.object
     [ "version" .= ("draft" :: String)
-    , "script" .= ("/webmcp.js" :: String)
+    , "script" .= ("/.webmcp/embed.js" :: String)
     , "deployments" .= readyDeployments
     ]
 
@@ -226,59 +240,51 @@ orgOpenApiHandler mScope = do
   env <- ask
   liftIO $ logInfo env.logger "OpenAPI schema requested"
     [("scope", toJSON mScope)]
-  registry <- liftIO . readTVarIO $ env.deploymentRegistry
-  let store = env.bundleStore
 
-  -- Collect metadata for all deployments (ready from memory, pending from cache)
-  allEntries <- liftIO $ fmap concat $ mapM (\(did, state) -> do
-    mMeta <- case state of
-      DeploymentReady _ meta -> pure (Just meta)
-      _ -> do
-        mBytes <- BundleStore.loadMetadataCache store did.unDeploymentId
-        case mBytes of
-          Just bytes -> case Aeson.eitherDecode bytes of
-            Right meta -> pure (Just meta)
-            Left _ -> pure Nothing
-          Nothing -> pure Nothing
-    pure $ case mMeta of
-      Nothing -> []
-      Just meta ->
+  entries <- collectMetadataEntries mScope
+  let allEntries =
         [ Aeson.object
-          [ "deployment" .= did.unDeploymentId
+          [ "deployment" .= deployId
           , "name" .= fn.fsName
           , "description" .= fn.fsDescription
           , "parameters" .= fn.fsParameters
           , "returnType" .= fn.fsReturnType
           , "isDeontic" .= fn.fsIsDeontic
           ]
-        | fn <- meta.metaFunctions
-        , matchesScope mScope did.unDeploymentId fn.fsName
+        | (deployId, fn) <- entries
         ]
-    ) (Map.toList registry)
 
   pure $ Aeson.object
     [ "functions" .= allEntries
     ]
 
--- | Check if a deployment/function matches the scope filter.
-matchesScope :: Maybe Text -> Text -> Text -> Bool
-matchesScope Nothing _ _ = True
-matchesScope (Just scope) deployId fnName =
-  any matchPattern (Text.splitOn "," scope)
- where
-  matchPattern pat =
-    let trimmed = Text.strip pat
-        (depPat, rest) = Text.breakOn "/" trimmed
-        fnPat = if Text.null rest then "*" else Text.drop 1 rest
-    in (depPat == "*" || depPat == deployId)
-       && (fnPat == "*" || fnPat == fnName)
-
--- | GET /webmcp.js — org-wide WebMCP script.
+-- | GET /.webmcp/embed.js — org-wide WebMCP script.
 webmcpHandler :: ServerT WebMCPApi AppM
 webmcpHandler = do
   env <- ask
   liftIO $ logInfo env.logger "WebMCP script served" []
   pure renderOrgWebMCPScript
+
+-- | GET /.well-known/mcp/manifest — MCP discovery manifest.
+mcpManifestHandler :: ServerT McpManifestApi AppM
+mcpManifestHandler = do
+  pure $ Aeson.object
+    [ "version" .= ("2025-03-26" :: Text)
+    , "capabilities" .= Aeson.object [ "tools" .= True ]
+    , "endpoints" .= Aeson.object [ "mcp" .= ("/.mcp" :: Text) ]
+    ]
+
+-- | POST /.mcp — org-wide MCP JSON-RPC endpoint (no deployment scope).
+mcpRootHandler :: ServerT McpApi AppM
+mcpRootHandler = mcpHandler Nothing
+
+-- | POST /{deploymentId}/.mcp — deployment-scoped MCP JSON-RPC endpoint.
+mcpScopedHandler :: ServerT McpScopedApi AppM
+mcpScopedHandler deployIdText = mcpHandler (Just deployIdText)
+
+-- | POST /deployments/{deploymentId}/.mcp — deployment-scoped MCP JSON-RPC endpoint (long route).
+mcpScopedLongHandler :: ServerT McpScopedLongApi AppM
+mcpScopedLongHandler deployIdText = mcpHandler (Just deployIdText)
 
 -- | Middleware: serve the deployment explorer page on GET / with Accept: text/html.
 explorerMiddleware :: Logger -> Middleware

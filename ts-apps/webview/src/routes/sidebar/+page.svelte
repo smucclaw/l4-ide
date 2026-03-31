@@ -161,7 +161,11 @@
     return fileName.replace(/\.l4$/i, '').replace(/[^a-zA-Z0-9_-]/g, '-')
   }
 
-  const deploymentIdPattern = /^[a-zA-Z0-9_-]{1,36}$/
+  const deploymentIdPattern = /^[a-zA-Z0-9_\s-]{1,36}$/
+
+  function sanitizeDeploymentId(raw: string): string {
+    return raw.trim().replace(/\s+/g, '-')
+  }
 
   function showDeployForm() {
     deploymentIdInput = deriveDeploymentId(activeFileName)
@@ -306,12 +310,17 @@
 
   async function continueDeploy() {
     if (!messenger) return
-    const id = deploymentIdInput.trim()
-    if (!deploymentIdPattern.test(id)) {
+    const raw = deploymentIdInput.trim()
+    if (!deploymentIdPattern.test(raw)) {
       deploymentIdError =
-        'Must be 1-36 chars: letters, numbers, hyphens, underscores'
+        'Must be 1-36 chars: letters, numbers, hyphens, underscores, spaces'
       return
     }
+    if (raw.startsWith('.')) {
+      deploymentIdError = 'Must not start with a dot'
+      return
+    }
+    const id = sanitizeDeploymentId(raw)
     deploymentIdError = ''
     verifying = true
 
@@ -343,7 +352,7 @@
   }
 
   async function deployAnyway() {
-    await executeDeploy(deploymentIdInput.trim())
+    await executeDeploy(sanitizeDeploymentId(deploymentIdInput))
   }
 
   async function executeDeploy(deploymentId: string) {
@@ -1080,6 +1089,7 @@
     align-items: center;
     gap: 6px;
     line-height: 1.3;
+    min-height: 18px;
   }
 
   .status-dot {
@@ -1367,6 +1377,7 @@
 
   .menu-wrapper {
     position: relative;
+    min-height: 18px;
   }
 
   .status-row-btn {
@@ -1383,6 +1394,8 @@
     font: inherit;
     text-align: left;
     line-height: 1.3;
+    min-height: 0;
+    vertical-align: top;
   }
 
   .status-label-inline {

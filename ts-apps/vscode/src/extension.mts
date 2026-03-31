@@ -13,6 +13,7 @@ import type { PanelConfig } from './webview-panel.js'
 import { PanelManager } from './webview-panel.js'
 
 import { VSCodeL4LanguageClient } from './vscode-l4-language-client.js'
+import { McpProxy } from './mcp-proxy.js'
 
 import { RenderAsLadderInfo, VersionedDocId } from '@repo/viz-expr'
 import { Schema } from 'effect'
@@ -468,13 +469,27 @@ export async function activate(context: ExtensionContext) {
   const auth = new AuthManager(context.secrets, outputChannel)
   const serviceClient = new ServiceClient(auth)
 
+  // Start local MCP proxy — always running, returns empty tools when disconnected
+  const mcpProxy = new McpProxy(auth, outputChannel, context.globalState)
+  context.subscriptions.push(mcpProxy)
+  mcpProxy.start()
+
   // Register URI handler for legalese.cloud login callback
   context.subscriptions.push(
     vscode.window.registerUriHandler({
-      handleUri: (uri) => auth.handleAuthCallback(uri),
+      handleUri: (uri: vscode.Uri) => auth.handleAuthCallback(uri),
     })
   )
   context.subscriptions.push(auth)
+
+  // Offer Claude Code setup when connection becomes active
+  context.subscriptions.push(
+    auth.onDidChange((state) => {
+      if (state.connected) {
+        mcpProxy.offerClaudeCodeSetup()
+      }
+    })
+  )
 
   // Auto-connect on startup (runs in background, doesn't block activation)
   auth.initialize()
@@ -536,7 +551,16 @@ export async function activate(context: ExtensionContext) {
   )
 
   // Start the client. This will also launch the server
-  await client.start()
+  try {
+    await client.start()
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    outputChannel.appendLine(`[client] Couldn't connect to jl4-lsp: ${msg}`)
+    vscode.window.showWarningMessage(
+      `Couldn't connect to jl4-lsp. L4 language features are unavailable. Set jl4.serverExecutablePath in settings or install jl4-lsp on your PATH.`
+    )
+    return
+  }
 
   // After evaluation completes, the LSP sends l4/directiveResultsUpdated with all
   // current directive results. Forward them to the inspector webview as SyncInspectorResults.

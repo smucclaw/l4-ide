@@ -48,25 +48,20 @@ instance Arbitrary FnLiteral where
       ]
 
 instance Arbitrary Reasoning where
-  arbitrary = Reasoning <$> arbitrary
-
-instance Arbitrary ReasonNode where
-  arbitrary = ReasonNode <$> arbitrary <*> arbitrary
-
-instance Arbitrary ReasoningTree where
   arbitrary = Q.sized $ \n -> do
     k <- Q.chooseInt (0, n)
     go k
    where
     go n = do
-      node <- arbitrary
+      code <- arbitrary
+      expl <- arbitrary
       pars <- arbPartition (n - 1)
       forest <- mapM go pars
-      return $
-        ReasoningTree
-          { payload = node
-          , children = forest
-          }
+      return Reasoning
+        { exampleCode = code
+        , explanation = expl
+        , children = forest
+        }
 
     arbPartition :: Int -> Q.Gen [Int]
     arbPartition k = case compare k 1 of

@@ -16,6 +16,7 @@ import Compiler (compileBundle, computeVersion)
 import DeploymentLoader (triggerCompilationIfPending)
 import Logging (logInfo, logWarn, logError)
 import Options (Options (..))
+import Shared (jsonError)
 import Types
 
 import Control.Applicative ((<|>))
@@ -25,7 +26,7 @@ import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Reader (asks)
 import qualified Codec.Archive.Zip as Zip
-import Data.Aeson (FromJSON, ToJSON, toJSON, (.=), object)
+import Data.Aeson (FromJSON, ToJSON, toJSON, (.=))
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy as LBS
 import Data.Char (isAlphaNum)
@@ -329,12 +330,14 @@ stateToResponse debugMode (DeploymentId did) = \case
 -- | Reserved words that cannot be used as deployment IDs.
 -- These correspond to top-level route segments in the API.
 reservedWords :: [Text]
-reservedWords = ["health", "deployments"]
+reservedWords = ["health", "deployments", "openapi.json"]
 
 validateDeploymentId :: Text -> AppM ()
 validateDeploymentId deployId = do
   when (deployId `elem` reservedWords) $
     throwError err400 { errBody = jsonError "Deployment ID is a reserved word" }
+  when (Text.isPrefixOf "." deployId) $
+    throwError err400 { errBody = jsonError "Deployment ID must not start with a dot" }
   when (Text.length deployId > 36) $
     throwError err400 { errBody = jsonError "Deployment ID exceeds maximum length of 36 characters" }
   when (Text.isInfixOf ".." deployId) $
@@ -387,7 +390,4 @@ extractSourcesFromMultipart multipart = do
         then throwError $ err400 { errBody = jsonError "Zip archive contains no files" }
         else pure (Map.fromList l4Entries)
 
--- | Encode an error message as a JSON object: {"error": "..."}
-jsonError :: Text -> LBS.ByteString
-jsonError msg = Aeson.encode $ object ["error" .= msg]
 
