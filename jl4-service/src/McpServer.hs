@@ -5,6 +5,7 @@ module McpServer (
   mcpHandler,
 ) where
 
+import DeploymentLoader (triggerCompilationIfPending)
 import Logging (logInfo, logWarn)
 import Shared (collectMetadataEntries)
 import Types
@@ -194,8 +195,9 @@ callTool mScope reqId toolName arguments = do
               ]
             _ -> []
 
-      -- Look up the deployment and function
+      -- Look up the deployment and function, triggering lazy compilation if needed
       let did = DeploymentId deployId
+      triggerCompilationIfPending did
       registry <- liftIO $ readTVarIO env.deploymentRegistry
       case Map.lookup did registry of
         Just (DeploymentReady fns _meta) ->
@@ -223,8 +225,12 @@ callTool mScope reqId toolName arguments = do
                     ]
             Nothing ->
               pure $ jsonRpcError reqId (-32602) ("Function not found: " <> fnName)
+        Just DeploymentCompiling ->
+          pure $ jsonRpcError reqId (-32002) ("Deployment is still compiling: " <> deployId)
+        Just (DeploymentFailed err) ->
+          pure $ jsonRpcError reqId (-32002) ("Deployment failed to compile: " <> err)
         _ ->
-          pure $ jsonRpcError reqId (-32602) ("Deployment not ready: " <> deployId)
+          pure $ jsonRpcError reqId (-32602) ("Deployment not found: " <> deployId)
 
 -- | Run evaluation for an MCP tool call.
 -- Returns Left errorText or Right resultJsonText.
