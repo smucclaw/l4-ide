@@ -22,6 +22,8 @@ import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map)
 import Data.Text (Text)
 import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text.Encoding
+import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Maybe as Maybe
 import GHC.Conc (setAllocationCounter, getAllocationCounter, enableAllocationLimit)
 import GHC.IO.Exception (AllocationLimitExceeded (..))
@@ -285,7 +287,8 @@ runMcpEvaluation vf args = do
         Just (Left err) ->
           pure $ Left (Text.pack (show err))
         Just (Right rwr) ->
-          pure $ Right (Text.pack (show (Aeson.toJSON (SimpleResponse rwr))))
+          let encoded = Aeson.encode (SimpleResponse rwr)
+          in pure $ Right (Text.Encoding.decodeUtf8 (LBS.toStrict encoded))
 
 -- ----------------------------------------------------------------------------
 -- JSON-RPC helpers
