@@ -171,19 +171,24 @@ Returns which inputs are still needed, ranked by impact on the outcome.
 
 The service exposes an [MCP](https://modelcontextprotocol.io/) JSON-RPC 2.0 endpoint that AI agents and LLM tool-use clients can call directly. MCP provides structured tool discovery and invocation without requiring browser integration.
 
-| Method | Endpoint                    | Description                                               |
-| ------ | --------------------------- | --------------------------------------------------------- |
-| `GET`  | `/.well-known/mcp/manifest` | MCP discovery manifest (version, capabilities, endpoints) |
-| `POST` | `/.mcp`                     | Org-wide MCP JSON-RPC endpoint (all deployments)          |
-| `POST` | `/{id}/.mcp`                | Deployment-scoped MCP endpoint (short route)              |
-| `POST` | `/deployments/{id}/.mcp`    | Deployment-scoped MCP endpoint (canonical route)          |
+| Method | Endpoint                    | Description                                                   |
+| ------ | --------------------------- | ------------------------------------------------------------- |
+| `GET`  | `/.well-known/mcp`          | MCP discovery endpoint (server info, capabilities, endpoints) |
+| `GET`  | `/.well-known/mcp/manifest` | MCP manifest (legacy/alternative discovery)                   |
+| `POST` | `/.mcp`                     | Org-wide MCP JSON-RPC endpoint (all deployments)              |
+| `POST` | `/{id}/.mcp`                | Deployment-scoped MCP endpoint (short route)                  |
+| `POST` | `/deployments/{id}/.mcp`    | Deployment-scoped MCP endpoint (canonical route)              |
 
 The org-wide endpoint (`/.mcp`) exposes tools from all deployments. The scoped endpoints (`/{id}/.mcp`) restrict tool visibility to a single deployment.
 
 #### MCP Discovery
 
 ```bash
-# Fetch the MCP manifest
+# Fetch the MCP discovery document (primary endpoint)
+curl http://localhost:8080/.well-known/mcp
+# {"name":"L4 Rules Engine","version":"1.0.0","protocol_version":"2025-03-26","capabilities":{"tools":{}},...}
+
+# Fetch the MCP manifest (legacy/alternative)
 curl http://localhost:8080/.well-known/mcp/manifest
 # {"version":"2025-03-26","capabilities":{"tools":true},"endpoints":{"mcp":"/.mcp"}}
 ```
