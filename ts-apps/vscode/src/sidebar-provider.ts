@@ -268,6 +268,10 @@ export function initializeSidebarMessenger(
       outputChannel.appendLine(
         `[sidebar] Error listing deployments: ${err instanceof Error ? err.message : String(err)}`
       )
+      outputChannel.appendLine(
+        `[sidebar] Disconnecting session due to deployment listing failure`
+      )
+      await auth.logout()
       return { deployments: [] }
     }
   })
