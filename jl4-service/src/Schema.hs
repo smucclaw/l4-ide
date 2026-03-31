@@ -106,8 +106,6 @@ instance ToSchema EvaluatorError
 instance ToSchema ParameterMismatch
 instance ToSchema ResponseWithReason
 instance ToSchema Reasoning
-instance ToSchema ReasoningTree
-instance ToSchema ReasonNode
 instance ToSchema FnArguments
 instance ToSchema TraceEvent
 instance ToSchema DeploymentMetadata where

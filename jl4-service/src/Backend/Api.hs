@@ -1,5 +1,6 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Backend.Api (
@@ -200,54 +201,49 @@ data ResponseWithReason = ResponseWithReason
   }
   deriving (Show, Read, Ord, Eq, Generic)
 
+-- | Derive the response tag based on content present.
+responseTag :: ResponseWithReason -> Text
+responseTag rwr
+  | Just _ <- rwr.graphviz = "GraphVizResponse"
+  | not (isEmptyReasoning rwr.reasoning) = "TraceResponse"
+  | otherwise = "SimpleResponse"
+
 instance ToJSON ResponseWithReason where
   toJSON rwr = Aeson.object $
-    [ "result"    .= rwr.fnResult
-    , "reasoning" .= rwr.reasoning
-    ] <> maybe [] (\g -> ["graphviz" .= g]) rwr.graphviz
+    [ "result" .= rwr.fnResult ]
+    <> (if isEmptyReasoning rwr.reasoning then [] else ["reasoning" .= rwr.reasoning])
+    <> maybe [] (\g -> ["graphviz" .= g]) rwr.graphviz
 
 instance FromJSON ResponseWithReason where
   parseJSON = Aeson.withObject "ResponseWithReason" $ \o ->
     ResponseWithReason
-      <$> (o .: "result"    <|> o .: "fnResult")
-      <*> o .: "reasoning"
+      <$> (o .: "result" <|> o .: "fnResult")
+      <*> (o .:? "reasoning" .!= emptyReasoning)
       <*> o .:? "graphviz"
 
--- | Wrap our reasoning into a top-level field.
-newtype Reasoning = Reasoning
-  { payload :: ReasoningTree
+-- | A reasoning tree node with optional children.
+-- Flattened for clean JSON: { exampleCode, explanation, children }
+data Reasoning = Reasoning
+  { exampleCode :: [Text]
+  , explanation :: [Text]
+  , children    :: [Reasoning]
   }
   deriving (Show, Read, Ord, Eq, Generic)
   deriving anyclass (FromJSON, ToJSON)
 
+emptyReasoning :: Reasoning
+emptyReasoning = Reasoning
+  { exampleCode = []
+  , explanation = []
+  , children    = []
+  }
+
+isEmptyReasoning :: Reasoning -> Bool
+isEmptyReasoning r =
+  null r.exampleCode && null r.explanation && null r.children
+
 emptyTree :: Reasoning
-emptyTree =
-  Reasoning
-    { payload =
-        ReasoningTree
-          { payload =
-              ReasonNode
-                { exampleCode = []
-                , explanation = []
-                }
-          , children = []
-          }
-    }
-
--- | Basically a rose tree, but serialisable to json and specialised to our purposes.
-data ReasoningTree = ReasoningTree
-  { payload :: ReasonNode
-  , children :: [ReasoningTree]
-  }
-  deriving stock (Show, Read, Ord, Eq, Generic)
-  deriving anyclass (FromJSON, ToJSON)
-
-data ReasonNode = ReasonNode
-  { exampleCode :: [Text]
-  , explanation :: [Text]
-  }
-  deriving stock (Show, Read, Ord, Eq, Generic)
-  deriving anyclass (FromJSON, ToJSON)
+emptyTree = emptyReasoning
 
 -- | An 'EvaluatorError' is some form of panic thrown by an evaluator.
 -- The execution of a function had to be interrupted for /some/ reason.

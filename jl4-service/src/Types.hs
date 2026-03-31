@@ -26,7 +26,7 @@ module Types (
   AppM,
 ) where
 
-import Backend.Api (EvalBackend, FnLiteral, RunFunction, EvaluatorError, ResponseWithReason, GraphVizResponse)
+import Backend.Api (EvalBackend, FnLiteral, RunFunction, EvaluatorError, ResponseWithReason, GraphVizResponse, responseTag)
 import Backend.DecisionQueryPlan (CachedDecisionQuery)
 import L4.FunctionSchema (Parameters)
 import Backend.Jl4 (CompiledModule)
@@ -219,11 +219,32 @@ instance FromJSON Function where
       props
 
 -- | Evaluation response: either a result with reasoning, or an error.
+-- Tags reflect content: SimpleResponse (result only), TraceResponse
+-- (result + reasoning), GraphVizResponse (result + reasoning + graphviz).
 data SimpleResponse
   = SimpleResponse !ResponseWithReason
   | SimpleError !EvaluatorError
   deriving stock (Show, Read, Ord, Eq, Generic)
-  deriving anyclass (FromJSON, ToJSON)
+
+instance ToJSON SimpleResponse where
+  toJSON (SimpleError err) = Aeson.object
+    [ "tag" .= ("Error" :: Text)
+    , "contents" .= err
+    ]
+  toJSON (SimpleResponse rwr) = Aeson.object
+    [ "tag" .= tag
+    , "contents" .= rwr
+    ]
+   where
+    tag :: Text
+    tag = responseTag rwr
+
+instance FromJSON SimpleResponse where
+  parseJSON = Aeson.withObject "SimpleResponse" $ \o -> do
+    tag <- o .:? "tag" :: Parser (Maybe Text)
+    case tag of
+      Just "Error" -> SimpleError <$> o .: "contents"
+      _ -> SimpleResponse <$> o .: "contents"
 
 -- ----------------------------------------------------------------------------
 -- Batch types
