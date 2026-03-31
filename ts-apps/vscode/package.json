@@ -137,6 +137,12 @@
         "command": "l4.renderResult",
         "title": "Track result"
       }
+    ],
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "l4-tools",
+        "label": "L4 Tools"
+      }
     ]
   },
   "prettier": "@repo/prettier-config",

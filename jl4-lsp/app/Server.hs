@@ -29,7 +29,7 @@ import L4.EvaluateLazy.GraphVizOptions (defaultGraphVizOptions)
 
 import Control.Concurrent.Strict
     ( newEmptyMVar, putMVar, tryReadMVar, withNumCapabilities, writeChan, newChan, readChan )
-import Control.Monad (unless, forever)
+import Control.Monad (unless, forever, when)
 import Control.Monad.IO.Class
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson as J
@@ -275,21 +275,23 @@ defaultMain recorder args = do
           (handlers args.evalConfig (cmapWithPrio LogHandlers recorder))
 
       -- See Note [Client configuration in Rules]
+      -- Only restart build session if the config actually changed
       onConfigChange :: MVar IdeState -> Config -> ServerM Config ()
       onConfigChange ideStateVar cfg = do
-        -- TODO: this is nuts, we're converting back to JSON just to get a fingerprint
-        let
-          cfgObj = J.toJSON cfg
+        let cfgObj = J.toJSON cfg
         mide <- liftIO $ tryReadMVar ideStateVar
         case mide of
           Nothing -> pure ()
           Just ide -> liftIO $ do
-            let
-              msg = Text.pack $ show cfg
-            setSomethingModified Shake.VFSUnmodified ide "config change" $ do
-              logWith recorder Debug $ LogConfigurationChange msg
-              modifyClientSettings ide (const $ Just cfgObj)
-              return [toNoFileKey Rules.GetClientSettings]
+            -- Check if config actually changed before triggering rebuild
+            prevCfg <- getClientSettingsIO ide
+            let changed = prevCfg /= Just cfgObj
+            when changed $ do
+              let msg = Text.pack $ show cfg
+              setSomethingModified Shake.VFSUnmodified ide "config change" $ do
+                logWith recorder Debug $ LogConfigurationChange msg
+                modifyClientSettings ide (const $ Just cfgObj)
+                return [toNoFileKey Rules.GetClientSettings]
 
     let runServerWithCommunication comm
           = do
