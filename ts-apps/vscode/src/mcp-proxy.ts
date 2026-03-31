@@ -42,16 +42,29 @@ export class McpProxy implements vscode.Disposable {
       this.handleRequest(req, res)
     })
 
-    await new Promise<void>((resolve, reject) => {
-      this.server!.listen(0, '127.0.0.1', () => {
-        const addr = this.server!.address()
-        if (addr && typeof addr === 'object') {
-          this.port = addr.port
-        }
-        resolve()
+    const port =
+      vscode.workspace.getConfiguration('jl4').get<number>('mcpPort') ?? 19415
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        this.server!.once('error', reject)
+        this.server!.listen(port, '127.0.0.1', () => {
+          this.server!.removeAllListeners('error')
+          this.port = port
+          resolve()
+        })
       })
-      this.server!.on('error', reject)
-    })
+    } catch {
+      this.server.close()
+      this.server = null
+      this.outputChannel.appendLine(
+        `[mcp-proxy] Could not bind to port ${port}`
+      )
+      vscode.window.showErrorMessage(
+        `L4 MCP server can't bind to localhost:${port}. Change the port in Settings → jl4.mcpPort.`
+      )
+      return
+    }
 
     this.outputChannel.appendLine(
       `[mcp-proxy] Started on http://127.0.0.1:${this.port}/.mcp`
@@ -72,6 +85,9 @@ export class McpProxy implements vscode.Disposable {
     } catch {
       // API not available in this VS Code version — proxy still works via URL
     }
+
+    // If Claude Code already has l4-rules configured, update the port
+    this.updateClaudeCodePort()
   }
 
   /** The local MCP endpoint URL, or undefined if not running. */
@@ -193,8 +209,32 @@ export class McpProxy implements vscode.Disposable {
   }
 
   /**
-   * If Claude Code's config exists (~/.claude.json), offer to add the
-   * local MCP proxy so Claude Code can access L4 tools automatically.
+   * If Claude Code's config has l4-rules, silently update the port
+   * to match the current proxy. Called on every start().
+   */
+  private updateClaudeCodePort(): void {
+    if (!this.port) return
+    const claudeConfigPath = path.join(os.homedir(), '.claude.json')
+    try {
+      const raw = fs.readFileSync(claudeConfigPath, 'utf-8')
+      const config = JSON.parse(raw)
+      const existing = config?.mcpServers?.['l4-rules']
+      if (!existing) return // not configured — don't touch
+      const newUrl = `http://127.0.0.1:${this.port}/.mcp`
+      if (existing.url === newUrl) return // already correct
+      config.mcpServers['l4-rules'] = { ...existing, url: newUrl }
+      fs.writeFileSync(claudeConfigPath, JSON.stringify(config, null, 2))
+      this.outputChannel.appendLine(
+        `[mcp-proxy] Updated Claude Code port to ${this.port}`
+      )
+    } catch {
+      // Config doesn't exist or isn't parseable — skip silently
+    }
+  }
+
+  /**
+   * If Claude Code is installed but l4-rules isn't configured yet,
+   * offer to add it.
    */
   async offerClaudeCodeSetup(): Promise<void> {
     if (!this.port) return
@@ -206,13 +246,16 @@ export class McpProxy implements vscode.Disposable {
       return // Claude Code not installed
     }
 
-    // Check if already configured
+    // Already configured — just ensure port is current
     try {
       const raw = fs.readFileSync(claudeConfigPath, 'utf-8')
       const config = JSON.parse(raw)
-      if (config?.mcpServers?.['l4-rules']) return // already set up
+      if (config?.mcpServers?.['l4-rules']) {
+        this.updateClaudeCodePort()
+        return
+      }
     } catch {
-      return // can't parse config
+      return
     }
 
     // Check if user previously dismissed

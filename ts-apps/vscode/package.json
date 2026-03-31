@@ -106,6 +106,12 @@
             "type": "string",
             "default": "",
             "markdownDescription": "API key (`sk_...`) for authenticating with a self-hosted jl4-service. Not needed when using Legalese Cloud login."
+          },
+          "jl4.mcpPort": {
+            "scope": "machine-overridable",
+            "type": "number",
+            "default": 19415,
+            "markdownDescription": "Local port for the L4 MCP proxy server. AI tools (Claude Code, Copilot, Cursor) connect to this port to access L4 rules."
           }
         }
       }
