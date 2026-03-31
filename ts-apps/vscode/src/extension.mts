@@ -470,7 +470,7 @@ export async function activate(context: ExtensionContext) {
   const serviceClient = new ServiceClient(auth)
 
   // Start local MCP proxy — always running, returns empty tools when disconnected
-  const mcpProxy = new McpProxy(auth, outputChannel)
+  const mcpProxy = new McpProxy(auth, outputChannel, context.globalState)
   context.subscriptions.push(mcpProxy)
   mcpProxy.start()
 

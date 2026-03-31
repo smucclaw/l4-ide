@@ -16,17 +16,22 @@ import type { AuthManager } from './auth.js'
  * the user's credentials. When disconnected or unauthenticated, returns
  * an empty tool list so the server stays registered but inert.
  */
+const CLAUDE_SETUP_DISMISSED_KEY = 'l4.claudeCodeSetupDismissed'
+
 export class McpProxy implements vscode.Disposable {
   private server: http.Server | null = null
   private port: number = 0
   private mcpRegistration: vscode.Disposable | undefined
   private outputChannel: vscode.OutputChannel
+  private globalState: vscode.Memento | undefined
 
   constructor(
     private readonly auth: AuthManager,
-    outputChannel: vscode.OutputChannel
+    outputChannel: vscode.OutputChannel,
+    globalState?: vscode.Memento
   ) {
     this.outputChannel = outputChannel
+    this.globalState = globalState
   }
 
   /** Start the proxy and register with VS Code. Call once on activation. */
@@ -210,11 +215,19 @@ export class McpProxy implements vscode.Disposable {
       return // can't parse config
     }
 
+    // Check if user previously dismissed
+    if (this.globalState?.get<boolean>(CLAUDE_SETUP_DISMISSED_KEY)) return
+
     const action = await vscode.window.showInformationMessage(
       'Add L4 Tools to Claude Code?',
       'Yes',
-      'No'
+      'No',
+      'Never'
     )
+    if (action === 'Never') {
+      this.globalState?.update(CLAUDE_SETUP_DISMISSED_KEY, true)
+      return
+    }
     if (action !== 'Yes') return
 
     try {
