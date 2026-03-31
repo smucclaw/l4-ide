@@ -1089,6 +1089,7 @@
     align-items: center;
     gap: 6px;
     line-height: 1.3;
+    min-height: 18px;
   }
 
   .status-dot {
@@ -1376,6 +1377,7 @@
 
   .menu-wrapper {
     position: relative;
+    min-height: 18px;
   }
 
   .status-row-btn {
@@ -1392,6 +1394,8 @@
     font: inherit;
     text-align: left;
     line-height: 1.3;
+    min-height: 0;
+    vertical-align: top;
   }
 
   .status-label-inline {
