@@ -58,6 +58,7 @@ library
     DataPlane
     DeploymentLoader
     Logging
+    McpServer
     Options
     Schema
     Types

@@ -5,6 +5,7 @@ module Application (defaultMain, app) where
 import qualified BundleStore
 import ControlPlane (ControlPlaneApi, controlPlaneHandler)
 import DataPlane (DataPlaneApi, dataPlaneHandler, ShortRoutes, shortRoutesHandler)
+import McpServer (mcpHandler)
 import DeploymentLoader (loadAndRegister)
 import Logging (Logger, logInfo, logDebug, logError, newLogger)
 import Options (Options (..), buildOpts)
@@ -37,7 +38,7 @@ import Servant
 import WebMCPPage (RawJs, JavaScript, renderExplorerPageBS, renderOrgWebMCPScript)
 
 -- | Combined service API.
-type ServiceApi = HealthApi :<|> WellKnownApi :<|> OrgOpenApiRoute :<|> WebMCPApi :<|> ControlPlaneApi :<|> DataPlaneApi :<|> ShortRoutes
+type ServiceApi = HealthApi :<|> WellKnownApi :<|> McpManifestApi :<|> OrgOpenApiRoute :<|> WebMCPApi :<|> McpApi :<|> McpScopedApi :<|> McpScopedLongApi :<|> ControlPlaneApi :<|> DataPlaneApi :<|> ShortRoutes
 
 -- | Health check endpoint.
 type HealthApi = "health" :> Get '[JSON] HealthResponse
@@ -49,7 +50,20 @@ type WellKnownApi = ".well-known" :> "webmcp" :> Get '[JSON] Aeson.Value
 type OrgOpenApiRoute = "openapi.json" :> QueryParam "scope" Text :> Get '[JSON] Aeson.Value
 
 -- | Org-wide WebMCP script endpoint.
-type WebMCPApi = "webmcp.js" :> Get '[JavaScript] RawJs
+-- RESERVED_SEGMENTS: .webmcp is a reserved path prefix (do not allow as deployment ID).
+type WebMCPApi = ".webmcp" :> "embed.js" :> Get '[JavaScript] RawJs
+
+-- | MCP manifest endpoint (/.well-known/mcp/manifest).
+type McpManifestApi = ".well-known" :> "mcp" :> "manifest" :> Get '[JSON] Aeson.Value
+
+-- | MCP JSON-RPC endpoint (org-wide, no deployment scope).
+type McpApi = ".mcp" :> ReqBody '[JSON] Aeson.Value :> Post '[JSON] Aeson.Value
+
+-- | MCP JSON-RPC endpoint scoped to a deployment (short route).
+type McpScopedApi = Capture "deploymentId" Text :> ".mcp" :> ReqBody '[JSON] Aeson.Value :> Post '[JSON] Aeson.Value
+
+-- | MCP JSON-RPC endpoint scoped to a deployment (long route).
+type McpScopedLongApi = "deployments" :> Capture "deploymentId" Text :> ".mcp" :> ReqBody '[JSON] Aeson.Value :> Post '[JSON] Aeson.Value
 
 -- | Main entry point.
 defaultMain :: IO ()
@@ -171,7 +185,7 @@ app env = serve (Proxy @ServiceApi) (serverT env)
 
 serverT :: AppEnv -> Server ServiceApi
 serverT env =
-  hoistServer (Proxy @ServiceApi) (nt env) (healthHandler :<|> wellKnownHandler :<|> orgOpenApiHandler :<|> webmcpHandler :<|> controlPlaneHandler :<|> dataPlaneHandler :<|> shortRoutesHandler)
+  hoistServer (Proxy @ServiceApi) (nt env) (healthHandler :<|> wellKnownHandler :<|> mcpManifestHandler :<|> orgOpenApiHandler :<|> webmcpHandler :<|> mcpRootHandler :<|> mcpScopedHandler :<|> mcpScopedLongHandler :<|> controlPlaneHandler :<|> dataPlaneHandler :<|> shortRoutesHandler)
  where
   nt :: AppEnv -> AppM a -> Handler a
   nt s x = runReaderT x s
@@ -214,7 +228,7 @@ wellKnownHandler = do
   liftIO $ logInfo env.logger "WebMCP manifest served" []
   pure $ Aeson.object
     [ "version" .= ("draft" :: String)
-    , "script" .= ("/webmcp.js" :: String)
+    , "script" .= ("/.webmcp/embed.js" :: String)
     , "deployments" .= readyDeployments
     ]
 
@@ -273,12 +287,33 @@ matchesScope (Just scope) deployId fnName =
     in (depPat == "*" || depPat == deployId)
        && (fnPat == "*" || fnPat == fnName)
 
--- | GET /webmcp.js — org-wide WebMCP script.
+-- | GET /.webmcp/embed.js — org-wide WebMCP script.
 webmcpHandler :: ServerT WebMCPApi AppM
 webmcpHandler = do
   env <- ask
   liftIO $ logInfo env.logger "WebMCP script served" []
   pure renderOrgWebMCPScript
+
+-- | GET /.well-known/mcp/manifest — MCP discovery manifest.
+mcpManifestHandler :: ServerT McpManifestApi AppM
+mcpManifestHandler = do
+  pure $ Aeson.object
+    [ "version" .= ("2025-03-26" :: Text)
+    , "capabilities" .= Aeson.object [ "tools" .= True ]
+    , "endpoints" .= Aeson.object [ "mcp" .= ("/.mcp" :: Text) ]
+    ]
+
+-- | POST /.mcp — org-wide MCP JSON-RPC endpoint (no deployment scope).
+mcpRootHandler :: ServerT McpApi AppM
+mcpRootHandler = mcpHandler Nothing
+
+-- | POST /{deploymentId}/.mcp — deployment-scoped MCP JSON-RPC endpoint.
+mcpScopedHandler :: ServerT McpScopedApi AppM
+mcpScopedHandler deployIdText = mcpHandler (Just deployIdText)
+
+-- | POST /deployments/{deploymentId}/.mcp — deployment-scoped MCP JSON-RPC endpoint (long route).
+mcpScopedLongHandler :: ServerT McpScopedLongApi AppM
+mcpScopedLongHandler deployIdText = mcpHandler (Just deployIdText)
 
 -- | Middleware: serve the deployment explorer page on GET / with Accept: text/html.
 explorerMiddleware :: Logger -> Middleware

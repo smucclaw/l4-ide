@@ -42,7 +42,7 @@ instance MimeRender JavaScript RawJs where
   mimeRender _ (RawJs bs) = bs
 
 -- | Render the org-level deployment explorer HTML page.
--- The page loads /webmcp.js which fetches all deployments and registers tools.
+-- The page loads /.webmcp/embed.js which fetches all deployments and registers tools.
 -- The HTML just listens for events and renders the UI.
 renderExplorerPage :: RawHtml
 renderExplorerPage = RawHtml renderExplorerPageBS
@@ -125,9 +125,31 @@ renderExplorerPageBS = LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text.unlines
   , "    </div>"
   , "  </div>"
   , ""
+  , "  <div class=\"embed\">"
+  , "    <h2>Connect via MCP (Model Context Protocol)</h2>"
+  , "    <p class=\"note\">Use the MCP server endpoint with any MCP-compatible client (Claude Desktop, Cursor, VS Code, etc.).</p>"
+  , "    <pre id=\"mcp-url\"></pre>"
+  , "    <div class=\"note\">"
+  , "      <dl>"
+  , "        <dt>Org-wide (all deployments)</dt>"
+  , "        <dd><code>POST /.mcp</code> &mdash; registers tools for every deployed function.</dd>"
+  , "        <dt>Scoped to one deployment</dt>"
+  , "        <dd><code>POST /{deployment-id}/.mcp</code> or <code>POST /deployments/{deployment-id}/.mcp</code></dd>"
+  , "        <dt>Authentication</dt>"
+  , "        <dd>Send your API key as <code>Authorization: Bearer sk_...</code>. Requires <strong>l4:read</strong> + <strong>l4:evaluate</strong> permissions.</dd>"
+  , "        <dt>Discovery</dt>"
+  , "        <dd><code>GET /.well-known/mcp/manifest</code> returns the MCP manifest. <code>GET /.well-known/oauth-protected-resource</code> for OAuth discovery.</dd>"
+  , "      </dl>"
+  , "      <p style=\"margin-top: 0.75rem;\"><strong>Example config</strong> (Claude Desktop / claude_desktop_config.json):</p>"
+  , "      <pre id=\"mcp-config\"></pre>"
+  , "    </div>"
+  , "  </div>"
+  , ""
   , "  <script>"
   , "    var BASE_URL = window.location.origin;"
-  , "    document.getElementById('embed-snippet').textContent = '<script src=\"' + BASE_URL + '/webmcp.js\" data-scope=\"*\" data-tools=\"auto\" data-api-key=\"sk_...\"></' + 'script>';"
+  , "    document.getElementById('embed-snippet').textContent = '<script src=\"' + BASE_URL + '/.webmcp/embed.js\" data-scope=\"*\" data-tools=\"auto\" data-api-key=\"sk_...\"></' + 'script>';"
+  , "    document.getElementById('mcp-url').textContent = BASE_URL + '/.mcp';"
+  , "    document.getElementById('mcp-config').textContent = JSON.stringify({ mcpServers: { 'l4-rules': { url: BASE_URL + '/.mcp', headers: { Authorization: 'Bearer sk_...' } } } }, null, 2);"
   , ""
   , "    window.addEventListener('webmcp-ready', function(e) {"
   , "      var deployments = e.detail.deployments;"
@@ -189,7 +211,7 @@ renderExplorerPageBS = LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text.unlines
   , "      statusEl.textContent = 'Failed to load: ' + e.detail.error;"
   , "    });"
   , "  </script>"
-  , "  <script src=\"/webmcp.js\"></script>"
+  , "  <script src=\"/.webmcp/embed.js\"></script>"
   , "</body>"
   , "</html>"
   ]
@@ -201,7 +223,7 @@ renderOrgWebMCPScript = RawJs $ LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text
   [ "(function() {"
   , "  'use strict';"
   , ""
-  , "  var scriptTag = document.currentScript || document.querySelector('script[src*=\"webmcp.js\"]');"
+  , "  var scriptTag = document.currentScript || document.querySelector('script[src*=\"embed.js\"]');"
   , "  var apiKey = scriptTag && scriptTag.getAttribute('data-api-key');"
   , "  var scope = scriptTag && scriptTag.getAttribute('data-scope');"
   , "  var toolsMode = (scriptTag && scriptTag.getAttribute('data-tools')) || 'auto';"

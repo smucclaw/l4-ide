@@ -329,12 +329,14 @@ stateToResponse debugMode (DeploymentId did) = \case
 -- | Reserved words that cannot be used as deployment IDs.
 -- These correspond to top-level route segments in the API.
 reservedWords :: [Text]
-reservedWords = ["health", "deployments"]
+reservedWords = ["health", "deployments", "openapi.json"]
 
 validateDeploymentId :: Text -> AppM ()
 validateDeploymentId deployId = do
   when (deployId `elem` reservedWords) $
     throwError err400 { errBody = jsonError "Deployment ID is a reserved word" }
+  when (Text.isPrefixOf "." deployId) $
+    throwError err400 { errBody = jsonError "Deployment ID must not start with a dot" }
   when (Text.length deployId > 36) $
     throwError err400 { errBody = jsonError "Deployment ID exceeds maximum length of 36 characters" }
   when (Text.isInfixOf ".." deployId) $
