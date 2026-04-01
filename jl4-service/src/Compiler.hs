@@ -29,7 +29,7 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text.Encoding
 import Data.Time (getCurrentTime)
 import L4.Export (ExportedFunction (..), ExportedParam (..), getExportedFunctions, extractImplicitAssumeParams)
-import L4.Syntax (Module, Resolved, Declare(..), Type'(..), RawName(..), getActual, rawName, rawNameToText)
+import L4.Syntax (Resolved, Declare(..), Type'(..), RawName(..), getActual, rawName, rawNameToText)
 import Logging (Logger, logInfo, logWarn)
 import qualified LSP.L4.Rules as Rules
 import System.FilePath (takeExtension)
@@ -113,7 +113,7 @@ compileSingleFile logger deployId filepath content moduleContext = do
           ]
       pure $ Left (Text.intercalate "\n" errs)
 
-    Just Rules.TypeCheckResult{module' = resolvedModule, environment = env, entityInfo = ei, errors = tcErrors} -> do
+    Just tcResult@Rules.TypeCheckResult{module' = resolvedModule, environment = env, entityInfo = ei, errors = tcErrors} -> do
       -- Discover exported functions
       let exports = getExportedFunctions resolvedModule
       if null exports
@@ -121,10 +121,12 @@ compileSingleFile logger deployId filepath content moduleContext = do
         else do
           -- Extract implicit ASSUMEs from type errors
           let implicitParams = extractImplicitAssumeParams tcErrors
+              -- Collect declares from this module and all transitive imports
+              allDeclares = collectAllDeclares tcResult
 
           -- Create ValidatedFunction for each export
           fns <- forM exports $ \export -> do
-            let fnDecl = exportToFunction resolvedModule implicitParams export
+            let fnDecl = exportToFunction allDeclares implicitParams export
                 apiDecl = toDecl fnDecl
             (runFn, mCompiled) <- Jl4.createFunction filepath apiDecl content moduleContext
             pure ValidatedFunction
@@ -141,6 +143,7 @@ compileSingleFile logger deployId filepath content moduleContext = do
                 , sbEnvironment = env
                 , sbEntityInfo = ei
                 , sbExports = exports
+                , sbDeclares = allDeclares
                 }
 
           logInfo logger "Found exports"
@@ -178,7 +181,7 @@ buildFromCborBundle logger deployId bundle sources storedMeta = do
     else do
       -- For each export, build a CompiledModule directly (no typechecking)
       fns <- forM exports $ \export -> do
-        let fnDecl = exportToFunction resolvedModule [] export
+        let fnDecl = exportToFunction bundle.sbDeclares [] export
             apiDecl = toDecl fnDecl
             funRawName = NormalName apiDecl.name
 
@@ -242,10 +245,9 @@ buildFromCborBundle logger deployId bundle sources storedMeta = do
           pure $ Right (fnMap, meta)
 
 -- | Convert an ExportedFunction to our Function type.
-exportToFunction :: Module Resolved -> [(Text, Type' Resolved)] -> ExportedFunction -> Function
-exportToFunction resolvedModule implicitParams export =
-  let baseParams = parametersFromExport resolvedModule export.exportParams
-      declares = declaresFromModule resolvedModule
+exportToFunction :: Map Text (Declare Resolved) -> [(Text, Type' Resolved)] -> ExportedFunction -> Function
+exportToFunction declares implicitParams export =
+  let baseParams = parametersFromExport declares export.exportParams
       -- Merge implicit params, avoiding duplicates
       implicitParamMap = Map.fromList
         [ (pname, (typeToParameter declares Set.empty ty) {parameterDescription = "", parameterAlias = Nothing})
@@ -306,10 +308,9 @@ exportToFunction resolvedModule implicitParams export =
     }
 
 -- | Build Parameters from ExportedParam list.
-parametersFromExport :: Module Resolved -> [ExportedParam] -> Parameters
-parametersFromExport resolvedModule params =
-  let declares = declaresFromModule resolvedModule
-  in MkParameters
+parametersFromExport :: Map Text (Declare Resolved) -> [ExportedParam] -> Parameters
+parametersFromExport declares params =
+  MkParameters
     { parameterMap = Map.fromList [(param.paramName, paramToParameter declares param) | param <- params]
     , required = [param.paramName | param <- params, param.paramRequired]
     }
@@ -354,6 +355,12 @@ extractDeonticTypeNames ty@(TyApp _ _ [partyTy, actionTy])
     typeName (TyApp _ n _) = rawNameToText (rawName (getActual n))
     typeName _ = "Unknown"
 extractDeonticTypeNames _ = Nothing
+
+-- | Collect all DECLARE entries from a TypeCheckResult and its transitive imports.
+collectAllDeclares :: Rules.TypeCheckResult -> Map Text (Declare Resolved)
+collectAllDeclares tc =
+  declaresFromModule tc.module'
+    <> foldMap collectAllDeclares tc.dependencies
 
 -- | Display the return type of an exported function as a user-facing string.
 returnTypeDisplay :: Maybe (Type' Resolved) -> Text

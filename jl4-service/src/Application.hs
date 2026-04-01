@@ -62,13 +62,14 @@ type McpDiscoveryApi = ".well-known" :> "mcp" :> Get '[JSON] Aeson.Value
 type McpManifestApi = ".well-known" :> "mcp" :> "manifest" :> Get '[JSON] Aeson.Value
 
 -- | MCP JSON-RPC endpoint (org-wide, no deployment scope).
-type McpApi = ".mcp" :> ReqBody '[JSON] Aeson.Value :> Post '[JSON] Aeson.Value
+-- POST handles JSON-RPC; GET returns 405 per MCP Streamable HTTP spec.
+type McpApi = ".mcp" :> (ReqBody '[JSON] Aeson.Value :> Post '[JSON] Aeson.Value :<|> Get '[JSON] Aeson.Value)
 
 -- | MCP JSON-RPC endpoint scoped to a deployment (short route).
-type McpScopedApi = Capture "deploymentId" Text :> ".mcp" :> ReqBody '[JSON] Aeson.Value :> Post '[JSON] Aeson.Value
+type McpScopedApi = Capture "deploymentId" Text :> ".mcp" :> (ReqBody '[JSON] Aeson.Value :> Post '[JSON] Aeson.Value :<|> Get '[JSON] Aeson.Value)
 
 -- | MCP JSON-RPC endpoint scoped to a deployment (long route).
-type McpScopedLongApi = "deployments" :> Capture "deploymentId" Text :> ".mcp" :> ReqBody '[JSON] Aeson.Value :> Post '[JSON] Aeson.Value
+type McpScopedLongApi = "deployments" :> Capture "deploymentId" Text :> ".mcp" :> (ReqBody '[JSON] Aeson.Value :> Post '[JSON] Aeson.Value :<|> Get '[JSON] Aeson.Value)
 
 -- | Main entry point.
 defaultMain :: IO ()
@@ -299,16 +300,17 @@ mcpManifestHandler = do
     ]
 
 -- | POST /.mcp — org-wide MCP JSON-RPC endpoint (no deployment scope).
+-- GET /.mcp returns 405 per MCP Streamable HTTP spec (POST-only).
 mcpRootHandler :: ServerT McpApi AppM
-mcpRootHandler = mcpHandler Nothing
+mcpRootHandler = mcpHandler Nothing :<|> throwError err405
 
 -- | POST /{deploymentId}/.mcp — deployment-scoped MCP JSON-RPC endpoint.
 mcpScopedHandler :: ServerT McpScopedApi AppM
-mcpScopedHandler deployIdText = mcpHandler (Just deployIdText)
+mcpScopedHandler deployIdText = mcpHandler (Just deployIdText) :<|> throwError err405
 
 -- | POST /deployments/{deploymentId}/.mcp — deployment-scoped MCP JSON-RPC endpoint (long route).
 mcpScopedLongHandler :: ServerT McpScopedLongApi AppM
-mcpScopedLongHandler deployIdText = mcpHandler (Just deployIdText)
+mcpScopedLongHandler deployIdText = mcpHandler (Just deployIdText) :<|> throwError err405
 
 -- | Middleware: serve the deployment explorer page on GET / with Accept: text/html.
 explorerMiddleware :: Logger -> Middleware
