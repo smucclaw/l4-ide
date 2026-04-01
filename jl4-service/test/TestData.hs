@@ -13,6 +13,7 @@ module TestData (
   saleContractJL4,
   deonticExportJL4,
   deonticRecordPartyJL4,
+  spacedFieldsJL4,
 ) where
 
 import Backend.Jl4 as Jl4
@@ -258,6 +259,19 @@ GIVETH A DEONTIC Party `Contract Action`
 -- Tests that events with JSON object parties (e.g. {"name": "Alice"})
 -- are correctly formatted as L4 record construction (Driver WITH name IS "Alice")
 -- rather than backtick-quoted identifiers.
+-- | L4 source with spaced field names, for testing hyphenated key remapping.
+-- Parameters use backtick identifiers with spaces that get sanitized to hyphens
+-- in the API/MCP schema.
+spacedFieldsJL4 :: Text
+spacedFieldsJL4 =
+  [i|
+@export default person check
+GIVEN `first name` IS A STRING
+      `is a citizen` IS A BOOLEAN
+GIVETH A BOOLEAN
+DECIDE `check person` IF `is a citizen`
+|]
+
 deonticRecordPartyJL4 :: Text
 deonticRecordPartyJL4 =
   [i|

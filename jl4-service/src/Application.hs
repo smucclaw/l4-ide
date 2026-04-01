@@ -35,7 +35,8 @@ import Network.Wai.Middleware.Cors (cors, simpleCorsResourcePolicy, corsMethods,
 import Options.Applicative (execParser)
 import Servant
 
-import WebMCPPage (RawJs, JavaScript, renderExplorerPageBS, renderOrgWebMCPScript)
+import ExplorerPage (renderExplorerPageBS)
+import WebMCPPage (RawJs, JavaScript, renderOrgWebMCPScript)
 
 -- | Combined service API.
 type ServiceApi = HealthApi :<|> WellKnownApi :<|> McpDiscoveryApi :<|> McpManifestApi :<|> OrgOpenApiRoute :<|> WebMCPApi :<|> McpApi :<|> McpScopedApi :<|> McpScopedLongApi :<|> ControlPlaneApi :<|> DataPlaneApi :<|> ShortRoutes
