@@ -1,11 +1,25 @@
 # L4 Rules-as-code Language Support and Tools
 
-Language support for L4 rules-as-code with syntax highlighting, IntelliSense, ladder diagram visualization, result inspection, and cloud deployment.
+Language support for L4 rules-as-code with MCP for AI agents, WebMCP for browser AI, syntax highlighting, IntelliSense, ladder diagram visualization, result inspection, and cloud deployment.
 
 Documentation: https://legalese.com/l4
 
 ## Features
 
+- **MCP Server (Model Context Protocol)**: Expose deployed L4 rules as tools that AI agents can discover and call
+  - Built-in MCP proxy server registers automatically with VS Code and Claude Code
+  - AI agents (Claude, Cursor, Copilot) can discover and invoke your L4 functions as structured tools
+  - Scoped access — expose all rules org-wide or restrict to specific deployments
+  - Authenticated via Legalese Cloud or API key for self-hosted setups
+- **WebMCP — Browser AI Integration**: Let browser-based AI agents call your L4 rules from any web page
+  - Embed a single `<script>` tag to register L4 functions with `navigator.modelContext`
+  - Browser AI agents discover and call your rules without a backend integration
+  - Configurable scope, tool registration mode, and authentication via data attributes
+- **Cloud Deploy**: Deploy L4 rules as REST APIs from the sidebar
+  - Deploy Preview tab shows exported functions with parameter schemas
+  - Breaking change detection when updating existing deployments
+  - Deployments tab lists active deployments with full function metadata
+  - Supports Legalese Cloud (browser login) and self-hosted jl4-service (API key)
 - **Syntax Highlighting**: Full support for L4 syntax with proper color coding
 - **Language Server Protocol (LSP)**: Advanced language features including:
   - IntelliSense and autocompletion
@@ -21,11 +35,6 @@ Documentation: https://legalese.com/l4
   - Results update automatically as you edit your code
   - Collapsible sections grouped by file
   - Syntax-highlighted output
-- **Cloud Deploy**: Deploy L4 rules as REST APIs from the sidebar
-  - Deploy Preview tab shows exported functions with parameter schemas
-  - Breaking change detection when updating existing deployments
-  - Deployments tab lists active deployments with full function metadata
-  - Supports Legalese Cloud (browser login) and self-hosted jl4-service (API key)
 
 ## What is L4?
 
@@ -35,6 +44,7 @@ L4 is a domain-specific language designed for expressing legal logic and rules i
 - Visualize complex legal logic through ladder diagrams
 - Validate legal reasoning through formal methods
 - Deploy rules as REST APIs for integration with other systems
+- Expose rules to AI agents via MCP and browser AI via WebMCP
 
 ## Getting Started
 
@@ -90,6 +100,70 @@ The L4 sidebar is accessible via the L4 icon in the activity bar. It has three t
 3. Click on the codelens to open the ladder diagram visualization
 4. The diagram will update automatically as you edit your code
 
+## MCP — AI Agent Integration
+
+Once you deploy L4 rules, they are automatically available as MCP tools that AI agents can discover and call.
+
+### Local MCP Proxy (VS Code)
+
+The extension starts a local MCP proxy server automatically. AI tools like Claude Code, Cursor, and GitHub Copilot can connect to it to discover and invoke your deployed L4 functions.
+
+The proxy registers with VS Code's built-in MCP system and updates Claude Code's config automatically if installed. The default port is `19415` (configurable via `jl4.mcpPort`).
+
+### Remote MCP Endpoints
+
+Deployed rules are also accessible via MCP endpoints on the service:
+
+- `POST /.mcp` — all deployments (org-wide)
+- `POST /{deployment-id}/.mcp` — scoped to one deployment
+- `GET /.well-known/mcp` — MCP discovery metadata
+
+Example MCP client config (e.g. for Claude Desktop):
+
+```json
+{
+  "mcpServers": {
+    "l4-rules": {
+      "url": "https://your-service/.mcp",
+      "headers": {
+        "Authorization": "Bearer sk_..."
+      }
+    }
+  }
+}
+```
+
+## WebMCP — Browser AI Integration
+
+WebMCP lets browser-based AI agents (like Claude on the web) discover and call your L4 rules directly from any web page.
+
+Add this script tag to your page:
+
+```html
+<script src="https://your-service/.webmcp/embed.js"></script>
+```
+
+The script registers your L4 functions with the browser's `navigator.modelContext` API. Browser AI agents can then see and call them as tools.
+
+### Configuration
+
+Use data attributes to customize behavior:
+
+```html
+<script
+  src="https://your-service/.webmcp/embed.js"
+  data-scope="insurance-premium/*,safe-valuation/effective-sale-price"
+  data-tools="auto"
+  data-api-key="sk_..."
+></script>
+```
+
+| Attribute      | Description                                                                                       |
+| -------------- | ------------------------------------------------------------------------------------------------- |
+| `data-scope`   | Filter by deployment/function (e.g. `deploy/*` for all functions, `deploy/fn` for a specific one) |
+| `data-tools`   | Registration mode: `auto` (default), `discovery`, `direct`, or `all`                              |
+| `data-api-key` | API key for authenticated access                                                                  |
+
 ## Cloud Deploy Setup
 
 ### Legalese Cloud
@@ -140,6 +214,7 @@ DECIDE `can vote` p IF
 - `jl4.trace.server`: Enable server communication tracing (off/messages/verbose)
 - `jl4.serviceUrl`: URL of the jl4-service for deploying rules (leave empty for Legalese Cloud)
 - `jl4.serviceApiKey`: API key for authenticating with a self-hosted jl4-service
+- `jl4.mcpPort`: Port for the local MCP proxy server (default: 19415)
 
 ## Contributing
 

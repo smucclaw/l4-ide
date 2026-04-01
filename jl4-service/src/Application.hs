@@ -17,7 +17,7 @@ import qualified Data.Aeson as Aeson
 import Data.Text (Text)
 import qualified Data.Text.Encoding as Text.Encoding
 import Control.Concurrent.Async (mapConcurrently_)
-import Control.Concurrent.STM (atomically, modifyTVar', newTVarIO, readTVarIO)
+import Control.Concurrent.STM (TVar, atomically, modifyTVar', newTVarIO, readTVarIO)
 import Control.Exception (SomeException, finally, displayException)
 import Control.Monad (forM_)
 import Control.Monad.IO.Class (liftIO)
@@ -122,7 +122,7 @@ defaultMain = do
 
   -- Build middleware stack
   concLimiter <- concurrencyLimiter options.maxConcurrentRequests
-  let middleware = concLimiter . requestLogMiddleware logger . corsMiddleware . explorerMiddleware logger
+  let middleware = concLimiter . requestLogMiddleware logger . corsMiddleware . explorerMiddleware logger registry
       onExc :: Maybe Request -> SomeException -> IO ()
       onExc _req exc =
         if defaultShouldDisplayException exc || debug
@@ -314,16 +314,18 @@ mcpScopedLongHandler :: ServerT McpScopedLongApi AppM
 mcpScopedLongHandler deployIdText = mcpHandler (Just deployIdText) :<|> throwError err405
 
 -- | Middleware: serve the deployment explorer page on GET / with Accept: text/html.
-explorerMiddleware :: Logger -> Middleware
-explorerMiddleware logger baseApp req sendResp
+-- Reads the deployment registry to render current state including pending/failed deployments.
+explorerMiddleware :: Logger -> TVar (Map.Map DeploymentId DeploymentState) -> Middleware
+explorerMiddleware logger registryVar baseApp req sendResp
   | requestMethod req == "GET"
   , rawPathInfo req == "/"
   , acceptsHtml (requestHeaders req)
   = do
       logInfo logger "Explorer page served" []
+      snapshot <- readTVarIO registryVar
       sendResp $ responseLBS ok200
         [("Content-Type", "text/html; charset=utf-8")]
-        renderExplorerPageBS
+        (renderExplorerPageBS snapshot)
   | otherwise = baseApp req sendResp
  where
   acceptsHtml headers =
