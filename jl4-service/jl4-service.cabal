@@ -57,6 +57,7 @@ library
     ControlPlane
     DataPlane
     DeploymentLoader
+    ExplorerPage
     Logging
     McpServer
     Options
@@ -127,6 +128,7 @@ test-suite jl4-service-test
     IntegrationSpec
     MaybeLiftSpec
     SchemaSpec
+    SanitizationSpec
     SerialisationSpec
     TestData
 

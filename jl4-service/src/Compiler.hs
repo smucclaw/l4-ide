@@ -8,6 +8,7 @@ module Compiler (
 import qualified Backend.Jl4 as Jl4
 import Backend.Jl4 (ModuleContext, CompiledModule(..), typecheckModule, buildImportEnvironment, getFunctionDefinition)
 import Backend.Api (EvalBackend (..), FunctionDeclaration (..))
+import Shared (validateNoSanitizationCollisions)
 import Backend.CodeGen (isDeonticType)
 import L4.FunctionSchema (Parameters (..), Parameter (..), typeToParameter, declaresFromModule)
 import BundleStore (SerializedBundle (..), StoredMetadata (..))
@@ -128,6 +129,20 @@ compileSingleFile logger deployId filepath content moduleContext = do
           fns <- forM exports $ \export -> do
             let fnDecl = exportToFunction allDeclares implicitParams export
                 apiDecl = toDecl fnDecl
+
+            -- Validate that sanitized property names don't collide
+            let collisions = validateNoSanitizationCollisions fnDecl.name fnDecl.parameters
+            unless (null collisions) $ do
+              let collisionMsg = Text.intercalate "\n  " collisions
+              logWarn logger "Property name sanitization collision"
+                [ ("deploymentId", toJSON deployId)
+                , ("function", toJSON fnDecl.name)
+                , ("collisions", toJSON collisions)
+                ]
+              error $ Text.unpack $ "Compilation failed for function '" <> fnDecl.name
+                <> "': field name collision after sanitization (spaces and hyphens "
+                <> "become indistinguishable in API/MCP schemas):\n  " <> collisionMsg
+
             (runFn, mCompiled) <- Jl4.createFunction filepath apiDecl content moduleContext
             pure ValidatedFunction
               { fnImpl = fnDecl
@@ -185,6 +200,19 @@ buildFromCborBundle logger deployId bundles sources storedMeta = do
           let fnDecl = exportToFunction bundle.sbDeclares [] export
               apiDecl = toDecl fnDecl
               funRawName = NormalName apiDecl.name
+
+          -- Validate that sanitized property names don't collide
+          let collisions = validateNoSanitizationCollisions fnDecl.name fnDecl.parameters
+          unless (null collisions) $ do
+            let collisionMsg = Text.intercalate "\n  " collisions
+            logWarn logger "Property name sanitization collision"
+              [ ("deploymentId", toJSON deployId)
+              , ("function", toJSON fnDecl.name)
+              , ("collisions", toJSON collisions)
+              ]
+            error $ Text.unpack $ "Compilation failed for function '" <> fnDecl.name
+              <> "': field name collision after sanitization (spaces and hyphens "
+              <> "become indistinguishable in API/MCP schemas):\n  " <> collisionMsg
 
           -- Find the function definition in the deserialized AST
           mDecide <- runExceptT $ getFunctionDefinition funRawName resolvedModule

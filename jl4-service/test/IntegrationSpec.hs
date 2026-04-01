@@ -37,7 +37,7 @@ import Network.Wai.Handler.Warp (testWithApplication)
 import System.Directory (removeDirectoryRecursive, doesDirectoryExist)
 import System.IO.Error (isPermissionError)
 
-import TestData (qualifiesJL4, recordJL4, maybeParamJL4, saleContractJL4, deonticExportJL4, deonticRecordPartyJL4)
+import TestData (qualifiesJL4, recordJL4, maybeParamJL4, saleContractJL4, deonticExportJL4, deonticRecordPartyJL4, spacedFieldsJL4)
 
 spec :: SpecWith ()
 spec = describe "integration" do
@@ -147,6 +147,85 @@ spec = describe "integration" do
               Map.lookup "extra_provided" fieldMap `shouldBe` Just (FnLitBool True)
             other ->
               expectationFailure ("Expected FnObject with named fields, got: " <> show other)
+
+  describe "field name sanitization (hyphen remapping)" do
+    it "accepts hyphenated field names and hyphenated function name in URL" do
+      withServiceFromSources "hyphen-eval" [("spaced.l4", spacedFieldsJL4)] \baseUrl mgr -> do
+        -- Use hyphenated function name and field keys (as advertised in schemas)
+        resp <- evalFunction baseUrl mgr "hyphen-eval" "check-person"
+          (Aeson.object
+            [ "arguments" Aeson..= Aeson.object
+                [ "first-name" Aeson..= ("Alice" :: Text)
+                , "is-a-citizen" Aeson..= True
+                ]
+            ])
+        assertSuccess resp \r ->
+          Map.lookup "value" r.fnResult `shouldBe` Just (FnLitBool True)
+
+    it "accepts URL-encoded spaced function name (percent encoding)" do
+      withServiceFromSources "urlenc-eval" [("spaced.l4", spacedFieldsJL4)] \baseUrl mgr -> do
+        resp <- evalFunction baseUrl mgr "urlenc-eval" "check%20person"
+          (Aeson.object
+            [ "arguments" Aeson..= Aeson.object
+                [ "first-name" Aeson..= ("Alice" :: Text)
+                , "is-a-citizen" Aeson..= True
+                ]
+            ])
+        assertSuccess resp \r ->
+          Map.lookup "value" r.fnResult `shouldBe` Just (FnLitBool True)
+
+    it "accepts plus-encoded spaced function name" do
+      withServiceFromSources "plus-eval" [("spaced.l4", spacedFieldsJL4)] \baseUrl mgr -> do
+        resp <- evalFunction baseUrl mgr "plus-eval" "check+person"
+          (Aeson.object
+            [ "arguments" Aeson..= Aeson.object
+                [ "first-name" Aeson..= ("Alice" :: Text)
+                , "is-a-citizen" Aeson..= True
+                ]
+            ])
+        assertSuccess resp \r ->
+          Map.lookup "value" r.fnResult `shouldBe` Just (FnLitBool True)
+
+    it "accepts original spaced field names in REST API" do
+      withServiceFromSources "space-eval" [("spaced.l4", spacedFieldsJL4)] \baseUrl mgr -> do
+        -- Use original spaced keys (backwards compatibility)
+        resp <- evalFunction baseUrl mgr "space-eval" "check%20person"
+          (Aeson.object
+            [ "arguments" Aeson..= Aeson.object
+                [ "first name" Aeson..= ("Bob" :: Text)
+                , "is a citizen" Aeson..= False
+                ]
+            ])
+        assertSuccess resp \r ->
+          Map.lookup "value" r.fnResult `shouldBe` Just (FnLitBool False)
+
+    it "returns original spaced field names in OpenAPI schema" do
+      withServiceFromSources "openapi-san" [("spaced.l4", spacedFieldsJL4)] \baseUrl mgr -> do
+        req <- parseRequest (baseUrl <> "/openapi.json")
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 200
+        let body = responseBody resp
+            mObj = decodeObject body
+            mFunctions = lookupKey "functions" mObj
+        case mFunctions of
+          Just (Aeson.Array fns) -> do
+            length fns `shouldSatisfy` (> 0)
+            let fn = case toList fns of { (x:_) -> x; [] -> error "empty functions array" }
+                mParams = case fn of
+                  Aeson.Object o -> Aeson.KeyMap.lookup "parameters" o
+                  _ -> Nothing
+                mProps = case mParams of
+                  Just (Aeson.Object p) -> Aeson.KeyMap.lookup "properties" p
+                  _ -> Nothing
+            case mProps of
+              Just (Aeson.Object props) -> do
+                -- OpenAPI preserves original L4 names (spaces, not hyphens)
+                Aeson.KeyMap.member "first name" props `shouldBe` True
+                Aeson.KeyMap.member "is a citizen" props `shouldBe` True
+              other ->
+                expectationFailure ("Expected properties object, got: " <> show other)
+          other ->
+            expectationFailure ("Expected functions array, got: " <> show other)
 
   describe "batch evaluation" do
     it "evaluates multiple cases in parallel" do

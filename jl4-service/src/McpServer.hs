@@ -7,7 +7,7 @@ module McpServer (
 
 import DeploymentLoader (triggerCompilationIfPending)
 import Logging (logInfo, logWarn)
-import Shared (collectMetadataEntries)
+import Shared (collectMetadataEntries, sanitizeParameters, buildPropertyReverseMap, remapFnLiteralKeys)
 import Types
 
 import Control.Monad.IO.Class (liftIO)
@@ -23,8 +23,6 @@ import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map)
 import Data.Text (Text)
 import qualified Data.Text as Text
-import qualified Data.Aeson.Key as Aeson.Key
-import L4.FunctionSchema (Parameters (..), Parameter (..))
 import qualified Data.Text.Encoding as Text.Encoding
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Maybe as Maybe
@@ -33,7 +31,7 @@ import GHC.IO.Exception (AllocationLimitExceeded (..))
 import Control.Exception (catch)
 import System.Timeout (timeout)
 
-import Backend.Api (EvalBackend (..), FnLiteral, RunFunction (..), TraceLevel (..))
+import Backend.Api (EvalBackend (..), FnLiteral (..), RunFunction (..), TraceLevel (..))
 import Options (Options (..))
 
 -- | Handle an MCP JSON-RPC 2.0 request and return a JSON-RPC 2.0 response.
@@ -186,11 +184,13 @@ callTool mScope reqId toolName arguments = do
         , ("functionName", Aeson.toJSON fnName)
         ]
       -- Build reverse mapping: sanitized property key -> original L4 name
+      -- This map includes all nested property names recursively.
       let reverseMap = buildPropertyReverseMap params
-      -- Parse arguments and remap sanitized keys back to original L4 names
+      -- Parse arguments and remap sanitized keys back to original L4 names.
+      -- Remapping is applied recursively to nested FnObject keys.
       let argPairs = case arguments of
             Aeson.Object obj ->
-              [ (Map.findWithDefault k k reverseMap, parseFnLiteral v)
+              [ (Map.findWithDefault k k reverseMap, remapFnLiteralKeys reverseMap <$> parseFnLiteral v)
               | (k, v) <- Map.toList (Aeson.KeyMap.toMapText obj)
               ]
             _ -> []
@@ -259,73 +259,6 @@ runMcpEvaluation vf args = do
         Just (Right rwr) ->
           let encoded = Aeson.encode (SimpleResponse rwr)
           in pure $ Right (Text.Encoding.decodeUtf8 (LBS.toStrict encoded))
-
--- ----------------------------------------------------------------------------
--- Parameter name sanitization
--- ----------------------------------------------------------------------------
-
--- | Sanitize a property name for use as a JSON property key in MCP tool schemas.
--- Replaces special characters (spaces, backticks, etc.) with hyphens and
--- collapses consecutive hyphens. Preserves alphanumeric, underscore, dot, and hyphen.
--- Uses the same replacement character as 'sanitizeName' for consistency.
-sanitizePropertyName :: Text -> Text
-sanitizePropertyName name =
-  let s = Text.map (\c -> if isAlphaNum c || c == '_' || c == '.' || c == '-' then c else '-') name
-      s' = collapseHyphens $ Text.dropWhile (== '-') $ Text.dropWhileEnd (== '-') s
-  in if Text.null s' then "_unnamed" else s'
- where
-  collapseHyphens t =
-    let collapsed = Text.replace "--" "-" t
-    in if collapsed == t then t else collapseHyphens collapsed
-
--- | Sanitize all property names in a Parameters schema for MCP compatibility.
--- MCP tool schemas require property names to be simple identifiers.
--- This recursively sanitizes property names in nested object types.
-sanitizeParameters :: Parameters -> Aeson.Value
-sanitizeParameters (MkParameters props reqProps) =
-  Aeson.object
-    [ "type" .= ("object" :: Text)
-    , "properties" .= Aeson.object
-        [ (Aeson.Key.fromText (sanitizePropertyName k), sanitizeParameterValue v)
-        | (k, v) <- Map.toList props
-        ]
-    , "required" .= map sanitizePropertyName reqProps
-    ]
-
--- | Sanitize a Parameter value, recursively sanitizing nested properties.
-sanitizeParameterValue :: Parameter -> Aeson.Value
-sanitizeParameterValue p =
-  Aeson.object $
-    [ "type" .= p.parameterType
-    , "alias" .= p.parameterAlias
-    , "enum" .= p.parameterEnum
-    , "description" .= p.parameterDescription
-    ]
-    ++ case p.parameterFormat of
-        Nothing -> []
-        Just fmt -> ["format" .= fmt]
-    ++ case p.parameterProperties of
-        Nothing -> []
-        Just nested -> ["properties" .= Aeson.object
-          [ (Aeson.Key.fromText (sanitizePropertyName nk), sanitizeParameterValue nv)
-          | (nk, nv) <- Map.toList nested
-          ]]
-    ++ case p.parameterPropertyOrder of
-        Nothing -> []
-        Just ord -> ["propertyOrder" .= map sanitizePropertyName ord]
-    ++ case p.parameterItems of
-        Nothing -> []
-        Just items -> ["items" .= sanitizeParameterValue items]
-
--- | Build a reverse mapping from sanitized property names back to original L4 names.
--- Only includes entries where the sanitized name differs from the original.
-buildPropertyReverseMap :: Parameters -> Map Text Text
-buildPropertyReverseMap (MkParameters props _) =
-  Map.fromList
-    [ (sanitizePropertyName k, k)
-    | k <- Map.keys props
-    , sanitizePropertyName k /= k
-    ]
 
 -- ----------------------------------------------------------------------------
 -- JSON-RPC helpers

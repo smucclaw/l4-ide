@@ -15,6 +15,7 @@ import DeploymentLoader (triggerCompilationIfPending)
 import Servant.Multipart
 import Backend.DecisionQueryPlan (CachedDecisionQuery, buildDecisionQueryCacheFromCompiled, queryPlan, QueryPlanResponse)
 import L4.FunctionSchema (Parameter, Parameters(..))
+import Shared (buildPropertyReverseMap, remapArguments, sanitizePropertyName)
 import Backend.Jl4 (CompiledModule (..), evaluateWithCompiledDeontic)
 import qualified L4.StateGraph as StateGraph
 import Compiler (toDecl)
@@ -151,11 +152,19 @@ requireDeploymentReady deployId = do
       pure (fns, meta)
 
 -- | Look up a function by name within a deployment.
+-- Tries the exact name first, then falls back to matching by sanitized name
+-- (so that "check-person" in a URL matches the function "check person").
 requireFunction :: Map Text ValidatedFunction -> Text -> AppM ValidatedFunction
 requireFunction fns fnName =
   case Map.lookup fnName fns of
-    Nothing -> throwError err404 { errBody = jsonError "Function not found" }
     Just vf -> pure vf
+    Nothing ->
+      -- Fall back: find a function whose name sanitizes to the same form
+      let sanitized = sanitizePropertyName fnName
+          match = find (\(k, _) -> sanitizePropertyName k == sanitized) (Map.toList fns)
+      in case match of
+        Just (_, vf) -> pure vf
+        Nothing -> throwError err404 { errBody = jsonError "Function not found" }
 
 -- ----------------------------------------------------------------------------
 -- Handlers
@@ -205,6 +214,11 @@ evalFunctionHandler deployId fnName mTraceHeader mTraceParam mGraphViz fnArgs = 
       isDeontic = Map.member "startTime" paramMap
                   && Map.member "events" paramMap
 
+  -- Build reverse mapping so REST API accepts both hyphenated and spaced field names
+  let reverseMap = buildPropertyReverseMap vf.fnImpl.parameters
+      rawArgs = Map.toList fnArgs.fnArguments
+      remappedArgs = remapArguments reverseMap rawArgs
+
   (result, allocBytes) <- case (isDeontic, fnArgs.startTime, fnArgs.events) of
     -- Non-deontic function: reject deontic params
     (False, Just _, _) ->
@@ -213,7 +227,7 @@ evalFunctionHandler deployId fnName mTraceHeader mTraceParam mGraphViz fnArgs = 
       throwError err400 { errBody = jsonError "startTime and events are only valid for functions returning DEONTIC" }
     -- Non-deontic function: existing path
     (False, Nothing, Nothing) ->
-      runEvaluatorFor vf fnArgs.fnEvalBackend (Map.toList fnArgs.fnArguments) Nothing mTraceHeader mTraceParam mGraphViz
+      runEvaluatorFor vf fnArgs.fnEvalBackend remappedArgs Nothing mTraceHeader mTraceParam mGraphViz
     -- Deontic function: require both startTime and events
     (True, Nothing, _) ->
       throwError err400 { errBody = jsonError "startTime is required for functions returning DEONTIC" }
@@ -221,7 +235,7 @@ evalFunctionHandler deployId fnName mTraceHeader mTraceParam mGraphViz fnArgs = 
       throwError err400 { errBody = jsonError "events is required for functions returning DEONTIC" }
     -- Deontic function with both params: use deontic evaluator
     (True, Just st, Just evts) ->
-      runDeonticEvaluatorFor vf fnArgs.fnEvalBackend (Map.toList fnArgs.fnArguments) st evts
+      runDeonticEvaluatorFor vf fnArgs.fnEvalBackend remappedArgs st evts
         vf.fnImpl.deonticPartyType vf.fnImpl.deonticActionType
         mTraceHeader mTraceParam mGraphViz
   pure $ addHeader allocBytes result
@@ -249,9 +263,12 @@ batchFunctionHandler deployId fnName mTraceHeader mTraceParam mGraphViz batchArg
   -- Capture the environment before going concurrent
   env <- ask
 
+  -- Build reverse mapping so REST API accepts both hyphenated and spaced field names
+  let reverseMap = buildPropertyReverseMap vf.fnImpl.parameters
+
   -- Evaluate all cases in parallel, collecting alloc bytes per case
   evalResults <- liftIO $ forConcurrently batchArgs.cases $ \inputCase -> do
-    let args = Map.assocs $ fmap Just inputCase.attributes
+    let args = remapArguments reverseMap $ Map.assocs $ fmap Just inputCase.attributes
     r <- runAppM env (runEvaluatorForDirect vf Nothing args outputFilter traceLevel includeGraphViz)
     pure (inputCase.id, r)
 

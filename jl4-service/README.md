@@ -181,6 +181,17 @@ The service exposes an [MCP](https://modelcontextprotocol.io/) JSON-RPC 2.0 endp
 
 The org-wide endpoint (`/.mcp`) exposes tools from all deployments. The scoped endpoints (`/{id}/.mcp`) restrict tool visibility to a single deployment.
 
+#### Field Name Sanitization
+
+L4 uses backtick identifiers with spaces (e.g., `` `function or purpose` ``), but JSON schema property names and URL path segments work better with hyphens. The service automatically sanitizes field names:
+
+- **MCP and WebMCP schemas**: spaces and special characters are replaced with hyphens (e.g., `function or purpose` → `function-or-purpose`)
+- **OpenAPI** (`/openapi.json`): preserves original L4 names with spaces (for human-readable documentation)
+- **Incoming arguments** (MCP tool calls, REST API evaluation, batch): both hyphenated and original spaced names are accepted and mapped back to the L4 originals
+- **Function names in URLs**: both hyphenated (`/functions/check-person/evaluation`) and URL-encoded (`/functions/check%20person/evaluation`) forms are accepted
+
+**Collision detection:** If two L4 field names would sanitize to the same hyphenated form (e.g., `` `foo bar` `` and `` `foo-bar` ``), compilation fails with a clear error message explaining the collision.
+
 #### MCP Discovery
 
 ```bash
@@ -342,7 +353,8 @@ Test coverage:
 - **BundleStoreSpec** -- Filesystem persistence round-trips
 - **CodeGenSpec** -- Input field name collision avoidance
 - **DecisionQueryCacheKeySpec** -- Cache key determinism
-- **IntegrationSpec** -- Full deployment lifecycle, evaluation, batch, control plane HTTP
+- **IntegrationSpec** -- Full deployment lifecycle, evaluation, batch, control plane HTTP, field name remapping
+- **SanitizationSpec** -- Property name sanitization, reverse mapping, collision detection
 - **SerialisationSpec** -- CBOR serialisation round-trips and cache rebuild
 - **SchemaSpec** -- QuickCheck property tests for API type serialization
 
@@ -363,7 +375,7 @@ jl4-service/
     DeploymentLoader.hs     -- Shared compilation logic (eager startup, lazy compile-on-access)
     McpServer.hs            -- MCP JSON-RPC 2.0 handler (tools/list, tools/call)
     Schema.hs               -- OpenAPI spec generation
-    Shared.hs               -- Shared utilities (scope matching, metadata collection, JSON errors)
+    Shared.hs               -- Shared utilities (scope matching, metadata, sanitization, JSON errors)
     WebMCPPage.hs           -- WebMCP deployment explorer + org-wide JS generation
     Backend/
       Api.hs                -- FnLiteral, ResponseWithReason, RunFunction
