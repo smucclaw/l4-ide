@@ -802,15 +802,18 @@ handlers evalConfig recorder =
                 , _xdata = Nothing
                 }
               Just tcResult -> do
-                let -- Collect exports from this module and all transitive imports
-                    collectExports tc =
-                      let mod' = tc.module'
-                          declares = FSchema.declaresFromModule mod'
-                          exps = Export.getExportedFunctions mod'
+                let -- Collect all declares from a module and its transitive imports
+                    collectAllDeclares tc =
+                      FSchema.declaresFromModule tc.module'
+                        <> foldMap collectAllDeclares tc.dependencies
+                    -- Collect exports from this module and all transitive imports
+                    collectExports declares tc =
+                      let exps = Export.getExportedFunctions tc.module'
                           here = map (Inspector.exportedFunctionToSummary declares) exps
-                          imported = concatMap collectExports tc.dependencies
+                          imported = concatMap (collectExports declares) tc.dependencies
                       in here <> imported
-                    summaries = collectExports tcResult
+                    allDeclares = collectAllDeclares tcResult
+                    summaries = collectExports allDeclares tcResult
                     -- Collect transitive import URIs from the dependency tree
                     collectImportUris tc = case tc.module' of
                       MkModule _ depUri _ ->

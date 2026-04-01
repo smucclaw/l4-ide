@@ -41,6 +41,38 @@
   }
 </script>
 
+{#snippet nestedProperties(
+  props: Record<string, FunctionParameter>,
+  depth: number
+)}
+  <div class="nested-props">
+    {#each Object.entries(props) as [nestedName, nestedParam]}
+      <div class="param-row nested">
+        <span class="param-name">{nestedName}</span>
+        <span class="param-type"
+          >{nestedParam.type}{#if nestedParam.alias}
+            ({nestedParam.alias}){/if}</span
+        >
+      </div>
+      {#if nestedParam.description}
+        <div class="param-desc nested">
+          {nestedParam.description}
+        </div>
+      {/if}
+      {#if nestedParam.enum && nestedParam.enum.length > 0}
+        <div class="param-enums nested">
+          {#each nestedParam.enum as val}
+            <span class="enum-tag">{val}</span>
+          {/each}
+        </div>
+      {/if}
+      {#if hasNestedProps(nestedParam)}
+        {@render nestedProperties(nestedParam.properties ?? {}, depth + 1)}
+      {/if}
+    {/each}
+  </div>
+{/snippet}
+
 <div class="tool-card" class:expanded>
   <button class="card-header" onclick={toggle}>
     <span class="chevron" class:rotated={expanded}>&#9002;</span>
@@ -93,19 +125,7 @@
               </div>
             {/if}
             {#if hasNestedProps(param)}
-              <div class="nested-props">
-                {#each Object.entries(param.properties ?? {}) as [nestedName, nestedParam]}
-                  <div class="param-row nested">
-                    <span class="param-name">{nestedName}</span>
-                    <span class="param-type">{nestedParam.type}</span>
-                  </div>
-                  {#if nestedParam.description}
-                    <div class="param-desc nested">
-                      {nestedParam.description}
-                    </div>
-                  {/if}
-                {/each}
-              </div>
+              {@render nestedProperties(param.properties ?? {}, 1)}
             {/if}
           {/each}
         </div>
@@ -271,6 +291,10 @@
     flex-wrap: wrap;
     gap: 3px;
     padding: 2px 4px;
+  }
+
+  .param-enums.nested {
+    padding-left: 16px;
   }
 
   .enum-tag {
