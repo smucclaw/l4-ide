@@ -55,6 +55,7 @@ import qualified Data.Time as Time
 import Data.Time.LocalTime (TimeOfDay(..), LocalTime(..), timeToTimeOfDay, timeOfDayToTime)
 import qualified Data.Time.Format as TimeFormat
 import qualified Data.Time.Zones as TZ
+import qualified Data.Time.Zones.All as TZAll
 import L4.Annotation
 import L4.Evaluate.Operators
 import L4.Evaluate.ValueLazy
@@ -2286,19 +2287,17 @@ evalTopDecl env (Section _ann section) =
 evalTopDecl _env (Import _ann _import_) =
   pure []
 evalTopDecl env (Timezone _ann expr) = do
-  -- Extract timezone string from the expression and set it in TemporalContext
+  -- Extract timezone string from the expression and set it in TemporalContext.
+  -- We store the timezone name without eagerly validating it here, because a
+  -- UserException at module level aborts ALL evaluation (including unrelated
+  -- #EVAL directives).  Validation happens lazily when TODAY / CURRENTTIME is
+  -- actually used, where the error is caught per-directive and surfaced as a
+  -- proper diagnostic.
   mTzName <- extractTimezoneString env expr
   case mTzName of
     Just tzName -> do
-      -- Validate it's a known IANA timezone by attempting to load it
-      mTz <- liftIO $ tryLoadTZ (Text.unpack tzName)
-      case mTz of
-        Just _ -> do
-          tc <- GetTemporalContext
-          PutTemporalContext tc { tcDocumentTimezone = Just tzName }
-        Nothing ->
-          UserException $ UserError $
-            "Unknown timezone: '" <> tzName <> "'. Use an IANA timezone name like \"Asia/Singapore\" or \"America/New_York\"."
+      tc <- GetTemporalContext
+      PutTemporalContext tc { tcDocumentTimezone = Just tzName }
     Nothing ->
       UserException $ UserError
         "TIMEZONE IS must be a string literal or a simple identifier that resolves to a string."
@@ -3023,7 +3022,11 @@ parseDigits txt =
 -- | Try to load a TZ from the IANA database. Returns Nothing on failure.
 tryLoadTZ :: String -> IO (Maybe TZ.TZ)
 tryLoadTZ name =
-  (Just <$> TZ.loadTZFromDB name) `catch` \(_ :: SomeException) -> pure Nothing
+  (Just <$> TZ.loadTZFromDB name) `catch` \(_ :: SomeException) ->
+    -- Fall back to the embedded timezone database.  The system DB may be
+    -- unavailable when the LSP runs inside VS Code or other sandboxed
+    -- environments on macOS.
+    pure $ TZAll.tzByLabel <$> TZAll.fromTZName (TE.encodeUtf8 (Text.pack name))
 
 -- | Extract a timezone string from a TIMEZONE IS expression.
 -- Handles string literals directly and simple identifiers by peeking at thunks.
