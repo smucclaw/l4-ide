@@ -1,19 +1,23 @@
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module ExplorerPage (
   renderExplorerPageBS,
 ) where
 
+import Types (DeploymentId (..), DeploymentState (..), DeploymentMetadata (..), FunctionSummary (..))
+
 import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy.Char8 as LBS
+import qualified Data.Map.Strict as Map
+import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text.Encoding
 
--- | Render the deployment explorer HTML page.
--- Loaded via middleware on GET / with Accept: text/html.
--- The page loads /.webmcp/embed.js which fetches all deployments and registers tools.
-renderExplorerPageBS :: ByteString
-renderExplorerPageBS = LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text.unlines
+-- | Render the deployment explorer HTML page from the in-memory registry snapshot.
+-- Shows all deployments including pending, compiling, and failed ones.
+renderExplorerPageBS :: Map.Map DeploymentId DeploymentState -> ByteString
+renderExplorerPageBS registry = LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text.unlines
   [ "<!DOCTYPE html>"
   , "<html lang=\"en\">"
   , "<head>"
@@ -25,16 +29,20 @@ renderExplorerPageBS = LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text.unlines
   , "  <link href=\"https://fonts.googleapis.com/css2?family=Merriweather:wght@700&display=swap\" rel=\"stylesheet\">"
   , "  <style>"
   , "    * { box-sizing: border-box; margin: 0; padding: 0; }"
-  , "    body { font-family: system-ui, -apple-system, sans-serif; max-width: 960px; margin: 0 auto; padding: 2rem; color: #1a1a1a; }"
-  , "    h1, .info h2 { font-family: 'Merriweather', system-ui, -apple-system, sans-serif; }"
+  , "    body { font-family: system-ui, -apple-system, sans-serif; max-width: 960px; margin: 0 auto; padding: 1rem; color: #1a1a1a; }"
+  , "    h1, h2 { font-family: 'Merriweather', system-ui, -apple-system, sans-serif; }"
   , "    h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }"
-  , "    .status { padding: 0.75rem 1rem; border-radius: 0.5rem; margin-bottom: 1.5rem; font-size: 0.875rem; }"
-  , "    .status.ok { background: #e8f5e9; color: #2e7d32; }"
-  , "    .status.warn { background: #fff3e0; color: #e65100; }"
-  , "    .status.loading { background: #e3f2fd; color: #1565c0; }"
+  , "    .page-header { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.25rem 1rem; margin-bottom: 1rem; }"
+  , "    .page-header h1 { margin-bottom: 0; }"
+  , "    .header-status { display: flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; color: #888; }"
+  , "    .status-dot { display: inline-block; width: 0.5em; height: 0.5em; min-width: 0.5em; min-height: 0.5em; border-radius: 50%; flex-shrink: 0; }"
+  , "    .status-dot.ok { background: #4caf50; }"
+  , "    .status-dot.warn { background: #ff9800; }"
   , "    h2 { font-size: 1.125rem; margin: 1.5rem 0 0.75rem; }"
-  , "    h3 { font-size: 1rem; cursor: pointer; }"
+  , "    h3 { font-size: 1rem; cursor: pointer; user-select: none; display: flex; align-items: center; gap: 0.4rem; }"
   , "    h3:hover { color: #1565c0; }"
+  , "    h3::before { content: ''; display: inline-block; width: 0.6em; height: 0.6em; background: currentColor; clip-path: polygon(0 0, 100% 50%, 0 100%); transition: transform 0.15s ease; transform: rotate(90deg); flex-shrink: 0; }"
+  , "    .deploy-section.collapsed h3::before { transform: rotate(0deg); }"
   , "    input[type=search] { width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #ddd; border-radius: 0.375rem; font-size: 0.875rem; margin-bottom: 1rem; }"
   , "    table { width: 100%; border-collapse: collapse; font-size: 0.875rem; margin-bottom: 1rem; }"
   , "    th { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 2px solid #ddd; font-weight: 600; }"
@@ -49,19 +57,23 @@ renderExplorerPageBS = LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text.unlines
   , "    .tag-status { font-size: 0.7rem; }"
   , "    .tag-ready { background: #e8f5e9; color: #2e7d32; }"
   , "    .tag-pending { background: #fff3e0; color: #e65100; }"
+  , "    .tag-compiling { background: #e3f2fd; color: #1565c0; }"
   , "    .tag-failed { background: #fce4ec; color: #c62828; }"
-  , "    .deploy-section { margin-bottom: 0.5rem; border: 1px solid #eee; border-radius: 0.5rem; padding: 0.75rem 1rem; }"
+  , "    .deploy-panel { border: 1px solid #eee; border-radius: 0.5rem; margin-bottom: 1rem; }"
+  , "    .deploy-section { padding: 0.75rem 1rem; }"
+  , "    .deploy-section + .deploy-section { border-top: 1px solid #eee; }"
   , "    .deploy-section.collapsed table { display: none; }"
+  , "    .deploy-section.collapsed .deploy-error { display: none; }"
   , "    .deploy-header { display: flex; justify-content: space-between; align-items: center; }"
-  , "    .deploy-meta { font-size: 0.8rem; color: #888; }"
-  , "    .info { margin-top: 2rem; padding: 1rem; background: #f8f9fa; border-radius: 0.5rem; }"
-  , "    .info h2 { margin-top: 0; }"
-  , "    .info pre { background: #1a1a1a; color: #e0e0e0; padding: 0.75rem; border-radius: 0.375rem; overflow-x: auto; font-size: 0.8rem; margin: 0.5rem 0; }"
-  , "    .info h2 { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 0.4rem; }"
-  , "    .info h2:hover { color: #1565c0; }"
-  , "    .info h2::before { content: ''; display: inline-block; width: 0.6em; height: 0.6em; background: currentColor; clip-path: polygon(0 0, 100% 50%, 0 100%); transition: transform 0.15s ease; transform: rotate(90deg); flex-shrink: 0; }"
-  , "    .info.collapsed h2::before { transform: rotate(0deg); }"
+  , "    .deploy-meta { font-size: 0.8rem; color: #888; font-weight: 400; }"
+  , "    .deploy-error { font-size: 0.8rem; color: #c62828; background: #fce4ec; padding: 0.5rem 0.75rem; border-radius: 0.375rem; margin-top: 0.5rem; white-space: pre-wrap; font-family: monospace; }"
+  , "    .info-panel { background: #f8f9fa; border-radius: 0.5rem; }"
+  , "    .info { padding: 1rem; }"
+  , "    .info + .info { border-top: 1px solid #eaeaea; }"
+  , "    .info h3 { margin-top: 0; }"
+  , "    .info.collapsed h3::before { transform: rotate(0deg); }"
   , "    .info.collapsed .info-body { display: none; }"
+  , "    .info pre { background: #1a1a1a; color: #e0e0e0; padding: 0.75rem; border-radius: 0.375rem; overflow-x: auto; font-size: 0.8rem; margin: 0.5rem 0; }"
   , "    .info .note { font-size: 0.8rem; color: #666; margin-top: 0.5rem; line-height: 1.6; }"
   , "    .info code { background: #e8e8e8; padding: 0.1rem 0.3rem; border-radius: 0.2rem; font-size: 0.8rem; }"
   , "    .info dt { font-weight: 600; margin-top: 0.5rem; font-size: 0.85rem; }"
@@ -69,17 +81,18 @@ renderExplorerPageBS = LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text.unlines
   , "  </style>"
   , "</head>"
   , "<body>"
-  , "  <h1>L4 Deployments</h1>"
-  , "  <div id=\"status\" class=\"status loading\">Loading deployments...</div>"
-  , ""
-  , "  <div id=\"deployments-section\" style=\"display:none\">"
-  , "    <input type=\"search\" id=\"fn-search\" placeholder=\"Search across all functions...\" />"
-  , "    <div id=\"deploy-list\"></div>"
+  , "  <div class=\"page-header\">"
+  , "    <h1>L4 Deployments</h1>"
+  , renderStatusBar registry
   , "  </div>"
   , ""
-  -- WebMCP embed info box
+  , renderDeploymentsSection registry
+  , ""
+  , "  <h2 style=\"margin-left: 0.2em;\">What to do next</h2>"
+  , "  <div class=\"info-panel\">"
+  -- WebMCP embed
   , "  <div class=\"info collapsed\">"
-  , "    <h2>Embed into your website with WebMCP</h2>"
+  , "    <h3>Embed into your website with WebMCP <span id=\"webmcp-pill\" class=\"tag tag-ready\" style=\"display:none;margin-left:auto;font-size:0.7rem;font-family:system-ui,-apple-system,sans-serif;text-align:center;\">WebMCP available in this browser</span></h3>"
   , "    <p class=\"note info-desc\">Add a script tag to any web page so browser AI agents can discover and call your L4 rules as structured tools.</p>"
   , "    <div class=\"info-body\">"
   , "    <pre id=\"embed-snippet\"></pre>"
@@ -102,10 +115,9 @@ renderExplorerPageBS = LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text.unlines
   , "    </div>"
   , "    </div>"
   , "  </div>"
-  , ""
-  -- MCP info box
+  -- MCP
   , "  <div class=\"info collapsed\">"
-  , "    <h2>Connect via MCP (Model Context Protocol)</h2>"
+  , "    <h3>Connect via MCP (Model Context Protocol)</h3>"
   , "    <p class=\"note info-desc\">Use the MCP server endpoint with any MCP-compatible client (Claude Desktop, Cursor, VS Code, etc.).</p>"
   , "    <div class=\"info-body\">"
   , "    <pre id=\"mcp-url\"></pre>"
@@ -125,10 +137,9 @@ renderExplorerPageBS = LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text.unlines
   , "    </div>"
   , "    </div>"
   , "  </div>"
-  , ""
-  -- REST API info box
+  -- REST API
   , "  <div class=\"info collapsed\">"
-  , "    <h2>Using the REST API</h2>"
+  , "    <h3>Using the REST API</h3>"
   , "    <p class=\"note info-desc\">Evaluate deployed L4 rules via HTTP. Single and batch evaluation endpoints, OpenAPI metadata with scope filtering.</p>"
   , "    <div class=\"info-body\">"
   , "    <div class=\"note\">"
@@ -158,10 +169,9 @@ renderExplorerPageBS = LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text.unlines
   , "    </div>"
   , "    </div>"
   , "  </div>"
-  , ""
-  -- Deploy info box
+  -- Deploy
   , "  <div class=\"info collapsed\">"
-  , "    <h2>Deploying L4 rules</h2>"
+  , "    <h3>Deploying L4 rules</h3>"
   , "    <p class=\"note info-desc\">Upload zip archives (bundles) of <code>.l4</code> files to create or update deployments.</p>"
   , "    <div class=\"info-body\">"
   , "    <div class=\"note\">"
@@ -184,11 +194,12 @@ renderExplorerPageBS = LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text.unlines
   , "    </div>"
   , "    </div>"
   , "  </div>"
+  , "  </div>"
   , ""
   , "  <script>"
-  , "    // Collapsible info boxes"
-  , "    document.querySelectorAll('.info h2').forEach(function(h2) {"
-  , "      h2.addEventListener('click', function() { h2.parentElement.classList.toggle('collapsed'); });"
+  , "    // Collapsible sections (deployments + info boxes)"
+  , "    document.querySelectorAll('.deploy-section h3, .info h3').forEach(function(h3) {"
+  , "      h3.addEventListener('click', function() { h3.closest('.deploy-section, .info').classList.toggle('collapsed'); });"
   , "    });"
   , ""
   , "    var BASE_URL = window.location.origin;"
@@ -197,71 +208,138 @@ renderExplorerPageBS = LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text.unlines
   , "    document.getElementById('mcp-config').textContent = JSON.stringify({ mcpServers: { 'l4-rules': { type: 'http', url: BASE_URL + '/.mcp', headers: { Authorization: 'Bearer sk_...' } } } }, null, 2);"
   , "    document.getElementById('deploy-example').textContent = 'curl -X POST ' + BASE_URL + '/deployments \\\\\\n  -F id=my-rules \\\\\\n  -F sources=@bundle.zip';"
   , ""
-  , "    window.addEventListener('webmcp-ready', function(e) {"
-  , "      var deployments = e.detail.deployments;"
-  , "      var allFns = e.detail.functions;"
-  , "      var statusEl = document.getElementById('status');"
-  , "      var totalFns = allFns.length;"
-  , ""
-  , "      function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }"
-  , "      function tagClass(rt) { rt = (rt || '').toUpperCase(); return rt === 'BOOLEAN' ? 'tag-bool' : rt === 'NUMBER' ? 'tag-num' : rt === 'STRING' ? 'tag-str' : rt === 'DEONTIC' ? 'tag-deontic' : 'tag-other'; }"
-  , ""
-  , "      var container = document.getElementById('deploy-list');"
-  , "      container.innerHTML = '';"
-  , ""
-  , "      if (deployments.length === 0) {"
-  , "        container.innerHTML = '<div style=\"padding: 1rem 1rem;\"><p style=\"color: #666; font-size: 0.95rem; margin-bottom: 0.25rem;\">No deployments found.</p><p style=\"color: #999; font-size: 0.8rem;\">Upload an L4 bundle via <code style=\"background:#e8e8e8;padding:0.1rem 0.3rem;border-radius:0.2rem;font-size:0.8rem;\">POST /deployments</code> to get started.</p></div>';"
-  , "      }"
-  , ""
-  , "      deployments.forEach(function(dep) {"
-  , "        var section = document.createElement('div');"
-  , "        section.className = 'deploy-section collapsed';"
-  , "        section.dataset.deploymentId = dep.id;"
-  , "        var fns = allFns.filter(function(f) { return f.deployment === dep.id; });"
-  , "        var statusTag = dep.status === 'ready' ? 'tag-ready' : dep.status === 'pending' ? 'tag-pending' : 'tag-failed';"
-  , "        section.innerHTML = '<div class=\"deploy-header\"><h3>' + esc(dep.id) + ' <span class=\"tag tag-status ' + statusTag + '\">' + esc(dep.status) + '</span> <span class=\"deploy-meta\">' + fns.length + ' functions</span></h3></div>' +"
-  , "          '<table><thead><tr><th>Name</th><th>Return</th><th>Description</th></tr></thead><tbody>' +"
-  , "          fns.map(function(fn) { var rt = (fn.returnType || '').toUpperCase(); return '<tr><td>' + esc(fn.name) + '</td><td><span class=\"tag ' + tagClass(rt) + '\">' + esc(rt) + '</span></td><td>' + esc(fn.description) + '</td></tr>'; }).join('') +"
-  , "          '</tbody></table>';"
-  , "        section.querySelector('h3').addEventListener('click', function() { section.classList.toggle('collapsed'); });"
-  , "        container.appendChild(section);"
-  , "      });"
-  , ""
-  , "      document.getElementById('deployments-section').style.display = '';"
-  , ""
-  , "      // Search filter"
-  , "      document.getElementById('fn-search').addEventListener('input', function(ev) {"
-  , "        var q = (ev.target.value || '').toLowerCase();"
-  , "        container.querySelectorAll('.deploy-section').forEach(function(sec) {"
-  , "          var rows = sec.querySelectorAll('tbody tr');"
-  , "          var anyVisible = false;"
-  , "          rows.forEach(function(row) {"
-  , "            var text = row.textContent.toLowerCase();"
-  , "            var show = !q || text.indexOf(q) >= 0;"
-  , "            row.style.display = show ? '' : 'none';"
-  , "            if (show) anyVisible = true;"
-  , "          });"
-  , "          sec.style.display = (!q || anyVisible) ? '' : 'none';"
-  , "          if (q && anyVisible) sec.classList.remove('collapsed');"
+  , "    // Search filter across server-rendered deployments"
+  , "    document.getElementById('fn-search').addEventListener('input', function(ev) {"
+  , "      var q = (ev.target.value || '').toLowerCase();"
+  , "      document.querySelectorAll('.deploy-section').forEach(function(sec) {"
+  , "        var rows = sec.querySelectorAll('tbody tr');"
+  , "        var anyVisible = false;"
+  , "        rows.forEach(function(row) {"
+  , "          var text = row.textContent.toLowerCase();"
+  , "          var show = !q || text.indexOf(q) >= 0;"
+  , "          row.style.display = show ? '' : 'none';"
+  , "          if (show) anyVisible = true;"
   , "        });"
+  , "        // For deployments without function tables (pending/failed), match on deployment id"
+  , "        if (rows.length === 0) {"
+  , "          anyVisible = !q || sec.textContent.toLowerCase().indexOf(q) >= 0;"
+  , "        }"
+  , "        sec.style.display = (!q || anyVisible) ? '' : 'none';"
+  , "        if (q && anyVisible) sec.classList.remove('collapsed');"
   , "      });"
-  , ""
-  , "      if (e.detail.webmcpRegistered) {"
-  , "        statusEl.className = 'status ok';"
-  , "        statusEl.textContent = totalFns + ' functions across ' + deployments.length + ' deployments — WebMCP tools are available for you via this browser.';"
-  , "      } else {"
-  , "        statusEl.className = 'status warn';"
-  , "        statusEl.textContent = totalFns + ' functions across ' + deployments.length + ' deployments. WebMCP not supported in this browser.';"
-  , "      }"
   , "    });"
   , ""
-  , "    window.addEventListener('webmcp-error', function(e) {"
-  , "      var statusEl = document.getElementById('status');"
-  , "      statusEl.className = 'status warn';"
-  , "      statusEl.textContent = 'Failed to load: ' + e.detail.error;"
+  , "    // WebMCP: show pill when embed.js reports successful tool registration"
+  , "    window.addEventListener('webmcp-ready', function(e) {"
+  , "      if (e.detail.webmcpRegistered) {"
+  , "        var pill = document.getElementById('webmcp-pill');"
+  , "        if (pill) pill.style.display = '';"
+  , "      }"
   , "    });"
   , "  </script>"
   , "  <script src=\"/.webmcp/embed.js\"></script>"
   , "</body>"
   , "</html>"
   ]
+
+-- | Render the status bar summarizing deployment counts.
+renderStatusBar :: Map.Map DeploymentId DeploymentState -> Text
+renderStatusBar registry
+  | Map.null registry = ""
+  | otherwise =
+      "    <span class=\"header-status\"><span class=\"status-dot " <> dotClass <> "\"></span>"
+        <> showT totalDeps <> " deployments"
+        <> "</span>"
+  where
+    entries = Map.toAscList registry
+    totalDeps = length entries
+    hasReady = any isReady (map snd entries)
+    dotClass
+      | hasReady = "ok"
+      | otherwise = "warn"
+    isReady (DeploymentReady _ _) = True
+    isReady _ = False
+
+-- | Render the deployments section with search and all deployment cards.
+renderDeploymentsSection :: Map.Map DeploymentId DeploymentState -> Text
+renderDeploymentsSection registry
+  | Map.null registry = Text.unlines
+      [ "  <div style=\"padding: 1rem 1rem;\">"
+      , "    <p style=\"color: #666; font-size: 0.95rem; margin-bottom: 0.25rem;\">No deployments found.</p>"
+      , "    <p style=\"color: #999; font-size: 0.8rem;\">Upload an L4 bundle via <code style=\"background:#e8e8e8;padding:0.1rem 0.3rem;border-radius:0.2rem;font-size:0.8rem;\">POST /deployments</code> to get started.</p>"
+      , "  </div>"
+      ]
+  | otherwise = Text.unlines
+      [ "  <div id=\"deployments-section\">"
+      , "    <input type=\"search\" id=\"fn-search\" placeholder=\"Search across all functions...\" />"
+      , "    <div id=\"deploy-list\" class=\"deploy-panel\">"
+      , Text.unlines (map (uncurry renderDeployment) (Map.toAscList registry))
+      , "    </div>"
+      , "  </div>"
+      ]
+
+-- | Render a single deployment card.
+renderDeployment :: DeploymentId -> DeploymentState -> Text
+renderDeployment (DeploymentId did) state = Text.unlines $
+  [ "      <div class=\"deploy-section collapsed\">"
+  , "        <div class=\"deploy-header\"><h3>"
+      <> esc did <> " "
+      <> statusTag <> " "
+      <> "<span class=\"deploy-meta\">" <> metaText <> "</span>"
+      <> "</h3></div>"
+  ] ++ bodyLines ++
+  [ "      </div>"
+  ]
+  where
+    (statusLabel, statusClass) = case state of
+      DeploymentPending    -> ("pending",   "tag-pending")
+      DeploymentCompiling  -> ("compiling", "tag-compiling")
+      DeploymentReady _ _  -> ("ready",     "tag-ready")
+      DeploymentFailed _   -> ("failed",    "tag-failed")
+
+    statusTag = "<span class=\"tag tag-status " <> statusClass <> "\">" <> statusLabel <> "</span>"
+
+    metaText = case state of
+      DeploymentReady _ meta -> showT (length (meta.metaFunctions)) <> " functions"
+      DeploymentFailed _     -> "compilation error"
+      DeploymentPending      -> "not yet compiled"
+      DeploymentCompiling    -> "compiling..."
+
+    bodyLines = case state of
+      DeploymentReady _ meta ->
+        [ "        <table><thead><tr><th>Name</th><th>Return</th><th>Description</th></tr></thead><tbody>"
+        , Text.unlines (map renderFunctionRow (meta.metaFunctions))
+        , "        </tbody></table>"
+        ]
+      DeploymentFailed err ->
+        [ "        <div class=\"deploy-error\">" <> esc err <> "</div>" ]
+      _ -> []
+
+-- | Render a single function row in the deployment table.
+renderFunctionRow :: FunctionSummary -> Text
+renderFunctionRow fs =
+  "          <tr><td>" <> esc fs.fsName
+  <> "</td><td><span class=\"tag " <> tagClass rt <> "\">" <> esc rt <> "</span></td><td>"
+  <> esc fs.fsDescription <> "</td></tr>"
+  where
+    rt = Text.toUpper fs.fsReturnType
+
+-- | Map return type to CSS class.
+tagClass :: Text -> Text
+tagClass rt
+  | rt == "BOOLEAN" = "tag-bool"
+  | rt == "NUMBER"  = "tag-num"
+  | rt == "STRING"  = "tag-str"
+  | rt == "DEONTIC" = "tag-deontic"
+  | otherwise       = "tag-other"
+
+-- | HTML-escape text.
+esc :: Text -> Text
+esc = Text.replace "&" "&amp;"
+    . Text.replace "<" "&lt;"
+    . Text.replace ">" "&gt;"
+    . Text.replace "\"" "&quot;"
+
+-- | Show an Int as Text.
+showT :: Int -> Text
+showT = Text.pack . show
