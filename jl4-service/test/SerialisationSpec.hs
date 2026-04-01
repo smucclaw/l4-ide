@@ -81,7 +81,7 @@ spec = describe "CBOR serialisation" do
                 -- Verify the module still has the same exports
                 -- (we can't compare directly since Anno_ is stripped,
                 -- but we can rebuild functions from it)
-                rebuildResult <- buildFromCborBundle logger "test" decoded sources
+                rebuildResult <- buildFromCborBundle logger "test" [decoded] sources
                   (StoredMetadata (computeVersion sources) "2025-01-01T00:00:00Z")
                 case rebuildResult of
                   Left rebuildErr -> expectationFailure ("Rebuild from decoded CBOR failed: " <> Text.unpack rebuildErr)
@@ -101,7 +101,7 @@ spec = describe "CBOR serialisation" do
         case result of
           Left err -> expectationFailure ("Compilation failed: " <> Text.unpack err)
           Right (_fns, _meta, bundles) -> do
-            mapM_ (saveBundleCbor store "cbor-test") bundles
+            saveBundleCbor store "cbor-test" bundles
 
             loaded <- loadBundleCbor logger store "cbor-test"
             isJust loaded `shouldBe` True
@@ -139,8 +139,8 @@ spec = describe "CBOR serialisation" do
           Left err -> expectationFailure ("Compilation failed: " <> Text.unpack err)
           Right (_fns, _meta, bundles) -> do
             -- Save twice — second should overwrite first cleanly
-            mapM_ (saveBundleCbor store "overwrite-test") bundles
-            mapM_ (saveBundleCbor store "overwrite-test") bundles
+            saveBundleCbor store "overwrite-test" bundles
+            saveBundleCbor store "overwrite-test" bundles
 
             loaded <- loadBundleCbor logger store "overwrite-test"
             isJust loaded `shouldBe` True
@@ -155,8 +155,8 @@ spec = describe "CBOR serialisation" do
         Right (compiledFns, _meta, bundles) -> do
           -- Rebuild from CBOR
           let storedMeta = StoredMetadata (computeVersion sources) "2025-01-01T00:00:00Z"
-          rebuiltResults <- mapM (\b -> buildFromCborBundle logger "test" b sources storedMeta) bundles
-          let rebuiltFns = mconcat [fns | Right (fns, _) <- rebuiltResults]
+          rebuildResult <- buildFromCborBundle logger "test" bundles sources storedMeta
+          let rebuiltFns = case rebuildResult of Right (fns, _) -> fns; Left _ -> Map.empty
 
           -- Same function names
           Map.keys rebuiltFns `shouldMatchList` Map.keys compiledFns
@@ -227,16 +227,16 @@ spec = describe "CBOR serialisation" do
           Left err -> expectationFailure ("Compilation failed: " <> Text.unpack err)
           Right (_fns, _meta, bundles) -> do
             -- Step 2: Save CBOR cache (as ControlPlane.hs does)
-            mapM_ (saveBundleCbor store deployId') bundles
+            saveBundleCbor store deployId' bundles
 
             -- Step 3: Simulate restart — load CBOR from disk
             mCbor <- loadBundleCbor logger store deployId'
             case mCbor of
               Nothing -> expectationFailure "Expected bundle.cbor to exist after save"
-              Just bundle -> do
+              Just loadedBundles -> do
                 -- Step 4: Rebuild from CBOR (as Application.hs does)
                 (loadedSources, storedMeta) <- loadBundle store deployId'
-                rebuildResult <- buildFromCborBundle logger "test" bundle loadedSources storedMeta
+                rebuildResult <- buildFromCborBundle logger "test" loadedBundles loadedSources storedMeta
                 case rebuildResult of
                   Left err -> expectationFailure ("Rebuild from CBOR failed: " <> Text.unpack err)
                   Right (fns, rebuildMeta) -> do
@@ -273,7 +273,7 @@ spec = describe "CBOR serialisation" do
         case result of
           Left err -> expectationFailure ("Compilation failed: " <> Text.unpack err)
           Right (_fns, _meta, bundles) -> do
-            mapM_ (saveBundleCbor store deployId') bundles
+            saveBundleCbor store deployId' bundles
 
             -- Verify CBOR exists
             mCbor <- loadBundleCbor logger store deployId'
@@ -349,9 +349,9 @@ withCborRebuiltService deployId sources act = do
 
   -- Serialize and deserialize (simulating restart)
   let storedMeta = StoredMetadata (computeVersion sources) "2025-01-01T00:00:00Z"
-  rebuiltFns <- fmap mconcat $ mapM (\bundle -> do
-    -- Encode to CBOR bytes, then decode back
-    let encoded = serialise bundle
+  rebuiltFns <- do
+    -- Encode to CBOR bytes, then decode back (as a list)
+    let encoded = serialise bundles
     case deserialiseOrFail encoded of
       Left err -> fail ("CBOR decode failed: " <> show err)
       Right decoded -> do
@@ -359,7 +359,6 @@ withCborRebuiltService deployId sources act = do
         case rebuildResult of
           Left err -> fail ("Rebuild failed: " <> Text.unpack err)
           Right (rebuiltFns', _) -> pure rebuiltFns'
-    ) bundles
 
   -- Register rebuilt functions and serve
   registry <- newTVarIO $ Map.singleton (DeploymentId deployId) (DeploymentReady rebuiltFns meta)

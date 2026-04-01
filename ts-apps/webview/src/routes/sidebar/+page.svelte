@@ -1377,6 +1377,8 @@
 
   .menu-wrapper {
     position: relative;
+    display: flex;
+    align-items: center;
     min-height: 18px;
   }
 

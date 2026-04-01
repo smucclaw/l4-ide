@@ -66,6 +66,7 @@ data SerializedBundle = SerializedBundle
   , sbEntityInfo  :: !EntityInfo      -- ^ Map Unique (Name, CheckEntity)
   , sbExports     :: ![ExportedFunction]  -- ^ Exported functions (annotations are stripped in CBOR, so these are stored explicitly)
   , sbDeclares    :: !(Map Text (Declare Resolved))  -- ^ All type declares (transitive imports included) for schema resolution
+  , sbFilePath    :: !FilePath        -- ^ Source file this bundle was compiled from
   }
   deriving stock (Generic)
   deriving anyclass (Serialise)
@@ -155,14 +156,14 @@ loadBundle (BundleStore root) deployId = do
 
   pure (sources, meta)
 
--- | Save the CBOR-serialized compiled state for a deployment.
--- Uses a temp file + rename for crash safety.
-saveBundleCbor :: BundleStore -> Text -> SerializedBundle -> IO ()
-saveBundleCbor (BundleStore root) deployId bundle = do
+-- | Save all CBOR-serialized compiled bundles for a deployment.
+-- Writes the full list atomically using a temp file + rename for crash safety.
+saveBundleCbor :: BundleStore -> Text -> [SerializedBundle] -> IO ()
+saveBundleCbor (BundleStore root) deployId bundles = do
   let did = Text.unpack deployId
       cborFile = root </> did </> "bundle.cbor"
       tmpFile = cborFile <> ".tmp"
-  LBS.writeFile tmpFile (serialise bundle)
+  LBS.writeFile tmpFile (serialise bundles)
   -- Atomic swap: remove old file if it exists, then rename
   exists <- doesFileExist cborFile
   if exists
@@ -172,10 +173,10 @@ saveBundleCbor (BundleStore root) deployId bundle = do
     else
       renameFile tmpFile cborFile
 
--- | Try to load the CBOR-serialized compiled state for a deployment.
+-- | Try to load CBOR-serialized compiled bundles for a deployment.
 -- Returns 'Nothing' if the file is absent or fails to parse
 -- (safe fallback to source recompilation).
-loadBundleCbor :: Logger -> BundleStore -> Text -> IO (Maybe SerializedBundle)
+loadBundleCbor :: Logger -> BundleStore -> Text -> IO (Maybe [SerializedBundle])
 loadBundleCbor logger (BundleStore root) deployId = do
   let cborFile = root </> Text.unpack deployId </> "bundle.cbor"
   exists <- doesFileExist cborFile
@@ -190,7 +191,7 @@ loadBundleCbor logger (BundleStore root) deployId = do
           logWarn logger "Corrupt bundle.cbor, will recompile"
             [("deploymentId", toJSON deployId)]
           pure Nothing
-        Right bundle -> pure (Just bundle)
+        Right bundles -> pure (Just bundles)
 
 -- | Recursively load all .l4 files from a directory.
 loadSourcesRecursive :: FilePath -> FilePath -> IO (Map FilePath Text)

@@ -39,10 +39,10 @@ loadAndRegister logger options registry store deployId = do
   -- Try fast path: load from CBOR cache
   mCbor <- BundleStore.loadBundleCbor logger store deployId
   result <- case mCbor of
-    Just bundle -> do
+    Just bundles -> do
       logDebug logger "Loading deployment from CBOR cache"
         [("deploymentId", toJSON deployId)]
-      cborResult <- buildFromCborBundle logger deployId bundle sources storedMeta
+      cborResult <- buildFromCborBundle logger deployId bundles sources storedMeta
       case cborResult of
         Right ok@(fns, _meta)
           | Map.null fns -> do
@@ -144,7 +144,7 @@ compileFreshAndCache logger timeoutMicros memLimitMb store deployId sources = do
       pure $ Left "Compilation timed out or exceeded memory limit"
     Just (Right (fns, meta, bundles)) -> do
       -- Save CBOR caches for fast restart
-      mapM_ (BundleStore.saveBundleCbor store deployId) bundles
+      BundleStore.saveBundleCbor store deployId bundles
       pure $ Right (fns, meta)
     Just (Left err) ->
       pure $ Left err
