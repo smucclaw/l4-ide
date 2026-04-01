@@ -265,13 +265,20 @@ export function initializeSidebarMessenger(
         })),
       }
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
       outputChannel.appendLine(
-        `[sidebar] Error listing deployments: ${err instanceof Error ? err.message : String(err)}`
+        `[sidebar] Error listing deployments: ${message}`
       )
-      outputChannel.appendLine(
-        `[sidebar] Disconnecting session due to deployment listing failure`
-      )
-      await auth.logout()
+      // Only logout on authentication failures — other errors (404, 502,
+      // network timeouts) should not disconnect an otherwise valid session.
+      const isAuthError =
+        message.includes(': 401 ') || message.includes(': 403 ')
+      if (isAuthError) {
+        outputChannel.appendLine(
+          `[sidebar] Disconnecting session due to authentication failure`
+        )
+        await auth.logout()
+      }
       return { deployments: [] }
     }
   })
