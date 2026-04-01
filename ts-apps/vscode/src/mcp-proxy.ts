@@ -169,20 +169,6 @@ export class McpProxy implements vscode.Disposable {
       return
     }
 
-    // GET /mcp — lightweight health check
-    if (req.method === 'GET') {
-      const serviceUrl = this.auth.getEffectiveServiceUrl()
-      res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.end(
-        JSON.stringify({
-          name: 'L4 Tools',
-          status: serviceUrl ? 'connected' : 'disconnected',
-          serviceUrl: serviceUrl || null,
-        })
-      )
-      return
-    }
-
     if (req.method !== 'POST') {
       res.writeHead(405, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ error: 'Method not allowed' }))

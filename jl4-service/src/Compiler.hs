@@ -144,6 +144,7 @@ compileSingleFile logger deployId filepath content moduleContext = do
                 , sbEntityInfo = ei
                 , sbExports = exports
                 , sbDeclares = allDeclares
+                , sbFilePath = filepath
                 }
 
           logInfo logger "Found exports"
@@ -153,7 +154,7 @@ compileSingleFile logger deployId filepath content moduleContext = do
             ]
           pure $ Right (fns, [bundle])
 
--- | Rebuild ValidatedFunctions from a deserialized CBOR bundle,
+-- | Rebuild ValidatedFunctions from deserialized CBOR bundles,
 -- skipping the expensive typecheck step.
 --
 -- This is the fast restart path: the Module Resolved, Environment, and
@@ -162,87 +163,77 @@ compileSingleFile logger deployId filepath content moduleContext = do
 buildFromCborBundle
   :: Logger
   -> Text  -- ^ deployment ID for logging
-  -> SerializedBundle
+  -> [SerializedBundle]
   -> Map FilePath Text       -- ^ source files (for import resolution and eval)
   -> StoredMetadata          -- ^ persisted metadata
   -> IO (Either Text (Map Text ValidatedFunction, DeploymentMetadata))
-buildFromCborBundle logger deployId bundle sources storedMeta = do
-  let resolvedModule = bundle.sbModule
-      env = bundle.sbEnvironment
-      ei = bundle.sbEntityInfo
-      moduleContext = sources
+buildFromCborBundle logger deployId bundles sources storedMeta = do
+  let moduleContext = sources
 
-  -- Use the full exported functions stored in the bundle (annotations are stripped
-  -- in CBOR, so getExportedFunctions on the deserialized module would return []).
-  let exports = bundle.sbExports
+  -- Process each bundle (one per source file that had exports)
+  allFns <- fmap concat $ forM bundles $ \bundle -> do
+    let resolvedModule = bundle.sbModule
+        env = bundle.sbEnvironment
+        ei = bundle.sbEntityInfo
+        exports = bundle.sbExports
+        filepath = bundle.sbFilePath
 
-  if null exports
-    then pure $ Left "No exported functions found in CBOR bundle"
-    else do
-      -- For each export, build a CompiledModule directly (no typechecking)
-      fns <- forM exports $ \export -> do
-        let fnDecl = exportToFunction bundle.sbDeclares [] export
-            apiDecl = toDecl fnDecl
-            funRawName = NormalName apiDecl.name
+    case Map.lookup filepath sources of
+      Nothing -> pure []
+      Just content -> do
+        fns <- forM exports $ \export -> do
+          let fnDecl = exportToFunction bundle.sbDeclares [] export
+              apiDecl = toDecl fnDecl
+              funRawName = NormalName apiDecl.name
 
-        -- Find the function definition in the deserialized AST
-        mDecide <- runExceptT $ getFunctionDefinition funRawName resolvedModule
-        case mDecide of
-          Left _err -> pure Nothing
-          Right decide -> do
-            -- Find which source file contains this function
-            -- Use the first .l4 file (most deployments have one file)
-            let l4Files = Map.toList $ Map.filterWithKey (\k _ -> takeExtension k == ".l4") sources
-            case l4Files of
-              [] -> pure Nothing
-              ((filepath, content):_) -> do
-                -- Build import environment (needs source + module context)
-                importEnv <- buildImportEnvironment filepath content moduleContext ei
+          -- Find the function definition in the deserialized AST
+          mDecide <- runExceptT $ getFunctionDefinition funRawName resolvedModule
+          case mDecide of
+            Left _err -> pure Nothing
+            Right decide -> do
+              importEnv <- buildImportEnvironment filepath content moduleContext ei
 
-                let compiled = CompiledModule
-                      { compiledModule = resolvedModule
-                      , compiledEnvironment = env
-                      , compiledEntityInfo = ei
-                      , compiledDecide = decide
-                      , compiledModuleContext = moduleContext
-                      , compiledImportEnv = importEnv
-                      , compiledSource = content
-                      }
+              let compiled = CompiledModule
+                    { compiledModule = resolvedModule
+                    , compiledEnvironment = env
+                    , compiledEntityInfo = ei
+                    , compiledDecide = decide
+                    , compiledModuleContext = moduleContext
+                    , compiledImportEnv = importEnv
+                    , compiledSource = content
+                    }
 
-                -- Create RunFunction using precompiled module
-                let runFn = Jl4.createRunFunctionFromCompiled filepath apiDecl compiled
+              let runFn = Jl4.createRunFunctionFromCompiled filepath apiDecl compiled
 
-                pure $ Just ValidatedFunction
-                  { fnImpl = fnDecl
-                  , fnEvaluator = Map.fromList [(JL4, runFn)]
-                  , fnCompiled = Just compiled
-                  , fnSources = Map.fromList [(JL4, content)]
-                  , fnDecisionQueryCache = Nothing
-                  }
-
-      let validFns = [fn | Just fn <- fns]
-
-      if null validFns
-        then pure $ Left "Failed to rebuild functions from CBOR bundle"
-        else do
-          -- Build function map
-          let fnMap = Map.fromList [(fn.fnImpl.name, fn) | fn <- validFns]
-
-          -- Reconstruct DeploymentMetadata from stored metadata
-          now <- getCurrentTime
-          let summaries = [FunctionSummary { fsName = fn.fnImpl.name, fsDescription = fn.fnImpl.description, fsParameters = fn.fnImpl.parameters, fsReturnType = fn.fnImpl.returnType, fsSection = Nothing, fsIsDeontic = fn.fnImpl.isDeontic } | fn <- validFns]
-              version = storedMeta.smVersion
-              meta = DeploymentMetadata
-                { metaFunctions = summaries
-                , metaVersion = version
-                , metaCreatedAt = now
+              pure $ Just ValidatedFunction
+                { fnImpl = fnDecl
+                , fnEvaluator = Map.fromList [(JL4, runFn)]
+                , fnCompiled = Just compiled
+                , fnSources = Map.fromList [(JL4, content)]
+                , fnDecisionQueryCache = Nothing
                 }
 
-          logInfo logger "Rebuilt functions from CBOR cache"
-            [ ("deploymentId", toJSON deployId)
-            , ("functionCount", toJSON (length validFns))
-            ]
-          pure $ Right (fnMap, meta)
+        pure [fn | Just fn <- fns]
+
+  if null allFns
+    then pure $ Left "No functions rebuilt from CBOR bundles"
+    else do
+      let fnMap = Map.fromList [(fn.fnImpl.name, fn) | fn <- allFns]
+
+      now <- getCurrentTime
+      let summaries = [FunctionSummary { fsName = fn.fnImpl.name, fsDescription = fn.fnImpl.description, fsParameters = fn.fnImpl.parameters, fsReturnType = fn.fnImpl.returnType, fsSection = Nothing, fsIsDeontic = fn.fnImpl.isDeontic } | fn <- allFns]
+          version = storedMeta.smVersion
+          meta = DeploymentMetadata
+            { metaFunctions = summaries
+            , metaVersion = version
+            , metaCreatedAt = now
+            }
+
+      logInfo logger "Rebuilt functions from CBOR cache"
+        [ ("deploymentId", toJSON deployId)
+        , ("functionCount", toJSON (length allFns))
+        ]
+      pure $ Right (fnMap, meta)
 
 -- | Convert an ExportedFunction to our Function type.
 exportToFunction :: Map Text (Declare Resolved) -> [(Text, Type' Resolved)] -> ExportedFunction -> Function

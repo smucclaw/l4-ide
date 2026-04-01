@@ -168,7 +168,7 @@ postDeploymentHandler multipart = do
             atomically $ modifyTVar' env.deploymentRegistry $
               Map.insert deployId (DeploymentFailed "Compilation timed out")
           Just (Right (fns, meta, bundles)) -> do
-            mapM_ (BundleStore.saveBundleCbor env.bundleStore (deployId.unDeploymentId)) bundles
+            BundleStore.saveBundleCbor env.bundleStore (deployId.unDeploymentId) bundles
             BundleStore.saveMetadataCache env.bundleStore (deployId.unDeploymentId) (Aeson.encode meta)
               `catch` \(e :: SomeException) ->
                 logWarn env.logger "Failed to save metadata cache (non-fatal)"
@@ -263,7 +263,7 @@ putDeploymentHandler deployIdText multipart = do
           [("deploymentId", toJSON deployId.unDeploymentId)]
       Just (Right (fns, meta, bundles)) -> do
         -- Save CBOR cache for fast restart
-        mapM_ (BundleStore.saveBundleCbor env.bundleStore (deployId.unDeploymentId)) bundles
+        BundleStore.saveBundleCbor env.bundleStore (deployId.unDeploymentId) bundles
         BundleStore.saveMetadataCache env.bundleStore (deployId.unDeploymentId) (Aeson.encode meta)
           `catch` \(e :: SomeException) ->
             logWarn env.logger "Failed to save metadata cache (non-fatal)"
