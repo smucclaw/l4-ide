@@ -107,18 +107,20 @@ Deployment states: `pending` (lazy-load, compiles on first access), `compiling` 
 
 ### Data Plane
 
-Evaluate functions within a deployment.
+Evaluate functions within a deployment. All routes are available in both short form (`/{id}/{fn}/...`) and long form (`/deployments/{id}/functions/{fn}/...`).
 
-| Method | Endpoint                                               | Description                                               |
-| ------ | ------------------------------------------------------ | --------------------------------------------------------- |
-| `GET`  | `/deployments/{id}/functions`                          | List available functions                                  |
-| `GET`  | `/deployments/{id}/functions/{fn}`                     | Get function schema                                       |
-| `POST` | `/deployments/{id}/functions/{fn}/evaluation`          | Evaluate a function                                       |
-| `POST` | `/deployments/{id}/functions/{fn}/evaluation/batch`    | Batch evaluate across many input cases                    |
-| `POST` | `/deployments/{id}/functions/{fn}/query-plan`          | Get next-question suggestions for interactive elicitation |
-| `GET`  | `/deployments/{id}/functions/{fn}/state-graphs`        | List state graphs from regulative rules                   |
-| `GET`  | `/deployments/{id}/functions/{fn}/state-graphs/{name}` | Get DOT source for a state graph                          |
-| `GET`  | `/deployments/{id}/openapi.json`                       | Deployment metadata                                       |
+| Method | Endpoint                                               | Short Route                      |
+| ------ | ------------------------------------------------------ | -------------------------------- |
+| `GET`  | `/deployments/{id}/functions`                          | `/{id}/functions`                |
+| `GET`  | `/deployments/{id}/functions/{fn}`                     | `/{id}/{fn}`                     |
+| `POST` | `/deployments/{id}/functions/{fn}/evaluation`          | `/{id}/{fn}/evaluation`          |
+| `POST` | `/deployments/{id}/functions/{fn}/evaluation/batch`    | `/{id}/{fn}/evaluation/batch`    |
+| `POST` | `/deployments/{id}/functions/{fn}/query-plan`          | `/{id}/{fn}/query-plan`          |
+| `GET`  | `/deployments/{id}/functions/{fn}/state-graphs`        | `/{id}/{fn}/state-graphs`        |
+| `GET`  | `/deployments/{id}/functions/{fn}/state-graphs/{name}` | `/{id}/{fn}/state-graphs/{name}` |
+| `GET`  | `/deployments/{id}/openapi.json`                       | `/{id}/openapi.json`             |
+
+Function names with spaces can use hyphens or URL-encoding in the path (e.g., `check-person` or `check%20person` for `check person`).
 
 ### Evaluation
 
@@ -371,12 +373,13 @@ jl4-service/
     BundleStore.hs          -- Filesystem persistence (save/load/list/delete)
     Compiler.hs             -- Bundle compilation (typecheck + export discovery)
     ControlPlane.hs         -- POST/GET/PUT/DELETE /deployments
-    DataPlane.hs            -- /deployments/{id}/functions/... evaluation handlers
+    DataPlane.hs            -- /deployments/{id}/functions/... evaluation handlers + short routes
     DeploymentLoader.hs     -- Shared compilation logic (eager startup, lazy compile-on-access)
+    ExplorerPage.hs         -- Landing page HTML (deployment explorer, API docs)
     McpServer.hs            -- MCP JSON-RPC 2.0 handler (tools/list, tools/call)
     Schema.hs               -- OpenAPI spec generation
     Shared.hs               -- Shared utilities (scope matching, metadata, sanitization, JSON errors)
-    WebMCPPage.hs           -- WebMCP deployment explorer + org-wide JS generation
+    WebMCPPage.hs           -- Org-wide WebMCP JavaScript (tool registration, sanitization)
     Backend/
       Api.hs                -- FnLiteral, ResponseWithReason, RunFunction
       Jl4.hs                -- L4 typechecking and evaluation via Shake rules

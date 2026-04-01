@@ -129,7 +129,7 @@ curl https://{your-org}.legalese.cloud/deployments/insurance-premium/functions
 ### Evaluate the default function
 
 ```bash
-curl -X POST http://your-service/deployments/insurance-premium/functions/calculate_premium/evaluation \
+curl -X POST http://your-service/deployments/insurance-premium/functions/calculate-premium/evaluation \
   -H "Content-Type: application/json" \
   -d '{
     "arguments": {
@@ -163,7 +163,7 @@ curl -X POST http://your-service/deployments/insurance-premium/functions/qualifi
 Not sure which inputs matter? Use the query-plan endpoint to ask only the questions that affect the outcome:
 
 ```bash
-curl -X POST http://your-service/deployments/insurance-premium/functions/calculate_premium/query-plan \
+curl -X POST http://your-service/deployments/insurance-premium/functions/calculate-premium/query-plan \
   -H "Content-Type: application/json" \
   -d '{"arguments": {"applicant": {"is existing customer": true}}}'
 ```
