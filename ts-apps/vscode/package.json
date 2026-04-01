@@ -1,7 +1,7 @@
 {
   "name": "l4-vscode",
   "displayName": "L4 Rules-as-code",
-  "description": "Write, test, and deploy legal rules as executable code — with syntax highlighting, IntelliSense, ladder diagrams, and one-click cloud deployment",
+  "description": "Write, test, and deploy legal rules as executable code — with MCP for AI agents, WebMCP for browser AI, syntax highlighting, IntelliSense, ladder diagrams, and cloud deployment",
   "license": "Apache-2.0",
   "version": "1.3.0",
   "publisher": "legalese",
@@ -12,6 +12,8 @@
   "keywords": [
     "l4",
     "legal",
+    "webmcp",
+    "mcp",
     "jl4",
     "language",
     "legislation",
