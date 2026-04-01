@@ -32,9 +32,11 @@ renderExplorerPageBS registry = LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text
   , "    body { font-family: system-ui, -apple-system, sans-serif; max-width: 960px; margin: 0 auto; padding: 1rem; color: #1a1a1a; }"
   , "    h1, h2 { font-family: 'Merriweather', system-ui, -apple-system, sans-serif; }"
   , "    h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }"
-  , "    .page-header { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.25rem 1rem; margin-bottom: 1rem; }"
+  , "    .page-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.25rem 1rem; margin-bottom: 1rem; }"
   , "    .page-header h1 { margin-bottom: 0; }"
-  , "    .header-status { display: flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; color: #888; }"
+  , "    .header-status { font-size: 0.8rem; color: #888; text-align: right; line-height: 1.5em; margin-left: auto; }"
+  , "    .header-status .status-dot { vertical-align: middle; margin-right: 0.35rem; }"
+  , "    .header-status #host-info { color: #666; }"
   , "    .status-dot { display: inline-block; width: 0.5em; height: 0.5em; min-width: 0.5em; min-height: 0.5em; border-radius: 50%; flex-shrink: 0; }"
   , "    .status-dot.ok { background: #4caf50; }"
   , "    .status-dot.warn { background: #ff9800; }"
@@ -203,6 +205,8 @@ renderExplorerPageBS registry = LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text
   , "    });"
   , ""
   , "    var BASE_URL = window.location.origin;"
+  , "    var hostInfo = document.getElementById('host-info');"
+  , "    if (hostInfo) hostInfo.textContent = BASE_URL;"
   , "    document.getElementById('embed-snippet').textContent = '<script src=\"' + BASE_URL + '/.webmcp/embed.js\" data-scope=\"*\" data-tools=\"auto\" data-api-key=\"sk_...\"></' + 'script>';"
   , "    document.getElementById('mcp-url').textContent = BASE_URL + '/.mcp';"
   , "    document.getElementById('mcp-config').textContent = JSON.stringify({ mcpServers: { 'l4-rules': { type: 'http', url: BASE_URL + '/.mcp', headers: { Authorization: 'Bearer sk_...' } } } }, null, 2);"
@@ -247,9 +251,8 @@ renderStatusBar :: Map.Map DeploymentId DeploymentState -> Text
 renderStatusBar registry
   | Map.null registry = ""
   | otherwise =
-      "    <span class=\"header-status\"><span class=\"status-dot " <> dotClass <> "\"></span>"
-        <> showT totalDeps <> " deployments"
-        <> "</span>"
+      "    <div class=\"header-status\"><div id=\"host-info\"></div><span class=\"status-dot " <> dotClass <> "\"></span>"
+        <> showT totalDeps <> " deployments</div>"
   where
     entries = Map.toAscList registry
     totalDeps = length entries
