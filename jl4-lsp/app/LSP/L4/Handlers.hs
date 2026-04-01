@@ -808,7 +808,8 @@ handlers evalConfig recorder =
                         <> foldMap collectAllDeclares tc.dependencies
                     -- Collect exports from this module and all transitive imports
                     collectExports declares tc =
-                      let exps = Export.getExportedFunctions tc.module'
+                      let exps = Export.enrichReturnTypes tc.entityInfo
+                               $ Export.getExportedFunctions tc.module'
                           here = map (Inspector.exportedFunctionToSummary declares) exps
                           imported = concatMap (collectExports declares) tc.dependencies
                       in here <> imported

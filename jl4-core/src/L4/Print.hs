@@ -12,6 +12,8 @@ import Data.Time (UTCTime, toGregorian)
 import Data.Time.LocalTime (TimeOfDay(..))
 import qualified Data.Time.Format as TimeFormat
 import qualified Data.Time.Zones as TZ
+import qualified Data.Time.Zones.All as TZAll
+import qualified Data.Text.Encoding as TE
 import Control.Exception (SomeException, catch)
 import System.IO.Unsafe (unsafePerformIO)
 import Prettyprinter
@@ -756,4 +758,6 @@ tryLoadTZPure name = unsafePerformIO $ tryLoadTZ (Text.unpack name)
 
 tryLoadTZ :: String -> IO (Maybe TZ.TZ)
 tryLoadTZ name =
-  (Just <$> TZ.loadTZFromDB name) `catch` \(_ :: SomeException) -> pure Nothing
+  (Just <$> TZ.loadTZFromDB name) `catch` \(_ :: SomeException) ->
+    -- Fall back to the embedded timezone database when the system DB is unavailable.
+    pure $ TZAll.tzByLabel <$> TZAll.fromTZName (TE.encodeUtf8 (Text.pack name))

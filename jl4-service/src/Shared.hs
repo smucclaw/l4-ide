@@ -119,14 +119,17 @@ sanitizeParameters (MkParameters props reqProps) =
     ]
 
 -- | Sanitize a Parameter value, recursively sanitizing nested properties.
+-- Produces a JSON Schema draft 2020-12 compliant object by omitting
+-- non-standard properties (alias, propertyOrder) and empty enum arrays.
 sanitizeParameterValue :: Parameter -> Aeson.Value
 sanitizeParameterValue p =
   Aeson.object $
     [ "type" .= p.parameterType
-    , "alias" .= p.parameterAlias
-    , "enum" .= p.parameterEnum
     , "description" .= p.parameterDescription
     ]
+    ++ case p.parameterEnum of
+        [] -> []
+        enums -> ["enum" .= enums]
     ++ case p.parameterFormat of
         Nothing -> []
         Just fmt -> ["format" .= fmt]
@@ -136,9 +139,6 @@ sanitizeParameterValue p =
           [ (Aeson.Key.fromText (sanitizePropertyName nk), sanitizeParameterValue nv)
           | (nk, nv) <- Map.toList nested
           ]]
-    ++ case p.parameterPropertyOrder of
-        Nothing -> []
-        Just ord -> ["propertyOrder" .= map sanitizePropertyName ord]
     ++ case p.parameterItems of
         Nothing -> []
         Just items -> ["items" .= sanitizeParameterValue items]
