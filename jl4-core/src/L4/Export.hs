@@ -8,6 +8,7 @@ module L4.Export (
   parseDescText,
   getExportedFunctions,
   getDefaultFunction,
+  enrichReturnTypes,
   buildTypeDescMap,
   assumesFromModule,
   extractAssumeParamTypes,
@@ -28,7 +29,7 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import L4.Annotation (getAnno)
 import L4.Syntax
-import L4.TypeCheck.Types (CheckErrorWithContext(..), CheckError(..))
+import L4.TypeCheck.Types (CheckErrorWithContext(..), CheckError(..), CheckEntity(..), EntityInfo)
 import Optics
 
 type TypeDescMap = Map.Map Unique Text
@@ -134,6 +135,27 @@ getDefaultFunction =
   List.find isDefaultExport . getExportedFunctions
  where
   isDefaultExport ExportedFunction{exportIsDefault = flag} = flag
+
+-- | Fill in missing return types using type-checker entity info.
+-- When a DECIDE has no explicit GIVETH, we look up the function's inferred
+-- type from 'EntityInfo' and extract the return type from it.
+enrichReturnTypes :: EntityInfo -> [ExportedFunction] -> [ExportedFunction]
+enrichReturnTypes entInfo = map enrich
+ where
+  enrich ef
+    | Just _ <- ef.exportReturnType = ef  -- already has a return type
+    | otherwise =
+        let MkDecide _ _ (MkAppForm _ name _ _) _ = ef.exportDecide
+        in ef { exportReturnType = inferReturnType name }
+
+  inferReturnType :: Resolved -> Maybe (Type' Resolved)
+  inferReturnType name =
+    case Map.lookup (getUnique name) entInfo of
+      Just (_, KnownTerm ty _) ->
+        Just $ case ty of
+          Fun _ _ ret -> ret
+          other       -> other
+      _ -> Nothing
 
 buildExportedFunction
   :: TypeDescMap

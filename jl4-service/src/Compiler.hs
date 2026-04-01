@@ -29,7 +29,7 @@ import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text.Encoding
 import Data.Time (getCurrentTime)
-import L4.Export (ExportedFunction (..), ExportedParam (..), getExportedFunctions, extractImplicitAssumeParams)
+import L4.Export (ExportedFunction (..), ExportedParam (..), getExportedFunctions, enrichReturnTypes, extractImplicitAssumeParams)
 import L4.Syntax (Resolved, Declare(..), Type'(..), RawName(..), getActual, rawName, rawNameToText)
 import Logging (Logger, logInfo, logWarn)
 import qualified LSP.L4.Rules as Rules
@@ -116,7 +116,7 @@ compileSingleFile logger deployId filepath content moduleContext = do
 
     Just tcResult@Rules.TypeCheckResult{module' = resolvedModule, environment = env, entityInfo = ei, errors = tcErrors} -> do
       -- Discover exported functions
-      let exports = getExportedFunctions resolvedModule
+      let exports = enrichReturnTypes ei $ getExportedFunctions resolvedModule
       if null exports
         then pure $ Right ([], [])
         else do
