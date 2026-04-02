@@ -205,7 +205,7 @@ The org-wide endpoint (`/.mcp`) exposes tools from all deployments. The scoped e
 L4 uses backtick identifiers with spaces (e.g., `` `function or purpose` ``), but JSON schema property names and URL path segments work better with hyphens. The service automatically sanitizes field names:
 
 - **MCP and WebMCP schemas**: spaces and special characters are replaced with hyphens (e.g., `function or purpose` → `function-or-purpose`)
-- **OpenAPI** (`/openapi.json`): preserves original L4 names with spaces (for human-readable documentation)
+- **OpenAPI** (`/openapi.json`): uses sanitized names in URL paths; parameter schemas preserve original L4 names
 - **Incoming arguments** (MCP tool calls, REST API evaluation, batch): both hyphenated and original spaced names are accepted and mapped back to the L4 originals
 - **Function names in URLs**: both hyphenated (`/functions/check-person/evaluation`) and URL-encoded (`/functions/check%20person/evaluation`) forms are accepted
 
@@ -287,10 +287,10 @@ The proxy injects these headers to control what jl4-service includes in response
 <!-- All deployments, all functions -->
 <script src="https://your-host/.webmcp/embed.js"></script>
 
-<!-- Scoped to specific deployments/functions -->
+<!-- Scoped to specific deployments -->
 <script
   src="https://your-host/.webmcp/embed.js"
-  data-scope="sell-scenario/*, safe-valuation/effective-sale-price"
+  data-scope="sell-scenario,safe-valuation"
 ></script>
 
 <!-- With API key for cross-origin auth -->
@@ -302,7 +302,7 @@ The proxy injects these headers to control what jl4-service includes in response
 
 **Configuration attributes:**
 
-- `data-scope` — Filter deployments/functions: `deploy/*` (all in deploy), `deploy/fn` (one function), comma-separated
+- `data-scope` — Filter by deployment ID: `deploy-id` (one deployment), `id1,id2` (multiple), comma-separated
 - `data-tools` — Registration mode: `auto` (default), `discovery`, `direct`, `all`
 - `data-api-key` — API key for cloud-hosted deployments on [Legalese Cloud](https://legalese.cloud). Not needed for self-hosted instances.
 
