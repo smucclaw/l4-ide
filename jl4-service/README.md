@@ -231,19 +231,20 @@ curl -X POST http://localhost:8080/my-rules/.mcp \
 
 Deployments are automatically [WebMCP](https://webmachinelearning.github.io/webmcp/)-compatible. Browser AI agents can discover and call deployed L4 rules as structured tools via a JavaScript snippet.
 
-| Method | Endpoint                           | Description                                           |
-| ------ | ---------------------------------- | ----------------------------------------------------- |
-| `GET`  | `/` (browser)                      | Deployment explorer — lists all deployments/functions |
-| `GET`  | `/deployments?functions=full`      | All deployments with full function schemas            |
-| `GET`  | `/deployments?scope=deploy-id`     | Filtered by deployment                                |
-| `GET`  | `/openapi.json`                    | Org-wide OpenAPI 3.0 spec                             |
-| `GET`  | `/deployments/{id}/openapi.json`   | Per-deployment OpenAPI 3.0 spec                       |
-| `GET`  | `/.webmcp/embed.js`                | Org-wide JS that registers WebMCP tools               |
-| `GET`  | `/.well-known/webmcp`              | Discovery manifest listing all deployments            |
+| Method | Endpoint                         | Description                                           |
+| ------ | -------------------------------- | ----------------------------------------------------- |
+| `GET`  | `/` (browser)                    | Deployment explorer — lists all deployments/functions |
+| `GET`  | `/deployments?functions=full`    | All deployments with full function schemas            |
+| `GET`  | `/deployments?scope=deploy-id`   | Filtered by deployment                                |
+| `GET`  | `/openapi.json`                  | Org-wide OpenAPI 3.0 spec                             |
+| `GET`  | `/deployments/{id}/openapi.json` | Per-deployment OpenAPI 3.0 spec                       |
+| `GET`  | `/.webmcp/embed.js`              | Org-wide JS that registers WebMCP tools               |
+| `GET`  | `/.well-known/webmcp`            | Discovery manifest listing all deployments            |
 
 The `/deployments` endpoint serves cached metadata even for pending (lazy-loaded) deployments, so it works immediately after a restart without triggering compilation.
 
 Query parameters for `GET /deployments`:
+
 - `?functions=full` — include full parameter schemas in function details
 - `?functions=none` — omit functions from metadata
 - Default: simple function listing (name, description, returnType)

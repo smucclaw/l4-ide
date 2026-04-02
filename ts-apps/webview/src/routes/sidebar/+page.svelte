@@ -1357,8 +1357,12 @@
   .deployment-error {
     margin: 4px 0;
     padding: 6px 8px;
-    background: var(--vscode-inputValidation-errorBackground, rgba(255, 0, 0, 0.1));
-    border: 1px solid var(--vscode-inputValidation-errorBorder, rgba(255, 0, 0, 0.3));
+    background: var(
+      --vscode-inputValidation-errorBackground,
+      rgba(255, 0, 0, 0.1)
+    );
+    border: 1px solid
+      var(--vscode-inputValidation-errorBorder, rgba(255, 0, 0, 0.3));
     border-radius: 4px;
   }
 

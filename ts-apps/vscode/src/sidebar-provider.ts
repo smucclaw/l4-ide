@@ -171,7 +171,15 @@ interface DeploymentResponse {
       description?: string
       parameters?: {
         type: 'object'
-        properties: Record<string, { type: string; enum: string[]; description: string; [key: string]: unknown }>
+        properties: Record<
+          string,
+          {
+            type: string
+            enum: string[]
+            description: string
+            [key: string]: unknown
+          }
+        >
         required: string[]
       }
       returnType?: string
@@ -239,13 +247,18 @@ export function initializeSidebarMessenger(
   // Handle list deployments request.
   // Uses GET /deployments?functions=full as the single source of truth.
   messenger.onRequest(ListSidebarDeployments, async () => {
-    outputChannel.appendLine(`[sidebar] Listing deployments via /deployments?functions=full`)
+    outputChannel.appendLine(
+      `[sidebar] Listing deployments via /deployments?functions=full`
+    )
     try {
-      const deployments = await serviceClient.getDeployments() as DeploymentResponse[]
+      const deployments =
+        (await serviceClient.getDeployments()) as DeploymentResponse[]
 
       // Empty array from 403 = insufficient permissions
       if (deployments.length === 0) {
-        outputChannel.appendLine(`[sidebar] No deployments returned (may lack l4:rules permission)`)
+        outputChannel.appendLine(
+          `[sidebar] No deployments returned (may lack l4:rules permission)`
+        )
       }
 
       return {
