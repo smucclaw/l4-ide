@@ -107,7 +107,7 @@ renderOrgWebMCPScript = RawJs $ LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text
   , "        if (safKey !== k) reverseMap[safKey] = k;"
   , "      });"
   , "      out.properties = nested;"
-  , "    }"
+  , "    } else if (p.type === 'object') { out.properties = {}; }"
   , "    if (p.items) out.items = sanitizeParamValue(p.items, reverseMap);"
   , "    return out;"
   , "  }"

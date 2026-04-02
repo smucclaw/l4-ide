@@ -259,7 +259,7 @@ renderExplorerPageBS registry = LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text
   , "            if(t){t.className='tag tag-status tag-ready';t.textContent='ready';}"
   , "            var m=sec.querySelector('.deploy-meta');"
   , "            var fns=d.metadata.functions||[];"
-  , "            if(m) m.textContent=fns.length+' functions';"
+  , "            if(m) m.textContent=fns.length+' '+(fns.length===1?'rule':'rules');"
   , "            var h='';"
   , "            if(fns.length){"
   , "              h+='<table><thead><tr><th>Name</th><th>Return</th><th>Description</th></tr></thead><tbody>';"
@@ -314,7 +314,7 @@ renderStatusBar registry
   | Map.null registry = ""
   | otherwise =
       "    <div class=\"header-status\"><div id=\"host-info\"></div><span class=\"status-dot " <> dotClass <> "\"></span>"
-        <> showT totalDeps <> " deployments</div>"
+        <> showT totalDeps <> " " <> plural totalDeps "deployment" <> "</div>"
   where
     entries = Map.toAscList registry
     totalDeps = length entries
@@ -371,7 +371,7 @@ renderDeployment (DeploymentId did) state = Text.unlines $
       _ -> ""
 
     metaText = case state of
-      DeploymentReady _ meta -> showT (length (meta.metaFunctions)) <> " functions"
+      DeploymentReady _ meta -> let n = length (meta.metaFunctions) in showT n <> " " <> plural n "rule"
       DeploymentPending (Just meta) -> showT (length (meta.metaFunctions)) <> " functions"
       DeploymentPending Nothing -> "not yet compiled"
       DeploymentFailed _     -> "compilation error"
@@ -440,3 +440,8 @@ escAttr = Text.replace "\\" "\\\\"
 -- | Show an Int as Text.
 showT :: Int -> Text
 showT = Text.pack . show
+
+-- | Pluralise a word: 1 → "rule", otherwise → "rules".
+plural :: Int -> Text -> Text
+plural 1 w = w
+plural _ w = w <> "s"

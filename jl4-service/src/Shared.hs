@@ -165,7 +165,9 @@ sanitizeParameterValue p =
         Nothing -> []
         Just fmt -> ["format" .= fmt]
     ++ case p.parameterProperties of
-        Nothing -> []
+        Nothing
+          | p.parameterType == "object" -> ["properties" .= Aeson.object []]
+          | otherwise -> []
         Just nested -> ["properties" .= Aeson.object
           [ (Aeson.Key.fromText (sanitizePropertyName nk), sanitizeParameterValue nv)
           | (nk, nv) <- Map.toList nested
