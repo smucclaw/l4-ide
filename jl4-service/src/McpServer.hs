@@ -114,7 +114,7 @@ buildToolList vis mScope = do
       let toolNames = buildToolNames entries
       pure [ Aeson.object
         [ "name" .= tn
-        , "description" .= (fn.fsDescription <> " [" <> deployId <> "/" <> fn.fsName <> "]")
+        , "description" .= ("L4 Rule: " <> fn.fsDescription <> " [" <> deployId <> "/" <> fn.fsName <> "]")
         , "inputSchema" .= sanitizeParameters fn.fsParameters
         ]
         | (tn, deployId, fn) <- toolNames
@@ -131,7 +131,7 @@ fileToolDefinitions :: [Aeson.Value]
 fileToolDefinitions =
   [ Aeson.object
     [ "name" .= ("list_files" :: Text)
-    , "description" .= ("List .l4 files and their exports in a deployment" :: Text)
+    , "description" .= ("Tooling: List .l4 files and their exports in a deployment" :: Text)
     , "inputSchema" .= Aeson.object
         [ "type" .= ("object" :: Text)
         , "properties" .= Aeson.object
@@ -144,7 +144,7 @@ fileToolDefinitions =
     ]
   , Aeson.object
     [ "name" .= ("read_file" :: Text)
-    , "description" .= ("Read .l4 source file content, optionally a line range" :: Text)
+    , "description" .= ("Tooling: Read .l4 source file content, optionally a line range" :: Text)
     , "inputSchema" .= Aeson.object
         [ "type" .= ("object" :: Text)
         , "properties" .= Aeson.object
@@ -165,7 +165,7 @@ fileToolDefinitions =
     ]
   , Aeson.object
     [ "name" .= ("search_identifier" :: Text)
-    , "description" .= ("Find definitions (DECLARE/DECIDE/MEANS/ASSUME blocks with decorators) and references of an L4 identifier. Text-based, not AST — may match in comments." :: Text)
+    , "description" .= ("Tooling: Find definitions and references of an L4 identifier. Text-based, may match in comments." :: Text)
     , "inputSchema" .= Aeson.object
         [ "type" .= ("object" :: Text)
         , "properties" .= Aeson.object
@@ -186,7 +186,7 @@ fileToolDefinitions =
     ]
   , Aeson.object
     [ "name" .= ("search_text" :: Text)
-    , "description" .= ("Grep .l4 files (case-insensitive substring)" :: Text)
+    , "description" .= ("Tooling: Search text in .l4 source files (case-insensitive)" :: Text)
     , "inputSchema" .= Aeson.object
         [ "type" .= ("object" :: Text)
         , "properties" .= Aeson.object
