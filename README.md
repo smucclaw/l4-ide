@@ -21,13 +21,14 @@ This repository includes the L4 compiler toolchain, IDE extensions for Visual St
 
 From a single L4 source file, you automatically get:
 
-- 🌐 **REST APIs** - Expose functions as HTTP endpoints with `@export` annotation
-- 🧙 **Web Applications** - Auto-generated questionnaires with smart question ordering
-- 💬 **Chatbot Interfaces** - Natural language interface for non-technical users
-- 📊 **Interactive Visualizations** - Ladder diagrams and evaluation traces
-- 🧪 **Test Suites** - Automated testing with golden files and assertions
-- 📚 **Documentation** - JSON schemas, Swagger specs, and type definitions
-- 🔗 **Enterprise Integration** - JSON/REST/SQL bridges to existing systems
+- 🌐 **REST APIs** — Expose functions as HTTP endpoints with `@export` annotation
+- 🤖 **AI Tool Integration** — MCP server for Claude, Cursor, VS Code Copilot; WebMCP for browser AI agents
+- 📂 **Source Code Browsing** — REST API and MCP tools to search, read, and explore deployed L4 files
+- 🧙 **Web Applications** — Auto-generated questionnaires with smart question ordering
+- 📊 **Interactive Visualizations** — Ladder diagrams and evaluation traces
+- 🧪 **Test Suites** — Automated testing with golden files and assertions
+- 📚 **Documentation** — OpenAPI 3.0 specs, JSON schemas, and type definitions
+- 🔗 **Enterprise Integration** — JSON/REST bridges to existing systems
 
 See [**doc/MARKETECTURE.md**](doc/MARKETECTURE.md) for the complete "whole product" picture of what L4 enables.
 
@@ -57,19 +58,6 @@ L4 has been piloted with organizations in both public and private sectors:
 - **[doc/dev/deployment/deployment.md](./doc/dev/deployment/deployment.md)** - Deploying to existing dev/prod servers
 - **[nix/README.md](./nix/README.md)** - NixOS configuration reference
 
-## Documentation
-
-### For Developers
-
-- **[dev-config.md](./dev-config.md)** - Local development guide (running with `cabal`)
-- **[dev-start.sh](./dev-start.sh)** - Helper script for starting services locally
-
-### For DevOps
-
-- **[PROVISIONING.md](./PROVISIONING.md)** - Setting up new servers from scratch (nixos-anywhere)
-- **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Deploying to existing dev/prod servers
-- **[nix/README.md](./nix/README.md)** - NixOS configuration reference
-
 ## Gallery
 
 Syntax Highlighting for Boolean-oriented decision logic
@@ -86,7 +74,7 @@ Curious how an L4 decision actually unfolded? Every tool in this repo can show y
 
 - **CLI:** `jl4-cli --graphviz myfile.l4 > trace.dot`, then render with `dot -Tsvg trace.dot > trace.svg`.
 - **REPL:** Load a file, run `:trace your expression`, or turn on `:tracefile traces/session` to capture numbered `.dot` files with timestamps, imports, and the final result right in the header.
-- **Decision Service:** Call `POST /functions/<name>/evaluation?trace=full&graphviz=true` to get a `graphviz` object containing the DOT plus relative PNG/SVG URLs, or hit `evaluation/trace.png` / `trace.svg` directly for ready-to-share images. Batch requests set `graphviz=true` to attach an `@graphviz` blob (same `{dot,png,svg}` shape) per case.
+- **Decision Service:** Call `POST /deployments/{id}/functions/{fn}/evaluation?trace=full&graphviz=true` to get a `graphviz` object containing the DOT source. Batch requests set `graphviz=true` to attach an `@graphviz` blob per case.
 
 These traces act like explainability receipts for deterministic logic: you can follow each node from the top-level question down to the exact condition or branch that determined the answer. Install GraphViz (`brew install graphviz` or `apt-get install graphviz`) to unlock the PNG/SVG outputs.
 
@@ -94,7 +82,7 @@ These traces act like explainability receipts for deterministic logic: you can f
 
 L4 provides audit-grade explainability and observability. Textual decision traces can be generated in plain text or JSON for archival purposes.
 
-## Status (December 2025)
+## Status (April 2026)
 
 ### Core Language Features ✅
 
@@ -114,7 +102,8 @@ L4 provides audit-grade explainability and observability. Textual decision trace
 
 ### IDE & Developer Tools ✅
 
-- ✅ VS Code extension with syntax highlighting, type checking, and inline evaluation
+- ✅ VS Code extension with syntax highlighting, type checking, inline evaluation, and deployment management
+- ✅ VS Code MCP proxy — local MCP server registered with Claude Code, Copilot, and other AI tools
 - ✅ LSP server with hover support for @desc annotations
 - ✅ Interactive REPL (jl4-repl) for live code exploration
 - ✅ Web-based editor at https://jl4.legalese.com/
@@ -131,12 +120,15 @@ L4 provides audit-grade explainability and observability. Textual decision trace
 
 ### Decision Service & APIs ✅
 
-- ✅ REST API for decision evaluation with OpenAPI/Swagger
+- ✅ REST API for decision evaluation with OpenAPI 3.0 spec generation
 - ✅ @export syntax for declaring API-exposed functions (no separate YAML needed)
 - ✅ Batch evaluation with parallel processing
-- ✅ Module precompilation for 10-100x performance improvement
-- ✅ JSON Schema generation (jl4-schema CLI)
-- ✅ Websessions integration with auto-push to decision service
+- ✅ Module precompilation via CBOR caching for fast restarts
+- ✅ MCP server (Model Context Protocol) for AI agent tool discovery and invocation
+- ✅ WebMCP browser integration — embed L4 rules as structured tools on any web page
+- ✅ L4 source file browsing API — list, read, search identifiers, grep deployed files
+- ✅ Permission-based visibility — `l4:rules`, `l4:read`, `l4:evaluate` control what's accessible
+- ✅ Lazy loading with metadata caching — serve function schemas without compilation
 
 ### In Development 🚧
 
@@ -174,11 +166,20 @@ An experimental prototype offers a lightweight web-based alternative to VS Code.
 
 https://jl4.legalese.com/
 
-## VS Code Extension: Download, Install and Build
+## VS Code Extension
 
-[Dev Build](Dev.md): for Haskell and JS developers to improve the toolchain and IDE developer experience. Requires Haskell and Typscript.
+The L4 VS Code extension provides a full development environment for writing, testing, and deploying L4 rules:
 
-[Quickstart for a local build](doc/foundation-course-ai/quickstart.md): for legal engineers to experiment with writing L4 code locally. Download the VS Code extension and get started.
+- **Language support** — syntax highlighting, type checking, inline evaluation, @export previews
+- **Deployment management** — deploy, undeploy, and monitor L4 rule bundles from the sidebar
+- **MCP proxy** — local MCP server that registers with Claude Code, Cursor, and VS Code Copilot automatically
+- **Service connection** — connect to [Legalese Cloud](https://legalese.cloud) or a self-hosted jl4-service instance
+- **Compile-on-demand** — expand an uncompiled deployment to trigger compilation
+
+**Install:**
+
+- [Dev Build](Dev.md) — for Haskell and JS developers to improve the toolchain. Requires Haskell and TypeScript.
+- [Quickstart](doc/foundation-course-ai/quickstart.md) — for legal engineers to experiment with writing L4 code locally.
 
 ## Application Libraries
 
