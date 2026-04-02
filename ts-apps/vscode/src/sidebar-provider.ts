@@ -161,17 +161,25 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 }
 
 /** Shape of a function entry in the org-wide /openapi.json response. */
-interface OrgOpenApiFunction {
-  deployment: string
-  name: string
-  description?: string
-  parameters?: {
-    type: 'object'
-    properties: Record<string, unknown>
-    required: string[]
+interface DeploymentResponse {
+  id: string
+  status: string
+  error?: string
+  metadata?: {
+    functions?: Array<{
+      name: string
+      description?: string
+      parameters?: {
+        type: 'object'
+        properties: Record<string, { type: string; enum: string[]; description: string; [key: string]: unknown }>
+        required: string[]
+      }
+      returnType?: string
+    }>
+    files?: Array<{ path: string; exports: string[] }>
+    version?: string
+    createdAt?: string
   }
-  returnType?: string
-  isDeontic?: boolean
 }
 
 /**
@@ -229,33 +237,28 @@ export function initializeSidebarMessenger(
   })
 
   // Handle list deployments request.
-  // Uses /openapi.json as the single source of truth: it contains all
-  // deployments and their function definitions with full parameter schemas.
+  // Uses GET /deployments?functions=full as the single source of truth.
   messenger.onRequest(ListSidebarDeployments, async () => {
-    outputChannel.appendLine(`[sidebar] Listing deployments via /openapi.json`)
+    outputChannel.appendLine(`[sidebar] Listing deployments via /deployments?functions=full`)
     try {
-      const openapi = await serviceClient.getOrgOpenApi()
+      const deployments = await serviceClient.getDeployments() as DeploymentResponse[]
 
-      const openapiFunctions =
-        (openapi as { functions?: OrgOpenApiFunction[] })?.functions ?? []
-
-      // Group functions by deployment ID
-      const funcsByDeployment = new Map<string, OrgOpenApiFunction[]>()
-      for (const fn of openapiFunctions) {
-        const existing = funcsByDeployment.get(fn.deployment)
-        if (existing) existing.push(fn)
-        else funcsByDeployment.set(fn.deployment, [fn])
+      // Empty array from 403 = insufficient permissions
+      if (deployments.length === 0) {
+        outputChannel.appendLine(`[sidebar] No deployments returned (may lack l4:rules permission)`)
       }
 
       return {
-        deployments: Array.from(funcsByDeployment, ([deploymentId, fns]) => ({
-          deploymentId,
-          functions: fns.map((fn) => ({
+        deployments: deployments.map((dep) => ({
+          deploymentId: dep.id,
+          status: dep.status as 'pending' | 'compiling' | 'ready' | 'failed',
+          error: dep.error,
+          functions: (dep.metadata?.functions ?? []).map((fn) => ({
             name: fn.name,
             description: fn.description ?? '',
             isDefault: false,
             returnType: fn.returnType ?? '',
-            isDeontic: fn.isDeontic ?? false,
+            isDeontic: false,
             parameters: fn.parameters ?? {
               type: 'object' as const,
               properties: {},
@@ -269,11 +272,9 @@ export function initializeSidebarMessenger(
       outputChannel.appendLine(
         `[sidebar] Error listing deployments: ${message}`
       )
-      // Only logout on authentication failures — other errors (404, 502,
-      // network timeouts) should not disconnect an otherwise valid session.
-      const isAuthError =
-        message.includes(': 401 ') || message.includes(': 403 ')
-      if (isAuthError) {
+      // Only logout on 401 (invalid credentials). 403 = valid session but
+      // insufficient permissions — don't disconnect.
+      if (message.includes(': 401 ')) {
         outputChannel.appendLine(
           `[sidebar] Disconnecting session due to authentication failure`
         )

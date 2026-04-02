@@ -103,13 +103,12 @@ handleMethod _vis _mScope reqId method _params = do
 
 -- | Build the list of tools from deployment metadata.
 -- Visibility controls which tools are included:
---   showFunctions → include per-function evaluation tools
---   showFiles     → include file browsing tools
--- The proxy gates tools/call by permission (l4:evaluate or l4:read).
+--   showFunctions && showEvaluate → include per-function evaluation tools
+--   showFiles                     → include file browsing tools
 buildToolList :: Visibility -> Maybe Text -> AppM [Aeson.Value]
 buildToolList vis mScope = do
-  -- Function evaluation tools (caller has l4:rules to see them; proxy gates tools/call on l4:evaluate)
-  fnTools <- if vis.showFunctions
+  -- Function evaluation tools (need l4:rules to see functions + l4:evaluate to call them)
+  fnTools <- if vis.showFunctions && vis.showEvaluate
     then do
       entries <- collectMetadataEntries mScope
       let toolNames = buildToolNames entries

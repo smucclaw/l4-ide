@@ -7,6 +7,7 @@ module Shared (
   matchesScope,
   -- * Metadata collection
   collectMetadataEntries,
+  collectDeploymentMetadata,
   -- * JSON error encoding
   jsonError,
   -- * Property name sanitization and remapping
@@ -82,6 +83,36 @@ collectMetadataEntries mScope = do
         | fn <- meta.metaFunctions
         , matchesScope mScope did.unDeploymentId fn.fsName
         ]
+    ) (Map.toList registry)
+
+-- | Collect full deployment metadata, optionally filtered by scope.
+-- Returns (deploymentId, DeploymentMetadata) pairs with functions filtered by scope.
+collectDeploymentMetadata :: Maybe Text -> AppM [(Text, DeploymentMetadata)]
+collectDeploymentMetadata mScope = do
+  env <- ask
+  registry <- liftIO . readTVarIO $ env.deploymentRegistry
+  let store = env.bundleStore
+
+  liftIO $ fmap concat $ mapM (\(did, state) -> do
+    mMeta <- case state of
+      DeploymentReady _ meta -> pure (Just meta)
+      _ -> do
+        mBytes <- BundleStore.loadMetadataCache store did.unDeploymentId
+        case mBytes of
+          Just bytes -> case Aeson.eitherDecode bytes of
+            Right meta -> pure (Just meta)
+            Left _ -> pure Nothing
+          Nothing -> pure Nothing
+    pure $ case mMeta of
+      Nothing -> []
+      Just meta ->
+        let filteredFns = [ fn | fn <- meta.metaFunctions
+                               , matchesScope mScope did.unDeploymentId fn.fsName ]
+            -- Include deployment if it has matching functions OR if scope matches deployment wildcard
+            depMatches = matchesScope mScope did.unDeploymentId "*"
+        in if null filteredFns && not depMatches
+           then []
+           else [(did.unDeploymentId, meta { metaFunctions = filteredFns })]
     ) (Map.toList registry)
 
 -- | Encode an error message as a JSON object: @{\"error\": \"...\"}@

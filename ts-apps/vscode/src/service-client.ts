@@ -107,16 +107,18 @@ export class ServiceClient {
   }
 
   /**
-   * Get the organization-wide OpenAPI spec (all deployments).
+   * List all deployments with full function details.
+   * Used by the sidebar to populate the deployment tree.
    */
-  async getOrgOpenApi(): Promise<unknown> {
-    const resp = await this.request('/openapi.json')
-    if (!resp.ok) await throwWithBody(resp, 'GET /openapi.json')
-    return resp.json()
+  async getDeployments(): Promise<unknown[]> {
+    const resp = await this.request('/deployments?functions=full')
+    if (resp.status === 403) return [] // insufficient permissions — handled by caller
+    if (!resp.ok) await throwWithBody(resp, 'GET /deployments?functions=full')
+    return resp.json() as Promise<unknown[]>
   }
 
   /**
-   * Get the OpenAPI spec for a single deployment.
+   * Get the OpenAPI 3.0 spec for a single deployment.
    */
   async getDeploymentOpenApi(deploymentId: string): Promise<unknown> {
     const encodedId = encodeURIComponent(deploymentId)

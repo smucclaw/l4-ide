@@ -258,7 +258,7 @@ deleteBundleCbor (BundleStore root) deployId = do
 -- This allows serving metadata for pending/lazy-loaded deployments without recompilation.
 saveMetadataCache :: BundleStore -> Text -> LBS.ByteString -> IO ()
 saveMetadataCache (BundleStore root) deployId metaJson = do
-  let cacheFile = root </> Text.unpack deployId </> "openapi-cache.json"
+  let cacheFile = root </> Text.unpack deployId </> "metadata-cache.json"
       tmpFile = cacheFile <> ".tmp"
   LBS.writeFile tmpFile metaJson
   exists <- doesFileExist cacheFile
@@ -273,7 +273,7 @@ saveMetadataCache (BundleStore root) deployId metaJson = do
 -- Returns the raw JSON ByteString (caller decodes as DeploymentMetadata).
 loadMetadataCache :: BundleStore -> Text -> IO (Maybe LBS.ByteString)
 loadMetadataCache (BundleStore root) deployId = do
-  let cacheFile = root </> Text.unpack deployId </> "openapi-cache.json"
+  let cacheFile = root </> Text.unpack deployId </> "metadata-cache.json"
   exists <- doesFileExist cacheFile
   if not exists
     then pure Nothing

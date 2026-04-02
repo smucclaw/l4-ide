@@ -61,6 +61,7 @@ library
     ExplorerPage
     Logging
     McpServer
+    OpenApiDoc
     Options
     Schema
     Shared

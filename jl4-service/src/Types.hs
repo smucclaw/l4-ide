@@ -58,8 +58,9 @@ newtype DeploymentId = DeploymentId { unDeploymentId :: Text }
 
 -- | Runtime state of a deployment.
 data DeploymentState
-  = DeploymentPending
+  = DeploymentPending !(Maybe DeploymentMetadata)
   -- ^ Registered but not yet compiled (lazy-load mode).
+  -- Carries cached metadata from a previous compilation if available.
   | DeploymentCompiling
   -- ^ Bundle is being compiled in a background thread.
   | DeploymentReady !(Map Text ValidatedFunction) !DeploymentMetadata
@@ -127,7 +128,7 @@ instance FromJSON FunctionSummary where
       <*> (o .: "parameters"  <|> o .: "fsParameters")
       <*> (o .: "returnType"  <|> o .: "fsReturnType")
       <*> (o .:? "section"    <|> o .:? "fsSection")
-      <*> (o .: "isDeontic"   <|> o .: "fsIsDeontic")
+      <*> pure False  -- isDeontic: internal only, not in JSON
       <*> (o .:? "sourceFile" <|> o .:? "fsSourceFile")
 
 -- | A source file entry within a deployment.
@@ -155,6 +156,7 @@ instance FromJSON FileEntry where
 data Visibility = Visibility
   { showFunctions :: !Bool
   , showFiles     :: !Bool
+  , showEvaluate  :: !Bool
   }
   deriving stock (Show, Eq)
 

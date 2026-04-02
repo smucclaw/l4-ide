@@ -431,7 +431,7 @@ requireDeploymentReady' deployId = do
   registry <- liftIO $ readTVarIO registry'
   case Map.lookup deployId registry of
     Nothing -> throwError err404
-    Just DeploymentPending -> do
+    Just (DeploymentPending _) -> do
       triggerCompilationIfPending deployId
       registryAfter <- liftIO $ readTVarIO registry'
       case Map.lookup deployId registryAfter of

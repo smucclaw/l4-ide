@@ -850,7 +850,9 @@
               </button>
             </div>
             {#if !collapsedDeployments.has(dep.deploymentId)}
-              {#if dep.functions.length > 0}
+              {#if dep.error}
+                <div class="deployment-error"><pre>{dep.error}</pre></div>
+              {:else if dep.functions.length > 0}
                 {#each dep.functions as func (func.name)}
                   <ToolCard
                     {func}
@@ -1350,6 +1352,25 @@
     color: var(--vscode-descriptionForeground);
     opacity: 0.6;
     padding: 4px 0;
+  }
+
+  .deployment-error {
+    margin: 4px 0;
+    padding: 6px 8px;
+    background: var(--vscode-inputValidation-errorBackground, rgba(255, 0, 0, 0.1));
+    border: 1px solid var(--vscode-inputValidation-errorBorder, rgba(255, 0, 0, 0.3));
+    border-radius: 4px;
+  }
+
+  .deployment-error pre {
+    margin: 0;
+    font-size: 0.82em;
+    font-family: var(--vscode-editor-font-family, monospace);
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 260px;
+    overflow-y: auto;
+    color: var(--vscode-errorForeground, #f48771);
   }
 
   .undeploy-btn {

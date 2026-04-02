@@ -10,7 +10,8 @@ import McpServer (mcpHandler)
 import DeploymentLoader (loadAndRegister)
 import Logging (Logger, logInfo, logDebug, logError, newLogger)
 import Options (Options (..), buildOpts)
-import Shared (collectMetadataEntries)
+import OpenApiDoc (buildOpenApiDoc)
+import Shared (collectDeploymentMetadata)
 import Types
 
 import Data.Aeson (toJSON, (.=))
@@ -50,8 +51,8 @@ type HealthApi = "health" :> Get '[JSON] HealthResponse
 -- | .well-known/webmcp discovery manifest.
 type WellKnownApi = ".well-known" :> "webmcp" :> Get '[JSON] Aeson.Value
 
--- | Org-wide OpenAPI metadata (all deployments, optionally filtered by scope).
-type OrgOpenApiRoute = "openapi.json" :> QueryParam "scope" Text :> Get '[JSON] Aeson.Value
+-- | Org-wide OpenAPI 3.0 spec (all deployments).
+type OrgOpenApiRoute = "openapi.json" :> Get '[JSON] Aeson.Value
 
 -- | Org-wide WebMCP script endpoint.
 -- RESERVED_SEGMENTS: .webmcp is a reserved path prefix (do not allow as deployment ID).
@@ -114,9 +115,10 @@ defaultMain = do
   if lazyLoad
     then do
       -- Lazy mode: register all as Pending, compile on first request
-      forM_ deployIds $ \did ->
+      forM_ deployIds $ \did -> do
+        mCachedMeta <- loadMetadataCacheAsDeploymentMetadata store did
         atomically $ modifyTVar' registry $
-          Map.insert (DeploymentId did) DeploymentPending
+          Map.insert (DeploymentId did) (DeploymentPending mCachedMeta)
       logInfo logger "Lazy loading enabled" []
     else do
       -- Eager mode: compile all in parallel
@@ -198,7 +200,7 @@ app env req sendResp = do
 
 serverT :: AppEnv -> Visibility -> Server ServiceApi
 serverT env vis =
-  hoistServer (Proxy @ServiceApi) (nt env) (healthHandler :<|> wellKnownHandler :<|> mcpDiscoveryHandler :<|> mcpManifestHandler :<|> orgOpenApiHandler :<|> webmcpHandler :<|> mcpRootHandler vis :<|> mcpScopedHandler vis :<|> mcpScopedLongHandler vis :<|> controlPlaneHandler vis :<|> fileBrowseHandler :<|> dataPlaneHandler :<|> shortRoutesHandler vis)
+  hoistServer (Proxy @ServiceApi) (nt env) (healthHandler :<|> wellKnownHandler :<|> mcpDiscoveryHandler :<|> mcpManifestHandler :<|> orgOpenApiHandler vis :<|> webmcpHandler :<|> mcpRootHandler vis :<|> mcpScopedHandler vis :<|> mcpScopedLongHandler vis :<|> controlPlaneHandler vis :<|> fileBrowseHandler :<|> dataPlaneHandler vis :<|> shortRoutesHandler vis)
  where
   nt :: AppEnv -> AppM a -> Handler a
   nt s x = runReaderT x s
@@ -214,7 +216,10 @@ extractVisibility req =
       includeFiles = case lookup "X-Include-Files" headers of
         Just "false" -> False
         _ -> True
-  in Visibility { showFunctions = includeFunctions, showFiles = includeFiles }
+      includeEvaluate = case lookup "X-Include-Evaluate" headers of
+        Just "false" -> False
+        _ -> True
+  in Visibility { showFunctions = includeFunctions, showFiles = includeFiles, showEvaluate = includeEvaluate }
 
 -- | GET /health — health check handler.
 healthHandler :: ServerT HealthApi AppM
@@ -223,7 +228,7 @@ healthHandler = do
   registry <- liftIO . readTVarIO $ env.deploymentRegistry
   let states = Map.elems registry
       nReady = length [() | DeploymentReady _ _ <- states]
-      nPending = length [() | DeploymentPending <- states]
+      nPending = length [() | DeploymentPending _ <- states]
       nCompiling = length [() | DeploymentCompiling <- states]
       nFailed = length [() | DeploymentFailed _ <- states]
       nTotal = length states
@@ -258,30 +263,16 @@ wellKnownHandler = do
     , "deployments" .= readyDeployments
     ]
 
--- | GET /openapi.json — org-wide metadata across all deployments.
--- Optional ?scope= parameter filters by deployment/function.
--- Serves from in-memory registry for ready deployments, disk cache for pending ones.
-orgOpenApiHandler :: ServerT OrgOpenApiRoute AppM
-orgOpenApiHandler mScope = do
+-- | GET /openapi.json — OpenAPI 3.0 spec across all deployments.
+-- Visibility headers control which paths appear.
+orgOpenApiHandler :: Visibility -> ServerT OrgOpenApiRoute AppM
+orgOpenApiHandler vis = do
   env <- ask
-  liftIO $ logInfo env.logger "OpenAPI schema requested"
-    [("scope", toJSON mScope)]
+  liftIO $ logInfo env.logger "OpenAPI schema requested" []
 
-  entries <- collectMetadataEntries mScope
-  let allEntries =
-        [ Aeson.object
-          [ "deployment" .= deployId
-          , "name" .= fn.fsName
-          , "description" .= fn.fsDescription
-          , "parameters" .= fn.fsParameters
-          , "returnType" .= fn.fsReturnType
-          ]
-        | (deployId, fn) <- entries
-        ]
-
-  pure $ Aeson.object
-    [ "functions" .= allEntries
-    ]
+  deployments <- collectDeploymentMetadata Nothing
+  let serverUrl = env.serverName
+  pure $ buildOpenApiDoc serverUrl vis deployments
 
 -- | GET /.webmcp/embed.js — org-wide WebMCP script.
 webmcpHandler :: ServerT WebMCPApi AppM
@@ -419,3 +410,14 @@ explorerMiddleware logger registryVar baseApp req sendResp
     case lookup "Accept" headers of
       Just accept -> "text/html" `BS.isInfixOf` accept
       Nothing -> False
+
+-- | Try to load cached DeploymentMetadata from disk for a deployment.
+-- Returns Nothing if no cache exists or decoding fails.
+loadMetadataCacheAsDeploymentMetadata :: BundleStore.BundleStore -> Text -> IO (Maybe DeploymentMetadata)
+loadMetadataCacheAsDeploymentMetadata store did = do
+  mBytes <- BundleStore.loadMetadataCache store did
+  pure $ case mBytes of
+    Just bytes -> case Aeson.eitherDecode bytes of
+      Right meta -> Just meta
+      Left _ -> Nothing
+    Nothing -> Nothing
