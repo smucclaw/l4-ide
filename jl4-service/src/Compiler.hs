@@ -60,12 +60,14 @@ compileBundle logger deployId sources = do
       let moduleContext = sources
 
       -- Try each file for exported functions
-      results <- forM l4Files $ \(filepath, content) ->
-        compileSingleFile logger deployId filepath content moduleContext
+      results <- forM l4Files $ \(filepath, content) -> do
+        r <- compileSingleFile logger deployId filepath content moduleContext
+        pure (filepath, r)
 
-      let allFunctions = concatMap (either (const []) fst) results
-          allBundles = concatMap (either (const []) snd) results
-          errors = [err | Left err <- results]
+      let allFunctionsWithFile = [ (fp, fn) | (fp, Right (fns, _)) <- results, fn <- fns ]
+          allFunctions = map snd allFunctionsWithFile
+          allBundles = concatMap (either (const []) snd . snd) results
+          errors = [err | (_, Left err) <- results]
 
       if null allFunctions && not (null errors)
         then pure $ Left $ Text.intercalate "\n" errors
@@ -75,10 +77,12 @@ compileBundle logger deployId sources = do
 
           -- Build metadata
           now <- getCurrentTime
-          let summaries = [FunctionSummary { fsName = fn.fnImpl.name, fsDescription = fn.fnImpl.description, fsParameters = fn.fnImpl.parameters, fsReturnType = fn.fnImpl.returnType, fsSection = Nothing, fsIsDeontic = fn.fnImpl.isDeontic } | fn <- allFunctions]
+          let summaries = [FunctionSummary { fsName = fn.fnImpl.name, fsDescription = fn.fnImpl.description, fsParameters = fn.fnImpl.parameters, fsReturnType = fn.fnImpl.returnType, fsSection = Nothing, fsIsDeontic = fn.fnImpl.isDeontic, fsSourceFile = Just (Text.pack fp) } | (fp, fn) <- allFunctionsWithFile]
               version = computeVersion sources
+              fileEntries = buildFileEntries deployId sources summaries
               meta = DeploymentMetadata
                 { metaFunctions = summaries
+                , metaFiles = fileEntries
                 , metaVersion = version
                 , metaCreatedAt = now
                 }
@@ -186,7 +190,7 @@ buildFromCborBundle logger deployId bundles sources storedMeta = do
   let moduleContext = sources
 
   -- Process each bundle (one per source file that had exports)
-  allFns <- fmap concat $ forM bundles $ \bundle -> do
+  allFnsWithFile <- fmap concat $ forM bundles $ \bundle -> do
     let resolvedModule = bundle.sbModule
         env = bundle.sbEnvironment
         ei = bundle.sbEntityInfo
@@ -241,18 +245,21 @@ buildFromCborBundle logger deployId bundles sources storedMeta = do
                 , fnDecisionQueryCache = Nothing
                 }
 
-        pure [fn | Just fn <- fns]
+        pure [(filepath, fn) | Just fn <- fns]
 
+  let allFns = map snd allFnsWithFile
   if null allFns
     then pure $ Left "No functions rebuilt from CBOR bundles"
     else do
       let fnMap = Map.fromList [(fn.fnImpl.name, fn) | fn <- allFns]
 
       now <- getCurrentTime
-      let summaries = [FunctionSummary { fsName = fn.fnImpl.name, fsDescription = fn.fnImpl.description, fsParameters = fn.fnImpl.parameters, fsReturnType = fn.fnImpl.returnType, fsSection = Nothing, fsIsDeontic = fn.fnImpl.isDeontic } | fn <- allFns]
+      let summaries = [FunctionSummary { fsName = fn.fnImpl.name, fsDescription = fn.fnImpl.description, fsParameters = fn.fnImpl.parameters, fsReturnType = fn.fnImpl.returnType, fsSection = Nothing, fsIsDeontic = fn.fnImpl.isDeontic, fsSourceFile = Just (Text.pack fp) } | (fp, fn) <- allFnsWithFile]
           version = storedMeta.smVersion
+          fileEntries = buildFileEntries deployId sources summaries
           meta = DeploymentMetadata
             { metaFunctions = summaries
+            , metaFiles = fileEntries
             , metaVersion = version
             , metaCreatedAt = now
             }
@@ -416,3 +423,21 @@ showHex n
   intToDigit i
     | i < 10 = toEnum (fromEnum '0' + i)
     | otherwise = toEnum (fromEnum 'a' + i - 10)
+
+-- | Build file entries from the source map and function summaries.
+-- Every .l4 file gets an entry; exports are populated from summaries that
+-- have a matching 'fsSourceFile'.
+buildFileEntries :: Text -> Map FilePath Text -> [FunctionSummary] -> [FileEntry]
+buildFileEntries deployId sources summaries =
+  let l4Paths = [fp | fp <- Map.keys sources, takeExtension fp == ".l4"]
+      exportsByFile = Map.fromListWith (++)
+        [ (sf, [fs.fsName])
+        | fs <- summaries
+        , Just sf <- [fs.fsSourceFile]
+        ]
+  in [ FileEntry
+         { fePath = "/deployments/" <> deployId <> "/files/" <> Text.pack fp
+         , feExports = maybe [] id (Map.lookup (Text.pack fp) exportsByFile)
+         }
+     | fp <- sortBy (comparing id) l4Paths
+     ]

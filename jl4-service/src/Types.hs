@@ -5,6 +5,8 @@ module Types (
   DeploymentState (..),
   DeploymentMetadata (..),
   FunctionSummary (..),
+  FileEntry (..),
+  Visibility (..),
   ValidatedFunction (..),
   Function (..),
   SimpleFunction (..),
@@ -56,8 +58,9 @@ newtype DeploymentId = DeploymentId { unDeploymentId :: Text }
 
 -- | Runtime state of a deployment.
 data DeploymentState
-  = DeploymentPending
+  = DeploymentPending !(Maybe DeploymentMetadata)
   -- ^ Registered but not yet compiled (lazy-load mode).
+  -- Carries cached metadata from a previous compilation if available.
   | DeploymentCompiling
   -- ^ Bundle is being compiled in a background thread.
   | DeploymentReady !(Map Text ValidatedFunction) !DeploymentMetadata
@@ -68,6 +71,8 @@ data DeploymentState
 -- | Metadata persisted alongside a deployment bundle.
 data DeploymentMetadata = DeploymentMetadata
   { metaFunctions :: ![FunctionSummary]
+  , metaFiles     :: ![FileEntry]
+  -- ^ List of .l4 source files in this deployment with their exports.
   , metaVersion   :: !Text
   -- ^ SHA-256 hex digest of all source contents (sorted by path).
   , metaCreatedAt :: !UTCTime
@@ -75,16 +80,17 @@ data DeploymentMetadata = DeploymentMetadata
   deriving stock (Show, Generic)
 
 instance ToJSON DeploymentMetadata where
-  toJSON dm = Aeson.object
-    [ "functions" .= dm.metaFunctions
-    , "version"   .= dm.metaVersion
+  toJSON dm = Aeson.object $
+    [ "version"   .= dm.metaVersion
     , "createdAt" .= dm.metaCreatedAt
-    ]
+    ] <> (if null dm.metaFunctions then [] else ["functions" .= dm.metaFunctions])
+      <> (if null dm.metaFiles then [] else ["files" .= dm.metaFiles])
 
 instance FromJSON DeploymentMetadata where
   parseJSON = Aeson.withObject "DeploymentMetadata" $ \o ->
     DeploymentMetadata
       <$> (o .: "functions"  <|> o .: "metaFunctions")
+      <*> (o .:? "files" .!= [] <|> o .:? "metaFiles" .!= [])
       <*> (o .: "version"    <|> o .: "metaVersion")
       <*> (o .: "createdAt"  <|> o .: "metaCreatedAt")
 
@@ -99,6 +105,9 @@ data FunctionSummary = FunctionSummary
   -- ^ L4 section header (§§) this function belongs to.
   , fsIsDeontic   :: !Bool
   -- ^ Whether this function returns a DEONTIC (needs startTime + events params).
+  , fsSourceFile  :: !(Maybe Text)
+  -- ^ Relative path of the source file this function was exported from.
+  -- 'Maybe' for backward compatibility with cached metadata.
   }
   deriving stock (Show, Generic)
 
@@ -109,7 +118,6 @@ instance ToJSON FunctionSummary where
     , "parameters"  .= fs.fsParameters
     , "returnType"  .= fs.fsReturnType
     , "section"     .= fs.fsSection
-    , "isDeontic"   .= fs.fsIsDeontic
     ]
 
 instance FromJSON FunctionSummary where
@@ -120,7 +128,37 @@ instance FromJSON FunctionSummary where
       <*> (o .: "parameters"  <|> o .: "fsParameters")
       <*> (o .: "returnType"  <|> o .: "fsReturnType")
       <*> (o .:? "section"    <|> o .:? "fsSection")
-      <*> (o .: "isDeontic"   <|> o .: "fsIsDeontic")
+      <*> pure False  -- isDeontic: internal only, not in JSON
+      <*> (o .:? "sourceFile" <|> o .:? "fsSourceFile")
+
+-- | A source file entry within a deployment.
+data FileEntry = FileEntry
+  { fePath    :: !Text    -- ^ Relative path (e.g. "rules/main.l4")
+  , feExports :: ![Text]  -- ^ Exported function names from this file
+  }
+  deriving stock (Show, Generic)
+
+instance ToJSON FileEntry where
+  toJSON fe = Aeson.object
+    [ "path"    .= fe.fePath
+    , "exports" .= fe.feExports
+    ]
+
+instance FromJSON FileEntry where
+  parseJSON = Aeson.withObject "FileEntry" $ \o ->
+    FileEntry
+      <$> o .: "path"
+      <*> o .:? "exports" .!= []
+
+-- | Visibility flags controlling what information to include in responses.
+-- Driven by proxy headers X-Include-Functions / X-Include-Files.
+-- Both default to True when headers are absent (backward compat, local dev).
+data Visibility = Visibility
+  { showFunctions :: !Bool
+  , showFiles     :: !Bool
+  , showEvaluate  :: !Bool
+  }
+  deriving stock (Show, Eq)
 
 -- | A compiled and ready-to-evaluate function.
 data ValidatedFunction = ValidatedFunction
@@ -190,7 +228,6 @@ instance ToJSON Function where
             , "parameters" .= fn.parameters
             , "supportedBackends" .= fn.supportedEvalBackend
             , "returnType" .= fn.returnType
-            , "isDeontic" .= fn.isDeontic
             ] <>
             maybe [] (\pt -> ["deonticPartyType" .= pt]) fn.deonticPartyType <>
             maybe [] (\at -> ["deonticActionType" .= at]) fn.deonticActionType)

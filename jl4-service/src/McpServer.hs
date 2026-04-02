@@ -5,7 +5,9 @@ module McpServer (
   mcpHandler,
 ) where
 
+import qualified BundleStore
 import DeploymentLoader (triggerCompilationIfPending)
+import FileBrowser (searchIdentifier, searchText, SearchMatch (..))
 import Logging (logInfo, logWarn)
 import Shared (collectMetadataEntries, sanitizeParameters, buildPropertyReverseMap, remapFnLiteralKeys)
 import Types
@@ -16,6 +18,7 @@ import Control.Monad.Trans.Except (runExceptT)
 import Control.Concurrent.STM (readTVarIO)
 import Data.Aeson ((.=))
 import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.Key as Aeson.Key
 import qualified Data.Aeson.KeyMap as Aeson.KeyMap
 import Data.Char (isAlphaNum)
 import Data.Int (Int64)
@@ -36,13 +39,14 @@ import Options (Options (..))
 
 -- | Handle an MCP JSON-RPC 2.0 request and return a JSON-RPC 2.0 response.
 -- The first argument is an optional deployment scope (Nothing = org-wide).
-mcpHandler :: Maybe Text -> Aeson.Value -> AppM Aeson.Value
-mcpHandler mScope reqVal = do
+-- Visibility controls which tools are advertised and callable.
+mcpHandler :: Visibility -> Maybe Text -> Aeson.Value -> AppM Aeson.Value
+mcpHandler vis mScope reqVal = do
   case parseJsonRpcRequest reqVal of
     Left errMsg ->
       pure $ jsonRpcError Nothing (-32700) errMsg
     Right (reqId, method, params) -> do
-      handleMethod mScope reqId method params
+      handleMethod vis mScope reqId method params
 
 -- | Parse a JSON-RPC 2.0 request into (id, method, params).
 parseJsonRpcRequest :: Aeson.Value -> Either Text (Maybe Aeson.Value, Text, Aeson.Value)
@@ -57,8 +61,8 @@ parseJsonRpcRequest val = case val of
   _ -> Left "Request must be a JSON object"
 
 -- | Route to the appropriate handler based on the JSON-RPC method.
-handleMethod :: Maybe Text -> Maybe Aeson.Value -> Text -> Aeson.Value -> AppM Aeson.Value
-handleMethod _mScope reqId "initialize" _params =
+handleMethod :: Visibility -> Maybe Text -> Maybe Aeson.Value -> Text -> Aeson.Value -> AppM Aeson.Value
+handleMethod _vis _mScope reqId "initialize" _params =
   pure $ jsonRpcResult reqId $ Aeson.object
     [ "protocolVersion" .= ("2025-03-26" :: Text)
     , "serverInfo" .= Aeson.object
@@ -69,15 +73,15 @@ handleMethod _mScope reqId "initialize" _params =
         [ "tools" .= Aeson.object [] ]
     ]
 
-handleMethod _mScope reqId "notifications/initialized" _params =
+handleMethod _vis _mScope reqId "notifications/initialized" _params =
   pure $ jsonRpcResult reqId (Aeson.object [])
 
-handleMethod mScope reqId "tools/list" _params = do
-  tools <- buildToolList mScope
+handleMethod vis mScope reqId "tools/list" _params = do
+  tools <- buildToolList vis mScope
   pure $ jsonRpcResult reqId $ Aeson.object
     [ "tools" .= tools ]
 
-handleMethod mScope reqId "tools/call" params = do
+handleMethod vis mScope reqId "tools/call" params = do
   case params of
     Aeson.Object obj -> do
       let mToolName = case Aeson.KeyMap.lookup "name" obj of
@@ -90,26 +94,118 @@ handleMethod mScope reqId "tools/call" params = do
         Nothing ->
           pure $ jsonRpcError reqId (-32602) "Missing 'name' in params"
         Just toolName -> do
-          callTool mScope reqId toolName (Maybe.fromMaybe (Aeson.object []) mArguments)
+          callTool vis mScope reqId toolName (Maybe.fromMaybe (Aeson.object []) mArguments)
     _ ->
       pure $ jsonRpcError reqId (-32602) "Invalid params for tools/call"
 
-handleMethod _mScope reqId method _params = do
+handleMethod _vis _mScope reqId method _params = do
   pure $ jsonRpcError reqId (-32601) ("Method not found: " <> method)
 
 -- | Build the list of tools from deployment metadata.
--- Reuses the same metadata collection logic as orgOpenApiHandler.
-buildToolList :: Maybe Text -> AppM [Aeson.Value]
-buildToolList mScope = do
-  entries <- collectMetadataEntries mScope
-  let toolNames = buildToolNames entries
-  pure [ Aeson.object
-    [ "name" .= tn
-    , "description" .= (fn.fsDescription <> " [" <> deployId <> "/" <> fn.fsName <> "]")
-    , "inputSchema" .= sanitizeParameters fn.fsParameters
+-- Visibility controls which tools are included:
+--   showFunctions && showEvaluate → include per-function evaluation tools
+--   showFiles                     → include file browsing tools
+buildToolList :: Visibility -> Maybe Text -> AppM [Aeson.Value]
+buildToolList vis mScope = do
+  -- Function evaluation tools (need l4:rules to see functions + l4:evaluate to call them)
+  fnTools <- if vis.showFunctions && vis.showEvaluate
+    then do
+      entries <- collectMetadataEntries mScope
+      let toolNames = buildToolNames entries
+      pure [ Aeson.object
+        [ "name" .= tn
+        , "description" .= ("L4 Rule: " <> fn.fsDescription <> " [" <> deployId <> "/" <> fn.fsName <> "]")
+        , "inputSchema" .= sanitizeParameters fn.fsParameters
+        ]
+        | (tn, deployId, fn) <- toolNames
+        ]
+    else pure []
+
+  -- File browsing tools (when showFiles is True)
+  let fileTools = if vis.showFiles then fileToolDefinitions else []
+
+  pure (fnTools ++ fileTools)
+
+-- | Static tool definitions for file browsing.
+fileToolDefinitions :: [Aeson.Value]
+fileToolDefinitions =
+  [ Aeson.object
+    [ "name" .= ("list_files" :: Text)
+    , "description" .= ("Tooling: List .l4 files and their exports in a deployment" :: Text)
+    , "inputSchema" .= Aeson.object
+        [ "type" .= ("object" :: Text)
+        , "properties" .= Aeson.object
+            [ "deployment" .= Aeson.object
+                [ "type" .= ("string" :: Text)
+                , "description" .= ("Omit for all deployments" :: Text)
+                ]
+            ]
+        ]
     ]
-    | (tn, deployId, fn) <- toolNames
+  , Aeson.object
+    [ "name" .= ("read_file" :: Text)
+    , "description" .= ("Tooling: Read .l4 source file content, optionally a line range" :: Text)
+    , "inputSchema" .= Aeson.object
+        [ "type" .= ("object" :: Text)
+        , "properties" .= Aeson.object
+            [ "deployment" .= Aeson.object
+                [ "type" .= ("string" :: Text)
+                ]
+            , "path" .= Aeson.object
+                [ "type" .= ("string" :: Text)
+                , "description" .= ("e.g. rules/main.l4" :: Text)
+                ]
+            , "lines" .= Aeson.object
+                [ "type" .= ("string" :: Text)
+                , "description" .= ("start:end (e.g. 85:89)" :: Text)
+                ]
+            ]
+        , "required" .= (["deployment", "path"] :: [Text])
+        ]
     ]
+  , Aeson.object
+    [ "name" .= ("search_identifier" :: Text)
+    , "description" .= ("Tooling: Find definitions and references of an L4 identifier. Text-based, may match in comments." :: Text)
+    , "inputSchema" .= Aeson.object
+        [ "type" .= ("object" :: Text)
+        , "properties" .= Aeson.object
+            [ "identifier" .= Aeson.object
+                [ "type" .= ("string" :: Text)
+                ]
+            , "deployment" .= Aeson.object
+                [ "type" .= ("string" :: Text)
+                , "description" .= ("Omit for all deployments" :: Text)
+                ]
+            , "file" .= Aeson.object
+                [ "type" .= ("string" :: Text)
+                , "description" .= ("Scope to one file" :: Text)
+                ]
+            ]
+        , "required" .= (["identifier"] :: [Text])
+        ]
+    ]
+  , Aeson.object
+    [ "name" .= ("search_text" :: Text)
+    , "description" .= ("Tooling: Search text in .l4 source files (case-insensitive)" :: Text)
+    , "inputSchema" .= Aeson.object
+        [ "type" .= ("object" :: Text)
+        , "properties" .= Aeson.object
+            [ "query" .= Aeson.object
+                [ "type" .= ("string" :: Text)
+                ]
+            , "deployment" .= Aeson.object
+                [ "type" .= ("string" :: Text)
+                , "description" .= ("Omit for all deployments" :: Text)
+                ]
+            , "file" .= Aeson.object
+                [ "type" .= ("string" :: Text)
+                , "description" .= ("Scope to one file" :: Text)
+                ]
+            ]
+        , "required" .= (["query"] :: [Text])
+        ]
+    ]
+  ]
 
 -- | Sanitize a name for use as a tool name.
 sanitizeName :: Int -> Text -> Text
@@ -162,8 +258,19 @@ findUniquePrefix dep others = go 1
     | otherwise = go (n + 1)
 
 -- | Execute a tool call by looking up the deployment and function, then evaluating.
-callTool :: Maybe Text -> Maybe Aeson.Value -> Text -> Aeson.Value -> AppM Aeson.Value
-callTool mScope reqId toolName arguments = do
+callTool :: Visibility -> Maybe Text -> Maybe Aeson.Value -> Text -> Aeson.Value -> AppM Aeson.Value
+callTool vis mScope reqId toolName arguments = do
+  -- Check file browsing tools first
+  case toolName of
+    "list_files" | vis.showFiles -> callListFiles reqId arguments
+    "read_file" | vis.showFiles -> callReadFile reqId arguments
+    "search_identifier" | vis.showFiles -> callSearchIdentifier reqId arguments
+    "search_text" | vis.showFiles -> callSearchText reqId arguments
+    _ -> callFunctionTool vis mScope reqId toolName arguments
+
+-- | Execute a function evaluation tool call.
+callFunctionTool :: Visibility -> Maybe Text -> Maybe Aeson.Value -> Text -> Aeson.Value -> AppM Aeson.Value
+callFunctionTool _vis mScope reqId toolName arguments = do
   env <- ask
   -- Build the tool lookup map from current metadata
   entries <- collectMetadataEntries mScope
@@ -259,6 +366,168 @@ runMcpEvaluation vf args = do
         Just (Right rwr) ->
           let encoded = Aeson.encode (SimpleResponse rwr)
           in pure $ Right (Text.Encoding.decodeUtf8 (LBS.toStrict encoded))
+
+-- ----------------------------------------------------------------------------
+-- File browsing tool handlers
+-- ----------------------------------------------------------------------------
+
+-- | list_files: list all .l4 source files across deployments.
+callListFiles :: Maybe Aeson.Value -> Aeson.Value -> AppM Aeson.Value
+callListFiles reqId arguments = do
+  env <- ask
+  let mDeployment = getStringArg "deployment" arguments
+  registry <- liftIO $ readTVarIO env.deploymentRegistry
+
+  let entries = [ (did.unDeploymentId, meta.metaFiles)
+                | (did, DeploymentReady _ meta) <- Map.toList registry
+                , case mDeployment of
+                    Nothing -> True
+                    Just d  -> did.unDeploymentId == d
+                ]
+      result = [ Aeson.object
+                   [ "deployment" .= deployId
+                   , "path" .= fe.fePath
+                   , "exports" .= fe.feExports
+                   ]
+               | (deployId, files) <- entries
+               , fe <- files
+               ]
+
+  pure $ jsonRpcResult reqId $ Aeson.object
+    [ "content" .= [ Aeson.object
+        [ "type" .= ("text" :: Text)
+        , "text" .= Text.Encoding.decodeUtf8 (LBS.toStrict (Aeson.encode result))
+        ]
+      ]
+    ]
+
+-- | read_file: read an L4 source file (whole or line range).
+callReadFile :: Maybe Aeson.Value -> Aeson.Value -> AppM Aeson.Value
+callReadFile reqId arguments = do
+  env <- ask
+  let mDeployment = getStringArg "deployment" arguments
+      mPath = getStringArg "path" arguments
+      mLines = getStringArg "lines" arguments
+
+  case (mDeployment, mPath) of
+    (Just deployId, Just path) -> do
+      mContent <- liftIO $ BundleStore.loadSingleFile env.bundleStore deployId (Text.unpack path)
+      case mContent of
+        Nothing ->
+          pure $ mcpTextResult reqId "File not found" True
+        Just content -> do
+          let result = case mLines of
+                Nothing -> content
+                Just lineSpec -> case parseLineRangeMcp lineSpec of
+                  Nothing -> content
+                  Just (s, e) ->
+                    let allLines = Text.lines content
+                        total = length allLines
+                        start = max 1 (min s total)
+                        end' = max start (min e total)
+                    in Text.unlines $ take (end' - start + 1) (drop (start - 1) allLines)
+          pure $ mcpTextResult reqId result False
+    _ ->
+      pure $ jsonRpcError reqId (-32602) "Missing required arguments: deployment, path"
+
+-- | search_identifier: search for L4 identifier definitions and references.
+callSearchIdentifier :: Maybe Aeson.Value -> Aeson.Value -> AppM Aeson.Value
+callSearchIdentifier reqId arguments = do
+  env <- ask
+  let mIdentifier = getStringArg "identifier" arguments
+      mDeployment = getStringArg "deployment" arguments
+      mFile = getStringArg "file" arguments
+
+  case mIdentifier of
+    Nothing ->
+      pure $ jsonRpcError reqId (-32602) "Missing required argument: identifier"
+    Just identifier -> do
+      sources <- loadSourcesForSearch env mDeployment mFile
+      let matches = searchIdentifier identifier sources
+          result = Aeson.encode (map matchToJson matches)
+      pure $ mcpTextResult reqId (Text.Encoding.decodeUtf8 (LBS.toStrict result)) False
+
+-- | search_text: grep-like text search across files.
+callSearchText :: Maybe Aeson.Value -> Aeson.Value -> AppM Aeson.Value
+callSearchText reqId arguments = do
+  env <- ask
+  let mQuery = getStringArg "query" arguments
+      mDeployment = getStringArg "deployment" arguments
+      mFile = getStringArg "file" arguments
+
+  case mQuery of
+    Nothing ->
+      pure $ jsonRpcError reqId (-32602) "Missing required argument: query"
+    Just query -> do
+      sources <- loadSourcesForSearch env mDeployment mFile
+      let matches = searchText query sources
+          result = Aeson.encode (map matchToJson matches)
+      pure $ mcpTextResult reqId (Text.Encoding.decodeUtf8 (LBS.toStrict result)) False
+
+-- | Load source files for search, filtered by deployment and file path.
+loadSourcesForSearch :: AppEnv -> Maybe Text -> Maybe Text -> AppM (Map FilePath Text)
+loadSourcesForSearch env mDeployment mFile = do
+  registry <- liftIO $ readTVarIO env.deploymentRegistry
+  let deployIds = case mDeployment of
+        Nothing -> [did.unDeploymentId | (did, DeploymentReady _ _) <- Map.toList registry]
+        Just d  -> [d]
+
+  allSources <- liftIO $ fmap Map.unions $ mapM (\did -> do
+    (sourceMap, _) <- BundleStore.loadBundle env.bundleStore did
+    let l4Only = Map.filterWithKey (\k _ -> takeExtensionText k == ".l4") sourceMap
+    -- Prefix file paths with deployment ID for cross-deployment uniqueness
+    pure $ case mDeployment of
+      Just _ -> l4Only  -- Single deployment: keep relative paths
+      Nothing -> Map.mapKeys (\k -> Text.unpack did ++ "/" ++ k) l4Only
+    ) deployIds
+
+  case mFile of
+    Nothing -> pure allSources
+    Just f  -> pure $ Map.filterWithKey (\k _ -> Text.pack k == f) allSources
+ where
+  takeExtensionText fp = let parts = break (== '.') (reverse fp)
+                         in case parts of
+                              (ext, '.':_) -> '.' : reverse ext
+                              _ -> ""
+
+-- | Convert a SearchMatch to JSON value.
+matchToJson :: SearchMatch -> Aeson.Value
+matchToJson m = Aeson.object
+  [ "file" .= m.smFile
+  , "lineStart" .= m.smLineStart
+  , "lineEnd" .= m.smLineEnd
+  , "content" .= m.smContent
+  , "isDefinition" .= m.smIsDefinition
+  ]
+
+-- | Build a text content result for MCP.
+mcpTextResult :: Maybe Aeson.Value -> Text -> Bool -> Aeson.Value
+mcpTextResult reqId text isError = jsonRpcResult reqId $ Aeson.object $
+  [ "content" .= [ Aeson.object
+      [ "type" .= ("text" :: Text)
+      , "text" .= text
+      ]
+    ]
+  ] <> if isError then ["isError" .= True] else []
+
+-- | Extract a string argument from a JSON object.
+getStringArg :: Text -> Aeson.Value -> Maybe Text
+getStringArg key (Aeson.Object obj) = case Aeson.KeyMap.lookup (Aeson.Key.fromText key) obj of
+  Just (Aeson.String s) -> Just s
+  _ -> Nothing
+getStringArg _ _ = Nothing
+
+-- | Parse a line range like "85:89" into (start, end).
+parseLineRangeMcp :: Text -> Maybe (Int, Int)
+parseLineRangeMcp spec = case Text.splitOn ":" spec of
+  [sText, eText] -> case (readMaybeInt (Text.unpack sText), readMaybeInt (Text.unpack eText)) of
+    (Just s, Just e) | s > 0 && e >= s -> Just (s, e)
+    _ -> Nothing
+  _ -> Nothing
+ where
+  readMaybeInt s = case reads s of
+    [(n, "")] -> Just (n :: Int)
+    _ -> Nothing
 
 -- ----------------------------------------------------------------------------
 -- JSON-RPC helpers

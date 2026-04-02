@@ -97,7 +97,7 @@ triggerCompilationIfPending deployId = do
   wasPending <- liftIO $ atomically $ do
     registry <- readTVar env.deploymentRegistry
     case Map.lookup deployId registry of
-      Just DeploymentPending -> do
+      Just (DeploymentPending _) -> do
         modifyTVar' env.deploymentRegistry $
           Map.insert deployId DeploymentCompiling
         pure True

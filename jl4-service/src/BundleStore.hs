@@ -13,6 +13,8 @@ module BundleStore (
   deleteBundleCbor,
   saveMetadataCache,
   loadMetadataCache,
+  loadSingleFile,
+  listSourceFiles,
 ) where
 
 import Codec.Serialise (Serialise, deserialiseOrFail, serialise)
@@ -41,7 +43,7 @@ import System.Directory
   , renameDirectory
   , renameFile
   )
-import System.FilePath ((</>), takeExtension, makeRelative)
+import System.FilePath ((</>), takeExtension, makeRelative, splitDirectories)
 
 -- | Handle to the on-disk bundle store.
 newtype BundleStore = BundleStore { storePath :: FilePath }
@@ -256,7 +258,7 @@ deleteBundleCbor (BundleStore root) deployId = do
 -- This allows serving metadata for pending/lazy-loaded deployments without recompilation.
 saveMetadataCache :: BundleStore -> Text -> LBS.ByteString -> IO ()
 saveMetadataCache (BundleStore root) deployId metaJson = do
-  let cacheFile = root </> Text.unpack deployId </> "openapi-cache.json"
+  let cacheFile = root </> Text.unpack deployId </> "metadata-cache.json"
       tmpFile = cacheFile <> ".tmp"
   LBS.writeFile tmpFile metaJson
   exists <- doesFileExist cacheFile
@@ -271,12 +273,53 @@ saveMetadataCache (BundleStore root) deployId metaJson = do
 -- Returns the raw JSON ByteString (caller decodes as DeploymentMetadata).
 loadMetadataCache :: BundleStore -> Text -> IO (Maybe LBS.ByteString)
 loadMetadataCache (BundleStore root) deployId = do
-  let cacheFile = root </> Text.unpack deployId </> "openapi-cache.json"
+  let cacheFile = root </> Text.unpack deployId </> "metadata-cache.json"
   exists <- doesFileExist cacheFile
   if not exists
     then pure Nothing
     else (Just . LBS.fromStrict <$> BS.readFile cacheFile)
       `catch` \(_ :: IOException) -> pure Nothing
+
+-- | Load a single source file from a deployment.
+-- Returns 'Nothing' if the file doesn't exist or the path is unsafe.
+loadSingleFile :: BundleStore -> Text -> FilePath -> IO (Maybe Text)
+loadSingleFile (BundleStore root) deployId relPath
+  | not (isPathSafe relPath) = pure Nothing
+  | otherwise = do
+      let fullPath = root </> Text.unpack deployId </> "sources" </> relPath
+      exists <- doesFileExist fullPath
+      if exists
+        then (Just <$> Text.IO.readFile fullPath)
+          `catch` \(_ :: IOException) -> pure Nothing
+        else pure Nothing
+
+-- | Check if a path is safe (no path traversal).
+isPathSafe :: FilePath -> Bool
+isPathSafe path = ".." `notElem` splitDirectories path
+
+-- | List all .l4 source files in a deployment.
+listSourceFiles :: BundleStore -> Text -> IO [FilePath]
+listSourceFiles (BundleStore root) deployId = do
+  let sourcesDir = root </> Text.unpack deployId </> "sources"
+  exists <- doesDirectoryExist sourcesDir
+  if not exists
+    then pure []
+    else listL4FilesRecursive sourcesDir sourcesDir
+
+-- | Recursively list .l4 file paths relative to a base directory.
+listL4FilesRecursive :: FilePath -> FilePath -> IO [FilePath]
+listL4FilesRecursive baseDir dir = do
+  entries <- listDirectory dir
+  paths <- mapM (\entry -> do
+    let fullPath = dir </> entry
+    isDir <- doesDirectoryExist fullPath
+    if isDir
+      then listL4FilesRecursive baseDir fullPath
+      else if takeExtension entry == ".l4"
+        then pure [makeRelative baseDir fullPath]
+        else pure []
+    ) entries
+  pure (concat paths)
 
 -- | Get the directory component of a file path.
 takeDirectory :: FilePath -> FilePath

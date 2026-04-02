@@ -188,6 +188,8 @@ export const RequestSidebarLogout: NotificationType<void> = {
 /** Deployment info derived from /openapi.json */
 export interface SidebarDeploymentInfo {
   deploymentId: string
+  status?: 'pending' | 'compiling' | 'ready' | 'failed'
+  error?: string
   functions: ExportedFunctionInfo[]
 }
 

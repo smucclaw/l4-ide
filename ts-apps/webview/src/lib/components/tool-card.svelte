@@ -3,14 +3,16 @@
 
   let {
     func,
-    initialExpanded = false,
-  }: { func: ExportedFunctionInfo; initialExpanded?: boolean } = $props()
-
-  // svelte-ignore state_referenced_locally
-  let expanded = $state(initialExpanded)
+    expanded = false,
+    onToggle,
+  }: {
+    func: ExportedFunctionInfo
+    expanded?: boolean
+    onToggle?: () => void
+  } = $props()
 
   function toggle() {
-    expanded = !expanded
+    if (onToggle) onToggle()
   }
 
   function paramEntries(

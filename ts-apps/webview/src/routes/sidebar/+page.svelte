@@ -39,7 +39,7 @@
     isLegaleseCloud: false,
   })
   let initialized: boolean = $state(false)
-  let loading: boolean = $state(false)
+  let previewDebounceTimer: ReturnType<typeof setTimeout> | null = null
   let activeTab: 'docs' | 'inspector' | 'preview' | 'deployments' =
     $state('docs')
   let menuOpen: boolean = $state(false)
@@ -67,6 +67,21 @@
   let collapsedDeployments: Set<string> = $state(new Set())
   let undeployConfirm: SidebarDeploymentInfo | null = $state(null)
 
+  // Track expanded tool cards by key (survives re-renders from file edits)
+  // Key format: "deploymentId/functionName" for deploy tab, "preview/functionName" for preview tab
+  let expandedCards: Set<string> = $state(new Set())
+
+  function isCardExpanded(key: string): boolean {
+    return expandedCards.has(key)
+  }
+
+  function toggleCard(key: string) {
+    const next = new Set(expandedCards)
+    if (next.has(key)) next.delete(key)
+    else next.add(key)
+    expandedCards = next
+  }
+
   // Reset undeploy confirmation when leaving the deployments tab
   $effect(() => {
     if (activeTab !== 'deployments') {
@@ -74,11 +89,49 @@
     }
   })
 
+  let compilingDeployments: Set<string> = $state(new Set())
+
   function toggleDeploymentCollapse(deploymentId: string) {
     const next = new Set(collapsedDeployments)
     if (next.has(deploymentId)) next.delete(deploymentId)
     else next.add(deploymentId)
     collapsedDeployments = next
+
+    // If expanding an uncompiled deployment (no functions, no error), trigger compilation
+    if (!next.has(deploymentId)) {
+      const dep = deployments.find((d) => d.deploymentId === deploymentId)
+      if (dep && dep.functions.length === 0 && !dep.error) {
+        triggerCompilation(deploymentId)
+      }
+    }
+  }
+
+  async function triggerCompilation(deploymentId: string) {
+    if (!messenger || compilingDeployments.has(deploymentId)) return
+    compilingDeployments = new Set([...compilingDeployments, deploymentId])
+    try {
+      // GET /deployments/{id} triggers compilation for pending deployments
+      const result = await messenger.sendRequest(
+        GetSidebarDeploymentStatus,
+        HOST_EXTENSION,
+        { deploymentId }
+      )
+      // Update the deployment in-place with the result
+      const dep = deployments.find((d) => d.deploymentId === deploymentId)
+      if (dep) {
+        dep.status = result.status
+        dep.error = result.error
+      }
+      // Refresh the full list to get function details
+      await fetchDeployments()
+    } catch {
+      // Compilation failed — refresh will pick up the error
+      await fetchDeployments()
+    } finally {
+      const next = new Set(compilingDeployments)
+      next.delete(deploymentId)
+      compilingDeployments = next
+    }
   }
 
   let messenger: InstanceType<typeof Messenger> | null = $state(null)
@@ -597,7 +650,7 @@
         activeFileUri = ''
         activeFileName = ''
         functions = []
-        loading = false
+        if (previewDebounceTimer) clearTimeout(previewDebounceTimer)
         if (deployView !== 'preview') deployView = 'preview'
         undeployConfirm = null
       }
@@ -611,20 +664,20 @@
           deployView = 'preview'
         }
         undeployConfirm = null
-        loading = true
-        messenger
-          ?.sendRequest(GetSidebarExportedFunctions, HOST_EXTENSION, {
-            verDocId: { uri, version },
-          })
-          .then((response) => {
-            functions = response.functions
-          })
-          .catch(() => {
-            functions = []
-          })
-          .finally(() => {
-            loading = false
-          })
+        // Debounce 200ms to avoid flickering on rapid edits
+        if (previewDebounceTimer) clearTimeout(previewDebounceTimer)
+        previewDebounceTimer = setTimeout(() => {
+          messenger
+            ?.sendRequest(GetSidebarExportedFunctions, HOST_EXTENSION, {
+              verDocId: { uri, version },
+            })
+            .then((response) => {
+              functions = response.functions
+            })
+            .catch(() => {
+              functions = []
+            })
+        }, 200)
       }
     })
 
@@ -753,20 +806,20 @@
         </div>
       {:else}
         <!-- Normal preview -->
-        {#if functions.length === 0 && !loading}
+        {#if functions.length === 0}
           <div class="empty-state">
             <p class="hint">
               Open an L4 file containing valid rules marked with @export
             </p>
           </div>
-        {:else if loading}
-          <div class="empty-state">
-            <p class="hint">Loading...</p>
-          </div>
         {:else}
           <div class="functions-list">
             {#each functions as func (func.name)}
-              <ToolCard {func} initialExpanded={functions.length <= 8} />
+              <ToolCard
+                {func}
+                expanded={isCardExpanded('.local/' + func.name)}
+                onToggle={() => toggleCard('.local/' + func.name)}
+              />
             {/each}
           </div>
         {/if}
@@ -831,9 +884,17 @@
               >
               <span class="deployment-id">{dep.deploymentId}</span>
               <span class="deployment-fn-count">
-                {dep.functions.length} rule{dep.functions.length !== 1
-                  ? 's'
-                  : ''}
+                {#if dep.error}
+                  Error
+                {:else if dep.functions.length === 0 && compilingDeployments.has(dep.deploymentId)}
+                  Compiling...
+                {:else if dep.functions.length === 0}
+                  Uncompiled
+                {:else}
+                  {dep.functions.length} rule{dep.functions.length !== 1
+                    ? 's'
+                    : ''}
+                {/if}
               </span>
               <button
                 class="undeploy-btn"
@@ -850,11 +911,19 @@
               </button>
             </div>
             {#if !collapsedDeployments.has(dep.deploymentId)}
-              {#if dep.functions.length > 0}
+              {#if dep.error}
+                <div class="deployment-error"><pre>{dep.error}</pre></div>
+              {:else if compilingDeployments.has(dep.deploymentId)}
+                <div class="deployment-empty">Compiling...</div>
+              {:else if dep.functions.length > 0}
                 {#each dep.functions as func (func.name)}
                   <ToolCard
                     {func}
-                    initialExpanded={dep.functions.length <= 8}
+                    expanded={isCardExpanded(
+                      dep.deploymentId + '/' + func.name
+                    )}
+                    onToggle={() =>
+                      toggleCard(dep.deploymentId + '/' + func.name)}
                   />
                 {/each}
               {:else}
@@ -1350,6 +1419,29 @@
     color: var(--vscode-descriptionForeground);
     opacity: 0.6;
     padding: 4px 0;
+  }
+
+  .deployment-error {
+    margin: 4px 0;
+    padding: 6px 8px;
+    background: var(
+      --vscode-inputValidation-errorBackground,
+      rgba(255, 0, 0, 0.1)
+    );
+    border: 1px solid
+      var(--vscode-inputValidation-errorBorder, rgba(255, 0, 0, 0.3));
+    border-radius: 4px;
+  }
+
+  .deployment-error pre {
+    margin: 0;
+    font-size: 0.82em;
+    font-family: var(--vscode-editor-font-family, monospace);
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 260px;
+    overflow-y: auto;
+    color: var(--vscode-errorForeground, #f48771);
   }
 
   .undeploy-btn {

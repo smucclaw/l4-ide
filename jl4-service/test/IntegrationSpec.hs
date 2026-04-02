@@ -201,31 +201,41 @@ spec = describe "integration" do
 
     it "returns original spaced field names in OpenAPI schema" do
       withServiceFromSources "openapi-san" [("spaced.l4", spacedFieldsJL4)] \baseUrl mgr -> do
-        req <- parseRequest (baseUrl <> "/openapi.json")
+        -- Use /deployments?functions=full to check parameter schemas
+        req <- parseRequest (baseUrl <> "/deployments?functions=full")
         resp <- httpLbs req mgr
         statusCode' resp `shouldBe` 200
         let body = responseBody resp
-            mObj = decodeObject body
-            mFunctions = lookupKey "functions" mObj
-        case mFunctions of
-          Just (Aeson.Array fns) -> do
-            length fns `shouldSatisfy` (> 0)
-            let fn = case toList fns of { (x:_) -> x; [] -> error "empty functions array" }
-                mParams = case fn of
-                  Aeson.Object o -> Aeson.KeyMap.lookup "parameters" o
+        case Aeson.decode body of
+          Just (Aeson.Array deps) -> do
+            length deps `shouldSatisfy` (> 0)
+            let dep = case toList deps of { (x:_) -> x; [] -> error "empty deployments" }
+                mFns = case dep of
+                  Aeson.Object o -> case Aeson.KeyMap.lookup "metadata" o of
+                    Just (Aeson.Object m) -> Aeson.KeyMap.lookup "functions" m
+                    _ -> Nothing
                   _ -> Nothing
-                mProps = case mParams of
-                  Just (Aeson.Object p) -> Aeson.KeyMap.lookup "properties" p
-                  _ -> Nothing
-            case mProps of
-              Just (Aeson.Object props) -> do
-                -- OpenAPI preserves original L4 names (spaces, not hyphens)
-                Aeson.KeyMap.member "first name" props `shouldBe` True
-                Aeson.KeyMap.member "is a citizen" props `shouldBe` True
+            case mFns of
+              Just (Aeson.Array fns) -> do
+                length fns `shouldSatisfy` (> 0)
+                let fn = case toList fns of { (x:_) -> x; [] -> error "empty functions" }
+                    mParams = case fn of
+                      Aeson.Object o -> Aeson.KeyMap.lookup "parameters" o
+                      _ -> Nothing
+                    mProps = case mParams of
+                      Just (Aeson.Object p) -> Aeson.KeyMap.lookup "properties" p
+                      _ -> Nothing
+                case mProps of
+                  Just (Aeson.Object props) -> do
+                    -- Deployments endpoint preserves original L4 names (spaces, not hyphens)
+                    Aeson.KeyMap.member "first name" props `shouldBe` True
+                    Aeson.KeyMap.member "is a citizen" props `shouldBe` True
+                  other ->
+                    expectationFailure ("Expected properties object, got: " <> show other)
               other ->
-                expectationFailure ("Expected properties object, got: " <> show other)
+                expectationFailure ("Expected functions array, got: " <> show other)
           other ->
-            expectationFailure ("Expected functions array, got: " <> show other)
+            expectationFailure ("Expected deployments array, got: " <> show other)
 
   describe "batch evaluation" do
     it "evaluates multiple cases in parallel" do
@@ -436,39 +446,44 @@ spec = describe "integration" do
         resp <- httpLbs req mgr
         statusCode' resp `shouldBe` 200
         let body = decodeObject (responseBody resp)
-        -- Function wrapper has type=function and nested function object
-        lookupKey "type" body `shouldBe` Just (Aeson.String "function")
+        -- FunctionSummary has name, parameters, returnType
+        lookupKey "name" body `shouldBe` Just (Aeson.String "compute_qualifies")
+        lookupKey "returnType" body `shouldSatisfy` Maybe.isJust
 
-    it "returns deployment metadata via openapi.json" do
+    it "returns OpenAPI 3.0 spec via per-deployment openapi.json" do
       withServiceFromSources "openapi" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
         req <- parseRequest (baseUrl <> "/deployments/openapi/openapi.json")
         resp <- httpLbs req mgr
         statusCode' resp `shouldBe` 200
         let body = decodeObject (responseBody resp)
-        lookupArrayLength "functions" body `shouldSatisfy` maybe False (> 0)
+        lookupKey "openapi" body `shouldBe` Just (Aeson.String "3.0.0")
+        lookupKey "paths" body `shouldSatisfy` Maybe.isJust
 
-    it "returns org-wide metadata via /openapi.json" do
+    it "returns OpenAPI 3.0 spec via org-wide /openapi.json" do
       withServiceFromSources "org-openapi" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
         req <- parseRequest (baseUrl <> "/openapi.json")
         resp <- httpLbs req mgr
         statusCode' resp `shouldBe` 200
         let body = decodeObject (responseBody resp)
-        lookupArrayLength "functions" body `shouldSatisfy` maybe False (> 0)
+        lookupKey "openapi" body `shouldBe` Just (Aeson.String "3.0.0")
+        lookupKey "paths" body `shouldSatisfy` Maybe.isJust
 
-    it "filters org-wide openapi.json by scope" do
+    it "filters deployments by scope" do
       withServiceFromSources "scope-test" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
         -- With matching scope
-        req1 <- parseRequest (baseUrl <> "/openapi.json?scope=scope-test/*")
+        req1 <- parseRequest (baseUrl <> "/deployments?functions=full&scope=scope-test/*")
         resp1 <- httpLbs req1 mgr
         statusCode' resp1 `shouldBe` 200
-        let body1 = decodeObject (responseBody resp1)
-        lookupArrayLength "functions" body1 `shouldSatisfy` maybe False (> 0)
+        case Aeson.decode (responseBody resp1) of
+          Just (Aeson.Array deps) -> length deps `shouldSatisfy` (> 0)
+          _ -> expectationFailure "Expected non-empty deployments array"
         -- With non-matching scope
-        req2 <- parseRequest (baseUrl <> "/openapi.json?scope=nonexistent/*")
+        req2 <- parseRequest (baseUrl <> "/deployments?functions=full&scope=nonexistent/*")
         resp2 <- httpLbs req2 mgr
         statusCode' resp2 `shouldBe` 200
-        let body2 = decodeObject (responseBody resp2)
-        lookupArrayLength "functions" body2 `shouldBe` Just 0
+        case Aeson.decode (responseBody resp2) of
+          Just (Aeson.Array deps) -> length deps `shouldBe` 0
+          _ -> expectationFailure "Expected empty deployments array"
 
   describe "deontic evaluation" do
     it "evaluates a deontic function to FULFILLED with all events" do
@@ -565,18 +580,15 @@ spec = describe "integration" do
         statusCode' resp `shouldBe` 200
         let body = decodeObject (responseBody resp)
         -- Check that parameters include startTime and events in required
-        case lookupKey "function" body of
-          Just (Aeson.Object fn) ->
-            case Aeson.KeyMap.lookup "parameters" fn of
-              Just (Aeson.Object params) ->
-                case Aeson.KeyMap.lookup "required" params of
-                  Just reqArr -> do
-                    let reqList = Aeson.decode (Aeson.encode reqArr) :: Maybe [Text]
-                    reqList `shouldSatisfy` maybe False (elem "startTime")
-                    reqList `shouldSatisfy` maybe False (elem "events")
-                  _ -> expectationFailure "Missing required array in parameters"
-              _ -> expectationFailure "Missing parameters in function"
-          _ -> expectationFailure "Missing function object in response"
+        case lookupKey "parameters" body of
+          Just (Aeson.Object params) ->
+            case Aeson.KeyMap.lookup "required" params of
+              Just reqArr -> do
+                let reqList = Aeson.decode (Aeson.encode reqArr) :: Maybe [Text]
+                reqList `shouldSatisfy` maybe False (elem "startTime")
+                reqList `shouldSatisfy` maybe False (elem "events")
+              _ -> expectationFailure "Missing required array in parameters"
+          _ -> expectationFailure "Missing parameters in response"
 
   describe "deontic evaluation with record-typed parties" do
     it "evaluates to FULFILLED when record-typed party wears seatbelt then drives" do
@@ -641,34 +653,31 @@ spec = describe "integration" do
         statusCode' resp `shouldBe` 200
         let body = decodeObject (responseBody resp)
         -- Check events parameter has object-typed party with "name" field
-        case lookupKey "function" body of
-          Just (Aeson.Object fn) ->
-            case Aeson.KeyMap.lookup "parameters" fn of
-              Just (Aeson.Object params) ->
-                case Aeson.KeyMap.lookup "properties" params of
-                  Just (Aeson.Object props) ->
-                    case Aeson.KeyMap.lookup "events" props of
-                      Just (Aeson.Object eventsParam) ->
-                        case Aeson.KeyMap.lookup "items" eventsParam of
-                          Just (Aeson.Object items) ->
-                            case Aeson.KeyMap.lookup "properties" items of
-                              Just (Aeson.Object eventProps) -> do
-                                -- party should be an object type (record), not a string (enum)
-                                case Aeson.KeyMap.lookup "party" eventProps of
-                                  Just (Aeson.Object partyParam) ->
-                                    Aeson.KeyMap.lookup "type" partyParam `shouldBe` Just (Aeson.String "object")
-                                  _ -> expectationFailure "Missing party in event properties"
-                                -- action should be a string type (enum)
-                                case Aeson.KeyMap.lookup "action" eventProps of
-                                  Just (Aeson.Object actionParam) ->
-                                    Aeson.KeyMap.lookup "type" actionParam `shouldBe` Just (Aeson.String "string")
-                                  _ -> expectationFailure "Missing action in event properties"
-                              _ -> expectationFailure "Missing properties in events items"
-                          _ -> expectationFailure "Missing items in events parameter"
-                      _ -> expectationFailure "Missing events in properties"
-                  _ -> expectationFailure "Missing properties in parameters"
-              _ -> expectationFailure "Missing parameters in function"
-          _ -> expectationFailure "Missing function object in response"
+        case lookupKey "parameters" body of
+          Just (Aeson.Object params) ->
+            case Aeson.KeyMap.lookup "properties" params of
+              Just (Aeson.Object props) ->
+                case Aeson.KeyMap.lookup "events" props of
+                  Just (Aeson.Object eventsParam) ->
+                    case Aeson.KeyMap.lookup "items" eventsParam of
+                      Just (Aeson.Object items) ->
+                        case Aeson.KeyMap.lookup "properties" items of
+                          Just (Aeson.Object eventProps) -> do
+                            -- party should be an object type (record), not a string (enum)
+                            case Aeson.KeyMap.lookup "party" eventProps of
+                              Just (Aeson.Object partyParam) ->
+                                Aeson.KeyMap.lookup "type" partyParam `shouldBe` Just (Aeson.String "object")
+                              _ -> expectationFailure "Missing party in event properties"
+                            -- action should be a string type (enum)
+                            case Aeson.KeyMap.lookup "action" eventProps of
+                              Just (Aeson.Object actionParam) ->
+                                Aeson.KeyMap.lookup "type" actionParam `shouldBe` Just (Aeson.String "string")
+                              _ -> expectationFailure "Missing action in event properties"
+                          _ -> expectationFailure "Missing properties in events items"
+                      _ -> expectationFailure "Missing items in events parameter"
+                  _ -> expectationFailure "Missing events in properties"
+              _ -> expectationFailure "Missing properties in parameters"
+          _ -> expectationFailure "Missing parameters in response"
 
   describe "state graphs" do
     it "returns empty list for a boolean-only module" do
@@ -716,6 +725,200 @@ spec = describe "integration" do
         req <- parseRequest (baseUrl <> "/deployments/sg-404/functions/test_fn/state-graphs/nonexistent")
         resp <- httpLbs req mgr
         statusCode' resp `shouldBe` 404
+
+  describe "visibility headers" do
+    it "X-Include-Functions: false hides functions from deployment response" do
+      withServiceFromSources "vis-fn" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        req <- parseRequest (baseUrl <> "/deployments")
+        let req' = req { requestHeaders = [("X-Include-Functions", "false")] }
+        resp <- httpLbs req' mgr
+        statusCode' resp `shouldBe` 200
+        case Aeson.decode (responseBody resp) of
+          Just (Aeson.Array deps) -> do
+            length deps `shouldSatisfy` (> 0)
+            let dep = safeHead (toList deps)
+                mFns = case dep of
+                  Aeson.Object o -> case Aeson.KeyMap.lookup "metadata" o of
+                    Just (Aeson.Object m) -> Aeson.KeyMap.lookup "functions" m
+                    _ -> Nothing
+                  _ -> Nothing
+            -- functions should be absent (empty = omitted)
+            mFns `shouldBe` Nothing
+          _ -> expectationFailure "Expected deployments array"
+
+    it "X-Include-Files: false hides files from deployment response" do
+      withServiceFromSources "vis-fi" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        req <- parseRequest (baseUrl <> "/deployments")
+        let req' = req { requestHeaders = [("X-Include-Files", "false")] }
+        resp <- httpLbs req' mgr
+        statusCode' resp `shouldBe` 200
+        case Aeson.decode (responseBody resp) of
+          Just (Aeson.Array deps) -> do
+            length deps `shouldSatisfy` (> 0)
+            let dep = safeHead (toList deps)
+                mFiles = case dep of
+                  Aeson.Object o -> case Aeson.KeyMap.lookup "metadata" o of
+                    Just (Aeson.Object m) -> Aeson.KeyMap.lookup "files" m
+                    _ -> Nothing
+                  _ -> Nothing
+            -- files should be absent
+            mFiles `shouldBe` Nothing
+          _ -> expectationFailure "Expected deployments array"
+
+    it "X-Include-Evaluate: false hides evaluation paths from OpenAPI" do
+      withServiceFromSources "vis-ev" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        req <- parseRequest (baseUrl <> "/openapi.json")
+        let req' = req { requestHeaders = [("X-Include-Evaluate", "false")] }
+        resp <- httpLbs req' mgr
+        statusCode' resp `shouldBe` 200
+        let body = decodeObject (responseBody resp)
+        case lookupKey "paths" body of
+          Just (Aeson.Object paths) -> do
+            -- Should have function GET paths but no evaluation POST paths
+            let pathKeys = map Aeson.Key.toText (Aeson.KeyMap.keys paths)
+                hasEval = any (Text.isInfixOf "/evaluation") pathKeys
+            hasEval `shouldBe` False
+          _ -> expectationFailure "Expected paths object"
+
+    it "X-Include-Evaluate: false hides evaluation tools from MCP" do
+      withServiceFromSources "vis-mcp" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        let mcpReq = Aeson.object
+              [ "jsonrpc" Aeson..= ("2.0" :: Text)
+              , "id" Aeson..= (1 :: Int)
+              , "method" Aeson..= ("tools/list" :: Text)
+              ]
+        req <- buildJsonPost (baseUrl <> "/.mcp") mcpReq
+        let req' = req { requestHeaders = ("X-Include-Evaluate", "false") : requestHeaders req }
+        resp <- httpLbs req' mgr
+        statusCode' resp `shouldBe` 200
+        let body = decodeObject (responseBody resp)
+        -- result.tools should exist but have no function evaluation tools
+        case lookupKey "result" body of
+          Just (Aeson.Object result) ->
+            case Aeson.KeyMap.lookup "tools" result of
+              Just (Aeson.Array tools) ->
+                -- Should have file tools but no function tools
+                let toolNames = [ n | Aeson.Object t <- toList tools
+                                    , Just (Aeson.String n) <- [Aeson.KeyMap.lookup "name" t] ]
+                    hasEvalTool = any (\n -> n /= "list_files" && n /= "read_file"
+                                          && n /= "search_identifier" && n /= "search_text") toolNames
+                in hasEvalTool `shouldBe` False
+              _ -> expectationFailure "Expected tools array"
+          _ -> expectationFailure "Expected result object"
+
+    it "X-Include-Functions: false hides all function tools from MCP" do
+      withServiceFromSources "vis-mcp-fn" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        let mcpReq = Aeson.object
+              [ "jsonrpc" Aeson..= ("2.0" :: Text)
+              , "id" Aeson..= (1 :: Int)
+              , "method" Aeson..= ("tools/list" :: Text)
+              ]
+        req <- buildJsonPost (baseUrl <> "/.mcp") mcpReq
+        let req' = req { requestHeaders = ("X-Include-Functions", "false") : requestHeaders req }
+        resp <- httpLbs req' mgr
+        statusCode' resp `shouldBe` 200
+        let body = decodeObject (responseBody resp)
+        case lookupKey "result" body of
+          Just (Aeson.Object result) ->
+            case Aeson.KeyMap.lookup "tools" result of
+              Just (Aeson.Array tools) ->
+                -- Should only have file tools, no function evaluation tools
+                let toolNames = [ n | Aeson.Object t <- toList tools
+                                    , Just (Aeson.String n) <- [Aeson.KeyMap.lookup "name" t] ]
+                    fileToolNames = ["list_files", "read_file", "search_identifier", "search_text"] :: [Text]
+                    nonFileTools = filter (`notElem` fileToolNames) toolNames
+                in nonFileTools `shouldBe` []
+              _ -> expectationFailure "Expected tools array"
+          _ -> expectationFailure "Expected result object"
+
+    it "X-Include-Files: false hides file tools from MCP" do
+      withServiceFromSources "vis-mcp-fi" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        let mcpReq = Aeson.object
+              [ "jsonrpc" Aeson..= ("2.0" :: Text)
+              , "id" Aeson..= (1 :: Int)
+              , "method" Aeson..= ("tools/list" :: Text)
+              ]
+        req <- buildJsonPost (baseUrl <> "/.mcp") mcpReq
+        let req' = req { requestHeaders = ("X-Include-Files", "false") : requestHeaders req }
+        resp <- httpLbs req' mgr
+        statusCode' resp `shouldBe` 200
+        let body = decodeObject (responseBody resp)
+        case lookupKey "result" body of
+          Just (Aeson.Object result) ->
+            case Aeson.KeyMap.lookup "tools" result of
+              Just (Aeson.Array tools) ->
+                -- Should have function tools but no file tools
+                let toolNames = [ n | Aeson.Object t <- toList tools
+                                    , Just (Aeson.String n) <- [Aeson.KeyMap.lookup "name" t] ]
+                    fileToolNames = ["list_files", "read_file", "search_identifier", "search_text"] :: [Text]
+                    hasFileTool = any (`elem` fileToolNames) toolNames
+                in hasFileTool `shouldBe` False
+              _ -> expectationFailure "Expected tools array"
+          _ -> expectationFailure "Expected result object"
+
+  describe "deployments query params" do
+    it "?functions=full includes parameters in listing" do
+      withServiceFromSources "qp-full" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        req <- parseRequest (baseUrl <> "/deployments?functions=full")
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 200
+        case Aeson.decode (responseBody resp) of
+          Just (Aeson.Array deps) -> do
+            length deps `shouldSatisfy` (> 0)
+            let dep = safeHead (toList deps)
+                hasFnParams = case dep of
+                  Aeson.Object o -> case Aeson.KeyMap.lookup "metadata" o of
+                    Just (Aeson.Object m) -> case Aeson.KeyMap.lookup "functions" m of
+                      Just (Aeson.Array fns) | not (null fns) ->
+                        case safeHead (toList fns) of
+                          Aeson.Object fn -> Aeson.KeyMap.member "parameters" fn
+                          _ -> False
+                      _ -> False
+                    _ -> False
+                  _ -> False
+            hasFnParams `shouldBe` True
+          _ -> expectationFailure "Expected deployments array"
+
+    it "default listing includes functions with name but not parameters" do
+      withServiceFromSources "qp-default" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        req <- parseRequest (baseUrl <> "/deployments")
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 200
+        case Aeson.decode (responseBody resp) of
+          Just (Aeson.Array deps) -> do
+            length deps `shouldSatisfy` (> 0)
+            let dep = safeHead (toList deps)
+                check = case dep of
+                  Aeson.Object o -> case Aeson.KeyMap.lookup "metadata" o of
+                    Just (Aeson.Object m) -> case Aeson.KeyMap.lookup "functions" m of
+                      Just (Aeson.Array fns) | not (null fns) ->
+                        case safeHead (toList fns) of
+                          Aeson.Object fn ->
+                            -- Has name but parameters should be empty (simple mode)
+                            Aeson.KeyMap.member "name" fn
+                          _ -> False
+                      _ -> False
+                    _ -> False
+                  _ -> False
+            check `shouldBe` True
+          _ -> expectationFailure "Expected deployments array"
+
+    it "?scope= filters deployments" do
+      withServiceFromSources "qp-scope" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        -- Matching scope
+        req1 <- parseRequest (baseUrl <> "/deployments?scope=qp-scope")
+        resp1 <- httpLbs req1 mgr
+        statusCode' resp1 `shouldBe` 200
+        case Aeson.decode (responseBody resp1) of
+          Just (Aeson.Array deps) -> length deps `shouldSatisfy` (> 0)
+          _ -> expectationFailure "Expected non-empty deployments array"
+        -- Non-matching scope
+        req2 <- parseRequest (baseUrl <> "/deployments?scope=nonexistent")
+        resp2 <- httpLbs req2 mgr
+        statusCode' resp2 `shouldBe` 200
+        case Aeson.decode (responseBody resp2) of
+          Just (Aeson.Array deps) -> length deps `shouldBe` 0
+          _ -> expectationFailure "Expected empty deployments array"
 
   describe "lazy-load (compile on first request)" do
     it "GET /deployments/{id} compiles pending deployment and returns ready" do
@@ -840,7 +1043,7 @@ withPendingService' deployId sources act = do
   BundleStore.saveBundle store deployId sourceMap storedMeta
 
   -- Register as Pending (not compiled)
-  registry <- newTVarIO $ Map.singleton (DeploymentId deployId) DeploymentPending
+  registry <- newTVarIO $ Map.singleton (DeploymentId deployId) (DeploymentPending Nothing)
   let env = MkAppEnv registry store Nothing logger testOptions
 
   mgr <- newManager defaultManagerSettings
@@ -1018,6 +1221,11 @@ lookupArrayLength k obj = do
   v <- lookupKey k obj
   arr <- Aeson.decode (Aeson.encode v) :: Maybe [Aeson.Value]
   Just (length arr)
+
+-- | Safe head for lists — avoids partial function warning.
+safeHead :: [a] -> a
+safeHead (x:_) = x
+safeHead [] = error "safeHead: empty list"
 
 -- | Default options for tests.
 testOptions :: Options

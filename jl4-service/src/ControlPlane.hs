@@ -12,6 +12,7 @@ module ControlPlane (
 ) where
 
 import qualified BundleStore
+import L4.FunctionSchema (Parameters (..))
 import Compiler (compileBundle, computeVersion)
 import DeploymentLoader (triggerCompilationIfPending)
 import Logging (logInfo, logWarn, logError)
@@ -75,17 +76,17 @@ instance FromJSON DeploymentStatusResponse where
 -- | The control plane API for managing deployments.
 type ControlPlaneApi =
        "deployments" :> MultipartForm Mem (MultipartData Mem) :> Verb 'POST 202 '[JSON] DeploymentStatusResponse
-  :<|> "deployments" :> Get '[JSON] [DeploymentStatusResponse]
+  :<|> "deployments" :> QueryParam "functions" Text :> QueryParam "scope" Text :> Get '[JSON] [DeploymentStatusResponse]
   :<|> "deployments" :> Capture "deploymentId" Text :> Get '[JSON] DeploymentStatusResponse
   :<|> "deployments" :> Capture "deploymentId" Text :> MultipartForm Mem (MultipartData Mem) :> Verb 'PUT 202 '[JSON] DeploymentStatusResponse
   :<|> "deployments" :> Capture "deploymentId" Text :> DeleteNoContent
 
 -- | Combined handler for the control plane.
-controlPlaneHandler :: ServerT ControlPlaneApi AppM
-controlPlaneHandler =
+controlPlaneHandler :: Visibility -> ServerT ControlPlaneApi AppM
+controlPlaneHandler vis =
        postDeploymentHandler
-  :<|> getDeploymentsHandler
-  :<|> getDeploymentHandler
+  :<|> getDeploymentsHandler vis
+  :<|> getDeploymentHandler vis
   :<|> putDeploymentHandler
   :<|> deleteDeploymentHandler
 
@@ -192,20 +193,55 @@ postDeploymentHandler multipart = do
         , dsError = Nothing
         }
 
--- | GET /deployments — list all deployments
-getDeploymentsHandler :: AppM [DeploymentStatusResponse]
-getDeploymentsHandler = do
+-- | GET /deployments — list all deployments.
+-- ?functions=simple → include function name + description in metadata (like GET .../functions)
+-- ?functions=full   → include full function details (parameters, returnType, section) in metadata
+-- ?scope=pattern    → filter by deployment pattern (e.g. "classics", "classics,test-rules")
+-- All function data gated by X-Include-Functions header — if false, ?functions is ignored.
+getDeploymentsHandler :: Visibility -> Maybe Text -> Maybe Text -> AppM [DeploymentStatusResponse]
+getDeploymentsHandler vis mFunctions mScope = do
   env <- asks id
-  liftIO $ logInfo env.logger "Deployments listed" []
+  liftIO $ logInfo env.logger "Deployments listed"
+    [("functions", toJSON mFunctions), ("scope", toJSON mScope)]
   registry <- liftIO $ readTVarIO env.deploymentRegistry
   let debugMode = env.options.debug
-  pure [stateToResponse debugMode did state | (did, state) <- Map.toList registry]
+      fnMode = if not vis.showFunctions then FnNone
+               else case mFunctions of
+                 Just "full" -> FnFull
+                 Just "none" -> FnNone
+                 _           -> FnSimple  -- default: name + description
+
+  let allResponses = map (\(did, state) ->
+        stateToResponse debugMode vis fnMode did state
+        ) (Map.toList registry)
+
+  pure $ case mScope of
+    Nothing -> allResponses
+    Just scope -> filter (matchesDeploymentScope scope) allResponses
+ where
+  matchesDeploymentScope scope resp =
+    let patterns = Text.splitOn "," scope
+    in any (\pat ->
+      let trimmed = Text.strip pat
+          (depPat, _rest) = Text.breakOn "/" trimmed
+      in depPat == "*" || depPat == resp.dsId
+      ) patterns
+
+-- | Function detail level in deployment responses.
+data FnMode = FnNone | FnSimple | FnFull
+
+-- | Strip parameters from a FunctionSummary (for ?functions=simple).
+simplify :: FunctionSummary -> FunctionSummary
+simplify fs = fs
+  { fsParameters = MkParameters Map.empty []
+  , fsSourceFile = Nothing
+  }
 
 -- | GET /deployments/{id} — get deployment status.
 -- If the deployment is Pending (lazy-load), compiles it synchronously
 -- before returning the response.
-getDeploymentHandler :: Text -> AppM DeploymentStatusResponse
-getDeploymentHandler deployIdText = do
+getDeploymentHandler :: Visibility -> Text -> AppM DeploymentStatusResponse
+getDeploymentHandler vis deployIdText = do
   env <- asks id
   let deployId = DeploymentId deployIdText
   liftIO $ logInfo env.logger "Deployment retrieved"
@@ -213,14 +249,14 @@ getDeploymentHandler deployIdText = do
   registry <- liftIO $ readTVarIO env.deploymentRegistry
   case Map.lookup deployId registry of
     Nothing -> throwError err404
-    Just DeploymentPending -> do
+    Just (DeploymentPending _) -> do
       triggerCompilationIfPending deployId
       -- Re-read: compilation is synchronous, state is now Ready or Failed
       registry' <- liftIO $ readTVarIO env.deploymentRegistry
       case Map.lookup deployId registry' of
         Nothing -> throwError err404
-        Just state' -> pure (stateToResponse env.options.debug deployId state')
-    Just state -> pure (stateToResponse env.options.debug deployId state)
+        Just state' -> pure (stateToResponse env.options.debug vis FnSimple deployId state')
+    Just state -> pure (stateToResponse env.options.debug vis FnSimple deployId state)
 
 -- | PUT /deployments/{id} — replace a deployment bundle
 putDeploymentHandler :: Text -> MultipartData Mem -> AppM DeploymentStatusResponse
@@ -315,11 +351,23 @@ deleteDeploymentHandler deployIdText = do
 
 -- | Convert DeploymentState to a response.
 -- In non-debug mode, error details are hidden.
-stateToResponse :: Bool -> DeploymentId -> DeploymentState -> DeploymentStatusResponse
-stateToResponse debugMode (DeploymentId did) = \case
-  DeploymentPending -> DeploymentStatusResponse did "pending" Nothing Nothing
+-- Visibility controls which fields are included in the response.
+stateToResponse :: Bool -> Visibility -> FnMode -> DeploymentId -> DeploymentState -> DeploymentStatusResponse
+stateToResponse debugMode vis fnMode (DeploymentId did) = \case
+  DeploymentPending mCachedMeta ->
+    let meta = case mCachedMeta of
+          Just m -> Just m { metaFunctions = case fnMode of FnNone -> []; FnSimple -> map simplify m.metaFunctions; FnFull -> m.metaFunctions, metaFiles = if vis.showFiles then m.metaFiles else [] }
+          Nothing -> Nothing
+    in DeploymentStatusResponse did "pending" meta Nothing
   DeploymentCompiling -> DeploymentStatusResponse did "compiling" Nothing Nothing
-  DeploymentReady _ meta -> DeploymentStatusResponse did "ready" (Just meta) Nothing
+  DeploymentReady _ meta ->
+    let filteredMeta = meta
+          { metaFunctions = case fnMode of
+              FnNone -> []
+              FnSimple -> map simplify meta.metaFunctions
+              FnFull -> meta.metaFunctions
+          , metaFiles = if vis.showFiles then meta.metaFiles else []}
+    in DeploymentStatusResponse did "ready" (Just filteredMeta) Nothing
   DeploymentFailed err ->
     let errorMsg = if debugMode then Just err else Just "Compilation failed"
     in DeploymentStatusResponse did "failed" Nothing errorMsg

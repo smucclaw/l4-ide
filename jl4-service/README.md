@@ -91,8 +91,8 @@ Manage deployment lifecycle.
 | Method   | Endpoint            | Description                                                         |
 | -------- | ------------------- | ------------------------------------------------------------------- |
 | `POST`   | `/deployments`      | Deploy a new bundle (multipart: `id` + `sources` zip)               |
-| `GET`    | `/deployments`      | List all deployments with status                                    |
-| `GET`    | `/deployments/{id}` | Get deployment status                                               |
+| `GET`    | `/deployments`      | List all deployments (`?functions=simple\|full\|none`, `?scope=id`) |
+| `GET`    | `/deployments/{id}` | Get deployment status (triggers compilation if pending)             |
 | `PUT`    | `/deployments/{id}` | Replace a deployment's bundle (old stays active until new compiles) |
 | `DELETE` | `/deployments/{id}` | Remove a deployment                                                 |
 
@@ -119,8 +119,25 @@ Evaluate functions within a deployment. All routes are available in both short f
 | `GET`  | `/deployments/{id}/functions/{fn}/state-graphs`        | `/{id}/{fn}/state-graphs`        |
 | `GET`  | `/deployments/{id}/functions/{fn}/state-graphs/{name}` | `/{id}/{fn}/state-graphs/{name}` |
 | `GET`  | `/deployments/{id}/openapi.json`                       | `/{id}/openapi.json`             |
+| `GET`  | `/deployments/{id}/files`                              | `/{id}/files`                    |
+| `GET`  | `/deployments/{id}/files/{path}.l4`                    | `/{id}/{path}.l4`                |
 
 Function names with spaces can use hyphens or URL-encoding in the path (e.g., `check-person` or `check%20person` for `check person`).
+
+### File Browsing
+
+Browse L4 source files within a deployment.
+
+| Method | Endpoint                            | Description                                                    |
+| ------ | ----------------------------------- | -------------------------------------------------------------- |
+| `GET`  | `/deployments/{id}/files`           | List files with content (`?identifier=`, `?search=`, `?file=`) |
+| `GET`  | `/deployments/{id}/files/{path}.l4` | Raw file content (`?lines=start:end` for line range)           |
+
+The `/files` endpoint supports three query parameters (combinable):
+
+- `?identifier=name` — find definitions and references of an L4 identifier
+- `?search=text` — grep source files (case-insensitive)
+- `?file=path.l4` — scope to a specific file
 
 ### Evaluation
 
@@ -234,15 +251,33 @@ Deployments are automatically [WebMCP](https://webmachinelearning.github.io/webm
 | Method | Endpoint                         | Description                                           |
 | ------ | -------------------------------- | ----------------------------------------------------- |
 | `GET`  | `/` (browser)                    | Deployment explorer — lists all deployments/functions |
-| `GET`  | `/openapi.json`                  | Org-wide metadata (all deployments, all functions)    |
-| `GET`  | `/openapi.json?scope=deploy/*`   | Filtered by deployment/function scope                 |
-| `GET`  | `/deployments/{id}/openapi.json` | Single deployment metadata (existing)                 |
+| `GET`  | `/deployments?functions=full`    | All deployments with full function schemas            |
+| `GET`  | `/deployments?scope=deploy-id`   | Filtered by deployment                                |
+| `GET`  | `/openapi.json`                  | Org-wide OpenAPI 3.0 spec                             |
+| `GET`  | `/deployments/{id}/openapi.json` | Per-deployment OpenAPI 3.0 spec                       |
 | `GET`  | `/.webmcp/embed.js`              | Org-wide JS that registers WebMCP tools               |
 | `GET`  | `/.well-known/webmcp`            | Discovery manifest listing all deployments            |
 
-The `/openapi.json` endpoint serves cached metadata even for pending (lazy-loaded) deployments, so it works immediately after a restart without triggering compilation.
+The `/deployments` endpoint serves cached metadata even for pending (lazy-loaded) deployments, so it works immediately after a restart without triggering compilation.
 
-The script registers **3 discovery tools** (`search_rules`, `get_rule_schema`, `evaluate_rule`) that work across all deployments. Direct per-function tools are also registered when the function count is small enough (≤ 20).
+Query parameters for `GET /deployments`:
+
+- `?functions=simple` — name, description, returnType per function (default)
+- `?functions=full` — include full parameter schemas in function details
+- `?functions=none` — omit functions from metadata
+- `?scope=id1,id2` — filter to specific deployments
+
+The script registers discovery tools (`search_rules`, `get_rule_schema`, `evaluate_rule`) and file browsing tools (`list_files`, `read_file`, `search_identifier`, `search_text`) based on what's available in the deployment data. Direct per-function tools are also registered when the function count is small enough (≤ 20).
+
+#### Visibility Headers
+
+The proxy injects these headers to control what jl4-service includes in responses. All default to `true` when absent (local dev, direct access).
+
+| Header                | Controls                                                               | Proxy permission |
+| --------------------- | ---------------------------------------------------------------------- | ---------------- |
+| `X-Include-Functions` | Functions in deployment metadata, function listing tools in MCP/WebMCP | `l4:rules`       |
+| `X-Include-Files`     | Files in deployment metadata, file browsing tools in MCP/WebMCP        | `l4:read`        |
+| `X-Include-Evaluate`  | Evaluation/batch/query-plan paths in OpenAPI, evaluation tools in MCP  | `l4:evaluate`    |
 
 > **Note:** The legacy path `/webmcp.js` is redirected to `/.webmcp/embed.js` with a 301. Update existing embeds when convenient.
 

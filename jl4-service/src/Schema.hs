@@ -128,7 +128,6 @@ instance ToSchema FunctionSummary where
   declareNamedSchema _ = do
     textRef <- declareSchemaRef (Proxy @Text)
     mTextRef <- declareSchemaRef (Proxy @(Maybe Text))
-    boolRef <- declareSchemaRef (Proxy @Bool)
     paramsRef <- declareSchemaRef (Proxy @Parameters)
     pure $
       NamedSchema (Just "FunctionSummary") $
@@ -140,9 +139,8 @@ instance ToSchema FunctionSummary where
                , ("parameters", paramsRef)
                , ("returnType", textRef)
                , ("section", mTextRef)
-               , ("isDeontic", boolRef)
                ]
-          & required .~ ["name", "description", "parameters", "returnType", "isDeontic"]
+          & required .~ ["name", "description", "parameters", "returnType"]
 
 instance ToSchema VizExpr.RenderAsLadderInfo where
   declareNamedSchema _ =

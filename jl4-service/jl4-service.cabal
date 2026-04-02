@@ -57,9 +57,11 @@ library
     ControlPlane
     DataPlane
     DeploymentLoader
+    FileBrowser
     ExplorerPage
     Logging
     McpServer
+    OpenApiDoc
     Options
     Schema
     Shared

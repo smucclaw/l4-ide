@@ -5,7 +5,7 @@ module ExplorerPage (
   renderExplorerPageBS,
 ) where
 
-import Types (DeploymentId (..), DeploymentState (..), DeploymentMetadata (..), FunctionSummary (..))
+import Types (DeploymentId (..), DeploymentState (..), DeploymentMetadata (..), FunctionSummary (..), FileEntry (..))
 
 import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy.Char8 as LBS
@@ -80,6 +80,9 @@ renderExplorerPageBS registry = LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text
   , "    .info code { background: #e8e8e8; padding: 0.1rem 0.3rem; border-radius: 0.2rem; font-size: 0.8rem; }"
   , "    .info dt { font-weight: 600; margin-top: 0.5rem; font-size: 0.85rem; }"
   , "    .info dd { margin-left: 1rem; font-size: 0.8rem; color: #555; }"
+  , "    .btn-compile { display: inline-block; padding: 0.2rem 0.6rem; border: 1px solid #ccc; border-radius: 0.375rem; font-size: 0.75rem; color: #000; background: transparent; cursor: pointer; font-weight: 500; margin-left: auto; }"
+  , "    .btn-compile:hover { background: #fff3e0; }"
+  , "    .btn-compile:disabled { opacity: 0.5; cursor: not-allowed; }"
   , "  </style>"
   , "</head>"
   , "<body>"
@@ -95,16 +98,16 @@ renderExplorerPageBS registry = LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text
   -- WebMCP embed
   , "  <div class=\"info collapsed\">"
   , "    <h3>Embed into your website with WebMCP <span id=\"webmcp-pill\" class=\"tag tag-ready\" style=\"display:none;margin-left:auto;font-size:0.7rem;font-family:system-ui,-apple-system,sans-serif;text-align:center;\">WebMCP available in this browser</span></h3>"
-  , "    <p class=\"note info-desc\">Add a script tag to any web page so browser AI agents can discover and call your L4 rules as structured tools.</p>"
+  , "    <p class=\"note info-desc\">Add a script tag to any web page so browser AI agents can discover, evaluate, and browse your L4 rules as structured tools.</p>"
   , "    <div class=\"info-body\">"
   , "    <pre id=\"embed-snippet\"></pre>"
   , "    <div class=\"note\">"
   , "      <dl>"
   , "        <dt><code>data-scope</code></dt>"
-  , "        <dd>Filter which deployments and functions to register.<br>"
-  , "            <code>deployment-id/*</code> all functions in a deployment<br>"
-  , "            <code>deployment-id/function-name</code> one specific function<br>"
-  , "            Comma-separated for multiple. Default: everything.</dd>"
+  , "        <dd>Filter which deployments to register tools for.<br>"
+  , "            <code>deployment-id</code> one deployment<br>"
+  , "            <code>id1,id2</code> multiple deployments<br>"
+  , "            Default: all deployments.</dd>"
   , "        <dt><code>data-tools</code></dt>"
   , "        <dd>Tool registration mode:<br>"
   , "            <code>auto</code> (default) discovery always + direct if &le; 20 functions<br>"
@@ -112,7 +115,7 @@ renderExplorerPageBS registry = LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text
   , "            <code>direct</code> only per-function tools<br>"
   , "            <code>all</code> both, always</dd>"
   , "        <dt><code>data-api-key</code></dt>"
-  , "        <dd>Add your API key for <a href=\"https://legalese.cloud\">Legalese Cloud</a> deployments. Needs <strong>l4:read</strong> for discovery, <strong>l4:evaluate</strong> to execute.</dd>"
+  , "        <dd>Add your API key for <a href=\"https://legalese.cloud\">Legalese Cloud</a> deployments. Needs <strong>l4:rules</strong> for discovery, <strong>l4:evaluate</strong> to execute, <strong>l4:read</strong> for file browsing tools.</dd>"
   , "      </dl>"
   , "    </div>"
   , "    </div>"
@@ -126,11 +129,11 @@ renderExplorerPageBS registry = LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text
   , "    <div class=\"note\">"
   , "      <dl>"
   , "        <dt>Org-wide (all deployments)</dt>"
-  , "        <dd><code>POST /.mcp</code> &mdash; registers tools for every deployed function.</dd>"
+  , "        <dd><code>POST /.mcp</code> &mdash; registers rule evaluation and file browsing tools for all deployments.</dd>"
   , "        <dt>Scoped to one deployment</dt>"
   , "        <dd><code>POST /{deployment-id}/.mcp</code> or <code>POST /deployments/{deployment-id}/.mcp</code></dd>"
   , "        <dt>Authentication</dt>"
-  , "        <dd>For <a href=\"https://legalese.cloud\">Legalese Cloud</a> deployments, send your API key as <code>Authorization: Bearer sk_...</code>. Requires <strong>l4:read</strong> + <strong>l4:evaluate</strong> permissions.</dd>"
+  , "        <dd>For <a href=\"https://legalese.cloud\">Legalese Cloud</a> deployments, send your API key as <code>Authorization: Bearer sk_...</code>.<br><strong>l4:rules</strong> to list tools. <strong>l4:evaluate</strong> to call rule evaluation tools. <strong>l4:read</strong> to call file browsing tools.</dd>"
   , "        <dt>Discovery</dt>"
   , "        <dd><code>GET /.well-known/mcp</code> returns the MCP discovery document.</dd>"
   , "      </dl>"
@@ -142,7 +145,7 @@ renderExplorerPageBS registry = LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text
   -- REST API
   , "  <div class=\"info collapsed\">"
   , "    <h3>Using the REST API</h3>"
-  , "    <p class=\"note info-desc\">Evaluate deployed L4 rules via HTTP. Single and batch evaluation endpoints, OpenAPI metadata with scope filtering.</p>"
+  , "    <p class=\"note info-desc\">Evaluate deployed L4 rules via HTTP. Browse source files, single and batch evaluation endpoints, OpenAPI metadata with scope filtering.</p>"
   , "    <div class=\"info-body\">"
   , "    <div class=\"note\">"
   , "      <dl>"
@@ -157,16 +160,22 @@ renderExplorerPageBS registry = LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text
   , "        <dt>Batch evaluation</dt>"
   , "        <dd><code>POST /{deployment-id}/{function-name}/evaluation/batch</code><br>"
   , "            <code>POST /deployments/{deployment-id}/functions/{function-name}/evaluation/batch</code></dd>"
-  , "        <dt>OpenAPI metadata (all deployments)</dt>"
-  , "        <dd><code>GET /openapi.json</code> &mdash; all functions with parameter schemas.<br>"
-  , "            <code>GET /openapi.json?scope={deployment-id}/*</code> &mdash; filter to one deployment.<br>"
-  , "            <code>GET /openapi.json?scope={deployment-id}/{function-name}</code> &mdash; filter to one function.<br>"
-  , "            Comma-separated for multiple scopes.</dd>"
-  , "        <dt>OpenAPI metadata (deployment scoped)</dt>"
-  , "        <dd><code>GET /{deployment-id}/openapi.json</code><br>"
-  , "            <code>GET /deployments/{deployment-id}/openapi.json</code></dd>"
+  , "        <dt>Browse source files</dt>"
+  , "        <dd><code>GET /deployments/{deployment-id}/files</code> &mdash; list files with content, search by identifier or text.<br>"
+  , "            <code>GET /deployments/{deployment-id}/files?identifier={name}</code> &mdash; find definitions and references.<br>"
+  , "            <code>GET /deployments/{deployment-id}/files?search={text}</code> &mdash; grep source files.<br>"
+  , "            <code>GET /deployments/{deployment-id}/files/{path}.l4</code> &mdash; raw file content.<br>"
+  , "            <code>GET /deployments/{deployment-id}/files/{path}.l4?lines=10:20</code> &mdash; line range.</dd>"
+  , "        <dt>List deployments with function details</dt>"
+  , "        <dd><code>GET /deployments</code> &mdash; all deployments with function names.<br>"
+  , "            <code>GET /deployments?functions=full</code> &mdash; include full parameter schemas.<br>"
+  , "            <code>GET /deployments?scope={deployment-id}</code> &mdash; filter by deployment.<br>"
+  , "            Combine: <code>GET /deployments?functions=full&amp;scope={deployment-id}</code></dd>"
+  , "        <dt>OpenAPI 3.0 spec</dt>"
+  , "        <dd><code>GET /openapi.json</code> &mdash; org-wide OpenAPI 3.0 spec describing all endpoints.<br>"
+  , "            <code>GET /deployments/{deployment-id}/openapi.json</code> &mdash; per-deployment spec.</dd>"
   , "        <dt>Authentication</dt>"
-  , "        <dd>For <a href=\"https://legalese.cloud\">Legalese Cloud</a>, send <code>Authorization: Bearer sk_...</code>. Needs <strong>l4:read</strong> to list, <strong>l4:evaluate</strong> to execute.</dd>"
+  , "        <dd>For <a href=\"https://legalese.cloud\">Legalese Cloud</a>, send <code>Authorization: Bearer sk_...</code>. Needs <strong>l4:rules</strong> to list, <strong>l4:evaluate</strong> to execute, <strong>l4:read</strong> to browse files.</dd>"
   , "      </dl>"
   , "    </div>"
   , "    </div>"
@@ -233,6 +242,57 @@ renderExplorerPageBS registry = LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text
   , "      });"
   , "    });"
   , ""
+  , "    function escH(s){return String(s).replace(/&/g,'\\x26amp;').replace(/</g,'\\x26lt;').replace(/>/g,'\\x26gt;').replace(/\\\"/g,'\\x26quot;');}"
+  , "    function compileDeployment(btn,deployId){"
+  , "      btn.disabled=true;btn.textContent='Compiling\\u2026';"
+  , "      var sec=btn.closest('.deploy-section');"
+  , "      var tag=sec.querySelector('.tag-pending');"
+  , "      if(tag){tag.className='tag tag-status tag-compiling';tag.textContent='compiling';}"
+  , "      var meta=sec.querySelector('.deploy-meta');"
+  , "      if(meta) meta.textContent='compiling\\u2026';"
+  , "      fetch('/'+encodeURIComponent(deployId),{headers:{'Accept':'application/json'}})"
+  , "        .then(function(r){return r.json().then(function(d){return{ok:r.ok,data:d};})})"
+  , "        .then(function(res){"
+  , "          var d=res.data; btn.remove();"
+  , "          if(d.status==='ready'&&d.metadata){"
+  , "            var t=sec.querySelector('.tag-status');"
+  , "            if(t){t.className='tag tag-status tag-ready';t.textContent='ready';}"
+  , "            var m=sec.querySelector('.deploy-meta');"
+  , "            var fns=d.metadata.functions||[];"
+  , "            if(m) m.textContent=fns.length+' functions';"
+  , "            var h='';"
+  , "            if(fns.length){"
+  , "              h+='<table><thead><tr><th>Name</th><th>Return</th><th>Description</th></tr></thead><tbody>';"
+  , "              fns.forEach(function(fn){"
+  , "                var rt=(fn.returnType||'').toUpperCase();"
+  , "                var cls=rt==='BOOLEAN'?'tag-bool':rt==='NUMBER'?'tag-num':rt==='STRING'?'tag-str':rt==='DEONTIC'?'tag-deontic':'tag-other';"
+  , "                h+='<tr><td>'+escH(fn.name)+'</td><td><span class=\\\"tag '+cls+'\\\">'+escH(rt)+'</span></td><td>'+escH(fn.description||'')+'</td></tr>';"
+  , "              });"
+  , "              h+='</tbody></table>';"
+  , "            }"
+  , "            var files=d.metadata.files||[];"
+  , "            if(files.length){"
+  , "              h+='<table><thead><tr><th>File</th><th>Exports</th></tr></thead><tbody>';"
+  , "              files.forEach(function(f){"
+  , "                h+='<tr><td><a href=\\\"'+escH(f.path)+'\\\">'+escH(f.path)+'</a></td><td>'+escH((f.exports||[]).join(', '))+'</td></tr>';"
+  , "              });"
+  , "              h+='</tbody></table>';"
+  , "            }"
+  , "            sec.querySelector('.deploy-header').insertAdjacentHTML('afterend',h);"
+  , "            sec.classList.remove('collapsed');"
+  , "            var dot=document.querySelector('.header-status .status-dot');if(dot){dot.className='status-dot ok';}"
+  , "          }else if(d.status==='failed'){"
+  , "            var t2=sec.querySelector('.tag-status');"
+  , "            if(t2){t2.className='tag tag-status tag-failed';t2.textContent='failed';}"
+  , "            var m2=sec.querySelector('.deploy-meta');"
+  , "            if(m2) m2.textContent='compilation error';"
+  , "            sec.querySelector('.deploy-header').insertAdjacentHTML('afterend','<div class=\\\"deploy-error\\\">'+escH(d.error||'Compilation failed')+'</div>');"
+  , "            sec.classList.remove('collapsed');"
+  , "          }"
+  , "        })"
+  , "        .catch(function(){btn.textContent='Error';var m3=sec.querySelector('.deploy-meta');if(m3) m3.textContent='request failed';});"
+  , "    }"
+  , ""
   , "    // WebMCP: show pill when embed.js reports successful tool registration"
   , "    window.addEventListener('webmcp-ready', function(e) {"
   , "      if (e.detail.webmcpRegistered) {"
@@ -284,39 +344,55 @@ renderDeploymentsSection registry
 -- | Render a single deployment card.
 renderDeployment :: DeploymentId -> DeploymentState -> Text
 renderDeployment (DeploymentId did) state = Text.unlines $
-  [ "      <div class=\"deploy-section collapsed\">"
+  [ "      <div class=\"deploy-section collapsed\" data-deployment-id=\"" <> esc did <> "\">"
   , "        <div class=\"deploy-header\"><h3>"
       <> esc did <> " "
       <> statusTag <> " "
       <> "<span class=\"deploy-meta\">" <> metaText <> "</span>"
-      <> "</h3></div>"
+      <> "</h3>"
+      <> compileButton
+      <> "</div>"
   ] ++ bodyLines ++
   [ "      </div>"
   ]
   where
     (statusLabel, statusClass) = case state of
-      DeploymentPending    -> ("pending",   "tag-pending")
+      DeploymentPending _  -> ("pending",   "tag-pending")
       DeploymentCompiling  -> ("compiling", "tag-compiling")
       DeploymentReady _ _  -> ("ready",     "tag-ready")
       DeploymentFailed _   -> ("failed",    "tag-failed")
 
     statusTag = "<span class=\"tag tag-status " <> statusClass <> "\">" <> statusLabel <> "</span>"
 
+    compileButton = case state of
+      DeploymentPending _ -> "<button class=\"btn-compile\" onclick=\"compileDeployment(this, '" <> escAttr did <> "'); event.stopPropagation();\">Compile now</button>"
+      _ -> ""
+
     metaText = case state of
       DeploymentReady _ meta -> showT (length (meta.metaFunctions)) <> " functions"
+      DeploymentPending (Just meta) -> showT (length (meta.metaFunctions)) <> " functions"
+      DeploymentPending Nothing -> "not yet compiled"
       DeploymentFailed _     -> "compilation error"
-      DeploymentPending      -> "not yet compiled"
       DeploymentCompiling    -> "compiling..."
 
     bodyLines = case state of
-      DeploymentReady _ meta ->
-        [ "        <table><thead><tr><th>Name</th><th>Return</th><th>Description</th></tr></thead><tbody>"
-        , Text.unlines (map renderFunctionRow (meta.metaFunctions))
-        , "        </tbody></table>"
-        ]
+      DeploymentReady _ meta -> renderMetaTables meta
+      DeploymentPending (Just meta) -> renderMetaTables meta
       DeploymentFailed err ->
         [ "        <div class=\"deploy-error\">" <> esc err <> "</div>" ]
       _ -> []
+
+-- | Render functions and files tables from deployment metadata.
+renderMetaTables :: DeploymentMetadata -> [Text]
+renderMetaTables meta =
+  [ "        <table><thead><tr><th>Name</th><th>Return</th><th>Description</th></tr></thead><tbody>"
+  , Text.unlines (map renderFunctionRow (meta.metaFunctions))
+  , "        </tbody></table>"
+  ] ++ if null (meta.metaFiles) then [] else
+  [ "        <table><thead><tr><th>File</th><th>Exports</th></tr></thead><tbody>"
+  , Text.unlines (map renderFileRow (meta.metaFiles))
+  , "        </tbody></table>"
+  ]
 
 -- | Render a single function row in the deployment table.
 renderFunctionRow :: FunctionSummary -> Text
@@ -326,6 +402,13 @@ renderFunctionRow fs =
   <> esc fs.fsDescription <> "</td></tr>"
   where
     rt = Text.toUpper fs.fsReturnType
+
+-- | Render a single file row in the files table.
+renderFileRow :: FileEntry -> Text
+renderFileRow fe =
+  "          <tr><td><a href=\"" <> esc fe.fePath <> "\">" <> esc fe.fePath <> "</a></td><td>"
+  <> esc (Text.intercalate ", " fe.feExports)
+  <> "</td></tr>"
 
 -- | Map return type to CSS class.
 tagClass :: Text -> Text
@@ -342,6 +425,15 @@ esc = Text.replace "&" "&amp;"
     . Text.replace "<" "&lt;"
     . Text.replace ">" "&gt;"
     . Text.replace "\"" "&quot;"
+
+-- | Escape text for use inside a JS string literal within an HTML attribute.
+escAttr :: Text -> Text
+escAttr = Text.replace "\\" "\\\\"
+        . Text.replace "'" "\\'"
+        . Text.replace "&" "&amp;"
+        . Text.replace "<" "&lt;"
+        . Text.replace ">" "&gt;"
+        . Text.replace "\"" "&quot;"
 
 -- | Show an Int as Text.
 showT :: Int -> Text

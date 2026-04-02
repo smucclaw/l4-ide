@@ -11,6 +11,8 @@ module DataPlane (
 import Backend.Api
 import qualified BundleStore
 import ControlPlane (DeploymentStatusResponse, getDeploymentHandler, putDeploymentHandler, deleteDeploymentHandler)
+import OpenApiDoc (buildOpenApiDoc)
+import FileBrowser (ShortFileBrowseApi, shortFileBrowseHandler)
 import DeploymentLoader (triggerCompilationIfPending)
 import Servant.Multipart
 import Backend.DecisionQueryPlan (CachedDecisionQuery, buildDecisionQueryCacheFromCompiled, queryPlan, QueryPlanResponse)
@@ -66,21 +68,23 @@ type ShortDeploymentRoutes =
        -- GET /{id}/functions → list functions
   :<|> "functions" :> Get '[JSON] [SimpleFunction]
        -- GET /{id}/openapi.json → OpenAPI spec
-  :<|> "openapi.json" :> Get '[JSON] DeploymentMetadata
+  :<|> "openapi.json" :> Get '[JSON] Aeson.Value
+       -- GET /{id}/files → file browsing
+  :<|> ShortFileBrowseApi
        -- /{id}/{fn}/... → function routes
   :<|> Capture "name" Text :> FunctionRoutes
 
 type DeploymentRoutes =
        "functions" :> Get '[JSON] [SimpleFunction]
   :<|> "functions" :> Capture "name" Text :> FunctionRoutes
-  :<|> "openapi.json" :> Get '[JSON] DeploymentMetadata  -- Simplified; returns metadata for now
+  :<|> "openapi.json" :> Get '[JSON] Aeson.Value
 
 -- | Evaluation responses include an X-Eval-Alloc-Bytes header reporting
 -- the GHC allocation bytes consumed by the evaluation.
 type EvalResponse a = Headers '[Header "X-Eval-Alloc-Bytes" Int64] a
 
 type FunctionRoutes =
-       Get '[JSON] Function
+       Get '[JSON] FunctionSummary
   :<|> "evaluation" :> Header "X-L4-Trace" Text :> QueryParam "trace" TraceLevel :> QueryParam "graphviz" Bool :> ReqBody '[JSON] FnArguments :> Post '[JSON] (EvalResponse SimpleResponse)
   :<|> "evaluation" :> "batch" :> Header "X-L4-Trace" Text :> QueryParam "trace" TraceLevel :> QueryParam "graphviz" Bool :> ReqBody '[JSON] BatchRequest :> Post '[JSON] (EvalResponse BatchResponse)
   :<|> "query-plan" :> ReqBody '[JSON] FnArguments :> Post '[JSON] QueryPlanResponse
@@ -88,22 +92,23 @@ type FunctionRoutes =
   :<|> "state-graphs" :> Capture "graphName" Text :> Get '[PlainText] Text
 
 -- | Combined handler.
-dataPlaneHandler :: ServerT DataPlaneApi AppM
-dataPlaneHandler deployIdText =
+dataPlaneHandler :: Visibility -> ServerT DataPlaneApi AppM
+dataPlaneHandler vis deployIdText =
        listFunctionsHandler deployId
   :<|> functionRoutesHandler deployId
-  :<|> openApiHandler deployId
+  :<|> openApiHandler vis deployId
  where
   deployId = DeploymentId deployIdText
 
 -- | Handler for short routes: /{id}/...
-shortRoutesHandler :: ServerT ShortRoutes AppM
-shortRoutesHandler deployIdText =
-       getDeploymentHandler deployIdText
+shortRoutesHandler :: Visibility -> ServerT ShortRoutes AppM
+shortRoutesHandler vis deployIdText =
+       getDeploymentHandler vis deployIdText
   :<|> putDeploymentHandler deployIdText
   :<|> deleteDeploymentHandler deployIdText
   :<|> listFunctionsHandler deployId
-  :<|> openApiHandler deployId
+  :<|> openApiHandler vis deployId
+  :<|> shortFileBrowseHandler deployId
   :<|> functionRoutesHandler deployId
  where
   deployId = DeploymentId deployIdText
@@ -131,7 +136,7 @@ requireDeploymentReady deployId = do
   registry <- asks (.deploymentRegistry) >>= liftIO . readTVarIO
   case Map.lookup deployId registry of
     Nothing -> throwError err404
-    Just DeploymentPending -> do
+    Just (DeploymentPending _) -> do
       triggerCompilationIfPending deployId
       -- Re-read: compilation is synchronous, state is now Ready or Failed
       registry' <- asks (.deploymentRegistry) >>= liftIO . readTVarIO
@@ -180,16 +185,29 @@ listFunctionsHandler deployId = do
   pure [SimpleFunction fn.fnImpl.name fn.fnImpl.description | fn <- Map.elems fns]
 
 -- | GET /deployments/{id}/functions/{fn}
-getFunctionHandler :: DeploymentId -> Text -> AppM Function
+getFunctionHandler :: DeploymentId -> Text -> AppM FunctionSummary
 getFunctionHandler deployId fnName = do
   logger <- asks (.logger)
   liftIO $ logInfo logger "Function retrieved"
     [ ("deploymentId", Aeson.toJSON deployId.unDeploymentId)
     , ("functionName", Aeson.toJSON fnName)
     ]
-  (fns, _meta) <- requireDeploymentReady deployId
+  (fns, meta) <- requireDeploymentReady deployId
   vf <- requireFunction fns fnName
-  pure vf.fnImpl
+  let fn = vf.fnImpl
+  -- Find the source file from metadata
+  let sourceFile = case [fs.fsSourceFile | fs <- meta.metaFunctions, fs.fsName == fn.name] of
+        (sf:_) -> sf
+        [] -> Nothing
+  pure FunctionSummary
+    { fsName = fn.name
+    , fsDescription = fn.description
+    , fsParameters = fn.parameters
+    , fsReturnType = fn.returnType
+    , fsSection = Nothing
+    , fsIsDeontic = fn.isDeontic
+    , fsSourceFile = sourceFile
+    }
 
 -- | POST /deployments/{id}/functions/{fn}/evaluation
 evalFunctionHandler
@@ -406,18 +424,20 @@ getStateGraphDotHandler deployId fnName graphName = do
 -- | GET /deployments/{id}/openapi.json
 -- Serves from in-memory registry if ready, or from disk cache if pending/compiling.
 -- Never triggers compilation — only evaluation endpoints should do that.
-openApiHandler :: DeploymentId -> AppM DeploymentMetadata
-openApiHandler deployId = do
+openApiHandler :: Visibility -> DeploymentId -> AppM Aeson.Value
+openApiHandler vis deployId = do
   logger <- asks (.logger)
+  serverName <- asks (.serverName)
   liftIO $ logInfo logger "OpenAPI spec retrieved"
     [("deploymentId", Aeson.toJSON deployId.unDeploymentId)]
   registry <- asks (.deploymentRegistry) >>= liftIO . readTVarIO
-  case Map.lookup deployId registry of
+  meta <- case Map.lookup deployId registry of
     Just (DeploymentReady _fns meta) -> pure meta
-    Just DeploymentPending -> serveCachedOrFail deployId
+    Just (DeploymentPending _) -> serveCachedOrFail deployId
     Just DeploymentCompiling -> serveCachedOrFail deployId
     Just (DeploymentFailed _) -> serveCachedOrFail deployId
     Nothing -> throwError err404
+  pure $ buildOpenApiDoc serverName vis [(deployId.unDeploymentId, meta)]
  where
   serveCachedOrFail did = do
     cached <- tryLoadCachedMeta did

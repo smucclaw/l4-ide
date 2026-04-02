@@ -219,10 +219,14 @@ instance Arbitrary DeploymentMetadata where
   arbitrary = DeploymentMetadata
     <$> arbitrary
     <*> arbitrary
+    <*> arbitrary
     <*> pure (UTCTime (fromGregorian 2025 1 1) 0)
 
 instance Arbitrary FunctionSummary where
-  arbitrary = FunctionSummary <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+  arbitrary = FunctionSummary <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+
+instance Arbitrary FileEntry where
+  arbitrary = FileEntry <$> arbitrary <*> arbitrary
 
 instance Arbitrary DeploymentStatusResponse where
   arbitrary = DeploymentStatusResponse
