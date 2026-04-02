@@ -57,6 +57,7 @@ library
     ControlPlane
     DataPlane
     DeploymentLoader
+    FileBrowser
     ExplorerPage
     Logging
     McpServer

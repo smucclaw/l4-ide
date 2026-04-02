@@ -81,11 +81,11 @@ type ControlPlaneApi =
   :<|> "deployments" :> Capture "deploymentId" Text :> DeleteNoContent
 
 -- | Combined handler for the control plane.
-controlPlaneHandler :: ServerT ControlPlaneApi AppM
-controlPlaneHandler =
+controlPlaneHandler :: Visibility -> ServerT ControlPlaneApi AppM
+controlPlaneHandler vis =
        postDeploymentHandler
-  :<|> getDeploymentsHandler
-  :<|> getDeploymentHandler
+  :<|> getDeploymentsHandler vis
+  :<|> getDeploymentHandler vis
   :<|> putDeploymentHandler
   :<|> deleteDeploymentHandler
 
@@ -193,19 +193,19 @@ postDeploymentHandler multipart = do
         }
 
 -- | GET /deployments — list all deployments
-getDeploymentsHandler :: AppM [DeploymentStatusResponse]
-getDeploymentsHandler = do
+getDeploymentsHandler :: Visibility -> AppM [DeploymentStatusResponse]
+getDeploymentsHandler vis = do
   env <- asks id
   liftIO $ logInfo env.logger "Deployments listed" []
   registry <- liftIO $ readTVarIO env.deploymentRegistry
   let debugMode = env.options.debug
-  pure [stateToResponse debugMode did state | (did, state) <- Map.toList registry]
+  pure [stateToResponse debugMode vis did state | (did, state) <- Map.toList registry]
 
 -- | GET /deployments/{id} — get deployment status.
 -- If the deployment is Pending (lazy-load), compiles it synchronously
 -- before returning the response.
-getDeploymentHandler :: Text -> AppM DeploymentStatusResponse
-getDeploymentHandler deployIdText = do
+getDeploymentHandler :: Visibility -> Text -> AppM DeploymentStatusResponse
+getDeploymentHandler vis deployIdText = do
   env <- asks id
   let deployId = DeploymentId deployIdText
   liftIO $ logInfo env.logger "Deployment retrieved"
@@ -219,8 +219,8 @@ getDeploymentHandler deployIdText = do
       registry' <- liftIO $ readTVarIO env.deploymentRegistry
       case Map.lookup deployId registry' of
         Nothing -> throwError err404
-        Just state' -> pure (stateToResponse env.options.debug deployId state')
-    Just state -> pure (stateToResponse env.options.debug deployId state)
+        Just state' -> pure (stateToResponse env.options.debug vis deployId state')
+    Just state -> pure (stateToResponse env.options.debug vis deployId state)
 
 -- | PUT /deployments/{id} — replace a deployment bundle
 putDeploymentHandler :: Text -> MultipartData Mem -> AppM DeploymentStatusResponse
@@ -315,11 +315,16 @@ deleteDeploymentHandler deployIdText = do
 
 -- | Convert DeploymentState to a response.
 -- In non-debug mode, error details are hidden.
-stateToResponse :: Bool -> DeploymentId -> DeploymentState -> DeploymentStatusResponse
-stateToResponse debugMode (DeploymentId did) = \case
+-- Visibility controls which fields are included in the response.
+stateToResponse :: Bool -> Visibility -> DeploymentId -> DeploymentState -> DeploymentStatusResponse
+stateToResponse debugMode vis (DeploymentId did) = \case
   DeploymentPending -> DeploymentStatusResponse did "pending" Nothing Nothing
   DeploymentCompiling -> DeploymentStatusResponse did "compiling" Nothing Nothing
-  DeploymentReady _ meta -> DeploymentStatusResponse did "ready" (Just meta) Nothing
+  DeploymentReady _ meta ->
+    let filteredMeta = meta
+          { metaFunctions = if vis.showFunctions then meta.metaFunctions else []
+          , metaFiles = if vis.showFiles then meta.metaFiles else []}
+    in DeploymentStatusResponse did "ready" (Just filteredMeta) Nothing
   DeploymentFailed err ->
     let errorMsg = if debugMode then Just err else Just "Compilation failed"
     in DeploymentStatusResponse did "failed" Nothing errorMsg

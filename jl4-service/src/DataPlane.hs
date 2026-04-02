@@ -11,6 +11,7 @@ module DataPlane (
 import Backend.Api
 import qualified BundleStore
 import ControlPlane (DeploymentStatusResponse, getDeploymentHandler, putDeploymentHandler, deleteDeploymentHandler)
+import FileBrowser (ShortFileBrowseApi, shortFileBrowseHandler)
 import DeploymentLoader (triggerCompilationIfPending)
 import Servant.Multipart
 import Backend.DecisionQueryPlan (CachedDecisionQuery, buildDecisionQueryCacheFromCompiled, queryPlan, QueryPlanResponse)
@@ -67,6 +68,8 @@ type ShortDeploymentRoutes =
   :<|> "functions" :> Get '[JSON] [SimpleFunction]
        -- GET /{id}/openapi.json → OpenAPI spec
   :<|> "openapi.json" :> Get '[JSON] DeploymentMetadata
+       -- GET /{id}/files → file browsing
+  :<|> ShortFileBrowseApi
        -- /{id}/{fn}/... → function routes
   :<|> Capture "name" Text :> FunctionRoutes
 
@@ -97,13 +100,14 @@ dataPlaneHandler deployIdText =
   deployId = DeploymentId deployIdText
 
 -- | Handler for short routes: /{id}/...
-shortRoutesHandler :: ServerT ShortRoutes AppM
-shortRoutesHandler deployIdText =
-       getDeploymentHandler deployIdText
+shortRoutesHandler :: Visibility -> ServerT ShortRoutes AppM
+shortRoutesHandler vis deployIdText =
+       getDeploymentHandler vis deployIdText
   :<|> putDeploymentHandler deployIdText
   :<|> deleteDeploymentHandler deployIdText
   :<|> listFunctionsHandler deployId
   :<|> openApiHandler deployId
+  :<|> shortFileBrowseHandler deployId
   :<|> functionRoutesHandler deployId
  where
   deployId = DeploymentId deployIdText

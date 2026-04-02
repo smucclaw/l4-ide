@@ -5,6 +5,7 @@ module Application (defaultMain, app) where
 import qualified BundleStore
 import ControlPlane (ControlPlaneApi, controlPlaneHandler)
 import DataPlane (DataPlaneApi, dataPlaneHandler, ShortRoutes, shortRoutesHandler)
+import FileBrowser (FileBrowseApi, fileBrowseHandler)
 import McpServer (mcpHandler)
 import DeploymentLoader (loadAndRegister)
 import Logging (Logger, logInfo, logDebug, logError, newLogger)
@@ -15,6 +16,7 @@ import Types
 import Data.Aeson (toJSON, (.=))
 import qualified Data.Aeson as Aeson
 import Data.Text (Text)
+import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text.Encoding
 import Control.Concurrent.Async (mapConcurrently_)
 import Control.Concurrent.STM (TVar, atomically, modifyTVar', newTVarIO, readTVarIO)
@@ -26,9 +28,10 @@ import Data.IORef (newIORef, atomicModifyIORef')
 import qualified Data.Map.Strict as Map
 import Data.Time (getCurrentTime, diffUTCTime)
 import Network.HTTP.Types.Status (statusCode)
-import Network.Wai (Middleware, Request, requestMethod, rawPathInfo, responseStatus, pathInfo, responseLBS, requestHeaders)
+import Network.Wai (Middleware, Request, requestMethod, rawPathInfo, responseStatus, pathInfo, responseLBS, requestHeaders, queryString)
 import Network.HTTP.Types (status503, mkStatus, ok200)
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as LBS
 import Network.Wai.Handler.Warp (defaultSettings, runSettings, setHost, setPort, setOnException, setOnExceptionResponse)
 import Network.Wai.Handler.Warp (defaultShouldDisplayException)
 import Network.Wai.Middleware.Cors (cors, simpleCorsResourcePolicy, corsMethods, corsRequestHeaders)
@@ -39,7 +42,7 @@ import ExplorerPage (renderExplorerPageBS)
 import WebMCPPage (RawJs, JavaScript, renderOrgWebMCPScript)
 
 -- | Combined service API.
-type ServiceApi = HealthApi :<|> WellKnownApi :<|> McpDiscoveryApi :<|> McpManifestApi :<|> OrgOpenApiRoute :<|> WebMCPApi :<|> McpApi :<|> McpScopedApi :<|> McpScopedLongApi :<|> ControlPlaneApi :<|> DataPlaneApi :<|> ShortRoutes
+type ServiceApi = HealthApi :<|> WellKnownApi :<|> McpDiscoveryApi :<|> McpManifestApi :<|> OrgOpenApiRoute :<|> WebMCPApi :<|> McpApi :<|> McpScopedApi :<|> McpScopedLongApi :<|> ControlPlaneApi :<|> FileBrowseApi :<|> DataPlaneApi :<|> ShortRoutes
 
 -- | Health check endpoint.
 type HealthApi = "health" :> Get '[JSON] HealthResponse
@@ -122,7 +125,7 @@ defaultMain = do
 
   -- Build middleware stack
   concLimiter <- concurrencyLimiter options.maxConcurrentRequests
-  let middleware = concLimiter . requestLogMiddleware logger . corsMiddleware . explorerMiddleware logger registry
+  let middleware = concLimiter . requestLogMiddleware logger . corsMiddleware . l4FileMiddleware env . explorerMiddleware logger registry
       onExc :: Maybe Request -> SomeException -> IO ()
       onExc _req exc =
         if defaultShouldDisplayException exc || debug
@@ -187,15 +190,31 @@ concurrencyLimiter maxConcurrent = do
           else sendResp $ responseLBS status503 [] "Service at capacity"
 
 -- | WAI Application.
+-- Extracts visibility headers from each request to control response filtering.
 app :: AppEnv -> Application
-app env = serve (Proxy @ServiceApi) (serverT env)
+app env req sendResp = do
+  let vis = extractVisibility req
+  serve (Proxy @ServiceApi) (serverT env vis) req sendResp
 
-serverT :: AppEnv -> Server ServiceApi
-serverT env =
-  hoistServer (Proxy @ServiceApi) (nt env) (healthHandler :<|> wellKnownHandler :<|> mcpDiscoveryHandler :<|> mcpManifestHandler :<|> orgOpenApiHandler :<|> webmcpHandler :<|> mcpRootHandler :<|> mcpScopedHandler :<|> mcpScopedLongHandler :<|> controlPlaneHandler :<|> dataPlaneHandler :<|> shortRoutesHandler)
+serverT :: AppEnv -> Visibility -> Server ServiceApi
+serverT env vis =
+  hoistServer (Proxy @ServiceApi) (nt env) (healthHandler :<|> wellKnownHandler :<|> mcpDiscoveryHandler :<|> mcpManifestHandler :<|> orgOpenApiHandler :<|> webmcpHandler :<|> mcpRootHandler vis :<|> mcpScopedHandler vis :<|> mcpScopedLongHandler vis :<|> controlPlaneHandler vis :<|> fileBrowseHandler :<|> dataPlaneHandler :<|> shortRoutesHandler vis)
  where
   nt :: AppEnv -> AppM a -> Handler a
   nt s x = runReaderT x s
+
+-- | Extract Visibility flags from WAI request headers.
+-- Both default to True when headers are absent (backward compat, local dev).
+extractVisibility :: Request -> Visibility
+extractVisibility req =
+  let headers = requestHeaders req
+      includeFunctions = case lookup "X-Include-Functions" headers of
+        Just "false" -> False
+        _ -> True
+      includeFiles = case lookup "X-Include-Files" headers of
+        Just "false" -> False
+        _ -> True
+  in Visibility { showFunctions = includeFunctions, showFiles = includeFiles }
 
 -- | GET /health — health check handler.
 healthHandler :: ServerT HealthApi AppM
@@ -256,7 +275,6 @@ orgOpenApiHandler mScope = do
           , "description" .= fn.fsDescription
           , "parameters" .= fn.fsParameters
           , "returnType" .= fn.fsReturnType
-          , "isDeontic" .= fn.fsIsDeontic
           ]
         | (deployId, fn) <- entries
         ]
@@ -302,16 +320,85 @@ mcpManifestHandler = do
 
 -- | POST /.mcp — org-wide MCP JSON-RPC endpoint (no deployment scope).
 -- GET /.mcp returns 405 per MCP Streamable HTTP spec (POST-only).
-mcpRootHandler :: ServerT McpApi AppM
-mcpRootHandler = mcpHandler Nothing :<|> throwError err405
+mcpRootHandler :: Visibility -> ServerT McpApi AppM
+mcpRootHandler vis = mcpHandler vis Nothing :<|> throwError err405
 
 -- | POST /{deploymentId}/.mcp — deployment-scoped MCP JSON-RPC endpoint.
-mcpScopedHandler :: ServerT McpScopedApi AppM
-mcpScopedHandler deployIdText = mcpHandler (Just deployIdText) :<|> throwError err405
+mcpScopedHandler :: Visibility -> ServerT McpScopedApi AppM
+mcpScopedHandler vis deployIdText = mcpHandler vis (Just deployIdText) :<|> throwError err405
 
 -- | POST /deployments/{deploymentId}/.mcp — deployment-scoped MCP JSON-RPC endpoint (long route).
-mcpScopedLongHandler :: ServerT McpScopedLongApi AppM
-mcpScopedLongHandler deployIdText = mcpHandler (Just deployIdText) :<|> throwError err405
+mcpScopedLongHandler :: Visibility -> ServerT McpScopedLongApi AppM
+mcpScopedLongHandler vis deployIdText = mcpHandler vis (Just deployIdText) :<|> throwError err405
+
+-- | Middleware: serve raw .l4 files for paths like /{id}/path/to/file.l4
+-- or /deployments/{id}/path/to/file.l4. Responds with plain text.
+-- Parses optional ?lines=start:end query param for line range slicing.
+l4FileMiddleware :: AppEnv -> Middleware
+l4FileMiddleware env baseApp req sendResp
+  | requestMethod req == "GET"
+  , Just (deployId, filePath) <- extractL4FilePath (pathInfo req)
+  = do
+      mContent <- BundleStore.loadSingleFile env.bundleStore deployId (Text.unpack filePath)
+      case mContent of
+        Nothing -> sendResp $ responseLBS (mkStatus 404 "Not Found")
+          [("Content-Type", "application/json")]
+          "{\"error\":\"File not found\"}"
+        Just content -> do
+          let mLines = extractLinesParam req
+              result = case mLines of
+                Nothing -> content
+                Just (s, e) ->
+                  let allLines = Text.lines content
+                      total = length allLines
+                      start = max 1 (min s total)
+                      end' = max start (min e total)
+                  in Text.unlines $ take (end' - start + 1) (drop (start - 1) allLines)
+          sendResp $ responseLBS ok200
+            [("Content-Type", "text/plain; charset=utf-8")]
+            (LBS.fromStrict $ Text.Encoding.encodeUtf8 result)
+  | otherwise = baseApp req sendResp
+ where
+  extractL4FilePath :: [Text] -> Maybe (Text, Text)
+  -- /deployments/{id}/files/{path}.l4
+  extractL4FilePath ("deployments":deployId:"files":rest)
+    | not (null rest), any (Text.isSuffixOf ".l4") rest
+    = Just (deployId, Text.intercalate "/" rest)
+  -- /deployments/{id}/{path}.l4 (without /files/ prefix)
+  extractL4FilePath ("deployments":deployId:rest)
+    | not (null rest), any (Text.isSuffixOf ".l4") rest
+    = Just (deployId, Text.intercalate "/" rest)
+  -- /{id}/files/{path}.l4
+  extractL4FilePath (deployId:"files":rest)
+    | not (null rest)
+    , any (Text.isSuffixOf ".l4") rest
+    , not (Text.isPrefixOf "." deployId)
+    , deployId /= "health"
+    = Just (deployId, Text.intercalate "/" rest)
+  -- /{id}/{path}.l4 (without /files/ prefix)
+  extractL4FilePath (deployId:rest)
+    | not (null rest)
+    , any (Text.isSuffixOf ".l4") rest
+    , not (Text.isPrefixOf "." deployId)
+    , deployId /= "health"
+    = Just (deployId, Text.intercalate "/" rest)
+  extractL4FilePath _ = Nothing
+
+  extractLinesParam :: Request -> Maybe (Int, Int)
+  extractLinesParam r =
+    let qs = queryString r
+    in case lookup "lines" qs of
+      Just (Just val) -> case Text.splitOn ":" (Text.Encoding.decodeUtf8 val) of
+        [sText, eText] -> case (readMaybe (Text.unpack sText), readMaybe (Text.unpack eText)) of
+          (Just s, Just e) | s > 0 && e >= s -> Just (s, e)
+          _ -> Nothing
+        _ -> Nothing
+      _ -> Nothing
+
+  readMaybe :: String -> Maybe Int
+  readMaybe s = case reads s of
+    [(n, "")] -> Just n
+    _ -> Nothing
 
 -- | Middleware: serve the deployment explorer page on GET / with Accept: text/html.
 -- Reads the deployment registry to render current state including pending/failed deployments.

@@ -5,7 +5,7 @@ module ExplorerPage (
   renderExplorerPageBS,
 ) where
 
-import Types (DeploymentId (..), DeploymentState (..), DeploymentMetadata (..), FunctionSummary (..))
+import Types (DeploymentId (..), DeploymentState (..), DeploymentMetadata (..), FunctionSummary (..), FileEntry (..))
 
 import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy.Char8 as LBS
@@ -112,7 +112,7 @@ renderExplorerPageBS registry = LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text
   , "            <code>direct</code> only per-function tools<br>"
   , "            <code>all</code> both, always</dd>"
   , "        <dt><code>data-api-key</code></dt>"
-  , "        <dd>Add your API key for <a href=\"https://legalese.cloud\">Legalese Cloud</a> deployments. Needs <strong>l4:read</strong> for discovery, <strong>l4:evaluate</strong> to execute.</dd>"
+  , "        <dd>Add your API key for <a href=\"https://legalese.cloud\">Legalese Cloud</a> deployments. Needs <strong>l4:rules</strong> for discovery, <strong>l4:evaluate</strong> to execute, <strong>l4:read</strong> for file browsing tools.</dd>"
   , "      </dl>"
   , "    </div>"
   , "    </div>"
@@ -130,7 +130,7 @@ renderExplorerPageBS registry = LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text
   , "        <dt>Scoped to one deployment</dt>"
   , "        <dd><code>POST /{deployment-id}/.mcp</code> or <code>POST /deployments/{deployment-id}/.mcp</code></dd>"
   , "        <dt>Authentication</dt>"
-  , "        <dd>For <a href=\"https://legalese.cloud\">Legalese Cloud</a> deployments, send your API key as <code>Authorization: Bearer sk_...</code>. Requires <strong>l4:read</strong> + <strong>l4:evaluate</strong> permissions.</dd>"
+  , "        <dd>For <a href=\"https://legalese.cloud\">Legalese Cloud</a> deployments, send your API key as <code>Authorization: Bearer sk_...</code>.<br><strong>l4:rules</strong> to list tools. <strong>l4:evaluate</strong> to call rule evaluation tools. <strong>l4:read</strong> to call file browsing tools.</dd>"
   , "        <dt>Discovery</dt>"
   , "        <dd><code>GET /.well-known/mcp</code> returns the MCP discovery document.</dd>"
   , "      </dl>"
@@ -142,7 +142,7 @@ renderExplorerPageBS registry = LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text
   -- REST API
   , "  <div class=\"info collapsed\">"
   , "    <h3>Using the REST API</h3>"
-  , "    <p class=\"note info-desc\">Evaluate deployed L4 rules via HTTP. Single and batch evaluation endpoints, OpenAPI metadata with scope filtering.</p>"
+  , "    <p class=\"note info-desc\">Evaluate deployed L4 rules via HTTP. Browse source files, single and batch evaluation endpoints, OpenAPI metadata with scope filtering.</p>"
   , "    <div class=\"info-body\">"
   , "    <div class=\"note\">"
   , "      <dl>"
@@ -157,6 +157,12 @@ renderExplorerPageBS registry = LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text
   , "        <dt>Batch evaluation</dt>"
   , "        <dd><code>POST /{deployment-id}/{function-name}/evaluation/batch</code><br>"
   , "            <code>POST /deployments/{deployment-id}/functions/{function-name}/evaluation/batch</code></dd>"
+  , "        <dt>Browse source files</dt>"
+  , "        <dd><code>GET /deployments/{deployment-id}/files</code> &mdash; list files with content, search by identifier or text.<br>"
+  , "            <code>GET /deployments/{deployment-id}/files?identifier={name}</code> &mdash; find definitions and references.<br>"
+  , "            <code>GET /deployments/{deployment-id}/files?search={text}</code> &mdash; grep source files.<br>"
+  , "            <code>GET /deployments/{deployment-id}/files/{path}.l4</code> &mdash; raw file content.<br>"
+  , "            <code>GET /deployments/{deployment-id}/files/{path}.l4?lines=10:20</code> &mdash; line range.</dd>"
   , "        <dt>OpenAPI metadata (all deployments)</dt>"
   , "        <dd><code>GET /openapi.json</code> &mdash; all functions with parameter schemas.<br>"
   , "            <code>GET /openapi.json?scope={deployment-id}/*</code> &mdash; filter to one deployment.<br>"
@@ -166,7 +172,7 @@ renderExplorerPageBS registry = LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text
   , "        <dd><code>GET /{deployment-id}/openapi.json</code><br>"
   , "            <code>GET /deployments/{deployment-id}/openapi.json</code></dd>"
   , "        <dt>Authentication</dt>"
-  , "        <dd>For <a href=\"https://legalese.cloud\">Legalese Cloud</a>, send <code>Authorization: Bearer sk_...</code>. Needs <strong>l4:read</strong> to list, <strong>l4:evaluate</strong> to execute.</dd>"
+  , "        <dd>For <a href=\"https://legalese.cloud\">Legalese Cloud</a>, send <code>Authorization: Bearer sk_...</code>. Needs <strong>l4:rules</strong> to list, <strong>l4:evaluate</strong> to execute, <strong>l4:read</strong> to browse files.</dd>"
   , "      </dl>"
   , "    </div>"
   , "    </div>"
@@ -313,6 +319,10 @@ renderDeployment (DeploymentId did) state = Text.unlines $
         [ "        <table><thead><tr><th>Name</th><th>Return</th><th>Description</th></tr></thead><tbody>"
         , Text.unlines (map renderFunctionRow (meta.metaFunctions))
         , "        </tbody></table>"
+        ] ++ if null (meta.metaFiles) then [] else
+        [ "        <table><thead><tr><th>File</th><th>Exports</th></tr></thead><tbody>"
+        , Text.unlines (map renderFileRow (meta.metaFiles))
+        , "        </tbody></table>"
         ]
       DeploymentFailed err ->
         [ "        <div class=\"deploy-error\">" <> esc err <> "</div>" ]
@@ -326,6 +336,13 @@ renderFunctionRow fs =
   <> esc fs.fsDescription <> "</td></tr>"
   where
     rt = Text.toUpper fs.fsReturnType
+
+-- | Render a single file row in the files table.
+renderFileRow :: FileEntry -> Text
+renderFileRow fe =
+  "          <tr><td><a href=\"" <> esc fe.fePath <> "\">" <> esc fe.fePath <> "</a></td><td>"
+  <> esc (Text.intercalate ", " fe.feExports)
+  <> "</td></tr>"
 
 -- | Map return type to CSS class.
 tagClass :: Text -> Text
