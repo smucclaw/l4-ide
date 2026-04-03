@@ -1,0 +1,56 @@
+-- =============================================================================
+-- ACTUS Contract Terms Library
+-- Algorithmic Contract Types Unified Standards (actusfrf.org)
+-- =============================================================================
+-- Contract term definitions - simplified version.
+-- =============================================================================
+
+IMPORT prelude
+IMPORT `actus-core`
+
+§ `ACTUS Contract Terms`
+
+-- =============================================================================
+§§ `Core Contract Terms`
+-- =============================================================================
+
+DECLARE `ACTUS Contract Terms` HAS
+    contractID              IS A STRING
+    contractType            IS A `Contract Type`
+    contractRole            IS A `Contract Role`
+    statusDate              IS A DATE
+    currency                IS AN `ACTUS Currency`
+    notionalPrincipal       IS A NUMBER
+    nominalInterestRate     IS A NUMBER
+    dayCountConvention      IS A `Day Count Convention`
+    initialExchangeDate     IS A MAYBE DATE
+    maturityDate            IS A MAYBE DATE
+
+-- =============================================================================
+§§ `FX Transaction Terms (FXOUT)`
+-- =============================================================================
+
+DECLARE `FXOUT Terms` HAS
+    contractID              IS A STRING
+    contractRole            IS A `Contract Role`
+    statusDate              IS A DATE
+    currency1               IS AN `ACTUS Currency`
+    amount1                 IS A NUMBER
+    currency2               IS AN `ACTUS Currency`
+    amount2                 IS A NUMBER
+    valueDate               IS A DATE
+    exchangeRate            IS A NUMBER
+
+-- Calculate exchange rate from FXOUT terms
+GIVEN fxTerms IS AN `FXOUT Terms`
+GIVETH A NUMBER
+`implied exchange rate` MEANS
+    IF fxTerms's amount1 EQUALS 0
+    THEN 0
+    ELSE fxTerms's amount2 DIVIDED BY fxTerms's amount1
+
+-- =============================================================================
+§§ `Version Information`
+-- =============================================================================
+
+`ACTUS Terms Library Version` MEANS "1.0.0"

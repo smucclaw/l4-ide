@@ -14,4 +14,4 @@ isInteger r =
 prettyRatio :: Rational -> Text
 prettyRatio r = case isInteger r of
   Nothing -> Text.pack $ Sci.formatScientific Sci.Fixed Nothing $ Sci.fromFloatDigits (fromRational @Double r)
-  Just i -> Text.show i
+  Just i -> Text.textShow i

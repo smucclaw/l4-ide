@@ -1,0 +1,65 @@
+// Anthropic Claude API Client Library
+// To use: IMPORT anthropic-client
+
+// Type Definitions
+DECLARE `Message` HAS
+  `role`    IS A STRING
+  `content` IS A STRING
+
+DECLARE `API Request` HAS
+  `model`      IS A STRING
+  `max_tokens` IS A NUMBER
+  `messages`   IS A LIST OF `Message`
+
+// API Configuration
+anthropicUrl MEANS
+  "https://api.anthropic.com/v1/messages"
+
+anthropicVersion MEANS
+  "2023-06-01"
+
+defaultModel MEANS
+  "claude-sonnet-4-5-20250929"
+
+defaultMaxTokens MEANS
+  1000
+
+// Get API key from environment variable
+getApiKey MEANS
+  CONSIDER ENV "ANTHROPIC_API_KEY"
+    WHEN JUST key THEN key
+    WHEN NOTHING THEN "ERROR: Set ANTHROPIC_API_KEY environment variable"
+
+// Helper: Create a message record
+GIVEN role IS A STRING
+      content IS A STRING
+createMessage MEANS
+  `Message` WITH
+    `role` IS role
+    `content` IS content
+
+// Helper: Build headers with API key
+buildHeaders key MEANS
+  CONCAT
+    "x-api-key: ", key, "\n",
+    "anthropic-version: ", anthropicVersion, "\n",
+    "content-type: application/json"
+
+// Helper: Build API request (nested record encoding)
+GIVEN userMessage IS A STRING
+buildRequest MEANS
+  `API Request` WITH
+    `model`      IS defaultModel
+    `max_tokens` IS defaultMaxTokens
+    `messages`   IS LIST (createMessage "user" userMessage)
+
+// Main: Call Claude API with explicit API key
+callClaudeWithKey apiKey userMessage MEANS
+  POST
+    anthropicUrl
+    (buildHeaders apiKey)
+    (JSONENCODE (buildRequest userMessage))
+
+// Main: Call Claude API using environment variable
+callClaude userMessage MEANS
+  callClaudeWithKey getApiKey userMessage

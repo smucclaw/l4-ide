@@ -22,8 +22,14 @@ import L4.Syntax (Type'(..), Resolved)
 import L4.Print (prettyLayout)
 
 -- | Check if a type name is a primitive that should be lifted
+-- Note: DATE is not included here because it needs special handling
+-- (converted to STRING for JSON, then parsed with TODATE)
 isPrimitiveType :: Text -> Bool
-isPrimitiveType name = name `elem` ["BOOLEAN", "NUMBER", "STRING", "DATE"]
+isPrimitiveType name = name `elem` ["BOOLEAN", "NUMBER", "STRING"]
+
+-- | Check if a type name is DATE
+isDateType :: Text -> Bool
+isDateType name = Text.toUpper (Text.strip name) == "DATE"
 
 -- | Check if a type is already a MAYBE type
 isAlreadyMaybe :: Text -> Bool
@@ -68,6 +74,10 @@ liftTypeText tyText
                    in "MAYBE (LIST OF (" <> liftTypeText elemType <> "))"
               -- MAYBE complex - keep as is (record fields handled by JSON decoder)
               else tyText
+  -- DATE type - convert to STRING for JSON compatibility
+  -- The CodeGen module will add TODATE conversion when unwrapping
+  | isDateType tyText =
+      "MAYBE STRING"
   -- Primitive types - wrap in MAYBE
   | isPrimitiveType (Text.toUpper $ Text.strip tyText) =
       "MAYBE " <> tyText

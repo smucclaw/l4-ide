@@ -1,0 +1,80 @@
+-- =============================================================================
+-- ACTUS Day Count Conventions Library
+-- Algorithmic Contract Types Unified Standards (actusfrf.org)
+-- =============================================================================
+-- Year fraction calculations for interest accrual.
+-- Simplified version - supports A365 and A360 conventions.
+-- =============================================================================
+
+IMPORT prelude
+IMPORT daydate
+IMPORT `actus-core`
+
+§ `ACTUS Day Count Conventions`
+
+-- =============================================================================
+§§ `Year Fraction Function Y(S,E)`
+-- =============================================================================
+
+GIVEN startDate IS A DATE
+      endDate IS A DATE
+      convention IS A `Day Count Convention`
+GIVETH A NUMBER
+`year fraction` MEANS
+    CONSIDER convention
+    WHEN A360  THEN `year fraction A360` startDate endDate
+    WHEN A365  THEN `year fraction A365` startDate endDate
+    OTHERWISE `year fraction A365` startDate endDate
+
+-- =============================================================================
+§§ `Actual/365 Fixed`
+-- =============================================================================
+
+GIVEN startDate IS A DATE
+      endDate IS A DATE
+GIVETH A NUMBER
+`year fraction A365` MEANS
+    daysBetween DIVIDED BY 365
+    WHERE
+        daysBetween MEANS (DATE_SERIAL endDate) MINUS (DATE_SERIAL startDate)
+
+-- =============================================================================
+§§ `Actual/360`
+-- =============================================================================
+
+GIVEN startDate IS A DATE
+      endDate IS A DATE
+GIVETH A NUMBER
+`year fraction A360` MEANS
+    daysBetween DIVIDED BY 360
+    WHERE
+        daysBetween MEANS (DATE_SERIAL endDate) MINUS (DATE_SERIAL startDate)
+
+-- =============================================================================
+§§ `Day Count Utilities`
+-- =============================================================================
+
+GIVEN startDate IS A DATE
+      endDate IS A DATE
+GIVETH A NUMBER
+`days between` MEANS
+    (DATE_SERIAL endDate) MINUS (DATE_SERIAL startDate)
+
+-- =============================================================================
+§§ `Interest Accrual`
+-- =============================================================================
+
+GIVEN principal IS A NUMBER
+      rate IS A NUMBER
+      startDate IS A DATE
+      endDate IS A DATE
+      convention IS A `Day Count Convention`
+GIVETH A NUMBER
+`accrued interest for period` MEANS
+    principal TIMES rate TIMES (`year fraction` startDate endDate convention)
+
+-- =============================================================================
+§§ `Version Information`
+-- =============================================================================
+
+`ACTUS Day Count Library Version` MEANS "1.0.0"

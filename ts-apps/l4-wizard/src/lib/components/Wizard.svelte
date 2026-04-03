@@ -256,8 +256,10 @@
         }
       })
 
-      // Update determination status
-      isDetermined = plan.determined !== null
+      // Update determination status:
+      // - For boolean functions: determined !== null means result is known (true/false)
+      // - For non-boolean functions: determined is always null, so check if all inputs provided
+      isDetermined = plan.determined !== null || plan.asks.length === 0
       if (plan.determined !== null) {
         result = plan.determined
       }
@@ -280,12 +282,11 @@
     parameters = parameters.map((p) => (p.key === key ? { ...p, value } : p))
 
     // Refresh query plan - this correctly implements three-valued (Kleene) logic
-    // and sets isDetermined only when the result is truly known
     await updateQueryPlan(functionName, bindings)
 
-    // Only evaluate when the query plan says the result is determined.
-    // This ensures partial inputs don't get incorrectly evaluated as false,
-    // while still supporting non-boolean results (amounts, strings, etc.)
+    // Evaluate when:
+    // 1. Boolean function with determined result (plan.determined !== null), OR
+    // 2. All inputs provided (plan.asks.length === 0) - handles non-boolean functions
     if (isDetermined && client) {
       try {
         const evalResult = await evaluateFunction(

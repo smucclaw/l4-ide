@@ -1,0 +1,177 @@
+-- Module 4: Functions - Complete Examples
+-- All examples are validated and use natural language identifiers
+
+IMPORT prelude
+
+-- =============================================================================
+-- SECTION 1: Basic Functions
+-- =============================================================================
+
+-- Square a number
+GIVEN n IS A NUMBER
+GIVETH A NUMBER
+`the square of` MEANS n * n
+
+-- Add two numbers together
+GIVEN x IS A NUMBER
+      y IS A NUMBER
+GIVETH A NUMBER
+`the sum of` MEANS x + y
+
+-- Check if a person is an adult
+GIVEN age IS A NUMBER
+GIVETH A BOOLEAN
+DECIDE `the person is an adult` IF age >= 18
+
+-- =============================================================================
+-- SECTION 2: Using DECIDE IF vs MEANS
+-- =============================================================================
+
+-- These are equivalent ways to define a boolean function:
+GIVEN age IS A NUMBER
+GIVETH A BOOLEAN
+`is adult (using MEANS)` MEANS age >= 18
+
+GIVEN age IS A NUMBER
+GIVETH A BOOLEAN
+DECIDE `is adult (using DECIDE IF)` IF age >= 18
+
+GIVEN age IS A NUMBER
+GIVETH A BOOLEAN
+DECIDE `is adult (using DECIDE IS)` IS age >= 18
+
+-- =============================================================================
+-- SECTION 3: Local Definitions with WHERE
+-- =============================================================================
+
+-- Compound interest calculation
+GIVEN principal IS A NUMBER
+      rate IS A NUMBER
+      years IS A NUMBER
+GIVETH A NUMBER
+`the compound interest` MEANS
+    principal * (`power` factor years)
+    WHERE
+        factor MEANS 1 + rate
+
+        -- Simple power function (integer exponents only)
+        GIVEN base IS A NUMBER
+              exp IS A NUMBER
+        GIVETH A NUMBER
+        `power` MEANS
+            IF exp <= 0
+            THEN 1
+            ELSE base * (`power` base (exp - 1))
+
+-- Monthly payment calculation (simplified)
+GIVEN loan IS A NUMBER
+      annualRate IS A NUMBER
+      months IS A NUMBER
+GIVETH A NUMBER
+`the monthly payment` MEANS
+    loan * monthlyRate / (1 - discountFactor)
+    WHERE
+        monthlyRate MEANS annualRate / 12
+        discountFactor MEANS `power` (1 + monthlyRate) (0 - months)
+
+        GIVEN base IS A NUMBER
+              exp IS A NUMBER
+        GIVETH A NUMBER
+        `power` MEANS
+            IF exp <= 0
+            THEN 1 / (`positive power` base (0 - exp))
+            ELSE `positive power` base exp
+
+        GIVEN base IS A NUMBER
+              exp IS A NUMBER
+        GIVETH A NUMBER
+        `positive power` MEANS
+            IF exp <= 0
+            THEN 1
+            ELSE base * (`positive power` base (exp - 1))
+
+-- =============================================================================
+-- SECTION 4: Recursive Functions
+-- =============================================================================
+
+-- Factorial: n!
+GIVEN n IS A NUMBER
+GIVETH A NUMBER
+`the factorial of` MEANS
+    IF n <= 1
+    THEN 1
+    ELSE n * (`the factorial of` (n - 1))
+
+-- Sum a list of numbers (using recursion)
+GIVEN numbers IS A LIST OF NUMBER
+GIVETH A NUMBER
+`the sum of the list` MEANS
+    CONSIDER numbers
+    WHEN EMPTY THEN 0
+    WHEN x FOLLOWED BY rest THEN x + `the sum of the list` rest
+
+-- Count elements in a list
+GIVEN xs IS A LIST OF NUMBER
+GIVETH A NUMBER
+`the length of` MEANS
+    CONSIDER xs
+    WHEN EMPTY THEN 0
+    WHEN x FOLLOWED BY rest THEN 1 + `the length of` rest
+
+-- =============================================================================
+-- SECTION 5: Higher-Order Functions
+-- =============================================================================
+
+-- Double each number in a list
+GIVEN numbers IS A LIST OF NUMBER
+GIVETH A LIST OF NUMBER
+`the doubled list` MEANS
+    map (GIVEN n YIELD n * 2) numbers
+
+-- Get only positive numbers
+GIVEN numbers IS A LIST OF NUMBER
+GIVETH A LIST OF NUMBER
+`the positive numbers in` MEANS
+    filter (GIVEN n YIELD n > 0) numbers
+
+-- Check if all numbers satisfy a condition
+GIVEN numbers IS A LIST OF NUMBER
+      threshold IS A NUMBER
+GIVETH A BOOLEAN
+DECIDE `all numbers are above threshold` IF
+    all (GIVEN n YIELD n > threshold) numbers
+
+-- =============================================================================
+-- SECTION 6: Test Data
+-- =============================================================================
+
+`test numbers` MEANS LIST 1, 2, 3, 4, 5
+`mixed numbers` MEANS LIST -2, -1, 0, 1, 2, 3
+
+-- =============================================================================
+-- SECTION 7: Tests
+-- =============================================================================
+
+-- Basic function tests
+#EVAL `the square of` 5
+#EVAL `the sum of` 3 4
+#EVAL `the person is an adult` 21
+#EVAL `the person is an adult` 16
+
+-- Equivalent definitions all return TRUE for age 25
+#EVAL `is adult (using MEANS)` 25
+#EVAL `is adult (using DECIDE IF)` 25
+#EVAL `is adult (using DECIDE IS)` 25
+
+-- WHERE clause tests
+#EVAL `the compound interest` 1000 0.05 3
+
+-- Recursive function tests
+#EVAL `the factorial of` 5
+#EVAL `the sum of the list` `test numbers`
+#EVAL `the length of` `test numbers`
+
+-- Higher-order function tests
+#EVAL `the doubled list` `test numbers`
+#EVAL `the positive numbers in` `mixed numbers`
+#EVAL `all numbers are above threshold` `test numbers` 0

@@ -1,0 +1,124 @@
+-- Module 2: Legal Entities and Relationships - Complete Examples
+-- All examples are validated and use natural language identifiers
+
+-- =============================================================================
+-- SECTION 1: Basic Record Types
+-- =============================================================================
+
+-- A person with natural language field names
+DECLARE Person
+    HAS `the person's name` IS A STRING
+        `the person's address` IS A STRING
+        `the person is a governor` IS A BOOLEAN
+
+-- A registered charity
+DECLARE `Registered Charity`
+    HAS `the charity's name` IS A STRING
+        `the registration number` IS A STRING
+        `the registration date` IS A NUMBER
+        `the address` IS A STRING
+
+-- =============================================================================
+-- SECTION 2: Enumeration Types
+-- =============================================================================
+
+-- Charitable purposes from legislation
+DECLARE Purpose IS ONE OF
+    `prevention or relief of poverty`
+    `advancement of education`
+    `advancement of religion`
+    `advancement of health`
+    `advancement of animal welfare`
+    `other purpose` HAS `the description` IS A STRING
+
+-- Status of a charity
+DECLARE Status IS ONE OF
+    Active
+    Suspended HAS `the reason` IS A STRING
+    Deregistered
+
+-- =============================================================================
+-- SECTION 3: Nested Types
+-- =============================================================================
+
+DECLARE `Bank Account`
+    HAS `the bank name` IS A STRING
+        `the account number` IS A STRING
+        `the SWIFT code` IS A STRING
+
+DECLARE Company
+    HAS `the company name` IS A STRING
+        `the jurisdiction` IS A STRING
+        `the bank account` IS A `Bank Account`
+
+-- =============================================================================
+-- SECTION 4: Union Types (Legal Entity)
+-- =============================================================================
+
+DECLARE `Legal Entity` IS ONE OF
+    Individual HAS `the person` IS A Person
+    Corporation HAS `the company` IS A Company
+
+-- =============================================================================
+-- SECTION 5: Pattern Matching
+-- =============================================================================
+
+-- Check if a purpose is charitable
+GIVEN purpose IS A Purpose
+GIVETH A BOOLEAN
+DECIDE `the purpose is charitable` IS
+    CONSIDER purpose
+    WHEN `advancement of education` THEN TRUE
+    WHEN `advancement of animal welfare` THEN TRUE
+    WHEN `prevention or relief of poverty` THEN TRUE
+    WHEN `advancement of health` THEN TRUE
+    WHEN `advancement of religion` THEN TRUE
+    WHEN `other purpose` description THEN FALSE
+    OTHERWISE FALSE
+
+-- Get the name of a legal entity
+GIVEN entity IS A `Legal Entity`
+GIVETH A STRING
+`the entity's name` MEANS
+    CONSIDER entity
+    WHEN Individual person THEN person's `the person's name`
+    WHEN Corporation company THEN company's `the company name`
+
+-- =============================================================================
+-- SECTION 6: Test Data
+-- =============================================================================
+
+-- Create test persons
+`Alice Smith` MEANS Person "Alice Smith" "123 Main Street, Jersey" TRUE
+`Bob Jones` MEANS Person "Bob Jones" "456 High Street, Jersey" FALSE
+
+-- Create test purposes
+`education purpose` MEANS `advancement of education`
+`custom purpose` MEANS `other purpose` "local community support"
+
+-- Create test company
+`Acme Bank Account` MEANS `Bank Account` "DBS Bank" "123-456789-0" "DBSSSGSG"
+`Acme Corporation` MEANS Company "Acme Corp" "Singapore" `Acme Bank Account`
+
+-- Create test legal entities
+`Alice as individual` MEANS Individual `Alice Smith`
+`Acme as corporation` MEANS Corporation `Acme Corporation`
+
+-- =============================================================================
+-- SECTION 7: Tests
+-- =============================================================================
+
+-- Field access tests
+#EVAL `Alice Smith`'s `the person's name`
+#EVAL `Alice Smith`'s `the person is a governor`
+
+-- Nested field access
+#EVAL `Acme Corporation`'s `the bank account`'s `the bank name`
+
+-- Pattern matching tests
+#EVAL `the purpose is charitable` `education purpose`
+#EVAL `the purpose is charitable` `custom purpose`
+
+-- Legal entity name extraction
+#EVAL `the entity's name` `Alice as individual`
+#EVAL `the entity's name` `Acme as corporation`

@@ -1,0 +1,102 @@
+-- Computed Fields Example
+-- Demonstrates "methods" on records: fields with MEANS clauses
+-- whose values are automatically derived from other fields.
+
+IMPORT prelude
+
+-- ─────────────────────────────────────────────────────────
+-- Basic computed fields (methods)
+-- ─────────────────────────────────────────────────────────
+-- Style: stored fields first, then computed/derived fields.
+
+DECLARE Employee HAS
+    -- stored fields (primary attributes)
+    `name`               IS A STRING
+    `date of birth`      IS A NUMBER
+    `date of employment` IS A NUMBER
+    `monthly salary`     IS A NUMBER
+    `current year`       IS A NUMBER
+    -- computed fields (derived attributes / methods)
+    `age`                IS A NUMBER
+        MEANS `current year` - `date of birth`
+    `years of service`   IS A NUMBER
+        MEANS `current year` - `date of employment`
+    `senior`             IS A BOOLEAN
+        MEANS `years of service` >= 10
+    `eligible`           IS A BOOLEAN
+        MEANS `senior`
+          AND `monthly salary` <= 6000
+
+-- Construction: only stored fields are supplied.
+-- Computed fields are derived automatically.
+veteran MEANS Employee WITH
+    `name`               IS "Lim"
+    `date of birth`      IS 1960
+    `date of employment` IS 1990
+    `monthly salary`     IS 3000
+    `current year`       IS 2026
+
+-- Access computed fields with 's, just like stored fields.
+#EVAL veteran's `age`            -- 66
+#EVAL veteran's `years of service` -- 36
+#EVAL veteran's `senior`         -- TRUE
+#EVAL veteran's `eligible`       -- TRUE
+
+-- ─────────────────────────────────────────────────────────
+-- Calling external functions from computed fields
+-- ─────────────────────────────────────────────────────────
+-- Multi-argument calls can use juxtaposition, OF, or mixfix:
+--   `apply rate` `balance` `rate`         -- juxtaposition
+--   `apply rate` OF `balance`, `rate`     -- OF (comma-separated)
+--   `apply` `balance` `at rate` `rate`    -- mixfix (natural language)
+-- All are equivalent. Choose whichever reads best in context.
+
+GIVEN `base` IS A NUMBER
+      `rate` IS A NUMBER
+GIVETH A NUMBER
+`apply rate` MEANS `base` * `rate` / 100
+
+DECLARE Account HAS
+    `balance`   IS A NUMBER
+    `rate`      IS A NUMBER
+    `interest`  IS A NUMBER
+        MEANS `apply rate` `balance` `rate`
+    `projected` IS A NUMBER
+        MEANS `balance` + `interest`
+
+savings MEANS Account WITH
+    `balance` IS 10000
+    `rate`    IS 5
+
+#EVAL savings's `interest`   -- 500.0
+#EVAL savings's `projected`  -- 10500.0
+
+-- ─────────────────────────────────────────────────────────
+-- WHERE and LET/IN inside computed fields
+-- ─────────────────────────────────────────────────────────
+
+GIVEN `x` IS A NUMBER
+GIVETH A NUMBER
+`square` MEANS `x` * `x`
+
+DECLARE Shape HAS
+    `width`   IS A NUMBER
+    `height`  IS A NUMBER
+    `area`    IS A NUMBER
+        MEANS `width` * `height`
+    `diag sq` IS A NUMBER
+        MEANS `result`
+          WHERE
+            `w2` MEANS `square` `width`
+            `h2` MEANS `square` `height`
+            `result` MEANS `w2` + `h2`
+    `scaled`  IS A NUMBER
+        MEANS LET `factor` MEANS 2 IN `area` * `factor`
+
+rect MEANS Shape WITH
+    `width`  IS 3
+    `height` IS 4
+
+#EVAL rect's `area`     -- 12
+#EVAL rect's `diag sq`  -- 25
+#EVAL rect's `scaled`   -- 24

@@ -1,0 +1,43 @@
+-- Example: A charity's obligation to file annual returns
+-- From Module 0: Introduction to L4
+
+-- First, define what a charity looks like
+DECLARE `Charity Status` IS ONE OF
+    Active
+    Suspended
+    Dissolved
+
+DECLARE `Registered Charity`
+    HAS `the name` IS A STRING
+        `the registration number` IS A STRING
+        `the status` IS A `Charity Status`
+
+-- Define the actors and actions for our obligation
+DECLARE Party IS ONE OF
+    `the charity`
+    `the Commissioner`
+
+DECLARE Action IS ONE OF
+    `file the annual return`
+    `issue a Required Steps Notice`
+
+-- The legal obligation: active charities must file annual returns
+GIVEN charity IS A `Registered Charity`
+GIVETH A DEONTIC Party Action
+`the charity must file its annual return` MEANS
+    IF charity's `the status` EQUALS Active
+    THEN PARTY `the charity`
+         MUST `file the annual return`
+         WITHIN 60
+         HENCE FULFILLED
+         LEST PARTY `the Commissioner`
+              MAY `issue a Required Steps Notice`
+              HENCE FULFILLED
+    ELSE FULFILLED
+
+-- Create a test charity
+`Acme Animal Shelter` MEANS `Registered Charity` "Acme Animal Shelter" "JC-2024-001" Active
+
+-- Test the obligation
+#TRACE `the charity must file its annual return` `Acme Animal Shelter` AT 0 WITH
+    PARTY `the charity` DOES `file the annual return` AT 30

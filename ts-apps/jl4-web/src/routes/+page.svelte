@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte'
+  import { onMount, onDestroy, tick } from 'svelte'
   import { SvelteToast, toast } from '@zerodevx/svelte-toast'
   import { debounce } from '$lib/utils'
   import * as Resizable from '$lib/components/ui/resizable/index.js'
@@ -10,19 +10,31 @@
   import { createConverter as createCodeConverter } from 'vscode-languageclient/lib/common/codeConverter.js'
   import * as monaco from '@codingame/monaco-vscode-editor-api'
   import { monacoModuleWrapperForErrorLens } from '$lib/monaco-error-lens-helpers'
+  import { monarchTokensProvider } from '@repo/l4-highlight'
 
   import { MonacoL4LanguageClient } from '$lib/monaco-l4-language-client'
+  import {
+    createLspConnection,
+    getDefaultConfig,
+    type LspConnectionResult,
+  } from '$lib/lsp-connection-factory'
   import type { LadderBackendApi } from 'jl4-client-rpc'
   import { LadderApiForMonaco } from '$lib/ladder-api-for-monaco'
   import { MonacoErrorLens } from '@ym-han/monaco-error-lens'
 
   import { defaultExample, type LegalExample } from '$lib/legal-examples'
   import ExampleSelector from '$lib/components/example-selector.svelte'
+  import InspectorPanel from '$lib/components/inspector-panel.svelte'
   import {
     fetchQueryPlan,
     upsertFunctionFromSource,
     type DecisionServiceClient,
   } from '$lib/decision-service-client'
+  import {
+    EvalDirectiveResultRequestType,
+    type DirectiveResult,
+    type SrcPos,
+  } from 'jl4-client-rpc'
 
   import {
     LadderFlow,
@@ -30,8 +42,8 @@
     LirRegistry,
     type FunDeclLirNode,
     LadderEnv,
-    elicitationOverrideFromQueryPlan,
     VizDeclLirSource,
+    elicitationOverrideFromQueryPlan,
   } from 'l4-ladder-visualizer'
   import {
     makeVizInfoDecoder,
@@ -71,6 +83,8 @@
     window.innerWidth < 1024 ? false : !ownUrl.searchParams.has('no-examples')
   )
   let showVisualizer = $state(false)
+  let rightPaneView: 'ladder' | 'inspector' = $state('ladder')
+  let inspectorPanel: InspectorPanel | undefined = $state(undefined)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let paneGroup: any = $state()
 
@@ -168,6 +182,8 @@
   let editor: monaco.editor.IStandaloneCodeEditor | undefined
   let monacoL4LangClient: MonacoL4LanguageClient | undefined
   let monacoErrorLens: MonacoErrorLens | undefined
+  let lspConnection: LspConnectionResult | undefined
+  let renderResultCommandDisposable: vscode.Disposable | undefined
 
   function bindingsKey(bindings: Record<string, boolean>) {
     const entries = Object.entries(bindings).sort(([a], [b]) =>
@@ -253,15 +269,13 @@
       'vscode-languageclient/browser.js'
     )
     const { MonacoLanguageClient } = await import('monaco-languageclient')
-    const { WebSocketMessageReader, WebSocketMessageWriter, toSocket } =
-      await import('vscode-ws-jsonrpc')
     const { configureDefaultWorkerFactory } = await import(
       'monaco-editor-wrapper/workers/workerLoaders'
     )
     const { ConsoleLogger } = await import('monaco-languageclient/tools')
 
-    const websocketUrl =
-      import.meta.env.VITE_SOCKET_URL || 'ws://localhost:5007'
+    // Get LSP connection configuration (supports WebSocket or WASM)
+    const lspConfig = getDefaultConfig()
 
     const runClient = async () => {
       console.log('🚀 runClient() STARTING - LSP client initialization')
@@ -275,6 +289,7 @@
               'editor.semanticHighlighting.enabled': true,
               'editor.experimental.asyncTokenization': true,
               'editor.lightbulb.enabled': 'on',
+              'editor.codeLens': true, // Enable code lenses for visualization actions
             }),
           },
           serviceOverrides: {},
@@ -294,11 +309,27 @@
         aliases: ['JL4', 'jl4'],
       })
 
+      // Monarch tokenizer — required for monaco.editor.colorize() in the inspector panel.
+      // Semantic tokens (from LSP) handle editor highlighting; this covers standalone colorization.
+      // Token definitions from @repo/l4-highlight (canonical source: jl4-core/src/L4/Lexer.hs)
+      monaco.languages.setMonarchTokensProvider(
+        'jl4',
+        monarchTokensProvider() as monaco.languages.IMonarchLanguage
+      )
+
       monaco.editor.defineTheme('jl4Theme', {
         base: 'vs',
         inherit: true,
         rules: [
-          { token: 'decorator', foreground: 'ffbd33' }, // for annotations
+          { token: 'directive', foreground: 'be37e8', fontStyle: 'bold' }, // #EVAL, #ASSERT etc.
+          { token: 'annotation', foreground: 'ffbd33' }, // @nlg, @ref etc.
+          { token: 'keyword', foreground: '0000ff' }, // L4 keywords
+          { token: 'type.identifier', foreground: '267f99' }, // uppercase non-keywords
+          { token: 'variable.name', foreground: '001080' }, // backtick identifiers
+          { token: 'string', foreground: 'a31515' },
+          { token: 'number', foreground: '098658' },
+          { token: 'operator', foreground: '888888' }, // operators
+          { token: 'comment', foreground: '008000', fontStyle: 'italic' },
         ],
         encodedTokensColors: [],
         colors: {
@@ -313,11 +344,23 @@
         value: defaultExample.content,
         language: 'jl4',
         automaticLayout: true,
-        wordBasedSuggestions: 'off',
+        wordBasedSuggestions: 'currentDocument',
         theme: 'jl4Theme',
         'semanticHighlighting.enabled': true,
         glyphMargin: true, // Required for gutter icons
+        codeLens: true, // Enable code lenses for visualization actions
       })
+
+      // Prevent the suggestion widget from auto-popping after Enter (new line).
+      // When the widget IS visible, this command doesn't fire so Enter still accepts suggestions.
+      editor.addCommand(
+        monaco.KeyCode.Enter,
+        () => {
+          editor?.trigger('keyboard', 'type', { text: '\n' })
+          editor?.trigger('', 'hideSuggestWidget', null)
+        },
+        '!suggestWidgetVisible'
+      )
 
       // Add comment/uncomment action to context menu
       editor.addAction({
@@ -455,29 +498,85 @@
         }
       }
 
-      initWebSocketAndStartClient(websocketUrl, logger)
+      // Initialize LSP connection using the factory
+      // This abstracts over WebSocket vs WASM connection types
+      await initLspConnection(logger, lspConfig)
     }
 
-    /** parameterized version , support all languageId */
-    const initWebSocketAndStartClient = (
-      url: string,
-      logger: ConsoleLogger
-    ): WebSocket => {
-      const webSocket = new WebSocket(url)
-      webSocket.onopen = async () => {
-        const socket = toSocket(webSocket)
-        const reader = new WebSocketMessageReader(socket)
-        const writer = new WebSocketMessageWriter(socket)
-        const languageClient = createLanguageClient(logger, {
-          reader,
-          writer,
-        })
+    /**
+     * Initialize LSP connection using the connection factory.
+     * Supports both WebSocket (current) and WASM (future) connection types.
+     */
+    const initLspConnection = async (
+      logger: ConsoleLogger,
+      config: ReturnType<typeof getDefaultConfig>
+    ): Promise<void> => {
+      try {
+        logger.info(
+          `[L4 LSP] Connecting with preferred type: ${config.preferredType}`
+        )
+
+        lspConnection = await createLspConnection(config)
+
+        logger.info(`[L4 LSP] Connected via ${lspConnection.type}`)
+
+        const languageClient = createLanguageClient(
+          logger,
+          lspConnection.transports
+        )
         await languageClient.start()
-        reader.onClose(() => {
+
+        // For websocket LSP: Haskell server doesn't declare executeCommandProvider,
+        // so l4.renderResult is never registered by the language client.
+        // Register it manually so codelens clicks work.
+        if (lspConnection.type === 'websocket') {
+          renderResultCommandDisposable = vscode.commands.registerCommand(
+            'l4.renderResult',
+            async (...args: unknown[]) => {
+              if (!monacoL4LangClient) return
+              const [verDocId, srcPos, directiveType] = args as [
+                { uri: string; version: number },
+                SrcPos,
+                string,
+              ]
+              try {
+                const result = await monacoL4LangClient.sendRequest(
+                  EvalDirectiveResultRequestType,
+                  { verDocId, srcPos, directiveType }
+                )
+                if (result) {
+                  rightPaneView = 'inspector'
+                  showVisualizer = true
+                  await tick()
+                  const directiveId = `${srcPos.line}:${srcPos.column}`
+                  const lineContent =
+                    editor?.getModel()?.getLineContent(srcPos.line) ?? ''
+                  const fileUri =
+                    editor?.getModel()?.uri.toString() ?? verDocId.uri
+                  inspectorPanel?.addOrScrollToResult(
+                    directiveId,
+                    srcPos,
+                    result as DirectiveResult,
+                    lineContent,
+                    fileUri
+                  )
+                }
+              } catch (e) {
+                logger.error(`l4.renderResult failed: ${e}`)
+              }
+            }
+          )
+        }
+
+        // Handle connection close
+        lspConnection.transports.reader.onClose(() => {
+          logger.info('[L4 LSP] Connection closed')
           languageClient.dispose()
         })
+      } catch (error) {
+        logger.error(`[L4 LSP] Failed to connect: ${error}`)
+        throw error
       }
-      return webSocket
     }
 
     /**********************************
@@ -559,6 +658,22 @@
 
       monacoL4LangClient = new MonacoL4LanguageClient(internalClient)
 
+      // When evaluation completes after an edit, update any open inspector sections.
+      internalClient.onNotification(
+        'l4/directiveResultsUpdated',
+        (params: {
+          uri: string
+          results: Array<{
+            directiveId: string
+            prettyText: string
+            success: boolean | null
+            lineContent: string
+          }>
+        }) => {
+          inspectorPanel?.syncSections(params.results, params.uri)
+        }
+      )
+
       /**********************************
             Init LadderBackendApi
       ***********************************/
@@ -574,6 +689,41 @@
       return {
         /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
         executeCommand: async (command: any, args: any, next: any) => {
+          // Handle l4.renderResult locally (don't forward to LSP as a command)
+          if (command === 'l4.renderResult' && monacoL4LangClient) {
+            const [verDocId, srcPos, directiveType] = args as [
+              { uri: string; version: number },
+              SrcPos,
+              string,
+            ]
+            try {
+              const result = await monacoL4LangClient.sendRequest(
+                EvalDirectiveResultRequestType,
+                { verDocId, srcPos, directiveType }
+              )
+              if (result) {
+                rightPaneView = 'inspector'
+                showVisualizer = true
+                await tick() // Wait for InspectorPanel to mount if pane was closed
+                const directiveId = `${srcPos.line}:${srcPos.column}`
+                const lineContent =
+                  editor?.getModel()?.getLineContent(srcPos.line) ?? ''
+                const fileUri =
+                  editor?.getModel()?.uri.toString() ?? verDocId.uri
+                inspectorPanel?.addOrScrollToResult(
+                  directiveId,
+                  srcPos,
+                  result,
+                  lineContent,
+                  fileUri
+                )
+              }
+            } catch (e) {
+              logger.error(`l4.renderResult failed: ${e}`)
+            }
+            return
+          }
+
           logger.debug(`trying to execute command ${command}`)
           const responseFromLangServer = await next(command, args)
 
@@ -585,6 +735,23 @@
             return
           }
 
+          // Handle the "cleared" response when a function is deleted during auto-refresh
+          const maybeClearedResponse = responseFromLangServer as {
+            cleared?: boolean
+            reason?: string
+          }
+          if (maybeClearedResponse.cleared) {
+            logger.info(
+              `Visualization cleared: ${maybeClearedResponse.reason || 'unknown reason'}`
+            )
+            // Reset to placeholder state - ladder will show empty/loading
+            renderLadderPromise = placeholderAlwaysPendingPromise
+            showVisualizer = false
+            currentDecisionServiceFunctionName = null
+            currentLadderGraphId = null
+            return
+          }
+
           const decoded = decodeVizInfo(responseFromLangServer)
           // TODO: Can improve this later
           switch (decoded._tag) {
@@ -592,6 +759,7 @@
               if (decoded.right) {
                 const renderLadderInfo: RenderAsLadderInfo = decoded.right
                 await makeLadderFlow(renderLadderInfo)
+                rightPaneView = 'ladder'
               }
               break
             case 'Left':
@@ -638,6 +806,9 @@
   })
 
   onDestroy(() => {
+    renderResultCommandDisposable?.dispose()
+    renderResultCommandDisposable = undefined
+
     if (monacoErrorLens) {
       monacoErrorLens.dispose()
       monacoErrorLens = undefined
@@ -653,6 +824,12 @@
     if (monacoL4LangClient) {
       monacoL4LangClient.dispose?.()
       monacoL4LangClient = undefined
+    }
+
+    // Dispose LSP connection
+    if (lspConnection) {
+      lspConnection.dispose()
+      lspConnection = undefined
     }
   })
 
@@ -740,6 +917,7 @@
   function handleExampleSelect(example: LegalExample) {
     if (showExamples && editor) {
       editor.setValue(example.content)
+      inspectorPanel?.clear()
 
       if (window.innerWidth <= 1023) {
         showSidebar = false
@@ -762,6 +940,7 @@
           const content = e.target?.result as string
           if (content && editor) {
             editor.setValue(content)
+            inspectorPanel?.clear()
             // Clear any URL parameters since we're loading a new file
             const ownUrl = new URL(window.location.href)
             if (ownUrl.searchParams.has('id')) {
@@ -985,34 +1164,34 @@
           <!-- Curved line from split to right node -->
           <path d="M12 12 Q15 15 17 18" />
         </svg>
-        Logic Viz
+        Inspector
+      </button>
+      <button
+        class="fab fab-wizard"
+        onclick={handleOpenWizard}
+        aria-label="Form Wizard"
+        title="Form Wizard"
+      >
+        <svg
+          width="20"
+          height="20"
+          style="font-size: 24px; vertical-align: middle; margin-right: 0.2em;"
+          viewBox="0 0 24 24"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          stroke-width="1.5"
+          stroke="currentColor"
+        >
+          <!-- Magic wand / wizard icon -->
+          <path
+            d="M15 4V2M15 16V14M8 9H10M20 9H22M17.8 11.8L19 13M17.8 6.2L19 5M12.2 11.8L11 13M12.2 6.2L11 5"
+          />
+          <path d="M15 9L3 21" stroke-linecap="round" />
+          <path d="M13 7L17 11" stroke-linecap="round" />
+        </svg>
+        Form Wizard
       </button>
     {/if}
-    <button
-      class="fab fab-wizard"
-      onclick={handleOpenWizard}
-      aria-label="Deploy"
-      title="Deploy"
-    >
-      <svg
-        width="20"
-        height="20"
-        style="font-size: 24px; vertical-align: middle; margin-right: 0.2em;"
-        viewBox="0 0 24 24"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        stroke-width="1.5"
-        stroke="currentColor"
-      >
-        <!-- Magic wand / wizard icon -->
-        <path
-          d="M15 4V2M15 16V14M8 9H10M20 9H22M17.8 11.8L19 13M17.8 6.2L19 5M12.2 11.8L11 13M12.2 6.2L11 5"
-        />
-        <path d="M15 9L3 21" stroke-linecap="round" />
-        <path d="M13 7L17 11" stroke-linecap="round" />
-      </svg>
-      Deploy
-    </button>
     <button
       class="fab fab-share"
       onclick={handleShare}
@@ -1053,7 +1232,11 @@
         <Resizable.Handle />
         <Resizable.Pane defaultSize={50}>
           <div class="relative h-full ladder-border">
-            <div id="jl4-webview" class="h-full max-w-[96%] mx-auto">
+            <div
+              id="jl4-webview"
+              class="h-full max-w-[96%] mx-auto"
+              class:hidden-pane={rightPaneView !== 'ladder'}
+            >
               {#await renderLadderPromise then ladder}
                 {#key ladder.funDeclLirNode}
                   <div class="slightly-shorter-than-full-viewport-height pb-1">
@@ -1067,6 +1250,12 @@
               {:catch error}
                 <p>Error loading Ladder Diagram: {error.message}</p>
               {/await}
+            </div>
+            <div
+              class="h-full"
+              class:hidden-pane={rightPaneView !== 'inspector'}
+            >
+              <InspectorPanel bind:this={inspectorPanel} {monaco} />
             </div>
           </div>
           <style>
@@ -1192,6 +1381,9 @@
   }
   .slightly-shorter-than-full-viewport-height {
     height: 100%;
+  }
+  .hidden-pane {
+    display: none;
   }
 
   @media (max-width: 1023px) {

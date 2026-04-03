@@ -2,6 +2,7 @@
 module L4.EvaluateLazy
 ( EvalConfig(..)
 , resolveEvalConfig
+, resolveEvalConfigWithSafeMode
 , parseFixedNow
 , readFixedNowEnv
 , EvalDirectiveResult (..)
@@ -15,6 +16,7 @@ module L4.EvaluateLazy
 , execEvalExprInContextOfModule
 , prettyEvalException
 , prettyEvalDirectiveResult
+, prettyEvalDirectiveResultWithFields
 )
 where
 
@@ -53,19 +55,29 @@ data EvalState =
     , evalTime   :: !UTCTime
     , temporalContext :: !(IORef TemporalContext)
     , tracePolicy :: !TracePolicy  -- controls trace collection and output
+    , safeMode   :: !Bool          -- when True, HTTP operations return errors
     }
 
 data EvalConfig = EvalConfig
-  { evalTime :: !UTCTime
+  { evalTime :: !(Maybe UTCTime)
+    -- ^ 'Nothing' means use the wall-clock at each evaluation (live mode).
+    -- 'Just t' means use a fixed time (for tests / JL4_FIXED_NOW).
   , tracePolicy :: !TracePolicy
+  , safeMode :: !Bool  -- ^ When True, HTTP operations (FETCH/POST) return errors instead of making requests
   }
 
 resolveEvalConfig :: Maybe UTCTime -> TracePolicy -> IO EvalConfig
-resolveEvalConfig mTime tracePolicy = case mTime of
-  Nothing -> do
-    time <- getCurrentTime
-    pure (EvalConfig time tracePolicy)
-  Just time -> pure (EvalConfig time tracePolicy)
+resolveEvalConfig mTime tracePolicy = resolveEvalConfigWithSafeMode mTime tracePolicy False
+
+resolveEvalConfigWithSafeMode :: Maybe UTCTime -> TracePolicy -> Bool -> IO EvalConfig
+resolveEvalConfigWithSafeMode mTime tracePolicy safe =
+  pure (EvalConfig mTime tracePolicy safe)
+
+-- | Resolve the eval time: use the fixed time if set, otherwise get the wall clock.
+resolveEvalTime :: EvalConfig -> IO UTCTime
+resolveEvalTime cfg = case cfg.evalTime of
+  Just t  -> pure t
+  Nothing -> getCurrentTime
 
 parseFixedNow :: Text -> Maybe UTCTime
 parseFixedNow = ISO8601.iso8601ParseM . Text.unpack
@@ -222,6 +234,8 @@ interpMachine = \ case
     asks (.evalTime)
   GetTracePolicy ->
     asks (.tracePolicy)
+  GetSafeMode ->
+    asks (.safeMode)
   Bind act k -> interpMachine act >>= interpMachine . k
   LiftIO m -> liftIO m >>= interpMachine . pure
   PushFrame f -> do
@@ -322,7 +336,7 @@ postprocessTrace actions =
 
 data EvalDirectiveResult =
   MkEvalDirectiveResult
-    { range  :: Maybe SrcRange -- ^ of the (L)EVAL / PROVISION directive
+    { range  :: Maybe SrcRange -- ^ of the (L)EVAL / DEONTIC directive
     , result :: EvalDirectiveValue
     , trace  :: Maybe EvalTrace
     }
@@ -351,6 +365,41 @@ prettyEvalDirectiveResult (MkEvalDirectiveResult _range res mtrace) =
         Nothing -> Text.empty
         Just t  -> "\n─────\n" <> prettyLayout t
 
+-- | Like 'prettyEvalDirectiveResult' but uses named-field syntax (WITH / IS)
+-- for constructors whose field names are provided.
+prettyEvalDirectiveResultWithFields :: ConstructorFieldNames -> EvalDirectiveResult -> Text
+prettyEvalDirectiveResultWithFields fields (MkEvalDirectiveResult _range res mtrace) =
+   prettyEvalDirectiveValueWithFields fields res
+   <> case mtrace of
+        Nothing -> Text.empty
+        Just t  -> "\n─────\n" <> prettyLayout t
+
+-- ----------------------------------------------------------------------------
+-- ToJSON instances for batch --json output
+-- ----------------------------------------------------------------------------
+
+instance Aeson.ToJSON EvalDirectiveResult where
+  toJSON (MkEvalDirectiveResult _range res _trace) = Aeson.object
+    [ "result" Aeson..= res
+    , "trace"  Aeson..= Aeson.Null
+    ]
+
+instance Aeson.ToJSON EvalDirectiveValue where
+  toJSON (Assertion b) = Aeson.object
+    [ "type"  Aeson..= ("assertion" :: Text)
+    , "value" Aeson..= b
+    ]
+  toJSON (Reduction (Right val)) = Aeson.toJSON val
+  toJSON (Reduction (Left exc)) = Aeson.object
+    [ "error" Aeson..= Text.unlines (prettyEvalException exc)
+    ]
+
+prettyEvalDirectiveValueWithFields :: ConstructorFieldNames -> EvalDirectiveValue -> Text
+prettyEvalDirectiveValueWithFields _fields (Assertion True)        = "assertion satisfied"
+prettyEvalDirectiveValueWithFields _fields (Assertion False)       = "assertion failed"
+prettyEvalDirectiveValueWithFields _fields (Reduction (Left exc))  = Text.unlines (prettyEvalException exc)
+prettyEvalDirectiveValueWithFields fields  (Reduction (Right v))   = prettyLayoutNF fields v
+
 -- | Evaluate WHNF to NF, with a cutoff (which possibly could be made configurable).
 nf :: WHNF -> Eval NF
 nf = nfAux maximumStackSize
@@ -360,6 +409,8 @@ nfAux  d _v | d < 0                  = pure Omitted
 nfAux _d (ValNumber i)               = pure (MkNF (ValNumber i))
 nfAux _d (ValString s)               = pure (MkNF (ValString s))
 nfAux _d (ValDate day)               = pure (MkNF (ValDate day))
+nfAux _d (ValTime tod)               = pure (MkNF (ValTime tod))
+nfAux _d (ValDateTime utc tz)        = pure (MkNF (ValDateTime utc tz))
 nfAux _d ValNil                      = pure (MkNF ValNil)
 nfAux  d (ValCons r1 r2)             = do
   v1 <- evalAndNF d r1
@@ -426,10 +477,11 @@ execEvalModuleWithEnv evalConfig entityInfo env m@(MkModule _ moduleUri _) = do
     MkEval f -> do
       stack     <- newIORef emptyStack
       supply    <- newIORef 0
-      let temporalCtx = initialTemporalContext evalConfig.evalTime
+      actualTime <- resolveEvalTime evalConfig
+      let temporalCtx = initialTemporalContext actualTime
       temporalContext <- newIORef temporalCtx
       let evalTrace = Nothing
-      r <- f MkEvalState {moduleUri, stack, supply, evalTrace, entityInfo, evalTime = evalConfig.evalTime, temporalContext, tracePolicy = evalConfig.tracePolicy}
+      r <- f MkEvalState {moduleUri, stack, supply, evalTrace, entityInfo, evalTime = actualTime, temporalContext, tracePolicy = evalConfig.tracePolicy, safeMode = evalConfig.safeMode}
       case r of
         Left exc -> do
           hPutStrLn stderr $ "Eval failure in module: " <> show moduleUri
@@ -475,10 +527,11 @@ execEvalModuleWithJSON evalConfig entityInfo json m@(MkModule _ moduleUri _) = d
     MkEval f -> do
       stack <- newIORef emptyStack
       supply <- newIORef 0
-      let temporalCtx = initialTemporalContext evalConfig.evalTime
+      actualTime <- resolveEvalTime evalConfig
+      let temporalCtx = initialTemporalContext actualTime
       temporalContext <- newIORef temporalCtx
       let evalTrace = Nothing
-      r <- f MkEvalState {moduleUri, stack, supply, evalTrace, entityInfo, evalTime = evalConfig.evalTime, temporalContext, tracePolicy = evalConfig.tracePolicy}
+      r <- f MkEvalState {moduleUri, stack, supply, evalTrace, entityInfo, evalTime = actualTime, temporalContext, tracePolicy = evalConfig.tracePolicy, safeMode = evalConfig.safeMode}
       case r of
         Left exc -> do
           hPutStrLn stderr $ "Eval failure in module: " <> show moduleUri
@@ -501,15 +554,26 @@ execEvalExprInContextOfModule evalConfig entityInfo expr (env, m) = do
       Directive emptyAnno $ LazyEval emptyAnno expr
     -- Didn't make a new module that imported the context module,
     -- because making the import requires a Resolved.
-    moduleWithoutDirectives = over moduleTopDecls (filter $ not . isDirective) m
+    -- Filter directives recursively (including in nested sections)
+    moduleWithoutDirectives = filterDirectivesFromModule m
   (_, res) <- execEvalModuleWithEnv evalConfig entityInfo env (evalExprDirective `prependToModule` moduleWithoutDirectives)
   case res of
     [result] -> pure (Just result)
     _        -> pure Nothing
   where
-    isDirective :: TopDecl Resolved -> Bool
-    isDirective (Directive _ _) = True
-    isDirective _ = False
-
     prependToModule :: TopDecl Resolved -> Module Resolved -> Module Resolved
     prependToModule newDecl = over moduleTopDecls (newDecl :)
+
+-- | Recursively filter out all Directive nodes from a module (including nested sections)
+filterDirectivesFromModule :: Module Resolved -> Module Resolved
+filterDirectivesFromModule (MkModule ann uri section) =
+  MkModule ann uri (filterDirectivesFromSection section)
+
+filterDirectivesFromSection :: Section Resolved -> Section Resolved
+filterDirectivesFromSection (MkSection sann sresolved maka decls) =
+  MkSection sann sresolved maka (mapMaybe filterTopDecl decls)
+  where
+    filterTopDecl :: TopDecl Resolved -> Maybe (TopDecl Resolved)
+    filterTopDecl (Directive _ _) = Nothing  -- Remove directives
+    filterTopDecl (Section ann sec) = Just (Section ann (filterDirectivesFromSection sec))  -- Recurse into sections
+    filterTopDecl other = Just other  -- Keep everything else

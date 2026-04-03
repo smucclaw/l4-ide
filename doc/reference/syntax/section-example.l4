@@ -1,0 +1,18 @@
+-- Example: Section markers (§)
+-- Demonstrates organizing code into sections
+
+§ `Eligibility Rules`
+
+age MEANS 21
+citizen MEANS TRUE
+
+§§ `Age Requirements`
+
+ageEligible MEANS age >= 18
+
+§§ `Citizenship Requirements`
+
+citizenshipEligible MEANS citizen EQUALS TRUE
+
+#EVAL ageEligible
+#EVAL citizenshipEligible

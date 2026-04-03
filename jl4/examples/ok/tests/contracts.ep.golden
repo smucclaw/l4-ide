@@ -37,13 +37,13 @@ DOES B AT payment 20 #TRACE aContract AT 0 WITH
 
 DOES B AT payment 10 #EVAL EVALTRACE x 5 (LIST EVENT S delivery 5, EVENT B (payment 3) 42)
 
-GIVETH PROVISION Person Action
+GIVETH DEONTIC Person Action
 x MEANS 
   PARTY S
   MUST delivery
   WITHIN 3
 
-GIVETH PROVISION Person Action
+GIVETH DEONTIC Person Action
 y MEANS 
   PARTY B
   MUST payment EXACTLY n
@@ -71,7 +71,7 @@ quux MEANS
   DOES B AT quuux PARTY 1
   DOES B AT baz qux PARTY 1
 
-DOES B AT baz bar GIVETH PROVISION Person Action
+DOES B AT baz bar GIVETH DEONTIC Person Action
 z MEANS 
   x ROR y
 

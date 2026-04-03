@@ -1,0 +1,45 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+computed-fields.l4:43:1-21:
+  "Alice"
+computed-fields.l4:44:1-20:
+  25
+computed-fields.l4:47:1-22:
+  TRUE
+computed-fields.l4:48:1-22:
+  FALSE
+computed-fields.l4:49:1-25:
+  "adult"
+computed-fields.l4:51:1-18:
+  11
+computed-fields.l4:52:1-20:
+  FALSE
+computed-fields.l4:53:1-20:
+  TRUE
+computed-fields.l4:54:1-23:
+  "child"
+computed-fields.l4:99:1-30:
+  TRUE
+computed-fields.l4:100:1-35:
+  `Low Risk`
+computed-fields.l4:101:1-31:
+  FALSE
+computed-fields.l4:126:1-27:
+  500
+computed-fields.l4:127:1-28:
+  10500
+computed-fields.l4:151:1-34:
+  400
+computed-fields.l4:152:1-32:
+  TRUE
+computed-fields.l4:153:1-27:
+  TRUE
+computed-fields.l4:181:1-20:
+  12
+computed-fields.l4:182:1-23:
+  25
+computed-fields.l4:183:1-22:
+  24
+computed-fields.l4:196:1-38:
+  25

@@ -4,6 +4,7 @@
     ./jl4-web/configuration.nix
     ./jl4-lsp/configuration.nix
     ./jl4-decision-service/configuration.nix
+    ./jl4-service/configuration.nix
     ./jl4-websessions/configuration.nix
     ./l4-wizard/configuration.nix
     ./module.nix
@@ -50,6 +51,19 @@
   };
 
   security.sudo.wheelNeedsPassword = false;
+
+  # ---------------------------------------------
+  # nix garbage collection
+  # ---------------------------------------------
+
+  nix.gc = {
+    automatic = true;
+    dates = "weekly";
+    options = "--delete-older-than 7d";
+  };
+
+  # Also optimize the store periodically to save disk space
+  nix.optimise.automatic = true;
 
   # ---------------------------------------------
   # ssh

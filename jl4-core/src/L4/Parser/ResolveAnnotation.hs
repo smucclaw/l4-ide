@@ -191,6 +191,8 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (TopDecl n) where
     Section ann s -> do
       section <- addNlg s
       pure $ Section ann section
+    Timezone ann e -> do
+      pure $ Timezone ann e
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Declare n) where
   addNlg a = extendNlgA a $ case a of
@@ -263,10 +265,10 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (TypeDecl n) where
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (TypedName n) where
   addNlg a = extendNlgA a $ case a of
-    MkTypedName ann n ty -> do
+    MkTypedName ann n ty mExpr -> do
       n' <- addNlg n
       ty' <- addNlg ty
-      pure $ MkTypedName ann n' ty'
+      pure $ MkTypedName ann n' ty' mExpr
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (ConDecl n) where
   addNlg a = extendNlgA a $ case a of
@@ -501,14 +503,14 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Expr n) where
       pure $ Breach ann mParty' mReason'
     Inert ann txt ctx -> pure $ Inert ann txt ctx
 
-instance (HasSrcRange n, HasNlg n) => HasNlg (Obligation n) where
-  addNlg (MkObligation ann' party event deadline followup lest) = do
+instance (HasSrcRange n, HasNlg n) => HasNlg (Deonton n) where
+  addNlg (MkDeonton ann' party event deadline followup lest) = do
     party' <- addNlg party
     event' <- addNlg event
     deadline' <- traverse addNlg deadline
     followup' <- traverse addNlg followup
     lest' <- traverse addNlg lest
-    pure $  MkObligation ann' party' event' deadline' followup' lest'
+    pure $  MkDeonton ann' party' event' deadline' followup' lest'
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (RAction n) where
   addNlg (MkAction ann modal rule provided) = do
@@ -582,6 +584,7 @@ instance HasDesc (TopDecl n) where
     Directive ann dir -> Directive ann <$> addDesc dir
     Import ann imp -> Import ann <$> addDesc imp
     Section ann sect -> Section ann <$> addDesc sect
+    Timezone ann e -> pure $ Timezone ann e
 
 instance HasDesc (Declare n) where
   addDesc decl@(MkDeclare ann tySig appForm tyDecl) = do
@@ -654,10 +657,10 @@ instance HasDesc (ConDecl n) where
     MkConDecl ann name <$> traverse addDesc names
 
 instance HasDesc (TypedName n) where
-  addDesc name@(MkTypedName ann n ty) = do
+  addDesc name@(MkTypedName ann n ty mExpr) = do
     ty' <- addDesc ty
     ann' <- attachLeadingOrInlineDesc name ann
-    pure $ MkTypedName ann' n ty'
+    pure $ MkTypedName ann' n ty' mExpr
 
 instance HasDesc (Type' n) where
   addDesc = pure

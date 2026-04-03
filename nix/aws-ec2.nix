@@ -9,17 +9,20 @@
     (modulesPath + "/installer/scan/not-detected.nix")
   ];
 
-  # without this we get weird delay errors upon nixos-rebuild switch
+  # Use systemd-networkd instead of dhcpcd for more predictable DNS management.
+  # This avoids resolvconf signature mismatches when resolv.conf is manually edited.
+  networking.useDHCP = false;
+  networking.useNetworkd = true;
+  systemd.network.networks."10-ens5" = {
+    matchConfig.Name = "ens5";
+    networkConfig.DHCP = "yes";
+    linkConfig.RequiredForOnline = "yes";
+  };
+  # AWS VPC DNS resolver — fallback in case DHCP doesn't populate resolv.conf.
+  # Without this, ACME cert renewal fails (can't resolve letsencrypt.org).
+  networking.nameservers = [ "172.31.0.2" "169.254.169.253" ];
+  # Disable wait-online to avoid deployment timeouts
   systemd.services.systemd-networkd-wait-online.enable = lib.mkForce false;
-  networking.useDHCP = lib.mkDefault true;
-  # but consider the alternative
-    # networking.useDHCP = false;
-    # networking.useNetworkd = true;
-    # systemd.network.networks."10-ens5" = {
-    #   matchConfig.Name = "ens5";
-    #   networkConfig.DHCP = "yes";
-    #   linkConfig.RequiredForOnline = "yes";
-    # };
   
   time.timeZone = "Asia/Singapore";
 

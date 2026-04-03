@@ -1,4 +1,0 @@
-DECIDE factorial n
-  IS IF n AT MOST 1 THEN 1 ELSE n * factorial (n - 1)
-
-#EVALTRACE factorial 6

@@ -1,8 +1,12 @@
 -- | Types needed during the scope and type checking phase.
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE UndecidableInstances #-}
 module L4.TypeCheck.Types where
 
 import Base
+#if defined(SERIALISE_ENABLED)
+import Codec.Serialise (Serialise)
+#endif
 import qualified Optics
 import L4.Annotation (HasSrcRange(..), HasAnno(..), AnnoExtra, AnnoToken, emptyAnno)
 import L4.Lexer (PosToken)
@@ -37,7 +41,11 @@ data CheckEntity =
   | KnownSection (Section Resolved)
   | KnownTypeVariable
   deriving stock (Eq, Generic, Show)
-  deriving anyclass NFData
+  deriving anyclass (NFData)
+
+#if defined(SERIALISE_ENABLED)
+deriving anyclass instance Serialise CheckEntity
+#endif
 
 data CheckState =
   MkCheckState
@@ -73,13 +81,17 @@ data CheckError =
   | IllegalApp Resolved (Type' Resolved) Int
   | IllegalAppNamed Resolved (Type' Resolved)
   | IncompleteAppNamed Resolved [OptionallyNamedType Resolved]
-  | CheckInfo (Type' Resolved)
+  | CheckInfo (Type' Resolved) (Maybe SrcRange)
   | CheckWarning CheckWarning
   | IllegalTypeInKindSignature (Type' Resolved)
   | MissingEntityInfo Resolved
   | DesugarAnnoRewritingError (Expr Name) HoleInfo
   | MixfixMatchErrorCheck Name MixfixMatchError
     -- ^ Error in mixfix pattern matching (function name, error details)
+  | CyclicComputedFields Name [Name]
+    -- ^ Circular dependency between computed fields (record name, cycle of field names)
+  | SuppliedComputedField Name
+    -- ^ Tried to supply a computed field in a record constructor (field name)
   deriving stock (Eq, Generic, Show)
   deriving anyclass NFData
 
@@ -179,6 +191,7 @@ instance HasSrcRange CheckError where
   rangeOf (OutOfScopeError n _)             = rangeOf n
   rangeOf (InconsistentNameInSignature n _) = rangeOf n
   rangeOf (InconsistentNameInAppForm n _)   = rangeOf n
+  rangeOf (CheckInfo _ mr)                  = mr
   rangeOf _                                 = Nothing
 
 -- | A token in a mixfix pattern, representing either a keyword (part of the function name)
@@ -299,6 +312,10 @@ data CheckEnv =
     , assumeDeclarations   :: !(Map SrcRange (DeclChecked (Assume Resolved)))
     , mixfixRegistry       :: !MixfixRegistry
     -- ^ Registry of mixfix functions indexed by their first keyword
+    , computedFields       :: !(Map RawName (Set RawName))
+    -- ^ Map from record type RawName to set of computed field RawNames.
+    -- Used to produce better error messages when a user tries to supply
+    -- a computed field in a record constructor.
     , errorContext         :: !CheckErrorContext
     , sectionStack         :: ![NonEmpty Text]
     }
@@ -537,6 +554,7 @@ isTopLevelBindingInSection u (MkSection _a  _mn _maka decls) = any (elem u . map
     Assume _ (MkAssume _ _ af _) -> appFormHeads af
     Directive _ _ -> []
     Import _ _ -> []
+    Timezone _ _ -> []
     -- NOTE: Sections are a toplevel binding in the current section but can also contain further
     -- toplevel bindings
     Section _ (MkSection _ mr maka decls') -> toResolved mr <> toResolved maka <> foldMap relevantResolveds decls'
@@ -842,6 +860,7 @@ extendEnv cis env =
     , declareDeclarations = e.declareDeclarations
     , assumeDeclarations = e.assumeDeclarations
     , mixfixRegistry = e.mixfixRegistry
+    , computedFields = e.computedFields
     , sectionStack = e.sectionStack
     }
     where

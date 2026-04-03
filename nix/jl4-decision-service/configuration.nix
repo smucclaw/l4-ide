@@ -21,6 +21,7 @@
       default = [
         ../../jl4/experiments/britishcitizen5.l4
         ../../jl4/experiments/parking.l4
+        ../../jl4/experiments/thailand-cosmetics
       ];
       description = "L4 files (and/or directories) to load into the decision service at startup";
     };

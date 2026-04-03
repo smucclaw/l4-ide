@@ -1,0 +1,17 @@
+-- This is a comment (starts with --)
+
+-- Define a simple type
+DECLARE Person
+    HAS name IS A STRING
+        age IS A NUMBER
+
+-- Create a person
+alice MEANS Person "Alice" 30
+
+-- Define a rule
+GIVEN p IS A Person
+GIVETH A BOOLEAN
+DECIDE `is adult` IF p's age >= 18
+
+-- Test it
+#EVAL `is adult` alice

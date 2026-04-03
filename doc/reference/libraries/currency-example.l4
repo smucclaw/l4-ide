@@ -1,0 +1,54 @@
+-- Currency Example: ISO 4217 currency handling
+IMPORT currency
+
+-- Currency codes
+#EVAL `US Dollar code`  -- "USD"
+#EVAL `Euro code`       -- "EUR"
+
+-- Decimal places per currency
+#EVAL `decimal places for currency` "USD"  -- RIGHT 2
+#EVAL `decimal places for currency` "JPY"  -- RIGHT 0 (no decimals)
+#EVAL `decimal places for currency` "XXX"  -- LEFT "Unknown currency code: XXX"
+
+-- Create money from minor units (cents)
+-- 12345 cents = $123.45
+DECIDE priceInCents IS 12345
+DECIDE formattedPrice IS Money priceInCents "USD"
+#EVAL formattedPrice  -- RIGHT "123.45 USD"
+
+-- Japanese Yen has no decimals
+DECIDE yenAmount IS Money 1000 "JPY"
+#EVAL yenAmount  -- RIGHT "1000 JPY"
+
+-- Convert between major and minor units
+DECIDE dollars IS 99.99
+DECIDE cents IS `major to minor units` dollars "USD"
+#EVAL cents  -- RIGHT 9999
+
+DECIDE backToDollars IS `minor to major units` 9999 "USD"
+#EVAL backToDollars  -- RIGHT 99.99
+
+-- Arithmetic (all in minor units to avoid floating point errors)
+DECIDE amount1 IS 1000  -- $10.00
+DECIDE amount2 IS 500   -- $5.00
+
+DECIDE added IS `add money` amount1 amount2 "USD"
+#EVAL added  -- RIGHT 1500 ($15.00)
+
+DECIDE subtracted IS `subtract money` amount1 amount2 "USD"
+#EVAL subtracted  -- RIGHT 500 ($5.00)
+
+-- Multiply by factor (e.g., tax)
+DECIDE taxRate IS 1.08  -- 8% tax
+DECIDE withTax IS `multiply money` amount1 taxRate "USD"
+#EVAL withTax  -- RIGHT 1080 ($10.80)
+
+-- Comparisons
+#EVAL `money greater than` 1000 500  -- TRUE
+#EVAL `money at least` 1000 1000     -- TRUE
+
+-- Validation
+#EVAL `is valid currency code` "USD"  -- TRUE
+#EVAL `is valid currency code` "usd"  -- FALSE (must be uppercase)
+#EVAL `is non-negative` 100           -- TRUE
+#EVAL `is positive` 0                 -- FALSE

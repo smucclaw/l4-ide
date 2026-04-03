@@ -144,14 +144,14 @@ nlgExpr = \ case
         pure $ MkGuardedExpr ann' c' f'
       e' <- nlgExpr e
       pure $ MultiWayIf ann es' e'
-    Regulative ann (MkObligation ann'' party (MkAction ann' modal rule provided) deadline followup lest) -> do
+    Regulative ann (MkDeonton ann'' party (MkAction ann' modal rule provided) deadline followup lest) -> do
       party' <- nlgExpr party
       rule' <- nlgPattern rule
       provided' <- traverse nlgExpr provided
       deadline' <- traverse nlgExpr deadline
       followup' <- traverse nlgExpr followup
       lest' <- traverse nlgExpr lest
-      pure $ Regulative ann (MkObligation ann'' party' (MkAction ann' modal rule' provided') deadline' followup' lest')
+      pure $ Regulative ann (MkDeonton ann'' party' (MkAction ann' modal rule' provided') deadline' followup' lest')
     Consider ann e branches  -> do
       e' <- nlgExpr e
       -- Since the bindings in the branches bring new variables into
@@ -318,7 +318,8 @@ nlgConDecl (MkConDecl ann n typedName) =
     <*> traverse nlgTypedName typedName
 
 nlgTypedName :: TypedName Resolved -> Check (TypedName Resolved)
-nlgTypedName (MkTypedName ann n ty) =
+nlgTypedName (MkTypedName ann n ty mExpr) =
   MkTypedName ann
     <$> resolveNlgAnnotationInResolved n
     <*> nlgType ty
+    <*> pure mExpr

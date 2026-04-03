@@ -1,0 +1,6 @@
+-- Computed Fields: Self-referencing Cycle (SHOULD FAIL)
+-- A computed field that references itself.
+DECLARE Bad HAS
+    `x` IS A NUMBER
+    `a` IS A NUMBER
+        MEANS `a` + 1

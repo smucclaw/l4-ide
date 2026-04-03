@@ -1,0 +1,14 @@
+-- Example: Textual vs symbolic operators
+-- All forms are equivalent and can be mixed
+
+age MEANS 25
+citizen MEANS TRUE
+
+-- All equivalent forms
+eligible1 MEANS (age > 18) AND (citizen EQUALS TRUE)
+eligible2 MEANS (age GREATER THAN 18) AND (citizen = TRUE)
+eligible3 MEANS (age > 18) && (citizen EQUALS TRUE)
+
+#EVAL eligible1
+#EVAL eligible2
+#EVAL eligible3

@@ -2,7 +2,17 @@ cabal-version: 3.0
 name: jl4-core
 version: 0.1
 build-type: Simple
-tested-with: GHC==9.6.6
+tested-with: GHC==9.10.2
+
+flag safe-mode
+  description: Disable FETCH/POST builtins (for WASM builds). When enabled, HTTP operations return errors.
+  default: False
+  manual: True
+
+flag serialise-support
+  description: Enable Serialise instances for AST types (for jl4-service CBOR caching). Disable for WASM builds where cborg doesn't compile.
+  default: True
+  manual: True
 
 data-files: libraries/*.l4
 
@@ -33,37 +43,44 @@ library
     aeson,
     bytestring,
     placeholder,
-    cassava,
-    process,
     containers,
     data-default,
     deepseq,
+    directory,
     dlist,
     extra,
     fgl,
-    file-io,
     filepath,
     generics-sop,
     graphviz,
-    hw-fingertree,
     logict,
     lsp-types,
     megaparsec,
     mtl,
     optics,
     optics-core,
-    pcre2,
     pretty-simple,
     prettyprinter,
     time,
-    safe-exceptions,
+    tz,
     scientific,
     split,
     text >= 2 && < 2.1.2,
     tree-diff,
     vector,
     template-haskell,
-    req,
+
+  if !flag(safe-mode)
+    build-depends: req >= 3.0
+    cpp-options: -DHTTP_ENABLED
+
+  if flag(serialise-support)
+    build-depends: serialise
+    cpp-options: -DSERIALISE_ENABLED
+
+  -- For WASM JavaScript FFI exports
+  if arch(wasm32)
+    build-depends: ghc-experimental
 
   autogen-modules:
     Paths_jl4_core
@@ -79,6 +96,7 @@ library
     L4.Annotation
     L4.Citations
     L4.Desugar
+    L4.Diagnostic
     L4.DirectiveFilter
     L4.Evaluate.Operators
     L4.Evaluate.ValueLazy
@@ -91,7 +109,9 @@ library
     L4.StateGraph
     L4.ExactPrint
     L4.Export
+    L4.FunctionSchema
     L4.FindDefinition
+    L4.FindReferences
     L4.JsonSchema
     L4.Lexer
     L4.Lint.AndOrDepth
@@ -107,7 +127,6 @@ library
     L4.Print
     L4.Syntax
     L4.TemporalContext
-    L4.TemporalGit
     L4.TracePolicy
     L4.Transform
     L4.TypeCheck
@@ -120,6 +139,16 @@ library
     L4.Utils.IntervalMap
     L4.Utils.RevList
     L4.Utils.Ratio
+    L4.Crypto.SHA1
+    L4.Crypto.UUID5
+    L4.Viz.Ladder
+    L4.Viz.VizExpr
+    L4.Import.Resolution
+    L4.Instances.Serialise
+    L4.API
+    L4.API.VirtualFS
+    L4.API.EmbeddedLibraries
+    L4.API.EmbeddedLibraries.TH
 
 test-suite jl4-core-test
   import: defaults
@@ -128,12 +157,16 @@ test-suite jl4-core-test
   main-is: Spec.hs
   other-modules:
     Paths_jl4_core
+    ImportResolutionSpec
     TemporalContextSpec
     MixfixParserSpec
+    UUID5Spec
   build-tool-depends:
     hspec-discover:hspec-discover
   build-depends:
     base,
+    bytestring,
+    containers,
     hspec,
     jl4-core,
     text,

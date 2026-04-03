@@ -1,0 +1,417 @@
+-- Module A1: Real Regulatory Schemes - Complete Example
+-- Charity Registration System based on Jersey Charities Law 2014
+--
+-- This file demonstrates the three-layer approach to encoding legislation:
+--   Layer A: Structural Definitions (types from statutory glossary)
+--   Layer B: Deontic Rules (obligations, permissions, prohibitions)
+--   Layer C: Events and State Transitions
+
+IMPORT prelude
+IMPORT daydate
+
+-- ============================================================
+§ `Layer A: Structural Definitions`
+-- ============================================================
+
+-- Supporting types needed by the main definitions
+
+DECLARE Conviction HAS
+    `the offence` IS A STRING
+    `the date` IS A DATE
+    `involves dishonesty` IS A BOOLEAN
+
+DECLARE Money HAS
+    amount IS A NUMBER
+    currency IS A STRING
+
+DECLARE Asset HAS
+    `the description` IS A STRING
+    `the value` IS A Money
+
+DECLARE Applicant HAS
+    `the name` IS A STRING
+    `the contact` IS A STRING
+
+-- Article 2(10): "misconduct" includes mismanagement or misapplication
+DECLARE MisconductType IS ONE OF
+    Mismanagement
+    Misapplication
+    OtherMisconduct HAS description IS A STRING
+
+-- Schedule 1: Charitable purposes (13 statutory heads)
+DECLARE CharitablePurpose IS ONE OF
+    `prevention or relief of poverty`
+    `advancement of education`
+    `advancement of religion`
+    `advancement of health or saving of lives`
+    `advancement of citizenship or community development`
+    `advancement of arts, culture, heritage or science`
+    `advancement of amateur sport`
+    `advancement of human rights, conflict resolution, reconciliation`
+    `advancement of environmental protection or improvement`
+    `relief of those in need`
+    `advancement of animal welfare`
+    `purposes analogous to charitable purposes`
+    `other charitable purpose` HAS description IS A STRING
+
+-- Article 2: Governor definition
+DECLARE Governor HAS
+    name IS A STRING
+    dateOfBirth IS A DATE
+    address IS A STRING
+    isBankrupt IS A BOOLEAN
+    convictions IS A LIST OF Conviction
+
+-- Core financial information (Regulation 1, Core Info Regs 2018)
+DECLARE CoreFinancialInfo HAS
+    income IS A Money
+    expenditure IS A Money
+    openingAssets IS A Money
+    closingAssets IS A Money
+    otherAssets IS A LIST OF Asset
+
+-- Register sections
+DECLARE RegisterSection IS ONE OF
+    GeneralSection
+    RestrictedSection
+
+-- Charity status
+DECLARE CharityStatus IS ONE OF
+    Pending
+    Active
+    Suspended HAS
+        reason IS A STRING
+        date IS A DATE
+    Deregistered HAS
+        reason IS A STRING
+        date IS A DATE
+        isRetrospective IS A BOOLEAN
+
+-- Main charity record
+DECLARE RegisteredCharity HAS
+    name IS A STRING
+    registrationNumber IS A STRING
+    section IS A RegisterSection
+    status IS A CharityStatus
+    constitution IS A STRING
+    purposes IS A LIST OF CharitablePurpose
+    publicBenefitStatement IS A STRING
+    governors IS A LIST OF Governor
+    financials IS A CoreFinancialInfo
+    registrationDate IS A DATE
+
+-- Reportable matters under Article 19(1)
+DECLARE ReportableMatter IS ONE OF
+    Bankruptcy HAS
+        date IS A DATE
+    DirectorDisqualification HAS
+        date IS A DATE
+        jurisdiction IS A STRING
+    DishonestConviction HAS
+        description IS A STRING
+        date IS A DATE
+
+-- ============================================================
+§ `Layer B: Deontic Definitions`
+-- ============================================================
+
+-- Actors in the regulatory system
+DECLARE Actor IS ONE OF
+    CharityActor HAS charity IS A RegisteredCharity
+    GovernorActor HAS governor IS A Governor
+    CommissionerActor
+    ApplicantActor HAS applicant IS A Applicant
+
+-- Actions that can be performed
+DECLARE Action IS ONE OF
+    -- Charity obligations
+    `file annual return`
+    `report change of particulars`
+    `report reportable matter` HAS
+        matter IS A ReportableMatter
+    -- Commissioner powers
+    `demand information`
+    `issue Required Steps Notice`
+    `suspend governor` HAS
+        reason IS A STRING
+    `deregister charity` HAS
+        reason IS A STRING
+    -- Governor obligations
+    `act in best interests`
+    `report conviction`
+    -- Appeal actions
+    `lodge appeal`
+
+-- ============================================================
+§ `Layer B: Deontic Rules`
+-- ============================================================
+
+-- B-AR-01: Annual Return Obligation
+-- Article 13(7)-(10) + Timing Order 2019
+-- "A registered charity must file an annual return within 2 months of year end"
+
+GIVEN charity IS A RegisteredCharity
+GIVETH A DEONTIC Actor Action
+`annual return obligation` MEANS
+    IF charity's status EQUALS Active
+    THEN
+        PARTY CharityActor charity
+        MUST `file annual return`
+        WITHIN 60  -- 2 months approximately 60 days
+        HENCE FULFILLED
+        LEST `Commissioner may issue notice` charity
+    ELSE FULFILLED
+
+-- B-RSN-01: Commissioner's Power to Issue Notice
+-- Article 27(1)-(4)
+
+GIVEN charity IS A RegisteredCharity
+GIVETH A DEONTIC Actor Action
+`Commissioner may issue notice` MEANS
+    PARTY CommissionerActor
+    MAY `issue Required Steps Notice`
+    HENCE `charity must comply with notice` charity
+
+-- B-RSN-02: Charity must comply with notice
+-- Article 27(5)
+
+GIVEN charity IS A RegisteredCharity
+GIVETH A DEONTIC Actor Action
+`charity must comply with notice` MEANS
+    PARTY CharityActor charity
+    MUST `file annual return`
+    WITHIN 30
+    HENCE FULFILLED
+    LEST BREACH BY CharityActor charity BECAUSE "Failed to comply with Required Steps Notice"
+
+-- B-GOV-02: Governor reporting obligation
+-- Article 19(1): A governor must notify the Commissioner as soon as practicable
+-- if any reportable matter applies to them
+
+GIVEN governor IS A Governor
+      matter IS A ReportableMatter
+GIVETH A DEONTIC Actor Action
+`governor reporting obligation` MEANS
+    PARTY GovernorActor governor
+    MUST `report reportable matter` matter
+    WITHIN 14  -- "as soon as practicable" interpreted as 14 days
+    HENCE FULFILLED
+    LEST `commissioner may suspend` governor
+
+-- B-GOV-03: Commissioner may suspend governor
+-- Article 29
+
+GIVEN governor IS A Governor
+GIVETH A DEONTIC Actor Action
+`commissioner may suspend` MEANS
+    PARTY CommissionerActor
+    MAY `suspend governor` "Failed to report reportable matter"
+    HENCE FULFILLED
+
+-- ============================================================
+§ `Layer C: Events and State Transitions`
+-- ============================================================
+
+-- Events that change the register
+DECLARE RegisterEvent IS ONE OF
+    CharityRegistered HAS
+        charity IS A RegisteredCharity
+        date IS A DATE
+    CharityMovedToRestricted HAS
+        charity IS A RegisteredCharity
+        date IS A DATE
+    CharityDeregistered HAS
+        charity IS A RegisteredCharity
+        reason IS A STRING
+        date IS A DATE
+        isRetrospective IS A BOOLEAN
+    AnnualReturnFiled HAS
+        charity IS A RegisteredCharity
+        year IS A NUMBER
+        wasLate IS A BOOLEAN
+    RequiredStepsNoticeIssued HAS
+        charity IS A RegisteredCharity
+        noticeId IS A STRING
+        deadline IS A DATE
+    GovernorSuspended HAS
+        governor IS A Governor
+        charity IS A RegisteredCharity
+        reason IS A STRING
+        period IS A NUMBER
+
+-- Effect of events on register
+GIVEN event IS A RegisterEvent
+GIVETH A STRING  -- Describes the effect
+`event effect` MEANS
+    CONSIDER event
+    WHEN CharityRegistered c d THEN
+        "New active entry created in register"
+    WHEN CharityDeregistered c r d retro THEN
+        IF retro
+        THEN "Entry moved to historic; registration void from earlier date"
+        ELSE "Entry moved to historic"
+    WHEN AnnualReturnFiled c y late THEN
+        IF late
+        THEN "Annual return logged with late flag"
+        ELSE "Annual return logged"
+    WHEN RequiredStepsNoticeIssued c nid deadline THEN
+        "Notice reference stored under Art 8(3)(k)"
+    OTHERWISE "Register updated"
+
+-- ============================================================
+§ `Cross-References and Charity Test`
+-- ============================================================
+
+-- The charity test (Article 5) references:
+-- - Schedule 1 (purposes)
+-- - Article 7 (public benefit)
+-- - Regulations (core financial info)
+
+GIVEN charity IS A RegisteredCharity
+GIVETH A BOOLEAN
+DECIDE `meets charity test` IF
+    `has charitable purposes` charity              -- Schedule 1
+    AND `provides public benefit` charity          -- Article 7
+    AND `has valid constitution` charity           -- Article 11(2)(a)
+    AND `has complete financial info` charity      -- Core Info Regs
+
+-- Stub: Check if charity has at least one charitable purpose
+GIVEN charity IS A RegisteredCharity
+GIVETH A BOOLEAN
+DECIDE `has charitable purposes` IF
+    NOT (null (charity's purposes))
+
+-- Article 7: Public benefit factors
+GIVEN charity IS A RegisteredCharity
+GIVETH A BOOLEAN
+DECIDE `provides public benefit` IF
+    `has identifiable benefit` charity             -- Art 7(2)(a)
+    AND `benefit outweighs detriment` charity      -- Art 7(2)(b)
+    AND NOT `unduly restricts beneficiaries` charity  -- Art 7(3)
+
+-- Stub implementations for public benefit factors
+GIVEN charity IS A RegisteredCharity
+GIVETH A BOOLEAN
+DECIDE `has identifiable benefit` IF
+    NOT (charity's publicBenefitStatement EQUALS "")
+
+GIVEN charity IS A RegisteredCharity
+GIVETH A BOOLEAN
+DECIDE `benefit outweighs detriment` IF
+    TRUE  -- Would need detailed analysis
+
+GIVEN charity IS A RegisteredCharity
+GIVETH A BOOLEAN
+DECIDE `unduly restricts beneficiaries` IF
+    FALSE  -- Would need detailed analysis
+
+GIVEN charity IS A RegisteredCharity
+GIVETH A BOOLEAN
+DECIDE `has valid constitution` IF
+    NOT (charity's constitution EQUALS "")
+
+GIVEN charity IS A RegisteredCharity
+GIVETH A BOOLEAN
+DECIDE `has complete financial info` IF
+    charity's financials's income's amount >= 0
+    AND charity's financials's expenditure's amount >= 0
+
+-- ============================================================
+§ `Handling Amendments - Temporal Validity`
+-- ============================================================
+
+-- Original Law 2014 had 12 charitable purposes
+-- R&O 27/2025 added "advancement of animal welfare"
+
+-- Model with effective dates:
+DECLARE PurposeWithDate HAS
+    purpose IS A CharitablePurpose
+    effectiveFrom IS A DATE
+
+-- Check if purpose was valid at a given date
+GIVEN purpose IS A CharitablePurpose
+      asOfDate IS A DATE
+GIVETH A BOOLEAN
+DECIDE `purpose valid at date` IF
+    -- Animal welfare only valid from 2025
+    IF purpose EQUALS `advancement of animal welfare`
+    THEN asOfDate >= Date 1 1 2025
+    ELSE TRUE  -- Other purposes valid from 2014
+
+-- ============================================================
+§ `Test Data`
+-- ============================================================
+
+-- Sample governor
+`John Smith` MEANS Governor WITH
+    name IS "John Smith"
+    dateOfBirth IS Date 15 6 1975
+    address IS "123 Main Street, St Helier"
+    isBankrupt IS FALSE
+    convictions IS EMPTY
+
+-- Sample financial info
+`sample financials` MEANS CoreFinancialInfo WITH
+    income IS Money WITH amount IS 50000, currency IS "GBP"
+    expenditure IS Money WITH amount IS 45000, currency IS "GBP"
+    openingAssets IS Money WITH amount IS 100000, currency IS "GBP"
+    closingAssets IS Money WITH amount IS 105000, currency IS "GBP"
+    otherAssets IS EMPTY
+
+-- Sample active charity
+`Acme Animal Shelter` MEANS RegisteredCharity WITH
+    name IS "Acme Animal Shelter"
+    registrationNumber IS "JC-2024-001"
+    section IS GeneralSection
+    status IS Active
+    constitution IS "Standard charitable constitution"
+    purposes IS LIST `advancement of animal welfare`
+    publicBenefitStatement IS "Provides shelter and care for abandoned animals in Jersey"
+    governors IS LIST `John Smith`
+    financials IS `sample financials`
+    registrationDate IS Date 15 1 2024
+
+-- ============================================================
+§ `Test Traces`
+-- ============================================================
+
+-- Test 1: Active charity files annual return on time
+#TRACE `annual return obligation` `Acme Animal Shelter` AT 0 WITH
+    PARTY CharityActor `Acme Animal Shelter` DOES `file annual return` AT 30
+
+-- Test 2: Active charity misses deadline, commissioner issues notice
+#TRACE `annual return obligation` `Acme Animal Shelter` AT 0 WITH
+    (`WAIT UNTIL` 70)
+
+-- Test 3: Governor reports bankruptcy promptly
+`bankruptcy matter` MEANS Bankruptcy (Date 1 7 2024)
+#TRACE `governor reporting obligation` `John Smith` `bankruptcy matter` AT 0 WITH
+    PARTY GovernorActor `John Smith` DOES `report reportable matter` `bankruptcy matter` AT 10
+
+-- Test 4: Governor fails to report, commissioner may suspend
+#TRACE `governor reporting obligation` `John Smith` `bankruptcy matter` AT 0 WITH
+    (`WAIT UNTIL` 20)
+
+-- ============================================================
+§ `Evaluations`
+-- ============================================================
+
+-- Check if Acme Animal Shelter meets the charity test
+#EVAL `meets charity test` `Acme Animal Shelter`
+
+-- Check public benefit
+#EVAL `provides public benefit` `Acme Animal Shelter`
+
+-- Check if animal welfare purpose was valid in 2024
+#EVAL `purpose valid at date` `advancement of animal welfare` (Date 1 6 2024)
+
+-- Check if animal welfare purpose is valid in 2025
+#EVAL `purpose valid at date` `advancement of animal welfare` (Date 1 6 2025)
+
+-- Check effect of registration event
+`registration event` MEANS CharityRegistered `Acme Animal Shelter` (Date 15 1 2024)
+#EVAL `event effect` `registration event`
+
+-- Check effect of late filing event
+`late filing event` MEANS AnnualReturnFiled `Acme Animal Shelter` 2024 TRUE
+#EVAL `event effect` `late filing event`

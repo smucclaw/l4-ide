@@ -1,0 +1,42 @@
+-- Test CONSIDER on primitive types (NUMBER, STRING, DATE)
+-- These types have infinitely many values, so pattern analysis shouldn't
+-- flag branches as redundant just because they match specific literals.
+
+IMPORT prelude
+
+-- Test NUMBER matching
+GIVEN n IS A NUMBER
+GIVETH A STRING
+`classify number` MEANS
+  CONSIDER n
+    WHEN 0 THEN "zero"
+    WHEN 1 THEN "one"
+    WHEN 2 THEN "two"
+    OTHERWISE "other"
+
+-- Test STRING matching
+GIVEN s IS A STRING
+GIVETH A STRING
+`classify string` MEANS
+  CONSIDER s
+    WHEN "a" THEN "letter a"
+    WHEN "b" THEN "letter b"
+    WHEN "c" THEN "letter c"
+    OTHERWISE "other letter"
+
+-- Test BOOLEAN matching - this SHOULD still generate warnings as needed
+-- since BOOLEAN has a finite set of values (TRUE, FALSE)
+GIVEN b IS A BOOLEAN
+GIVETH A STRING
+`classify bool` MEANS
+  CONSIDER b
+    WHEN TRUE THEN "yes"
+    WHEN FALSE THEN "no"
+
+-- Smoke test: verify the functions work
+#EVAL `classify number` 1
+#EVAL `classify number` 42
+#EVAL `classify string` "a"
+#EVAL `classify string` "z"
+#EVAL `classify bool` TRUE
+#EVAL `classify bool` FALSE

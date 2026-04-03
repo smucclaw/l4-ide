@@ -1,17 +1,1 @@
-{
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "properties": {
-        "bar": {
-            "$ref": "#/$defs/BOOLEAN"
-        },
-        "foo": {
-            "$ref": "#/$defs/BOOLEAN"
-        }
-    },
-    "required": [
-        "foo",
-        "bar"
-    ],
-    "title": "x1",
-    "type": "object"
-}
+No @export annotations found in file

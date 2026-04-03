@@ -1,0 +1,7 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+timezone-tests.l4:10:1-26:
+  "America/New_York"
+timezone-tests.l4:21:1-23:
+  assertion satisfied

@@ -107,6 +107,7 @@ import Optics ((%~), (^.))
 import qualified Base.Set as Set
 import Data.Function (on)
 import Control.Exception (assert)
+import L4.Desugar (desugarComputedFields, detectComputedFieldCycles, extractComputedFieldNames)
 
 mkInitialCheckState :: Substitution -> CheckState
 mkInitialCheckState substitution =
@@ -130,6 +131,7 @@ mkInitialCheckEnv moduleUri environment entityInfo =
     , declareDeclarations = Map.empty
     , assumeDeclarations = Map.empty
     , mixfixRegistry = Map.empty
+    , computedFields = Map.empty
     , moduleUri
     , sectionStack = []
     }
@@ -155,13 +157,18 @@ initialCheckEnv moduleUri = mkInitialCheckEnv moduleUri initialEnvironment initi
 
 doCheckProgramWithDependencies :: CheckState -> CheckEnv -> Module  Name -> CheckResult
 doCheckProgramWithDependencies checkState checkEnv program =
-  case runCheckUnique (checkProgram program) checkEnv checkState of
+  let cycleErrors =
+        [ MkCheckErrorWithContext (CyclicComputedFields recName cycleFlds) (WhileCheckingDeclare recName None)
+        | (recName, cycleFlds) <- detectComputedFieldCycles program
+        ]
+      checkEnv' = checkEnv { computedFields = extractComputedFieldNames program }
+  in case runCheckUnique (checkProgram (desugarComputedFields program)) checkEnv' checkState of
     (w, s) ->
       let
         (errs, (rprog, topEnv, localMixfixRegistry)) = runWith w
       in
         -- might be nicer to be able to do this within the inferProgram call / at the end of it
-        case runCheckUnique (traverse applySubst errs) checkEnv s of
+        case runCheckUnique (traverse applySubst (cycleErrors ++ errs)) checkEnv s of
           (w', s') ->
             let (moreErrs, substErrs) = runWith w'
                 env = extendEnv topEnv checkEnv
@@ -205,8 +212,8 @@ withExtraMixfix mixfixAdds =
   local (updateMixfix mixfixAdds)
   where
     updateMixfix :: MixfixRegistry -> CheckEnv -> CheckEnv
-    updateMixfix adds (MkCheckEnv a b c d e f g reg h i) =
-      MkCheckEnv a b c d e f g (Map.union adds reg) h i
+    updateMixfix adds (MkCheckEnv a b c d e f g reg cf h i) =
+      MkCheckEnv a b c d e f g (Map.union adds reg) cf h i
 
 dedupCheckInfos :: [CheckInfo] -> [CheckInfo]
 dedupCheckInfos = go Set.empty []
@@ -411,7 +418,7 @@ inferDirective (LazyEvalTrace ann e) = errorContext (WhileCheckingExpression e) 
   pure (LazyEvalTrace ann re)
 inferDirective (Check ann e) = errorContext (WhileCheckingExpression e) do
   (re, te) <- prune $ inferExpr e
-  addError (CheckInfo te)
+  addError (CheckInfo te (rangeOf ann))
   pure (Check ann re)
 inferDirective (Contract ann e t evs) = errorContext (WhileCheckingExpression e) do
   partyT <- fresh (NormalName "party")
@@ -474,6 +481,9 @@ inferTopDecl (Import ann import_) = do
 inferTopDecl (Section ann sec) = do
   (sec', extends) <- inferSection sec
   pure (Section ann sec', extends)
+inferTopDecl (Timezone ann tzExpr) = do
+  (rtzExpr, _ty) <- inferExpr tzExpr
+  pure (Timezone ann rtzExpr, [])
 
 -- TODO: Somewhere near the top we should do dependency analysis. Note that
 -- there is a potential problem. If we use type-directed name resolution but
@@ -829,10 +839,10 @@ inferConDecl rappForm (MkConDecl ann n tns) = do
   pure (condecl, makeKnown dn conInfo : concat extends)
 
 typedNameOptionallyNamedType :: TypedName n -> OptionallyNamedType n
-typedNameOptionallyNamedType (MkTypedName _ n t) = MkOptionallyNamedType emptyAnno (Just n) t
+typedNameOptionallyNamedType (MkTypedName _ n t _) = MkOptionallyNamedType emptyAnno (Just n) t
 
 inferSelector :: AppForm Resolved -> TypedName Name -> Check (TypedName Resolved, [CheckInfo])
-inferSelector rappForm (MkTypedName ann n t) = do
+inferSelector rappForm (MkTypedName ann n t _mExpr) = do
   rt <- inferType t
   dn <- def n
   let selectorInfo = KnownTerm (forall' (view appFormArgs rappForm) (fun_ [appFormType rappForm] rt)) Selector
@@ -841,7 +851,9 @@ inferSelector rappForm (MkTypedName ann n t) = do
     Just desc -> for_ (rangeOf dn) $ \srcRange ->
       addDescForSrcRange srcRange (getDesc desc)
     Nothing -> pure ()
-  pure (MkTypedName ann dn rt, [makeKnown dn selectorInfo])
+  -- Note: computed fields (MEANS clause) are desugared before type checking,
+  -- so _mExpr is always Nothing here. We pass Nothing in the output.
+  pure (MkTypedName ann dn rt Nothing, [makeKnown dn selectorInfo])
 
 -- | Infers / checks a type to be of kind TYPE.
 inferType :: Type' Name -> Check (Type' Resolved)
@@ -1083,18 +1095,18 @@ checkMultiWayIf ann es e t = do
   e' <- checkExpr ExpectIfBranchesContext e t
   pure (MultiWayIf ann es' e')
 
-checkObligation
+checkDeonton
   :: Anno -> Expr Name -> RAction Name
   -> Maybe (Expr Name) -> Maybe (Expr Name) -> Maybe (Expr Name)
-  -> Type' Resolved -> Type' Resolved -> Check (Obligation Resolved)
-checkObligation ann party action due hence lest partyT actionT = do
+  -> Type' Resolved -> Type' Resolved -> Check (Deonton Resolved)
+checkDeonton ann party action due hence lest partyT actionT = do
   partyR <- checkExpr ExpectRegulativePartyContext party partyT
   (actionR, boundByPattern) <- checkAction action actionT
   let rTy = contract partyT actionT
   dueR <- traverse (\e -> checkExpr ExpectRegulativeDeadlineContext e number) due
   henceR <- traverse (\e -> extendKnownMany boundByPattern $ checkExpr ExpectRegulativeFollowupContext e rTy) hence
   lestR <- traverse (\e -> checkExpr ExpectRegulativeFollowupContext e rTy) lest
-  pure (MkObligation ann partyR actionR dueR henceR lestR)
+  pure (MkDeonton ann partyR actionR dueR henceR lestR)
 
 checkAction :: RAction Name -> Type' Resolved -> Check (RAction Resolved, [CheckInfo])
 checkAction MkAction {anno, modal, action, provided = mprovided} actionT = do
@@ -1125,12 +1137,17 @@ checkConsider ec ann e branches t = do
   let redundant = redundantBranches $ annotateRefinement bs
       missing = nubBy ((==) `on` fmap getUnique) $ expandToPattern scrutVar $ normalizeRefinement $ uncoverRefinement bs
 
-  unless (null missing) do
+  -- Skip pattern analysis warnings for primitive types (NUMBER, STRING, DATE)
+  -- because the analysis is designed for algebraic data types with known constructors.
+  -- Primitive types have infinitely many values (literals) that can't be enumerated.
+  -- We need to apply the current substitution to resolve any inference variables.
+  resolvedTe <- applySubst te
+  let isPrimitiveScrutinee = isPrimitiveType resolvedTe
+
+  unless (null missing || isPrimitiveScrutinee) do
     addWarning $ PatternMatchesMissing missing
-  unless (null redundant) do
+  unless (null redundant || isPrimitiveScrutinee) do
     addWarning $ PatternMatchRedundant redundant
-
-
 
   pure (Consider ann re rbranches)
 
@@ -1394,10 +1411,10 @@ inferExpr' g =
       v <- fresh (NormalName "multiwayif")
       re <- checkMultiWayIf ann es e v
       pure (re, v)
-    Regulative ann (MkObligation ann'' e1 e2 me3 me4 me5) -> do
+    Regulative ann (MkDeonton ann'' e1 e2 me3 me4 me5) -> do
       party <- fresh (NormalName "party")
       action <- fresh (NormalName "action")
-      ob <- checkObligation ann'' e1 e2 me3 me4 me5 party action
+      ob <- checkDeonton ann'' e1 e2 me3 me4 me5 party action
       pure (Regulative ann ob, contract party action)
     Consider ann e branches -> do
       v <- fresh (NormalName "consider")
@@ -1483,6 +1500,21 @@ isStringCoercible ty = case ty of
     in t `elem` ["NUMBER", "STRING", "BOOLEAN", "DATE"]
   _ -> False
 
+-- | Check if a type is a primitive type with infinitely many values.
+-- Used to skip pattern exhaustiveness/redundancy analysis for CONSIDER expressions
+-- on primitive types, since the analysis is designed for algebraic data types
+-- with a finite, known set of constructors.
+isPrimitiveType :: Type' Resolved -> Bool
+isPrimitiveType ty = case ty of
+  InfVar{} -> False  -- Unknown type, don't skip analysis
+  TyApp _ tyRef [] ->
+    let t = nameToText (getName tyRef)
+    -- NUMBER and STRING have infinitely many literal values
+    -- DATE also has many values that can't be enumerated
+    -- BOOLEAN has only TRUE/FALSE so analysis works correctly for it
+    in t `elem` ["NUMBER", "STRING", "DATE"]
+  _ -> False
+
 inferEvent :: Event Name -> Check (Event Resolved, Type' Resolved)
 inferEvent (MkEvent ann party action timestamp atFirst) = do
   partyT <- fresh (NormalName "party")
@@ -1519,6 +1551,12 @@ supplyAppNamed  r onts (MkNamedExpr ann n e : nes) = do
 
 findOptionallyNamedType :: Name -> [(Int, OptionallyNamedType Resolved)] -> Check (Int, Resolved, Type' Resolved, [(Int, OptionallyNamedType Resolved)])
 findOptionallyNamedType n [] = do
+  -- Check if this is a computed field that was stripped during desugaring
+  cfMap <- asks (.computedFields)
+  let rn' = rawName n
+  case [() | (_recRn, flds) <- Map.toList cfMap, Set.member rn' flds] of
+    (_ : _) -> addError (SuppliedComputedField n)
+    []      -> pure ()
   v <- fresh (NormalName "v")
   rn <- outOfScope n v
   pure (0, rn, v, [])
@@ -2071,6 +2109,7 @@ inferTyDeclTopLevel = \ case
   Directive _ _ -> pure []
   Import    _ _ -> pure []
   Section   _ s -> inferTyDeclSection s
+  Timezone  _ _ -> pure []
 
 inferTyDeclDeclare :: Declare Name -> Check (Maybe (DeclChecked (Declare Resolved)))
 inferTyDeclDeclare (MkDeclare ann _tysig appForm t) = prune $
@@ -2123,6 +2162,7 @@ scanTyDeclTopLevel = \ case
   Directive _ _ -> pure []
   Import    _ _ -> pure []
   Section   _ s -> scanTyDeclSection s
+  Timezone  _ _ -> pure []
 
 scanTyDeclLocalDecl :: LocalDecl Name -> Check (Maybe DeclTypeSig)
 scanTyDeclLocalDecl = \ case
@@ -2678,6 +2718,7 @@ scanFunSigTopLevel = \ case
   Directive _ _ -> pure []
   Import    _ _ -> pure []
   Section   _ s -> scanFunSigSection s
+  Timezone  _ _ -> pure []
 
 scanFunSigLocalDecl :: LocalDecl Name -> Check (Maybe FunTypeSig)
 scanFunSigLocalDecl = \ case
@@ -2688,10 +2729,19 @@ scanFunSigDecide :: Decide Name -> Check FunTypeSig
 scanFunSigDecide d@(MkDecide _ tysig appForm _) = prune $
   errorContext (WhileCheckingDecide (getName appForm)) do
     (rappForm, rtysig, extendsTySig) <- checkTermAppFormTypeSigConsistency appForm tysig
+    -- Determine if this DECIDE is a synthetic computed field function
+    cfMap <- asks (.computedFields)
+    let funcRawName = rawName (getName appForm)
+        kind = if any (Set.member funcRawName) (Map.elems cfMap)
+               then ComputedSelector else Computable
     (ce, rt, result, extendsAppForm) <- extendKnownMany extendsTySig do
       inferTermAppForm rappForm rtysig
-    dty <- setAnnResolvedType rt (Just Computable) d
-    name <- withQualified (appFormHeads rappForm) ce
+    -- Override TermKind: use ComputedSelector for computed field functions
+    let ce' = case ce of
+          KnownTerm t _ -> KnownTerm t kind
+          other         -> other
+    dty <- setAnnResolvedType rt (Just kind) d
+    name <- withQualified (appFormHeads rappForm) ce'
     -- Extract mixfix pattern info by comparing AppForm against GIVEN parameters
     let mMixfix = extractMixfixInfo tysig appForm
     pure $ MkFunTypeSig
@@ -2837,8 +2887,8 @@ setInertContext = go True  -- True = we're at top level or direct boolean operan
 
     goNamed ctx' (MkNamedExpr ann n e) = MkNamedExpr ann n (go False ctx' e)
     goGuarded ctx' (MkGuardedExpr ann c f) = MkGuardedExpr ann (go True ctx' c) (go False ctx' f)
-    goObl ctx' (MkObligation ann party action due hence lest) =
-      MkObligation ann (go False ctx' party) (goRAction ctx' action) (fmap (go False ctx') due) (fmap (go False ctx') hence) (fmap (go False ctx') lest)
+    goObl ctx' (MkDeonton ann party action due hence lest) =
+      MkDeonton ann (go False ctx' party) (goRAction ctx' action) (fmap (go False ctx') due) (fmap (go False ctx') hence) (fmap (go False ctx') lest)
     goRAction ctx' (MkAction ann modal pat provided) =
       MkAction ann modal pat (fmap (go False ctx') provided)
     goBranch ctx' (MkBranch ann lhs e) = MkBranch ann lhs (go False ctx' e)
@@ -2982,7 +3032,7 @@ prettyCheckError (OutOfScopeError n t)                     =
   ]
 prettyCheckError (KindError k ts)                          =
   [ "The arities of the types do not match."
-  , "I expected " <> Text.show k <> " arguments, but I found " <> Text.show (length ts) <> "."
+  , "I expected " <> Text.textShow k <> " arguments, but I found " <> Text.textShow (length ts) <> "."
   ]
 prettyCheckError (TypeMismatch ec expected given)          =
   prettyTypeMismatch ec expected given
@@ -3082,7 +3132,7 @@ prettyCheckError (IncompleteAppNamed r onts)               =
   , "you forgot to supply the following arguments:"
   , ""
   ] ++ map (\ ont -> "  " <> prettyOptionallyNamedType ont) onts
-prettyCheckError (CheckInfo t)                             = [prettyLayout t]
+prettyCheckError (CheckInfo t _)                           = [prettyLayout t]
 prettyCheckError (IllegalTypeInKindSignature t)            =
   [ "In a signature of a type declaration, all parameters must be of type"
   , ""
@@ -3108,11 +3158,27 @@ prettyCheckError (DesugarAnnoRewritingError context errorInfo) =
   , ""
   , "We ran into the error:"
   , "The source annotation are not matching the expected number of arguments."
-  , "Expected " <> Text.show (errorInfo.expected) <> " holes but got: " <> Text.show (errorInfo.got)
+  , "Expected " <> Text.textShow (errorInfo.expected) <> " holes but got: " <> Text.textShow (errorInfo.got)
   ]
 prettyCheckError (CheckWarning warning) = prettyCheckWarning warning
 prettyCheckError (MixfixMatchErrorCheck funcName err) =
   prettyMixfixMatchError funcName err
+prettyCheckError (CyclicComputedFields _recName cycleFlds) =
+  [ "Circular dependency detected between computed fields:"
+  , ""
+  ] ++ map (\ n -> "  " <> quotedName n) cycleFlds ++
+  [ ""
+  , "Computed fields cannot depend on each other in a cycle."
+  , "Break the cycle by making one of these a stored field"
+  , "or restructuring the dependencies."
+  ]
+prettyCheckError (SuppliedComputedField fieldName) =
+  [ "The field " <> quotedName fieldName <> " is a computed field"
+  , "and cannot be supplied in a record constructor."
+  , ""
+  , "Computed fields are automatically derived from their MEANS expression."
+  , "Remove this field from the constructor."
+  ]
 
 -- | Pretty print mixfix match errors with helpful suggestions.
 prettyMixfixMatchError :: Name -> MixfixMatchError -> [Text]
@@ -3139,7 +3205,7 @@ prettyMixfixMatchError funcName = \case
     ]
   ArityMismatch expected actual ->
     [ "Wrong number of arguments in mixfix expression"
-    , "Expected " <> Text.show expected <> " arguments but got " <> Text.show actual
+    , "Expected " <> Text.textShow expected <> " arguments but got " <> Text.textShow actual
     , "In expression involving: " <> prettyLayout funcName
     ]
   where

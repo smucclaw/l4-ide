@@ -1,0 +1,61 @@
+-- Computed Fields: Age from Birthdate
+-- A more realistic pattern: age is not stored, it's computed from birth year
+-- and an as-of date. The as-of date is supplied at construction time,
+-- making the record a "snapshot" evaluated at a point in time.
+--
+-- This avoids impurity in the computed field itself: the caller chooses
+-- when "now" is by supplying `as at year`.
+--
+-- Note: we are deliberately conflating application environment (the current
+-- date) with application data (the person's attributes) for simplicity.
+-- A more principled design might separate the "context" or "environment"
+-- from the "entity" — but in legal reasoning, the evaluation date is often
+-- treated as just another given fact, so the conflation is pragmatic and
+-- mirrors how legislation is typically structured.
+
+IMPORT prelude
+
+GIVEN `date1` IS A NUMBER
+      `date2` IS A NUMBER
+GIVETH A NUMBER
+`years between` MEANS `date2` - `date1`
+
+DECLARE Person HAS
+    `name`          IS A STRING
+    `birth year`    IS A NUMBER
+    `as at year`    IS A NUMBER          -- the "clock" is a stored input, not impure
+    `age`           IS A NUMBER          -- computed from two stored fields
+        MEANS `years between` OF `birth year`, `as at year`
+    `adult`         IS A BOOLEAN
+        MEANS `age` >= 18
+    `minor`         IS A BOOLEAN
+        MEANS NOT `adult`
+
+-- Alice in 2026
+alice2026 MEANS Person WITH
+    `name`       IS "Alice"
+    `birth year` IS 2001
+    `as at year` IS 2026
+
+-- Alice in 2015 (same person, different snapshot)
+alice2015 MEANS Person WITH
+    `name`       IS "Alice"
+    `birth year` IS 2001
+    `as at year` IS 2015
+
+-- Bob, a child
+bob MEANS Person WITH
+    `name`       IS "Bob"
+    `birth year` IS 2015
+    `as at year` IS 2026
+
+#EVAL alice2026's `age`     -- 25
+#EVAL alice2026's `adult`   -- TRUE
+#EVAL alice2026's `minor`   -- FALSE
+
+#EVAL alice2015's `age`     -- 14
+#EVAL alice2015's `adult`   -- FALSE
+#EVAL alice2015's `minor`   -- TRUE
+
+#EVAL bob's `age`           -- 11
+#EVAL bob's `adult`         -- FALSE

@@ -1,0 +1,122 @@
+-- BECAUSE Keyword Examples
+-- Demonstrates breach reasons in regulative rules
+
+--------------------------------------------------------------------------------
+-- Type Declarations
+--------------------------------------------------------------------------------
+
+DECLARE Person IS ONE OF Seller, Buyer, Employee, Employer, Tenant, Landlord
+
+DECLARE Action IS ONE OF
+  `deliver goods`
+  `pay amount` HAS amount IS A NUMBER
+  `pass inspection`
+  `disclose information`
+  `pay rent` HAS amount IS A NUMBER
+  `maintain property`
+  smoke
+
+--------------------------------------------------------------------------------
+-- Basic BECAUSE Usage
+--------------------------------------------------------------------------------
+
+-- Simple breach with reason only
+`delivery with reason` MEANS
+  PARTY Seller
+  MUST `deliver goods`
+  WITHIN 14
+  HENCE FULFILLED
+  LEST BREACH BECAUSE "delivery deadline exceeded"
+
+-- Full form: BY party BECAUSE reason
+`delivery full form` MEANS
+  PARTY Seller
+  MUST `deliver goods`
+  WITHIN 14
+  HENCE FULFILLED
+  LEST BREACH BY Seller BECAUSE "failed to deliver within contractual period"
+
+--------------------------------------------------------------------------------
+-- Distinguishing Different Breach Types
+--------------------------------------------------------------------------------
+
+-- Payment deadline breach
+`payment deadline` MEANS
+  PARTY Buyer
+  MUST `pay amount` 1000
+  WITHIN 30
+  HENCE FULFILLED
+  LEST BREACH BY Buyer BECAUSE "payment received after deadline"
+
+-- Quality inspection failure
+`quality check` MEANS
+  PARTY Seller
+  MUST `pass inspection`
+  WITHIN 7
+  HENCE FULFILLED
+  LEST BREACH BY Seller BECAUSE "goods failed quality inspection per spec A.3"
+
+--------------------------------------------------------------------------------
+-- Referencing Legal Text in Reasons
+--------------------------------------------------------------------------------
+
+-- Reference to contract section
+`nda obligation` MEANS
+  PARTY Employee
+  SHANT `disclose information`
+  HENCE FULFILLED
+  LEST BREACH BY Employee BECAUSE "violated NDA section 3.2"
+
+-- Reference to lease agreement
+`subletting prohibition` MEANS
+  PARTY Tenant
+  SHANT `disclose information`
+  HENCE FULFILLED
+  LEST BREACH BY Tenant BECAUSE "violated lease agreement section 8"
+
+--------------------------------------------------------------------------------
+-- Chained Obligations with Different Reasons
+--------------------------------------------------------------------------------
+
+`rental agreement` MEANS
+  PARTY Tenant
+  MUST `pay rent` 2000
+  WITHIN 5
+  HENCE (
+    PARTY Landlord
+    MUST `maintain property`
+    WITHIN 30
+    HENCE FULFILLED
+    LEST BREACH BY Landlord BECAUSE "failed to perform maintenance duties"
+  )
+  LEST BREACH BY Tenant BECAUSE "rent payment overdue"
+
+--------------------------------------------------------------------------------
+-- BECAUSE in Prohibition (SHANT)
+--------------------------------------------------------------------------------
+
+`no smoking policy` MEANS
+  PARTY Employee
+  SHANT smoke
+  HENCE FULFILLED
+  LEST BREACH BY Employee BECAUSE "violated workplace no-smoking policy"
+
+--------------------------------------------------------------------------------
+-- Testing with #TRACE
+--------------------------------------------------------------------------------
+
+-- Test 1: Obligation fulfilled (no breach)
+#TRACE `delivery with reason` AT 0 WITH
+  PARTY Seller DOES `deliver goods` AT 10
+
+-- Test 2: Obligation breached (deadline passes without action)
+-- This will show the BECAUSE reason in the breach output
+#TRACE `delivery full form` AT 0 WITH
+
+-- Test 3: Prohibition violated
+#TRACE `no smoking policy` AT 0 WITH
+  PARTY Employee DOES smoke AT 5
+
+-- Test 4: Chained obligation - first party fulfills, second breaches
+#TRACE `rental agreement` AT 0 WITH
+  PARTY Tenant DOES `pay rent` 2000 AT 3

@@ -1,0 +1,64 @@
+-- Type articles: A, AN, THE
+
+-- Using A with Types
+
+-- A before consonant sounds
+ASSUME age IS A NUMBER
+ASSUME name IS A STRING
+ASSUME employed IS A BOOLEAN
+
+-- A with function parameters
+GIVEN x IS A NUMBER
+double x MEANS x TIMES 2
+
+#EVAL double 21
+
+-- Using AN with Types
+
+-- AN before vowel sounds (for readability)
+DECLARE Account HAS
+  balance IS A NUMBER
+  holder IS A STRING
+
+ASSUME myAccount IS AN Account
+
+-- Both A and AN are syntactically valid
+-- AN just reads better before vowels
+GIVEN acc IS AN Account
+getBalance acc MEANS acc's balance
+
+-- Using THE for Field Access
+
+DECLARE Person HAS
+  personName IS A STRING
+  personAge IS A NUMBER
+
+DECIDE john IS Person WITH
+  personName IS "John"
+  personAge IS 30
+
+-- Field access using genitive
+DECIDE johnsName IS john's personName
+DECIDE johnsAge IS john's personAge
+
+#EVAL johnsName
+#EVAL johnsAge
+
+-- Comparing THE...OF vs Genitive
+
+-- Genitive syntax for field access
+DECIDE nameViaGenitive IS john's personName
+
+#EVAL nameViaGenitive
+
+-- Articles in Legal-Style Text
+
+DECLARE Contract HAS
+  effectiveDate IS A NUMBER
+  amount IS A NUMBER
+
+ASSUME agreement IS A Contract
+
+-- Field access via genitive
+DECIDE contractDate IS agreement's effectiveDate
+DECIDE contractAmount IS agreement's amount

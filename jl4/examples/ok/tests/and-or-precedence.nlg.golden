@@ -1,0 +1,14 @@
+`case1_multiline_ambiguous`
+`case1_multiline_and_tighter`
+not `case1_multiline_or_tighter`
+`case2_multiline_ambiguous`
+`case2_multiline_and_tighter`
+not `case2_multiline_or_tighter`
+`case1_singleline_ambiguous`
+`case1_singleline_and_tighter`
+not `case1_singleline_or_tighter`
+`case2_singleline_ambiguous`
+`case2_singleline_and_tighter`
+not `case2_singleline_or_tighter`
+`case1_multiline_ambiguous` is equal to `case1_singleline_ambiguous`
+`case2_multiline_ambiguous` is equal to `case2_singleline_ambiguous`

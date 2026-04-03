@@ -24,7 +24,8 @@ case "$MODE" in
     cabal run jl4-decision-service -- \
       --port "$DECISION_PORT" \
       --sourcePaths ../jl4/experiments/britishcitizen5.l4 \
-      --sourcePaths ../jl4/experiments/parking.l4
+      --sourcePaths ../jl4/experiments/parking.l4 \
+      --sourcePaths ../jl4/experiments/thailand-cosmetics
     ;;
 
   websessions-only)
@@ -62,6 +63,7 @@ case "$MODE" in
         --port "$DECISION_PORT" \
         --sourcePaths ../jl4/experiments/britishcitizen5.l4 \
         --sourcePaths ../jl4/experiments/parking.l4 \
+        --sourcePaths ../jl4/experiments/thailand-cosmetics \
         --crudServerName localhost \
         --crudServerPort "$WEBSESSIONS_PORT") > /tmp/jl4-decision.log 2>&1 &
       echo "DECISION_PID=$!" >> "$PIDFILE"
@@ -127,6 +129,7 @@ case "$MODE" in
       echo "    --port $DECISION_PORT \\"
       echo "    --sourcePaths ../jl4/experiments/britishcitizen5.l4 \\"
       echo "    --sourcePaths ../jl4/experiments/parking.l4 \\"
+      echo "    --sourcePaths ../jl4/experiments/thailand-cosmetics \\"
       echo "    --crudServerName localhost --crudServerPort $WEBSESSIONS_PORT"
       echo ""
       echo "Terminal 3 - Websessions (after decision service starts):"

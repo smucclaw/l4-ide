@@ -1,0 +1,622 @@
+/**
+ * Low-level WASM bridge for L4 language features.
+ *
+ * This module handles:
+ * - Loading and instantiating the WASM module
+ * - Calling exported functions via GHC's JS FFI
+ *
+ * The WASM module is built from jl4-core using GHC's WASM backend.
+ * It exports JavaScript-callable functions using `foreign export javascript`.
+ *
+ * @see https://ghc.gitlab.haskell.org/ghc/doc/users_guide/wasm.html
+ */
+
+/**
+ * Interface for the L4 WASM module's JavaScript exports.
+ *
+ * These correspond to `foreign export javascript` declarations in Haskell.
+ * GHC's JS FFI handles marshalling automatically - we pass JS values directly.
+ */
+export interface L4WasmExports {
+  /**
+   * WebAssembly memory for the module.
+   */
+  memory: WebAssembly.Memory
+
+  /**
+   * Parse and type-check L4 source code.
+   * @param source - L4 source code
+   * @returns JSON-encoded array of diagnostics
+   */
+  l4_check(source: string): Promise<string>
+
+  /**
+   * Get hover information at a position.
+   * @param source - L4 source code
+   * @param line - 0-indexed line number
+   * @param column - 0-indexed column number
+   * @returns JSON-encoded hover info or "null"
+   */
+  l4_hover(source: string, line: number, column: number): Promise<string>
+
+  /**
+   * Get completion suggestions at a position.
+   * @param source - L4 source code
+   * @param line - 0-indexed line number
+   * @param column - 0-indexed column number
+   * @returns JSON-encoded array of completion items
+   */
+  l4_completions(source: string, line: number, column: number): Promise<string>
+
+  /**
+   * Get semantic tokens for syntax highlighting.
+   * @param source - L4 source code
+   * @returns JSON-encoded semantic tokens
+   */
+  l4_semantic_tokens(source: string): Promise<string>
+
+  /**
+   * Evaluate L4 source code and return #EVAL directive results.
+   * @param source - L4 source code with #EVAL directives
+   * @returns JSON-encoded evaluation results
+   */
+  l4_eval(source: string): Promise<string>
+
+  /**
+   * Evaluate a specific directive at a given source position.
+   * @param source - L4 source code
+   * @param line - 1-indexed line number
+   * @param col - 1-indexed column number
+   * @param directiveType - The directive type (e.g., "#EVAL", "#ASSERT")
+   * @returns JSON-encoded DirectiveResult or error object
+   */
+  l4_eval_directive(
+    source: string,
+    line: number,
+    col: number,
+    directiveType: string
+  ): Promise<string>
+
+  /**
+   * Get visualization data for a specific function by name.
+   * @param source - L4 source code
+   * @param uri - Document URI
+   * @param version - Document version
+   * @param functionName - Name of the function to visualize
+   * @param simplify - Whether to simplify the boolean expression
+   * @returns JSON-encoded RenderAsLadderInfo or error object with notFound flag
+   */
+  l4_visualize_by_name(
+    source: string,
+    uri: string,
+    version: number,
+    functionName: string,
+    simplify: boolean
+  ): Promise<string>
+
+  /**
+   * Get code lenses for all visualizable DECIDE rules.
+   * @param source - L4 source code
+   * @param uri - Document URI
+   * @param version - Document version
+   * @returns JSON-encoded array of code lens objects
+   */
+  l4_code_lenses(source: string, uri: string, version: number): Promise<string>
+
+  /**
+   * Go to definition at a position.
+   * @param source - L4 source code
+   * @param line - 1-indexed line number
+   * @param col - 1-indexed column number
+   * @returns JSON-encoded location or "null"
+   */
+  l4_definition(source: string, line: number, col: number): Promise<string>
+
+  /**
+   * Find all references at a position.
+   * @param source - L4 source code
+   * @param line - 1-indexed line number
+   * @param col - 1-indexed column number
+   * @returns JSON-encoded array of locations
+   */
+  l4_references(source: string, line: number, col: number): Promise<string>
+
+  /**
+   * Initialize the WASI reactor (and Haskell RTS).
+   * Must be called before any other exported functions.
+   */
+  _initialize(): void
+
+  /**
+   * RTS scheduler loop - called by the JS FFI runtime.
+   */
+  rts_schedulerLoop(): void
+
+  /**
+   * Free a stable pointer.
+   */
+  rts_freeStablePtr(sp: number): void
+}
+
+/**
+ * Type for the JS FFI imports generator function.
+ * This is the default export from the post-link.mjs generated file.
+ */
+type JsFFIImportsGenerator = (exports: L4WasmExports) => Record<string, unknown>
+
+/**
+ * L4 WASM Bridge
+ *
+ * Provides a high-level interface to the L4 WASM module.
+ * Handles loading, caching, and provides typed wrappers around exports.
+ */
+export class L4WasmBridge {
+  private exports: L4WasmExports | null = null
+
+  constructor(
+    private wasmUrl: string,
+    private jsUrl: string,
+    private version: string
+  ) {}
+
+  /**
+   * Initialize the WASM module
+   */
+  async initialize(): Promise<void> {
+    this.exports = await this.loadModule()
+
+    // Initialize the WASI reactor (and Haskell RTS)
+    // This must be called before any other exported functions
+    this.exports._initialize()
+  }
+
+  /**
+   * Load WASM module with GHC JS FFI support.
+   *
+   * GHC WASM modules require a two-phase instantiation:
+   * 1. Load the JS FFI glue code (generated by post-link.mjs)
+   * 2. Instantiate WASM with the JS FFI imports
+   */
+  private async loadModule(): Promise<L4WasmExports> {
+    const cacheKey = `l4-wasm-${this.version}`
+
+    // Load the JS FFI glue code
+    const jsModule = await import(/* @vite-ignore */ this.jsUrl)
+    const generateImports: JsFFIImportsGenerator = jsModule.default
+
+    // Try cache first for WASM
+    let wasmBuffer: ArrayBuffer | null = null
+    try {
+      const cache = await caches.open('l4-wasm-cache-v1')
+      const cached = await cache.match(cacheKey)
+
+      if (cached) {
+        wasmBuffer = await cached.arrayBuffer()
+      }
+    } catch {
+      // Cache not available, will fetch
+    }
+
+    // Fetch fresh if not cached
+    if (!wasmBuffer) {
+      const response = await fetch(this.wasmUrl)
+
+      if (!response.ok) {
+        throw new Error(
+          `Failed to fetch WASM: ${response.status} ${response.statusText}`
+        )
+      }
+
+      wasmBuffer = await response.arrayBuffer()
+
+      // Cache for future use
+      try {
+        const cache = await caches.open('l4-wasm-cache-v1')
+        await cache.put(cacheKey, new Response(wasmBuffer.slice(0)))
+      } catch {
+        // Failed to cache, continue anyway
+      }
+    }
+
+    // Compile the WASM module
+    const wasmModule = await WebAssembly.compile(wasmBuffer)
+
+    // Create a placeholder exports object for the JS FFI generator
+    // We'll update it after instantiation
+    const exportsProxy: L4WasmExports = {} as L4WasmExports
+
+    // Generate JS FFI imports - these need access to the exports
+    // for things like memory access and RTS callbacks
+    const jsFFIImports = generateImports(exportsProxy)
+
+    // WASI imports (minimal - just what the RTS needs)
+    const wasiImports = this.createWasiImports()
+
+    // Instantiate with all imports
+    const instance = await WebAssembly.instantiate(wasmModule, {
+      wasi_snapshot_preview1: wasiImports as WebAssembly.ModuleImports,
+      ghc_wasm_jsffi: jsFFIImports as WebAssembly.ModuleImports,
+    })
+
+    // Copy exports to the proxy object so JS FFI callbacks work
+    Object.assign(exportsProxy, instance.exports)
+
+    return instance.exports as unknown as L4WasmExports
+  }
+
+  /**
+   * Create WASI imports for the GHC RTS.
+   * GHC WASM with WASI requires these functions for proper operation.
+   *
+   * Note: We use WebAssembly.ImportValue compatible signatures.
+   * The actual WASI functions receive numbers/bigints from WASM.
+   */
+  private createWasiImports(): Record<string, WebAssembly.ImportValue> {
+    // Helper to get memory (proxy is updated after instantiation)
+    const getMemory = () => this.exports?.memory
+
+    // Clock functions
+    const clock_time_get = (
+      _clockId: number,
+      _precision: bigint,
+      out: number
+    ): number => {
+      const memory = getMemory()
+      if (memory) {
+        const view = new DataView(memory.buffer)
+        view.setBigUint64(out, BigInt(Date.now()) * BigInt(1_000_000), true)
+      }
+      return 0
+    }
+
+    // FD operations
+    const fd_write = (
+      fd: number,
+      iovs: number,
+      iovsLen: number,
+      nwritten: number
+    ): number => {
+      const memory = getMemory()
+      if (memory && (fd === 1 || fd === 2)) {
+        const view = new DataView(memory.buffer)
+        let totalWritten = 0
+        for (let i = 0; i < iovsLen; i++) {
+          const ptr = view.getUint32(iovs + i * 8, true)
+          const len = view.getUint32(iovs + i * 8 + 4, true)
+          const bytes = new Uint8Array(memory.buffer, ptr, len)
+          const text = new TextDecoder().decode(bytes)
+          if (text.trim() && fd === 2) {
+            // Only output stderr errors to console
+            console.error('[WASM stderr]', text)
+          }
+          totalWritten += len
+        }
+        view.setUint32(nwritten, totalWritten, true)
+      }
+      return 0
+    }
+
+    const proc_exit = (): void => {
+      // Process exit - no action needed in browser
+    }
+
+    const args_sizes_get = (argc: number, argvBufSize: number): number => {
+      const memory = getMemory()
+      if (memory) {
+        const view = new DataView(memory.buffer)
+        view.setUint32(argc, 0, true)
+        view.setUint32(argvBufSize, 0, true)
+      }
+      return 0
+    }
+
+    const environ_sizes_get = (
+      environc: number,
+      environBufSize: number
+    ): number => {
+      const memory = getMemory()
+      if (memory) {
+        const view = new DataView(memory.buffer)
+        view.setUint32(environc, 0, true)
+        view.setUint32(environBufSize, 0, true)
+      }
+      return 0
+    }
+
+    return {
+      clock_time_get,
+      fd_write,
+      fd_read: () => 0,
+      fd_close: () => 0,
+      fd_seek: () => 0,
+      fd_fdstat_get: () => 0,
+      fd_fdstat_set_flags: () => 0,
+      fd_filestat_get: () => 0,
+      fd_filestat_set_size: () => 0,
+      fd_prestat_get: () => 8, // EBADF - no preopened directories
+      fd_prestat_dir_name: () => 8, // EBADF
+      // Path operations (stubs - not used in reactor mode)
+      path_create_directory: () => 63, // ENOSYS
+      path_filestat_get: () => 63,
+      path_open: () => 63,
+      // Polling (stub for async I/O)
+      poll_oneoff: () => 0,
+      proc_exit,
+      args_sizes_get,
+      args_get: () => 0,
+      environ_sizes_get,
+      environ_get: () => 0,
+    }
+  }
+
+  /**
+   * Check if initialized
+   */
+  isReady(): boolean {
+    return this.exports !== null
+  }
+
+  /**
+   * Parse and type-check source code
+   */
+  async check(source: string): Promise<Diagnostic[]> {
+    if (!this.exports) {
+      throw new Error('WASM not initialized')
+    }
+    const json = await this.exports.l4_check(source)
+    return JSON.parse(json)
+  }
+
+  /**
+   * Get hover information at a position
+   */
+  async hover(
+    source: string,
+    line: number,
+    character: number
+  ): Promise<Hover | null> {
+    if (!this.exports) {
+      throw new Error('WASM not initialized')
+    }
+    const json = await this.exports.l4_hover(source, line, character)
+    return JSON.parse(json)
+  }
+
+  /**
+   * Get completions at a position
+   */
+  async completions(
+    source: string,
+    line: number,
+    character: number
+  ): Promise<CompletionItem[]> {
+    if (!this.exports) {
+      throw new Error('WASM not initialized')
+    }
+    const json = await this.exports.l4_completions(source, line, character)
+    return JSON.parse(json)
+  }
+
+  /**
+   * Get semantic tokens
+   */
+  async semanticTokens(source: string): Promise<SemanticTokens> {
+    if (!this.exports) {
+      throw new Error('WASM not initialized')
+    }
+    const json = await this.exports.l4_semantic_tokens(source)
+    return JSON.parse(json)
+  }
+
+  /**
+   * Evaluate L4 source code
+   */
+  async evaluate(source: string): Promise<EvalResult> {
+    if (!this.exports) {
+      throw new Error('WASM not initialized')
+    }
+    const json = await this.exports.l4_eval(source)
+    return JSON.parse(json)
+  }
+
+  /**
+   * Get visualization data for a specific function by name.
+   * Returns the RenderAsLadderInfo structure needed by the visualizer,
+   * or an object with "error" and optionally "notFound: true" if the function
+   * is no longer available.
+   */
+  async visualizeByName(
+    source: string,
+    uri: string,
+    version: number,
+    functionName: string,
+    simplify: boolean
+  ): Promise<VisualizeResult> {
+    if (!this.exports) {
+      throw new Error('WASM not initialized')
+    }
+    const json = await this.exports.l4_visualize_by_name(
+      source,
+      uri,
+      version,
+      functionName,
+      simplify
+    )
+    return JSON.parse(json)
+  }
+
+  /**
+   * Get code lenses for all visualizable DECIDE rules.
+   * Returns an array of code lens objects compatible with Monaco.
+   */
+  async codeLenses(
+    source: string,
+    uri: string,
+    version: number
+  ): Promise<CodeLens[]> {
+    if (!this.exports) {
+      throw new Error('WASM not initialized')
+    }
+    const json = await this.exports.l4_code_lenses(source, uri, version)
+    return JSON.parse(json)
+  }
+
+  /**
+   * Evaluate a specific directive at a given source position.
+   * Returns a DirectiveResult or error object.
+   */
+  async evalDirective(
+    source: string,
+    line: number,
+    col: number,
+    directiveType: string
+  ): Promise<Record<string, unknown>> {
+    if (!this.exports) {
+      throw new Error('WASM not initialized')
+    }
+    const json = await this.exports.l4_eval_directive(
+      source,
+      line,
+      col,
+      directiveType
+    )
+    return JSON.parse(json)
+  }
+
+  /**
+   * Go to definition at a position.
+   * Returns the location of the definition, or null if not found.
+   * @param source - L4 source code
+   * @param line - 1-indexed line number
+   * @param col - 1-indexed column number
+   */
+  async definition(
+    source: string,
+    line: number,
+    col: number
+  ): Promise<Location | null> {
+    if (!this.exports) {
+      throw new Error('WASM not initialized')
+    }
+    const json = await this.exports.l4_definition(source, line, col)
+    const result = JSON.parse(json)
+    return result === null ? null : result
+  }
+
+  /**
+   * Find all references at a position.
+   * Returns an array of locations where the symbol is used.
+   * @param source - L4 source code
+   * @param line - 1-indexed line number
+   * @param col - 1-indexed column number
+   */
+  async references(
+    source: string,
+    line: number,
+    col: number
+  ): Promise<Location[]> {
+    if (!this.exports) {
+      throw new Error('WASM not initialized')
+    }
+    const json = await this.exports.l4_references(source, line, col)
+    return JSON.parse(json)
+  }
+
+  /**
+   * Check if visualization is supported by this WASM module.
+   * Always returns true now that the uuid dependency issue is resolved.
+   */
+  supportsVisualization(): boolean {
+    return true
+  }
+
+  /**
+   * Clean up resources
+   */
+  dispose(): void {
+    this.exports = null
+  }
+}
+
+// LSP-compatible types
+
+export interface Position {
+  line: number
+  character: number
+}
+
+export interface Range {
+  start: Position
+  end: Position
+}
+
+export interface Location {
+  range: Range
+  uri?: string
+}
+
+export interface Diagnostic {
+  range: Range
+  severity: number // 1=Error, 2=Warning, 3=Info, 4=Hint
+  message: string
+  source: string
+}
+
+export interface Hover {
+  contents: {
+    kind: 'markdown' | 'plaintext'
+    value: string
+  }
+  range?: Range
+}
+
+export interface CompletionItem {
+  label: string
+  kind: number // CompletionItemKind
+  detail?: string
+  documentation?: string
+  insertText?: string
+}
+
+export interface SemanticTokens {
+  data: number[] // Delta-encoded token data
+}
+
+export interface CodeLens {
+  range: {
+    startLineNumber: number
+    startColumn: number
+    endLineNumber: number
+    endColumn: number
+  }
+  command: {
+    id: string
+    title: string
+    arguments?: unknown[]
+  }
+}
+
+export interface VisualizeResult {
+  verDocId?: { uri: string; version: number }
+  funDecl?: unknown
+  error?: string
+  notFound?: boolean
+}
+
+export interface EvalResultSuccess {
+  success: true
+  results: EvalDirectiveResult[]
+}
+
+export interface EvalResultFailure {
+  success: false
+  diagnostics: Diagnostic[]
+}
+
+export type EvalResult = EvalResultSuccess | EvalResultFailure
+
+export interface EvalDirectiveResult {
+  result: string
+  success: boolean
+  range?: Range
+}

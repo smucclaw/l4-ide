@@ -24,7 +24,7 @@ DECLARE Action IS ONE OF
 // the buyer makes four payments
 
 GIVEN symtab IS A  `Symbol Table`
-GIVETH PROVISION Actor Action
+GIVETH DEONTIC Actor Action
 `Initial Sale` MEANS
  PARTY Seller
  MUST deliver "apple" 1

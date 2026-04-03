@@ -1,0 +1,43 @@
+-- ASSUME keyword examples
+
+-- Basic Variable Assumptions
+
+-- Assume primitive types
+ASSUME `is employed` IS A BOOLEAN
+ASSUME `annual income` IS A NUMBER
+ASSUME `applicant name` IS A STRING
+
+-- Function Assumptions
+
+-- Single parameter function
+ASSUME `calculate tax` IS A FUNCTION FROM NUMBER TO NUMBER
+
+-- The assumed function can be used in expressions
+DECIDE `tax on income` IS `calculate tax` `annual income`
+
+-- Using Assumed Values in Decisions
+
+ASSUME age IS A NUMBER
+ASSUME `has valid license` IS A BOOLEAN
+
+-- Combine assumed values in logic
+DECIDE `can drive` IS
+  age >= 16 AND `has valid license`
+
+-- Evaluating with Assumed Values
+
+-- The expression uses assumed values
+#CHECK `can drive`
+
+-- Complex Example: Eligibility Check
+
+ASSUME `applicant age` IS A NUMBER
+ASSUME `years of residence` IS A NUMBER
+ASSUME `has criminal record` IS A BOOLEAN
+
+DECIDE `is eligible for benefit` IS
+      `applicant age` >= 21
+  AND `years of residence` >= 5
+  AND NOT `has criminal record`
+
+#CHECK `is eligible for benefit`
