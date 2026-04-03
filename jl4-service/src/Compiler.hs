@@ -6,7 +6,7 @@ module Compiler (
 ) where
 
 import qualified Backend.Jl4 as Jl4
-import Backend.Jl4 (ModuleContext, CompiledModule(..), typecheckModule, buildImportEnvironment, getFunctionDefinition)
+import Backend.Jl4 (ModuleContext, CompiledModule(..), typecheckModule, buildImportEnvironment, getFunctionDefinition, buildSharedContext, buildCompiledFromShared)
 import Backend.Api (EvalBackend (..), FunctionDeclaration (..))
 import Shared (validateNoSanitizationCollisions)
 import Backend.CodeGen (isDeonticType)
@@ -129,6 +129,11 @@ compileSingleFile logger deployId filepath content moduleContext = do
               -- Collect declares from this module and all transitive imports
               allDeclares = collectAllDeclares tcResult
 
+          -- Build shared context ONCE for all functions from this file.
+          -- This avoids re-typechecking and re-building the import environment
+          -- for each exported function (previously O(N) typechecks, now O(1)).
+          shared <- buildSharedContext filepath content moduleContext resolvedModule env ei
+
           -- Create ValidatedFunction for each export
           fns <- forM exports $ \export -> do
             let fnDecl = exportToFunction allDeclares implicitParams export
@@ -147,14 +152,29 @@ compileSingleFile logger deployId filepath content moduleContext = do
                 <> "': field name collision after sanitization (spaces and hyphens "
                 <> "become indistinguishable in API/MCP schemas):\n  " <> collisionMsg
 
-            (runFn, mCompiled) <- Jl4.createFunction filepath apiDecl content moduleContext
-            pure ValidatedFunction
-              { fnImpl = fnDecl
-              , fnEvaluator = Map.fromList [(JL4, runFn)]
-              , fnCompiled = mCompiled
-              , fnSources = Map.fromList [(JL4, content)]
-              , fnDecisionQueryCache = Nothing
-              }
+            -- Build CompiledModule from shared context (only extracts the Decide)
+            let funRawName = NormalName apiDecl.name
+            mCompiled <- buildCompiledFromShared shared funRawName
+            case mCompiled of
+              Right compiled -> do
+                let runFn = Jl4.createRunFunctionFromCompiled filepath apiDecl compiled
+                pure ValidatedFunction
+                  { fnImpl = fnDecl
+                  , fnEvaluator = Map.fromList [(JL4, runFn)]
+                  , fnCompiled = Just compiled
+                  , fnSources = Map.fromList [(JL4, content)]
+                  , fnDecisionQueryCache = Nothing
+                  }
+              Left _err -> do
+                -- Fallback: use original createFunction path
+                (runFn, mComp) <- Jl4.createFunction filepath apiDecl content moduleContext
+                pure ValidatedFunction
+                  { fnImpl = fnDecl
+                  , fnEvaluator = Map.fromList [(JL4, runFn)]
+                  , fnCompiled = mComp
+                  , fnSources = Map.fromList [(JL4, content)]
+                  , fnDecisionQueryCache = Nothing
+                  }
 
           -- Build SerializedBundle from typecheck result for CBOR caching
           let bundle = SerializedBundle
@@ -200,6 +220,9 @@ buildFromCborBundle logger deployId bundles sources storedMeta = do
     case Map.lookup filepath sources of
       Nothing -> pure []
       Just content -> do
+        -- Build import environment ONCE per file (not per function)
+        importEnv <- buildImportEnvironment filepath content moduleContext ei
+
         fns <- forM exports $ \export -> do
           let fnDecl = exportToFunction bundle.sbDeclares [] export
               apiDecl = toDecl fnDecl
@@ -223,8 +246,8 @@ buildFromCborBundle logger deployId bundles sources storedMeta = do
           case mDecide of
             Left _err -> pure Nothing
             Right decide -> do
-              importEnv <- buildImportEnvironment filepath content moduleContext ei
-
+              -- All fields except compiledDecide are shared across functions
+              -- from the same file — GHC shares the heap pointers.
               let compiled = CompiledModule
                     { compiledModule = resolvedModule
                     , compiledEnvironment = env

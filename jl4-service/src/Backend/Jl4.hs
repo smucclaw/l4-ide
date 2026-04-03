@@ -1,5 +1,5 @@
 {-# LANGUAGE ViewPatterns #-}
-module Backend.Jl4 (createFunction, createRunFunctionFromCompiled, getFunctionDefinition, buildFunDecide, ModuleContext, CompiledModule(..), precompileModule, evaluateWithCompiled, evaluateWithCompiledDeontic, typecheckModule, buildImportEnvironment) where
+module Backend.Jl4 (createFunction, createRunFunctionFromCompiled, getFunctionDefinition, buildFunDecide, ModuleContext, CompiledModule(..), SharedModuleContext(..), precompileModule, buildSharedContext, buildCompiledFromShared, evaluateWithCompiled, evaluateWithCompiledDeontic, typecheckModule, buildImportEnvironment) where
 
 import Base hiding (trace)
 import qualified Base.DList as DList
@@ -54,6 +54,61 @@ data CompiledModule = CompiledModule
   , compiledSource :: !Text                          -- ^ Original source text (preserves layout)
   }
   deriving (Generic)
+
+-- | Shared context for all functions compiled from the same source file.
+-- Stored once per file and referenced by each CompiledModule to avoid
+-- duplicating the AST, environments, and source text per function.
+data SharedModuleContext = SharedModuleContext
+  { sharedModule :: !(Module Resolved)
+  , sharedEnvironment :: !Environment
+  , sharedEntityInfo :: !EntityInfo
+  , sharedModuleContext :: !ModuleContext
+  , sharedImportEnv :: !EvalEnv.Environment
+  , sharedSource :: !Text
+  }
+
+-- | Build shared context from an already-typechecked module.
+-- Call once per source file, then use 'buildCompiledFromShared' per function.
+buildSharedContext
+  :: FilePath
+  -> Text
+  -> ModuleContext
+  -> Module Resolved
+  -> Environment
+  -> EntityInfo
+  -> IO SharedModuleContext
+buildSharedContext filepath source moduleContext resolvedModule env entityInfo = do
+  importEnv <- buildImportEnvironment filepath source moduleContext entityInfo
+  pure SharedModuleContext
+    { sharedModule = resolvedModule
+    , sharedEnvironment = env
+    , sharedEntityInfo = entityInfo
+    , sharedModuleContext = moduleContext
+    , sharedImportEnv = importEnv
+    , sharedSource = source
+    }
+
+-- | Build a CompiledModule for a single function, reusing shared context.
+-- Only extracts the function-specific Decide; everything else is shared.
+buildCompiledFromShared :: SharedModuleContext -> RawName -> IO (Either Text CompiledModule)
+buildCompiledFromShared shared funName = runExceptT $ do
+  decide <- withExceptT evalErrorToText $ getFunctionDefinition funName shared.sharedModule
+  pure CompiledModule
+    { compiledModule = shared.sharedModule
+    , compiledEnvironment = shared.sharedEnvironment
+    , compiledEntityInfo = shared.sharedEntityInfo
+    , compiledDecide = decide
+    , compiledModuleContext = shared.sharedModuleContext
+    , compiledImportEnv = shared.sharedImportEnv
+    , compiledSource = shared.sharedSource
+    }
+ where
+  evalErrorToText :: EvaluatorError -> Text
+  evalErrorToText (InterpreterError t) = t
+  evalErrorToText (RequiredParameterMissing pm) = "Required parameter missing: expected " <> Text.textShow pm.expected <> ", got " <> Text.textShow pm.actual
+  evalErrorToText (UnknownArguments args) = "Unknown arguments: " <> Text.intercalate ", " args
+  evalErrorToText (CannotHandleParameterType lit) = "Cannot handle parameter type: " <> Text.textShow lit
+  evalErrorToText CannotHandleUnknownVars = "Cannot handle unknown variables"
 
 buildFunDecide :: Text -> FunctionDeclaration -> ExceptT EvaluatorError IO (Decide Resolved)
 buildFunDecide fnImpl fnDecl = do
