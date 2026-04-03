@@ -275,12 +275,35 @@ decideNodeStartsAtPos pos d = Just pos == do
 
 completions :: Rope -> NormalizedUri -> TypeCheckResult -> Position -> [CompletionItem]
 completions rope nuri typeCheck pos@(Position ln col) = do
-  let completionPrefix =
-        Text.takeWhileEnd isAlphaNum
-        $ Rope.toText
+  let textBeforeCursor =
+        Rope.toText
         $ fst -- we don't care for the rest of the line
         $ Rope.charSplitAt (fromIntegral col)
         $ Rope.getLine (fromIntegral ln) rope
+
+      completionPrefix = Text.takeWhileEnd isAlphaNum textBeforeCursor
+
+      -- Check if the user already typed a leading backtick before the alphanumeric prefix.
+      -- If so, we need textEdits that include it in the replacement range to avoid doubling it.
+      hasLeadingBacktick =
+        let beforePrefix = Text.dropEnd (Text.length completionPrefix) textBeforeCursor
+        in maybe False ((== '`') . snd) (Text.unsnoc beforePrefix)
+
+      prefixLen = fromIntegral (Text.length completionPrefix)
+      editStart = Position ln (col - prefixLen - if hasLeadingBacktick then 1 else 0)
+      editRange = Range editStart (Position ln col)
+
+      -- For backtick-quoted completion items, set a textEdit so VS Code replaces
+      -- the user's leading backtick + prefix together, avoiding a doubled backtick.
+      -- Also update filterText to include the backtick, since VS Code filters against
+      -- the text covered by the textEdit range.
+      addBacktickTextEdit item
+        | hasLeadingBacktick
+        , Text.isPrefixOf "`" item._label
+        = item { CompletionItem._textEdit = Just (InL (TextEdit editRange item._label))
+               , CompletionItem._filterText = Just item._label
+               }
+        | otherwise = item
 
       filterMatchesOn f is =
         map Fuzzy.original $ Fuzzy.filter
@@ -318,7 +341,7 @@ completions rope nuri typeCheck pos@(Position ln col) = do
             )
         $ Map.toList finalCheckInfos
 
-  keywordItems <> scopedItems
+  map addBacktickTextEdit (keywordItems <> scopedItems)
 
 -- ----------------------------------------------------------------------------
 -- LSP Hovers
