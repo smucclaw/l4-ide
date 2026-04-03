@@ -11,6 +11,8 @@
     RequestOpenUrl,
     RequestOpenServiceUrl,
     RequestOpenConsole,
+    RequestOpenExtensionSettings,
+    RequestCopySignInLink,
     RequestDisconnect,
     SidebarConnectionStatusChanged,
     ListSidebarDeployments,
@@ -594,6 +596,22 @@
     )
   }
 
+  function openExtensionSettings() {
+    messenger?.sendNotification(
+      RequestOpenExtensionSettings,
+      HOST_EXTENSION,
+      undefined as never
+    )
+  }
+
+  function copySignInLink() {
+    messenger?.sendNotification(
+      RequestCopySignInLink,
+      HOST_EXTENSION,
+      undefined as never
+    )
+  }
+
   async function refreshConnectionStatus() {
     if (!messenger) return
     try {
@@ -941,35 +959,31 @@
   {/if}
   <div class="status-footer">
     <div class="footer-info">
-      {#if connectionStatus.connected}
-        <div class="menu-wrapper">
-          <button class="status-row-btn" onclick={toggleMenu}>
-            <span class="status-dot {statusDotClass(connectionStatus.status)}"
-            ></span>
-            <span class="status-label-inline"
-              >{statusLabel(connectionStatus)}</span
-            >
-            <svg
-              class="dropdown-caret"
-              width="10"
-              height="10"
-              viewBox="0 0 10 10"
-              ><path
-                d="M2 3.5 L5 7 L8 3.5"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              /></svg
-            >
-          </button>
-          {#if menuOpen}
-            <div class="dropdown-menu">
-              <button class="menu-item" onclick={menuAction(openDocumentation)}>
-                Open L4 Docs website
-              </button>
-              <div class="menu-separator"></div>
+      <div class="menu-wrapper">
+        <button class="status-row-btn" onclick={toggleMenu}>
+          <span class="status-dot {statusDotClass(connectionStatus.status)}"
+          ></span>
+          <span class="status-label-inline"
+            >{statusLabel(connectionStatus)}</span
+          >
+          <svg class="dropdown-caret" width="10" height="10" viewBox="0 0 10 10"
+            ><path
+              d="M2 3.5 L5 7 L8 3.5"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            /></svg
+          >
+        </button>
+        {#if menuOpen}
+          <div class="dropdown-menu">
+            <button class="menu-item" onclick={menuAction(openDocumentation)}>
+              Open L4 Docs website
+            </button>
+            <div class="menu-separator"></div>
+            {#if connectionStatus.connected}
               {#if connectionStatus.serviceUrl}
                 <button class="menu-item" onclick={menuAction(openServiceUrl)}>
                   Visit {connectionStatus.serviceUrl}
@@ -985,6 +999,12 @@
                 Refresh Deployments
               </button>
               {#if !connectionStatus.isLegaleseCloud}
+                <button
+                  class="menu-item"
+                  onclick={menuAction(openExtensionSettings)}
+                >
+                  Extension Settings
+                </button>
                 <button class="menu-item" onclick={menuAction(disconnect)}>
                   Disconnect
                 </button>
@@ -994,20 +1014,30 @@
                 <button class="menu-item" onclick={menuAction(openConsole)}>
                   Legalese Cloud Console
                 </button>
+                <button
+                  class="menu-item"
+                  onclick={menuAction(openExtensionSettings)}
+                >
+                  Extension Settings
+                </button>
                 <button class="menu-item" onclick={menuAction(signOut)}>
                   Sign out
                 </button>
               {/if}
-            </div>
-          {/if}
-        </div>
-      {:else}
-        <div class="status-row">
-          <span class="status-dot {statusDotClass(connectionStatus.status)}"
-          ></span>
-          <span class="status-label">{statusLabel(connectionStatus)}</span>
-        </div>
-      {/if}
+            {:else}
+              <button
+                class="menu-item"
+                onclick={menuAction(openExtensionSettings)}
+              >
+                Extension Settings
+              </button>
+              <button class="menu-item" onclick={menuAction(copySignInLink)}>
+                Copy Legalese Cloud Sign-In Link
+              </button>
+            {/if}
+          </div>
+        {/if}
+      </div>
       <span class="file-info">
         {#if functions.length > 0}
           {functions.length} rule{functions.length !== 1 ? 's' : ''} exported in
