@@ -104,16 +104,20 @@ renderExplorerPageBS registry = LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text
   , "    <div class=\"note\">"
   , "      <dl>"
   , "        <dt><code>data-scope</code></dt>"
-  , "        <dd>Filter which deployments to register tools for.<br>"
-  , "            <code>deployment-id</code> one deployment<br>"
+  , "        <dd>Filter which deployments and rules to register tools for.<br>"
+  , "            <code>deployment-id</code> one deployment (all rules)<br>"
   , "            <code>id1,id2</code> multiple deployments<br>"
-  , "            Default: all deployments.</dd>"
+  , "            <code>{deployment-id}/{rule-name}</code> specific rule in a deployment<br>"
+  , "            <code>*/{rule-name}</code> rules across all deployments<br>"
+  , "            Default: all deployments, all rules.</dd>"
   , "        <dt><code>data-tools</code></dt>"
-  , "        <dd>Tool registration mode:<br>"
-  , "            <code>auto</code> (default) discovery always + direct if &le; 20 functions<br>"
-  , "            <code>discovery</code> only search/schema/evaluate meta-tools<br>"
-  , "            <code>direct</code> only per-function tools<br>"
-  , "            <code>all</code> both, always</dd>"
+  , "        <dd>Comma-separated list of tool categories to register:<br>"
+  , "            <code>auto</code> (default) <code>rules</code> if &le; 20, otherwise <code>rule-tools</code><br>"
+  , "            <code>rules</code> one tool per exported rule (direct evaluation)<br>"
+  , "            <code>rule-tools</code> search_rules, get_rule_schema, evaluate_rule<br>"
+  , "            <code>file-tools</code> list_files, read_file, search_identifier, search_text<br>"
+  , "            <code>all</code> rules + rule-tools + file-tools<br>"
+  , "            Example: <code>rules,file-tools</code></dd>"
   , "        <dt><code>data-api-key</code></dt>"
   , "        <dd>Add your API key for <a href=\"https://legalese.cloud\">Legalese Cloud</a> deployments. Needs <strong>l4:rules</strong> for discovery, <strong>l4:evaluate</strong> to execute, <strong>l4:read</strong> for file browsing tools.</dd>"
   , "      </dl>"
@@ -149,25 +153,25 @@ renderExplorerPageBS registry = LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text
   , "    <div class=\"info-body\">"
   , "    <div class=\"note\">"
   , "      <dl>"
-  , "        <dt>List functions</dt>"
+  , "        <dt>List rules</dt>"
   , "        <dd><code>GET /{deployment-id}/functions</code><br>"
   , "            <code>GET /deployments/{deployment-id}/functions</code></dd>"
-  , "        <dt>Evaluate a function</dt>"
-  , "        <dd><code>POST /{deployment-id}/{function-name}/evaluation</code><br>"
-  , "            <code>POST /deployments/{deployment-id}/functions/{function-name}/evaluation</code><br>"
+  , "        <dt>Evaluate a rule</dt>"
+  , "        <dd><code>POST /{deployment-id}/{rule-name}/evaluation</code><br>"
+  , "            <code>POST /deployments/{deployment-id}/functions/{rule-name}/evaluation</code><br>"
   , "            Body: <code>{\"arguments\": {\"field-name\": value, ...}}</code><br>"
-  , "            Function names with spaces can use hyphens or URL-encoding (<code>check-person</code>, <code>check%20person</code>).</dd>"
+  , "            Rule names with spaces can use hyphens or URL-encoding (<code>check-person</code>, <code>check%20person</code>).</dd>"
   , "        <dt>Batch evaluation</dt>"
-  , "        <dd><code>POST /{deployment-id}/{function-name}/evaluation/batch</code><br>"
-  , "            <code>POST /deployments/{deployment-id}/functions/{function-name}/evaluation/batch</code></dd>"
+  , "        <dd><code>POST /{deployment-id}/{rule-name}/evaluation/batch</code><br>"
+  , "            <code>POST /deployments/{deployment-id}/functions/{rule-name}/evaluation/batch</code></dd>"
   , "        <dt>Browse source files</dt>"
   , "        <dd><code>GET /deployments/{deployment-id}/files</code> &mdash; list files with content, search by identifier or text.<br>"
   , "            <code>GET /deployments/{deployment-id}/files?identifier={name}</code> &mdash; find definitions and references.<br>"
   , "            <code>GET /deployments/{deployment-id}/files?search={text}</code> &mdash; grep source files.<br>"
   , "            <code>GET /deployments/{deployment-id}/files/{path}.l4</code> &mdash; raw file content.<br>"
   , "            <code>GET /deployments/{deployment-id}/files/{path}.l4?lines=10:20</code> &mdash; line range.</dd>"
-  , "        <dt>List deployments with function details</dt>"
-  , "        <dd><code>GET /deployments</code> &mdash; all deployments with function names.<br>"
+  , "        <dt>List deployments with rule details</dt>"
+  , "        <dd><code>GET /deployments</code> &mdash; all deployments with rule names.<br>"
   , "            <code>GET /deployments?functions=full</code> &mdash; include full parameter schemas.<br>"
   , "            <code>GET /deployments?scope={deployment-id}</code> &mdash; filter by deployment.<br>"
   , "            Combine: <code>GET /deployments?functions=full&amp;scope={deployment-id}</code></dd>"
@@ -193,7 +197,7 @@ renderExplorerPageBS registry = LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text
   , "        <dt>Check deployment status</dt>"
   , "        <dd><code>GET /{deployment-id}</code><br>"
   , "            <code>GET /deployments/{deployment-id}</code><br>"
-  , "            Returns status (<code>ready</code>, <code>pending</code>, or <code>failed</code>) and function count.</dd>"
+  , "            Returns status (<code>ready</code>, <code>pending</code>, or <code>failed</code>) and rule count.</dd>"
   , "        <dt>Delete a deployment</dt>"
   , "        <dd><code>DELETE /{deployment-id}</code><br>"
   , "            <code>DELETE /deployments/{deployment-id}</code></dd>"
@@ -233,7 +237,7 @@ renderExplorerPageBS registry = LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text
   , "          row.style.display = show ? '' : 'none';"
   , "          if (show) anyVisible = true;"
   , "        });"
-  , "        // For deployments without function tables (pending/failed), match on deployment id"
+  , "        // For deployments without rule tables (pending/failed), match on deployment id"
   , "        if (rows.length === 0) {"
   , "          anyVisible = !q || sec.textContent.toLowerCase().indexOf(q) >= 0;"
   , "        }"
@@ -336,7 +340,7 @@ renderDeploymentsSection registry
       ]
   | otherwise = Text.unlines
       [ "  <div id=\"deployments-section\">"
-      , "    <input type=\"search\" id=\"fn-search\" placeholder=\"Search across all functions...\" />"
+      , "    <input type=\"search\" id=\"fn-search\" placeholder=\"Search across all rule...\" />"
       , "    <div id=\"deploy-list\" class=\"deploy-panel\">"
       , Text.unlines (map (uncurry renderDeployment) (Map.toAscList registry))
       , "    </div>"
@@ -372,10 +376,10 @@ renderDeployment (DeploymentId did) state = Text.unlines $
 
     metaText = case state of
       DeploymentReady _ meta -> let n = length (meta.metaFunctions) in showT n <> " " <> plural n "rule"
-      DeploymentPending (Just meta) -> showT (length (meta.metaFunctions)) <> " functions"
+      DeploymentPending (Just meta) -> showT (length (meta.metaFunctions)) <> " rules"
       DeploymentPending Nothing -> "not yet compiled"
       DeploymentFailed _     -> "compilation error"
-      DeploymentCompiling    -> "compiling..."
+      DeploymentCompiling    -> ""
 
     bodyLines = case state of
       DeploymentReady _ meta -> renderMetaTables meta
@@ -384,7 +388,7 @@ renderDeployment (DeploymentId did) state = Text.unlines $
         [ "        <div class=\"deploy-error\">" <> esc err <> "</div>" ]
       _ -> []
 
--- | Render functions and files tables from deployment metadata.
+-- | Render rules and files tables from deployment metadata.
 renderMetaTables :: DeploymentMetadata -> [Text]
 renderMetaTables meta =
   [ "        <table><thead><tr><th>Name</th><th>Return</th><th>Description</th></tr></thead><tbody>"
@@ -396,7 +400,7 @@ renderMetaTables meta =
   , "        </tbody></table>"
   ]
 
--- | Render a single function row in the deployment table.
+-- | Render a single rule row in the deployment table.
 renderFunctionRow :: FunctionSummary -> Text
 renderFunctionRow fs =
   "          <tr><td>" <> esc fs.fsName

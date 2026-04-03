@@ -268,6 +268,16 @@ export const RequestOpenConsole: NotificationType<void> = {
   method: 'requestOpenConsole',
 }
 
+/** Sidebar asks extension to open the extension settings */
+export const RequestOpenExtensionSettings: NotificationType<void> = {
+  method: 'requestOpenExtensionSettings',
+}
+
+/** Sidebar asks extension to copy the Legalese Cloud sign-in link to clipboard */
+export const RequestCopySignInLink: NotificationType<void> = {
+  method: 'requestCopySignInLink',
+}
+
 /** Sidebar asks extension to disconnect (clear credentials + service URL) */
 export const RequestDisconnect: NotificationType<void> = {
   method: 'requestDisconnect',
