@@ -263,6 +263,27 @@ This script:
 - Reference the GLOSSARY for keyword/type lookups
 - Each page should link to related content in other sections
 
+## In-Progress Branches (on origin)
+
+These branches have unpushed or in-review work. Resume with `git worktree add <dir> <branch>` or `claude --worktree`.
+
+### Language Design Specs (ready to implement)
+
+| Branch                          | Topic                        | Summary                                                                                                                            |
+| ------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `every`                         | EVERY/EACH quantifiers       | Spec for quantifier syntax, test cases, consolidated last-argument style. Parser not yet implemented.                              |
+| `mengwong/deadlines`            | Deontic deadlines            | BY/WITHIN with DATE types, mandatory deadlines, EVENTUALLY, DeadlineWindow. All 8 open questions resolved.                         |
+| `mengwong/spec-notwithstanding` | SUBJECT TO / NOTWITHSTANDING | 5-role taxonomy (override, exception, condition, scope-limit, priority), 55-example corpus, evaluation pipeline, syntax proposals. |
+
+### Active Feature Branches
+
+| Branch                    | Topic             | Summary                                                                                                    |
+| ------------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------- |
+| `mengwong/doc-review`     | Documentation     | Merged ai-ref into doc/, added reference pages, fixed doc test errors. PR #872.                            |
+| `mengwong/fix-visualizer` | Ladder visualizer | InertExprLirNode support, l4-wizard deployment, Penal Code s420 example. Merged with main 2026-04-03.      |
+| `mengwong/evaluate-dtrt`  | GraphViz traces   | Decision service GraphViz output, decimal precision, perf. Merged with main 2026-04-03.                    |
+| `mengwong/gen-web-app`    | Wizard deployment | Nix deployment fix, ASSUME params in wizard, query plan three-valued results. Merged with main 2026-04-03. |
+
 ### Documentation Checklist
 
 When adding or modifying documentation:
