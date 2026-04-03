@@ -4,9 +4,9 @@ module SanitizationSpec (spec) where
 
 import Test.Hspec
 
-import Backend.Api (FnLiteral (..))
+import Backend.Api (FnLiteral (..), EvaluatorError (..), ParameterMismatch (..), prettyEvaluatorError)
 import L4.FunctionSchema (Parameters (..), Parameter (..))
-import Shared (sanitizePropertyName, buildPropertyReverseMap, remapFnLiteralKeys, remapArguments, validateNoSanitizationCollisions)
+import Shared (sanitizePropertyName, buildPropertyReverseMap, remapFnLiteralKeys, remapArguments, validateNoSanitizationCollisions, sanitizeFieldNamesInText)
 
 import qualified Data.Map.Strict as Map
 import Data.Text (Text)
@@ -181,6 +181,55 @@ spec = describe "Sanitization" $ do
             []
       let collisions = validateNoSanitizationCollisions "test_fn" params
       length collisions `shouldBe` 1
+
+  describe "sanitizeFieldNamesInText" $ do
+    it "replaces original L4 field names with sanitized equivalents" $ do
+      let revMap = Map.fromList
+            [ ("years-of-service", "years of service")
+            , ("performance-rating", "performance rating")
+            ]
+      sanitizeFieldNamesInText revMap "Missing value for parameter: years of service"
+        `shouldBe` "Missing value for parameter: years-of-service"
+
+    it "replaces multiple field names in the same text" $ do
+      let revMap = Map.fromList
+            [ ("years-of-service", "years of service")
+            , ("performance-rating", "performance rating")
+            ]
+      sanitizeFieldNamesInText revMap "Expected years of service and performance rating"
+        `shouldBe` "Expected years-of-service and performance-rating"
+
+    it "does nothing when no names differ" $ do
+      let revMap = Map.fromList [("name", "name")]
+      sanitizeFieldNamesInText revMap "Missing: name" `shouldBe` "Missing: name"
+
+    it "handles empty reverse map" $ do
+      sanitizeFieldNamesInText Map.empty "some error text" `shouldBe` "some error text"
+
+    it "replaces longer names first to avoid partial matches" $ do
+      let revMap = Map.fromList
+            [ ("is-a-citizen", "is a citizen")
+            , ("is-a", "is a")
+            ]
+      sanitizeFieldNamesInText revMap "Check if is a citizen"
+        `shouldBe` "Check if is-a-citizen"
+
+  describe "prettyEvaluatorError" $ do
+    it "formats InterpreterError as plain text" $
+      prettyEvaluatorError (InterpreterError "something went wrong")
+        `shouldBe` "something went wrong"
+
+    it "formats RequiredParameterMissing" $
+      prettyEvaluatorError (RequiredParameterMissing (ParameterMismatch 3 1))
+        `shouldBe` "Required parameter missing: expected 3 parameter(s), but got 1"
+
+    it "formats UnknownArguments" $
+      prettyEvaluatorError (UnknownArguments ["foo", "bar"])
+        `shouldBe` "Unknown argument(s): foo, bar"
+
+    it "formats CannotHandleUnknownVars" $
+      prettyEvaluatorError CannotHandleUnknownVars
+        `shouldBe` "Cannot handle unknown variables in input"
 
 -- | Helper to create a simple Parameter with no nested properties.
 simpleParam :: Text -> Parameter

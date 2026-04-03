@@ -9,7 +9,7 @@ import qualified BundleStore
 import DeploymentLoader (triggerCompilationIfPending)
 import FileBrowser (searchIdentifier, searchText, SearchMatch (..))
 import Logging (logInfo, logWarn)
-import Shared (collectMetadataEntries, sanitizeParameters, buildPropertyReverseMap, remapFnLiteralKeys)
+import Shared (collectMetadataEntries, sanitizeParameters, buildPropertyReverseMap, remapFnLiteralKeys, sanitizeFieldNamesInText)
 import Types
 
 import Control.Monad.IO.Class (liftIO)
@@ -34,7 +34,7 @@ import GHC.IO.Exception (AllocationLimitExceeded (..))
 import Control.Exception (catch)
 import System.Timeout (timeout)
 
-import Backend.Api (EvalBackend (..), FnLiteral (..), RunFunction (..), TraceLevel (..))
+import Backend.Api (EvalBackend (..), FnLiteral (..), RunFunction (..), TraceLevel (..), prettyEvaluatorError)
 import Options (Options (..))
 
 -- | Handle an MCP JSON-RPC 2.0 request and return a JSON-RPC 2.0 response.
@@ -314,10 +314,12 @@ callFunctionTool _vis mScope reqId toolName arguments = do
               evalResult <- runMcpEvaluation vf argPairs
               case evalResult of
                 Left errMsg ->
-                  pure $ jsonRpcResult reqId $ Aeson.object
+                  -- Replace original L4 field names with sanitized versions in error text
+                  let sanitizedErr = sanitizeFieldNamesInText reverseMap errMsg
+                  in pure $ jsonRpcResult reqId $ Aeson.object
                     [ "content" .= [ Aeson.object
                         [ "type" .= ("text" :: Text)
-                        , "text" .= errMsg
+                        , "text" .= sanitizedErr
                         ]
                       ]
                     , "isError" .= True
@@ -362,7 +364,7 @@ runMcpEvaluation vf args = do
       case mResult of
         Nothing -> pure $ Left "Evaluation resource limit exceeded"
         Just (Left err) ->
-          pure $ Left (Text.pack (show err))
+          pure $ Left (prettyEvaluatorError err)
         Just (Right rwr) ->
           let encoded = Aeson.encode (SimpleResponse rwr)
           in pure $ Right (Text.Encoding.decodeUtf8 (LBS.toStrict encoded))
