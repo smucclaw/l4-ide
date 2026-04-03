@@ -1,0 +1,10 @@
+-- Time type errors: passing wrong types to TIME builtins
+
+-- String where NUMBER expected
+DECIDE `bad time` IS TIME_FROM_HMS "nine" 30 0
+
+-- Boolean where TIME expected
+DECIDE `bad hour` IS TIME_HOUR TRUE
+
+-- NUMBER where TIME expected in serial
+DECIDE `bad serial` IS TIME_SERIAL 42

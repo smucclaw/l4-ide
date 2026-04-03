@@ -60,6 +60,7 @@ rodentAndVerminFunction = do
       , fnCompiled = mCompiled
       , fnSources = Map.fromList [(JL4, rodentAndVerminJL4)]
       , fnDecisionQueryCache = Nothing
+      , fnExplicitlyExported = True
       }
 
 rodentAndVerminJL4 :: Text
@@ -132,6 +133,7 @@ constantFunction = do
       , fnCompiled = mCompiled
       , fnSources = Map.fromList [(JL4, constantJL4)]
       , fnDecisionQueryCache = Nothing
+      , fnExplicitlyExported = True
       }
 
 constantJL4 :: Text

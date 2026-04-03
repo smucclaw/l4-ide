@@ -1,0 +1,18 @@
+-- Timezone Example: IANA timezone constants
+IMPORT timezone
+
+-- Set document timezone using a constant
+TIMEZONE IS EST
+
+-- Verify the resolved IANA name
+DECIDE `document timezone` IS TIMEZONE
+#EVAL `document timezone`  -- "America/New_York"
+
+-- Timezone constants resolve to IANA strings
+#EVAL EST  -- "America/New_York"
+#EVAL PST  -- "America/Los_Angeles"
+#EVAL SGT  -- "Asia/Singapore"
+#EVAL UTC  -- "Etc/UTC"
+
+-- EST and EDT map to the same zone (DST handled automatically)
+#ASSERT EST EQUALS EDT

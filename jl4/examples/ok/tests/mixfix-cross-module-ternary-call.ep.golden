@@ -1,0 +1,10 @@
+-- Cross-module ternary mixfix test
+-- Tests that ternary mixfix operators work when imported
+
+IMPORT prelude
+IMPORT `mixfix-cross-module-ternary-def`
+
+-- Test ternary mixfix from imported module
+DECIDE cross_module_ternary IS `added to` `should equal` 1 2 `should equal` 3
+
+#CHECK cross_module_ternary

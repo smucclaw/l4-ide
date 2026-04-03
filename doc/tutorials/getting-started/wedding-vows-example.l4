@@ -1,0 +1,49 @@
+-- Wedding Vows as L4 Regulative Rules
+
+§ `Wedding Vows`
+
+-- Actors
+DECLARE Person IS ONE OF Spouse1, Spouse2
+
+-- Actions
+DECLARE Action IS ONE OF
+    `exchange vows`
+    `love and cherish`
+    `have and hold`
+    `support`
+    `care for`
+    abandon
+    `be unfaithful`
+
+-- The ceremony
+GIVETH DEONTIC Person Action
+`wedding ceremony` MEANS
+    PARTY Spouse1
+    MUST `exchange vows`
+    WITHIN 1
+    HENCE
+        PARTY Spouse2
+        MUST `exchange vows`
+        WITHIN 1
+        HENCE FULFILLED
+        LEST BREACH BY Spouse2 BECAUSE "failed to exchange vows"
+    LEST BREACH BY Spouse1 BECAUSE "failed to exchange vows"
+
+-- Core vows using RAND for parallel obligations
+GIVETH DEONTIC Person Action
+`love obligation` MEANS
+    (PARTY Spouse1 MUST `love and cherish` HENCE FULFILLED LEST BREACH)
+    RAND
+    (PARTY Spouse2 MUST `love and cherish` HENCE FULFILLED LEST BREACH)
+
+-- Prohibitions
+GIVETH DEONTIC Person Action
+`fidelity clause` MEANS
+    (PARTY Spouse1 SHANT `be unfaithful` HENCE FULFILLED LEST BREACH)
+    RAND
+    (PARTY Spouse2 SHANT `be unfaithful` HENCE FULFILLED LEST BREACH)
+
+-- Test - successful wedding ceremony
+#TRACE `wedding ceremony` AT 0 WITH
+    PARTY Spouse1 DOES `exchange vows` AT 0
+    PARTY Spouse2 DOES `exchange vows` AT 0

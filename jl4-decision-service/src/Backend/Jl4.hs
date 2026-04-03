@@ -11,6 +11,7 @@ import L4.Annotation
 import qualified L4.Evaluate.ValueLazy as Eval
 import qualified L4.EvaluateLazy as Eval
 import L4.EvaluateLazy.Machine (EvalException, emptyEnvironment)
+import qualified L4.Evaluate.ValueLazy as EvalEnv (Environment)
 import L4.EvaluateLazy.Trace
 import qualified L4.EvaluateLazy.GraphViz2 as GraphViz
 import L4.TracePolicy (apiDefaultPolicy, TracePolicy(..))
@@ -32,7 +33,7 @@ import System.FilePath ((<.>), takeFileName)
 
 import Backend.Api
 import Backend.CodeGen (generateEvalWrapper, GeneratedCode(..))
-import Backend.DirectiveFilter (filterIdeDirectives)
+import L4.Export (extractAssumeParamTypes)
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Aeson
 import qualified Data.Scientific as Scientific
@@ -44,10 +45,12 @@ type ModuleContext = Map FilePath Text
 -- | Pre-compiled L4 module ready for fast evaluation
 data CompiledModule = CompiledModule
   { compiledModule :: !(Module Resolved)
-  , compiledEnvironment :: !Environment
+  , compiledEnvironment :: !Environment              -- ^ Typechecker environment (for type info)
   , compiledEntityInfo :: !EntityInfo
   , compiledDecide :: !(Decide Resolved)
-  , compiledModuleContext :: !ModuleContext  -- ^ Context needed for IMPORT resolution
+  , compiledModuleContext :: !ModuleContext          -- ^ Context needed for IMPORT resolution
+  , compiledImportEnv :: !EvalEnv.Environment        -- ^ Evaluator environment from imports
+  , compiledSource :: !Text                          -- ^ Original source text (preserves layout)
   }
   deriving (Generic)
 
@@ -81,6 +84,11 @@ precompileModule filepath source moduleContext funName = runExceptT $ do
   -- Extract the function definition
   decide <- withExceptT evalErrorToText $ getFunctionDefinition funName tcRes.module'
 
+  -- Pre-evaluate import dependencies to get the evaluator Environment
+  -- This is needed because execEvalExprInContextOfModule expects the import
+  -- environment to be pre-computed (it only evaluates the current module fresh)
+  importEnv <- liftIO $ buildImportEnvironment filepath source moduleContext tcRes.entityInfo
+
   -- Build the compiled module
   pure CompiledModule
     { compiledModule = tcRes.module'
@@ -88,13 +96,15 @@ precompileModule filepath source moduleContext funName = runExceptT $ do
     , compiledEntityInfo = tcRes.entityInfo
     , compiledDecide = decide
     , compiledModuleContext = moduleContext  -- Store context for IMPORT resolution
+    , compiledImportEnv = importEnv
+    , compiledSource = source                -- Preserve original source for layout-sensitive re-parsing
     }
  where
   evalErrorToText :: EvaluatorError -> Text
   evalErrorToText (InterpreterError t) = t
-  evalErrorToText (RequiredParameterMissing pm) = "Required parameter missing: expected " <> Text.show pm.expected <> ", got " <> Text.show pm.actual
+  evalErrorToText (RequiredParameterMissing pm) = "Required parameter missing: expected " <> Text.textShow pm.expected <> ", got " <> Text.textShow pm.actual
   evalErrorToText (UnknownArguments args) = "Unknown arguments: " <> Text.intercalate ", " args
-  evalErrorToText (CannotHandleParameterType lit) = "Cannot handle parameter type: " <> Text.show lit
+  evalErrorToText (CannotHandleParameterType lit) = "Cannot handle parameter type: " <> Text.textShow lit
   evalErrorToText CannotHandleUnknownVars = "Cannot handle unknown variables"
 
 -- ----------------------------------------------------------------------------
@@ -132,21 +142,24 @@ buildFunctionCallExpr funName args =
   App emptyAnno funName args
 
 -- | Check if any parameter value requires wrapper-based evaluation
--- This includes FnObject (records), FnUncertain, and FnUnknown (null/empty inputs)
--- These types need JSONDECODE to handle properly (e.g., for MAYBE-typed fields)
+-- Returns True for:
+-- - Missing parameters (Nothing) - need wrapper to handle as UNKNOWN
+-- - FnObject, FnUncertain, FnUnknown, FnLitString (enum coercion)
+-- These types need JSONDECODE to handle properly
 requiresWrapperEvaluation :: [(Text, Maybe FnLiteral)] -> Bool
-requiresWrapperEvaluation = any (maybe False needsWrapper . snd)
+requiresWrapperEvaluation = any (\(_, mVal) -> maybe True needsWrapper mVal)
   where
     needsWrapper :: FnLiteral -> Bool
     needsWrapper (FnObject _) = True
     needsWrapper FnUncertain = True
     needsWrapper FnUnknown = True
+    needsWrapper (FnLitString _) = True  -- Strings may be enum constructors
     needsWrapper (FnArray xs) = any needsWrapper xs
     needsWrapper _ = False
 
 -- | Evaluate using precompiled module (fast path) - direct AST evaluation
 -- This avoids the text round-trip through prettyLayout and re-parsing
--- Falls back to wrapper-based evaluation for FnObject parameters
+-- Falls back to wrapper-based evaluation for FnObject parameters or missing params
 evaluateWithCompiled
   :: FilePath
   -> FunctionDeclaration
@@ -156,11 +169,22 @@ evaluateWithCompiled
   -> Bool
   -> ExceptT EvaluatorError IO ResponseWithReason
 evaluateWithCompiled filepath fnDecl compiled params traceLevel includeGraphViz = do
+  -- Fill in missing parameters with Nothing
+  -- The input params may only contain provided parameters; we need explicit Nothing
+  -- entries for missing parameters so requiresWrapperEvaluation can detect them
+  let expectedParams = map fst (extractParamTypes compiled.compiledDecide)
+      inputMap = Map.fromList params
+      -- join flattens Maybe (Maybe FnLiteral) -> Maybe FnLiteral:
+      -- - Nothing (not in input) -> Nothing
+      -- - Just Nothing (explicit unknown) -> Nothing
+      -- - Just (Just v) (provided value) -> Just v
+      fullParams = [(name, join $ Map.lookup name inputMap) | name <- expectedParams]
+
   -- Check if we need to fall back to wrapper-based evaluation
-  -- (for FnObject, FnUncertain, FnUnknown which require JSONDECODE)
-  if requiresWrapperEvaluation params
-    then evaluateWithWrapper filepath fnDecl compiled params traceLevel includeGraphViz
-    else evaluateDirectAST compiled params traceLevel includeGraphViz
+  -- (for FnObject, FnUncertain, FnUnknown, missing params which require JSONDECODE)
+  if requiresWrapperEvaluation fullParams
+    then evaluateWithWrapper filepath fnDecl compiled fullParams traceLevel includeGraphViz
+    else evaluateDirectAST compiled fullParams traceLevel includeGraphViz
 
 -- | Direct AST evaluation (fast path) - for simple types without FnObject
 evaluateDirectAST
@@ -200,14 +224,14 @@ evaluateDirectAST compiled params traceLevel includeGraphViz = do
   fixedNow <- liftIO Eval.readFixedNowEnv
   evalConfig <- liftIO $ Eval.resolveEvalConfig fixedNow evalTracePolicy
 
-  -- Pass empty environment - the module will be evaluated fresh each time
-  -- The evaluator's Environment (Map Unique Reference) is different from
-  -- the typechecker's Environment (Map RawName [Unique])
+  -- Pass the pre-computed import environment
+  -- The module's own definitions are evaluated fresh each time, but imports
+  -- need their References to be pre-allocated
   mResult <- liftIO $ Eval.execEvalExprInContextOfModule
     evalConfig
     compiled.compiledEntityInfo
     callExpr
-    (emptyEnvironment, compiled.compiledModule)
+    (compiled.compiledImportEnv, compiled.compiledModule)
 
   -- Handle result
   case mResult of
@@ -225,7 +249,7 @@ handleEvalResultDirect
   -> ExceptT EvaluatorError IO ResponseWithReason
 handleEvalResultDirect result trace traceLevel includeGraphViz mModule = case result of
   Eval.Assertion _ -> throwError $ InterpreterError "L4: Got an assertion instead of a normal result."
-  Eval.Reduction (Left evalExc) -> throwError $ InterpreterError $ Text.show evalExc
+  Eval.Reduction (Left evalExc) -> throwError $ InterpreterError $ Text.textShow evalExc
   Eval.Reduction (Right val) -> do
     r <- nfToFnLiteral val
     pure $ ResponseWithReason
@@ -260,13 +284,14 @@ evaluateWithWrapper
   -> ExceptT EvaluatorError IO ResponseWithReason
 evaluateWithWrapper filepath fnDecl compiled params traceLevel includeGraphViz = do
   -- Extract parameter types from the compiled function definition
-  let paramTypes = extractParamTypes compiled.compiledDecide
+  let givenParamTypes = extractParamTypes compiled.compiledDecide
+      assumeParamTypes = extractAssumeParamTypes compiled.compiledModule compiled.compiledDecide
 
   -- Convert input parameters to JSON
   inputJson <- paramsToJson params
 
   -- Generate wrapper code using existing code generation
-  genCode <- case generateEvalWrapper fnDecl.name paramTypes inputJson traceLevel of
+  genCode <- case generateEvalWrapper fnDecl.name givenParamTypes assumeParamTypes inputJson traceLevel of
     Left err -> throwError $ InterpreterError err
     Right gc -> pure gc
 
@@ -291,24 +316,76 @@ evaluateWrapperInContext
   -> CompiledModule
   -> IO ([Text], Maybe [Eval.EvalDirectiveResult])
 evaluateWrapperInContext filepath wrapperCode compiled = do
-  -- Import the precompiled module's declarations into the wrapper's context
-  -- For simplicity, we concatenate the filtered module text with the wrapper
-  -- But we skip re-typechecking the original module
-  let filteredModule = filterIdeDirectives compiled.compiledModule
-      filteredSource = prettyLayout filteredModule
+  -- Use original source text to preserve layout-sensitive formatting
+  -- L4 is layout-sensitive (like Python), so prettyLayout can break indentation
+  -- We filter IDE directives (#EVAL, #TRACE, etc.) using text-based filtering
+  let filteredSource = filterIdeDirectivesText compiled.compiledSource
       combinedProgram = filteredSource <> wrapperCode
 
   -- Evaluate the combined program using the original module context
   -- This ensures IMPORT statements can be resolved correctly
   evaluateModule filepath combinedProgram compiled.compiledModuleContext
 
+-- | Filter IDE directives from source text while preserving layout
+-- Removes lines starting with #EVAL, #TRACE, #EVALTRACE, #ASSERT, #CHECK
+-- Also removes continuation lines for multiline directives (#TRACE ... WITH)
+-- A continuation line is one that:
+-- 1. Immediately follows a directive line or another continuation
+-- 2. Is more indented than the directive line (or is a blank/comment line)
+filterIdeDirectivesText :: Text -> Text
+filterIdeDirectivesText = Text.unlines . filterLines . Text.lines
+  where
+    -- Filter lines, tracking whether we're inside a multiline directive
+    filterLines :: [Text] -> [Text]
+    filterLines = go Nothing
+      where
+        -- mIndent = Nothing: not in a directive
+        -- mIndent = Just indent: in a directive with given base indentation
+        go :: Maybe Int -> [Text] -> [Text]
+        go _ [] = []
+        go mIndent (line:rest)
+          | isDirectiveLine line =
+              -- Start of a directive - skip it and enter directive state
+              let baseIndent = lineIndentation line
+              in go (Just baseIndent) rest
+          | Just baseIndent <- mIndent, isContinuationLine baseIndent line =
+              -- Continuation of a multiline directive - skip it
+              go mIndent rest
+          | otherwise =
+              -- Not a directive or continuation - keep it and reset state
+              line : go Nothing rest
+
+    -- Check if line starts a directive (with optional leading whitespace)
+    isDirectiveLine :: Text -> Bool
+    isDirectiveLine line =
+      let stripped = Text.stripStart line
+      in any (`Text.isPrefixOf` stripped)
+           ["#EVAL", "#EVALTRACE", "#TRACE", "#ASSERT", "#CHECK"]
+
+    -- Check if line is a continuation of a multiline directive
+    -- Continuation lines are either:
+    -- 1. More indented than the base directive
+    -- 2. Empty or whitespace-only (blank lines within directive)
+    -- 3. Comment-only lines (starting with --) that are more indented
+    isContinuationLine :: Int -> Text -> Bool
+    isContinuationLine baseIndent line
+      | Text.all isSpace line = True  -- Blank line - include in directive block
+      | lineIndentation line > baseIndent = True  -- More indented = continuation
+      | otherwise = False
+
+    -- Get the indentation (number of leading spaces/tabs) of a line
+    lineIndentation :: Text -> Int
+    lineIndentation = Text.length . Text.takeWhile isSpace
+
+    isSpace :: Char -> Bool
+    isSpace c = c == ' ' || c == '\t'
+
 -- | Convert FnLiteral parameters to Aeson.Value
+-- Missing parameters (Nothing) become FnUnknown -> Aeson.Null for partial evaluation
 paramsToJson :: (Monad m) => [(Text, Maybe FnLiteral)] -> ExceptT EvaluatorError m Aeson.Value
-paramsToJson params = do
-  pairs <- forM params $ \(name, mVal) -> case mVal of
-    Nothing -> throwError $ InterpreterError $ "Missing value for parameter: " <> name
-    Just val -> pure (name, fnLiteralToJson val)
-  pure $ Aeson.object [(Aeson.fromText k, v) | (k, v) <- pairs]
+paramsToJson params =
+  let pairs = [(name, fnLiteralToJson (maybe FnUnknown id mVal)) | (name, mVal) <- params]
+  in pure $ Aeson.object [(Aeson.fromText k, v) | (k, v) <- pairs]
 
 -- | Convert FnLiteral to Aeson.Value
 fnLiteralToJson :: FnLiteral -> Aeson.Value
@@ -333,7 +410,7 @@ handleEvalResult
   -> ExceptT EvaluatorError IO ResponseWithReason
 handleEvalResult result trace _sentinel traceLevel includeGraphViz mModule = case result of
   Eval.Assertion _ -> throwError $ InterpreterError "L4: Got an assertion instead of a normal result."
-  Eval.Reduction (Left evalExc) -> throwError $ InterpreterError $ Text.show evalExc
+  Eval.Reduction (Left evalExc) -> throwError $ InterpreterError $ Text.textShow evalExc
   Eval.Reduction (Right val) -> do
     r <- nfToFnLiteral val
     -- Check if the result is NOTHING (decode failure from LEFT error) or JUST value
@@ -408,17 +485,18 @@ createFunction filepath fnDecl fnImpl moduleContext = do
 
                 -- 2. Get function definition and extract parameter types
                 funDecide <- getFunctionDefinition funRawName tcRes.module'
-                let paramTypes = extractParamTypes funDecide
+                let givenParamTypes = extractParamTypes funDecide
+                    assumeParamTypes = extractAssumeParamTypes tcRes.module' funDecide
 
-                -- 3. Filter IDE directives from the module
-                let filteredModule = filterIdeDirectives tcRes.module'
-                    filteredSource = prettyLayout filteredModule
+                -- 3. Filter IDE directives from the original source text
+                -- L4 is layout-sensitive, so we must preserve the original formatting
+                let filteredSource = filterIdeDirectivesText fnImpl
 
                 -- 4. Convert input parameters to JSON
                 inputJson <- paramsToJson params'
 
                 -- 5. Generate wrapper code
-                genCode <- case generateEvalWrapper fnDecl.name paramTypes inputJson traceLevel of
+                genCode <- case generateEvalWrapper fnDecl.name givenParamTypes assumeParamTypes inputJson traceLevel of
                   Left err -> throwError $ InterpreterError err
                   Right gc -> pure gc
 
@@ -472,8 +550,66 @@ getFunctionDefinition name (MkModule _ _ sect) = case goSection sect of
     Directive _ _ -> Nothing
     Import _ _ -> Nothing
     Section _ s -> goSection s
+    Timezone _ _ -> Nothing
 
   nameOf (MkDecide _ _ (MkAppForm _ n _ _) _) = n
+
+-- | Build the evaluator Environment for imported modules
+-- This evaluates all imports and returns their combined environment
+-- so that execEvalExprInContextOfModule can reference imported definitions
+buildImportEnvironment
+  :: FilePath
+  -> Text
+  -> ModuleContext
+  -> EntityInfo
+  -> IO EvalEnv.Environment
+buildImportEnvironment filepath source moduleContext _entityInfo = do
+  -- We need to evaluate the imports to get their References
+  -- The cleanest way is to use the existing evaluation infrastructure
+  -- which handles import resolution through the Shake system
+  --
+  -- Strategy: Create a minimal module that just has the imports (no code),
+  -- evaluate it, and extract the resulting environment
+  fixedNow <- Eval.readFixedNowEnv
+  evalConfig <- Eval.resolveEvalConfig fixedNow apiDefaultPolicy
+
+  -- The easiest approach is to evaluate the full module and get the import environment
+  -- from the GetLazyEvaluationDependencies result. But since we're outside the Shake
+  -- monad, we use oneshotL4ActionAndErrors with the EvaluateLazy rule.
+  --
+  -- However, EvaluateLazy doesn't directly expose the import environment.
+  -- Instead, we can evaluate an empty directive and get the environment from
+  -- the module evaluation. But this is complex.
+  --
+  -- Simpler approach: Since the wrapper-based evaluation already works
+  -- (it uses evaluateModule which goes through Shake), the issue is only
+  -- in the direct AST path. For now, let's just extract imports from the
+  -- module and evaluate them.
+  --
+  -- Actually, the simplest fix is to evaluate the module once during precompilation
+  -- using the same infrastructure as evaluateModule, and capture the environment.
+
+  result <- oneshotL4ActionAndErrors evalConfig filepath $ \nfp -> do
+    let uri = normalizedFilePathToUri nfp
+    -- Add all module files as virtual files for IMPORT resolution
+    forM_ (Map.toList moduleContext) $ \(path, content) -> do
+      let modulePath = toNormalizedFilePath ("." <> takeFileName path)
+      _ <- Shake.addVirtualFile modulePath content
+      pure ()
+    -- Add the main file
+    _ <- Shake.addVirtualFile nfp source
+    -- Use GetLazyEvaluationDependencies which returns (Environment, [EvalDirectiveResult])
+    -- This rule is defined with defineWithCallStack, so we need to wrap it with AttachCallStack
+    Shake.use (Shake.AttachCallStack [uri] Rules.GetLazyEvaluationDependencies) uri
+
+  case result of
+    (_errs, Just (importEnv, _dirResults)) ->
+      -- Successfully built import environment
+      pure importEnv
+    (_errs, Nothing) ->
+      -- Fall back to empty environment if evaluation fails
+      -- (This shouldn't happen since the module already typechecked)
+      pure emptyEnvironment
 
 -- ----------------------------------------------------------------------------
 -- Helpers and other non-generic functions
@@ -490,7 +626,11 @@ valueToFnLiteral = \case
       Just int -> FnLitInt int
       Nothing -> FnLitDouble $ fromRational i
   Eval.ValDate day ->
-    pure $ FnLitString (Text.show day)
+    pure $ FnLitString (Text.textShow day)
+  Eval.ValTime tod ->
+    pure $ FnLitString (Text.textShow tod)
+  Eval.ValDateTime utc _tzName ->
+    pure $ FnLitString (Text.textShow utc)
   Eval.ValString t -> pure $ FnLitString t
   Eval.ValNil -> pure $ FnArray []
   Eval.ValCons v1 v2 -> nfToFnLiteral v1 >>= \ l1 -> listToFnLiteral (DList.singleton l1) v2

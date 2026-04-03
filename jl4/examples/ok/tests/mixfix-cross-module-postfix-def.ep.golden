@@ -1,0 +1,13 @@
+-- Module defining postfix mixfix for cross-module testing
+
+IMPORT prelude
+
+-- Postfix mixfix: x `is even`
+GIVEN x IS A NUMBER
+GIVETH BOOLEAN
+x `is even` MEANS (x MODULO 2) EQUALS 0
+
+-- Same-module test
+DECIDE same_module_postfix IS `is even`
+
+#CHECK same_module_postfix

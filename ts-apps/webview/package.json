@@ -51,13 +51,15 @@
     "vite": "^6.0.7"
   },
   "dependencies": {
-    "l4-ladder-visualizer": "*",
-    "@repo/vscode-webview-rpc": "*",
+    "@repo/l4-highlight": "*",
     "@repo/viz-expr": "*",
+    "@repo/vscode-webview-rpc": "*",
     "csstype": "^3.1.3",
     "effect": "^3.11.0",
     "esbuild": "^0.24.2",
+    "l4-ladder-visualizer": "*",
     "lodash": "^4.17.21",
+    "marked": "^14.0.0",
     "runed": "^0.23.3",
     "ts-pattern": "^5.6.2",
     "vscode-jsonrpc": "^8.2.1",

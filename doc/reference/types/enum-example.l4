@@ -1,0 +1,18 @@
+-- Example: Enum type declaration
+-- Demonstrates sum types with named constructors
+
+DECLARE Color IS ONE OF
+  Red
+  Green
+  Blue
+
+-- Example usage
+`my favorite color` MEANS Red
+
+`name of the color` MEANS
+  CONSIDER `my favorite color`
+  WHEN Red   THEN "red"
+  WHEN Green THEN "green"
+  WHEN Blue  THEN "blue"
+
+#EVAL `name of the color`

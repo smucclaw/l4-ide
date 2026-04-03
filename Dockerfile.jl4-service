@@ -1,0 +1,57 @@
+# Multi-stage build for jl4-service
+FROM haskell:9.10.2 AS builder
+
+RUN apt-get update && apt-get install -y \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+# Copy cabal project files first for dependency caching
+COPY cabal.project .
+COPY jl4-core/jl4-core.cabal jl4-core/
+COPY jl4/jl4.cabal jl4/
+COPY jl4-lsp/jl4-lsp.cabal jl4-lsp/
+COPY jl4-service/jl4-service.cabal jl4-service/
+COPY jl4-query-plan/jl4-query-plan.cabal jl4-query-plan/
+
+# Build dependencies (cached unless .cabal files change)
+RUN cabal update && cabal build --only-dependencies jl4-service
+
+# Copy source code
+COPY jl4-core jl4-core
+COPY jl4 jl4
+COPY jl4-lsp jl4-lsp
+COPY jl4-service jl4-service
+COPY jl4-query-plan jl4-query-plan
+
+# Build the project
+RUN cabal build jl4-service && \
+    cabal install jl4-service:exe:jl4-service \
+      --installdir=/opt/jl4-service --install-method=copy
+
+# Runtime stage
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    curl \
+    libgmp10 \
+    libffi8 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY --from=builder /opt/jl4-service/jl4-service /usr/local/bin/
+
+EXPOSE 8080
+
+ENV JL4_PORT=8080
+ENV JL4_STORE_PATH=/data/store
+
+VOLUME ["/data/store"]
+
+HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+CMD ["jl4-service"]

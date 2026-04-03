@@ -2,7 +2,13 @@ module L4.Evaluate.ValueLazy where
 
 import Base
 import Control.Concurrent (ThreadId)
-import Data.Time (Day)
+import Data.Aeson (ToJSON(..), object, (.=))
+import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.Key as Key
+import Data.Ratio (numerator, denominator)
+import qualified Data.Vector as Vector
+import Data.Time (Day, UTCTime)
+import Data.Time.LocalTime (TimeOfDay)
 import L4.Syntax
 import L4.Evaluate.Operators (BinOp)
 
@@ -43,6 +49,8 @@ data Value a =
     ValNumber Rational
   | ValString Text
   | ValDate Day
+  | ValTime !TimeOfDay                 -- ^ Wall-clock time (local, no date/tz)
+  | ValDateTime !UTCTime !Text         -- ^ UTC instant + IANA timezone name
   | ValNil
   | ValCons a a
   | ValClosure (GivenSig Resolved) (Expr Resolved) Environment
@@ -77,6 +85,8 @@ data ReasonForBreach a
 data NullaryBuiltinFun
   = NullaryTodaySerial
   | NullaryNowSerial
+  | NullaryTimezone          -- ^ Returns document IANA timezone name from TemporalContext
+  | NullaryCurrentTime       -- ^ Returns current local TIME (requires TIMEZONE IS)
   deriving stock (Show)
 
 data UnaryBuiltinFun
@@ -114,6 +124,19 @@ data UnaryBuiltinFun
   | UnaryToString        -- α → STRING (runtime-restricted to supported types)
   | UnaryToNumber        -- STRING → MAYBE NUMBER
   | UnaryToDate          -- STRING → MAYBE DATE (uses runtime type info)
+  -- TIME builtins
+  | UnaryTimeHour         -- TIME → NUMBER
+  | UnaryTimeMinute       -- TIME → NUMBER
+  | UnaryTimeSecond       -- TIME → NUMBER
+  | UnaryTimeToSerial     -- TIME → NUMBER (fraction of day)
+  | UnaryTimeFromSerial   -- NUMBER → TIME
+  | UnaryToTime           -- STRING → TIME (parse "HH:MM:SS")
+  -- DATETIME builtins
+  | UnaryDatetimeDate     -- DATETIME → DATE (local date via stored tz)
+  | UnaryDatetimeTime     -- DATETIME → TIME (local time via stored tz)
+  | UnaryDatetimeSerial   -- DATETIME → NUMBER (UTC-based serial)
+  | UnaryDatetimeTzName   -- DATETIME → STRING (IANA timezone name)
+  | UnaryToDatetime       -- STRING → DATETIME (parse ISO-8601)
   deriving stock (Show)
 
 data TernaryBuiltinFun
@@ -123,6 +146,9 @@ data TernaryBuiltinFun
   | TernaryDateFromDMY   -- NUMBER → NUMBER → NUMBER → DATE
   | TernaryEverBetween
   | TernaryAlwaysBetween
+  -- TIME/DATETIME constructors
+  | TernaryTimeFromHMS      -- NUMBER → NUMBER → NUMBER → TIME
+  | TernaryDatetimeFromDTZ  -- DATE → TIME → STRING → DATETIME
   deriving stock (Show)
 
 -- | This is a non-standard instance because environments can be recursive, hence we must
@@ -131,6 +157,8 @@ instance NFData a => NFData (Value a) where
   rnf :: Value a -> ()
   rnf (ValNumber i)               = rnf i
   rnf (ValDate d)                 = rnf d
+  rnf (ValTime t)                 = rnf t
+  rnf (ValDateTime u tz)          = rnf u `seq` rnf tz
   rnf (ValROp env op a b)     = env `seq` op `deepseq` a `deepseq` b `deepseq` ()
   rnf (ValString t)               = rnf t
   rnf ValNil                      = ()
@@ -159,6 +187,8 @@ instance NFData NullaryBuiltinFun where
   rnf :: NullaryBuiltinFun -> ()
   rnf NullaryTodaySerial = ()
   rnf NullaryNowSerial = ()
+  rnf NullaryTimezone = ()
+  rnf NullaryCurrentTime = ()
 
 instance NFData UnaryBuiltinFun where
   rnf :: UnaryBuiltinFun -> ()
@@ -194,6 +224,17 @@ instance NFData UnaryBuiltinFun where
   rnf UnaryDateMonth = ()
   rnf UnaryDateYear = ()
   rnf UnaryTimeValue = ()
+  rnf UnaryTimeHour = ()
+  rnf UnaryTimeMinute = ()
+  rnf UnaryTimeSecond = ()
+  rnf UnaryTimeToSerial = ()
+  rnf UnaryTimeFromSerial = ()
+  rnf UnaryToTime = ()
+  rnf UnaryDatetimeDate = ()
+  rnf UnaryDatetimeTime = ()
+  rnf UnaryDatetimeSerial = ()
+  rnf UnaryDatetimeTzName = ()
+  rnf UnaryToDatetime = ()
 
 instance NFData TernaryBuiltinFun where
   rnf :: TernaryBuiltinFun -> ()
@@ -204,3 +245,74 @@ instance NFData TernaryBuiltinFun where
   rnf TernaryDateFromDMY = ()
   rnf TernaryEverBetween = ()
   rnf TernaryAlwaysBetween = ()
+  rnf TernaryTimeFromHMS = ()
+  rnf TernaryDatetimeFromDTZ = ()
+
+-- ----------------------------------------------------------------------------
+-- ToJSON instances for batch --json output
+-- ----------------------------------------------------------------------------
+
+-- | Get the constructor name as Text from a Resolved name.
+resolvedNameText :: Resolved -> Text
+resolvedNameText = rawNameToText . rawName . getOriginal
+
+-- | Flatten a ValCons/ValNil chain into a JSON array.
+-- If the structure is not a proper list, fall back to a two-element array.
+flattenList :: ToJSON a => a -> a -> Aeson.Value
+flattenList x xs = case toJSON xs of
+  Aeson.Array arr -> Aeson.Array (Vector.cons (toJSON x) arr)
+  _               -> toJSON [toJSON x, toJSON xs]
+
+instance ToJSON NF where
+  toJSON (MkNF val) = toJSON val
+  toJSON Omitted    = Aeson.Null
+
+instance ToJSON a => ToJSON (Value a) where
+  toJSON (ValNumber r)
+    | denominator r == 1 = toJSON (numerator r)
+    | otherwise          = toJSON (fromRational r :: Double)
+  toJSON (ValString s)            = toJSON s
+  toJSON (ValDate d)              = toJSON (show d)
+  toJSON (ValTime t)              = toJSON (show t)
+  toJSON (ValDateTime utc tz)     = object ["utc" .= utc, "timezone" .= tz]
+  toJSON ValNil                   = toJSON ([] :: [Aeson.Value])
+  toJSON (ValCons x xs)           = flattenList x xs
+  toJSON (ValConstructor name [])
+    | cname == "NOTHING"          = Aeson.Null
+    | cname == "EMPTY"            = toJSON ([] :: [Aeson.Value])
+    | cname == "TRUE"             = Aeson.Bool True
+    | cname == "FALSE"            = Aeson.Bool False
+    | otherwise                   = toJSON cname
+    where cname = resolvedNameText name
+  toJSON (ValConstructor name [v])
+    | resolvedNameText name == "JUST" = toJSON v
+  toJSON (ValConstructor name fields) = object
+    [ Key.fromText (resolvedNameText name) .= toJSON fields ]
+  toJSON (ValClosure{})           = toJSON ("<function>" :: Text)
+  toJSON (ValObligation{})        = toJSON ("<obligation>" :: Text)
+  toJSON (ValROp{})               = toJSON ("<deferred-op>" :: Text)
+  toJSON (ValNullaryBuiltinFun{}) = toJSON ("<builtin>" :: Text)
+  toJSON (ValUnaryBuiltinFun{})   = toJSON ("<builtin>" :: Text)
+  toJSON (ValBinaryBuiltinFun{})  = toJSON ("<builtin>" :: Text)
+  toJSON (ValTernaryBuiltinFun{}) = toJSON ("<builtin>" :: Text)
+  toJSON (ValPartialTernary{})    = toJSON ("<partial>" :: Text)
+  toJSON (ValPartialTernary2{})   = toJSON ("<partial>" :: Text)
+  toJSON (ValUnappliedConstructor r) = toJSON (resolvedNameText r)
+  toJSON (ValAssumed r)           = toJSON ("<assumed:" <> resolvedNameText r <> ">" :: Text)
+  toJSON (ValEnvironment{})       = toJSON ("<environment>" :: Text)
+  toJSON (ValBreached reason)     = object ["breached" .= toJSON reason]
+
+instance ToJSON a => ToJSON (ReasonForBreach a) where
+  toJSON (DeadlineMissed deadline now elapsed _party action limit) = object
+    [ "type" .= ("deadline_missed" :: Text)
+    , "deadline" .= deadline
+    , "now" .= now
+    , "elapsed" .= (fromRational elapsed :: Double)
+    , "action" .= show action
+    , "limit" .= (fromRational limit :: Double)
+    ]
+  toJSON (ExplicitBreach mParty mReason) = object
+    [ "type" .= ("explicit_breach" :: Text)
+    , "party" .= mParty
+    , "reason" .= mReason
+    ]

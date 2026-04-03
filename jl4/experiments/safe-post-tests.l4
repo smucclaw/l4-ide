@@ -1,6 +1,6 @@
 IMPORT `safe-post`
 
-#EVAL EVALPROVISION x (LIST EVENT S delivery 5, EVENT B payment 42) 5
+#EVAL EVALDEONTIC x (LIST EVENT S delivery 5, EVENT B payment 42) 5
 
 #TRACE x AT 4 WITH 
   PARTY S DOES delivery AT 4

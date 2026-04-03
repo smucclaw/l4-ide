@@ -106,11 +106,11 @@ inRange (MkSrcPos l c) (MkSrcRange (MkSrcPos l1 c1) (MkSrcPos l2 c2) _ _) =
 
 
 prettySrcPos :: SrcPos -> Text
-prettySrcPos (MkSrcPos l c) = Text.show l <> ":" <> Text.show c
+prettySrcPos (MkSrcPos l c) = Text.textShow l <> ":" <> Text.textShow c
 
 prettyPartialSrcPos :: SrcPos -> SrcPos -> Text
 prettyPartialSrcPos (MkSrcPos rl rc) p@(MkSrcPos l c)
   | rl == l && rc == c = ""
-  | rl == l            = "-" <> Text.show c
+  | rl == l            = "-" <> Text.textShow c
   | otherwise          = "-" <> prettySrcPos p
 

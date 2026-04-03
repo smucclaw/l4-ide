@@ -71,3 +71,80 @@ export const InlineExprsRequestType = makeL4RpcRequestType<
   InlineExprsRequestParams,
   InlineExprsResult
 >('l4/inlineExprs')
+
+/****************************************
+    Inspector protocol extensions
+*****************************************/
+
+export interface SrcPos {
+  line: number
+  column: number
+}
+
+export interface EvalDirectiveResultParams {
+  verDocId: { uri: string; version: number }
+  srcPos: SrcPos
+  directiveType: string
+}
+
+export interface DirectiveResult {
+  directiveType: string
+  prettyText: string
+  success: boolean | null
+  structuredValue: unknown | null
+}
+
+/**
+ * Request type for getting a directive's evaluation result
+ */
+export const EvalDirectiveResultRequestType = makeL4RpcRequestType<
+  EvalDirectiveResultParams,
+  DirectiveResult
+>('l4/evalDirectiveResult')
+
+/****************************************
+    Deploy sidebar protocol extensions
+*****************************************/
+
+export interface FunctionParameter {
+  type: string
+  alias?: string
+  format?: string
+  enum: string[]
+  description: string
+  properties?: Record<string, FunctionParameter>
+  propertyOrder?: string[]
+  items?: FunctionParameter
+}
+
+export interface FunctionParameters {
+  type: 'object'
+  properties: Record<string, FunctionParameter>
+  required: string[]
+}
+
+export interface ExportedFunctionInfo {
+  name: string
+  description: string
+  isDefault: boolean
+  returnType: string
+  isDeontic: boolean
+  parameters: FunctionParameters
+}
+
+export interface GetExportedFunctionsParams {
+  verDocId: { uri: string; version: number }
+}
+
+export interface GetExportedFunctionsResponse {
+  functions: ExportedFunctionInfo[]
+  importedFiles: string[]
+}
+
+/**
+ * Request type for getting exported functions from the current file
+ */
+export const GetExportedFunctionsRequestType = makeL4RpcRequestType<
+  GetExportedFunctionsParams,
+  GetExportedFunctionsResponse
+>('l4/getExportedFunctions')

@@ -5,6 +5,7 @@
   import { DecisionServiceQueryPlanRequest } from '@repo/vscode-webview-rpc'
   import {
     RenderAsLadder,
+    ToggleSimplify,
     makeRenderAsLadderSuccessResponse,
     WebviewFrontendIsReadyNotification,
     type WebviewFrontendIsReadyMessage,
@@ -76,6 +77,16 @@
   let lastQueryPlanBindingsKey: string | null = null
   let queryPlanInFlight = false
   let queryPlanNeedsRerun = false
+  let simplified = $state(false)
+
+  function toggleSimplify() {
+    simplified = !simplified
+    if (messenger) {
+      messenger.sendNotification(ToggleSimplify, HOST_EXTENSION, {
+        shouldSimplify: simplified,
+      })
+    }
+  }
 
   function bindingsKey(bindings: Record<string, boolean>) {
     const entries = Object.entries(bindings).sort(([a], [b]) =>
@@ -223,11 +234,18 @@
 </script>
 
 <!-- TODO: Make this a Svelte snippet or smtg like that so it can be shared between the vscode webview and jl4 webview pane -->
+<div class="ladder-toolbar">
+  <label class="simplify-toggle">
+    <input type="checkbox" checked={simplified} onchange={toggleSimplify} />
+    Simplified
+  </label>
+</div>
+
 {#await renderLadderPromise}
   <p>Loading Ladder Diagram...</p>
 {:then ladder}
-  <!-- TODO: Think more about whether to use #key -- which destroys and rebuilds the component --- or have 
-  flow-base work with the reactive node prop (i.e., have LadderFlow 
+  <!-- TODO: Think more about whether to use #key -- which destroys and rebuilds the component --- or have
+  flow-base work with the reactive node prop (i.e., have LadderFlow
   update the relevant internals without destroying and rebuilding the component).
   Going with #key for now because it feels conceptually simpler -->
   {#key ladder.funDeclLirNode}
@@ -240,7 +258,30 @@
 {/await}
 
 <style>
+  .ladder-toolbar {
+    display: flex;
+    align-items: center;
+    padding: 4px 8px;
+    background: var(--vscode-sideBarSectionHeader-background, #252526);
+    border-bottom: 1px solid var(--vscode-panel-border, #444);
+  }
+
+  .simplify-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--vscode-font-family, sans-serif);
+    font-size: var(--vscode-font-size, 13px);
+    color: var(--vscode-foreground);
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .simplify-toggle input[type='checkbox'] {
+    cursor: pointer;
+  }
+
   .slightly-shorter-than-full-viewport-height {
-    height: 98svh;
+    height: calc(98svh - 30px);
   }
 </style>

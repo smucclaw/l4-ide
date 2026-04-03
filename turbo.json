@@ -12,7 +12,8 @@
         "**/*.tsbuildinfo",
         ".svelte-kit/**",
         "ts-apps/vscode/static/**"
-      ]
+      ],
+      "env": ["GIT_COMMIT_HASH"]
     },
     "lint": {
       "dependsOn": ["^build", "^lint"]

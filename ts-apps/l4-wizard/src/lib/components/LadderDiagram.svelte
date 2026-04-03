@@ -4,17 +4,24 @@
   type Props = {
     ladder: Ladder | null
     bindings?: Record<string, unknown>
-    onNodeClick?: (key: string, currentValue: unknown) => void
+    atomToKeys?: Map<number, string[]>
+    onNodeClick?: (unique: number, currentValue: unknown) => void
   }
 
-  let { ladder, bindings = {}, onNodeClick }: Props = $props()
+  let {
+    ladder,
+    bindings = {},
+    atomToKeys = new Map(),
+    onNodeClick,
+  }: Props = $props()
 
   interface TreeNode {
     type: string
     label: string
     children: TreeNode[]
     depth: number
-    paramKey?: string // For variable nodes
+    paramKey?: string // For variable nodes (label-based, for display)
+    unique?: number // Atom unique ID for binding lookup
   }
 
   function buildTree(node: LadderNode, depth: number = 0): TreeNode {
@@ -51,6 +58,20 @@
           children: [],
           depth,
           paramKey,
+          unique: node.name.unique,
+        }
+      }
+
+      case 'App': {
+        // Function application node - display as a named function with its arguments
+        const fnLabel = node.fnName.label.replace(/^`|`$/g, '')
+        return {
+          type: 'App',
+          label: fnLabel,
+          children: node.args.map((arg) => buildTree(arg, depth + 1)),
+          depth,
+          paramKey: fnLabel,
+          unique: node.fnName.unique,
         }
       }
     }
@@ -58,9 +79,45 @@
 
   let tree = $derived(ladder ? buildTree(ladder.funDecl.body) : null)
 
-  function getNodeColor(type: string, paramKey?: string): string {
-    if (type === 'Var' && paramKey) {
-      const value = bindings[paramKey]
+  /**
+   * Get the combined value for an atom based on its binding keys.
+   * For atoms with multiple binding keys (AND semantics):
+   * - True if ALL keys are true
+   * - False if ANY key is false
+   * - Unknown otherwise
+   */
+  function getAtomValue(unique?: number): boolean | undefined {
+    if (unique === undefined) return undefined
+
+    const keys = atomToKeys.get(unique)
+    if (!keys || keys.length === 0) return undefined
+
+    let hasTrue = false
+    let hasFalse = false
+    let hasUndefined = false
+
+    for (const key of keys) {
+      const value = bindings[key]
+      if (value === true) hasTrue = true
+      else if (value === false) hasFalse = true
+      else hasUndefined = true
+    }
+
+    // If any binding is false, the AND is false
+    if (hasFalse) return false
+    // If all bindings are true, the AND is true
+    if (hasTrue && !hasUndefined) return true
+    // Otherwise unknown
+    return undefined
+  }
+
+  function getNodeColor(
+    type: string,
+    paramKey?: string,
+    unique?: number
+  ): string {
+    if ((type === 'Var' || type === 'App') && unique !== undefined) {
+      const value = getAtomValue(unique)
       if (value === true) {
         return 'bg-green-200 border-green-500 text-green-900'
       } else if (value === false) {
@@ -76,22 +133,29 @@
         return 'bg-green-100 border-green-400 text-green-800'
       case 'Not':
         return 'bg-red-100 border-red-400 text-red-800'
+      case 'App':
+        return 'bg-purple-100 border-purple-400 text-purple-800'
       default:
         return 'bg-gray-100 border-gray-300 text-gray-700'
     }
   }
 
-  function getValueLabel(paramKey: string): string {
-    const value = bindings[paramKey]
+  function getValueLabel(unique?: number): string {
+    const value = getAtomValue(unique)
     if (value === true) return '✓ True'
     if (value === false) return '✗ False'
     return '? Unknown'
   }
 
   function handleNodeClick(node: TreeNode) {
-    if (node.type === 'Var' && node.paramKey && onNodeClick) {
-      const currentValue = bindings[node.paramKey]
-      onNodeClick(node.paramKey, currentValue)
+    if (
+      (node.type === 'Var' || node.type === 'App') &&
+      node.unique !== undefined &&
+      onNodeClick
+    ) {
+      // Use unique ID to get the combined value for this atom
+      const currentValue = getAtomValue(node.unique)
+      onNodeClick(node.unique, currentValue)
     }
   }
 
@@ -136,7 +200,8 @@
                 <div
                   class="inline-flex items-center gap-2 rounded border-2 px-3 py-1.5 text-sm font-medium {getNodeColor(
                     child.type,
-                    child.paramKey
+                    child.paramKey,
+                    child.unique
                   )} {child.type === 'Var' && onNodeClick
                     ? 'cursor-pointer hover:shadow-md transition-shadow'
                     : ''}"
@@ -177,9 +242,9 @@
                     </svg>
                   {/if}
                   <span>{child.label}</span>
-                  {#if child.type === 'Var' && child.paramKey}
+                  {#if (child.type === 'Var' || child.type === 'App') && child.unique !== undefined}
                     <span class="ml-2 text-xs font-semibold">
-                      {getValueLabel(child.paramKey)}
+                      {getValueLabel(child.unique)}
                     </span>
                   {/if}
                 </div>
@@ -190,13 +255,19 @@
             <div
               class="inline-flex items-center gap-2 rounded border-2 px-3 py-1.5 text-sm font-medium {getNodeColor(
                 node.type,
-                node.paramKey
-              )} {node.type === 'Var' && onNodeClick
+                node.paramKey,
+                node.unique
+              )} {(node.type === 'Var' || node.type === 'App') && onNodeClick
                 ? 'cursor-pointer hover:shadow-md transition-shadow'
                 : ''}"
               onclick={() => handleNodeClick(node)}
-              role={node.type === 'Var' && onNodeClick ? 'button' : undefined}
-              tabindex={node.type === 'Var' && onNodeClick ? 0 : -1}
+              role={(node.type === 'Var' || node.type === 'App') && onNodeClick
+                ? 'button'
+                : undefined}
+              tabindex={(node.type === 'Var' || node.type === 'App') &&
+              onNodeClick
+                ? 0
+                : -1}
             >
               {#if node.type === 'And'}
                 <svg
@@ -227,16 +298,30 @@
                     d="M8 12h8"
                   />
                 </svg>
+              {:else if node.type === 'App'}
+                <svg
+                  class="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                  />
+                </svg>
               {/if}
               <span>{node.label}</span>
-              {#if node.type === 'Var' && node.paramKey}
+              {#if (node.type === 'Var' || node.type === 'App') && node.unique !== undefined}
                 <span class="ml-2 text-xs font-semibold">
-                  {getValueLabel(node.paramKey)}
+                  {getValueLabel(node.unique)}
                 </span>
               {/if}
             </div>
 
-            {#if node.children.length > 0 && node.type !== 'Not'}
+            {#if node.children.length > 0 && node.type !== 'Not' && node.type !== 'Var'}
               <div class="space-y-2">
                 {#each node.children as child}
                   {@render renderNode(child)}

@@ -1,0 +1,36 @@
+Parsing successful
+Typechecking successful
+Info | updateFileDiagnostics published different from new diagnostics - file diagnostics:
+File: computed-fields-self-cycle.l4
+  Hidden: no
+  Range: 3:9-3:12
+  Source: check
+  Severity: DiagnosticSeverity_Error
+  Code: <none>
+  Message:
+    Circular dependency detected between computed fields:
+
+      `a`
+
+    Computed fields cannot depend on each other in a cycle.
+    Break the cycle by making one of these a stored field
+    or restructuring the dependencies.
+
+File: computed-fields-self-cycle.l4
+  Hidden: no
+  Range: 6:15-6:20
+  Source: check
+  Severity: DiagnosticSeverity_Error
+  Code: <none>
+  Message:
+    The first argument of function 
+
+      `__PLUS__` (predefined)
+
+    is expected to be of type
+
+      NUMBER
+
+    but is here of type
+
+      FUNCTION FROM Bad TO NUMBER

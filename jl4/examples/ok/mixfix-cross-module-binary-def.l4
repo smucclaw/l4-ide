@@ -1,0 +1,10 @@
+-- Module defining binary mixfix for cross-module testing
+-- Binary mixfix works cross-module (workaround for ternary bug)
+
+IMPORT prelude
+
+-- Binary mixfix: person `is eligible for` program
+GIVEN person IS A STRING
+      program IS A STRING
+GIVETH BOOLEAN
+person `is eligible for` program MEANS TRUE

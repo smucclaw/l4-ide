@@ -22,3 +22,6 @@ examples/
 hie.yaml
 
 .vscode-test/
+
+# Ignore generated WASM artifacts
+ts-apps/jl4-web/static/wasm/

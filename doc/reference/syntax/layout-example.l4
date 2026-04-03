@@ -1,0 +1,12 @@
+-- Example: Layout rules (indentation-based grouping)
+-- Demonstrates how indentation defines code blocks
+
+DECLARE Person
+  HAS name IS A STRING    -- Indented: part of declaration
+      age IS A NUMBER     -- Same level: another field
+      
+john MEANS Person WITH
+  name IS "John Doe"
+  age  IS 30
+
+#EVAL john's name

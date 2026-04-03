@@ -5,6 +5,7 @@
 
 module LSP.L4.Handlers where
 
+import Control.Concurrent (forkIO)
 import Control.Concurrent.Strict (Chan, writeChan)
 import Control.Exception.Safe (MonadCatch, MonadMask, MonadThrow)
 import Control.Lens ((^.))
@@ -29,10 +30,12 @@ import qualified Data.Maybe as Maybe
 import Data.Text (Text)
 import qualified Base.Text as Text
 import qualified Data.Text.Lazy as LazyText
+import qualified Data.Text.Mixed.Rope as Rope
 import GHC.Generics
 import GHC.TypeLits (Symbol)
 import Data.Proxy (Proxy (..))
 import System.FilePath (takeExtension)
+import L4.FindReferences (lookupReference)
 import LSP.L4.Base
 import LSP.L4.Config
 import LSP.L4.Rules hiding (Log (..))
@@ -58,7 +61,11 @@ import Language.LSP.Server hiding (notificationHandler, requestHandler)
 import qualified Language.LSP.Server as LSP
 import Language.LSP.VFS (VFS)
 import LSP.L4.Actions
+import qualified LSP.L4.Inspector as Inspector
 import L4.EvaluateLazy (EvalConfig)
+import qualified L4.EvaluateLazy as EL
+import qualified L4.Export as Export
+import qualified L4.FunctionSchema as FSchema
 
 data ReactorMessage
   = ReactorNotification (IO ())
@@ -150,6 +157,57 @@ notificationHandler m k = LSP.notificationHandler m $ \TNotificationMessage{_par
   liftIO $ writeChan st.reactor $ ReactorNotification (LSP.runLspT env $ runServerM st $ k st.ideState vfs _params)
 
 -- ----------------------------------------------------------------------------
+-- Directive results notification
+-- ----------------------------------------------------------------------------
+
+-- | After a file change, wait for evaluation to complete then push all directive
+-- results to the client as a @l4/directiveResultsUpdated@ notification.
+-- Runs in a background thread so it doesn't block the reactor.
+scheduleDirectiveResultsNotification
+  :: IdeState -> Uri -> NormalizedUri -> ServerM Config ()
+scheduleDirectiveResultsNotification ide doc nuri = do
+  env <- LSP.getLspEnv
+  liftIO $ Extra.void $ forkIO $ do
+    -- Wait for EvaluateLazy (also blocks on SuccessfulTypeCheck transitively).
+    -- If type-checking fails, mEvalResults is Nothing and we send nothing,
+    -- leaving inspector sections frozen at their last valid state (matching WASM behaviour).
+    (mEvalResults, mTcResult, mRope) <- runAction "l4/directiveResultsNotif" ide $ do
+      mEval <- use EvaluateLazy nuri
+      mTc   <- use SuccessfulTypeCheck nuri
+      mRope <- getFileContents nuri
+      pure (mEval, mTc, mRope)
+    case mEvalResults of
+      Nothing -> pure ()
+      Just evalResults -> do
+        let getLineContent lineNo = case mRope of
+              Nothing   -> ""
+              Just rope ->
+                let ls = Text.lines (Rope.toText rope)
+                in if lineNo > 0 && lineNo <= length ls
+                   then ls !! (lineNo - 1)
+                   else ""
+            conFields    = maybe mempty (extractConstructorFieldNames . (.entityInfo)) mTcResult
+            evalUpdates  = Maybe.mapMaybe (Inspector.evalDirectiveToUpdateItem conFields getLineContent) evalResults
+            checkUpdates =
+              [ Inspector.DirectiveUpdateItem
+                  { directiveId = Text.pack (show lineNo) <> ":" <> Text.pack (show colNo)
+                  , prettyText  = Text.intercalate "\n" (prettyCheckErrorWithContext info)
+                  , success     = Just True
+                  , lineContent = getLineContent lineNo
+                  }
+              | Just tcResult <- [mTcResult]
+              , info <- tcResult.infos
+              , Just (MkSrcRange (MkSrcPos lineNo colNo) _ _ _) <- [rangeOf info]
+              ]
+        LSP.runLspT env $
+          sendNotification
+            (SMethod_CustomMethod (Proxy @Inspector.DirectiveResultsUpdatedMethodName))
+            (Aeson.toJSON $ Inspector.DirectiveResultsUpdatedParams
+              { uri     = getUri doc
+              , results = evalUpdates <> checkUpdates
+              })
+
+-- ----------------------------------------------------------------------------
 -- Handlers
 -- ----------------------------------------------------------------------------
 
@@ -160,40 +218,46 @@ handlers evalConfig recorder =
       notificationHandler SMethod_Initialized $ \ide _ _ -> do
         liftIO $ shakeSessionInit (cmapWithPrio LogShake recorder) ide
     , -- Handling of the virtual file system
-      notificationHandler SMethod_TextDocumentDidOpen $ \ide vfs msg -> liftIO $ do
+      notificationHandler SMethod_TextDocumentDidOpen $ \ide vfs msg -> do
         let
           doc = msg ^. J.textDocument . J.uri
           version = msg ^. J.textDocument . J.version
-          uri = toNormalizedUri doc
+          nuri = toNormalizedUri doc
         -- Only process .l4 files
         Extra.when (isL4File doc) $ do
-          atomically $ updatePositionMapping ide (VersionedTextDocumentIdentifier doc version) []
-          -- We don't know if the file actually exists, or if the contents match those on disk
-          -- For example, vscode restores previously unsaved contents on open
-          setFileModified (VFSModified vfs) ide uri $
-            addFileOfInterest ide uri Modified{firstOpen=True}
-          logWith recorder Debug $ LogOpenedTextDocument doc
-    , notificationHandler SMethod_TextDocumentDidChange $ \ide vfs msg -> liftIO $ do
+          liftIO $ do
+            atomically $ updatePositionMapping ide (VersionedTextDocumentIdentifier doc version) []
+            -- We don't know if the file actually exists, or if the contents match those on disk
+            -- For example, vscode restores previously unsaved contents on open
+            setFileModified (VFSModified vfs) ide nuri $
+              addFileOfInterest ide nuri Modified{firstOpen=True}
+            logWith recorder Debug $ LogOpenedTextDocument doc
+          scheduleDirectiveResultsNotification ide doc nuri
+    , notificationHandler SMethod_TextDocumentDidChange $ \ide vfs msg -> do
         let
           doc = msg ^. J.textDocument . J.uri
-          uri = toNormalizedUri doc
+          nuri = toNormalizedUri doc
           version = msg ^. J.textDocument . J.version
           changes = msg ^. J.contentChanges
         -- Only process .l4 files
         Extra.when (isL4File doc) $ do
-          atomically $ updatePositionMapping ide (VersionedTextDocumentIdentifier doc version) changes
-          setFileModified (VFSModified vfs) ide uri $
-            addFileOfInterest ide uri Modified{firstOpen=False}
-          logWith recorder Debug $ LogModifiedTextDocument doc
-    , notificationHandler SMethod_TextDocumentDidSave $ \ide vfs msg -> liftIO $ do
+          liftIO $ do
+            atomically $ updatePositionMapping ide (VersionedTextDocumentIdentifier doc version) changes
+            setFileModified (VFSModified vfs) ide nuri $
+              addFileOfInterest ide nuri Modified{firstOpen=False}
+            logWith recorder Debug $ LogModifiedTextDocument doc
+          scheduleDirectiveResultsNotification ide doc nuri
+    , notificationHandler SMethod_TextDocumentDidSave $ \ide vfs msg -> do
         let
           doc = msg ^. J.textDocument . J.uri
-          uri = toNormalizedUri doc
+          nuri = toNormalizedUri doc
         -- Only process .l4 files
         Extra.when (isL4File doc) $ do
-          setFileModified (VFSModified vfs) ide uri $
-            addFileOfInterest ide uri OnDisk
-          logWith recorder Debug $ LogSavedTextDocument doc
+          liftIO $ do
+            setFileModified (VFSModified vfs) ide nuri $
+              addFileOfInterest ide nuri OnDisk
+            logWith recorder Debug $ LogSavedTextDocument doc
+          scheduleDirectiveResultsNotification ide doc nuri
     , notificationHandler SMethod_TextDocumentDidClose $ \ide vfs msg -> liftIO $ do
         let
           doc = msg ^. J.textDocument . J.uri
@@ -274,7 +338,7 @@ handlers evalConfig recorder =
               Left $
                 TResponseError
                   { _code = InL LSPErrorCodes_RequestFailed
-                  , _message = "Internal error, failed to produce semantic tokens for " <> Text.show uri.getUri
+                  , _message = "Internal error, failed to produce semantic tokens for " <> Text.textShow uri.getUri
                   , _xdata = Nothing
                   }
 
@@ -305,22 +369,19 @@ handlers evalConfig recorder =
           use_ TypeCheck (toNormalizedUri verTextDocId._uri)
 
         let
-          mkCodeLens srcPos simplify = CodeLens
+          mkDecisionGraphCodeLens srcPos = CodeLens
             { _command = Just Command
-              { _title = t simplify
+              { _title = "Show decision graph"
               , _command = "l4.visualize"
-              , _arguments = Just [Aeson.toJSON verTextDocId, Aeson.toJSON (Generically srcPos), Aeson.toJSON simplify]
+              , _arguments = Just [Aeson.toJSON verTextDocId, Aeson.toJSON (Generically srcPos), Aeson.toJSON False]
               }
             , _range = pointRange $ srcPosToPosition srcPos
             , _data_ = Nothing
             }
-            where
-              t False = "Visualize"
-              t True  = "Simplify and visualize"
 
-          --  Check if can make viz with a given simplify flag
-          canVisualize decide simplify =
-            let cfg = Ladder.mkVizConfig verTextDocId typeCheck.module' typeCheck.substitution simplify
+          --  Check if can make viz (without simplification — simplification is now a toggle inside the panel)
+          canVisualize decide =
+            let cfg = Ladder.mkVizConfig verTextDocId typeCheck.module' typeCheck.substitution False
             in isRight (Ladder.doVisualize decide cfg)
 
           decideToCodeLens decide =
@@ -329,15 +390,54 @@ handlers evalConfig recorder =
             -- If in future this is too slow, we should think about caching these results or, even better,
             -- make the visualizer work on as many examples as possible.
             case rangeOfNode decide of
-              Just node ->
-                let simplifyFlags = [False, True]
-                in map (mkCodeLens node.start) (filter (canVisualize decide) simplifyFlags)
-              Nothing -> []
+              Just node
+                | canVisualize decide -> [mkDecisionGraphCodeLens node.start]
+              _ -> []
 
           -- adds codelenses to visualize DECIDE or MEANS clauses
           visualizeDecides :: [CodeLens] = foldTopLevelDecides decideToCodeLens typeCheck.module'
 
-        pure (Right (InL visualizeDecides))
+          directiveLabel :: Directive Resolved -> Text
+          directiveLabel = \case
+            LazyEval{}      -> "#EVAL"
+            LazyEvalTrace{} -> "#EVALTRACE"
+            Check{}         -> "#CHECK"
+            Contract{}      -> "#CHECK"
+            Assert{}        -> "#ASSERT"
+
+          mkRenderResultCodeLens srcPos label = CodeLens
+            { _command = Just Command
+              { _title = "Track result"
+              , _command = "l4.renderResult"
+              , _arguments = Just [Aeson.toJSON verTextDocId, Aeson.toJSON (Generically srcPos), Aeson.toJSON label]
+              }
+            , _range = pointRange $ srcPosToPosition srcPos
+            , _data_ = Nothing
+            }
+
+          directiveToCodeLens :: TopDecl Resolved -> [CodeLens]
+          directiveToCodeLens = \case
+            Directive _ d ->
+              case rangeOfNode d of
+                Just node -> [mkRenderResultCodeLens node.start (directiveLabel d)]
+                _ -> []
+            _ -> []
+
+          -- foldTopDecls only visits the top-level section; directives can be
+          -- nested inside §§ sub-sections, so we recurse through all sections.
+          collectFromSection :: Section Resolved -> [CodeLens]
+          collectFromSection (MkSection _ _ _ topDecls) = concatMap collectFromTopDecl topDecls
+
+          collectFromTopDecl :: TopDecl Resolved -> [CodeLens]
+          collectFromTopDecl td = directiveToCodeLens td ++ case td of
+            Section _ s -> collectFromSection s
+            _           -> []
+
+          renderResultDirectives :: [CodeLens] =
+            let MkModule _ _ section = typeCheck.module'
+            in collectFromSection section
+
+        pure (Right (InL (visualizeDecides <> renderResultDirectives)))
     , requestHandler SMethod_TextDocumentReferences $ \ide params -> do
         let doc :: Uri = params ^. J.textDocument . J.uri
             pos :: SrcPos = lspPositionToSrcPos $ params ^. J.position
@@ -349,6 +449,187 @@ handlers evalConfig recorder =
 
         let locs = map (\range -> Location (fromNormalizedUri range.moduleUri) (srcRangeToLspRange (Just range))) $ lookupReference pos refs
         pure (Right (InL locs))
+    , requestHandler SMethod_TextDocumentDocumentSymbol $ \ide params -> do
+        let uri = params ^. J.textDocument . J.uri
+            nuri = toNormalizedUri uri
+
+        mTypeCheck <- liftIO $ runAction "documentSymbol" ide $
+          useWithStale TypeCheck nuri
+
+        let docSymbols = case mTypeCheck of
+              Nothing -> []
+              Just (typeCheck, _positionMapping) ->
+                let MkModule _ moduleNuri section = typeCheck.module'
+                    subst = typeCheck.substitution
+                    entInfo = typeCheck.entityInfo
+                in sectionToSymbols moduleNuri subst entInfo section
+
+            sectionToSymbols :: NormalizedUri -> Substitution -> EntityInfo -> Section Resolved -> [DocumentSymbol]
+            sectionToSymbols moduleNuri subst entInfo (MkSection _ _ _ topDecls) =
+              concatMap (topDeclToSymbol moduleNuri subst entInfo) topDecls
+
+            topDeclToSymbol :: NormalizedUri -> Substitution -> EntityInfo -> TopDecl Resolved -> [DocumentSymbol]
+            topDeclToSymbol moduleNuri subst entInfo = \case
+              Section _ s@(MkSection _ mName _ _) ->
+                case rangeOfNode s of
+                  Just rng ->
+                    let name = maybe "§" (nameToText . getOriginal) mName
+                        lspRange = srcRangeToLspRange (Just rng)
+                        selRange = maybe lspRange nameSelRange mName
+                    in [ DocumentSymbol
+                          { _name = name
+                          , _detail = Nothing
+                          , _kind = SymbolKind_Namespace
+                          , _tags = Nothing
+                          , _deprecated = Nothing
+                          , _range = lspRange
+                          , _selectionRange = selRange
+                          , _children = Just $ sectionToSymbols moduleNuri subst entInfo s
+                          }
+                       ]
+                  Nothing -> sectionToSymbols moduleNuri subst entInfo s
+
+              Declare _ decl@(MkDeclare _ _ (MkAppForm _ n _ _) typeDecl) ->
+                case rangeOfNode decl of
+                  Just rng ->
+                    let lspRange = srcRangeToLspRange (Just rng)
+                        selRange = nameSelRange n
+                        originalName = nameToText (getOriginal n)
+                    in case typeDecl of
+                      RecordDecl{} ->
+                        [ mkSymbol originalName Nothing SymbolKind_TypeParameter lspRange selRange ]
+                      EnumDecl _ cons ->
+                        let children = map (conDeclToSymbol originalName lspRange) cons
+                        in [ mkSymbolWithChildren originalName Nothing SymbolKind_Enum lspRange selRange children ]
+                      SynonymDecl _ ty ->
+                        let detail = prettyLayout ty
+                        in [ mkSymbol originalName (Just detail) SymbolKind_Variable lspRange selRange ]
+                  Nothing -> []
+
+              Decide _ decide@(MkDecide _ (MkTypeSig _ (MkGivenSig _ givenParams) _) (MkAppForm _ n _ _) body) ->
+                case rangeOfNode decide of
+                  Just rng ->
+                    let lspRange = srcRangeToLspRange (Just rng)
+                        selRange = nameSelRange n
+                        detail = inferredReturnType moduleNuri subst entInfo n
+                        isDeontic = case body of
+                          Regulative{} -> True
+                          _ -> case detail of
+                            Just t  -> "DEONTIC" `Text.isPrefixOf` t
+                            Nothing -> False
+                        kind = if isDeontic then SymbolKind_Event else SymbolKind_Function
+                        paramChildren = map (givenParamToSymbol lspRange) givenParams
+                    in [ mkSymbolWithChildren (nameToText (getOriginal n)) detail kind lspRange selRange paramChildren ]
+                  Nothing -> []
+
+              Assume _ assume@(MkAssume _ _ (MkAppForm _ n _ _) mTy) ->
+                case rangeOfNode assume of
+                  Just rng ->
+                    let lspRange = srcRangeToLspRange (Just rng)
+                        selRange = nameSelRange n
+                        detail = fmap prettyLayout mTy
+                    in [ mkSymbol (nameToText (getOriginal n)) detail SymbolKind_Variable lspRange selRange ]
+                  Nothing -> []
+
+              Directive _ d ->
+                case rangeOfNode d of
+                  Just rng ->
+                    let lspRange = srcRangeToLspRange (Just rng)
+                        (label, dExpr) = case d of
+                          LazyEval _ e      -> ("#EVAL", e)
+                          LazyEvalTrace _ e -> ("#EVALTRACE", e)
+                          Check _ e         -> ("#CHECK", e)
+                          Contract _ e _ _  -> ("#CHECK", e)
+                          Assert _ e        -> ("#ASSERT", e)
+                        detail = prettyLayout dExpr
+                    in [ mkSymbol label (Just detail) SymbolKind_Operator lspRange lspRange ]
+                  Nothing -> []
+
+              Import _ imp@(MkImport _ n _) ->
+                case rangeOfNode imp of
+                  Just rng ->
+                    let lspRange = srcRangeToLspRange (Just rng)
+                        selRange = nameSelRange n
+                    in [ mkSymbol (nameToText (getOriginal n)) Nothing SymbolKind_File lspRange selRange ]
+                  Nothing -> []
+
+              _ -> []
+
+            nameSelRange :: Resolved -> LSP.Range
+            nameSelRange n = srcRangeToLspRange (rangeOf (getOriginal n))
+
+            inferredReturnType :: NormalizedUri -> Substitution -> EntityInfo -> Resolved -> Maybe Text
+            inferredReturnType moduleNuri subst entInfo n =
+              case Map.lookup (getUnique n) entInfo of
+                Just (_, KnownTerm ty _) ->
+                  let resolved = applyFinalSubstitution subst moduleNuri ty
+                      retTy = case resolved of
+                        Fun _ _ ret -> ret
+                        other       -> other
+                  in Just (prettyLayout retTy)
+                _ -> Nothing
+
+            mkSymbol :: Text -> Maybe Text -> SymbolKind -> LSP.Range -> LSP.Range -> DocumentSymbol
+            mkSymbol name detail kind range selRange = mkSymbolWithChildren name detail kind range selRange []
+
+            mkSymbolWithChildren :: Text -> Maybe Text -> SymbolKind -> LSP.Range -> LSP.Range -> [DocumentSymbol] -> DocumentSymbol
+            mkSymbolWithChildren name detail kind range selRange children = DocumentSymbol
+              { _name = name
+              , _detail = detail
+              , _kind = kind
+              , _tags = Nothing
+              , _deprecated = Nothing
+              , _range = range
+              , _selectionRange = clampRange range selRange
+              , _children = case children of
+                  [] -> Nothing
+                  cs -> Just cs
+              }
+
+            conDeclToSymbol :: Text -> LSP.Range -> ConDecl Resolved -> DocumentSymbol
+            conDeclToSymbol _enumName parentRange (MkConDecl _ n _) =
+              let variantName = nameToText (getOriginal n)
+                  selRange = nameSelRange n
+              in mkSymbol variantName Nothing SymbolKind_EnumMember parentRange selRange
+
+            givenParamToSymbol :: LSP.Range -> OptionallyTypedName Resolved -> DocumentSymbol
+            givenParamToSymbol parentRange (MkOptionallyTypedName _ n mTy) =
+              let paramName = nameToText (getOriginal n)
+                  selRange = nameSelRange n
+                  (detail, kind) = case mTy of
+                    Nothing -> (Nothing, SymbolKind_Variable)
+                    Just ty ->
+                      let tyText = prettyLayout ty
+                      in (Just tyText, typeToSymbolKind tyText)
+              in mkSymbol paramName detail kind parentRange selRange
+
+            typeToSymbolKind :: Text -> SymbolKind
+            typeToSymbolKind tyText
+              | tyText == "BOOLEAN"                       = SymbolKind_Boolean
+              | tyText `elem` ["NUMBER", "INTEGER"]       = SymbolKind_Number
+              | tyText `elem` ["STRING", "TEXT"]           = SymbolKind_String
+              | "LIST" `Text.isPrefixOf` tyText           = SymbolKind_Array
+              | Just inner <- Text.stripPrefix "MAYBE OF " tyText = typeToSymbolKind inner
+              | Just inner <- Text.stripPrefix "MAYBE " tyText = typeToSymbolKind inner
+              | otherwise                                 = SymbolKind_TypeParameter
+
+            -- | Ensure selectionRange is contained within fullRange (LSP requirement).
+            -- Falls back to fullRange if selectionRange is not contained.
+            clampRange :: LSP.Range -> LSP.Range -> LSP.Range
+            clampRange full sel
+              | containsRange full sel = sel
+              | otherwise = full
+
+            containsRange :: LSP.Range -> LSP.Range -> Bool
+            containsRange (LSP.Range fStart fEnd) (LSP.Range sStart sEnd) =
+              posLeq fStart sStart && posLeq sEnd fEnd
+
+            posLeq :: LSP.Position -> LSP.Position -> Bool
+            posLeq a b = a._line < b._line || (a._line == b._line && a._character <= b._character)
+
+
+
+        pure (Right (InR (InL docSymbols)))
 
     -- custom requests
     , requestHandler (SMethod_CustomMethod (Proxy @Ladder.EvalAppMethodName)) $ \ide params ->
@@ -366,7 +647,7 @@ handlers evalConfig recorder =
                 result <- MkVizHandler $ evalApp evalConfig tcRes.entityInfo (evalEnv, tcRes.module') evalParams recentViz
                 logWith recorder Debug $
                   LogHandlingCustomRequest evalParams.verDocId._uri
-                  ("Eval result: " <> Text.show result)
+                  ("Eval result: " <> Text.textShow result)
                 pure result
 
     , requestHandler (SMethod_CustomMethod (Proxy @Ladder.InlineExprsMethodName)) $ \ide params ->
@@ -390,6 +671,119 @@ handlers evalConfig recorder =
                     , getUri ieParams.verDocId._uri
                     , Ladder.prettyPrintVizError vizError
                     ]
+
+    , requestHandler (SMethod_CustomMethod (Proxy @Inspector.EvalDirectiveResultMethodName)) $ \ide params -> do
+        let parseParams :: Aeson.Value -> Maybe Inspector.EvalDirectiveResultParams
+            parseParams v = case Aeson.fromJSON v of
+              Aeson.Success p -> Just p
+              _               -> Nothing
+
+        case parseParams params of
+          Nothing -> pure $ Left $ TResponseError
+            { _code = InR ErrorCodes_InvalidParams
+            , _message = "Failed to parse evalDirectiveResult params"
+            , _xdata = Nothing
+            }
+          Just reqParams -> do
+            let nuri = toNormalizedUri reqParams.verDocId._uri
+                targetPos = reqParams.srcPos
+
+            (mResults, mTcResult') <- liftIO $ runAction "l4/evalDirectiveResult" ide $ do
+              mEval <- use EvaluateLazy nuri
+              mTc   <- use SuccessfulTypeCheck nuri
+              pure (mEval, mTc)
+
+            case mResults of
+              Nothing -> pure $ Left $ TResponseError
+                { _code = InR ErrorCodes_InvalidRequest
+                , _message = "No evaluation results available"
+                , _xdata = Nothing
+                }
+              Just results -> do
+                let conFields = maybe mempty (extractConstructorFieldNames . (.entityInfo)) mTcResult'
+                    matchesPos (EL.MkEvalDirectiveResult rng _ _) = fmap (.start) rng == Just targetPos
+                    matchingResult = List.find matchesPos results
+                case matchingResult of
+                  Just evalRes ->
+                    pure $ Right $ Aeson.toJSON $
+                      Inspector.evalDirectiveToResult conFields reqParams.directiveType evalRes
+                  Nothing | reqParams.directiveType == "#CHECK" -> do
+                    -- #CHECK results come from the type checker (CheckInfo), not the evaluator.
+                    -- Look for a CheckInfo item on the same line as the target position.
+                    mTcResult <- liftIO $ runAction "l4/evalDirectiveResult/#CHECK" ide $
+                      use SuccessfulTypeCheck nuri
+                    case mTcResult of
+                      Nothing -> pure $ Left $ TResponseError
+                        { _code = InR ErrorCodes_InvalidRequest
+                        , _message = "No type check result available for #CHECK"
+                        , _xdata = Nothing
+                        }
+                      Just tcResult ->
+                        let matchesCheckPos err = fmap (.start) (rangeOf err) == Just targetPos
+                            mInfo = List.find matchesCheckPos tcResult.infos
+                        in case mInfo of
+                          Nothing -> pure $ Left $ TResponseError
+                            { _code = InR ErrorCodes_InvalidRequest
+                            , _message = "No #CHECK result found at the given position"
+                            , _xdata = Nothing
+                            }
+                          Just info ->
+                            pure $ Right $ Aeson.toJSON $ Inspector.DirectiveResult
+                              { directiveType = "#CHECK"
+                              , prettyText = Text.intercalate "\n" (prettyCheckErrorWithContext info)
+                              , success = Just True
+                              , structuredValue = Nothing
+                              }
+                  Nothing -> pure $ Left $ TResponseError
+                    { _code = InR ErrorCodes_InvalidRequest
+                    , _message = "No directive result found at the given position"
+                    , _xdata = Nothing
+                    }
+
+    , requestHandler (SMethod_CustomMethod (Proxy @Inspector.GetExportedFunctionsMethodName)) $ \_ide params -> do
+        let parseParams :: Aeson.Value -> Maybe Inspector.GetExportedFunctionsParams
+            parseParams v = case Aeson.fromJSON v of
+              Aeson.Success p -> Just p
+              _               -> Nothing
+
+        case parseParams params of
+          Nothing -> pure $ Left $ TResponseError
+            { _code = InR ErrorCodes_InvalidParams
+            , _message = "Failed to parse getExportedFunctions params"
+            , _xdata = Nothing
+            }
+          Just reqParams -> do
+            let nuri = toNormalizedUri reqParams.verDocId._uri
+
+            mTcResult <- liftIO $ runAction "l4/getExportedFunctions" _ide $
+              use TypeCheck nuri
+
+            case mTcResult of
+              Nothing -> pure $ Left $ TResponseError
+                { _code = InR ErrorCodes_InvalidRequest
+                , _message = "No type check result available"
+                , _xdata = Nothing
+                }
+              Just tcResult -> do
+                let -- Collect exports from this module and all transitive imports
+                    collectExports tc =
+                      let mod' = tc.module'
+                          declares = FSchema.declaresFromModule mod'
+                          exps = Export.getExportedFunctions mod'
+                          here = map (Inspector.exportedFunctionToSummary declares) exps
+                          imported = concatMap collectExports tc.dependencies
+                      in here <> imported
+                    summaries = collectExports tcResult
+                    -- Collect transitive import URIs from the dependency tree
+                    collectImportUris tc = case tc.module' of
+                      MkModule _ depUri _ ->
+                        fromNormalizedUri depUri : concatMap collectImportUris tc.dependencies
+                    importUris = map getUri $ concatMap collectImportUris tcResult.dependencies
+                    response = Inspector.GetExportedFunctionsResponse
+                      { functions = summaries
+                      , importedFiles = importUris
+                      }
+                pure $ Right $ Aeson.toJSON response
     ]
 
 activeFileDiagnosticsInRange :: ShakeExtras -> NormalizedUri -> Range -> STM [FileDiagnostic]
@@ -570,7 +964,7 @@ withVizRequestContext recorder method params ide handlerKont = do
   case (mtcRes, mRecentViz) of
     (Nothing, _) -> throwError $ TResponseError
       { _code = InR ErrorCodes_InvalidRequest
-      , _message = "Failed to get type check for " <> Text.show verDocId._uri
+      , _message = "Failed to get type check for " <> Text.textShow verDocId._uri
       , _xdata = Nothing
       }
     (_, Nothing) -> throwError $ TResponseError
@@ -602,8 +996,8 @@ checkVizVersion reqParams recentViz = do
     then pure ()
     else throwError $ TResponseError
       { _code = InL LSPErrorCodes_ContentModified
-      , _message = "Document version mismatch. Visualizer version: " <> Text.show (reqParams.verDocId)._version <>
-          ", whereas server's version is: " <> Text.show vizConfig.verTxtDocId._version
+      , _message = "Document version mismatch. Visualizer version: " <> Text.textShow (reqParams.verDocId)._version <>
+          ", whereas server's version is: " <> Text.textShow vizConfig.verTxtDocId._version
       , _xdata = Nothing
       }
       -- TODO: Have the client update accordingly when it gets this error code,

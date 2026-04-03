@@ -51,6 +51,13 @@ export type LadderNode =
       atomId: string
       canInline: boolean
     }
+  | {
+      $type: 'App'
+      id: { id: number }
+      fnName: { label: string; unique: number }
+      args: LadderNode[]
+      atomId: string
+    }
 
 export type Ladder = {
   funDecl: {

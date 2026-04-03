@@ -23,6 +23,7 @@ data TemporalContext = TemporalContext
   , tcRuleEncodingTime :: !(Maybe UTCTime)
   , tcRuleCommit :: !(Maybe Text.Text)
   , tcDecisionTime :: !(Maybe UTCTime)
+  , tcDocumentTimezone :: !(Maybe Text.Text)  -- ^ IANA timezone name (e.g. "Asia/Singapore")
   }
   deriving stock (Eq, Show, Generic)
 
@@ -31,9 +32,7 @@ data EvalClause
   = UnderValidTime Day
   | AsOfSystemTime UTCTime
   | UnderRulesEffectiveAt Day
-  | UnderCommit Text.Text
   | UnderRulesEncodedAt UTCTime
-  | RetroactiveTo Day
   deriving stock (Eq, Show, Generic)
 
 -- | Seed an initial temporal context using the wall-clock time for
@@ -48,6 +47,7 @@ initialTemporalContext now =
     , tcRuleEncodingTime = Nothing
     , tcRuleCommit = Nothing
     , tcDecisionTime = Just now
+    , tcDocumentTimezone = Nothing
     }
 
 -- | Apply a list of clauses to a context, left-to-right.
@@ -73,11 +73,5 @@ applyEvalClauses clauses ctx0 =
         where
           -- default encoding snapshot to the target day when unspecified
           coerceDay day = UTCTime day (secondsToDiffTime 0)
-      UnderCommit _commit ->
-        ctx { tcRuleCommit = Just _commit }
       UnderRulesEncodedAt t ->
         ctx { tcRuleEncodingTime = Just t }
-      RetroactiveTo d ->
-        applyClause
-          (applyClause ctx (UnderRulesEffectiveAt d))
-          (AsOfSystemTime (UTCTime d (secondsToDiffTime 0)))

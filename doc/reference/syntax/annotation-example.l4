@@ -1,0 +1,13 @@
+-- Example: Annotations in L4
+-- Demonstrates @desc, @nlg, and @ref annotations
+
+@desc "Person's age in years"
+ASSUME age IS A NUMBER
+
+@nlg "the applicant's age"
+ASSUME applicantAge IS A NUMBER
+
+@ref "Section 4(1)(a) of the Act"
+ASSUME eligible IS A BOOLEAN
+
+#EVAL age

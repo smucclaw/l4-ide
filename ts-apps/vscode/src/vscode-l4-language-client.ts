@@ -1,4 +1,4 @@
-import { LanguageClient } from 'vscode-languageclient/node.js'
+import { LanguageClient, Disposable } from 'vscode-languageclient/node.js'
 import { type L4RpcRequestType, L4LanguageClient } from 'jl4-client-rpc'
 
 export class VSCodeL4LanguageClient implements L4LanguageClient {
@@ -30,6 +30,13 @@ export class VSCodeL4LanguageClient implements L4LanguageClient {
     params: P
   ): Promise<R | null> {
     return this.client.sendRequest(type.method, params)
+  }
+
+  onNotification(
+    method: string,
+    handler: (params: unknown) => void
+  ): Disposable {
+    return this.client.onNotification(method, handler)
   }
 
   async dispose(): Promise<void> {

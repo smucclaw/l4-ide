@@ -1,0 +1,25 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+computed-fields-extra.l4:17:1-24:
+  42
+computed-fields-extra.l4:40:1-23:
+  13
+computed-fields-extra.l4:41:1-28:
+  7
+computed-fields-extra.l4:42:1-25:
+  30
+computed-fields-extra.l4:43:1-27:
+  FALSE
+computed-fields-extra.l4:44:1-32:
+  TRUE
+computed-fields-extra.l4:50:1-33:
+  TRUE
+computed-fields-extra.l4:71:1-33:
+  15
+computed-fields-extra.l4:72:1-40:
+  11
+computed-fields-extra.l4:85:1-22:
+  TRUE
+computed-fields-extra.l4:88:1-22:
+  FALSE

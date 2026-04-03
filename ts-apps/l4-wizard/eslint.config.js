@@ -5,4 +5,12 @@ export default [
   {
     ignores: ['*.mjs'],
   },
+  {
+    // Define global constants injected by Vite
+    languageOptions: {
+      globals: {
+        __COMMIT_HASH__: 'readonly',
+      },
+    },
+  },
 ]

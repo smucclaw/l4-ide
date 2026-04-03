@@ -184,13 +184,17 @@ https://jl4.legalese.com/
 
 L4 includes foundational libraries for building legal and commercial applications:
 
-- **[Jurisdiction](jl4-core/libraries/jurisdiction.l4)**: ISO 3166 country codes, US states, Canadian provinces, and supranational regions (EU). Use directly in code as string literals ("US", "GB", "SG").
+ISO 3166 country codes, US states, Canadian provinces, and supranational regions (EU). Use directly in code as string literals ("US", "GB", "SG").
+[Jurisdiction](jl4-core/libraries/jurisdiction.l4)
 
-- **[Currency](jl4-core/libraries/currency.l4)**: ISO 4217 currency codes (USD, EUR, GBP, JPY, etc.) with integer minor unit storage to avoid floating-point errors.
+ISO 4217 currency codes (USD, EUR, GBP, JPY, etc.) with integer minor unit storage to avoid floating-point errors.
+[Currency](jl4-core/libraries/currency.l4)
 
-- **[Legal Persons](jl4-core/libraries/legal-persons.l4)**: Model individuals, corporations, partnerships, LLCs, and trusts with appropriate legal attributes.
+Model individuals, corporations, partnerships, LLCs, and trusts with appropriate legal attributes.
+[Legal Persons](jl4-core/libraries/legal-persons.l4)
 
-- **[Holdings](jl4-core/libraries/holdings.l4)**: Ownership structures and percentage holdings for modeling corporate relationships and beneficial ownership.
+Ownership structures and percentage holdings for modeling corporate relationships and beneficial ownership.
+[Holdings](jl4-core/libraries/holdings.l4)
 
 These libraries follow a principle of simplicity and extensibility—they provide common patterns while allowing applications to extend them for specific needs.
 

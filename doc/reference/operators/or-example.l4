@@ -1,0 +1,77 @@
+-- OR keyword examples
+
+-- Basic OR Operations
+
+#EVAL TRUE OR TRUE
+#EVAL TRUE OR FALSE
+#EVAL FALSE OR TRUE
+#EVAL FALSE OR FALSE
+
+-- Symbolic Alternative (||)
+
+#EVAL TRUE || TRUE
+#EVAL TRUE || FALSE
+
+-- In Conditional Logic
+
+ASSUME isStudent IS A BOOLEAN
+ASSUME isSenior IS A BOOLEAN
+
+DECIDE getsDiscount IS isStudent OR isSenior
+
+#CHECK getsDiscount
+
+-- Chaining Multiple Conditions
+
+GIVEN a IS A BOOLEAN
+      b IS A BOOLEAN
+      c IS A BOOLEAN
+anyTrue a b c MEANS a OR b OR c
+
+#EVAL anyTrue FALSE FALSE FALSE
+#EVAL anyTrue FALSE TRUE FALSE
+
+-- Layout-Sensitive OR (Vertical Format)
+
+ASSUME isAdmin IS A BOOLEAN
+ASSUME isOwner IS A BOOLEAN
+ASSUME hasPermission IS A BOOLEAN
+
+DECIDE hasAccess IS
+      isAdmin
+  OR  isOwner
+  OR  hasPermission
+
+#CHECK hasAccess
+
+-- Complex Expressions with OR
+
+GIVEN status IS A STRING
+isTerminalStatus status MEANS
+      status EQUALS "completed"
+  OR  status EQUALS "cancelled"
+  OR  status EQUALS "failed"
+
+#EVAL isTerminalStatus "completed"
+#EVAL isTerminalStatus "pending"
+
+-- OR in IF Expressions
+
+GIVEN userType IS A STRING, hasVIP IS A BOOLEAN
+getPriority userType hasVIP MEANS
+  IF userType EQUALS "admin" OR hasVIP
+  THEN "high"
+  ELSE "normal"
+
+#EVAL getPriority "user" TRUE
+#EVAL getPriority "user" FALSE
+
+-- Combining AND and OR
+
+GIVEN x IS A NUMBER, y IS A BOOLEAN
+complexCondition x y MEANS
+  (x > 0 AND x < 100) OR y
+
+#EVAL complexCondition 50 FALSE
+#EVAL complexCondition 150 FALSE
+#EVAL complexCondition 150 TRUE

@@ -1,0 +1,45 @@
+cabal-version:      3.4
+name:               jl4-wasm
+version:            0.1
+synopsis:           L4 WASM module for browser-based language features
+description:
+  Compiles L4 language features to WebAssembly for use in the browser.
+  Exports parsing, type checking, evaluation, and LSP-like features via
+  GHC's JavaScript FFI.
+
+license:            Apache-2.0
+author:             CCLAW
+maintainer:         smucclaw@gmail.com
+category:           Language
+build-type:         Simple
+
+executable jl4-wasm
+  default-language: GHC2021
+  ghc-options:
+    -Wall
+    -Wcompat
+    -Wredundant-constraints
+    -Wno-name-shadowing
+    -Wincomplete-uni-patterns
+    -Wincomplete-record-updates
+    -fhide-source-paths
+
+  -- Required for WASM reactor model (library-style, no main)
+  -- -static forces all code into one WASM file
+  if arch(wasm32)
+    ghc-options:
+      -no-hs-main
+      -optl-mexec-model=reactor
+      -static
+
+  hs-source-dirs: app
+  main-is: Main.hs
+
+  build-depends:
+    base,
+    jl4-core,
+    text
+
+  -- For WASM JavaScript FFI
+  if arch(wasm32)
+    build-depends: ghc-experimental

@@ -1,0 +1,134 @@
+-- Computed Fields: WHERE and LET/IN in MEANS bodies
+-- Tests that computed field expressions can use local bindings,
+-- including multi-argument function calls (via OF syntax) inside
+-- WHERE and LET/IN clauses.
+
+IMPORT prelude
+
+-- Helper: two-argument functions to exercise comma parsing
+GIVEN `x` IS A NUMBER
+GIVETH A NUMBER
+`square` MEANS `x` * `x`
+
+GIVEN `a` IS A NUMBER
+      `b` IS A NUMBER
+GIVETH A NUMBER
+`add` MEANS `a` + `b`
+
+GIVEN `a` IS A NUMBER
+      `b` IS A NUMBER
+GIVETH A NUMBER
+`multiply` MEANS `a` * `b`
+
+GIVEN `base` IS A NUMBER
+      `rate` IS A NUMBER
+GIVETH A NUMBER
+`apply rate` MEANS `base` * `rate` / 100
+
+-- ═══════════════════════════════════════════════════════════
+-- 1. Basic WHERE and LET/IN (no commas)
+-- ═══════════════════════════════════════════════════════════
+
+DECLARE Shape HAS
+    `width`     IS A NUMBER
+    `height`    IS A NUMBER
+    `area`      IS A NUMBER
+        MEANS `width` * `height`
+    `diagonal`  IS A NUMBER
+        MEANS `result`
+          WHERE
+            `w2` MEANS `square` `width`
+            `h2` MEANS `square` `height`
+            `result` MEANS `w2` + `h2`
+    `scaled area` IS A NUMBER
+        MEANS LET `factor` MEANS 2 IN `area` * `factor`
+
+rect MEANS Shape WITH
+    `width`  IS 3
+    `height` IS 4
+
+#EVAL rect's `area`         -- 12
+#EVAL rect's `diagonal`     -- 25  (9 + 16)
+#EVAL rect's `scaled area`  -- 24  (12 * 2)
+
+-- ═══════════════════════════════════════════════════════════
+-- 2. Commas inside WHERE bindings
+-- ═══════════════════════════════════════════════════════════
+
+DECLARE Investment HAS
+    `principal`    IS A NUMBER
+    `rate`         IS A NUMBER
+    `years`        IS A NUMBER
+    `simple interest` IS A NUMBER
+        MEANS `result`
+          WHERE
+            `annual` MEANS `apply rate` OF `principal`, `rate`
+            `result` MEANS `multiply` OF `annual`, `years`
+    `total value`  IS A NUMBER
+        MEANS `add` OF `principal`, `simple interest`
+
+inv MEANS Investment WITH
+    `principal` IS 10000
+    `rate`      IS 5
+    `years`     IS 3
+
+#EVAL inv's `simple interest`  -- 1500  (10000 * 5/100 * 3)
+#EVAL inv's `total value`      -- 11500 (10000 + 1500)
+
+-- ═══════════════════════════════════════════════════════════
+-- 3. Commas directly in MEANS (no WHERE/LET)
+-- ═══════════════════════════════════════════════════════════
+
+DECLARE QuickCalc HAS
+    `x`       IS A NUMBER
+    `y`       IS A NUMBER
+    `sum`     IS A NUMBER
+        MEANS `add` OF `x`, `y`
+    `product` IS A NUMBER
+        MEANS `multiply` OF `x`, `y`
+
+qc MEANS QuickCalc WITH
+    `x` IS 7
+    `y` IS 3
+
+#EVAL qc's `sum`      -- 10
+#EVAL qc's `product`  -- 21
+
+-- ═══════════════════════════════════════════════════════════
+-- 4. Commas inside LET/IN
+-- ═══════════════════════════════════════════════════════════
+
+DECLARE Bonus HAS
+    `base salary`  IS A NUMBER
+    `bonus rate`   IS A NUMBER
+    `total comp`   IS A NUMBER
+        MEANS LET `bonus` MEANS `apply rate` OF `base salary`, `bonus rate`
+              IN  `add` OF `base salary`, `bonus`
+
+emp MEANS Bonus WITH
+    `base salary` IS 5000
+    `bonus rate`  IS 10
+
+#EVAL emp's `total comp`  -- 5500  (5000 + 500)
+
+-- ═══════════════════════════════════════════════════════════
+-- 5. Nested WHERE with commas at multiple levels
+-- ═══════════════════════════════════════════════════════════
+
+DECLARE TaxCalc HAS
+    `income`      IS A NUMBER
+    `deductions`  IS A NUMBER
+    `tax rate`    IS A NUMBER
+    `net tax`     IS A NUMBER
+        MEANS `result`
+          WHERE
+            `taxable` MEANS `add` OF `income`, 0 - `deductions`
+            `gross tax` MEANS `apply rate` OF `taxable`, `tax rate`
+            `result` MEANS `gross tax`
+
+tc MEANS TaxCalc WITH
+    `income`     IS 100000
+    `deductions` IS 20000
+    `tax rate`   IS 30
+
+#EVAL tc's `net tax`  -- 24000  ((100000 - 20000) * 30 / 100)

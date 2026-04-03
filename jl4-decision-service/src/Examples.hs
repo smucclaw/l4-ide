@@ -19,8 +19,7 @@ import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
 import qualified Data.Text.IO as TIO
 import qualified Data.Yaml as Yaml
-import L4.Annotation (getAnno)
-import L4.Export (DescFlags (..), ExportedFunction (..), ExportedParam (..), ParsedDesc (..), getExportedFunctions, parseDescText)
+import L4.Export (ExportedFunction (..), ExportedParam (..), getExportedFunctions, extractImplicitAssumeParams)
 import L4.Syntax
 import qualified LSP.L4.Rules as Rules
 import Optics ((^.))
@@ -111,35 +110,41 @@ tryLoadFromAnnotationsExplicit moduleContext path content = do
         putStrLn $ "- annotation load failed for " <> path <> " due to typecheck errors:"
         mapM_ (putStrLn . ("    " <>) . T.unpack) errs
       pure []
-    Just Rules.TypeCheckResult{module' = resolvedModule} -> do
-      let exports = explicitExportsOnly (getExportedFunctions resolvedModule)
+    Just Rules.TypeCheckResult{module' = resolvedModule, errors = tcErrors} -> do
+      let exports = getExportedFunctions resolvedModule
       case exports of
         [] -> pure []
         xs -> do
           let ordered = orderExports xs
-          pure [ (export.exportName, exportToFunction resolvedModule export) | export <- ordered ]
+              -- Extract implicit ASSUMEs from OutOfScopeError with resolved types
+              implicitParams = extractImplicitAssumeParams tcErrors
+          pure [ (export.exportName, exportToFunctionWithImplicits resolvedModule implicitParams export) | export <- ordered ]
   where
     orderExports xs =
       let (defaults, rest) = List.partition (.exportIsDefault) xs
       in defaults <> rest
 
-explicitExportsOnly :: [ExportedFunction] -> [ExportedFunction]
-explicitExportsOnly =
-  filter \export ->
-    case getAnno export.exportDecide ^. annDesc of
-      Nothing -> False
-      Just desc ->
-        case parseDescText (getDesc desc) of
-          ParsedDesc{flags = DescFlags{isExport}} -> isExport
-
-exportToFunction :: Module Resolved -> ExportedFunction -> Function
-exportToFunction resolvedModule export =
-  Function
+-- | Export function with implicit ASSUME parameters merged in
+exportToFunctionWithImplicits :: Module Resolved -> [(Text, Type' Resolved)] -> ExportedFunction -> Function
+exportToFunctionWithImplicits resolvedModule implicitParams export =
+  let baseParams = parametersFromExport resolvedModule export.exportParams
+      declares = declaresFromModule resolvedModule
+      -- Convert implicit params to Parameter objects, avoiding duplicates
+      implicitParamMap = Map.fromList
+        [ (name, (typeToParameter declares Set.empty ty) {parameterDescription = "", parameterAlias = Nothing})
+        | (name, ty) <- implicitParams
+        , name `Map.notMember` baseParams.parameterMap  -- Don't override explicit params
+        ]
+      mergedParams = baseParams
+        { parameterMap = baseParams.parameterMap <> implicitParamMap
+        , required = baseParams.required <> Map.keys implicitParamMap
+        }
+  in Function
     { name = export.exportName
     , description =
         let desc = T.strip export.exportDescription
         in if T.null desc then "Exported function" else desc
-    , parameters = parametersFromExport resolvedModule export.exportParams
+    , parameters = mergedParams
     , supportedEvalBackend = [JL4]
     }
 
@@ -253,11 +258,11 @@ typeToParameter declares visited ty =
           RecordDecl _ _ fields ->
             let
               visited' = Set.insert typeName visited
-              fieldOrder = [resolvedNameText fieldName | MkTypedName _ fieldName _ <- fields]
+              fieldOrder = [resolvedNameText fieldName | MkTypedName _ fieldName _ _ <- fields]
               props =
                 Map.fromList
                   [ (resolvedNameText fieldName, addDesc fieldDesc (typeToParameter declares visited' fieldTy))
-                  | MkTypedName fieldAnn fieldName fieldTy <- fields
+                  | MkTypedName fieldAnn fieldName fieldTy _ <- fields
                   , let fieldDesc = fmap getDesc (fieldAnn Optics.^. annDesc)
                   ]
              in
@@ -318,6 +323,7 @@ createValidatedFunction filepath _filename content fnDecl moduleContext = do
     , fnCompiled = mCompiled
     , fnSources = Map.fromList [(JL4, content)]
     , fnDecisionQueryCache = Nothing
+    , fnExplicitlyExported = True  -- Functions loaded via loadL4Functions are always explicitly exported
     }
 
 -- ----------------------------------------------------------------------------
@@ -358,9 +364,9 @@ personQualifiesFunction = do
             MkParameters
               { parameterMap =
                 Map.fromList
-                    [ ("walks", Parameter "string" Nothing ["true", "false"] "Did the person walk?" Nothing Nothing Nothing)
-                    , ("eats", Parameter "string" Nothing ["true", "false"] "Did the person eat?" Nothing Nothing Nothing)
-                    , ("drinks", Parameter "string" Nothing ["true", "false"] "Did the person drink?" Nothing Nothing Nothing)
+                    [ ("walks", Parameter "boolean" Nothing [] "Did the person walk?" Nothing Nothing Nothing)
+                    , ("eats", Parameter "boolean" Nothing [] "Did the person eat?" Nothing Nothing Nothing)
+                    , ("drinks", Parameter "boolean" Nothing [] "Did the person drink?" Nothing Nothing Nothing)
                     ]
               , required = ["walks", "eats", "drinks"]
               }
@@ -374,6 +380,7 @@ personQualifiesFunction = do
       , fnCompiled = mCompiled
       , fnSources = Map.fromList [(JL4, computeQualifiesJL4NoInput)]
       , fnDecisionQueryCache = Nothing
+      , fnExplicitlyExported = True  -- Hardcoded example functions are always visible
       }
 
 -- | Metadata about the function that the user might want to know.
@@ -395,16 +402,16 @@ rodentsAndVerminFunction = do
             let
               params =
                 Map.fromList
-                  [ ("Loss or Damage.caused by insects", Parameter "string" Nothing ["true", "false"] "Was the damage caused by insects?" Nothing Nothing Nothing)
-                  , ("Loss or Damage.caused by birds", Parameter "string" Nothing ["true", "false"] "Was the damage caused by birds?" Nothing Nothing Nothing)
-                  , ("Loss or Damage.caused by vermin", Parameter "string" Nothing ["true", "false"] "Was the damage caused by vermin?" Nothing Nothing Nothing)
-                  , ("Loss or Damage.caused by rodents", Parameter "string" Nothing ["true", "false"] "Was the damage caused by rodents?" Nothing Nothing Nothing)
-                  , ("Loss or Damage.to Contents", Parameter "string" Nothing ["true", "false"] "Is the damage to your contents?" Nothing Nothing Nothing)
-                  , ("Loss or Damage.ensuing covered loss", Parameter "string" Nothing ["true", "false"] "Is the damage ensuing covered loss" Nothing Nothing Nothing)
-                  , ("any other exclusion applies", Parameter "string" Nothing ["true", "false"] "Are any other exclusions besides mentioned ones?" Nothing Nothing Nothing)
-                  , ("a household appliance", Parameter "string" Nothing ["true", "false"] "Did water escape from a household appliance due to an animal?" Nothing Nothing Nothing)
-                  , ("a swimming pool", Parameter "string" Nothing ["true", "false"] "Did water escape from a swimming pool due to an animal?" Nothing Nothing Nothing)
-                  , ("a plumbing, heating, or air conditioning system", Parameter "string" Nothing ["true", "false"] "Did water escape from a plumbing, heating or conditioning system due to an animal?" Nothing Nothing Nothing)
+                  [ ("Loss or Damage.caused by insects", Parameter "boolean" Nothing [] "Was the damage caused by insects?" Nothing Nothing Nothing)
+                  , ("Loss or Damage.caused by birds", Parameter "boolean" Nothing [] "Was the damage caused by birds?" Nothing Nothing Nothing)
+                  , ("Loss or Damage.caused by vermin", Parameter "boolean" Nothing [] "Was the damage caused by vermin?" Nothing Nothing Nothing)
+                  , ("Loss or Damage.caused by rodents", Parameter "boolean" Nothing [] "Was the damage caused by rodents?" Nothing Nothing Nothing)
+                  , ("Loss or Damage.to Contents", Parameter "boolean" Nothing [] "Is the damage to your contents?" Nothing Nothing Nothing)
+                  , ("Loss or Damage.ensuing covered loss", Parameter "boolean" Nothing [] "Is the damage ensuing covered loss" Nothing Nothing Nothing)
+                  , ("any other exclusion applies", Parameter "boolean" Nothing [] "Are any other exclusions besides mentioned ones?" Nothing Nothing Nothing)
+                  , ("a household appliance", Parameter "boolean" Nothing [] "Did water escape from a household appliance due to an animal?" Nothing Nothing Nothing)
+                  , ("a swimming pool", Parameter "boolean" Nothing [] "Did water escape from a swimming pool due to an animal?" Nothing Nothing Nothing)
+                  , ("a plumbing, heating, or air conditioning system", Parameter "boolean" Nothing [] "Did water escape from a plumbing, heating or conditioning system due to an animal?" Nothing Nothing Nothing)
                   ]
             in
               MkParameters
@@ -421,6 +428,7 @@ rodentsAndVerminFunction = do
       , fnCompiled = mCompiled
       , fnSources = Map.fromList [(JL4, rodentsAndVerminJL4)]
       , fnDecisionQueryCache = Nothing
+      , fnExplicitlyExported = True  -- Hardcoded example functions are always visible
       }
 
 computeQualifiesJL4NoInput :: Text
@@ -508,6 +516,7 @@ constantFunction = do
       , fnCompiled = mCompiled
       , fnSources = Map.fromList [(JL4, constantJL4)]
       , fnDecisionQueryCache = Nothing
+      , fnExplicitlyExported = True  -- Hardcoded example functions are always visible
       }
 
 constantJL4 :: Text

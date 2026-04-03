@@ -1,9 +1,9 @@
 {
   "name": "l4-vscode",
   "displayName": "L4 Rules-as-code",
-  "description": "Language support for L4 rules-as-code with syntax highlighting, IntelliSense, and ladder diagram visualization",
+  "description": "Write, test, and deploy legal rules as executable code — with syntax highlighting, IntelliSense, ladder diagrams, and one-click cloud deployment",
   "license": "Apache-2.0",
-  "version": "1.1.0",
+  "version": "1.3.0",
   "publisher": "legalese",
   "categories": [
     "Programming Languages",
@@ -41,37 +41,75 @@
     "directory": "ts-apps/vscode"
   },
   "activationEvents": [
-    "onLanguage:l4"
+    "onLanguage:l4",
+    "onView:l4.deployView"
   ],
   "contributes": {
-    "configuration": {
-      "title": "L4 Language Server",
-      "properties": {
-        "jl4.serverExecutablePath": {
-          "scope": "machine-overridable",
-          "type": "string",
-          "default": "",
-          "markdownDescription": "Path to the `jl4-lsp` executable. Leave empty to use the bundled binary or find `jl4-lsp` on your PATH."
-        },
-        "jl4.decisionServiceUrl": {
-          "scope": "resource",
-          "type": "string",
-          "default": "http://localhost:8001",
-          "description": "Base URL for jl4-decision-service (used for query planning)"
-        },
-        "jl4.trace.server": {
-          "scope": "resource",
-          "type": "string",
-          "enum": [
-            "off",
-            "messages",
-            "verbose"
-          ],
-          "default": "off",
-          "description": "Traces the communication between VS Code and the language server."
+    "viewsContainers": {
+      "secondarySidebar": [
+        {
+          "id": "l4-sidebar",
+          "title": "L4",
+          "icon": "static/l4-sidebar-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "l4-sidebar": [
+        {
+          "id": "l4.deployView",
+          "name": "L4",
+          "type": "webview"
+        }
+      ]
+    },
+    "configuration": [
+      {
+        "title": "L4 Language Server",
+        "properties": {
+          "jl4.serverExecutablePath": {
+            "scope": "machine-overridable",
+            "type": "string",
+            "default": "",
+            "markdownDescription": "Path to the `jl4-lsp` executable. Leave empty to use the bundled binary or find `jl4-lsp` on your PATH."
+          },
+          "jl4.decisionServiceUrl": {
+            "scope": "resource",
+            "type": "string",
+            "default": "http://localhost:8001",
+            "description": "Base URL for jl4-decision-service (used for query planning)"
+          },
+          "jl4.trace.server": {
+            "scope": "resource",
+            "type": "string",
+            "enum": [
+              "off",
+              "messages",
+              "verbose"
+            ],
+            "default": "off",
+            "description": "Traces the communication between VS Code and the language server."
+          }
+        }
+      },
+      {
+        "title": "L4 Cloud Deploy",
+        "properties": {
+          "jl4.serviceUrl": {
+            "scope": "resource",
+            "type": "string",
+            "default": "",
+            "markdownDescription": "URL of the jl4-service for deploying rules (e.g. `http://localhost:8080`). Set this for self-hosted deployments. Leave empty to use Legalese Cloud login."
+          },
+          "jl4.serviceApiKey": {
+            "scope": "resource",
+            "type": "string",
+            "default": "",
+            "markdownDescription": "API key (`sk_...`) for authenticating with a self-hosted jl4-service. Not needed when using Legalese Cloud login."
+          }
         }
       }
-    },
+    ],
     "languages": [
       {
         "id": "l4",
@@ -87,14 +125,18 @@
     "commands": [
       {
         "command": "l4.visualize",
-        "title": "Visualize L4 expression"
+        "title": "Show decision graph"
+      },
+      {
+        "command": "l4.renderResult",
+        "title": "Track result"
       }
     ]
   },
   "prettier": "@repo/prettier-config",
   "dependencies": {
-    "@repo/vscode-webview-rpc": "*",
     "@repo/viz-expr": "*",
+    "@repo/vscode-webview-rpc": "*",
     "@repo/webview": "*",
     "jl4-client-rpc": "*",
     "minimatch": "^10.0.1",
@@ -113,7 +155,7 @@
     "@types/vscode": "^1.94.0",
     "@typescript-eslint/eslint-plugin": "^8.18.0",
     "@typescript-eslint/parser": "^8.18.0",
-    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.4.1",
     "@vscode/vsce": "^3.6.0",
     "babel-loader": "^9.2.1",
@@ -130,7 +172,7 @@
   "scripts": {
     "vscode:prepublish": "npm run lint && npm run bundle-esbuild",
     "build": "npm run clean && npm run prepare:webview && tsc -b tsconfig.json && npm run bundle-esbuild",
-    "prepare:webview": "mkdir -p ./static/webview && cp -r ../webview/build/* ./static/webview/",
+    "prepare:webview": "rm -rf ./static/webview && mkdir -p ./static/webview && cp -r ../webview/build/* ./static/webview/",
     "bundle-esbuild": "node scripts/build.mjs",
     "test": "tsc -b tsconfig.json && node --test out/unit-tests/*.test.js",
     "package": "npm run lint && npx vsce package",

@@ -1,0 +1,11 @@
+-- Cross-module postfix mixfix test
+
+IMPORT prelude
+IMPORT `mixfix-cross-module-postfix-def`
+
+-- Test postfix mixfix from imported module
+DECIDE cross_module_postfix_true IS 6 `is even`
+DECIDE cross_module_postfix_false IS 7 `is even`
+
+#EVAL cross_module_postfix_true
+#EVAL cross_module_postfix_false

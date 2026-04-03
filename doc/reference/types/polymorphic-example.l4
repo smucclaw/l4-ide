@@ -1,0 +1,15 @@
+-- Example: Polymorphic function
+-- Demonstrates generic types that work with any type
+
+GIVEN a IS A TYPE
+      list IS A LIST OF a
+GIVETH A NUMBER
+`length of list` list MEANS go 0 list
+  WHERE
+    go acc l MEANS
+      CONSIDER l
+      WHEN EMPTY THEN acc
+      WHEN x FOLLOWED BY xs THEN go (acc + 1) xs
+
+#EVAL `length of list` (LIST 1, 2, 3)
+#EVAL `length of list` (LIST "a", "b", "c")

@@ -2,6 +2,7 @@
 *~
 *.actual
 build
+.continue
 # Build Outputs
 ## Built Visual Studio Code Extensions
 .cabal
@@ -14,7 +15,6 @@ coverage
 .direnv
 dist
 dist-newstyle/
-doc/*/*.html
 .DS_Store
 .env
 .env.development.local
@@ -61,3 +61,4 @@ yarn-error.log*
 # Generated skill packages
 l4/l4.skill
 l4/l4.zip
+.cache/

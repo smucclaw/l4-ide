@@ -5,6 +5,9 @@
 module Backend.Api (
   module Backend.Api,
   TraceLevel (..),
+  StateGraphFormat (..),
+  StateGraphInfo (..),
+  StateGraphListResponse (..),
 ) where
 
 import Control.Monad.Trans.Except (ExceptT)
@@ -258,3 +261,41 @@ parseTextAsFnLiteral t
     ('\"', t') <- uncons t
     (t'', '\"') <- unsnoc t'
     pure t''
+
+-- ----------------------------------------------------------------------------
+-- State Graph Types
+-- ----------------------------------------------------------------------------
+
+-- | Format for state graph output
+data StateGraphFormat
+  = StateGraphDot  -- ^ GraphViz DOT text
+  | StateGraphSvg  -- ^ SVG image
+  | StateGraphPng  -- ^ PNG image
+  deriving (Show, Eq, Ord, Enum, Bounded, Generic)
+
+instance FromHttpApiData StateGraphFormat where
+  parseQueryParam t = case Text.toLower t of
+    "dot" -> Right StateGraphDot
+    "svg" -> Right StateGraphSvg
+    "png" -> Right StateGraphPng
+    _ -> Left $ "Invalid state graph format: " <> t <> ". Expected: dot, svg, png"
+
+instance ToHttpApiData StateGraphFormat where
+  toQueryParam StateGraphDot = "dot"
+  toQueryParam StateGraphSvg = "svg"
+  toQueryParam StateGraphPng = "png"
+
+-- | Basic information about a state graph
+data StateGraphInfo = StateGraphInfo
+  { graphName :: Text
+  , graphDescription :: Maybe Text
+  }
+  deriving (Show, Read, Ord, Eq, Generic)
+  deriving anyclass (FromJSON, ToJSON, ToSchema)
+
+-- | Response for listing all state graphs in a module
+newtype StateGraphListResponse = StateGraphListResponse
+  { graphs :: [StateGraphInfo]
+  }
+  deriving (Show, Read, Ord, Eq, Generic)
+  deriving anyclass (FromJSON, ToJSON, ToSchema)

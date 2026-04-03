@@ -1,0 +1,186 @@
+-- Module 6: Putting It Together - Capstone Example
+-- A complete charity registration system
+-- All examples are validated and use natural language identifiers
+
+IMPORT prelude
+
+-- =============================================================================
+-- SECTION 1: Type Definitions
+-- =============================================================================
+
+-- Charitable purposes (from legislation)
+DECLARE Purpose IS ONE OF
+    `prevention or relief of poverty`
+    `advancement of education`
+    `advancement of religion`
+    `advancement of health`
+    `advancement of animal welfare`
+    `other purpose` HAS `the description` IS A STRING
+
+-- Legal status of a charity
+DECLARE Status IS ONE OF
+    Active
+    Suspended HAS `the reason` IS A STRING
+    Deregistered
+
+-- Criminal conviction record
+DECLARE Conviction
+    HAS `the description` IS A STRING
+        `the conviction is spent` IS A BOOLEAN
+
+-- Governor of a charity
+DECLARE Governor
+    HAS `the governor's name` IS A STRING
+        `the governor's age` IS A NUMBER
+        `the governor is bankrupt` IS A BOOLEAN
+        `the governor's convictions` IS A LIST OF Conviction
+
+-- The main charity record
+DECLARE `Registered Charity`
+    HAS `the charity's name` IS A STRING
+        `the registration number` IS A STRING
+        `the charity's status` IS A Status
+        `the charity's purposes` IS A LIST OF Purpose
+        `the charity's governors` IS A LIST OF Governor
+
+-- =============================================================================
+-- SECTION 2: Eligibility Rules
+-- =============================================================================
+
+-- A governor must be an adult (at least 18)
+GIVEN governor IS A Governor
+GIVETH A BOOLEAN
+DECIDE `the governor is an adult` IF
+    governor's `the governor's age` >= 18
+
+-- Check for disqualifying convictions (unspent convictions)
+GIVEN governor IS A Governor
+GIVETH A BOOLEAN
+DECIDE `the governor has a disqualifying conviction` IF
+    any (GIVEN c YIELD c's `the conviction is spent` EQUALS FALSE) (governor's `the governor's convictions`)
+
+-- A person can be a governor if they meet all criteria
+GIVEN governor IS A Governor
+GIVETH A BOOLEAN
+DECIDE `the person can be a governor` IF
+    `the governor is an adult` governor
+    AND NOT governor's `the governor is bankrupt`
+    AND NOT `the governor has a disqualifying conviction` governor
+
+-- A purpose is charitable if it's from the approved list
+GIVEN purpose IS A Purpose
+GIVETH A BOOLEAN
+DECIDE `the purpose is charitable` IS
+    CONSIDER purpose
+    WHEN `prevention or relief of poverty` THEN TRUE
+    WHEN `advancement of education` THEN TRUE
+    WHEN `advancement of religion` THEN TRUE
+    WHEN `advancement of health` THEN TRUE
+    WHEN `advancement of animal welfare` THEN TRUE
+    WHEN `other purpose` description THEN FALSE
+
+-- A charity is valid if it has valid purposes and valid governors
+GIVEN charity IS A `Registered Charity`
+GIVETH A BOOLEAN
+DECIDE `the charity is valid` IF
+    charity's `the charity's status` EQUALS Active
+    AND NOT null (charity's `the charity's purposes`)
+    AND all (GIVEN p YIELD `the purpose is charitable` p) (charity's `the charity's purposes`)
+    AND NOT null (charity's `the charity's governors`)
+    AND all (GIVEN g YIELD `the person can be a governor` g) (charity's `the charity's governors`)
+
+-- =============================================================================
+-- SECTION 3: Filing Obligations
+-- =============================================================================
+
+-- Actors and actions for the regulatory system
+DECLARE Actor IS ONE OF
+    `the Charity`
+    `the Commissioner`
+
+DECLARE Action IS ONE OF
+    `file the annual return`
+    `issue a Required Steps Notice`
+    `correct the deficiencies`
+
+-- Annual return filing obligation
+GIVEN charity IS A `Registered Charity`
+GIVETH A DEONTIC Actor Action
+`the annual return obligation` MEANS
+    IF charity's `the charity's status` EQUALS Active
+    THEN
+        PARTY `the Charity`
+        MUST `file the annual return`
+        WITHIN 60
+        HENCE FULFILLED
+        LEST
+            PARTY `the Commissioner`
+            MUST `issue a Required Steps Notice`
+            WITHIN 14
+            HENCE `the correction period`
+            LEST BREACH BY `the Commissioner` BECAUSE "failed to issue notice"
+    ELSE FULFILLED
+
+-- After notice is issued, charity has time to correct
+GIVETH A DEONTIC Actor Action
+`the correction period` MEANS
+    PARTY `the Charity`
+    MUST `correct the deficiencies`
+    WITHIN 30
+    HENCE FULFILLED
+    LEST BREACH BY `the Charity` BECAUSE "failed to correct after notice"
+
+-- =============================================================================
+-- SECTION 4: Test Data
+-- =============================================================================
+
+-- Valid governor
+`Jane Smith` MEANS Governor "Jane Smith" 45 FALSE (LIST)
+
+-- Governor with issues
+`John Doe (bankrupt)` MEANS Governor "John Doe" 50 TRUE (LIST)
+
+`unspent conviction` MEANS Conviction "Fraud conviction 2020" FALSE
+`Bob Jones (with conviction)` MEANS Governor "Bob Jones" 40 FALSE (LIST `unspent conviction`)
+
+`Young Person` MEANS Governor "Young Person" 16 FALSE (LIST)
+
+-- Valid charity
+`Jersey Animal Welfare` MEANS `Registered Charity` "Jersey Animal Welfare" "CH001" Active (LIST `advancement of animal welfare`, `advancement of education`) (LIST `Jane Smith`)
+
+-- Charity with invalid governor
+`Problem Charity` MEANS `Registered Charity` "Problem Charity" "CH002" Active (LIST `advancement of education`) (LIST `John Doe (bankrupt)`)
+
+-- Suspended charity
+`Suspended Charity` MEANS `Registered Charity` "Suspended Charity" "CH003" (Suspended "Financial irregularities") (LIST `advancement of health`) (LIST `Jane Smith`)
+
+-- =============================================================================
+-- SECTION 5: Tests
+-- =============================================================================
+
+-- Governor eligibility tests
+#EVAL `the governor is an adult` `Jane Smith`
+#EVAL `the governor is an adult` `Young Person`
+#EVAL `the person can be a governor` `Jane Smith`
+#EVAL `the person can be a governor` `John Doe (bankrupt)`
+#EVAL `the person can be a governor` `Bob Jones (with conviction)`
+#EVAL `the person can be a governor` `Young Person`
+
+-- Charity validity tests
+#EVAL `the charity is valid` `Jersey Animal Welfare`
+#EVAL `the charity is valid` `Problem Charity`
+#EVAL `the charity is valid` `Suspended Charity`
+
+-- Test filing obligation scenarios
+
+-- Happy path: charity files on time
+#TRACE `the annual return obligation` `Jersey Animal Welfare` AT 0 WITH
+    PARTY `the Charity` DOES `file the annual return` AT 30
+
+-- Suspended charity: no filing required
+#TRACE `the annual return obligation` `Suspended Charity` AT 0 WITH
+
+-- Late filing: notice issued, then charity corrects
+#TRACE `the annual return obligation` `Jersey Animal Welfare` AT 0 WITH
+    PARTY `the Commissioner` DOES `issue a Required Steps Notice` AT 70
+    PARTY `the Charity` DOES `correct the deficiencies` AT 90

@@ -135,6 +135,7 @@ symbols = Map.fromList
 data TKeywords
   = TKGiven
   | TKGiveth
+  | TKGives   -- Synonym for TKGiveth
   | TKDecide
   | TKExact
   | TKMeans
@@ -210,6 +211,7 @@ data TKeywords
   | TKIn
   | TKBe
   | TKMean
+  | TKUnless
   deriving stock (Eq, Generic, Ord, Show)
   deriving anyclass (ToExpr, NFData)
 
@@ -217,6 +219,7 @@ keywords :: Map Text TKeywords
 keywords = Map.fromList
   [ ("GIVEN"      , TKGiven      )
   , ("GIVETH"     , TKGiveth     )
+  , ("GIVES"      , TKGives      )
   , ("DECIDE"     , TKDecide     )
   , ("EXACTLY"    , TKExact      )
   , ("MEANS"      , TKMeans      )
@@ -292,6 +295,7 @@ keywords = Map.fromList
   , ("IN"         , TKIn         )
   , ("BE"         , TKBe         )
   , ("MEAN"       , TKMean       )
+  , ("UNLESS"     , TKUnless     )
   ]
 
 data TOperators

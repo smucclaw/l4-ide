@@ -1,0 +1,56 @@
+-- Computed Fields: Nested Record Access
+-- Tests computed fields that access fields on nested records via 's.
+
+IMPORT prelude
+
+DECLARE `Risk Category` IS ONE OF
+    `Low Risk`
+    `Medium Risk`
+    `High Risk`
+    `Uninsurable`
+
+DECLARE Driver HAS
+    `name`              IS A STRING
+    `age`               IS A NUMBER
+    `years licensed`    IS A NUMBER
+    `accident count`    IS A NUMBER
+    `has tickets`       IS A BOOLEAN
+    `adult`             IS A BOOLEAN
+        MEANS `age` >= 18
+    `risk category`     IS A `Risk Category`
+        MEANS IF `accident count` = 0
+              THEN IF `has tickets` THEN `Medium Risk` ELSE `Low Risk`
+              ELSE IF `accident count` <= 2
+                   THEN `High Risk`
+                   ELSE `Uninsurable`
+
+DECLARE Policy HAS
+    `driver`         IS A Driver
+    `vehicle value`  IS A NUMBER
+    `base premium`   IS A NUMBER
+        MEANS CONSIDER `driver`'s `risk category`
+              WHEN `Low Risk`    THEN `vehicle value` * 0.02
+              WHEN `Medium Risk` THEN `vehicle value` * 0.04
+              WHEN `High Risk`   THEN `vehicle value` * 0.08
+              WHEN `Uninsurable` THEN 0
+    `affordable`     IS A BOOLEAN               -- depends on another computed field
+        MEANS `base premium` <= 500
+    `valid`          IS A BOOLEAN               -- reaches into nested record's computed field
+        MEANS `driver`'s `adult`
+          AND `affordable`
+
+alice MEANS Driver WITH
+    `name`           IS "Alice"
+    `age`            IS 25
+    `years licensed` IS 3
+    `accident count` IS 0
+    `has tickets`    IS FALSE
+
+alicePolicy MEANS Policy WITH
+    `driver`        IS alice
+    `vehicle value` IS 20000
+
+-- Nested access: policy reaches into driver's computed field
+#EVAL alicePolicy's `base premium`   -- 400.0  (20000 * 0.02, Low Risk)
+#EVAL alicePolicy's `affordable`     -- TRUE   (400 <= 500)
+#EVAL alicePolicy's `valid`          -- TRUE   (alice's adult AND affordable)

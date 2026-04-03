@@ -21,10 +21,11 @@ case "$MODE" in
   decision-only)
     echo "Starting decision service only (port $DECISION_PORT)..."
     cd jl4-decision-service
-    cabal run jl4-decision-service-exe -- \
+    cabal run jl4-decision-service -- \
       --port "$DECISION_PORT" \
       --sourcePaths ../jl4/experiments/britishcitizen5.l4 \
-      --sourcePaths ../jl4/experiments/parking.l4
+      --sourcePaths ../jl4/experiments/parking.l4 \
+      --sourcePaths ../jl4/experiments/thailand-cosmetics
     ;;
 
   websessions-only)
@@ -41,7 +42,7 @@ case "$MODE" in
 
   lsp-only)
     echo "Starting LSP server only (port $LSP_PORT)..."
-    cabal run exe:jl4-lsp -- ws --port "$LSP_PORT" --cwd "$LSP_CWD"
+    cabal run exe:jl4-lsp -- ws --host 0.0.0.0 --port "$LSP_PORT" --cwd "$LSP_CWD"
     ;;
 
   full)
@@ -53,15 +54,16 @@ case "$MODE" in
       
       # Start LSP Server
       echo "Starting LSP server on port $LSP_PORT..."
-      cabal run exe:jl4-lsp -- ws --port "$LSP_PORT" --cwd "$LSP_CWD" > /tmp/jl4-lsp.log 2>&1 &
+      cabal run exe:jl4-lsp -- ws --host 0.0.0.0 --port "$LSP_PORT" --cwd "$LSP_CWD" > /tmp/jl4-lsp.log 2>&1 &
       echo "LSP_PID=$!" >> "$PIDFILE"
       
       # Start Decision Service
       echo "Starting decision service on port $DECISION_PORT..."
-      (cd jl4-decision-service && cabal run jl4-decision-service-exe -- \
+      (cd jl4-decision-service && cabal run jl4-decision-service -- \
         --port "$DECISION_PORT" \
         --sourcePaths ../jl4/experiments/britishcitizen5.l4 \
         --sourcePaths ../jl4/experiments/parking.l4 \
+        --sourcePaths ../jl4/experiments/thailand-cosmetics \
         --crudServerName localhost \
         --crudServerPort "$WEBSESSIONS_PORT") > /tmp/jl4-decision.log 2>&1 &
       echo "DECISION_PID=$!" >> "$PIDFILE"
@@ -120,13 +122,14 @@ case "$MODE" in
       echo "      Or run './dev-start.sh full --run' to start all in background"
       echo ""
       echo "Terminal 1 - LSP Server:"
-      echo "  cabal run exe:jl4-lsp -- ws --port $LSP_PORT --cwd $LSP_CWD"
+      echo "  cabal run exe:jl4-lsp -- ws --host 0.0.0.0 --port $LSP_PORT --cwd $LSP_CWD"
       echo ""
       echo "Terminal 2 - Decision Service:"
-      echo "  cd jl4-decision-service && cabal run jl4-decision-service-exe -- \\"
+      echo "  cd jl4-decision-service && cabal run jl4-decision-service -- \\"
       echo "    --port $DECISION_PORT \\"
       echo "    --sourcePaths ../jl4/experiments/britishcitizen5.l4 \\"
       echo "    --sourcePaths ../jl4/experiments/parking.l4 \\"
+      echo "    --sourcePaths ../jl4/experiments/thailand-cosmetics \\"
       echo "    --crudServerName localhost --crudServerPort $WEBSESSIONS_PORT"
       echo ""
       echo "Terminal 3 - Websessions (after decision service starts):"

@@ -20,7 +20,7 @@ User sees parameter name `age_21_plus` in JSON schema:
 
 User sends binding:
 ```json
-{"fnArguments": {"age_21_plus": true}}
+{"arguments": {"age_21_plus": true}}
 ```
 
 ### Actual Behavior (System Perspective)
@@ -31,7 +31,7 @@ Binding matcher requires **exact label match**, so `age_21_plus` doesn't match `
 ### Workaround
 Send bindings with backticks matching the internal label:
 ```json
-{"fnArguments": {"`age_21_plus`": true}}
+{"arguments": {"`age_21_plus`": true}}
 ```
 
 ## Test Results
@@ -106,13 +106,13 @@ Update API documentation to specify that binding keys must match internal labels
 # Test with correct backtick format
 curl -s -X POST "http://localhost:8001/functions/may%20purchase%20alcohol/query-plan" \
   -H "Content-Type: application/json" \
-  -d '{"fnArguments": {"`age_21_plus`": true}}' \
+  -d '{"arguments": {"`age_21_plus`": true}}' \
   | jq '{determined, stillNeeded: [.stillNeeded[] | .label]}'
 
 # Compare: without backticks (doesn't work)
 curl -s -X POST "http://localhost:8001/functions/may%20purchase%20alcohol/query-plan" \
   -H "Content-Type: application/json" \
-  -d '{"fnArguments": {"age_21_plus": true}}' \
+  -d '{"arguments": {"age_21_plus": true}}' \
   | jq '{determined, stillNeeded: [.stillNeeded[] | .label]}'
 ```
 
