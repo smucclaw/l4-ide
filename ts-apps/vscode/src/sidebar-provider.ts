@@ -21,6 +21,8 @@ import {
   RequestOpenUrl,
   RequestOpenServiceUrl,
   RequestOpenConsole,
+  RequestOpenExtensionSettings,
+  RequestCopySignInLink,
   RequestDisconnect,
   RequestRefreshDeployments,
   ShowNotification,
@@ -454,6 +456,31 @@ export function initializeSidebarMessenger(
       ? `https://legalese.com/console?token=${encodeURIComponent(session)}`
       : 'https://legalese.com/console'
     vscode.env.openExternal(vscode.Uri.parse(consoleUrl))
+  })
+
+  // Open the extension settings
+  messenger.onNotification(RequestOpenExtensionSettings, () => {
+    vscode.commands.executeCommand(
+      'workbench.action.openSettings',
+      '@ext:legalese.l4-vscode'
+    )
+  })
+
+  // Copy Legalese Cloud sign-in link to clipboard.
+  // Points to the console redirect page which shows who you're signed in as
+  // and provides a "Return to VS Code" button. If not signed in, the console
+  // handles the login flow and redirects back.
+  messenger.onNotification(RequestCopySignInLink, async () => {
+    const callbackUri = await vscode.env.asExternalUri(
+      vscode.Uri.parse(
+        `${vscode.env.uriScheme}://legalese.l4-vscode/auth-callback`
+      )
+    )
+    const redirectUrl = `https://${LEGALESE_CLOUD_DOMAIN}/?redirect_to=${encodeURIComponent(callbackUri.toString())}`
+    await vscode.env.clipboard.writeText(redirectUrl)
+    vscode.window.showInformationMessage(
+      'Legalese Cloud sign-in link copied to clipboard'
+    )
   })
 
   // Disconnect: clear session token only, never touch settings

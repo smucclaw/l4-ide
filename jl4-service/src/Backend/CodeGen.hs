@@ -7,6 +7,7 @@ module Backend.CodeGen
   -- Exported for testing
   , inputFieldName
   , transformJsonKeys
+  , escapeAsL4String
   , fnLiteralToL4Expr
   , fnLiteralToL4ExprWithType
   ) where
@@ -20,6 +21,7 @@ import qualified Data.Set as Set
 import qualified Data.Text as Text
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TL
+import L4.Lexer (showStringLit)
 import L4.Syntax (Type'(..), Resolved, getUnique)
 import L4.TypeCheck.Environment (booleanUnique, dateUnique, timeUnique, datetimeUnique, maybeUnique, contractUnique)
 import Backend.Api (TraceLevel(..), TraceEvent(..), FnLiteral(..))
@@ -196,12 +198,12 @@ transformJsonKeys (Aeson.Object obj) =
 transformJsonKeys other = other
 
 -- | Escape JSON value as an L4 string literal
+-- Uses L4's own showStringLit which handles all escape sequences correctly
+-- (backslashes, quotes, control characters, etc.)
 escapeAsL4String :: Aeson.Value -> Text
 escapeAsL4String val =
   let jsonText = TL.toStrict $ TL.decodeUtf8 $ Aeson.encode val
-      -- Only escape internal quotes - JSON is already properly formatted
-      escaped = Text.replace "\"" "\\\"" jsonText
-  in "\"" <> escaped <> "\""
+  in showStringLit jsonText
 
 -- | Generate EVAL or EVALTRACE with deep Maybe lifting, handling both GIVEN and ASSUME params.
 --
