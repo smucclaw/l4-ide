@@ -263,6 +263,18 @@ This script:
 - Reference the GLOSSARY for keyword/type lookups
 - Each page should link to related content in other sections
 
+## In-Progress Language Design Specs
+
+These branches contain substantial design thinking and are ready to pick up when we next want to work on these features. All are pushed to origin.
+
+| Branch | Topic | Summary |
+|---|---|---|
+| `every` | EVERY/EACH quantifiers | Spec for quantifier syntax, test cases, consolidated last-argument style. Parser not yet implemented. |
+| `mengwong/deadlines` | Deontic deadlines | BY/WITHIN with DATE types, mandatory deadlines, EVENTUALLY, DeadlineWindow. All 8 open questions resolved. |
+| `mengwong/spec-notwithstanding` | SUBJECT TO / NOTWITHSTANDING | 5-role taxonomy (override, exception, condition, scope-limit, priority), 55-example corpus, evaluation pipeline, syntax proposals for constitutive + regulative rules. |
+
+To resume work: `git worktree add <dir> <branch>` from the main worktree.
+
 ### Documentation Checklist
 
 When adding or modifying documentation:
