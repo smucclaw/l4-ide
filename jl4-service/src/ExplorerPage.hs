@@ -252,8 +252,6 @@ renderExplorerPageBS registry = LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text
   , "      var sec=btn.closest('.deploy-section');"
   , "      var tag=sec.querySelector('.tag-pending');"
   , "      if(tag){tag.className='tag tag-status tag-compiling';tag.textContent='compiling';}"
-  , "      var meta=sec.querySelector('.deploy-meta');"
-  , "      if(meta) meta.textContent='compiling\\u2026';"
   , "      fetch('/'+encodeURIComponent(deployId),{headers:{'Accept':'application/json'}})"
   , "        .then(function(r){return r.json().then(function(d){return{ok:r.ok,data:d};})})"
   , "        .then(function(res){"
