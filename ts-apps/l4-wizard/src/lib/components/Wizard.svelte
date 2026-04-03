@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { base } from '$app/paths'
   import type {
     Parameter,
     Parameters,
@@ -19,6 +20,7 @@
   import OutcomeBanner from './OutcomeBanner.svelte'
   import LadderDiagram from './LadderDiagram.svelte'
   import GraphvizDiagram from './GraphvizDiagram.svelte'
+  import StateGraphDiagram from './StateGraphDiagram.svelte'
 
   type Props = {
     serviceUrl: string
@@ -37,6 +39,8 @@
   let client: DecisionServiceClient | null = $state(null)
   let functionDescription = $state('')
   let ladder: Ladder = $state(null)
+  // Map from atom unique ID to binding keys (for ladder diagram)
+  let atomToKeys: Map<number, string[]> = $state(new Map())
 
   // Track the current config to detect changes (non-reactive)
   let currentUrl = ''
@@ -59,6 +63,13 @@
     try {
       isLoading = true
       error = null
+
+      // Clear state when switching functions to avoid stale data
+      // (atom unique IDs are allocated per-module and can collide between functions)
+      atomToKeys = new Map()
+      bindings = {}
+      result = null
+      isDetermined = false
 
       client = createClient(url)
 
@@ -121,6 +132,27 @@
 
       // Store the ladder for later use
       ladder = plan.ladder
+
+      // Build mapping from atom unique IDs to binding keys
+      // This allows the ladder diagram to look up bindings correctly
+      // IMPORTANT: We MERGE new mappings into the existing map rather than replacing it
+      // because when some parameters are answered, the API returns only remaining asks,
+      // and we'd lose the mapping for already-answered parameters
+      const mergedAtomToKeys = new Map(atomToKeys)
+      for (const ask of plan.asks) {
+        // Use key if available, otherwise fall back to container (stripped of backticks)
+        const bindingKey = ask.key ?? stripBackticks(ask.container)
+        if (bindingKey) {
+          for (const atom of ask.atoms) {
+            const existing = mergedAtomToKeys.get(atom.unique) ?? []
+            if (!existing.includes(bindingKey)) {
+              existing.push(bindingKey)
+              mergedAtomToKeys.set(atom.unique, existing)
+            }
+          }
+        }
+      }
+      atomToKeys = mergedAtomToKeys
 
       // Build set of parameters that are still needed based on asks
       // The asks array tells us which parameters we need to query
@@ -224,8 +256,10 @@
         }
       })
 
-      // Update determination status
-      isDetermined = plan.determined !== null
+      // Update determination status:
+      // - For boolean functions: determined !== null means result is known (true/false)
+      // - For non-boolean functions: determined is always null, so check if all inputs provided
+      isDetermined = plan.determined !== null || plan.asks.length === 0
       if (plan.determined !== null) {
         result = plan.determined
       }
@@ -247,11 +281,13 @@
     // Update parameter value
     parameters = parameters.map((p) => (p.key === key ? { ...p, value } : p))
 
-    // Refresh query plan and evaluation
+    // Refresh query plan - this correctly implements three-valued (Kleene) logic
     await updateQueryPlan(functionName, bindings)
 
-    // If we have bindings, try to evaluate
-    if (Object.keys(bindings).length > 0 && client) {
+    // Evaluate when:
+    // 1. Boolean function with determined result (plan.determined !== null), OR
+    // 2. All inputs provided (plan.asks.length === 0) - handles non-boolean functions
+    if (isDetermined && client) {
       try {
         const evalResult = await evaluateFunction(
           client,
@@ -259,13 +295,20 @@
           bindings
         )
         result = evalResult.result
-      } catch {
-        // Evaluation may fail if not all required inputs are provided
+      } catch (e) {
+        console.warn('Evaluation failed:', e instanceof Error ? e.message : e)
       }
     }
   }
 
-  function handleLadderNodeClick(key: string, currentValue: unknown) {
+  async function handleLadderNodeClick(unique: number, currentValue: unknown) {
+    // Look up binding keys for this atom's unique ID
+    const keys = atomToKeys.get(unique)
+    if (!keys || keys.length === 0) {
+      console.warn(`No binding keys found for atom unique ${unique}`)
+      return
+    }
+
     // Cycle through: undefined → true → false → undefined
     let nextValue: unknown
     if (currentValue === undefined) {
@@ -275,7 +318,39 @@
     } else {
       nextValue = undefined
     }
-    handleParameterChange(key, nextValue)
+
+    // Batch update all associated binding keys
+    const newBindings = { ...bindings }
+    for (const key of keys) {
+      if (nextValue === undefined) {
+        delete newBindings[key]
+      } else {
+        newBindings[key] = nextValue
+      }
+
+      // Update parameter value in state
+      parameters = parameters.map((p) =>
+        p.key === key ? { ...p, value: nextValue } : p
+      )
+    }
+    bindings = newBindings
+
+    // Refresh query plan (which correctly handles three-valued logic)
+    await updateQueryPlan(functionName, bindings)
+
+    // Only evaluate when determined - see comment in handleParameterChange
+    if (isDetermined && client) {
+      try {
+        const evalResult = await evaluateFunction(
+          client,
+          functionName,
+          bindings
+        )
+        result = evalResult.result
+      } catch (e) {
+        console.warn('Evaluation failed:', e instanceof Error ? e.message : e)
+      }
+    }
   }
 
   function handleReset() {
@@ -294,7 +369,7 @@
 <div class="mx-auto max-w-4xl px-4 py-8">
   <!-- Back link -->
   <a
-    href="?"
+    href={`${base}/`}
     class="mb-4 inline-flex items-center text-sm text-gray-500 hover:text-gray-700"
   >
     <svg
@@ -344,7 +419,12 @@
 
     <!-- Ladder Diagram -->
     <section class="mb-8">
-      <LadderDiagram {ladder} {bindings} onNodeClick={handleLadderNodeClick} />
+      <LadderDiagram
+        {ladder}
+        {bindings}
+        {atomToKeys}
+        onNodeClick={handleLadderNodeClick}
+      />
     </section>
 
     <!-- Parameter Grid -->
@@ -358,6 +438,11 @@
     <!-- Graphviz Diagram -->
     <section class="mt-8">
       <GraphvizDiagram {client} {functionName} {bindings} />
+    </section>
+
+    <!-- State Graph Diagram -->
+    <section class="mt-8">
+      <StateGraphDiagram {client} {functionName} />
     </section>
   {/if}
 </div>

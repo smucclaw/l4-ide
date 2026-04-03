@@ -132,7 +132,32 @@ export interface FlowLirNode extends LirNode, Ord<FlowLirNode> {
   toPretty(context: LirContext): string
 }
 
+/**
+ * Type discriminator for LadderLirNode subclasses.
+ * Using string literals instead of instanceof to avoid issues with
+ * module duplication in bundlers (Vite/Rollup) which can cause
+ * instanceof checks to fail when the same class is bundled multiple times.
+ */
+export type LadderNodeKind =
+  | 'TrueExprLirNode'
+  | 'FalseExprLirNode'
+  | 'InertExprLirNode'
+  | 'UBoolVarLirNode'
+  | 'NotStartLirNode'
+  | 'NotEndLirNode'
+  | 'SinkLirNode'
+  | 'SourceNoAnnoLirNode'
+  | 'SourceWithOrAnnoLirNode'
+  | 'AppLirNode'
+  | 'FunDeclLirNode'
+  | 'NNFLadderGraphLirNode'
+  | 'NonNNFLadderGraphLirNode'
+  | 'LinPathLirNode'
+  | 'PathsListLirNode'
+
 abstract class BaseFlowLirNode extends DefaultLirNode implements FlowLirNode {
+  /** Type discriminator for reliable type checking across module boundaries */
+  abstract readonly nodeKind: LadderNodeKind
   protected position: Position
   protected dimensions?: Dimensions
 
@@ -828,16 +853,17 @@ export function isSelectableLadderLirNode(
 export function isTrueExprLirNode(
   node: LadderLirNode
 ): node is TrueExprLirNode {
-  return node instanceof TrueExprLirNode
+  return node.nodeKind === 'TrueExprLirNode'
 }
 
 export function isFalseExprLirNode(
   node: LadderLirNode
 ): node is FalseExprLirNode {
-  return node instanceof FalseExprLirNode
+  return node.nodeKind === 'FalseExprLirNode'
 }
 
 export class FalseExprLirNode extends BaseFlowLirNode implements FlowLirNode {
+  readonly nodeKind = 'FalseExprLirNode' as const
   #name: Name
   #value = new FalseVal()
 
@@ -864,6 +890,7 @@ export class FalseExprLirNode extends BaseFlowLirNode implements FlowLirNode {
 }
 
 export class TrueExprLirNode extends BaseFlowLirNode implements FlowLirNode {
+  readonly nodeKind = 'TrueExprLirNode' as const
   #name: Name
   #value = new TrueVal()
 
@@ -900,10 +927,11 @@ export type InertContext = 'InertAnd' | 'InertOr'
 export function isInertExprLirNode(
   node: LadderLirNode
 ): node is InertExprLirNode {
-  return node instanceof InertExprLirNode
+  return node.nodeKind === 'InertExprLirNode'
 }
 
 export class InertExprLirNode extends BaseFlowLirNode implements FlowLirNode {
+  readonly nodeKind = 'InertExprLirNode' as const
   #text: string
   #context: InertContext
   #value: UBoolVal
@@ -957,13 +985,14 @@ export interface VarLirNode extends FlowLirNode {
 export function isUBoolVarLirNode(
   node: LadderLirNode
 ): node is UBoolVarLirNode {
-  return node instanceof UBoolVarLirNode
+  return node.nodeKind === 'UBoolVarLirNode'
 }
 
 /* For now, changes to the data associated with BoolVarLirNodes will be published
 by the LadderGraphLirNode, as opposed to the BoolVarLirNode itself.
 */
 export class UBoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
+  readonly nodeKind = 'UBoolVarLirNode' as const
   #originalExpr: UBoolVar
   #initialValue: UBoolVal
 
@@ -1017,10 +1046,12 @@ export class UBoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
 export function isNotStartLirNode(
   node: LadderLirNode
 ): node is NotStartLirNode {
-  return node instanceof NotStartLirNode
+  return node.nodeKind === 'NotStartLirNode'
 }
 
 export class NotStartLirNode extends BaseFlowLirNode implements FlowLirNode {
+  readonly nodeKind = 'NotStartLirNode' as const
+
   constructor(
     nodeInfo: LirNodeInfo,
     private readonly negand: DirectedAcyclicGraph<LirId>,
@@ -1052,10 +1083,12 @@ export class NotStartLirNode extends BaseFlowLirNode implements FlowLirNode {
 }
 
 export function isNotEndLirNode(node: LadderLirNode): node is NotEndLirNode {
-  return node instanceof NotEndLirNode
+  return node.nodeKind === 'NotEndLirNode'
 }
 
 export class NotEndLirNode extends BaseFlowLirNode implements FlowLirNode {
+  readonly nodeKind = 'NotEndLirNode' as const
+
   constructor(
     nodeInfo: LirNodeInfo,
     position: Position = DEFAULT_INITIAL_POSITION
@@ -1080,10 +1113,11 @@ export class NotEndLirNode extends BaseFlowLirNode implements FlowLirNode {
 export type AppArgLirNode = UBoolVarLirNode
 
 export function isAppLirNode(node: LadderLirNode): node is AppLirNode {
-  return node instanceof AppLirNode
+  return node.nodeKind === 'AppLirNode'
 }
 
 export class AppLirNode extends BaseFlowLirNode implements FlowLirNode {
+  readonly nodeKind = 'AppLirNode' as const
   #fnName: Name
   #args: LirId[]
 
@@ -1147,7 +1181,7 @@ export function isSourceLirNode(node: LadderLirNode): node is SourceLirNode {
   return isSourceNoAnnoLirNode(node) || isSourceWithOrAnnoLirNode(node)
 }
 export function isSinkLirNode(node: LadderLirNode): node is SinkLirNode {
-  return node instanceof SinkLirNode
+  return node.nodeKind === 'SinkLirNode'
 }
 
 abstract class BaseBundlingFlowLirNode extends BaseFlowLirNode {
@@ -1168,13 +1202,15 @@ abstract class BaseBundlingFlowLirNode extends BaseFlowLirNode {
 export function isSourceNoAnnoLirNode(
   node: LadderLirNode
 ): node is SourceNoAnnoLirNode {
-  return node instanceof SourceNoAnnoLirNode
+  return node.nodeKind === 'SourceNoAnnoLirNode'
 }
 
 export class SourceNoAnnoLirNode
   extends BaseBundlingFlowLirNode
   implements FlowLirNode
 {
+  readonly nodeKind = 'SourceNoAnnoLirNode' as const
+
   constructor(
     nodeInfo: LirNodeInfo,
     position: Position = DEFAULT_INITIAL_POSITION
@@ -1194,13 +1230,15 @@ export class SourceNoAnnoLirNode
 export function isSourceWithOrAnnoLirNode(
   node: LadderLirNode
 ): node is SourceWithOrAnnoLirNode {
-  return node instanceof SourceWithOrAnnoLirNode
+  return node.nodeKind === 'SourceWithOrAnnoLirNode'
 }
 
 export class SourceWithOrAnnoLirNode
   extends BaseBundlingFlowLirNode
   implements FlowLirNode
 {
+  readonly nodeKind = 'SourceWithOrAnnoLirNode' as const
+
   constructor(
     nodeInfo: LirNodeInfo,
     annotation: BundlingNodeDisplayerData['annotation'],
@@ -1222,6 +1260,8 @@ export class SinkLirNode
   extends BaseBundlingFlowLirNode
   implements FlowLirNode
 {
+  readonly nodeKind = 'SinkLirNode' as const
+
   constructor(
     nodeInfo: LirNodeInfo,
     annotation: BundlingNodeDisplayerData['annotation'] = emptyBundlingNodeAnno.annotation,

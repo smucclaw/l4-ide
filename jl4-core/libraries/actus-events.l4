@@ -1,0 +1,187 @@
+-- =============================================================================
+-- ACTUS Events Library
+-- Algorithmic Contract Types Unified Standards (actusfrf.org)
+-- =============================================================================
+-- Contract event types and basic operations.
+-- =============================================================================
+
+IMPORT prelude
+IMPORT `actus-core`
+
+§ `ACTUS Contract Events`
+
+-- =============================================================================
+§§ `Event Types`
+-- =============================================================================
+
+DECLARE `Event Type` IS ONE OF
+    IED         -- Initial Exchange Date
+    PR          -- Principal Redemption
+    PP          -- Principal Prepayment
+    MD          -- Maturity
+    IP          -- Interest Payment
+    IPCI        -- Interest Capitalization
+    RR          -- Rate Reset
+    RRF         -- Rate Reset (Known)
+    FP          -- Fee Payment
+    PY          -- Penalty Payment
+    TD          -- Termination
+    XD          -- Exercise
+    STD         -- Settlement
+    DV          -- Dividend Payment
+    CE          -- Credit Event
+    AD          -- Monitoring
+
+-- Event sequence for ordering
+GIVEN evt IS AN `Event Type`
+GIVETH A NUMBER
+`event sequence` MEANS
+    CONSIDER evt
+    WHEN IED  THEN 1
+    WHEN FP   THEN 2
+    WHEN PR   THEN 3
+    WHEN PP   THEN 7
+    WHEN IP   THEN 8
+    WHEN IPCI THEN 9
+    WHEN CE   THEN 10
+    WHEN RRF  THEN 11
+    WHEN RR   THEN 12
+    WHEN DV   THEN 13
+    WHEN TD   THEN 16
+    WHEN MD   THEN 19
+    WHEN XD   THEN 20
+    WHEN STD  THEN 21
+    WHEN AD   THEN 22
+    WHEN PY   THEN 6
+
+-- Event name for display
+GIVEN evt IS AN `Event Type`
+GIVETH A STRING
+`event name` MEANS
+    CONSIDER evt
+    WHEN IED  THEN "Initial Exchange"
+    WHEN PR   THEN "Principal Redemption"
+    WHEN PP   THEN "Principal Prepayment"
+    WHEN MD   THEN "Maturity"
+    WHEN IP   THEN "Interest Payment"
+    WHEN IPCI THEN "Interest Capitalization"
+    WHEN RR   THEN "Rate Reset"
+    WHEN RRF  THEN "Rate Reset Known"
+    WHEN FP   THEN "Fee Payment"
+    WHEN PY   THEN "Penalty Payment"
+    WHEN TD   THEN "Termination"
+    WHEN XD   THEN "Exercise"
+    WHEN STD  THEN "Settlement"
+    WHEN DV   THEN "Dividend"
+    WHEN CE   THEN "Credit Event"
+    WHEN AD   THEN "Monitoring"
+
+-- Event acronym
+GIVEN evt IS AN `Event Type`
+GIVETH A STRING
+`event acronym` MEANS
+    CONSIDER evt
+    WHEN IED  THEN "IED"
+    WHEN PR   THEN "PR"
+    WHEN PP   THEN "PP"
+    WHEN MD   THEN "MD"
+    WHEN IP   THEN "IP"
+    WHEN IPCI THEN "IPCI"
+    WHEN RR   THEN "RR"
+    WHEN RRF  THEN "RRF"
+    WHEN FP   THEN "FP"
+    WHEN PY   THEN "PY"
+    WHEN TD   THEN "TD"
+    WHEN XD   THEN "XD"
+    WHEN STD  THEN "STD"
+    WHEN DV   THEN "DV"
+    WHEN CE   THEN "CE"
+    WHEN AD   THEN "AD"
+
+-- =============================================================================
+§§ `Contract Event Record`
+-- =============================================================================
+
+DECLARE `Contract Event` HAS
+    eventType           IS AN `Event Type`
+    eventDate           IS A DATE
+    payoff              IS A NUMBER
+    currency            IS AN `ACTUS Currency`
+    notionalPrincipal   IS A NUMBER
+    nominalInterestRate IS A NUMBER
+    accruedInterest     IS A NUMBER
+
+-- Create an event
+GIVEN evtType IS AN `Event Type`
+      evtDate IS A DATE
+      poff    IS A NUMBER
+      ccy     IS AN `ACTUS Currency`
+      nt      IS A NUMBER
+      ipnr    IS A NUMBER
+      ipac    IS A NUMBER
+GIVETH A `Contract Event`
+`make event` MEANS
+    `Contract Event` WITH
+        eventType           IS evtType
+        eventDate           IS evtDate
+        payoff              IS poff
+        currency            IS ccy
+        notionalPrincipal   IS nt
+        nominalInterestRate IS ipnr
+        accruedInterest     IS ipac
+
+-- =============================================================================
+§§ `Event Predicates`
+-- =============================================================================
+
+GIVEN evt IS AN `Event Type`
+GIVETH A BOOLEAN
+`is principal event` MEANS
+    CONSIDER evt
+    WHEN IED THEN TRUE
+    WHEN PR  THEN TRUE
+    WHEN PP  THEN TRUE
+    WHEN MD  THEN TRUE
+    OTHERWISE FALSE
+
+GIVEN evt IS AN `Event Type`
+GIVETH A BOOLEAN
+`is interest event` MEANS
+    CONSIDER evt
+    WHEN IP   THEN TRUE
+    WHEN IPCI THEN TRUE
+    WHEN RR   THEN TRUE
+    WHEN RRF  THEN TRUE
+    OTHERWISE FALSE
+
+GIVEN evt IS AN `Event Type`
+GIVETH A BOOLEAN
+`has cash flow` MEANS
+    CONSIDER evt
+    WHEN IED  THEN TRUE
+    WHEN PR   THEN TRUE
+    WHEN PP   THEN TRUE
+    WHEN MD   THEN TRUE
+    WHEN IP   THEN TRUE
+    WHEN FP   THEN TRUE
+    WHEN PY   THEN TRUE
+    WHEN DV   THEN TRUE
+    WHEN STD  THEN TRUE
+    OTHERWISE FALSE
+
+-- =============================================================================
+§§ `Event List Operations`
+-- =============================================================================
+
+GIVEN events IS A LIST OF `Contract Event`
+GIVETH A NUMBER
+`total payoff` MEANS
+    CONSIDER events
+    WHEN EMPTY THEN 0
+    WHEN e FOLLOWED BY rest THEN (e's payoff) PLUS (`total payoff` rest)
+
+-- =============================================================================
+§§ `Version Information`
+-- =============================================================================
+
+`ACTUS Events Library Version` MEANS "1.0.0"

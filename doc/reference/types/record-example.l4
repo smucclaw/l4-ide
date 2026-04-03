@@ -1,0 +1,14 @@
+-- Example: Record type declaration
+-- Demonstrates product types with named fields
+
+DECLARE Person
+  HAS `full name` IS A STRING
+      age         IS A NUMBER
+
+-- Example: Creating a person record
+`the applicant` MEANS Person WITH
+  `full name` IS "John Doe"
+  age         IS 30
+
+#EVAL `the applicant`'s `full name`
+#EVAL `the applicant`'s age

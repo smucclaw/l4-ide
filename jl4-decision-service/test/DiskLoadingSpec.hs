@@ -16,7 +16,7 @@ import qualified Examples
 
 spec :: Spec
 spec = describe "disk loading" do
-  it "prefers YAML sidecar over implicit default export" do
+  it "loads function from YAML sidecar when L4 has no @export" do
     withTempDir \dir -> do
       let
         l4Path = dir </> "example.l4"
@@ -47,7 +47,7 @@ spec = describe "disk loading" do
       (functions, _ctx) <- Examples.loadL4Functions [l4Path]
       Map.keys functions `shouldBe` ["chosen"]
 
-  it "loads only explicit @export functions when no YAML exists" do
+  it "loads only explicit @export functions, ignoring files without @export" do
     withTempDir \dir -> do
       let
         exportedPath = dir </> "exported.l4"
@@ -67,6 +67,7 @@ spec = describe "disk loading" do
           ]
 
       (functions, _ctx) <- Examples.loadL4Functions [exportedPath, implicitPath]
+      -- Only explicit @export is loaded; implicit file has no exports
       Map.keys functions `shouldBe` ["exported"]
 
   describe "@export placement" do
@@ -107,7 +108,7 @@ spec = describe "disk loading" do
         (functions, _ctx) <- Examples.loadL4Functions [l4Path]
         Map.keys functions `shouldBe` ["test_with_means"]
 
-    it "does NOT work when @export is between GIVEN and GIVETH" do
+    it "ignores @export between GIVEN and GIVETH, yielding no exports" do
       withTempDir \dir -> do
         let l4Path = dir </> "export-between-given-giveth.l4"
         TIO.writeFile l4Path $
@@ -118,9 +119,10 @@ spec = describe "disk loading" do
             , "DECIDE test_between IS x"
             ]
         (functions, _ctx) <- Examples.loadL4Functions [l4Path]
+        -- @export in wrong place is ignored, no implicit default
         Map.keys functions `shouldBe` []
 
-    it "does NOT work when @export is between GIVETH and DECIDE" do
+    it "ignores @export between GIVETH and DECIDE, yielding no exports" do
       withTempDir \dir -> do
         let l4Path = dir </> "export-after-giveth.l4"
         TIO.writeFile l4Path $
@@ -131,9 +133,10 @@ spec = describe "disk loading" do
             , "DECIDE test_after_giveth IS x"
             ]
         (functions, _ctx) <- Examples.loadL4Functions [l4Path]
+        -- @export in wrong place is ignored, no implicit default
         Map.keys functions `shouldBe` []
 
-    it "does NOT work when @export is right before DECIDE (after GIVETH)" do
+    it "ignores @export right before DECIDE, yielding no exports" do
       withTempDir \dir -> do
         let l4Path = dir </> "export-before-decide.l4"
         TIO.writeFile l4Path $
@@ -144,6 +147,7 @@ spec = describe "disk loading" do
             , "DECIDE test_before_decide IS x"
             ]
         (functions, _ctx) <- Examples.loadL4Functions [l4Path]
+        -- @export in wrong place is ignored, no implicit default
         Map.keys functions `shouldBe` []
 
 withTempDir :: (FilePath -> IO a) -> IO a

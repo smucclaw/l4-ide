@@ -1,0 +1,86 @@
+IMPORT prelude
+IMPORT dayDate
+
+DECLARE `Risk Category` IS ONE OF
+    `Low Risk`
+    `Medium Risk`
+    `High Risk`
+    `Uninsurable`
+
+DECLARE Driver HAS
+    -- stored fields
+    `name`              IS A STRING
+    `age`               IS A NUMBER
+    `years licensed`    IS A NUMBER
+    `accident count`    IS A NUMBER
+    `has tickets`       IS A BOOLEAN
+    -- computed fields (methods)
+    `meets minimum age`          IS A BOOLEAN
+        MEANS `age` >= 18
+    `has sufficient experience`  IS A BOOLEAN
+        MEANS `years licensed` >= 2
+    `risk category`              IS A `Risk Category`
+        MEANS CONSIDER `accident count`
+              WHEN 0 THEN IF `has tickets` THEN `Medium Risk` ELSE `Low Risk`
+              WHEN 1 THEN `Medium Risk`
+              WHEN 2 THEN `High Risk`
+              OTHERWISE `Uninsurable`
+    `is eligible for insurance`  IS A BOOLEAN
+        MEANS `meets minimum age`
+          AND `has sufficient experience`
+          AND `accident count` <= 3
+
+DECLARE Policy HAS
+    -- stored fields
+    `driver`            IS A Driver
+    `vehicle value`     IS A NUMBER
+    `coverage level`    IS A STRING
+    -- computed fields (methods)
+    `base premium`      IS A MAYBE NUMBER
+        MEANS CONSIDER `driver`'s `risk category`
+              WHEN `Low Risk`    THEN JUST (`vehicle value` * 0.02)
+              WHEN `Medium Risk` THEN JUST (`vehicle value` * 0.04)
+              WHEN `High Risk`   THEN JUST (`vehicle value` * 0.08)
+              WHEN `Uninsurable` THEN NOTHING
+
+-- Test data
+alice MEANS Driver WITH
+    `name`           IS "Alice"
+    `age`            IS 25
+    `years licensed` IS 3
+    `accident count` IS 0
+    `has tickets`    IS FALSE
+
+teen MEANS Driver WITH
+    `name`           IS "Teen"
+    `age`            IS 16
+    `years licensed` IS 0
+    `accident count` IS 0
+    `has tickets`    IS FALSE
+
+risky MEANS Driver WITH
+    `name`           IS "Risky"
+    `age`            IS 40
+    `years licensed` IS 10
+    `accident count` IS 4
+    `has tickets`    IS TRUE
+
+alicePolicy MEANS Policy WITH
+    `driver`         IS alice
+    `vehicle value`  IS 20000
+    `coverage level` IS "comprehensive"
+
+-- Driver computed fields
+#EVAL alice's `meets minimum age`             -- TRUE
+#EVAL alice's `has sufficient experience`     -- TRUE
+#EVAL alice's `risk category`                 -- Low Risk
+#EVAL alice's `is eligible for insurance`     -- TRUE
+
+#EVAL teen's `meets minimum age`              -- FALSE
+#EVAL teen's `is eligible for insurance`      -- FALSE
+
+#EVAL risky's `risk category`                 -- Uninsurable
+#EVAL risky's `is eligible for insurance`     -- FALSE
+
+-- Policy computed fields (nested record access)
+#EVAL alicePolicy's `base premium`            -- JUST 400.0

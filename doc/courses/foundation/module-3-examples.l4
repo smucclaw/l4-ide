@@ -1,0 +1,184 @@
+-- Module 3: Control Flow - Complete Examples
+-- All examples are validated and use natural language identifiers
+
+IMPORT prelude
+
+-- =============================================================================
+-- SECTION 1: Conditional Expressions
+-- =============================================================================
+
+-- Categorize a person's age
+GIVEN age IS A NUMBER
+GIVETH A STRING
+`the age category` MEANS
+    IF age < 18
+    THEN "minor"
+    ELSE "adult"
+
+-- Grade a score with nested conditionals
+GIVEN score IS A NUMBER
+GIVETH A STRING
+`the letter grade` MEANS
+    IF score >= 90
+    THEN "A"
+    ELSE IF score >= 80
+         THEN "B"
+         ELSE IF score >= 70
+              THEN "C"
+              ELSE IF score >= 60
+                   THEN "D"
+                   ELSE "F"
+
+-- Categorize an amount
+GIVEN amount IS A NUMBER
+GIVETH A STRING
+`the amount category` MEANS
+    IF amount < 100
+    THEN "small"
+    ELSE IF amount < 1000
+         THEN "medium"
+         ELSE "large"
+
+-- =============================================================================
+-- SECTION 2: Boolean Logic
+-- =============================================================================
+
+-- Can a person vote?
+GIVEN age IS A NUMBER
+      `is registered` IS A BOOLEAN
+GIVETH A BOOLEAN
+DECIDE `the person can vote` IF
+    age >= 18 AND `is registered`
+
+-- Does a transaction need review?
+GIVEN amount IS A NUMBER
+      `is high risk` IS A BOOLEAN
+GIVETH A BOOLEAN
+DECIDE `the transaction needs review` IF
+    amount > 10000 OR `is high risk`
+
+-- Is the person a minor?
+GIVEN age IS A NUMBER
+GIVETH A BOOLEAN
+DECIDE `the person is a minor` IF
+    NOT age >= 18
+
+-- =============================================================================
+-- SECTION 3: Working with Lists
+-- =============================================================================
+
+-- Check if all numbers are positive
+GIVEN numbers IS A LIST OF NUMBER
+GIVETH A BOOLEAN
+DECIDE `all numbers are positive` IF
+    all (GIVEN n YIELD n > 0) numbers
+
+-- Check if any number is negative
+GIVEN numbers IS A LIST OF NUMBER
+GIVETH A BOOLEAN
+DECIDE `some number is negative` IF
+    any (GIVEN n YIELD n < 0) numbers
+
+-- Get numbers greater than a threshold
+GIVEN numbers IS A LIST OF NUMBER
+      threshold IS A NUMBER
+GIVETH A LIST OF NUMBER
+`numbers above threshold` MEANS
+    filter (GIVEN n YIELD n > threshold) numbers
+
+-- =============================================================================
+-- SECTION 4: Pattern Matching on Lists
+-- =============================================================================
+
+-- Describe a list
+GIVEN items IS A LIST OF STRING
+GIVETH A STRING
+`describe the list` MEANS
+    CONSIDER items
+    WHEN EMPTY THEN "no items"
+    WHEN first FOLLOWED BY EMPTY THEN "one item"
+    WHEN first FOLLOWED BY rest THEN "multiple items"
+
+-- =============================================================================
+-- SECTION 5: Complex Eligibility Example
+-- =============================================================================
+
+-- A conviction record
+DECLARE Conviction
+    HAS `the description` IS A STRING
+        `the conviction is spent` IS A BOOLEAN
+
+-- A person with potential convictions
+DECLARE Person
+    HAS `the person's name` IS A STRING
+        `the person's age` IS A NUMBER
+        `the person is bankrupt` IS A BOOLEAN
+        `the person's convictions` IS A LIST OF Conviction
+
+-- Check if a person has an unspent conviction
+GIVEN person IS A Person
+GIVETH A BOOLEAN
+DECIDE `the person has an unspent conviction` IF
+    any (GIVEN c YIELD c's `the conviction is spent` EQUALS FALSE) (person's `the person's convictions`)
+
+-- Check if a person is eligible for a position
+GIVEN person IS A Person
+GIVETH A BOOLEAN
+DECIDE `the person is eligible for the position` IF
+    person's `the person's age` >= 21
+    AND NOT person's `the person is bankrupt`
+    AND NOT `the person has an unspent conviction` person
+
+-- =============================================================================
+-- SECTION 6: Test Data
+-- =============================================================================
+
+-- Test lists
+`positive numbers` MEANS LIST 1, 2, 3, 4, 5
+`mixed numbers` MEANS LIST -1, 2, -3, 4
+`empty list` MEANS LIST
+`single item` MEANS LIST "apple"
+`multiple items` MEANS LIST "apple", "banana", "cherry"
+
+-- Test people
+`spent conviction` MEANS Conviction "Minor offense 2010" TRUE
+`unspent conviction` MEANS Conviction "Fraud 2023" FALSE
+
+`eligible person` MEANS Person "Alice" 30 FALSE (LIST)
+`bankrupt person` MEANS Person "Bob" 35 TRUE (LIST)
+`person with unspent conviction` MEANS Person "Charlie" 40 FALSE (LIST `unspent conviction`)
+`young person` MEANS Person "Diana" 19 FALSE (LIST)
+
+-- =============================================================================
+-- SECTION 7: Tests
+-- =============================================================================
+
+-- Conditional tests
+#EVAL `the age category` 16
+#EVAL `the age category` 25
+#EVAL `the letter grade` 85
+#EVAL `the amount category` 50
+#EVAL `the amount category` 500
+#EVAL `the amount category` 5000
+
+-- Boolean tests
+#EVAL `the person can vote` 21 TRUE
+#EVAL `the person can vote` 16 TRUE
+#EVAL `the person is a minor` 16
+
+-- List tests
+#EVAL `all numbers are positive` `positive numbers`
+#EVAL `all numbers are positive` `mixed numbers`
+#EVAL `some number is negative` `mixed numbers`
+#EVAL `numbers above threshold` `positive numbers` 3
+
+-- Pattern matching tests
+#EVAL `describe the list` `empty list`
+#EVAL `describe the list` `single item`
+#EVAL `describe the list` `multiple items`
+
+-- Eligibility tests
+#EVAL `the person is eligible for the position` `eligible person`
+#EVAL `the person is eligible for the position` `bankrupt person`
+#EVAL `the person is eligible for the position` `person with unspent conviction`
+#EVAL `the person is eligible for the position` `young person`

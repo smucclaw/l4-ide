@@ -4,8 +4,11 @@
   import FunctionList from '$lib/components/FunctionList.svelte'
 
   // Get configuration from URL params or environment
+  // VITE_DECISION_SERVICE_URL is set at build time for production deployments
+  const defaultServiceUrl =
+    import.meta.env.VITE_DECISION_SERVICE_URL ?? 'http://localhost:8001'
   let serviceUrl = $derived(
-    $page.url.searchParams.get('service') ?? 'http://localhost:8001'
+    $page.url.searchParams.get('service') ?? defaultServiceUrl
   )
   let functionName = $derived($page.url.searchParams.get('fn'))
 </script>

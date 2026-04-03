@@ -1,0 +1,21 @@
+-- Example: Asyndetic operators (... and ..)
+-- Implicit AND and OR using punctuation
+
+citizen MEANS TRUE
+over18 MEANS TRUE
+hasID MEANS TRUE
+
+approved MEANS TRUE
+pending MEANS FALSE
+review MEANS FALSE
+
+-- Ellipsis (...) = implicit AND
+eligible1 MEANS citizen ... over18 ... hasID
+-- Equivalent to: (citizen AND over18 AND hasID)
+
+-- Double dot (..) = implicit OR
+inProgress MEANS approved .. pending .. review
+-- Equivalent to: (approved OR pending OR review)
+
+#EVAL eligible1
+#EVAL inProgress

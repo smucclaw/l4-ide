@@ -1,0 +1,91 @@
+-- Prelude Example: Demonstrating core list and Maybe patterns
+-- The prelude is automatically imported and provides foundational types
+
+-- List construction using FOLLOWED BY (cons) and EMPTY
+DECIDE `first few numbers` IS 1 FOLLOWED BY 2 FOLLOWED BY 3 FOLLOWED BY EMPTY
+#EVAL `first few numbers`  -- LIST 1, 2, 3
+
+-- Alternative: LIST syntax
+DECIDE `more numbers` IS LIST 4, 5, 6
+#EVAL `more numbers`  -- LIST 4, 5, 6
+
+-- Pattern matching on lists with CONSIDER
+GIVEN list IS A LIST OF NUMBER
+GIVETH A NUMBER
+`length of list` list MEANS
+  CONSIDER list
+  WHEN EMPTY THEN 0
+  WHEN x FOLLOWED BY xs THEN 1 PLUS `length of list` xs
+
+#EVAL `length of list` `first few numbers`  -- 3
+
+-- Map: Apply function to each element
+GIVEN list IS A LIST OF NUMBER
+GIVETH A LIST OF NUMBER
+`double all values` list MEANS
+  CONSIDER list
+  WHEN EMPTY THEN EMPTY
+  WHEN x FOLLOWED BY xs THEN (x TIMES 2) FOLLOWED BY `double all values` xs
+
+#EVAL `double all values` `first few numbers`  -- LIST 2, 4, 6
+
+-- Filter: Keep elements matching predicate
+GIVEN list IS A LIST OF NUMBER
+GIVETH A LIST OF NUMBER
+`keep only even numbers` list MEANS
+  CONSIDER list
+  WHEN EMPTY THEN EMPTY
+  WHEN x FOLLOWED BY xs THEN
+    IF x MODULO 2 EQUALS 0
+    THEN x FOLLOWED BY `keep only even numbers` xs
+    ELSE `keep only even numbers` xs
+
+#EVAL `keep only even numbers` (LIST 1, 2, 3, 4, 5, 6)  -- LIST 2, 4, 6
+
+-- Fold: Reduce list to single value (sum)
+GIVEN list IS A LIST OF NUMBER
+GIVETH A NUMBER
+`sum of all values` list MEANS
+  CONSIDER list
+  WHEN EMPTY THEN 0
+  WHEN x FOLLOWED BY xs THEN x PLUS `sum of all values` xs
+
+#EVAL `sum of all values` `first few numbers`  -- 6
+
+-- Maybe type: JUST for present values, NOTHING for absent
+DECIDE `maybe has value` IS JUST 42
+DECIDE `no value present` IS NOTHING
+
+#EVAL `maybe has value`  -- JUST 42
+#EVAL `no value present`     -- NOTHING
+
+-- Pattern matching on Maybe
+GIVEN maybe IS A MAYBE NUMBER
+GIVETH A NUMBER
+`get value or default to zero` maybe MEANS
+  CONSIDER maybe
+  WHEN NOTHING THEN 0
+  WHEN JUST x THEN x
+
+#EVAL `get value or default to zero` `maybe has value`  -- 42
+#EVAL `get value or default to zero` `no value present`     -- 0
+
+-- Either type: LEFT or RIGHT
+DECIDE `successful result` IS RIGHT 100
+DECIDE `error result` IS LEFT "error"
+
+#EVAL `successful result`  -- RIGHT 100
+#EVAL `error result`  -- LEFT "error"
+
+-- Element membership check
+GIVEN x IS A NUMBER
+      list IS A LIST OF NUMBER
+GIVETH A BOOLEAN
+`is element in list` x list MEANS
+  CONSIDER list
+  WHEN EMPTY THEN FALSE
+  WHEN y FOLLOWED BY ys THEN
+    IF x EQUALS y THEN TRUE ELSE `is element in list` x ys
+
+#EVAL `is element in list` 2 `first few numbers`  -- TRUE
+#EVAL `is element in list` 9 `first few numbers`  -- FALSE

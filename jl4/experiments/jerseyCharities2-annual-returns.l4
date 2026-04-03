@@ -205,7 +205,7 @@ DECLARE Action IS ONE OF
 § `Annual Return Obligation (Art 13, Law 2014 & Art 2, R&O 59/2018)`
 GIVEN charity  IS A RegisterEntry
       register IS A CharityRegister
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 `annual return requested` MEANS
   PARTY Role OF Commissioner
   MUST  Notify OF Charity charity
@@ -234,7 +234,7 @@ DECLARE DateRel IS ONE OF
 GIVEN charity  IS A RegisterEntry
       register IS A CharityRegister
       financialYear IS A NUMBER
-GIVETH A PROVISION Actor Action
+GIVETH A DEONTIC Actor Action
 `file annual return` MEANS
   PARTY Charity charity
   MUST Notify OF Role OF Commissioner

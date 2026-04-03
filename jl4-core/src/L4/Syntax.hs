@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -9,6 +10,10 @@ import Base
 import L4.Annotation
 import L4.Lexer (PosToken)
 
+#if defined(SERIALISE_ENABLED)
+import L4.Instances.Serialise ()
+import Codec.Serialise (Serialise)
+#endif
 import Data.Default
 import qualified GHC.Generics as GHC
 import qualified Generics.SOP as SOP
@@ -100,7 +105,8 @@ data Type' n =
 type Kind = Int
 
 data TypedName n =
-  MkTypedName Anno n (Type' n)
+  MkTypedName Anno n (Type' n) (Maybe (Expr n))
+  -- ^ Nothing = stored field, Just expr = computed field (MEANS clause)
   deriving stock (GHC.Generic, Eq, Ord, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
@@ -219,7 +225,7 @@ data Expr n =
   | AppNamed   Anno n [NamedExpr n] (Maybe [Int]) -- we store the order of arguments during type checking
   | IfThenElse Anno (Expr n) (Expr n) (Expr n)
   | MultiWayIf Anno [GuardedExpr n] (Expr n)
-  | Regulative Anno (Obligation n)
+  | Regulative Anno (Deonton n)
   | Consider   Anno (Expr n) [Branch n]
   -- | ParenExpr  Anno (Expr n) -- temporary
   | Lit        Anno Lit
@@ -255,10 +261,14 @@ data GuardedExpr n =
   deriving stock (GHC.Generic, Eq, Ord, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
--- | obligations ala CSL; this represents an obligation with the following form:
--- <party> action(params) due <maybe time> (fromMaybe 0) <maybe then> (fromMaybe fulfilment)
-data Obligation n
-  = MkObligation
+-- | A Deonton (from Greek δέον "duty" + -on) is the atomic unit of normative content.
+-- It represents a deontic position: what a party must, may, or must not do.
+-- The name parallels physics terminology (electron, photon) to suggest a fundamental particle
+-- of deontic logic. Encompasses obligations, permissions, and prohibitions.
+--
+-- Structure: PARTY ... MUST/MAY/SHANT ... BEFORE ... HENCE ... LEST
+data Deonton n
+  = MkDeonton
   { anno :: Anno
   , party :: Expr n
   , action :: RAction n
@@ -341,6 +351,7 @@ data TopDecl n =
   | Directive Anno (Directive n)
   | Import    Anno (Import n)
   | Section   Anno (Section n)
+  | Timezone  Anno (Expr n)       -- ^ @TIMEZONE IS <expr>@ declaration
   deriving stock (GHC.Generic, Eq, Ord, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
@@ -461,6 +472,7 @@ data TermKind =
   | Local -- ^ a local variable (introduced by a lambda or pattern)
   | Constructor
   | Selector
+  | ComputedSelector -- ^ a computed field (MEANS clause), behaves like a selector but is derived
   deriving stock (Eq, Ord, Generic, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
@@ -515,8 +527,8 @@ deriving via L4Syntax (Expr n)
   instance HasAnno (Expr n)
 deriving via L4Syntax (GuardedExpr n)
   instance HasAnno (GuardedExpr n)
-deriving via L4Syntax (Obligation n)
-  instance HasAnno (Obligation n)
+deriving via L4Syntax (Deonton n)
+  instance HasAnno (Deonton n)
 deriving via L4Syntax (RAction n)
   instance HasAnno (RAction n)
 deriving via L4Syntax (Event n)
@@ -560,7 +572,7 @@ deriving anyclass instance ToConcreteNodes PosToken (AppForm Name)
 deriving anyclass instance ToConcreteNodes PosToken (Aka Name)
 deriving anyclass instance ToConcreteNodes PosToken (Expr Name)
 deriving anyclass instance ToConcreteNodes PosToken (GuardedExpr Name)
-deriving anyclass instance ToConcreteNodes PosToken (Obligation Name)
+deriving anyclass instance ToConcreteNodes PosToken (Deonton Name)
 -- DeonticModal has no source tokens, so return empty list
 instance ToConcreteNodes PosToken DeonticModal where
   toNodes _ = pure []
@@ -610,7 +622,7 @@ deriving anyclass instance ToConcreteNodes PosToken (AppForm Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (Aka Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (Expr Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (GuardedExpr Resolved)
-deriving anyclass instance ToConcreteNodes PosToken (Obligation Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (Deonton Resolved)
 -- Manual instance for RAction to skip the modal field (which has no source tokens)
 instance ToConcreteNodes PosToken (RAction Resolved) where
   toNodes (MkAction ann _modal action provided) =
@@ -761,7 +773,7 @@ deriving anyclass instance HasSrcRange (AppForm a)
 deriving anyclass instance HasSrcRange (Aka a)
 deriving anyclass instance HasSrcRange (Expr a)
 deriving anyclass instance HasSrcRange (GuardedExpr a)
-deriving anyclass instance HasSrcRange (Obligation a)
+deriving anyclass instance HasSrcRange (Deonton a)
 deriving anyclass instance HasSrcRange (LocalDecl a)
 deriving anyclass instance HasSrcRange (NamedExpr a)
 deriving anyclass instance HasSrcRange (Branch a)
@@ -807,4 +819,55 @@ fun ts t = Fun emptyAnno ts t
 
 app :: n -> [Type' n] -> Type' n
 app = TyApp emptyAnno
+
+-- ----------------------------------------------------------------------------
+-- Serialise instances (CBOR) for AST caching in jl4-service
+-- ----------------------------------------------------------------------------
+
+#if defined(SERIALISE_ENABLED)
+deriving anyclass instance Serialise Name
+deriving anyclass instance Serialise RawName
+deriving anyclass instance Serialise Unique
+deriving anyclass instance Serialise Resolved
+deriving anyclass instance Serialise n => Serialise (Type' n)
+deriving anyclass instance Serialise n => Serialise (TypedName n)
+deriving anyclass instance Serialise n => Serialise (OptionallyTypedName n)
+deriving anyclass instance Serialise n => Serialise (OptionallyNamedType n)
+deriving anyclass instance Serialise n => Serialise (TypeSig n)
+deriving anyclass instance Serialise n => Serialise (GivenSig n)
+deriving anyclass instance Serialise n => Serialise (GivethSig n)
+deriving anyclass instance Serialise n => Serialise (Decide n)
+deriving anyclass instance Serialise n => Serialise (AppForm n)
+deriving anyclass instance Serialise n => Serialise (Aka n)
+deriving anyclass instance Serialise n => Serialise (Declare n)
+deriving anyclass instance Serialise n => Serialise (Assume n)
+deriving anyclass instance Serialise n => Serialise (Directive n)
+deriving anyclass instance Serialise n => Serialise (Event n)
+deriving anyclass instance Serialise n => Serialise (Import n)
+deriving anyclass instance Serialise n => Serialise (TypeDecl n)
+deriving anyclass instance Serialise n => Serialise (ConDecl n)
+deriving anyclass instance Serialise n => Serialise (Expr n)
+deriving anyclass instance Serialise InertContext
+deriving anyclass instance Serialise n => Serialise (GuardedExpr n)
+deriving anyclass instance Serialise n => Serialise (Deonton n)
+deriving anyclass instance Serialise DeonticModal
+deriving anyclass instance Serialise n => Serialise (RAction n)
+deriving anyclass instance Serialise n => Serialise (NamedExpr n)
+deriving anyclass instance Serialise Lit
+deriving anyclass instance Serialise n => Serialise (Branch n)
+deriving anyclass instance Serialise n => Serialise (BranchLhs n)
+deriving anyclass instance Serialise n => Serialise (Pattern n)
+deriving anyclass instance Serialise n => Serialise (Module n)
+deriving anyclass instance Serialise n => Serialise (Section n)
+deriving anyclass instance Serialise n => Serialise (TopDecl n)
+deriving anyclass instance Serialise n => Serialise (LocalDecl n)
+deriving anyclass instance Serialise Extension
+deriving anyclass instance Serialise Info
+deriving anyclass instance Serialise TermKind
+deriving anyclass instance Serialise Nlg
+deriving anyclass instance Serialise n => Serialise (NlgFragment n)
+deriving anyclass instance Serialise Comment
+deriving anyclass instance Serialise Ref
+deriving anyclass instance Serialise Desc
+#endif
 

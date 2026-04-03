@@ -1,0 +1,9 @@
+-- Example: Function type
+-- Demonstrates function type signature
+
+GIVEN x IS A NUMBER
+      y IS A NUMBER
+GIVETH A NUMBER
+add x y MEANS x PLUS y
+
+#EVAL add 5 3

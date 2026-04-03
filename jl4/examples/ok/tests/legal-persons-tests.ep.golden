@@ -1,7 +1,10 @@
 IMPORT prelude
 IMPORT daydate
+IMPORT timezone
 IMPORT jurisdiction
 IMPORT `legal-persons`
+
+"Etc/UTC"
 
 § `Legal Persons Library Tests`
 

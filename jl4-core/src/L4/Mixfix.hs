@@ -78,8 +78,25 @@ extractMixfixInfo tysig appForm =
     paramCount :: Int
     paramCount = length $ filter isParamToken patternTokens
 
+    -- | Check if there's a keyword that comes AFTER a parameter.
+    -- This distinguishes true mixfix patterns (where keywords are interspersed
+    -- with parameters) from prefix functions where the user redundantly listed
+    -- GIVEN parameter names after the function name.
+    --
+    -- Examples:
+    --   [Keyword, Param]       -> False (just prefix with redundant param listing)
+    --   [Keyword, Param, Param] -> False (same - no keyword after any param)
+    --   [Param, Keyword]       -> True  (e.g., "person IS ELIGIBLE")
+    --   [Param, Keyword, Param] -> True  (e.g., "person IS ELIGIBLE FOR program")
+    --   [Keyword, Param, Keyword] -> True (e.g., "IF cond THEN")
+    hasKeywordAfterParam :: Bool
+    hasKeywordAfterParam =
+      let afterFirstParam = dropWhile (not . isParamToken) patternTokens
+          afterParam = drop 1 afterFirstParam  -- skip the first param itself
+      in any (not . isParamToken) afterParam
+
   in
-    if paramCount > 0 && (maybe False isParamToken (listToMaybe patternTokens) || paramCount < length patternTokens)
+    if paramCount > 0 && hasKeywordAfterParam
        then Just MkMixfixInfo
               { pattern = patternTokens
               , keywords = keywordList

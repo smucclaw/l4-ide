@@ -1,0 +1,30 @@
+-- Computed Fields: Basic Test
+-- Tests the simplest case: a boolean computed field derived from a stored number field.
+-- The 's accessor should work identically for stored and computed fields.
+
+IMPORT prelude
+
+DECLARE Person HAS
+    `name`   IS A STRING
+    `age`    IS A NUMBER
+    `adult`  IS A BOOLEAN
+        MEANS `age` >= 18
+
+alice MEANS Person WITH
+    `name` IS "Alice"
+    `age`  IS 25
+
+bob MEANS Person WITH
+    `name` IS "Bob"
+    `age`  IS 12
+
+-- stored field access
+#EVAL alice's `name`    -- "Alice"
+#EVAL alice's `age`     -- 25
+
+-- computed field access: same 's syntax
+-- alice's adult = "alice is adult" = TRUE
+#EVAL alice's `adult`   -- TRUE
+
+-- bob's adult = "bob is adult" = FALSE
+#EVAL bob's `adult`     -- FALSE

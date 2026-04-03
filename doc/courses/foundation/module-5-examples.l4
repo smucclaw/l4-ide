@@ -1,0 +1,151 @@
+-- Module 5: Regulative Rules - Complete Examples
+-- All examples are validated and use natural language identifiers
+
+-- =============================================================================
+-- SECTION 1: Actor and Action Types
+-- =============================================================================
+
+-- Parties to a contract
+DECLARE `Contract Party` IS ONE OF
+    `the buyer`
+    `the seller`
+    `the landlord`
+    `the tenant`
+    `the employee`
+    `the employer`
+
+-- Actions in a sale contract
+DECLARE `Sale Action` IS ONE OF
+    `deliver the goods`
+    `pay the invoice` HAS amount IS A NUMBER
+    `inspect the goods`
+    `cancel the order`
+
+-- =============================================================================
+-- SECTION 2: Basic Obligations with MUST
+-- =============================================================================
+
+-- Simple delivery obligation
+GIVETH A DEONTIC `Contract Party` `Sale Action`
+`the delivery obligation` MEANS
+    PARTY `the seller`
+    MUST `deliver the goods`
+    WITHIN 14
+    HENCE FULFILLED
+    LEST BREACH
+
+-- =============================================================================
+-- SECTION 3: Permissions with MAY
+-- =============================================================================
+
+-- The buyer may inspect goods
+GIVETH A DEONTIC `Contract Party` `Sale Action`
+`the inspection right` MEANS
+    PARTY `the buyer`
+    MAY `inspect the goods`
+    HENCE FULFILLED
+
+-- =============================================================================
+-- SECTION 4: Chained Obligations with HENCE
+-- =============================================================================
+
+-- Complete sale contract: deliver then pay
+GIVETH A DEONTIC `Contract Party` `Sale Action`
+`the complete sale contract` MEANS
+    PARTY `the seller`
+    MUST `deliver the goods`
+    WITHIN 14
+    HENCE
+        PARTY `the buyer`
+        MUST `pay the invoice` 1000
+        WITHIN 30
+        HENCE FULFILLED
+        LEST BREACH
+    LEST
+        PARTY `the seller`
+        MAY `cancel the order`
+        HENCE BREACH
+
+-- =============================================================================
+-- SECTION 5: Alternative Consequences with LEST
+-- =============================================================================
+
+-- Late payment with penalty
+GIVETH A DEONTIC `Contract Party` `Sale Action`
+`the payment with late fee` MEANS
+    PARTY `the buyer`
+    MUST `pay the invoice` 1000
+    WITHIN 30
+    HENCE FULFILLED
+    LEST
+        PARTY `the buyer`
+        MUST `pay the invoice` 1100
+        WITHIN 14
+        HENCE FULFILLED
+        LEST BREACH
+
+-- =============================================================================
+-- SECTION 6: Real-World Example - Wedding Vows
+-- =============================================================================
+
+DECLARE Spouse IS ONE OF
+    Spouse1
+    Spouse2
+
+DECLARE Vow IS ONE OF
+    `exchange vows`
+    `love and cherish`
+    abandon
+    `be unfaithful`
+
+-- The wedding ceremony: mutual exchange of vows
+GIVETH A DEONTIC Spouse Vow
+`the wedding ceremony` MEANS
+    PARTY Spouse1
+    MUST `exchange vows`
+    WITHIN 1
+    HENCE
+        PARTY Spouse2
+        MUST `exchange vows`
+        WITHIN 1
+        HENCE FULFILLED
+        LEST BREACH BY Spouse2 BECAUSE "failed to exchange vows"
+    LEST BREACH BY Spouse1 BECAUSE "failed to exchange vows"
+
+-- Fidelity clause: prohibition
+GIVETH A DEONTIC Spouse Vow
+`the fidelity clause` MEANS
+    PARTY Spouse1
+    SHANT `be unfaithful`
+    HENCE FULFILLED
+    LEST BREACH BY Spouse1 BECAUSE "was unfaithful"
+
+-- =============================================================================
+-- SECTION 7: Tests
+-- =============================================================================
+
+-- Test the delivery obligation - fulfilled
+#TRACE `the delivery obligation` AT 0 WITH
+    PARTY `the seller` DOES `deliver the goods` AT 10
+
+-- Test the delivery obligation - breached (late delivery)
+#TRACE `the delivery obligation` AT 0 WITH
+    PARTY `the seller` DOES `deliver the goods` AT 20
+
+-- Test the complete sale - happy path
+#TRACE `the complete sale contract` AT 0 WITH
+    PARTY `the seller` DOES `deliver the goods` AT 10
+    PARTY `the buyer` DOES `pay the invoice` 1000 AT 35
+
+-- Test the late payment with penalty - pays late with fee
+#TRACE `the payment with late fee` AT 0 WITH
+    PARTY `the buyer` DOES `pay the invoice` 1100 AT 40
+
+-- Test the wedding ceremony - happy marriage
+#TRACE `the wedding ceremony` AT 0 WITH
+    PARTY Spouse1 DOES `exchange vows` AT 0
+    PARTY Spouse2 DOES `exchange vows` AT 0
+
+-- Test the fidelity clause - breach
+#TRACE `the fidelity clause` AT 0 WITH
+    PARTY Spouse1 DOES `be unfaithful` AT 100

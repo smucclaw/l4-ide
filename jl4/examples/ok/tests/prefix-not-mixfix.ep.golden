@@ -1,0 +1,58 @@
+§ `Prefix Functions With Redundant Parameter Names`
+
+-- Regression test: Functions defined with GIVEN parameters should remain
+-- prefix-style even if the parameter name is repeated after the function
+-- name on the MEANS line. They should NOT be treated as mixfix.
+--
+-- This allows such functions to be passed to higher-order functions
+-- without needing parentheses.
+
+DECLARE Person HAS
+    `name` IS A STRING
+    `age`  IS A NUMBER
+
+-- Define a predicate using the "redundant param" style.
+-- The `person` after the function name should NOT make this mixfix.
+GIVEN person IS A Person
+GIVETH A BOOLEAN
+`is adult` person MEANS person's age >= 18
+
+-- Same function without the redundant param (for comparison).
+GIVEN person IS A Person
+GIVETH A BOOLEAN
+`is adult clean` MEANS person's age >= 18
+
+-- KEY TEST: Both definitions should allow the function to be passed
+-- as an argument to another function. Previously, `is adult` would
+-- be incorrectly treated as mixfix.
+GIVEN predicate IS A FUNCTION FROM Person TO BOOLEAN
+      person IS A Person
+GIVETH A BOOLEAN
+`apply predicate` MEANS predicate person
+
+-- Both styles should work when passed as function arguments
+GIVEN person IS A Person
+GIVETH A BOOLEAN
+`test adult` MEANS `apply predicate` OF `is adult`, person
+
+GIVEN person IS A Person
+GIVETH A BOOLEAN
+`test adult clean` MEANS `apply predicate` OF `is adult clean`, person
+
+-- Additional test: multiple redundant params should also work
+GIVEN a IS A NUMBER
+      b IS A NUMBER
+GIVETH A NUMBER
+`add numbers` a b MEANS a + b
+
+-- Two-arg functions should also be passable
+GIVEN f IS A FUNCTION FROM NUMBER AND NUMBER TO NUMBER
+      x IS A NUMBER
+      y IS A NUMBER
+GIVETH A NUMBER
+`apply binary` MEANS f x y
+
+GIVEN x IS A NUMBER
+      y IS A NUMBER
+GIVETH A NUMBER
+`test add` MEANS `apply binary` OF `add numbers`, x, y

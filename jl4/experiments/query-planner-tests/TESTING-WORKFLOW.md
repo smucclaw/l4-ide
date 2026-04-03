@@ -162,7 +162,7 @@ curl http://localhost:8001/functions/$FUNC_ID | jq '.'
 ```bash
 curl -X POST "http://localhost:8001/functions/$FUNC_ID/evaluation" \
   -H "Content-Type: application/json" \
-  -d '{"fnArguments": {"a": true, "b": false}}'
+  -d '{"arguments": {"a": true, "b": false}}'
 # Verify the actual evaluation result
 ```
 

@@ -53,8 +53,12 @@ buildCompletionItem raw = \ case
       { CompletionItem._kind = Just $ case (term, ty) of
          (Constructor, _) -> CompletionItemKind_Constructor
          (Selector, _) -> CompletionItemKind_Field
+         (ComputedSelector, _) -> CompletionItemKind_Field
          (_, unrollForall -> Fun {}) -> CompletionItemKind_Function
          _ -> CompletionItemKind_Constant
+      , CompletionItem._detail = case term of
+         ComputedSelector -> Just "(computed)"
+         _ -> Nothing
       }
   KnownType kind _args _tydec ->
     pure (defaultTopDeclCompletionItem (typeFunction kind))

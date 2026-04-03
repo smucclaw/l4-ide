@@ -4,7 +4,7 @@
 }:
 pkgs.mkShell {
   buildInputs = [
-    pkgs.haskell.compiler.ghc98
+    pkgs.haskell.compiler.ghc910
     pkgs.cabal-install
     pkgs.ghciwatch
     pkgs.zlib

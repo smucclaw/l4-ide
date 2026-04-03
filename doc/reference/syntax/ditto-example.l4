@@ -1,0 +1,12 @@
+-- Example: Ditto (^) syntax
+-- Copy tokens from previous line (one ^ per token)
+
+eligible MEANS TRUE
+
+john  MEANS eligible
+mary  ^     ^        -- Copies "MEANS eligible"
+alice ^     ^        -- Also copies "MEANS eligible"
+
+#EVAL john
+#EVAL mary
+#EVAL alice

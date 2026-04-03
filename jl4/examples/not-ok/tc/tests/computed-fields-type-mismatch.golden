@@ -1,0 +1,17 @@
+Parsing successful
+Typechecking successful
+Info | updateFileDiagnostics published different from new diagnostics - file diagnostics:
+File: computed-fields-type-mismatch.l4
+  Hidden: no
+  Range: 6:15-6:22
+  Source: check
+  Severity: DiagnosticSeverity_Error
+  Code: <none>
+  Message:
+    The type of this definition must match its type signature at computed-fields-type-mismatch.l4:5:12-21, namely
+
+      BOOLEAN
+
+    but is here of type
+
+      NUMBER

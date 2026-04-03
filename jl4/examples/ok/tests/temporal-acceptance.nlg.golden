@@ -4,4 +4,3 @@
 `WHEN LAST` with `Date` with 10, 1 and 2024 and `weekend?`
 `WHEN NEXT` with `Date` with 10, 1 and 2024 and `weekend?`
 `VALUE AT` with `Date` with 4, 7 and 1776 and given `d` then `d`
-`EVAL RETROACTIVE TO` with `DATE_SERIAL` with `Date` with 25, 12 and 2000 and `TODAY`

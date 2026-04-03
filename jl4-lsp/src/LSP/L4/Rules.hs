@@ -10,6 +10,7 @@ import L4.Citations
 import qualified L4.Evaluate.ValueLazy as EvaluateLazy
 import qualified L4.EvaluateLazy as EvaluateLazy
 import qualified L4.ExactPrint as ExactPrint
+import L4.FindReferences (ReferenceMapping(..), singletonReferenceMapping)
 import L4.Lexer (PError, PosToken)
 import qualified L4.Lexer as Lexer
 import qualified L4.Parser as Parser
@@ -19,22 +20,19 @@ import qualified L4.Print as Print
 import L4.Syntax
 import L4.TypeCheck (CheckErrorWithContext (..), CheckResult (..), Substitution, applyFinalSubstitution, toResolved)
 import qualified L4.TypeCheck as TypeCheck
+import qualified L4.Lint.AndOrDepth as Lint
 
 import Control.Applicative
 import Control.Monad.Trans.Maybe
 import Data.Hashable (Hashable)
 import Data.Monoid (Ap (..))
 import qualified Data.Map.Strict as Map
-import Data.Map.Monoidal (MonoidalMap)
-import qualified Data.Map.Monoidal as MonoidalMap
 import qualified Data.Maybe as Maybe
 import qualified Base.Text as Text
 import qualified Data.Text.Mixed.Rope as Rope
 import System.FilePath
 import L4.Utils.IntervalMap (IntervalMap)
-import qualified L4.Utils.IntervalMap as IVMap
 import Development.IDE.Graph
-import GHC.Generics (Generically (..))
 import LSP.Core.PositionMapping
 import LSP.Core.RuleTypes
 import LSP.Core.Shake hiding (Log)
@@ -45,10 +43,10 @@ import LSP.Logger
 import LSP.SemanticTokens
 import Language.LSP.Protocol.Types
 import qualified Language.LSP.Protocol.Types as LSP
-import Data.Either (partitionEithers)
+
 import qualified Data.List as List
 import System.Directory
-import System.Environment (getExecutablePath)
+import System.Environment (getExecutablePath, lookupEnv)
 import qualified Paths_jl4_core
 import qualified L4.Utils.IntervalMap as IV
 import UnliftIO
@@ -95,6 +93,11 @@ data GetImports = GetImports
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Hashable)
 
+type instance RuleResult GetMixfixRegistry = Parser.MixfixHintRegistry
+data GetMixfixRegistry = GetMixfixRegistry
+  deriving stock (Generic, Show, Eq)
+  deriving anyclass (NFData, Hashable)
+
 type instance RuleResult GetTypeCheckDependencies = [(ImportResult, TypeCheckResult)]
 data GetTypeCheckDependencies = GetTypeCheckDependencies
   deriving stock (Generic, Show, Eq)
@@ -124,7 +127,9 @@ data TypeCheckResult = TypeCheckResult
   , environment :: TypeCheck.Environment
   , entityInfo :: TypeCheck.EntityInfo
   , infos :: [TypeCheck.CheckErrorWithContext]
+  , errors :: [TypeCheck.CheckErrorWithContext]  -- ^ Actual errors (OutOfScopeError etc.) for implicit ASSUME extraction
   , dependencies :: [TypeCheckResult]
+  , mixfixRegistry :: TypeCheck.MixfixRegistry
   }
   deriving stock (Generic)
 
@@ -141,7 +146,9 @@ instance NFData TypeCheckResult where
     `seq` rnf environment
     `seq` rnf entityInfo
     `seq` rnf infos
+    `seq` rnf errors
     `seq` rnf dependencies
+    `seq` rnf mixfixRegistry
 
 type instance RuleResult EvaluateLazy = [EvaluateLazy.EvalDirectiveResult]
 data EvaluateLazy = EvaluateLazy
@@ -200,28 +207,8 @@ data ExactPrint = ExactPrint
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Hashable)
 
-data ReferenceMapping =
-  ReferenceMapping
-  { actualToOriginal :: IntervalMap SrcPos Unique
-  -- ^ getting the original occurence of a name, based on its reference's source range
-  , originalToActual :: MonoidalMap Unique [SrcRange]
-  -- ^ getting the source range of all references of an original definition
-  }
-  deriving stock Generic
-  deriving anyclass NFData
-  deriving (Semigroup, Monoid) via Generically ReferenceMapping
-
-singletonReferenceMapping :: Unique -> SrcRange -> ReferenceMapping
-singletonReferenceMapping originalName actualRange
-  = ReferenceMapping
-  { actualToOriginal = IV.singleton (IV.srcRangeToInterval actualRange) originalName
-  , originalToActual = MonoidalMap.singleton originalName [actualRange]
-  }
-
-lookupReference :: SrcPos -> ReferenceMapping -> [SrcRange]
-lookupReference pos mapping = do
-  (_, n) <- IVMap.search pos mapping.actualToOriginal
-  Maybe.fromMaybe [] $ MonoidalMap.lookup n mapping.originalToActual
+-- Note: ReferenceMapping, singletonReferenceMapping, and lookupReference
+-- are imported from L4.FindReferences (shared with WASM mode)
 
 data Log
   = ShakeLog Shake.Log
@@ -270,21 +257,119 @@ jl4Rules evalConfig rootDirectory recorder = do
           Right ts ->
             pure ([], Just (ts, contents))
 
-  define shakeRecorder $ \GetParsedAst uri -> do
+  -- | GetMixfixRegistry collects mixfix hints from the current module AND all imports.
+  -- This enables cross-module mixfix resolution.
+  define shakeRecorder $ \GetMixfixRegistry uri -> do
     (tokens, contents) <- use_ GetLexTokens uri
     case Parser.execProgramParserForTokens uri contents tokens of
+      Left _errs ->
+        -- If we can't parse at all, return empty registry
+        pure ([], Just Parser.emptyMixfixHintRegistry)
+      Right (firstProg, _) -> do
+        -- Get local mixfix hints from this module
+        let localHints = Parser.buildMixfixHintRegistry firstProg
+
+        -- Extract imports from first-pass parse (import syntax doesn't need mixfix)
+        let extractImport :: TopDecl Name -> [Name]
+            extractImport = \case
+              Import _ (MkImport _ n _) -> [n]
+              _ -> []
+            importNames = foldTopDecls extractImport firstProg
+
+        -- Resolve import URIs using the same logic as GetImports
+        let resolveImportUri :: Name -> Action (Maybe NormalizedUri)
+            resolveImportUri n = do
+              let modName = takeBaseName $ Text.unpack $ rawNameToText $ rawName n
+
+              -- Generate candidate VFS URIs
+              let projectUri = toNormalizedUri $ Uri $ Text.pack $ "project:/" <> modName <.> "l4"
+                  relativeUri = do
+                    nfp <- uriToNormalizedFilePath uri
+                    let dir = takeDirectory $ fromNormalizedFilePath nfp
+                    pure $ toNormalizedUri $ filePathToUri $ dir </> modName <.> "l4"
+                  rootUri = toNormalizedUri $ filePathToUri $ rootDirectory </> modName <.> "l4"
+                  vfsUris = [projectUri] <> Maybe.maybeToList relativeUri <> [rootUri]
+
+              -- Check VFS first
+              let checkVfs candidateUri = do
+                    mContent <- use GetFileContents candidateUri
+                    pure $ case mContent of
+                      Just (_, Just _rope) -> Just candidateUri
+                      _ -> Nothing
+
+              vfsResult <- runMaybeT $ asum $ map (MaybeT . checkVfs) vfsUris
+
+              case vfsResult of
+                Just vfsUri -> pure $ Just vfsUri
+                Nothing -> do
+                  -- Fall back to filesystem
+                  let relPath = do
+                        dir <- takeDirectory . fromNormalizedFilePath <$> uriToNormalizedFilePath uri
+                        pure $ dir </> modName <.> "l4"
+                      rootPath = rootDirectory </> modName <.> "l4"
+
+                  -- Look for libraries in multiple locations, in order of priority:
+                  -- 1. JL4_LIBRARY_PATH environment variable (user override)
+                  -- 2. XDG data directory (~/.local/share/jl4/libraries/) for cabal install
+                  -- 3. Bundled with VSCode extension (../../libraries from executable)
+                  -- 4. Cabal's getDataDir (for cabal run during development)
+                  builtinPaths <- liftIO $ do
+                    -- 1. Check JL4_LIBRARY_PATH environment variable
+                    mEnvPath <- lookupEnv "JL4_LIBRARY_PATH"
+                    let envPaths = case mEnvPath of
+                          Just p  -> [p </> modName <.> "l4"]
+                          Nothing -> []
+
+                    -- 2. XDG data directory (~/.local/share/jl4/libraries/)
+                    xdgDataDir <- getXdgDirectory XdgData "jl4"
+                    let xdgPath = xdgDataDir </> "libraries" </> modName <.> "l4"
+
+                    -- 3. VSCode extension bundled libraries
+                    exePath <- getExecutablePath
+                    let exeDir = takeDirectory exePath
+                        extensionRoot = exeDir </> ".." </> ".."
+                        bundledPath = extensionRoot </> "libraries" </> modName <.> "l4"
+
+                    -- 4. Cabal's getDataDir (for development / cabal run)
+                    dataDir <- Paths_jl4_core.getDataDir
+                    let cabalPath = dataDir </> "libraries" </> modName <.> "l4"
+
+                    pure $ envPaths <> [xdgPath, bundledPath, cabalPath]
+
+                  let paths = catMaybes [Just rootPath, relPath] <> builtinPaths
+
+                  existingPath <- runMaybeT $ asum $
+                    flip map paths $ \pth -> do
+                      exists <- liftIO (doesFileExist pth)
+                      guard exists
+                      pure pth
+
+                  pure $ fmap (toNormalizedUri . filePathToUri) existingPath
+
+        -- Resolve all import URIs
+        resolvedUris <- catMaybes <$> traverse resolveImportUri importNames
+
+        -- Recursively get mixfix hints from imported modules
+        importedHints <- mconcat . catMaybes <$> uses GetMixfixRegistry resolvedUris
+
+        -- Combine local + imported hints
+        let combinedHints = localHints <> importedHints
+        pure ([], Just combinedHints)
+
+  define shakeRecorder $ \GetParsedAst uri -> do
+    (tokens, contents) <- use_ GetLexTokens uri
+    -- Get combined mixfix hints (local + all imports)
+    combinedHints <- use_ GetMixfixRegistry uri
+    -- Parse with full mixfix knowledge
+    case Parser.execProgramParserForTokensWithHints combinedHints uri contents tokens of
       Left errs -> do
         let diags = toList $ fmap mkParseErrorDiagnostic errs
         pure (fmap (mkSimpleFileDiagnostic uri) diags , Nothing)
-      Right (firstProg, _) -> do
-        let hints = Parser.buildMixfixHintRegistry firstProg
-        case Parser.execProgramParserForTokensWithHints hints uri contents tokens of
-          Left errs -> do
-            let diags = toList $ fmap mkParseErrorDiagnostic errs
-            pure (fmap (mkSimpleFileDiagnostic uri) diags , Nothing)
-          Right (finalProg, warns) -> do
-            let diags = fmap mkNlgWarning warns
-            pure (fmap (mkSimpleFileDiagnostic uri) diags, Just finalProg)
+      Right (finalProg, warns) -> do
+        let nlgDiags = fmap mkNlgWarning warns
+            lintDiags = fmap mkAndOrLintWarning $ Lint.checkAndOrDepth finalProg
+            allDiags = nlgDiags <> lintDiags
+        pure (fmap (mkSimpleFileDiagnostic uri) allDiags, Just finalProg)
 
   define shakeRecorder $ \GetImports uri -> do
     let -- NOTE: we curently don't allow any relative or absolute file paths, just bare module names
@@ -350,25 +435,38 @@ jl4Rules evalConfig rootDirectory recorder = do
 
                 let rootPath = rootDirectory </> modName <.> "l4"
 
-                -- Look for bundled libraries relative to the executable first
-                -- This handles the VSCode extension case where libraries are bundled
-                -- alongside the binary. Fall back to Cabal's data-dir for development.
+                -- Look for libraries in multiple locations, in order of priority:
+                -- 1. JL4_LIBRARY_PATH environment variable (user override)
+                -- 2. XDG data directory (~/.local/share/jl4/libraries/) for cabal install
+                -- 3. Bundled with VSCode extension (../../libraries from executable)
+                -- 4. Cabal's getDataDir (for cabal run during development)
                 builtinPaths <- liftIO $ do
-                  exePath <- getExecutablePath
-                  let exeDir = takeDirectory exePath
+                  -- 1. Check JL4_LIBRARY_PATH environment variable
+                  mEnvPath <- lookupEnv "JL4_LIBRARY_PATH"
+                  let envPaths = case mEnvPath of
+                        Just p  -> [p </> modName <.> "l4"]
+                        Nothing -> []
+
+                  -- 2. Cabal's getDataDir (source tree during development, install prefix when installed)
+                  dataDir <- Paths_jl4_core.getDataDir
+                  let cabalPath = dataDir </> "libraries" </> modName <.> "l4"
+
+                  -- 3. XDG data directory (~/.local/share/jl4/libraries/)
+                  xdgDataDir <- getXdgDirectory XdgData "jl4"
+                  let xdgPath = xdgDataDir </> "libraries" </> modName <.> "l4"
+
+                  -- 4. VSCode extension bundled libraries
                   -- The VSCode extension structure is:
                   --   extension/
                   --   ├── bin/<platform>/jl4-lsp[.exe]  <- executable is here
                   --   └── libraries/*.l4                <- libraries are here
                   -- So we need to go up TWO levels (../../) from the executable.
+                  exePath <- getExecutablePath
+                  let exeDir = takeDirectory exePath
                   let extensionRoot = exeDir </> ".." </> ".."
-                  -- Try:
-                  -- 1. ../../libraries (for bundled VSCode extension)
-                  -- 2. Cabal's getDataDir (for development / cabal install)
                   let bundledPath = extensionRoot </> "libraries" </> modName <.> "l4"
-                  dataDir <- Paths_jl4_core.getDataDir
-                  let cabalPath = dataDir </> "libraries" </> modName <.> "l4"
-                  pure [bundledPath, cabalPath]
+
+                  pure $ envPaths <> [cabalPath, xdgPath, bundledPath]
 
                 pure $ [Just rootPath, relPath] <> map Just builtinPaths
 
@@ -459,7 +557,9 @@ jl4Rules evalConfig rootDirectory recorder = do
             , declTypeSigs = Map.empty
             , declareDeclarations = Map.empty
             , assumeDeclarations = Map.empty
-            , mixfixRegistry = Map.empty
+            , mixfixRegistry = Map.unionWith (<>) cEnv.mixfixRegistry tcRes.mixfixRegistry
+            -- ^ Merge mixfix registries from imported modules so cross-module mixfix calls work
+            , computedFields = Map.empty
             , sectionStack = []
             }
         -- NOTE: we don't want to leak the inference variables from the substitution
@@ -476,11 +576,13 @@ jl4Rules evalConfig rootDirectory recorder = do
         , entityInfo = applyFinalSubstitution result.substitution uri result.entityInfo
         , success = null errors
         , infos
+        , errors  -- Include actual errors (OutOfScopeError etc.) for implicit ASSUME extraction
         , infoMap = result.infoMap
         , nlgMap = result.nlgMap
         , scopeMap = result.scopeMap
         , descMap = result.descMap
         , dependencies = dependencies <> foldMap (.dependencies) dependencies
+        , mixfixRegistry = result.mixfixRegistry
         }
       )
 
@@ -572,68 +674,29 @@ jl4Rules evalConfig rootDirectory recorder = do
 
   define shakeRecorder $ \GetRelSemanticTokens f -> do
     tokens <- use_ GetSemanticTokens f
-    let semanticTokens = relativizeTokens $ fmap toSemanticTokenAbsolute tokens
+    -- Sort tokens by position before relativizing. The type-checked semantic tokens
+    -- may be returned in a different order than their source positions, which breaks
+    -- relativizeTokens (it computes relative positions assuming sorted input).
+    let sortedTokens = List.sortOn (.start) tokens
+    let semanticTokens = relativizeTokens $ fmap toSemanticTokenAbsolute sortedTokens
     case encodeTokens defaultSemanticTokensLegend semanticTokens of
       Left err -> do
         logWith recorder Error $ LogRelSemanticTokenError err
         pure ([], Nothing)
       Right relSemTokens ->
           pure ([], Just relSemTokens)
-  define shakeRecorder $ \ResolveReferenceAnnotations uri -> case uriToNormalizedFilePath uri of
-    -- TODO: this should load citations from a "central place" as long as we don't
-    -- support citations directly in the file
-    Nothing -> pure ([], Nothing)
-    Just f -> do
-      ownPath <- normalizedFilePathToOsPath f
+  define shakeRecorder $ \ResolveReferenceAnnotations uri -> do
       (tokens, _) <- use_ GetLexTokens uri
 
-      -- obtain a valid relative file path from the ref-src annos and
-      -- parse the file contents from csv into intervalmaps from the sources of
-      -- the annos to the reference they represent
-      refSrcs <- liftIO
-        $ traverse
-          (\n -> runExceptT do
-             refSrc <- withRefSrc ownPath n
-             let refMap = withRefMap n
-             pure (refSrc <> refMap)
-          )
-          tokens
+      -- Collect @ref-map annotations from tokens
+      -- Note: @ref-src (CSV file loading) has been removed for WASM compatibility
+      let references = foldMap withRefMap tokens
 
-      -- report any errors encountered while parsing any of the ref-src annos,
-      -- annotate them on the ref-src annos they originated from and finally
-      -- union all interval maps
-      let (errs, references) = partitionEithers refSrcs
+          mps = if null references
+            then Nothing
+            else Just $ mkReferences tokens references
 
-          mkReferencesFromNonempty v
-            | null v = Nothing
-            | otherwise = Just $ mkReferences tokens v
-
-          mps = case Maybe.mapMaybe mkReferencesFromNonempty references of
-            [] -> Nothing
-            xs -> Just $ mconcat xs
-
-          diags = map (uncurry mkDiagnostic) errs
-
-          mkDiagnostic loc err =
-            FileDiagnostic
-              { fdLspDiagnostic =
-                Diagnostic
-                  { _source = Just "jl4"
-                  , _severity = Just DiagnosticSeverity_Warning
-                  , _range = srcRangeToLspRange $ Just loc
-                  , _message = Text.pack err
-                  , _relatedInformation = Nothing
-                  , _data_ = Nothing
-                  , _codeDescription = Nothing
-                  , _tags = Nothing
-                  , _code = Nothing
-                  }
-              , fdFilePath = uri
-              , fdShouldShowDiagnostic = ShowDiag
-              , fdOriginalSource = NoMessage
-              }
-
-      pure (diags, mps)
+      pure ([], mps)
 
   define shakeRecorder $ \GetReferences uri -> do
     tcRes <- use_ TypeCheck uri
@@ -691,6 +754,20 @@ jl4Rules evalConfig rootDirectory recorder = do
           , _data_ = Nothing
           }
 
+    mkAndOrLintWarning :: Lint.AndOrWarning -> Diagnostic
+    mkAndOrLintWarning warn =
+        Diagnostic
+          { _range = srcRangeToLspRange warn.warningRange
+          , _severity = Just LSP.DiagnosticSeverity_Warning
+          , _code = Nothing
+          , _codeDescription = Nothing
+          , _source = Just "linter"
+          , _message = Text.pack $ "AND and OR operators appear at the same indentation level (column " <> show warn.conflictingColumn <> "). This may indicate a precedence error - please use indentation to clarify precedence; in a pinch, parentheses may also be used."
+          , _tags = Nothing
+          , _relatedInformation = Nothing
+          , _data_ = Nothing
+          }
+
     mkParseErrorDiagnostic :: PError -> Diagnostic
     mkParseErrorDiagnostic parseError = mkSimpleDiagnostic parseError.origin parseError.message (Just parseError.range)
 
@@ -714,8 +791,9 @@ jl4Rules evalConfig rootDirectory recorder = do
         { _range = srcRangeToLspRange range
         , _severity =
             case res of
-              EvaluateLazy.Assertion False -> Just LSP.DiagnosticSeverity_Error
-              _                            -> Just LSP.DiagnosticSeverity_Information
+              EvaluateLazy.Assertion False  -> Just LSP.DiagnosticSeverity_Error
+              EvaluateLazy.Reduction (Left _) -> Just LSP.DiagnosticSeverity_Error
+              _                             -> Just LSP.DiagnosticSeverity_Information
         , _code = Nothing
         , _codeDescription = Nothing
         , _source = Just "eval"

@@ -1,0 +1,81 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+actus-library-test.l4:18:1-22:
+  1
+actus-library-test.l4:19:1-22:
+  -1
+actus-library-test.l4:25:1-26:
+  365
+actus-library-test.l4:26:1-26:
+  360
+actus-library-test.l4:32:1-17:
+  "USD"
+actus-library-test.l4:33:1-17:
+  "EUR"
+actus-library-test.l4:41:1-33:
+  TRUE
+actus-library-test.l4:42:1-33:
+  FALSE
+actus-library-test.l4:43:1-33:
+  FALSE
+actus-library-test.l4:49:1-41:
+  FALSE
+actus-library-test.l4:50:1-41:
+  TRUE
+actus-library-test.l4:57:1-20:
+  "IED"
+actus-library-test.l4:58:1-19:
+  "IP"
+actus-library-test.l4:59:1-19:
+  "PR"
+actus-library-test.l4:66:1-21:
+  1
+actus-library-test.l4:67:1-20:
+  8
+actus-library-test.l4:68:1-20:
+  19
+actus-library-test.l4:74:1-32:
+  0.4986301369863014
+actus-library-test.l4:80:1-32:
+  0.5055555555555555
+actus-library-test.l4:91:1-30:
+  2493.150684931507
+actus-library-test.l4:99:1-26:
+  TRUE
+actus-library-test.l4:100:1-26:
+  FALSE
+actus-library-test.l4:101:1-26:
+  TRUE
+actus-library-test.l4:102:1-26:
+  FALSE
+actus-library-test.l4:108:1-22:
+  29
+actus-library-test.l4:109:1-22:
+  28
+actus-library-test.l4:115:1-31:
+  1
+actus-library-test.l4:116:1-35:
+  Months
+actus-library-test.l4:117:1-30:
+  1
+actus-library-test.l4:118:1-34:
+  Years
+actus-library-test.l4:124:1-32:
+  1000
+actus-library-test.l4:125:1-32:
+  500
+actus-library-test.l4:135:1-32:
+  DATE OF 28, 2, 2023
+actus-library-test.l4:136:1-32:
+  DATE OF 29, 2, 2024
+actus-library-test.l4:142:1-32:
+  DATE OF 28, 2, 2023
+actus-library-test.l4:143:1-32:
+  DATE OF 29, 2, 2024
+actus-library-test.l4:148:1-27:
+  DATE OF 30, 4, 2024
+actus-library-test.l4:153:1-27:
+  DATE OF 15, 2, 2024
+actus-library-test.l4:158:1-33:
+  LIST DATE OF 31, 1, 2024, DATE OF 29, 2, 2024, DATE OF 31, 3, 2024

@@ -10,6 +10,7 @@ import type { LadderEnv } from '$lib/ladder-env.js'
 import {
   isTrueExprLirNode,
   isFalseExprLirNode,
+  isInertExprLirNode,
   isUBoolVarLirNode,
   isNotStartLirNode,
   isSinkLirNode,
@@ -24,6 +25,7 @@ import {
   type LadderSFNode,
   trueExprNodeType,
   falseExprNodeType,
+  inertExprNodeType,
   uBoolVarNodeType,
   notStartNodeType,
   notEndNodeType,
@@ -120,6 +122,13 @@ export function ladderLirNodeToSfNode(
       return {
         ...defaults,
         type: falseExprNodeType,
+        data: defaultData,
+      }
+    })
+    .with(P.when(isInertExprLirNode), () => {
+      return {
+        ...defaults,
+        type: inertExprNodeType,
         data: defaultData,
       }
     })

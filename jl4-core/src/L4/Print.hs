@@ -1,12 +1,19 @@
 module L4.Print where
 
 import Base
+import qualified Base.Map as Map
 import qualified Base.Text as Text
 import L4.Evaluate.ValueLazy as Lazy
 import L4.Syntax
+import qualified L4.TypeCheck.Types as TC
 
 import Data.Char
-import Data.Time (toGregorian)
+import Data.Time (UTCTime, toGregorian)
+import Data.Time.LocalTime (TimeOfDay(..))
+import qualified Data.Time.Format as TimeFormat
+import qualified Data.Time.Zones as TZ
+import Control.Exception (SomeException, catch)
+import System.IO.Unsafe (unsafePerformIO)
 import Prettyprinter
 import Prettyprinter.Render.Text
 import qualified Data.List.NonEmpty as NE
@@ -22,6 +29,35 @@ prettyLayout a = docText $ printWithLayout a
 
 docText :: Doc ann -> Text
 docText = renderStrict . layoutPretty (LayoutOptions Unbounded)
+
+-- | A map from constructor 'Unique' to its field names (in order).
+-- Used for pretty-printing constructor values with named fields.
+type ConstructorFieldNames = Map Unique [Text]
+
+-- | Build a 'ConstructorFieldNames' map from type-checker 'EntityInfo'.
+-- For each constructor, extracts the parameter names from its function type.
+extractConstructorFieldNames :: TC.EntityInfo -> ConstructorFieldNames
+extractConstructorFieldNames ei = Map.fromList
+  [ (u, names)
+  | (u, (_name, TC.KnownTerm ty Constructor)) <- Map.toList ei
+  , let names = fieldNamesFromType ty
+  , not (null names)
+  ]
+  where
+    fieldNamesFromType :: Type' Resolved -> [Text]
+    fieldNamesFromType (Fun _ params _) = mapMaybe paramName params
+    fieldNamesFromType (Forall _ _ inner) = fieldNamesFromType inner
+    fieldNamesFromType _ = []
+
+    paramName :: OptionallyNamedType Resolved -> Maybe Text
+    paramName (MkOptionallyNamedType _ (Just n) _) = Just (resolvedToText n)
+    paramName _ = Nothing
+
+    resolvedToText :: Resolved -> Text
+    resolvedToText r = case rawName (getActual r) of
+      NormalName t -> t
+      QualifiedName _ t -> t
+      PreDef t -> t
 
 -- | Hack to get the lines of a document as 'Doc'. Used for the trace printer
 -- and in situations where we need to prefix all the lines with something else.
@@ -85,7 +121,10 @@ instance LayoutPrinterWithName a => LayoutPrinter (OptionallyTypedName a) where
 
 instance LayoutPrinterWithName a => LayoutPrinter (TypedName a) where
   printWithLayout = \ case
-    MkTypedName _ a ty -> printWithLayout a <+> "IS" <+> printWithLayout ty
+    MkTypedName _ a ty Nothing -> printWithLayout a <+> "IS" <+> printWithLayout ty
+    MkTypedName _ a ty (Just meansExpr) ->
+      printWithLayout a <+> "IS" <+> printWithLayout ty <> line <>
+      indent 4 ("MEANS" <+> printWithLayout meansExpr)
 
 instance LayoutPrinterWithName a => LayoutPrinter (TypeSig a) where
   printWithLayout = \ case
@@ -228,6 +267,7 @@ instance (LayoutPrinterWithName a, n ~ Int) => LayoutPrinter (n, TopDecl a) wher
     (_, Directive _ t) -> printWithLayout t
     (_, Import    _ t) -> printWithLayout t
     (i, Section   _ t) -> printWithLayout (i, t)
+    (_, Timezone  _ _) -> mempty  -- TIMEZONE IS declarations are not pretty-printed
 
 instance LayoutPrinterWithName a => LayoutPrinter (Expr a) where
   printWithLayout :: LayoutPrinter a => Expr a -> Doc ann
@@ -303,7 +343,7 @@ instance LayoutPrinterWithName a => LayoutPrinter (Expr a) where
         [ "BRANCH" ]
         <> map (\(MkGuardedExpr _ a b) -> "IF" <+> printWithLayout a <+> "THEN" <+> printWithLayout b) conds
         <> [ "OTHERWISE" <+> printWithLayout o ]
-    Regulative _ (MkObligation _ p a t f l) -> prettyObligation p a t f l
+    Regulative _ (MkDeonton _ p a t f l) -> prettyObligation p a t f l
     Consider   _ expr branches ->
       "CONSIDER" <+> printWithLayout expr <+> hang 2 (vsep $ punctuate comma (fmap printWithLayout branches))
 
@@ -454,6 +494,11 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
     Lazy.ValDate day               ->
       let (y, m, d) = toGregorian day
       in "DATE OF" <+> hsep [pretty d <> ",", pretty m <> ",", pretty y]
+    Lazy.ValTime tod               ->
+      let h = todHour tod; mi = todMin tod; s = todSec tod
+      in "TIME OF" <+> hsep [pretty h <> ",", pretty mi <> ",", pretty (realToFrac s :: Double)]
+    Lazy.ValDateTime utc tzName    ->
+      pretty (formatDateTimeIso utc tzName)
     Lazy.ValNil                    -> "EMPTY"
     Lazy.ValCons v1 v2             -> "(" <> printWithLayout v1 <> " FOLLOWED BY " <> printWithLayout v2 <> ")" -- TODO: parens
     Lazy.ValClosure{}              -> "<function>"
@@ -470,7 +515,7 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
       vals@(_:_) -> space <> "OF" <+> hsep (punctuate comma (fmap parensIfNeeded vals))
     Lazy.ValEnvironment _env       -> "<environment>"
     Lazy.ValBreached reason        -> vcat
-      [ "PROVISION BREACHED:"
+      [ "DEONTIC BREACHED:"
       , indent 2 $ printWithLayout reason
       ]
     Lazy.ValObligation _env p a t f l -> case t of
@@ -486,12 +531,73 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
     Lazy.ValNumber{}               -> printWithLayout v
     Lazy.ValString{}               -> printWithLayout v
     Lazy.ValDate{}                 -> printWithLayout v
+    Lazy.ValTime{}                 -> printWithLayout v
+    Lazy.ValDateTime{}             -> printWithLayout v
     Lazy.ValNil                    -> "EMPTY"
     Lazy.ValClosure{}              -> printWithLayout v
     Lazy.ValUnappliedConstructor{} -> printWithLayout v
     Lazy.ValAssumed{}              -> printWithLayout v
     Lazy.ValConstructor r []       -> printWithLayout r
     _ -> surround (printWithLayout v) "(" ")"
+
+-- | Pretty-print an 'NF' value, using named fields (WITH / IS syntax) for
+-- constructors whose field names are provided in the map.
+prettyNFWithConstructorFields :: ConstructorFieldNames -> Lazy.NF -> Doc ann
+prettyNFWithConstructorFields fields = goNF
+  where
+    goNF :: Lazy.NF -> Doc ann
+    goNF (Lazy.MkNF v)  = goVal v
+    goNF Lazy.Omitted    = "…"
+
+    goVal :: Lazy.Value Lazy.NF -> Doc ann
+    goVal = \case
+      Lazy.ValConstructor r vs
+        | Just names <- Map.lookup (getUnique r) fields
+        , length names == length vs
+        , not (null vs)
+        -> printWithLayout r <+> "WITH"
+           <+> hsep (punctuate comma (zipWith fieldPair names vs))
+      -- For everything else, delegate to the standard LayoutPrinter,
+      -- but recurse into nested NF values with field-name awareness.
+      Lazy.ValCons hd tl ->
+        "LIST" <+> goList hd tl
+      Lazy.ValConstructor r vs -> printWithLayout r <> case vs of
+        [] -> mempty
+        vals@(_:_) -> space <> "OF" <+> hsep (punctuate comma (fmap goNFParens vals))
+      other -> printWithLayout other
+
+    fieldPair :: Text -> Lazy.NF -> Doc ann
+    fieldPair name val = pretty (quoteIfNeeded name) <+> "IS" <+> goNF val
+
+    goList :: Lazy.NF -> Lazy.NF -> Doc ann
+    goList v1 (Lazy.MkNF Lazy.ValNil)        = goNF v1
+    goList v1 (Lazy.MkNF (Lazy.ValCons v2 v3)) = goNF v1 <> comma <+> goList v2 v3
+    goList Lazy.Omitted Lazy.Omitted         = "..."
+    goList v1 Lazy.Omitted                   = goNF v1 <> comma <+> "..."
+    goList v1 v                              = goNF v1 <> comma <+> goNF v
+
+    goNFParens :: Lazy.NF -> Doc ann
+    goNFParens nf = case nf of
+      Lazy.MkNF v -> goValParens v
+      Lazy.Omitted -> "…"
+
+    goValParens :: Lazy.Value Lazy.NF -> Doc ann
+    goValParens v = case v of
+      Lazy.ValNumber{}               -> goVal v
+      Lazy.ValString{}               -> goVal v
+      Lazy.ValDate{}                 -> goVal v
+      Lazy.ValTime{}                 -> goVal v
+      Lazy.ValDateTime{}             -> goVal v
+      Lazy.ValNil                    -> "EMPTY"
+      Lazy.ValClosure{}              -> goVal v
+      Lazy.ValUnappliedConstructor{} -> goVal v
+      Lazy.ValAssumed{}              -> goVal v
+      Lazy.ValConstructor _ []       -> goVal v
+      _ -> surround (goVal v) "(" ")"
+
+-- | Pretty-print an 'NF' to 'Text', using named fields when available.
+prettyLayoutNF :: ConstructorFieldNames -> Lazy.NF -> Text
+prettyLayoutNF fields nf = docText $ prettyNFWithConstructorFields fields nf
 
 instance LayoutPrinter BinOp where
   printWithLayout = \ case
@@ -629,3 +735,25 @@ escapeStringLiteral = Text.concatMap (\ case
   '\\' -> "\\\\"
   c -> Text.singleton c
   )
+
+-- | Format a UTCTime with timezone offset as ISO-8601
+formatDateTimeIso :: UTCTime -> Text -> Text
+formatDateTimeIso utc tzName =
+  case tryLoadTZPure tzName of
+    Just tz ->
+      let localTime' = TZ.utcToLocalTimeTZ tz utc
+          offset = TZ.timeZoneForUTCTime tz utc
+          offsetStr = TimeFormat.formatTime TimeFormat.defaultTimeLocale "%z" offset
+      in Text.pack (TimeFormat.formatTime TimeFormat.defaultTimeLocale "%Y-%m-%dT%H:%M:%S" localTime') <> Text.pack offsetStr
+    Nothing ->
+      -- Fallback: format as UTC
+      Text.pack $ TimeFormat.formatTime TimeFormat.defaultTimeLocale "%Y-%m-%dT%H:%M:%SZ" utc
+
+-- | Pure wrapper for TZ loading (uses unsafePerformIO since TZ data is static)
+tryLoadTZPure :: Text -> Maybe TZ.TZ
+tryLoadTZPure name = unsafePerformIO $ tryLoadTZ (Text.unpack name)
+{-# NOINLINE tryLoadTZPure #-}
+
+tryLoadTZ :: String -> IO (Maybe TZ.TZ)
+tryLoadTZ name =
+  (Just <$> TZ.loadTZFromDB name) `catch` \(_ :: SomeException) -> pure Nothing

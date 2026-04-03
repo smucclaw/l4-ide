@@ -16,6 +16,9 @@ module L4.Parser (
   PState (..),
   MixfixHintRegistry,
   buildMixfixHintRegistry,
+  emptyMixfixHintRegistry,
+  hasMixfixHints,
+  showKeywords,
 
   -- * Debug combinators
   expr,
@@ -319,13 +322,16 @@ simpleName =
 
 qualifiedName :: Parser (Epa Name)
 qualifiedName = do
-  -- TODO: in future we may also want to allow `tokOf #_TQuoted`
+  -- Allow both regular identifiers and quoted identifiers in qualified names
   let nameAndQualifiers = List.unsnoc . mapMaybe (either (const Nothing) (Just . snd))
+      identToken = tokOf $ #_TIdentifiers % #_TIdentifier
+      quotedToken = tokOf $ #_TIdentifiers % #_TQuoted
+      identOrQuoted = identToken <|> quotedToken
   res@(nameAndQualifiers -> Just (q : qs, n)) <- do
-    x <- tokOf $ #_TIdentifiers % #_TIdentifier
+    x <- identOrQuoted
     dotOrIdentifier <- some do
       d <- tokOf $ #_TSymbols % #_TDot
-      i <- tokOf $ #_TIdentifiers % #_TIdentifier
+      i <- identOrQuoted
       pure [Left $ fst d, Right i]
     pure $ (Right x :) $ mconcat dotOrIdentifier
   wsOrAnnotation <- spaceOrAnnotations
@@ -341,7 +347,7 @@ qualifiedName = do
  tokOf p = token (\t -> (t,) <$> preview p (computedPayload t)) Set.empty
 
 name :: Parser Name
-name = attachEpa (quotedName <|> try qualifiedName <|> simpleName) <?> "identifier"
+name = attachEpa (try qualifiedName <|> quotedName <|> simpleName) <?> "identifier"
 
 tokenAsName :: TokenType -> Parser Name
 tokenAsName tt =
@@ -444,7 +450,12 @@ topdeclWithRecovery n = do
 
 topdecl :: Parser (TopDecl Name)
 topdecl =
-  withTypeSig (\ sig -> attachAnno $
+  -- TIMEZONE IS must be tried before withTypeSig because the meansKW
+  -- alternative inside decide would consume TIMEZONE as an identifier
+  -- via appForm, preventing backtracking to timezone'.
+      attachAnno
+        (Timezone  emptyAnno <$> annoHole (try timezone'))
+  <|> withTypeSig (\ sig -> attachAnno $
         Declare   emptyAnno <$> annoHole (declare sig)
     <|> Decide    emptyAnno <$> annoHole (decide sig)
     <|> Assume    emptyAnno <$> annoHole (assume sig)
@@ -586,6 +597,15 @@ import' =
       <*> annoHole name
       <*> pure Nothing
 
+-- | Parse @TIMEZONE IS <expr>@
+-- TIMEZONE is not a keyword — it's matched as an identifier so it can
+-- also be used as a builtin name in expressions.
+timezone' :: Parser (Expr Name)
+timezone' =
+  spacedToken_ (TIdentifiers (TIdentifier "TIMEZONE"))
+    *> spacedKeyword_ TKIs
+    *> expr
+
 assume :: TypeSig Name -> Parser (Assume Name)
 assume sig = do
   current <- Lexer.indentLevel
@@ -708,7 +728,7 @@ giveth = do
   current <- Lexer.indentLevel
   attachAnno $
     MkGivethSig emptyAnno
-      <$  annoLexeme (spacedKeyword_ TKGiveth)
+      <$  annoLexeme (spacedKeyword_ TKGiveth <|> spacedKeyword_ TKGives)
 --      <*  optional article
       <*> annoHole (indented type' current)
 
@@ -833,13 +853,15 @@ lsepBy1 pp sep =
     zipAnno p s = setAnno (fixAnnoSrcRange $ getAnno p <> mkSimpleEpaAnno (lexToEpa s)) p
 
 reqParam :: Parser (TypedName Name)
-reqParam =
+reqParam = do
+  current <- Lexer.indentLevel
   attachAnno $
     MkTypedName emptyAnno
       <$> annoHole name
       <*  annoLexeme separator
 --      <*  optional article
       <*> annoHole type'
+      <*> optional (annoLexeme (spacedKeyword_ TKMeans) *> annoHole (indentedExpr current))
 
 param :: Parser (OptionallyTypedName Name)
 param =
@@ -1166,6 +1188,7 @@ data Assoc = AssocLeft | AssocRight
 operator :: Parser (Prio, Assoc, Expr Name -> Expr Name -> Expr Name)
 operator =
       (\ op -> (1, AssocRight, infix2  Implies   op)) <$> (spacedKeyword_ TKImplies <|> spacedTokenOp_ TImplies )
+  <|> (\ op -> (1, AssocRight, infixUnless       op)) <$> spacedKeyword_ TKUnless
   <|> (\ op -> (2, AssocRight, infix2  Or        op)) <$> (spacedKeyword_ TKOr      <|> spacedTokenOp_ TOr      <|> spacedSymbol_ TEllipsisOr)
   <|> (\ op -> (3, AssocRight, infix2  And       op)) <$> (spacedKeyword_ TKAnd     <|> spacedTokenOp_ TAnd     <|> spacedSymbol_ TEllipsis)
   <|> (\ op -> (2, AssocRight, infix2  ROr       op)) <$> spacedKeyword_ TKROr
@@ -1260,6 +1283,21 @@ infix2 f op l r =
 infix2' :: HasSrcRange (a n) => (Anno -> a n -> a n -> a n) -> Anno -> a n -> a n -> a n
 infix2' f op l r =
   f (fixAnnoSrcRange $ mkHoleAnnoFor l <> op <> mkHoleAnnoFor r) l r
+
+-- | UNLESS is syntactic sugar for AND NOT.
+-- `l UNLESS r` desugars to `l AND (NOT r)`
+-- UNLESS has precedence 1 (lower than OR at 2), so it binds to entire expressions:
+--   `A OR B OR C UNLESS D` becomes `(A OR B OR C) AND (NOT D)`
+--   `A AND B AND C UNLESS D` becomes `(A AND B AND C) AND (NOT D)`
+infixUnless :: Lexeme PosToken -> Expr Name -> Expr Name -> Expr Name
+infixUnless op l r =
+  let opAnno = mkSimpleEpaAnno (lexToEpa op)
+      -- Construct NOT r with annotation derived from UNLESS and r
+      notAnno = fixAnnoSrcRange $ opAnno <> mkHoleAnnoFor r
+      notR = Not notAnno r
+      -- Construct l AND (NOT r) with annotation spanning the whole expression
+      andAnno = fixAnnoSrcRange $ mkHoleAnnoFor l <> opAnno <> mkHoleAnnoFor r
+  in And andAnno l notR
 
 postfix :: HasSrcRange (a n) => (Anno -> a n -> a n) -> Lexeme PosToken -> a n -> a n
 postfix f op l =
@@ -1500,6 +1538,13 @@ stringLit =
 
 -- | Parser for function application.
 --
+-- Tries two alternatives for the argument list:
+--
+--   1. __OF syntax__ – @f OF x, y@ – arguments are explicitly
+--      comma-separated via 'lsepBy1'.
+--
+--   2. __Juxtaposition__ – @f x y@ – arguments are parsed by
+--      'parseAppArgs' using indentation only.
 app :: Parser (Expr Name)
 app = do
   current <- Lexer.indentLevel
@@ -1512,6 +1557,19 @@ app = do
         <|> annoHole (parseAppArgs current fname)
     pure (App emptyAnno fname args)
 
+-- | Parse function arguments supplied by juxtaposition (without @OF@).
+--
+-- Each argument must be an atomic expression ('atomicExpr'') that is
+-- indented to the right of @current@ (the column of the enclosing
+-- expression).  Arguments are collected greedily: the parser keeps going
+-- as long as it can find indented atomic expressions.
+--
+-- Commas are never consumed here.  If you need comma-separated arguments,
+-- use the @OF@ syntax (@f OF x, y@) instead.
+--
+-- __Mixfix guard.__  On the first argument only, 'guardMixfixKeyword'
+-- checks that we are not about to consume a token that should be
+-- interpreted as a mixfix keyword on a continuation line.
 parseAppArgs :: Pos -> Name -> Parser [Expr Name]
 parseAppArgs current fname = go True
   where
@@ -1673,11 +1731,11 @@ breach = do
 optionalWithHole :: HasSrcRange a => AnnoParser a -> AnnoParser (Maybe a)
 optionalWithHole p = Just <$> p <|> annoHole (pure Nothing)
 
-obligation :: Parser (Obligation Name)
+obligation :: Parser (Deonton Name)
 obligation = do
   current <- Lexer.indentLevel
   attachAnno $
-    MkObligation emptyAnno
+    MkDeonton emptyAnno
       <$  annoLexeme (spacedKeyword_ TKParty)
       <*> annoHole (indentedExpr current)
       <*> annoHole (must current)

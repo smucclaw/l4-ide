@@ -1,0 +1,32 @@
+Parsing successful
+Typechecking successful
+quoted-sections.l4:13:1-26:
+  BOOLEAN
+quoted-sections.l4:14:1-42:
+  BOOLEAN
+quoted-sections.l4:15:1-57:
+  BOOLEAN
+quoted-sections.l4:23:1-18:
+  BOOLEAN
+quoted-sections.l4:24:1-33:
+  BOOLEAN
+quoted-sections.l4:31:1-35:
+  BOOLEAN
+quoted-sections.l4:35:1-28:
+  BOOLEAN
+quoted-sections.l4:36:1-46:
+  BOOLEAN
+quoted-sections.l4:37:1-63:
+  BOOLEAN
+quoted-sections.l4:38:1-20:
+  BOOLEAN
+quoted-sections.l4:39:1-37:
+  BOOLEAN
+quoted-sections.l4:40:1-39:
+  BOOLEAN
+quoted-sections.l4:46:1-61:
+  BOOLEAN
+quoted-sections.l4:47:1-44:
+  BOOLEAN
+quoted-sections.l4:48:1-35:
+  BOOLEAN

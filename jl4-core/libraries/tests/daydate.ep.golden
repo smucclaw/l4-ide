@@ -5,7 +5,7 @@
 -- A week begins on Monday
 -- Check the test/daydate.l4 file to see examples
 
-
+IMPORT `date-compat`
 
 
 §§ `Constants`
@@ -50,7 +50,10 @@ GIVEN day   IS A NUMBER
       year  IS A NUMBER
 GIVETH A DATE
 `Date` AKA `Days to date` MEANS
-    DATE_FROM_DMY day month year
+    DATE_FROM_SERIAL (jan1serial PLUS monthDays PLUS day MINUS 1)
+    WHERE
+        jan1serial MEANS DATE_SERIAL (DATE_FROM_DMY 1 1 year)
+        monthDays MEANS `Months since year start to days` month year
 
 GIVEN days  IS A NUMBER
 GIVETH A DATE
@@ -61,6 +64,21 @@ GIVEN date  IS A DATE
 GIVETH A DATE
 `Date` AKA `Days to date` MEANS date
 
+-- Date str  -> parse date string (YYYY-MM-DD, etc.), ignores time/timezone if present
+GIVEN str IS A STRING
+GIVETH A MAYBE DATE
+`Date` AKA `Days to date` MEANS
+    CONSIDER DATEVALUE str
+    WHEN RIGHT d THEN JUST d
+    WHEN LEFT err THEN
+        CONSIDER TODATETIME str
+        WHEN JUST dt THEN JUST (DATETIME_DATE dt)
+        WHEN NOTHING THEN NOTHING
+
+-- Date dt  -> extract date from DATETIME (ignores time and timezone)
+GIVEN dt IS A DATETIME
+GIVETH A DATE
+`Date` AKA `Days to date` MEANS DATETIME_DATE dt
 
 
 
@@ -77,7 +95,7 @@ GIVEN day   IS A NUMBER
       year  IS A NUMBER
 GIVETH A NUMBER
 `Day` AKA `Date to days` MEANS
-    DATE_SERIAL (DATE_FROM_DMY day month year)
+    DATE_SERIAL (Date day month year)
 
 GIVEN days  IS A NUMBER
 GIVETH A NUMBER
@@ -319,7 +337,6 @@ GIVEN date  IS A DATE
 GIVETH A NUMBER
 `Years to days` MEANS
     `Years to days` (DATE_YEAR date)
-
 
 
 
@@ -598,14 +615,24 @@ GIVETH A BOOLEAN
 GIVEN a IS A DATE
       b IS A DATE
 GIVETH A BOOLEAN
-`__GT__` AKA `is after` MEANS
+`__GT__` MEANS
     Day a GREATER THAN Day b
 
 GIVEN a IS A DATE
       b IS A DATE
 GIVETH A BOOLEAN
-`__LT__` AKA `is before` MEANS
+`__LT__` MEANS
     Day a LESS THAN Day b
+
+GIVEN a IS A DATE
+      b IS A DATE
+GIVETH A BOOLEAN
+a `is before` b MEANS a LESS THAN b
+
+GIVEN a IS A DATE
+      b IS A DATE
+GIVETH A BOOLEAN
+a `is after` b MEANS a GREATER THAN b
 
 GIVEN a IS A DATE
       b IS A NUMBER

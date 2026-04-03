@@ -1,0 +1,33 @@
+digraph {
+    graph [rankdir=TB
+          ,label="Spouse1 holds Spouse2"
+          ,labelloc=t
+          ,fontname=Helvetica
+          ,fontsize=14];
+    node [fontname=Helvetica
+         ,fontsize=11];
+    edge [fontname=Helvetica
+         ,fontsize=10];
+    0 [label=initial
+      ,fillcolor=white
+      ,style=filled
+      ,shape=ellipse
+      ,fillcolor="#e8f4fd"];
+    1 [label=next
+      ,fillcolor=white
+      ,style=filled
+      ,shape=ellipse
+      ,fillcolor="#ffffff"];
+    2 [label=Breach
+      ,fillcolor=white
+      ,style=filled
+      ,shape=doublecircle
+      ,fillcolor="#f8d7da"];
+    0 -> 1 [label="Spouse1 MUST have and hold"
+           ,color="#28a745"
+           ,style=solid];
+    0 -> 2 [label=timeout
+           ,color="#dc3545"
+           ,style=dashed];
+}
+

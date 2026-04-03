@@ -1,0 +1,26 @@
+-- Simple eligibility example from documentation
+
+§ `Eligibility Rule`
+
+-- Define the Person type
+DECLARE Person
+    HAS name IS A STRING
+        age IS A NUMBER
+        hasValidID IS A BOOLEAN
+
+-- Define the eligibility rule
+GIVEN person IS A Person
+GIVETH A BOOLEAN
+DECIDE `is eligible` IF
+    person's age >= 18
+    AND person's hasValidID
+
+-- Test data
+alice MEANS Person "Alice" 25 TRUE
+bob MEANS Person "Bob" 16 TRUE
+charlie MEANS Person "Charlie" 30 FALSE
+
+-- Tests
+#EVAL `is eligible` alice    -- Should be TRUE
+#EVAL `is eligible` bob      -- Should be FALSE (under 18)
+#EVAL `is eligible` charlie  -- Should be FALSE (no valid ID)

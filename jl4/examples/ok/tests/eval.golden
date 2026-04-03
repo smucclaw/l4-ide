@@ -1,7 +1,7 @@
 Parsing successful
 Typechecking successful
 Evaluation successful
-eval.l4:22:8-13:
+eval.l4:22:1-13:
   NUMBER
 eval.l4:23:1-12:
   16

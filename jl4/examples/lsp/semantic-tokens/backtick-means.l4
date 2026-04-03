@@ -1,0 +1,11 @@
+§ `Test backtick and MEANS interaction`
+
+-- Case 1: Regular identifier, then quoted identifier, then MEANS
+-- MEANS should be keyword
+GIVEN x IS A BOOLEAN
+x `foo` MEANS TRUE
+
+-- Case 2: Quoted identifier, then regular identifier, then MEANS
+-- MEANS should be keyword
+GIVEN y IS A BOOLEAN
+`bar` y MEANS TRUE

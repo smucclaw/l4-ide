@@ -1,0 +1,2 @@
+# Pre-commit hook: ensure dependencies are synced and code is formatted
+npm ci && npm run format:check

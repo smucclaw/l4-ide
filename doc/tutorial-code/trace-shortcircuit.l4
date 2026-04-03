@@ -1,6 +1,0 @@
-DECIDE dangerousValue IS 1 / 0
-
-DECIDE safeResult condition
-  IS IF condition THEN dangerousValue ELSE 42
-
-#EVALTRACE safeResult FALSE

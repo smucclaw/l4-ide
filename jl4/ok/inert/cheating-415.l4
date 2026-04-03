@@ -1,3 +1,5 @@
+
+
 -- Singapore Penal Code Section 415: Cheating
 -- Translated from the layman/woon.ts representation to L4 with inert elements
 --
@@ -5,31 +7,99 @@
 -- scaffolding to make the logical structure readable while not affecting
 -- the boolean evaluation.
 
--- Section 415: Cheating (simplified structure)
--- A person commits cheating if, by deceiving any person, they:
--- (a) fraudulently or dishonestly induce the person to deliver property, OR
--- (b) intentionally induce the person to do/not do something causing harm
+-- 415.  Whoever, by deceiving any person,
+--         whether or not such deception was the sole or main inducement,
+--       fraudulently or dishonestly
+--           induces the person so deceived
+--                to deliver or cause the delivery of any property to any person,
+--             or to consent that any person shall retain any property,
+--    or intentionally
+--           induces the person so deceived
+--              to do or omit to do
+--                 anything which he would not do or omit to do if he were not so deceived,
+--              and which act or omission causes or is likely to cause
+--                  damage or harm to any person
+--                    in body, mind, reputation or property,
+--  is said to “cheat”.
 
-GIVEN `deceiving any person` IS A BOOLEAN
-      `fraudulently induces` IS A BOOLEAN
-      `dishonestly induces` IS A BOOLEAN
-      `deliver property` IS A BOOLEAN
-      `cause delivery of property` IS A BOOLEAN
-      `consent to retain property` IS A BOOLEAN
-DECIDE `cheating simplified` IF
-        `deceiving any person`
-    AND "fraudulent or dishonest inducement"
-    AND     `fraudulently induces`
-        OR  `dishonestly induces`
-    AND "to deliver or retain property"
-    AND     `deliver property`
-        OR  `cause delivery of property`
-        OR  `consent to retain property`
+--     Explanation 1.—A dishonest concealment of facts is a deception within the meaning of this section.
+--     Explanation 2.—Mere breach of contract is not of itself proof of an original fraudulent intent.
+--     Explanation 3.—Whoever makes a representation through any agent is to be treated as having made the representation himself.
+--     Explanation 4.—A person that is a company or association or body of persons, whether incorporated or not, can be deceived for the purposes of this section, even though none of its individual officers, employees or agents is personally deceived.
+--     Explanation 5.—A person that is a company or association or body of persons, whether incorporated or not, can be induced to act in a manner mentioned in this section even though none of its individual officers, employees or agents is personally induced to act in such manner.
 
--- Expected: TRUE
--- Because: deceiving=TRUE AND (fraudulently=TRUE OR dishonestly=FALSE)=TRUE
---          AND (deliver=TRUE OR cause=FALSE OR consent=FALSE)=TRUE
-#EVAL `cheating simplified` TRUE TRUE FALSE TRUE FALSE FALSE
+-- Illustrations
+--      (a)  A, by falsely pretending to be in the Government service, intentionally deceives Z, and thus dishonestly induces Z to let him have on credit goods for which he does not mean to pay. Acheats.
+--      (b)  A, by putting a counterfeit mark on an article, intentionally deceives Z into a belief that this article was made by a certain celebrated manufacturer, and thus dishonestly induces Z to buy and pay for the article. Acheats.
+--      (c)  A, by exhibiting to Z a false sample of an article, intentionally deceives Z into believing that the article corresponds with the sample, and thereby dishonestly induces Z to buy and pay for the article. Acheats.
+--      (d)  A, by tendering in payment for an article a bill on a house with which A keeps no money, and by which A expects that the bill will be dishonoured, intentionally deceives Z, and thereby dishonestly induces Z to deliver the article, intending not to pay for it. Acheats.
+--      (e)  A, by pledging as diamonds articles which he knows are not diamonds, intentionally deceives Z, and thereby dishonestly induces Z to lend money. Acheats.
+--      (f)  A intentionally deceives Z into a belief that A means to repay any money that Z may lend to him, and thereby dishonestly induces Z to lend him money, A not intending to repay it. Acheats.
+--      (g)  A intentionally deceives Z into a belief that A means to deliver to Z a certain quantity of pepper which he does not intend to deliver, and thereby dishonestly induces Z to advance money upon the faith of such delivery. A cheats; but if A, at the time of obtaining the money, intends to deliver the pepper, and afterwards breaks his contract and does not deliver it, he does not cheat, but is liable only to a civil action for breach of contract.
+--      (h)  A intentionally deceives Z into a belief that A has performed A’s part of a contract made with Z, which he has not performed, and thereby dishonestly induces Z to pay money. Acheats.
+--      (i)  A sells and conveys an estate to B. A, knowing that in consequence of such sale he has no right to the property, sells or mortgages the same to Z without disclosing the fact of the previous sale and conveyance to B, and receives the purchase or mortgage money from Z. A cheats.
+--      (j)  A, playing with false dice, or marked cards, wins money from B. Acheats.
+--      (k)  A places an order for concert tickets in the automated concert ticketing system of a company, Z, using stolen credit card details, and thereby causes Z’s ticketing system to electronically deliver the electronic concert tickets to A. Z has been deceived and induced into delivering the tickets to A even though no human officer, employee or agent of Z has been personally deceived or induced.
+
+
+DECLARE Person
+    HAS name IS A STRING
+
+-- Full Section 415 structure with proper indentation
+-- The structure mirrors woon.ts cheating definition
+
+GIVEN p1 IS A BOOLEAN
+      `by deceiving any person` IS A BOOLEAN
+      `fraudulently`            IS A BOOLEAN
+      `dishonestly`             IS A BOOLEAN
+      `deliver`                 IS A BOOLEAN
+      `cause the delivery`      IS A BOOLEAN
+      `consent that any person shall retain any property` IS A BOOLEAN
+      `intentionally`           IS A BOOLEAN
+      `do`                      IS A BOOLEAN
+      `omit to do`              IS A BOOLEAN
+      `anything`                IS A BOOLEAN
+      `causes`                  IS A BOOLEAN
+      `is likely to cause`      IS A BOOLEAN
+      `damage`                  IS A BOOLEAN
+      `harm`                    IS A BOOLEAN
+      `body`                    IS A BOOLEAN
+      `mind`                    IS A BOOLEAN
+      `reputation`              IS A BOOLEAN
+      `property`                IS A BOOLEAN
+      
+DECIDE `commits cheating` IF
+        `by deceiving any person`
+   ...  p1   ...
+                      `fraudulently`
+                  OR  `dishonestly`
+                  ..  "induces the person so deceived"
+             ...    "to" ...     `deliver`
+                             OR  `cause the delivery`
+                             ..  "of any property to any person"
+                 OR "to" ... `consent that any person shall retain any property`
+        
+         OR  `intentionally` .. "induces the person so deceived"
+             ... "to" ...    `do`
+                          OR `omit to do`
+                          ..      "anything which he would not"
+                              ...     "do"
+                                  OR "omit to do"
+                                  .. "if he were not so deceived"
+             AND         "which act or omission"
+                     ..  `causes`
+                     OR  `is likely to cause`
+                 ...     `damage`
+                     OR  `harm`
+                     ..  "to any person"
+                 ...     "in"
+                     ..  `body`
+                     ..  `mind`
+                     ..  `reputation`
+                     OR  `property`
+
+-- Expected: TRUE (fraudulent inducement to deliver property)
+#EVAL `commits cheating` TRUE TRUE TRUE FALSE TRUE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE TRUE TRUE TRUE
 
 
 -- The "cheating tautology" from woon.ts: "whether such deception was or was not
@@ -44,83 +114,11 @@ DECIDE `cheating tautology` IF
     "whether such deception"
     ...     `was the inducement`
         OR  `was not the inducement`
-    ... "the"
-    AND     `sole inducement`
-        OR  `main inducement`
+    ...      "the"
+        AND     `sole inducement`
+            OR  `main inducement`
     ... "inducement"
 
 -- Expected: TRUE
 -- Because: (was=TRUE OR was_not=FALSE)=TRUE AND (sole=FALSE OR main=TRUE)=TRUE
 #EVAL `cheating tautology` TRUE FALSE FALSE TRUE
-
-
--- Full Section 415 structure with proper indentation
--- The structure mirrors woon.ts cheating definition
-
-GIVEN `deceives` IS A BOOLEAN
-      `fraudulent` IS A BOOLEAN
-      `dishonest` IS A BOOLEAN
-      `delivers` IS A BOOLEAN
-      `causes delivery` IS A BOOLEAN
-      `consents retention` IS A BOOLEAN
-      `intentional` IS A BOOLEAN
-      `does something` IS A BOOLEAN
-      `omits something` IS A BOOLEAN
-      `causes harm` IS A BOOLEAN
-      `likely causes harm` IS A BOOLEAN
-      `harms body` IS A BOOLEAN
-      `harms mind` IS A BOOLEAN
-      `harms reputation` IS A BOOLEAN
-      `harms property` IS A BOOLEAN
-DECIDE `commits cheating` IF
-    "by deceiving any person"
-    ... `deceives`
-    AND "and"
-    AND     "fraudulently or dishonestly induces"
-            ... `fraudulent`
-            OR  `dishonest`
-        ... "the person so deceived to"
-        AND     `delivers`
-            OR  `causes delivery`
-            OR  `consents retention`
-       OR   "intentionally induces the person so deceived"
-            ... `intentional`
-        AND     `does something`
-            OR  `omits something`
-        AND "which act or omission"
-        AND     `causes harm`
-            OR  `likely causes harm`
-        AND "to any person in"
-        AND     `harms body`
-            OR  `harms mind`
-            OR  `harms reputation`
-            OR  `harms property`
-
--- Expected: TRUE (fraudulent inducement to deliver property)
--- Args: deceives=T, fraudulent=T, dishonest=F, delivers=T, causes_delivery=F, consents=F,
---       intentional=F, does=F, omits=F, causes_harm=F, likely=F, body=F, mind=F, rep=F, prop=F
-#EVAL `commits cheating` TRUE TRUE FALSE TRUE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE
-
-
--- Test case 2: Intentional harm branch with true values
-GIVEN `intentionally induces 2` IS A BOOLEAN
-      `do something 2` IS A BOOLEAN
-      `causes harm 2` IS A BOOLEAN
-      `body harm 2` IS A BOOLEAN
-DECIDE `intentional harm only` IF
-    "intentionally induces the person so deceived to"
-    ... `intentionally induces 2`
-    AND     `do something 2`
-        OR  "not do something"
-    ... "if he were not so deceived"
-    ... "and which act or omission"
-    AND     `causes harm 2`
-        OR  "is likely to cause"
-    ... "to any person in"
-    AND     `body harm 2`
-        OR  "mind"
-        OR  "reputation"
-        OR  "property"
-
--- Expected: TRUE
-#EVAL `intentional harm only` TRUE TRUE TRUE TRUE

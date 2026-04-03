@@ -1,0 +1,75 @@
+-- DECIDE keyword examples
+
+-- Simple Named Values
+
+DECIDE `the answer` IS 42
+DECIDE `approximate pi` IS 3.14159
+DECIDE `welcome greeting` IS "Hello, World!"
+DECIDE `is enabled` IS TRUE
+
+#EVAL `the answer`
+#EVAL `welcome greeting`
+
+-- Functions with DECIDE and MEANS
+
+-- Simple function using MEANS
+GIVEN x IS A NUMBER
+`double a number` x MEANS x TIMES 2
+
+#EVAL `double a number` 21
+
+-- Function with DECIDE ... IS
+GIVEN n IS A NUMBER
+DECIDE `square of` n IS n TIMES n
+
+#EVAL `square of` 7
+
+-- Conditional Decisions
+
+GIVEN age IS A NUMBER
+`age category for` age MEANS
+  IF age < 13 THEN "child"
+  ELSE IF age < 20 THEN "teenager"
+       ELSE IF age < 65 THEN "adult"
+            ELSE "senior"
+
+#EVAL `age category for` 25
+#EVAL `age category for` 10
+
+-- Boolean Decisions with IF
+
+ASSUME `person age` IS A NUMBER
+ASSUME `has valid ID` IS A BOOLEAN
+DECIDE `can enter venue` IF
+  `person age` >= 21 AND `has valid ID`
+
+#CHECK `can enter venue`
+
+-- Decisions with WHERE Clauses
+
+GIVEN radius IS A NUMBER
+DECIDE `area of circle with radius` radius IS
+  `local pi` TIMES radius TIMES radius
+  WHERE
+    `local pi` MEANS 3.14159
+
+#EVAL `area of circle with radius` 10
+
+-- Recursive Decisions
+
+GIVEN num IS A NUMBER
+GIVETH A NUMBER
+`factorial of` num MEANS
+  IF num EQUALS 0
+  THEN 1
+  ELSE num TIMES `factorial of` (num MINUS 1)
+
+#EVAL `factorial of` 5
+
+-- Multi-parameter Functions
+
+GIVEN a IS A NUMBER
+      b IS A NUMBER
+`maximum of two numbers` a b MEANS IF a > b THEN a ELSE b
+
+#EVAL `maximum of two numbers` 10 25

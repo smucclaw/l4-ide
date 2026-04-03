@@ -960,7 +960,7 @@ getExpressionType st contextFile exprText = do
     Nothing -> pure "Failed to type check expression"
     Just tc -> do
       -- Look for CheckInfo in the infos list - #CHECK adds the type as a CheckInfo
-      let checkInfoTypes = [ty | MkCheckErrorWithContext (CheckInfo ty) _ <- tc.infos]
+      let checkInfoTypes = [ty | MkCheckErrorWithContext (CheckInfo ty _) _ <- tc.infos]
       case checkInfoTypes of
         (ty:_) -> pure $ Print.prettyLayout ty
         [] | not tc.success -> do

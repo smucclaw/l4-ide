@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -35,10 +36,13 @@ import qualified Base.Map as Map
 import qualified Base.Set as Set
 import Control.Concurrent
 import System.Environment (lookupEnv)
+import qualified Data.ByteString as BS
+import qualified Data.Text.Encoding as TE
+#ifdef HTTP_ENABLED
 import           Network.HTTP.Req ((=:))
 import qualified Network.HTTP.Req as Req
-import qualified Data.Text.Encoding as TE
 import qualified Data.ByteString.Lazy.Char8 as LBS
+#endif
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -48,15 +52,15 @@ import qualified Data.Char as Char
 import Data.Fixed (Pico)
 import Data.Time (UTCTime)
 import qualified Data.Time as Time
+import Data.Time.LocalTime (TimeOfDay(..), LocalTime(..), timeToTimeOfDay, timeOfDayToTime)
 import qualified Data.Time.Format as TimeFormat
+import qualified Data.Time.Zones as TZ
 import L4.Annotation
 import L4.Evaluate.Operators
 import L4.Evaluate.ValueLazy
 import L4.TemporalContext (EvalClause (..), TemporalContext (..), applyEvalClauses)
-import L4.TemporalGit
-import Language.LSP.Protocol.Types (uriToFilePath)
 import L4.Parser.SrcSpan (SrcRange)
-import L4.Print
+import L4.Print hiding (tryLoadTZ, tryLoadTZPure, formatDateTimeIso)
 import L4.Syntax
 import qualified L4.TypeCheck as TypeCheck
 import L4.TypeCheck.Types (EntityInfo)
@@ -66,6 +70,8 @@ import qualified L4.TracePolicy as TracePolicy
 import L4.Utils.Ratio
 import Text.Read (readMaybe)
 import qualified Data.Scientific as Sci
+import System.IO.Unsafe (unsafePerformIO)
+import Control.Exception (SomeException, catch)
 
 data Frame =
     BinOp1 BinOp {- -} (Expr Resolved) Environment
@@ -107,12 +113,6 @@ data Frame =
   -- Temporal context scoping for rules encoded time
   | EvalUnderRulesEncodedAt1 Reference Environment
   | EvalUnderRulesEncodedAt2 TemporalContext
-  -- Temporal context scoping for commit override
-  | EvalUnderCommit1 Reference Environment
-  | EvalUnderCommit2 TemporalContext
-  -- Temporal context scoping for retroactive shorthand
-  | EvalRetroactiveTo1 Reference Environment
-  | EvalRetroactiveTo2 TemporalContext
   -- Temporal iteration frames
   | EverBetweenFrame TemporalContext WHNF Time.Day Time.Day Integer
   | AlwaysBetweenFrame TemporalContext WHNF Time.Day Time.Day Integer
@@ -154,6 +154,7 @@ data UserEvalException =
   | DivisionByZero BinOp
   | NotAnInteger BinOp Rational
   | Stuck Resolved -- ^ stores the term we got stuck on
+  | UserError Text -- ^ general user-facing error (e.g. missing TIMEZONE declaration)
   deriving stock (Generic, Show)
   deriving anyclass NFData
 
@@ -170,6 +171,7 @@ data Machine a where
   PutTemporalContext :: TemporalContext -> Machine ()
   GetModuleUri :: Machine NormalizedUri
   GetTracePolicy :: Machine TracePolicy
+  GetSafeMode :: Machine Bool  -- ^ Returns True when HTTP operations should be disabled
   PokeThunk :: Reference
     -> (ThreadId -> Thunk -> (Thunk, a))
     -> Machine a
@@ -320,16 +322,6 @@ forwardExpr env = \ case
                thunkRef <- allocate_ thunkExpr env
                PushFrame (EvalUnderRulesEncodedAt1 thunkRef env)
                ForwardExpr env dateExpr
-      uniq | uniq == TypeCheck.evalUnderCommitUnique
-           , [commitExpr, thunkExpr] <- es -> do
-               thunkRef <- allocate_ thunkExpr env
-               PushFrame (EvalUnderCommit1 thunkRef env)
-               ForwardExpr env commitExpr
-      uniq | uniq == TypeCheck.evalRetroactiveToUnique
-           , [dateExpr, thunkExpr] <- es -> do
-               thunkRef <- allocate_ thunkExpr env
-               PushFrame (EvalRetroactiveTo1 thunkRef env)
-               ForwardExpr env dateExpr
       _ -> do
         let expectedType = case getAnno ann of
               Anno {extra = Extension {resolvedInfo = Just (TypeInfo ty _)}} -> Just ty
@@ -377,7 +369,7 @@ forwardExpr env = \ case
     env' <- evalRecLocalDecls env ds
     let combinedEnv = Map.union env' env
     ForwardExpr combinedEnv e
-  Regulative _ann (MkObligation _ party action due followup lest) ->
+  Regulative _ann (MkDeonton _ party action due followup lest) ->
     Backward (ValObligation env (Left party) action (Left due) (fromMaybe fulfilExpr followup) lest)
   Event _ann ev ->
     ForwardExpr env (desugarEvent ev)
@@ -507,7 +499,7 @@ backward val = WithPoppedFrame $ \ case
     serial <- expectNumber val
     originalCtx <- GetTemporalContext
     let retroDay = Time.utctDay (serialToUTCTime serial)
-    newCtx <- resolveRulesEffectiveContext originalCtx retroDay
+        newCtx = applyEvalClauses [UnderRulesEffectiveAt retroDay] originalCtx
     PutTemporalContext newCtx
     PushFrame (EvalUnderRulesEffectiveAt2 originalCtx)
     EvalRef thunkRef
@@ -517,22 +509,6 @@ backward val = WithPoppedFrame $ \ case
     let newCtx = applyEvalClauses [UnderRulesEncodedAt (serialToUTCTime serial)] originalCtx
     PutTemporalContext newCtx
     PushFrame (EvalUnderRulesEncodedAt2 originalCtx)
-    EvalRef thunkRef
-  Just (EvalUnderCommit1 thunkRef _env) -> do
-    commitTxt <- expectString val
-    originalCtx <- GetTemporalContext
-    newCtx <- resolveCommitContext originalCtx commitTxt
-    PutTemporalContext newCtx
-    PushFrame (EvalUnderCommit2 originalCtx)
-    EvalRef thunkRef
-  Just (EvalRetroactiveTo1 thunkRef _env) -> do
-    serial <- expectNumber val
-    originalCtx <- GetTemporalContext
-    let retroDay = Time.utctDay (serialToUTCTime serial)
-    retroCtx <- resolveRulesEffectiveContext originalCtx retroDay
-    let newCtx = applyEvalClauses [AsOfSystemTime (Time.UTCTime retroDay (Time.secondsToDiffTime 0))] retroCtx
-    PutTemporalContext newCtx
-    PushFrame (EvalRetroactiveTo2 originalCtx)
     EvalRef thunkRef
   Just (IfThenElse1 e2 e3 env) ->
     case val of
@@ -661,12 +637,6 @@ backward val = WithPoppedFrame $ \ case
   Just (EvalUnderRulesEncodedAt2 originalCtx) -> do
     PutTemporalContext originalCtx
     Backward val
-  Just (EvalUnderCommit2 originalCtx) -> do
-    PutTemporalContext originalCtx
-    Backward val
-  Just (EvalRetroactiveTo2 originalCtx) -> do
-    PutTemporalContext originalCtx
-    Backward val
   Just (EverBetweenFrame originalCtx predicate endDay currentDay step) -> do
     PutTemporalContext originalCtx
     case boolView val of
@@ -681,7 +651,7 @@ backward val = WithPoppedFrame $ \ case
             PushFrame (EverBetweenFrame originalCtx predicate endDay nextDay step)
             applyDatePredicate predicate nextDay
       Nothing ->
-        InternalException $ RuntimeTypeError "EVER BETWEEN expects predicate returning BOOLEAN"
+        UserException $ UserError "EVER BETWEEN expects predicate returning BOOLEAN"
   Just (AlwaysBetweenFrame originalCtx predicate endDay currentDay step) -> do
     PutTemporalContext originalCtx
     case boolView val of
@@ -696,7 +666,7 @@ backward val = WithPoppedFrame $ \ case
             PushFrame (AlwaysBetweenFrame originalCtx predicate endDay nextDay step)
             applyDatePredicate predicate nextDay
       Nothing ->
-        InternalException $ RuntimeTypeError "ALWAYS BETWEEN expects predicate returning BOOLEAN"
+        UserException $ UserError "ALWAYS BETWEEN expects predicate returning BOOLEAN"
   Just (WhenLastFrame originalCtx predicate currentDay) -> do
     PutTemporalContext originalCtx
     case boolView val of
@@ -713,7 +683,7 @@ backward val = WithPoppedFrame $ \ case
             PushFrame (WhenLastFrame originalCtx predicate nextDay)
             applyDatePredicate predicate nextDay
       Nothing ->
-        InternalException $ RuntimeTypeError "WHEN LAST expects predicate returning BOOLEAN"
+        UserException $ UserError "WHEN LAST expects predicate returning BOOLEAN"
   Just (WhenNextFrame originalCtx predicate currentDay limitDay) -> do
     PutTemporalContext originalCtx
     case boolView val of
@@ -730,7 +700,7 @@ backward val = WithPoppedFrame $ \ case
             PushFrame (WhenNextFrame originalCtx predicate nextDay limitDay)
             applyDatePredicate predicate nextDay
       Nothing ->
-        InternalException $ RuntimeTypeError "WHEN NEXT expects predicate returning BOOLEAN"
+        UserException $ UserError "WHEN NEXT expects predicate returning BOOLEAN"
   Just (ValueAtFrame originalCtx) -> do
     PutTemporalContext originalCtx
     Backward val
@@ -1127,17 +1097,17 @@ runLit (StringLit _ann str)  = pure (ValString str)
 expect1 :: [a] -> Machine a
 expect1 = \ case
   [x] -> pure x
-  xs -> InternalException (RuntimeTypeError $ "Expected 1 argument, but got " <> Text.show (length xs))
+  xs -> InternalException (RuntimeTypeError $ "Expected 1 argument, but got " <> Text.textShow (length xs))
 
 expect2 :: [a] -> Machine (a, a)
 expect2 = \ case
   [x, y] -> pure (x, y)
-  xs -> InternalException (RuntimeTypeError $ "Expected 2 arguments, but got " <> Text.show (length xs))
+  xs -> InternalException (RuntimeTypeError $ "Expected 2 arguments, but got " <> Text.textShow (length xs))
 
 expect3 :: [a] -> Machine (a, a, a)
 expect3 = \ case
   [x, y, z] -> pure (x, y, z)
-  xs -> InternalException (RuntimeTypeError $ "Expected 3 arguments, but got " <> Text.show (length xs))
+  xs -> InternalException (RuntimeTypeError $ "Expected 3 arguments, but got " <> Text.textShow (length xs))
 
 expectNumber :: WHNF -> Machine Rational
 expectNumber = \ case
@@ -1255,7 +1225,9 @@ encodeValueToJson = \case
 -- | Type-directed JSON decoding - uses type information to construct proper records
 decodeJsonToValueTyped :: Text -> Type' Resolved -> Machine WHNF
 decodeJsonToValueTyped jsonStr ty = do
-  case Aeson.eitherDecodeStrict' (TE.encodeUtf8 jsonStr) of
+  let jsonBytes :: BS.ByteString
+      jsonBytes = TE.encodeUtf8 jsonStr
+  case Aeson.eitherDecodeStrict' jsonBytes of
     Left err -> do
       -- Parse error: return LEFT errorMsg
       errorRef <- AllocateValue (ValString (Text.pack err))
@@ -1280,7 +1252,7 @@ jsonValueToWHNFTyped jsonValue ty = do
             let values = Vector.toList vec
             jsonListToWHNFTyped values elementType
           _ -> do
-            InternalException $ RuntimeTypeError $
+            UserException $ UserError $
               "Expected JSON array to decode to LIST type, but got: " <> Text.pack (show jsonValue)
 
     -- Handle MAYBE α
@@ -1305,18 +1277,51 @@ jsonValueToWHNFTyped jsonValue ty = do
         "STRING" -> do
           case jsonValue of
             Aeson.String s -> pure $ ValString s
-            _ -> InternalException $ RuntimeTypeError $
+            _ -> UserException $ UserError $
                   "Expected JSON string but got: " <> Text.pack (show jsonValue)
         "NUMBER" -> do
           case jsonValue of
             Aeson.Number n -> pure $ ValNumber (toRational n)
-            _ -> InternalException $ RuntimeTypeError $
+            _ -> UserException $ UserError $
                   "Expected JSON number but got: " <> Text.pack (show jsonValue)
         "BOOLEAN" -> do
           case jsonValue of
             Aeson.Bool b -> pure $ if b then ValBool True else ValBool False
-            _ -> InternalException $ RuntimeTypeError $
+            _ -> UserException $ UserError $
                   "Expected JSON boolean but got: " <> Text.pack (show jsonValue)
+        "DATE" -> do
+          -- DATE fields in JSON should be ISO-8601 strings (YYYY-MM-DD)
+          case jsonValue of
+            Aeson.String s -> do
+              case parseDateText s of
+                Just day -> pure $ ValDate day
+                Nothing -> UserException $ UserError $
+                  "Could not parse date string '" <> s <> "'. Expected format: YYYY-MM-DD"
+            _ -> UserException $ UserError $
+                  "Expected JSON string for DATE field but got: " <> Text.pack (show jsonValue)
+        "TIME" -> do
+          -- TIME fields in JSON should be strings (HH:MM:SS or HH:MM)
+          case jsonValue of
+            Aeson.String s -> do
+              case parseTimeText s of
+                Just tod -> pure $ ValTime tod
+                Nothing -> UserException $ UserError $
+                  "Could not parse time string '" <> s <> "'. Expected format: HH:MM:SS or HH:MM"
+            _ -> UserException $ UserError $
+                  "Expected JSON string for TIME field but got: " <> Text.pack (show jsonValue)
+        "DATETIME" -> do
+          -- DATETIME fields in JSON should be ISO-8601 strings with timezone
+          case jsonValue of
+            Aeson.String s -> do
+              case parseDatetimeText s of
+                Just utc -> do
+                  tc <- GetTemporalContext
+                  let tzName = fromMaybe "Etc/UTC" tc.tcDocumentTimezone
+                  pure $ ValDateTime utc tzName
+                Nothing -> UserException $ UserError $
+                  "Could not parse datetime string '" <> s <> "'. Expected ISO-8601 format: YYYY-MM-DDTHH:MM:SSZ"
+            _ -> UserException $ UserError $
+                  "Expected JSON string for DATETIME field but got: " <> Text.pack (show jsonValue)
 
         -- Not a primitive, check if it's a custom record type
         _ -> do
@@ -1373,7 +1378,7 @@ jsonValueToWHNFTyped jsonValue ty = do
                         case KeyMap.lookup (Key.fromText fieldName) obj of
                           Nothing -> do
                             -- Field missing in JSON, this is an error
-                            InternalException $ RuntimeTypeError $
+                            UserException $ UserError $
                               "Missing required field '" <> fieldName <> "' in JSON object"
                           Just fieldValue -> do
                             -- RECURSIVELY decode the field value WITH TYPE INFORMATION
@@ -1383,7 +1388,7 @@ jsonValueToWHNFTyped jsonValue ty = do
                       pure $ ValConstructor conRef fieldRefs
                     _ -> do
                       -- JSON value is not an object, can't decode to record
-                      InternalException $ RuntimeTypeError $
+                      UserException $ UserError $
                         "Expected JSON object to decode to record type, but got: " <> Text.pack (show jsonValue)
 
     -- For other types, fall back to generic decoding
@@ -1449,38 +1454,47 @@ textListToWHNF (x:xs) = do
   tailRef <- AllocateValue tailVal
   pure $ ValCons headRef tailRef
 
+#ifdef HTTP_ENABLED
 runPost :: WHNF -> WHNF -> WHNF -> Machine Config
 runPost urlVal headersVal bodyVal = do
-  url <- expectString urlVal
-  headersStr <- expectString headersVal
-  body <- expectString bodyVal
-  let (url', options) = Text.breakOn "?" url
-      (protocol, _) = Text.breakOn "://" url'
-  case protocol of
-    "https" -> do
-      let (hostname, path) = Text.breakOn "/" (Text.drop (Text.length "https://") url')
-          pathSegments = filter (not . Text.null) $ Text.splitOn "/" path
-          reqBase = Req.https hostname
-          reqWithPath = foldl (Req./:) reqBase pathSegments
-          params = if Text.null options then [] else Text.splitOn "&" (Text.drop 1 options)
+  safe <- GetSafeMode
+  if safe
+    then InternalException (RuntimeTypeError "POST is disabled in safe mode (no HTTP requests allowed)")
+    else do
+      url <- expectString urlVal
+      headersStr <- expectString headersVal
+      body <- expectString bodyVal
+      let (url', options) = Text.breakOn "?" url
+          (protocol, _) = Text.breakOn "://" url'
+      case protocol of
+        "https" -> do
+          let (hostname, path) = Text.breakOn "/" (Text.drop (Text.length "https://") url')
+              pathSegments = filter (not . Text.null) $ Text.splitOn "/" path
+              reqBase = Req.https hostname
+              reqWithPath = foldl (Req./:) reqBase pathSegments
+              params = if Text.null options then [] else Text.splitOn "&" (Text.drop 1 options)
 
-          -- Parse headers from newline-separated format: "Header-Name: value\nAnother-Header: value"
-          headerLines = filter (not . Text.null) $ Text.splitOn "\n" headersStr
-          parseHeader line =
-            let (name, rest) = Text.breakOn ":" line
-                value = Text.strip $ Text.drop 1 rest  -- drop the colon and strip whitespace
-            in if Text.null rest
-               then Nothing  -- invalid header format
-               else Just (Req.header (TE.encodeUtf8 name) (TE.encodeUtf8 value))
-          headerOptions = mapMaybe parseHeader headerLines
+              -- Parse headers from newline-separated format: "Header-Name: value\nAnother-Header: value"
+              headerLines = filter (not . Text.null) $ Text.splitOn "\n" headersStr
+              parseHeader line =
+                let (name, rest) = Text.breakOn ":" line
+                    value = Text.strip $ Text.drop 1 rest  -- drop the colon and strip whitespace
+                in if Text.null rest
+                   then Nothing  -- invalid header format
+                   else Just (Req.header (TE.encodeUtf8 name) (TE.encodeUtf8 value))
+              headerOptions = mapMaybe parseHeader headerLines
 
-          queryOptions = map (\p -> let (k,v) = Text.breakOn "=" p in k =: Text.drop 1 v) params
-          req_options = mconcat (headerOptions <> queryOptions)
+              queryOptions = map (\p -> let (k,v) = Text.breakOn "=" p in k =: Text.drop 1 v) params
+              req_options = mconcat (headerOptions <> queryOptions)
 
-      res <- liftIO $ Req.runReq Req.defaultHttpConfig $ do
-        Req.req Req.POST reqWithPath (Req.ReqBodyLbs $ LBS.fromStrict $ TE.encodeUtf8 body) Req.lbsResponse req_options
-      Backward $ ValString (TE.decodeUtf8 . LBS.toStrict $ Req.responseBody res)
-    _ -> InternalException (RuntimeTypeError "POST only supports https")
+          res <- liftIO $ Req.runReq Req.defaultHttpConfig $ do
+            Req.req Req.POST reqWithPath (Req.ReqBodyLbs $ LBS.fromStrict $ TE.encodeUtf8 body) Req.lbsResponse req_options
+          Backward $ ValString (TE.decodeUtf8 . LBS.toStrict $ Req.responseBody res)
+        _ -> InternalException (RuntimeTypeError "POST only supports https")
+#else
+runPost :: WHNF -> WHNF -> WHNF -> Machine Config
+runPost _ _ _ = InternalException (RuntimeTypeError "POST is not available (HTTP support disabled at compile time)")
+#endif
 
 runConcat :: [WHNF] -> Machine Config
 runConcat vals = do
@@ -1500,6 +1514,10 @@ coerceToString val = case val of
     Backward $ ValString (if b then "TRUE" else "FALSE")
   ValDate day ->
     Backward $ ValString (formatDateIso day)
+  ValTime tod ->
+    Backward $ ValString (formatTimeOfDay tod)
+  ValDateTime utc tzName ->
+    Backward $ ValString (formatDateTimeIso utc tzName)
   ValConstructor con fields
     | isDateConstructor con -> do
         case fields of
@@ -1514,8 +1532,8 @@ coerceToString val = case val of
     incompatible
   where
     incompatible =
-      InternalException $ RuntimeTypeError $
-        "AS STRING/TOSTRING can only convert NUMBER, BOOLEAN, DATE, or STRING to STRING, but found: " <> prettyLayout val
+      UserException $ UserError $
+        "AS STRING/TOSTRING can only convert NUMBER, BOOLEAN, DATE, TIME, DATETIME, or STRING to STRING, but found: " <> prettyLayout val
 
 formatDateIso :: Time.Day -> Text
 formatDateIso day =
@@ -1546,7 +1564,7 @@ formatDateParts year month day =
   pad 4 year <> "-" <> pad 2 month <> "-" <> pad 2 day
   where
     pad width v =
-      let raw = Text.show v
+      let raw = Text.textShow v
       in if Text.length raw >= width
            then raw
            else Text.replicate (width - Text.length raw) "0" <> raw
@@ -1632,23 +1650,32 @@ runBuiltin es op mTy = do
         Nothing ->
           decodeJsonToValue jsonStr
       Backward result
+#ifdef HTTP_ENABLED
     UnaryFetch -> do
-      url <- expectString es
-      let (url', options) = Text.breakOn "?" url
-          (protocol, _) = Text.breakOn "://" url'
-      case protocol of
-        "https" -> do
-          let (hostname, path) = Text.breakOn "/" (Text.drop (Text.length "https://") url')
-              pathSegments = filter (not . Text.null) $ Text.splitOn "/" path
-              reqBase = Req.https hostname
-              reqWithPath = foldl (Req./:) reqBase pathSegments
-              params = if Text.null options then [] else Text.splitOn "&" (Text.drop 1 options)
-              req_options =
-                mconcat (map (\p -> let (k,v) = Text.breakOn "=" p in k =: Text.drop 1 v) params)
-          res <- liftIO $ Req.runReq Req.defaultHttpConfig $ do
-            Req.req Req.GET reqWithPath Req.NoReqBody Req.lbsResponse req_options
-          Backward $ ValString (TE.decodeUtf8 . LBS.toStrict $ Req.responseBody res)
-        _ -> InternalException (RuntimeTypeError "FETCH only supports https")
+      safe <- GetSafeMode
+      if safe
+        then InternalException (RuntimeTypeError "FETCH is disabled in safe mode (no HTTP requests allowed)")
+        else do
+          url <- expectString es
+          let (url', options) = Text.breakOn "?" url
+              (protocol, _) = Text.breakOn "://" url'
+          case protocol of
+            "https" -> do
+              let (hostname, path) = Text.breakOn "/" (Text.drop (Text.length "https://") url')
+                  pathSegments = filter (not . Text.null) $ Text.splitOn "/" path
+                  reqBase = Req.https hostname
+                  reqWithPath = foldl (Req./:) reqBase pathSegments
+                  params = if Text.null options then [] else Text.splitOn "&" (Text.drop 1 options)
+                  req_options =
+                    mconcat (map (\p -> let (k,v) = Text.breakOn "=" p in k =: Text.drop 1 v) params)
+              res <- liftIO $ Req.runReq Req.defaultHttpConfig $ do
+                Req.req Req.GET reqWithPath Req.NoReqBody Req.lbsResponse req_options
+              Backward $ ValString (TE.decodeUtf8 . LBS.toStrict $ Req.responseBody res)
+            _ -> InternalException (RuntimeTypeError "FETCH only supports https")
+#else
+    UnaryFetch -> do
+      InternalException (RuntimeTypeError "FETCH is not available (HTTP support disabled at compile time)")
+#endif
     UnaryEnv -> do
       varName <- expectString es
       maybeValue <- liftIO $ lookupEnv (Text.unpack varName)
@@ -1729,6 +1756,66 @@ runBuiltin es op mTy = do
         Right fraction -> do
           valRef <- AllocateValue (ValNumber fraction)
           Backward $ ValConstructor TypeCheck.rightRef [valRef]
+    -- TIME builtins
+    UnaryTimeHour -> do
+      tod <- expectTimeValue es
+      Backward $ ValNumber (fromIntegral $ todHour tod)
+    UnaryTimeMinute -> do
+      tod <- expectTimeValue es
+      Backward $ ValNumber (fromIntegral $ todMin tod)
+    UnaryTimeSecond -> do
+      tod <- expectTimeValue es
+      Backward $ ValNumber (realToFrac $ todSec tod)
+    UnaryTimeToSerial -> do
+      tod <- expectTimeValue es
+      let seconds = timeOfDayToTime tod
+      Backward $ ValNumber (toRational seconds / toRational (86400 :: Pico))
+    UnaryTimeFromSerial -> do
+      serial <- expectNumber es
+      let seconds = realToFrac (serial * 86400) :: Pico
+      Backward $ ValTime (timeToTimeOfDay (realToFrac seconds))
+    UnaryToTime -> do
+      str <- expectString es
+      case parseTimeText str of
+        Just tod -> do
+          todRef <- AllocateValue (ValTime tod)
+          Backward $ ValConstructor TypeCheck.justRef [todRef]
+        Nothing ->
+          Backward $ ValConstructor TypeCheck.nothingRef []
+    -- DATETIME builtins
+    UnaryDatetimeDate -> do
+      (utc, tzName) <- expectDateTimeValue es
+      case tryLoadTZPure tzName of
+        Just tz -> do
+          let localTime' = TZ.utcToLocalTimeTZ tz utc
+          Backward $ ValDate (localDay localTime')
+        Nothing ->
+          UserException $ UserError $ "Could not load timezone: " <> tzName
+    UnaryDatetimeTime -> do
+      (utc, tzName) <- expectDateTimeValue es
+      case tryLoadTZPure tzName of
+        Just tz -> do
+          let localTime' = TZ.utcToLocalTimeTZ tz utc
+          Backward $ ValTime (localTimeOfDay localTime')
+        Nothing ->
+          UserException $ UserError $ "Could not load timezone: " <> tzName
+    UnaryDatetimeSerial -> do
+      (utc, _tzName) <- expectDateTimeValue es
+      Backward $ ValNumber (utcDatestamp utc)
+    UnaryDatetimeTzName -> do
+      (_utc, tzName) <- expectDateTimeValue es
+      Backward $ ValString tzName
+    UnaryToDatetime -> do
+      str <- expectString es
+      case parseDatetimeText str of
+        Just utc -> do
+          -- Use document timezone as default for the stored tz name
+          tc <- GetTemporalContext
+          let tzName = fromMaybe "Etc/UTC" tc.tcDocumentTimezone
+          dtRef <- AllocateValue (ValDateTime utc tzName)
+          Backward $ ValConstructor TypeCheck.justRef [dtRef]
+        Nothing ->
+          Backward $ ValConstructor TypeCheck.nothingRef []
     -- Numeric unary operations (catch-all)
     _ -> do
       val :: Rational <- expectNumber es
@@ -1737,11 +1824,11 @@ runBuiltin es op mTy = do
       case op of
         UnaryLn ->
           if val <= 0
-            then InternalException $ RuntimeTypeError "LN expects input greater than 0"
+            then UserException $ UserError "LN expects input greater than 0"
             else Backward $ ValNumber (toRational (log valDouble))
         UnaryLog10 ->
           if val <= 0
-            then InternalException $ RuntimeTypeError "LOG10 expects input greater than 0"
+            then UserException $ UserError "LOG10 expects input greater than 0"
             else Backward $ ValNumber (toRational (logBase 10 valDouble))
         UnarySin ->
           Backward $ ValNumber (toRational (sin valDouble))
@@ -1751,11 +1838,11 @@ runBuiltin es op mTy = do
           Backward $ ValNumber (toRational (tan valDouble))
         UnaryAsin ->
           if val < (-1) || val > 1
-            then InternalException $ RuntimeTypeError "ASIN expects input between -1 and 1"
+            then UserException $ UserError "ASIN expects input between -1 and 1"
             else Backward $ ValNumber (toRational (asin valDouble))
         UnaryAcos ->
           if val < (-1) || val > 1
-            then InternalException $ RuntimeTypeError "ACOS expects input between -1 and 1"
+            then UserException $ UserError "ACOS expects input between -1 and 1"
             else Backward $ ValNumber (toRational (acos valDouble))
         UnaryAtan ->
           Backward $ ValNumber (toRational (atan valDouble))
@@ -1795,7 +1882,30 @@ runTernaryBuiltin TernaryDateFromDMY dVal mVal yVal = do
   case Time.fromGregorianValid yInt (fromInteger mInt) (fromInteger dInt) of
     Just day -> Backward (ValDate day)
     Nothing ->
-      InternalException $ RuntimeTypeError "DATE_FROM_DMY produced an invalid date"
+      UserException $ UserError $
+        "DATE_FROM_DMY produced an invalid date from day="
+        <> Text.pack (show dInt) <> ", month=" <> Text.pack (show mInt) <> ", year=" <> Text.pack (show yInt)
+runTernaryBuiltin TernaryTimeFromHMS hVal mVal sVal = do
+  hNum <- expectNumber hVal
+  mNum <- expectNumber mVal
+  sNum <- expectNumber sVal
+  hInt <- expectWhole "TIME_FROM_HMS expects integer hour" hNum
+  mInt <- expectWhole "TIME_FROM_HMS expects integer minute" mNum
+  let sPico = realToFrac sNum :: Pico
+  if hInt >= 0 && hInt < 24 && mInt >= 0 && mInt < 60 && sPico >= 0 && sPico < 60
+    then Backward $ ValTime (TimeOfDay (fromInteger hInt) (fromInteger mInt) sPico)
+    else UserException $ UserError "TIME_FROM_HMS: values out of range (H: 0-23, M: 0-59, S: 0-59)"
+runTernaryBuiltin TernaryDatetimeFromDTZ dateVal timeVal tzVal = do
+  day <- expectDateValue dateVal
+  tod <- expectTimeValue timeVal
+  tzName <- expectString tzVal
+  case tryLoadTZPure tzName of
+    Just tz -> do
+      let localTime = LocalTime day tod
+          utc = TZ.localTimeToUTCTZ tz localTime
+      Backward $ ValDateTime utc tzName
+    Nothing ->
+      UserException $ UserError $ "Unknown timezone: '" <> tzName <> "'. Use an IANA timezone name like \"Asia/Singapore\" or \"America/New_York\"."
 runTernaryBuiltin TernaryEverBetween startVal endVal predicate =
   startEverBetween startVal endVal predicate
 runTernaryBuiltin TernaryAlwaysBetween startVal endVal predicate =
@@ -1832,15 +1942,27 @@ runBinOp BinOpEquals val1             val2                       = runBinOpEqual
 runBinOp BinOpLeq    (ValNumber num1) (ValNumber num2)           = Backward $ ValBool (num1 <= num2)
 runBinOp BinOpLeq    (ValString str1) (ValString str2)           = Backward $ ValBool (str1 <= str2)
 runBinOp BinOpLeq    (ValBool b1)     (ValBool b2)               = Backward $ ValBool (b1 <= b2)
+runBinOp BinOpLeq    (ValDate d1)     (ValDate d2)               = Backward $ ValBool (d1 <= d2)
+runBinOp BinOpLeq    (ValTime t1)     (ValTime t2)               = Backward $ ValBool (t1 <= t2)
+runBinOp BinOpLeq    (ValDateTime u1 _) (ValDateTime u2 _)       = Backward $ ValBool (u1 <= u2)
 runBinOp BinOpGeq    (ValNumber num1) (ValNumber num2)           = Backward $ ValBool (num1 >= num2)
 runBinOp BinOpGeq    (ValString str1) (ValString str2)           = Backward $ ValBool (str1 >= str2)
 runBinOp BinOpGeq    (ValBool b1)     (ValBool b2)               = Backward $ ValBool (b1 >= b2)
+runBinOp BinOpGeq    (ValDate d1)     (ValDate d2)               = Backward $ ValBool (d1 >= d2)
+runBinOp BinOpGeq    (ValTime t1)     (ValTime t2)               = Backward $ ValBool (t1 >= t2)
+runBinOp BinOpGeq    (ValDateTime u1 _) (ValDateTime u2 _)       = Backward $ ValBool (u1 >= u2)
 runBinOp BinOpLt     (ValNumber num1) (ValNumber num2)           = Backward $ ValBool (num1 < num2)
 runBinOp BinOpLt     (ValString str1) (ValString str2)           = Backward $ ValBool (str1 < str2)
 runBinOp BinOpLt     (ValBool b1)     (ValBool b2)               = Backward $ ValBool (b1 < b2)
+runBinOp BinOpLt     (ValDate d1)     (ValDate d2)               = Backward $ ValBool (d1 < d2)
+runBinOp BinOpLt     (ValTime t1)     (ValTime t2)               = Backward $ ValBool (t1 < t2)
+runBinOp BinOpLt     (ValDateTime u1 _) (ValDateTime u2 _)       = Backward $ ValBool (u1 < u2)
 runBinOp BinOpGt     (ValNumber num1) (ValNumber num2)           = Backward $ ValBool (num1 > num2)
 runBinOp BinOpGt     (ValString str1) (ValString str2)           = Backward $ ValBool (str1 > str2)
 runBinOp BinOpGt     (ValBool b1)     (ValBool b2)               = Backward $ ValBool (b1 > b2)
+runBinOp BinOpGt     (ValDate d1)     (ValDate d2)               = Backward $ ValBool (d1 > d2)
+runBinOp BinOpGt     (ValTime t1)     (ValTime t2)               = Backward $ ValBool (t1 > t2)
+runBinOp BinOpGt     (ValDateTime u1 _) (ValDateTime u2 _)       = Backward $ ValBool (u1 > u2)
 -- String binary operations
 runBinOp BinOpContains   (ValString haystack) (ValString needle) = Backward $ ValBool (needle `Text.isInfixOf` haystack)
 runBinOp BinOpStartsWith (ValString text) (ValString prefix)     = Backward $ ValBool (prefix `Text.isPrefixOf` text)
@@ -1875,10 +1997,14 @@ runBinOpEquals :: WHNF -> WHNF -> Machine Config
 runBinOpEquals (ValNumber num1)        (ValNumber num2) = Backward $ valBool $ num1 == num2
 runBinOpEquals (ValString str1)        (ValString str2) = Backward $ valBool $ str1 == str2
 runBinOpEquals (ValDate d1)            (ValDate d2) = Backward $ valBool $ d1 == d2
+runBinOpEquals (ValTime t1)            (ValTime t2) = Backward $ valBool $ t1 == t2
+runBinOpEquals (ValDateTime u1 _)      (ValDateTime u2 _) = Backward $ valBool $ u1 == u2
 runBinOpEquals ValNil                  ValNil           = Backward $ valBool True
 runBinOpEquals (ValCons r1 rs1)        (ValCons r2 rs2) = do
   PushFrame (EqConstructor1 r2 [(rs1, rs2)])
   EvalRef r1
+runBinOpEquals ValNil                  (ValCons _ _)   = Backward $ ValBool False
+runBinOpEquals (ValCons _ _)           ValNil           = Backward $ ValBool False
 runBinOpEquals (ValConstructor n1 rs1) (ValConstructor n2 rs2)
   | sameResolved n1 n2 && length rs1 == length rs2 =
     let
@@ -2043,9 +2169,12 @@ evalRef rf =
     thunk@(WHNF val) ->
       case val of
         ValNullaryBuiltinFun fn ->
+          -- Don't cache nullary builtins (e.g. TIMEZONE, TODAY, NOW) because
+          -- their results depend on mutable state (TemporalContext) that can
+          -- change between evaluations while the thunk IORef persists in
+          -- cached import environments.
           (thunk, do
               evaluated <- evalNullaryBuiltin fn
-              updateThunkToWHNF rf evaluated
               Backward evaluated)
         _ ->
           (thunk, Backward val)
@@ -2107,6 +2236,8 @@ scanTopDecl (Directive _ann _directive) =
   pure []
 scanTopDecl (Import _ann _import_) =
   pure []
+scanTopDecl (Timezone _ann _expr) =
+  pure []
 
 -- | Just collect all defined names; could plausibly be done generically.
 scanLocalDecl :: LocalDecl Resolved -> Machine [Resolved]
@@ -2135,7 +2266,7 @@ scanTypeDecl (SynonymDecl _ann _t) =
 
 scanConDecl :: ConDecl Resolved -> Machine [Resolved]
 scanConDecl (MkConDecl _ann n [])  = pure [n]
-scanConDecl (MkConDecl _ann n tns) = pure (n : ((\ (MkTypedName _ n' _) -> n') <$> tns))
+scanConDecl (MkConDecl _ann n tns) = pure (n : ((\ (MkTypedName _ n' _ _) -> n') <$> tns))
 
 evalSection :: Environment -> Section Resolved -> Machine [EvalDirective]
 evalSection env (MkSection _ann _mn _maka topdecls) =
@@ -2153,6 +2284,24 @@ evalTopDecl env (Directive _ann directive) =
 evalTopDecl env (Section _ann section) =
   evalSection env section
 evalTopDecl _env (Import _ann _import_) =
+  pure []
+evalTopDecl env (Timezone _ann expr) = do
+  -- Extract timezone string from the expression and set it in TemporalContext
+  mTzName <- extractTimezoneString env expr
+  case mTzName of
+    Just tzName -> do
+      -- Validate it's a known IANA timezone by attempting to load it
+      mTz <- liftIO $ tryLoadTZ (Text.unpack tzName)
+      case mTz of
+        Just _ -> do
+          tc <- GetTemporalContext
+          PutTemporalContext tc { tcDocumentTimezone = Just tzName }
+        Nothing ->
+          UserException $ UserError $
+            "Unknown timezone: '" <> tzName <> "'. Use an IANA timezone name like \"Asia/Singapore\" or \"America/New_York\"."
+    Nothing ->
+      UserException $ UserError
+        "TIMEZONE IS must be a string literal or a simple identifier that resolves to a string."
   pure []
 
 evalDirective :: Environment -> Directive Resolved -> Machine [EvalDirective]
@@ -2242,7 +2391,7 @@ evalConDecl env (MkConDecl _ann n tns) = do
   updateTerm env n (WHNF (ValUnappliedConstructor n))
   conRef <- ref (TypeCheck.getName n) n
   -- selectors (we need to create fresh names for the lambda abstractions so that every binder is unique)
-  traverse_ (\ (i, MkTypedName _ sn _t) -> do
+  traverse_ (\ (i, MkTypedName _ sn _t _) -> do
     arg    <- def (TypeCheck.getName n)
     argRef <- ref (TypeCheck.getName n) arg
     args <- traverse (def . TypeCheck.getName) tns
@@ -2393,7 +2542,7 @@ prettyUserEvalException = \ case
     <> [ "has no corresponding pattern." ]
   StackOverflow ->
     [ "Stack overflow: "
-    , "Recursion depth of " <> Text.show maximumStackSize
+    , "Recursion depth of " <> Text.textShow maximumStackSize
     , "exceeded." ]
   DivisionByZero op ->
     [ "Division by zero in the operation:"
@@ -2409,6 +2558,8 @@ prettyUserEvalException = \ case
     [ "I could not continue evaluating, because I needed to know the value of" ]
     <> indentMany r
     <> [ "but it is an assumed term." ]
+  UserError msg ->
+    [ msg ]
 
 maximumStackSize :: Int
 maximumStackSize = 200
@@ -2446,6 +2597,23 @@ initialEnvironment = do
   toStringRef <- AllocateValue (ValUnaryBuiltinFun UnaryToString)
   toNumberRef <- AllocateValue (ValUnaryBuiltinFun UnaryToNumber)
   toDateRef <- AllocateValue (ValUnaryBuiltinFun UnaryToDate)
+  -- TIME builtins
+  timeHourRef <- AllocateValue (ValUnaryBuiltinFun UnaryTimeHour)
+  timeMinuteRef <- AllocateValue (ValUnaryBuiltinFun UnaryTimeMinute)
+  timeSecondRef <- AllocateValue (ValUnaryBuiltinFun UnaryTimeSecond)
+  timeToSerialRef <- AllocateValue (ValUnaryBuiltinFun UnaryTimeToSerial)
+  timeFromSerialRef <- AllocateValue (ValUnaryBuiltinFun UnaryTimeFromSerial)
+  timeFromHMSRef <- AllocateValue (ValTernaryBuiltinFun TernaryTimeFromHMS)
+  toTimeRef <- AllocateValue (ValUnaryBuiltinFun UnaryToTime)
+  -- DATETIME builtins
+  datetimeDateRef <- AllocateValue (ValUnaryBuiltinFun UnaryDatetimeDate)
+  datetimeTimeRef <- AllocateValue (ValUnaryBuiltinFun UnaryDatetimeTime)
+  datetimeSerialRef <- AllocateValue (ValUnaryBuiltinFun UnaryDatetimeSerial)
+  datetimeTzNameRef <- AllocateValue (ValUnaryBuiltinFun UnaryDatetimeTzName)
+  datetimeFromDTZRef <- AllocateValue (ValTernaryBuiltinFun TernaryDatetimeFromDTZ)
+  toDatetimeRef <- AllocateValue (ValUnaryBuiltinFun UnaryToDatetime)
+  -- TIMEZONE nullary builtin
+  timezoneRef <- AllocateValue (ValNullaryBuiltinFun NullaryTimezone)
   -- Ternary string builtins
   substringRef <- AllocateValue (ValTernaryBuiltinFun TernarySubstring)
   replaceRef <- AllocateValue (ValTernaryBuiltinFun TernaryReplace)
@@ -2456,6 +2624,7 @@ initialEnvironment = do
   jsonDecodeRef <- AllocateValue (ValUnaryBuiltinFun UnaryJsonDecode)
   todayRef <- AllocateValue (ValNullaryBuiltinFun NullaryTodaySerial)
   nowRef <- AllocateValue (ValNullaryBuiltinFun NullaryNowSerial)
+  currentTimeRef <- AllocateValue (ValNullaryBuiltinFun NullaryCurrentTime)
   dateFromTextRef <- AllocateValue (ValUnaryBuiltinFun UnaryDateValue)
   dateSerialRef <- AllocateValue (ValUnaryBuiltinFun UnaryDateSerial)
   dateFromSerialRef <- AllocateValue (ValUnaryBuiltinFun UnaryDateFromSerial)
@@ -2471,8 +2640,6 @@ initialEnvironment = do
   evalUnderValidTimeRef <- AllocateValue (ValAssumed TypeCheck.evalUnderValidTimeRef)
   evalUnderRulesEffectiveAtRef <- AllocateValue (ValAssumed TypeCheck.evalUnderRulesEffectiveAtRef)
   evalUnderRulesEncodedAtRef <- AllocateValue (ValAssumed TypeCheck.evalUnderRulesEncodedAtRef)
-  evalUnderCommitRef <- AllocateValue (ValAssumed TypeCheck.evalUnderCommitRef)
-  evalRetroactiveToRef <- AllocateValue (ValAssumed TypeCheck.evalRetroactiveToRef)
   fulfilRef <- AllocateValue ValFulfilled
   neverMatchesPartyRef <- AllocateValue ValNeverMatchesParty
   neverMatchesActRef <- AllocateValue ValNeverMatchesAct
@@ -2521,6 +2688,7 @@ initialEnvironment = do
       , (TypeCheck.jsonDecodeUnique, jsonDecodeRef)
       , (TypeCheck.todaySerialUnique, todayRef)
       , (TypeCheck.nowSerialUnique, nowRef)
+      , (TypeCheck.currentTimeUnique, currentTimeRef)
       , (TypeCheck.dateFromTextUnique, dateFromTextRef)
       , (TypeCheck.dateSerialUnique, dateSerialRef)
       , (TypeCheck.dateFromSerialUnique, dateFromSerialRef)
@@ -2535,8 +2703,6 @@ initialEnvironment = do
       , (TypeCheck.evalUnderValidTimeUnique, evalUnderValidTimeRef)
       , (TypeCheck.evalUnderRulesEffectiveAtUnique, evalUnderRulesEffectiveAtRef)
       , (TypeCheck.evalUnderRulesEncodedAtUnique, evalUnderRulesEncodedAtRef)
-      , (TypeCheck.evalUnderCommitUnique, evalUnderCommitRef)
-      , (TypeCheck.evalRetroactiveToUnique, evalRetroactiveToRef)
       , (TypeCheck.waitUntilUnique, waitUntilRef)
       , (TypeCheck.andUnique, andRef)
       , (TypeCheck.orUnique, orRef)
@@ -2550,6 +2716,23 @@ initialEnvironment = do
       , (TypeCheck.toStringUnique, toStringRef)
       , (TypeCheck.toNumberUnique, toNumberRef)
       , (TypeCheck.toDateUnique, toDateRef)
+      -- TIME builtins
+      , (TypeCheck.timeHourUnique, timeHourRef)
+      , (TypeCheck.timeMinuteUnique, timeMinuteRef)
+      , (TypeCheck.timeSecondUnique, timeSecondRef)
+      , (TypeCheck.timeToSerialUnique, timeToSerialRef)
+      , (TypeCheck.timeFromSerialUnique, timeFromSerialRef)
+      , (TypeCheck.timeFromHMSUnique, timeFromHMSRef)
+      , (TypeCheck.toTimeUnique, toTimeRef)
+      -- DATETIME builtins
+      , (TypeCheck.datetimeDateUnique, datetimeDateRef)
+      , (TypeCheck.datetimeTimeUnique, datetimeTimeRef)
+      , (TypeCheck.datetimeSerialUnique, datetimeSerialRef)
+      , (TypeCheck.datetimeTzNameUnique, datetimeTzNameRef)
+      , (TypeCheck.datetimeFromDTZUnique, datetimeFromDTZRef)
+      , (TypeCheck.toDatetimeUnique, toDatetimeRef)
+      -- TIMEZONE
+      , (TypeCheck.timezoneUnique, timezoneRef)
       -- Ternary string functions
       , (TypeCheck.substringUnique, substringRef)
       , (TypeCheck.replaceUnique, replaceRef)
@@ -2595,13 +2778,47 @@ evalNullaryBuiltin :: NullaryBuiltinFun -> Machine WHNF
 evalNullaryBuiltin = \case
   NullaryTodaySerial -> do
     tc <- GetTemporalContext
-    let TemporalContext { tcSystemTime = systemTime } = tc
-        todayDay = Time.utctDay systemTime
-    pure $ ValDate todayDay
+    case tc.tcDocumentTimezone of
+      Just tzName -> do
+        mTz <- liftIO $ tryLoadTZ (Text.unpack tzName)
+        case mTz of
+          Just tz -> do
+            let localTime = TZ.utcToLocalTimeTZ tz tc.tcSystemTime
+                todayDay = localDay localTime
+            pure $ ValDate todayDay
+          Nothing ->
+            UserException $ UserError $
+              "Could not load timezone '" <> tzName <> "' for TODAY."
+      Nothing ->
+        UserException $ UserError
+          "TIMEZONE is not declared. TODAY requires 'TIMEZONE IS \"<IANA timezone>\"' in your document."
   NullaryNowSerial -> do
     tc <- GetTemporalContext
-    let TemporalContext { tcSystemTime = systemTime } = tc
-    pure $ ValNumber (utcDatestamp systemTime)
+    let tzName = fromMaybe "Etc/UTC" tc.tcDocumentTimezone
+    pure $ ValDateTime tc.tcSystemTime tzName
+  NullaryTimezone -> do
+    tc <- GetTemporalContext
+    case tc.tcDocumentTimezone of
+      Just tzName -> pure $ ValString tzName
+      Nothing ->
+        UserException $ UserError
+          "TIMEZONE is not declared. Add 'TIMEZONE IS \"<IANA timezone>\"' to your document."
+  NullaryCurrentTime -> do
+    tc <- GetTemporalContext
+    case tc.tcDocumentTimezone of
+      Just tzName -> do
+        mTz <- liftIO $ tryLoadTZ (Text.unpack tzName)
+        case mTz of
+          Just tz -> do
+            let localTime = TZ.utcToLocalTimeTZ tz tc.tcSystemTime
+                tod = localTimeOfDay localTime
+            pure $ ValTime tod
+          Nothing ->
+            UserException $ UserError $
+              "Could not load timezone '" <> tzName <> "' for CURRENTTIME."
+      Nothing ->
+        UserException $ UserError
+          "TIMEZONE is not declared. CURRENTTIME requires 'TIMEZONE IS \"<IANA timezone>\"' in your document."
 
 utcDatestamp :: Time.UTCTime -> Rational
 utcDatestamp time =
@@ -2631,47 +2848,6 @@ serialToUTCTime serial =
       seconds :: Pico
       seconds = realToFrac (fraction * secondsPerDay)
   in Time.UTCTime day (realToFrac seconds)
-
-requireModulePath :: Machine FilePath
-requireModulePath = do
-  uri <- GetModuleUri
-  case uriToFilePath (fromNormalizedUri uri) of
-    Nothing -> InternalException $ RuntimeTypeError "Temporal evaluation requires a file-backed module"
-    Just fp -> pure fp
-
-liftEitherIO :: IO (Either Text a) -> Machine a
-liftEitherIO action = do
-  res <- liftIO action
-  case res of
-    Left err -> InternalException $ RuntimeTypeError err
-    Right v -> pure v
-
-resolveCommitContext :: TemporalContext -> Text -> Machine TemporalContext
-resolveCommitContext originalCtx commitTxt = do
-  modulePath <- requireModulePath
-  repoRoot <- liftEitherIO (resolveRepoRoot modulePath)
-  commitInfo <- liftEitherIO (resolveCommitHash repoRoot commitTxt)
-  let withCommit = applyEvalClauses [UnderCommit commitInfo.commitHash] originalCtx
-      commitDay = Time.utctDay commitInfo.commitTime
-  pure
-    withCommit
-      { tcRuleEncodingTime = Just commitInfo.commitTime
-      , tcRuleVersionTime = case withCommit.tcRuleVersionTime of
-          Nothing -> Just commitDay
-          justDay -> justDay
-      }
-
-resolveRulesEffectiveContext :: TemporalContext -> Time.Day -> Machine TemporalContext
-resolveRulesEffectiveContext originalCtx day = do
-  modulePath <- requireModulePath
-  repoRoot <- liftEitherIO (resolveRepoRoot modulePath)
-  commitInfo <- liftEitherIO (resolveRulesCommitByDate repoRoot modulePath day)
-  let baseCtx = applyEvalClauses [UnderRulesEffectiveAt day] originalCtx
-  pure
-    baseCtx
-      { tcRuleCommit = Just commitInfo.commitHash
-      , tcRuleEncodingTime = Just commitInfo.commitTime
-      }
 
 dateFormats :: [String]
 dateFormats =
@@ -2839,6 +3015,95 @@ parseDigits txt =
   if Text.all Char.isDigit txt
     then Right (Text.foldl' (\acc ch -> acc * 10 + toInteger (Char.digitToInt ch)) 0 txt)
     else Left "TIMEVALUE: expected only digits in fractional part."
+
+----------------------------------------------------------------------------
+-- Timezone utilities
+----------------------------------------------------------------------------
+
+-- | Try to load a TZ from the IANA database. Returns Nothing on failure.
+tryLoadTZ :: String -> IO (Maybe TZ.TZ)
+tryLoadTZ name =
+  (Just <$> TZ.loadTZFromDB name) `catch` \(_ :: SomeException) -> pure Nothing
+
+-- | Extract a timezone string from a TIMEZONE IS expression.
+-- Handles string literals directly and simple identifiers by peeking at thunks.
+extractTimezoneString :: Environment -> Expr Resolved -> Machine (Maybe Text)
+extractTimezoneString _env (Lit _ (StringLit _ s)) = pure (Just s)
+extractTimezoneString env (App _ nameRef []) = do
+  case Map.lookup (getUnique nameRef) env of
+    Just refId ->
+      PokeThunk refId $ \_ thunk -> case thunk of
+        WHNF (ValString s) -> (thunk, Just s)
+        Unevaluated _ (Lit _ (StringLit _ s)) _ -> (thunk, Just s)
+        _ -> (thunk, Nothing)
+    Nothing -> pure Nothing
+extractTimezoneString _ _ = pure Nothing
+
+-- | Parse a time string in HH:MM:SS or HH:MM format to TimeOfDay
+parseTimeText :: Text -> Maybe TimeOfDay
+parseTimeText raw =
+  let trimmed = Text.strip raw
+      formats = ["%H:%M:%S", "%H:%M:%S%Q", "%H:%M"]
+  in listToMaybe
+       [ tod
+       | fmt <- formats
+       , Just tod <- [TimeFormat.parseTimeM True TimeFormat.defaultTimeLocale fmt (Text.unpack trimmed)]
+       ]
+
+-- | Parse an ISO-8601 datetime string to UTCTime
+parseDatetimeText :: Text -> Maybe UTCTime
+parseDatetimeText raw =
+  let trimmed = Text.strip raw
+      formats =
+        [ "%Y-%m-%dT%H:%M:%S%Z"
+        , "%Y-%m-%dT%H:%M:%S%Q%Z"
+        , "%Y-%m-%dT%H:%M:%SZ"
+        , "%Y-%m-%dT%H:%M:%S%QZ"
+        , "%Y-%m-%dT%H:%M:%S%z"
+        , "%Y-%m-%dT%H:%M:%S%Q%z"
+        , "%Y-%m-%d %H:%M:%S%Z"
+        , "%Y-%m-%d %H:%M:%S%z"
+        ]
+  in listToMaybe
+       [ utc
+       | fmt <- formats
+       , Just utc <- [TimeFormat.parseTimeM True TimeFormat.defaultTimeLocale fmt (Text.unpack trimmed)]
+       ]
+
+-- | Format a TimeOfDay as HH:MM:SS
+formatTimeOfDay :: TimeOfDay -> Text
+formatTimeOfDay tod =
+  Text.pack $ TimeFormat.formatTime TimeFormat.defaultTimeLocale "%H:%M:%S" tod
+
+-- | Format a UTCTime with timezone offset as ISO-8601
+formatDateTimeIso :: UTCTime -> Text -> Text
+formatDateTimeIso utc tzName =
+  case tryLoadTZPure tzName of
+    Just tz ->
+      let localTime' = TZ.utcToLocalTimeTZ tz utc
+          offset = TZ.timeZoneForUTCTime tz utc
+          offsetStr = TimeFormat.formatTime TimeFormat.defaultTimeLocale "%z" offset
+      in Text.pack (TimeFormat.formatTime TimeFormat.defaultTimeLocale "%Y-%m-%dT%H:%M:%S" localTime') <> Text.pack offsetStr
+    Nothing ->
+      -- Fallback: format as UTC
+      Text.pack $ TimeFormat.formatTime TimeFormat.defaultTimeLocale "%Y-%m-%dT%H:%M:%SZ" utc
+
+-- | Pure-ish wrapper for TZ loading (uses unsafePerformIO since TZ data is static)
+tryLoadTZPure :: Text -> Maybe TZ.TZ
+tryLoadTZPure name = unsafePerformIO $ tryLoadTZ (Text.unpack name)
+{-# NOINLINE tryLoadTZPure #-}
+
+-- | Extract TimeOfDay from a WHNF value
+expectTimeValue :: WHNF -> Machine TimeOfDay
+expectTimeValue (ValTime tod) = pure tod
+expectTimeValue val = InternalException $ RuntimeTypeError $
+  "Expected TIME value but got: " <> prettyLayout val
+
+-- | Extract UTCTime and timezone from a WHNF value
+expectDateTimeValue :: WHNF -> Machine (UTCTime, Text)
+expectDateTimeValue (ValDateTime utc tz) = pure (utc, tz)
+expectDateTimeValue val = InternalException $ RuntimeTypeError $
+  "Expected DATETIME value but got: " <> prettyLayout val
 
 boolBinOpClosure :: Reference -> Reference -> (Resolved -> Resolved -> Expr Resolved) -> Machine (Value a)
 boolBinOpClosure true false buildExpr = do

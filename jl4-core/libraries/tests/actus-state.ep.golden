@@ -1,0 +1,64 @@
+-- =============================================================================
+-- ACTUS State Variables Library
+-- Algorithmic Contract Types Unified Standards (actusfrf.org)
+-- =============================================================================
+-- Contract state variables - simplified version.
+-- =============================================================================
+
+IMPORT prelude
+IMPORT `actus-core`
+
+§ `ACTUS State Variables`
+
+-- =============================================================================
+§§ `Contract State`
+-- =============================================================================
+
+DECLARE `Contract State` HAS
+    statusDate              IS A DATE
+    contractPerformance     IS A `Contract Performance`
+    notionalPrincipal       IS A NUMBER
+    accruedInterest         IS A NUMBER
+    nominalInterestRate     IS A NUMBER
+    feeAccrued              IS A NUMBER
+
+-- =============================================================================
+§§ `State Predicates`
+-- =============================================================================
+
+GIVEN state IS A `Contract State`
+GIVETH A BOOLEAN
+`is fully paid` MEANS
+    state's notionalPrincipal EQUALS 0
+    AND state's accruedInterest EQUALS 0
+
+GIVEN state IS A `Contract State`
+GIVETH A BOOLEAN
+`is in default` MEANS
+    CONSIDER state's contractPerformance
+    WHEN DF THEN TRUE
+    OTHERWISE FALSE
+
+GIVEN state IS A `Contract State`
+GIVETH A NUMBER
+`outstanding balance` MEANS
+    state's notionalPrincipal PLUS state's accruedInterest PLUS state's feeAccrued
+
+-- =============================================================================
+§§ `Empty State`
+-- =============================================================================
+
+`empty state` MEANS
+    `Contract State` WITH
+        statusDate          IS DATE_FROM_DMY 1 1 2000
+        contractPerformance IS PF
+        notionalPrincipal   IS 0
+        accruedInterest     IS 0
+        nominalInterestRate IS 0
+        feeAccrued          IS 0
+
+-- =============================================================================
+§§ `Version Information`
+-- =============================================================================
+
+`ACTUS State Library Version` MEANS "1.0.0"

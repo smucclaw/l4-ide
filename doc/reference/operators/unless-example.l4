@@ -1,0 +1,139 @@
+-- UNLESS Keyword Examples
+-- UNLESS is syntactic sugar for AND NOT, with precedence lower than OR.
+
+--------------------------------------------------------------------------------
+-- Basic UNLESS Tests
+--------------------------------------------------------------------------------
+
+-- TRUE UNLESS TRUE = TRUE AND NOT TRUE = FALSE
+DECIDE basic1 IF TRUE UNLESS TRUE
+#ASSERT NOT basic1
+
+-- TRUE UNLESS FALSE = TRUE AND NOT FALSE = TRUE
+DECIDE basic2 IF TRUE UNLESS FALSE
+#ASSERT basic2
+
+-- FALSE UNLESS TRUE = FALSE AND NOT TRUE = FALSE
+DECIDE basic3 IF FALSE UNLESS TRUE
+#ASSERT NOT basic3
+
+-- FALSE UNLESS FALSE = FALSE AND NOT FALSE = FALSE
+DECIDE basic4 IF FALSE UNLESS FALSE
+#ASSERT NOT basic4
+
+--------------------------------------------------------------------------------
+-- Legal Exception Pattern
+--------------------------------------------------------------------------------
+
+-- "The applicant is eligible if they meet all requirements,
+--  UNLESS they have been disqualified"
+
+ASSUME `is a citizen` IS A BOOLEAN
+ASSUME `has resided for 5 years` IS A BOOLEAN
+ASSUME `has valid identification` IS A BOOLEAN
+ASSUME `has been disqualified` IS A BOOLEAN
+
+DECIDE `is eligible for benefits` IF
+      `is a citizen`
+  AND `has resided for 5 years`
+  AND `has valid identification`
+  UNLESS `has been disqualified`
+
+--------------------------------------------------------------------------------
+-- UNLESS with AND (multi-line)
+--------------------------------------------------------------------------------
+
+-- All conditions must be true, unless the exception applies
+DECIDE and_unless_example IF
+         TRUE
+  AND    TRUE
+  AND    TRUE
+  UNLESS TRUE
+
+#ASSERT NOT and_unless_example  -- (T AND T AND T) AND NOT T = FALSE
+
+DECIDE and_unless_example2 IF
+         TRUE
+  AND    TRUE
+  AND    TRUE
+  UNLESS FALSE
+
+#ASSERT and_unless_example2  -- (T AND T AND T) AND NOT F = TRUE
+
+--------------------------------------------------------------------------------
+-- UNLESS with OR (demonstrates precedence)
+--------------------------------------------------------------------------------
+
+-- UNLESS binds LOOSER than OR, so:
+-- (FALSE OR TRUE OR TRUE) UNLESS TRUE = (TRUE) AND NOT TRUE = FALSE
+
+DECIDE or_unless_example IF
+         FALSE
+  OR     TRUE
+  OR     TRUE
+  UNLESS TRUE
+
+#ASSERT NOT or_unless_example
+
+-- Another OR example
+DECIDE or_unless_example2 IF
+         FALSE
+  OR     TRUE
+  UNLESS FALSE
+
+#ASSERT or_unless_example2  -- (FALSE OR TRUE) AND NOT FALSE = TRUE
+
+--------------------------------------------------------------------------------
+-- Single-line variants (same semantics)
+--------------------------------------------------------------------------------
+
+DECIDE single_and IF TRUE AND TRUE AND TRUE UNLESS TRUE
+DECIDE single_or IF FALSE OR TRUE OR TRUE UNLESS TRUE
+
+#ASSERT NOT single_and
+#ASSERT NOT single_or
+
+--------------------------------------------------------------------------------
+-- Precedence Verification
+--------------------------------------------------------------------------------
+
+-- This test proves UNLESS binds looser than OR:
+-- If UNLESS bound tighter: TRUE OR FALSE UNLESS TRUE = TRUE OR (FALSE AND NOT TRUE) = TRUE
+-- With correct precedence: TRUE OR FALSE UNLESS TRUE = (TRUE OR FALSE) AND NOT TRUE = FALSE
+
+DECIDE precedence_test IF TRUE OR FALSE UNLESS TRUE
+#ASSERT NOT precedence_test  -- Proves UNLESS binds looser than OR
+
+--------------------------------------------------------------------------------
+-- Real-world Legal Examples
+--------------------------------------------------------------------------------
+
+-- Contract validity
+ASSUME `signed by both parties` IS A BOOLEAN
+ASSUME `consideration exchanged` IS A BOOLEAN
+ASSUME `signed under duress` IS A BOOLEAN
+
+DECIDE `contract is valid` IF
+      `signed by both parties`
+  AND `consideration exchanged`
+  UNLESS `signed under duress`
+
+-- Building access
+ASSUME `has valid badge` IS A BOOLEAN
+ASSUME `during business hours` IS A BOOLEAN
+ASSUME `building is closed` IS A BOOLEAN
+
+DECIDE `can enter building` IF
+      `has valid badge`
+  AND `during business hours`
+  UNLESS `building is closed`
+
+-- Employment eligibility
+ASSUME `is employee` IS A BOOLEAN
+ASSUME `is contractor` IS A BOOLEAN
+ASSUME `has been terminated` IS A BOOLEAN
+
+DECIDE `has system access` IF
+         `is employee`
+  OR     `is contractor`
+  UNLESS `has been terminated`

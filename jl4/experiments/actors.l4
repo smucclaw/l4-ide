@@ -31,7 +31,7 @@ johnDoe MEANS NaturalPerson OF "John Doe"
 GIVEN investor IS A Actor
       company  IS A Actor
       symtab   IS A `Symbol Table`
-GIVETH PROVISION Actor Action
+GIVETH DEONTIC Actor Action
 `Series A Financing` MEANS
   PARTY   investor
   MUST    pay 200
@@ -48,7 +48,7 @@ GIVETH PROVISION Actor Action
 GIVEN investor IS A Actor
       company  IS A Actor
       symtab   IS A `Symbol Table`
-GIVETH PROVISION Actor Action
+GIVETH DEONTIC Actor Action
 `Series A Issue` MEANS
   PARTY   company
   MUST    issue (shares 300)
@@ -64,7 +64,7 @@ GIVETH PROVISION Actor Action
 
 
 GIVEN symtab   IS A `Symbol Table`
-GIVETH PROVISION Actor Action
+GIVETH DEONTIC Actor Action
 `returnFulfilled` MEANS FULFILLED
 
 

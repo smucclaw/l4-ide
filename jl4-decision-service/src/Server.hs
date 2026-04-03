@@ -51,6 +51,9 @@ module Server (
   QueryInput (..),
   QueryAsk (..),
   QueryPlanResponse (..),
+  StateGraphListResponse (..),
+  StateGraphInfo (..),
+  StateGraphFormat (..),
 
   -- * utilities
   toDecl,
@@ -101,9 +104,11 @@ import qualified L4.CRUD as CRUD
 import Servant.Client.Generic (genericClient)
 import Network.HTTP.Client (Manager)
 import qualified Base.Text as T
-import L4.Export (ExportedFunction (..), ExportedParam (..), getExportedFunctions)
+import L4.Export (ExportedFunction (..), ExportedParam (..), DescFlags (..), ParsedDesc (..), getExportedFunctions, parseDescText, extractImplicitAssumeParams)
+import L4.Annotation (getAnno)
 import L4.Syntax
 import L4.Print (prettyLayout)
+import qualified L4.StateGraph as StateGraph
 import Data.Function
 import qualified Optics
 import L4.Lexer
@@ -127,6 +132,10 @@ data ValidatedFunction = ValidatedFunction
   , fnCompiled :: !(Maybe Jl4.CompiledModule)
   , fnSources :: !(Map EvalBackend Text)
   , fnDecisionQueryCache :: !(Maybe CachedDecisionQuery)
+  , fnExplicitlyExported :: !Bool
+  -- ^ True if this function has an explicit @export annotation.
+  -- When a module has explicit exports, only explicitly exported functions
+  -- should be shown in getAllFunctions.
   }
 
 type AppM = ReaderT AppEnv Handler
@@ -232,6 +241,36 @@ data SingleFunctionApi' mode = SingleFunctionApi
   -- ^ Run a function with a "batch" of parameters.
   -- This API aims to be consistent with
   -- https://docs.oracle.com/en/cloud/saas/b2c-service/opawx/using-batch-assess-rest-api.html
+  , listStateGraphs ::
+      mode
+        :- "state-graphs"
+          :> Summary "List all state transition graphs in this module"
+          :> Description "Extracts state graphs from regulative rules (MUST/MAY/SHANT) in the L4 module"
+          :> OperationId "listStateGraphs"
+          :> Get '[JSON] StateGraphListResponse
+  , getStateGraphDot ::
+      mode
+        :- "state-graphs"
+          :> Capture "graphName" Text
+          :> Summary "Get state transition graph as GraphViz DOT"
+          :> OperationId "getStateGraphDot"
+          :> Get '[PlainText] Text
+  , getStateGraphSvg ::
+      mode
+        :- "state-graphs"
+          :> Capture "graphName" Text
+          :> "svg"
+          :> Summary "Render state transition graph as SVG"
+          :> OperationId "getStateGraphSvg"
+          :> Get '[PlainText] Text
+  , getStateGraphPng ::
+      mode
+        :- "state-graphs"
+          :> Capture "graphName" Text
+          :> "png"
+          :> Summary "Render state transition graph as PNG"
+          :> OperationId "getStateGraphPng"
+          :> Get '[OctetStream] Api.PngImage
   }
   deriving stock (Generic)
 
@@ -341,6 +380,14 @@ handler =
                     batchFunctionHandler name mTraceHeader mTraceParam mGraphViz
                 , queryPlan =
                     queryPlanHandler name
+                , listStateGraphs =
+                    listStateGraphsHandler name
+                , getStateGraphDot =
+                    getStateGraphDotHandler name
+                , getStateGraphSvg =
+                    getStateGraphSvgHandler name
+                , getStateGraphPng =
+                    getStateGraphPngHandler name
                 }
           }
     }
@@ -359,6 +406,67 @@ queryPlanHandler name' args = do
       (\funName fn -> DecisionQueryPlan.buildDecisionQueryCache funName fn.fnSources)
 
   pure (DecisionQueryPlan.queryPlan name cached args)
+
+-- ----------------------------------------------------------------------------
+-- State Graph Handlers
+-- ----------------------------------------------------------------------------
+
+-- | List all state graphs available in the module
+listStateGraphsHandler :: String -> AppM StateGraphListResponse
+listStateGraphsHandler name' = do
+  let name = Text.pack name'
+  vf <- lookupValidatedFunction name
+  case vf.fnCompiled of
+    Nothing -> throwError err404 { errBody = "No compiled module found for function" }
+    Just compiled -> do
+      let graphs = StateGraph.extractStateGraphs compiled.compiledModule
+      pure $ StateGraphListResponse
+        { graphs = map (\sg -> StateGraphInfo sg.sgName Nothing) graphs
+        }
+
+-- | Get state graph as DOT text
+getStateGraphDotHandler :: String -> Text -> AppM Text
+getStateGraphDotHandler name' graphName = do
+  let name = Text.pack name'
+  vf <- lookupValidatedFunction name
+  case vf.fnCompiled of
+    Nothing -> throwError err404 { errBody = "No compiled module found for function" }
+    Just compiled -> do
+      let graphs = StateGraph.extractStateGraphs compiled.compiledModule
+      case find (\sg -> sg.sgName == graphName) graphs of
+        Nothing -> throwError err404 { errBody = "State graph not found: " <> encodeTextLBS graphName }
+        Just graph -> do
+          let opts = StateGraph.defaultStateGraphOptions
+          pure $ StateGraph.stateGraphToDot opts graph
+
+-- | Render state graph as SVG
+getStateGraphSvgHandler :: String -> Text -> AppM Text
+getStateGraphSvgHandler name' graphName = do
+  dot <- getStateGraphDotHandler name' graphName
+  ensureGraphVizAvailable
+  result <- liftIO $ renderSVG dot
+  case result of
+    Left err -> throwError err500 { errBody = encodeTextLBS err }
+    Right svgText -> pure svgText
+
+-- | Render state graph as PNG
+getStateGraphPngHandler :: String -> Text -> AppM Api.PngImage
+getStateGraphPngHandler name' graphName = do
+  dot <- getStateGraphDotHandler name' graphName
+  ensureGraphVizAvailable
+  result <- liftIO $ renderPNG dot
+  case result of
+    Left err -> throwError err500 { errBody = encodeTextLBS err }
+    Right bytes -> pure (Api.PngImage bytes)
+
+-- | Helper to look up a validated function by name
+lookupValidatedFunction :: Text -> AppM ValidatedFunction
+lookupValidatedFunction name = do
+  functionsTVar <- asks (.functionDatabase)
+  functions <- liftIO $ readTVarIO functionsTVar
+  case Map.lookup name functions of
+    Nothing -> throwError err404 { errBody = "Function not found: " <> encodeTextLBS name }
+    Just vf -> pure vf
 
 evalFunctionHandler :: String -> Maybe Text -> Maybe Api.TraceLevel -> Maybe Bool -> FnArguments -> AppM SimpleResponse
 evalFunctionHandler name' mTraceHeader mTraceParam mGraphViz args = do
@@ -642,6 +750,18 @@ validateFunction fn = do
             Nothing -> Nothing
       pure (Map.map fst evalMap, mCompiled)
 
+  -- Determine if this function is explicitly exported
+  let isExplicit = case mCompiled of
+        Nothing -> True  -- If no compiled module, assume explicitly exported (backwards compatible)
+        Just compiled ->
+          let resolvedModule = compiled.compiledModule
+              exports = getExportedFunctions resolvedModule
+              explicitExports = filter isExplicitExport exports
+              fnName = fnWithDeclaration.declaration.name
+          in case explicitExports of
+              [] -> True  -- No explicit exports in module, so implicit default counts as "exported"
+              xs -> any (\e -> e.exportName == fnName) xs  -- Must match an explicit export
+
   pure
     ValidatedFunction
       { fnImpl = fnWithDeclaration.declaration
@@ -649,11 +769,22 @@ validateFunction fn = do
       , fnCompiled = mCompiled
       , fnSources = fnWithDeclaration.implementation
       , fnDecisionQueryCache = Nothing
+      , fnExplicitlyExported = isExplicit
       }
  where
   validateImplementation :: FunctionImplementation -> EvalBackend -> Text -> AppM (RunFunction, Maybe Jl4.CompiledModule)
   validateImplementation fnImpl JL4 program =
     liftIO $ Jl4.createFunction (Text.unpack fnImpl.declaration.name <> ".l4") (toDecl fnImpl.declaration) program Map.empty
+
+-- | Check if an exported function has an explicit @export annotation
+-- (as opposed to being implicitly exported as the first DECIDE)
+isExplicitExport :: ExportedFunction -> Bool
+isExplicitExport export =
+  case getAnno export.exportDecide Optics.^. annDesc of
+    Nothing -> False
+    Just desc ->
+      case parseDescText (getDesc desc) of
+        ParsedDesc{flags = DescFlags{isExport}} -> isExport
 
 fillMetadataFromAnnotations :: FunctionImplementation -> AppM Function
 fillMetadataFromAnnotations fn =
@@ -683,28 +814,44 @@ deriveFunctionFromSource existing source = do
       unless (null errs) $
         liftIO $ putStrLn $ "Failed to derive metadata from annotations: " <> Text.unpack (Text.intercalate "; " errs)
       pure Nothing
-    Just Rules.TypeCheckResult{module' = resolvedModule} -> do
+    Just Rules.TypeCheckResult{module' = resolvedModule, errors = tcErrors} -> do
       let exports = getExportedFunctions resolvedModule
       case selectExport existing exports of
         Nothing -> pure Nothing
         Just exported -> do
           let derived = exportToFunction resolvedModule exported
+              -- Extract implicit ASSUMEs from OutOfScopeError with resolved types
+              -- These are undeclared variables whose types can be inferred from usage
+              implicitParams = extractImplicitAssumeParams tcErrors
+              declares = declaresFromModule resolvedModule
+              -- Convert implicit params to Parameter objects
+              implicitParamMap = Map.fromList
+                [ (name, (typeToParameter declares Set.empty ty) {parameterDescription = "", parameterAlias = Nothing})
+                | (name, ty) <- implicitParams
+                , name `Map.notMember` derived.parameters.parameterMap  -- Don't override explicit params
+                ]
+              -- Merge implicit params into derived parameters
+              mergedParams = derived.parameters
+                { parameterMap = derived.parameters.parameterMap <> implicitParamMap
+                , required = derived.parameters.required <> Map.keys implicitParamMap
+                }
           pure $ Just Function
             { name = chooseField existing.name derived.name
             , description = chooseField existing.description derived.description
             , parameters =
                 if Map.null existing.parameters.parameterMap
-                  then derived.parameters
+                  then mergedParams
                   else existing.parameters
             , supportedEvalBackend = existing.supportedEvalBackend
             }
  where
   chooseField orig new =
-    if Text.null (Text.strip orig) then new else orig
+    -- If orig is empty or looks like a UUID, prefer the derived name
+    if Text.null (Text.strip orig) || looksLikeUUID orig then new else orig
 
 selectExport :: Function -> [ExportedFunction] -> Maybe ExportedFunction
 selectExport existing exports =
-  let byName = if Text.null (Text.strip existing.name)
+  let byName = if Text.null (Text.strip existing.name) || looksLikeUUID existing.name
                   then Nothing
                   else List.find (\e -> e.exportName == existing.name) exports
       byDefault = List.find (.exportIsDefault) exports
@@ -829,11 +976,11 @@ typeToParameter declares visited ty =
           RecordDecl _ _ fields ->
             let
               visited' = Set.insert typeName visited
-              fieldOrder = [resolvedNameText fieldName | MkTypedName _ fieldName _ <- fields]
+              fieldOrder = [resolvedNameText fieldName | MkTypedName _ fieldName _ _ <- fields]
               props =
                 Map.fromList
                   [ (resolvedNameText fieldName, addDesc fieldDesc (typeToParameter declares visited' fieldTy))
-                  | MkTypedName fieldAnn fieldName fieldTy <- fields
+                  | MkTypedName fieldAnn fieldName fieldTy _ <- fields
                   , let fieldDesc = fmap getDesc (fieldAnn Optics.^. annDesc)
                   ]
              in
@@ -858,26 +1005,32 @@ resolvedNameText :: Resolved -> Text
 resolvedNameText =
   rawNameToText . rawName . getActual
 
+-- | Check if a function name looks like a UUID (with optional suffix after colon)
+-- Matches patterns like:
+--   b52992ed-39fd-4226-bad2-2deee2473881
+--   b52992ed-39fd-4226-bad2-2deee2473881:functionName
+looksLikeUUID :: Text -> Bool
+looksLikeUUID name =
+  let (beforeColon, _) = Text.breakOn ":" name
+      nameToCheck = if Text.null beforeColon then name else beforeColon
+  in Maybe.isJust (UUID.fromText nameToCheck)
+
 getAllFunctions :: AppM [SimpleFunction]
 getAllFunctions = do
   functions <- liftIO . readTVarIO =<< asks (.functionDatabase)
-  pure $ fmap (toSimpleFunction . (.fnImpl)) $ filter (not . looksLikeUUID . (.fnImpl.name)) $ Map.elems functions
+  -- Filter to only show:
+  -- 1. Functions that don't have UUID-like names
+  -- 2. Functions that are explicitly exported (when exports are present in the source)
+  let visibleFunctions = filter isVisible $ Map.elems functions
+  pure $ fmap (toSimpleFunction . (.fnImpl)) visibleFunctions
  where
+  isVisible vf =
+    not (looksLikeUUID vf.fnImpl.name) && vf.fnExplicitlyExported
   toSimpleFunction s =
     SimpleFunction
       { simpleName = s.name
       , simpleDescription = s.description
       }
-  
-  -- | Check if a function name looks like a UUID (with optional suffix after colon)
-  -- Matches patterns like:
-  --   b52992ed-39fd-4226-bad2-2deee2473881
-  --   b52992ed-39fd-4226-bad2-2deee2473881:functionName
-  looksLikeUUID :: Text -> Bool
-  looksLikeUUID name =
-    let (beforeColon, _) = Text.breakOn ":" name
-        nameToCheck = if Text.null beforeColon then name else beforeColon
-    in Maybe.isJust (UUID.fromText nameToCheck)
 
 getFunctionHandler :: String -> AppM Function
 getFunctionHandler name = do
@@ -908,8 +1061,8 @@ withUUIDFunction uuidAndFun k err = case UUID.fromText muuid of
         (typecheckErrs, mTcRes) <- liftIO $ Jl4.typecheckModule fileName prog Map.empty
         let mResolvedModule = (\Rules.TypeCheckResult{module' = m} -> m) <$> mTcRes
 
-        -- Derive actual function name from exports if not specified in UUID
-        actualFunName <- if Text.null (Text.strip funNameFromUUID)
+        -- Derive actual function name from exports if not specified in UUID or if it's a UUID itself
+        actualFunName <- if Text.null (Text.strip funNameFromUUID) || looksLikeUUID funNameFromUUID
           then do
             case mTcRes of
               Nothing -> do
@@ -937,12 +1090,49 @@ withUUIDFunction uuidAndFun k err = case UUID.fromText muuid of
 
         (runFn, mCompiled) <- liftIO $ Jl4.createFunction (Text.unpack actualFunName <> ".l4") fnDecl prog Map.empty
 
+        -- Check if this function is explicitly exported
+        let isExplicit = case mCompiled of
+              Nothing -> True  -- No compiled module, assume exported
+              Just compiled ->
+                let exports = getExportedFunctions compiled.compiledModule
+                    explicitExports = filter isExplicitExport exports
+                in case explicitExports of
+                    [] -> True  -- No explicit exports, implicit default counts
+                    xs -> any (\e -> e.exportName == actualFunName) xs
+
+        -- Extract parameters including ASSUME params (not just GIVEN)
+        -- This mirrors deriveFunctionFromSource which properly handles all param types
+        let sessionParams = case mTcRes of
+              Nothing -> parametersOfDecideWithModule mResolvedModule decide  -- Fallback to GIVEN-only
+              Just Rules.TypeCheckResult{module' = resolvedModule, errors = tcErrors} ->
+                let exports = getExportedFunctions resolvedModule
+                    dummyFn = Function actualFunName "" MkParameters{parameterMap = Map.empty, required = []} []
+                in case selectExport dummyFn exports of
+                  Nothing -> parametersOfDecideWithModule mResolvedModule decide  -- Fallback
+                  Just exported ->
+                    let -- Base params from export (includes GIVEN + explicit ASSUME)
+                        baseParams = parametersFromExport resolvedModule exported.exportParams
+                        -- Extract implicit ASSUMEs from OutOfScopeError with resolved types
+                        implicitParams = extractImplicitAssumeParams tcErrors
+                        declares = declaresFromModule resolvedModule
+                        -- Convert implicit params to Parameter objects
+                        implicitParamMap = Map.fromList
+                          [ (name, (typeToParameter declares Set.empty ty) {parameterDescription = "", parameterAlias = Nothing})
+                          | (name, ty) <- implicitParams
+                          , name `Map.notMember` baseParams.parameterMap  -- Don't override explicit params
+                          ]
+                    in baseParams
+                      { parameterMap = baseParams.parameterMap <> implicitParamMap
+                      , required = baseParams.required <> Map.keys implicitParamMap
+                      }
+
         k ValidatedFunction
-          { fnImpl = fnImpl { parameters = parametersOfDecideWithModule mResolvedModule decide }
+          { fnImpl = fnImpl { parameters = sessionParams }
           , fnEvaluator = Map.singleton JL4 runFn
           , fnCompiled = mCompiled
           , fnSources = Map.singleton JL4 prog
           , fnDecisionQueryCache = Nothing
+          , fnExplicitlyExported = isExplicit
           }
   where
    (muuid, funNameFromUUID) = T.drop 1 <$> T.breakOn ":" uuidAndFun
