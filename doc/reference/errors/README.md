@@ -453,16 +453,21 @@ See [Libraries](../libraries/README.md) for the full list of available libraries
 
 **What went wrong:** L4 could not find the module you are trying to import. L4 searches for modules in this order:
 
-1. Virtual filesystem (VFS) provided by the IDE
-2. Relative to the current file
-3. XDG data directory (`~/.local/share/jl4/libraries/`)
-4. Bundled libraries shipped with L4
+1. Virtual filesystem (VFS) provided by the IDE or service
+2. `JL4_LIBRARY_PATH` environment variable (if set)
+3. Project root directory / relative to the importing file
+4. XDG data directory (`~/.local/share/jl4/libraries/`)
+5. Bundled with the VSCode extension (`../../libraries/` from executable)
+6. Embedded standard libraries compiled into the binary
+
+When `JL4_LIBRARY_PATH` is set, embedded libraries (step 6) are skipped. This gives operators full control over which libraries are available.
 
 **How to fix it:**
 
 - Check the module name for typos.
-- For your own modules, use a relative path: `IMPORT ./mymodule`
+- For your own modules, place them in the project directory or set `JL4_LIBRARY_PATH`.
 - For third-party libraries, install them to `~/.local/share/jl4/libraries/`
+- If `JL4_LIBRARY_PATH` is set, ensure it contains the standard libraries you need (e.g., `prelude.l4`).
 
 ---
 

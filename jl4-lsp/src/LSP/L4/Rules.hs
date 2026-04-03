@@ -47,7 +47,7 @@ import qualified Language.LSP.Protocol.Types as LSP
 import qualified Data.List as List
 import System.Directory
 import System.Environment (getExecutablePath, lookupEnv)
-import qualified Paths_jl4_core
+import qualified L4.API.EmbeddedLibraries as EmbeddedLibraries
 import qualified L4.Utils.IntervalMap as IV
 import UnliftIO
 
@@ -232,6 +232,62 @@ instance Pretty Log where
             <+> pretty s.category
     LogImportResolution msg -> "[Import Resolution]" <+> pretty msg
 
+-- | Result of filesystem library resolution.
+data LibraryResolution = LibraryResolution
+  { resolvedPath    :: !(Maybe FilePath)  -- ^ Path found, if any
+  , searchedPaths   :: ![FilePath]        -- ^ All paths that were checked
+  , hasExplicitPath :: !Bool              -- ^ True if JL4_LIBRARY_PATH is set (skip embedded libs)
+  }
+
+-- | Resolve a library module from the filesystem.
+-- Checks paths in order of priority:
+--   1. JL4_LIBRARY_PATH environment variable (user/operator override)
+--   2. Root directory (project-local)
+--   3. Relative to importing file
+--   4. XDG data directory (~/.local/share/jl4/libraries/)
+--   5. Bundled with VSCode extension (../../libraries from executable)
+--
+-- When JL4_LIBRARY_PATH is set, callers should NOT fall back to embedded
+-- libraries — the operator has taken explicit control of the library store.
+resolveLibraryFromFilesystem :: FilePath -> Maybe NormalizedFilePath -> String -> IO LibraryResolution
+resolveLibraryFromFilesystem rootDirectory mImportingFile modName = do
+  let relPath = do
+        nfp <- mImportingFile
+        let dir = takeDirectory (fromNormalizedFilePath nfp)
+        pure $ dir </> modName <.> "l4"
+      rootPath = rootDirectory </> modName <.> "l4"
+
+  mEnvPath <- lookupEnv "JL4_LIBRARY_PATH"
+  let hasExplicit = Maybe.isJust mEnvPath
+      envPaths = case mEnvPath of
+        Just p  -> [p </> modName <.> "l4"]
+        Nothing -> []
+
+  discoverPaths <- do
+    xdgDataDir <- getXdgDirectory XdgData "jl4"
+    let xdgPath = xdgDataDir </> "libraries" </> modName <.> "l4"
+
+    exePath <- getExecutablePath
+    let exeDir = takeDirectory exePath
+        extensionRoot = exeDir </> ".." </> ".."
+        bundledPath = extensionRoot </> "libraries" </> modName <.> "l4"
+
+    pure [xdgPath, bundledPath]
+
+  let allPaths = envPaths <> catMaybes [Just rootPath, relPath] <> discoverPaths
+
+  result <- runMaybeT $ asum $
+    flip map allPaths $ \pth -> do
+      exists <- liftIO (doesFileExist pth)
+      guard exists
+      pure pth
+
+  pure LibraryResolution
+    { resolvedPath = result
+    , searchedPaths = allPaths
+    , hasExplicitPath = hasExplicit
+    }
+
 jl4Rules :: EvaluateLazy.EvalConfig -> FilePath -> Recorder (WithPriority Log) -> Rules ()
 jl4Rules evalConfig rootDirectory recorder = do
   define shakeRecorder $ \GetLexTokens uri -> do
@@ -302,49 +358,20 @@ jl4Rules evalConfig rootDirectory recorder = do
               case vfsResult of
                 Just vfsUri -> pure $ Just vfsUri
                 Nothing -> do
-                  -- Fall back to filesystem
-                  let relPath = do
-                        dir <- takeDirectory . fromNormalizedFilePath <$> uriToNormalizedFilePath uri
-                        pure $ dir </> modName <.> "l4"
-                      rootPath = rootDirectory </> modName <.> "l4"
-
-                  -- Look for libraries in multiple locations, in order of priority:
-                  -- 1. JL4_LIBRARY_PATH environment variable (user override)
-                  -- 2. XDG data directory (~/.local/share/jl4/libraries/) for cabal install
-                  -- 3. Bundled with VSCode extension (../../libraries from executable)
-                  -- 4. Cabal's getDataDir (for cabal run during development)
-                  builtinPaths <- liftIO $ do
-                    -- 1. Check JL4_LIBRARY_PATH environment variable
-                    mEnvPath <- lookupEnv "JL4_LIBRARY_PATH"
-                    let envPaths = case mEnvPath of
-                          Just p  -> [p </> modName <.> "l4"]
-                          Nothing -> []
-
-                    -- 2. XDG data directory (~/.local/share/jl4/libraries/)
-                    xdgDataDir <- getXdgDirectory XdgData "jl4"
-                    let xdgPath = xdgDataDir </> "libraries" </> modName <.> "l4"
-
-                    -- 3. VSCode extension bundled libraries
-                    exePath <- getExecutablePath
-                    let exeDir = takeDirectory exePath
-                        extensionRoot = exeDir </> ".." </> ".."
-                        bundledPath = extensionRoot </> "libraries" </> modName <.> "l4"
-
-                    -- 4. Cabal's getDataDir (for development / cabal run)
-                    dataDir <- Paths_jl4_core.getDataDir
-                    let cabalPath = dataDir </> "libraries" </> modName <.> "l4"
-
-                    pure $ envPaths <> [xdgPath, bundledPath, cabalPath]
-
-                  let paths = catMaybes [Just rootPath, relPath] <> builtinPaths
-
-                  existingPath <- runMaybeT $ asum $
-                    flip map paths $ \pth -> do
-                      exists <- liftIO (doesFileExist pth)
-                      guard exists
-                      pure pth
-
-                  pure $ fmap (toNormalizedUri . filePathToUri) existingPath
+                  let mImportingNfp = uriToNormalizedFilePath uri
+                  res <- liftIO $ resolveLibraryFromFilesystem rootDirectory mImportingNfp modName
+                  case res.resolvedPath of
+                    Just fp -> pure $ Just (toNormalizedUri $ filePathToUri fp)
+                    Nothing
+                      -- Skip embedded libs when operator has set an explicit library path
+                      | res.hasExplicitPath -> pure Nothing
+                      | otherwise ->
+                          case EmbeddedLibraries.lookupEmbeddedLibrary (Text.pack modName) of
+                            Just libContent -> do
+                              let libPath = toNormalizedFilePath ("./" <> modName <.> "l4")
+                              _ <- Shake.addVirtualFile libPath libContent
+                              pure $ Just (normalizedFilePathToUri libPath)
+                            Nothing -> pure Nothing
 
         -- Resolve all import URIs
         resolvedUris <- catMaybes <$> traverse resolveImportUri importNames
@@ -422,73 +449,33 @@ jl4Rules evalConfig rootDirectory recorder = do
                 "Found in VFS: " <> (fromNormalizedUri vfsUri).getUri
               pure (rangeOf a, modName, [], vfsUris, Just (Left vfsUri))
             Nothing -> do
-              -- Fall back to filesystem
-              logWith recorder Debug $ LogImportResolution $
-                "Not in VFS, checking filesystem..."
+              let mImportingNfp = uriToNormalizedFilePath uri
+              res <- liftIO $ resolveLibraryFromFilesystem rootDirectory mImportingNfp modName
 
-              paths <- catMaybes <$> do
-                -- NOTE: if the current URI is a file uri, we first check the directory relative to the current file
-                --
-                let relPath = do
-                      dir <- takeDirectory . fromNormalizedFilePath <$> uriToNormalizedFilePath uri
-                      pure $ dir </> modName <.> "l4"
-
-                let rootPath = rootDirectory </> modName <.> "l4"
-
-                -- Look for libraries in multiple locations, in order of priority:
-                -- 1. JL4_LIBRARY_PATH environment variable (user override)
-                -- 2. XDG data directory (~/.local/share/jl4/libraries/) for cabal install
-                -- 3. Bundled with VSCode extension (../../libraries from executable)
-                -- 4. Cabal's getDataDir (for cabal run during development)
-                builtinPaths <- liftIO $ do
-                  -- 1. Check JL4_LIBRARY_PATH environment variable
-                  mEnvPath <- lookupEnv "JL4_LIBRARY_PATH"
-                  let envPaths = case mEnvPath of
-                        Just p  -> [p </> modName <.> "l4"]
-                        Nothing -> []
-
-                  -- 2. Cabal's getDataDir (source tree during development, install prefix when installed)
-                  dataDir <- Paths_jl4_core.getDataDir
-                  let cabalPath = dataDir </> "libraries" </> modName <.> "l4"
-
-                  -- 3. XDG data directory (~/.local/share/jl4/libraries/)
-                  xdgDataDir <- getXdgDirectory XdgData "jl4"
-                  let xdgPath = xdgDataDir </> "libraries" </> modName <.> "l4"
-
-                  -- 4. VSCode extension bundled libraries
-                  -- The VSCode extension structure is:
-                  --   extension/
-                  --   ├── bin/<platform>/jl4-lsp[.exe]  <- executable is here
-                  --   └── libraries/*.l4                <- libraries are here
-                  -- So we need to go up TWO levels (../../) from the executable.
-                  exePath <- getExecutablePath
-                  let exeDir = takeDirectory exePath
-                  let extensionRoot = exeDir </> ".." </> ".."
-                  let bundledPath = extensionRoot </> "libraries" </> modName <.> "l4"
-
-                  pure $ envPaths <> [cabalPath, xdgPath, bundledPath]
-
-                pure $ [Just rootPath, relPath] <> map Just builtinPaths
-
-              logWith recorder Debug $ LogImportResolution $
-                "Checking filesystem paths: " <> Text.intercalate ", " (map Text.pack paths)
-
-              existingPaths <- runMaybeT do
-
-                let guardExists pth = do
-                      exists <- liftIO (doesFileExist pth)
-                      guard exists
-                      pure pth
-
-                asum $ guardExists <$> paths
-
-              case existingPaths of
-                Just fp -> logWith recorder Info $ LogImportResolution $
-                  "Found on filesystem: " <> Text.pack fp
-                Nothing -> logWith recorder Warning $ LogImportResolution $
-                  "Module not found: " <> Text.pack modName
-
-              pure (rangeOf a, modName, paths, vfsUris, fmap Right existingPaths)
+              case res.resolvedPath of
+                Just fp -> do
+                  logWith recorder Info $ LogImportResolution $
+                    "Found on filesystem: " <> Text.pack fp
+                  pure (rangeOf a, modName, res.searchedPaths, vfsUris, Just (Right fp))
+                Nothing
+                  -- Skip embedded libs when operator has set an explicit library path
+                  | res.hasExplicitPath -> do
+                      logWith recorder Warning $ LogImportResolution $
+                        "Module not found (JL4_LIBRARY_PATH is set, embedded libs skipped): " <> Text.pack modName
+                      pure (rangeOf a, modName, res.searchedPaths, vfsUris, Nothing)
+                  | otherwise ->
+                      case EmbeddedLibraries.lookupEmbeddedLibrary (Text.pack modName) of
+                        Just libContent -> do
+                          logWith recorder Info $ LogImportResolution $
+                            "Found in embedded libraries: " <> Text.pack modName
+                          let libPath = toNormalizedFilePath ("./" <> modName <.> "l4")
+                          _ <- Shake.addVirtualFile libPath libContent
+                          let libUri = normalizedFilePathToUri libPath
+                          pure (rangeOf a, modName, res.searchedPaths, vfsUris, Just (Left libUri))
+                        Nothing -> do
+                          logWith recorder Warning $ LogImportResolution $
+                            "Module not found: " <> Text.pack modName
+                          pure (rangeOf a, modName, res.searchedPaths, vfsUris, Nothing)
 
         mkImportUri (range, modName, fsPaths, vfsUris, mResult) = case mResult of
           Just (Left vfsUri) -> do

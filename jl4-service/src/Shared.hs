@@ -16,6 +16,8 @@ module Shared (
   buildPropertyReverseMap,
   remapFnLiteralKeys,
   remapArguments,
+  -- * Error text sanitization
+  sanitizeFieldNamesInText,
   -- * Collision detection
   validateNoSanitizationCollisions,
 ) where
@@ -32,6 +34,7 @@ import qualified Data.Aeson.Key as Aeson.Key
 import Data.Aeson ((.=), object)
 import qualified Data.ByteString.Lazy as LBS
 import Data.Char (isAlphaNum)
+import qualified Data.List as List
 import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map)
 import Data.Text (Text)
@@ -212,6 +215,23 @@ remapArguments reverseMap args =
   [ (Map.findWithDefault k k reverseMap, fmap (remapFnLiteralKeys reverseMap) v)
   | (k, v) <- args
   ]
+
+-- ----------------------------------------------------------------------------
+-- Error text sanitization
+-- ----------------------------------------------------------------------------
+
+-- | Replace original L4 field names with their sanitized equivalents in error text.
+-- The reverseMap is sanitized->original; we invert it to find originals and replace
+-- them with their sanitized form. Replaces longer names first to avoid partial matches.
+sanitizeFieldNamesInText :: Map Text Text -> Text -> Text
+sanitizeFieldNamesInText reverseMap text =
+  let -- Invert: original -> sanitized (only where they differ)
+      forwardPairs = [(original, sanitized)
+                     | (sanitized, original) <- Map.toList reverseMap
+                     , sanitized /= original]
+      -- Sort by descending length to replace longer names first
+      sorted = List.sortOn (negate . Text.length . fst) forwardPairs
+  in foldl' (\t (original, sanitized) -> Text.replace original sanitized t) text sorted
 
 -- ----------------------------------------------------------------------------
 -- Collision detection

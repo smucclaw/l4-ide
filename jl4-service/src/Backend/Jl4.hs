@@ -33,6 +33,7 @@ import System.FilePath ((<.>), takeFileName)
 
 import Backend.Api
 import Backend.CodeGen (generateEvalWrapper, generateDeonticEvalWrapper, GeneratedCode(..))
+import qualified L4.API.EmbeddedLibraries as EmbeddedLibraries
 import L4.Export (extractAssumeParamTypes)
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Aeson
@@ -287,7 +288,7 @@ handleEvalResultDirect
   -> ExceptT EvaluatorError IO ResponseWithReason
 handleEvalResultDirect ei result trace traceLevel includeGraphViz mModule = case result of
   Eval.Assertion _ -> throwError $ InterpreterError "L4: Got an assertion instead of a normal result."
-  Eval.Reduction (Left evalExc) -> throwError $ InterpreterError $ Text.textShow evalExc
+  Eval.Reduction (Left evalExc) -> throwError $ InterpreterError $ Text.unlines (Eval.prettyEvalException evalExc)
   Eval.Reduction (Right val) -> do
     r <- nfToFnLiteral ei val
     pure $ ResponseWithReason
@@ -449,7 +450,7 @@ handleEvalResult
   -> ExceptT EvaluatorError IO ResponseWithReason
 handleEvalResult ei result trace _sentinel traceLevel includeGraphViz mModule = case result of
   Eval.Assertion _ -> throwError $ InterpreterError "L4: Got an assertion instead of a normal result."
-  Eval.Reduction (Left evalExc) -> throwError $ InterpreterError $ Text.textShow evalExc
+  Eval.Reduction (Left evalExc) -> throwError $ InterpreterError $ Text.unlines (Eval.prettyEvalException evalExc)
   Eval.Reduction (Right val) -> do
     r <- nfToFnLiteral ei val
     -- Check if the result is NOTHING (decode failure from LEFT error) or JUST value
@@ -616,6 +617,13 @@ buildImportEnvironment filepath source moduleContext _entityInfo = do
 
   result <- oneshotL4ActionAndErrors evalConfig filepath $ \nfp -> do
     let uri = normalizedFilePathToUri nfp
+    -- Add embedded libraries as virtual files so IMPORT resolution works
+    -- even when Paths_jl4_core.getDataDir points to a non-existent directory
+    -- (e.g., in pre-built binaries deployed to a different machine)
+    forM_ (Map.toList EmbeddedLibraries.embeddedLibraries) $ \(libName, libContent) -> do
+      let libPath = toNormalizedFilePath ("./" <> Text.unpack libName <> ".l4")
+      _ <- Shake.addVirtualFile libPath libContent
+      pure ()
     -- Add all module files as virtual files for IMPORT resolution
     forM_ (Map.toList moduleContext) $ \(path, content) -> do
       let modulePath = toNormalizedFilePath ("." <> takeFileName path)
@@ -832,6 +840,13 @@ typecheckModule file input moduleContext = do
   liftIO $ oneshotL4ActionAndErrors evalConfig file \nfp -> do
     let
       uri = normalizedFilePathToUri nfp
+    -- Add embedded libraries as virtual files so IMPORT resolution works
+    -- even when Paths_jl4_core.getDataDir points to a non-existent directory
+    -- (e.g., in pre-built binaries deployed to a different machine)
+    forM_ (Map.toList EmbeddedLibraries.embeddedLibraries) $ \(libName, libContent) -> do
+      let libPath = toNormalizedFilePath ("./" <> Text.unpack libName <> ".l4")
+      _ <- Shake.addVirtualFile libPath libContent
+      pure ()
     -- Add all module files as virtual files for IMPORT resolution
     forM_ (Map.toList moduleContext) $ \(path, content) -> do
       let modulePath = toNormalizedFilePath ("./" <> takeFileName path)
@@ -848,6 +863,13 @@ evaluateModule file input moduleContext = do
   liftIO $ oneshotL4ActionAndErrors evalConfig file \nfp -> do
     let
       uri = normalizedFilePathToUri nfp
+    -- Add embedded libraries as virtual files so IMPORT resolution works
+    -- even when Paths_jl4_core.getDataDir points to a non-existent directory
+    -- (e.g., in pre-built binaries deployed to a different machine)
+    forM_ (Map.toList EmbeddedLibraries.embeddedLibraries) $ \(libName, libContent) -> do
+      let libPath = toNormalizedFilePath ("./" <> Text.unpack libName <> ".l4")
+      _ <- Shake.addVirtualFile libPath libContent
+      pure ()
     -- Add all module files as virtual files for IMPORT resolution
     forM_ (Map.toList moduleContext) $ \(path, content) -> do
       let modulePath = toNormalizedFilePath ("./" <> takeFileName path)

@@ -258,6 +258,19 @@ data EvaluatorError
   deriving stock (Show, Read, Ord, Eq, Generic)
   deriving anyclass (FromJSON, ToJSON)
 
+prettyEvaluatorError :: EvaluatorError -> Text
+prettyEvaluatorError = \case
+  InterpreterError msg -> msg
+  RequiredParameterMissing pm ->
+    "Required parameter missing: expected " <> Text.pack (show pm.expected)
+    <> " parameter(s), but got " <> Text.pack (show pm.actual)
+  UnknownArguments args ->
+    "Unknown argument(s): " <> Text.intercalate ", " args
+  CannotHandleParameterType lit ->
+    "Cannot handle parameter type: " <> Text.pack (show lit)
+  CannotHandleUnknownVars ->
+    "Cannot handle unknown variables in input"
+
 data ParameterMismatch = ParameterMismatch
   { expected :: !Int
   , actual :: !Int
