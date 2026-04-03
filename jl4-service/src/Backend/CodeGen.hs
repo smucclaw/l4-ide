@@ -7,6 +7,7 @@ module Backend.CodeGen
   -- Exported for testing
   , inputFieldName
   , transformJsonKeys
+  , escapeAsL4String
   , fnLiteralToL4Expr
   , fnLiteralToL4ExprWithType
   ) where
