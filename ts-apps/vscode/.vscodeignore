@@ -3,16 +3,21 @@
 # Include bundled binaries
 !bin/**
 
-# Include bundled L4 libraries
-!libraries/**
+# Exclude L4 library test outputs (golden files grow with each test run)
+libraries/tests/**
 
 **/*.ts
+**/*.mts
 **/*.map
 .vscode/**
 .gitignore
 **/tsconfig.json
 **/tsconfig.base.json
+**/*.tsbuildinfo
 *.vsix
+scripts/**
+eslint.config.mjs
+.vscode-test.js
 
 node_modules/**
 !node_modules/vscode-jsonrpc/**
@@ -25,7 +30,7 @@ node_modules/**
 out/**
 !out/*.js
 
-# this is a short-term hack. 
+# this is a short-term hack.
 # Better solution is to use something like webpack
 .../../../
 ../../
