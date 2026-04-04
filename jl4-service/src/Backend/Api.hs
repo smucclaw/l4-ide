@@ -137,7 +137,7 @@ instance FromJSON FnArguments where
   parseJSON = Aeson.withObject "FnArguments" $ \o ->
     FnArguments
       <$> (o .:? "evalBackend"  <|> o .:? "fnEvalBackend")
-      <*> (o .: "arguments"     <|> o .: "fnArguments")
+      <*> o .: "arguments"
       <*> o .:? "startTime"
       <*> o .:? "events"
 

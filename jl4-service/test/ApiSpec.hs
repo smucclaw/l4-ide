@@ -7,6 +7,7 @@ import Data.Aeson (decode)
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.Aeson.Types as Aeson
+import qualified Data.Map.Strict as Map
 import Test.Hspec
 
 spec :: Spec
@@ -96,3 +97,33 @@ spec = do
     it "should parse quoted strings as FnLitString" $ do
       parseTextAsFnLiteral "\"five\"" `shouldBe` FnLitString "five"
       parseTextAsFnLiteral "\"5\"" `shouldBe` FnLitString "5"
+
+  describe "FnArguments JSON parsing" $ do
+    it "parses arguments wrapper format" $ do
+      let json = "{\"arguments\": {\"x\": 42}}"
+      case decode json :: Maybe FnArguments of
+        Nothing -> expectationFailure "Failed to parse FnArguments"
+        Just fa -> do
+          fa.fnArguments `shouldBe` Map.fromList [("x", Just (FnLitInt 42))]
+          fa.startTime `shouldBe` Nothing
+          fa.events `shouldBe` Nothing
+
+    it "parses deontic format with arguments, startTime, and events" $ do
+      let json = "{\"arguments\": {\"state\": true}, \"startTime\": 0, \"events\": []}"
+      case decode json :: Maybe FnArguments of
+        Nothing -> expectationFailure "Failed to parse FnArguments"
+        Just fa -> do
+          fa.fnArguments `shouldBe` Map.fromList [("state", Just (FnLitBool True))]
+          fa.startTime `shouldBe` Just 0
+          fa.events `shouldBe` Just []
+
+    it "rejects missing arguments key" $ do
+      let json = "{\"x\": 42}"
+      (decode json :: Maybe FnArguments) `shouldBe` Nothing
+
+    it "handles null argument values as Nothing" $ do
+      let json = "{\"arguments\": {\"x\": null, \"y\": 5}}"
+      case decode json :: Maybe FnArguments of
+        Nothing -> expectationFailure "Failed to parse FnArguments"
+        Just fa ->
+          fa.fnArguments `shouldBe` Map.fromList [("x", Nothing), ("y", Just (FnLitInt 5))]
