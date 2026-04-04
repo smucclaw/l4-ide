@@ -96,7 +96,9 @@ Manage deployment lifecycle.
 | `PUT`    | `/deployments/{id}` | Replace a deployment's bundle (old stays active until new compiles) |
 | `DELETE` | `/deployments/{id}` | Remove a deployment                                                 |
 
-Deployment states: `pending` (lazy-load, compiles on first access), `compiling` (202), `ready` (200), `failed` (200 with error).
+Deployment states: `pending` (lazy-load, not yet compiled), `compiling` (compilation in progress), `ready` (compiled and serving), `failed` (compilation error stored).
+
+**Optimistic compilation:** Evaluation and function listing on pending deployments trigger compilation with a 2-second optimistic timeout. If compilation finishes within 2 seconds, the result is returned inline (200). If not, the response is HTTP 202 with `{"status":"compiling","retryAfterMs":2000}` and a `Retry-After: 2` header — the client should retry after the delay. File browsing endpoints never require compilation.
 
 **Validation rules:**
 
@@ -126,7 +128,7 @@ Function names with spaces can use hyphens or URL-encoding in the path (e.g., `c
 
 ### File Browsing
 
-Browse L4 source files within a deployment.
+Browse L4 source files within a deployment. **File browsing works immediately after upload — no compilation required.** This includes all deployment states: pending, compiling, ready, and failed.
 
 | Method | Endpoint                            | Description                                                    |
 | ------ | ----------------------------------- | -------------------------------------------------------------- |
@@ -135,9 +137,11 @@ Browse L4 source files within a deployment.
 
 The `/files` endpoint supports three query parameters (combinable):
 
-- `?identifier=name` — find definitions and references of an L4 identifier
-- `?search=text` — grep source files (case-insensitive)
+- `?identifier=name` — find definitions and references of an L4 identifier (text-based, works pre-compilation)
+- `?search=text` — grep source files (case-insensitive, works pre-compilation)
 - `?file=path.l4` — scope to a specific file
+
+Export information (which functions a file exports) is available only after compilation. Pre-compilation responses include file content but empty export lists.
 
 ### Evaluation
 
@@ -310,20 +314,20 @@ The proxy injects these headers to control what jl4-service includes in response
 
 All options can also be set via environment variables. CLI arguments take precedence over environment variables.
 
-| Option                      | Env Var                       | Description                                                                                                                               | Default          |
-| --------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| `--port`, `-p`              | `JL4_PORT`                    | HTTP port                                                                                                                                 | `8080`           |
-| `--store-path`              | `JL4_STORE_PATH`              | Directory for persisting deployment bundles                                                                                               | `/tmp/jl4-store` |
-| `--server-name`, `-s`       | `JL4_SERVER_NAME`             | Server URL for OpenAPI metadata                                                                                                           | -                |
-| `--lazy-load`               | `JL4_LAZY_LOAD`               | Register deployments as pending on startup; compile synchronously on first access (first request is slower, subsequent requests are fast) | `false`          |
-| `--debug`                   | `JL4_DEBUG`                   | Enable debug mode (verbose errors, debug-level logs)                                                                                      | `false`          |
-| `--max-zip-size`            | `JL4_MAX_ZIP_SIZE`            | Maximum zip upload size in bytes                                                                                                          | `2097152` (2 MB) |
-| `--max-file-count`          | `JL4_MAX_FILE_COUNT`          | Maximum number of files per zip upload                                                                                                    | `5096`           |
-| `--max-deployments`         | `JL4_MAX_DEPLOYMENTS`         | Maximum number of concurrent deployments                                                                                                  | `1024`           |
-| `--max-concurrent-requests` | `JL4_MAX_CONCURRENT_REQUESTS` | Maximum concurrent requests (503 when exceeded)                                                                                           | `20`             |
-| `--max-eval-memory-mb`      | `JL4_MAX_EVAL_MEMORY_MB`      | Per-evaluation allocation limit in MB                                                                                                     | `256`            |
-| `--eval-timeout`            | `JL4_EVAL_TIMEOUT`            | Evaluation timeout in seconds                                                                                                             | `60`             |
-| `--compile-timeout`         | `JL4_COMPILE_TIMEOUT`         | Compilation timeout in seconds                                                                                                            | `60`             |
+| Option                      | Env Var                       | Description                                                                                                                                                                              | Default          |
+| --------------------------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `--port`, `-p`              | `JL4_PORT`                    | HTTP port                                                                                                                                                                                | `8080`           |
+| `--store-path`              | `JL4_STORE_PATH`              | Directory for persisting deployment bundles                                                                                                                                              | `/tmp/jl4-store` |
+| `--server-name`, `-s`       | `JL4_SERVER_NAME`             | Server URL for OpenAPI metadata                                                                                                                                                          | -                |
+| `--lazy-load`               | `JL4_LAZY_LOAD`               | Register deployments as pending on startup; compile on first evaluation/function access (optimistic 2s timeout, returns 202 if still compiling). File browsing always works immediately. | `false`          |
+| `--debug`                   | `JL4_DEBUG`                   | Enable debug mode (verbose errors, debug-level logs)                                                                                                                                     | `false`          |
+| `--max-zip-size`            | `JL4_MAX_ZIP_SIZE`            | Maximum zip upload size in bytes                                                                                                                                                         | `2097152` (2 MB) |
+| `--max-file-count`          | `JL4_MAX_FILE_COUNT`          | Maximum number of files per zip upload                                                                                                                                                   | `5096`           |
+| `--max-deployments`         | `JL4_MAX_DEPLOYMENTS`         | Maximum number of concurrent deployments                                                                                                                                                 | `1024`           |
+| `--max-concurrent-requests` | `JL4_MAX_CONCURRENT_REQUESTS` | Maximum concurrent requests (503 when exceeded)                                                                                                                                          | `20`             |
+| `--max-eval-memory-mb`      | `JL4_MAX_EVAL_MEMORY_MB`      | Per-evaluation allocation limit in MB                                                                                                                                                    | `256`            |
+| `--eval-timeout`            | `JL4_EVAL_TIMEOUT`            | Evaluation timeout in seconds                                                                                                                                                            | `60`             |
+| `--compile-timeout`         | `JL4_COMPILE_TIMEOUT`         | Compilation timeout in seconds                                                                                                                                                           | `60`             |
 
 Boolean env vars accept `1`, `true`, or `yes` (case-insensitive).
 
@@ -371,7 +375,7 @@ Deployments are stored on disk at `{store-path}/{deployment-id}/`:
     metadata.json
 ```
 
-On startup, the service scans the store directory and recompiles all deployments. With `--lazy-load`, deployments are registered as pending and compiled synchronously on first access (GET, evaluate, or list functions).
+On startup, the service scans the store directory and recompiles all deployments. With `--lazy-load`, deployments are registered as pending and compiled on first evaluation or function access (with a 2-second optimistic timeout). File browsing (`list_files`, `read_file`, `search_identifier`, `search_text`) reads directly from disk and works immediately regardless of compilation state.
 
 ## Testing
 
