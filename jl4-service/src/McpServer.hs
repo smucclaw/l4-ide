@@ -6,7 +6,7 @@ module McpServer (
 ) where
 
 import qualified BundleStore
-import DeploymentLoader (triggerCompilationIfPending)
+import DeploymentLoader (tryCompileWithTimeout, CompilationResult (..))
 import FileBrowser (searchIdentifier, searchText, SearchMatch (..))
 import Logging (logInfo, logWarn)
 import Shared (collectMetadataEntries, sanitizeParameters, buildPropertyReverseMap, remapFnLiteralKeys, sanitizeFieldNamesInText)
@@ -30,8 +30,8 @@ import qualified Data.Text.Encoding as Text.Encoding
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Maybe as Maybe
 import GHC.Conc (setAllocationCounter, getAllocationCounter, enableAllocationLimit)
+import Control.Exception (SomeException, catch)
 import GHC.IO.Exception (AllocationLimitExceeded (..))
-import Control.Exception (catch)
 import System.Timeout (timeout)
 
 import Backend.Api (EvalBackend (..), FnLiteral (..), RunFunction (..), TraceLevel (..), prettyEvaluatorError)
@@ -333,12 +333,11 @@ callFunctionTool _vis mScope reqId toolName arguments = do
                   ]
             _ -> []
 
-      -- Look up the deployment and function, triggering lazy compilation if needed
+      -- Look up the deployment and function, with optimistic 2s compilation
       let did = DeploymentId deployId
-      triggerCompilationIfPending did
-      registry <- liftIO $ readTVarIO env.deploymentRegistry
-      case Map.lookup did registry of
-        Just (DeploymentReady fns _meta) ->
+      compResult <- tryCompileWithTimeout did 2_000_000
+      case compResult of
+        CompilationReady fns _meta ->
           case Map.lookup fnName fns of
             Just vf -> do
               -- Run evaluation (deontic eval is handled by DataPlane, not here)
@@ -365,12 +364,11 @@ callFunctionTool _vis mScope reqId toolName arguments = do
                     ]
             Nothing ->
               pure $ jsonRpcError reqId (-32602) ("Function not found: " <> fnName)
-        Just DeploymentCompiling ->
-          pure $ jsonRpcError reqId (-32002) ("Deployment is still compiling: " <> deployId)
-        Just (DeploymentFailed err) ->
-          pure $ jsonRpcError reqId (-32002) ("Deployment failed to compile: " <> err)
-        _ ->
-          pure $ jsonRpcError reqId (-32602) ("Deployment not found: " <> deployId)
+        CompilationInProgress ->
+          pure $ mcpTextResult reqId
+            "{\"status\":\"compiling\",\"retryAfterMs\":2000}" False
+        CompilationError err ->
+          pure $ jsonRpcError reqId (-32002) ("Deployment failed: " <> err)
 
 -- | Run evaluation for an MCP tool call.
 -- Returns Left errorText or Right resultJsonText.
@@ -405,25 +403,36 @@ runMcpEvaluation vf args = do
 -- ----------------------------------------------------------------------------
 
 -- | list_files: list all .l4 source files across deployments.
+-- Works immediately without compilation by reading from disk.
+-- Uses metadata (with exports) when available, otherwise enumerates raw files.
 callListFiles :: Maybe Aeson.Value -> Aeson.Value -> AppM Aeson.Value
 callListFiles reqId arguments = do
   env <- ask
   let mDeployment = getStringArg "deployment" arguments
   registry <- liftIO $ readTVarIO env.deploymentRegistry
 
-  let entries = [ (did.unDeploymentId, meta.metaFiles)
-                | (did, DeploymentReady _ meta) <- Map.toList registry
-                , case mDeployment of
-                    Nothing -> True
-                    Just d  -> did.unDeploymentId == d
-                ]
-      result = [ Aeson.object
+  let deployIds = case mDeployment of
+        Nothing -> [did.unDeploymentId | (did, _) <- Map.toList registry]
+        Just d  -> [d]
+
+  results <- liftIO $ mapM (\did -> do
+    let deployId = DeploymentId did
+    case Map.lookup deployId registry of
+      Just (DeploymentReady _ meta) ->
+        -- Use metadata (has export info)
+        pure [(did, fe) | fe <- meta.metaFiles]
+      _ -> do
+        -- Read from disk (no export info available pre-compilation)
+        files <- BundleStore.listSourceFiles env.bundleStore did
+        pure [(did, FileEntry (Text.pack f) []) | f <- files]
+    ) deployIds
+
+  let result = [ Aeson.object
                    [ "deployment" .= deployId
                    , "path" .= fe.fePath
                    , "exports" .= fe.feExports
                    ]
-               | (deployId, files) <- entries
-               , fe <- files
+               | (deployId, fe) <- concat results
                ]
 
   pure $ jsonRpcResult reqId $ Aeson.object
@@ -498,20 +507,24 @@ callSearchText reqId arguments = do
       pure $ mcpTextResult reqId (Text.Encoding.decodeUtf8 (LBS.toStrict result)) False
 
 -- | Load source files for search, filtered by deployment and file path.
+-- Works without compilation by reading directly from disk.
 loadSourcesForSearch :: AppEnv -> Maybe Text -> Maybe Text -> AppM (Map FilePath Text)
 loadSourcesForSearch env mDeployment mFile = do
   registry <- liftIO $ readTVarIO env.deploymentRegistry
   let deployIds = case mDeployment of
-        Nothing -> [did.unDeploymentId | (did, DeploymentReady _ _) <- Map.toList registry]
+        Nothing -> [did.unDeploymentId | (did, _) <- Map.toList registry]
         Just d  -> [d]
 
   allSources <- liftIO $ fmap Map.unions $ mapM (\did -> do
-    (sourceMap, _) <- BundleStore.loadBundle env.bundleStore did
-    let l4Only = Map.filterWithKey (\k _ -> takeExtensionText k == ".l4") sourceMap
-    -- Prefix file paths with deployment ID for cross-deployment uniqueness
-    pure $ case mDeployment of
-      Just _ -> l4Only  -- Single deployment: keep relative paths
-      Nothing -> Map.mapKeys (\k -> Text.unpack did ++ "/" ++ k) l4Only
+    result <- (do
+      (sourceMap, _) <- BundleStore.loadBundle env.bundleStore did
+      let l4Only = Map.filterWithKey (\k _ -> takeExtensionText k == ".l4") sourceMap
+      -- Prefix file paths with deployment ID for cross-deployment uniqueness
+      pure $ case mDeployment of
+        Just _ -> l4Only  -- Single deployment: keep relative paths
+        Nothing -> Map.mapKeys (\k -> Text.unpack did ++ "/" ++ k) l4Only
+      ) `catch` \(_ :: SomeException) -> pure Map.empty
+    pure result
     ) deployIds
 
   case mFile of
