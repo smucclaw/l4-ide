@@ -149,6 +149,7 @@
 <style>
   .tool-card {
     border: 1px solid var(--vscode-panel-border, #444);
+    border-left: 3px solid var(--vscode-panel-border, #444);
     border-radius: 4px;
     margin-bottom: 6px;
     overflow: hidden;

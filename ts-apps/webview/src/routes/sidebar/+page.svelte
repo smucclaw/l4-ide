@@ -889,65 +889,67 @@
       {:else}
         <div class="deployments-list">
           {#each deployments as dep (dep.deploymentId)}
-            <!-- svelte-ignore a11y_click_events_have_key_events -->
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <div
-              class="deployment-header"
-              onclick={() => toggleDeploymentCollapse(dep.deploymentId)}
-            >
-              <span
-                class="chevron"
-                class:rotated={!collapsedDeployments.has(dep.deploymentId)}
-                >&#9002;</span
+            <div class="deployment-group">
+              <!-- svelte-ignore a11y_click_events_have_key_events -->
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <div
+                class="deployment-header"
+                onclick={() => toggleDeploymentCollapse(dep.deploymentId)}
               >
-              <span class="deployment-id">{dep.deploymentId}</span>
-              <span class="deployment-fn-count">
+                <span
+                  class="chevron"
+                  class:rotated={!collapsedDeployments.has(dep.deploymentId)}
+                  >&#9002;</span
+                >
+                <span class="deployment-id">{dep.deploymentId}</span>
+                <span class="deployment-fn-count">
+                  {#if dep.error}
+                    Error
+                  {:else if dep.functions.length === 0 && compilingDeployments.has(dep.deploymentId)}
+                    Compiling...
+                  {:else if dep.functions.length === 0}
+                    Uncompiled
+                  {:else}
+                    {dep.functions.length} rule{dep.functions.length !== 1
+                      ? 's'
+                      : ''}
+                  {/if}
+                </span>
+                <button
+                  class="undeploy-btn"
+                  disabled={undeployingId === dep.deploymentId}
+                  onclick={(e: MouseEvent) => {
+                    e.stopPropagation()
+                    requestUndeploy(dep)
+                  }}
+                  title="Undeploy"
+                >
+                  {undeployingId === dep.deploymentId
+                    ? 'Removing...'
+                    : 'Undeploy'}
+                </button>
+              </div>
+              {#if !collapsedDeployments.has(dep.deploymentId)}
                 {#if dep.error}
-                  Error
-                {:else if dep.functions.length === 0 && compilingDeployments.has(dep.deploymentId)}
-                  Compiling...
-                {:else if dep.functions.length === 0}
-                  Uncompiled
+                  <div class="deployment-error"><pre>{dep.error}</pre></div>
+                {:else if compilingDeployments.has(dep.deploymentId)}
+                  <div class="deployment-empty">Compiling...</div>
+                {:else if dep.functions.length > 0}
+                  {#each dep.functions as func (func.name)}
+                    <ToolCard
+                      {func}
+                      expanded={isCardExpanded(
+                        dep.deploymentId + '/' + func.name
+                      )}
+                      onToggle={() =>
+                        toggleCard(dep.deploymentId + '/' + func.name)}
+                    />
+                  {/each}
                 {:else}
-                  {dep.functions.length} rule{dep.functions.length !== 1
-                    ? 's'
-                    : ''}
+                  <div class="deployment-empty">No rules</div>
                 {/if}
-              </span>
-              <button
-                class="undeploy-btn"
-                disabled={undeployingId === dep.deploymentId}
-                onclick={(e: MouseEvent) => {
-                  e.stopPropagation()
-                  requestUndeploy(dep)
-                }}
-                title="Undeploy"
-              >
-                {undeployingId === dep.deploymentId
-                  ? 'Removing...'
-                  : 'Undeploy'}
-              </button>
-            </div>
-            {#if !collapsedDeployments.has(dep.deploymentId)}
-              {#if dep.error}
-                <div class="deployment-error"><pre>{dep.error}</pre></div>
-              {:else if compilingDeployments.has(dep.deploymentId)}
-                <div class="deployment-empty">Compiling...</div>
-              {:else if dep.functions.length > 0}
-                {#each dep.functions as func (func.name)}
-                  <ToolCard
-                    {func}
-                    expanded={isCardExpanded(
-                      dep.deploymentId + '/' + func.name
-                    )}
-                    onToggle={() =>
-                      toggleCard(dep.deploymentId + '/' + func.name)}
-                  />
-                {/each}
-              {:else}
-                <div class="deployment-empty">No rules</div>
               {/if}
-            {/if}
+            </div>
           {/each}
         </div>
       {/if}
@@ -1387,6 +1389,7 @@
   .deployments-list {
     display: flex;
     flex-direction: column;
+    gap: 8px;
   }
 
   .deployment-header {
@@ -1394,8 +1397,7 @@
     align-items: center;
     gap: 6px;
     padding: 4px 8px;
-    margin-top: 4px;
-    margin-bottom: 4px;
+    margin-bottom: 8px;
     background: var(--vscode-sideBarSectionHeader-background, #252526);
     border: 1px solid var(--vscode-panel-border, #444);
     border-radius: 4px;
@@ -1454,12 +1456,8 @@
   .deployment-error {
     margin: 4px 0;
     padding: 6px 8px;
-    background: var(
-      --vscode-inputValidation-errorBackground,
-      rgba(255, 0, 0, 0.1)
-    );
-    border: 1px solid
-      var(--vscode-inputValidation-errorBorder, rgba(255, 0, 0, 0.3));
+    border: 1px solid var(--vscode-panel-border, #444);
+    border-left: 3px solid var(--vscode-testing-iconFailed, #f14c4c);
     border-radius: 4px;
   }
 
