@@ -114,13 +114,6 @@ executable jl4-service
   import: defaults
   main-is: Main.hs
   hs-source-dirs: app
-  ghc-options:
-    -threaded
-    -rtsopts
-    "-with-rtsopts=-N -A16m -qg"
-    -- -N: use all available cores
-    -- -A16m: 16MB nursery (larger nursery = less frequent minor GC)
-    -- -qg: parallel GC (reduces pause times with -threaded)
   build-depends:
     jl4-service
 

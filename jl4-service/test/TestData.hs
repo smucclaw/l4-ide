@@ -70,7 +70,8 @@ rodentAndVerminFunction = do
       { fnImpl = fnDecl
       , fnEvaluator = Map.fromList [(JL4, runFn)]
       , fnCompiled = mCompiled
-      , fnSources = Map.fromList [(JL4, rodentAndVerminJL4)]
+      , fnSourceText = rodentAndVerminJL4
+      , fnModuleContext = Map.empty
       , fnDecisionQueryCache = Nothing
       }
 
@@ -145,7 +146,8 @@ constantFunction = do
       { fnImpl = fnDecl
       , fnEvaluator = Map.fromList [(JL4, runFn)]
       , fnCompiled = mCompiled
-      , fnSources = Map.fromList [(JL4, constantJL4)]
+      , fnSourceText = constantJL4
+      , fnModuleContext = Map.empty
       , fnDecisionQueryCache = Nothing
       }
 

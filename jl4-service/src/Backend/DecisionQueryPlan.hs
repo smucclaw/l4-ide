@@ -43,7 +43,7 @@ import qualified LSP.L4.Viz.Ladder as LadderViz
 import qualified LSP.L4.Viz.VizExpr as VizExpr
 import qualified Language.LSP.Protocol.Types as LSP
 
-import Backend.Api (EvalBackend (..), FnArguments (..), FnLiteral (..))
+import Backend.Api (FnArguments (..), FnLiteral (..))
 import qualified L4.Decision.QueryPlan as QP
 import L4.Decision.QueryPlan (QueryAtom (..), QueryImpact (..), QueryInput (..), QueryOutcome (..))
 
@@ -152,20 +152,14 @@ orderAsksForElicitation params =
    in
     List.sortOn sortKey
 
-decisionQueryCacheKey :: Text -> Map EvalBackend Text -> Text
-decisionQueryCacheKey funName sources =
+decisionQueryCacheKey :: Text -> Text -> Text
+decisionQueryCacheKey funName sourceText =
   let
-    sourcesTxt =
-      Text.intercalate
-        "\n\n"
-        [ Text.pack (show b) <> "\n" <> src
-        | (b, src) <- Map.toAscList sources
-        ]
     canonical =
       Text.intercalate
         "\n\n"
         [ "function=" <> funName
-        , "sources=" <> sourcesTxt
+        , "source=" <> sourceText
         ]
   in UUID.toText (UUIDV5.generateNamed UUIDV5.namespaceURL (BS.unpack (Text.encodeUtf8 canonical)))
 
@@ -175,9 +169,9 @@ buildDecisionQueryCacheFromCompiled ::
   (MonadError ServerError m) =>
   Text ->
   CompiledModule ->
-  Map EvalBackend Text ->
+  Text ->
   m CachedDecisionQuery
-buildDecisionQueryCacheFromCompiled funName compiled sources = do
+buildDecisionQueryCacheFromCompiled funName compiled sourceText = do
   let resolvedModule = compiled.compiledModule
       decide = compiled.compiledDecide
       fileName = Text.unpack funName <> ".l4"
@@ -196,7 +190,7 @@ buildDecisionQueryCacheFromCompiled funName compiled sources = do
 
   pure
     CachedDecisionQuery
-      { cacheKey = decisionQueryCacheKey funName sources
+      { cacheKey = decisionQueryCacheKey funName sourceText
       , ladderInfo
       , core =
           QP.CachedDecisionQuery

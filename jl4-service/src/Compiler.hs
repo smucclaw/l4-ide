@@ -6,7 +6,8 @@ module Compiler (
 ) where
 
 import qualified Backend.Jl4 as Jl4
-import Backend.Jl4 (ModuleContext, CompiledModule(..), typecheckModule, buildImportEnvironment, getFunctionDefinition, buildSharedContext, buildCompiledFromShared)
+import Backend.Jl4 (ModuleContext, CompiledModule(..), getFunctionDefinition, buildCompiledFromShared, typecheckAndEvalBundle)
+import qualified L4.Evaluate.ValueLazy as EvalEnv (Environment)
 import Backend.Api (EvalBackend (..), FunctionDeclaration (..))
 import Shared (validateNoSanitizationCollisions)
 import Backend.CodeGen (isDeonticType)
@@ -37,15 +38,13 @@ import System.FilePath (takeExtension)
 
 -- | Compile an in-memory source map into a deployment-ready function registry.
 --
+-- Uses a SINGLE Shake session for the entire bundle: all files are typechecked
+-- and evaluated together, so Shake automatically shares parse/typecheck/eval
+-- results across the import graph. This avoids creating N independent IDE
+-- sessions that redundantly re-process overlapping imports.
+--
 -- Returns a list of 'SerializedBundle's (one per compiled file that had exports)
 -- so callers can persist CBOR caches for fast restart.
---
--- Steps:
--- 1. Identify all .l4 files that may contain exported functions
--- 2. Build ModuleContext from all sources
--- 3. For each file, typecheck and discover @export annotations
--- 4. For each export, create a RunFunction + CompiledModule
--- 5. Build metadata with SHA-256 version
 compileBundle
   :: Logger
   -> Text  -- ^ deployment ID for logging
@@ -56,13 +55,26 @@ compileBundle logger deployId sources = do
   if null l4Files
     then pure $ Left "No .l4 files found in bundle"
     else do
-      -- Build module context from all sources (for import resolution)
       let moduleContext = sources
+          allPaths = map fst l4Files
 
-      -- Try each file for exported functions
-      results <- forM l4Files $ \(filepath, content) -> do
-        r <- compileSingleFile logger deployId filepath content moduleContext
-        pure (filepath, r)
+      -- Phase 1: Typecheck ALL files in one Shake session.
+      -- Pass all paths as needing eval environments — we'll discover which have
+      -- exports from the typecheck results, then only the eval envs for those
+      -- files will actually be used.
+      (_errs, tcMap, evalMap) <- typecheckAndEvalBundle moduleContext allPaths
+
+      -- Phase 2: Process typecheck results per file
+      results <- forM l4Files $ \(filepath, content) ->
+        case Map.lookup filepath tcMap of
+          Just (Just tcResult) ->
+            processTypecheckedFile logger deployId filepath content moduleContext tcResult evalMap
+          _ -> do
+            logWarn logger "Typecheck failed"
+              [ ("deploymentId", toJSON deployId)
+              , ("file", toJSON filepath)
+              ]
+            pure (filepath, Left "Typecheck failed")
 
       let allFunctionsWithFile = [ (fp, fn) | (fp, Right (fns, _)) <- results, fn <- fns ]
           allFunctions = map snd allFunctionsWithFile
@@ -72,10 +84,8 @@ compileBundle logger deployId sources = do
       if null allFunctions && not (null errors)
         then pure $ Left $ Text.intercalate "\n" errors
         else do
-          -- Build function map
           let fnMap = Map.fromList [(fn.fnImpl.name, fn) | fn <- allFunctions]
 
-          -- Build metadata
           now <- getCurrentTime
           let summaries = [FunctionSummary { fsName = fn.fnImpl.name, fsDescription = fn.fnImpl.description, fsParameters = fn.fnImpl.parameters, fsReturnType = fn.fnImpl.returnType, fsSection = Nothing, fsIsDeontic = fn.fnImpl.isDeontic, fsSourceFile = Just (Text.pack fp) } | (fp, fn) <- allFunctionsWithFile]
               version = computeVersion sources
@@ -95,103 +105,97 @@ compileBundle logger deployId sources = do
 
           pure $ Right (fnMap, meta, allBundles)
 
--- | Compile a single .l4 file's exported functions.
--- Returns a list of ValidatedFunctions and optionally a SerializedBundle
--- (if typechecking succeeded and there were exports).
-compileSingleFile
+-- | Process a single typechecked file: discover exports, build CompiledModules.
+-- The typecheck result and evaluator import environment come from the shared
+-- Shake session (not from per-file oneshot sessions).
+processTypecheckedFile
   :: Logger
-  -> Text  -- ^ deployment ID for logging
+  -> Text  -- ^ deployment ID
   -> FilePath
-  -> Text
+  -> Text  -- ^ source content
   -> ModuleContext
-  -> IO (Either Text ([ValidatedFunction], [SerializedBundle]))
-compileSingleFile logger deployId filepath content moduleContext = do
-  -- Typecheck the module
-  (errs, mTcRes) <- typecheckModule filepath content moduleContext
-  case mTcRes of
-    Nothing -> do
-      unless (null errs) $
-        logWarn logger "Typecheck failed"
-          [ ("deploymentId", toJSON deployId)
-          , ("file", toJSON filepath)
-          , ("errors", toJSON errs)
-          ]
-      pure $ Left (Text.intercalate "\n" errs)
+  -> Rules.TypeCheckResult
+  -> Map FilePath EvalEnv.Environment  -- ^ Import environments from shared session
+  -> IO (FilePath, Either Text ([ValidatedFunction], [SerializedBundle]))
+processTypecheckedFile logger deployId filepath content moduleContext
+  tcResult@Rules.TypeCheckResult{module' = resolvedModule, environment = env, entityInfo = ei, errors = tcErrors}
+  evalMap = do
+    let exports = enrichReturnTypes ei $ getExportedFunctions resolvedModule
+    if null exports
+      then pure (filepath, Right ([], []))
+      else do
+        let implicitParams = extractImplicitAssumeParams tcErrors
+            allDeclares = collectAllDeclares tcResult
+            -- Look up the import environment from the shared session
+            importEnv = Map.findWithDefault Jl4.emptyEvalEnvironment filepath evalMap
 
-    Just tcResult@Rules.TypeCheckResult{module' = resolvedModule, environment = env, entityInfo = ei, errors = tcErrors} -> do
-      -- Discover exported functions
-      let exports = enrichReturnTypes ei $ getExportedFunctions resolvedModule
-      if null exports
-        then pure $ Right ([], [])
-        else do
-          -- Extract implicit ASSUMEs from type errors
-          let implicitParams = extractImplicitAssumeParams tcErrors
-              -- Collect declares from this module and all transitive imports
-              allDeclares = collectAllDeclares tcResult
+        -- Build shared context for all functions from this file
+        let shared = Jl4.SharedModuleContext
+              { Jl4.sharedModule = resolvedModule
+              , Jl4.sharedEnvironment = env
+              , Jl4.sharedEntityInfo = ei
+              , Jl4.sharedModuleContext = moduleContext
+              , Jl4.sharedImportEnv = importEnv
+              , Jl4.sharedSource = content
+              }
 
-          -- Build shared context ONCE for all functions from this file.
-          -- This avoids re-typechecking and re-building the import environment
-          -- for each exported function (previously O(N) typechecks, now O(1)).
-          shared <- buildSharedContext filepath content moduleContext resolvedModule env ei
+        fns <- forM exports $ \export -> do
+          let fnDecl = exportToFunction allDeclares implicitParams export
+              apiDecl = toDecl fnDecl
 
-          -- Create ValidatedFunction for each export
-          fns <- forM exports $ \export -> do
-            let fnDecl = exportToFunction allDeclares implicitParams export
-                apiDecl = toDecl fnDecl
+          let collisions = validateNoSanitizationCollisions fnDecl.name fnDecl.parameters
+          unless (null collisions) $ do
+            let collisionMsg = Text.intercalate "\n  " collisions
+            logWarn logger "Property name sanitization collision"
+              [ ("deploymentId", toJSON deployId)
+              , ("function", toJSON fnDecl.name)
+              , ("collisions", toJSON collisions)
+              ]
+            error $ Text.unpack $ "Compilation failed for function '" <> fnDecl.name
+              <> "': field name collision after sanitization (spaces and hyphens "
+              <> "become indistinguishable in API/MCP schemas):\n  " <> collisionMsg
 
-            -- Validate that sanitized property names don't collide
-            let collisions = validateNoSanitizationCollisions fnDecl.name fnDecl.parameters
-            unless (null collisions) $ do
-              let collisionMsg = Text.intercalate "\n  " collisions
-              logWarn logger "Property name sanitization collision"
-                [ ("deploymentId", toJSON deployId)
-                , ("function", toJSON fnDecl.name)
-                , ("collisions", toJSON collisions)
-                ]
-              error $ Text.unpack $ "Compilation failed for function '" <> fnDecl.name
-                <> "': field name collision after sanitization (spaces and hyphens "
-                <> "become indistinguishable in API/MCP schemas):\n  " <> collisionMsg
-
-            -- Build CompiledModule from shared context (only extracts the Decide)
-            let funRawName = NormalName apiDecl.name
-            mCompiled <- buildCompiledFromShared shared funRawName
-            case mCompiled of
-              Right compiled -> do
-                let runFn = Jl4.createRunFunctionFromCompiled filepath apiDecl compiled
-                pure ValidatedFunction
-                  { fnImpl = fnDecl
-                  , fnEvaluator = Map.fromList [(JL4, runFn)]
-                  , fnCompiled = Just compiled
-                  , fnSources = Map.fromList [(JL4, content)]
-                  , fnDecisionQueryCache = Nothing
-                  }
-              Left _err -> do
-                -- Fallback: use original createFunction path
-                (runFn, mComp) <- Jl4.createFunction filepath apiDecl content moduleContext
-                pure ValidatedFunction
-                  { fnImpl = fnDecl
-                  , fnEvaluator = Map.fromList [(JL4, runFn)]
-                  , fnCompiled = mComp
-                  , fnSources = Map.fromList [(JL4, content)]
-                  , fnDecisionQueryCache = Nothing
-                  }
-
-          -- Build SerializedBundle from typecheck result for CBOR caching
-          let bundle = SerializedBundle
-                { sbModule = resolvedModule
-                , sbEnvironment = env
-                , sbEntityInfo = ei
-                , sbExports = exports
-                , sbDeclares = allDeclares
-                , sbFilePath = filepath
+          let funRawName = NormalName apiDecl.name
+          mCompiled <- buildCompiledFromShared shared funRawName
+          case mCompiled of
+            Right compiled -> do
+              let runFn = Jl4.createRunFunctionFromCompiled filepath apiDecl compiled content moduleContext
+              pure ValidatedFunction
+                { fnImpl = fnDecl
+                , fnEvaluator = Map.fromList [(JL4, runFn)]
+                , fnCompiled = Just compiled
+                , fnSourceText = content
+                , fnModuleContext = moduleContext
+                , fnDecisionQueryCache = Nothing
+                }
+            Left _err -> do
+              -- Fallback: use original createFunction path (per-file session)
+              (runFn, mComp) <- Jl4.createFunction filepath apiDecl content moduleContext
+              pure ValidatedFunction
+                { fnImpl = fnDecl
+                , fnEvaluator = Map.fromList [(JL4, runFn)]
+                , fnCompiled = mComp
+                , fnSourceText = content
+                , fnModuleContext = moduleContext
+                , fnDecisionQueryCache = Nothing
                 }
 
-          logInfo logger "Found exports"
-            [ ("deploymentId", toJSON deployId)
-            , ("file", toJSON filepath)
-            , ("exportCount", toJSON (length fns))
-            ]
-          pure $ Right (fns, [bundle])
+        -- Build SerializedBundle from typecheck result for CBOR caching
+        let bundle = SerializedBundle
+              { sbModule = resolvedModule
+              , sbEnvironment = env
+              , sbEntityInfo = ei
+              , sbExports = exports
+              , sbDeclares = allDeclares
+              , sbFilePath = filepath
+              }
+
+        logInfo logger "Found exports"
+          [ ("deploymentId", toJSON deployId)
+          , ("file", toJSON filepath)
+          , ("exportCount", toJSON (length fns))
+          ]
+        pure (filepath, Right (fns, [bundle]))
 
 -- | Rebuild ValidatedFunctions from deserialized CBOR bundles,
 -- skipping the expensive typecheck step.
@@ -199,6 +203,9 @@ compileSingleFile logger deployId filepath content moduleContext = do
 -- This is the fast restart path: the Module Resolved, Environment, and
 -- EntityInfo are loaded from CBOR, and only the evaluator import environment
 -- needs to be rebuilt (which requires the sources).
+--
+-- Uses a single Shake session for all import environment evaluations,
+-- sharing work across the import graph.
 buildFromCborBundle
   :: Logger
   -> Text  -- ^ deployment ID for logging
@@ -208,8 +215,13 @@ buildFromCborBundle
   -> IO (Either Text (Map Text ValidatedFunction, DeploymentMetadata))
 buildFromCborBundle logger deployId bundles sources storedMeta = do
   let moduleContext = sources
+      -- Collect filepaths that need import environments (bundle files with sources)
+      bundleFiles = [bundle.sbFilePath | bundle <- bundles, Map.member bundle.sbFilePath sources]
 
-  -- Process each bundle (one per source file that had exports)
+  -- Build all import environments in a single Shake session
+  (_errs, _tcMap, evalMap) <- typecheckAndEvalBundle moduleContext bundleFiles
+
+  -- Process each bundle using the shared eval environments
   allFnsWithFile <- fmap concat $ forM bundles $ \bundle -> do
     let resolvedModule = bundle.sbModule
         env = bundle.sbEnvironment
@@ -220,8 +232,7 @@ buildFromCborBundle logger deployId bundles sources storedMeta = do
     case Map.lookup filepath sources of
       Nothing -> pure []
       Just content -> do
-        -- Build import environment ONCE per file (not per function)
-        importEnv <- buildImportEnvironment filepath content moduleContext ei
+        let importEnv = Map.findWithDefault Jl4.emptyEvalEnvironment filepath evalMap
 
         fns <- forM exports $ \export -> do
           let fnDecl = exportToFunction bundle.sbDeclares [] export
@@ -246,25 +257,22 @@ buildFromCborBundle logger deployId bundles sources storedMeta = do
           case mDecide of
             Left _err -> pure Nothing
             Right decide -> do
-              -- All fields except compiledDecide are shared across functions
-              -- from the same file — GHC shares the heap pointers.
               let compiled = CompiledModule
                     { compiledModule = resolvedModule
                     , compiledEnvironment = env
                     , compiledEntityInfo = ei
                     , compiledDecide = decide
-                    , compiledModuleContext = moduleContext
                     , compiledImportEnv = importEnv
-                    , compiledSource = content
                     }
 
-              let runFn = Jl4.createRunFunctionFromCompiled filepath apiDecl compiled
+              let runFn = Jl4.createRunFunctionFromCompiled filepath apiDecl compiled content moduleContext
 
               pure $ Just ValidatedFunction
                 { fnImpl = fnDecl
                 , fnEvaluator = Map.fromList [(JL4, runFn)]
                 , fnCompiled = Just compiled
-                , fnSources = Map.fromList [(JL4, content)]
+                , fnSourceText = content
+                , fnModuleContext = moduleContext
                 , fnDecisionQueryCache = Nothing
                 }
 
