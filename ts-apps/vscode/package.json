@@ -138,8 +138,22 @@
       {
         "command": "l4.renderResult",
         "title": "Track result"
+      },
+      {
+        "command": "l4.openSidebar",
+        "title": "Open L4 Sidebar",
+        "icon": "static/l4-editor-icon.svg"
       }
     ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "l4.openSidebar",
+          "when": "resourceLangId == l4",
+          "group": "navigation"
+        }
+      ]
+    },
     "mcpServerDefinitionProviders": [
       {
         "id": "l4-tools",
