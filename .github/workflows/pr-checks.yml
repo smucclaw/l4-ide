@@ -177,6 +177,8 @@ jobs:
 
       - name: Run tests
         run: cabal test all
+        env:
+          JL4_LIBRARY_PATH: ${{ github.workspace }}/jl4-core/libraries
 
       - name: Run documentation tests
         run: ./doc/test-docs.sh
