@@ -357,7 +357,7 @@ queryPlanHandler' deployId fnName fnArgs = do
       compiled <- case vf.fnCompiled of
         Nothing -> throwError err500 { errBody = jsonError "No compiled module available for query-plan" }
         Just c -> pure c
-      c <- buildDecisionQueryCacheFromCompiled fnName compiled vf.fnSources
+      c <- buildDecisionQueryCacheFromCompiled fnName compiled vf.fnSourceText
       storeDecisionQueryCache deployId fnName c
       pure c
 
@@ -530,6 +530,8 @@ runDeonticEvaluatorFor vf _engine args startTime events mPartyType mActionType m
             filepath
             fnDecl
             compiled
+            vf.fnSourceText
+            vf.fnModuleContext
             args
             startTime
             events

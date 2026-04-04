@@ -31,7 +31,7 @@ module Types (
 import Backend.Api (EvalBackend, FnLiteral, RunFunction, EvaluatorError, ResponseWithReason, GraphVizResponse, responseTag)
 import Backend.DecisionQueryPlan (CachedDecisionQuery)
 import L4.FunctionSchema (Parameters)
-import Backend.Jl4 (CompiledModule)
+import Backend.Jl4 (CompiledModule, ModuleContext)
 import BundleStore (BundleStore)
 import Control.Applicative ((<|>))
 import Control.Concurrent.STM (TVar)
@@ -161,11 +161,18 @@ data Visibility = Visibility
   deriving stock (Show, Eq)
 
 -- | A compiled and ready-to-evaluate function.
+-- Note: fnSourceText and fnModuleContext are shared across all functions from
+-- the same source file (GHC shares heap pointers). They are NOT duplicated.
 data ValidatedFunction = ValidatedFunction
   { fnImpl                :: !Function
   , fnEvaluator           :: !(Map EvalBackend RunFunction)
   , fnCompiled            :: !(Maybe CompiledModule)
-  , fnSources             :: !(Map EvalBackend Text)
+  , fnSourceText          :: !Text
+  -- ^ Original source text of the file this function was compiled from.
+  -- Shared across all functions from the same file.
+  , fnModuleContext       :: !ModuleContext
+  -- ^ Module context (all imported file contents) for IMPORT resolution.
+  -- Shared across all functions from the same deployment.
   , fnDecisionQueryCache  :: !(Maybe CachedDecisionQuery)
   }
 

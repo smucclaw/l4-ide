@@ -157,6 +157,26 @@ curl -X POST 'http://localhost:8080/deployments/my-rules/functions/compute_quali
   -d '{"arguments":{"walks": true, "drinks": true, "eats": true}}'
 ```
 
+#### Deontic (Contract) Evaluation
+
+Functions returning `DEONTIC` model contract obligations and require additional parameters for simulation:
+
+```bash
+curl -X POST http://localhost:8080/deployments/my-contract/functions/service-requirement/evaluation \
+  -H "Content-Type: application/json" \
+  -d '{
+    "arguments": {"state": {"status": "Active", "metrics": {"revenue": 1000000}}},
+    "startTime": 0,
+    "events": [
+      {"party": {"Name": "Alice"}, "action": "maintain eligible service", "at": 1}
+    ]
+  }'
+```
+
+- `arguments` — the function's GIVEN parameters (same as non-deontic)
+- `startTime` — start time for contract simulation (required for DEONTIC)
+- `events` — list of trace events, each with `party`, `action`, and `at` timestamp (required for DEONTIC)
+
 ### Batch Evaluation
 
 Evaluate a function across many input cases in parallel:
@@ -243,6 +263,15 @@ curl -X POST http://localhost:8080/my-rules/.mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
+
+#### MCP Schema Design
+
+MCP tool schemas are optimized to minimize tokens in AI context windows:
+
+- **Non-deontic functions**: parameters are listed directly at the top level of the tool's `inputSchema` (no wrapper). The AI calls the tool with `{"product": {...}}`.
+- **Deontic functions**: parameters are wrapped in `arguments` alongside `startTime` and `events`. The AI calls with `{"arguments": {...}, "startTime": 0, "events": [...]}`.
+
+This differs from the REST API which always uses `{"arguments": {...}}` for consistency.
 
 ### WebMCP (Browser AI Agent Integration)
 

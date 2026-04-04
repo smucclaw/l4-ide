@@ -152,7 +152,7 @@ buildFunctionPaths vis prefix deployId fn =
                       [ "required" .= True
                       , "content" .= Aeson.object
                           [ "application/json" .= Aeson.object
-                              [ "schema" .= fn.fsParameters
+                              [ "schema" .= evalRequestSchema fn
                               ]
                           ]
                       ]
@@ -265,6 +265,37 @@ buildComponents = Aeson.object
           ]
       ]
   ]
+
+-- | Build the request body schema for evaluation endpoints.
+-- Always wraps function parameters in an "arguments" key.
+-- Deontic functions additionally require "startTime" and "events".
+evalRequestSchema :: FunctionSummary -> Aeson.Value
+evalRequestSchema fn =
+  let baseProps = Aeson.KeyMap.fromList
+        [ ("arguments", Aeson.toJSON fn.fsParameters) ]
+      baseRequired = ["arguments" :: Text]
+      (props, required)
+        | fn.fsIsDeontic =
+            ( baseProps
+              <> Aeson.KeyMap.fromList
+                [ ("startTime", Aeson.object
+                    [ "type" .= ("number" :: Text)
+                    , "description" .= ("Start time for contract simulation" :: Text)
+                    ])
+                , ("events", Aeson.object
+                    [ "type" .= ("array" :: Text)
+                    , "description" .= ("Events for contract simulation (each: {party, action, at})" :: Text)
+                    , "items" .= Aeson.object ["type" .= ("object" :: Text)]
+                    ])
+                ]
+            , baseRequired <> ["startTime", "events"]
+            )
+        | otherwise = (baseProps, baseRequired)
+  in Aeson.object
+    [ "type" .= ("object" :: Text)
+    , "properties" .= Aeson.Object props
+    , "required" .= required
+    ]
 
 -- | Sanitize a text for use as an OpenAPI operationId.
 sanitizeOperationId :: Text -> Text

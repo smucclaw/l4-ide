@@ -350,74 +350,79 @@
     </div>
   {:else}
     {#each fileGroups as group (group.fileUri)}
-      {#if hasMultipleFiles}
-        <div class="file-header">
-          <button
-            class="collapse-toggle"
-            onclick={() => toggleFileCollapse(group.fileUri)}
-            title={collapsedFiles.has(group.fileUri)
-              ? 'Expand file'
-              : 'Collapse file'}
-          >
-            <span
-              class="chevron"
-              class:rotated={!collapsedFiles.has(group.fileUri)}>&#9002;</span
+      <div class="file-group">
+        {#if hasMultipleFiles}
+          <div class="file-header">
+            <button
+              class="collapse-toggle"
+              onclick={() => toggleFileCollapse(group.fileUri)}
+              title={collapsedFiles.has(group.fileUri)
+                ? 'Expand file'
+                : 'Collapse file'}
             >
-          </button>
-          <span class="file-name" title={group.fileUri}
-            >{group.displayName}</span
-          >
-          <button
-            class="remove-all-btn"
-            onclick={() => removeFileGroup(group.fileUri)}
-            title="Remove all results from this file"
-          >
-            Remove all
-          </button>
-        </div>
-      {/if}
-
-      {#if !hasMultipleFiles || !collapsedFiles.has(group.fileUri)}
-        {#each group.sections as section (section.renderKey)}
-          <div
-            id="section-{section.directiveId}"
-            class="result-section {successClass(section.success)}"
-          >
-            <div class="section-header">
-              <button
-                class="collapse-toggle"
-                onclick={() => toggleCollapse(section.directiveId)}
-                title={section.collapsed ? 'Expand' : 'Collapse'}
+              <span
+                class="chevron"
+                class:rotated={!collapsedFiles.has(group.fileUri)}>&#9002;</span
               >
-                <span class="chevron" class:rotated={!section.collapsed}
-                  >&#9002;</span
-                >
-              </button>
-              {#if !section.stale}
-                <span class="source-location">{section.srcLine}:</span>
-              {/if}
-              <span class="directive-label" title={section.lineContent.trim()}>
-                {@html colorized[section.directiveId]?.header ??
-                  escapeHtml(section.lineContent.trim())}
-              </span>
-              <button
-                class="dismiss-btn"
-                onclick={() => removeSection(section.directiveId)}
-                title="Remove this result"
-              >
-                ✕
-              </button>
-            </div>
-
-            {#if !section.collapsed}
-              <div class="section-body">
-                <pre class="result-code">{@html colorized[section.directiveId]
-                    ?.body ?? escapeHtml(section.prettyText)}</pre>
-              </div>
-            {/if}
+            </button>
+            <span class="file-name" title={group.fileUri}
+              >{group.displayName}</span
+            >
+            <button
+              class="remove-all-btn"
+              onclick={() => removeFileGroup(group.fileUri)}
+              title="Remove all results from this file"
+            >
+              Remove all
+            </button>
           </div>
-        {/each}
-      {/if}
+        {/if}
+
+        {#if !hasMultipleFiles || !collapsedFiles.has(group.fileUri)}
+          {#each group.sections as section (section.renderKey)}
+            <div
+              id="section-{section.directiveId}"
+              class="result-section {successClass(section.success)}"
+            >
+              <div class="section-header">
+                <button
+                  class="collapse-toggle"
+                  onclick={() => toggleCollapse(section.directiveId)}
+                  title={section.collapsed ? 'Expand' : 'Collapse'}
+                >
+                  <span class="chevron" class:rotated={!section.collapsed}
+                    >&#9002;</span
+                  >
+                </button>
+                {#if !section.stale}
+                  <span class="source-location">{section.srcLine}:</span>
+                {/if}
+                <span
+                  class="directive-label"
+                  title={section.lineContent.trim()}
+                >
+                  {@html colorized[section.directiveId]?.header ??
+                    escapeHtml(section.lineContent.trim())}
+                </span>
+                <button
+                  class="dismiss-btn"
+                  onclick={() => removeSection(section.directiveId)}
+                  title="Remove this result"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {#if !section.collapsed}
+                <div class="section-body">
+                  <pre class="result-code">{@html colorized[section.directiveId]
+                      ?.body ?? escapeHtml(section.prettyText)}</pre>
+                </div>
+              {/if}
+            </div>
+          {/each}
+        {/if}
+      </div>
     {/each}
   {/if}
 </div>
@@ -425,6 +430,9 @@
 <style>
   .inspector-panel {
     padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
   }
 
   .empty-state {
@@ -448,8 +456,6 @@
     align-items: center;
     gap: 6px;
     padding: 4px 8px;
-    margin-top: 4px;
-    margin-bottom: 4px;
     background: var(--vscode-sideBarSectionHeader-background, #252526);
     border: 1px solid var(--vscode-panel-border, #444);
     border-radius: 4px;
@@ -482,10 +488,16 @@
     opacity: 1;
   }
 
+  .file-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
   .result-section {
     border: 1px solid var(--vscode-panel-border, #444);
+    border-left-width: 3px;
     border-radius: 4px;
-    margin-bottom: 8px;
     overflow: hidden;
   }
 

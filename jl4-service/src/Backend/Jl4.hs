@@ -1,5 +1,5 @@
 {-# LANGUAGE ViewPatterns #-}
-module Backend.Jl4 (createFunction, createRunFunctionFromCompiled, getFunctionDefinition, buildFunDecide, ModuleContext, CompiledModule(..), precompileModule, evaluateWithCompiled, evaluateWithCompiledDeontic, typecheckModule, buildImportEnvironment) where
+module Backend.Jl4 (createFunction, createRunFunctionFromCompiled, getFunctionDefinition, buildFunDecide, ModuleContext, CompiledModule(..), SharedModuleContext(..), precompileModule, buildSharedContext, buildCompiledFromShared, evaluateWithCompiled, evaluateWithCompiledDeontic, typecheckModule, buildImportEnvironment, typecheckAndEvalBundle, emptyEvalEnvironment) where
 
 import Base hiding (trace)
 import qualified Base.DList as DList
@@ -29,11 +29,11 @@ import qualified LSP.L4.Rules as Rules
 import Optics ((^.), (%))
 
 import Language.LSP.Protocol.Types (normalizedFilePathToUri, toNormalizedFilePath)
-import System.FilePath ((<.>), takeFileName)
+import System.FilePath ((<.>))
+import qualified Data.Map.Strict as StrictMap
 
 import Backend.Api
 import Backend.CodeGen (generateEvalWrapper, generateDeonticEvalWrapper, GeneratedCode(..))
-import qualified L4.API.EmbeddedLibraries as EmbeddedLibraries
 import L4.Export (extractAssumeParamTypes)
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Aeson
@@ -43,17 +43,141 @@ import qualified Data.Vector as Vector
 -- | Map from file path to file content for module resolution
 type ModuleContext = Map FilePath Text
 
--- | Pre-compiled L4 module ready for fast evaluation
+-- | Pre-compiled L4 module ready for fast evaluation.
+-- Note: source text and module context are intentionally NOT stored here.
+-- They are stored once per deployment (not per function) and passed
+-- explicitly to evaluation functions that need them, to avoid retaining
+-- N copies across N compiled functions from the same file.
 data CompiledModule = CompiledModule
   { compiledModule :: !(Module Resolved)
   , compiledEnvironment :: !Environment              -- ^ Typechecker environment (for type info)
   , compiledEntityInfo :: !EntityInfo
   , compiledDecide :: !(Decide Resolved)
-  , compiledModuleContext :: !ModuleContext          -- ^ Context needed for IMPORT resolution
   , compiledImportEnv :: !EvalEnv.Environment        -- ^ Evaluator environment from imports
-  , compiledSource :: !Text                          -- ^ Original source text (preserves layout)
   }
   deriving (Generic)
+
+-- | Empty evaluator environment (for files with no imports)
+emptyEvalEnvironment :: EvalEnv.Environment
+emptyEvalEnvironment = emptyEnvironment
+
+-- | Shared context for all functions compiled from the same source file.
+-- Stored once per file and referenced by each CompiledModule to avoid
+-- duplicating the AST, environments, and source text per function.
+data SharedModuleContext = SharedModuleContext
+  { sharedModule :: !(Module Resolved)
+  , sharedEnvironment :: !Environment
+  , sharedEntityInfo :: !EntityInfo
+  , sharedModuleContext :: !ModuleContext
+  , sharedImportEnv :: !EvalEnv.Environment
+  , sharedSource :: !Text
+  }
+
+-- | Build shared context from an already-typechecked module.
+-- Call once per source file, then use 'buildCompiledFromShared' per function.
+buildSharedContext
+  :: FilePath
+  -> Text
+  -> ModuleContext
+  -> Module Resolved
+  -> Environment
+  -> EntityInfo
+  -> IO SharedModuleContext
+buildSharedContext filepath source moduleContext resolvedModule env entityInfo = do
+  importEnv <- buildImportEnvironment filepath source moduleContext entityInfo
+  pure SharedModuleContext
+    { sharedModule = resolvedModule
+    , sharedEnvironment = env
+    , sharedEntityInfo = entityInfo
+    , sharedModuleContext = moduleContext
+    , sharedImportEnv = importEnv
+    , sharedSource = source
+    }
+
+-- | Build a CompiledModule for a single function, reusing shared context.
+-- Only extracts the function-specific Decide; everything else is shared.
+buildCompiledFromShared :: SharedModuleContext -> RawName -> IO (Either Text CompiledModule)
+buildCompiledFromShared shared funName = runExceptT $ do
+  decide <- withExceptT evalErrorToText $ getFunctionDefinition funName shared.sharedModule
+  pure CompiledModule
+    { compiledModule = shared.sharedModule
+    , compiledEnvironment = shared.sharedEnvironment
+    , compiledEntityInfo = shared.sharedEntityInfo
+    , compiledDecide = decide
+    , compiledImportEnv = shared.sharedImportEnv
+    }
+ where
+  evalErrorToText :: EvaluatorError -> Text
+  evalErrorToText (InterpreterError t) = t
+  evalErrorToText (RequiredParameterMissing pm) = "Required parameter missing: expected " <> Text.textShow pm.expected <> ", got " <> Text.textShow pm.actual
+  evalErrorToText (UnknownArguments args) = "Unknown arguments: " <> Text.intercalate ", " args
+  evalErrorToText (CannotHandleParameterType lit) = "Cannot handle parameter type: " <> Text.textShow lit
+  evalErrorToText CannotHandleUnknownVars = "Cannot handle unknown variables"
+
+-- | Typecheck and evaluate all files in a bundle in a SINGLE Shake session.
+-- This avoids creating N independent IDE sessions that redundantly re-parse
+-- and re-typecheck overlapping imports. Shake caches intermediate results
+-- (parse, import resolution, typecheck) and shares them across all files.
+--
+-- Returns per-file typecheck results and per-file evaluator environments
+-- (for files that have exports and need import environments).
+typecheckAndEvalBundle
+  :: ModuleContext
+  -- ^ All source files in the bundle (filepath -> content)
+  -> [FilePath]
+  -- ^ Files that need evaluator import environments (i.e., files with exports).
+  -- Pass empty list to skip evaluation entirely (typecheck only).
+  -> IO ( [Text]
+        -- ^ Diagnostic/error messages from the session
+        , Map FilePath (Maybe Rules.TypeCheckResult)
+        -- ^ Typecheck results per file (Nothing if typecheck failed)
+        , Map FilePath EvalEnv.Environment
+        -- ^ Evaluator import environments for requested files
+        )
+typecheckAndEvalBundle moduleContext evalFiles = do
+  fixedNow <- Eval.readFixedNowEnv
+  evalConfig <- Eval.resolveEvalConfig fixedNow apiDefaultPolicy
+
+  -- Use the first file's directory as the session root (arbitrary but required)
+  let allFiles = StrictMap.toList moduleContext
+  case allFiles of
+    [] -> pure ([], StrictMap.empty, StrictMap.empty)
+    ((firstPath, _) : _) -> do
+      (errs, (tcMap, evalMap)) <- oneshotL4ActionAndErrors evalConfig firstPath $ \_nfp -> do
+        -- Register ALL bundle files as virtual files in one go.
+        -- Use the full path from the bundle (not just the basename) to avoid
+        -- collisions when multiple files share the same filename in different dirs.
+        fileNfps <- forM allFiles $ \(path, content) -> do
+          let nfp = toNormalizedFilePath ("./" <> path)
+          _ <- Shake.addVirtualFile nfp content
+          pure (path, nfp, normalizedFilePathToUri nfp)
+
+        -- Typecheck ALL files in one batch — Shake shares import resolution
+        let allUris = [uri | (_, _, uri) <- fileNfps]
+        tcResults <- Shake.uses Rules.TypeCheck allUris
+
+        let tcMap = StrictMap.fromList
+              [(path, mTc) | ((path, _, _), mTc) <- zip fileNfps (toList tcResults)]
+
+        -- Build evaluator import environments for files that need them.
+        -- Uses GetLazyEvaluationDependencies which recursively evaluates imports.
+        -- Within the same session, Shake reuses already-evaluated imports.
+        -- We use per-file `use` (not batch `uses`) because each call needs its
+        -- own AttachCallStack with the file's URI for cycle detection.
+        let evalUriMap = [(path, uri) | (path, _, uri) <- fileNfps
+                                      , path `elem` evalFiles]
+        evalPairs <- forM evalUriMap $ \(path, uri) -> do
+          mResult <- Shake.use (Shake.AttachCallStack [uri] Rules.GetLazyEvaluationDependencies) uri
+          pure (path, mResult)
+
+        let evalMap = StrictMap.fromList
+              [ (path, env)
+              | (path, Just (env, _dirResults)) <- evalPairs
+              ]
+
+        pure (tcMap, evalMap)
+
+      pure (errs, tcMap, evalMap)
 
 buildFunDecide :: Text -> FunctionDeclaration -> ExceptT EvaluatorError IO (Decide Resolved)
 buildFunDecide fnImpl fnDecl = do
@@ -96,9 +220,7 @@ precompileModule filepath source moduleContext funName = runExceptT $ do
     , compiledEnvironment = tcRes.environment
     , compiledEntityInfo = tcRes.entityInfo
     , compiledDecide = decide
-    , compiledModuleContext = moduleContext  -- Store context for IMPORT resolution
     , compiledImportEnv = importEnv
-    , compiledSource = source                -- Preserve original source for layout-sensitive re-parsing
     }
  where
   evalErrorToText :: EvaluatorError -> Text
@@ -165,11 +287,13 @@ evaluateWithCompiled
   :: FilePath
   -> FunctionDeclaration
   -> CompiledModule
+  -> Text  -- ^ Original source text (for wrapper fallback)
+  -> ModuleContext  -- ^ Module context (for wrapper fallback IMPORT resolution)
   -> [(Text, Maybe FnLiteral)]
   -> TraceLevel
   -> Bool
   -> ExceptT EvaluatorError IO ResponseWithReason
-evaluateWithCompiled filepath fnDecl compiled params traceLevel includeGraphViz = do
+evaluateWithCompiled filepath fnDecl compiled sourceText modContext params traceLevel includeGraphViz = do
   -- Fill in missing parameters with Nothing
   -- The input params may only contain provided parameters; we need explicit Nothing
   -- entries for missing parameters so requiresWrapperEvaluation can detect them
@@ -184,7 +308,7 @@ evaluateWithCompiled filepath fnDecl compiled params traceLevel includeGraphViz 
   -- Check if we need to fall back to wrapper-based evaluation
   -- (for FnObject, FnUncertain, FnUnknown, missing params which require JSONDECODE)
   if requiresWrapperEvaluation fullParams
-    then evaluateWithWrapper filepath fnDecl compiled fullParams traceLevel includeGraphViz
+    then evaluateWithWrapper filepath fnDecl compiled sourceText modContext fullParams traceLevel includeGraphViz
     else evaluateDirectAST compiled fullParams traceLevel includeGraphViz
 
 -- | Evaluate a deontic function with startTime and events via EVALTRACE wrapper.
@@ -193,6 +317,8 @@ evaluateWithCompiledDeontic
   :: FilePath
   -> FunctionDeclaration
   -> CompiledModule
+  -> Text  -- ^ Original source text
+  -> ModuleContext  -- ^ Module context for IMPORT resolution
   -> [(Text, Maybe FnLiteral)]
   -> Scientific.Scientific   -- ^ Start time for contract simulation
   -> [TraceEvent]             -- ^ Events to replay
@@ -201,7 +327,7 @@ evaluateWithCompiledDeontic
   -> TraceLevel
   -> Bool
   -> ExceptT EvaluatorError IO ResponseWithReason
-evaluateWithCompiledDeontic filepath fnDecl compiled params startTime traceEvents mPartyType mActionType traceLevel includeGraphViz = do
+evaluateWithCompiledDeontic filepath fnDecl compiled sourceText modContext params startTime traceEvents mPartyType mActionType traceLevel includeGraphViz = do
   let givenParamTypes = extractParamTypes compiled.compiledDecide
       assumeParamTypes = extractAssumeParamTypes compiled.compiledModule compiled.compiledDecide
 
@@ -214,7 +340,7 @@ evaluateWithCompiledDeontic filepath fnDecl compiled params startTime traceEvent
     Right gc -> pure gc
 
   -- Evaluate the wrapper in the context of the precompiled module
-  (errs, mEvalRes) <- liftIO $ evaluateWrapperInContext filepath genCode.generatedWrapper compiled
+  (errs, mEvalRes) <- liftIO $ evaluateWrapperInContext filepath genCode.generatedWrapper sourceText modContext
 
   -- Handle result
   case mEvalRes of
@@ -315,11 +441,13 @@ evaluateWithWrapper
   :: FilePath
   -> FunctionDeclaration
   -> CompiledModule
+  -> Text  -- ^ Original source text
+  -> ModuleContext  -- ^ Module context for IMPORT resolution
   -> [(Text, Maybe FnLiteral)]
   -> TraceLevel
   -> Bool
   -> ExceptT EvaluatorError IO ResponseWithReason
-evaluateWithWrapper filepath fnDecl compiled params traceLevel includeGraphViz = do
+evaluateWithWrapper filepath fnDecl compiled sourceText modContext params traceLevel includeGraphViz = do
   -- Extract parameter types from the compiled function definition
   let givenParamTypes = extractParamTypes compiled.compiledDecide
       assumeParamTypes = extractAssumeParamTypes compiled.compiledModule compiled.compiledDecide
@@ -335,7 +463,7 @@ evaluateWithWrapper filepath fnDecl compiled params traceLevel includeGraphViz =
   -- The wrapper contains JSONDECODE and function application
   -- We evaluate the wrapper in the context of the precompiled module
   -- This avoids re-parsing and re-typechecking the main module
-  (errs, mEvalRes) <- liftIO $ evaluateWrapperInContext filepath genCode.generatedWrapper compiled
+  (errs, mEvalRes) <- liftIO $ evaluateWrapperInContext filepath genCode.generatedWrapper sourceText modContext
 
   -- Handle result
   case mEvalRes of
@@ -350,18 +478,19 @@ evaluateWithWrapper filepath fnDecl compiled params traceLevel includeGraphViz =
 evaluateWrapperInContext
   :: FilePath
   -> Text  -- ^ Wrapper code containing #EVAL directive
-  -> CompiledModule
+  -> Text  -- ^ Original source text (preserves layout)
+  -> ModuleContext  -- ^ Module context for IMPORT resolution
   -> IO ([Text], Maybe [Eval.EvalDirectiveResult])
-evaluateWrapperInContext filepath wrapperCode compiled = do
+evaluateWrapperInContext filepath wrapperCode sourceText modContext = do
   -- Use original source text to preserve layout-sensitive formatting
   -- L4 is layout-sensitive (like Python), so prettyLayout can break indentation
   -- We filter IDE directives (#EVAL, #TRACE, etc.) using text-based filtering
-  let filteredSource = filterIdeDirectivesText compiled.compiledSource
+  let filteredSource = filterIdeDirectivesText sourceText
       combinedProgram = filteredSource <> wrapperCode
 
   -- Evaluate the combined program using the original module context
   -- This ensures IMPORT statements can be resolved correctly
-  evaluateModule filepath combinedProgram compiled.compiledModuleContext
+  evaluateModule filepath combinedProgram modContext
 
 -- | Filter IDE directives from source text while preserving layout
 -- Removes lines starting with #EVAL, #TRACE, #EVALTRACE, #ASSERT, #CHECK
@@ -505,9 +634,10 @@ createFunction filepath fnDecl fnImpl moduleContext = do
   case precompileResult of
     Right compiled -> do
       -- Fast path: use precompiled module
+      -- Capture fnImpl and moduleContext in the closure for wrapper fallback
       let runFn = RunFunction
             { runFunction = \params' _outFilter traceLevel includeGraphViz ->
-                evaluateWithCompiled filepath fnDecl compiled params' traceLevel includeGraphViz
+                evaluateWithCompiled filepath fnDecl compiled fnImpl moduleContext params' traceLevel includeGraphViz
             }
       pure (runFn, Just compiled)
 
@@ -556,12 +686,13 @@ createFunction filepath fnDecl fnImpl moduleContext = do
       pure (runFn, Nothing)
 
 -- | Create a 'RunFunction' from an already-compiled module.
--- Used by the CBOR cache path to avoid re-typechecking.
-createRunFunctionFromCompiled :: FilePath -> FunctionDeclaration -> CompiledModule -> RunFunction
-createRunFunctionFromCompiled filepath fnDecl compiled =
+-- Source text and module context are captured in the closure (once per file)
+-- rather than stored in every CompiledModule, to reduce retained memory.
+createRunFunctionFromCompiled :: FilePath -> FunctionDeclaration -> CompiledModule -> Text -> ModuleContext -> RunFunction
+createRunFunctionFromCompiled filepath fnDecl compiled sourceText modContext =
   RunFunction
     { runFunction = \params' _outFilter traceLevel includeGraphViz ->
-        evaluateWithCompiled filepath fnDecl compiled params' traceLevel includeGraphViz
+        evaluateWithCompiled filepath fnDecl compiled sourceText modContext params' traceLevel includeGraphViz
     }
 
 -- | Extract parameter names and types from a DECIDE's GIVEN clause
@@ -617,16 +748,12 @@ buildImportEnvironment filepath source moduleContext _entityInfo = do
 
   result <- oneshotL4ActionAndErrors evalConfig filepath $ \nfp -> do
     let uri = normalizedFilePathToUri nfp
-    -- Add embedded libraries as virtual files so IMPORT resolution works
-    -- even when Paths_jl4_core.getDataDir points to a non-existent directory
-    -- (e.g., in pre-built binaries deployed to a different machine)
-    forM_ (Map.toList EmbeddedLibraries.embeddedLibraries) $ \(libName, libContent) -> do
-      let libPath = toNormalizedFilePath ("./" <> Text.unpack libName <> ".l4")
-      _ <- Shake.addVirtualFile libPath libContent
-      pure ()
     -- Add all module files as virtual files for IMPORT resolution
+    -- Note: embedded libraries are resolved by the import resolver via
+    -- JL4_LIBRARY_PATH or Paths_jl4_core data-dir; no need to register
+    -- them as virtual files here.
     forM_ (Map.toList moduleContext) $ \(path, content) -> do
-      let modulePath = toNormalizedFilePath ("." <> takeFileName path)
+      let modulePath = toNormalizedFilePath ("./" <> path)
       _ <- Shake.addVirtualFile modulePath content
       pure ()
     -- Add the main file
@@ -840,16 +967,12 @@ typecheckModule file input moduleContext = do
   liftIO $ oneshotL4ActionAndErrors evalConfig file \nfp -> do
     let
       uri = normalizedFilePathToUri nfp
-    -- Add embedded libraries as virtual files so IMPORT resolution works
-    -- even when Paths_jl4_core.getDataDir points to a non-existent directory
-    -- (e.g., in pre-built binaries deployed to a different machine)
-    forM_ (Map.toList EmbeddedLibraries.embeddedLibraries) $ \(libName, libContent) -> do
-      let libPath = toNormalizedFilePath ("./" <> Text.unpack libName <> ".l4")
-      _ <- Shake.addVirtualFile libPath libContent
-      pure ()
     -- Add all module files as virtual files for IMPORT resolution
+    -- Note: embedded libraries are resolved by the import resolver via
+    -- JL4_LIBRARY_PATH or Paths_jl4_core data-dir; no need to register
+    -- them as virtual files here.
     forM_ (Map.toList moduleContext) $ \(path, content) -> do
-      let modulePath = toNormalizedFilePath ("./" <> takeFileName path)
+      let modulePath = toNormalizedFilePath ("./" <> path)
       _ <- Shake.addVirtualFile modulePath content
       pure ()
     -- Add the main file
@@ -863,16 +986,12 @@ evaluateModule file input moduleContext = do
   liftIO $ oneshotL4ActionAndErrors evalConfig file \nfp -> do
     let
       uri = normalizedFilePathToUri nfp
-    -- Add embedded libraries as virtual files so IMPORT resolution works
-    -- even when Paths_jl4_core.getDataDir points to a non-existent directory
-    -- (e.g., in pre-built binaries deployed to a different machine)
-    forM_ (Map.toList EmbeddedLibraries.embeddedLibraries) $ \(libName, libContent) -> do
-      let libPath = toNormalizedFilePath ("./" <> Text.unpack libName <> ".l4")
-      _ <- Shake.addVirtualFile libPath libContent
-      pure ()
     -- Add all module files as virtual files for IMPORT resolution
+    -- Note: embedded libraries are resolved by the import resolver via
+    -- JL4_LIBRARY_PATH or Paths_jl4_core data-dir; no need to register
+    -- them as virtual files here.
     forM_ (Map.toList moduleContext) $ \(path, content) -> do
-      let modulePath = toNormalizedFilePath ("./" <> takeFileName path)
+      let modulePath = toNormalizedFilePath ("./" <> path)
       _ <- Shake.addVirtualFile modulePath content
       pure ()
     -- Add the main file
