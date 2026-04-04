@@ -13,7 +13,7 @@ import qualified BundleStore
 import ControlPlane (DeploymentStatusResponse, getDeploymentHandler, putDeploymentHandler, deleteDeploymentHandler)
 import OpenApiDoc (buildOpenApiDoc)
 import FileBrowser (ShortFileBrowseApi, shortFileBrowseHandler)
-import DeploymentLoader (triggerCompilationIfPending)
+import DeploymentLoader (tryCompileWithTimeout, CompilationResult (..))
 import Servant.Multipart
 import Backend.DecisionQueryPlan (CachedDecisionQuery, buildDecisionQueryCacheFromCompiled, queryPlan, QueryPlanResponse)
 import L4.FunctionSchema (Parameter, Parameters(..))
@@ -27,6 +27,7 @@ import Shared (jsonError)
 import Types
 
 import qualified Data.Aeson as Aeson
+import Data.Aeson ((.=))
 import Data.Int (Int64)
 import Control.Concurrent.Async (forConcurrently)
 import Control.Concurrent.STM (atomically, modifyTVar', readTVarIO)
@@ -127,34 +128,35 @@ functionRoutesHandler deployId fnName =
 -- ----------------------------------------------------------------------------
 
 -- | Require a deployment to be in Ready state.
--- If the deployment is Pending (lazy-load), compiles it synchronously
--- (first request is slower, subsequent requests are fast).
--- In non-debug mode, error details are hidden.
+-- Uses optimistic compilation: if the deployment is Pending or Compiling,
+-- waits up to 2 seconds for compilation to finish. If it finishes in time,
+-- returns the result. Otherwise returns HTTP 202 with a "compiling" response.
 requireDeploymentReady :: DeploymentId -> AppM (Map Text ValidatedFunction, DeploymentMetadata)
 requireDeploymentReady deployId = do
   debugMode <- asks (.options.debug)
+  -- First check if the deployment exists at all
   registry <- asks (.deploymentRegistry) >>= liftIO . readTVarIO
   case Map.lookup deployId registry of
     Nothing -> throwError err404
-    Just (DeploymentPending _) -> do
-      triggerCompilationIfPending deployId
-      -- Re-read: compilation is synchronous, state is now Ready or Failed
-      registry' <- asks (.deploymentRegistry) >>= liftIO . readTVarIO
-      case Map.lookup deployId registry' of
-        Just (DeploymentReady fns meta) -> pure (fns, meta)
-        Just (DeploymentFailed msg) ->
-          if debugMode
-            then throwError err500 { errBody = jsonError ("Deployment compilation failed: " <> msg) }
-            else throwError err500 { errBody = jsonError "Deployment compilation failed" }
-        _ -> throwError err500 { errBody = jsonError "Deployment compilation did not complete" }
-    Just DeploymentCompiling ->
-      throwError err503 { errBody = jsonError "Deployment is still compiling" }
-    Just (DeploymentFailed msg) ->
+    _ -> pure ()
+
+  result <- tryCompileWithTimeout deployId 2_000_000
+  case result of
+    CompilationReady fns meta -> pure (fns, meta)
+    CompilationInProgress ->
+      throwError ServerError
+        { errHTTPCode = 202
+        , errReasonPhrase = "Accepted"
+        , errBody = Aeson.encode $ Aeson.object
+            [ "status" .= ("compiling" :: Text)
+            , "retryAfterMs" .= (2000 :: Int)
+            ]
+        , errHeaders = [("Retry-After", "2")]
+        }
+    CompilationError err ->
       if debugMode
-        then throwError err500 { errBody = jsonError ("Deployment compilation failed: " <> msg) }
+        then throwError err500 { errBody = jsonError ("Deployment compilation failed: " <> err) }
         else throwError err500 { errBody = jsonError "Deployment compilation failed" }
-    Just (DeploymentReady fns meta) ->
-      pure (fns, meta)
 
 -- | Look up a function by name within a deployment.
 -- Tries the exact name first, then falls back to matching by sanitized name

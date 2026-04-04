@@ -16,9 +16,6 @@ module FileBrowser (
 ) where
 
 import qualified BundleStore
-import DeploymentLoader (triggerCompilationIfPending)
-import Options (Options (..))
-import Shared (jsonError)
 import Types
 
 import Control.Concurrent.STM (readTVarIO)
@@ -142,6 +139,8 @@ shortFileBrowseHandler :: DeploymentId -> ServerT ShortFileBrowseApi AppM
 shortFileBrowseHandler deployId = filesQueryHandler deployId
 
 -- | GET /files — JSON query endpoint.
+-- Works without compilation by reading source files from disk.
+-- Uses metadata for export info when available (deployment is Ready).
 filesQueryHandler
   :: DeploymentId
   -> Maybe Text    -- ^ ?file= filter
@@ -149,26 +148,32 @@ filesQueryHandler
   -> Maybe Text    -- ^ ?search= text search
   -> AppM FilesResponse
 filesQueryHandler deployId mFileFilter mIdentifier mSearch = do
-  (_, meta) <- requireDeploymentReady' deployId
   env <- asks id
   let store = env.bundleStore
 
-  -- Load source files
-  allSources <- liftIO $ BundleStore.loadBundle store deployId.unDeploymentId
-  let (sourceMap, _storedMeta) = allSources
-      l4Sources = Map.filterWithKey (\k _ -> takeExtension k == ".l4") sourceMap
+  -- Try to get metadata from registry (if Ready) for export info
+  registry <- liftIO $ readTVarIO env.deploymentRegistry
+  let mMeta = case Map.lookup deployId registry of
+        Just (DeploymentReady _ meta) -> Just meta
+        _ -> Nothing
+
+  -- Load source files from disk (always available post-upload)
+  (sourceMap, _storedMeta) <- liftIO $ BundleStore.loadBundle store deployId.unDeploymentId
+  let l4Sources = Map.filterWithKey (\k _ -> takeExtension k == ".l4") sourceMap
 
   -- Apply file filter
   let filteredSources = case mFileFilter of
         Nothing -> l4Sources
         Just f  -> Map.filterWithKey (\k _ -> Text.pack k == f) l4Sources
 
-  -- Build export lookup from metadata
-  let exportsByFile = Map.fromListWith (++)
-        [ (sf, [fs.fsName])
-        | fs <- meta.metaFunctions
-        , Just sf <- [fs.fsSourceFile]
-        ]
+  -- Build export lookup from metadata (empty if not compiled yet)
+  let exportsByFile = case mMeta of
+        Just meta -> Map.fromListWith (++)
+          [ (sf, [fs.fsName])
+          | fs <- meta.metaFunctions
+          , Just sf <- [fs.fsSourceFile]
+          ]
+        Nothing -> Map.empty
 
   case (mIdentifier, mSearch) of
     (Just identifier, _) -> do
@@ -422,33 +427,6 @@ deduplicateMatches (m1:m2:rest)
 -- Helpers
 -- ----------------------------------------------------------------------------
 
--- | Require a deployment to be in Ready state (same as DataPlane but no function lookup).
-requireDeploymentReady' :: DeploymentId -> AppM (Map Text ValidatedFunction, DeploymentMetadata)
-requireDeploymentReady' deployId = do
-  env <- asks id
-  let debugMode = env.options.debug
-  let registry' = env.deploymentRegistry
-  registry <- liftIO $ readTVarIO registry'
-  case Map.lookup deployId registry of
-    Nothing -> throwError err404
-    Just (DeploymentPending _) -> do
-      triggerCompilationIfPending deployId
-      registryAfter <- liftIO $ readTVarIO registry'
-      case Map.lookup deployId registryAfter of
-        Just (DeploymentReady fns meta) -> pure (fns, meta)
-        Just (DeploymentFailed msg) ->
-          if debugMode
-            then throwError err500 { errBody = jsonError ("Deployment compilation failed: " <> msg) }
-            else throwError err500 { errBody = jsonError "Deployment compilation failed" }
-        _ -> throwError err500 { errBody = jsonError "Deployment compilation did not complete" }
-    Just DeploymentCompiling ->
-      throwError err503 { errBody = jsonError "Deployment is still compiling" }
-    Just (DeploymentFailed msg) ->
-      if debugMode
-        then throwError err500 { errBody = jsonError ("Deployment compilation failed: " <> msg) }
-        else throwError err500 { errBody = jsonError "Deployment compilation failed" }
-    Just (DeploymentReady fns meta) ->
-      pure (fns, meta)
 
 -- | Build a FileDetail from a source file entry.
 mkFileDetail :: Map Text [Text] -> FilePath -> Text -> FileDetail

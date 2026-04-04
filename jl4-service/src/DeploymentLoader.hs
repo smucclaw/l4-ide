@@ -4,6 +4,8 @@
 module DeploymentLoader (
   loadAndRegister,
   triggerCompilationIfPending,
+  tryCompileWithTimeout,
+  CompilationResult (..),
 ) where
 
 import qualified BundleStore
@@ -13,10 +15,11 @@ import Logging (Logger, logInfo, logWarn, logError, logDebug)
 import Options (Options (..))
 import Types
 
-import Control.Concurrent.STM (TVar, atomically, modifyTVar', readTVar)
+import Control.Concurrent.Async (async)
+import Control.Concurrent.STM (TVar, atomically, modifyTVar', readTVar, retry)
 import Control.Exception (SomeException, catch, displayException)
 import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Trans.Reader (asks)
+import Control.Monad.Trans.Reader (asks, ask)
 import qualified Data.Aeson as Aeson
 import Data.Aeson (toJSON)
 import Data.Int (Int64)
@@ -114,6 +117,74 @@ triggerCompilationIfPending deployId = do
           atomically $ modifyTVar' env.deploymentRegistry $
             Map.insert deployId (DeploymentFailed "Compilation failed unexpectedly")
     False -> pure ()
+
+-- | Result of an optimistic compilation attempt.
+data CompilationResult
+  = CompilationReady !(Map.Map Text ValidatedFunction) !DeploymentMetadata
+  -- ^ Compilation finished in time (or was already ready).
+  | CompilationInProgress
+  -- ^ Compilation started but did not finish within the timeout.
+  -- The compilation continues in the background; the client should retry.
+  | CompilationError !Text
+  -- ^ Compilation failed or the deployment was not found.
+
+-- | Try to compile a deployment within a timeout (microseconds).
+-- If already Ready, returns immediately. If Pending, starts background
+-- compilation and waits up to the timeout. If Compiling (by another request),
+-- waits up to the timeout for it to finish. Returns 'CompilationInProgress'
+-- if the timeout expires before compilation completes.
+tryCompileWithTimeout :: DeploymentId -> Int -> AppM CompilationResult
+tryCompileWithTimeout deployId timeoutMicros = do
+  env <- ask
+  let registryTVar = env.deploymentRegistry
+  state <- liftIO $ atomically $ Map.lookup deployId <$> readTVar registryTVar
+  case state of
+    Just (DeploymentReady fns meta) -> pure (CompilationReady fns meta)
+    Just (DeploymentFailed err) -> pure (CompilationError err)
+    Nothing -> pure (CompilationError "Deployment not found")
+    Just (DeploymentPending _) -> do
+      -- Atomically transition Pending → Compiling, or detect another thread did it
+      wasPending <- liftIO $ atomically $ do
+        reg <- readTVar registryTVar
+        case Map.lookup deployId reg of
+          Just (DeploymentPending _) -> do
+            modifyTVar' registryTVar $ Map.insert deployId DeploymentCompiling
+            pure True
+          _ -> pure False
+      if wasPending
+        then do
+          -- We won the race: start compilation in the background
+          let DeploymentId did = deployId
+          _ <- liftIO $ async $
+            loadAndRegister env.logger env.options registryTVar env.bundleStore did
+              `catch` \(e :: SomeException) -> do
+                logError env.logger "Compilation threw an exception"
+                  [ ("deploymentId", toJSON did)
+                  , ("error", toJSON (displayException e))
+                  ]
+                atomically $ modifyTVar' registryTVar $
+                  Map.insert deployId (DeploymentFailed "Compilation failed unexpectedly")
+          waitForResult registryTVar deployId timeoutMicros
+        else
+          -- Another thread transitioned it; wait for the result
+          waitForResult registryTVar deployId timeoutMicros
+    Just DeploymentCompiling ->
+      waitForResult registryTVar deployId timeoutMicros
+
+-- | Wait for a deployment to leave 'DeploymentCompiling' state, with a timeout.
+-- Uses STM retry to block efficiently until the TVar changes.
+waitForResult :: TVar (Map.Map DeploymentId DeploymentState) -> DeploymentId -> Int -> AppM CompilationResult
+waitForResult registryTVar deployId timeoutMicros = do
+  mResult <- liftIO $ timeout timeoutMicros $ atomically $ do
+    reg <- readTVar registryTVar
+    case Map.lookup deployId reg of
+      Just DeploymentCompiling -> retry  -- block until state changes
+      Just (DeploymentReady fns meta) -> pure (CompilationReady fns meta)
+      Just (DeploymentFailed err) -> pure (CompilationError err)
+      _ -> pure (CompilationError "Deployment disappeared during compilation")
+  pure $ case mResult of
+    Nothing -> CompilationInProgress
+    Just r  -> r
 
 -- | Compile from source with timeout and memory limit, and save CBOR cache for next restart.
 compileFreshAndCache

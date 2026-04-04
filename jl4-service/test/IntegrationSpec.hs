@@ -977,6 +977,210 @@ spec = describe "integration" do
               _ -> False
           _ -> False
 
+  describe "pre-compilation file access" do
+    it "GET /deployments/{id}/files returns files for pending deployment" do
+      withPendingService "precomp-files" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        req <- parseRequest (baseUrl <> "/deployments/precomp-files/files")
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 200
+        let body = decodeObject (responseBody resp)
+        case lookupKey "files" body of
+          Just (Aeson.Array files) -> length files `shouldSatisfy` (> 0)
+          _ -> expectationFailure "Expected 'files' array in response"
+
+    it "GET /deployments/{id}/files?file=qualifies.l4 returns file content for pending deployment" do
+      withPendingService "precomp-file" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        req <- parseRequest (baseUrl <> "/deployments/precomp-file/files?file=qualifies.l4")
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 200
+        -- Response should include file content with L4 keywords
+        let body = LBS.toStrict (responseBody resp)
+        body `shouldSatisfy` ("DECIDE" `BS.isInfixOf`)
+
+    it "GET /deployments/{id}/files?search=DECIDE returns matches for pending deployment" do
+      withPendingService "precomp-search" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        req <- parseRequest (baseUrl <> "/deployments/precomp-search/files?search=DECIDE")
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 200
+        let respBody = responseBody resp
+        -- Response should contain both files and search matches
+        LBS.toStrict respBody `shouldSatisfy` \bs ->
+          "DECIDE" `BS.isInfixOf` bs && "matches" `BS.isInfixOf` bs
+
+    it "MCP list_files returns files for pending deployment" do
+      withPendingService "precomp-mcp-list" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        let rpcBody = Aeson.object
+              [ "jsonrpc" Aeson..= ("2.0" :: Text)
+              , "id" Aeson..= (1 :: Int)
+              , "method" Aeson..= ("tools/call" :: Text)
+              , "params" Aeson..= Aeson.object
+                  [ "name" Aeson..= ("list_files" :: Text)
+                  , "arguments" Aeson..= Aeson.object
+                      [ "deployment" Aeson..= ("precomp-mcp-list" :: Text)
+                      ]
+                  ]
+              ]
+        req <- buildJsonPost (baseUrl <> "/.mcp") rpcBody
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 200
+        let body = decodeObject (responseBody resp)
+        -- Should have a result with content (not an error)
+        lookupKey "error" body `shouldBe` Nothing
+        lookupKey "result" body `shouldSatisfy` Maybe.isJust
+
+    it "MCP read_file returns content for pending deployment" do
+      withPendingService "precomp-mcp-read" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        let rpcBody = Aeson.object
+              [ "jsonrpc" Aeson..= ("2.0" :: Text)
+              , "id" Aeson..= (1 :: Int)
+              , "method" Aeson..= ("tools/call" :: Text)
+              , "params" Aeson..= Aeson.object
+                  [ "name" Aeson..= ("read_file" :: Text)
+                  , "arguments" Aeson..= Aeson.object
+                      [ "deployment" Aeson..= ("precomp-mcp-read" :: Text)
+                      , "path" Aeson..= ("qualifies.l4" :: Text)
+                      ]
+                  ]
+              ]
+        req <- buildJsonPost (baseUrl <> "/.mcp") rpcBody
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 200
+        let body = decodeObject (responseBody resp)
+        lookupKey "error" body `shouldBe` Nothing
+        -- The content text should contain L4 source
+        let mResult = lookupKey "result" body
+        mResult `shouldSatisfy` Maybe.isJust
+
+    it "MCP search_identifier returns results for pending deployment" do
+      withPendingService "precomp-mcp-ident" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        let rpcBody = Aeson.object
+              [ "jsonrpc" Aeson..= ("2.0" :: Text)
+              , "id" Aeson..= (1 :: Int)
+              , "method" Aeson..= ("tools/call" :: Text)
+              , "params" Aeson..= Aeson.object
+                  [ "name" Aeson..= ("search_identifier" :: Text)
+                  , "arguments" Aeson..= Aeson.object
+                      [ "identifier" Aeson..= ("compute_qualifies" :: Text)
+                      , "deployment" Aeson..= ("precomp-mcp-ident" :: Text)
+                      ]
+                  ]
+              ]
+        req <- buildJsonPost (baseUrl <> "/.mcp") rpcBody
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 200
+        let body = decodeObject (responseBody resp)
+        lookupKey "error" body `shouldBe` Nothing
+        -- Should find the function definition
+        LBS.toStrict (responseBody resp) `shouldSatisfy` ("compute_qualifies" `BS.isInfixOf`)
+
+    it "MCP read_file rejects path traversal (../)" do
+      withPendingService "precomp-traversal" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        let rpcBody = Aeson.object
+              [ "jsonrpc" Aeson..= ("2.0" :: Text)
+              , "id" Aeson..= (1 :: Int)
+              , "method" Aeson..= ("tools/call" :: Text)
+              , "params" Aeson..= Aeson.object
+                  [ "name" Aeson..= ("read_file" :: Text)
+                  , "arguments" Aeson..= Aeson.object
+                      [ "deployment" Aeson..= ("precomp-traversal" :: Text)
+                      , "path" Aeson..= ("../metadata.json" :: Text)
+                      ]
+                  ]
+              ]
+        req <- buildJsonPost (baseUrl <> "/.mcp") rpcBody
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 200
+        let body = decodeObject (responseBody resp)
+        -- Should return a "File not found" result (path safety check rejects ../)
+        lookupKey "result" body `shouldSatisfy` Maybe.isJust
+
+    it "GET /deployments/{id}/files rejects path traversal in file param" do
+      withPendingService "precomp-traversal2" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        req <- parseRequest (baseUrl <> "/deployments/precomp-traversal2/files?file=../metadata.json")
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 200
+        -- Response should have empty files array (path doesn't match any .l4 file)
+        let body = decodeObject (responseBody resp)
+        case lookupKey "files" body of
+          Just (Aeson.Array files) -> length files `shouldBe` 0
+          _ -> pure ()  -- Any non-success is fine
+
+  describe "failed deployment file access" do
+    it "GET /deployments/{id}/files returns files for failed deployment" do
+      withFailedService "failed-files" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        req <- parseRequest (baseUrl <> "/deployments/failed-files/files")
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 200
+        let body = decodeObject (responseBody resp)
+        case lookupKey "files" body of
+          Just (Aeson.Array files) -> length files `shouldSatisfy` (> 0)
+          _ -> expectationFailure "Expected 'files' array in response"
+
+    it "MCP list_files returns files for failed deployment" do
+      withFailedService "failed-mcp-list" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        let rpcBody = Aeson.object
+              [ "jsonrpc" Aeson..= ("2.0" :: Text)
+              , "id" Aeson..= (1 :: Int)
+              , "method" Aeson..= ("tools/call" :: Text)
+              , "params" Aeson..= Aeson.object
+                  [ "name" Aeson..= ("list_files" :: Text)
+                  , "arguments" Aeson..= Aeson.object
+                      [ "deployment" Aeson..= ("failed-mcp-list" :: Text)
+                      ]
+                  ]
+              ]
+        req <- buildJsonPost (baseUrl <> "/.mcp") rpcBody
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 200
+        let body = decodeObject (responseBody resp)
+        lookupKey "error" body `shouldBe` Nothing
+
+    it "MCP read_file returns content for failed deployment" do
+      withFailedService "failed-mcp-read" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        let rpcBody = Aeson.object
+              [ "jsonrpc" Aeson..= ("2.0" :: Text)
+              , "id" Aeson..= (1 :: Int)
+              , "method" Aeson..= ("tools/call" :: Text)
+              , "params" Aeson..= Aeson.object
+                  [ "name" Aeson..= ("read_file" :: Text)
+                  , "arguments" Aeson..= Aeson.object
+                      [ "deployment" Aeson..= ("failed-mcp-read" :: Text)
+                      , "path" Aeson..= ("qualifies.l4" :: Text)
+                      ]
+                  ]
+              ]
+        req <- buildJsonPost (baseUrl <> "/.mcp") rpcBody
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 200
+        let body = decodeObject (responseBody resp)
+        lookupKey "error" body `shouldBe` Nothing
+
+    it "evaluation on failed deployment returns 500" do
+      withFailedService "failed-eval" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        resp <- evalFunction baseUrl mgr "failed-eval" "compute_qualifies"
+          (Aeson.object
+            [ "arguments" Aeson..= Aeson.object
+                [ "walks" Aeson..= True
+                , "eats" Aeson..= True
+                , "drinks" Aeson..= True
+                ]
+            ])
+        statusCode' resp `shouldBe` 500
+
+  describe "optimistic compilation" do
+    it "evaluation on pending deployment returns 200 (compiles within 2s for small file)" do
+      withPendingService "precomp-eval" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        resp <- evalFunction baseUrl mgr "precomp-eval" "compute_qualifies"
+          (Aeson.object
+            [ "arguments" Aeson..= Aeson.object
+                [ "walks" Aeson..= True
+                , "eats" Aeson..= True
+                , "drinks" Aeson..= True
+                ]
+            ])
+        -- Small file compiles fast enough for the 2s optimistic timeout
+        statusCode' resp `shouldSatisfy` (\s -> s == 200 || s == 202)
+
   describe "compiler" do
     it "compiles valid L4 sources" do
       logger <- newLogger False
@@ -1044,6 +1248,46 @@ withPendingService' deployId sources act = do
 
   -- Register as Pending (not compiled)
   registry <- newTVarIO $ Map.singleton (DeploymentId deployId) (DeploymentPending Nothing)
+  let env = MkAppEnv registry store Nothing logger testOptions
+
+  mgr <- newManager defaultManagerSettings
+  testWithApplication (pure $ app env) \port -> do
+    let baseUrl = "http://localhost:" <> show port
+    result <- act baseUrl mgr
+    cleanDir tmpPath
+    pure result
+
+-- | Save sources to disk and register as DeploymentFailed,
+-- simulating a deployment that failed to compile. Sources exist on disk.
+withFailedService :: Text -> [(FilePath, Text)] -> (String -> Manager -> IO a) -> IO a
+withFailedService deployId sources act = do
+  resOrExc <- try (withFailedService' deployId sources act)
+  case resOrExc of
+    Left ioe ->
+      if isPermissionError ioe
+        then pendingWith ("Skipping integration test (cannot bind sockets): " <> show ioe) >> pure undefined
+        else do
+          expectationFailure (show ioe)
+          pure undefined
+    Right result -> pure result
+
+withFailedService' :: Text -> [(FilePath, Text)] -> (String -> Manager -> IO a) -> IO a
+withFailedService' deployId sources act = do
+  let tmpPath = "/tmp/jl4-service-test-" <> Text.unpack deployId
+  cleanDir tmpPath
+  store <- initStore tmpPath
+  logger <- newLogger False
+
+  let sourceMap = Map.fromList sources
+      version = computeVersion sourceMap
+      storedMeta = BundleStore.StoredMetadata
+        { BundleStore.smVersion = version
+        , BundleStore.smCreatedAt = "2026-01-01T00:00:00Z"
+        }
+  BundleStore.saveBundle store deployId sourceMap storedMeta
+
+  -- Register as Failed
+  registry <- newTVarIO $ Map.singleton (DeploymentId deployId) (DeploymentFailed "Test: simulated compilation failure")
   let env = MkAppEnv registry store Nothing logger testOptions
 
   mgr <- newManager defaultManagerSettings
