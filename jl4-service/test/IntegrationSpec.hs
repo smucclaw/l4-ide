@@ -15,6 +15,7 @@ import Logging (newLogger)
 import Options (Options (..))
 import Types
 
+import Control.Monad (guard)
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.STM (newTVarIO)
 import Control.Exception (try)
@@ -147,6 +148,53 @@ spec = describe "integration" do
               Map.lookup "extra_provided" fieldMap `shouldBe` Just (FnLitBool True)
             other ->
               expectationFailure ("Expected FnObject with named fields, got: " <> show other)
+
+    it "handles omitted MAYBE parameter (not present in JSON)" do
+      withServiceFromSources "maybe-omit" [("maybe.l4", maybeParamJL4)] \baseUrl mgr -> do
+        resp <- evalFunction baseUrl mgr "maybe-omit" "with_maybe"
+          (Aeson.object
+            [ "arguments" Aeson..= Aeson.object
+                [ "label" Aeson..= ("test" :: Text)
+                -- "extra" is intentionally omitted
+                ]
+            ])
+        assertSuccess resp \r -> do
+          let mValue = Map.lookup "value" r.fnResult
+          case mValue of
+            Just (FnObject [(conName, FnObject fields)]) -> do
+              conName `shouldBe` "Result"
+              let fieldMap = Map.fromList fields
+              Map.lookup "label" fieldMap `shouldBe` Just (FnLitString "test")
+              Map.lookup "extra_provided" fieldMap `shouldBe` Just (FnLitBool False)
+            other ->
+              expectationFailure ("Expected FnObject with named fields, got: " <> show other)
+
+    it "MAYBE parameter is not in the required list of the schema" do
+      withServiceFromSources "maybe-schema" [("maybe.l4", maybeParamJL4)] \baseUrl mgr -> do
+        -- GET /deployments?functions=full returns deployment with function schemas
+        req <- parseRequest (baseUrl <> "/deployments?functions=full")
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 200
+        let body = Aeson.decode @Aeson.Value (responseBody resp)
+        case body of
+          Just (Aeson.Array deployments) -> do
+            -- Find the with_maybe function's parameters.required list
+            -- Response structure: [{metadata: {functions: [{name, parameters: {required: [...]}}]}}]
+            let findRequired = do
+                  Aeson.Object deploy <- toList deployments
+                  Aeson.Object meta <- toList $ Aeson.KeyMap.lookup "metadata" deploy
+                  Aeson.Array fns <- toList $ Aeson.KeyMap.lookup "functions" meta
+                  Aeson.Object fn <- toList fns
+                  guard (Aeson.KeyMap.lookup "name" fn == Just (Aeson.String "with_maybe"))
+                  Aeson.Object params <- toList $ Aeson.KeyMap.lookup "parameters" fn
+                  Aeson.Array reqArr <- toList $ Aeson.KeyMap.lookup "required" params
+                  pure [t | Aeson.String t <- toList reqArr]
+            case findRequired of
+              (reqList:_) -> do
+                reqList `shouldContain` ["label"]
+                reqList `shouldNotContain` ["extra"]
+              [] -> expectationFailure "Could not find with_maybe function in deployment response"
+          other -> expectationFailure ("Expected JSON array of deployments, got: " <> show other)
 
   describe "field name sanitization (hyphen remapping)" do
     it "accepts hyphenated field names and hyphenated function name in URL" do

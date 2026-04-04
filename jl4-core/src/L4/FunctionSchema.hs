@@ -20,6 +20,7 @@ import qualified Data.Text as Text
 
 import L4.Export (extractAssumeParamTypes, extractImplicitAssumeParams)
 import L4.Syntax
+import L4.TypeCheck.Environment (maybeUnique)
 import L4.TypeCheck.Types (CheckErrorWithContext)
 import qualified Optics
 
@@ -242,6 +243,12 @@ parametersFromDecideWithErrors resolvedModule decide@(MkDecide _ (MkTypeSig _ (M
       in (name, base {parameterDescription = "", parameterAlias = Nothing})
 
     givenParamList = map mkOne names
+    -- Track which GIVEN params have MAYBE/Optional types (these are not required)
+    requiredGivenParams =
+      [ resolvedNameText resolved
+      | MkOptionallyTypedName _ resolved mType <- names
+      , not (isMaybeType mType)
+      ]
     assumeParamList = map mkAssumeParam assumeParams
     implicitParamList = map mkAssumeParam implicitParams
 
@@ -250,7 +257,7 @@ parametersFromDecideWithErrors resolvedModule decide@(MkDecide _ (MkTypeSig _ (M
    in
     MkParameters
       { parameterMap = Map.fromList (givenParamList <> allAssumeParams)
-      , required = map fst givenParamList <> map fst allAssumeParams
+      , required = requiredGivenParams <> map fst allAssumeParams
       }
  where
   emptyParam :: Text -> Parameter
@@ -265,6 +272,11 @@ parametersFromDecideWithErrors resolvedModule decide@(MkDecide _ (MkTypeSig _ (M
       , parameterPropertyOrder = Nothing
       , parameterItems = Nothing
       }
+
+-- | Check if a type annotation is MAYBE (i.e., the parameter is optional).
+isMaybeType :: Maybe (Type' Resolved) -> Bool
+isMaybeType (Just (TyApp _ name [_inner])) = getUnique name == maybeUnique
+isMaybeType _ = False
 
 resolvedNameText :: Resolved -> Text
 resolvedNameText =

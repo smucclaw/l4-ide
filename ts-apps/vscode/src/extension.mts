@@ -519,6 +519,13 @@ export async function activate(context: ExtensionContext) {
     )
   )
 
+  // Register command to open/focus the L4 sidebar from the editor title bar
+  context.subscriptions.push(
+    vscode.commands.registerCommand('l4.openSidebar', () => {
+      vscode.commands.executeCommand(`${SIDEBAR_WEBVIEW_TYPE}.focus`)
+    })
+  )
+
   // Refresh sidebar token colors on theme change (alongside panels)
   context.subscriptions.push(
     vscode.window.onDidChangeActiveColorTheme(() => {

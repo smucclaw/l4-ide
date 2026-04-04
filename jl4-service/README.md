@@ -161,6 +161,26 @@ curl -X POST 'http://localhost:8080/deployments/my-rules/functions/compute_quali
   -d '{"arguments":{"walks": true, "drinks": true, "eats": true}}'
 ```
 
+#### Deontic (Contract) Evaluation
+
+Functions returning `DEONTIC` model contract obligations and require additional parameters for simulation:
+
+```bash
+curl -X POST http://localhost:8080/deployments/my-contract/functions/service-requirement/evaluation \
+  -H "Content-Type: application/json" \
+  -d '{
+    "arguments": {"state": {"status": "Active", "metrics": {"revenue": 1000000}}},
+    "startTime": 0,
+    "events": [
+      {"party": {"Name": "Alice"}, "action": "maintain eligible service", "at": 1}
+    ]
+  }'
+```
+
+- `arguments` — the function's GIVEN parameters (same as non-deontic)
+- `startTime` — start time for contract simulation (required for DEONTIC)
+- `events` — list of trace events, each with `party`, `action`, and `at` timestamp (required for DEONTIC)
+
 ### Batch Evaluation
 
 Evaluate a function across many input cases in parallel:
@@ -248,6 +268,15 @@ curl -X POST http://localhost:8080/my-rules/.mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
 
+#### MCP Schema Design
+
+MCP tool schemas are optimized to minimize tokens in AI context windows:
+
+- **Non-deontic functions**: parameters are listed directly at the top level of the tool's `inputSchema` (no wrapper). The AI calls the tool with `{"product": {...}}`.
+- **Deontic functions**: parameters are wrapped in `arguments` alongside `startTime` and `events`. The AI calls with `{"arguments": {...}, "startTime": 0, "events": [...]}`.
+
+This differs from the REST API which always uses `{"arguments": {...}}` for consistency.
+
 ### WebMCP (Browser AI Agent Integration)
 
 Deployments are automatically [WebMCP](https://webmachinelearning.github.io/webmcp/)-compatible. Browser AI agents can discover and call deployed L4 rules as structured tools via a JavaScript snippet.
@@ -271,7 +300,7 @@ Query parameters for `GET /deployments`:
 - `?functions=none` — omit functions from metadata
 - `?scope=id1,id2` — filter to specific deployments
 
-The script registers discovery tools (`search_rules`, `get_rule_schema`, `evaluate_rule`) and file browsing tools (`list_files`, `read_file`, `search_identifier`, `search_text`) based on what's available in the deployment data. Direct per-function tools are also registered when the function count is small enough (≤ 20).
+The script registers tools based on the `data-tools` attribute. By default (`auto`), it registers per-rule tools if ≤ 20 rules, otherwise discovery tools (`search_rules`, `get_rule_schema`, `evaluate_rule`). File browsing tools (`list_files`, `read_file`, `search_identifier`, `search_text`) must be opted into explicitly via `file-tools` or `all`. Use comma-separated values to combine categories (e.g., `data-tools="rules,file-tools"`).
 
 #### Visibility Headers
 
@@ -306,8 +335,8 @@ The proxy injects these headers to control what jl4-service includes in response
 
 **Configuration attributes:**
 
-- `data-scope` — Filter by deployment ID: `deploy-id` (one deployment), `id1,id2` (multiple), comma-separated
-- `data-tools` — Registration mode: `auto` (default), `discovery`, `direct`, `all`
+- `data-scope` — Filter by deployment and/or function: `deploy-id` (one deployment), `id1,id2` (multiple), `id/function-name` (specific function), `*/function-name` (function across all deployments). Default: all.
+- `data-tools` — Comma-separated list of tool categories: `rules` (one tool per rule), `rule-tools` (search/schema/evaluate), `file-tools` (list/read/search files), `auto` (default: `rules` if ≤20, otherwise `rule-tools`), `all` (everything). Example: `rules,file-tools`.
 - `data-api-key` — API key for cloud-hosted deployments on [Legalese Cloud](https://legalese.cloud). Not needed for self-hosted instances.
 
 ## CLI Options

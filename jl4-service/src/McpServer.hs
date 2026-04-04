@@ -9,7 +9,7 @@ import qualified BundleStore
 import DeploymentLoader (tryCompileWithTimeout, CompilationResult (..))
 import FileBrowser (searchIdentifier, searchText, SearchMatch (..))
 import Logging (logInfo, logWarn)
-import Shared (collectMetadataEntries, sanitizeParameters, buildPropertyReverseMap, remapFnLiteralKeys)
+import Shared (collectMetadataEntries, sanitizeParameters, buildPropertyReverseMap, remapFnLiteralKeys, sanitizeFieldNamesInText)
 import Types
 
 import Control.Monad.IO.Class (liftIO)
@@ -34,7 +34,7 @@ import Control.Exception (SomeException, catch)
 import GHC.IO.Exception (AllocationLimitExceeded (..))
 import System.Timeout (timeout)
 
-import Backend.Api (EvalBackend (..), FnLiteral (..), RunFunction (..), TraceLevel (..))
+import Backend.Api (EvalBackend (..), FnLiteral (..), RunFunction (..), TraceLevel (..), prettyEvaluatorError)
 import Options (Options (..))
 
 -- | Handle an MCP JSON-RPC 2.0 request and return a JSON-RPC 2.0 response.
@@ -115,7 +115,7 @@ buildToolList vis mScope = do
       pure [ Aeson.object
         [ "name" .= tn
         , "description" .= ("L4 Rule: " <> fn.fsDescription <> " [" <> deployId <> "/" <> fn.fsName <> "]")
-        , "inputSchema" .= sanitizeParameters fn.fsParameters
+        , "inputSchema" .= mcpToolSchema fn
         ]
         | (tn, deployId, fn) <- toolNames
         ]
@@ -125,6 +125,30 @@ buildToolList vis mScope = do
   let fileTools = if vis.showFiles then fileToolDefinitions else []
 
   pure (fnTools ++ fileTools)
+
+-- | Build the MCP inputSchema for a function tool.
+-- Non-deontic functions list parameters directly at the top level.
+-- Deontic functions wrap parameters in "arguments" and add "startTime" + "events".
+mcpToolSchema :: FunctionSummary -> Aeson.Value
+mcpToolSchema fn
+  | "DEONTIC" `Text.isPrefixOf` fn.fsReturnType =
+      Aeson.object
+        [ "type" .= ("object" :: Text)
+        , "properties" .= Aeson.object
+            [ "arguments" .= sanitizeParameters fn.fsParameters
+            , "startTime" .= Aeson.object
+                [ "type" .= ("number" :: Text)
+                , "description" .= ("Start time for contract simulation" :: Text)
+                ]
+            , "events" .= Aeson.object
+                [ "type" .= ("array" :: Text)
+                , "description" .= ("Events for contract simulation (each: {party, action, at})" :: Text)
+                , "items" .= Aeson.object ["type" .= ("object" :: Text)]
+                ]
+            ]
+        , "required" .= (["arguments", "startTime", "events"] :: [Text])
+        ]
+  | otherwise = sanitizeParameters fn.fsParameters
 
 -- | Static tool definitions for file browsing.
 fileToolDefinitions :: [Aeson.Value]
@@ -275,7 +299,7 @@ callFunctionTool _vis mScope reqId toolName arguments = do
   -- Build the tool lookup map from current metadata
   entries <- collectMetadataEntries mScope
   let toolMap = Map.fromList
-        [ (tn, (deployId, fn.fsName, fn.fsParameters))
+        [ (tn, (deployId, fn.fsName, fn.fsParameters, "DEONTIC" `Text.isPrefixOf` fn.fsReturnType))
         | (tn, deployId, fn) <- buildToolNames entries
         ]
 
@@ -284,22 +308,29 @@ callFunctionTool _vis mScope reqId toolName arguments = do
       liftIO $ logWarn env.logger "MCP tool not found"
         [("toolName", Aeson.toJSON toolName)]
       pure $ jsonRpcError reqId (-32602) ("Unknown tool: " <> toolName)
-    Just (deployId, fnName, params) -> do
+    Just (deployId, fnName, params, isDeontic) -> do
       liftIO $ logInfo env.logger "MCP tool called"
         [ ("toolName", Aeson.toJSON toolName)
         , ("deploymentId", Aeson.toJSON deployId)
         , ("functionName", Aeson.toJSON fnName)
         ]
       -- Build reverse mapping: sanitized property key -> original L4 name
-      -- This map includes all nested property names recursively.
       let reverseMap = buildPropertyReverseMap params
-      -- Parse arguments and remap sanitized keys back to original L4 names.
-      -- Remapping is applied recursively to nested FnObject keys.
+      -- For deontic functions, the function args are in "arguments",
+      -- with "startTime" and "events" alongside.
+      -- For non-deontic, all top-level keys are function args.
       let argPairs = case arguments of
-            Aeson.Object obj ->
-              [ (Map.findWithDefault k k reverseMap, remapFnLiteralKeys reverseMap <$> parseFnLiteral v)
-              | (k, v) <- Map.toList (Aeson.KeyMap.toMapText obj)
-              ]
+            Aeson.Object obj
+              | isDeontic
+              , Just (Aeson.Object argsObj) <- Aeson.KeyMap.lookup "arguments" obj ->
+                  [ (Map.findWithDefault k k reverseMap, remapFnLiteralKeys reverseMap <$> parseFnLiteral v)
+                  | (k, v) <- Map.toList (Aeson.KeyMap.toMapText argsObj)
+                  ]
+              | otherwise ->
+                  [ (Map.findWithDefault k k reverseMap, remapFnLiteralKeys reverseMap <$> parseFnLiteral v)
+                  | (k, v) <- Map.toList (Aeson.KeyMap.toMapText obj)
+                  , Aeson.Key.fromText k `notElem` ["startTime", "events", "arguments"]
+                  ]
             _ -> []
 
       -- Look up the deployment and function, with optimistic 2s compilation
@@ -309,14 +340,16 @@ callFunctionTool _vis mScope reqId toolName arguments = do
         CompilationReady fns _meta ->
           case Map.lookup fnName fns of
             Just vf -> do
-              -- Run evaluation
+              -- Run evaluation (deontic eval is handled by DataPlane, not here)
               evalResult <- runMcpEvaluation vf argPairs
               case evalResult of
                 Left errMsg ->
-                  pure $ jsonRpcResult reqId $ Aeson.object
+                  -- Replace original L4 field names with sanitized versions in error text
+                  let sanitizedErr = sanitizeFieldNamesInText reverseMap errMsg
+                  in pure $ jsonRpcResult reqId $ Aeson.object
                     [ "content" .= [ Aeson.object
                         [ "type" .= ("text" :: Text)
-                        , "text" .= errMsg
+                        , "text" .= sanitizedErr
                         ]
                       ]
                     , "isError" .= True
@@ -360,7 +393,7 @@ runMcpEvaluation vf args = do
       case mResult of
         Nothing -> pure $ Left "Evaluation resource limit exceeded"
         Just (Left err) ->
-          pure $ Left (Text.pack (show err))
+          pure $ Left (prettyEvaluatorError err)
         Just (Right rwr) ->
           let encoded = Aeson.encode (SimpleResponse rwr)
           in pure $ Right (Text.Encoding.decodeUtf8 (LBS.toStrict encoded))

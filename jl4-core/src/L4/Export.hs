@@ -29,6 +29,7 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import L4.Annotation (getAnno)
 import L4.Syntax
+import L4.TypeCheck.Environment (maybeUnique)
 import L4.TypeCheck.Types (CheckErrorWithContext(..), CheckError(..), CheckEntity(..), EntityInfo)
 import Optics
 
@@ -192,7 +193,7 @@ extractParams typeDescMap (MkTypeSig _ (MkGivenSig _ names) _) =
       { paramName = resolvedToText resolved
       , paramType = mType
       , paramDescription = paramDesc <|> fallbackDesc
-      , paramRequired = True
+      , paramRequired = not (isMaybeType mType)
       }
 
 extractReturnType :: TypeSig Resolved -> Maybe (Type' Resolved)
@@ -313,8 +314,13 @@ assumeToParam typeDescMap (MkAssume ann _ (MkAppForm _ name _ _) mType) =
       { paramName = resolvedToText name
       , paramType = mType
       , paramDescription = paramDesc <|> fallbackDesc
-      , paramRequired = True
+      , paramRequired = not (isMaybeType mType)
       }
+
+-- | Check if a type annotation is MAYBE (i.e., the parameter is optional).
+isMaybeType :: Maybe (Type' Resolved) -> Bool
+isMaybeType (Just (TyApp _ name [_inner])) = getUnique name == maybeUnique
+isMaybeType _ = False
 
 -- | Extract (name, type) pairs for ASSUME declarations referenced by a DECIDE body.
 -- Used by CodeGen to generate LET bindings for ASSUME values.

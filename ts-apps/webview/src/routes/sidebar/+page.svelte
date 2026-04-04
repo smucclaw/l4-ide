@@ -11,6 +11,8 @@
     RequestOpenUrl,
     RequestOpenServiceUrl,
     RequestOpenConsole,
+    RequestOpenExtensionSettings,
+    RequestCopySignInLink,
     RequestDisconnect,
     SidebarConnectionStatusChanged,
     ListSidebarDeployments,
@@ -594,6 +596,22 @@
     )
   }
 
+  function openExtensionSettings() {
+    messenger?.sendNotification(
+      RequestOpenExtensionSettings,
+      HOST_EXTENSION,
+      undefined as never
+    )
+  }
+
+  function copySignInLink() {
+    messenger?.sendNotification(
+      RequestCopySignInLink,
+      HOST_EXTENSION,
+      undefined as never
+    )
+  }
+
   async function refreshConnectionStatus() {
     if (!messenger) return
     try {
@@ -871,65 +889,67 @@
       {:else}
         <div class="deployments-list">
           {#each deployments as dep (dep.deploymentId)}
-            <!-- svelte-ignore a11y_click_events_have_key_events -->
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <div
-              class="deployment-header"
-              onclick={() => toggleDeploymentCollapse(dep.deploymentId)}
-            >
-              <span
-                class="chevron"
-                class:rotated={!collapsedDeployments.has(dep.deploymentId)}
-                >&#9002;</span
+            <div class="deployment-group">
+              <!-- svelte-ignore a11y_click_events_have_key_events -->
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <div
+                class="deployment-header"
+                onclick={() => toggleDeploymentCollapse(dep.deploymentId)}
               >
-              <span class="deployment-id">{dep.deploymentId}</span>
-              <span class="deployment-fn-count">
+                <span
+                  class="chevron"
+                  class:rotated={!collapsedDeployments.has(dep.deploymentId)}
+                  >&#9002;</span
+                >
+                <span class="deployment-id">{dep.deploymentId}</span>
+                <span class="deployment-fn-count">
+                  {#if dep.error}
+                    Error
+                  {:else if dep.functions.length === 0 && compilingDeployments.has(dep.deploymentId)}
+                    Compiling...
+                  {:else if dep.functions.length === 0}
+                    Uncompiled
+                  {:else}
+                    {dep.functions.length} rule{dep.functions.length !== 1
+                      ? 's'
+                      : ''}
+                  {/if}
+                </span>
+                <button
+                  class="undeploy-btn"
+                  disabled={undeployingId === dep.deploymentId}
+                  onclick={(e: MouseEvent) => {
+                    e.stopPropagation()
+                    requestUndeploy(dep)
+                  }}
+                  title="Undeploy"
+                >
+                  {undeployingId === dep.deploymentId
+                    ? 'Removing...'
+                    : 'Undeploy'}
+                </button>
+              </div>
+              {#if !collapsedDeployments.has(dep.deploymentId)}
                 {#if dep.error}
-                  Error
-                {:else if dep.functions.length === 0 && compilingDeployments.has(dep.deploymentId)}
-                  Compiling...
-                {:else if dep.functions.length === 0}
-                  Uncompiled
+                  <div class="deployment-error"><pre>{dep.error}</pre></div>
+                {:else if compilingDeployments.has(dep.deploymentId)}
+                  <div class="deployment-empty">Compiling...</div>
+                {:else if dep.functions.length > 0}
+                  {#each dep.functions as func (func.name)}
+                    <ToolCard
+                      {func}
+                      expanded={isCardExpanded(
+                        dep.deploymentId + '/' + func.name
+                      )}
+                      onToggle={() =>
+                        toggleCard(dep.deploymentId + '/' + func.name)}
+                    />
+                  {/each}
                 {:else}
-                  {dep.functions.length} rule{dep.functions.length !== 1
-                    ? 's'
-                    : ''}
+                  <div class="deployment-empty">No rules</div>
                 {/if}
-              </span>
-              <button
-                class="undeploy-btn"
-                disabled={undeployingId === dep.deploymentId}
-                onclick={(e: MouseEvent) => {
-                  e.stopPropagation()
-                  requestUndeploy(dep)
-                }}
-                title="Undeploy"
-              >
-                {undeployingId === dep.deploymentId
-                  ? 'Removing...'
-                  : 'Undeploy'}
-              </button>
-            </div>
-            {#if !collapsedDeployments.has(dep.deploymentId)}
-              {#if dep.error}
-                <div class="deployment-error"><pre>{dep.error}</pre></div>
-              {:else if compilingDeployments.has(dep.deploymentId)}
-                <div class="deployment-empty">Compiling...</div>
-              {:else if dep.functions.length > 0}
-                {#each dep.functions as func (func.name)}
-                  <ToolCard
-                    {func}
-                    expanded={isCardExpanded(
-                      dep.deploymentId + '/' + func.name
-                    )}
-                    onToggle={() =>
-                      toggleCard(dep.deploymentId + '/' + func.name)}
-                  />
-                {/each}
-              {:else}
-                <div class="deployment-empty">No rules</div>
               {/if}
-            {/if}
+            </div>
           {/each}
         </div>
       {/if}
@@ -941,35 +961,31 @@
   {/if}
   <div class="status-footer">
     <div class="footer-info">
-      {#if connectionStatus.connected}
-        <div class="menu-wrapper">
-          <button class="status-row-btn" onclick={toggleMenu}>
-            <span class="status-dot {statusDotClass(connectionStatus.status)}"
-            ></span>
-            <span class="status-label-inline"
-              >{statusLabel(connectionStatus)}</span
-            >
-            <svg
-              class="dropdown-caret"
-              width="10"
-              height="10"
-              viewBox="0 0 10 10"
-              ><path
-                d="M2 3.5 L5 7 L8 3.5"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              /></svg
-            >
-          </button>
-          {#if menuOpen}
-            <div class="dropdown-menu">
-              <button class="menu-item" onclick={menuAction(openDocumentation)}>
-                Open L4 Docs website
-              </button>
-              <div class="menu-separator"></div>
+      <div class="menu-wrapper">
+        <button class="status-row-btn" onclick={toggleMenu}>
+          <span class="status-dot {statusDotClass(connectionStatus.status)}"
+          ></span>
+          <span class="status-label-inline"
+            >{statusLabel(connectionStatus)}</span
+          >
+          <svg class="dropdown-caret" width="10" height="10" viewBox="0 0 10 10"
+            ><path
+              d="M2 3.5 L5 7 L8 3.5"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            /></svg
+          >
+        </button>
+        {#if menuOpen}
+          <div class="dropdown-menu">
+            <button class="menu-item" onclick={menuAction(openDocumentation)}>
+              Open L4 Docs website
+            </button>
+            <div class="menu-separator"></div>
+            {#if connectionStatus.connected}
               {#if connectionStatus.serviceUrl}
                 <button class="menu-item" onclick={menuAction(openServiceUrl)}>
                   Visit {connectionStatus.serviceUrl}
@@ -985,6 +1001,12 @@
                 Refresh Deployments
               </button>
               {#if !connectionStatus.isLegaleseCloud}
+                <button
+                  class="menu-item"
+                  onclick={menuAction(openExtensionSettings)}
+                >
+                  Extension Settings
+                </button>
                 <button class="menu-item" onclick={menuAction(disconnect)}>
                   Disconnect
                 </button>
@@ -994,20 +1016,30 @@
                 <button class="menu-item" onclick={menuAction(openConsole)}>
                   Legalese Cloud Console
                 </button>
+                <button
+                  class="menu-item"
+                  onclick={menuAction(openExtensionSettings)}
+                >
+                  Extension Settings
+                </button>
                 <button class="menu-item" onclick={menuAction(signOut)}>
                   Sign out
                 </button>
               {/if}
-            </div>
-          {/if}
-        </div>
-      {:else}
-        <div class="status-row">
-          <span class="status-dot {statusDotClass(connectionStatus.status)}"
-          ></span>
-          <span class="status-label">{statusLabel(connectionStatus)}</span>
-        </div>
-      {/if}
+            {:else}
+              <button
+                class="menu-item"
+                onclick={menuAction(openExtensionSettings)}
+              >
+                Extension Settings
+              </button>
+              <button class="menu-item" onclick={menuAction(copySignInLink)}>
+                Copy Legalese Cloud Sign-In Link
+              </button>
+            {/if}
+          </div>
+        {/if}
+      </div>
       <span class="file-info">
         {#if functions.length > 0}
           {functions.length} rule{functions.length !== 1 ? 's' : ''} exported in
@@ -1357,6 +1389,7 @@
   .deployments-list {
     display: flex;
     flex-direction: column;
+    gap: 8px;
   }
 
   .deployment-header {
@@ -1364,8 +1397,7 @@
     align-items: center;
     gap: 6px;
     padding: 4px 8px;
-    margin-top: 4px;
-    margin-bottom: 4px;
+    margin-bottom: 8px;
     background: var(--vscode-sideBarSectionHeader-background, #252526);
     border: 1px solid var(--vscode-panel-border, #444);
     border-radius: 4px;
@@ -1424,12 +1456,8 @@
   .deployment-error {
     margin: 4px 0;
     padding: 6px 8px;
-    background: var(
-      --vscode-inputValidation-errorBackground,
-      rgba(255, 0, 0, 0.1)
-    );
-    border: 1px solid
-      var(--vscode-inputValidation-errorBorder, rgba(255, 0, 0, 0.3));
+    border: 1px solid var(--vscode-panel-border, #444);
+    border-left: 3px solid var(--vscode-testing-iconFailed, #f14c4c);
     border-radius: 4px;
   }
 
