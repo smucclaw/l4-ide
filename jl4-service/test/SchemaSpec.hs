@@ -93,7 +93,7 @@ instance Arbitrary Parameters where
 instance Arbitrary Parameter where
   arbitrary = Q.sized $ \n ->
     if n <= 0
-      then Parameter <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> pure Nothing <*> pure Nothing <*> pure Nothing
+      then Parameter <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> pure Nothing <*> pure Nothing <*> pure Nothing <*> pure Nothing
       else
         Parameter
           <$> arbitrary
@@ -101,6 +101,7 @@ instance Arbitrary Parameter where
           <*> arbitrary
           <*> arbitrary
           <*> arbitrary
+          <*> Q.resize (n `div` 4) arbitrary
           <*> Q.resize (n `div` 4) arbitrary
           <*> Q.resize (n `div` 4) arbitrary
           <*> Q.resize (n `div` 4) arbitrary

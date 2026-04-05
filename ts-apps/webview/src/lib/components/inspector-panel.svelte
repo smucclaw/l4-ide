@@ -5,9 +5,11 @@
     AddInspectorResult,
     RemoveInspectorResult,
     SyncInspectorResults,
+    RequestRevealLocation,
     type AddInspectorResultMessage,
     type SyncInspectorResultsMessage,
   } from 'jl4-client-rpc'
+  import { HOST_EXTENSION } from 'vscode-messenger-common'
   import { colorize, escapeHtml } from '@repo/l4-highlight'
 
   let { messenger }: { messenger: InstanceType<typeof Messenger> | null } =
@@ -110,6 +112,13 @@
     if (next.has(fileUri)) next.delete(fileUri)
     else next.add(fileUri)
     collapsedFiles = next
+  }
+
+  function revealInEditor(uri: string, line: number) {
+    messenger?.sendNotification(RequestRevealLocation, HOST_EXTENSION, {
+      uri,
+      line,
+    })
   }
 
   // ---------------------------------------------------------------------------
@@ -386,24 +395,28 @@
             >
               <div class="section-header">
                 <button
-                  class="collapse-toggle"
-                  onclick={() => toggleCollapse(section.directiveId)}
+                  class="section-header-toggle"
+                  onclick={(e: MouseEvent) => {
+                    if (e.metaKey || e.ctrlKey)
+                      revealInEditor(section.fileUri, section.srcLine)
+                    else toggleCollapse(section.directiveId)
+                  }}
                   title={section.collapsed ? 'Expand' : 'Collapse'}
                 >
                   <span class="chevron" class:rotated={!section.collapsed}
                     >&#9002;</span
                   >
+                  {#if !section.stale}
+                    <span class="source-location">{section.srcLine}:</span>
+                  {/if}
+                  <span
+                    class="directive-label"
+                    title={section.lineContent.trim()}
+                  >
+                    {@html colorized[section.directiveId]?.header ??
+                      escapeHtml(section.lineContent.trim())}
+                  </span>
                 </button>
-                {#if !section.stale}
-                  <span class="source-location">{section.srcLine}:</span>
-                {/if}
-                <span
-                  class="directive-label"
-                  title={section.lineContent.trim()}
-                >
-                  {@html colorized[section.directiveId]?.header ??
-                    escapeHtml(section.lineContent.trim())}
-                </span>
                 <button
                   class="dismiss-btn"
                   onclick={() => removeSection(section.directiveId)}
@@ -512,25 +525,30 @@
   .section-header {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 3px 4px 3px 8px;
     background: var(--vscode-sideBarSectionHeader-background, #252526);
     border-bottom: 1px solid var(--vscode-panel-border, #444);
-    cursor: default;
     user-select: none;
     min-width: 0;
   }
 
-  .collapse-toggle {
+  .section-header-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+    padding: 5px 8px;
     background: none;
     border: none;
     color: var(--vscode-foreground);
     cursor: pointer;
-    padding: 0;
-    font-size: 11px;
-    display: flex;
-    align-items: center;
-    flex-shrink: 0;
+    font-family: inherit;
+    font-size: inherit;
+    text-align: left;
+  }
+
+  .section-header:hover {
+    background: var(--vscode-list-hoverBackground, #2a2d2e);
   }
 
   .chevron {
@@ -572,7 +590,7 @@
     cursor: pointer;
     opacity: 0.5;
     font-size: 12px;
-    padding: 0 4px;
+    padding: 0 7px 0 4px;
     flex-shrink: 0;
   }
 

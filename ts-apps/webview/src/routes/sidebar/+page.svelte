@@ -21,6 +21,7 @@
     GetSidebarDeploymentOpenApi,
     GetSidebarDeploymentStatus,
     ShowNotification,
+    RequestRevealLocation,
     type WebviewFrontendIsReadyMessage,
     type ExportedFunctionInfo,
     type GetSidebarConnectionStatusResponse,
@@ -837,6 +838,14 @@
                 {func}
                 expanded={isCardExpanded('.local/' + func.name)}
                 onToggle={() => toggleCard('.local/' + func.name)}
+                onReveal={func.srcLine
+                  ? () =>
+                      messenger?.sendNotification(
+                        RequestRevealLocation,
+                        HOST_EXTENSION,
+                        { uri: activeFileUri, line: func.srcLine! }
+                      )
+                  : undefined}
               />
             {/each}
           </div>

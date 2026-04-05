@@ -28,6 +28,7 @@ import {
   RequestOpenExtensionSettings,
   RequestCopySignInLink,
   RequestDisconnect,
+  RequestRevealLocation,
   RequestRefreshDeployments,
   ShowNotification,
   RemoveInspectorResult,
@@ -428,6 +429,21 @@ export function initializeSidebarMessenger(
       content: params.content,
     })
     await vscode.window.showTextDocument(doc)
+  })
+
+  // Open a file at a specific line in the editor
+  messenger.onNotification(RequestRevealLocation, async (params) => {
+    const docUri = vscode.Uri.parse(params.uri)
+    const doc =
+      vscode.workspace.textDocuments.find(
+        (d) => d.uri.toString() === params.uri
+      ) ?? (await vscode.workspace.openTextDocument(docUri))
+    const line = Math.max(0, params.line - 1) // Convert 1-based to 0-based
+    const range = new vscode.Range(line, 0, line, 0)
+    await vscode.window.showTextDocument(doc, {
+      selection: range,
+      preserveFocus: false,
+    })
   })
 
   // Open an arbitrary URL in the browser

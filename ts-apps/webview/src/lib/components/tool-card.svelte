@@ -5,10 +5,12 @@
     func,
     expanded = false,
     onToggle,
+    onReveal,
   }: {
     func: ExportedFunctionInfo
     expanded?: boolean
     onToggle?: () => void
+    onReveal?: () => void
   } = $props()
 
   function toggle() {
@@ -45,7 +47,8 @@
 
 {#snippet nestedProperties(
   props: Record<string, FunctionParameter>,
-  depth: number
+  depth: number,
+  requiredFields?: string[]
 )}
   <div class="nested-props">
     {#each Object.entries(props) as [nestedName, nestedParam]}
@@ -55,6 +58,9 @@
           >{nestedParam.type}{#if nestedParam.alias}
             ({nestedParam.alias}){/if}</span
         >
+        {#if requiredFields && !requiredFields.includes(nestedName)}
+          <span class="badge optional-badge">optional</span>
+        {/if}
       </div>
       {#if nestedParam.description}
         <div class="param-desc nested">
@@ -69,15 +75,28 @@
         </div>
       {/if}
       {#if hasNestedProps(nestedParam)}
-        {@render nestedProperties(nestedParam.properties ?? {}, depth + 1)}
+        {@render nestedProperties(
+          nestedParam.properties ?? {},
+          depth + 1,
+          nestedParam.required
+        )}
       {/if}
     {/each}
   </div>
 {/snippet}
 
 <div class="tool-card" class:expanded>
-  <button class="card-header" onclick={toggle}>
+  <button
+    class="card-header"
+    onclick={(e: MouseEvent) => {
+      if ((e.metaKey || e.ctrlKey) && onReveal) onReveal()
+      else toggle()
+    }}
+  >
     <span class="chevron" class:rotated={expanded}>&#9002;</span>
+    {#if func.srcLine}
+      <span class="source-location">{func.srcLine}:</span>
+    {/if}
     <span class="func-name">{func.name}</span>
     {#if func.isDefault}
       <span class="badge default-badge">DEFAULT</span>
@@ -88,11 +107,7 @@
       >
     {/if}
     {#if func.returnType}
-      <span class="return-type"
-        >{func.returnType.startsWith('MAYBE')
-          ? func.returnType.split(' ').slice(0, 2).join(' ')
-          : func.returnType.split(' ')[0]}</span
-      >
+      <span class="return-type">{func.returnType}</span>
     {/if}
   </button>
 
@@ -112,8 +127,8 @@
                 >{param.type}{#if param.alias}
                   ({param.alias}){/if}</span
               >
-              {#if isRequired(name, func.parameters)}
-                <span class="badge required-badge">required</span>
+              {#if !isRequired(name, func.parameters)}
+                <span class="badge optional-badge">optional</span>
               {/if}
             </div>
             {#if param.description}
@@ -127,7 +142,11 @@
               </div>
             {/if}
             {#if hasNestedProps(param)}
-              {@render nestedProperties(param.properties ?? {}, 1)}
+              {@render nestedProperties(
+                param.properties ?? {},
+                1,
+                param.required
+              )}
             {/if}
           {/each}
         </div>
@@ -187,10 +206,18 @@
     transform: rotate(90deg);
   }
 
+  .source-location {
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 0.85em;
+    color: var(--vscode-descriptionForeground);
+    opacity: 0.7;
+    flex-shrink: 0;
+  }
+
   .func-name {
     font-family: var(--vscode-editor-font-family, monospace);
     font-size: 0.95em;
-    flex: 1;
+    flex: 1 1 0;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -209,8 +236,11 @@
     font-family: var(--vscode-editor-font-family, monospace);
     font-size: 0.88em;
     color: var(--l4-tok-identifier, #4ec9b0);
-    flex-shrink: 0;
-    margin-left: auto;
+    flex: 0 3 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .param-count + .return-type {
@@ -263,7 +293,7 @@
   }
 
   .param-row.nested {
-    padding-left: 16px;
+    padding-left: 4px;
   }
 
   .param-name {
@@ -286,7 +316,7 @@
   }
 
   .param-desc.nested {
-    padding-left: 16px;
+    padding-left: 4px;
   }
 
   .param-enums {
@@ -297,7 +327,7 @@
   }
 
   .param-enums.nested {
-    padding-left: 16px;
+    padding-left: 4px;
   }
 
   .enum-tag {
@@ -324,7 +354,7 @@
     opacity: 0.5;
   }
 
-  .required-badge {
+  .optional-badge {
     background: none;
     border: none;
     padding: 0;
@@ -341,7 +371,7 @@
 
   .nested-props {
     border-left: 1px solid var(--vscode-panel-border, #444);
-    margin-left: 8px;
-    padding-left: 4px;
+    margin-left: 4px;
+    padding-left: 8px;
   }
 </style>
