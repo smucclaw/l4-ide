@@ -985,6 +985,13 @@
               Open L4 Docs website
             </button>
             <div class="menu-separator"></div>
+            <button
+              class="menu-item"
+              onclick={menuAction(openExtensionSettings)}
+            >
+              Extension Settings
+            </button>
+            <div class="menu-separator"></div>
             {#if connectionStatus.connected}
               {#if connectionStatus.serviceUrl}
                 <button class="menu-item" onclick={menuAction(openServiceUrl)}>
@@ -1001,12 +1008,6 @@
                 Refresh Deployments
               </button>
               {#if !connectionStatus.isLegaleseCloud}
-                <button
-                  class="menu-item"
-                  onclick={menuAction(openExtensionSettings)}
-                >
-                  Extension Settings
-                </button>
                 <button class="menu-item" onclick={menuAction(disconnect)}>
                   Disconnect
                 </button>
@@ -1016,23 +1017,11 @@
                 <button class="menu-item" onclick={menuAction(openConsole)}>
                   Legalese Cloud Console
                 </button>
-                <button
-                  class="menu-item"
-                  onclick={menuAction(openExtensionSettings)}
-                >
-                  Extension Settings
-                </button>
                 <button class="menu-item" onclick={menuAction(signOut)}>
                   Sign out
                 </button>
               {/if}
             {:else}
-              <button
-                class="menu-item"
-                onclick={menuAction(openExtensionSettings)}
-              >
-                Extension Settings
-              </button>
               <button class="menu-item" onclick={menuAction(copySignInLink)}>
                 Copy Legalese Cloud Sign-In Link
               </button>

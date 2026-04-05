@@ -6,6 +6,10 @@ import { type AuthManager, LEGALESE_CLOUD_DOMAIN } from './auth.js'
 import type { ServiceClient } from './service-client.js'
 import { getWebviewContent } from './webview-panel.js'
 import {
+  showTimedInformationMessage,
+  showTimedWarningMessage,
+} from './notifications.js'
+import {
   GetExportedFunctionsRequestType,
   GetSidebarExportedFunctions,
   GetSidebarConnectionStatus,
@@ -478,7 +482,7 @@ export function initializeSidebarMessenger(
     )
     const redirectUrl = `https://${LEGALESE_CLOUD_DOMAIN}/?redirect_to=${encodeURIComponent(callbackUri.toString())}`
     await vscode.env.clipboard.writeText(redirectUrl)
-    vscode.window.showInformationMessage(
+    showTimedInformationMessage(
       'Legalese Cloud sign-in link copied to clipboard'
     )
   })
@@ -498,10 +502,10 @@ export function initializeSidebarMessenger(
   messenger.onNotification(ShowNotification, (params) => {
     switch (params.type) {
       case 'info':
-        vscode.window.showInformationMessage(params.message)
+        showTimedInformationMessage(params.message)
         break
       case 'warning':
-        vscode.window.showWarningMessage(params.message)
+        showTimedWarningMessage(params.message)
         break
       case 'error':
         vscode.window.showErrorMessage(params.message)
