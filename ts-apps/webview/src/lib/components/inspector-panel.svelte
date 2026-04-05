@@ -336,13 +336,47 @@
   }
 
   type ColorizedEntry = { header: string; body: string }
+  /**
+   * Format a result value string by converting commas into line-breaks
+   * with indentation based on parenthesis nesting depth.
+   * Parentheses that wrap record values (e.g. `(Foo WITH ...)`) are stripped.
+   */
+  function formatResultValue(text: string): string {
+    let result = ''
+    let depth = 0
+    const indent = () => '\n' + '  '.repeat(depth)
+
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i]
+      if (ch === '(') {
+        depth++
+        // Strip the opening paren — the content will be indented
+      } else if (ch === ')') {
+        depth = Math.max(0, depth - 1)
+        // Strip the closing paren
+      } else if (ch === ',') {
+        // Skip optional space after comma
+        if (text[i + 1] === ' ') i++
+        result += indent()
+      } else if (text.startsWith(' WITH ', i)) {
+        depth++
+        result += ' WITH'
+        result += indent()
+        i += 5 // skip " WITH"
+      } else {
+        result += ch
+      }
+    }
+    return result
+  }
+
   const colorized: Record<string, ColorizedEntry> = $derived(
     Object.fromEntries(
       sections.map((s) => [
         s.directiveId,
         {
           header: colorize(s.lineContent.trim()),
-          body: colorize(s.prettyText),
+          body: colorize(formatResultValue(s.prettyText)),
         },
       ])
     )
