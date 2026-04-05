@@ -232,7 +232,8 @@ declareToJsonSchema ctx (MkDeclare ann _ _ typeDecl) =
         fieldDesc = fmap getDesc (fieldAnn ^. annDesc)
         (fieldSchema, newDefs) = typeToJsonSchema ctx'{ctxCollectedDefs = defs} fieldTy
         schemaWithDesc = addDescToSchema fieldSchema fieldDesc
-     in ((fieldNameText, schemaWithDesc, True) : acc, newDefs)
+        isRequired = not (isMaybeOrOptionalType fieldTy)
+     in ((fieldNameText, schemaWithDesc, isRequired) : acc, newDefs)
 
   addDescToSchema :: SchemaType -> Maybe Text -> SchemaType
   addDescToSchema st Nothing = st
@@ -300,7 +301,12 @@ enumWithPayloads ctx' desc constructors =
             SAnyOf opts _ -> SAnyOf opts (Just d)
             SStringFormat fmt _ -> SStringFormat fmt (Just d)
             SNull -> SNull
-     in ((fieldNameText, schemaWithDesc, True) : acc, newDefs)
+     in ((fieldNameText, schemaWithDesc, not (isMaybeOrOptionalType fieldTy)) : acc, newDefs)
+
+-- | Check if a type is MAYBE or Optional, matching the same logic as typeToJsonSchema
+isMaybeOrOptionalType :: Type' Resolved -> Bool
+isMaybeOrOptionalType (TyApp _ name [_]) = resolvedToText name `elem` ["Maybe", "Optional"]
+isMaybeOrOptionalType _ = False
 
 resolvedToText :: Resolved -> Text
 resolvedToText =

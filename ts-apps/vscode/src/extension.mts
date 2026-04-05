@@ -1,5 +1,6 @@
 import { ExtensionContext, workspace, window } from 'vscode'
 import * as vscode from 'vscode'
+import { showTimedWarningMessage } from './notifications.js'
 import * as path from 'path'
 import * as fs from 'fs'
 import {
@@ -563,7 +564,7 @@ export async function activate(context: ExtensionContext) {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     outputChannel.appendLine(`[client] Couldn't connect to jl4-lsp: ${msg}`)
-    vscode.window.showWarningMessage(
+    showTimedWarningMessage(
       `Couldn't connect to jl4-lsp. L4 language features are unavailable. Set jl4.serverExecutablePath in settings or install jl4-lsp on your PATH.`
     )
     return

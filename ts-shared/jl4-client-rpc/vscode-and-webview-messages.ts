@@ -283,6 +283,14 @@ export const RequestDisconnect: NotificationType<void> = {
   method: 'requestDisconnect',
 }
 
+/** Sidebar asks extension to open a file at a specific line */
+export const RequestRevealLocation: NotificationType<{
+  uri: string
+  line: number
+}> = {
+  method: 'requestRevealLocation',
+}
+
 /** Sidebar asks extension to open L4 code as a new untitled file */
 export const RequestNewL4File: NotificationType<{ content: string }> = {
   method: 'requestNewL4File',
