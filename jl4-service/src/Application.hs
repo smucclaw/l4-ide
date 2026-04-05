@@ -25,14 +25,15 @@ import Control.Exception (SomeException, finally, displayException)
 import Control.Monad (forM_)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Reader (ReaderT (..), ask)
-import Data.IORef (newIORef, atomicModifyIORef')
+import Data.IORef (newIORef, readIORef, atomicModifyIORef')
 import qualified Data.Map.Strict as Map
 import Data.Time (getCurrentTime, diffUTCTime)
 import Network.HTTP.Types.Status (statusCode)
-import Network.Wai (Middleware, Request, requestMethod, rawPathInfo, responseStatus, pathInfo, responseLBS, requestHeaders, queryString)
+import Network.Wai (Middleware, Request, requestMethod, rawPathInfo, responseStatus, pathInfo, responseLBS, requestHeaders, queryString, responseToStream)
 import Network.HTTP.Types (status503, mkStatus, ok200)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
+import Data.ByteString.Builder (toLazyByteString)
 import Network.Wai.Handler.Warp (defaultSettings, runSettings, setHost, setPort, setOnException, setOnExceptionResponse)
 import Network.Wai.Handler.Warp (defaultShouldDisplayException)
 import Network.Wai.Middleware.Cors (cors, simpleCorsResourcePolicy, corsMethods, corsRequestHeaders)
@@ -127,7 +128,7 @@ defaultMain = do
 
   -- Build middleware stack
   concLimiter <- concurrencyLimiter options.maxConcurrentRequests
-  let middleware = concLimiter . requestLogMiddleware logger . corsMiddleware . l4FileMiddleware env . explorerMiddleware logger registry
+  let middleware = concLimiter . contentLengthMiddleware . requestLogMiddleware logger . corsMiddleware . l4FileMiddleware env . explorerMiddleware logger registry
       onExc :: Maybe Request -> SomeException -> IO ()
       onExc _req exc =
         if defaultShouldDisplayException exc || debug
@@ -190,6 +191,24 @@ concurrencyLimiter maxConcurrent = do
           then baseApp req sendResp `finally`
                  atomicModifyIORef' counter (\n -> (n - 1, ()))
           else sendResp $ responseLBS status503 [] "Service at capacity"
+
+-- | Middleware that ensures every response has a Content-Length header.
+-- Servant's JSON encoding uses responseBuilder (chunked transfer encoding)
+-- which omits Content-Length. CloudFront requires Content-Length to perform
+-- on-the-fly gzip/brotli compression. This middleware buffers the streaming
+-- body into a lazy ByteString and re-emits it via responseLBS, which Warp
+-- automatically sends with Content-Length.
+contentLengthMiddleware :: Middleware
+contentLengthMiddleware baseApp req sendResp =
+  baseApp req $ \res -> do
+    let (status, headers, withBody) = responseToStream res
+    body <- withBody $ \streamBody -> do
+      ref <- newIORef mempty
+      streamBody
+        (\builder -> atomicModifyIORef' ref (\acc -> (acc <> toLazyByteString builder, ())))
+        (pure ()) -- flush is a no-op since we buffer the full response
+      readIORef ref
+    sendResp $ responseLBS status headers body
 
 -- | WAI Application.
 -- Extracts visibility headers from each request to control response filtering.
