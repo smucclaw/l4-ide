@@ -690,8 +690,7 @@
     font-weight: bold;
   }
   :global(.tok-comment) {
-    color: var(--l4-tok-comment, #6a9955);
-    font-style: italic;
+    color: var(--l4-tok-comment, #8d949d);
   }
   :global(.tok-string) {
     color: var(--l4-tok-string, #ce9178);

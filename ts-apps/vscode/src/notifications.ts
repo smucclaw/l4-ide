@@ -1,9 +1,9 @@
 import * as vscode from 'vscode'
 
-const AUTO_DISMISS_MS = 10_000
+const AUTO_DISMISS_MS = 4_000
 
 /**
- * Shows a notification that auto-dismisses after 10 seconds.
+ * Shows a notification that auto-dismisses after 4 seconds.
  * Uses vscode.window.withProgress as that's the only API that supports auto-dismiss.
  */
 export function showTimedInformationMessage(message: string): void {
