@@ -898,32 +898,38 @@
       {:else}
         <div class="deployments-list">
           {#each deployments as dep (dep.deploymentId)}
-            <div class="deployment-group">
-              <!-- svelte-ignore a11y_click_events_have_key_events -->
-              <!-- svelte-ignore a11y_no_static_element_interactions -->
-              <div
-                class="deployment-header"
-                onclick={() => toggleDeploymentCollapse(dep.deploymentId)}
-              >
-                <span
-                  class="chevron"
-                  class:rotated={!collapsedDeployments.has(dep.deploymentId)}
-                  >&#9002;</span
+            <div
+              class="deployment-group"
+              class:collapsed={collapsedDeployments.has(dep.deploymentId)}
+            >
+              <div class="deployment-header">
+                <button
+                  class="deployment-header-toggle"
+                  onclick={() => toggleDeploymentCollapse(dep.deploymentId)}
+                  title={collapsedDeployments.has(dep.deploymentId)
+                    ? 'Expand deployment'
+                    : 'Collapse deployment'}
                 >
-                <span class="deployment-id">{dep.deploymentId}</span>
-                <span class="deployment-fn-count">
-                  {#if dep.error}
-                    Error
-                  {:else if dep.functions.length === 0 && compilingDeployments.has(dep.deploymentId)}
-                    Compiling...
-                  {:else if dep.functions.length === 0}
-                    Uncompiled
-                  {:else}
-                    {dep.functions.length} rule{dep.functions.length !== 1
-                      ? 's'
-                      : ''}
-                  {/if}
-                </span>
+                  <span
+                    class="chevron"
+                    class:rotated={!collapsedDeployments.has(dep.deploymentId)}
+                    >&#9002;</span
+                  >
+                  <span class="deployment-id">{dep.deploymentId}</span>
+                  <span class="deployment-fn-count">
+                    {#if dep.error}
+                      Error
+                    {:else if dep.functions.length === 0 && compilingDeployments.has(dep.deploymentId)}
+                      Compiling...
+                    {:else if dep.functions.length === 0}
+                      Uncompiled
+                    {:else}
+                      {dep.functions.length} rule{dep.functions.length !== 1
+                        ? 's'
+                        : ''}
+                    {/if}
+                  </span>
+                </button>
                 <button
                   class="undeploy-btn"
                   disabled={undeployingId === dep.deploymentId}
@@ -1140,6 +1146,7 @@
   .functions-list {
     display: flex;
     flex-direction: column;
+    gap: 8px;
   }
 
   .progress-bar {
@@ -1387,22 +1394,44 @@
   .deployments-list {
     display: flex;
     flex-direction: column;
+    gap: 16px;
+    padding-bottom: 16px;
+  }
+
+  .deployment-group {
+    display: flex;
+    flex-direction: column;
     gap: 8px;
+  }
+
+  .deployment-group.collapsed {
+    margin-bottom: -8px;
   }
 
   .deployment-header {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 4px 8px;
-    margin-bottom: 8px;
     background: var(--vscode-sideBarSectionHeader-background, #252526);
-    border: 1px solid var(--vscode-panel-border, #444);
-    border-radius: 4px;
-    cursor: pointer;
     user-select: none;
     font-size: 0.92em;
     font-weight: 500;
+  }
+
+  .deployment-header-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+    padding: 4px 5px;
+    background: none;
+    border: none;
+    color: var(--vscode-foreground);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: inherit;
+    font-weight: inherit;
+    text-align: left;
   }
 
   .collapse-toggle {
@@ -1471,9 +1500,8 @@
   }
 
   .undeploy-btn {
-    margin-left: auto;
     font-size: 0.85em;
-    padding: 2px 1px 2px 4px;
+    padding: 2px 8px 2px 8px;
     border-radius: 3px;
     border: none;
     background: none;
