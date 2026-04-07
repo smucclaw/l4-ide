@@ -82,7 +82,7 @@ identIsFunction t = case posTokenCategory t.payload of
 
 identIsSelector :: PosToken -> Maybe SemanticTokenTypes
 identIsSelector t = case posTokenCategory t.payload of
-  CIdentifier -> Just SemanticTokenTypes_Method
+  CIdentifier -> Just SemanticTokenTypes_Variable
   _ -> Nothing
 
 identIsAssume :: PosToken -> Maybe SemanticTokenTypes

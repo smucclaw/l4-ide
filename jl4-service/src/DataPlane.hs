@@ -28,6 +28,7 @@ import Types
 
 import qualified Data.Aeson as Aeson
 import Data.Aeson ((.=))
+import qualified Data.ByteString.Char8 as BS8
 import Data.Int (Int64)
 import Control.Concurrent.Async (forConcurrently)
 import Control.Concurrent.STM (atomically, modifyTVar', readTVarIO)
@@ -258,7 +259,9 @@ evalFunctionHandler deployId fnName mTraceHeader mTraceParam mGraphViz fnArgs = 
       runDeonticEvaluatorFor vf fnArgs.fnEvalBackend remappedArgs st evts
         vf.fnImpl.deonticPartyType vf.fnImpl.deonticActionType
         mTraceHeader mTraceParam mGraphViz
-  pure $ addHeader allocBytes result
+  case result of
+    SimpleError _ -> throwEvalError allocBytes result
+    _ -> pure $ addHeader allocBytes result
 
 -- | POST /deployments/{id}/functions/{fn}/evaluation/batch
 batchFunctionHandler
@@ -575,6 +578,20 @@ timeoutAction act = do
 -- ----------------------------------------------------------------------------
 -- Helpers
 -- ----------------------------------------------------------------------------
+
+-- | Throw a 422 Unprocessable Entity with the SimpleResponse JSON body
+-- and the X-Eval-Alloc-Bytes header.
+throwEvalError :: Int64 -> SimpleResponse -> AppM a
+throwEvalError allocBytes resp =
+  throwError ServerError
+    { errHTTPCode = 422
+    , errReasonPhrase = "Unprocessable Entity"
+    , errBody = Aeson.encode resp
+    , errHeaders =
+        [ ("Content-Type", "application/json")
+        , ("X-Eval-Alloc-Bytes", BS8.pack $ show allocBytes)
+        ]
+    }
 
 -- | Determine trace level from header and query parameter.
 determineTraceLevel :: Maybe Text -> Maybe TraceLevel -> TraceLevel
