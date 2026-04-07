@@ -149,7 +149,7 @@ renderExplorerPageBS registry = LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text
   -- REST API
   , "  <div class=\"info collapsed\">"
   , "    <h3>Using the REST API</h3>"
-  , "    <p class=\"note info-desc\">Evaluate deployed L4 rules via HTTP. Browse source files, single and batch evaluation endpoints, OpenAPI metadata with scope filtering.</p>"
+  , "    <p class=\"note info-desc\">Evaluate deployed L4 rules via HTTP. Browse source files, single and batch evaluation endpoints. <a href=\"/openapi.json\">OpenAPI 3.0 spec of all endpoints</a>.</p>"
   , "    <div class=\"info-body\">"
   , "    <div class=\"note\">"
   , "      <dl>"
