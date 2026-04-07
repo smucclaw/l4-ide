@@ -175,6 +175,9 @@ sanitizeParameterValue p =
           [ (Aeson.Key.fromText (sanitizePropertyName nk), sanitizeParameterValue nv)
           | (nk, nv) <- Map.toList nested
           ]]
+    ++ case p.parameterRequired of
+        Nothing -> []
+        Just req -> ["required" .= map sanitizePropertyName req]
     ++ case p.parameterItems of
         Nothing -> []
         Just items -> ["items" .= sanitizeParameterValue items]

@@ -1377,10 +1377,14 @@ jsonValueToWHNFTyped jsonValue ty = do
                       -- Note: We ignore extra fields in the JSON (Postel's Law)
                       fieldRefs <- forM fieldNamesAndTypes $ \(fieldName, fieldType) -> do
                         case KeyMap.lookup (Key.fromText fieldName) obj of
-                          Nothing -> do
-                            -- Field missing in JSON, this is an error
-                            UserException $ UserError $
-                              "Missing required field '" <> fieldName <> "' in JSON object"
+                          Nothing
+                            | isMaybeFieldTy fieldType ->
+                              -- MAYBE field missing in JSON: treat as NOTHING
+                              AllocateValue $ ValConstructor TypeCheck.nothingRef []
+                            | otherwise -> do
+                              -- Required field missing in JSON: error
+                              UserException $ UserError $
+                                "Missing required field '" <> fieldName <> "' in JSON object"
                           Just fieldValue -> do
                             -- RECURSIVELY decode the field value WITH TYPE INFORMATION
                             fieldWHNF <- jsonValueToWHNFTyped fieldValue fieldType
@@ -1394,6 +1398,11 @@ jsonValueToWHNFTyped jsonValue ty = do
 
     -- For other types, fall back to generic decoding
     _ -> jsonValueToWHNF jsonValue
+
+-- | Check if a type is MAYBE α (used for optional record field handling)
+isMaybeFieldTy :: Type' Resolved -> Bool
+isMaybeFieldTy (TyApp _ tyName [_]) = nameToText (TypeCheck.getName tyName) == "MAYBE"
+isMaybeFieldTy _ = False
 
 -- | Convert list of JSON values to L4 list (ValCons/ValNil) with type information
 -- This recursively decodes each element using the provided element type

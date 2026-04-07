@@ -6,6 +6,10 @@ import { type AuthManager, LEGALESE_CLOUD_DOMAIN } from './auth.js'
 import type { ServiceClient } from './service-client.js'
 import { getWebviewContent } from './webview-panel.js'
 import {
+  showTimedInformationMessage,
+  showTimedWarningMessage,
+} from './notifications.js'
+import {
   GetExportedFunctionsRequestType,
   GetSidebarExportedFunctions,
   GetSidebarConnectionStatus,
@@ -24,6 +28,7 @@ import {
   RequestOpenExtensionSettings,
   RequestCopySignInLink,
   RequestDisconnect,
+  RequestRevealLocation,
   RequestRefreshDeployments,
   ShowNotification,
   RemoveInspectorResult,
@@ -426,6 +431,21 @@ export function initializeSidebarMessenger(
     await vscode.window.showTextDocument(doc)
   })
 
+  // Open a file at a specific line in the editor
+  messenger.onNotification(RequestRevealLocation, async (params) => {
+    const docUri = vscode.Uri.parse(params.uri)
+    const doc =
+      vscode.workspace.textDocuments.find(
+        (d) => d.uri.toString() === params.uri
+      ) ?? (await vscode.workspace.openTextDocument(docUri))
+    const line = Math.max(0, params.line - 1) // Convert 1-based to 0-based
+    const range = new vscode.Range(line, 0, line, 0)
+    await vscode.window.showTextDocument(doc, {
+      selection: range,
+      preserveFocus: false,
+    })
+  })
+
   // Open an arbitrary URL in the browser
   messenger.onNotification(RequestOpenUrl, (params) => {
     vscode.env.openExternal(vscode.Uri.parse(params.url))
@@ -478,7 +498,7 @@ export function initializeSidebarMessenger(
     )
     const redirectUrl = `https://${LEGALESE_CLOUD_DOMAIN}/?redirect_to=${encodeURIComponent(callbackUri.toString())}`
     await vscode.env.clipboard.writeText(redirectUrl)
-    vscode.window.showInformationMessage(
+    showTimedInformationMessage(
       'Legalese Cloud sign-in link copied to clipboard'
     )
   })
@@ -498,10 +518,10 @@ export function initializeSidebarMessenger(
   messenger.onNotification(ShowNotification, (params) => {
     switch (params.type) {
       case 'info':
-        vscode.window.showInformationMessage(params.message)
+        showTimedInformationMessage(params.message)
         break
       case 'warning':
-        vscode.window.showWarningMessage(params.message)
+        showTimedWarningMessage(params.message)
         break
       case 'error':
         vscode.window.showErrorMessage(params.message)

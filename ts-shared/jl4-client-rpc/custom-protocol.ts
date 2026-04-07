@@ -115,6 +115,7 @@ export interface FunctionParameter {
   properties?: Record<string, FunctionParameter>
   propertyOrder?: string[]
   items?: FunctionParameter
+  required?: string[]
 }
 
 export interface FunctionParameters {
@@ -130,6 +131,7 @@ export interface ExportedFunctionInfo {
   returnType: string
   isDeontic: boolean
   parameters: FunctionParameters
+  srcLine?: number
 }
 
 export interface GetExportedFunctionsParams {

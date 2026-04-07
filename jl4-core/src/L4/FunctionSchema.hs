@@ -39,6 +39,7 @@ data Parameter = Parameter
   , parameterProperties :: !(Maybe (Map Text Parameter)) -- Nested properties for object types
   , parameterPropertyOrder :: !(Maybe [Text]) -- Field order for object types (declaration order when available)
   , parameterItems :: !(Maybe Parameter) -- Array items schema for array types
+  , parameterRequired :: !(Maybe [Text]) -- Required field names for nested object types
   }
   deriving stock (Show, Read, Ord, Eq, Generic)
 
@@ -77,6 +78,9 @@ instance ToJSON Parameter where
         ++ case p.parameterItems of
           Nothing -> []
           Just items -> ["items" .= items]
+        ++ case p.parameterRequired of
+          Nothing -> []
+          Just req -> ["required" .= req]
 
 instance FromJSON Parameter where
   parseJSON = Aeson.withObject "Parameter" $ \p ->
@@ -89,6 +93,7 @@ instance FromJSON Parameter where
       <*> p .:? "properties"
       <*> p .:? "propertyOrder"
       <*> p .:? "items"
+      <*> p .:? "required"
 
 declaresFromModule :: Module Resolved -> Map Text (Declare Resolved)
 declaresFromModule (MkModule _ _ section) =
@@ -144,6 +149,7 @@ typeToParameter declares visited ty =
       , parameterProperties = Nothing
       , parameterPropertyOrder = Nothing
       , parameterItems = Nothing
+      , parameterRequired = Nothing
       }
 
   typeNameToParameter :: Resolved -> Parameter
@@ -189,11 +195,17 @@ typeToParameter declares visited ty =
                   | MkTypedName fieldAnn fieldName fieldTy _ <- fields
                   , let fieldDesc = fmap getDesc (fieldAnn Optics.^. annDesc)
                   ]
+              requiredFields =
+                [ resolvedNameText fieldName
+                | MkTypedName _ fieldName fieldTy _ <- fields
+                , not (isMaybeFieldType fieldTy)
+                ]
              in
               (emptyParam "object")
                 { parameterDescription = Maybe.fromMaybe "" (fmap getDesc (declAnn Optics.^. annDesc))
                 , parameterProperties = Just props
                 , parameterPropertyOrder = Just fieldOrder
+                , parameterRequired = Just requiredFields
                 }
           EnumDecl _ constructors ->
             (emptyParam "string")
@@ -271,12 +283,20 @@ parametersFromDecideWithErrors resolvedModule decide@(MkDecide _ (MkTypeSig _ (M
       , parameterProperties = Nothing
       , parameterPropertyOrder = Nothing
       , parameterItems = Nothing
+      , parameterRequired = Nothing
       }
 
 -- | Check if a type annotation is MAYBE (i.e., the parameter is optional).
 isMaybeType :: Maybe (Type' Resolved) -> Bool
 isMaybeType (Just (TyApp _ name [_inner])) = getUnique name == maybeUnique
 isMaybeType _ = False
+
+-- | Check if a field type is MAYBE or Optional (for record field required tracking).
+isMaybeFieldType :: Type' Resolved -> Bool
+isMaybeFieldType (TyApp _ name [_]) =
+  let lowered = Text.toLower (resolvedNameText name)
+   in lowered `elem` ["maybe", "optional"]
+isMaybeFieldType _ = False
 
 resolvedNameText :: Resolved -> Text
 resolvedNameText =

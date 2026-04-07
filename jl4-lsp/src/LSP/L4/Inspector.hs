@@ -19,7 +19,8 @@ import GHC.TypeLits (Symbol)
 import Language.LSP.Protocol.Types as LSP
 import L4.Parser.SrcSpan (SrcPos(..), SrcRange(..))
 import L4.Print (prettyLayout, ConstructorFieldNames)
-import L4.Syntax (getActual, Declare, Resolved)
+import L4.Annotation (Anno_(..))
+import L4.Syntax (getActual, Declare, Decide(..), AppForm(..), Resolved)
 
 import qualified L4.Export as Export
 import qualified L4.FunctionSchema as FSchema
@@ -274,11 +275,12 @@ data ExportedFunctionSummary = ExportedFunctionSummary
   , returnType :: !Text
   , isDeontic :: !Bool
   , parameters :: !FSchema.Parameters
+  , srcLine :: !(Maybe Int)
   }
   deriving stock (Eq, Show, Generic)
 
 instance ToJSON ExportedFunctionSummary where
-  toJSON f = object
+  toJSON f = object $
     [ "name" .= f.name
     , "description" .= f.description
     , "isDefault" .= f.isDefault
@@ -286,6 +288,9 @@ instance ToJSON ExportedFunctionSummary where
     , "isDeontic" .= f.isDeontic
     , "parameters" .= f.parameters
     ]
+    ++ case f.srcLine of
+      Nothing -> []
+      Just l -> ["srcLine" .= l]
 
 data GetExportedFunctionsResponse = GetExportedFunctionsResponse
   { functions :: [ExportedFunctionSummary]
@@ -323,6 +328,7 @@ exportedFunctionToSummary declares ef =
               , parameterProperties = Nothing
               , parameterPropertyOrder = Nothing
               , parameterItems = Nothing
+              , parameterRequired = Nothing
               }
             Just ty -> FSchema.typeToParameter declares Set.empty ty
           desc = case ep.paramDescription of
@@ -342,6 +348,10 @@ exportedFunctionToSummary declares ef =
 
     -- Deontic detection: check if return type pretty-prints as containing "DEONTIC"
     isDeontic' = "DEONTIC" `Text.isInfixOf` Text.toUpper retType
+
+    -- Extract line number from the function name's AppForm annotation
+    MkDecide _ _ (MkAppForm (Anno _ appRange _) _ _ _) _ = ef.exportDecide
+    fnLine = fmap (\r -> r.start.line) appRange
   in
     ExportedFunctionSummary
       { name = ef.exportName
@@ -350,4 +360,5 @@ exportedFunctionToSummary declares ef =
       , returnType = retType
       , isDeontic = isDeontic'
       , parameters = params
+      , srcLine = fnLine
       }

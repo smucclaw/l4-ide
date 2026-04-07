@@ -5,9 +5,11 @@
     AddInspectorResult,
     RemoveInspectorResult,
     SyncInspectorResults,
+    RequestRevealLocation,
     type AddInspectorResultMessage,
     type SyncInspectorResultsMessage,
   } from 'jl4-client-rpc'
+  import { HOST_EXTENSION } from 'vscode-messenger-common'
   import { colorize, escapeHtml } from '@repo/l4-highlight'
 
   let { messenger }: { messenger: InstanceType<typeof Messenger> | null } =
@@ -110,6 +112,13 @@
     if (next.has(fileUri)) next.delete(fileUri)
     else next.add(fileUri)
     collapsedFiles = next
+  }
+
+  function revealInEditor(uri: string, line: number) {
+    messenger?.sendNotification(RequestRevealLocation, HOST_EXTENSION, {
+      uri,
+      line,
+    })
   }
 
   // ---------------------------------------------------------------------------
@@ -327,13 +336,47 @@
   }
 
   type ColorizedEntry = { header: string; body: string }
+  /**
+   * Format a result value string by converting commas into line-breaks
+   * with indentation based on parenthesis nesting depth.
+   * Parentheses that wrap record values (e.g. `(Foo WITH ...)`) are stripped.
+   */
+  function formatResultValue(text: string): string {
+    let result = ''
+    let depth = 0
+    const indent = () => '\n' + '  '.repeat(depth)
+
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i]
+      if (ch === '(') {
+        depth++
+        // Strip the opening paren — the content will be indented
+      } else if (ch === ')') {
+        depth = Math.max(0, depth - 1)
+        // Strip the closing paren
+      } else if (ch === ',') {
+        // Skip optional space after comma
+        if (text[i + 1] === ' ') i++
+        result += indent()
+      } else if (text.startsWith(' WITH ', i)) {
+        depth++
+        result += ' WITH'
+        result += indent()
+        i += 5 // skip " WITH"
+      } else {
+        result += ch
+      }
+    }
+    return result
+  }
+
   const colorized: Record<string, ColorizedEntry> = $derived(
     Object.fromEntries(
       sections.map((s) => [
         s.directiveId,
         {
           header: colorize(s.lineContent.trim()),
-          body: colorize(s.prettyText),
+          body: colorize(formatResultValue(s.prettyText)),
         },
       ])
     )
@@ -350,11 +393,14 @@
     </div>
   {:else}
     {#each fileGroups as group (group.fileUri)}
-      <div class="file-group">
+      <div
+        class="file-group"
+        class:collapsed={hasMultipleFiles && collapsedFiles.has(group.fileUri)}
+      >
         {#if hasMultipleFiles}
           <div class="file-header">
             <button
-              class="collapse-toggle"
+              class="file-header-toggle"
               onclick={() => toggleFileCollapse(group.fileUri)}
               title={collapsedFiles.has(group.fileUri)
                 ? 'Expand file'
@@ -364,13 +410,21 @@
                 class="chevron"
                 class:rotated={!collapsedFiles.has(group.fileUri)}>&#9002;</span
               >
+              <span class="file-name" title={group.fileUri}
+                >{group.displayName}</span
+              >
             </button>
-            <span class="file-name" title={group.fileUri}
-              >{group.displayName}</span
-            >
+            <span class="file-result-count">
+              {group.sections.length} result{group.sections.length !== 1
+                ? 's'
+                : ''}
+            </span>
             <button
               class="remove-all-btn"
-              onclick={() => removeFileGroup(group.fileUri)}
+              onclick={(e: MouseEvent) => {
+                e.stopPropagation()
+                removeFileGroup(group.fileUri)
+              }}
               title="Remove all results from this file"
             >
               Remove all
@@ -386,24 +440,28 @@
             >
               <div class="section-header">
                 <button
-                  class="collapse-toggle"
-                  onclick={() => toggleCollapse(section.directiveId)}
+                  class="section-header-toggle"
+                  onclick={(e: MouseEvent) => {
+                    if (e.metaKey || e.ctrlKey)
+                      revealInEditor(section.fileUri, section.srcLine)
+                    else toggleCollapse(section.directiveId)
+                  }}
                   title={section.collapsed ? 'Expand' : 'Collapse'}
                 >
                   <span class="chevron" class:rotated={!section.collapsed}
                     >&#9002;</span
                   >
+                  {#if !section.stale}
+                    <span class="source-location">{section.srcLine}:</span>
+                  {/if}
+                  <span
+                    class="directive-label"
+                    title={section.lineContent.trim()}
+                  >
+                    {@html colorized[section.directiveId]?.header ??
+                      escapeHtml(section.lineContent.trim())}
+                  </span>
                 </button>
-                {#if !section.stale}
-                  <span class="source-location">{section.srcLine}:</span>
-                {/if}
-                <span
-                  class="directive-label"
-                  title={section.lineContent.trim()}
-                >
-                  {@html colorized[section.directiveId]?.header ??
-                    escapeHtml(section.lineContent.trim())}
-                </span>
                 <button
                   class="dismiss-btn"
                   onclick={() => removeSection(section.directiveId)}
@@ -429,10 +487,10 @@
 
 <style>
   .inspector-panel {
-    padding: 0;
+    padding: 0 0 16px;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 24px;
   }
 
   .empty-state {
@@ -454,15 +512,27 @@
   .file-header {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 4px 8px;
     background: var(--vscode-sideBarSectionHeader-background, #252526);
-    border: 1px solid var(--vscode-panel-border, #444);
-    border-radius: 4px;
-    cursor: default;
     user-select: none;
     font-size: 0.92em;
     font-weight: 500;
+  }
+
+  .file-header-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+    padding: 4px 5px;
+    background: none;
+    border: none;
+    color: var(--vscode-foreground);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: inherit;
+    font-weight: inherit;
+    text-align: left;
   }
 
   .file-name {
@@ -473,8 +543,14 @@
     min-width: 0;
   }
 
+  .file-result-count {
+    font-size: 0.82em;
+    color: var(--vscode-descriptionForeground);
+    opacity: 0.6;
+    flex-shrink: 0;
+  }
+
   .remove-all-btn {
-    margin-left: auto;
     background: none;
     border: none;
     color: var(--vscode-foreground);
@@ -482,6 +558,7 @@
     opacity: 0.5;
     font-size: 0.9em;
     flex-shrink: 0;
+    padding: 4px 8px;
   }
 
   .remove-all-btn:hover {
@@ -492,6 +569,10 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
+  }
+
+  .file-group.collapsed {
+    margin-bottom: -16px;
   }
 
   .result-section {
@@ -512,25 +593,30 @@
   .section-header {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 3px 4px 3px 8px;
     background: var(--vscode-sideBarSectionHeader-background, #252526);
     border-bottom: 1px solid var(--vscode-panel-border, #444);
-    cursor: default;
     user-select: none;
     min-width: 0;
   }
 
-  .collapse-toggle {
+  .section-header-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+    padding: 5px 8px;
     background: none;
     border: none;
     color: var(--vscode-foreground);
     cursor: pointer;
-    padding: 0;
-    font-size: 11px;
-    display: flex;
-    align-items: center;
-    flex-shrink: 0;
+    font-family: inherit;
+    font-size: inherit;
+    text-align: left;
+  }
+
+  .section-header:hover {
+    background: var(--vscode-list-hoverBackground, #2a2d2e);
   }
 
   .chevron {
@@ -538,7 +624,6 @@
     color: var(--vscode-descriptionForeground);
     transition: transform 0.15s;
     transform-origin: 25% 50%;
-    margin: 0 -3px 0 1px;
   }
 
   .chevron.rotated {
@@ -572,7 +657,7 @@
     cursor: pointer;
     opacity: 0.5;
     font-size: 12px;
-    padding: 0 4px;
+    padding: 0 7px 0 4px;
     flex-shrink: 0;
   }
 
@@ -605,20 +690,19 @@
     font-weight: bold;
   }
   :global(.tok-comment) {
-    color: var(--l4-tok-comment, #6a9955);
-    font-style: italic;
+    color: var(--l4-tok-comment, #8d949d);
   }
   :global(.tok-string) {
     color: var(--l4-tok-string, #ce9178);
   }
   :global(.tok-variable) {
-    color: var(--l4-tok-variable, #9cdcfe);
+    color: var(--l4-tok-operator, #d4d4d4);
   }
   :global(.tok-number) {
     color: var(--l4-tok-number, #b5cea8);
   }
   :global(.tok-operator) {
-    color: var(--l4-tok-operator, #d4d4d4);
+    color: var(--l4-tok-variable, #9cdcfe);
   }
   :global(.tok-identifier) {
     color: var(--l4-tok-identifier, #4ec9b0);
