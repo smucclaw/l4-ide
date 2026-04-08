@@ -106,7 +106,10 @@ defaultMain = do
   store <- BundleStore.initStore storePath
   BundleStore.cleanupStore logger store
   registry <- newTVarIO Map.empty
-  let env = MkAppEnv registry store options.serverName logger options
+  let effectiveServerName = case options.serverName of
+        Just s  -> Just s
+        Nothing -> Just ("http://localhost:" <> Text.pack (show options.port))
+      env = MkAppEnv registry store effectiveServerName logger options
 
   -- Scan existing deployments and register them
   deployIds <- BundleStore.listDeployments store

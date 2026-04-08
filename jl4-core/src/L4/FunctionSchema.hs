@@ -61,11 +61,14 @@ instance FromJSON Parameters where
 instance ToJSON Parameter where
   toJSON p =
     Aeson.object $
-      [ "type" .= p.parameterType
-      , "alias" .= p.parameterAlias
-      , "enum" .= p.parameterEnum
-      , "description" .= p.parameterDescription
-      ]
+      [ "type" .= p.parameterType ]
+        ++ (if Text.null p.parameterDescription then [] else ["description" .= p.parameterDescription])
+        ++ case p.parameterAlias of
+          Nothing -> []
+          Just alias -> ["alias" .= alias]
+        ++ case p.parameterEnum of
+          [] -> []
+          enums -> ["enum" .= enums]
         ++ case p.parameterFormat of
           Nothing -> []
           Just fmt -> ["format" .= fmt]
@@ -89,7 +92,7 @@ instance FromJSON Parameter where
       <*> p .:? "alias"
       <*> p .:? "format"
       <*> p .:? "enum" .!= []
-      <*> p .: "description"
+      <*> p .:? "description" .!= ""
       <*> p .:? "properties"
       <*> p .:? "propertyOrder"
       <*> p .:? "items"

@@ -11,6 +11,8 @@ import qualified Data.Aeson.Key as Aeson.Key
 import qualified Data.Aeson.KeyMap as Aeson.KeyMap
 import Data.Text (Text)
 import qualified Data.Text as Text
+import qualified Data.Map.Strict as Map
+import L4.FunctionSchema (Parameters (..))
 
 -- | Build a valid OpenAPI 3.0 document from deployment metadata.
 --
@@ -133,7 +135,27 @@ buildFunctionPaths vis prefix deployId fn =
           [ "get" .= Aeson.object
               [ "summary" .= fn.fsDescription
               , "operationId" .= ("getFunction_" <> opIdBase :: Text)
-              , "responses" .= standardResponses
+              , "responses" .= Aeson.object
+                  [ "200" .= Aeson.object
+                      [ "description" .= ("Function schema" :: Text)
+                      , "content" .= Aeson.object
+                          [ "application/json" .= Aeson.object
+                              [ "schema" .= Aeson.object
+                                  [ "type" .= ("object" :: Text)
+                                  , "properties" .= Aeson.object
+                                      [ "name" .= Aeson.object
+                                          [ "type" .= ("string" :: Text) ]
+                                      , "description" .= Aeson.object
+                                          [ "type" .= ("string" :: Text) ]
+                                      , "parameters" .= stripNonOpenApiFields (Aeson.toJSON fn.fsParameters)
+                                      , "returnType" .= Aeson.object
+                                          [ "type" .= ("string" :: Text) ]
+                                      ]
+                                  ]
+                              ]
+                          ]
+                      ]
+                  ]
               ]
           ]
       )
@@ -180,9 +202,7 @@ buildFunctionPaths vis prefix deployId fn =
                       [ "required" .= True
                       , "content" .= Aeson.object
                           [ "application/json" .= Aeson.object
-                              [ "schema" .= Aeson.object
-                                  [ "$ref" .= ("#/components/schemas/BatchRequest" :: Text)
-                                  ]
+                              [ "schema" .= batchRequestSchema fn
                               ]
                           ]
                       ]
@@ -195,6 +215,14 @@ buildFunctionPaths vis prefix deployId fn =
               [ "post" .= Aeson.object
                   [ "summary" .= ("Query plan for " <> fn.fsName :: Text)
                   , "operationId" .= ("queryPlan_" <> opIdBase :: Text)
+                  , "requestBody" .= Aeson.object
+                      [ "required" .= True
+                      , "content" .= Aeson.object
+                          [ "application/json" .= Aeson.object
+                              [ "schema" .= evalRequestSchema fn
+                              ]
+                          ]
+                      ]
                   , "responses" .= standardResponses
                   ]
               ]
@@ -272,7 +300,7 @@ buildComponents = Aeson.object
 evalRequestSchema :: FunctionSummary -> Aeson.Value
 evalRequestSchema fn =
   let baseProps = Aeson.KeyMap.fromList
-        [ ("arguments", Aeson.toJSON fn.fsParameters) ]
+        [ ("arguments", stripNonOpenApiFields $ Aeson.toJSON fn.fsParameters) ]
       baseRequired = ["arguments" :: Text]
       (props, required)
         | fn.fsIsDeontic =
@@ -296,6 +324,53 @@ evalRequestSchema fn =
     , "properties" .= Aeson.Object props
     , "required" .= required
     ]
+
+-- | Build a function-specific batch request schema.
+-- Cases use flat field names matching the function's parameters, plus @id.
+batchRequestSchema :: FunctionSummary -> Aeson.Value
+batchRequestSchema fn =
+  let params = fn.fsParameters
+      -- Build case item schema: @id + function parameter fields
+      caseProperties = Aeson.KeyMap.fromList $
+        [ ("@id", Aeson.object
+            [ "description" .= ("Case identifier" :: Text)
+            ])
+        ] <>
+        [ (Aeson.Key.fromText k, stripNonOpenApiFields $ Aeson.toJSON v)
+        | (k, v) <- Map.toList params.parameterMap
+        ]
+      caseRequired = "@id" : params.required
+  in Aeson.object
+    [ "type" .= ("object" :: Text)
+    , "properties" .= Aeson.object
+        [ "outcomes" .= Aeson.object
+            [ "type" .= ("array" :: Text)
+            , "items" .= Aeson.object ["type" .= ("string" :: Text)]
+            , "description" .= ("Outcome attributes to include in results" :: Text)
+            ]
+        , "cases" .= Aeson.object
+            [ "type" .= ("array" :: Text)
+            , "items" .= Aeson.object
+                [ "type" .= ("object" :: Text)
+                , "properties" .= Aeson.Object caseProperties
+                , "required" .= caseRequired
+                ]
+            , "description" .= ("Input cases to evaluate" :: Text)
+            ]
+        ]
+    , "required" .= (["outcomes", "cases"] :: [Text])
+    ]
+
+-- | Recursively strip non-OpenAPI-compliant fields from parameter schemas.
+-- Removes "alias" and "propertyOrder" which are L4-specific extensions.
+stripNonOpenApiFields :: Aeson.Value -> Aeson.Value
+stripNonOpenApiFields (Aeson.Object obj) =
+  Aeson.Object $ Aeson.KeyMap.map stripNonOpenApiFields
+               $ Aeson.KeyMap.delete "alias"
+               $ Aeson.KeyMap.delete "propertyOrder" obj
+stripNonOpenApiFields (Aeson.Array arr) =
+  Aeson.Array $ fmap stripNonOpenApiFields arr
+stripNonOpenApiFields v = v
 
 -- | Sanitize a text for use as an OpenAPI operationId.
 sanitizeOperationId :: Text -> Text
