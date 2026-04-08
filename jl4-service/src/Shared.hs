@@ -31,6 +31,7 @@ import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Reader (ask)
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Aeson.Key
+import qualified Data.Aeson.KeyMap as Aeson.KeyMap
 import Data.Aeson ((.=), object)
 import qualified Data.ByteString.Lazy as LBS
 import Data.Char (isAlphaNum)
@@ -152,35 +153,43 @@ sanitizeParameters (MkParameters props reqProps) =
     , "required" .= map sanitizePropertyName reqProps
     ]
 
--- | Sanitize a Parameter value, recursively sanitizing nested properties.
--- Produces a JSON Schema draft 2020-12 compliant object by omitting
--- non-standard properties (alias, propertyOrder) and empty enum arrays.
+-- | Sanitize a Parameter value for MCP tool schemas.
+-- Builds on the canonical ToJSON (which already omits empty fields),
+-- then sanitizes property names (spaces → hyphens) and strips
+-- non-standard fields (alias, propertyOrder).
 sanitizeParameterValue :: Parameter -> Aeson.Value
 sanitizeParameterValue p =
-  Aeson.object $
-    [ "type" .= p.parameterType
-    , "description" .= p.parameterDescription
+  let base = Aeson.toJSON p
+      sanitized = stripAndSanitize base
+  in case p.parameterProperties of
+      -- Bare object types need explicit empty properties for MCP
+      Nothing | p.parameterType == "object" -> case sanitized of
+        Aeson.Object obj -> Aeson.Object $
+          Aeson.KeyMap.insert "properties" (Aeson.object []) obj
+        other -> other
+      _ -> sanitized
+ where
+  stripAndSanitize (Aeson.Object obj) =
+    let cleaned = Aeson.KeyMap.delete "alias"
+                $ Aeson.KeyMap.delete "propertyOrder" obj
+        sanitizeEntry k v
+          | k == "properties" = sanitizeProps v
+          | k == "required" = sanitizeRequired v
+          | k == "items" = stripAndSanitize v
+          | otherwise = v
+    in Aeson.Object $ Aeson.KeyMap.mapWithKey sanitizeEntry cleaned
+  stripAndSanitize (Aeson.Array arr) = Aeson.Array $ fmap stripAndSanitize arr
+  stripAndSanitize v = v
+
+  sanitizeProps (Aeson.Object obj) = Aeson.Object $ Aeson.KeyMap.fromList
+    [ (Aeson.Key.fromText (sanitizePropertyName (Aeson.Key.toText k)), stripAndSanitize v)
+    | (k, v) <- Aeson.KeyMap.toList obj
     ]
-    ++ case p.parameterEnum of
-        [] -> []
-        enums -> ["enum" .= enums]
-    ++ case p.parameterFormat of
-        Nothing -> []
-        Just fmt -> ["format" .= fmt]
-    ++ case p.parameterProperties of
-        Nothing
-          | p.parameterType == "object" -> ["properties" .= Aeson.object []]
-          | otherwise -> []
-        Just nested -> ["properties" .= Aeson.object
-          [ (Aeson.Key.fromText (sanitizePropertyName nk), sanitizeParameterValue nv)
-          | (nk, nv) <- Map.toList nested
-          ]]
-    ++ case p.parameterRequired of
-        Nothing -> []
-        Just req -> ["required" .= map sanitizePropertyName req]
-    ++ case p.parameterItems of
-        Nothing -> []
-        Just items -> ["items" .= sanitizeParameterValue items]
+  sanitizeProps v = v
+
+  sanitizeRequired (Aeson.Array arr) = Aeson.Array $ fmap
+    (\v -> case v of Aeson.String t -> Aeson.String (sanitizePropertyName t); _ -> v) arr
+  sanitizeRequired v = v
 
 -- | Build a reverse mapping from sanitized property names back to original L4 names.
 -- Recursively includes entries from nested object properties and array items.

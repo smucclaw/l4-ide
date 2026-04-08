@@ -225,11 +225,11 @@ Phase: Check
 18:10-12 SemanticTokenTypes_Keyword
 19:5-17 SemanticTokenTypes_Class
 19:18-21 SemanticTokenTypes_Keyword
-20:7-11 SemanticTokenTypes_Method
+20:7-11 SemanticTokenTypes_Variable
 20:12-14 SemanticTokenTypes_Keyword
 20:15-16 SemanticTokenTypes_Keyword
 20:17-23 SemanticTokenTypes_Type
-21:7-11 SemanticTokenTypes_Method
+21:7-11 SemanticTokenTypes_Variable
 21:12-14 SemanticTokenTypes_Keyword
 21:15-16 SemanticTokenTypes_Keyword
 21:17-23 SemanticTokenTypes_Type
