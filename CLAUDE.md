@@ -18,16 +18,15 @@ Coding guidelines for AI agents working in this repository.
 
 ### Haskell (Cabal)
 
-| Package                 | Purpose                                        |
-| ----------------------- | ---------------------------------------------- |
-| `jl4-core/`             | Core language (parser, typechecker, evaluator) |
-| `jl4/`                  | CLI tool and JSON schema generator             |
-| `jl4-lsp/`              | Language Server Protocol for IDE support       |
-| `jl4-repl/`             | Interactive REPL                               |
-| `jl4-decision-service/` | REST API for decision evaluation (deprecated)  |
-| `jl4-service/`          | REST API for decision evaluation               |
-| `jl4-websessions/`      | Session persistence service                    |
-| `jl4-query-plan/`       | Query planning utilities                       |
+| Package            | Purpose                                        |
+| ------------------ | ---------------------------------------------- |
+| `jl4-core/`        | Core language (parser, typechecker, evaluator) |
+| `jl4/`             | CLI tool and JSON schema generator             |
+| `jl4-lsp/`         | Language Server Protocol for IDE support       |
+| `jl4-repl/`        | Interactive REPL                               |
+| `jl4-service/`     | REST API for decision evaluation               |
+| `jl4-websessions/` | Session persistence service                    |
+| `jl4-query-plan/`  | Query planning utilities                       |
 
 ### TypeScript (npm workspaces + Turborepo)
 

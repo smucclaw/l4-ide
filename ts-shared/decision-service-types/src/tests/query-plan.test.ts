@@ -76,7 +76,6 @@ describe('sortAsksForElicitation', () => {
       label: `rol.${path.join('.')}`,
       score: 10,
       atoms: [],
-      schema: null,
     })
 
     const sorted = sortAsksForElicitation(params, [

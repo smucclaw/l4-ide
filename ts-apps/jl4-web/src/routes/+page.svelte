@@ -26,12 +26,8 @@
   import ExampleSelector from '$lib/components/example-selector.svelte'
   import InspectorPanel from '$lib/components/inspector-panel.svelte'
   import {
-    fetchQueryPlan,
-    upsertFunctionFromSource,
-    type DecisionServiceClient,
-  } from '$lib/decision-service-client'
-  import {
     EvalDirectiveResultRequestType,
+    QueryPlanRequestType,
     type DirectiveResult,
     type SrcPos,
   } from 'jl4-client-rpc'
@@ -58,16 +54,11 @@
   let persistSession: undefined | (() => Promise<string | undefined>) =
     undefined
   const sessionUrl = import.meta.env.VITE_SESSION_URL || 'http://localhost:5008'
-  const decisionServiceUrl =
-    import.meta.env.VITE_DECISION_SERVICE_URL || 'http://localhost:8001'
   const wizardUrl = import.meta.env.VITE_WIZARD_URL || 'http://localhost:5174'
-  const decisionServiceClient: DecisionServiceClient = {
-    baseUrl: decisionServiceUrl,
-  }
 
-  let currentDecisionServiceFunctionName: string | null = $state(null)
+  let currentFunctionName: string | null = $state(null)
+  let currentVerDocId: { uri: string; version: number } | null = null
   let currentLadderGraphId: import('l4-ladder-visualizer').LirId | null = null
-  let ensureDecisionServiceFnReady: Promise<void> = Promise.resolve()
   let lastQueryPlanBindingsKey: string | null = null
   let queryPlanInFlight = false
   let queryPlanNeedsRerun = false
@@ -196,7 +187,7 @@
     fnName: string
     bindings: Record<string, boolean>
   } | null {
-    if (!currentDecisionServiceFunctionName) return null
+    if (!currentFunctionName) return null
     const top = ladderEnv?.getTopFunDeclLirNode(context)
     const ladderGraph = top?.getBody(context)
     if (!ladderGraph) return null
@@ -213,23 +204,22 @@
         out[atomId] = false
       }
     }
-    return { fnName: currentDecisionServiceFunctionName, bindings: out }
+    return { fnName: currentFunctionName, bindings: out }
   }
 
-  async function refreshQueryPlanFromDecisionService() {
+  async function refreshQueryPlan() {
     const curr = getCurrentAtomBindings()
-    if (!curr) return
+    if (!curr || !currentVerDocId || !monacoL4LangClient) return
 
     const nextKey = `${curr.fnName}|${bindingsKey(curr.bindings)}`
     if (lastQueryPlanBindingsKey === nextKey) return
 
-    await ensureDecisionServiceFnReady
-
-    const resp = await fetchQueryPlan(
-      decisionServiceClient,
-      curr.fnName,
-      curr.bindings
-    )
+    const resp = await monacoL4LangClient.sendRequest(QueryPlanRequestType, {
+      fnName: curr.fnName,
+      bindings: curr.bindings,
+      verDocId: currentVerDocId,
+    })
+    if (!resp) return
     lastQueryPlanBindingsKey = nextKey
 
     const ladderGraph = ladderEnv.getTopFunDeclLirNode(context).getBody(context)
@@ -246,9 +236,9 @@
       return
     }
     queryPlanInFlight = true
-    void refreshQueryPlanFromDecisionService()
-      .catch((e) => {
-        console.warn('decision-service query-plan failed', e)
+    void refreshQueryPlan()
+      .catch((e: unknown) => {
+        console.warn('query-plan failed', e)
       })
       .finally(() => {
         queryPlanInFlight = false
@@ -603,17 +593,9 @@
       showVisualizer = true
 
       const fnName = ladderInfo.funDecl.name.label
-      currentDecisionServiceFunctionName = fnName
+      currentFunctionName = fnName
+      currentVerDocId = ladderInfo.verDocId
       lastQueryPlanBindingsKey = null
-
-      const source = editor?.getValue() ?? ''
-      ensureDecisionServiceFnReady = upsertFunctionFromSource(
-        decisionServiceClient,
-        fnName,
-        source
-      ).catch((e) => {
-        console.warn('decision-service upsert failed', e)
-      })
 
       const ladderGraph = ladderEnv
         .getTopFunDeclLirNode(context)
@@ -747,7 +729,7 @@
             // Reset to placeholder state - ladder will show empty/loading
             renderLadderPromise = placeholderAlwaysPendingPromise
             showVisualizer = false
-            currentDecisionServiceFunctionName = null
+            currentFunctionName = null
             currentLadderGraphId = null
             return
           }
@@ -871,8 +853,8 @@
       await navigator.clipboard.writeText(shareUrl)
 
       // Build wizard URL using path-based routing: /wizard/{sessionId}/{functionName}
-      const shareWizardUrl = currentDecisionServiceFunctionName
-        ? `${wizardUrl}/${sessionId}/${encodeURIComponent(currentDecisionServiceFunctionName)}`
+      const shareWizardUrl = currentFunctionName
+        ? `${wizardUrl}/${sessionId}/${encodeURIComponent(currentFunctionName)}`
         : `${wizardUrl}/${sessionId}`
       toast.push(
         `Link copied to clipboard. <a href="${shareWizardUrl}" target="_blank" style="color: #60a5fa; text-decoration: underline;">Open in Wizard</a>`,
@@ -890,19 +872,10 @@
     // Persist to session server - we need the session ID for the wizard URL
     const sessionId = await handlePersist()
 
-    // If we have a function, ensure it's uploaded to the decision service
-    if (currentDecisionServiceFunctionName) {
-      try {
-        await ensureDecisionServiceFnReady
-      } catch (e) {
-        console.warn('Failed to ensure function is ready:', e)
-      }
-    }
-
     // Navigate to wizard using path-based routing: /wizard/{sessionId}/{functionName}
     let targetWizardUrl: string
-    if (sessionId && currentDecisionServiceFunctionName) {
-      targetWizardUrl = `${wizardUrl}/${sessionId}/${encodeURIComponent(currentDecisionServiceFunctionName)}`
+    if (sessionId && currentFunctionName) {
+      targetWizardUrl = `${wizardUrl}/${sessionId}/${encodeURIComponent(currentFunctionName)}`
     } else if (sessionId) {
       targetWizardUrl = `${wizardUrl}/${sessionId}`
     } else {

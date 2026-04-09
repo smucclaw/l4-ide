@@ -26,14 +26,13 @@
   config.systemd.services.jl4-websessions = {
     enable = true;
     description = "jl4-websessions";
-    after = [ "network.target" "jl4-decision-service.service" ];
+    after = [ "network.target" ];
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
       ExecStart = ''
         ${pkgs.callPackage ./package.nix { }}/bin/jl4-websessions \
           ${toString config.services.jl4-websessions.port} \
-          /var/lib/private/jl4-websessions/sessions.db \
-          http://localhost:${toString config.services.jl4-decision-service.port}
+          /var/lib/private/jl4-websessions/sessions.db
       '';
       Restart = "always";
 

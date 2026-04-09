@@ -73,6 +73,63 @@ export const InlineExprsRequestType = makeL4RpcRequestType<
 >('l4/inlineExprs')
 
 /****************************************
+    Query plan protocol extension
+*****************************************/
+
+export interface QueryPlanRequestParams {
+  fnName: string
+  bindings: Record<string, boolean>
+  verDocId: { uri: string; version: number }
+}
+
+export type QueryAtom = {
+  unique: number
+  atomId: string
+  label: string
+  inputRefs?: { rootUnique: number; path: string[] }[]
+}
+
+export type QueryImpact = {
+  ifTrue: { determined: boolean | null; support: QueryAtom[] }
+  ifFalse: { determined: boolean | null; support: QueryAtom[] }
+}
+
+export type QueryAsk = {
+  container: string
+  key: string | null
+  path: string[]
+  label: string
+  score: number
+  atoms: QueryAtom[]
+}
+
+export type QueryPlanResponse = {
+  determined: boolean | null
+  stillNeeded: QueryAtom[]
+  ranked: QueryAtom[]
+  inputs: {
+    inputUnique: number
+    inputLabel: string
+    score: number
+    atoms: QueryAtom[]
+  }[]
+  asks: QueryAsk[]
+  impact: Record<string, QueryImpact>
+  impactByAtomId: Record<string, QueryImpact>
+  note: string
+  ladder?: unknown
+}
+
+/**
+ * Request type for computing the query plan (elicitation ordering)
+ * for a visualized DECIDE function, given current boolean bindings.
+ */
+export const QueryPlanRequestType = makeL4RpcRequestType<
+  QueryPlanRequestParams,
+  QueryPlanResponse
+>('l4/queryPlan')
+
+/****************************************
     Inspector protocol extensions
 *****************************************/
 

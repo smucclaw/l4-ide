@@ -3,7 +3,7 @@ let
   # Remove trailing slash for the base path (SvelteKit expects no trailing slash)
   basePath = lib.removeSuffix "/" config.services.l4-wizard.path;
   wizardPackage = pkgs.callPackage ./package.nix {
-    decision-service-url = "${config.networking.domain}${config.services.jl4-decision-service.path}";
+    decision-service-url = "${config.networking.domain}${config.services.jl4-service.path}";
     base-path = basePath;
     secure = true;
   };

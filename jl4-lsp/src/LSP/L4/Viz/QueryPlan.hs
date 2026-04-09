@@ -2,8 +2,10 @@
 
 module LSP.L4.Viz.QueryPlan (
   buildQueryPlanCache,
+  buildParamsByUnique,
   annotateLadderWithAtomIds,
   queryPlanFromLadder,
+  vizExprToBoolExpr,
 ) where
 
 import Base
@@ -19,6 +21,14 @@ import qualified L4.Decision.QueryPlan as QP
 
 import qualified LSP.L4.Viz.Ladder as LadderViz
 import qualified LSP.L4.Viz.VizExpr as VizExpr
+
+-- | Extract parameter labels keyed by unique from a RenderAsLadderInfo.
+buildParamsByUnique :: VizExpr.RenderAsLadderInfo -> Map Int Text
+buildParamsByUnique ladderInfo =
+  Map.fromList
+    [ (p.unique, p.label)
+    | p <- ladderInfo.funDecl.params
+    ]
 
 annotateLadderWithAtomIds ::
   VizExpr.RenderAsLadderInfo ->

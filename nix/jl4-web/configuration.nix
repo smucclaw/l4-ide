@@ -8,7 +8,6 @@ in
     "/".root = pkgs.callPackage ./package.nix {
       socket-url = "${config.networking.domain}${config.services.jl4-lsp.path}";
       session-url = "${config.networking.domain}${config.services.jl4-websessions.path}";
-      decision-service-url = "${config.networking.domain}${config.services.jl4-decision-service.path}";
       wizard-path = wizardPath;  # Relative path, same origin
       secure = true;
     };

@@ -2,10 +2,10 @@
   import { onDestroy, onMount } from 'svelte'
   import { RenderAsLadderInfo } from '@repo/viz-expr'
   import { LadderApiForWebview } from '$lib/ladder-api-for-webview'
-  import { DecisionServiceQueryPlanRequest } from '@repo/vscode-webview-rpc'
   import {
     RenderAsLadder,
     ToggleSimplify,
+    QueryPlanRequestType,
     makeRenderAsLadderSuccessResponse,
     WebviewFrontendIsReadyNotification,
     type WebviewFrontendIsReadyMessage,
@@ -96,7 +96,7 @@
   }
 
   function getCurrentAtomBindings(): {
-    docUri: string
+    verDocId: { uri: string; version: number }
     fnName: string
     bindings: Record<string, boolean>
   } | null {
@@ -118,21 +118,18 @@
       }
     }
 
-    return { docUri: docId.uri, fnName: top.getFunName(context), bindings: out }
+    return { verDocId: docId, fnName: top.getFunName(context), bindings: out }
   }
 
-  async function refreshQueryPlanFromExtension(): Promise<void> {
+  async function refreshQueryPlan(): Promise<void> {
     const curr = getCurrentAtomBindings()
-    if (!curr) return
+    if (!curr || !backendApi) return
 
-    const nextKey = `${curr.docUri}|${curr.fnName}|${bindingsKey(curr.bindings)}`
+    const nextKey = `${curr.verDocId.uri}|${curr.fnName}|${bindingsKey(curr.bindings)}`
     if (lastQueryPlanBindingsKey === nextKey) return
 
-    const resp = await messenger.sendRequest(
-      DecisionServiceQueryPlanRequest,
-      HOST_EXTENSION,
-      curr
-    )
+    const resp = await backendApi.sendClientRequest(QueryPlanRequestType, curr)
+    if (!resp) return
     lastQueryPlanBindingsKey = nextKey
 
     const ladderGraph = ladderEnv.getTopFunDeclLirNode(context).getBody(context)
@@ -149,9 +146,9 @@
       return
     }
     queryPlanInFlight = true
-    void refreshQueryPlanFromExtension()
-      .catch((e) => {
-        console.warn('decision-service query-plan failed', e)
+    void refreshQueryPlan()
+      .catch((e: unknown) => {
+        console.warn('query-plan failed', e)
       })
       .finally(() => {
         queryPlanInFlight = false

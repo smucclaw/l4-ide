@@ -10,16 +10,26 @@ module L4.Viz.Ladder
   ( -- * Main entry points
     visualize
   , visualizeByName
+  , visualizeByNameWithState
   , findAllVisualizableDecides
   , VisualizableDecide(..)
   , VizError(..)
   , prettyPrintVizError
+    -- * Viz state (for query planning)
+  , VizState(..)
+  , InputRef(..)
+  , getAtomDeps
+  , getAtomInputRefs
+    -- * Utilities (shared with LSP)
+  , generateAtomId
   ) where
 
 import Base
 import qualified Base.Text as Text
 import Data.IntMap.Lazy (IntMap)
 import qualified Data.IntMap.Lazy as Map
+import Data.IntSet (IntSet)
+import qualified Data.IntSet as IntSet
 
 import qualified Data.Set as Set
 import qualified Data.List.NonEmpty as NE
@@ -77,6 +87,7 @@ data VizState = MkVizState
   , maxId          :: !ID
   , functionName   :: !Text
   , defsForInlining :: IntMap (Expr Resolved)
+  , atomDeps       :: IntMap IntSet
   , atomInputRefs  :: IntMap (Set InputRef)
   }
   deriving stock (Generic)
@@ -96,6 +107,7 @@ mkInitialState uri mod' subst simp = MkVizState
   , maxId = MkID 0
   , functionName = ""
   , defsForInlining = Map.empty
+  , atomDeps = Map.empty
   , atomInputRefs = Map.empty
   }
 
@@ -128,7 +140,8 @@ getExpandedType ty = do
   pure $ TC.applyFinalSubstitution subst uri ty
 
 recordAtomInputRefs :: Int -> Set InputRef -> Viz ()
-recordAtomInputRefs uniq refs =
+recordAtomInputRefs uniq refs = do
+  #atomDeps %= Map.insertWith (<>) uniq (IntSet.fromList (map (.rootUnique) (Set.toList refs)))
   #atomInputRefs %= Map.insertWith (<>) uniq refs
 
 lookupLocalDecideBody :: Int -> Viz (Maybe (Expr Resolved))
@@ -177,24 +190,38 @@ visualize :: NormalizedUri -> Text -> Int -> Module Resolved -> TC.Substitution 
 visualize uri uriText version mod' subst simplify =
   case findVisualizableDecide mod' of
     Nothing -> Left InvalidProgramNoDecidesFound
-    Just decide -> visualizeDecide uri uriText version mod' subst simplify decide
+    Just decide -> fmap fst $ visualizeDecideWithState uri uriText version mod' subst simplify decide
 
 -- | Visualize a specific DECIDE by function name.
 -- Returns Nothing if the function is not found or not visualizable.
 visualizeByName :: NormalizedUri -> Text -> Int -> Module Resolved -> TC.Substitution -> Bool -> Text -> Either VizError RenderAsLadderInfo
 visualizeByName uri uriText version mod' subst simplify targetName =
+  fmap fst $ visualizeByNameWithState uri uriText version mod' subst simplify targetName
+
+-- | Like 'visualizeByName' but also returns the 'VizState'
+-- (needed for query plan computation).
+visualizeByNameWithState :: NormalizedUri -> Text -> Int -> Module Resolved -> TC.Substitution -> Bool -> Text -> Either VizError (RenderAsLadderInfo, VizState)
+visualizeByNameWithState uri uriText version mod' subst simplify targetName =
   case findDecideByName mod' targetName of
     Nothing -> Left InvalidProgramNoDecidesFound
-    Just decide -> visualizeDecide uri uriText version mod' subst simplify decide
+    Just decide -> visualizeDecideWithState uri uriText version mod' subst simplify decide
 
--- | Internal: visualize a specific Decide
-visualizeDecide :: NormalizedUri -> Text -> Int -> Module Resolved -> TC.Substitution -> Bool -> Decide Resolved -> Either VizError RenderAsLadderInfo
-visualizeDecide uri uriText version mod' subst simplify decide =
+-- | Internal: visualize a specific Decide, returning both the info and state.
+visualizeDecideWithState :: NormalizedUri -> Text -> Int -> Module Resolved -> TC.Substitution -> Bool -> Decide Resolved -> Either VizError (RenderAsLadderInfo, VizState)
+visualizeDecideWithState uri uriText version mod' subst simplify decide =
   let initialEnv = MkVizEnv { localDecls = [] }
       initialState = mkInitialState uri mod' subst simplify
       verDocId = MkVersionedDocId uriText version
-      (result, _) = (vizProgram verDocId decide).getViz initialEnv initialState
-  in result
+      (result, finalState) = (vizProgram verDocId decide).getViz initialEnv initialState
+  in fmap (, finalState) result
+
+-- | Get atom dependency map from VizState.
+getAtomDeps :: VizState -> IntMap IntSet
+getAtomDeps = (.atomDeps)
+
+-- | Get atom input references from VizState.
+getAtomInputRefs :: VizState -> IntMap (Set InputRef)
+getAtomInputRefs = (.atomInputRefs)
 
 -- | Find all DECIDE rules that can be visualized.
 -- Rather than just checking types, we try to visualize each DECIDE

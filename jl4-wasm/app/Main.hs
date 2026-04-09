@@ -8,8 +8,9 @@ module Main (main) where
 -- Import L4.API to ensure its code (including foreign exports) is linked.
 -- We must reference at least one exported function to force linking.
 import L4.API (l4Check)
+import QueryPlanWasm (l4QueryPlan)
 
 -- | Entry point for the WASM reactor.
--- We reference l4Check to force the L4.API module (and its foreign exports) to be linked.
+-- We reference exports to force modules (and their foreign exports) to be linked.
 main :: IO ()
-main = l4Check "" `seq` pure ()
+main = l4Check "" `seq` l4QueryPlan "" "" "" "" `seq` pure ()

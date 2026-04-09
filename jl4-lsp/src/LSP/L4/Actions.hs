@@ -230,7 +230,7 @@ visualise mtcRes (getRecVis, setRecVis) verTextDocId msrcPos = do
     updateVizConfig :: VersionedTextDocumentIdentifier -> TypeCheckResult -> RecentlyVisualised -> Ladder.VizConfig
     updateVizConfig verTxtDocId tcRes recentlyVisualised =
       Ladder.getVizConfig recentlyVisualised.vizState
-        & set #verTxtDocId verTxtDocId
+        & set #verDocId (Ladder.fromLspVerDocId verTxtDocId)
         & set #moduleUri (toNormalizedUri verTxtDocId._uri)
         & set #substitution tcRes.substitution
 

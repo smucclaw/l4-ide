@@ -122,6 +122,21 @@ export interface L4WasmExports {
   l4_references(source: string, line: number, col: number): Promise<string>
 
   /**
+   * Compute query plan for a DECIDE function with boolean bindings.
+   * @param source - L4 source code
+   * @param uri - document URI
+   * @param functionName - the DECIDE function name
+   * @param bindingsJson - JSON object of {label: boolean} bindings
+   * @returns JSON-encoded QueryPlanResponse or error object
+   */
+  l4_query_plan(
+    source: string,
+    uri: string,
+    functionName: string,
+    bindingsJson: string
+  ): Promise<string>
+
+  /**
    * Initialize the WASI reactor (and Haskell RTS).
    * Must be called before any other exported functions.
    */

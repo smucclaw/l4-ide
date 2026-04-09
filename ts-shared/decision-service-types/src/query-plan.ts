@@ -36,7 +36,6 @@ export type QueryAsk = {
   label: string
   score: number
   atoms: QueryAtom[]
-  schema: Parameter | null
 }
 
 export type LadderNode =
@@ -75,7 +74,7 @@ export type QueryPlanResponse = {
   impact: Record<string, QueryImpact>
   impactByAtomId: Record<string, QueryImpact>
   note: string
-  ladder: Ladder
+  ladder?: Ladder
 }
 
 export function askKeyFromPath(path: string[]): string | null {

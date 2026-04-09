@@ -75,12 +75,6 @@
             "default": "",
             "markdownDescription": "Path to the `jl4-lsp` executable. Leave empty to use the bundled binary or find `jl4-lsp` on your PATH."
           },
-          "jl4.decisionServiceUrl": {
-            "scope": "resource",
-            "type": "string",
-            "default": "http://localhost:8001",
-            "description": "Base URL for jl4-decision-service (used for query planning)"
-          },
           "jl4.trace.server": {
             "scope": "resource",
             "type": "string",
@@ -164,7 +158,6 @@
   "prettier": "@repo/prettier-config",
   "dependencies": {
     "@repo/viz-expr": "*",
-    "@repo/vscode-webview-rpc": "*",
     "@repo/webview": "*",
     "jl4-client-rpc": "*",
     "minimatch": "^10.0.1",
