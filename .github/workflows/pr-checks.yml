@@ -62,10 +62,10 @@ jobs:
         run: apt install -y git sudo software-properties-common curl xvfb
       - name: Update git config
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Use Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           cache-dependency-path: package-lock.json
           node-version: "24.x"
@@ -114,7 +114,7 @@ jobs:
           xz-utils
       - name: Update git config
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Update git submodules
         run: git submodule update --init
@@ -130,7 +130,7 @@ jobs:
       # Restore caches BEFORE configure so cabal can plan incrementally
       # on top of existing build state rather than starting fresh.
       - name: Restore cached build artifacts
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         id: build-cache
         with:
           path: dist-newstyle
@@ -139,7 +139,7 @@ jobs:
             ${{ runner.os }}-ghc-${{ steps.setup.outputs.ghc-version }}-dist-
 
       - name: Restore cached dependencies
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         id: deps-cache
         env:
           key: ${{ runner.os }}-ghc-${{ steps.setup.outputs.ghc-version }}-cabal-${{ steps.setup.outputs.cabal-version }}
@@ -159,7 +159,7 @@ jobs:
         run: cabal build all --only-dependencies
 
       - name: Save cached dependencies
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         if: steps.deps-cache.outputs.cache-hit != 'true'
         with:
           path: ${{ steps.setup.outputs.cabal-store }}
@@ -169,7 +169,7 @@ jobs:
         run: cabal build all
 
       - name: Save cached build artifacts
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         if: success()
         with:
           path: dist-newstyle
@@ -196,7 +196,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: true
 
@@ -207,7 +207,7 @@ jobs:
 
       - name: Cache GHC WASM toolchain
         id: cache-ghc-wasm
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.ghc-wasm
           key: ghc-wasm-${{ env.GHC_WASM_VERSION }}-${{ runner.os }}
@@ -225,7 +225,7 @@ jobs:
           wasm32-wasi-cabal --version
 
       - name: Cache WASM dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.ghc-wasm/.cabal/store
@@ -310,7 +310,7 @@ jobs:
       id-token: "write"
       contents: "read"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: cachix/install-nix-action@v31
       - run: nix flake check
       - run: nix -Lv build .#jl4-web
