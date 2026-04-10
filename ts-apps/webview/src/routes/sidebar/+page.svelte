@@ -1431,7 +1431,7 @@
     flex-shrink: 0;
     margin-top: auto;
     margin-bottom: 2px;
-    padding: 10px 12px;
+    padding: 16px 18px;
     background: var(
       --vscode-textBlockQuote-background,
       rgba(127, 127, 127, 0.1)
