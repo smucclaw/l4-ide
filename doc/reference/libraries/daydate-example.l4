@@ -8,12 +8,6 @@ DECIDE `New Year 2025` IS Date 1 1 2025
 #EVAL `Christmas 2024`
 #EVAL `New Year 2025`
 
--- Date from ISO string (returns MAYBE DATE, ignores time/timezone if present)
-DECIDE `from iso date` IS Date "2025-06-15"
-DECIDE `from iso datetime` IS Date "2025-06-15T10:30:00Z"
-#EVAL `from iso date`       -- JUST OF (DATE OF 15, 6, 2025)
-#EVAL `from iso datetime`   -- JUST OF (DATE OF 15, 6, 2025)
-
 -- Date arithmetic
 DECIDE `week later` IS `Christmas 2024` PLUS 7
 #EVAL `week later`  -- January 1, 2025
@@ -57,12 +51,6 @@ DECIDE `next week` IS `the week after` `Christmas 2024`
 -- Date comparison (via operator overloads)
 #EVAL `Christmas 2024` < `New Year 2025`   -- TRUE
 #EVAL `Christmas 2024` >= `New Year 2025`  -- FALSE
-
--- Readable comparisons
-DECIDE `christmas is before new year` IS `Christmas 2024` `is before` `New Year 2025`
-DECIDE `new year is after christmas` IS `New Year 2025` `is after` `Christmas 2024`
-#EVAL `christmas is before new year`  -- TRUE
-#EVAL `new year is after christmas`   -- TRUE
 
 -- Month helpers
 DECIDE `July 4th` IS July 4 2024
