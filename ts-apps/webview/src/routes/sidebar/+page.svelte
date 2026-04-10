@@ -183,6 +183,8 @@
       if (verifying) return 'Verifying...'
       if (deployView === 'breaking-warning') return 'Deploy Anyway'
       if (deployView === 'deploy-form') return 'Deploy Now'
+      if (activeTab === 'deployments' && deployments.length > 0)
+        return 'Open in web browser'
       return 'Deploy'
     }
     if (conn.status === 'connecting') return 'Connecting...'
@@ -202,13 +204,13 @@
     if (connectionStatus.status !== 'connected') return false
     // Undeploy confirm is always enabled
     if (undeployConfirm) return false
+    // On the deployments tab, the button becomes "Open in web browser"
+    // when at least one deployment exists; otherwise stays disabled.
+    if (activeTab === 'deployments') {
+      return deployments.length === 0
+    }
     // Disable on non-deploy tabs
-    if (
-      activeTab === 'deployments' ||
-      activeTab === 'inspector' ||
-      activeTab === 'docs'
-    )
-      return true
+    if (activeTab === 'inspector' || activeTab === 'docs') return true
     if (deployView === 'preview' && functions.length === 0) return true
     return false
   }
@@ -478,6 +480,8 @@
         undefined as never
       )
       deployments = result.deployments
+      // Deployments are collapsed by default; user can expand individually.
+      collapsedDeployments = new Set(deployments.map((d) => d.deploymentId))
     } catch {
       deployments = []
     } finally {
@@ -530,6 +534,8 @@
         deployAnyway()
       } else if (deployView === 'deploy-form') {
         continueDeploy()
+      } else if (activeTab === 'deployments' && deployments.length > 0) {
+        openServiceUrl()
       } else {
         showDeployForm()
       }
@@ -853,121 +859,140 @@
       {/if}
     {/if}
     {#if activeTab === 'deployments'}
-      {#if undeployConfirm}
-        <div class="breaking-warning">
-          <button class="back-btn" onclick={cancelUndeploy}
-            >&larr; Back to deployments</button
-          >
-          <div class="warning-header">
-            &#9888; This will break existing integrations
-          </div>
-          <div class="warning-body">
-            <p class="warning-desc">
-              Removing <strong>{undeployConfirm.deploymentId}</strong> will permanently
-              delete the following rules:
-            </p>
-            <ul class="breaking-list">
-              {#each undeployConfirm.functions as func}
-                <li><span class="breaking-ident">{func.name}</span></li>
-              {/each}
-            </ul>
-          </div>
-        </div>
-      {:else if !connectionStatus.connected}
-        <div class="empty-state">
-          <p class="hint">
-            {#if !initialized}
-              &nbsp;
-            {:else if connectionStatus.serviceUrl}
-              Connect to {stripProtocol(connectionStatus.serviceUrl)} to view deployments.
-            {:else}
-              Sign in with Legalese Cloud to view your deployments.
-            {/if}
-          </p>
-        </div>
-      {:else if deploymentsLoading}
-        <div class="empty-state">
-          <p class="hint">Loading deployments...</p>
-        </div>
-      {:else if deployments.length === 0}
-        <div class="empty-state">
-          <p class="hint">
-            No deployments yet. Deploy an L4 file to get started.
-          </p>
-        </div>
-      {:else}
-        <div class="deployments-list">
-          {#each deployments as dep (dep.deploymentId)}
-            <div
-              class="deployment-group"
-              class:collapsed={collapsedDeployments.has(dep.deploymentId)}
-            >
-              <div class="deployment-header">
-                <button
-                  class="deployment-header-toggle"
-                  onclick={() => toggleDeploymentCollapse(dep.deploymentId)}
-                  title={collapsedDeployments.has(dep.deploymentId)
-                    ? 'Expand deployment'
-                    : 'Collapse deployment'}
-                >
-                  <span
-                    class="chevron"
-                    class:rotated={!collapsedDeployments.has(dep.deploymentId)}
-                    >&#9002;</span
-                  >
-                  <span class="deployment-id">{dep.deploymentId}</span>
-                  <span class="deployment-fn-count">
-                    {#if dep.error}
-                      Error
-                    {:else if dep.functions.length === 0 && compilingDeployments.has(dep.deploymentId)}
-                      Compiling...
-                    {:else if dep.functions.length === 0}
-                      Uncompiled
-                    {:else}
-                      {dep.functions.length} rule{dep.functions.length !== 1
-                        ? 's'
-                        : ''}
-                    {/if}
-                  </span>
-                </button>
-                <button
-                  class="undeploy-btn"
-                  disabled={undeployingId === dep.deploymentId}
-                  onclick={(e: MouseEvent) => {
-                    e.stopPropagation()
-                    requestUndeploy(dep)
-                  }}
-                  title="Undeploy"
-                >
-                  {undeployingId === dep.deploymentId
-                    ? 'Removing...'
-                    : 'Undeploy'}
-                </button>
+      <div class="deployments-tab-wrapper">
+        <div class="deployments-tab-body">
+          {#if undeployConfirm}
+            <div class="breaking-warning">
+              <button class="back-btn" onclick={cancelUndeploy}
+                >&larr; Back to deployments</button
+              >
+              <div class="warning-header">
+                &#9888; This will break existing integrations
               </div>
-              {#if !collapsedDeployments.has(dep.deploymentId)}
-                {#if dep.error}
-                  <div class="deployment-error"><pre>{dep.error}</pre></div>
-                {:else if compilingDeployments.has(dep.deploymentId)}
-                  <div class="deployment-empty">Compiling...</div>
-                {:else if dep.functions.length > 0}
-                  {#each dep.functions as func (func.name)}
-                    <ToolCard
-                      {func}
-                      expanded={isCardExpanded(
-                        dep.deploymentId + '/' + func.name
-                      )}
-                      onToggle={() =>
-                        toggleCard(dep.deploymentId + '/' + func.name)}
-                    />
+              <div class="warning-body">
+                <p class="warning-desc">
+                  Removing <strong>{undeployConfirm.deploymentId}</strong> will permanently
+                  delete the following rules:
+                </p>
+                <ul class="breaking-list">
+                  {#each undeployConfirm.functions as func}
+                    <li><span class="breaking-ident">{func.name}</span></li>
                   {/each}
-                {:else}
-                  <div class="deployment-empty">No rules</div>
-                {/if}
-              {/if}
+                </ul>
+              </div>
             </div>
-          {/each}
+          {:else if !connectionStatus.connected}
+            <div class="empty-state">
+              <p class="hint">
+                {#if !initialized}
+                  &nbsp;
+                {:else if connectionStatus.serviceUrl}
+                  Connect to {stripProtocol(connectionStatus.serviceUrl)} to view
+                  deployments.
+                {:else}
+                  Sign in with Legalese Cloud to view your deployments.
+                {/if}
+              </p>
+            </div>
+          {:else if deploymentsLoading}
+            <div class="empty-state">
+              <p class="hint">Loading deployments...</p>
+            </div>
+          {:else if deployments.length === 0}
+            <div class="empty-state">
+              <p class="hint">
+                No deployments yet. Deploy an L4 file to get started.
+              </p>
+            </div>
+          {:else}
+            <div class="deployments-list">
+              {#each deployments as dep (dep.deploymentId)}
+                <div
+                  class="deployment-group"
+                  class:collapsed={collapsedDeployments.has(dep.deploymentId)}
+                >
+                  <div class="deployment-header">
+                    <button
+                      class="deployment-header-toggle"
+                      onclick={() => toggleDeploymentCollapse(dep.deploymentId)}
+                      title={collapsedDeployments.has(dep.deploymentId)
+                        ? 'Expand deployment'
+                        : 'Collapse deployment'}
+                    >
+                      <span
+                        class="chevron"
+                        class:rotated={!collapsedDeployments.has(
+                          dep.deploymentId
+                        )}>&#9002;</span
+                      >
+                      <span class="deployment-id">{dep.deploymentId}</span>
+                      <span class="deployment-fn-count">
+                        {#if dep.error}
+                          Error
+                        {:else if dep.functions.length === 0 && compilingDeployments.has(dep.deploymentId)}
+                          Compiling...
+                        {:else if dep.functions.length === 0}
+                          Uncompiled
+                        {:else}
+                          {dep.functions.length} rule{dep.functions.length !== 1
+                            ? 's'
+                            : ''}
+                        {/if}
+                      </span>
+                    </button>
+                    <button
+                      class="undeploy-btn"
+                      disabled={undeployingId === dep.deploymentId}
+                      onclick={(e: MouseEvent) => {
+                        e.stopPropagation()
+                        requestUndeploy(dep)
+                      }}
+                      title="Undeploy"
+                    >
+                      {undeployingId === dep.deploymentId
+                        ? 'Removing...'
+                        : 'Undeploy'}
+                    </button>
+                  </div>
+                  {#if !collapsedDeployments.has(dep.deploymentId)}
+                    {#if dep.error}
+                      <div class="deployment-error"><pre>{dep.error}</pre></div>
+                    {:else if compilingDeployments.has(dep.deploymentId)}
+                      <div class="deployment-empty">Compiling...</div>
+                    {:else if dep.functions.length > 0}
+                      {#each dep.functions as func (func.name)}
+                        <ToolCard
+                          {func}
+                          expanded={isCardExpanded(
+                            dep.deploymentId + '/' + func.name
+                          )}
+                          onToggle={() =>
+                            toggleCard(dep.deploymentId + '/' + func.name)}
+                        />
+                      {/each}
+                    {:else}
+                      <div class="deployment-empty">No rules</div>
+                    {/if}
+                  {/if}
+                </div>
+              {/each}
+            </div>
+          {/if}
         </div>
-      {/if}
+        <aside class="deployment-info-note" role="note">
+          <p>
+            Deployments are automatically available in your VS Code Copilot and
+            Claude Code assistant as local MCP tools.
+          </p>
+          <p>
+            They're also available as REST API's, online MCP server and WebMCP
+            tools {connectionStatus.isLegaleseCloud
+              ? 'on the Legalese Cloud'
+              : 'via the connected JL4 service'}. Open the deployments in the
+            web browser to learn more.
+          </p>
+        </aside>
+      </div>
     {/if}
   </div>
 
@@ -1389,6 +1414,40 @@
     font-family: var(--vscode-editor-font-family, monospace);
     font-size: 0.92em;
     color: var(--l4-tok-identifier, #4ec9b0);
+  }
+
+  .deployments-tab-wrapper {
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+  }
+
+  .deployments-tab-body {
+    flex: 1 0 auto;
+    padding-bottom: 24px;
+  }
+
+  .deployment-info-note {
+    flex-shrink: 0;
+    margin-top: auto;
+    margin-bottom: 2px;
+    padding: 10px 12px;
+    background: var(
+      --vscode-textBlockQuote-background,
+      rgba(127, 127, 127, 0.1)
+    );
+    border-radius: 4px;
+    font-size: 0.82em;
+    line-height: 1.45;
+    color: var(--vscode-descriptionForeground);
+  }
+
+  .deployment-info-note > :global(p) {
+    margin: 0;
+  }
+
+  .deployment-info-note > :global(p + p) {
+    margin-top: 6px;
   }
 
   .deployments-list {
