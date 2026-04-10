@@ -10,34 +10,34 @@ Coding guidelines for AI agents working in this repository.
 
 ### Haskell (Cabal)
 
-| Package                 | Purpose                                                 |
-| ----------------------- | ------------------------------------------------------- |
-| `jl4-core/`             | Core language (parser, typechecker, evaluator)          |
-| `jl4/`                  | CLI (`jl4-cli`) and JSON schema generator               |
-| `jl4-lsp/`              | Language Server Protocol for IDE support                |
-| `jl4-repl/`             | Interactive REPL                                        |
-| `jl4-service/`          | REST API for decision evaluation                        |
-| `jl4-websessions/`      | Session persistence service                             |
-| `jl4-query-plan/`       | Query planning utilities                                |
-| `jl4-wasm/`             | WASM build of L4 for in-browser evaluation              |
-| `jl4-actus-analyzer/`   | Static analyzer classifying L4 contracts by ACTUS/FIBO  |
+| Package               | Purpose                                                |
+| --------------------- | ------------------------------------------------------ |
+| `jl4-core/`           | Core language (parser, typechecker, evaluator)         |
+| `jl4/`                | CLI (`jl4-cli`) and JSON schema generator              |
+| `jl4-lsp/`            | Language Server Protocol for IDE support               |
+| `jl4-repl/`           | Interactive REPL                                       |
+| `jl4-service/`        | REST API for decision evaluation                       |
+| `jl4-websessions/`    | Session persistence service                            |
+| `jl4-query-plan/`     | Query planning utilities                               |
+| `jl4-wasm/`           | WASM build of L4 for in-browser evaluation             |
+| `jl4-actus-analyzer/` | Static analyzer classifying L4 contracts by ACTUS/FIBO |
 
 ### TypeScript (npm workspaces + Turborepo)
 
-| Package             | Purpose                                    |
-| ------------------- | ------------------------------------------ |
-| `ts-apps/vscode/`   | VS Code extension                          |
-| `ts-apps/jl4-web/`  | Web-based editor (Svelte)                  |
-| `ts-apps/webview/`  | Shared webview UI assets                   |
-| `ts-shared/`        | Shared libraries (RPC client, visualizers) |
+| Package            | Purpose                                    |
+| ------------------ | ------------------------------------------ |
+| `ts-apps/vscode/`  | VS Code extension                          |
+| `ts-apps/jl4-web/` | Web-based editor (Svelte)                  |
+| `ts-apps/webview/` | Shared webview UI assets                   |
+| `ts-shared/`       | Shared libraries (RPC client, visualizers) |
 
 ### Documentation
 
-| Location      | Content                                                     |
-| ------------- | ----------------------------------------------------------- |
-| `doc/`        | L4 language docs (reference, courses, tutorials, concepts)  |
-| `specs/`      | Development specs (`todo/`, `done/`, `roadmap/`)            |
-| `*/README.md` | Component-specific setup and usage                          |
+| Location      | Content                                                    |
+| ------------- | ---------------------------------------------------------- |
+| `doc/`        | L4 language docs (reference, courses, tutorials, concepts) |
+| `specs/`      | Development specs (`todo/`, `done/`, `roadmap/`)           |
+| `*/README.md` | Component-specific setup and usage                         |
 
 ## Essential Commands
 
