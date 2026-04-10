@@ -14,7 +14,7 @@
       "source": {
         "source": "github",
         "repo": "legalese/l4-ide",
-        "path": "skill"
+        "path": "."
       },
       "description": "L4 programming language for computational law - encode contracts, regulations, and policies as executable, testable, verifiable programs",
       "version": "0.1.0",

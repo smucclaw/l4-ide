@@ -16,6 +16,27 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # Multi-tenant decision service
+  jl4-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.jl4-service
+    container_name: jl4-service
+    ports:
+      - "8080:8080"
+    volumes:
+      - jl4-service-data:/data/store
+    environment:
+      JL4_PORT: "8080"
+      JL4_STORE_PATH: /data/store
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
   # Websessions Service
   jl4-websessions:
     build:
@@ -57,6 +78,8 @@ services:
 
 volumes:
   websessions-data:
+    driver: local
+  jl4-service-data:
     driver: local
 
 networks:
