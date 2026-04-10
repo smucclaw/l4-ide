@@ -4,10 +4,9 @@ on:
   push:
     branches: [main]
     paths:
-      - "l4/**"
+      - ".claude/skills/writing-l4-rules/**"
       - ".claude-plugin/**"
-      - "!l4/l4.skill"
-      - "!l4/l4.zip"
+      - "PLUGIN.md"
   workflow_dispatch:
 
 jobs:
@@ -26,10 +25,10 @@ jobs:
       - name: Get version from commits
         id: version
         run: |
-          # Count commits to l4/ and .claude-plugin/ directories for versioning
-          COMMIT_COUNT=$(git log --oneline -- l4/ .claude-plugin/ | wc -l | tr -d ' ')
+          # Count commits to skill and plugin manifest directories for versioning
+          COMMIT_COUNT=$(git log --oneline -- .claude/skills/writing-l4-rules/ .claude-plugin/ skill/ l4/ | wc -l | tr -d ' ')
           # Get short hash of latest commit touching plugin directories
-          SHORT_SHA=$(git log -1 --format=%h -- l4/ .claude-plugin/)
+          SHORT_SHA=$(git log -1 --format=%h -- .claude/skills/writing-l4-rules/ .claude-plugin/ skill/ l4/)
           # Create version string
           VERSION="v0.1.${COMMIT_COUNT}"
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
@@ -53,34 +52,33 @@ jobs:
       - name: Create plugin packages
         run: |
           # Remove existing packages if present
-          rm -f l4/l4.skill l4/l4.zip l4-plugin.zip
+          rm -f writing-l4-rules.skill l4-plugin.zip
 
-          # Create skill-only package (for manual skill installation)
-          cd l4
-          zip -r l4.skill \
-            assets/ \
-            references/ \
-            scripts/ \
-            SKILL.md \
-            -x "*.DS_Store" \
-            -x "*/__pycache__/*" \
-            -x "*/node_modules/.cache/*"
-          cd ..
+          # Create skill-only package (for users who just want the SKILL.md + references)
+          (
+            cd .claude/skills/writing-l4-rules
+            zip -r "$GITHUB_WORKSPACE/writing-l4-rules.skill" \
+              assets/ \
+              references/ \
+              scripts/ \
+              SKILL.md \
+              -x "*.DS_Store" \
+              -x "*/__pycache__/*" \
+              -x "*/node_modules/.cache/*"
+          )
 
-          # Create full plugin package (includes .claude-plugin/ directory)
+          # Create full plugin package (includes .claude-plugin/ manifest + skill + PLUGIN.md)
           zip -r l4-plugin.zip \
             .claude-plugin/ \
-            l4/ \
+            .claude/skills/writing-l4-rules/ \
             PLUGIN.md \
             -x "*.DS_Store" \
             -x "*/__pycache__/*" \
-            -x "*/node_modules/.cache/*" \
-            -x "l4/l4.skill" \
-            -x "l4/l4.zip"
+            -x "*/node_modules/.cache/*"
 
           # Verify packages
           echo "=== Skill Package ==="
-          ls -lh l4/l4.skill
+          ls -lh writing-l4-rules.skill
           echo ""
           echo "=== Plugin Package ==="
           ls -lh l4-plugin.zip
@@ -126,32 +124,25 @@ jobs:
             3. Restart Claude Code
 
             **Skill-Only Installation:**
-            1. Download `l4.skill`
-            2. Place in `~/.claude/skills/l4/` or `.claude/skills/l4/`
+            1. Download `writing-l4-rules.skill`
+            2. Extract into `~/.claude/skills/writing-l4-rules/` or `<project>/.claude/skills/writing-l4-rules/`
 
             ### What's Included
 
-            - **L4 Language Skill**: Expert guidance for encoding legal logic
-            - **LSP Integration**: Cloud-based code intelligence via `wss://jl4.legalese.com/lsp`
-            - **Validation Scripts**: Cloud validation without local Haskell installation
-            - **Comprehensive Documentation**: Syntax guides, workflows, and examples
+            - **L4 authoring skill**: Expert guidance for formalising legal text as typed decision functions and regulative rules
+            - **Reference documentation**: Deep dives on regulative rules, builtin libraries, and common gotchas
+            - **Deploy to Legalese Cloud**: Annotate with `@export` / `@desc` and ship rules as REST, MCP, WebMCP, and OpenAPI endpoints
 
             ### Features
 
-            - Real-time syntax validation and type checking
-            - Code completion and navigation
-            - Formal verification capabilities
-            - Web app generation from legal rules
-            - Audit-grade evaluation traces
-
-            ### Access Tiers
-
-            - **Free Tier**: Cloud validation, basic type checking, community support
-            - **Premium Tier** (coming soon): Higher limits, priority support, advanced features
+            - Formalise legal text as executable, type-checked rules
+            - Obligations with deadlines and reparations (`MUST` / `HENCE` / `LEST` / `BREACH`)
+            - One-click deployment to [Legalese Cloud](https://legalese.cloud) from the VS Code extension
+            - Audit-grade execution traces for every decision
 
             ### Documentation
 
-            See [PLUGIN.md](https://github.com/legalese/l4-ide/blob/main/skill/PLUGIN.md) for complete documentation.
+            See [PLUGIN.md](https://github.com/legalese/l4-ide/blob/main/PLUGIN.md) for complete documentation.
 
             ---
 
@@ -159,7 +150,7 @@ jobs:
             **Commit:** ${{ github.sha }}
             **Generated:** ${{ github.event.head_commit.timestamp }}
           files: |
-            l4/l4.skill
+            writing-l4-rules.skill
             l4-plugin.zip
           draft: false
           prerelease: false
@@ -170,7 +161,7 @@ jobs:
         if: steps.check_release.outputs.exists == 'true'
         run: |
           echo "Updating existing release ${{ steps.version.outputs.tag }}"
-          gh release upload ${{ steps.version.outputs.tag }} l4/l4.skill l4-plugin.zip --clobber
+          gh release upload ${{ steps.version.outputs.tag }} writing-l4-rules.skill l4-plugin.zip --clobber
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -179,7 +170,7 @@ jobs:
           echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Version:** ${{ steps.version.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Skill Package:** l4.skill ($(ls -lh l4/l4.skill | awk '{print $5}'))" >> $GITHUB_STEP_SUMMARY
+          echo "- **Skill Package:** writing-l4-rules.skill ($(ls -lh writing-l4-rules.skill | awk '{print $5}'))" >> $GITHUB_STEP_SUMMARY
           echo "- **Plugin Package:** l4-plugin.zip ($(ls -lh l4-plugin.zip | awk '{print $5}'))" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Installation" >> $GITHUB_STEP_SUMMARY

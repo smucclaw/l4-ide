@@ -20,6 +20,6 @@
     "verification",
     "functional-programming"
   ],
-  "skills": "./skill/",
+  "skills": "./.claude/skills/",
   "lspServers": "./.lsp.json"
 }

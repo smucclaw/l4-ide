@@ -1,162 +1,128 @@
 # L4 Computational Law Plugin for Claude Code
 
-A Claude Code plugin that provides comprehensive support for L4, the programming language for computational law. Write legal rules, contracts, and regulations as executable, type-checked, formally verifiable code.
+A Claude Code plugin for writing **L4 rules-as-code** — a statically-typed, pure-functional programming language for computational law. Encode legislation, contracts, policies, and regulations as executable, type-checked rules, then deploy them as live REST APIs, MCP tools, and WebMCP agents via [Legalese Cloud](https://legalese.cloud).
 
 ## Features
 
-- **L4 Language Skill**: Expert guidance for encoding legal logic in L4
-- **LSP Integration**: Real-time code intelligence via cloud-based Language Server
-  - Syntax highlighting and validation
-  - Type checking and error diagnostics
-  - Code completion and navigation
-- **Cloud Validation**: Validate L4 code against the production LSP server at `wss://jl4.legalese.com/lsp`
-- **Comprehensive Documentation**: Syntax references, workflow guides, and examples
+- **L4 authoring skill** — expert guidance for formalising legal text as typed decision functions and regulative rules (`MUST` / `MAY` / `SHANT` / `DO`, with deadlines, `HENCE` / `LEST` consequences, and `BREACH` semantics).
+- **Deploy to Legalese Cloud** — annotate functions with `@export` and `@desc`, deploy from the VS Code extension's Deploy tab, and your rules are instantly available as:
+  - **REST** endpoints (`POST /deployments/{id}/functions/{fn}/evaluation`)
+  - **MCP** JSON-RPC 2.0 tools for LLM agent tool-use (`POST /deployments/{id}/.mcp`)
+  - **WebMCP** tools for browser AI agents (`<script src="/.webmcp/embed.js">`)
+  - **OpenAPI 3.0** schemas (`GET /deployments/{id}/openapi.json`)
+  - **Query planning** for interactive questionnaires that only ask inputs that still matter
+  - **Audit-grade execution traces** (`?trace=full&graphviz=true` on any evaluation)
+- **Reference documentation** — curated deep-dives on regulative rules, builtin libraries, and traps a general-purpose LLM won't get right, all discoverable from the skill.
 
 ## Installation
 
-### Via Marketplace (Recommended)
+### Via Marketplace (recommended)
 
 1. Add the Legalese marketplace:
-
    ```
    /plugin marketplace add legalese/l4-ide
    ```
-
-2. Install the L4 plugin:
+2. Install the plugin:
    ```
    /plugin install l4-computational-law@legalese
    ```
 
-### Manual Installation
-
-1. Download the latest `l4.skill` from [GitHub Releases](https://github.com/legalese/l4-ide/releases)
-2. Extract to your Claude Code skills directory:
-   - Personal: `~/.claude/skills/l4/`
-   - Project: `.claude/skills/l4/`
+Once installed, Claude Code auto-loads the `writing-l4-rules` skill whenever the plugin is active.
 
 ## Usage
 
-Once installed, the L4 skill automatically activates when you:
+The skill activates when you:
 
-- Mention L4, legal rules, contracts, or regulations
-- Work with `.l4` or `.yaml` files containing L4 code
-- Ask about computational law or formal legal specification
+- Ask to formalise legal text, contracts, policies, or regulations
+- Work with `.l4` files
+- Ask about computational law, obligations/deadlines, or deploying L4 rules as APIs or agent tools
 
-### Example Prompts
+### Example prompts
 
-- "Help me encode this insurance policy in L4"
-- "Write an L4 program for this contract clause"
-- "Validate my L4 code for syntax errors"
-- "Generate a web app from this L4 rule"
-
-## Access Tiers
-
-The L4 cloud services operate on a tiered access model:
-
-### Free Tier
-
-- Cloud validation via LSP WebSocket
-- Basic type checking and syntax validation
-- Community support via GitHub issues
-- Fair use limits apply
-
-### Premium Tier (Coming Soon)
-
-- Higher API rate limits for intensive validation
-- Priority support
-- Advanced features:
-  - Formal verification
-  - Test case generation
-  - Multi-file project analysis
-- Commercial use license
-
-Authentication and billing are handled transparently when connecting to cloud services. Contact hello@legalese.com for premium tier access.
-
-## Documentation
-
-- **Syntax Quick Reference**: `skill/references/syntax-quick-ref.md`
-- **Workflow Guide**: `skill/references/workflow-guide.md`
-- **GitHub Resources**: `skill/references/github-resources.md`
-- **Complete Skill Guide**: `skill/SKILL.md`
-
-## Cloud Validation
-
-The plugin connects to the L4 Language Server at `wss://jl4.legalese.com/lsp` for:
-
-- Real-time syntax validation
-- Type checking
-- Semantic analysis
-- Code intelligence features
-
-No local Haskell toolchain required! Validation runs entirely in the cloud.
-
-### Validation Scripts
-
-For standalone validation outside Claude Code:
-
-```bash
-# Validate an L4 file via WebSocket
-cd skill/scripts
-npm install
-node validate-cloud.mjs ../path/to/your/file.l4
-```
+- "Formalise this insurance policy clause in L4"
+- "Draft an L4 rule for a 30-day payment obligation with breach reparation"
+- "Model this statute as L4 with `#TRACE` test cases"
+- "Export this decision function and deploy it to Legalese Cloud"
+- "Turn this eligibility checklist into an MCP tool my agent can call"
 
 ## What is L4?
 
-L4 is a statically-typed functional programming language inspired by Haskell, designed specifically for encoding legal and regulatory logic. It enables:
+L4 is a statically-typed, pure-functional language designed for legal drafting:
 
-- **Isomorphic formalization**: Map legal text structure directly to code
-- **Type safety**: Catch logical errors at compile time
-- **Formal verification**: Prove properties about legal rules
-- **Executable specifications**: Generate web apps and decision services from legal code
-- **Traceable reasoning**: Audit-grade execution traces with citations back to source rules
+- **Layout-sensitive** like Python
+- **Haskell-style algebraic data types** for modelling legal ontologies
+- **Backtick identifiers** that read like prose: `` `the applicant qualifies for benefits` ``
+- **Regulative rules** with deadlines and reparations: `MUST … WITHIN 30 … HENCE … LEST BREACH`
+- **`@export` / `@desc` annotations** that publish typed functions to REST, MCP, and OpenAPI with LLM-friendly parameter descriptions
 
-## Examples
+Canonical documentation lives at <https://legalese.com/l4/>.
 
-### Simple Contract Rule
-
-```l4
-DECLARE PolicyStatus IS ONE OF
-    Active
-    Suspended
-    Cancelled
-
-DECIDE eligibleForClaim
-    GIVEN policy HAS status IS A PolicyStatus
-    IF policy's status IS Active
-    THEN True
-    ELSE False
-```
-
-### Insurance Premium Calculation
+### Example: an exported decision function
 
 ```l4
-DEFINE calculatePremium
-    GIVEN
-        driver HAS
-            age IS A NUMBER
-            yearsLicensed IS A NUMBER
-            accidentCount IS A NUMBER
-    RETURN A NUMBER
-    AS
-        LET baseRate IS 1000
-        LET ageFactor IS IF driver's age < 25 THEN 1.5 ELSE 1.0
-        LET experienceFactor IS IF driver's yearsLicensed < 3 THEN 1.3 ELSE 1.0
-        LET accidentPenalty IS driver's accidentCount * 200
-        baseRate * ageFactor * experienceFactor + accidentPenalty
+@desc Given the day of the week, a flag about whether it's a public holiday, and prevailing weather conditions, calculate the cost of parking.
+@export default Calculate the cost of parking
+GIVEN
+  day_of_week       IS A NUMBER  @desc the day of the week (1 = Monday, ..., 7 = Sunday)
+  is_public_holiday IS A BOOLEAN @desc whether it is a public holiday
+  current_weather   IS A STRING  @desc Current weather conditions. Possible values are: fair, rain, snow
+GIVETH A NUMBER
+DECIDE `Parking cost` IS ...
 ```
+
+The `@desc` on each parameter flows into the generated OpenAPI schema and the MCP tool's `inputSchema`, so downstream LLMs know exactly how to construct a valid call. See the full working file at [.claude/skills/writing-l4-rules/assets/example-parking.l4](.claude/skills/writing-l4-rules/assets/example-parking.l4).
+
+## Deployment with Legalese Cloud
+
+[Legalese Cloud](https://legalese.cloud) is the managed hosting service for L4 rule bundles. One deployment gives you every interface at once — REST, MCP, WebMCP, OpenAPI, query planning, and traces — all backed by the same type-checked source.
+
+Each organisation gets a subdomain (`https://{org-slug}.legalese.cloud`), OAuth-protected endpoints, handled compilation, and one-click deployment from the VS Code extension's Deploy tab. Discovery starts at:
+
+```
+https://{org-slug}.legalese.cloud/.well-known/oauth-protected-resource
+```
+
+You can also self-host with `jl4-service` — the API surface is identical, so client code is portable between self-hosted and managed deployments.
+
+## Validation
+
+Validate `.l4` files locally with the `jl4-cli` tool from this repository:
+
+```bash
+cabal run jl4-cli -- path/to/file.l4
+```
+
+A wrapper script ships inside the skill at [.claude/skills/writing-l4-rules/scripts/validate.sh](.claude/skills/writing-l4-rules/scripts/validate.sh).
+
+## Documentation
+
+Inside the plugin ([.claude/skills/writing-l4-rules/](.claude/skills/writing-l4-rules/)):
+
+- [SKILL.md](.claude/skills/writing-l4-rules/SKILL.md) — operational guide for writing and deploying L4
+- [references/regulative.md](.claude/skills/writing-l4-rules/references/regulative.md) — obligations, `#TRACE`, and the `MUST` / `HENCE` / `LEST` / `BREACH` machinery
+- [references/builtins.md](.claude/skills/writing-l4-rules/references/builtins.md) — coercions, HTTP/JSON, temporal globals, and the library index
+- [references/gotchas.md](.claude/skills/writing-l4-rules/references/gotchas.md) — ditto `^`, asyndetic `...` / `..`, `§` sections, computed fields, `IS` vs `MEANS` vs `IF`, mixfix
+
+External:
+
+- **Start here:** <https://legalese.com/l4/README.md>
+- **Glossary:** <https://legalese.com/l4/reference/GLOSSARY.md>
+- **Cheat sheet:** <https://legalese.com/l4/reference/cheat-sheet.md>
+- **Regulative rules reference:** <https://legalese.com/l4/reference/regulative.md>
+- **Libraries:** <https://legalese.com/l4/reference/libraries.md>
+- **Legalese Cloud:** <https://legalese.cloud>
 
 ## Support
 
-- **Documentation**: https://github.com/legalese/l4-ide
-- **Issues**: https://github.com/legalese/l4-ide/issues
-- **Email**: hello@legalese.com
-- **Website**: https://legalese.com
+- **Documentation:** <https://legalese.com/l4/>
+- **Issues:** <https://github.com/legalese/l4-ide/issues>
+- **Email:** hello@legalese.com
+- **Website:** <https://legalese.com>
 
 ## License
 
-BSD-3-Clause
+Apache 2.0
 
 ## Credits
 
-Developed by Legalese
+Developed by Legalese Pte. Ltd. in Singapore

@@ -33,6 +33,8 @@ This repository contains the L4 compiler, IDE tooling (VS Code extension, LSP, R
 | [jl4-service](jl4-service/)         | REST API for decision evaluation               |
 | [jl4-websessions](jl4-websessions/) | Session persistence service                    |
 | [jl4-query-plan](jl4-query-plan/)   | Query planning utilities                       |
+| [jl4-actus-analyzer](jl4-actus-analyzer/) | Static analyzer classifying L4 contracts by ACTUS / FIBO |
+| [jl4-wasm](jl4-wasm/)               | WebAssembly build of L4 for browser/Node.js    |
 
 **TypeScript (npm workspaces + Turborepo):**
 
@@ -51,7 +53,7 @@ cabal build all          # Haskell
 npm ci && npm run build  # TypeScript
 ```
 
-See [CLAUDE.md](CLAUDE.md) and [AGENTS.md](AGENTS.md) for the repository conventions and workflow, and [dev-start.sh](dev-start.sh) for running services locally.
+See [AGENTS.md](AGENTS.md) for repository conventions and workflow, and [dev-start.sh](dev-start.sh) for running services locally.
 
 **Requirements:** GHC 9.10.2, Cabal 3.10+, Node.js ≥ 20, and GraphViz (`dot`). Nix users can run `nix-shell nix/shell.nix` for a ready environment.
 
