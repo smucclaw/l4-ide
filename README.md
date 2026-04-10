@@ -24,17 +24,17 @@ This repository contains the L4 compiler, IDE tooling (VS Code extension, LSP, R
 
 **Haskell (Cabal):**
 
-| Package                             | Purpose                                        |
-| ----------------------------------- | ---------------------------------------------- |
-| [jl4-core](jl4-core/)               | Core language (parser, typechecker, evaluator) |
-| [jl4](jl4/)                         | CLI tool and JSON schema generator             |
-| [jl4-lsp](jl4-lsp/)                 | Language Server Protocol for IDE support       |
-| [jl4-repl](jl4-repl/)               | Interactive REPL                               |
-| [jl4-service](jl4-service/)         | REST API for decision evaluation               |
-| [jl4-websessions](jl4-websessions/) | Session persistence service                    |
-| [jl4-query-plan](jl4-query-plan/)   | Query planning utilities                       |
+| Package                                   | Purpose                                                  |
+| ----------------------------------------- | -------------------------------------------------------- |
+| [jl4-core](jl4-core/)                     | Core language (parser, typechecker, evaluator)           |
+| [jl4](jl4/)                               | CLI tool and JSON schema generator                       |
+| [jl4-lsp](jl4-lsp/)                       | Language Server Protocol for IDE support                 |
+| [jl4-repl](jl4-repl/)                     | Interactive REPL                                         |
+| [jl4-service](jl4-service/)               | REST API for decision evaluation                         |
+| [jl4-websessions](jl4-websessions/)       | Session persistence service                              |
+| [jl4-query-plan](jl4-query-plan/)         | Query planning utilities                                 |
 | [jl4-actus-analyzer](jl4-actus-analyzer/) | Static analyzer classifying L4 contracts by ACTUS / FIBO |
-| [jl4-wasm](jl4-wasm/)               | WebAssembly build of L4 for browser/Node.js    |
+| [jl4-wasm](jl4-wasm/)                     | WebAssembly build of L4 for browser/Node.js              |
 
 **TypeScript (npm workspaces + Turborepo):**
 
