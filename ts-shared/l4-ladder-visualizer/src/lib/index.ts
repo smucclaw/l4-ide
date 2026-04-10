@@ -4,7 +4,6 @@ export * from './data/viz-expr-to-lir.js'
 /** Ladder 'Env' */
 export * from './ladder-env.js'
 
-/** Decision-service query-plan helpers (for ladder elicitation UI) */
 export * from './eval/query-plan-override.js'
 
 /** @repo/layout-ir contains the core Lir framework.
