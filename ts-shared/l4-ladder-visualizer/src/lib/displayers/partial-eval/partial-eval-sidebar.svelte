@@ -38,7 +38,7 @@
 
 <aside class="partial-eval-sidebar">
   <div class="sidebar-header">
-    <span class="sidebar-title">Assumptions</span>
+    <span class="sidebar-title">Inputs</span>
     <div class="sidebar-header-actions">
       {#if analysis}
         <span class="text-xs text-muted-foreground">
@@ -49,8 +49,8 @@
       {/if}
       <button
         class="icon-btn"
-        title="Reset all assumptions"
-        aria-label="Reset all assumptions"
+        title="Reset all inputs"
+        aria-label="Reset all inputs"
         onclick={handleReset}
       >
         <RotateCcw size={14} />
@@ -58,7 +58,7 @@
       <button
         class="icon-btn"
         title="Close"
-        aria-label="Close assumptions panel"
+        aria-label="Close inputs panel"
         onclick={onClose}
       >
         <X size={14} />

@@ -379,8 +379,8 @@ Misc SF UI TODOs:
             <ControlButton
               onclick={() => (showPartialEvalSidebar = !showPartialEvalSidebar)}
               title={showPartialEvalSidebar
-                ? 'Hide assumptions panel'
-                : 'Show assumptions panel'}
+                ? 'Hide inputs panel'
+                : 'Show inputs panel'}
             >
               <SlidersHorizontal size={14} />
             </ControlButton>
