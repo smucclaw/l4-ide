@@ -1,13 +1,9 @@
 {
   "l4": {
-    "command": null,
+    "command": "jl4-lsp",
     "args": [],
     "initializationOptions": {},
     "settings": {},
-    "transport": {
-      "kind": "websocket",
-      "url": "wss://jl4.legalese.com/lsp"
-    },
     "documentSelector": [
       {
         "language": "l4",
