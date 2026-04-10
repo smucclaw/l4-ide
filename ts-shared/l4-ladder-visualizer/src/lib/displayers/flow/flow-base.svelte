@@ -23,9 +23,10 @@
   import { ladderGraphToSFGraph } from './ladder-lir-to-sf.js'
   import PathsList from '../paths-list.svelte'
   import PartialEvalSidebar from '$lib/displayers/partial-eval/partial-eval-sidebar.svelte'
+  import type { PartialEvalAnalysis } from '$lib/eval/partial-eval.js'
 
-  import { Collapsible } from 'bits-ui'
   import List from 'lucide-svelte/icons/list'
+  import SlidersHorizontal from 'lucide-svelte/icons/sliders-horizontal'
   import dagre from '@dagrejs/dagre'
   import { getLayoutedElements, type DagreConfig } from './layout.js'
   import {
@@ -186,11 +187,18 @@
   ************************************/
 
   let resultMessage: string = $state('')
+  let partialEvalAnalysis: PartialEvalAnalysis | null = $state(null)
   function updateResultDisplay() {
     resultMessage = `evaluates to ${ladderGraph.getResult(context).toPretty()}`
+    partialEvalAnalysis = ladderGraph.getPartialEvalAnalysis(context)
   }
 
   let showPartialEvalSidebar = $state(false)
+  let showPathsList = $state(false)
+  function togglePathsList() {
+    showPathsList = !showPathsList
+    setTimeout(doFitView, 10)
+  }
 
   /*********************************************
         LadderGraph event listener
@@ -339,7 +347,12 @@ Misc SF UI TODOs:
   >
     <div class="flow-row">
       {#if showPartialEvalSidebar}
-        <PartialEvalSidebar {context} {ladderGraph} />
+        <PartialEvalSidebar
+          {context}
+          {ladderGraph}
+          analysis={partialEvalAnalysis}
+          onClose={() => (showPartialEvalSidebar = false)}
+        />
       {/if}
       <div class="flow-main">
         <SvelteFlow
@@ -365,11 +378,20 @@ Misc SF UI TODOs:
             </ControlButton>
             <ControlButton
               onclick={() => (showPartialEvalSidebar = !showPartialEvalSidebar)}
+              title={showPartialEvalSidebar
+                ? 'Hide assumptions panel'
+                : 'Show assumptions panel'}
             >
-              <div class="text-[0.7rem] p-1">
-                {showPartialEvalSidebar ? 'Hide' : 'Inputs'}
-              </div>
+              <SlidersHorizontal size={14} />
             </ControlButton>
+            {#if isNNFLadderGraphLirNode(ladderGraph)}
+              <ControlButton
+                onclick={togglePathsList}
+                title={showPathsList ? 'Hide path list' : 'Show path list'}
+              >
+                <List size={14} />
+              </ControlButton>
+            {/if}
           </Controls>
           <Background />
         </SvelteFlow>
@@ -377,28 +399,9 @@ Misc SF UI TODOs:
     </div>
   </div>
   <!-- Paths Section -->
-  <!-- TODO: Move the following into a lin paths container component -->
-  {#if pathsList && isNNFLadderGraphLirNode(ladderGraph)}
+  {#if showPathsList && pathsList && isNNFLadderGraphLirNode(ladderGraph)}
     <div class="paths-container">
-      <!-- TODO: Make a standalone wrapper over the collapsible component, as suggested by https://bits-ui.com/docs/components/collapsible  -->
-      <!-- Using setTimeout instead of window requestAnimationFrame because it can take time to generate the paths list the first time round -->
-      <Collapsible.Root onOpenChange={() => setTimeout(doFitView, 10)}>
-        <Collapsible.Trigger class="flex items-center justify-end w-full gap-2">
-          <!-- TODO: Improve the button styles -->
-          <button
-            class="rounded-md border-1 border-sky-700 px-2 py-1 text-xs hover:bg-accent flex items-center gap-1"
-          >
-            <List /><span>List paths</span>
-          </button>
-        </Collapsible.Trigger>
-        <Collapsible.Content class="pt-2">
-          <PathsList {context} node={pathsList} {ladderGraph} />
-        </Collapsible.Content>
-      </Collapsible.Root>
-    </div>
-  {:else}
-    <div class="text-center text-xs">
-      To list paths, first click on 'Simplify and visualise' in the editor.
+      <PathsList {context} node={pathsList} {ladderGraph} />
     </div>
   {/if}
 </div>

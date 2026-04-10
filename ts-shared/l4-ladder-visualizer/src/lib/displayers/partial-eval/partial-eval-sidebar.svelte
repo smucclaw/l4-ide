@@ -2,16 +2,24 @@
   import type { LirContext } from '@repo/layout-ir'
   import type { Unique } from '@repo/viz-expr'
   import type { LadderGraphLirNode } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
+  import type { PartialEvalAnalysis } from '$lib/eval/partial-eval.js'
   import { FalseVal, TrueVal, UnknownVal } from '$lib/eval/type.js'
+  import RotateCcw from 'lucide-svelte/icons/rotate-ccw'
+  import X from 'lucide-svelte/icons/x'
 
   interface PartialEvalSidebarProps {
     context: LirContext
     ladderGraph: LadderGraphLirNode
+    analysis: PartialEvalAnalysis | null
+    onClose: () => void
   }
 
-  let { context, ladderGraph }: PartialEvalSidebarProps = $props()
+  let { context, ladderGraph, analysis, onClose }: PartialEvalSidebarProps =
+    $props()
 
-  const analysis = $derived(ladderGraph.getPartialEvalAnalysis(context))
+  function handleReset() {
+    ladderGraph.resetBindings(context)
+  }
 
   const labelFor = (unique: Unique) =>
     ladderGraph.getLabelForUnique(context, unique)
@@ -29,15 +37,33 @@
 </script>
 
 <aside class="partial-eval-sidebar">
-  <div class="text-sm font-semibold flex items-center justify-between">
-    <span>Inputs</span>
-    {#if analysis}
-      <span class="text-xs text-muted-foreground">
-        {analysis.usedBdd ? 'BDD' : 'fold'}{#if analysis.bddStats}
-          · {analysis.bddStats.support} live
-        {/if}
-      </span>
-    {/if}
+  <div class="sidebar-header">
+    <span class="sidebar-title">Assumptions</span>
+    <div class="sidebar-header-actions">
+      {#if analysis}
+        <span class="text-xs text-muted-foreground">
+          {analysis.usedBdd ? 'BDD' : 'fold'}{#if analysis.bddStats}
+            &nbsp;· {analysis.bddStats.support} live&nbsp;
+          {/if}
+        </span>
+      {/if}
+      <button
+        class="icon-btn"
+        title="Reset all assumptions"
+        aria-label="Reset all assumptions"
+        onclick={handleReset}
+      >
+        <RotateCcw size={14} />
+      </button>
+      <button
+        class="icon-btn"
+        title="Close"
+        aria-label="Close assumptions panel"
+        onclick={onClose}
+      >
+        <X size={14} />
+      </button>
+    </div>
   </div>
 
   {#if !analysis}
@@ -116,7 +142,7 @@
     </div>
 
     <div class="bucket">
-      <div class="bucket-title">Don’t Care</div>
+      <div class="bucket-title">Moot</div>
       {#if analysis.dontCare.length === 0}
         <div class="bucket-empty">None.</div>
       {:else}
@@ -133,7 +159,7 @@
     </div>
 
     <div class="bucket">
-      <div class="bucket-title">Restricted</div>
+      <div class="bucket-title">Simplified</div>
       <pre class="expr">{analysis.restrictedExprText}</pre>
       <div class="result">
         Result: <span class="font-semibold"
@@ -154,6 +180,41 @@
     border: 1px solid var(--color-border, rgba(0, 0, 0, 0.15));
     background: var(--color-background, white);
     color: var(--color-foreground, inherit);
+  }
+
+  .sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  .sidebar-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+
+  .sidebar-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 0.25rem;
+    border: 1px solid var(--color-border, rgba(0, 0, 0, 0.15));
+    background: var(--color-background, white);
+    color: inherit;
+    cursor: pointer;
+  }
+
+  .icon-btn:hover {
+    background: var(--color-accent, rgba(0, 0, 0, 0.06));
   }
 
   .bucket {
