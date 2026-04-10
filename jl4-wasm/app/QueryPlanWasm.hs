@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE OverloadedStrings #-}
 -- | Query plan computation for WASM.
 --
 -- This module bridges jl4-core's visualization pipeline with jl4-query-plan
