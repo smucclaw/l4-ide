@@ -9,7 +9,6 @@ import qualified Data.Text as Text
 import Data.UUID (UUID)
 import qualified Data.UUID as UUID
 import Database.SQLite.Simple as SQLite (withConnection)
-import Network.HTTP.Client (defaultManagerSettings, newManager)
 import Network.HTTP.Types (hContentType, methodGet, methodPost, status200)
 import Network.HTTP.Types.URI (renderQuery)
 import Network.Wai (Request (..))
@@ -39,13 +38,8 @@ crudSmokeTest =
     let dbPath = fp </> "test.db"
         program = Text.pack "add x y MEANS x + y"
     createDB dbPath
-    httpMgr <- newManager defaultManagerSettings
     SQLite.withConnection dbPath \dbConn -> do
-      let env = MkHandlerEnv
-            { dbConn = dbConn
-            , httpManager = httpMgr
-            , decisionServiceUrl = Nothing
-            }
+      let env = MkHandlerEnv { dbConn = dbConn }
       runSession (crudSession program) (mkApp env)
 
 crudSession :: Text -> Session ()

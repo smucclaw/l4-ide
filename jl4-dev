@@ -54,7 +54,6 @@ COMMANDS:
 
 SERVICES:
     jl4-lsp                LSP WebSocket server (port 8000)
-    jl4-decision-service   Decision API (port 8001)
     jl4-websessions        Session management (port 8002)
     jl4-web                Web frontend (port 5173)
 
@@ -68,7 +67,6 @@ EXAMPLES:
 
 URLS:
     Web Frontend:      http://localhost:5173
-    Decision Service:  http://localhost:8001
     Websessions:       http://localhost:8002
     LSP WebSocket:     ws://localhost:8000
 
@@ -166,13 +164,6 @@ cmd_test() {
         log_success "✓ LSP server responding on port 8000"
     else
         log_error "✗ LSP server not responding on port 8000"
-    fi
-
-    # Test Decision Service
-    if curl -sf http://localhost:8001/functions > /dev/null 2>&1; then
-        log_success "✓ Decision service responding on port 8001"
-    else
-        log_error "✗ Decision service not responding on port 8001"
     fi
 
     # Test Websessions

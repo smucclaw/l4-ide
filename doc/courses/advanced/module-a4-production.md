@@ -250,16 +250,22 @@ GIVETH A MAYBE RegisteredCharity
 
 ### REST API Integration
 
-The Decision Service provides a REST API:
+`jl4-service` provides a multi-tenant REST API. Deploy a bundle of `.l4` files
+as a zip and call the resulting endpoints:
 
 ```bash
-# Start the decision service
-cabal run jl4-decision-service -- myfile.l4
+# Start the service
+cabal run jl4-service
 
-# Call via HTTP
-curl -X POST http://localhost:8080/evaluate \
+# Deploy a bundle (myfile.l4 zipped as bundle.zip)
+curl -X POST http://localhost:8080/deployments/myapp \
+  -H "Content-Type: application/zip" \
+  --data-binary @bundle.zip
+
+# Call a function in the deployment
+curl -X POST http://localhost:8080/deployments/myapp/functions/is%20eligible/evaluation \
   -H "Content-Type: application/json" \
-  -d '{"function": "is eligible", "args": {"person": {"name": "Test", "age": 25}}}'
+  -d '{"arguments": {"person": {"name": "Test", "age": 25}}}'
 ```
 
 ### Web Form Generation

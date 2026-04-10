@@ -45,4 +45,4 @@ RUN mkdir -p /data
 
 EXPOSE 8002
 
-CMD ["jl4-websessions", "8002", "/data/sessions.db", "http://jl4-decision-service:8001"]
+CMD ["jl4-websessions", "8002", "/data/sessions.db"]

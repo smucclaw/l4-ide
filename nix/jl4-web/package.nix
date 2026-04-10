@@ -1,7 +1,6 @@
 {
   socket-url ? "localhost:5007",
   session-url ? "localhost:5008",
-  wizard-path ? "/wizard",  # Relative path for same-origin in production
   secure ? false,
   buildNpmPackage,
   importNpmLock,
@@ -37,15 +36,10 @@ buildNpmPackage rec {
     set -x
     export VITE_SOCKET_URL=${if secure then "wss" else "ws"}://${socket-url};
     export VITE_SESSION_URL=${if secure then "https" else "http"}://${session-url};
-    export VITE_WIZARD_URL=${wizard-path};
 
     pushd ./ts-shared
 
     pushd ./type-utils
-    npm run build
-    popd
-
-    pushd ./decision-service-types
     npm run build
     popd
 
@@ -58,10 +52,6 @@ buildNpmPackage rec {
     popd
 
     pushd ./jl4-client-rpc
-    npm run build
-    popd
-
-    pushd ./vscode-webview-rpc
     npm run build
     popd
 

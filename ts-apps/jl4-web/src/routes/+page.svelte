@@ -54,7 +54,6 @@
   let persistSession: undefined | (() => Promise<string | undefined>) =
     undefined
   const sessionUrl = import.meta.env.VITE_SESSION_URL || 'http://localhost:5008'
-  const wizardUrl = import.meta.env.VITE_WIZARD_URL || 'http://localhost:5174'
 
   let currentFunctionName: string | null = $state(null)
   let currentVerDocId: { uri: string; version: number } | null = null
@@ -851,39 +850,9 @@
       }
 
       await navigator.clipboard.writeText(shareUrl)
-
-      // Build wizard URL using path-based routing: /wizard/{sessionId}/{functionName}
-      const shareWizardUrl = currentFunctionName
-        ? `${wizardUrl}/${sessionId}/${encodeURIComponent(currentFunctionName)}`
-        : `${wizardUrl}/${sessionId}`
-      toast.push(
-        `Link copied to clipboard. <a href="${shareWizardUrl}" target="_blank" style="color: #60a5fa; text-decoration: underline;">Open in Wizard</a>`,
-        { duration: 6000 }
-      )
+      toast.push('Link copied to clipboard.', { duration: 4000 })
     } else {
       toast.push('Could not persist the file to generate a share link.')
-    }
-  }
-
-  async function handleOpenWizard() {
-    // Open window synchronously to avoid popup blocking (async awaits would make it non-user-initiated)
-    const wizardWindow = window.open('about:blank', '_blank')
-
-    // Persist to session server - we need the session ID for the wizard URL
-    const sessionId = await handlePersist()
-
-    // Navigate to wizard using path-based routing: /wizard/{sessionId}/{functionName}
-    let targetWizardUrl: string
-    if (sessionId && currentFunctionName) {
-      targetWizardUrl = `${wizardUrl}/${sessionId}/${encodeURIComponent(currentFunctionName)}`
-    } else if (sessionId) {
-      targetWizardUrl = `${wizardUrl}/${sessionId}`
-    } else {
-      targetWizardUrl = wizardUrl
-    }
-
-    if (wizardWindow) {
-      wizardWindow.location.href = targetWizardUrl
     }
   }
 
@@ -1138,31 +1107,6 @@
           <path d="M12 12 Q15 15 17 18" />
         </svg>
         Inspector
-      </button>
-      <button
-        class="fab fab-wizard"
-        onclick={handleOpenWizard}
-        aria-label="Form Wizard"
-        title="Form Wizard"
-      >
-        <svg
-          width="20"
-          height="20"
-          style="font-size: 24px; vertical-align: middle; margin-right: 0.2em;"
-          viewBox="0 0 24 24"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-          stroke-width="1.5"
-          stroke="currentColor"
-        >
-          <!-- Magic wand / wizard icon -->
-          <path
-            d="M15 4V2M15 16V14M8 9H10M20 9H22M17.8 11.8L19 13M17.8 6.2L19 5M12.2 11.8L11 13M12.2 6.2L11 5"
-          />
-          <path d="M15 9L3 21" stroke-linecap="round" />
-          <path d="M13 7L17 11" stroke-linecap="round" />
-        </svg>
-        Form Wizard
       </button>
     {/if}
     <button

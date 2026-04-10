@@ -538,14 +538,13 @@ export class WasmLspHandler {
 
     try {
       const bindingsJson = JSON.stringify(p.bindings)
-      const json = await this.bridge.exports!.l4_query_plan(
+      const result = (await this.bridge.queryPlan(
         content,
         uri,
         p.fnName,
         bindingsJson
-      )
-      const result = JSON.parse(json)
-      if (result.error) return null
+      )) as { error?: string } | null
+      if (!result || result.error) return null
       return result
     } catch {
       return null

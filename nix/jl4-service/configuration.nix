@@ -100,7 +100,7 @@
 
       StateDirectory = "jl4-service";
 
-      # Security (relaxed vs decision-service: needs writable store)
+      # Security (needs writable store)
       DynamicUser = true;
       NoNewPrivileges = true;
       ProtectSystem = "strict";

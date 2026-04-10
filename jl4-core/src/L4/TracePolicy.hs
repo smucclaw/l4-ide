@@ -107,8 +107,8 @@ replDefaultPolicy gvOpts = TracePolicy
   , evaltraceDirectiveTrace = CollectTrace (TraceOptions TextTrace Stdout gvOpts)
   }
 
--- | API default: Collect traces for EVALTRACE directives
--- The decision service uses #EVALTRACE when trace=full is requested,
+-- | API default: Collect traces for EVALTRACE directives.
+-- jl4-service uses #EVALTRACE when trace=full is requested,
 -- so we need to collect traces for those directives to enable GraphViz output.
 apiDefaultPolicy :: TracePolicy
 apiDefaultPolicy = TracePolicy
