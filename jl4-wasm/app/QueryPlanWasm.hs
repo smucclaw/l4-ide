@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 -- | Query plan computation for WASM.
 --
 -- This module bridges jl4-core's visualization pipeline with jl4-query-plan
@@ -22,6 +23,7 @@ import qualified L4.Viz.Ladder as Ladder
 import qualified L4.Viz.VizExpr as VizExpr
 import qualified L4.Decision.BooleanDecisionQuery as BDQ
 import qualified L4.Decision.QueryPlan as QP
+import L4.Decision.QueryPlan (CachedDecisionQuery(..), InputRef(..))
 
 #if defined(wasm32_HOST_ARCH)
 import GHC.Wasm.Prim (JSString(..), fromJSString, toJSString)

@@ -538,6 +538,32 @@ export class L4WasmBridge {
   }
 
   /**
+   * Compute query plan for a DECIDE function with boolean bindings.
+   * @param source - L4 source code
+   * @param uri - document URI
+   * @param functionName - the DECIDE function name
+   * @param bindingsJson - JSON object of {label: boolean} bindings
+   * @returns parsed QueryPlanResponse, or an error object
+   */
+  async queryPlan(
+    source: string,
+    uri: string,
+    functionName: string,
+    bindingsJson: string
+  ): Promise<unknown> {
+    if (!this.exports) {
+      throw new Error('WASM not initialized')
+    }
+    const json = await this.exports.l4_query_plan(
+      source,
+      uri,
+      functionName,
+      bindingsJson
+    )
+    return JSON.parse(json)
+  }
+
+  /**
    * Check if visualization is supported by this WASM module.
    * Always returns true now that the uuid dependency issue is resolved.
    */
