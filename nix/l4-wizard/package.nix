@@ -58,10 +58,6 @@ buildNpmPackage rec {
     npm run build
     popd
 
-    pushd ./vscode-webview-rpc
-    npm run build
-    popd
-
     pushd ./l4-highlight
     npm run build
     popd
