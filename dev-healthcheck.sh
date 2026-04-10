@@ -13,6 +13,7 @@ BOLD='\033[1m'
 # Configuration from environment or defaults
 WEBSESSIONS_PORT="${JL4_WEBSESSIONS_PORT:-8002}"
 LSP_PORT="${JL4_LSP_PORT:-8000}"
+SERVICE_PORT="${JL4_SERVICE_PORT:-8080}"
 WEB_IDE_PORT="${JL4_WEB_IDE_PORT:-5173}"
 TIMEOUT="${HEALTHCHECK_TIMEOUT:-5}"
 
@@ -64,6 +65,20 @@ check_lsp_server() {
     fi
 }
 
+check_jl4_service() {
+    local url="http://localhost:${SERVICE_PORT}/health"
+
+    if response=$(curl -s --max-time "$TIMEOUT" "$url" 2>&1); then
+        if echo "$response" | jq -e '.status == "healthy"' >/dev/null 2>&1; then
+            print_result "jl4-service" "OK" "port $SERVICE_PORT (/health responding)"
+        else
+            print_result "jl4-service" "FAIL" "port $SERVICE_PORT (unexpected /health response)"
+        fi
+    else
+        print_result "jl4-service" "FAIL" "port $SERVICE_PORT (not responding)"
+    fi
+}
+
 check_web_ide() {
     local url="http://localhost:${WEB_IDE_PORT}/"
 
@@ -88,6 +103,7 @@ print_footer() {
         echo
         echo "Services accessible at:"
         echo "  LSP:         ws://localhost:${LSP_PORT}"
+        echo "  jl4-service: http://localhost:${SERVICE_PORT}"
         echo "  Websessions: http://localhost:${WEBSESSIONS_PORT}"
         echo "  Web IDE:     http://localhost:${WEB_IDE_PORT}"
         return 0
@@ -97,7 +113,7 @@ print_footer() {
         echo "Troubleshooting:"
         echo "  1. Start services: ./dev-start.sh full --run"
         echo "  2. Check logs in /tmp/jl4-*.log"
-        echo "  3. Verify ports not in use: lsof -i :${WEBSESSIONS_PORT},${LSP_PORT},${WEB_IDE_PORT}"
+        echo "  3. Verify ports not in use: lsof -i :${WEBSESSIONS_PORT},${LSP_PORT},${SERVICE_PORT},${WEB_IDE_PORT}"
         return 1
     fi
 }
@@ -108,6 +124,7 @@ main() {
 
     # Run checks in order
     check_lsp_server
+    check_jl4_service
     check_websessions
     check_web_ide
 

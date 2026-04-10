@@ -23,6 +23,18 @@ services:
       - websessions-data:/data
       - cabal-cache:/root/.cabal
 
+  jl4-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.jl4-service
+      target: builder
+    command: |
+      sh -c "cd /build/jl4-service && cabal run jl4-service -- --port 8080 --store-path /data/store"
+    volumes:
+      - .:/build
+      - jl4-service-data:/data/store
+      - cabal-cache:/root/.cabal
+
   jl4-web:
     build:
       context: .
@@ -39,4 +51,6 @@ volumes:
   cabal-cache:
     driver: local
   websessions-data:
+    driver: local
+  jl4-service-data:
     driver: local
