@@ -1,4 +1,4 @@
--- Test file for automatic ASSUME-to-GIVEN conversion in decision service
+-- Test file for automatic ASSUME-to-GIVEN conversion in jl4-service
 -- When @export functions reference ASSUME declarations, those should be
 -- automatically exposed as API input parameters.
 

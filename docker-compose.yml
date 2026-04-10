@@ -16,35 +16,6 @@ services:
       retries: 5
     restart: unless-stopped
 
-  # Decision Service API
-  jl4-decision-service:
-    build:
-      context: .
-      dockerfile: Dockerfile.jl4-decision-service
-    container_name: jl4-decision-service
-    ports:
-      - "8001:8001"
-    volumes:
-      - ./jl4/examples:/app/examples:ro
-      - ./jl4/experiments:/app/experiments:ro
-      - ./doc/tutorial-code:/app/tutorial-code:ro
-    depends_on:
-      jl4-websessions:
-        condition: service_healthy
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "sh",
-          "-c",
-          "wget --spider http://localhost:8001/functions || exit 1",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    restart: unless-stopped
-
   # Websessions Service
   jl4-websessions:
     build:
@@ -76,8 +47,6 @@ services:
       jl4-lsp:
         condition: service_healthy
       jl4-websessions:
-        condition: service_healthy
-      jl4-decision-service:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--spider", "http://localhost:5173"]
