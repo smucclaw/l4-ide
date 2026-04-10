@@ -170,10 +170,10 @@ jobs:
 
       - name: Save cached build artifacts
         uses: actions/cache/save@v5
-        if: success()
+        if: success() && steps.build-cache.outputs.cache-hit != 'true'
         with:
           path: dist-newstyle
-          key: ${{ runner.os }}-ghc-${{ steps.setup.outputs.ghc-version }}-dist-${{ hashFiles('**/*.hs', '**/*.cabal') }}
+          key: ${{ steps.build-cache.outputs.cache-primary-key }}
 
       - name: Run tests
         run: cabal test all
