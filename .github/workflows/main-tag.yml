@@ -74,7 +74,7 @@ jobs:
           ls -lh bin/darwin-arm64/
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: jl4-lsp-darwin-arm64
           path: bin/darwin-arm64/jl4-lsp
@@ -138,7 +138,7 @@ jobs:
           ls -lh bin/win32-x64/
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: jl4-lsp-win32-x64
           path: bin/win32-x64/
@@ -217,14 +217,14 @@ jobs:
           ls -lh bin/linux-x64/
 
       - name: Upload LSP binary artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: jl4-lsp-linux-x64
           path: bin/linux-x64/jl4-lsp
           retention-days: 90
 
       - name: Upload jl4-service artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: jl4-service-linux-x64
           path: |
@@ -296,7 +296,7 @@ jobs:
           ls -lh bin/linux-arm64/
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: jl4-lsp-linux-arm64
           path: bin/linux-arm64/jl4-lsp
@@ -380,7 +380,7 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Upload WASM artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: jl4-wasm-${{ steps.prepare-artifacts.outputs.version }}
           path: wasm-artifacts/
@@ -462,7 +462,7 @@ jobs:
           npx vsce package --target ${{ matrix.target }} --no-dependencies -o l4-vscode-${{ matrix.target }}-${{ env.PACKAGE_VERSION }}.vsix
 
       - name: Upload VSIX artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: l4-vscode-${{ matrix.target }}-${{ env.PACKAGE_VERSION }}
           path: ts-apps/vscode/*.vsix
@@ -533,7 +533,7 @@ jobs:
           npx vsce package --no-dependencies -o l4-vscode-all-platforms-${{ env.PACKAGE_VERSION }}.vsix
 
       - name: Upload VSIX artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: l4-vscode-all-platforms-${{ env.PACKAGE_VERSION }}
           path: ts-apps/vscode/*.vsix
@@ -577,7 +577,7 @@ jobs:
           npx vsce package --no-dependencies -o l4-vscode-universal-${{ env.PACKAGE_VERSION }}.vsix
 
       - name: Upload VSIX artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: l4-vscode-universal-${{ env.PACKAGE_VERSION }}
           path: ts-apps/vscode/*.vsix

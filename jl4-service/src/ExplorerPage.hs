@@ -187,7 +187,7 @@ renderExplorerPageBS registry = LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text
   -- Deploy
   , "  <div class=\"info collapsed\">"
   , "    <h3>Deploying L4 rules</h3>"
-  , "    <p class=\"note info-desc\">Upload zip archives (bundles) of <code>.l4</code> files to create or update deployments.</p>"
+  , "    <p class=\"note info-desc\">Use the L4 VS Code Extension or upload zip archives (bundles) of <code>.l4</code> files to create or update deployments directly.</p>"
   , "    <div class=\"info-body\">"
   , "    <div class=\"note\">"
   , "      <dl>"
