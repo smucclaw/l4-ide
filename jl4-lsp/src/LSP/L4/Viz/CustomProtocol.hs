@@ -9,6 +9,7 @@ module LSP.L4.Viz.CustomProtocol where
 
 import qualified Base.Text as T
 import Data.Aeson (FromJSON(..), ToJSON(..), object, (.:), (.=), withObject)
+import Data.Map (Map)
 import GHC.Generics (Generic)
 import Data.Proxy (Proxy(..))
 import GHC.TypeLits  (Symbol, KnownSymbol, symbolVal)
@@ -68,6 +69,20 @@ newtype InlineExprsResult = MkInlineExprsResult RenderAsLadderInfo
   deriving newtype (FromJSON, ToJSON)
 
 ------------------------------------------------------
+-- l4/queryPlan Request Params
+------------------------------------------------------
+
+-- | Payload / params for QueryPlanRequest.
+--   The response uses 'L4.Decision.QueryPlan.QueryPlanResponse' directly.
+data QueryPlanRequestParams = QueryPlanRequestParams
+  { fnName   :: T.Text
+  , bindings :: Map T.Text Bool
+  , verDocId :: LSP.VersionedTextDocumentIdentifier
+  }
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (FromJSON, ToJSON)
+
+------------------------------------------------------
 --  Custom methods for LSP
 ------------------------------------------------------
 
@@ -76,6 +91,9 @@ type EvalAppMethodName = "l4/evalApp"
 
 type InlineExprsMethodName :: Symbol
 type InlineExprsMethodName = "l4/inlineExprs"
+
+type QueryPlanMethodName :: Symbol
+type QueryPlanMethodName = "l4/queryPlan"
 
 ------------------------------------------------------
 --  CustomMethod typeclass
@@ -87,14 +105,16 @@ class KnownSymbol a => CustomMethod (a :: Symbol) where
 
 instance CustomMethod EvalAppMethodName
 instance CustomMethod InlineExprsMethodName
+instance CustomMethod QueryPlanMethodName
 
 ------------------------------------------------------
 --  LadderRequestParams typeclass
 ------------------------------------------------------
 
-class (GHC.Records.HasField "verDocId" params VersionedTextDocumentIdentifier, 
-       FromJSON params) 
+class (GHC.Records.HasField "verDocId" params VersionedTextDocumentIdentifier,
+       FromJSON params)
       => LadderRequestParams params
-  
+
 instance LadderRequestParams EvalAppRequestParams
 instance LadderRequestParams InlineExprsRequestParams
+instance LadderRequestParams QueryPlanRequestParams

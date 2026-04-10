@@ -22,10 +22,6 @@ interface ImportMetaEnv {
   readonly VITE_PREFER_WASM?: string
   /** Session persistence service URL */
   readonly VITE_SESSION_URL?: string
-  /** Decision service URL */
-  readonly VITE_DECISION_SERVICE_URL?: string
-  /** Wizard application URL */
-  readonly VITE_WIZARD_URL?: string
 }
 
 interface ImportMeta {

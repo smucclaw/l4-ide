@@ -75,12 +75,6 @@
             "default": "",
             "markdownDescription": "Path to the `jl4-lsp` executable. Leave empty to use the bundled binary or find `jl4-lsp` on your PATH."
           },
-          "jl4.decisionServiceUrl": {
-            "scope": "resource",
-            "type": "string",
-            "default": "http://localhost:8001",
-            "description": "Base URL for jl4-decision-service (used for query planning)"
-          },
           "jl4.trace.server": {
             "scope": "resource",
             "type": "string",
@@ -164,7 +158,6 @@
   "prettier": "@repo/prettier-config",
   "dependencies": {
     "@repo/viz-expr": "*",
-    "@repo/vscode-webview-rpc": "*",
     "@repo/webview": "*",
     "jl4-client-rpc": "*",
     "minimatch": "^10.0.1",
@@ -179,7 +172,7 @@
     "@repo/prettier-config": "*",
     "@types/fs-extra": "^11.0.4",
     "@types/minimatch": "^5.1.2",
-    "@types/node": "^20.11",
+    "@types/node": "^24.0.0",
     "@types/vscode": "^1.94.0",
     "@typescript-eslint/eslint-plugin": "^8.18.0",
     "@typescript-eslint/parser": "^8.18.0",
@@ -187,7 +180,7 @@
     "@vscode/test-electron": "^2.4.1",
     "@vscode/vsce": "^3.6.0",
     "babel-loader": "^9.2.1",
-    "esbuild": "^0.24.2",
+    "esbuild": "^0.25.0",
     "eslint": "^9.17.0",
     "eslint-config-prettier": "^9.1.0",
     "fs-extra": "^11.2.0",

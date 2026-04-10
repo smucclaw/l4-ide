@@ -1,11 +1,11 @@
--- Test file for implicit ASSUME extraction in decision service
+-- Test file for implicit ASSUME extraction in jl4-service
 --
 -- This file tests the "dynamic mode" where undeclared variables with
 -- type-inferred types are automatically exposed as API parameters.
 --
 -- Expected behavior:
 -- - IDE shows red error for undeclared `temperature` and `approved`
--- - Decision service still generates valid function schema
+-- - jl4-service still generates valid function schema
 -- - Schema includes all three parameter types:
 --   1. GIVEN parameters (threshold)
 --   2. Explicit ASSUME parameters (humidity)

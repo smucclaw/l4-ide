@@ -46,7 +46,6 @@ library
   exposed-modules:
     Application
     Backend.Api
-    Backend.BooleanDecisionQuery
     Backend.CodeGen
     Backend.DecisionQueryPlan
     Backend.DirectiveFilter
@@ -129,6 +128,7 @@ test-suite jl4-service-test
     DecisionQueryCacheKeySpec
     IntegrationSpec
     MaybeLiftSpec
+    QueryPlanSpec
     SchemaSpec
     SanitizationSpec
     SerialisationSpec
@@ -150,7 +150,10 @@ test-suite jl4-service-test
     http-client,
     http-types,
     jl4-core,
+    jl4-lsp,
+    jl4-query-plan,
     jl4-service,
+    lsp-types,
     QuickCheck,
     quickcheck-instances,
     serialise,

@@ -19,6 +19,9 @@ module LSP.L4.Viz.Ladder (
   getAtomInputRefs,
   getVizConfig,
 
+  -- * Conversion
+  V.fromLspVerDocId,
+
   -- * Other helpers
   prettyPrintVizError
   ) where
@@ -30,18 +33,13 @@ import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
 import qualified Data.Set as Set
 import qualified Data.List.NonEmpty as NE
-import qualified Data.List as List
 import Optics.State.Operators ((<%=), (%=))
 import Optics
 import Control.Monad.Extra (unlessM)
 import qualified Language.LSP.Protocol.Types as LSP
-import qualified Data.UUID as UUID
-import qualified Data.UUID.V5 as UUIDV5
-import qualified Data.ByteString as BS
-import qualified Data.Text as Text
-import qualified Data.Text.Encoding as TextEncoding
 
 import qualified L4.TypeCheck as TC
+import L4.Viz.Ladder (InputRef(..), generateAtomId)
 import L4.Annotation
 import L4.Syntax
 import L4.Print (prettyLayout)
@@ -68,12 +66,12 @@ newtype Viz a = MkViz {getViz :: VizEnv -> VizState -> (Either VizError a, VizSt
 newtype VizEnv = MkVizEnv { localDecls :: [LocalDecl Resolved]}
 
 mkVizConfig :: LSP.VersionedTextDocumentIdentifier -> Module Resolved -> TC.Substitution -> Bool -> VizConfig
-mkVizConfig verTxtDocId module' substitution shouldSimplify =
-  let moduleUri = toNormalizedUri verTxtDocId._uri
+mkVizConfig lspVerDocId module' substitution shouldSimplify =
+  let moduleUri = toNormalizedUri lspVerDocId._uri
   in MkVizConfig
     { moduleUri
     , module'
-    , verTxtDocId
+    , verDocId = V.fromLspVerDocId lspVerDocId
     , substitution
     , shouldSimplify
     }
@@ -81,9 +79,9 @@ mkVizConfig verTxtDocId module' substitution shouldSimplify =
 data VizConfig = MkVizConfig
   { moduleUri      :: !NormalizedUri
   , module'        :: Module Resolved
-  , verTxtDocId    :: !LSP.VersionedTextDocumentIdentifier
-  , substitution   :: !TC.Substitution  -- might be more futureproof to use TypeCheckResult
-  , shouldSimplify :: !Bool             -- ^ whether to simplify the expression
+  , verDocId       :: !V.VersionedDocId
+  , substitution   :: !TC.Substitution
+  , shouldSimplify :: !Bool
   }
   deriving stock (Show, Generic, Eq)
 
@@ -131,10 +129,10 @@ mkInitialVizState cfg =
 getVizCfg :: Viz VizConfig
 getVizCfg = use #cfg
 
-getVerTxtDocId :: Viz LSP.VersionedTextDocumentIdentifier
-getVerTxtDocId = do
+getVerDocId :: Viz V.VersionedDocId
+getVerDocId = do
   cfg <- getVizCfg
-  pure cfg.verTxtDocId
+  pure cfg.verDocId
 
 getExpandedType :: Type' Resolved -> Viz (Type' Resolved)
 getExpandedType ty = do
@@ -176,11 +174,6 @@ recordAtomDeps :: V.Unique -> IntSet -> Viz ()
 recordAtomDeps uniq deps =
   #atomDeps %= Map.insertWith (<>) uniq deps
 
-data InputRef = MkInputRef
-  { rootUnique :: !Int
-  , path :: ![Text]
-  }
-  deriving stock (Eq, Ord, Show, Generic)
 
 recordAtomInputRefs :: V.Unique -> Set InputRef -> Viz ()
 recordAtomInputRefs uniq refs = do
@@ -288,7 +281,7 @@ doVisualize decide cfg =
     initialVizState = mkInitialVizState cfg
 
 vizProgram :: Decide Resolved -> Viz RenderAsLadderInfo
-vizProgram decide = MkRenderAsLadderInfo <$> getVerTxtDocId <*> translateDecide decide
+vizProgram decide = MkRenderAsLadderInfo <$> getVerDocId <*> translateDecide decide
 
 ------------------------------------------------------
 -- translateDecide, translateExpr
@@ -481,35 +474,6 @@ mkVizNameWith printer (getUniqueName -> (MkUnique {unique}, name)) =
 ------------------------------------------------------
 -- AtomId generation
 ------------------------------------------------------
-
--- | Generate a stable UUIDv5-based atomId from function name, label, and input refs.
--- This matches the algorithm used in jl4-query-plan/src/L4/Decision/QueryPlan.hs
-generateAtomId :: Text -> Text -> Set InputRef -> Text
-generateAtomId functionName label refs =
-  let
-    renderInputRef :: InputRef -> Text
-    renderInputRef ref =
-      let
-        rootTxt = Text.pack (show ref.rootUnique)
-        pathTxt =
-          case ref.path of
-            [] -> ""
-            xs -> "." <> Text.intercalate "." xs
-       in rootTxt <> pathTxt
-
-    sortedRefs =
-      List.sort
-        [ renderInputRef ref
-        | ref <- Set.toList refs
-        ]
-
-    canonical =
-      Text.intercalate
-        "|"
-        ( [functionName, label]
-            <> ["refs=" <> Text.intercalate ";" sortedRefs | not (null sortedRefs)]
-        )
-   in UUID.toText (UUIDV5.generateNamed UUIDV5.namespaceURL (BS.unpack (TextEncoding.encodeUtf8 canonical)))
 
 ------------------------------------------------------
 -- Crude dependency tracking

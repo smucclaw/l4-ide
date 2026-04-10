@@ -55,7 +55,7 @@ Build on your foundation with advanced patterns, real-world applications, and pr
 
 1. Foundation: Modules 0-4
 2. Advanced: Module A1 (VSCode Workflow)
-3. Advanced: Module A4 (Decision Services)
+3. Advanced: Module A4 (Production Patterns)
 4. Advanced: Module A6-A8 (Integration and Architecture)
 
 ### For Legal Engineers

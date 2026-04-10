@@ -35,9 +35,16 @@ executable jl4-wasm
   hs-source-dirs: app
   main-is: Main.hs
 
+  other-modules:
+    QueryPlanWasm
+
   build-depends:
+    aeson,
     base,
+    bytestring,
+    containers,
     jl4-core,
+    jl4-query-plan,
     text
 
   -- For WASM JavaScript FFI

@@ -507,6 +507,15 @@ abstract class BaseLadderGraphLirNode
     this.getRegistry().publish(context, this.getId())
   }
 
+  /** Reset every binding to UnknownVal and re-evaluate. */
+  async resetBindings(context: LirContext) {
+    for (const [unique] of this.#bindings.getEntries()) {
+      this.#bindings.set(unique, new UnknownVal())
+    }
+    await this.doEvalLadderExprWithVarBindings(context)
+    this.getRegistry().publish(context, this.getId())
+  }
+
   /*************************************
          Result
   **************************************/

@@ -11,31 +11,13 @@ services:
       - .:/build
       - cabal-cache:/root/.cabal
 
-  jl4-decision-service:
-    build:
-      context: .
-      dockerfile: Dockerfile.jl4-decision-service
-      target: builder
-    command: |
-      sh -c "cd /build/jl4-decision-service && cabal run jl4-decision-service-exe -- \
-        --port 8001 \
-        --serverName http://localhost:8001 \
-        --sourcePaths /build/jl4/experiments/britishcitizen5.l4 \
-        --sourcePaths /build/jl4/experiments/parking.l4 \
-        --sourcePaths /build/jl4/experiments/thailand-cosmetics \
-        --crudServerName jl4-websessions \
-        --crudServerPort 8002"
-    volumes:
-      - .:/build
-      - cabal-cache:/root/.cabal
-
   jl4-websessions:
     build:
       context: .
       dockerfile: Dockerfile.jl4-websessions
       target: builder
     command: |
-      sh -c "cd /build/jl4-websessions && cabal run jl4-websessions -- 8002 /data/sessions.db http://jl4-decision-service:8001"
+      sh -c "cd /build/jl4-websessions && cabal run jl4-websessions -- 8002 /data/sessions.db"
     volumes:
       - .:/build
       - websessions-data:/data

@@ -152,7 +152,7 @@ defaultMain = do
     [("port", toJSON port)]
   runSettings settings (middleware $ app env)
 
--- | CORS middleware — same policy as jl4-decision-service.
+-- | CORS middleware — allows all origins for development.
 corsMiddleware :: Middleware
 corsMiddleware = cors (const $ Just simpleCorsResourcePolicy
   { corsMethods = ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"]

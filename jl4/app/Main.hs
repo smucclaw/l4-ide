@@ -72,7 +72,7 @@ parseBatchInput fmt bytes = case Text.toLower fmt of
   _ -> Left $ "Unsupported format: " ++ Text.unpack fmt
 
 ----------------------------------------------------------------------------
--- Wrapper code generation (adapted from jl4-decision-service/Backend/CodeGen.hs)
+-- Wrapper code generation
 ----------------------------------------------------------------------------
 
 -- | Generate L4 wrapper code for JSONDECODE-based batch evaluation

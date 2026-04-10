@@ -20,7 +20,7 @@ module Backend.DecisionQueryPlan (
 ) where
 
 import Base
-import qualified Backend.BooleanDecisionQuery as BDQ
+import qualified L4.Decision.BooleanDecisionQuery as BDQ
 import L4.FunctionSchema (Parameter (..), Parameters (..), parametersFromDecideWithErrors)
 import Backend.Jl4 (CompiledModule (..))
 import Data.Aeson (FromJSON, ToJSON, (.=), object)
@@ -41,6 +41,7 @@ import qualified Data.UUID.V5 as UUIDV5
 
 import qualified LSP.L4.Viz.Ladder as LadderViz
 import qualified LSP.L4.Viz.VizExpr as VizExpr
+import LSP.L4.Viz.QueryPlan (vizExprToBoolExpr)
 import qualified Language.LSP.Protocol.Types as LSP
 
 import Backend.Api (FnArguments (..), FnLiteral (..))
@@ -61,7 +62,6 @@ data QueryAsk = QueryAsk
   , label :: !Text
   , score :: !Double
   , atoms :: ![QueryAtom]
-  , schema :: !(Maybe Parameter)
   }
   deriving stock (Show, Generic)
   deriving anyclass (FromJSON)
@@ -79,8 +79,7 @@ instance ToJSON QueryAsk where
     , "path" .= qa.path
     , "label" .= stripBackticks qa.label
     , "score" .= qa.score
-    , "atoms" .= qa.atoms  -- QueryAtom has its own ToJSON that strips backticks
-    , "schema" .= qa.schema
+    , "atoms" .= qa.atoms
     ]
 
 data PathSortKey
@@ -212,35 +211,6 @@ mkVerDocId fileName =
     , _version = 1
     }
 
-vizExprToBoolExpr ::
-  VizExpr.IRExpr ->
-  (BDQ.BoolExpr Int, Map Int Text, [Int])
-vizExprToBoolExpr expr =
-  let (e, labels, order0) = go expr
-   in (e, labels, List.nub order0)
- where
-  go :: VizExpr.IRExpr -> (BDQ.BoolExpr Int, Map Int Text, [Int])
-  go = \case
-    VizExpr.TrueE _ _ -> (BDQ.BTrue, Map.empty, [])
-    VizExpr.FalseE _ _ -> (BDQ.BFalse, Map.empty, [])
-    VizExpr.UBoolVar _ nm _ _ _ ->
-      let u = nm.unique
-       in (BDQ.BVar u, Map.singleton u nm.label, [u])
-    VizExpr.App _ nm _args _ ->
-      let u = nm.unique
-       in (BDQ.BVar u, Map.singleton u nm.label, [u])
-    VizExpr.Not _ x ->
-      let (ex, m, o) = go x
-       in (BDQ.BNot ex, m, o)
-    VizExpr.And _ xs ->
-      let (es, ms, os) = unzip3 (map go xs)
-       in (BDQ.BAnd es, Map.unions ms, concat os)
-    VizExpr.Or _ xs ->
-      let (es, ms, os) = unzip3 (map go xs)
-       in (BDQ.BOr es, Map.unions ms, concat os)
-    -- Inert elements evaluate to identity for their context: AND→True, OR→False
-    VizExpr.InertE _ _ VizExpr.InertAnd -> (BDQ.BTrue, Map.empty, [])
-    VizExpr.InertE _ _ VizExpr.InertOr -> (BDQ.BFalse, Map.empty, [])
 
 data QueryPlanResponse = QueryPlanResponse
   { determined :: !(Maybe Bool)
@@ -289,49 +259,6 @@ queryPlan name cached args =
     QP.QueryPlanResponse{determined, stillNeeded, ranked, inputs, asks = asksRanked, impact, impactByAtomId, note} =
       QP.queryPlan name paramsByUnique cached.core flattenedLabelBindings
 
-    askSchemaFor :: QP.QueryAsk -> Maybe Parameter
-    askSchemaFor qa = do
-      root <- Map.lookup qa.container cached.paramSchema.parameterMap
-      schemaAtPathVariants root qa.path
-
-    schemaAtPathVariants :: Parameter -> [Text] -> Maybe Parameter
-    schemaAtPathVariants root segs =
-      let
-        splitSegments =
-          concatMap
-            (\s -> filter (not . Text.null) (Text.splitOn "." s))
-            segs
-        variants = List.nub [segs, splitSegments]
-       in
-        listToMaybe (mapMaybe (schemaAtPath root) variants)
-
-    schemaAtPath :: Parameter -> [Text] -> Maybe Parameter
-    schemaAtPath p0 = \case
-      [] -> Just p0
-      segs@(seg : rest) ->
-        let
-          descendItems =
-            p0.parameterItems
-         in
-          case seg of
-            "*" -> descendItems >>= \p1 -> schemaAtPath p1 rest
-            "[]" -> descendItems >>= \p1 -> schemaAtPath p1 rest
-            _ | Text.all Char.isDigit seg -> descendItems >>= \p1 -> schemaAtPath p1 rest
-            _ ->
-              p0.parameterProperties >>= \props ->
-                consumeProperty props segs >>= \(p1, rest') ->
-                  schemaAtPath p1 rest'
-
-    consumeProperty :: Map Text Parameter -> [Text] -> Maybe (Parameter, [Text])
-    consumeProperty props segs =
-      let
-        n = length segs
-        tryLen k =
-          let key0 = Text.intercalate "." (take k segs)
-           in (,drop k segs) <$> Map.lookup key0 props
-       in
-        listToMaybe (mapMaybe tryLen [n, n - 1 .. 1])
-
     asksEnriched =
       [ QueryAsk
           { container = a.container
@@ -340,7 +267,6 @@ queryPlan name cached args =
           , label = a.label
           , score = a.score
           , atoms = a.atoms
-          , schema = askSchemaFor a
           }
       | a <- asksRanked
       ]

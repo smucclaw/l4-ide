@@ -182,8 +182,7 @@ data FunctionDeclaration = FunctionDeclaration
   }
 
 -- | GraphViz DOT source for trace visualization.
--- Unlike jl4-decision-service, PNG/SVG rendering is not supported;
--- only the raw DOT text is returned.
+-- Only raw DOT text is returned; clients render it themselves.
 newtype GraphVizResponse = GraphVizResponse
   { dot :: Text
     -- ^ Raw DOT text for callers who want to render or post-process traces themselves.

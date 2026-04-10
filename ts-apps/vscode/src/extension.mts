@@ -20,7 +20,6 @@ import { RenderAsLadderInfo, VersionedDocId } from '@repo/viz-expr'
 import { Schema } from 'effect'
 import type { WebviewTypeMessageParticipant } from 'vscode-messenger-common'
 import { Messenger } from 'vscode-messenger'
-import { DecisionServiceQueryPlanRequest } from '@repo/vscode-webview-rpc'
 import {
   RenderAsLadder,
   WebviewFrontendIsReadyNotification,
@@ -32,11 +31,6 @@ import {
   type DirectiveResult,
   type SrcPos,
 } from 'jl4-client-rpc'
-import {
-  fetchQueryPlan,
-  upsertFunctionFromSource,
-  type DecisionServiceClient,
-} from './decision-service-client.js'
 import { cmdRenderResult } from './commands.js'
 import {
   SidebarProvider,
@@ -89,10 +83,6 @@ function initializeWebviewMessenger(
 ) {
   /** Messenger for VSCode extension to communicate with webview */
   const webviewMessenger = new Messenger({ debugLog: true })
-  const lastUpsertByDocUri = new Map<
-    string,
-    { version: number; fnName: string }
-  >()
 
   // Set up listeners
   // -- Listen for whether webview frontend has initialized
@@ -102,6 +92,8 @@ function initializeWebviewMessenger(
   })
 
   // -- Listen for LSP client relay requests from webview
+  // This generic relay handles all custom LSP requests from the webview,
+  // including l4/queryPlan, l4/evalApp, l4/inlineExprs, etc.
   webviewMessenger.onRequest(
     makeLspRelayRequestType<object, unknown>(),
     async (clientReqParams) => {
@@ -119,41 +111,6 @@ function initializeWebviewMessenger(
         '--------------------------------------------------'
       )
       return response
-    }
-  )
-
-  // -- Listen for decision-service query-plan requests from webview
-  webviewMessenger.onRequest(
-    DecisionServiceQueryPlanRequest,
-    async (params) => {
-      const decisionServiceUrl: string =
-        workspace.getConfiguration('jl4').get('decisionServiceUrl') ??
-        'http://localhost:8001'
-      const client: DecisionServiceClient = { baseUrl: decisionServiceUrl }
-
-      const docUri = vscode.Uri.parse(params.docUri)
-      const existing = vscode.workspace.textDocuments.find(
-        (d) => d.uri.toString() === params.docUri
-      )
-      const doc = existing ?? (await vscode.workspace.openTextDocument(docUri))
-
-      const prev = lastUpsertByDocUri.get(params.docUri)
-      if (
-        !prev ||
-        prev.version !== doc.version ||
-        prev.fnName !== params.fnName
-      ) {
-        outputChannel.appendLine(
-          `Ext: upserting decision-service function ${params.fnName} from ${params.docUri} v${doc.version}`
-        )
-        await upsertFunctionFromSource(client, params.fnName, doc.getText())
-        lastUpsertByDocUri.set(params.docUri, {
-          version: doc.version,
-          fnName: params.fnName,
-        })
-      }
-
-      return await fetchQueryPlan(client, params.fnName, params.bindings)
     }
   )
 

@@ -4,7 +4,6 @@ packages:
   ./jl4-query-plan
   ./jl4-lsp
   ./jl4-repl
-  ./jl4-decision-service
   ./jl4-websessions
   ./jl4-actus-analyzer
   ./jl4-service

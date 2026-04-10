@@ -52,6 +52,7 @@ import LSP.Core.Types.Location
 import qualified LSP.L4.Viz.Ladder as Ladder
 import qualified LSP.L4.Viz.CustomProtocol as Ladder
 import LSP.L4.Viz.CustomProtocol (LadderRequestParams)
+import qualified LSP.L4.Viz.QueryPlan as VizQueryPlan
 import LSP.Logger
 import qualified Language.LSP.Protocol.Lens as J
 import Language.LSP.Protocol.Message
@@ -709,6 +710,28 @@ handlers evalConfig recorder =
                     , Ladder.prettyPrintVizError vizError
                     ]
 
+    , requestHandler (SMethod_CustomMethod (Proxy @Ladder.QueryPlanMethodName)) $ \ide params ->
+        liftIO $ runVizHandlerM $ withVizRequestContext recorder (Proxy @Ladder.QueryPlanMethodName) params ide $
+          \(qpParams :: Ladder.QueryPlanRequestParams) _tcRes recentViz -> do
+            let vizConfig = Ladder.getVizConfig recentViz.vizState
+            MkVizHandler $
+              case Ladder.doVisualize recentViz.decide vizConfig of
+                Right (vizProgramInfo, vizState) ->
+                  let paramsByUnique =
+                        VizQueryPlan.buildParamsByUnique vizProgramInfo
+                      flatBindings = Map.toList qpParams.bindings
+                      result = VizQueryPlan.queryPlanFromLadder qpParams.fnName paramsByUnique vizProgramInfo vizState flatBindings
+                  in do
+                    logWith recorder Debug $
+                      LogHandlingCustomRequest qpParams.verDocId._uri
+                        ("Query plan for: " <> qpParams.fnName)
+                    pure $ Aeson.toJSON result
+                Left vizError ->
+                  defaultResponseError $ Text.unlines
+                    [ "Could not compute query plan:"
+                    , Ladder.prettyPrintVizError vizError
+                    ]
+
     , requestHandler (SMethod_CustomMethod (Proxy @Inspector.EvalDirectiveResultMethodName)) $ \ide params -> do
         let parseParams :: Aeson.Value -> Maybe Inspector.EvalDirectiveResultParams
             parseParams v = case Aeson.fromJSON v of
@@ -1033,12 +1056,13 @@ checkVizVersion
   -> VizHandler method ()
 checkVizVersion reqParams recentViz = do
   let vizConfig = Ladder.getVizConfig . (.vizState) $ recentViz
-  if reqParams.verDocId == vizConfig.verTxtDocId
+      clientVerDocId = Ladder.fromLspVerDocId reqParams.verDocId
+  if clientVerDocId == vizConfig.verDocId
     then pure ()
     else throwError $ TResponseError
       { _code = InL LSPErrorCodes_ContentModified
-      , _message = "Document version mismatch. Visualizer version: " <> Text.textShow (reqParams.verDocId)._version <>
-          ", whereas server's version is: " <> Text.textShow vizConfig.verTxtDocId._version
+      , _message = "Document version mismatch. Client version: " <> Text.textShow (reqParams.verDocId)._version <>
+          ", server version: " <> Text.textShow clientVerDocId
       , _xdata = Nothing
       }
       -- TODO: Have the client update accordingly when it gets this error code,

@@ -1,6 +1,6 @@
 module BooleanDecisionQuerySpec (spec) where
 
-import Backend.BooleanDecisionQuery
+import L4.Decision.BooleanDecisionQuery
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import Test.Hspec

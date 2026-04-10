@@ -47,8 +47,6 @@ library
     L4.Decision.QueryPlan
   build-depends:
     aeson,
-    bytestring,
     containers,
     jl4-core,
-    text,
-    uuid
+    text

@@ -254,6 +254,9 @@ export class WasmLspHandler {
       case 'l4/evalDirectiveResult':
         return this.handleEvalDirectiveResult(params)
 
+      case 'l4/queryPlan':
+        return this.handleQueryPlan(params)
+
       case 'workspace/executeCommand':
         return this.handleExecuteCommand(params)
 
@@ -516,6 +519,35 @@ export class WasmLspHandler {
       }))
     } catch {
       return []
+    }
+  }
+
+  /**
+   * Handle l4/queryPlan request.
+   * Computes the query plan for elicitation ordering in the ladder visualizer.
+   */
+  private async handleQueryPlan(params: unknown): Promise<unknown> {
+    const p = params as {
+      fnName: string
+      bindings: Record<string, boolean>
+      verDocId: { uri: string; version: number }
+    }
+    const uri = p.verDocId.uri
+    const content = this.documentContents.get(uri)
+    if (!content) return null
+
+    try {
+      const bindingsJson = JSON.stringify(p.bindings)
+      const result = (await this.bridge.queryPlan(
+        content,
+        uri,
+        p.fnName,
+        bindingsJson
+      )) as { error?: string } | null
+      if (!result || result.error) return null
+      return result
+    } catch {
+      return null
     }
   }
 

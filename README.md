@@ -222,7 +222,7 @@ Production-grade L4 development for enterprise systems. Covers professional work
 - **Module A1**: VSCode Development Workflow
 - **Module A2**: AI-Assisted Rule Ingestion
 - **Module A3**: Temporal Logic [WIP]
-- **Module A4**: Decision Service APIs
+- **Module A4**: Production Patterns
 - **Module A5**: Rebuttable Presumptions [ROADMAP]
 - **Module A6**: JSON Integration & External Systems
 - **Module A7**: Regression Testing & Change Control

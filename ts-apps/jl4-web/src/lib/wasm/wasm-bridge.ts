@@ -122,6 +122,21 @@ export interface L4WasmExports {
   l4_references(source: string, line: number, col: number): Promise<string>
 
   /**
+   * Compute query plan for a DECIDE function with boolean bindings.
+   * @param source - L4 source code
+   * @param uri - document URI
+   * @param functionName - the DECIDE function name
+   * @param bindingsJson - JSON object of {label: boolean} bindings
+   * @returns JSON-encoded QueryPlanResponse or error object
+   */
+  l4_query_plan(
+    source: string,
+    uri: string,
+    functionName: string,
+    bindingsJson: string
+  ): Promise<string>
+
+  /**
    * Initialize the WASI reactor (and Haskell RTS).
    * Must be called before any other exported functions.
    */
@@ -519,6 +534,32 @@ export class L4WasmBridge {
       throw new Error('WASM not initialized')
     }
     const json = await this.exports.l4_references(source, line, col)
+    return JSON.parse(json)
+  }
+
+  /**
+   * Compute query plan for a DECIDE function with boolean bindings.
+   * @param source - L4 source code
+   * @param uri - document URI
+   * @param functionName - the DECIDE function name
+   * @param bindingsJson - JSON object of {label: boolean} bindings
+   * @returns parsed QueryPlanResponse, or an error object
+   */
+  async queryPlan(
+    source: string,
+    uri: string,
+    functionName: string,
+    bindingsJson: string
+  ): Promise<unknown> {
+    if (!this.exports) {
+      throw new Error('WASM not initialized')
+    }
+    const json = await this.exports.l4_query_plan(
+      source,
+      uri,
+      functionName,
+      bindingsJson
+    )
     return JSON.parse(json)
   }
 

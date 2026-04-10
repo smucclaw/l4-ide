@@ -19,7 +19,6 @@ import qualified L4.Decision.BooleanDecisionQuery as BDQ
 import Control.Applicative ((<|>))
 import Data.Aeson (FromJSON, ToJSON, (.=), object)
 import qualified Data.Aeson as Aeson
-import qualified Data.ByteString as BS
 import qualified Data.IntMap.Lazy as IntMap
 import Data.IntMap.Lazy (IntMap)
 import qualified Data.IntSet as IntSet
@@ -33,8 +32,7 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import Text.Read (readMaybe)
 
-import qualified Data.UUID as UUID
-import qualified Data.UUID.V5 as UUIDV5
+import qualified L4.Crypto.UUID5 as UUID5
 
 inputRefsClosureByUnique :: CachedDecisionQuery -> IntMap (Set InputRef)
 inputRefsClosureByUnique cached =
@@ -226,7 +224,7 @@ atomIdByUnique name paramsByUnique cached =
             ( [name, lbl]
                 <> ["refs=" <> Text.intercalate ";" refs | not (null refs)]
             )
-       in UUID.toText (UUIDV5.generateNamed UUIDV5.namespaceURL (BS.unpack (Text.encodeUtf8 canonical)))
+       in UUID5.toText (UUID5.generateNamed UUID5.namespaceURL (Text.encodeUtf8 canonical))
    in
     Map.fromList
       [ (u, stableAtomId u lbl)

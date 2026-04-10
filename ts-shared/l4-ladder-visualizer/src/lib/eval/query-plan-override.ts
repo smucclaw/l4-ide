@@ -1,5 +1,4 @@
-import type { QueryPlanResponse } from '@repo/decision-service-types'
-import { schemaSummary } from '@repo/decision-service-types'
+import type { QueryPlanResponse } from 'jl4-client-rpc'
 import type { LirContext } from '@repo/layout-ir'
 import type { Unique } from '@repo/viz-expr'
 import type { ElicitationAsk, PartialEvalAnalysis } from './partial-eval.js'
@@ -71,7 +70,7 @@ export function elicitationOverrideFromQueryPlan(
           container: ask.container,
           path: ask.path,
           label: ask.label,
-          schemaSummary: schemaSummary(ask.schema),
+          schemaSummary: null,
         })
       }
     }
