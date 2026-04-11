@@ -7,6 +7,7 @@
 module Main where
 
 import Control.Applicative ((<|>))
+import GHC.IO.Encoding (setLocaleEncoding, utf8)
 import Options.Applicative
   ( Parser
   , ParserInfo
@@ -23,6 +24,7 @@ import Options.Applicative
   , subparser
   )
 import qualified Options.Applicative as Options
+import System.IO (hSetEncoding, stdin, stdout, stderr)
 
 import L4.Cli.Ast (AstOptions, astCmd, astOptionsParser)
 import L4.Cli.Batch (BatchOptions, batchCmd, batchOptionsParser)
@@ -85,6 +87,26 @@ commandInfo = info (helper <*> commandParser)
 
 main :: IO ()
 main = do
+  -- Force UTF-8 everywhere. On Windows, GHC's default locale encoding is
+  -- whatever the user codepage happens to be (CP1252 / CP437 / CP850 …),
+  -- which means two independent disasters:
+  --
+  --   1. `Text.readFile` in LSP.Core.Shake decodes `.l4` source as the
+  --      system codepage, so `§` (bytes 0xC2 0xA7) comes back as "┬º"
+  --      and the parser bails with `unexpected '┬'`.
+  --   2. `putStrLn`-family writes to stdout/stderr run their Text through
+  --      the same codepage, so echoing a `§` back as part of a diagnostic
+  --      crashes with `hPutChar: cannot encode character '\167'`.
+  --
+  -- `setLocaleEncoding` fixes (1) by making *new* handles UTF-8 by
+  -- default. The three explicit `hSetEncoding` calls fix (2) by
+  -- overriding the standard handles, which were already opened by the
+  -- runtime before `main` started and so inherited the original locale.
+  setLocaleEncoding utf8
+  hSetEncoding stdin  utf8
+  hSetEncoding stdout utf8
+  hSetEncoding stderr utf8
+
   cmd <- customExecParser (prefs showHelpOnEmpty) commandInfo
   case cmd of
     CmdRun        opts -> runCmd        opts
