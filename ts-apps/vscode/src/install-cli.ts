@@ -1,3 +1,8 @@
+// This file reads runtime-only environment variables (LOCALAPPDATA on
+// Windows) that are set by the end user's OS — not at turbo build time —
+// so the turbo-inputs lint rule does not apply here.
+/* eslint-disable turbo/no-undeclared-env-vars */
+
 // L4 CLI installer.
 //
 // Handles discovery of the bundled `l4` binary shipped inside the VSIX
@@ -202,9 +207,6 @@ async function installWindows(
   outputChannel: vscode.OutputChannel,
   silent: boolean
 ): Promise<{ ok: true; installedAt: string; message: string }> {
-  // LOCALAPPDATA is read at VS Code runtime on the user's machine, not at
-  // turbo build time, so the turbo inputs lint rule doesn't apply here.
-  // eslint-disable-next-line turbo/no-undeclared-env-vars
   const localAppData =
     process.env.LOCALAPPDATA ?? path.join(os.homedir(), 'AppData', 'Local')
   const installDir = path.join(localAppData, 'Programs', 'l4')
