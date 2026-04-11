@@ -12,7 +12,10 @@ module Main where
 
 import Control.Monad (unless)
 import Data.List (isInfixOf)
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy.Char8 as BSL8
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
 import Data.Aeson (Value(..), eitherDecode)
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.Aeson.Key as Key
@@ -20,7 +23,15 @@ import System.Directory (doesFileExist)
 import System.Environment (lookupEnv)
 import System.Exit (ExitCode(..), exitFailure)
 import System.FilePath ((</>))
-import System.Process (proc, readCreateProcessWithExitCode)
+import System.IO (hClose, hSetBinaryMode)
+import System.Process
+  ( CreateProcess(..)
+  , StdStream(..)
+  , createProcess
+  , proc
+  , readCreateProcessWithExitCode
+  , waitForProcess
+  )
 import Test.Hspec
 
 ----------------------------------------------------------------------------
@@ -78,10 +89,34 @@ data Output = Output
   , outStderr :: String
   } deriving (Eq, Show)
 
+-- | Run the l4 binary and capture its stdout + stderr.
+--
+-- Reads both streams as raw bytes and decodes them as UTF-8 leniently,
+-- bypassing @readCreateProcessWithExitCode@'s reliance on the system
+-- locale encoding. On Windows CI runners the locale is typically CP1252,
+-- which rejects the UTF-8 lead bytes (0xC2, 0xE2, …) that @l4.exe@
+-- writes for section markers (§) and en/em-dashes in help text — that
+-- is the @hGetContents: cannot decode byte sequence starting from 194@
+-- failure we saw on the first Windows build.
 runL4 :: FilePath -> [String] -> IO Output
 runL4 bin args = do
-  (code, out, err) <- readCreateProcessWithExitCode (proc bin args) ""
-  pure (Output code out err)
+  let cp = (proc bin args)
+        { std_in  = CreatePipe
+        , std_out = CreatePipe
+        , std_err = CreatePipe
+        }
+  (Just hin, Just hout, Just herr, ph) <- createProcess cp
+  hClose hin
+  hSetBinaryMode hout True
+  hSetBinaryMode herr True
+  soutBytes <- BS.hGetContents hout
+  serrBytes <- BS.hGetContents herr
+  code <- waitForProcess ph
+  pure Output
+    { outExit   = code
+    , outStdout = T.unpack (TE.decodeUtf8Lenient soutBytes)
+    , outStderr = T.unpack (TE.decodeUtf8Lenient serrBytes)
+    }
 
 -- | Assert the CLI exited 0 with a given substring on stdout.
 expectOk :: FilePath -> [String] -> String -> IO ()
