@@ -1,12 +1,12 @@
--- | @l4 fmt FILE@ — exact-print / reformat an L4 file to stdout.
+-- | @l4 format FILE@ — exact-print / reformat an L4 file to stdout.
 --
 -- Mirrors the @gofmt@ / @rustfmt@ convention: no flags means "print the
 -- reformatted source to stdout". Redirect with @>@ to write in place.
 -- Exits 0 on success, 1 if the file fails to parse/typecheck.
-module L4.Cli.Fmt
-  ( FmtOptions(..)
-  , fmtOptionsParser
-  , fmtCmd
+module L4.Cli.Format
+  ( FormatOptions(..)
+  , formatOptionsParser
+  , formatCmd
   ) where
 
 import qualified Base.Text as Text
@@ -23,22 +23,22 @@ import L4.Cli.Common
 -- Options
 ----------------------------------------------------------------------------
 
-newtype FmtOptions = FmtOptions
-  { fmtFile :: FilePath
+newtype FormatOptions = FormatOptions
+  { formatFile :: FilePath
   }
 
-fmtOptionsParser :: Parser FmtOptions
-fmtOptionsParser = FmtOptions
+formatOptionsParser :: Parser FormatOptions
+formatOptionsParser = FormatOptions
   <$> strArgument (metavar "FILE" <> help "Path to the .l4 file to reformat")
 
 ----------------------------------------------------------------------------
 -- Entry point
 ----------------------------------------------------------------------------
 
-fmtCmd :: FmtOptions -> IO ()
-fmtCmd opts = do
+formatCmd :: FormatOptions -> IO ()
+formatCmd opts = do
   evalConfig <- makeEvalConfig (FixedNowOpt Nothing)
-  (errs, mEp) <- runOneshot evalConfig opts.fmtFile \nfp -> do
+  (errs, mEp) <- runOneshot evalConfig opts.formatFile \nfp -> do
     let uri = normalizedFilePathToUri nfp
     _ <- Shake.addVirtualFileFromFS nfp
     Shake.use Rules.ExactPrint uri
