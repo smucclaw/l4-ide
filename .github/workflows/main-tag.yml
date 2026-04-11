@@ -37,8 +37,8 @@ jobs:
       - name: Configure and generate build plan
         run: |
           cabal update
-          cabal configure --disable-tests --disable-documentation
-          cabal build exe:jl4-lsp exe:l4 --dry-run
+          cabal configure --enable-tests --disable-documentation
+          cabal build exe:jl4-lsp exe:l4 test:l4-cli-test --dry-run
 
       - name: Restore cached dependencies
         uses: actions/cache/restore@v5
@@ -52,7 +52,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.cache.outputs.cache-hit != 'true'
-        run: cabal build exe:jl4-lsp exe:l4 --only-dependencies
+        run: cabal build exe:jl4-lsp exe:l4 test:l4-cli-test --only-dependencies
 
       - name: Save cached dependencies
         uses: actions/cache/save@v5
@@ -106,8 +106,8 @@ jobs:
         shell: bash
         run: |
           cabal update
-          cabal configure --disable-tests --disable-documentation
-          cabal build exe:jl4-lsp exe:l4 --dry-run
+          cabal configure --enable-tests --disable-documentation
+          cabal build exe:jl4-lsp exe:l4 test:l4-cli-test --dry-run
 
       - name: Restore cached dependencies
         uses: actions/cache/restore@v5
@@ -122,7 +122,7 @@ jobs:
       - name: Install dependencies
         if: steps.cache.outputs.cache-hit != 'true'
         shell: bash
-        run: cabal build exe:jl4-lsp exe:l4 --only-dependencies
+        run: cabal build exe:jl4-lsp exe:l4 test:l4-cli-test --only-dependencies
 
       - name: Save cached dependencies
         uses: actions/cache/save@v5
@@ -182,8 +182,8 @@ jobs:
       - name: Configure and build
         run: |
           cabal update
-          cabal configure --disable-tests --disable-documentation
-          cabal build exe:jl4-lsp exe:l4 exe:jl4-service --dry-run
+          cabal configure --enable-tests --disable-documentation
+          cabal build exe:jl4-lsp exe:l4 exe:jl4-service test:l4-cli-test --dry-run
 
       - name: Restore cached dependencies
         uses: actions/cache/restore@v5
@@ -197,7 +197,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.cache.outputs.cache-hit != 'true'
-        run: cabal build exe:jl4-lsp exe:l4 exe:jl4-service --only-dependencies
+        run: cabal build exe:jl4-lsp exe:l4 exe:jl4-service test:l4-cli-test --only-dependencies
 
       - name: Save cached dependencies
         uses: actions/cache/save@v5
@@ -277,8 +277,8 @@ jobs:
       - name: Configure and build
         run: |
           cabal update
-          cabal configure --disable-tests --disable-documentation
-          cabal build exe:jl4-lsp exe:l4 --dry-run
+          cabal configure --enable-tests --disable-documentation
+          cabal build exe:jl4-lsp exe:l4 test:l4-cli-test --dry-run
 
       - name: Restore cached dependencies
         uses: actions/cache/restore@v5
@@ -292,7 +292,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.cache.outputs.cache-hit != 'true'
-        run: cabal build exe:jl4-lsp exe:l4 --only-dependencies
+        run: cabal build exe:jl4-lsp exe:l4 test:l4-cli-test --only-dependencies
 
       - name: Save cached dependencies
         uses: actions/cache/save@v5
