@@ -155,7 +155,7 @@ main = do
 
 spec :: FilePath -> Spec
 spec bin = do
-  describe "l4 help" $ do
+  describe "l4 --help" $ do
     it "lists every subcommand" $ do
       Output code sout _ <- runL4 bin ["--help"]
       code `shouldBe` ExitSuccess
