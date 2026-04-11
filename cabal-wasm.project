@@ -7,7 +7,7 @@ packages:
   jl4-wasm
 
 -- Ignore all other packages in the repo
--- (jl4-lsp, jl4-cli, jl4-service have non-WASM deps)
+-- (jl4-lsp, the l4 CLI, and jl4-service have non-WASM deps)
 
 -- Enable safe-mode to disable HTTP (req library doesn't support WASM)
 -- Disable serialise-support because cborg doesn't compile for wasm32-wasi

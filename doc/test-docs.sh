@@ -107,7 +107,7 @@ CHECKS:
 
     2. L4 file validation
        - Validates all .l4 files in the doc/ folder
-       - Uses jl4-cli for syntax and type checking
+       - Uses the l4 CLI for syntax and type checking
 
     3. Orphan file detection
        - Finds .md and .l4 files not linked from any other file
@@ -281,44 +281,44 @@ echo ""
 log_info "Validating L4 files..."
 echo ""
 
-# Function to run jl4-cli - handles both direct invocation and cabal run
-run_jl4_cli() {
+# Function to run the l4 CLI - handles both direct invocation and cabal run
+run_l4_cli() {
     local file="$1"
-    if [[ -n "$JL4_CLI_DIRECT" ]]; then
-        "$JL4_CLI_DIRECT" "$file" 2>&1
+    if [[ -n "$L4_CLI_DIRECT" ]]; then
+        "$L4_CLI_DIRECT" run "$file" 2>&1
     else
-        # Run from repo root for proper library resolution
-        # Use cabal run which sets up data-files paths correctly
-        # Set JL4_LIBRARY_PATH to prefer local libraries over installed ones
-        (cd "$REPO_ROOT" && JL4_LIBRARY_PATH="${JL4_LIBRARY_PATH:-jl4-core/libraries}" cabal run jl4:jl4-cli -v0 -- "$file" 2>&1)
+        # Run from repo root for proper library resolution.
+        # cabal run sets up data-files paths correctly; JL4_LIBRARY_PATH
+        # prefers local libraries over any installed copy.
+        (cd "$REPO_ROOT" && JL4_LIBRARY_PATH="${JL4_LIBRARY_PATH:-jl4-core/libraries}" cabal run jl4:l4 -v0 -- run "$file" 2>&1)
     fi
 }
 
-# Check if jl4-cli is available
-JL4_CLI_DIRECT=""
+# Check if the l4 CLI is available
+L4_CLI_DIRECT=""
 JL4_AVAILABLE=false
 
-if command -v jl4-cli &> /dev/null; then
-    JL4_CLI_DIRECT="jl4-cli"
+if command -v l4 &> /dev/null; then
+    L4_CLI_DIRECT="l4"
     JL4_AVAILABLE=true
-    log_verbose "Using jl4-cli from PATH"
+    log_verbose "Using l4 from PATH"
 elif command -v cabal &> /dev/null; then
     # Try to find the built binary using cabal list-bin (fully qualified name)
-    JL4_BIN=""
+    L4_BIN=""
     set +e  # Temporarily disable exit on error for cabal command
-    JL4_BIN=$(cd "$REPO_ROOT" && cabal list-bin jl4:jl4-cli 2>/dev/null)
+    L4_BIN=$(cd "$REPO_ROOT" && cabal list-bin jl4:l4 2>/dev/null)
     CABAL_EXIT=$?
     set -e
-    
-    if [[ $CABAL_EXIT -eq 0 && -n "$JL4_BIN" && -x "$JL4_BIN" ]]; then
+
+    if [[ $CABAL_EXIT -eq 0 && -n "$L4_BIN" && -x "$L4_BIN" ]]; then
         JL4_AVAILABLE=true
-        log_verbose "Using cabal run jl4-cli"
+        log_verbose "Using cabal run jl4:l4"
     else
-        log_warn "jl4-cli not built. Run 'cabal build jl4:jl4-cli' first."
+        log_warn "l4 CLI not built. Run 'cabal build jl4:l4' first."
         log_warn "Skipping L4 validation"
     fi
 else
-    log_warn "jl4-cli not found and cabal not available"
+    log_warn "l4 CLI not found and cabal not available"
     log_warn "Skipping L4 validation"
 fi
 
@@ -327,9 +327,9 @@ if $JL4_AVAILABLE; then
     while IFS= read -r -d '' l4_file; do
         relative_path="${l4_file#$SCRIPT_DIR/}"
         
-        # Run jl4-cli and capture output
+        # Run l4 CLI and capture output
         set +e  # Disable exit on error for this command
-        output=$(run_jl4_cli "$l4_file")
+        output=$(run_l4_cli "$l4_file")
         run_exit_code=$?
         set -e  # Re-enable
         

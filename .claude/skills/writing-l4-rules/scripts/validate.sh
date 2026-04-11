@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # L4 Validation Wrapper Script
-# Provides convenient validation of L4 files with jl4-cli
+# Provides convenient validation of L4 files using the `l4` CLI.
 
 set -euo pipefail
 
@@ -29,19 +29,23 @@ if [[ ! "$L4_FILE" =~ \.l4$ ]]; then
 fi
 
 echo "Validating L4 file: $L4_FILE"
-echo "Running jl4-cli..."
+echo "Running l4 run..."
 echo ""
 
-# Run jl4-cli with provided file and any additional arguments
-if command -v jl4-cli &> /dev/null; then
-    # jl4-cli is in PATH
-    jl4-cli "$@" "$L4_FILE"
+# Prefer the installed `l4` CLI (shipped with the VSCode extension or
+# installed manually), fall back to `cabal run l4` when we're inside a
+# checkout of the l4-ide repository.
+if command -v l4 &> /dev/null; then
+    l4 run "$@" "$L4_FILE"
 elif command -v cabal &> /dev/null; then
-    # Use cabal to run jl4-cli
-    cabal run jl4-cli -- "$@" "$L4_FILE"
+    cabal run l4 -- run "$@" "$L4_FILE"
 else
-    echo "Error: Neither jl4-cli nor cabal found in PATH"
-    echo "Please install jl4-cli or Haskell's cabal build tool"
+    echo "Error: Neither 'l4' nor 'cabal' found in PATH"
+    echo ""
+    echo "Install the l4 CLI either by:"
+    echo "  - Opening the L4 sidebar in VS Code and picking 'Install L4 CLI', or"
+    echo "  - Installing Haskell's cabal build tool and running this from inside"
+    echo "    a checkout of https://github.com/legalese/l4-ide"
     exit 1
 fi
 

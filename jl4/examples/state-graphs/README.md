@@ -18,7 +18,10 @@ Source files with regulative rules (MUST/MAY/SHANT):
 
 Command:
 ```bash
-cabal run jl4-cli -- --state-graph <file.l4>
+l4 state-graph <file.l4>
+
+# Or from a Haskell checkout
+cabal run l4 -- state-graph <file.l4>
 ```
 
 ## File Formats

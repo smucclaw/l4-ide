@@ -13,6 +13,7 @@
     RequestOpenConsole,
     RequestOpenExtensionSettings,
     RequestAddL4ToolsToClaudeCode,
+    RequestInstallL4Cli,
     RequestCopySignInLink,
     RequestDisconnect,
     SidebarConnectionStatusChanged,
@@ -620,6 +621,14 @@
     )
   }
 
+  function installL4Cli() {
+    messenger?.sendNotification(
+      RequestInstallL4Cli,
+      HOST_EXTENSION,
+      undefined as never
+    )
+  }
+
   function copySignInLink() {
     messenger?.sendNotification(
       RequestCopySignInLink,
@@ -1039,6 +1048,9 @@
               onclick={menuAction(openExtensionSettings)}
             >
               Extension Settings
+            </button>
+            <button class="menu-item" onclick={menuAction(installL4Cli)}>
+              Install L4 CLI
             </button>
             <button
               class="menu-item"

@@ -127,7 +127,10 @@ This creates a Person named "Alice" who is 25 years old with valid ID.
 ### Option B: Command Line
 
 ```bash
-cabal run jl4-cli -- eligibility.l4
+l4 run eligibility.l4
+
+# Or from a Haskell checkout
+cabal run l4 -- run eligibility.l4
 ```
 
 This validates the file and reports any errors.

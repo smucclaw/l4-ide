@@ -5,6 +5,7 @@ import * as os from 'node:os'
 import * as vscode from 'vscode'
 import type { AuthManager } from './auth.js'
 import { showTimedWarningMessage } from './notifications.js'
+import { installL4Cli } from './install-cli.js'
 
 /**
  * Local MCP proxy server.
@@ -18,6 +19,15 @@ import { showTimedWarningMessage } from './notifications.js'
  * an empty tool list so the server stays registered but inert.
  */
 const CLAUDE_SETUP_DISMISSED_KEY = 'l4.claudeCodeSetupDismissed'
+
+export type ClaudeSetupOutcome =
+  | 'no-proxy' // proxy never started — abort
+  | 'no-config' // ~/.claude.json doesn't exist
+  | 'unparseable-config' // ~/.claude.json exists but isn't valid JSON
+  | 'already-configured' // both MCP + skill already installed
+  | 'dismissed-previously' // user previously clicked "Never"
+  | 'user-declined' // user just clicked "No" or closed the dialog
+  | 'accepted-co-installed' // user clicked "Yes" — we installed both tools AND the CLI
 
 export class McpProxy implements vscode.Disposable {
   private server: http.Server | null = null
@@ -308,18 +318,28 @@ export class McpProxy implements vscode.Disposable {
   }
 
   /**
+   * Outcome of the startup "Add L4 Tools to Claude Code?" flow. The
+   * caller uses this to decide whether to fall through to the standalone
+   * "Install L4 CLI?" prompt — which we want in every branch *except*
+   * `accepted-co-installed`, because that path already co-installs the
+   * CLI as part of the Claude setup.
+   */
+
+  /**
    * If Claude Code is installed but any component of the L4 tools
    * (MCP server or writing-l4-rules skill) is missing, offer to add
-   * the full set.
+   * the full set.  Returns a tag describing what happened so the
+   * startup flow can fall through to the CLI install prompt when
+   * appropriate.
    */
-  async offerClaudeCodeSetup(): Promise<void> {
-    if (!this.port) return
+  async offerClaudeCodeSetup(): Promise<ClaudeSetupOutcome> {
+    if (!this.port) return 'no-proxy'
 
     const claudeConfigPath = path.join(os.homedir(), '.claude.json')
     try {
       fs.accessSync(claudeConfigPath, fs.constants.R_OK)
     } catch {
-      return // Claude Code not installed
+      return 'no-config' // Claude Code not installed
     }
 
     // Inspect the current state of both components.
@@ -329,18 +349,20 @@ export class McpProxy implements vscode.Disposable {
       const config = JSON.parse(raw)
       mcpPresent = !!config?.mcpServers?.['l4-rules']
     } catch {
-      return // Unparseable config — don't touch it
+      return 'unparseable-config' // Don't touch it
     }
     const skillPresent = this.isWritingL4RulesSkillInstalled()
 
     // Everything already in place — just keep the port in sync silently.
     if (mcpPresent && skillPresent) {
       this.updateClaudeCodePort()
-      return
+      return 'already-configured'
     }
 
     // At least one component is missing. Respect a prior "Never".
-    if (this.globalState?.get<boolean>(CLAUDE_SETUP_DISMISSED_KEY)) return
+    if (this.globalState?.get<boolean>(CLAUDE_SETUP_DISMISSED_KEY)) {
+      return 'dismissed-previously'
+    }
 
     const action = await vscode.window.showInformationMessage(
       'Add L4 Tools to Claude Code?',
@@ -350,11 +372,14 @@ export class McpProxy implements vscode.Disposable {
     )
     if (action === 'Never') {
       this.globalState?.update(CLAUDE_SETUP_DISMISSED_KEY, true)
-      return
+      return 'user-declined'
     }
-    if (action !== 'Yes') return
+    if (action !== 'Yes') return 'user-declined'
 
+    // installL4Tools co-installs the L4 CLI silently (see its body),
+    // so the caller does NOT need to prompt separately.
     this.installL4Tools(claudeConfigPath)
+    return 'accepted-co-installed'
   }
 
   /**
@@ -437,6 +462,16 @@ export class McpProxy implements vscode.Disposable {
     }
 
     this.installWritingL4RulesSkill()
+
+    // The writing-l4-rules skill tells Claude to invoke the `l4` CLI for
+    // validation, so installing the skill without installing the CLI
+    // leaves the agent with instructions it can't follow. Install both
+    // together, silently (we'll surface a single "done" toast below).
+    if (this.extensionPath) {
+      void installL4Cli(this.extensionPath, this.outputChannel, {
+        silent: true,
+      })
+    }
 
     void vscode.window.showInformationMessage(
       'L4 tools added to Claude Code. Restart Claude Code to pick up the change.',

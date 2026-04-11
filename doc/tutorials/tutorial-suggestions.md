@@ -241,7 +241,7 @@ Have an idea for a tutorial? Submit it here!
 
 1. Use one of the templates above
 2. Create working `.l4` examples in `/docs/examples/tutorials/`
-3. Verify examples work with `cabal run jl4-cli`
+3. Verify examples work with `l4 run` (or `cabal run l4 -- run`)
 4. Write tutorial content in appropriate subfolder
 5. Link examples from tutorial
 6. Submit pull request

@@ -28,6 +28,7 @@ import {
   RequestOpenConsole,
   RequestOpenExtensionSettings,
   RequestAddL4ToolsToClaudeCode,
+  RequestInstallL4Cli,
   RequestCopySignInLink,
   RequestDisconnect,
   RequestRevealLocation,
@@ -492,6 +493,14 @@ export function initializeSidebarMessenger(
   // Add L4 Tools (MCP + writing-l4-rules skill) to Claude Code
   messenger.onNotification(RequestAddL4ToolsToClaudeCode, async () => {
     await mcpProxy.addL4ToolsToClaudeCode()
+  })
+
+  // Install the bundled l4 CLI on PATH.
+  // The sidebar dropdown fires this separately from "Add L4 Tools …"
+  // because a user may want the CLI without touching Claude Code
+  // (e.g. to use it from their shell or editor).
+  messenger.onNotification(RequestInstallL4Cli, async () => {
+    await vscode.commands.executeCommand('l4.installCli')
   })
 
   // Copy Legalese Cloud sign-in link to clipboard.

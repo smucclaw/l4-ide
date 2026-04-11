@@ -4,9 +4,9 @@ Support scripts for the L4 skill.
 
 ## validate.sh
 
-A wrapper around `jl4-cli` that type-checks an L4 file. It prefers a `jl4-cli`
-binary on `PATH`, falling back to `cabal run jl4-cli` when run from inside a
-local checkout of the `l4-ide` repository.
+A wrapper around the `l4` CLI that type-checks and evaluates an L4 file.
+It prefers an `l4` binary on `PATH`, falling back to `cabal run l4` when
+run from inside a local checkout of the `l4-ide` repository.
 
 ### Usage
 
@@ -26,8 +26,10 @@ Exit codes:
 
 Either:
 
-- `jl4-cli` available on `PATH`, or
-- A checkout of [`legalese/l4-ide`](https://github.com/legalese/l4-ide) with `cabal` available (the script will invoke `cabal run jl4-cli -- ...`)
+- The `l4` CLI available on `PATH` (install from the L4 VS Code
+  extension's sidebar menu: **Install L4 CLI**), or
+- A checkout of [`legalese/l4-ide`](https://github.com/legalese/l4-ide)
+  with `cabal` available — the script will invoke `cabal run l4 -- run ...`.
 
 ### Common errors
 

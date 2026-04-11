@@ -86,10 +86,17 @@ You can also self-host with `jl4-service` — the API surface is identical, so c
 
 ## Validation
 
-Validate `.l4` files locally with the `jl4-cli` tool from this repository:
+Validate `.l4` files locally with the `l4` CLI:
 
 ```bash
-cabal run jl4-cli -- path/to/file.l4
+# Fast typecheck (use for CI / pre-commit)
+l4 check path/to/file.l4
+
+# Full typecheck + evaluate #EVAL directives
+l4 run path/to/file.l4
+
+# From a Haskell checkout (no installed binary)
+cabal run l4 -- run path/to/file.l4
 ```
 
 A wrapper script ships inside the skill at [.claude/skills/writing-l4-rules/scripts/validate.sh](.claude/skills/writing-l4-rules/scripts/validate.sh).

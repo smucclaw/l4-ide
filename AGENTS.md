@@ -13,7 +13,7 @@ Coding guidelines for AI agents working in this repository.
 | Package               | Purpose                                                |
 | --------------------- | ------------------------------------------------------ |
 | `jl4-core/`           | Core language (parser, typechecker, evaluator)         |
-| `jl4/`                | CLI (`jl4-cli`) and JSON schema generator              |
+| `jl4/`                | CLI (`l4`) and JSON schema generator                   |
 | `jl4-lsp/`            | Language Server Protocol for IDE support               |
 | `jl4-repl/`           | Interactive REPL                                       |
 | `jl4-service/`        | REST API for decision evaluation                       |
@@ -50,7 +50,8 @@ npm test                                 # TypeScript tests
 
 npm run format                           # TypeScript formatting (required — CI rejects unformatted)
 
-cabal run jl4-cli  -- file.l4            # Run a file
+cabal run l4      -- run file.l4         # Typecheck and evaluate a file
+cabal run l4      -- check file.l4       # Fast typecheck-only
 cabal run jl4-repl -- file.l4            # REPL
 ```
 
@@ -151,7 +152,7 @@ Prefer separate `.l4` files over inline code blocks so examples are validated:
 **Example:** [eligibility-example.l4](eligibility-example.l4)
 ```
 
-All L4 code must compile. Validate with `cabal run jl4-cli -- path/to/file.l4` or the MCP validator.
+All L4 code must compile. Validate with `l4 check path/to/file.l4` (or `cabal run l4 -- check path/to/file.l4` from a Haskell checkout) or the MCP validator.
 
 Write identifiers that read like natural language for legal audiences: `` `the applicant` `` not `applicant`, `` `has valid identification` `` not `hasValidID`. No camel-case or. Be very descriptive.
 
