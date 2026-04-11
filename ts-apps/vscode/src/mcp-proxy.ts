@@ -4,10 +4,7 @@ import * as path from 'node:path'
 import * as os from 'node:os'
 import * as vscode from 'vscode'
 import type { AuthManager } from './auth.js'
-import {
-  showTimedInformationMessage,
-  showTimedWarningMessage,
-} from './notifications.js'
+import { showTimedWarningMessage } from './notifications.js'
 
 /**
  * Local MCP proxy server.
@@ -441,8 +438,9 @@ export class McpProxy implements vscode.Disposable {
 
     this.installWritingL4RulesSkill()
 
-    showTimedInformationMessage(
-      'L4 tools added to Claude Code. Restart Claude Code to pick up the change.'
+    void vscode.window.showInformationMessage(
+      'L4 tools added to Claude Code. Restart Claude Code to pick up the change.',
+      'Okay'
     )
   }
 
