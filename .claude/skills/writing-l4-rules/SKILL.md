@@ -1,61 +1,47 @@
 ---
 name: writing-l4-rules
-description: Writes, validates, and deploys L4 — a typed functional language for computational law — encoding contracts, regulations, and policy logic as executable rules with type-checked decisions and formally-modeled obligations. Use when the user asks to formalise legal text, draft rules with deadlines and reparations, mark functions for deployment with `@export`/`@desc`, run `jl4-cli`, or deploy to `jl4-service`/Legalese Cloud.
+description: Writes, validates, and deploys L4 — a typed functional language for computational law — encoding contracts, regulations, and policy logic as executable rules with type-checked decisions and formally-modeled obligations. Use when the user asks to formalise legal text, draft rules with deadlines and reparations, mark functions for deployment with `@export`/`@desc`, validate `.l4` files, or deploy to `jl4-service` / Legalese Cloud.
 ---
 
 # Writing L4 Rules
 
-L4 is a statically-typed, pure-functional language for computational law. It is layout-sensitive like Python, has Haskell-style algebraic data types, and adds legal-drafting affordances: backtick identifiers that read like prose, regulative rules (`PARTY … MUST … WITHIN … HENCE … LEST …`), and `@export`/`@desc` annotations that publish typed decision functions to a REST/MCP API.
+L4 is a statically-typed, pure-functional language for computational law. It looks and reads like legal prose — backtick identifiers hold whole phrases, regulative rules model deadlines and breaches, and every `@export`ed function becomes a REST / MCP tool. It is layout-sensitive like Python and has Haskell-style algebraic data types.
 
-**Canonical documentation** — always authoritative for the currently-published L4:
+Use this skill when the user wants to **formalise legal text** (legislation, contracts, policies), **encode auditable decision logic**, **model obligations with deadlines** (L4's unique strength), or **deploy rules as a live API or MCP**.
 
-<https://legalese.com/l4/README.md>
-
-This file is a compact operational guide. For anything syntactic you do not remember, link through to the corresponding page on `legalese.com/l4/...` rather than guessing. Three deeper references ship in this skill:
-
-- [references/regulative.md](references/regulative.md) — deep dive on obligations, `#TRACE`, and the `MUST`/`MAY`/`SHANT`/`DO` `HENCE` `LEST` `BREACH` machinery
-- [references/builtins.md](references/builtins.md) — coercions, HTTP/JSON, temporal globals, and the library index
-- [references/gotchas.md](references/gotchas.md) — traps a general-purpose LLM will not get right (ditto `^`, asyndetic `...`/`..`, `§` sections, computed fields, `IS` vs `MEANS` vs `IF`, mixfix)
+Authoritative docs, always the source of truth for syntax: <https://legalese.com/l4/README.md>. When in doubt about a keyword, link through rather than guess.
 
 ---
 
-## When to use L4
+## Read before you write your first line
 
-Reach for this skill when the user wants to:
+**Open [references/traps.md](references/traps.md) first.** It lists twelve high-frequency traps that every LLM (including Claude) hits on first try — flat `ELSE IF` cascades that don't parse, silently-ignored imports, missing record-update syntax, confusing `inferred type HNN` errors for undeclared parties, and more. Each entry has the exact error message, the broken code, and the fix. The file also contains an error-message decoder ring and a pre-flight checklist.
 
-1. **Formalise legal text** (legislation, contracts, policies, regulations) as executable rules
-2. **Encode decision logic** that must be auditable and type-checked, not hand-waved
-3. **Model obligations with deadlines** (pay within 30 days, deliver before X, file by Y) — this is L4's unique strength over general-purpose languages
-4. **Deploy rules as an API** via `jl4-service` or [Legalese Cloud](https://legalese.cloud), including as MCP tools for other AI agents
-5. **Validate** an existing `.l4` file with `jl4-cli`
+Three other references ship alongside:
 
-L4 is the wrong tool for imperative scripting, UI code, numerical computing, or anything that requires mutation. If the task does not involve legal semantics or auditable decisions, reach for something else.
+- [references/regulative.md](references/regulative.md) — obligations, `HENCE`/`LEST`, `BREACH BECAUSE`, `#TRACE` simulation, recursive payment schedules.
+- [references/builtins.md](references/builtins.md) — type coercions (`TONUMBER`, `TODATE`, …), HTTP/JSON built-ins, temporal globals, library index.
+- [references/gotchas.md](references/gotchas.md) — syntactic curios worth knowing: ditto `^`, asyndetic `...`/`..`, `§` section markers, computed fields, mixfix notation, the `IS` vs `MEANS` vs `IF` distinction.
+
+Pull these in on demand — don't preload them.
 
 ---
 
-## Core workflow
+## The writing workflow
 
-### 1. Analyse the source
+### Step 1 — read the source with three questions
 
-When given a PDF, URL, or natural-language description:
+- **Ontology:** what entities, statuses, categories does the text refer to (even implicitly)? These become `DECLARE`d types.
+- **Decisions:** what boolean or numeric outcomes does the rule produce? These become exported functions.
+- **Obligations:** who must do what, by when, with what consequence on breach? These become regulative rules.
 
-- **Ontology** — what entities, statuses, categories exist? These are often unstated; infer them.
-- **Decisions** — what are the boolean or numeric outcomes the rule produces?
-- **Obligations** — who must do what, by when, with what consequence on breach?
+### Step 2 — model the domain with `DECLARE`
 
-### 2. Model the domain with `DECLARE`
+Use sum types for things that are "one of these", records for things that are "a bundle of facts":
 
 ```l4
--- Enum (sum type)
 DECLARE RiskCategory IS ONE OF LowRisk, MediumRisk, HighRisk, Uninsurable
 
--- Enum with per-constructor fields
-DECLARE Shape IS ONE OF
-    Circle    HAS radius IS A NUMBER
-    Rectangle HAS width  IS A NUMBER
-                  height IS A NUMBER
-
--- Record (product type)
 DECLARE Driver HAS
     `name`           IS A STRING
     `age`            IS A NUMBER
@@ -64,48 +50,15 @@ DECLARE Driver HAS
     `has tickets`    IS A BOOLEAN
 ```
 
-Records can declare **computed fields** (derived attributes) with `MEANS`; see [references/gotchas.md](references/gotchas.md) and <https://legalese.com/l4/reference/types/DECLARE.md>.
+When a decision depends on many related facts (applicants, claims, orders, taxpayers), **wrap them in one record and have the top-level decision take a single parameter**. This keeps your exported surface clean even when the domain has 15+ fields, and it matches how legal inputs actually arrive — as a complete fact pattern, not a flat argument list.
 
-### 3. Write decisions
+Mutually-exclusive options (conviction categories, dwelling types, plan status) should be enums, not booleans — you get exhaustiveness checking and the types document the source text.
 
-L4 has three function-definition forms. Use whichever reads most like the source text.
+Records can declare **computed fields** derived from sibling fields; see [references/gotchas.md](references/gotchas.md).
 
-```l4
--- General form: DECIDE … IS / MEANS
-GIVEN driver IS A Driver
-GIVETH A RiskCategory
-DECIDE `assess risk` driver IS
-    CONSIDER driver's `accident count`
-    WHEN 0 THEN IF driver's `has tickets`
-                THEN MediumRisk
-                ELSE LowRisk
-    WHEN 1 THEN MediumRisk
-    WHEN 2 THEN HighRisk
-    OTHERWISE  Uninsurable
+### Step 3 — write decisions that read like the source
 
--- Boolean-returning shortcut: DECIDE … IF
-GIVEN driver IS A Driver
-GIVETH A BOOLEAN
-DECIDE `meets minimum age` IF
-    driver's `age` AT LEAST 18
-
--- Plain MEANS (DECIDE optional)
-GIVEN n IS A NUMBER
-`square of` n MEANS n TIMES n
-```
-
-**Key idioms:**
-
-- `CONSIDER ... WHEN ... OTHERWISE ...` is the pattern-match form. `BRANCH IF ... OTHERWISE` is the multi-way-if form.
-- `WHERE` introduces local helpers, `LET x MEANS … IN …` introduces a single local binding.
-- `YIELD` makes lambdas: `GIVEN n YIELD n GREATER THAN 0`.
-- Backtick identifiers can contain spaces and punctuation (`` `the applicant qualifies` ``); use them to make rules read like legal prose.
-- Mixfix lets a function's name intersperse with its arguments: `` `employee` `works for` `employer` ``.
-- Field access uses the genitive `'s`: `person's age`, `application's employee's nationality`.
-
-### 4. Structure like the source
-
-**Isomorphic encoding** — match the logical shape of the source text. If legislation has sections numbered 1.1 / 1.2 / 1.3 with three clauses joined by AND, your L4 should have three conjuncts in the same order. This keeps the rule auditable against the statute.
+Isomorphic encoding: match the section structure of the source with `§` and `§§` markers, and mirror its conjunctions / disjunctions in the order they appear:
 
 ```l4
 § `Part I — Eligibility`
@@ -115,43 +68,71 @@ GIVEN damage IS A Damage
 GIVETH A BOOLEAN
 DECIDE `coverage applies` IF
         NOT `caused by excluded pests` damage
-    AND (   `bird damage to contents`         damage
-         OR `animal-caused water escape`      damage)
+    AND (   `bird damage to contents`    damage
+         OR `animal-caused water escape` damage)
 ```
 
-`§` and `§§` mark sections — they are structural, not comments. See [references/gotchas.md](references/gotchas.md).
+L4 has three function forms; pick the one that reads closest to the source:
 
-### 5. Model obligations and deadlines
+- `DECIDE foo IS <value-expr>` — for numeric and record results.
+- `DECIDE foo IF <boolean-expr>` — for predicates.
+- `foo MEANS <expr>` — for plain value bindings, no `DECIDE` needed.
 
-When the source text says "must", "may", "shall not", or "within X days", use L4's regulative rules:
+Control flow, in the order you should reach for them:
+
+1. **Enum pattern-match** (exhaustive, cleanest lookup tables):
+
+   ```l4
+   DECIDE `rating factor` vc IS
+       CONSIDER vc
+       WHEN `Private Small`      THEN 0.028
+       WHEN `Private Medium`     THEN 0.034
+       WHEN `Performance Sports` THEN 0.068
+       -- ...
+   ```
+
+2. **Flat multi-branch grid** — use `BRANCH IF`, which is the clean flat form. Subsequent `IF`s and `OTHERWISE` align with the **first** `IF` after `BRANCH`, not with `BRANCH` itself.
+
+   ```l4
+   DECIDE `parking cost` IS
+       BRANCH IF is_holiday        THEN 0
+              IF is_rotten_weather THEN 2
+              IF day_of_week LESS THAN 6 THEN 5
+              OTHERWISE                        4
+   ```
+
+3. **Two-way:** `IF cond THEN a ELSE b`.
+4. **Local helpers:** `WHERE` (trailing) for multiple bindings; `LET x MEANS e IN body` for one inline binding. **Don't chain `LET ... IN`** — use `WHERE`.
+
+**Do not reach for nested `ELSE IF`** — L4's layout rules fight you on flat cascades. `BRANCH` is the right tool. (This is the #1 authoring trap; see [traps.md §1](references/traps.md).)
+
+Backtick any identifier that contains a space or punctuation, including parameter names: `` `days elapsed` IS A NUMBER ``. When you pass a genitive sub-expression to a function, parenthesise it: ``f (r's `employee`)``. These two habits prevent 80% of parse errors ([traps.md §3–§4](references/traps.md)).
+
+### Step 4 — model obligations if the text has deadlines
+
+When the source says "must", "may", "shall not", or "within X days", use regulative rules. The five-keyword skeleton:
 
 ```l4
-paymentObligation MEANS
-    PARTY   `The Borrower`
-    MUST    `pay` `outstanding amount` EXACTLY `To Lender`
-    WITHIN  30
-    HENCE   FULFILLED
-    LEST    BREACH BY `The Borrower` BECAUSE "payment deadline exceeded"
+DECLARE `Sale Party` IS ONE OF `The Seller`, `The Buyer`
+
+`delivery obligation` MEANS
+    PARTY  `The Seller`
+    MUST   `deliver goods`
+    WITHIN 30
+    HENCE  FULFILLED
+    LEST   BREACH BY `The Seller`
+           BECAUSE "delivery not made within 30 days of the contracted date"
 ```
 
-Full treatment — `MUST`/`MAY`/`SHANT`/`DO`, `HENCE`/`LEST` semantics (note: `SHANT` flips polarity), `BREACH BY … BECAUSE …`, `RAND`/`ROR` composition, `PROVIDED` guards, `EXACTLY` matching, recursive obligations, and `#TRACE` simulation — is in [references/regulative.md](references/regulative.md).
+**Declare the parties first.** Every identifier after `PARTY` or in a `BREACH BY` must be a value of a declared type — either a local `DECLARE ... IS ONE OF ...` or an import from `legal-persons`. Missing the declaration produces a cryptic `inferred type HNN` error.
 
-### 6. Validate with `jl4-cli`
+For `MUST` / `MAY` / `SHANT` / `DO` semantics, `RAND` / `ROR` composition, `PROVIDED` / `EXACTLY` matching, recursive obligations, and `#TRACE` simulation, load [references/regulative.md](references/regulative.md).
 
-```bash
-# Preferred
-cabal run jl4-cli -- path/to/file.l4
+Regulative rules are traced and simulated, not called over REST. **Do not `@export` them** — the thing a REST client wants is the decision function that says whether the obligation was satisfied.
 
-# Or if jl4-cli is on PATH
-jl4-cli path/to/file.l4
+### Step 5 — test inline with `#ASSERT`, `#EVAL`, `#TRACE`
 
-# Pin "now" for reproducible evaluation
-jl4-cli --fixed-now=2025-01-01T00:00:00Z path/to/file.l4
-```
-
-A wrapper is provided at [scripts/validate.sh](scripts/validate.sh). Type errors are reported with line numbers — iterate until the check passes.
-
-### 7. Test with `#EVAL`, `#ASSERT`, `#TRACE`
+L4's directive system is its built-in test harness. Run tests against fixture values in the rule file itself, or in a companion `_tests.l4` file. Both styles produce `assertion satisfied` / `assertion failed` diagnostics readable through the validation paths in Step 6.
 
 ```l4
 `Alice` MEANS Driver WITH
@@ -165,208 +146,83 @@ A wrapper is provided at [scripts/validate.sh](scripts/validate.sh). Type errors
 #ASSERT `assess risk` `Alice` EQUALS LowRisk
 ```
 
-Available directives: `#EVAL`, `#EVALTRACE`, `#TRACE`, `#CHECK`, `#ASSERT`.
-
-### 8. Deploy
-
-See the **Deployment** section below. In short: add `@export` above the functions that should become API endpoints, add `@desc` to their parameters, and ship.
-
----
-
-## Deployment with `jl4-service`
-
-`jl4-service` turns L4 rule bundles into live, multi-tenant REST APIs. The same annotated source is automatically exposed as:
-
-- **REST** — `POST /deployments/{id}/functions/{fn}/evaluation`
-- **Batch** — `/functions/{fn}/evaluation/batch` (parallel case evaluation)
-- **Query planning** — `/functions/{fn}/query-plan` for interactive questionnaires that only ask the inputs that still matter
-- **OpenAPI 3.0** — `/deployments/{id}/openapi.json`
-- **MCP JSON-RPC 2.0** — `POST /deployments/{id}/.mcp` for LLM tool-use clients
-- **WebMCP** — `<script src="/.webmcp/embed.js">` for browser AI agents
-- **Traces** — `?trace=full&graphviz=true` on any evaluation
-
-**Self-hosted or managed.** You can run `jl4-service` yourself (`cabal run jl4-service`), or use the managed [Legalese Cloud](https://legalese.cloud) offering, which gives each org a subdomain (`https://{org-slug}.legalese.cloud`), handled compilation, OAuth protection, and one-click deployment from the VS Code extension's Deploy tab. Both expose the same API shape, so annotations and client code are portable.
-
-### `@export` — publish a function
-
-Only functions marked `@export` are visible to the service. Place it directly above the `GIVEN`/function definition — **not** between `GIVETH` and `DECIDE`:
-
-| Form                            | Effect                                                 |
-| ------------------------------- | ------------------------------------------------------ |
-| `@export <description>`         | Export this function with a human-readable description |
-| `@export default <description>` | Export as the bundle's **default** function            |
-| `@desc <description>`           | Internal description only — does **not** export        |
-
-The description is the single highest-value sentence in the whole file: it is what an LLM agent sees in its tool list when deciding whether to call this rule. Write it as if the agent has no other context.
+For a companion test file:
 
 ```l4
--- ✘ Vague — agent cannot tell when to call this
-@export do the calculation
+IMPORT prelude
+IMPORT `my-rules`            -- same directory, filename without .l4
 
--- ✘ Implementation detail leaking out
-@export Apply the branching logic defined in §3.2
-
--- ✔ Clear domain intent
-@export Calculate the annual income tax owed by an individual resident taxpayer
+§ `Tests`
+-- ...
 ```
 
-### `@desc` — document parameters
+**Test-file ground rules — these were all learned the hard way:**
 
-Put an inline `@desc` on **every** `GIVEN` parameter an API caller has to supply. These descriptions flow into the OpenAPI parameter docs and the MCP tool's `inputSchema`, and they are what LLMs read when deciding **how to construct a valid call**.
+1. `IMPORT` must be the first non-comment content in the file. Imports placed after a `§` or comment are **silently ignored**, and every imported name then reports as "not found".
+2. Filenames must use dashes or camelCase, not underscores — `` IMPORT `policy_remote_work` `` fails to resolve `policy_remote_work.l4`.
+3. L4 has **no record-update syntax**. You cannot write `` `base case` WITH `field` IS newValue `` — only `TypeName WITH ...` (full construction). For test fixtures that vary one field across many cases, either write each one out fully, or build a tiny helper function.
+4. `#ASSERT` / `#EVAL` expressions must fit on one line. Pre-bind long fixtures to named values and reference them in the directive.
+5. Name each fixture descriptively (`` `salary at exact floor` ``, `` `with prior immigration breach` ``). Failing assertions echo the identifier, making the failure self-documenting.
+6. Write tests _alongside_ the rule, not after. When tests drive development they catch real bugs — the English source is often internally inconsistent, and that tension only surfaces when a concrete fact pattern forces one interpretation over another.
+
+All these points are expanded in [traps.md §7–§12](references/traps.md).
+
+### Step 6 — validate
+
+When Claude runs inside the VS Code extension (the default), `jl4-lsp` recompiles every `.l4` file you touch and the diagnostics come back automatically in the `<ide_diagnostics>` block of the tool hook output. Just edit the file and read the hook output. This covers type errors, parse errors, and every `#ASSERT` / `#EVAL` result in the file you edited. **Iterate by editing, not by running commands.**
+
+Two cases where you need more than passive diagnostics:
+
+- **Validating a file you are not about to edit** — e.g. checking that a test file still passes after you edited the rule it imports. Passive diagnostics only fire on the edited file. Touch the test file or call the stdio driver.
+- **Running outside the VS Code extension** — Agent SDK, CI, sandbox. No IDE hook is available.
+
+For those, run the stdio LSP driver shipped with this skill:
+
+```bash
+node /Users/tgorissen/.claude/skills/writing-l4-rules/scripts/validate-lsp.mjs path/to/file.l4 [more.l4 ...]
+```
+
+It spawns `jl4-lsp` (must be on PATH, which the VS Code extension ensures), opens each file as an LSP document, waits for `publishDiagnostics`, prints every diagnostic with line numbers, and exits non-zero on errors. It is a ~150-line Node script — [scripts/validate-lsp.mjs](scripts/validate-lsp.mjs) — intended for batch use; you do not need it for ordinary authoring.
+
+If you get a confusing error, **check [traps.md](references/traps.md) first** — its decoder ring maps most common symptoms to causes.
+
+### Step 7 — export for deployment
+
+Only functions marked `@export` are visible to `jl4-service`. Place `@export` directly above the function header, not between `GIVETH` and `DECIDE`.
 
 ```l4
-@export Calculate the cost of parking for a given day
-GIVEN
-  day_of_week       IS A NUMBER  @desc Day of the week (1 = Monday, 2 = Tuesday, ..., 7 = Sunday)
-  is_public_holiday IS A BOOLEAN @desc Whether the day is a gazetted public holiday
-  current_weather   IS A STRING  @desc Current weather conditions. One of: "fair", "rain", "snow"
+@export Calculate the annual auto insurance premium under the Comprehensive Motor Policy, including base premium, no-claims discount, young-driver and high-risk-area loadings, anti-theft and multi-vehicle discounts, §6 floor and cap, and 12% Insurance Premium Tax.
+GIVEN p IS A `Policy Inputs`
+  @desc All rating facts. `sum insured` is the agreed market value in policy currency; `age of youngest driver` in years; `vehicles in account` is the count of policies on the same account (1 means no multi-vehicle discount).
 GIVETH A NUMBER
-DECIDE parking_cost IS ...
+DECIDE `calculate annual premium` p IS ...
 ```
 
-A full working example is at [assets/example-parking.l4](assets/example-parking.l4).
+The `@export` description is the single highest-value sentence in the file — it is what a downstream LLM agent sees when deciding whether to call this rule. Write it for an agent with no other context:
 
-### Writing annotations AI agents can actually use
+- ✘ `@export do the calculation`
+- ✘ `@export Apply the branching logic defined in §3.2`
+- ✔ `@export Calculate the annual income tax owed by an individual resident taxpayer`
 
-Because exported metadata is what a downstream LLM sees in its tool-use context:
+Put an inline `@desc` on **every** `GIVEN` parameter. These flow into OpenAPI schemas and MCP `inputSchema` — they are what LLMs read to decide how to construct a valid call. Enumerate allowed string values inline (the type system sees `STRING` as opaque), state units and ranges, explain meaning not shape.
 
-1. **Enumerate allowed values inline.** If a `STRING` accepts a fixed set, list them in the `@desc`. The type `STRING` is opaque to the schema generator — the LLM only knows what you tell it.
-2. **State units and ranges.** `@desc Amount in USD cents` beats `amount`. Same for dates (`ISO 8601, e.g. 2025-03-15`) and durations (`number of days`).
-3. **Explain semantics, not syntax.** The JSON type is already in the schema. Use `@desc` for what the number _means_.
-4. **`@export` answers "is this the tool I want?"; `@desc` answers "what do I put here?"**
-5. **Avoid internal jargon.** The agent has no access to your team glossary.
-6. **One sentence per parameter.** Long enough to disambiguate, short enough to fit a crowded tool list.
+**Pick 2–4 exports per file, not one giant entry point.** A good pattern:
 
-### Deployment workflow
+- The headline yes/no (`applicant qualifies`, `clause 6 covenants met`).
+- The numeric quantity that explains it (`score applicant`, `clause 5 liquidated damages`, `section 15 max uplift`).
+- A sub-decision that callers use as a pre-screen before building the full fact record (`employee is eligible for remote work`).
+- Individual component calculations useful for UI breakdown (`calculate base premium`, `no claims discount rate`).
 
-1. **Annotate** — add `@export` and parameter `@desc`s.
-2. **Validate** locally with `jl4-cli`.
-3. **Bundle** — zip the `.l4` files.
-4. **Deploy** via the VS Code Deploy tab, or:
-   ```bash
-   curl -X POST http://localhost:8080/deployments \
-     -F "id=my-rules" \
-     -F "sources=@/tmp/bundle.zip"
-   ```
-5. **Verify** — `GET /deployments/{id}/openapi.json` to confirm the exported surface.
-6. **Call**:
-   ```bash
-   curl -X POST http://localhost:8080/deployments/my-rules/functions/parking_cost/evaluation \
-     -H "Content-Type: application/json" \
-     -d '{"arguments": {"day_of_week": 6, "is_public_holiday": false, "current_weather": "fair"}}'
-   ```
-
-### Name sanitization
-
-L4 identifiers with spaces (`` `calculate premium` ``) are automatically hyphenated for JSON/URL use (`calculate-premium`). The REST API accepts both the spaced and hyphenated forms. If two L4 names would collide after sanitization (e.g. `` `foo bar` `` and `` `foo-bar` ``), compilation fails with an explicit error.
-
-### Legalese Cloud specifics
-
-When the agent is pointed at a `.legalese.cloud` host, endpoints are OAuth-protected. Discovery starts at:
-
-```
-https://{org-slug}.legalese.cloud/.well-known/oauth-protected-resource
-```
-
-Fetch this first to learn which authorization server issues tokens and what scopes are required (the same `resource_metadata` link appears in `WWW-Authenticate: Bearer …` challenges). Then pass `Authorization: Bearer <token>` on REST, MCP, and WebMCP requests.
-
-Other useful well-known paths on a Legalese Cloud org:
-
-- `/.well-known/mcp` — MCP server discovery
-- `/.well-known/webmcp` — WebMCP discovery manifest
-- `/openapi.json` — org-wide OpenAPI 3.0 spec
-- `/deployments?functions=full` — cached metadata for all deployments
-
-For the full service reference (CLI flags, resource limits, deontic evaluation shapes), see the `jl4-service` README bundled with the running server.
-
----
-
-## Syntax anchor
-
-Just enough to write most rules without a round-trip. Anything not here, check <https://legalese.com/l4/reference/GLOSSARY.md>.
-
-### Types
-
-| L4                            | Meaning                                             |
-| ----------------------------- | --------------------------------------------------- |
-| `NUMBER`                      | Integers and rationals                              |
-| `STRING`                      | Text                                                |
-| `BOOLEAN`                     | `TRUE` / `FALSE`                                    |
-| `DATE` / `TIME` / `DATETIME`  | Calendar date / time-of-day / instant               |
-| `LIST OF T`                   | Ordered collection                                  |
-| `MAYBE T`                     | Optional (`JUST x` / `NOTHING`)                     |
-| `EITHER A B`                  | Choice (`LEFT x` / `RIGHT y`)                       |
-| `DECLARE T HAS ...`           | Record                                              |
-| `DECLARE T IS ONE OF a, b, c` | Enum (optionally with per-constructor `HAS` fields) |
-
-### Operators
-
-Full table at <https://legalese.com/l4/reference/GLOSSARY.md>. The ones used constantly:
-
-- **Boolean:** `AND`, `OR`, `NOT`, `IMPLIES` (`=>`), `UNLESS` (= `AND NOT`)
-- **Comparison:** `EQUALS`, `GREATER THAN` / `ABOVE`, `LESS THAN` / `BELOW`, `AT LEAST` (≥), `AT MOST` (≤)
-- **Arithmetic:** `PLUS`, `MINUS`, `TIMES`, `DIVIDED BY`, `MODULO` — or `+`, `-`, `*`, `/`
-- **String:** `CONCAT`, `APPEND`
-- **List:** `LIST a, b, c`, `EMPTY`, `x FOLLOWED BY xs`
-
-### Control flow
-
-```l4
-IF cond THEN a ELSE b
-
-CONSIDER value
-WHEN Pat1 THEN r1
-WHEN Pat2 WITH field THEN r2
-OTHERWISE rDefault
-
-BRANCH IF x EQUALS 1 THEN "one"
-       IF ^ EQUALS 2 THEN "two"
-       OTHERWISE "other"
-```
-
-The caret `^` is the **ditto** operator — "same as the cell above". See [references/gotchas.md](references/gotchas.md).
-
-### Record construction and access
-
-```l4
-Person WITH `name` IS "Alice", `age` IS 30
-person's `name`
-application's employee's nationality   -- chaining
-```
-
-### Directives
-
-- `#EVAL expr` — evaluate and print
-- `#EVALTRACE expr` — evaluate with execution trace
-- `#CHECK expr` — type-check without evaluating
-- `#ASSERT bool_expr` — assert must be TRUE
-- `#TRACE contract AT time WITH ...` — simulate a regulative rule; see [references/regulative.md](references/regulative.md)
-
-### Annotations
-
-- `@desc` — human-readable description (internal unless paired with `@export`)
-- `@export` — mark a function for deployment
-- `@nlg` — natural-language generation hint
-- `@ref`, `@ref-src`, `@ref-map` — cross-reference to a legal source
-
-### Imports
-
-```l4
-IMPORT prelude      -- automatically imported, but explicit is fine
-IMPORT daydate
-IMPORT currency
-```
-
-The prelude is always available. For the full library list (`prelude`, `daydate`, `time`, `datetime`, `timezone`, `math`, `currency`, `legal-persons`, `jurisdiction`, `actus`, `llm`, `excel-date`, `holdings`, `date-compat`), see [references/builtins.md](references/builtins.md) or <https://legalese.com/l4/reference/libraries.md>.
+The worked example at [assets/example-parking.l4](assets/example-parking.l4) shows a complete `@export` + `@desc` pattern end-to-end.
 
 ---
 
 ## Writing for legal audiences
 
-L4's target users are policy writers and legal authors, not programmers. Write rules that read like prose and make generous use of the tick marked identifiers containing full phrases
+L4's users are policy writers and legal authors, not programmers. Rules should read like the underlying text.
 
 ```l4
--- ✔ Reads like legal text
+-- ✔ Reads like legal prose
 GIVEN person IS A Person
 GIVETH A BOOLEAN
 DECIDE `the person is eligible for benefits` IF
@@ -374,41 +230,100 @@ DECIDE `the person is eligible for benefits` IF
     AND `the person has resided for at least 5 years`
     AND NOT `the person has been disqualified`
 
--- ✘ Reads like programmer code
-GIVEN p IS A Person
-GIVETH A BOOLEAN
+-- ✘ Reads like code
 isEligible p MEANS p's citizen && p's years >= 5 && !p's disqualified
 ```
 
-**Use backtick identifiers liberally.** `` `the applicant` `` not `applicant`. `` `has valid identification` `` not `hasValidID`.
+Use **mixfix notation** for binary-ish relations so the call site reads as prose:
+
+```l4
+GIVEN employee IS AN Employee
+      employer IS A Company
+GIVETH A BOOLEAN
+`employee` `works for` `employer` MEANS ...
+
+-- Called as: `Alice` `works for` `Acme Corp`
+```
+
+Backtick identifiers are the single biggest lever for readability — use them liberally in function names, parameter names, field names, and enum constructors. A rule file where only the keywords are in English is code; one where the vocabulary is in English is law.
 
 ---
 
-## Troubleshooting
+## Deploying with `jl4-service`
 
-- **Parse error: unexpected token** — L4 is layout-sensitive. Check indentation.
-- **Pattern match not exhaustive** — add `OTHERWISE` or handle every enum constructor.
-- **Not in scope** — define the function before use, or add the needed `IMPORT`.
-- **Type mismatch** — use the explicit coercions (`TOSTRING`, `TONUMBER`, `TODATE`, …); L4 does no implicit coercion. See [references/builtins.md](references/builtins.md).
-- **`#TRACE` returns a residual obligation instead of `FULFILLED`** — the trace ended in a state with open obligations. Read the residual: it tells you exactly what's still owed and by whom.
+`jl4-service` turns an annotated `.l4` bundle into a multi-endpoint service: REST, batch, query-planning, OpenAPI 3.0, MCP JSON-RPC, WebMCP, and trace visualisation. Self-host via `cabal run jl4-service`, or use the managed [Legalese Cloud](https://legalese.cloud) — both expose the same API surface and accept the same `@export`-annotated source.
 
-For compiler-error recipes, see <https://legalese.com/l4/reference/errors.md>.
+### Workflow
+
+1. **Annotate** — `@export` on every publishable function, inline `@desc` on every `GIVEN` parameter.
+2. **Validate** locally via Step 6 until all diagnostics are clean.
+3. **Bundle** — zip the `.l4` files.
+4. **Deploy** via the VS Code extension's Deploy tab, or:
+
+   ```bash
+   curl -X POST http://localhost:8080/deployments \
+     -F "id=my-rules" \
+     -F "sources=@/tmp/bundle.zip"
+   ```
+
+5. **Verify** — `GET /deployments/{id}/openapi.json` to inspect the exported surface.
+6. **Call**:
+
+   ```bash
+   curl -X POST http://localhost:8080/deployments/my-rules/functions/calculate-annual-premium/evaluation \
+     -H "Content-Type: application/json" \
+     -d '{"arguments": {...}}'
+   ```
+
+### Name sanitization
+
+L4 identifiers with spaces are auto-hyphenated for URL / JSON use — `` `calculate annual premium` `` → `calculate-annual-premium`. The REST API accepts either form. Collisions between a spaced name and a dashed name (`` `foo bar` `` and `` `foo-bar` ``) fail compilation explicitly.
+
+### Legalese Cloud
+
+Endpoints on a `.legalese.cloud` host are OAuth-protected. Discovery starts at:
+
+```
+https://{org-slug}.legalese.cloud/.well-known/oauth-protected-resource
+```
+
+Fetch this first to learn the authorization server and required scopes, then pass `Authorization: Bearer <token>` on REST, MCP, and WebMCP requests. Other useful well-known paths:
+
+- `/.well-known/mcp` — MCP server discovery
+- `/.well-known/webmcp` — WebMCP discovery manifest
+- `/openapi.json` — org-wide OpenAPI 3.0 spec
+- `/deployments?functions=full` — cached metadata for all deployments
+
+---
+
+## Quick syntax reminders
+
+Full glossary: <https://legalese.com/l4/reference/GLOSSARY.md>. Load [references/builtins.md](references/builtins.md) for coercions, HTTP/JSON, and libraries.
+
+**Types:** `NUMBER`, `STRING`, `BOOLEAN`, `DATE` / `TIME` / `DATETIME`, `LIST OF T`, `MAYBE T` (`JUST x` / `NOTHING`), `EITHER A B` (`LEFT x` / `RIGHT y`), `DECLARE T HAS ...`, `DECLARE T IS ONE OF a, b, c`.
+
+**Operators:** `AND` `OR` `NOT` `IMPLIES` `UNLESS` · `EQUALS` `GREATER THAN` `LESS THAN` `AT LEAST` `AT MOST` · `PLUS` `MINUS` `TIMES` `DIVIDED BY` `MODULO` · `CONCAT` `APPEND` · `LIST a, b, c` `EMPTY` `x FOLLOWED BY xs`.
+
+**Records:** `Person WITH \`name\` IS "Alice", \`age\` IS 30`to construct,`person's \`name\``to access. Chain with`application's employee's nationality`. Always parenthesise a genitive sub-expression passed to a function: `f (r's field)`.
+
+**Directives:** `#EVAL`, `#EVALTRACE`, `#TRACE`, `#CHECK`, `#ASSERT`.
+
+**Annotations:** `@desc` (parameter or internal), `@export` (publish for deployment), `@export default` (bundle default), `@nlg` (NLG hint), `@ref` / `@ref-src` / `@ref-map` (legal citations).
+
+**Imports:** must be at the top of the file, before any `§` or content. Filenames must use dashes or camelCase. `IMPORT prelude` is implicit but harmless to be explicit. Library list in [references/builtins.md](references/builtins.md).
 
 ---
 
 ## Further reading
 
-All documentation for the currently-published L4 release lives under `https://legalese.com/l4/...`:
+All authoritative docs live under `https://legalese.com/l4/...`:
 
-- **Start here:** <https://legalese.com/l4/README.md>
-- **Glossary of every keyword, operator, type:** <https://legalese.com/l4/reference/GLOSSARY.md>
-- **Cheat sheet (translation from other languages):** <https://legalese.com/l4/reference/cheat-sheet.md>
-- **Regulative rules:** <https://legalese.com/l4/reference/regulative.md>
-- **Libraries:** <https://legalese.com/l4/reference/libraries.md>
-- **Tutorials — first L4 file:** <https://legalese.com/l4/tutorials/getting-started/first-l4-file.md>
-- **Tutorials — common patterns:** <https://legalese.com/l4/tutorials/getting-started/common-patterns.md>
-- **Tutorials — deploying functions:** <https://legalese.com/l4/tutorials/deploying-functions/exporting-functions-for-deployment.md>
-- **Concepts — regulative rules:** <https://legalese.com/l4/concepts/legal-modeling/regulative-rules.md>
-- **Foundation course (Module 5 — regulative rules):** <https://legalese.com/l4/courses/foundation/module-5-regulative.md>
+- **README and conceptual overview:** <https://legalese.com/l4/README.md>
+- **Full glossary:** <https://legalese.com/l4/reference/GLOSSARY.md>
+- **Cheat sheet (from other languages):** <https://legalese.com/l4/reference/cheat-sheet.md>
+- **Regulative rules reference:** <https://legalese.com/l4/reference/regulative.md>
+- **Library catalogue:** <https://legalese.com/l4/reference/libraries.md>
+- **Tutorials:** <https://legalese.com/l4/tutorials/getting-started/first-l4-file.md>, <https://legalese.com/l4/tutorials/getting-started/common-patterns.md>, <https://legalese.com/l4/tutorials/deploying-functions/exporting-functions-for-deployment.md>
+- **Foundation course — regulative rules module:** <https://legalese.com/l4/courses/foundation/module-5-regulative.md>
 
-The website tracks the currently-published L4 version; treat it as ground truth over any snippet in this skill.
+Treat the website as ground truth over anything in this skill — it tracks the currently-published L4 release.

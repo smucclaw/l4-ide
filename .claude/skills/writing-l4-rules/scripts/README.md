@@ -1,37 +1,50 @@
 # L4 Skill Scripts
 
-Support scripts for the L4 skill.
+Support scripts for the `writing-l4-rules` skill.
 
-## validate.sh
+## validate-lsp.mjs
 
-A wrapper around `jl4-cli` that type-checks an L4 file. It prefers a `jl4-cli`
-binary on `PATH`, falling back to `cabal run jl4-cli` when run from inside a
-local checkout of the `l4-ide` repository.
+A minimal Node-based LSP client that drives `jl4-lsp` over stdio to validate
+`.l4` files. Use this when you need to validate files outside the VS Code
+extension — for example, in CI, in an Agent SDK sandbox, or when validating
+a test file you are not about to edit.
+
+Inside the VS Code extension, you usually do not need this at all: every
+`Edit` / `Write` on a `.l4` file already triggers `jl4-lsp` and returns
+diagnostics via the IDE hook. Use `validate-lsp.mjs` when that passive flow
+is unavailable or insufficient.
 
 ### Usage
 
 ```bash
-./validate.sh path/to/file.l4
-
-# Pin evaluation time for reproducible results
-./validate.sh path/to/file.l4 --fixed-now=2025-01-01T00:00:00Z
+node scripts/validate-lsp.mjs path/to/file.l4 [more.l4 ...]
 ```
 
-Exit codes:
+For each file, the script:
 
-- `0` — validation successful
-- non-zero — validation failed (see stderr for the actual error)
+1. Spawns `jl4-lsp` (must be on `PATH` — the VS Code extension installs it)
+2. Sends an LSP `initialize` → `initialized` → `textDocument/didOpen` sequence
+3. Waits for `publishDiagnostics` notifications
+4. Prints every diagnostic with severity and line number, including
+   Info-level `assertion satisfied` / `assertion failed` from `#ASSERT`,
+   and `Result: ...` from `#EVAL` / `#TRACE`
+5. Exits with `0` if there are no errors, `1` otherwise
+
+Imports resolve relative to each file's directory, exactly as the VS Code
+extension does them.
 
 ### Requirements
 
-Either:
+- Node ≥ 18 (uses `node:child_process`, `node:fs`, `node:url`)
+- `jl4-lsp` on `PATH`. The VS Code extension ships a platform-specific
+  binary under `<extension>/bin/<platform>-<arch>/jl4-lsp`; point your
+  `PATH` there, or install the binary elsewhere on `PATH`.
 
-- `jl4-cli` available on `PATH`, or
-- A checkout of [`legalese/l4-ide`](https://github.com/legalese/l4-ide) with `cabal` available (the script will invoke `cabal run jl4-cli -- ...`)
+### When to use this vs. IDE diagnostics
 
-### Common errors
-
-- **Type mismatches** — passing wrong types to a function
-- **Undefined functions or types** — missing `IMPORT` or definition order
-- **Pattern match not exhaustive** — missing `OTHERWISE` or enum case
-- **Layout errors** — L4 is layout-sensitive like Python/Haskell
+| Scenario                                                  | Preferred path          |
+| --------------------------------------------------------- | ----------------------- |
+| Authoring a rule file, iterating                          | Passive IDE diagnostics |
+| Re-checking a test file after editing the rule it imports | `validate-lsp.mjs`      |
+| Running a whole test suite and counting results           | `validate-lsp.mjs`      |
+| Outside the VS Code extension (CI, Agent SDK, sandbox)    | `validate-lsp.mjs`      |
