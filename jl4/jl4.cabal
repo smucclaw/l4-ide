@@ -51,7 +51,7 @@ executable l4
     L4.Cli.Batch
     L4.Cli.Check
     L4.Cli.Common
-    L4.Cli.Fmt
+    L4.Cli.Format
     L4.Cli.Run
     L4.Cli.StateGraph
     L4.Cli.Trace

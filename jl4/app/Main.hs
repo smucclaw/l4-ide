@@ -27,7 +27,7 @@ import qualified Options.Applicative as Options
 import L4.Cli.Ast (AstOptions, astCmd, astOptionsParser)
 import L4.Cli.Batch (BatchOptions, batchCmd, batchOptionsParser)
 import L4.Cli.Check (CheckOptions, checkCmd, checkOptionsParser)
-import L4.Cli.Fmt (FmtOptions, fmtCmd, fmtOptionsParser)
+import L4.Cli.Format (FormatOptions, formatCmd, formatOptionsParser)
 import L4.Cli.Run (RunOptions, runCmd, runOptionsParser)
 import L4.Cli.StateGraph (StateGraphOptions, stateGraphCmd, stateGraphOptionsParser)
 import L4.Cli.Trace (TraceOptions, traceCmd, traceOptionsParser)
@@ -39,7 +39,7 @@ import L4.Cli.Trace (TraceOptions, traceCmd, traceOptionsParser)
 data Command
   = CmdRun        RunOptions
   | CmdCheck      CheckOptions
-  | CmdFmt        FmtOptions
+  | CmdFormat     FormatOptions
   | CmdAst        AstOptions
   | CmdBatch      BatchOptions
   | CmdTrace      TraceOptions
@@ -59,8 +59,8 @@ commandParser =
       <> command "check"
            (info (CmdCheck <$> checkOptionsParser)
              (progDesc "Typecheck an L4 file only (fast path; no evaluation)"))
-      <> command "fmt"
-           (info (CmdFmt <$> fmtOptionsParser)
+      <> command "format"
+           (info (CmdFormat <$> formatOptionsParser)
              (progDesc "Reformat an L4 file and print to stdout"))
       <> command "ast"
            (info (CmdAst <$> astOptionsParser)
@@ -89,7 +89,7 @@ main = do
   case cmd of
     CmdRun        opts -> runCmd        opts
     CmdCheck      opts -> checkCmd      opts
-    CmdFmt        opts -> fmtCmd        opts
+    CmdFormat     opts -> formatCmd     opts
     CmdAst        opts -> astCmd        opts
     CmdBatch      opts -> batchCmd      opts
     CmdTrace      opts -> traceCmd      opts

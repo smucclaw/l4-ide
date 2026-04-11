@@ -161,7 +161,7 @@ spec bin = do
       code `shouldBe` ExitSuccess
       sout `shouldSatisfy` ("run" `isInfixOf`)
       sout `shouldSatisfy` ("check" `isInfixOf`)
-      sout `shouldSatisfy` ("fmt" `isInfixOf`)
+      sout `shouldSatisfy` ("format" `isInfixOf`)
       sout `shouldSatisfy` ("ast" `isInfixOf`)
       sout `shouldSatisfy` ("batch" `isInfixOf`)
       sout `shouldSatisfy` ("trace" `isInfixOf`)
@@ -218,16 +218,16 @@ spec bin = do
       Output code _ _ <- runL4 bin ["check", garbageFixture]
       code `shouldSatisfy` (/= ExitSuccess)
 
-  describe "l4 fmt" $ do
+  describe "l4 format" $ do
     it "prints the reformatted source of a clean file to stdout" $ do
-      Output code sout _ <- runL4 bin ["fmt", cleanFixture]
+      Output code sout _ <- runL4 bin ["format", cleanFixture]
       code `shouldBe` ExitSuccess
       -- Formatter output should contain the DECIDE (exact spelling may
       -- differ from input, so we only look for the identifier).
       sout `shouldSatisfy` ("xor" `isInfixOf`)
 
     it "writes nothing to stdout and exits non-zero on a broken file" $ do
-      Output code _ _ <- runL4 bin ["fmt", garbageFixture]
+      Output code _ _ <- runL4 bin ["format", garbageFixture]
       code `shouldSatisfy` (/= ExitSuccess)
 
   describe "l4 ast" $ do
