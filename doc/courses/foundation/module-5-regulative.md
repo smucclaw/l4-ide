@@ -258,7 +258,10 @@ See the wedding vows example which demonstrates:
 L4 can visualize regulative rules as state transition diagrams:
 
 ```bash
-cabal run jl4-cli -- --state-graph mycontract.l4
+l4 state-graph mycontract.l4
+
+# Or from a Haskell checkout
+cabal run l4 -- state-graph mycontract.l4
 ```
 
 This generates a graph showing:

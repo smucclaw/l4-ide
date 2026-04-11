@@ -75,7 +75,7 @@ Provides syntax highlighting, type checking, inline evaluation, `@export` previe
 
 Every tool in this repo can render an L4 evaluation as a GraphViz diagram:
 
-- **CLI:** `jl4-cli --graphviz myfile.l4 > trace.dot`, then `dot -Tsvg trace.dot > trace.svg`
+- **CLI:** `l4 trace myfile.l4 > trace.dot`, then `dot -Tsvg trace.dot > trace.svg` (or `l4 trace myfile.l4 --format svg -o out/` to generate SVG files directly)
 - **REPL:** `:trace <expression>`, or `:tracefile traces/session` to capture numbered `.dot` files
 - **Decision Service:** `POST /deployments/{id}/functions/{fn}/evaluation?trace=full&graphviz=true`
 

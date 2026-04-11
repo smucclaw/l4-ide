@@ -1,0 +1,8 @@
+§ EvalFixture
+
+GIVEN x IS A BOOLEAN
+GIVETH A BOOLEAN
+DECIDE doubleNot x IS NOT NOT x
+
+#EVAL doubleNot TRUE
+#EVAL doubleNot FALSE

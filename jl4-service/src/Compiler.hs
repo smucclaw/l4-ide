@@ -440,7 +440,11 @@ returnTypeDisplay Nothing = "unknown"
 returnTypeDisplay (Just ty)
   | isDeonticType ty = "DEONTIC"
   | otherwise = case ty of
-      TyApp _ n _ -> Text.toUpper (rawNameToText (rawName (getActual n)))
+      TyApp _ n args ->
+        let nameText = Text.toUpper (rawNameToText (rawName (getActual n)))
+         in if null args
+              then nameText
+              else nameText <> " " <> Text.intercalate " " (map (returnTypeDisplay . Just) args)
       Type _ -> "TYPE"
       Fun{} -> "FUNCTION"
       Forall _ _ inner -> returnTypeDisplay (Just inner)

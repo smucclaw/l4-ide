@@ -105,9 +105,9 @@ If you use `TODAY` or `CURRENTTIME` without `TIMEZONE IS`, the compiler errors.
 For reproducible evaluation, pin the clock from the CLI:
 
 ```bash
-jl4-cli --fixed-now=2025-01-01T00:00:00Z my-rules.l4
+l4 run --fixed-now=2025-01-01T00:00:00Z my-rules.l4
 # or
-JL4_FIXED_NOW=2025-01-01T00:00:00Z jl4-cli my-rules.l4
+JL4_FIXED_NOW=2025-01-01T00:00:00Z l4 run my-rules.l4
 ```
 
 ---

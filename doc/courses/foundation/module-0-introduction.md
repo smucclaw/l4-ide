@@ -111,7 +111,8 @@ If you have the L4 tools installed:
 
 ```bash
 # Run a file
-cabal run jl4-cli -- myfile.l4
+l4 run myfile.l4                        # when the `l4` CLI is on PATH
+cabal run l4 -- run myfile.l4           # from a Haskell checkout
 
 # Interactive REPL
 cabal run jl4-repl -- myfile.l4

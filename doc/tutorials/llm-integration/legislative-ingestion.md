@@ -217,7 +217,10 @@ ASSUME `satisfies public benefit` IS BOOLEAN
 Run the L4 type checker:
 
 ```bash
-cabal run jl4-cli -- charity-test.l4
+l4 check charity-test.l4
+
+# Or from a Haskell checkout
+cabal run l4 -- check charity-test.l4
 ```
 
 ### Common Issues

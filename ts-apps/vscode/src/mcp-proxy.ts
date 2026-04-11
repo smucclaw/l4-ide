@@ -4,7 +4,8 @@ import * as path from 'node:path'
 import * as os from 'node:os'
 import * as vscode from 'vscode'
 import type { AuthManager } from './auth.js'
-import { showTimedInformationMessage } from './notifications.js'
+import { showTimedWarningMessage } from './notifications.js'
+import { installL4Cli } from './install-cli.js'
 
 /**
  * Local MCP proxy server.
@@ -19,20 +20,32 @@ import { showTimedInformationMessage } from './notifications.js'
  */
 const CLAUDE_SETUP_DISMISSED_KEY = 'l4.claudeCodeSetupDismissed'
 
+export type ClaudeSetupOutcome =
+  | 'no-proxy' // proxy never started — abort
+  | 'no-config' // ~/.claude.json doesn't exist
+  | 'unparseable-config' // ~/.claude.json exists but isn't valid JSON
+  | 'already-configured' // both MCP + skill already installed
+  | 'dismissed-previously' // user previously clicked "Never"
+  | 'user-declined' // user just clicked "No" or closed the dialog
+  | 'accepted-co-installed' // user clicked "Yes" — we installed both tools AND the CLI
+
 export class McpProxy implements vscode.Disposable {
   private server: http.Server | null = null
   private port: number = 0
   private mcpRegistration: vscode.Disposable | undefined
   private outputChannel: vscode.OutputChannel
   private globalState: vscode.Memento | undefined
+  private extensionPath: string | undefined
 
   constructor(
     private readonly auth: AuthManager,
     outputChannel: vscode.OutputChannel,
-    globalState?: vscode.Memento
+    globalState?: vscode.Memento,
+    extensionPath?: string
   ) {
     this.outputChannel = outputChannel
     this.globalState = globalState
+    this.extensionPath = extensionPath
   }
 
   /** Start the proxy and register with VS Code. Call once on activation. */
@@ -305,33 +318,51 @@ export class McpProxy implements vscode.Disposable {
   }
 
   /**
-   * If Claude Code is installed but l4-rules isn't configured yet,
-   * offer to add it.
+   * Outcome of the startup "Add L4 Tools to Claude Code?" flow. The
+   * caller uses this to decide whether to fall through to the standalone
+   * "Install L4 CLI?" prompt — which we want in every branch *except*
+   * `accepted-co-installed`, because that path already co-installs the
+   * CLI as part of the Claude setup.
    */
-  async offerClaudeCodeSetup(): Promise<void> {
-    if (!this.port) return
+
+  /**
+   * If Claude Code is installed but any component of the L4 tools
+   * (MCP server or writing-l4-rules skill) is missing, offer to add
+   * the full set.  Returns a tag describing what happened so the
+   * startup flow can fall through to the CLI install prompt when
+   * appropriate.
+   */
+  async offerClaudeCodeSetup(): Promise<ClaudeSetupOutcome> {
+    if (!this.port) return 'no-proxy'
 
     const claudeConfigPath = path.join(os.homedir(), '.claude.json')
     try {
       fs.accessSync(claudeConfigPath, fs.constants.R_OK)
     } catch {
-      return // Claude Code not installed
+      return 'no-config' // Claude Code not installed
     }
 
-    // Already configured — just ensure port is current
+    // Inspect the current state of both components.
+    let mcpPresent = false
     try {
       const raw = fs.readFileSync(claudeConfigPath, 'utf-8')
       const config = JSON.parse(raw)
-      if (config?.mcpServers?.['l4-rules']) {
-        this.updateClaudeCodePort()
-        return
-      }
+      mcpPresent = !!config?.mcpServers?.['l4-rules']
     } catch {
-      return
+      return 'unparseable-config' // Don't touch it
+    }
+    const skillPresent = this.isWritingL4RulesSkillInstalled()
+
+    // Everything already in place — just keep the port in sync silently.
+    if (mcpPresent && skillPresent) {
+      this.updateClaudeCodePort()
+      return 'already-configured'
     }
 
-    // Check if user previously dismissed
-    if (this.globalState?.get<boolean>(CLAUDE_SETUP_DISMISSED_KEY)) return
+    // At least one component is missing. Respect a prior "Never".
+    if (this.globalState?.get<boolean>(CLAUDE_SETUP_DISMISSED_KEY)) {
+      return 'dismissed-previously'
+    }
 
     const action = await vscode.window.showInformationMessage(
       'Add L4 Tools to Claude Code?',
@@ -341,29 +372,154 @@ export class McpProxy implements vscode.Disposable {
     )
     if (action === 'Never') {
       this.globalState?.update(CLAUDE_SETUP_DISMISSED_KEY, true)
+      return 'user-declined'
+    }
+    if (action !== 'Yes') return 'user-declined'
+
+    // installL4Tools co-installs the L4 CLI silently (see its body),
+    // so the caller does NOT need to prompt separately.
+    this.installL4Tools(claudeConfigPath)
+    return 'accepted-co-installed'
+  }
+
+  /**
+   * True if ~/.claude/skills/writing-l4-rules/SKILL.md exists.
+   * Used to decide whether the skill half of the L4 tools is installed.
+   */
+  private isWritingL4RulesSkillInstalled(): boolean {
+    const skillMdPath = path.join(
+      os.homedir(),
+      '.claude',
+      'skills',
+      'writing-l4-rules',
+      'SKILL.md'
+    )
+    try {
+      return fs.statSync(skillMdPath).isFile()
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * Public entry point triggered from the sidebar menu.
+   * Verifies/installs the L4 tools (MCP server + writing-l4-rules skill)
+   * in Claude Code, without re-prompting the user.
+   *
+   * If ~/.claude.json is missing, shows a 4s warning and does nothing.
+   */
+  async addL4ToolsToClaudeCode(): Promise<void> {
+    const claudeConfigPath = path.join(os.homedir(), '.claude.json')
+    try {
+      fs.accessSync(claudeConfigPath, fs.constants.R_OK)
+    } catch {
+      showTimedWarningMessage(
+        'Claude Code .claude.json file could not be found in the user home directory'
+      )
       return
     }
-    if (action !== 'Yes') return
+    this.installL4Tools(claudeConfigPath)
+  }
+
+  /**
+   * Write (or refresh) the l4-rules MCP entry in ~/.claude.json, install
+   * the bundled writing-l4-rules skill, and show a confirmation toast.
+   *
+   * Assumes claudeConfigPath exists and is readable.
+   */
+  private installL4Tools(claudeConfigPath: string): void {
+    if (!this.port) return
 
     try {
       const raw = fs.readFileSync(claudeConfigPath, 'utf-8')
       const config = JSON.parse(raw)
       if (!config.mcpServers) config.mcpServers = {}
-      config.mcpServers['l4-rules'] = {
-        type: 'http',
-        url: `http://127.0.0.1:${this.port}/mcp`,
+      const desiredUrl = `http://127.0.0.1:${this.port}/mcp`
+      const existing = config.mcpServers['l4-rules']
+      const alreadyCorrect =
+        existing && existing.type === 'http' && existing.url === desiredUrl
+      if (!alreadyCorrect) {
+        config.mcpServers['l4-rules'] = {
+          type: 'http',
+          url: desiredUrl,
+        }
+        fs.writeFileSync(claudeConfigPath, JSON.stringify(config, null, 2))
+        this.outputChannel.appendLine(
+          existing
+            ? '[mcp-proxy] Refreshed l4-rules entry in ~/.claude.json'
+            : '[mcp-proxy] Added l4-rules to ~/.claude.json'
+        )
+      } else {
+        this.outputChannel.appendLine(
+          '[mcp-proxy] l4-rules entry in ~/.claude.json already up to date'
+        )
       }
-      fs.writeFileSync(claudeConfigPath, JSON.stringify(config, null, 2))
-      this.outputChannel.appendLine(
-        '[mcp-proxy] Added l4-rules to ~/.claude.json'
-      )
-      showTimedInformationMessage(
-        'L4 tools added to Claude Code. Restart Claude Code to pick up the change.'
-      )
     } catch (err) {
       this.outputChannel.appendLine(
         `[mcp-proxy] Failed to update ~/.claude.json: ${err instanceof Error ? err.message : String(err)}`
       )
+      return
+    }
+
+    this.installWritingL4RulesSkill()
+
+    // The writing-l4-rules skill tells Claude to invoke the `l4` CLI for
+    // validation, so installing the skill without installing the CLI
+    // leaves the agent with instructions it can't follow. Install both
+    // together, silently (we'll surface a single "done" toast below).
+    if (this.extensionPath) {
+      void installL4Cli(this.extensionPath, this.outputChannel, {
+        silent: true,
+      })
+    }
+
+    void vscode.window.showInformationMessage(
+      'L4 tools added to Claude Code. Restart Claude Code to pick up the change.',
+      'Okay'
+    )
+  }
+
+  /**
+   * Copy the bundled writing-l4-rules skill into ~/.claude/skills/.
+   * Returns true on success, false otherwise (non-fatal).
+   */
+  private installWritingL4RulesSkill(): boolean {
+    if (!this.extensionPath) {
+      this.outputChannel.appendLine(
+        '[mcp-proxy] Skill install skipped: extensionPath not set'
+      )
+      return false
+    }
+    const src = path.join(
+      this.extensionPath,
+      'static',
+      'skills',
+      'writing-l4-rules'
+    )
+    if (!fs.existsSync(src)) {
+      this.outputChannel.appendLine(
+        `[mcp-proxy] Skill install skipped: bundled skill not found at ${src}`
+      )
+      return false
+    }
+    const dest = path.join(
+      os.homedir(),
+      '.claude',
+      'skills',
+      'writing-l4-rules'
+    )
+    try {
+      fs.mkdirSync(path.dirname(dest), { recursive: true })
+      fs.cpSync(src, dest, { recursive: true, force: true })
+      this.outputChannel.appendLine(
+        `[mcp-proxy] Installed writing-l4-rules skill to ${dest}`
+      )
+      return true
+    } catch (err) {
+      this.outputChannel.appendLine(
+        `[mcp-proxy] Failed to install writing-l4-rules skill: ${err instanceof Error ? err.message : String(err)}`
+      )
+      return false
     }
   }
 

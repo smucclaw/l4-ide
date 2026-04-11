@@ -24,7 +24,7 @@ common defaults
   build-depends:
     base
 
-executable jl4-cli
+executable l4
   import: defaults
   hs-source-dirs: app
   build-depends:
@@ -35,16 +35,26 @@ executable jl4-cli
     cassava,
     directory,
     filepath,
+    hls-graph,
+    lsp-types,
     process,
     text,
     time,
-    lsp-types,
     optparse-applicative,
     pretty-simple,
     unordered-containers,
     vector,
     yaml,
   main-is: Main.hs
+  other-modules:
+    L4.Cli.Ast
+    L4.Cli.Batch
+    L4.Cli.Check
+    L4.Cli.Common
+    L4.Cli.Format
+    L4.Cli.Run
+    L4.Cli.StateGraph
+    L4.Cli.Trace
 
 executable jl4-schema
   import: defaults
@@ -87,3 +97,23 @@ test-suite jl4-test
     silently,
     transformers,
     lsp-types,
+
+test-suite l4-cli-test
+  import: defaults
+  ghc-options: -threaded -rtsopts
+  type: exitcode-stdio-1.0
+  hs-source-dirs: tests-cli
+  main-is: Main.hs
+  other-modules:
+    Paths_jl4
+  autogen-modules:
+    Paths_jl4
+  build-tool-depends:
+    jl4:l4
+  build-depends:
+    aeson,
+    bytestring,
+    directory,
+    filepath,
+    hspec,
+    process,

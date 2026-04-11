@@ -322,20 +322,21 @@
     display: flex;
     flex-wrap: wrap;
     gap: 3px;
-    padding: 2px 4px;
+    padding: 2px 4px 2px 16px;
   }
 
   .param-enums.nested {
-    padding-left: 4px;
+    padding-left: 16px;
   }
 
   .enum-tag {
     font-family: var(--vscode-editor-font-family, monospace);
-    font-size: 0.82em;
-    padding: 1px 5px;
+    font-size: 0.78em;
+    padding: 1px 3px;
     border-radius: 3px;
-    background: var(--vscode-badge-background, #4d4d4d);
-    color: var(--vscode-badge-foreground, #ccc);
+    background: transparent;
+    color: var(--vscode-badge-background, #4d4d4d);
+    border: 1px solid var(--vscode-badge-background, #4d4d4d);
   }
 
   .badge {

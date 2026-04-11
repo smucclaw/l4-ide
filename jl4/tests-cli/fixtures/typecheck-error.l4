@@ -1,0 +1,6 @@
+§ TypecheckErrorFixture
+
+-- Intentionally wrong: body is a number but the return type is BOOLEAN.
+GIVEN x IS A NUMBER
+GIVETH A BOOLEAN
+DECIDE badTyping x IS x

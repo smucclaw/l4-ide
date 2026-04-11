@@ -301,7 +301,10 @@ Use `#TRACE` to simulate scenarios:
 L4 can visualize regulative rules as state machines:
 
 ```bash
-cabal run jl4-cli -- --state-graph mycontract.l4
+l4 state-graph mycontract.l4
+
+# Or from a Haskell checkout
+cabal run l4 -- state-graph mycontract.l4
 ```
 
 This shows:

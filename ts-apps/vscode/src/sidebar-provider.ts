@@ -4,6 +4,7 @@ import type { WebviewTypeMessageParticipant } from 'vscode-messenger-common'
 import type { VSCodeL4LanguageClient } from './vscode-l4-language-client.js'
 import { type AuthManager, LEGALESE_CLOUD_DOMAIN } from './auth.js'
 import type { ServiceClient } from './service-client.js'
+import type { McpProxy } from './mcp-proxy.js'
 import { getWebviewContent } from './webview-panel.js'
 import {
   showTimedInformationMessage,
@@ -26,6 +27,8 @@ import {
   RequestOpenServiceUrl,
   RequestOpenConsole,
   RequestOpenExtensionSettings,
+  RequestAddL4ToolsToClaudeCode,
+  RequestInstallL4Cli,
   RequestCopySignInLink,
   RequestDisconnect,
   RequestRevealLocation,
@@ -206,6 +209,7 @@ export function initializeSidebarMessenger(
   auth: AuthManager,
   serviceClient: ServiceClient,
   outputChannel: vscode.OutputChannel,
+  mcpProxy: McpProxy,
   onInspectorSectionRemoved?: (directiveId: string) => void
 ) {
   // Handle exported functions request from sidebar
@@ -484,6 +488,19 @@ export function initializeSidebarMessenger(
       'workbench.action.openSettings',
       '@ext:legalese.l4-vscode'
     )
+  })
+
+  // Add L4 Tools (MCP + writing-l4-rules skill) to Claude Code
+  messenger.onNotification(RequestAddL4ToolsToClaudeCode, async () => {
+    await mcpProxy.addL4ToolsToClaudeCode()
+  })
+
+  // Install the bundled l4 CLI on PATH.
+  // The sidebar dropdown fires this separately from "Add L4 Tools …"
+  // because a user may want the CLI without touching Claude Code
+  // (e.g. to use it from their shell or editor).
+  messenger.onNotification(RequestInstallL4Cli, async () => {
+    await vscode.commands.executeCommand('l4.installCli')
   })
 
   // Copy Legalese Cloud sign-in link to clipboard.

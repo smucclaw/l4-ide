@@ -1,6 +1,6 @@
 ---
 name: writing-l4-rules
-description: Writes, validates, and deploys L4 — a typed functional language for computational law — encoding contracts, regulations, and policy logic as executable rules with type-checked decisions and formally-modeled obligations. Use when the user asks to formalise legal text, draft rules with deadlines and reparations, mark functions for deployment with `@export`/`@desc`, run `jl4-cli`, or deploy to `jl4-service`/Legalese Cloud.
+description: Writes, validates, and deploys L4 — a typed functional language for computational law — encoding contracts, regulations, and policy logic as executable rules with type-checked decisions and formally-modeled obligations. Use when the user asks to formalise legal text, draft rules with deadlines and reparations, mark functions for deployment with `@export`/`@desc`, run the `l4` CLI (`l4 run`, `l4 check`), or deploy to `jl4-service`/Legalese Cloud.
 ---
 
 # Writing L4 Rules
@@ -27,7 +27,7 @@ Reach for this skill when the user wants to:
 2. **Encode decision logic** that must be auditable and type-checked, not hand-waved
 3. **Model obligations with deadlines** (pay within 30 days, deliver before X, file by Y) — this is L4's unique strength over general-purpose languages
 4. **Deploy rules as an API** via `jl4-service` or [Legalese Cloud](https://legalese.cloud), including as MCP tools for other AI agents
-5. **Validate** an existing `.l4` file with `jl4-cli`
+5. **Validate** an existing `.l4` file with the `l4` CLI (`l4 check`, `l4 run`)
 
 L4 is the wrong tool for imperative scripting, UI code, numerical computing, or anything that requires mutation. If the task does not involve legal semantics or auditable decisions, reach for something else.
 
@@ -71,7 +71,7 @@ Records can declare **computed fields** (derived attributes) with `MEANS`; see [
 L4 has three function-definition forms. Use whichever reads most like the source text.
 
 ```l4
--- General form: DECIDE … IS / MEANS
+-- General form: DECIDE … IS / … MEANS
 GIVEN driver IS A Driver
 GIVETH A RiskCategory
 DECIDE `assess risk` driver IS
@@ -89,19 +89,20 @@ GIVETH A BOOLEAN
 DECIDE `meets minimum age` IF
     driver's `age` AT LEAST 18
 
--- Plain MEANS (DECIDE optional)
+-- Plain MEANS
 GIVEN n IS A NUMBER
 `square of` n MEANS n TIMES n
 ```
 
 **Key idioms:**
 
-- `CONSIDER ... WHEN ... OTHERWISE ...` is the pattern-match form. `BRANCH IF ... OTHERWISE` is the multi-way-if form.
-- `WHERE` introduces local helpers, `LET x MEANS … IN …` introduces a single local binding.
+- `IF … THEN … ELSE` idioms must always be indented in stair-stepping fashion. `BRANCH IF … OTHERWISE` is the flat multi-way-if form. Note that `OTHERWISE` must match `IF` intendation, not `BRANCH`.
+- `CONSIDER … WHEN … OTHERWISE …` is the pattern-match form.
+- `WHERE` introduces local helpers using `… MEANS`, `DECIDE … IS`, `DECIDE … IF`. `LET x MEANS … IN …` introduces a single local binding.
 - `YIELD` makes lambdas: `GIVEN n YIELD n GREATER THAN 0`.
 - Backtick identifiers can contain spaces and punctuation (`` `the applicant qualifies` ``); use them to make rules read like legal prose.
 - Mixfix lets a function's name intersperse with its arguments: `` `employee` `works for` `employer` ``.
-- Field access uses the genitive `'s`: `person's age`, `application's employee's nationality`.
+- Field access uses the genitive `'s`: `person's age`, `application's employee's nationality`. Note that function arguments bind stronger than genitive. `f r's foo` parses as `(f r)'s foo`, not `f (r's foo)`.
 
 ### 4. Structure like the source
 
@@ -119,7 +120,7 @@ DECIDE `coverage applies` IF
          OR `animal-caused water escape`      damage)
 ```
 
-`§` and `§§` mark sections — they are structural, not comments. See [references/gotchas.md](references/gotchas.md).
+`§`, `§§`, etc. mark sections — they are structural, not comments. See [references/gotchas.md](references/gotchas.md).
 
 ### 5. Model obligations and deadlines
 
@@ -136,20 +137,42 @@ paymentObligation MEANS
 
 Full treatment — `MUST`/`MAY`/`SHANT`/`DO`, `HENCE`/`LEST` semantics (note: `SHANT` flips polarity), `BREACH BY … BECAUSE …`, `RAND`/`ROR` composition, `PROVIDED` guards, `EXACTLY` matching, recursive obligations, and `#TRACE` simulation — is in [references/regulative.md](references/regulative.md).
 
-### 6. Validate with `jl4-cli`
+### 6. Validate with the `l4` CLI
 
 ```bash
-# Preferred
-cabal run jl4-cli -- path/to/file.l4
+# Fast path — typecheck only, no evaluation. Use for lint / CI.
+l4 check path/to/file.l4
 
-# Or if jl4-cli is on PATH
-jl4-cli path/to/file.l4
+# Full path — typecheck + evaluate every #EVAL/#EVALTRACE directive.
+l4 run path/to/file.l4
 
-# Pin "now" for reproducible evaluation
-jl4-cli --fixed-now=2025-01-01T00:00:00Z path/to/file.l4
+# Pin "now" for reproducible evaluation of NOW/TODAY
+l4 run --fixed-now=2025-01-01T00:00:00Z path/to/file.l4
+
+# Machine-readable envelope for editors, CI, and agents
+l4 run path/to/file.l4 --json
+
+# From a Haskell checkout (no installed binary)
+cabal run l4 -- run path/to/file.l4
 ```
 
-A wrapper is provided at [scripts/validate.sh](scripts/validate.sh). Type errors are reported with line numbers — iterate until the check passes.
+If `l4` isn't on your PATH and you're running inside VS Code, open the L4
+sidebar menu and pick **Install L4 CLI**. A shell-wrapper is provided at
+[scripts/validate.sh](scripts/validate.sh) for environments where PATH is
+problematic. Type errors are reported with line numbers — iterate until
+the check passes.
+
+**Other subcommands** (run `l4 <command> --help` for details):
+
+- `l4 format FILE` — reformat an `.l4` file to stdout (`gofmt`-style).
+- `l4 ast FILE` — dump the parsed AST (debugging L4 itself or tooling).
+- `l4 batch FILE --inputs rows.{json,yaml,csv}` — evaluate an `@export`
+  function against many rows, streaming NDJSON output (one object per
+  row).
+- `l4 trace FILE [--format dot|png|svg] [-o DIR]` — render
+  `#EVALTRACE` evaluation traces as GraphViz (PNG/SVG needs `-o`).
+- `l4 state-graph FILE` — extract regulative-rule state transition
+  graphs as GraphViz DOT.
 
 ### 7. Test with `#EVAL`, `#ASSERT`, `#TRACE`
 
@@ -169,7 +192,7 @@ Available directives: `#EVAL`, `#EVALTRACE`, `#TRACE`, `#CHECK`, `#ASSERT`.
 
 ### 8. Deploy
 
-See the **Deployment** section below. In short: add `@export` above the functions that should become API endpoints, add `@desc` to their parameters, and ship.
+See the **Deployment** section below. In short: add `@export` above the functions that should become API endpoints, add `@desc` to their parameters. Exported functions should answer the highest utility questions a reader of the rules might want to answer. Often the rule definition is not written as such and a separate file importing the rules needs to decorate those export functions.
 
 ---
 
@@ -240,7 +263,7 @@ Because exported metadata is what a downstream LLM sees in its tool-use context:
 ### Deployment workflow
 
 1. **Annotate** — add `@export` and parameter `@desc`s.
-2. **Validate** locally with `jl4-cli`.
+2. **Validate** locally with `l4 check` (fast) or `l4 run` (full evaluation).
 3. **Bundle** — zip the `.l4` files.
 4. **Deploy** via the VS Code Deploy tab, or:
    ```bash
@@ -344,20 +367,23 @@ application's employee's nationality   -- chaining
 
 ### Annotations
 
-- `@desc` — human-readable description (internal unless paired with `@export`)
-- `@export` — mark a function for deployment
+- `@desc` — human-readable description behind any line or `GIVEN` parameter (internal unless paired with `@export`)
+- `@export` — atop the `GIVEN`. mark a function for deployment
 - `@nlg` — natural-language generation hint
 - `@ref`, `@ref-src`, `@ref-map` — cross-reference to a legal source
 
 ### Imports
 
+Imports should be the first lines in a file before anything else.
+
 ```l4
-IMPORT prelude      -- automatically imported, but explicit is fine
-IMPORT daydate
-IMPORT currency
+IMPORT prelude
+IMPORT `excel-date`
 ```
 
 The prelude is always available. For the full library list (`prelude`, `daydate`, `time`, `datetime`, `timezone`, `math`, `currency`, `legal-persons`, `jurisdiction`, `actus`, `llm`, `excel-date`, `holdings`, `date-compat`), see [references/builtins.md](references/builtins.md) or <https://legalese.com/l4/reference/libraries.md>.
+
+**Filenames with hyphens, spaces, or other non-identifier characters must be backtick-quoted.**
 
 ---
 

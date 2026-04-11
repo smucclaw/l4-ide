@@ -137,6 +137,10 @@
         "command": "l4.openSidebar",
         "title": "Open L4 Sidebar",
         "icon": "static/l4-editor-icon.svg"
+      },
+      {
+        "command": "l4.installCli",
+        "title": "L4: Install L4 CLI"
       }
     ],
     "menus": {

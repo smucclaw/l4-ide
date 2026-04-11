@@ -15,6 +15,7 @@ import { PanelManager } from './webview-panel.js'
 
 import { VSCodeL4LanguageClient } from './vscode-l4-language-client.js'
 import { McpProxy } from './mcp-proxy.js'
+import { installL4Cli, maybeOfferInstallL4Cli } from './install-cli.js'
 
 import { RenderAsLadderInfo, VersionedDocId } from '@repo/viz-expr'
 import { Schema } from 'effect'
@@ -428,7 +429,12 @@ export async function activate(context: ExtensionContext) {
   const serviceClient = new ServiceClient(auth)
 
   // Start local MCP proxy — always running, returns empty tools when disconnected
-  const mcpProxy = new McpProxy(auth, outputChannel, context.globalState)
+  const mcpProxy = new McpProxy(
+    auth,
+    outputChannel,
+    context.globalState,
+    context.extensionUri.fsPath
+  )
   context.subscriptions.push(mcpProxy)
   mcpProxy.start()
 
@@ -440,14 +446,32 @@ export async function activate(context: ExtensionContext) {
   )
   context.subscriptions.push(auth)
 
-  // Offer Claude Code setup when connection becomes active
+  // Register the "Install L4 CLI" command (sidebar dropdown + palette).
   context.subscriptions.push(
-    auth.onDidChange((state) => {
-      if (state.connected) {
-        mcpProxy.offerClaudeCodeSetup()
-      }
+    vscode.commands.registerCommand('l4.installCli', async () => {
+      await installL4Cli(context.extensionPath, outputChannel)
     })
   )
+
+  // Startup offer flow:
+  //
+  //   1. If ~/.claude.json exists AND the user hasn't previously
+  //      declined Claude Code setup, offer "Add L4 Tools to Claude Code?".
+  //      Accepting co-installs the l4 CLI silently because the
+  //      writing-l4-rules skill invokes it.
+  //
+  //   2. If the user declined in (1), or ~/.claude.json is missing, or
+  //      Claude Code is already fully configured but l4 isn't on PATH,
+  //      fall through to the separate "Install L4 CLI?" prompt.
+  //
+  // Runs in the background so activation isn't blocked.
+  void (async () => {
+    const outcome = await mcpProxy.offerClaudeCodeSetup()
+    outputChannel.appendLine(`[startup] Claude Code setup outcome: ${outcome}`)
+    if (outcome !== 'accepted-co-installed') {
+      await maybeOfferInstallL4Cli(context, outputChannel)
+    }
+  })()
 
   // Auto-connect on startup (runs in background, doesn't block activation)
   auth.initialize()
@@ -460,6 +484,7 @@ export async function activate(context: ExtensionContext) {
     auth,
     serviceClient,
     outputChannel,
+    mcpProxy,
     (directiveId) => openInspectorSections.delete(directiveId)
   )
 
