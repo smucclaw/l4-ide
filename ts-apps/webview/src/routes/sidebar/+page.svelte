@@ -12,6 +12,7 @@
     RequestOpenServiceUrl,
     RequestOpenConsole,
     RequestOpenExtensionSettings,
+    RequestAddL4ToolsToClaudeCode,
     RequestCopySignInLink,
     RequestDisconnect,
     SidebarConnectionStatusChanged,
@@ -611,6 +612,14 @@
     )
   }
 
+  function addL4ToolsToClaudeCode() {
+    messenger?.sendNotification(
+      RequestAddL4ToolsToClaudeCode,
+      HOST_EXTENSION,
+      undefined as never
+    )
+  }
+
   function copySignInLink() {
     messenger?.sendNotification(
       RequestCopySignInLink,
@@ -1030,6 +1039,12 @@
               onclick={menuAction(openExtensionSettings)}
             >
               Extension Settings
+            </button>
+            <button
+              class="menu-item"
+              onclick={menuAction(addL4ToolsToClaudeCode)}
+            >
+              Add L4 Tools to Claude Code
             </button>
             <div class="menu-separator"></div>
             {#if connectionStatus.connected}

@@ -273,6 +273,11 @@ export const RequestOpenExtensionSettings: NotificationType<void> = {
   method: 'requestOpenExtensionSettings',
 }
 
+/** Sidebar asks extension to add L4 tools (MCP server + skill) to Claude Code */
+export const RequestAddL4ToolsToClaudeCode: NotificationType<void> = {
+  method: 'requestAddL4ToolsToClaudeCode',
+}
+
 /** Sidebar asks extension to copy the Legalese Cloud sign-in link to clipboard */
 export const RequestCopySignInLink: NotificationType<void> = {
   method: 'requestCopySignInLink',
