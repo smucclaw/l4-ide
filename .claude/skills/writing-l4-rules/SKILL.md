@@ -71,7 +71,7 @@ Records can declare **computed fields** (derived attributes) with `MEANS`; see [
 L4 has three function-definition forms. Use whichever reads most like the source text.
 
 ```l4
--- General form: DECIDE … IS / MEANS
+-- General form: DECIDE … IS / … MEANS
 GIVEN driver IS A Driver
 GIVETH A RiskCategory
 DECIDE `assess risk` driver IS
@@ -89,19 +89,20 @@ GIVETH A BOOLEAN
 DECIDE `meets minimum age` IF
     driver's `age` AT LEAST 18
 
--- Plain MEANS (DECIDE optional)
+-- Plain MEANS
 GIVEN n IS A NUMBER
 `square of` n MEANS n TIMES n
 ```
 
 **Key idioms:**
 
-- `CONSIDER ... WHEN ... OTHERWISE ...` is the pattern-match form. `BRANCH IF ... OTHERWISE` is the multi-way-if form.
-- `WHERE` introduces local helpers, `LET x MEANS … IN …` introduces a single local binding.
+- `IF … THEN … ELSE` idioms must always be indented in stair-stepping fashion. `BRANCH IF … OTHERWISE` is the flat multi-way-if form. Note that `OTHERWISE` must match `IF` intendation, not `BRANCH`.
+- `CONSIDER … WHEN … OTHERWISE …` is the pattern-match form.
+- `WHERE` introduces local helpers using `… MEANS`, `DECIDE … IS`, `DECIDE … IF`. `LET x MEANS … IN …` introduces a single local binding.
 - `YIELD` makes lambdas: `GIVEN n YIELD n GREATER THAN 0`.
 - Backtick identifiers can contain spaces and punctuation (`` `the applicant qualifies` ``); use them to make rules read like legal prose.
 - Mixfix lets a function's name intersperse with its arguments: `` `employee` `works for` `employer` ``.
-- Field access uses the genitive `'s`: `person's age`, `application's employee's nationality`.
+- Field access uses the genitive `'s`: `person's age`, `application's employee's nationality`. Note that function arguments bind stronger than genitive. `f r's foo` parses as `(f r)'s foo`, not `f (r's foo)`.
 
 ### 4. Structure like the source
 
@@ -119,7 +120,7 @@ DECIDE `coverage applies` IF
          OR `animal-caused water escape`      damage)
 ```
 
-`§` and `§§` mark sections — they are structural, not comments. See [references/gotchas.md](references/gotchas.md).
+`§`, `§§`, etc. mark sections — they are structural, not comments. See [references/gotchas.md](references/gotchas.md).
 
 ### 5. Model obligations and deadlines
 
@@ -169,7 +170,7 @@ Available directives: `#EVAL`, `#EVALTRACE`, `#TRACE`, `#CHECK`, `#ASSERT`.
 
 ### 8. Deploy
 
-See the **Deployment** section below. In short: add `@export` above the functions that should become API endpoints, add `@desc` to their parameters, and ship.
+See the **Deployment** section below. In short: add `@export` above the functions that should become API endpoints, add `@desc` to their parameters. Exported functions should answer the highest utility questions a reader of the rules might want to answer. Often the rule definition is not written as such and a separate file importing the rules needs to decorate those export functions.
 
 ---
 
@@ -351,10 +352,11 @@ application's employee's nationality   -- chaining
 
 ### Imports
 
+Imports should be the first lines in a file before anything else.
+
 ```l4
-IMPORT prelude      -- automatically imported, but explicit is fine
+IMPORT prelude
 IMPORT daydate
-IMPORT currency
 ```
 
 The prelude is always available. For the full library list (`prelude`, `daydate`, `time`, `datetime`, `timezone`, `math`, `currency`, `legal-persons`, `jurisdiction`, `actus`, `llm`, `excel-date`, `holdings`, `date-compat`), see [references/builtins.md](references/builtins.md) or <https://legalese.com/l4/reference/libraries.md>.
