@@ -5,7 +5,7 @@ description: Writes, validates, and deploys L4 — a typed functional language f
 
 # Writing L4 Rules
 
-L4 is a statically-typed, pure-functional language for computational law. It is layout-sensitive like Python, has Haskell-style algebraic data types, and adds legal-drafting affordances: backtick identifiers that read like prose, regulative rules (`PARTY … MUST … WITHIN … HENCE … LEST …`), and `@export`/`@desc` annotations that publish typed decision functions to a REST/MCP API.
+L4 is a statically-typed, pure-functional language for computational law. It is layout-sensitive like Python, has Haskell-style algebraic data types, and adds legal-drafting affordances: backtick identifiers that read like prose, regulative rules (`PARTY … MUST … WITHIN … HENCE … LEST …`), and `@export`/`@desc` annotations that publish typed decision functions to a REST API/MCP.
 
 **Canonical documentation** — always authoritative for the currently-published L4:
 
@@ -120,7 +120,7 @@ DECIDE `coverage applies` IF
          OR `animal-caused water escape`      damage)
 ```
 
-`§`, `§§`, etc. mark sections — they are structural, not comments. See [references/gotchas.md](references/gotchas.md).
+`§`, `§§`, `§§§`, etc. mark sections — they are structural, not comments. See [references/gotchas.md](references/gotchas.md).
 
 ### 5. Model obligations and deadlines
 
@@ -152,15 +152,15 @@ l4 run --fixed-now=2025-01-01T00:00:00Z path/to/file.l4
 # Machine-readable envelope for editors, CI, and agents
 l4 run path/to/file.l4 --json
 
-# From a Haskell checkout (no installed binary)
+# From a Haskell checkout (no installed binary, needs legalese/l4-ide repo)
 cabal run l4 -- run path/to/file.l4
 ```
 
-If `l4` isn't on your PATH and you're running inside VS Code, open the L4
-sidebar menu and pick **Install L4 CLI**. A shell-wrapper is provided at
-[scripts/validate.sh](scripts/validate.sh) for environments where PATH is
-problematic. Type errors are reported with line numbers — iterate until
-the check passes.
+If `l4` isn't on your PATH and you're running inside VS Code, open the
+L4 sidebar menu and pick **Install L4 CLI**. A shell-wrapper is
+provided at [scripts/validate.sh](scripts/validate.sh) for environments
+where PATH is problematic. Type errors are reported with line numbers —
+iterate until the check passes.
 
 **Other subcommands** (run `l4 <command> --help` for details):
 
@@ -192,7 +192,7 @@ Available directives: `#EVAL`, `#EVALTRACE`, `#TRACE`, `#CHECK`, `#ASSERT`.
 
 ### 8. Deploy
 
-See the **Deployment** section below. In short: add `@export` above the functions that should become API endpoints, add `@desc` to their parameters. Exported functions should answer the highest utility questions a reader of the rules might want to answer. Often the rule definition is not written as such and a separate file importing the rules needs to decorate those export functions.
+See the **Deployment** section below. In short: add `@export` above the functions that should become API endpoints, add `@desc` to their parameters. Exported functions should answer the highest utility questions a reader of the rules might have. Often the rule definition is not written as such and a separate file importing the rules needs to decorate those export functions.
 
 ---
 
@@ -315,12 +315,15 @@ Just enough to write most rules without a round-trip. Anything not here, check <
 | `NUMBER`                      | Integers and rationals                              |
 | `STRING`                      | Text                                                |
 | `BOOLEAN`                     | `TRUE` / `FALSE`                                    |
-| `DATE` / `TIME` / `DATETIME`  | Calendar date / time-of-day / instant               |
+| `DATE` / `TIME` / `DATETIME`  | Calendar date / time-of-day (wallclock) / instant   |
 | `LIST OF T`                   | Ordered collection                                  |
 | `MAYBE T`                     | Optional (`JUST x` / `NOTHING`)                     |
 | `EITHER A B`                  | Choice (`LEFT x` / `RIGHT y`)                       |
 | `DECLARE T HAS ...`           | Record                                              |
 | `DECLARE T IS ONE OF a, b, c` | Enum (optionally with per-constructor `HAS` fields) |
+
+`TODAY` returns `DATE`. `CURRENTTIME` returns `TIME`. Both need e.g. `TIMEZONE IS "America/New_York"` to return a value.
+`NOW` returns `DATETIME` and is always "Etc/UTC" unless otherwise specified.
 
 ### Operators
 
