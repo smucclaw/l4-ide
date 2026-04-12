@@ -9,10 +9,10 @@
 // (at <extensionPath>/bin/<platform-arch>/l4[.exe]) and exposes a
 // single user-facing command that installs it onto the user's PATH:
 //
-//  - macOS / Linux: symlink into `~/.local/bin/l4`. `~/.local/bin` is on
-//    PATH by default in most modern shells via the user-profile autoconf
-//    pattern, but when it isn't, we surface a copy-pasteable snippet
-//    instead of silently editing rc files.
+//  - macOS / Linux: symlink into `~/.local/bin/l4`. If `~/.local/bin`
+//    isn't on the user's login-shell PATH, we auto-append the PATH
+//    export to their shell rc file (e.g. `~/.zshrc`). If no rc file
+//    exists we fall back to a copy-pasteable snippet.
 //
 //  - Windows: copy the exe into `%LOCALAPPDATA%\Programs\l4\l4.exe` and
 //    append that directory to the user-level PATH via `setx PATH`.
@@ -74,15 +74,27 @@ export function findBundledCli(
 }
 
 /**
- * Ask the shell if `l4` is already on PATH.
+ * Ask the user's login shell if `l4` is already on PATH.
  *
- * Avoids `which` / `where` having different exit codes by swallowing
- * both and just checking for a non-empty stdout line.
+ * On Unix we spawn a login-interactive shell (`$SHELL -li -c 'which l4'`)
+ * so the check reflects what the user actually sees in a new terminal,
+ * not the VS Code extension host's augmented PATH.
  */
 async function isL4OnPath(): Promise<boolean> {
-  const cmd = process.platform === 'win32' ? 'where' : 'which'
+  if (process.platform === 'win32') {
+    try {
+      const { stdout } = await execFileAsync('where', ['l4'])
+      return stdout.trim().length > 0
+    } catch {
+      return false
+    }
+  }
+
+  const shell = process.env.SHELL || '/bin/sh'
   try {
-    const { stdout } = await execFileAsync(cmd, ['l4'])
+    const { stdout } = await execFileAsync(shell, ['-li', '-c', 'which l4'], {
+      timeout: 5000,
+    })
     return stdout.trim().length > 0
   } catch {
     return false
@@ -133,12 +145,10 @@ export async function installL4Cli(
 /**
  * Unix install path: symlink the bundled binary into `~/.local/bin/l4`.
  *
- * `~/.local/bin` is on PATH by default on macOS via the `path_helper`
- * mechanism only when `~/.local/bin` is listed in `/etc/paths.d/`; on
- * Linux distros with `systemd --user` sessions it's appended via
- * `~/.profile`. We don't rely on either — if `~/.local/bin` isn't in
- * PATH after the symlink, we show the user a one-liner they can paste
- * into their shell rc file themselves.
+ * If `~/.local/bin` isn't on the user's login-shell PATH, we
+ * automatically append the PATH export to their shell rc file
+ * (e.g. `~/.zshrc` or `~/.bashrc`). If no rc file exists we fall
+ * back to offering a copy-pasteable snippet.
  */
 async function installUnix(
   src: string,
@@ -165,16 +175,31 @@ async function installUnix(
   outputChannel.appendLine(`[install-cli] Symlinked ${target} -> ${src}`)
 
   const onPath = await isL4OnPath()
-  const message = onPath
-    ? `l4 installed at ${target} and is on your PATH. Open a new terminal and try \`l4 run path/to/file.l4\`.`
-    : `l4 installed at ${target}, but ~/.local/bin is not on your PATH. Add it with:\n\n  export PATH="$HOME/.local/bin:$PATH"\n\nto your ~/.zshrc or ~/.bashrc, then restart your terminal.`
 
-  if (!silent) {
-    if (onPath) {
+  if (onPath) {
+    const message = `l4 installed at ${target} and is on your PATH. Open a new terminal and try \`l4 run path/to/file.l4\`.`
+    if (!silent) {
       void vscode.window.showInformationMessage(
         `L4 CLI installed. Run \`l4 --help\` in a new terminal to get started.`
       )
-    } else {
+    }
+    return { ok: true, installedAt: target, message }
+  }
+
+  // ~/.local/bin is not on PATH — try to fix the user's shell rc file.
+  const rcUpdated = ensureLocalBinInShellRc(home, outputChannel)
+  let message: string
+
+  if (rcUpdated) {
+    message = `l4 installed at ${target}. Updated ${rcUpdated} to add ~/.local/bin to your PATH — restart your terminal for it to take effect.`
+    if (!silent) {
+      void vscode.window.showInformationMessage(
+        `L4 CLI installed and PATH configured in ${path.basename(rcUpdated)}. Restart your terminal, then run \`l4 --help\`.`
+      )
+    }
+  } else {
+    message = `l4 installed at ${target}, but ~/.local/bin is not on your PATH. Add it with:\n\n  export PATH="$HOME/.local/bin:$PATH"\n\nto your shell rc file, then restart your terminal.`
+    if (!silent) {
       const action = await vscode.window.showWarningMessage(
         `L4 CLI installed at ${target}, but ~/.local/bin is not on your PATH.`,
         'Copy PATH snippet',
@@ -185,13 +210,67 @@ async function installUnix(
           'export PATH="$HOME/.local/bin:$PATH"'
         )
         void vscode.window.showInformationMessage(
-          'Copied. Paste into ~/.zshrc or ~/.bashrc and restart your terminal.'
+          'Copied. Paste into your shell rc file and restart your terminal.'
         )
       }
     }
   }
 
   return { ok: true, installedAt: target, message }
+}
+
+const PATH_EXPORT_LINE = 'export PATH="$HOME/.local/bin:$PATH"'
+const PATH_EXPORT_COMMENT =
+  '# Added by L4 extension — puts ~/.local/bin on PATH'
+
+/**
+ * Detect the user's shell rc file, and if it exists but doesn't already
+ * contain a `~/.local/bin` PATH entry, append one.
+ *
+ * Returns the rc file path that was updated, or undefined if we couldn't
+ * or shouldn't modify anything.
+ */
+function ensureLocalBinInShellRc(
+  home: string,
+  outputChannel: vscode.OutputChannel
+): string | undefined {
+  const shell = path.basename(process.env.SHELL || '')
+  // Ordered by preference — check the user's actual shell first.
+  const candidates: string[] = []
+  if (shell === 'zsh') candidates.push('.zshrc')
+  else if (shell === 'bash') candidates.push('.bashrc', '.bash_profile')
+  else if (shell === 'fish') {
+    // fish uses a different syntax; fall back to manual instructions.
+    return undefined
+  }
+  // Always include common fallbacks after the primary.
+  if (!candidates.includes('.zshrc')) candidates.push('.zshrc')
+  if (!candidates.includes('.bashrc')) candidates.push('.bashrc')
+
+  for (const name of candidates) {
+    const rcPath = path.join(home, name)
+    if (!fs.existsSync(rcPath)) continue
+
+    const content = fs.readFileSync(rcPath, 'utf-8')
+    // Already has ~/.local/bin on PATH — nothing to do.
+    if (content.includes('.local/bin')) {
+      outputChannel.appendLine(
+        `[install-cli] ${name} already references .local/bin`
+      )
+      return undefined
+    }
+
+    const suffix = content.endsWith('\n') ? '' : '\n'
+    fs.appendFileSync(
+      rcPath,
+      `${suffix}\n${PATH_EXPORT_COMMENT}\n${PATH_EXPORT_LINE}\n`
+    )
+    outputChannel.appendLine(`[install-cli] Appended PATH export to ${rcPath}`)
+    return rcPath
+  }
+
+  outputChannel.appendLine('[install-cli] No shell rc file found to update')
+  return undefined
 }
 
 /**
@@ -300,7 +379,7 @@ export async function maybeOfferInstallL4Cli(
   }
 
   const action = await vscode.window.showInformationMessage(
-    'Install the L4 CLI (`l4`) on your PATH? This lets you run `l4 run file.l4`, `l4 check file.l4`, etc. from any terminal.',
+    'Install the L4 CLI? This lets you run `l4 run file.l4`, etc. from any terminal.',
     'Install',
     'Not now',
     'Never'
