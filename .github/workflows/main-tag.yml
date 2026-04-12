@@ -80,7 +80,7 @@ jobs:
           ls -lh bin/darwin-arm64/
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: jl4-lsp-darwin-arm64
           path: bin/darwin-arm64/
@@ -148,7 +148,7 @@ jobs:
           ls -lh bin/win32-x64/
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: jl4-lsp-win32-x64
           path: bin/win32-x64/
@@ -232,7 +232,7 @@ jobs:
           ls -lh bin/linux-x64/
 
       - name: Upload LSP + CLI binary artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: jl4-lsp-linux-x64
           path: |
@@ -241,7 +241,7 @@ jobs:
           retention-days: 90
 
       - name: Upload jl4-service artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: jl4-service-linux-x64
           path: |
@@ -318,7 +318,7 @@ jobs:
           ls -lh bin/linux-arm64/
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: jl4-lsp-linux-arm64
           path: bin/linux-arm64/
@@ -402,7 +402,7 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Upload WASM artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: jl4-wasm-${{ steps.prepare-artifacts.outputs.version }}
           path: wasm-artifacts/
@@ -460,7 +460,7 @@ jobs:
         run: npm run build
 
       - name: Download LSP + l4 binaries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ matrix.artifact }}
           path: ts-apps/vscode/bin/${{ matrix.target }}
@@ -482,7 +482,7 @@ jobs:
           npx vsce package --target ${{ matrix.target }} --no-dependencies -o l4-vscode-${{ matrix.target }}-${{ env.PACKAGE_VERSION }}.vsix
 
       - name: Upload VSIX artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: l4-vscode-${{ matrix.target }}-${{ env.PACKAGE_VERSION }}
           path: ts-apps/vscode/*.vsix
@@ -526,7 +526,7 @@ jobs:
         run: npm run build
 
       - name: Download all LSP binaries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           pattern: jl4-lsp-*
           path: ts-apps/vscode/bin
@@ -553,7 +553,7 @@ jobs:
           npx vsce package --no-dependencies -o l4-vscode-all-platforms-${{ env.PACKAGE_VERSION }}.vsix
 
       - name: Upload VSIX artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: l4-vscode-all-platforms-${{ env.PACKAGE_VERSION }}
           path: ts-apps/vscode/*.vsix
@@ -597,7 +597,7 @@ jobs:
           npx vsce package --no-dependencies -o l4-vscode-universal-${{ env.PACKAGE_VERSION }}.vsix
 
       - name: Upload VSIX artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: l4-vscode-universal-${{ env.PACKAGE_VERSION }}
           path: ts-apps/vscode/*.vsix
@@ -621,7 +621,7 @@ jobs:
           fetch-depth: 0
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: artifacts
 
@@ -684,7 +684,7 @@ jobs:
           git push origin "${{ steps.tag-name.outputs.tag }}"
 
       - name: Upload artifacts to tag
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag-name.outputs.tag }}
           name: L4 VSCode Extension & WASM (Build ${{ github.run_number }})
