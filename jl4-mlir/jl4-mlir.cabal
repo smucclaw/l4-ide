@@ -74,11 +74,17 @@ executable jl4-mlir
   import: defaults
   hs-source-dirs: app
   main-is: Main.hs
+  -- The Node runner template in Main.hs embeds runtime/jl4-runtime.mjs
+  -- at compile time via Template Haskell — so TH needs to re-read that
+  -- file if it changes between builds.
+  extra-source-files:
+    runtime/jl4-runtime.mjs
   build-depends:
     aeson,
     aeson-pretty,
     bytestring,
     directory,
+    file-embed,
     filepath,
     jl4-mlir,
     optparse-applicative,
