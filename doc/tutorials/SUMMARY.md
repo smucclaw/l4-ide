@@ -22,3 +22,4 @@
 
 - [Getting Started with LLM](llm-integration/llm-getting-started.md)
 - [Legislative Ingestion](llm-integration/legislative-ingestion.md)
+- [Composing L4 with AI](llm-integration/composing-l4-with-ai.md)
