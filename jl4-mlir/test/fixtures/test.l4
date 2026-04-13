@@ -1,0 +1,618 @@
+IMPORT prelude
+
+-- Validation fixture for auth proxy integration tests.
+-- Tests deploy, evaluate, and permission flows.
+
+-- ==================================================================
+-- §1  Bonus rules (original)
+-- ==================================================================
+
+§ `Some test rules to deploy`
+
+`bonus amount` MEANS 5000
+
+@export Check if someone is eligible for a bonus
+GIVEN `years of service` IS A NUMBER
+      `performance rating` IS A NUMBER @desc 0 = bad, 5 = great
+GIVETH A BOOLEAN
+DECIDE `is eligible` IS
+    `years of service` >= 3
+    AND `performance rating` >= 4
+
+@export Calculate the amount of the bonus
+GIVEN `years of service` IS A NUMBER
+      `performance rating` IS A NUMBER @desc 0 = bad, 5 = great
+GIVETH A NUMBER
+DECIDE `calculate bonus` IS
+    IF `is eligible` `years of service` `performance rating`
+    THEN `bonus amount` TIMES `years of service`
+    ELSE 0
+
+§ `Verifying the bonus rules`
+
+#EVAL `calculate bonus` 5 9
+#EVAL `calculate bonus` 2 5
+#EVAL `is eligible` 5 4
+#EVAL `bonus amount`
+
+-- ==================================================================
+-- §2  Progressive income tax calculator
+-- ==================================================================
+
+§ `Progressive Income Tax`
+
+§§ `Tax ontology`
+
+DECLARE TaxBracket HAS
+    `lower bound`  IS A NUMBER
+    `upper bound`  IS A MAYBE NUMBER   @desc NOTHING means no cap
+    `rate`         IS A NUMBER         @desc Decimal, e.g. 0.22
+
+DECLARE FilingStatus IS ONE OF Single, Married, HeadOfHousehold
+
+DECLARE Taxpayer HAS
+    `name`             IS A STRING
+    `annual income`    IS A NUMBER
+    `filing status`    IS A FilingStatus
+    `deductions`       IS A NUMBER
+    `tax credits`      IS A NUMBER
+    `foreign income`   IS A MAYBE NUMBER @desc Income earned abroad, if any
+
+§§ `Tax helpers`
+
+-- Taxable income after deductions, floored at zero
+GIVEN tp IS A Taxpayer
+GIVETH A NUMBER
+DECIDE `taxable income` IS
+    max 0 (tp's `annual income` MINUS tp's deductions)
+
+-- Tax owed in a single bracket
+GIVEN income IS A NUMBER
+      bracket IS A TaxBracket
+GIVETH A NUMBER
+DECIDE `tax in bracket` IS
+    IF income <= bracket's `lower bound`
+    THEN 0
+    ELSE
+        CONSIDER bracket's `upper bound`
+        WHEN NOTHING THEN
+            (income MINUS bracket's `lower bound`) TIMES bracket's rate
+        WHEN JUST cap THEN
+            (min income cap MINUS bracket's `lower bound`) TIMES bracket's rate
+
+-- Sum tax across a list of brackets (recursive)
+GIVEN income IS A NUMBER
+      brackets IS A LIST OF TaxBracket
+GIVETH A NUMBER
+DECIDE `tax across brackets` IS
+    CONSIDER brackets
+    WHEN EMPTY THEN 0
+    WHEN b FOLLOWED BY rest THEN
+        `tax in bracket` income b
+        PLUS `tax across brackets` income rest
+
+§§ `Bracket schedules`
+
+-- Simplified 2024 US-style single brackets
+
+`bracket 10%` MEANS TaxBracket WITH
+    `lower bound` IS 0
+    `upper bound` IS JUST 11600
+    `rate`        IS 0.10
+
+`bracket 12%` MEANS TaxBracket WITH
+    `lower bound` IS 11600
+    `upper bound` IS JUST 47150
+    `rate`        IS 0.12
+
+`bracket 22%` MEANS TaxBracket WITH
+    `lower bound` IS 47150
+    `upper bound` IS JUST 100525
+    `rate`        IS 0.22
+
+`bracket 24%` MEANS TaxBracket WITH
+    `lower bound` IS 100525
+    `upper bound` IS JUST 191950
+    `rate`        IS 0.24
+
+`bracket 32%` MEANS TaxBracket WITH
+    `lower bound` IS 191950
+    `upper bound` IS JUST 243725
+    `rate`        IS 0.32
+
+`bracket 35%` MEANS TaxBracket WITH
+    `lower bound` IS 243725
+    `upper bound` IS JUST 609350
+    `rate`        IS 0.35
+
+`bracket 37%` MEANS TaxBracket WITH
+    `lower bound` IS 609350
+    `upper bound` IS NOTHING
+    `rate`        IS 0.37
+
+`single brackets` MEANS
+    `bracket 10%` FOLLOWED BY
+    `bracket 12%` FOLLOWED BY
+    `bracket 22%` FOLLOWED BY
+    `bracket 24%` FOLLOWED BY
+    `bracket 32%` FOLLOWED BY
+    `bracket 35%` FOLLOWED BY
+    `bracket 37%` FOLLOWED BY EMPTY
+
+-- Select the bracket schedule for the filing status
+GIVEN status IS A FilingStatus
+GIVETH A LIST OF TaxBracket
+DECIDE `brackets for status` IS
+    CONSIDER status
+    WHEN Single          THEN `single brackets`
+    WHEN Married         THEN `single brackets`   -- simplified: same schedule
+    WHEN HeadOfHousehold THEN `single brackets`
+
+§§ `Top-level tax decisions`
+
+-- Gross federal tax before credits
+GIVEN tp IS A Taxpayer
+GIVETH A NUMBER
+DECIDE `gross tax` IS
+    `tax across brackets` income brackets
+    WHERE
+        income   MEANS `taxable income` tp
+        brackets MEANS `brackets for status` (tp's `filing status`)
+
+-- Net tax after credits, floored at zero
+@export Calculate federal income tax for a taxpayer
+GIVEN tp IS A Taxpayer @desc The taxpayer's full profile
+GIVETH A NUMBER
+DECIDE `calculate tax` IS
+    max 0 (`gross tax` tp MINUS tp's `tax credits`)
+
+-- Effective tax rate as a percentage
+@export Calculate effective tax rate
+GIVEN tp IS A Taxpayer @desc The taxpayer's full profile
+GIVETH A NUMBER
+DECIDE `effective tax rate` IS
+    IF tp's `annual income` EQUALS 0
+    THEN 0
+    ELSE `calculate tax` tp DIVIDED BY tp's `annual income`
+
+-- Whether the taxpayer must file a foreign income disclosure
+@export Check if foreign income disclosure is required
+GIVEN tp IS A Taxpayer @desc The taxpayer's full profile
+GIVETH A BOOLEAN
+DECIDE `requires foreign income disclosure` IS
+    CONSIDER tp's `foreign income`
+    WHEN NOTHING THEN FALSE
+    WHEN JUST amt THEN amt > 10000
+
+§§ `Tax test fixtures`
+
+`alice the engineer` MEANS Taxpayer WITH
+    `name`           IS "Alice"
+    `annual income`  IS 95000
+    `filing status`  IS Single
+    deductions       IS 14600
+    `tax credits`    IS 2000
+    `foreign income` IS NOTHING
+
+`bob the consultant` MEANS Taxpayer WITH
+    `name`           IS "Bob"
+    `annual income`  IS 250000
+    `filing status`  IS Married
+    deductions       IS 29200
+    `tax credits`    IS 0
+    `foreign income` IS JUST 45000
+
+`carol the intern` MEANS Taxpayer WITH
+    `name`           IS "Carol"
+    `annual income`  IS 8000
+    `filing status`  IS Single
+    deductions       IS 14600
+    `tax credits`    IS 0
+    `foreign income` IS NOTHING
+
+§§ `Tax tests`
+
+#EVAL `calculate tax` `alice the engineer`
+#EVAL `calculate tax` `bob the consultant`
+#EVAL `calculate tax` `carol the intern`
+#EVAL `effective tax rate` `alice the engineer`
+#ASSERT `requires foreign income disclosure` `bob the consultant`
+#ASSERT NOT `requires foreign income disclosure` `alice the engineer`
+-- Carol's income is below the standard deduction so taxable income is 0
+#ASSERT (`calculate tax` `carol the intern`) EQUALS 0
+
+-- ==================================================================
+-- §3  Loan eligibility & amortisation
+-- ==================================================================
+
+§ `Loan Eligibility and Amortisation`
+
+§§ `Loan ontology`
+
+DECLARE RiskCategory IS ONE OF
+    Low,
+    Medium,
+    High,
+    Uninsurable
+
+DECLARE CreditProfile HAS
+    `credit score`       IS A NUMBER  @desc 300–850 FICO range
+    `monthly income`     IS A NUMBER
+    `monthly debts`      IS A NUMBER
+    `employment months`  IS A NUMBER  @desc Months at current employer
+    `bankruptcy history` IS A BOOLEAN
+
+DECLARE LoanRequest HAS
+    `applicant`       IS A CreditProfile
+    `loan amount`     IS A NUMBER
+    `term in months`  IS A NUMBER
+    `collateral value` IS A MAYBE NUMBER @desc Secured loan if present
+
+§§ `Risk assessment`
+
+-- Debt-to-income ratio
+GIVEN profile IS A CreditProfile
+GIVETH A NUMBER
+DECIDE `debt to income ratio` IS
+    IF profile's `monthly income` EQUALS 0
+    THEN 999
+    ELSE profile's `monthly debts` DIVIDED BY profile's `monthly income`
+
+-- Classify into a risk category
+GIVEN profile IS A CreditProfile
+GIVETH A RiskCategory
+DECIDE `risk category` IS
+    IF profile's `bankruptcy history`
+    THEN Uninsurable
+    ELSE IF profile's `credit score` < 500
+         THEN High
+         ELSE IF profile's `credit score` < 670
+                  OR `debt to income ratio` profile > 0.43
+              THEN Medium
+              ELSE Low
+
+-- Interest rate based on risk (annual %)
+GIVEN profile IS A CreditProfile
+GIVETH A NUMBER
+DECIDE `annual interest rate` IS
+    CONSIDER `risk category` profile
+    WHEN Low          THEN 0.049
+    WHEN Medium       THEN 0.079
+    WHEN High         THEN 0.129
+    WHEN Uninsurable  THEN 0.199
+
+§§ `Eligibility decision`
+
+-- Loan-to-value ratio (only meaningful for secured loans)
+GIVEN req IS A LoanRequest
+GIVETH A MAYBE NUMBER
+DECIDE `loan to value ratio` IS
+    CONSIDER req's `collateral value`
+    WHEN NOTHING  THEN NOTHING
+    WHEN JUST col THEN JUST (req's `loan amount` DIVIDED BY col)
+
+-- Maximum allowed debt-to-income including the new payment
+GIVEN req IS A LoanRequest
+GIVETH A NUMBER
+DECIDE `projected monthly payment` IS
+    req's `loan amount` DIVIDED BY req's `term in months`
+
+GIVEN req IS A LoanRequest
+GIVETH A NUMBER
+DECIDE `projected dti` IS
+    (req's applicant's `monthly debts` PLUS `projected monthly payment` req)
+    DIVIDED BY req's applicant's `monthly income`
+
+@export Determine whether a loan application is approved
+GIVEN req IS A LoanRequest @desc Full loan request with applicant profile
+GIVETH A BOOLEAN
+DECIDE `loan is approved` IF
+    NOT (req's applicant's `bankruptcy history`)
+    AND req's applicant's `credit score` >= 500
+    AND req's applicant's `employment months` >= 6
+    AND `projected dti` req <= 0.50
+    AND CONSIDER `loan to value ratio` req
+        WHEN NOTHING    THEN TRUE
+        WHEN JUST ratio THEN ratio <= 0.80
+
+-- Denial reason (NOTHING if approved)
+@export Get the reason a loan was denied
+GIVEN req IS A LoanRequest @desc Full loan request with applicant profile
+GIVETH A MAYBE STRING
+DECIDE `denial reason` IS
+    IF req's applicant's `bankruptcy history`
+    THEN JUST "Applicant has bankruptcy on record"
+    ELSE IF req's applicant's `credit score` < 500
+         THEN JUST "Credit score below minimum threshold of 500"
+         ELSE IF req's applicant's `employment months` < 6
+              THEN JUST "Less than 6 months at current employer"
+              ELSE IF `projected dti` req > 0.50
+                   THEN JUST "Projected debt-to-income ratio exceeds 50%"
+                   ELSE CONSIDER `loan to value ratio` req
+                        WHEN NOTHING    THEN NOTHING
+                        WHEN JUST ratio THEN
+                            IF ratio > 0.80
+                            THEN JUST "Loan-to-value ratio exceeds 80%"
+                            ELSE NOTHING
+
+§§ `Amortisation schedule`
+
+-- Simple monthly amortisation: principal portion per month
+-- (simplified flat amortisation for test purposes)
+GIVEN req IS A LoanRequest
+GIVETH A NUMBER
+DECIDE `monthly principal` IS
+    req's `loan amount` DIVIDED BY req's `term in months`
+
+-- Monthly interest portion
+GIVEN req IS A LoanRequest
+GIVETH A NUMBER
+DECIDE `monthly interest` IS
+    (req's `loan amount` TIMES `annual interest rate` (req's applicant))
+    DIVIDED BY 12
+
+-- Total monthly payment
+@export Calculate the total monthly loan payment
+GIVEN req IS A LoanRequest @desc Full loan request with applicant profile
+GIVETH A NUMBER
+DECIDE `monthly loan payment` IS
+    `monthly principal` req PLUS `monthly interest` req
+
+-- Total interest over the life of the loan
+@export Calculate total interest paid over the loan term
+GIVEN req IS A LoanRequest @desc Full loan request with applicant profile
+GIVETH A NUMBER
+DECIDE `total interest paid` IS
+    `monthly interest` req TIMES req's `term in months`
+
+§§ `Loan test fixtures`
+
+`strong applicant` MEANS CreditProfile WITH
+    `credit score`       IS 780
+    `monthly income`     IS 8000
+    `monthly debts`      IS 1200
+    `employment months`  IS 48
+    `bankruptcy history` IS FALSE
+
+`weak applicant` MEANS CreditProfile WITH
+    `credit score`       IS 550
+    `monthly income`     IS 3500
+    `monthly debts`      IS 1800
+    `employment months`  IS 3
+    `bankruptcy history` IS FALSE
+
+`bankrupt applicant` MEANS CreditProfile WITH
+    `credit score`       IS 620
+    `monthly income`     IS 5000
+    `monthly debts`      IS 500
+    `employment months`  IS 24
+    `bankruptcy history` IS TRUE
+
+`home loan` MEANS LoanRequest WITH
+    applicant          IS `strong applicant`
+    `loan amount`      IS 320000
+    `term in months`   IS 360
+    `collateral value` IS JUST 420000
+
+`personal loan` MEANS LoanRequest WITH
+    applicant          IS `strong applicant`
+    `loan amount`      IS 15000
+    `term in months`   IS 36
+    `collateral value` IS NOTHING
+
+`risky personal loan` MEANS LoanRequest WITH
+    applicant          IS `weak applicant`
+    `loan amount`      IS 25000
+    `term in months`   IS 24
+    `collateral value` IS NOTHING
+
+`bankrupt home loan` MEANS LoanRequest WITH
+    applicant          IS `bankrupt applicant`
+    `loan amount`      IS 200000
+    `term in months`   IS 360
+    `collateral value` IS JUST 250000
+
+§§ `Loan tests`
+
+#ASSERT `loan is approved` `home loan`
+#ASSERT `loan is approved` `personal loan`
+#ASSERT NOT `loan is approved` `risky personal loan`
+#ASSERT NOT `loan is approved` `bankrupt home loan`
+
+#ASSERT (`denial reason` `home loan`) EQUALS NOTHING
+#ASSERT (`denial reason` `bankrupt home loan`) EQUALS JUST "Applicant has bankruptcy on record"
+#ASSERT (`denial reason` `risky personal loan`) EQUALS JUST "Less than 6 months at current employer"
+
+#EVAL `monthly loan payment` `home loan`
+#EVAL `total interest paid` `home loan`
+#EVAL `risk category` `strong applicant`
+#EVAL `risk category` `weak applicant`
+#EVAL `risk category` `bankrupt applicant`
+#EVAL `debt to income ratio` `strong applicant`
+#EVAL `loan to value ratio` `home loan`
+
+-- ==================================================================
+-- §4  Event ticketing — waitlists, pricing tiers, group discounts
+-- ==================================================================
+
+§ `Event Ticketing System`
+
+§§ `Ticketing ontology`
+
+DECLARE TicketTier IS ONE OF
+    EarlyBird,
+    Standard,
+    VIP,
+    LastMinute
+
+DECLARE Attendee HAS
+    `attendee name`  IS A STRING
+    `is member`      IS A BOOLEAN
+    `age`            IS A NUMBER
+
+DECLARE TicketOrder HAS
+    `attendees`       IS A LIST OF Attendee
+    `tier`            IS A TicketTier
+    `event capacity`  IS A NUMBER
+    `tickets sold`    IS A NUMBER
+    `promo code`      IS A MAYBE STRING
+
+§§ `Pricing`
+
+-- Base price per tier
+GIVEN tier IS A TicketTier
+GIVETH A NUMBER
+DECIDE `base price` IS
+    CONSIDER tier
+    WHEN EarlyBird   THEN 49
+    WHEN Standard    THEN 89
+    WHEN VIP         THEN 249
+    WHEN LastMinute  THEN 119
+
+-- Per-attendee price adjustments
+GIVEN attendee IS AN Attendee
+      tier IS A TicketTier
+GIVETH A NUMBER
+DECIDE `individual ticket price` IS
+    IF attendee's age < 12
+    THEN `base price` tier TIMES 0.5
+    ELSE IF attendee's age >= 65
+         THEN `base price` tier TIMES 0.7
+         ELSE IF attendee's `is member`
+              THEN `base price` tier TIMES 0.85
+              ELSE `base price` tier
+
+-- Sum prices for a list of attendees
+GIVEN attendees IS A LIST OF Attendee
+      tier IS A TicketTier
+GIVETH A NUMBER
+DECIDE `sum ticket prices` IS
+    CONSIDER attendees
+    WHEN EMPTY THEN 0
+    WHEN a FOLLOWED BY rest THEN
+        `individual ticket price` a tier
+        PLUS `sum ticket prices` rest tier
+
+-- Group discount: 10% off for 5+, 20% off for 10+
+GIVEN order IS A TicketOrder
+GIVETH A NUMBER
+DECIDE `group discount multiplier` IS
+    IF count (order's attendees) >= 10
+    THEN 0.80
+    ELSE IF count (order's attendees) >= 5
+         THEN 0.90
+         ELSE 1.0
+
+-- Promo code discount
+GIVEN order IS A TicketOrder
+GIVETH A NUMBER
+DECIDE `promo discount multiplier` IS
+    CONSIDER order's `promo code`
+    WHEN NOTHING   THEN 1.0
+    WHEN JUST code THEN
+        IF code EQUALS "SAVE20"
+        THEN 0.80
+        ELSE IF code EQUALS "HALF"
+             THEN 0.50
+             ELSE 1.0
+
+-- Use the better of group or promo (not both)
+GIVEN order IS A TicketOrder
+GIVETH A NUMBER
+DECIDE `best discount` IS
+    min (`group discount multiplier` order)
+        (`promo discount multiplier` order)
+
+-- Total order price
+@export Calculate total price for a ticket order
+GIVEN order IS A TicketOrder @desc The full ticket order
+GIVETH A NUMBER
+DECIDE `order total` IS
+    `sum ticket prices` (order's attendees) (order's tier)
+    TIMES `best discount` order
+
+§§ `Availability`
+
+GIVEN order IS A TicketOrder
+GIVETH A NUMBER
+DECIDE `remaining capacity` IS
+    order's `event capacity` MINUS order's `tickets sold`
+
+@export Check if the requested tickets can be fulfilled
+GIVEN order IS A TicketOrder @desc The full ticket order
+GIVETH A BOOLEAN
+DECIDE `tickets available` IF
+    count (order's attendees) <= `remaining capacity` order
+
+-- Waitlist position (NOTHING if tickets are available)
+@export Get waitlist position if sold out
+GIVEN order IS A TicketOrder @desc The full ticket order
+GIVETH A MAYBE NUMBER
+DECIDE `waitlist position` IS
+    IF `tickets available` order
+    THEN NOTHING
+    ELSE JUST (order's `tickets sold` MINUS order's `event capacity` PLUS 1)
+
+§§ `Ticket test fixtures`
+
+`member adult` MEANS Attendee WITH
+    `attendee name` IS "Dana"
+    `is member`     IS TRUE
+    age             IS 35
+
+`child` MEANS Attendee WITH
+    `attendee name` IS "Eli"
+    `is member`     IS FALSE
+    age             IS 9
+
+`senior` MEANS Attendee WITH
+    `attendee name` IS "Fran"
+    `is member`     IS FALSE
+    age             IS 70
+
+`regular adult` MEANS Attendee WITH
+    `attendee name` IS "Gus"
+    `is member`     IS FALSE
+    age             IS 28
+
+`small vip order` MEANS TicketOrder WITH
+    attendees        IS LIST `member adult`, `child`, `senior`
+    tier             IS VIP
+    `event capacity` IS 500
+    `tickets sold`   IS 200
+    `promo code`     IS NOTHING
+
+`big group standard order` MEANS TicketOrder WITH
+    attendees        IS LIST `regular adult`, `regular adult`, `regular adult`,
+                             `regular adult`, `regular adult`, `regular adult`,
+                             `regular adult`, `regular adult`, `regular adult`,
+                             `regular adult`, `member adult`, `child`
+    tier             IS Standard
+    `event capacity` IS 1000
+    `tickets sold`   IS 50
+    `promo code`     IS JUST "SAVE20"
+
+`sold out order` MEANS TicketOrder WITH
+    attendees        IS LIST `regular adult`, `regular adult`
+    tier             IS EarlyBird
+    `event capacity` IS 100
+    `tickets sold`   IS 100
+    `promo code`     IS NOTHING
+
+§§ `Ticket tests`
+
+#ASSERT `tickets available` `small vip order`
+#ASSERT `tickets available` `big group standard order`
+#ASSERT NOT `tickets available` `sold out order`
+
+#ASSERT (`waitlist position` `small vip order`) EQUALS NOTHING
+#ASSERT (`waitlist position` `sold out order`) EQUALS JUST 1
+
+#EVAL `order total` `small vip order`
+#EVAL `order total` `big group standard order`
+#EVAL `order total` `sold out order`
+#EVAL `best discount` `big group standard order`
+#EVAL `individual ticket price` `child` VIP
+#EVAL `individual ticket price` `senior` VIP
+#EVAL `individual ticket price` `member adult` VIP
+#EVAL `individual ticket price` `regular adult` VIP

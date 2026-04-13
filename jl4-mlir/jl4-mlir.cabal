@@ -1,0 +1,101 @@
+cabal-version: 3.0
+name: jl4-mlir
+version: 0.1
+synopsis: MLIR compiler backend for L4 targeting WebAssembly
+description:
+  Compiles L4 programs to MLIR intermediate representation and lowers
+  through the LLVM dialect to WebAssembly. Consumes the typed L4 AST
+  directly from jl4-core (Module Resolved) and emits MLIR textual IR
+  that can be compiled to .wasm via the standard MLIR/LLVM toolchain.
+
+license: Apache-2.0
+author: CCLAW
+maintainer: smucclaw@gmail.com
+category: Language, Compiler
+build-type: Simple
+tested-with: GHC==9.10.2
+
+common defaults
+  default-language: GHC2021
+  ghc-options: -Wall -Wderiving-typeable -Wunused-packages -Werror
+  default-extensions:
+    BlockArguments
+    DefaultSignatures
+    DeriveAnyClass
+    DerivingStrategies
+    DerivingVia
+    DuplicateRecordFields
+    NoFieldSelectors
+    OverloadedRecordDot
+    OverloadedStrings
+    OverloadedLabels
+    LambdaCase
+    NoImportQualifiedPost
+  build-depends:
+    base
+
+library
+  import: defaults
+  hs-source-dirs: src
+  exposed-modules:
+    L4.MLIR
+    L4.MLIR.ABI
+    L4.MLIR.IR
+    L4.MLIR.Emit
+    L4.MLIR.Lower
+    L4.MLIR.Types
+    L4.MLIR.Pipeline
+    L4.MLIR.Schema
+    L4.MLIR.Marshal
+    L4.MLIR.Dialect.Func
+    L4.MLIR.Dialect.Arith
+    L4.MLIR.Dialect.SCF
+    L4.MLIR.Dialect.CF
+    L4.MLIR.Dialect.MemRef
+    L4.MLIR.Dialect.LLVM
+    L4.MLIR.Runtime.Builtins
+  build-depends:
+    aeson,
+    bytestring,
+    containers,
+    directory,
+    filepath,
+    jl4-core,
+    jl4-lsp,
+    lsp-types,
+    mtl,
+    prettyprinter,
+    process,
+    scientific,
+    text >= 2 && < 2.1.2,
+    vector,
+
+executable jl4-mlir
+  import: defaults
+  hs-source-dirs: app
+  main-is: Main.hs
+  -- The Node runner template in Main.hs embeds runtime/jl4-runtime.mjs
+  -- at compile time via Template Haskell — so TH needs to re-read that
+  -- file if it changes between builds.
+  extra-source-files:
+    runtime/jl4-runtime.mjs
+  build-depends:
+    aeson,
+    aeson-pretty,
+    bytestring,
+    directory,
+    file-embed,
+    filepath,
+    jl4-mlir,
+    optparse-applicative,
+    process,
+    text >= 2 && < 2.1.2,
+
+test-suite jl4-mlir-test
+  import: defaults
+  type: exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is: Main.hs
+  build-depends:
+    jl4-mlir,
+    text >= 2 && < 2.1.2,

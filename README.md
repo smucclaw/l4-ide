@@ -35,6 +35,7 @@ This repository contains the L4 compiler, IDE tooling (VS Code extension, LSP, R
 | [jl4-query-plan](jl4-query-plan/)         | Query planning utilities                                 |
 | [jl4-actus-analyzer](jl4-actus-analyzer/) | Static analyzer classifying L4 contracts by ACTUS / FIBO |
 | [jl4-wasm](jl4-wasm/)                     | WebAssembly build of L4 for browser/Node.js              |
+| [jl4-mlir](jl4-mlir/)                     | MLIR/WASM compiler backend: L4 → `.wasm` decision binary |
 
 **TypeScript (npm workspaces + Turborepo):**
 

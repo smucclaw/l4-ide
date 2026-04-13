@@ -1,0 +1,48 @@
+IMPORT prelude
+IMPORT daydate
+IMPORT time
+IMPORT datetime
+IMPORT timezone
+
+TIMEZONE IS SGT
+
+@export Construct a date from day/month/year
+GIVEN d IS A NUMBER
+      m IS A NUMBER
+      y IS A NUMBER
+GIVETH A DATE
+DECIDE `make date` IS Date d m y
+
+@export Number of days between two dates (b MINUS a)
+GIVEN a IS A DATE
+      b IS A DATE
+GIVETH A NUMBER
+DECIDE `days between` IS b MINUS a
+
+@export Add days to a date
+GIVEN d IS A DATE
+      n IS A NUMBER
+GIVETH A DATE
+DECIDE `shift date` IS d PLUS n
+
+@export Construct a wall-clock time
+GIVEN h IS A NUMBER
+      m IS A NUMBER
+      s IS A NUMBER
+GIVETH A TIME
+DECIDE `make time` IS Time h m s
+
+@export Construct a datetime from D/M/Y H:M:S
+GIVEN d IS A NUMBER
+      mo IS A NUMBER
+      y IS A NUMBER
+      h IS A NUMBER
+      mi IS A NUMBER
+      s IS A NUMBER
+GIVETH A DATETIME
+DECIDE `make datetime` IS Datetime d mo y h mi s
+
+@export Is this date a weekday
+GIVEN d IS A DATE
+GIVETH A BOOLEAN
+DECIDE `is a weekday` IS `is weekday` d
