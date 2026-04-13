@@ -234,25 +234,216 @@ precompileModule filepath source moduleContext funName = runExceptT $ do
 -- Direct AST evaluation (avoiding text round-trip)
 -- ----------------------------------------------------------------------------
 
--- | Convert FnLiteral to Expr Resolved
--- This allows us to build function call expressions directly without going through text
--- Note: FnObject, FnUncertain, and FnUnknown require wrapper-based evaluation
--- and should be filtered out by requiresWrapperEvaluation before calling this
-fnLiteralToExpr :: FnLiteral -> Expr Resolved
-fnLiteralToExpr = \case
-  FnLitInt i -> Lit emptyAnno (NumericLit emptyAnno (fromIntegral i))
-  -- Use Scientific for exact decimal semantics matching JSONDECODE
-  -- This preserves decimal values like 0.1 as exact rationals (1/10)
-  -- Scientific has a Real instance so toRational works directly
-  FnLitDouble d -> Lit emptyAnno (NumericLit emptyAnno (toRational (Scientific.fromFloatDigits d)))
-  FnLitBool True -> App emptyAnno TypeCheck.trueRef []
-  FnLitBool False -> App emptyAnno TypeCheck.falseRef []
-  FnLitString s -> Lit emptyAnno (StringLit emptyAnno s)
-  FnArray xs -> List emptyAnno (map fnLiteralToExpr xs)
-  -- These cases should never be reached if requiresWrapperEvaluation is checked first
-  FnObject _fields -> error "fnLiteralToExpr: FnObject requires wrapper-based evaluation"
-  FnUncertain -> error "fnLiteralToExpr: FnUncertain requires wrapper-based evaluation"
-  FnUnknown -> error "fnLiteralToExpr: FnUnknown requires wrapper-based evaluation"
+-- | Integer literal shortcut.
+numLit :: Int -> Expr Resolved
+numLit n = Lit emptyAnno (NumericLit emptyAnno (fromIntegral n))
+
+-- | Is this 'Type' Resolved' a nullary application of the given
+-- built-in 'Unique'? Works for DATE / TIME / DATETIME / NUMBER / etc.
+isTypeUnique :: Unique -> Type' Resolved -> Bool
+isTypeUnique u (TyApp _ name _) = getUnique name == u
+isTypeUnique _ _                = False
+
+-- | Parse 'YYYY-MM-DD' (optionally followed by more characters, which
+-- are ignored). Returns '(year, month, day)'.
+parseIsoDate :: Text -> Maybe (Int, Int, Int)
+parseIsoDate t = do
+  let prefix = Text.take 10 t
+  case Text.splitOn "-" prefix of
+    [ys, ms, ds] -> do
+      y <- readInt ys
+      m <- readInt ms
+      d <- readInt ds
+      pure (y, m, d)
+    _ -> Nothing
+
+-- | Parse 'HH:MM[:SS[.fraction]]'. Ignores trailing timezone suffix.
+parseIsoTime :: Text -> Maybe (Int, Int, Int)
+parseIsoTime t = case Text.splitOn ":" (Text.takeWhile (\c -> c /= ' ' && c /= '+' && c /= 'Z') t) of
+  [hs, ms]      -> do
+    h <- readInt hs
+    m <- readInt ms
+    pure (h, m, 0)
+  [hs, ms, ss]  -> do
+    h  <- readInt hs
+    m  <- readInt ms
+    s  <- readInt (Text.takeWhile (/= '.') ss)
+    pure (h, m, s)
+  _ -> Nothing
+
+-- | Parse a range of common ISO-8601-ish datetime strings. The
+-- returned timezone is either the explicit IANA name, a '±HH:MM'
+-- offset as text, or 'UTC' as a fallback. Supports both
+-- 'YYYY-MM-DDTHH:MM:SSZ' and the service's 'YYYY-MM-DD HH:MM:SS UTC'
+-- output shape.
+parseIsoDatetime :: Text -> Maybe ((Int, Int, Int), (Int, Int, Int), Text)
+parseIsoDatetime t = do
+  (y, m, d) <- parseIsoDate t
+  let afterDate = Text.drop 10 t
+  let afterSep  = if Text.null afterDate
+                    then afterDate
+                    else if Text.head afterDate == 'T' || Text.head afterDate == ' '
+                           then Text.drop 1 afterDate
+                           else afterDate
+  (h, mi, s) <- parseIsoTime afterSep
+  let tzPart = Text.dropWhile (\c -> c /= ' ' && c /= 'Z' && c /= '+' && c /= '-') (Text.drop 8 afterSep)
+      tz     = case Text.strip tzPart of
+                 "" -> "UTC"
+                 "Z" -> "UTC"
+                 other -> other
+  pure ((y, m, d), (h, mi, s), tz)
+
+readInt :: Text -> Maybe Int
+readInt t = case reads (Text.unpack t) of
+  [(n, "")] -> Just n
+  _ -> Nothing
+
+-- | Cache of record / enum type information gathered once from the
+-- typechecked 'Module Resolved'. Used by 'fnLiteralToExprTyped' to
+-- convert 'FnObject' into @App recordCtorRef [fieldExpr,...]@ (in
+-- declaration order) and 'FnLitString' into an enum constructor ref
+-- when the expected type is an enum.
+data ModuleInfo = ModuleInfo
+  { miRecords      :: Map Unique (Resolved, [(Text, Type' Resolved)])
+    -- ^ record type unique -> (type-constructor ref, [(field name, field type)])
+  , miEnumVariants :: Map Unique [(Text, Resolved)]
+    -- ^ enum type unique -> [(variant name, variant constructor ref)]
+  }
+
+buildModuleInfo :: Module Resolved -> ModuleInfo
+buildModuleInfo (MkModule _ _ section) = ModuleInfo
+  { miRecords      = Map.fromList [ r | Just r <- map recordFor (flattenDeclares section) ]
+  , miEnumVariants = Map.fromList [ r | Just r <- map enumFor   (flattenDeclares section) ]
+  }
+  where
+    flattenDeclares :: Section Resolved -> [Declare Resolved]
+    flattenDeclares (MkSection _ _ _ decls) = concatMap step decls
+      where
+        step (Declare _ d)  = [d]
+        step (Section _ s') = flattenDeclares s'
+        step _              = []
+
+    recordFor :: Declare Resolved -> Maybe (Unique, (Resolved, [(Text, Type' Resolved)]))
+    -- A 'RecordDecl' carries its value-level constructor in the 'Maybe n'
+    -- slot — *not* the type name in the outer 'AppForm'. The evaluator
+    -- binds the record builder under that constructor's unique in
+    -- 'evalConDecl', so we key our cache off the type name but build the
+    -- 'App' using the constructor Resolved.
+    recordFor (MkDeclare _ _ (MkAppForm _ tyName _ _) (RecordDecl _ (Just ctor) fields)) =
+      Just (getUnique tyName, (ctor, map fieldOf fields))
+      where
+        fieldOf (MkTypedName _ fn fty _) = (rawNameToText (rawName (getActual fn)), fty)
+    recordFor _ = Nothing
+
+    enumFor :: Declare Resolved -> Maybe (Unique, [(Text, Resolved)])
+    enumFor (MkDeclare _ _ (MkAppForm _ tyName _ _) (EnumDecl _ ctors)) =
+      Just (getUnique tyName, map ctorOf ctors)
+      where
+        ctorOf (MkConDecl _ c _) = (rawNameToText (rawName (getActual c)), c)
+    enumFor _ = Nothing
+
+-- | Is this @TyApp@ the built-in MAYBE / LIST type?
+stripMaybe :: Type' Resolved -> Maybe (Type' Resolved)
+stripMaybe (TyApp _ name [inner]) | getUnique name == TypeCheck.maybeUnique = Just inner
+stripMaybe _ = Nothing
+
+stripList :: Type' Resolved -> Maybe (Type' Resolved)
+stripList (TyApp _ name [inner]) | getUnique name == TypeCheck.listUnique = Just inner
+stripList _ = Nothing
+
+-- | Look up an enum or record type by unique.
+lookupEnum :: ModuleInfo -> Type' Resolved -> Maybe [(Text, Resolved)]
+lookupEnum mi (TyApp _ name _) = Map.lookup (getUnique name) mi.miEnumVariants
+lookupEnum _ _                 = Nothing
+
+lookupRecord :: ModuleInfo -> Type' Resolved -> Maybe (Resolved, [(Text, Type' Resolved)])
+lookupRecord mi (TyApp _ name _) = Map.lookup (getUnique name) mi.miRecords
+lookupRecord _ _                 = Nothing
+
+-- | Convert an 'FnLiteral' (possibly missing) to an L4 AST expression
+-- that matches the expected 'Type' Resolved'. Handles MAYBE wrapping /
+-- unwrapping, record construction (via declaration-order field lookup),
+-- enum constructor coercion from 'FnLitString', and nested lists /
+-- records. Returns 'Left' for cases that can't be represented as a pure
+-- AST value ('FnUnknown' / 'FnUncertain' against a non-MAYBE type) —
+-- callers can then fall back to the wrapper path.
+fnLiteralToExprTyped
+  :: ModuleInfo
+  -> Type' Resolved
+  -> Maybe FnLiteral
+  -> Either Text (Expr Resolved)
+fnLiteralToExprTyped mi ty mVal
+  -- MAYBE type: map missing / null / explicit NOTHING literal to NOTHING,
+  -- anything else to JUST <recurse with inner type>.
+  | Just inner <- stripMaybe ty =
+      case mVal of
+        Nothing                  -> Right (App emptyAnno TypeCheck.nothingRef [])
+        Just FnUnknown           -> Right (App emptyAnno TypeCheck.nothingRef [])
+        Just (FnLitString "NOTHING") ->
+          Right (App emptyAnno TypeCheck.nothingRef [])
+        Just v -> do
+          e <- fnLiteralToExprTyped mi inner (Just v)
+          Right (App emptyAnno TypeCheck.justRef [e])
+  | otherwise = case mVal of
+      Nothing          -> Left "missing required parameter"
+      Just FnUnknown   -> Left "unknown value for a non-MAYBE parameter"
+      Just FnUncertain -> Left "uncertain value is not supported in direct evaluation"
+      Just v           -> nonMaybeValue mi ty v
+
+nonMaybeValue
+  :: ModuleInfo
+  -> Type' Resolved
+  -> FnLiteral
+  -> Either Text (Expr Resolved)
+nonMaybeValue mi ty = \case
+  FnLitInt i     -> Right (Lit emptyAnno (NumericLit emptyAnno (fromIntegral i)))
+  FnLitDouble d  -> Right (Lit emptyAnno (NumericLit emptyAnno
+                            (toRational (Scientific.fromFloatDigits d))))
+  FnLitBool True  -> Right (App emptyAnno TypeCheck.trueRef [])
+  FnLitBool False -> Right (App emptyAnno TypeCheck.falseRef [])
+  FnLitString s
+    -- If the expected type is an enum, resolve the string to a variant.
+    | Just variants <- lookupEnum mi ty ->
+        case lookup s variants of
+          Just ref -> Right (App emptyAnno ref [])
+          Nothing  -> Left ("unknown enum variant: " <> s)
+    -- ISO date / time / datetime strings against a temporal parameter.
+    -- The wire format mirrors JSON Schema ('date', 'time', 'date-time'
+    -- formats); parse here and emit the primitive constructor so the
+    -- evaluator sees a real temporal value instead of a rejected
+    -- STRING literal.
+    | isTypeUnique TypeCheck.dateUnique ty, Just (y, m, d) <- parseIsoDate s ->
+        Right (App emptyAnno TypeCheck.dateFromDMYRef
+                 [numLit d, numLit m, numLit y])
+    | isTypeUnique TypeCheck.timeUnique ty, Just (h, m, sec) <- parseIsoTime s ->
+        Right (App emptyAnno TypeCheck.timeFromHMSRef
+                 [numLit h, numLit m, numLit sec])
+    | isTypeUnique TypeCheck.datetimeUnique ty
+    , Just ((yy, mo, dd), (hh, mn, ss), tz) <- parseIsoDatetime s ->
+        Right (App emptyAnno TypeCheck.datetimeFromDTZRef
+                 [ App emptyAnno TypeCheck.dateFromDMYRef [numLit dd, numLit mo, numLit yy]
+                 , App emptyAnno TypeCheck.timeFromHMSRef [numLit hh, numLit mn, numLit ss]
+                 , Lit emptyAnno (StringLit emptyAnno tz)
+                 ])
+    -- Otherwise treat as a plain STRING literal.
+    | otherwise -> Right (Lit emptyAnno (StringLit emptyAnno s))
+  FnArray xs ->
+    case stripList ty of
+      Just elemTy -> List emptyAnno <$> traverse (\v -> fnLiteralToExprTyped mi elemTy (Just v)) xs
+      Nothing     -> Left "FnArray but expected type is not LIST"
+  FnObject fields
+    | Just (ctorRef, decl) <- lookupRecord mi ty -> do
+        -- Walk the record's fields in declaration order and pick each
+        -- value from the supplied FnObject (missing fields are handled
+        -- by the MAYBE branch above via 'Nothing').
+        let fieldMap = Map.fromList fields
+        argExprs <- forM decl $ \(fname, fty) ->
+          fnLiteralToExprTyped mi fty (Map.lookup fname fieldMap)
+        Right (App emptyAnno ctorRef argExprs)
+    | otherwise ->
+        Left "FnObject but expected type is not a known record"
+  FnUnknown   -> Left "unknown value for a non-MAYBE parameter"
+  FnUncertain -> Left "uncertain value is not supported in direct evaluation"
 
 -- | Get the function's Resolved name from the compiled decide
 getFunctionResolved :: Decide Resolved -> Resolved
@@ -269,16 +460,19 @@ buildFunctionCallExpr funName args =
 -- - Missing parameters (Nothing) - need wrapper to handle as UNKNOWN
 -- - FnObject, FnUncertain, FnUnknown, FnLitString (enum coercion)
 -- These types need JSONDECODE to handle properly
+-- | The only shapes direct-AST can't express are 'FnUncertain' (an
+-- L4 UNCERTAIN value) and 'FnUnknown' outside a MAYBE-typed slot. The
+-- direct path handles everything else — including records, enums,
+-- lists, and missing optional parameters — in 'fnLiteralToExprTyped'.
 requiresWrapperEvaluation :: [(Text, Maybe FnLiteral)] -> Bool
-requiresWrapperEvaluation = any (\(_, mVal) -> maybe True needsWrapper mVal)
+requiresWrapperEvaluation = any (\(_, mVal) -> maybe False needsWrapper mVal)
   where
     needsWrapper :: FnLiteral -> Bool
-    needsWrapper (FnObject _) = True
-    needsWrapper FnUncertain = True
-    needsWrapper FnUnknown = True
-    needsWrapper (FnLitString _) = True  -- Strings may be enum constructors
-    needsWrapper (FnArray xs) = any needsWrapper xs
-    needsWrapper _ = False
+    needsWrapper FnUncertain    = True
+    needsWrapper FnUnknown      = True
+    needsWrapper (FnArray xs)   = any needsWrapper xs
+    needsWrapper (FnObject kvs) = any (needsWrapper . snd) kvs
+    needsWrapper _              = False
 
 -- | Evaluate using precompiled module (fast path) - direct AST evaluation
 -- This avoids the text round-trip through prettyLayout and re-parsing
@@ -358,17 +552,18 @@ evaluateDirectAST
   -> Bool
   -> ExceptT EvaluatorError IO ResponseWithReason
 evaluateDirectAST compiled params traceLevel includeGraphViz = do
-  -- Convert input parameters to a map for lookup
-  let paramMap = Map.fromList [(name, val) | (name, Just val) <- params]
+  -- Build once per call: a lookup of every record / enum declaration in
+  -- the compiled module so 'fnLiteralToExprTyped' can construct record
+  -- literals and enum variants without re-running the typechecker.
+  let moduleInfo = buildModuleInfo compiled.compiledModule
+      paramTypes = extractParamTypes compiled.compiledDecide
+      paramMap   = Map.fromList [(name, val) | (name, Just val) <- params]
 
-  -- Get parameter names in order from the function signature
-  let paramTypes = extractParamTypes compiled.compiledDecide
-      paramNames = map fst paramTypes
-
-  -- Build argument expressions in the correct order
-  argExprs <- forM paramNames $ \name -> case Map.lookup name paramMap of
-    Nothing -> throwError $ InterpreterError $ "Missing value for parameter: " <> name
-    Just val -> pure (fnLiteralToExpr val)
+  argExprs <- forM paramTypes $ \(name, ty) ->
+    case fnLiteralToExprTyped moduleInfo ty (Map.lookup name paramMap) of
+      Left err ->
+        throwError $ InterpreterError ("Parameter '" <> name <> "': " <> err)
+      Right e -> pure e
 
   -- Get the function's Resolved name from the compiled decide
   let funResolved = getFunctionResolved compiled.compiledDecide

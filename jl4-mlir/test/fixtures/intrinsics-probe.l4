@@ -1,0 +1,40 @@
+IMPORT prelude
+
+@export Square root
+GIVEN x IS A NUMBER
+GIVETH A NUMBER
+DECIDE `root of` IS SQRT x
+
+@export Natural log
+GIVEN x IS A NUMBER
+GIVETH A NUMBER
+DECIDE `ln of` IS LN x
+
+@export Uppercase a string
+GIVEN s IS A STRING
+GIVETH A STRING
+DECIDE `shouting` IS TOUPPER s
+
+@export Contains check
+GIVEN haystack IS A STRING
+      needle IS A STRING
+GIVETH A BOOLEAN
+DECIDE `has substring` IS CONTAINS haystack needle
+
+@export String length
+GIVEN s IS A STRING
+GIVETH A NUMBER
+DECIDE `size of` IS STRINGLENGTH s
+
+@export Replace substring
+GIVEN s IS A STRING
+      a IS A STRING
+      b IS A STRING
+GIVETH A STRING
+DECIDE `substitute` IS REPLACE s a b
+
+@export Is integer check
+GIVEN n IS A NUMBER
+GIVETH A BOOLEAN
+DECIDE `whole number` IS `IS INTEGER` n
+

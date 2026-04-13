@@ -10,7 +10,7 @@ Welcome to the L4 language documentation. L4 is a domain-specific language for l
 
 New to L4? Start here:
 
-1. **[Get L4](https://marketplace.visualstudio.com/items?itemName=Legalese.l4-vscode)** - Download the VS Code extension [![L4 Rules-as-code](https://img.shields.io/visual-studio-marketplace/v/Legalese.l4-vscode?color=blue&logo=visualstudiocode&logoColor=white&label=L4%20Rules-as-code)](https://marketplace.visualstudio.com/items?itemName=Legalese.l4-vscode)
+1. **[Get L4](https://marketplace.visualstudio.com/items?itemName=Legalese.l4-vscode)** - Download the VS Code extension
 2. **[Foundation Course](courses/foundation/README.md)** - Learn L4 systematically (start here!)
 3. **[Your First L4 File](tutorials/getting-started/first-l4-file.md)** - Hands-on in 15 minutes
 
