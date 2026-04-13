@@ -77,6 +77,42 @@ runtimeFunctions =
   , ("__l4_datetime_tz",       [l4NumberType], [l4NumberType])
   , ("__l4_datetime_serial",   [l4NumberType], [l4NumberType])
   , ("__l4_to_datetime",       [l4NumberType], [l4NumberType]) -- STRING -> MAYBE DATETIME
+    -- Extended numeric intrinsics.
+  , ("__l4_sqrt",     [l4NumberType], [l4NumberType])
+  , ("__l4_ln",       [l4NumberType], [l4NumberType])
+  , ("__l4_log10",    [l4NumberType], [l4NumberType])
+  , ("__l4_sin",      [l4NumberType], [l4NumberType])
+  , ("__l4_cos",      [l4NumberType], [l4NumberType])
+  , ("__l4_tan",      [l4NumberType], [l4NumberType])
+  , ("__l4_asin",     [l4NumberType], [l4NumberType])
+  , ("__l4_acos",     [l4NumberType], [l4NumberType])
+  , ("__l4_atan",     [l4NumberType], [l4NumberType])
+  , ("__l4_trunc",    [l4NumberType, l4NumberType], [l4NumberType])  -- digits
+  , ("__l4_is_integer", [l4NumberType], [l4NumberType])
+    -- String unary.
+  , ("__l4_string_length", [l4NumberType], [l4NumberType])
+  , ("__l4_to_upper",      [l4NumberType], [l4NumberType])
+  , ("__l4_to_lower",      [l4NumberType], [l4NumberType])
+  , ("__l4_trim",          [l4NumberType], [l4NumberType])
+    -- String binary / search.
+  , ("__l4_contains",     [l4NumberType, l4NumberType], [l4NumberType])
+  , ("__l4_starts_with",  [l4NumberType, l4NumberType], [l4NumberType])
+  , ("__l4_ends_with",    [l4NumberType, l4NumberType], [l4NumberType])
+  , ("__l4_index_of",     [l4NumberType, l4NumberType], [l4NumberType])
+  , ("__l4_char_at",      [l4NumberType, l4NumberType], [l4NumberType])
+    -- String ternary.
+  , ("__l4_substring", [l4NumberType, l4NumberType, l4NumberType], [l4NumberType])
+  , ("__l4_replace",   [l4NumberType, l4NumberType, l4NumberType], [l4NumberType])
+    -- Conversion.
+  , ("__l4_to_number", [l4NumberType], [l4NumberType])
+    -- Nullary temporal.
+  , ("__l4_today_serial",  [], [l4NumberType])
+  , ("__l4_now_serial",    [], [l4NumberType])
+  , ("__l4_current_time",  [], [l4NumberType])
+  , ("__l4_timezone_name", [], [l4NumberType])
+    -- JSON.
+  , ("__l4_json_encode", [l4NumberType], [l4NumberType])
+  , ("__l4_json_decode", [l4NumberType], [l4NumberType])
   ]
 
 -- | Build an extern function declaration (func.func private).

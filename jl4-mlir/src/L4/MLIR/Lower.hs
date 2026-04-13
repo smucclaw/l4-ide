@@ -982,6 +982,11 @@ lowerExpr expr expectedTy = case expr of
           pure mb
         -- Empty list: null pointer encoded as f64(0.0)
         "EMPTY" -> nullListF64
+        -- Nullary temporal intrinsics — built-in names that take no
+        -- arguments and return a scalar (date/time serial).
+        "TODAY"       -> emitVal $ \vid -> funcCall [vid] "__l4_today_serial" [] [] [l4NumberType]
+        "NOW"         -> emitVal $ \vid -> funcCall [vid] "__l4_now_serial"   [] [] [l4NumberType]
+        "CURRENTTIME" -> emitVal $ \vid -> funcCall [vid] "__l4_current_time" [] [] [l4NumberType]
         _ -> do
           env <- gets (.typeEnv)
           case lookupEnumTag name env of
@@ -1101,13 +1106,43 @@ lowerExpr expr expectedTy = case expr of
             -- Numeric intrinsics (uppercase prelude aliases that L4 users
             -- can call directly; the lowercase 'min'/'max'/'abs' entries
             -- above handle the prelude's lowercased wrappers).
-            ("FLOOR",    [n_])                 -> runtimeCall "__l4_floor" [n_]
-            ("CEILING",  [n_])                 -> runtimeCall "__l4_ceil"  [n_]
-            ("ROUND",    [n_])                 -> runtimeCall "__l4_round" [n_]
-            ("ABS",      [n_])                 -> runtimeCall "__l4_abs"   [n_]
-            ("POW",      [a_, b_])             -> runtimeCall "__l4_pow"   [a_, b_]
-            ("MIN",      [a_, b_])             -> runtimeCall "__l4_min"   [a_, b_]
-            ("MAX",      [a_, b_])             -> runtimeCall "__l4_max"   [a_, b_]
+            ("FLOOR",       [n_])              -> runtimeCall "__l4_floor"      [n_]
+            ("CEILING",     [n_])              -> runtimeCall "__l4_ceil"       [n_]
+            ("ROUND",       [n_])              -> runtimeCall "__l4_round"      [n_]
+            ("ABS",         [n_])              -> runtimeCall "__l4_abs"        [n_]
+            ("POW",         [a_, b_])          -> runtimeCall "__l4_pow"        [a_, b_]
+            ("EXPONENT",    [a_, b_])          -> runtimeCall "__l4_pow"        [a_, b_]
+            ("MIN",         [a_, b_])          -> runtimeCall "__l4_min"        [a_, b_]
+            ("MAX",         [a_, b_])          -> runtimeCall "__l4_max"        [a_, b_]
+            ("SQRT",        [n_])              -> runtimeCall "__l4_sqrt"       [n_]
+            ("LN",          [n_])              -> runtimeCall "__l4_ln"         [n_]
+            ("LOG10",       [n_])              -> runtimeCall "__l4_log10"      [n_]
+            ("SIN",         [n_])              -> runtimeCall "__l4_sin"        [n_]
+            ("COS",         [n_])              -> runtimeCall "__l4_cos"        [n_]
+            ("TAN",         [n_])              -> runtimeCall "__l4_tan"        [n_]
+            ("ASIN",        [n_])              -> runtimeCall "__l4_asin"       [n_]
+            ("ACOS",        [n_])              -> runtimeCall "__l4_acos"       [n_]
+            ("ATAN",        [n_])              -> runtimeCall "__l4_atan"       [n_]
+            ("TRUNC",       [a_, b_])          -> runtimeCall "__l4_trunc"      [a_, b_]
+            ("IS INTEGER",  [n_])              -> runtimeCall "__l4_is_integer" [n_]
+            -- String intrinsics.
+            ("STRINGLENGTH",[s_])              -> runtimeCall "__l4_string_length" [s_]
+            ("TOUPPER",     [s_])              -> runtimeCall "__l4_to_upper"     [s_]
+            ("TOLOWER",     [s_])              -> runtimeCall "__l4_to_lower"     [s_]
+            ("TRIM",        [s_])              -> runtimeCall "__l4_trim"         [s_]
+            ("CONTAINS",    [a_, b_])          -> runtimeCall "__l4_contains"     [a_, b_]
+            ("STARTSWITH",  [a_, b_])          -> runtimeCall "__l4_starts_with"  [a_, b_]
+            ("ENDSWITH",    [a_, b_])          -> runtimeCall "__l4_ends_with"    [a_, b_]
+            ("INDEXOF",     [a_, b_])          -> runtimeCall "__l4_index_of"     [a_, b_]
+            ("CHARAT",      [a_, b_])          -> runtimeCall "__l4_char_at"      [a_, b_]
+            ("SUBSTRING",   [a_, b_, c_])      -> runtimeCall "__l4_substring"    [a_, b_, c_]
+            ("REPLACE",     [a_, b_, c_])      -> runtimeCall "__l4_replace"      [a_, b_, c_]
+            -- Conversion.
+            ("TOSTRING",    [v_])              -> runtimeCall "__l4_to_string"    [v_]
+            ("TONUMBER",    [s_])              -> runtimeCall "__l4_to_number"    [s_]
+            -- JSON.
+            ("JSONENCODE",  [v_])              -> runtimeCall "__l4_json_encode"  [v_]
+            ("JSONDECODE",  [s_])              -> runtimeCall "__l4_json_decode"  [s_]
             -- General function application: uniform f64 ABI via callL4.
             _ -> do
               sigs <- gets (.funcSigs)
