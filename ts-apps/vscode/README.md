@@ -1,6 +1,6 @@
 # L4 Rules-as-code Language Support and Tools
 
-Language support for L4 rules-as-code with MCP for AI agents, WebMCP for browser AI, syntax highlighting, IntelliSense, ladder diagram visualization, result inspection, and cloud deployment.
+Language support for L4 rules-as-code with MCP for AI agents, Claude Code and Copilot integration, WebMCP for browser AI, syntax highlighting, IntelliSense, CLI, decision graph visualizations, result inspection, and Legalese Cloud deployment.
 
 Documentation: https://legalese.com/l4
 
@@ -26,7 +26,7 @@ Documentation: https://legalese.com/l4
   - Error detection and diagnostics
   - Code navigation
   - Symbol search
-- **Ladder Diagram Visualization**: Interactive visualization of L4 rules as ladder diagrams
+- **Ladder Diagram Visualization**: Interactive decision graph of L4 rules as ladder diagrams
   - Real-time updates as you edit your code
   - Visual representation of logical relationships
   - Interactive exploration of rule structures
@@ -52,24 +52,6 @@ L4 is a domain-specific language designed for expressing legal logic and rules i
 2. **Open an L4 File**: Create or open a file with the `.l4` extension
 3. **Configure the Language Server**: The extension requires the `jl4-lsp` language server
 
-### Language Server Setup
-
-**Platform-specific versions (recommended):** If you installed a platform-specific version of the extension (e.g., for macOS ARM64, Windows x64, etc.), the `jl4-lsp` language server is bundled and ready to use—no additional setup required!
-
-**Universal version:** If you installed the universal extension, or if the bundled binary is not available for your platform, install the language server:
-
-```bash
-cabal install exe:jl4-lsp --overwrite-policy=always
-```
-
-Alternatively, specify the path manually in VS Code settings:
-
-```json
-{
-  "jl4.serverExecutablePath": "/path/to/jl4-lsp"
-}
-```
-
 ## Using the Sidebar
 
 The L4 sidebar is accessible via the L4 icon in the activity bar. It has three tabs:
@@ -93,10 +75,10 @@ The L4 sidebar is accessible via the L4 icon in the activity bar. It has three t
 - Expand a deployment to see its function schemas
 - Undeploy with confirmation
 
-## Using the Visualization
+## Using the L4 Decision Graph
 
 1. Open an L4 file containing rules
-2. Look for "Visualize" or "Simplify and visualize" codelens above L4 expressions
+2. Look for the "Show decision graph" codelens above L4 rules with boolean returns
 3. Click on the codelens to open the ladder diagram visualization
 4. The diagram will update automatically as you edit your code
 
@@ -184,6 +166,27 @@ Configure the service URL and API key in VS Code settings:
 }
 ```
 
+## L4 CLI
+
+The extension ships with the `l4` command-line tool for running L4 files, checking rules, and other workflows outside the editor.
+
+### Installing
+
+Run **L4: Install L4 CLI** from the command palette, or accept the prompt the first time you open an L4 project. This installs the bundled `l4` binary onto your PATH:
+
+- **macOS / Linux**: symlinks the binary into `~/.local/bin/l4`. If `~/.local/bin` isn't on your PATH, the extension shows the `export PATH="$HOME/.local/bin:$PATH"` snippet to add to your `~/.zshrc` or `~/.bashrc`.
+- **Windows**: copies the exe into `%LOCALAPPDATA%\Programs\l4\l4.exe` and appends that directory to your user PATH via `setx`. Restart open terminals for the change to take effect.
+
+The installer is safe to re-run — each invocation refreshes the symlink or file, so upgrades propagate when you update the extension.
+
+### Requirements
+
+The CLI is bundled only in platform-specific builds of the extension (macOS ARM64/x64, Linux x64, Windows x64). If you installed the universal build, install `l4` manually via `cabal install exe:l4 --overwrite-policy=always`.
+
+### Usage
+
+Once installed, run `l4 --help` in a new terminal to see available subcommands.
+
 ## Example L4 Code
 
 ```l4
@@ -216,14 +219,24 @@ DECIDE `can vote` p IF
 - `jl4.serviceApiKey`: API key for authenticating with a self-hosted jl4-service
 - `jl4.mcpPort`: Port for the local MCP proxy server (default: 19415)
 
-## Contributing
+### Custom Language Server Setup
 
-This extension is part of the L4 IDE project. For issues, feature requests, or contributions, please visit the project repository.
+**Platform-specific versions (recommended):** If you installed a platform-specific version of the extension (e.g., for macOS ARM64, Windows x64, etc.), the `jl4-lsp` language server is bundled and ready to use—no additional setup required!
+
+**Universal version:** If you installed the universal extension, or if the bundled binary is not available for your platform, install the language server:
+
+```bash
+cabal install exe:jl4-lsp --overwrite-policy=always
+```
+
+Alternatively, specify the path manually in VS Code settings:
+
+```json
+{
+  "jl4.serverExecutablePath": "/path/to/jl4-lsp"
+}
+```
 
 ## License
 
 Apache 2.0 - See license file for details.
-
-## Support
-
-For support and documentation, please refer to the L4 project documentation and community resources.
