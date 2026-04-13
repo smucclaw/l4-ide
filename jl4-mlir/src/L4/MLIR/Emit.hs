@@ -80,12 +80,17 @@ emitLlvmGlobal op =
       val = findAttr "value" op.opAttributes
       -- LLVM's @!llvm.array<N x i8>@ size must be the UTF-8 *byte* count,
       -- not the character count. 'Text.length' counts code points, which
-      -- disagrees on any non-ASCII input (emoji, accents, etc.).
-      strByteLen = case val of
-        Just (StringAttr s) -> BS.length (Text.Encoding.encodeUtf8 s)
-        _ -> 0
+      -- disagrees on any non-ASCII input (emoji, accents, etc.). We also
+      -- append a trailing NUL byte so the host runtime's C-string reader
+      -- can walk to the terminator instead of running past one global
+      -- and into the next.
+      (nulTerminated, strByteLen) = case val of
+        Just (StringAttr s) ->
+          let bytes = BS.length (Text.Encoding.encodeUtf8 s)
+          in (Just (StringAttr (s <> Text.singleton '\0')), bytes + 1)
+        _ -> (val, 0)
   in "llvm.mlir.global private constant @" <> pretty name
-    <> parens (emitAttrValue val)
+    <> parens (emitAttrValue nulTerminated)
     <+> ":" <+> "!llvm.array<" <> pretty strByteLen <+> "x i8>"
 
 emitGenericOp :: Operation -> Doc ann

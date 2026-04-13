@@ -153,6 +153,15 @@ unboxABI _ src = pure src
 -- This is the /only/ way the lowering should invoke an L4 function.
 -- Calls to runtime support routines ('__l4_*' helpers) that aren't
 -- part of the L4 ABI can still use 'funcCall' directly.
+-- | Call a runtime support routine (@__l4_*@). Every arg and the result
+-- use the uniform f64 ABI; the host runtime (Node / Wasmtime) is
+-- responsible for reinterpret-casting pointer payloads.
+runtimeCall :: Text -> [Expr Resolved] -> LowerM Value
+runtimeCall name es = do
+  vs <- forM es (\e -> lowerExpr e l4NumberType)
+  let tys = replicate (length vs) l4NumberType
+  emitVal $ \vid -> funcCall [vid] name vs tys [l4NumberType]
+
 callL4 :: Text -> [(Value, MLIRType)] -> MLIRType -> LowerM Value
 callL4 callee args retTy = do
   -- Box each arg at the call site.
@@ -480,17 +489,30 @@ registerDependencyModule skipLocal (MkModule _ _ section) = go section
     processDep :: TopDecl Resolved -> LowerM ()
     processDep = \case
       Declare _ d -> lowerDeclare d
-      Decide _ d  -> registerExternDecide d
+      Decide _ d  -> processDepDecide d
       Assume _ a  -> registerExternAssume a
       Section _ s -> go s
       _ -> pure ()
 
     shouldSkip :: Text -> LowerM Bool
     shouldSkip name = do
-      -- Skip if the main module defines this name, OR if we've already
-      -- registered this extern (deps can re-export each other's symbols).
       existing <- gets (Map.lookup name . (.funcSigs))
       pure (Set.member name skipLocal || existing /= Nothing)
+
+    -- For a dep 'Decide' we emit a real function body when the type
+    -- signature is free of function-typed parameters (the MLIR backend
+    -- doesn't yet support higher-order calls). Otherwise we fall back
+    -- to an extern declaration — the call site will get a symbolic
+    -- reference that fails at link time if actually invoked, but won't
+    -- break the module for unrelated calls.
+    processDepDecide :: Decide Resolved -> LowerM ()
+    processDepDecide decide@(MkDecide _ typeSig appForm _) = do
+      let name = sanitizeName (resolvedName (appFormHead' appForm))
+      skip <- shouldSkip name
+      unless skip $
+        if sigHasFunctionParam typeSig
+          then registerExternDecide decide
+          else lowerDecide decide
 
     registerExternDecide :: Decide Resolved -> LowerM ()
     registerExternDecide (MkDecide _ typeSig appForm _body) = do
@@ -500,8 +522,7 @@ registerDependencyModule skipLocal (MkModule _ _ section) = go section
           retType = if hasGiveth typeSig then sigRetType else l4NumberType
           argListElems = listElementsFromSig env typeSig
           declOp = mkExternFunc name argTypes retType
-      skip <- shouldSkip name
-      unless skip $ modify' $ \s -> s
+      modify' $ \s -> s
         { funcSigs = Map.insert name (argTypes, retType) s.funcSigs
         , funcListElems = Map.insert name argListElems s.funcListElems
         , globals = declOp : s.globals
@@ -609,9 +630,36 @@ lowerTopDecl = \case
   Decide _ decl  -> lowerDecide decl
   Section _ sect -> lowerSection sect
   Assume _ assume -> lowerAssume assume
-  Directive _ _  -> pure ()  -- Directives are compile-time only
-  Import _ _     -> pure ()  -- Imports resolved by jl4-core
-  Timezone _ _   -> pure ()  -- Timezone config, not compiled
+  Directive _ _  -> pure ()
+  Import _ _     -> pure ()
+  -- 'TIMEZONE IS <expr>' establishes the document default timezone and
+  -- must be visible to library helpers that reference the name
+  -- 'TIMEZONE' (notably 'Datetime' constructors that take no explicit
+  -- tz). Emit a zero-arg function that evaluates the expression and
+  -- returns the IANA string pointer.
+  Timezone _ expr -> lowerTimezoneDirective expr
+
+-- | Emit a zero-arg 'TIMEZONE()' function whose body returns the
+-- IANA-tz string specified by the 'TIMEZONE IS ...' directive.
+lowerTimezoneDirective :: Expr Resolved -> LowerM ()
+lowerTimezoneDirective expr = do
+  let retType = l4NumberType
+  entryBlock <- freshBlockId
+  withScope $ do
+    (resultVal, bodyOps) <- collectOps $ lowerExpr expr retType
+    (boxedResult, boxOps) <- collectOps $ boxABI retType resultVal
+    let retOp = funcReturn [boxedResult] [l4Value]
+        block = Block
+          { blockId = entryBlock
+          , blockArgs = []
+          , blockOps = bodyOps ++ boxOps ++ [retOp]
+          }
+        region = Region [block]
+        funcOp = funcFunc "TIMEZONE" [] [l4Value] region
+    modify' $ \s -> s
+      { functions = funcOp : s.functions
+      , funcSigs = Map.insert "TIMEZONE" ([], retType) s.funcSigs
+      }
 
 -- | An @ASSUME@ declaration in L4 is an external parameter — a value
 -- that must be supplied by the caller/host. We emit it as an MLIR
@@ -752,6 +800,19 @@ sigToTypesEnv env (MkTypeSig _ givenSig mGiveth) =
 hasGiveth :: TypeSig Resolved -> Bool
 hasGiveth (MkTypeSig _ _ (Just _)) = True
 hasGiveth _ = False
+
+-- | Does any parameter of this signature have a function type? Such
+-- decls require higher-order function support, which the MLIR backend
+-- doesn't yet implement; we keep them as externs instead of lowering.
+sigHasFunctionParam :: TypeSig Resolved -> Bool
+sigHasFunctionParam (MkTypeSig _ (MkGivenSig _ params) _) =
+  any hasFunTy params
+  where
+    hasFunTy (MkOptionallyTypedName _ _ (Just ty)) = isFunType ty
+    hasFunTy _ = False
+    isFunType (Fun {})       = True
+    isFunType (Forall _ _ t) = isFunType t
+    isFunType _              = False
 
 -- | Stateful type inference.
 --
@@ -1012,6 +1073,41 @@ lowerExpr expr expectedTy = case expr of
               storeSlot mb 0 one
               storeSlot mb 1 innerVal
               pure mb
+            -- DATE / TIME / DATETIME primitives. These don't need a fresh
+            -- extern synthesized (we declare them in Runtime.Builtins); we
+            -- just route the call directly so the f64 ABI is bypassed
+            -- (they already use f64 natively).
+            ("DATE_FROM_DMY",    [d_, m_, y_]) -> runtimeCall "__l4_date_from_dmy"    [d_, m_, y_]
+            ("DATE_FROM_SERIAL", [n_])         -> runtimeCall "__l4_date_from_serial" [n_]
+            ("DATE_SERIAL",      [d_])         -> runtimeCall "__l4_date_serial"      [d_]
+            ("DATE_DAY",         [d_])         -> runtimeCall "__l4_date_day"         [d_]
+            ("DATE_MONTH",       [d_])         -> runtimeCall "__l4_date_month"       [d_]
+            ("DATE_YEAR",        [d_])         -> runtimeCall "__l4_date_year"        [d_]
+            ("DATEVALUE",        [s_])         -> runtimeCall "__l4_datevalue"        [s_]
+            ("TODATE",           [s_])         -> runtimeCall "__l4_to_date"          [s_]
+            ("TIME_FROM_HMS",    [h_, m_, s_]) -> runtimeCall "__l4_time_from_hms"    [h_, m_, s_]
+            ("TIME_FROM_SERIAL", [n_])         -> runtimeCall "__l4_time_from_serial" [n_]
+            ("TIME_SERIAL",      [t_])         -> runtimeCall "__l4_time_serial"      [t_]
+            ("TIME_HOUR",        [t_])         -> runtimeCall "__l4_time_hour"        [t_]
+            ("TIME_MINUTE",      [t_])         -> runtimeCall "__l4_time_minute"      [t_]
+            ("TIME_SECOND",      [t_])         -> runtimeCall "__l4_time_second"      [t_]
+            ("TOTIME",           [s_])         -> runtimeCall "__l4_to_time"          [s_]
+            ("DATETIME_FROM_DTZ",[d_, t_, z_]) -> runtimeCall "__l4_datetime_from_dtz"[d_, t_, z_]
+            ("DATETIME_DATE",    [dt_])        -> runtimeCall "__l4_datetime_date"    [dt_]
+            ("DATETIME_TIME",    [dt_])        -> runtimeCall "__l4_datetime_time"    [dt_]
+            ("DATETIME_TZ",      [dt_])        -> runtimeCall "__l4_datetime_tz"      [dt_]
+            ("DATETIME_SERIAL",  [dt_])        -> runtimeCall "__l4_datetime_serial"  [dt_]
+            ("TODATETIME",       [s_])         -> runtimeCall "__l4_to_datetime"      [s_]
+            -- Numeric intrinsics (uppercase prelude aliases that L4 users
+            -- can call directly; the lowercase 'min'/'max'/'abs' entries
+            -- above handle the prelude's lowercased wrappers).
+            ("FLOOR",    [n_])                 -> runtimeCall "__l4_floor" [n_]
+            ("CEILING",  [n_])                 -> runtimeCall "__l4_ceil"  [n_]
+            ("ROUND",    [n_])                 -> runtimeCall "__l4_round" [n_]
+            ("ABS",      [n_])                 -> runtimeCall "__l4_abs"   [n_]
+            ("POW",      [a_, b_])             -> runtimeCall "__l4_pow"   [a_, b_]
+            ("MIN",      [a_, b_])             -> runtimeCall "__l4_min"   [a_, b_]
+            ("MAX",      [a_, b_])             -> runtimeCall "__l4_max"   [a_, b_]
             -- General function application: uniform f64 ABI via callL4.
             _ -> do
               sigs <- gets (.funcSigs)

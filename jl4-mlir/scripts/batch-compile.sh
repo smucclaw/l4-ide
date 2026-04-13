@@ -252,6 +252,16 @@ echo "Summary written to:"
 echo "  $SUMMARY_TXT"
 echo "  $SUMMARY_JSON"
 
+# Clean up the per-file build products (.wasm, .mlir, .ll, .o, .opt.mlir,
+# .schema.json, .log). Keep only the summary files. This keeps a run from
+# leaving hundreds of MB of generated artifacts in dist-wasm/.
+find "$OUTPUT_DIR" -type f \
+  \( -name "*.wasm" -o -name "*.mlir" -o -name "*.ll" \
+     -o -name "*.o" -o -name "*.schema.json" -o -name "*.log" \) \
+  -delete 2>/dev/null
+# Remove any directories that are now empty.
+find "$OUTPUT_DIR" -type d -empty -delete 2>/dev/null
+
 if [[ $COMPILE_FAILED -gt 0 || $CHECK_FAILED -gt 0 ]]; then
   exit 1
 fi

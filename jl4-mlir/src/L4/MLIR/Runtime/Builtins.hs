@@ -47,6 +47,36 @@ runtimeFunctions =
   , ("__l4_list_empty",  [],                           [l4NumberType])
   , ("__l4_alloc",       [IntegerType 64],             [PointerType])  -- special
   , ("__l4_free",        [l4NumberType],               [])
+    -- DATE primitives. DATE is represented as f64 days-since-Unix-epoch
+    -- (1970-01-01). Arithmetic on dates (PLUS/MINUS NUMBER) is plain
+    -- arith.addf / arith.subf; only construction, parsing and field
+    -- extraction need runtime help.
+  , ("__l4_date_from_dmy",    [l4NumberType, l4NumberType, l4NumberType], [l4NumberType])
+  , ("__l4_date_from_serial", [l4NumberType], [l4NumberType])
+  , ("__l4_date_serial",      [l4NumberType], [l4NumberType])
+  , ("__l4_date_day",         [l4NumberType], [l4NumberType])
+  , ("__l4_date_month",       [l4NumberType], [l4NumberType])
+  , ("__l4_date_year",        [l4NumberType], [l4NumberType])
+  , ("__l4_datevalue",        [l4NumberType], [l4NumberType]) -- STRING -> Either STRING DATE (returned as MAYBE-like ptr)
+  , ("__l4_to_date",          [l4NumberType], [l4NumberType]) -- STRING -> MAYBE DATE
+    -- TIME primitives. TIME is represented as f64 seconds-since-midnight
+    -- (non-negative; fractional for sub-second precision).
+  , ("__l4_time_from_hms",    [l4NumberType, l4NumberType, l4NumberType], [l4NumberType])
+  , ("__l4_time_from_serial", [l4NumberType], [l4NumberType])
+  , ("__l4_time_serial",      [l4NumberType], [l4NumberType])
+  , ("__l4_time_hour",        [l4NumberType], [l4NumberType])
+  , ("__l4_time_minute",      [l4NumberType], [l4NumberType])
+  , ("__l4_time_second",      [l4NumberType], [l4NumberType])
+  , ("__l4_to_time",          [l4NumberType], [l4NumberType]) -- STRING -> MAYBE TIME
+    -- DATETIME primitives. DATETIME is represented as a pointer to a
+    -- 2-slot record: slot 0 = UTC Unix seconds (f64), slot 1 = IANA
+    -- timezone name (STRING pointer).
+  , ("__l4_datetime_from_dtz", [l4NumberType, l4NumberType, l4NumberType], [l4NumberType])
+  , ("__l4_datetime_date",     [l4NumberType], [l4NumberType])
+  , ("__l4_datetime_time",     [l4NumberType], [l4NumberType])
+  , ("__l4_datetime_tz",       [l4NumberType], [l4NumberType])
+  , ("__l4_datetime_serial",   [l4NumberType], [l4NumberType])
+  , ("__l4_to_datetime",       [l4NumberType], [l4NumberType]) -- STRING -> MAYBE DATETIME
   ]
 
 -- | Build an extern function declaration (func.func private).
