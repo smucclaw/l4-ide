@@ -498,11 +498,18 @@ evaluateWithCompiled filepath fnDecl compiled sourceText modContext params trace
       -- - Just Nothing (explicit unknown) -> Nothing
       -- - Just (Just v) (provided value) -> Just v
       fullParams = [(name, join $ Map.lookup name inputMap) | name <- expectedParams]
+      -- If the function body references any module-level ASSUMEs, those are
+      -- surfaced as function-level parameters in the MCP/HTTP schema and
+      -- must be injected at evaluation time. The wrapper path emits them as
+      -- LET bindings around the call; the direct-AST path doesn't know how
+      -- to inject them, so route ASSUME-using functions through the wrapper.
+      hasAssumeRefs = not (null (extractAssumeParamTypes compiled.compiledModule compiled.compiledDecide))
+      -- Pass ALL params (including ASSUMEs) to the wrapper path so their
+      -- values get bound; the direct path only needs GIVEN params.
+      wrapperParams = params
 
-  -- Check if we need to fall back to wrapper-based evaluation
-  -- (for FnObject, FnUncertain, FnUnknown, missing params which require JSONDECODE)
-  if requiresWrapperEvaluation fullParams
-    then evaluateWithWrapper filepath fnDecl compiled sourceText modContext fullParams traceLevel includeGraphViz
+  if requiresWrapperEvaluation fullParams || hasAssumeRefs
+    then evaluateWithWrapper filepath fnDecl compiled sourceText modContext wrapperParams traceLevel includeGraphViz
     else evaluateDirectAST compiled fullParams traceLevel includeGraphViz
 
 -- | Evaluate a deontic function with startTime and events via EVALTRACE wrapper.

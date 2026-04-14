@@ -233,6 +233,19 @@ The description is the single highest-value sentence in the whole file: it is wh
 @export Calculate the annual income tax owed by an individual resident taxpayer
 ```
 
+### ASSUMEs as export parameters
+
+Module-level `ASSUME`s that an `@export` function references are promoted to
+parameters of that function and must be supplied by the caller — they behave
+just like `GIVEN` parameters at the API boundary. ASSUMEs not referenced by
+any exported function remain internal assumptions.
+
+**Function-typed inputs are not allowed for `@export`.** Neither a `GIVEN`
+parameter nor a referenced `ASSUME` may have a `FUNCTION FROM … TO …` type
+on an exported function (functions can't be passed over JSON). The
+typechecker and `jl4-service` deploy both reject such bundles with
+`Function type inputs are not supported for @export`.
+
 ### `@desc` — document parameters
 
 Put an inline `@desc` on **every** `GIVEN` parameter an API caller has to supply. These descriptions flow into the OpenAPI parameter docs and the MCP tool's `inputSchema`, and they are what LLMs read when deciding **how to construct a valid call**.

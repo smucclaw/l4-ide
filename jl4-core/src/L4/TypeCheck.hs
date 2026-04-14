@@ -93,6 +93,7 @@ import L4.TypeCheck.Unify
 import L4.TypeCheck.With as X
 import qualified L4.Utils.IntervalMap as IV
 import L4.Mixfix (MixfixInfo(..), MixfixPatternToken(..), extractMixfixInfo, canonicalMixfixName, firstKeyword)
+import qualified L4.Export as Export
 
 import Control.Applicative
 import Data.Monoid
@@ -175,9 +176,10 @@ doCheckProgramWithDependencies checkState checkEnv program =
                 -- Combine mixfix registry from imports with this module's local definitions
                 -- so importing modules can use mixfix functions defined here
                 combinedMixfixRegistry = unionMixfixRegistry localMixfixRegistry env.mixfixRegistry
+                exportErrs = Export.validateExportInputs rprog
             in MkCheckResult
               { program = rprog
-              , errors = substErrs ++ moreErrs
+              , errors = substErrs ++ moreErrs ++ exportErrs
               , substitution = s'.substitution
               , environment = env.environment
               , entityInfo = env.entityInfo
@@ -3222,6 +3224,12 @@ prettyCheckError (SuppliedComputedField fieldName) =
   , ""
   , "Computed fields are automatically derived from their MEANS expression."
   , "Remove this field from the constructor."
+  ]
+prettyCheckError (ExportFunctionTypeInput _fnName paramName) =
+  [ "Function type inputs are not supported for @export."
+  , "The parameter "
+      <> quotedName (getActual paramName)
+      <> " has a function type."
   ]
 
 -- | Pretty print mixfix match errors with helpful suggestions.

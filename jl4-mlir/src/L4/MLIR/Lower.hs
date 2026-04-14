@@ -24,6 +24,7 @@ import L4.MLIR.Dialect.SCF
 import L4.MLIR.Dialect.LLVM
 import qualified L4.MLIR.Schema as Schema
 import L4.MLIR.ABI (l4Value)
+import qualified L4.Export as Export
 
 import L4.Syntax
   ( Module(..), Section(..), TopDecl(..), Decide(..), Declare(..)
@@ -79,6 +80,12 @@ data LowerState = LowerState
     -- parameters. Call sites must prepend the corresponding current
     -- bindings before emitting the call.
   , localCaptures :: Map Text [Text]
+    -- | For each @\@export@-decorated DECIDE, the extra ASSUME-derived
+    -- parameters (Resolved name + L4 type) that should be appended to
+    -- the function's ABI arg list. Keyed by sanitized function name.
+    -- Non-exported DECIDEs aren't in this map, so they fall back to
+    -- the original extern-based ASSUME model.
+  , exportAssumeArgs :: Map Text [(Resolved, Type' Resolved)]
   }
 
 type LowerM a = State LowerState a
@@ -100,6 +107,7 @@ initState info = LowerState
   , funcListElems = Map.empty
   , sourceTypeMap = info
   , localCaptures = Map.empty
+  , exportAssumeArgs = Map.empty
   }
 
 -- | Look up the ground-truth type for an expression using the typechecker's
@@ -288,12 +296,34 @@ lowerProgram = lowerProgramWithInfo IV.empty
 lowerProgramWithInfo :: InfoMap -> Module Resolved -> [Module Resolved] -> MLIRModule
 lowerProgramWithInfo info mainMod deps =
   let mainNames = collectLocalNames mainMod
+      exportArgs = collectExportAssumeArgs mainMod
+      initial = (initState info) { exportAssumeArgs = exportArgs }
       finalState = execState (do
         forM_ deps (registerDependencyModule mainNames)
         lowerModuleDecls mainMod
-        ) (initState info)
+        ) initial
       rawOps = reverse finalState.globals ++ reverse finalState.functions
   in MLIRModule { moduleOps = rawOps }
+
+-- | For every @\@export@-decorated DECIDE in the main module, collect the
+-- ASSUME declarations it references. These get promoted to function-level
+-- parameters at the ABI boundary so hosts can supply their values without
+-- going through the extern-import mechanism used by non-exported DECIDEs.
+collectExportAssumeArgs :: Module Resolved -> Map Text [(Resolved, Type' Resolved)]
+collectExportAssumeArgs mod' = Map.fromList
+  [ (sanitizeName (resolvedName fnName), args)
+  | decide@(MkDecide _ _ (MkAppForm _ fnName _ _) _) <- exportedDecides
+  , let args = Export.extractAssumeParamResolveds mod' decide
+  , not (null args)
+  ]
+ where
+  exportedDecides = goSection sect
+  MkModule _ _ sect = mod'
+  goSection (MkSection _ _ _ decls) = decls >>= goDecl
+  goDecl = \case
+    Decide _ d | Export.isExportedDecide d -> [d]
+    Section _ s -> goSection s
+    _ -> []
 
 -- | Final pass run by 'L4.MLIR.Pipeline' once all operations — including
 -- runtime builtins — have been assembled. It handles three consumers
@@ -597,12 +627,17 @@ registerFuncSig (Decide _ (MkDecide _ typeSig appForm body)) = do
   let name = sanitizeName (resolvedName (appFormHead' appForm))
       (argTypes, sigRetType) = sigToTypesEnv env typeSig
       argListElems = listElementsFromSig env typeSig
+  -- Exported DECIDEs that reference module-level ASSUMEs get those ASSUMEs
+  -- appended as extra arguments in the ABI.
+  extraArgs <- Map.findWithDefault [] name <$> gets (.exportAssumeArgs)
+  let extraArgTypes = [l4TypeToMLIR env ty | (_, ty) <- extraArgs]
+      extraListElems = [Nothing | _ <- extraArgs]
   -- For MEANS bindings, infer type statefully (may reference other registered bindings)
   inferredRet <- inferExprTypeM body
   let retType = if hasGiveth typeSig then sigRetType else inferredRet
   modify' $ \s -> s
-    { funcSigs = Map.insert name (argTypes, retType) s.funcSigs
-    , funcListElems = Map.insert name argListElems s.funcListElems
+    { funcSigs = Map.insert name (argTypes ++ extraArgTypes, retType) s.funcSigs
+    , funcListElems = Map.insert name (argListElems ++ extraListElems) s.funcListElems
     }
 registerFuncSig (Section _ sect) = do
   let MkSection _ _ _ ds = sect
@@ -724,9 +759,18 @@ lowerDecide :: Decide Resolved -> LowerM ()
 lowerDecide (MkDecide _ typeSig appForm body) = do
   env <- gets (.typeEnv)
   let funcName = sanitizeName (resolvedName (appFormHead' appForm))
-      params   = appFormParams appForm
-      (argTypes, sigRetType) = sigToTypesEnv env typeSig
+      givenParams = appFormParams appForm
+      (givenArgTypes, sigRetType) = sigToTypesEnv env typeSig
       listElemTys = listElementsFromSig env typeSig
+  -- If this DECIDE is @export-decorated and references ASSUMEs, those
+  -- ASSUMEs become additional ABI parameters (see 'collectExportAssumeArgs').
+  -- They're appended after the GIVEN params so existing call sites for
+  -- non-exported callers still match.
+  extraAssumeArgs <- Map.findWithDefault [] funcName <$> gets (.exportAssumeArgs)
+  let extraParams   = map fst extraAssumeArgs
+      extraArgTypes = [l4TypeToMLIR env ty | (_, ty) <- extraAssumeArgs]
+      params    = givenParams ++ extraParams
+      argTypes  = givenArgTypes ++ extraArgTypes
 
   -- Respect the signature we already registered in 'registerFuncSig'
   -- so call-site types match the definition — without that, a MEANS
