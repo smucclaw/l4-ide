@@ -262,22 +262,24 @@ collectTypeSynonyms (MkModule _ _ section) =
     Section _ sub -> goSection sub
     _ -> []
 
--- | Check if a type is a function type, expanding type synonyms.
--- This handles types like `DECLARE Pred IS A FUNCTION FROM NUMBER TO BOOLEAN`
--- followed by `ASSUME p IS A Pred`.
+-- | Check if a type /contains/ a function type anywhere — expanding type
+-- synonyms and recursing into parameterised type constructors
+-- (@MAYBE OF (FUNCTION FROM A TO B)@, @LIST OF FUNCTION …@, etc.).
+-- @\@export@ cannot accept any such parameter because functions can't be
+-- passed over JSON regardless of their wrapper.
 isFunctionTypeExpanded :: Map.Map Unique (Type' Resolved) -> Type' Resolved -> Bool
 isFunctionTypeExpanded synonyms = go Set.empty
  where
   go visited ty = case ty of
     Fun {} -> True
     Forall _ _ inner -> go visited inner
-    TyApp _ name [] ->
+    TyApp _ name args ->
       let u = getUnique name
-      in if Set.member u visited
-            then False  -- Prevent infinite recursion on cyclic synonyms
-            else case Map.lookup u synonyms of
-              Just expanded -> go (Set.insert u visited) expanded
-              Nothing -> False
+          expansion = case Map.lookup u synonyms of
+            Just expanded | not (Set.member u visited) ->
+              go (Set.insert u visited) expanded
+            _ -> False
+      in expansion || any (go visited) args
     _ -> False
 
 -- | Collect the 'Unique' of every identifier the expression references —

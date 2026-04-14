@@ -172,15 +172,37 @@ runtimeCall name es = do
 
 callL4 :: Text -> [(Value, MLIRType)] -> MLIRType -> LowerM Value
 callL4 callee args retTy = do
+  -- Internal callers of @export functions don't supply the ASSUME-derived
+  -- args themselves; synthesise each by calling the ASSUME's own extern,
+  -- preserving the pre-@export behaviour (the wasm host satisfies the
+  -- import). Host calls supply the values directly and never hit this
+  -- path (they enter through the function boundary, not callL4).
+  fullArgs <- appendAssumeExternArgs callee args
   -- Box each arg at the call site.
-  boxed <- forM args $ \(v, t) -> boxABI t v
+  boxed <- forM fullArgs $ \(v, t) -> boxABI t v
   -- Emit the call with uniform f64 signature.
-  let nArgs = length args
+  let nArgs = length fullArgs
       sigArgs = replicate nArgs l4Value
   boxedResult <- emitVal $ \vid ->
     funcCall [vid] callee boxed sigArgs [l4Value]
   -- Unbox the return to the expected native type.
   unboxABI retTy boxedResult
+
+-- | For callees that were registered with extra ASSUME-derived parameters
+-- (see 'exportAssumeArgs'), append one extern call per extra parameter so
+-- the call site matches the callee's extended arity.
+appendAssumeExternArgs :: Text -> [(Value, MLIRType)] -> LowerM [(Value, MLIRType)]
+appendAssumeExternArgs callee args = do
+  extras <- Map.findWithDefault [] callee <$> gets (.exportAssumeArgs)
+  if null extras then pure args
+  else do
+    env <- gets (.typeEnv)
+    extraPairs <- forM extras $ \(assumeRes, assumeTy) -> do
+      let externName = sanitizeName (resolvedName assumeRes)
+          mlTy = l4TypeToMLIR env assumeTy
+      v <- emitVal $ \vid -> funcCall [vid] externName [] [] [l4Value]
+      pure (v, mlTy)
+    pure (args ++ extraPairs)
 
 -- | Allocate a fresh SSA value.
 fresh :: LowerM ValueId
