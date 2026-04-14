@@ -38,7 +38,7 @@ import Network.Wai.Handler.Warp (testWithApplication)
 import System.Directory (removeDirectoryRecursive, doesDirectoryExist)
 import System.IO.Error (isPermissionError)
 
-import TestData (qualifiesJL4, recordJL4, maybeParamJL4, saleContractJL4, deonticExportJL4, deonticRecordPartyJL4, spacedFieldsJL4)
+import TestData (qualifiesJL4, recordJL4, maybeParamJL4, saleContractJL4, deonticExportJL4, deonticRecordPartyJL4, spacedFieldsJL4, assumeParamJL4)
 
 spec :: SpecWith ()
 spec = describe "integration" do
@@ -64,6 +64,32 @@ spec = describe "integration" do
                 [ "walks" Aeson..= False
                 , "eats" Aeson..= False
                 , "drinks" Aeson..= False
+                ]
+            ])
+        assertSuccess resp \r ->
+          Map.lookup "value" r.fnResult `shouldBe` Just (FnLitBool False)
+
+    it "promotes referenced ASSUMEs to parameters on @export (true case)" do
+      -- Verifies the direct-AST path binds module-level ASSUMEs from the
+      -- caller's input via a LET wrapper around the call.
+      withServiceFromSources "assume-true" [("adult.l4", assumeParamJL4)] \baseUrl mgr -> do
+        resp <- evalFunction baseUrl mgr "assume-true" "is_adult"
+          (Aeson.object
+            [ "arguments" Aeson..= Aeson.object
+                [ "threshold" Aeson..= (18 :: Int)
+                , "age" Aeson..= (25 :: Int)
+                ]
+            ])
+        assertSuccess resp \r ->
+          Map.lookup "value" r.fnResult `shouldBe` Just (FnLitBool True)
+
+    it "promotes referenced ASSUMEs to parameters on @export (false case)" do
+      withServiceFromSources "assume-false" [("adult.l4", assumeParamJL4)] \baseUrl mgr -> do
+        resp <- evalFunction baseUrl mgr "assume-false" "is_adult"
+          (Aeson.object
+            [ "arguments" Aeson..= Aeson.object
+                [ "threshold" Aeson..= (18 :: Int)
+                , "age" Aeson..= (15 :: Int)
                 ]
             ])
         assertSuccess resp \r ->

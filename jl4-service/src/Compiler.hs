@@ -12,6 +12,7 @@ import Backend.Api (EvalBackend (..), FunctionDeclaration (..))
 import Shared (validateNoSanitizationCollisions)
 import Backend.CodeGen (isDeonticType)
 import L4.FunctionSchema (Parameters (..), Parameter (..), typeToParameter, declaresFromModule)
+import L4.TypeCheck.Types (CheckErrorWithContext (..), CheckError (..))
 import BundleStore (SerializedBundle (..), StoredMetadata (..))
 import Types
 import Control.Monad (forM, unless)
@@ -121,7 +122,21 @@ processTypecheckedFile logger deployId filepath content moduleContext
   tcResult@Rules.TypeCheckResult{module' = resolvedModule, environment = env, entityInfo = ei, errors = tcErrors}
   evalMap = do
     let exports = enrichReturnTypes ei $ getExportedFunctions resolvedModule
-    if null exports
+        exportFnTypeErrs =
+          [ "Function type inputs are not supported for @export (parameter "
+              <> resolvedText paramName <> " of "
+              <> resolvedText fnName <> ")"
+          | MkCheckErrorWithContext{kind = ExportFunctionTypeInput fnName paramName} <- tcErrors
+          ]
+    if not (null exportFnTypeErrs)
+      then do
+        logWarn logger "Deploy rejected: @export function has FUNCTION-typed input"
+          [ ("deploymentId", toJSON deployId)
+          , ("file", toJSON filepath)
+          , ("errors", toJSON exportFnTypeErrs)
+          ]
+        pure (filepath, Left (Text.intercalate "; " exportFnTypeErrs))
+      else if null exports
       then pure (filepath, Right ([], []))
       else do
         let implicitParams = extractImplicitAssumeParams tcErrors
@@ -427,6 +442,10 @@ extractDeonticTypeNames ty@(TyApp _ _ [partyTy, actionTy])
     typeName (TyApp _ n _) = rawNameToText (rawName (getActual n))
     typeName _ = "Unknown"
 extractDeonticTypeNames _ = Nothing
+
+-- | Extract display text from a Resolved name.
+resolvedText :: Resolved -> Text
+resolvedText = rawNameToText . rawName . getActual
 
 -- | Collect all DECLARE entries from a TypeCheckResult and its transitive imports.
 collectAllDeclares :: Rules.TypeCheckResult -> Map Text (Declare Resolved)

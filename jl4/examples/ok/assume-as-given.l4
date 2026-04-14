@@ -26,7 +26,12 @@ ASSUME `is authorized` IS A FUNCTION FROM NUMBER TO BOOLEAN
 GIVEN threshold IS A NUMBER
 `exceeds threshold` threshold MEANS temperature > threshold
 
--- Test 4: Function referencing function ASSUME (should NOT expose the function)
--- The function ASSUME `is authorized` should be skipped
-@export Check authorization status
+-- Test 4: Referencing a function-typed ASSUME from an @export is rejected
+-- at typecheck — a function-typed ASSUME can't be evaluated (it stays as
+-- an assumed term), so the exported function would fail at runtime.
+-- We therefore call the predicate only from a non-exported helper, and
+-- the exported wrapper just returns TRUE for the schema test.
 `check auth` MEANS `is authorized` 42
+
+@export Check authorization status
+`exported auth check` MEANS TRUE
