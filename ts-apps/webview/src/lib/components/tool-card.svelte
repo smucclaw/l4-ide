@@ -281,11 +281,10 @@
   .params-list {
     display: flex;
     flex-direction: column;
-    gap: 2px;
   }
 
   .param-row {
-    padding: 2px 4px;
+    padding: 0 4px;
     line-height: 1.5;
     word-break: break-word;
   }
