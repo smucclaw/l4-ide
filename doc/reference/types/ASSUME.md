@@ -88,9 +88,11 @@ ASSUME predicate IS A FUNCTION FROM NUMBER TO BOOLEAN
 DECIDE `applies` IF predicate OF 42
 ```
 
-Functions cannot be passed over JSON (REST/MCP), so the typechecker emits
-`Function type inputs are not supported for @export` and the service refuses
-to deploy bundles containing such exports.
+Functions can't be passed over JSON (REST/MCP), and function-typed ASSUMEs
+stay uninterpreted at runtime — so any call would fail with an "assumed
+term" error rather than return a value. The typechecker emits
+`Function type inputs are not supported for @export` and the service
+refuses to deploy such bundles.
 
 ## Binding Assumed Values
 

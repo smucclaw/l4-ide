@@ -402,9 +402,11 @@ extractImplicitAssumeParams errors =
   , not (hasTypeInferenceVars ty)
   ]
 
--- | Validate that no @export-decorated DECIDE has a function-typed input,
--- either via its GIVEN signature or via a referenced ASSUME.
--- Returns one 'ExportFunctionTypeInput' error per offending input.
+-- | Validate that no @export-decorated DECIDE has a function-typed input —
+-- either a GIVEN parameter, or a module-level ASSUME the body calls.
+-- Function-typed inputs can't be evaluated end-to-end: GIVENs can't be
+-- passed over JSON, and function-typed ASSUMEs stay 'ValAssumed' at
+-- runtime, causing a stuck "assumed term" error when the body invokes them.
 validateExportInputs :: Module Resolved -> [CheckErrorWithContext]
 validateExportInputs mod' =
   let synonyms = collectTypeSynonyms mod'
@@ -427,8 +429,8 @@ isExportedDecide decide =
     Just desc -> (parseDescText (getDesc desc)).flags.isExport
     Nothing   -> False
 
--- | Like 'assumesFromModule' but WITHOUT filtering out function-typed ASSUMEs.
--- Used for validation so we can still report them as errors.
+-- | Like 'assumesFromModule' but WITHOUT the function-type filter —
+-- so the validator sees every ASSUME and can flag function-typed ones.
 allAssumesFromModule :: Module Resolved -> Map.Map Unique (Assume Resolved)
 allAssumesFromModule (MkModule _ _ section) =
   Map.fromList (collectSection section)
@@ -445,10 +447,9 @@ checkOneExport
   -> Map.Map Unique (Assume Resolved)
   -> Decide Resolved
   -> [CheckErrorWithContext]
-checkOneExport synonyms assumes decide@(MkDecide _ tySig appForm _) =
-  let MkAppForm _ fnName _ _ = appForm
-  in checkGivenFunctionInputs synonyms fnName tySig
-     ++ checkAssumeFunctionInputs synonyms assumes fnName decide
+checkOneExport synonyms assumes decide@(MkDecide _ tySig (MkAppForm _ fnName _ _) _) =
+  checkGivenFunctionInputs synonyms fnName tySig
+  ++ checkAssumeFunctionInputs synonyms assumes fnName decide
 
 checkGivenFunctionInputs
   :: Map.Map Unique (Type' Resolved)

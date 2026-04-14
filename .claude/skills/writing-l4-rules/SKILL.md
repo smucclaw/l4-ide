@@ -242,9 +242,10 @@ any exported function remain internal assumptions.
 
 **Function-typed inputs are not allowed for `@export`.** Neither a `GIVEN`
 parameter nor a referenced `ASSUME` may have a `FUNCTION FROM … TO …` type
-on an exported function (functions can't be passed over JSON). The
-typechecker and `jl4-service` deploy both reject such bundles with
-`Function type inputs are not supported for @export`.
+on an exported function: GIVENs can't be passed over JSON, and function-typed
+ASSUMEs stay uninterpreted at runtime (any call fails with a stuck
+"assumed term" error). The typechecker and `jl4-service` deploy both reject
+such bundles with `Function type inputs are not supported for @export`.
 
 ### `@desc` — document parameters
 
