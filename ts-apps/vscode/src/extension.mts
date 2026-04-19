@@ -41,6 +41,11 @@ import {
 } from './sidebar-provider.js'
 import { AuthManager } from './auth.js'
 import { ServiceClient } from './service-client.js'
+import { AiLogger } from './ai/logger.js'
+import { AiProxyClient } from './ai/ai-proxy-client.js'
+import { ConversationStore } from './ai/conversation-store.js'
+import { ChatService } from './ai/chat-service.js'
+import { registerAiChatHandlers } from './ai/register.js'
 
 /***********************************************
      decode for RenderAsLadderInfo
@@ -486,6 +491,31 @@ export async function activate(context: ExtensionContext) {
     outputChannel,
     mcpProxy,
     (directiveId) => openInspectorSections.delete(directiveId)
+  )
+
+  // Legalese AI services — independent from the jl4 service URL flow.
+  // The proxy endpoint is hardcoded (see ai-proxy-client.ts) and only
+  // overridable via the LEGALESE_AI_ENDPOINT env var for local dev.
+  const aiLogger = new AiLogger()
+  context.subscriptions.push(aiLogger)
+  const aiProxy = new AiProxyClient({ auth, logger: aiLogger })
+  const aiStore = new ConversationStore(context, aiLogger)
+  const chatService = new ChatService({
+    auth,
+    client,
+    store: aiStore,
+    proxy: aiProxy,
+    logger: aiLogger,
+  })
+  context.subscriptions.push(
+    registerAiChatHandlers({
+      messenger: sidebarMessenger,
+      frontend: sidebarWebviewFrontend,
+      auth,
+      service: chatService,
+      store: aiStore,
+      logger: aiLogger,
+    })
   )
 
   const sidebarProvider = new SidebarProvider(

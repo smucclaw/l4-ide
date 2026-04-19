@@ -257,7 +257,7 @@ MCP servers
   [+ Add MCP server]
 ```
 
-Settings write through to VSCode configuration (`jl4.ai.*`) so they're
+Settings write through to VSCode configuration (`legaleseAi.*`) so they're
 scriptable and sync via VSCode settings sync.
 
 ---
@@ -389,7 +389,7 @@ for all MCP client work — don't roll our own stdio/HTTP handshake.
   _client_ (yes, into its own process) so the permission model and
   dispatcher treat it identically to any third-party server.
 - **User-configured** — stdio (`command`, `args`, `env`) or HTTP from
-  `jl4.ai.mcpServers` settings.
+  `legaleseAi.mcpServers` settings.
 
 ### 5.4 Permission model
 
@@ -581,21 +581,21 @@ a truncated form of the first user message.
 
 ### 7.3 Settings
 
-All under `jl4.ai.*` in VSCode configuration. package.json contributions:
+All under `legaleseAi.*` in VSCode configuration. package.json contributions:
 
 ```jsonc
 {
-  "jl4.ai.permissions.readFiles": {
+  "legaleseAi.permissions.readFiles": {
     "enum": ["never", "ask", "always"],
     "default": "always",
   },
-  "jl4.ai.permissions.createFiles": { "default": "always" },
-  "jl4.ai.permissions.editFiles": { "default": "always" },
-  "jl4.ai.permissions.deleteFiles": { "default": "ask" },
-  "jl4.ai.permissions.evaluateL4": { "default": "always" },
-  "jl4.ai.permissions.evaluateRule": { "default": "always" },
-  "jl4.ai.permissions.runDeployedRules": { "default": "always" },
-  "jl4.ai.mcpServers": {
+  "legaleseAi.permissions.createFiles": { "default": "always" },
+  "legaleseAi.permissions.editFiles": { "default": "always" },
+  "legaleseAi.permissions.deleteFiles": { "default": "ask" },
+  "legaleseAi.permissions.evaluateL4": { "default": "always" },
+  "legaleseAi.permissions.evaluateRule": { "default": "always" },
+  "legaleseAi.permissions.runDeployedRules": { "default": "always" },
+  "legaleseAi.mcpServers": {
     "type": "object",
     "additionalProperties": { "type": "object" },
   },
@@ -853,7 +853,7 @@ ai/
     l4-evaluate.ts            # l4__evaluate
     ask-user.ts               # meta__ask_user
   mcp/
-    client-manager.ts         # reads jl4.ai.mcpServers, wraps MCP SDK
+    client-manager.ts         # reads legaleseAi.mcpServers, wraps MCP SDK
     l4-rules-client.ts        # connect to existing localhost MCP server
 ```
 
@@ -962,7 +962,7 @@ third-party configured servers become available.
 - `meta__ask_user` (pauses the turn, surfaces structured question).
 - MCP integration via `@modelcontextprotocol/sdk`:
   - `l4-rules` as a built-in MCP server.
-  - Third-party servers from `jl4.ai.mcpServers` setting.
+  - Third-party servers from `legaleseAi.mcpServers` setting.
 
 **Permissions** — braver defaults per §5.4. Settings panel permissions
 section becomes interactive. Inline approval UI banner; "Always allow"

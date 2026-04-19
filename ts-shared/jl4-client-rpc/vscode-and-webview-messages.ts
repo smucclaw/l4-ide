@@ -335,6 +335,192 @@ export const SidebarConnectionStatusChanged: NotificationType<GetSidebarConnecti
     method: 'sidebarConnectionStatusChanged',
   }
 
+/*************************************************************
+            Legalese AI chat tab messages
+**************************************************************/
+
+/** An OpenAI-shaped chat message. The server-side ai-proxy accepts the
+ * standard OpenAI format including role "user" | "assistant" | "tool",
+ * tool_calls on assistant, tool_call_id on tool. Phase 1 only exchanges
+ * plain user/assistant text; later phases carry richer shapes.
+ */
+export interface AiChatMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool'
+  content: string | null
+  tool_calls?: Array<{
+    id: string
+    type: 'function'
+    function: { name: string; arguments: string }
+  }>
+  tool_call_id?: string
+  name?: string
+  /** Client-only UI metadata (ignored by the server). */
+  _meta?: Record<string, unknown>
+}
+
+/** Thin envelope around an OpenAI message list. Persists locally in the
+ * extension's globalStorage and is replayed into the webview on reopen. */
+export interface AiConversation {
+  id: string
+  orgId: string
+  userId: string
+  model: string
+  title: string
+  createdAt: string
+  lastActiveAt: string
+  messages: AiChatMessage[]
+}
+
+/** Lightweight row for the history overlay — avoids shipping full
+ * message arrays for the listing. */
+export interface AiConversationSummary {
+  id: string
+  title: string
+  model: string
+  createdAt: string
+  lastActiveAt: string
+  messageCount: number
+}
+
+/** Start (or continue) a streaming chat turn. Extension responds via
+ * the AiChat* notifications below, keyed by conversationId. Omitting the
+ * id starts a new conversation; the `AiChatStarted` event carries the
+ * fresh id back. */
+export interface AiChatStartParams {
+  conversationId?: string
+  text: string
+  /** Resolved file or symbol mentions (already expanded to content
+   * references client-side; extension just forwards). Phase 1 sends
+   * empty list; `@` mention work arrives in a later commit. */
+  mentions: Array<{ kind: 'file' | 'symbol' | 'selection'; label: string }>
+  /** Attachment hints (Phase 3); Phase 1 always empty. */
+  attachments: Array<{ kind: 'text' | 'pdf'; path: string }>
+}
+
+export const AiChatStart: NotificationType<AiChatStartParams> = {
+  method: 'aiChatStart',
+}
+
+export const AiChatAbort: NotificationType<{ conversationId: string }> = {
+  method: 'aiChatAbort',
+}
+
+/** Extension → webview: turn started, id + model assigned. */
+export const AiChatStarted: NotificationType<{
+  conversationId: string
+  model: string
+}> = {
+  method: 'aiChatStarted',
+}
+
+/** Extension → webview: incremental assistant text. */
+export const AiChatTextDelta: NotificationType<{
+  conversationId: string
+  text: string
+}> = {
+  method: 'aiChatTextDelta',
+}
+
+/** Extension → webview: turn finished. `finishReason` matches the
+ * OpenAI set: 'stop' | 'tool_calls' | 'length' | 'content_filter' | 'error'.
+ */
+export const AiChatDone: NotificationType<{
+  conversationId: string
+  finishReason: string
+  usage?: { promptTokens: number; completionTokens: number }
+}> = {
+  method: 'aiChatDone',
+}
+
+/** Extension → webview: something went wrong mid-turn. `code` is
+ * optional and maps to http codes / OpenAI error codes for clients to
+ * switch on (`daily_token_limit_exceeded`, `unauthenticated`, etc.). */
+export const AiChatError: NotificationType<{
+  conversationId: string
+  message: string
+  code?: string
+}> = {
+  method: 'aiChatError',
+}
+
+/** Webview asks for the list of locally-tracked conversations. */
+export const AiConversationList: RequestType<
+  void,
+  { items: AiConversationSummary[] }
+> = {
+  method: 'aiConversationList',
+}
+
+/** Load a single conversation by id from local storage. */
+export const AiConversationLoad: RequestType<
+  { id: string },
+  { conversation: AiConversation | null }
+> = {
+  method: 'aiConversationLoad',
+}
+
+/** Rename-delete locally + on the server. */
+export const AiConversationDelete: RequestType<
+  { id: string },
+  { ok: boolean }
+> = {
+  method: 'aiConversationDelete',
+}
+
+/** Webview asks for a fresh conversation id (drops local state; starts
+ * blank). Currently a notification because no response is needed —
+ * state transitions happen in the webview's own store. */
+export const AiConversationNew: NotificationType<void> = {
+  method: 'aiConversationNew',
+}
+
+/** Push from extension: auth state changed (signed-in, cloud session
+ * status). The AI tab uses this to enable/disable input. Separate from
+ * `SidebarConnectionStatusChanged` because the AI tab cares about
+ * cloud-specific auth, not generic service-url reachability. */
+export const AiAuthStatus: NotificationType<{
+  signedIn: boolean
+  userId?: string
+  orgSlug?: string
+}> = {
+  method: 'aiAuthStatus',
+}
+
+/** `@` mention autocomplete: returns matching files / workspace symbols.
+ * Phase 1 populates this from the active editor + workspace file
+ * search; later we augment with exported symbol names. */
+export interface AiMentionCandidate {
+  kind: 'file' | 'symbol' | 'selection'
+  label: string
+  /** URI for file candidates; export name for symbols; empty for selection. */
+  target: string
+}
+
+export const AiMentionSearch: RequestType<
+  { query: string },
+  { items: AiMentionCandidate[] }
+> = {
+  method: 'aiMentionSearch',
+}
+
+/** Usage polling: webview tells the extension when to poll (tab
+ * visible + conversation loaded → subscribe; otherwise unsubscribe). */
+export const AiUsageSubscribe: NotificationType<void> = {
+  method: 'aiUsageSubscribe',
+}
+
+export const AiUsageUnsubscribe: NotificationType<void> = {
+  method: 'aiUsageUnsubscribe',
+}
+
+export const AiUsageUpdate: NotificationType<{
+  used: number
+  limit: number
+  blockOnOverage: boolean
+}> = {
+  method: 'aiUsageUpdate',
+}
+
 /*******************************************************************************
  Convert between L4 RPC types and vscode-messenger's Request/Notification types
 ********************************************************************************/
