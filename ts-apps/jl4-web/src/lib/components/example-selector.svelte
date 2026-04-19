@@ -19,9 +19,12 @@
     <button
       class="example-button external"
       onclick={() =>
-        window.open('https://github.com/smucclaw/l4-ide', '_blank')}
+        window.open(
+          'https://marketplace.visualstudio.com/items?itemName=Legalese.l4-vscode',
+          '_blank'
+        )}
     >
-      L4-IDE on Github
+      Download L4 for VS Code
     </button>
     <h4>Load example files</h4>
     {#each legalExamples as example}
