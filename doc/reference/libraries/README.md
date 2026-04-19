@@ -4,7 +4,7 @@ L4 ships with a set of core libraries that provide essential functions for commo
 
 ## Overview
 
-Core libraries are located in the [jl4-core/libraries/](https://github.com/smucclaw/l4-ide/tree/main/jl4-core/libraries) directory:
+Core libraries are located in the [jl4-core/libraries/](https://github.com/legalese/l4-ide/tree/main/jl4-core/libraries) directory:
 
 - **[prelude](prelude.md)** - Standard functions (automatically imported)
 - **[daydate](daydate.md)** - Date calculations and temporal logic
@@ -249,4 +249,4 @@ Legal entity types, identity documents, and capacity checks. Key functions: `age
 - **[GLOSSARY](../GLOSSARY.md)** - Language feature index
 - **[Types](../types/README.md)** - Type system documentation
 - **[IMPORT keyword](IMPORT.md)** - IMPORT keyword details
-- **[Specs](https://github.com/smucclaw/l4-ide/tree/main/specs)** - Technical specifications
+- **[Specs](https://github.com/legalese/l4-ide/tree/main/specs)** - Technical specifications
