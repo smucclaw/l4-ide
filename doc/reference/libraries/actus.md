@@ -8,13 +8,13 @@ Import with `IMPORT actus` to get all modules, or import individual modules sele
 
 | File                                                                                                   | Purpose                                   |
 | ------------------------------------------------------------------------------------------------------ | ----------------------------------------- |
-| [actus.l4](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/libraries/actus.l4)                   | Main entry point (re-exports all modules) |
-| [actus-core.l4](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/libraries/actus-core.l4)         | Core types (contract types, roles, enums) |
-| [actus-terms.l4](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/libraries/actus-terms.l4)       | Contract term definitions                 |
-| [actus-state.l4](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/libraries/actus-state.l4)       | Contract state variables                  |
-| [actus-events.l4](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/libraries/actus-events.l4)     | Event types and operations                |
-| [actus-daycount.l4](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/libraries/actus-daycount.l4) | Day count conventions and year fractions  |
-| [actus-schedule.l4](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/libraries/actus-schedule.l4) | Schedule generation                       |
+| [actus.l4](https://github.com/legalese/l4-ide/blob/main/jl4-core/libraries/actus.l4)                   | Main entry point (re-exports all modules) |
+| [actus-core.l4](https://github.com/legalese/l4-ide/blob/main/jl4-core/libraries/actus-core.l4)         | Core types (contract types, roles, enums) |
+| [actus-terms.l4](https://github.com/legalese/l4-ide/blob/main/jl4-core/libraries/actus-terms.l4)       | Contract term definitions                 |
+| [actus-state.l4](https://github.com/legalese/l4-ide/blob/main/jl4-core/libraries/actus-state.l4)       | Contract state variables                  |
+| [actus-events.l4](https://github.com/legalese/l4-ide/blob/main/jl4-core/libraries/actus-events.l4)     | Event types and operations                |
+| [actus-daycount.l4](https://github.com/legalese/l4-ide/blob/main/jl4-core/libraries/actus-daycount.l4) | Day count conventions and year fractions  |
+| [actus-schedule.l4](https://github.com/legalese/l4-ide/blob/main/jl4-core/libraries/actus-schedule.l4) | Schedule generation                       |
 
 ### Core Types (`actus-core`)
 
@@ -113,4 +113,4 @@ Import with `IMPORT actus` to get all modules, or import individual modules sele
 
 - `` `net cash flow` `` — sum all cash flows from a list of events
 
-**See the [actus.l4](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/libraries/actus.l4) source and sub-modules for full details.**
+**See the [actus.l4](https://github.com/legalese/l4-ide/blob/main/jl4-core/libraries/actus.l4) source and sub-modules for full details.**

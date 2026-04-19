@@ -5,7 +5,7 @@ Can be imported into L4 files with `IMPORT timezone`.
 
 ### Location
 
-[jl4-core/libraries/timezone.l4](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/libraries/timezone.l4)
+[jl4-core/libraries/timezone.l4](https://github.com/legalese/l4-ide/blob/main/jl4-core/libraries/timezone.l4)
 
 ### Features
 
@@ -80,4 +80,4 @@ TIMEZONE IS "Asia/Singapore"
 
 [timezone-example.l4](timezone-example.l4)
 
-**See [timezone.l4](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/libraries/timezone.l4) source for all constants.**
+**See [timezone.l4](https://github.com/legalese/l4-ide/blob/main/jl4-core/libraries/timezone.l4) source for all constants.**

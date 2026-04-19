@@ -103,7 +103,7 @@ Sum types with named constructors.
 
 Two-element product type from prelude.
 
-**Note:** PAIR is defined in the prelude library. See [prelude.l4](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/libraries/prelude.l4) for implementation.
+**Note:** PAIR is defined in the prelude library. See [prelude.l4](https://github.com/legalese/l4-ide/blob/main/jl4-core/libraries/prelude.l4) for implementation.
 
 - Generic over both element types
 - Used in key-value data structures
@@ -170,7 +170,7 @@ Choice between two alternative values.
 
 Associative map from keys to values (from prelude).
 
-**Note:** Dictionary is defined in the prelude library. See [prelude.l4](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/libraries/prelude.l4) for implementation.
+**Note:** Dictionary is defined in the prelude library. See [prelude.l4](https://github.com/legalese/l4-ide/blob/main/jl4-core/libraries/prelude.l4) for implementation.
 
 - Generic key-value store
 - Lookup by key
@@ -348,4 +348,4 @@ TYPE
 - **[Functions](../functions/README.md)** - Function keywords
 - **[Operators](../operators/README.md)** - Operations on types
 - **[Type Theory](type-theory.md)** - Formal type inference rules, bidirectional checking, and advanced type system details
-- **[Specifications](https://github.com/smucclaw/l4-ide/tree/main/specs)** - Technical specifications
+- **[Specifications](https://github.com/legalese/l4-ide/tree/main/specs)** - Technical specifications
