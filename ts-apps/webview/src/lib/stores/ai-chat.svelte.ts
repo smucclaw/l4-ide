@@ -6,12 +6,14 @@ import {
   AiConversationDelete,
   AiConversationList,
   AiConversationLoad,
+  AiMentionSearch,
   AiUsageSubscribe,
   AiUsageUnsubscribe,
   type AiConversation,
   type AiConversationSummary,
   type AiChatMessage,
   type AiChatStartParams,
+  type AiMentionCandidate,
 } from 'jl4-client-rpc'
 
 /**
@@ -272,6 +274,19 @@ export function createAiChatStore(
     return draftsByConv.get(key) ?? ''
   }
 
+  async function searchMentions(query: string): Promise<AiMentionCandidate[]> {
+    const m = getMessenger()
+    if (!m) return []
+    try {
+      const res = await m.sendRequest(AiMentionSearch, HOST_EXTENSION, {
+        query,
+      })
+      return res.items
+    } catch {
+      return []
+    }
+  }
+
   return {
     // Reactive state exposed for components.
     get currentId() {
@@ -306,6 +321,7 @@ export function createAiChatStore(
     usageUnsubscribe,
     setDraft,
     getDraft,
+    searchMentions,
     // Event handlers — wired into the messenger from the top-level panel.
     onStarted,
     onTextDelta,
@@ -334,6 +350,7 @@ export type AiChatStore = {
   usageUnsubscribe: () => void
   setDraft: (text: string) => void
   getDraft: () => string
+  searchMentions: (query: string) => Promise<AiMentionCandidate[]>
   onStarted: (params: { conversationId: string; model: string }) => void
   onTextDelta: (params: { conversationId: string; text: string }) => void
   onDone: (params: { conversationId: string; finishReason: string }) => void

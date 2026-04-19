@@ -1,7 +1,9 @@
 <script lang="ts">
   import { tick } from 'svelte'
   import type { AiChatStore } from '$lib/stores/ai-chat.svelte'
+  import type { AiMentionCandidate } from 'jl4-client-rpc'
   import UsageLine from './usage-line.svelte'
+  import MentionPopup from './mention-popup.svelte'
 
   let {
     store,
@@ -25,6 +27,19 @@
   let text = $state<string>('')
   let isStreaming = $derived(store.current?.streaming ?? false)
 
+  // @-mention state. `from` is the index of the `@` in the textarea;
+  // while the popup is open, `items` holds the last search result set.
+  let mentionState = $state<null | {
+    from: number
+    query: string
+    items: AiMentionCandidate[]
+    selected: number
+  }>(null)
+  // Collected mention labels to attach to the next send. Cleared on submit.
+  let stagedMentions = $state<
+    Array<{ kind: AiMentionCandidate['kind']; label: string }>
+  >([])
+
   function autoresize(): void {
     if (!textarea) return
     textarea.style.height = 'auto'
@@ -35,9 +50,105 @@
   function onInput(): void {
     store.setDraft(text)
     autoresize()
+    detectMention()
+  }
+
+  /**
+   * Detect whether the cursor is inside an active `@`-mention fragment.
+   * A mention trigger is an `@` that is either at the start of the
+   * textarea or preceded by whitespace, followed by token chars
+   * (word chars, `.`, `-`, `/`) up to the cursor. Any whitespace or
+   * non-token char dismisses the popup.
+   */
+  function detectMention(): void {
+    if (!textarea) {
+      mentionState = null
+      return
+    }
+    const cursor = textarea.selectionStart ?? text.length
+    const before = text.slice(0, cursor)
+    const atIdx = before.lastIndexOf('@')
+    if (atIdx < 0) {
+      mentionState = null
+      return
+    }
+    const charBeforeAt = atIdx > 0 ? text[atIdx - 1] : ''
+    if (atIdx > 0 && charBeforeAt !== undefined && !/\s/.test(charBeforeAt)) {
+      mentionState = null
+      return
+    }
+    const query = before.slice(atIdx + 1)
+    if (/[^\w./-]/.test(query)) {
+      mentionState = null
+      return
+    }
+    void store.searchMentions(query).then((items) => {
+      // Guard: the user may have moved on by the time the search returns.
+      const stillOpen = textarea && textarea.selectionStart === cursor
+      if (!stillOpen) return
+      mentionState = {
+        from: atIdx,
+        query,
+        items,
+        selected: 0,
+      }
+    })
+  }
+
+  function pickMention(item: AiMentionCandidate): void {
+    if (!mentionState || !textarea) return
+    const { from, query } = mentionState
+    const before = text.slice(0, from)
+    const after = text.slice(from + 1 + query.length)
+    const inserted = `@${item.label}`
+    const trailingSpace = after.startsWith(' ') ? '' : ' '
+    text = `${before}${inserted}${trailingSpace}${after}`
+    store.setDraft(text)
+    stagedMentions = [
+      ...stagedMentions.filter((m) => m.label !== item.label),
+      { kind: item.kind, label: item.label },
+    ]
+    mentionState = null
+    // Move the cursor just past the inserted chip.
+    const cursorPos = before.length + inserted.length + trailingSpace.length
+    void tick().then(() => {
+      if (textarea) {
+        textarea.focus()
+        textarea.setSelectionRange(cursorPos, cursorPos)
+        autoresize()
+      }
+    })
   }
 
   function onKeydown(e: KeyboardEvent): void {
+    if (mentionState) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        mentionState.selected = Math.min(
+          mentionState.selected + 1,
+          Math.max(0, mentionState.items.length - 1)
+        )
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        mentionState.selected = Math.max(mentionState.selected - 1, 0)
+        return
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        const picked = mentionState.items[mentionState.selected]
+        if (picked) {
+          e.preventDefault()
+          pickMention(picked)
+          return
+        }
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        mentionState = null
+        return
+      }
+    }
     if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
       e.preventDefault()
       submit()
@@ -47,9 +158,11 @@
   function submit(): void {
     const trimmed = text.trim()
     if (!trimmed || disabled) return
-    store.send(trimmed)
+    store.send(trimmed, stagedMentions)
+    stagedMentions = []
     text = ''
     store.setDraft('')
+    mentionState = null
     // Next tick so the textarea empties before we resize.
     void tick().then(() => autoresize())
   }
@@ -71,6 +184,15 @@
 </script>
 
 <div class="chat-input-box">
+  {#if mentionState}
+    <MentionPopup
+      items={mentionState.items}
+      selected={mentionState.selected}
+      onPick={pickMention}
+      onCancel={() => (mentionState = null)}
+    />
+  {/if}
+
   <textarea
     class="chat-textarea"
     bind:this={textarea}
@@ -128,6 +250,7 @@
 
 <style>
   .chat-input-box {
+    position: relative;
     display: flex;
     flex-direction: column;
     border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
