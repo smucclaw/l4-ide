@@ -14,6 +14,7 @@ module TestData (
   deonticExportJL4,
   deonticRecordPartyJL4,
   spacedFieldsJL4,
+  assumeParamJL4,
 ) where
 
 import Backend.Jl4 as Jl4
@@ -168,6 +169,20 @@ GIVEN walks IS A BOOLEAN
       drinks IS A BOOLEAN
 GIVETH A BOOLEAN
 DECIDE compute_qualifies IF walks AND eats AND drinks
+|]
+
+-- | L4 source with a module-level ASSUME referenced by an @export.
+-- Exercises the ASSUME→parameter promotion path in the direct-AST
+-- evaluator: the caller supplies both the GIVEN and the ASSUME value.
+assumeParamJL4 :: Text
+assumeParamJL4 =
+  [i|
+ASSUME age IS A NUMBER
+
+@export Check adult status
+GIVEN threshold IS A NUMBER
+GIVETH A BOOLEAN
+DECIDE is_adult IF age >= threshold
 |]
 
 -- | L4 source returning a record type, for testing named fields in JSON output.

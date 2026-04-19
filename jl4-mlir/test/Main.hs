@@ -7,21 +7,29 @@ module Main (main) where
 import qualified Data.Text as Text
 import System.Exit (exitFailure, exitSuccess)
 
+import qualified Data.Text as T
+
 import L4.MLIR.IR
 import L4.MLIR.Emit (renderMLIR)
 import L4.MLIR.Dialect.Func
 import L4.MLIR.Dialect.Arith
 import L4.MLIR.Dialect.SCF
 import L4.MLIR.Runtime.Builtins (builtinDeclarations)
+import L4.MLIR.Lower (lowerProgramWithInfo)
+
+import L4.API.VirtualFS (checkWithImports, emptyVFS)
+import L4.Import.Resolution (TypeCheckWithDepsResult(..))
 
 main :: IO ()
 main = do
   results <- sequence
-    [ test "type emission"          testTypeEmission
-    , test "simple function"        testSimpleFunction
-    , test "if-then-else"           testIfThenElse
-    , test "builtin declarations"   testBuiltins
-    , test "arithmetic ops"         testArithOps
+    [ test "type emission"                     testTypeEmission
+    , test "simple function"                   testSimpleFunction
+    , test "if-then-else"                      testIfThenElse
+    , test "builtin declarations"              testBuiltins
+    , test "arithmetic ops"                    testArithOps
+    , test "@export ASSUMEs become args"       testExportAssumePromotion
+    , test "internal callers fill via extern"  testInternalCallFillsAssumes
     ]
   if and results
     then do
@@ -130,4 +138,58 @@ testArithOps = do
       && Text.isInfixOf "arith.subf" mlir
       && Text.isInfixOf "arith.mulf" mlir
       && Text.isInfixOf "arith.divf" mlir
+
+-- | Lower an L4 source string to MLIR text, going through the real
+-- typecheck + lowering pipeline.
+lowerSource :: T.Text -> Either [T.Text] T.Text
+lowerSource src =
+  case checkWithImports emptyVFS src of
+    Left errs -> Left errs
+    Right r -> Right (renderMLIR (lowerProgramWithInfo r.tcdInfoMap r.tcdModule []))
+
+-- | Verify that an @export-decorated DECIDE with a referenced ASSUME
+-- emits a function whose argument count matches GIVEN + ASSUME.
+testExportAssumePromotion :: IO Bool
+testExportAssumePromotion = do
+  let src = T.unlines
+        [ "ASSUME `age` IS A NUMBER"
+        , ""
+        , "@export Check adult status"
+        , "GIVEN `threshold` IS A NUMBER"
+        , "GIVETH A BOOLEAN"
+        , "DECIDE `is_adult` IF `age` >= `threshold`"
+        ]
+  case lowerSource src of
+    Left errs -> do
+      putStrLn $ "\n    typecheck failed: " <> show errs
+      pure False
+    Right mlir ->
+      -- Exported function must take two f64 args (threshold + age).
+      pure $ T.isInfixOf "func.func @is_adult(%0: f64, %1: f64)" mlir
+          || T.isInfixOf "func.func @is_adult(%arg0: f64, %arg1: f64)" mlir
+
+-- | When an internal (non-@export) function calls an @export function
+-- that has ASSUME-derived args, the call site should invoke the ASSUME's
+-- extern to fill the extra arg rather than pass too few.
+testInternalCallFillsAssumes :: IO Bool
+testInternalCallFillsAssumes = do
+  let src = T.unlines
+        [ "ASSUME `age` IS A NUMBER"
+        , ""
+        , "@export Core rule"
+        , "GIVEN `threshold` IS A NUMBER"
+        , "GIVETH A BOOLEAN"
+        , "DECIDE `is_adult` IF `age` >= `threshold`"
+        , ""
+        , "GIVETH A BOOLEAN"
+        , "DECIDE `adult_at_18` IF `is_adult` OF 18"
+        ]
+  case lowerSource src of
+    Left errs -> do
+      putStrLn $ "\n    typecheck failed: " <> show errs
+      pure False
+    Right mlir ->
+      -- adult_at_18 must call the @age extern AND call is_adult with two args.
+      pure $ T.isInfixOf "func.call @age()" mlir
+          && T.isInfixOf "func.call @is_adult" mlir
       && Text.isInfixOf "arith.cmpf" mlir

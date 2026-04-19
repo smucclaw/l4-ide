@@ -11,7 +11,9 @@ module Shared (
   -- * JSON error encoding
   jsonError,
   -- * Property name sanitization and remapping
+  sanitizePropertyNameRaw,
   sanitizePropertyName,
+  sanitizePropertyNames,
   sanitizeParameters,
   buildPropertyReverseMap,
   remapFnLiteralKeys,
@@ -41,6 +43,7 @@ import Data.Map.Strict (Map)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import L4.FunctionSchema (Parameters (..), Parameter (..))
+import Numeric (showHex)
 
 -- | Check if a deployment/function matches the scope filter.
 --
@@ -127,11 +130,12 @@ jsonError msg = Aeson.encode $ object ["error" .= msg]
 -- Property name sanitization and remapping
 -- ----------------------------------------------------------------------------
 
--- | Sanitize a property name for use as a JSON property key.
--- Replaces special characters (spaces, backticks, etc.) with hyphens and
--- collapses consecutive hyphens. Preserves alphanumeric, underscore, dot, and hyphen.
-sanitizePropertyName :: Text -> Text
-sanitizePropertyName name =
+-- | Raw property name sanitization: replaces special characters with hyphens
+-- and collapses consecutive hyphens. Does NOT truncate.
+-- Preserves alphanumeric, underscore, dot, and hyphen.
+-- Used for structural collision detection (so "foo bar" vs "foo-bar" still collide).
+sanitizePropertyNameRaw :: Text -> Text
+sanitizePropertyNameRaw name =
   let s = Text.map (\c -> if isAlphaNum c || c == '_' || c == '.' || c == '-' then c else '-') name
       s' = collapseHyphens $ Text.dropWhile (== '-') $ Text.dropWhileEnd (== '-') s
   in if Text.null s' then "_unnamed" else s'
@@ -140,59 +144,95 @@ sanitizePropertyName name =
     let collapsed = Text.replace "--" "-" t
     in if collapsed == t then t else collapseHyphens collapsed
 
--- | Sanitize all property names in a Parameters schema.
--- Recursively sanitizes property names in nested object types.
+-- | Sanitize a property name and truncate to 60 chars (leaves room for a
+-- 4-char dedup suffix to bring the total within Anthropic's 64-char limit).
+-- Drops any trailing hyphen left by truncation.
+sanitizePropertyName :: Text -> Text
+sanitizePropertyName =
+  Text.dropWhileEnd (== '-') . Text.take 60 . sanitizePropertyNameRaw
+
+-- | Deterministic 3 hex-char hash suffix of a Text.
+-- Used to disambiguate property names whose 60-char truncations collide.
+-- Stable across runs so deployments are reproducible.
+shortHashSuffix :: Text -> Text
+shortHashSuffix t =
+  let h = Text.foldl' (\acc c -> (acc * 131 + fromEnum c) `mod` 16777259) 1 t :: Int
+      s = showHex (h `mod` 4096) ""
+  in Text.pack (replicate (3 - length s) '0' ++ s)
+
+-- | Map original property names → final unique sanitized names.
+-- When two originals truncate to the same 60-char prefix, disambiguates each
+-- with a hash suffix of the original (total ≤ 64 chars).
+-- Structural collisions (e.g. "foo bar" and "foo-bar") still collide and
+-- should be caught separately via 'validateNoSanitizationCollisions'.
+sanitizePropertyNames :: [Text] -> Map Text Text
+sanitizePropertyNames origs =
+  let naive = [(o, sanitizePropertyName o) | o <- origs]
+      groups :: Map Text [Text]
+      groups = Map.fromListWith (flip (++)) [(s, [o]) | (o, s) <- naive]
+  in Map.fromList $ concat
+       [ case os of
+           [o] -> [(o, s)]
+           _   -> [(o, disambiguate s o) | o <- os]
+       | (s, os) <- Map.toList groups
+       ]
+ where
+  disambiguate s o =
+    Text.dropWhileEnd (== '-') (Text.take 60 s) <> "-" <> shortHashSuffix o
+
+-- | Sanitize all property names in a Parameters schema for MCP.
+-- Applies dedup at each object level (hash-suffix disambiguation) and
+-- recurses into nested objects and array items.
 sanitizeParameters :: Parameters -> Aeson.Value
 sanitizeParameters (MkParameters props reqProps) =
-  Aeson.object
+  let nameMap = sanitizePropertyNames (Map.keys props)
+      finalOf o = Map.findWithDefault (sanitizePropertyName o) o nameMap
+  in Aeson.object
     [ "type" .= ("object" :: Text)
     , "properties" .= Aeson.object
-        [ (Aeson.Key.fromText (sanitizePropertyName k), sanitizeParameterValue v)
+        [ (Aeson.Key.fromText (finalOf k), sanitizeParameterValue v)
         | (k, v) <- Map.toList props
         ]
-    , "required" .= map sanitizePropertyName reqProps
+    , "required" .= map finalOf reqProps
     ]
 
 -- | Sanitize a Parameter value for MCP tool schemas.
--- Builds on the canonical ToJSON (which already omits empty fields),
--- then sanitizes property names (spaces → hyphens) and strips
--- non-standard fields (alias, propertyOrder).
+-- Recursively rebuilds nested object properties with per-level dedup and
+-- strips non-standard fields (alias, propertyOrder).
 sanitizeParameterValue :: Parameter -> Aeson.Value
 sanitizeParameterValue p =
-  let base = Aeson.toJSON p
-      sanitized = stripAndSanitize base
-  in case p.parameterProperties of
-      -- Bare object types need explicit empty properties for MCP
-      Nothing | p.parameterType == "object" -> case sanitized of
-        Aeson.Object obj -> Aeson.Object $
-          Aeson.KeyMap.insert "properties" (Aeson.object []) obj
-        other -> other
-      _ -> sanitized
- where
-  stripAndSanitize (Aeson.Object obj) =
-    let cleaned = Aeson.KeyMap.delete "alias"
-                $ Aeson.KeyMap.delete "propertyOrder" obj
-        sanitizeEntry k v
-          | k == "properties" = sanitizeProps v
-          | k == "required" = sanitizeRequired v
-          | k == "items" = stripAndSanitize v
-          | otherwise = v
-    in Aeson.Object $ Aeson.KeyMap.mapWithKey sanitizeEntry cleaned
-  stripAndSanitize (Aeson.Array arr) = Aeson.Array $ fmap stripAndSanitize arr
-  stripAndSanitize v = v
-
-  sanitizeProps (Aeson.Object obj) = Aeson.Object $ Aeson.KeyMap.fromList
-    [ (Aeson.Key.fromText (sanitizePropertyName (Aeson.Key.toText k)), stripAndSanitize v)
-    | (k, v) <- Aeson.KeyMap.toList obj
-    ]
-  sanitizeProps v = v
-
-  sanitizeRequired (Aeson.Array arr) = Aeson.Array $ fmap
-    (\v -> case v of Aeson.String t -> Aeson.String (sanitizePropertyName t); _ -> v) arr
-  sanitizeRequired v = v
+  let base = Aeson.KeyMap.delete "alias"
+           $ Aeson.KeyMap.delete "propertyOrder"
+           $ Aeson.KeyMap.delete "properties"
+           $ Aeson.KeyMap.delete "items"
+           $ Aeson.KeyMap.delete "required"
+           $ case Aeson.toJSON p of
+               Aeson.Object o -> o
+               _ -> Aeson.KeyMap.empty
+      withProps = case p.parameterProperties of
+        Just nested ->
+          let nameMap = sanitizePropertyNames (Map.keys nested)
+              finalOf o = Map.findWithDefault (sanitizePropertyName o) o nameMap
+              propsVal = Aeson.object
+                [ (Aeson.Key.fromText (finalOf k), sanitizeParameterValue v)
+                | (k, v) <- Map.toList nested
+                ]
+              reqField = case p.parameterRequired of
+                Just req -> Aeson.KeyMap.insert "required"
+                              (Aeson.toJSON (map finalOf req))
+                Nothing -> id
+          in reqField $ Aeson.KeyMap.insert "properties" propsVal base
+        Nothing | p.parameterType == "object" ->
+          Aeson.KeyMap.insert "properties" (Aeson.object []) base
+        Nothing -> base
+      withItems = case p.parameterItems of
+        Just items -> Aeson.KeyMap.insert "items" (sanitizeParameterValue items) withProps
+        Nothing -> withProps
+  in Aeson.Object withItems
 
 -- | Build a reverse mapping from sanitized property names back to original L4 names.
--- Recursively includes entries from nested object properties and array items.
+-- Recursively includes entries from nested object properties and array items,
+-- using the same dedup logic as 'sanitizeParameters'.
 buildPropertyReverseMap :: Parameters -> Map Text Text
 buildPropertyReverseMap (MkParameters props _) =
   buildNestedReverseMap props
@@ -200,12 +240,13 @@ buildPropertyReverseMap (MkParameters props _) =
 -- | Recursively collect sanitized -> original name mappings from a property map.
 buildNestedReverseMap :: Map Text Parameter -> Map Text Text
 buildNestedReverseMap props =
-  Map.fromList
-    [ (sanitizePropertyName k, k)
-    | k <- Map.keys props
-    , sanitizePropertyName k /= k
-    ]
-  <> foldMap collectFromParameter (Map.elems props)
+  let nameMap = sanitizePropertyNames (Map.keys props)
+      thisLevel = Map.fromList
+        [ (san, orig)
+        | (orig, san) <- Map.toList nameMap
+        , san /= orig
+        ]
+  in thisLevel <> foldMap collectFromParameter (Map.elems props)
  where
   collectFromParameter :: Parameter -> Map Text Text
   collectFromParameter p =
@@ -260,7 +301,7 @@ validateNoSanitizationCollisions context (MkParameters props _) =
 checkPropertyMap :: Text -> Map Text Parameter -> [Text]
 checkPropertyMap context props =
   let keys = Map.keys props
-      sanitizedPairs = [(k, sanitizePropertyName k) | k <- keys]
+      sanitizedPairs = [(k, sanitizePropertyNameRaw k) | k <- keys]
       -- Group by sanitized name
       groups = Map.fromListWith (++) [(san, [orig]) | (orig, san) <- sanitizedPairs]
       -- Find groups with more than one original name

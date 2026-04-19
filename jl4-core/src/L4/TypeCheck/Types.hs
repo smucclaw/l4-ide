@@ -93,6 +93,10 @@ data CheckError =
     -- ^ Circular dependency between computed fields (record name, cycle of field names)
   | SuppliedComputedField Name
     -- ^ Tried to supply a computed field in a record constructor (field name)
+  | ExportFunctionTypeInput Resolved Resolved
+    -- ^ An @export-decorated DECIDE has a function-typed input (GIVEN or
+    -- referenced ASSUME). Arguments: exported-function name, offending
+    -- parameter/assume name.
   deriving stock (Eq, Generic, Show)
   deriving anyclass NFData
 

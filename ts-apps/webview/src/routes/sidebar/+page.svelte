@@ -1088,6 +1088,10 @@
                   Sign out
                 </button>
               {/if}
+            {:else if connectionStatus.status === 'connecting'}
+              <button class="menu-item" onclick={menuAction(disconnect)}>
+                Disconnect
+              </button>
             {:else}
               <button class="menu-item" onclick={menuAction(copySignInLink)}>
                 Copy Legalese Cloud Sign-In Link
