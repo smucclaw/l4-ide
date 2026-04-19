@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte'
+  import { onDestroy } from 'svelte'
   import type { Messenger } from 'vscode-messenger-webview'
   import { HOST_EXTENSION } from 'vscode-messenger-common'
   import {
@@ -8,6 +8,7 @@
     AiChatError,
     AiChatStarted,
     AiChatTextDelta,
+    AiChatToolCall,
     AiUsageUpdate,
     RequestSidebarLogin,
     type GetSidebarConnectionStatusResponse,
@@ -39,24 +40,31 @@
   })
 
   let historyOpen = $state(false)
+  let subscribed = false
 
-  function subscribeToMessenger(): void {
-    if (!messenger) return
+  function subscribeToMessenger(m: InstanceType<typeof Messenger>): void {
     // vscode-messenger-webview returns the messenger (fluent API) from
     // onNotification, not a Disposable. Subscriptions live for the
-    // lifetime of the webview — which equals the lifetime of this
-    // component inside the sidebar host — so we don't need to track
-    // them explicitly. A webview reload clears everything.
-    messenger.onNotification(AiChatStarted, (p) => store.onStarted(p))
-    messenger.onNotification(AiChatTextDelta, (p) => store.onTextDelta(p))
-    messenger.onNotification(AiChatDone, (p) => store.onDone(p))
-    messenger.onNotification(AiChatError, (p) => store.onError(p))
-    messenger.onNotification(AiUsageUpdate, (p) => store.onUsageUpdate(p))
-    messenger.onNotification(AiAuthStatus, (p) => store.onAuthStatus(p))
+    // lifetime of the webview; a reload clears everything.
+    m.onNotification(AiChatStarted, (p) => store.onStarted(p))
+    m.onNotification(AiChatTextDelta, (p) => store.onTextDelta(p))
+    m.onNotification(AiChatDone, (p) => store.onDone(p))
+    m.onNotification(AiChatError, (p) => store.onError(p))
+    m.onNotification(AiChatToolCall, (p) => store.onToolCall(p))
+    m.onNotification(AiUsageUpdate, (p) => store.onUsageUpdate(p))
+    m.onNotification(AiAuthStatus, (p) => store.onAuthStatus(p))
   }
 
-  onMount(() => {
-    subscribeToMessenger()
+  // Attach handlers as soon as the messenger prop is non-null. An
+  // earlier version of this did it in `onMount`, but Svelte runs child
+  // `onMount` BEFORE the parent's — at which point the sidebar's
+  // +page.svelte hasn't constructed the messenger yet. The effect
+  // below re-runs when the prop flips from null to a real Messenger
+  // and binds the handlers exactly once.
+  $effect(() => {
+    if (!messenger || subscribed) return
+    subscribeToMessenger(messenger)
+    subscribed = true
     void store.refreshHistory()
   })
 
@@ -139,7 +147,14 @@
     {#if showEmptyState}
       <EmptyState onSeed={onSeedSelect} />
     {:else if showChat && store.current}
-      <MessageList turns={store.current.turns} {onRetry} onSignIn={signIn} />
+      <MessageList
+        turns={store.current.turns}
+        {onRetry}
+        onSignIn={signIn}
+        onApproveTool={(callId, decision) =>
+          store.approveTool(callId, decision)}
+        onOpenFileDiff={(callId) => store.openFileDiff(callId)}
+      />
     {/if}
 
     {#if historyOpen}

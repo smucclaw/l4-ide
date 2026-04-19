@@ -1,4 +1,3 @@
-import { randomUUID } from 'crypto'
 import type {
   AiChatMessage,
   AiChatStartParams,
@@ -11,6 +10,8 @@ import type { ConversationStore } from './conversation-store.js'
 import type { AiLogger } from './logger.js'
 import { buildEditorContextMessage } from './editor-context.js'
 import { buildWorkspaceBootstrapMessage } from './workspace-bootstrap.js'
+import { BUILTIN_TOOLS } from './tool-registry.js'
+import type { ToolDispatcher } from './tool-dispatcher.js'
 
 /**
  * Events the chat service emits while running a turn. The sidebar
@@ -26,6 +27,16 @@ export type ChatServiceEvent =
       tool: string
       status: 'running' | 'done' | 'error'
       message: string
+    }
+  | {
+      kind: 'tool-call'
+      conversationId: string
+      callId: string
+      name: string
+      argsJson: string
+      status: 'pending-approval' | 'running' | 'done' | 'error'
+      result?: string
+      error?: string
     }
   | {
       kind: 'done'
@@ -48,6 +59,7 @@ export interface ChatServiceOptions {
   store: ConversationStore
   proxy: AiProxyClient
   logger: AiLogger
+  dispatcher: ToolDispatcher
 }
 
 /**
@@ -81,151 +93,294 @@ export class ChatService {
    */
   async start(params: AiChatStartParams): Promise<void> {
     const isNew = !params.conversationId
-    // Local provisional id — replaced by the server's id once metadata
-    // arrives. The webview reconciles on the `started` event.
-    const localId = params.conversationId ?? provisionalId()
+    const { turnId } = params
 
     const abortController = new AbortController()
-    this.active.set(localId, abortController)
+    this.active.set(turnId, abortController)
+    this.opts.logger.info(
+      `turn start (turnId=${turnId}, conv=${params.conversationId ?? '<new>'}, isNew=${isNew}, textLen=${params.text.length})`
+    )
+
+    // Outer loop state: tracks the server conversation id once metadata
+    // arrives, the running total of assistant text emitted this turn,
+    // and whether we've already emitted a `done` for the UI.
+    let serverConversationId: string | undefined = params.conversationId
+    let totalAssistantText = ''
+
+    // Initial POST body: editor/workspace context + the new user turn.
+    let nextMessages = await this.assembleMessages(params, isNew).catch(
+      (err) => {
+        this.opts.logger.error('chat-service: assembleMessages failed', err)
+        return null
+      }
+    )
+    if (nextMessages === null) {
+      this.emit({
+        kind: 'error',
+        conversationId: turnId,
+        message: 'Failed to assemble request context',
+        code: 'internal_error',
+      })
+      this.active.delete(turnId)
+      return
+    }
+    this.opts.logger.info(
+      `assembled ${nextMessages.length} messages; opening stream`
+    )
 
     try {
-      const messages = await this.assembleMessages(params, isNew)
-      let serverConversationId: string | undefined = params.conversationId
-
-      let assistantText = ''
-      let finished = false
-
-      try {
-        for await (const ev of this.opts.proxy.stream(
-          {
-            messages,
-            conversationId: params.conversationId,
-            stream: true,
-          },
-          abortController.signal
-        )) {
-          if (ev.kind === 'metadata') {
-            serverConversationId = ev.conversationId
-            this.emit({
-              kind: 'started',
-              conversationId: ev.conversationId,
-              model: ev.model,
-            })
-            // Seed the local file so a disconnect doesn't lose the user turn.
-            await this.opts.store
-              .appendMessages(
-                ev.conversationId,
-                // orgId/userId not known here from the webview's side; the
-                // proxy owns the truth. We store a placeholder that the
-                // user-facing UI doesn't read.
-                '',
-                '',
-                ev.model,
-                titleFromUserMessage(params.text),
-                messages.filter((m) => m.role === 'user')
-              )
-              .catch((err) =>
-                this.opts.logger.warn(
-                  `chat-service: initial user-turn save failed: ${err instanceof Error ? err.message : String(err)}`
-                )
-              )
-          } else if (ev.kind === 'text-delta') {
-            assistantText += ev.text
-            this.emit({
-              kind: 'text-delta',
-              conversationId: serverConversationId ?? localId,
-              text: ev.text,
-            })
-          } else if (ev.kind === 'tool-activity') {
-            this.emit({
-              kind: 'tool-activity',
-              conversationId: serverConversationId ?? localId,
-              tool: ev.tool,
-              status: ev.status,
-              message: ev.message,
-            })
-          } else if (ev.kind === 'done') {
-            finished = true
-            if (serverConversationId) {
-              await this.persistAssistantTurn(
-                serverConversationId,
-                assistantText
-              )
-            }
-            this.emit({
-              kind: 'done',
-              conversationId: serverConversationId ?? localId,
-              finishReason: ev.finishReason,
-              usage: ev.usage,
-            })
-            if (isNew && serverConversationId) {
-              this.generateTitleInBackground(serverConversationId, params.text)
-            }
-          } else if (ev.kind === 'error') {
-            this.emit({
-              kind: 'error',
-              conversationId: serverConversationId ?? localId,
-              message: ev.message,
-              code: ev.code,
-            })
-            finished = true
-          }
-        }
-
-        if (!finished) {
-          // Stream ended without a done frame — treat as a completion
-          // so the UI unsticks. Partial text (if any) is already persisted
-          // per delta and will be saved below.
-          if (serverConversationId) {
-            await this.persistAssistantTurn(serverConversationId, assistantText)
-          }
-          this.emit({
-            kind: 'done',
-            conversationId: serverConversationId ?? localId,
-            finishReason: 'stop',
+      // Tool-call loop: each iteration runs one streaming request. If
+      // the model finishes with `tool_calls`, we dispatch the calls
+      // locally, build a follow-up body with `role:"tool"` results,
+      // and run the stream again. Loop exits on `stop`, `length`,
+      // `content_filter`, `aborted`, or an error.
+      for (let iteration = 0; ; iteration++) {
+        const { finishReason, pendingCalls, assistantText } =
+          await this.runStreamIteration({
+            turnId,
+            iteration,
+            messages: nextMessages,
+            // After the first iteration we let the proxy's
+            // conversation state own history; we pass the server id
+            // back and send only the delta.
+            conversationId: serverConversationId ?? params.conversationId,
+            isNew,
+            userText: params.text,
+            abortSignal: abortController.signal,
+            onMetadata: (md) => {
+              serverConversationId = md.conversationId
+            },
           })
-        }
-      } catch (err) {
-        if (abortController.signal.aborted) {
-          // Abort is a user action, not an error.
-          if (serverConversationId && assistantText) {
+        totalAssistantText += assistantText
+
+        if (finishReason !== 'tool_calls') {
+          // Natural terminal state: stop, length, content_filter, error, aborted.
+          if (serverConversationId) {
             await this.persistAssistantTurn(
               serverConversationId,
-              assistantText,
-              { aborted: true }
+              totalAssistantText,
+              finishReason === 'aborted' ? { aborted: true } : undefined
             )
           }
           this.emit({
             kind: 'done',
-            conversationId: serverConversationId ?? localId,
-            finishReason: 'aborted',
+            conversationId: serverConversationId ?? turnId,
+            finishReason,
           })
-        } else if (err instanceof AiProxyError) {
+          if (isNew && serverConversationId && finishReason === 'stop') {
+            this.generateTitleInBackground(serverConversationId, params.text)
+          }
+          break
+        }
+
+        if (pendingCalls.length === 0) {
+          // Defensive: the proxy said tool_calls but shipped none.
+          // Treat as stop to avoid an infinite loop.
+          this.opts.logger.warn(
+            'finish_reason=tool_calls but no tool-call events received; stopping'
+          )
           this.emit({
-            kind: 'error',
-            conversationId: serverConversationId ?? localId,
-            message: err.message,
-            code: err.code,
+            kind: 'done',
+            conversationId: serverConversationId ?? turnId,
+            finishReason: 'stop',
           })
-        } else {
-          this.opts.logger.error('chat-service: unhandled stream error', err)
-          this.emit({
-            kind: 'error',
-            conversationId: serverConversationId ?? localId,
-            message: err instanceof Error ? err.message : String(err),
-            code: 'internal_error',
+          break
+        }
+
+        // Execute each pending call. The dispatcher handles permissions,
+        // approval prompts, and execution. Failures come back as
+        // `{ok:false,error}` and still flow back to the proxy as a
+        // tool-result so the model can react to them.
+        const toolMessages: AiChatMessage[] = []
+        for (const call of pendingCalls) {
+          const result = await this.opts.dispatcher.run({
+            callId: call.callId,
+            name: call.name,
+            argsJson: call.argsJson,
+          })
+          const content = result.ok
+            ? result.output
+            : JSON.stringify({
+                error: (result as { error: string }).error,
+                code: (result as { code?: string }).code,
+              })
+          toolMessages.push({
+            role: 'tool',
+            content,
+            tool_call_id: call.callId,
+            name: call.name,
           })
         }
+
+        // Next iteration sends only the tool results; the proxy's
+        // conversation state already has the assistant tool_calls saved.
+        nextMessages = toolMessages
+      }
+    } catch (err) {
+      if (abortController.signal.aborted) {
+        if (serverConversationId && totalAssistantText) {
+          await this.persistAssistantTurn(
+            serverConversationId,
+            totalAssistantText,
+            { aborted: true }
+          )
+        }
+        this.emit({
+          kind: 'done',
+          conversationId: serverConversationId ?? turnId,
+          finishReason: 'aborted',
+        })
+      } else if (err instanceof AiProxyError) {
+        this.emit({
+          kind: 'error',
+          conversationId: serverConversationId ?? turnId,
+          message: err.message,
+          code: err.code,
+        })
+      } else {
+        this.opts.logger.error('chat-service: unhandled loop error', err)
+        this.emit({
+          kind: 'error',
+          conversationId: serverConversationId ?? turnId,
+          message: err instanceof Error ? err.message : String(err),
+          code: 'internal_error',
+        })
       }
     } finally {
-      this.active.delete(localId)
+      this.active.delete(turnId)
     }
   }
 
-  abort(conversationId: string): void {
-    const ctrl = this.active.get(conversationId)
+  /**
+   * Run a single HTTP round-trip against the proxy and emit every SSE
+   * event to the webview. Returns the terminal state:
+   *  - `finishReason`: whatever the stream ended on; `tool_calls`
+   *    means the caller should dispatch `pendingCalls` and loop again.
+   *  - `pendingCalls`: any client-tool invocations the model asked for.
+   *  - `assistantText`: the text streamed in this iteration (for
+   *    persistence on the terminal iteration).
+   */
+  private async runStreamIteration(opts: {
+    turnId: string
+    iteration: number
+    messages: AiChatMessage[]
+    conversationId: string | undefined
+    isNew: boolean
+    userText: string
+    abortSignal: AbortSignal
+    onMetadata: (md: { conversationId: string; model: string }) => void
+  }): Promise<{
+    finishReason: string
+    pendingCalls: Array<{ callId: string; name: string; argsJson: string }>
+    assistantText: string
+  }> {
+    const {
+      turnId,
+      iteration,
+      messages,
+      conversationId,
+      abortSignal,
+      onMetadata,
+    } = opts
+    const pendingCalls: Array<{
+      callId: string
+      name: string
+      argsJson: string
+    }> = []
+    let assistantText = ''
+    let finishReason = 'stop'
+    let local: string | undefined = conversationId
+
+    for await (const ev of this.opts.proxy.stream(
+      {
+        messages,
+        conversationId,
+        // Client-declared tools every request; harmless when the model
+        // doesn't call any.
+        tools: BUILTIN_TOOLS,
+        stream: true,
+      },
+      abortSignal
+    )) {
+      if (ev.kind === 'metadata') {
+        local = ev.conversationId
+        onMetadata({ conversationId: ev.conversationId, model: ev.model })
+        if (iteration === 0) {
+          this.emit({
+            kind: 'started',
+            conversationId: ev.conversationId,
+            model: ev.model,
+          })
+          // Seed the local file with the user turn so a crash mid-stream
+          // doesn't lose it.
+          await this.opts.store
+            .appendMessages(
+              ev.conversationId,
+              '',
+              '',
+              ev.model,
+              titleFromUserMessage(opts.userText),
+              messages.filter((m) => m.role === 'user')
+            )
+            .catch((err) =>
+              this.opts.logger.warn(
+                `chat-service: initial user-turn save failed: ${err instanceof Error ? err.message : String(err)}`
+              )
+            )
+        }
+      } else if (ev.kind === 'text-delta') {
+        assistantText += ev.text
+        this.emit({
+          kind: 'text-delta',
+          conversationId: local ?? turnId,
+          text: ev.text,
+        })
+      } else if (ev.kind === 'tool-activity') {
+        this.emit({
+          kind: 'tool-activity',
+          conversationId: local ?? turnId,
+          tool: ev.tool,
+          status: ev.status,
+          message: ev.message,
+        })
+      } else if (ev.kind === 'tool-call') {
+        pendingCalls.push({
+          callId: ev.callId,
+          name: ev.name,
+          argsJson: ev.argsJson,
+        })
+        // Surface the call to the UI as "running" (actual permission
+        // + execution happens in the dispatcher below). The webview
+        // shows the tool row immediately for responsive feel.
+        this.emit({
+          kind: 'tool-call',
+          conversationId: local ?? turnId,
+          callId: ev.callId,
+          name: ev.name,
+          argsJson: ev.argsJson,
+          status: 'running',
+        })
+      } else if (ev.kind === 'done') {
+        finishReason = ev.finishReason
+      } else if (ev.kind === 'error') {
+        this.emit({
+          kind: 'error',
+          conversationId: local ?? turnId,
+          message: ev.message,
+          code: ev.code,
+        })
+        // Treat the inner error as a terminal state for this turn.
+        return { finishReason: 'error', pendingCalls: [], assistantText }
+      }
+    }
+
+    return { finishReason, pendingCalls, assistantText }
+  }
+
+  abort(turnId: string): void {
+    const ctrl = this.active.get(turnId)
     if (ctrl && !ctrl.signal.aborted) {
-      this.opts.logger.info(`abort requested for ${conversationId}`)
+      this.opts.logger.info(`abort requested for turn ${turnId}`)
       ctrl.abort()
     }
   }
@@ -293,10 +448,6 @@ export class ChatService {
       })
       .catch(() => undefined)
   }
-}
-
-function provisionalId(): string {
-  return `conv_local_${randomUUID().replace(/-/g, '').slice(0, 24)}`
 }
 
 function titleFromUserMessage(text: string): string {

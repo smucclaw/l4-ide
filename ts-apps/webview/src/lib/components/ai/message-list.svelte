@@ -8,10 +8,17 @@
     turns,
     onRetry,
     onSignIn,
+    onApproveTool,
+    onOpenFileDiff,
   }: {
     turns: RenderedTurn[]
     onRetry?: () => void
     onSignIn?: () => void
+    onApproveTool: (
+      callId: string,
+      decision: 'allow' | 'deny' | 'alwaysAllow'
+    ) => void
+    onOpenFileDiff: (callId: string) => void
   } = $props()
 
   let scrollEl = $state<HTMLDivElement>()
@@ -61,8 +68,11 @@
         content={turn.content}
         streaming={!!turn.streaming}
         error={turn.error}
+        toolCalls={turn.toolCalls}
         {onRetry}
         {onSignIn}
+        {onApproveTool}
+        {onOpenFileDiff}
       />
     {/if}
   {/each}
@@ -89,10 +99,7 @@
     position: sticky;
     bottom: 8px;
     align-self: center;
-    background: var(
-      --vscode-button-secondaryBackground,
-      rgba(128, 128, 128, 0.3)
-    );
+    background: var(--vscode-sideBar-background, rgba(128, 128, 128, 0.3));
     color: var(--vscode-button-secondaryForeground, inherit);
     border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
     border-radius: 12px;
@@ -100,11 +107,5 @@
     font-size: 11px;
     cursor: pointer;
     margin-top: 8px;
-  }
-  .jump-btn:hover {
-    background: var(
-      --vscode-button-secondaryHoverBackground,
-      rgba(128, 128, 128, 0.45)
-    );
   }
 </style>

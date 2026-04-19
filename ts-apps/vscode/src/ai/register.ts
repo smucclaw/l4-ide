@@ -1,18 +1,21 @@
-import type * as vscode from 'vscode'
+import * as vscode from 'vscode'
 import type { Messenger } from 'vscode-messenger'
 import type { WebviewTypeMessageParticipant } from 'vscode-messenger-common'
 import {
   AiAuthStatus,
   AiChatAbort,
+  AiChatApproveTool,
   AiChatDone,
   AiChatError,
   AiChatStart,
   AiChatStarted,
   AiChatTextDelta,
+  AiChatToolCall,
   AiConversationDelete,
   AiConversationList,
   AiConversationLoad,
   AiConversationNew,
+  AiFileOpenDiff,
   AiMentionSearch,
   AiUsageSubscribe,
   AiUsageUnsubscribe,
@@ -23,6 +26,8 @@ import type { AuthManager } from '../auth.js'
 import type { ChatService, ChatServiceEvent } from './chat-service.js'
 import type { ConversationStore } from './conversation-store.js'
 import type { AiLogger } from './logger.js'
+import { categoryForTool, setPermission } from './permissions.js'
+import { previewProposedContent } from './tools/fs.js'
 
 /**
  * Wire every AI-chat RPC into the sidebar messenger. Called after
@@ -37,8 +42,38 @@ export function registerAiChatHandlers(deps: {
   service: ChatService
   store: ConversationStore
   logger: AiLogger
+  /** Map of pending approval promises keyed by callId. Populated by
+   * the tool dispatcher; drained by the webview's approve/deny message. */
+  approvalPending: Map<string, (decision: 'allow' | 'deny') => void>
+  /** Mutable channel the dispatcher uses to emit status updates for
+   * each tool call. We fill in the `emit` function here so the
+   * dispatcher can forward to the webview via the same messenger. */
+  toolStatusChannel: {
+    emit: (
+      callId: string,
+      status: 'running' | 'done' | 'error',
+      detail?: { result?: string; error?: string }
+    ) => void
+  }
 }): vscode.Disposable {
-  const { messenger, frontend, auth, service, store, logger } = deps
+  const {
+    messenger,
+    frontend,
+    auth,
+    service,
+    store,
+    logger,
+    approvalPending,
+    toolStatusChannel,
+  } = deps
+  logger.info(
+    'registerAiChatHandlers: installing handlers on sidebar messenger'
+  )
+
+  /** Latest argsJson keyed by tool-call id, captured when the dispatcher
+   *  asks the UI for approval. Used by `file/openDiff` to render the
+   *  proposed contents for fs__create_file / fs__edit_file. */
+  const callArgs = new Map<string, { name: string; argsJson: string }>()
 
   // ── Forward chat service events to the webview as typed notifications.
   const emit = (event: ChatServiceEvent): void => {
@@ -75,24 +110,109 @@ export function registerAiChatHandlers(deps: {
           `tool_activity ${event.status} ${event.tool}: ${event.message}`
         )
         break
+      case 'tool-call':
+        callArgs.set(event.callId, {
+          name: event.name,
+          argsJson: event.argsJson,
+        })
+        messenger.sendNotification(AiChatToolCall, frontend, {
+          conversationId: event.conversationId,
+          callId: event.callId,
+          name: event.name,
+          argsJson: event.argsJson,
+          status: event.status,
+          result: event.result,
+          errorMessage: event.error,
+        })
+        break
     }
   }
   service.setEmitter(emit)
 
+  // The dispatcher emits status updates through this channel so we
+  // can forward them to the webview as AiChatToolCall notifications
+  // with matching callId. One tool call may fire multiple updates
+  // (running → done) — the webview merges by callId.
+  toolStatusChannel.emit = (callId, status, detail) => {
+    const meta = callArgs.get(callId)
+    messenger.sendNotification(AiChatToolCall, frontend, {
+      conversationId: '',
+      callId,
+      name: meta?.name ?? '',
+      argsJson: meta?.argsJson ?? '{}',
+      status,
+      result: detail?.result,
+      errorMessage: detail?.error,
+    })
+  }
+
   // ── Webview → extension handlers.
-  messenger.onNotification(AiChatStart, async (params) => {
-    logger.debug(
-      `chat/start (conv=${params.conversationId ?? '<new>'}, text=${params.text.slice(0, 40)})`
-    )
+  // NB: sync handler — vscode-messenger calls the handler and forgets
+  // about the return value, so there's no benefit to `async` here, and
+  // it rules out any chance that an uncaught rejection inside the body
+  // silently swallows the registration.
+  messenger.onNotification(AiChatStart, (params) => {
     try {
-      await service.start(params)
-    } catch (err) {
+      logger.info(
+        `chat/start received (turn=${params?.turnId ?? '?'}, conv=${params?.conversationId ?? '<new>'}, textLen=${params?.text?.length ?? 0}, mentions=${params?.mentions?.length ?? 0})`
+      )
+    } catch (logErr) {
+      logger.error('chat/start log-line failed', logErr)
+    }
+    void service.start(params).catch((err) => {
       logger.error('chat/start failed', err)
+    })
+  })
+
+  messenger.onNotification(AiChatAbort, ({ turnId }) => {
+    logger.info(`chat/abort received (turn=${turnId})`)
+    service.abort(turnId)
+  })
+
+  // Tool approval: resolve the pending promise the dispatcher is
+  // waiting on. `alwaysAllow` also bumps the permission setting to
+  // `always` so subsequent calls in the same category run unattended.
+  messenger.onNotification(AiChatApproveTool, ({ callId, decision }) => {
+    logger.info(`tool/approve received (call=${callId}, decision=${decision})`)
+    const resolver = approvalPending.get(callId)
+    approvalPending.delete(callId)
+    if (!resolver) {
+      logger.warn(`tool/approve: no pending approval for ${callId}`)
+      return
+    }
+    if (decision === 'alwaysAllow') {
+      const meta = callArgs.get(callId)
+      if (meta) {
+        const category = categoryForTool(meta.name)
+        if (category) {
+          void setPermission(category, 'always').catch((err) =>
+            logger.warn(
+              `tool/approve: failed to persist always-allow for ${category}: ${err instanceof Error ? err.message : String(err)}`
+            )
+          )
+        }
+      }
+      resolver('allow')
+    } else {
+      resolver(decision)
     }
   })
 
-  messenger.onNotification(AiChatAbort, ({ conversationId }) => {
-    service.abort(conversationId)
+  messenger.onNotification(AiFileOpenDiff, async ({ callId }) => {
+    const meta = callArgs.get(callId)
+    if (!meta) return
+    try {
+      const preview = await previewProposedContent(
+        meta.name,
+        JSON.parse(meta.argsJson)
+      )
+      if (!preview) return
+      await openProposalDiff(preview)
+    } catch (err) {
+      logger.warn(
+        `file/openDiff failed: ${err instanceof Error ? err.message : String(err)}`
+      )
+    }
   })
 
   messenger.onRequest(AiConversationList, async () => {
@@ -142,6 +262,73 @@ export function registerAiChatHandlers(deps: {
     }
   })
 
+  // ── Proposed-content virtual scheme for diff previews. ─────────────
+  // When the user cmd+clicks a filename inside a file-tool row, we want
+  // VSCode's diff editor to compare the real on-disk file against the
+  // proposal the model staged. Since the proposal only lives in memory,
+  // we expose it via a TextDocumentContentProvider under a dedicated
+  // scheme (`l4-ai-proposed:`). The path encodes a short nonce that
+  // keys into `proposedByNonce` below.
+  const proposedByNonce = new Map<string, string>()
+  let nonceCounter = 0
+  const proposedProvider: vscode.TextDocumentContentProvider = {
+    provideTextDocumentContent(uri) {
+      const nonce = uri.path.split('/').pop()
+      return (nonce && proposedByNonce.get(nonce)) ?? ''
+    },
+  }
+  const schemeReg = vscode.workspace.registerTextDocumentContentProvider(
+    'l4-ai-proposed',
+    proposedProvider
+  )
+
+  async function openProposalDiff(preview: {
+    relativePath: string
+    current: string
+    proposed: string
+  }): Promise<void> {
+    const nonce = `${++nonceCounter}-${Date.now().toString(36)}`
+    proposedByNonce.set(nonce, preview.proposed)
+    // File extension matters — the diff editor uses it to pick the
+    // language mode for syntax highlighting.
+    const ext = preview.relativePath.split('.').pop() ?? 'txt'
+    const proposedUri = vscode.Uri.parse(
+      `l4-ai-proposed:/${preview.relativePath}.${nonce}.${ext}`
+    )
+    const currentUri = await resolveCurrentUri(preview.relativePath)
+    // If the current file doesn't exist yet (create flow), synthesize a
+    // second virtual doc for the empty side.
+    const left =
+      currentUri ??
+      (() => {
+        const emptyNonce = `empty-${nonce}`
+        proposedByNonce.set(emptyNonce, '')
+        return vscode.Uri.parse(
+          `l4-ai-proposed:/${preview.relativePath}.${emptyNonce}.${ext}`
+        )
+      })()
+    await vscode.commands.executeCommand(
+      'vscode.diff',
+      left,
+      proposedUri,
+      `Legalese AI — ${preview.relativePath}`
+    )
+  }
+
+  async function resolveCurrentUri(
+    relative: string
+  ): Promise<vscode.Uri | null> {
+    const folders = vscode.workspace.workspaceFolders ?? []
+    if (folders.length === 0) return null
+    const candidate = vscode.Uri.joinPath(folders[0]!.uri, relative)
+    try {
+      await vscode.workspace.fs.stat(candidate)
+      return candidate
+    } catch {
+      return null
+    }
+  }
+
   // Push auth status whenever the AuthManager fires; the webview uses
   // this to enable/disable the input. The "signed in" criterion is
   // deliberately broad: any connected auth context (Legalese Cloud
@@ -158,6 +345,7 @@ export function registerAiChatHandlers(deps: {
     dispose(): void {
       if (usageTimer) clearInterval(usageTimer)
       authSub.dispose()
+      schemeReg.dispose()
     },
   }
 }

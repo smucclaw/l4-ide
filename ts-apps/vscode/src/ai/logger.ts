@@ -10,6 +10,16 @@ export class AiLogger {
 
   constructor(name = 'Legalese AI') {
     this.channel = vscode.window.createOutputChannel(name)
+    // Immediately log so the channel appears in the Output dropdown;
+    // some VSCode versions omit empty channels from the list.
+    this.channel.appendLine(
+      `[info] Legalese AI output channel ready (${new Date().toISOString()})`
+    )
+  }
+
+  /** Reveal the output channel in the Output panel. */
+  show(): void {
+    this.channel.show(true)
   }
 
   info(message: string): void {

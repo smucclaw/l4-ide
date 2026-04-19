@@ -38,7 +38,7 @@
   // the webview CSS can style them consistently.
   const renderer = new marked.Renderer()
   renderer.code = ({ text: code, lang }) => {
-    if (lang === 'l4' || lang === 'jl4' || lang === 'l4-file') {
+    if (lang === 'l4' || lang === 'l4-file') {
       return `<pre><code class="language-l4">${colorize(code)}</code></pre>`
     }
     const escaped = code
@@ -60,22 +60,41 @@
 <div class="streaming-md">
   {@html committedHtml}
   {#if trailing}
-    <pre class="in-flight">{trailing}<span class="cursor">▋</span></pre>
+    <div class="in-flight">{trailing}<span class="cursor">▋</span></div>
   {/if}
 </div>
 
 <style>
+  /* Fenced code block: thin border panel, no filled background.
+     Matches the ToolCard card style so prose + code sit on the same
+     sidebar surface. */
   .streaming-md :global(pre) {
-    background: var(--vscode-textCodeBlock-background);
+    background: var(--vscode-editor-background);
     padding: 8px 10px;
+    border: 1px solid var(--vscode-panel-border, #444);
     border-radius: 4px;
     overflow-x: auto;
     margin: 8px 0;
     font-size: 12px;
     line-height: 1.45;
   }
-  .streaming-md :global(code) {
+  .streaming-md :global(pre code) {
+    background: none;
+    padding: 0;
+    color: inherit;
     font-family: var(--vscode-editor-font-family, monospace);
+    font-size: inherit;
+  }
+  /* Inline code: transparent background, slightly under body-font
+     size, and the teal identifier tone used by the Docs tab. Fenced
+     blocks override this with `color: inherit` via .streaming-md
+     :global(pre code) above so the highlighter can pick colors. */
+  .streaming-md :global(code) {
+    background: transparent;
+    padding: 0;
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 0.92em;
+    color: var(--l4-tok-identifier, #4ec9b0);
   }
   .streaming-md :global(p) {
     margin: 4px 0 10px;
@@ -105,12 +124,17 @@
     padding: 4px 8px;
   }
 
+  /* In-flight block: plain foreground text on the normal background
+     with no special margin. Uses a <div> (not <pre>) so it doesn't
+     pick up the pre border above. */
   .in-flight {
     white-space: pre-wrap;
+    word-break: break-word;
     font-family: inherit;
-    background: none;
+    color: inherit;
+    background: transparent;
     padding: 0;
-    margin: 0 0 8px;
+    margin: 0;
   }
 
   .cursor {

@@ -119,6 +119,7 @@
     flex: 1;
     overflow-y: auto;
     padding: 4px 0;
+    gap: 1px;
   }
   .empty-hint {
     padding: 24px 16px;

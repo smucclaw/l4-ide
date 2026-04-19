@@ -45,6 +45,7 @@ import { AiLogger } from './ai/logger.js'
 import { AiProxyClient } from './ai/ai-proxy-client.js'
 import { ConversationStore } from './ai/conversation-store.js'
 import { ChatService } from './ai/chat-service.js'
+import { ToolDispatcher, previewProposedContent } from './ai/tool-dispatcher.js'
 import { registerAiChatHandlers } from './ai/register.js'
 
 /***********************************************
@@ -500,12 +501,53 @@ export async function activate(context: ExtensionContext) {
   context.subscriptions.push(aiLogger)
   const aiProxy = new AiProxyClient({ auth, logger: aiLogger })
   const aiStore = new ConversationStore(context, aiLogger)
+  // The tool dispatcher needs a handle on the messenger + service to
+  // request approval and emit status updates, so we register with
+  // setter-injection after construction: the dispatcher takes a
+  // callback pair, both of which get filled in below by the
+  // registerAiChatHandlers pipeline.
+  const approvalPending = new Map<
+    string,
+    (decision: 'allow' | 'deny') => void
+  >()
+  // The dispatcher emits tool status updates through this channel; the
+  // sidebar's registerAiChatHandlers replaces the stub `emit` with one
+  // that forwards to the webview via the shared messenger.
+  const toolStatusChannel: {
+    emit: (
+      callId: string,
+      status: 'running' | 'done' | 'error',
+      detail?: { result?: string; error?: string }
+    ) => void
+  } = {
+    emit: () => undefined,
+  }
+  const dispatcher = new ToolDispatcher({
+    logger: aiLogger,
+    requestApproval: async (call) =>
+      new Promise<'allow' | 'deny'>((resolve) => {
+        approvalPending.set(call.callId, resolve)
+      }),
+    notifyStatus: (callId, status, detail) =>
+      toolStatusChannel.emit(callId, status, detail),
+    getProposedDiff: async (call) => {
+      try {
+        return await previewProposedContent(
+          call.name,
+          JSON.parse(call.argsJson)
+        )
+      } catch {
+        return null
+      }
+    },
+  })
   const chatService = new ChatService({
     auth,
     client,
     store: aiStore,
     proxy: aiProxy,
     logger: aiLogger,
+    dispatcher,
   })
   context.subscriptions.push(
     registerAiChatHandlers({
@@ -515,6 +557,8 @@ export async function activate(context: ExtensionContext) {
       service: chatService,
       store: aiStore,
       logger: aiLogger,
+      approvalPending,
+      toolStatusChannel,
     })
   )
 

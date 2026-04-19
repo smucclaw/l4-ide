@@ -387,7 +387,15 @@ export interface AiConversationSummary {
  * id starts a new conversation; the `AiChatStarted` event carries the
  * fresh id back. */
 export interface AiChatStartParams {
+  /** Server-assigned conversation id for follow-up turns. Omit to
+   * start a new conversation; the `AiChatStarted` event carries the
+   * fresh id back. */
   conversationId?: string
+  /** Client-generated per-turn id, opaque to the server. Used as the
+   * abort-correlation key so the webview can cancel a specific
+   * in-flight request regardless of whether the server has assigned a
+   * conversationId yet. */
+  turnId: string
   text: string
   /** Resolved file or symbol mentions (already expanded to content
    * references client-side; extension just forwards). Phase 1 sends
@@ -401,7 +409,10 @@ export const AiChatStart: NotificationType<AiChatStartParams> = {
   method: 'aiChatStart',
 }
 
-export const AiChatAbort: NotificationType<{ conversationId: string }> = {
+/** Cancel an in-flight turn by its client-generated `turnId`. The
+ * conversation id isn't used here because the server hasn't necessarily
+ * assigned one yet when the user clicks Stop. */
+export const AiChatAbort: NotificationType<{ turnId: string }> = {
   method: 'aiChatAbort',
 }
 
@@ -411,6 +422,43 @@ export const AiChatStarted: NotificationType<{
   model: string
 }> = {
   method: 'aiChatStarted',
+}
+
+/** Extension → webview: a client-side tool was invoked by the model.
+ * Phase 2 payload carries everything the UI needs to render an inline
+ * row (name, arguments) and reflect status updates without a second
+ * round-trip. `status` may step through pending-approval → running →
+ * done / error over the lifetime of a single callId. */
+export const AiChatToolCall: NotificationType<{
+  conversationId: string
+  callId: string
+  name: string
+  argsJson: string
+  status: 'pending-approval' | 'running' | 'done' | 'error'
+  result?: string
+  errorMessage?: string
+}> = {
+  method: 'aiChatToolCall',
+}
+
+/** Webview → extension: user made a decision on a pending-approval
+ * tool call. `alwaysAllow` permanently bumps the matching permission
+ * setting to `always`. */
+export const AiChatApproveTool: NotificationType<{
+  callId: string
+  decision: 'allow' | 'deny' | 'alwaysAllow'
+}> = {
+  method: 'aiChatApproveTool',
+}
+
+/** Webview → extension: open a VSCode diff editor comparing the
+ * current on-disk contents against the proposal staged by an in-flight
+ * tool call (fs__create_file / fs__edit_file). Triggered by cmd+click
+ * on the filename inside a tool-call row. */
+export const AiFileOpenDiff: NotificationType<{
+  callId: string
+}> = {
+  method: 'aiFileOpenDiff',
 }
 
 /** Extension → webview: incremental assistant text. */

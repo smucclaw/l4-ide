@@ -95,6 +95,15 @@
     }
   })
 
+  // Reset the Deploy-tab flow when switching away so the footer action
+  // button returns to its idle "Deploy" label instead of remaining on
+  // "Deploy Now" / "Verifying..." while the user is on another tab.
+  $effect(() => {
+    if (activeTab !== 'preview' && deployView !== 'preview') {
+      deployView = 'preview'
+    }
+  })
+
   let compilingDeployments: Set<string> = $state(new Set())
 
   function toggleDeploymentCollapse(deploymentId: string) {
@@ -212,8 +221,15 @@
     if (activeTab === 'deployments') {
       return deployments.length === 0
     }
-    // Disable on non-deploy tabs
-    if (activeTab === 'inspector' || activeTab === 'docs') return true
+    // Disable on non-deploy tabs (Docs, Inspector, AI chat). These
+    // tabs don't own the footer Deploy action, so the button should
+    // read "Deploy" but be inert while the user is on them.
+    if (
+      activeTab === 'inspector' ||
+      activeTab === 'docs' ||
+      activeTab === 'ai-chat'
+    )
+      return true
     if (deployView === 'preview' && functions.length === 0) return true
     return false
   }
@@ -1383,7 +1399,7 @@
   }
 
   .form-input:focus {
-    border-color: #c8376a;
+    border-color: var(--vscode-foreground, #ccc);
   }
 
   .form-error {

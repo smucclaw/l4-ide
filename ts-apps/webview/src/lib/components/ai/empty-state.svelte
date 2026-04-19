@@ -78,15 +78,23 @@
     text-align: left;
     background: transparent;
     color: var(--vscode-foreground);
-    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
+    border: 1px solid rgba(128, 128, 128, 0.3);
     border-radius: 4px;
     padding: 10px 12px;
     font-size: 12px;
     line-height: 1.4;
     cursor: pointer;
+    transition:
+      border-color 0.12s ease-out,
+      background-color 0.12s ease-out;
   }
   .seed-button:hover {
-    background: var(--vscode-list-hoverBackground);
-    border-color: var(--vscode-focusBorder, rgba(128, 128, 128, 0.55));
+    background: rgba(128, 128, 128, 0.08);
+    border-color: rgba(180, 180, 180, 0.6);
+  }
+  .seed-button:focus,
+  .seed-button:focus-visible {
+    outline: none;
+    border-color: rgba(200, 200, 200, 0.75);
   }
 </style>

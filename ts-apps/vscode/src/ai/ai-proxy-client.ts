@@ -84,9 +84,20 @@ export class AiProxyClient {
   ): AsyncGenerator<AiProxyStreamEvent> {
     const url = `${AI_ENDPOINT}/v1/chat/completions`
     const headers = await this.opts.auth.getAuthHeaders()
-    this.opts.logger.debug(
-      `POST ${url} (conversationId=${request.conversationId ?? '<new>'})`
+    const hasAuth = !!headers.Authorization
+    this.opts.logger.info(
+      `POST ${url} (conversationId=${request.conversationId ?? '<new>'}, auth=${hasAuth ? 'bearer' : 'none'})`
     )
+    if (!hasAuth) {
+      // Fail fast instead of hitting the server with empty
+      // credentials — that would just return 401, but surfacing it
+      // here with a clearer code/message is friendlier.
+      throw new AiProxyError(
+        'No Legalese Cloud session found. Sign in from the sidebar to use AI chat.',
+        'unauthenticated',
+        401
+      )
+    }
     const res = await fetch(url, {
       method: 'POST',
       headers: {
@@ -97,6 +108,9 @@ export class AiProxyClient {
       body: JSON.stringify({ ...request, stream: true }),
       signal: abortSignal,
     })
+    this.opts.logger.info(
+      `response ${res.status} ${res.statusText} (content-type=${res.headers.get('content-type') ?? '?'})`
+    )
     if (!res.ok || !res.body) {
       let body = ''
       try {
@@ -108,7 +122,7 @@ export class AiProxyClient {
       const code = extractErrorCode(body) ?? httpStatusToCode(res.status)
       throw new AiProxyError(message, code, res.status)
     }
-    yield* parseSse(res.body)
+    yield* parseSse(res.body, this.opts.logger)
   }
 
   /**
@@ -212,28 +226,42 @@ function extractErrorCode(body: string): string | undefined {
  * `chat.completion.chunk` data-only frames.
  */
 async function* parseSse(
-  body: ReadableStream<Uint8Array>
+  body: ReadableStream<Uint8Array>,
+  logger?: AiLogger
 ): AsyncGenerator<AiProxyStreamEvent> {
   const reader = body.getReader()
   const decoder = new TextDecoder('utf-8')
   let buffer = ''
+  let totalBytes = 0
+  let totalFrames = 0
+  let firstByteLogged = false
+  // Accept either \n\n (standard SSE) or \r\n\r\n (some edge proxies).
+  const FRAME_BOUNDARY = /\r?\n\r?\n/
   while (true) {
     const { value, done } = await reader.read()
-    if (done) break
+    if (done) {
+      logger?.info(`stream closed (bytes=${totalBytes}, frames=${totalFrames})`)
+      break
+    }
+    totalBytes += value.byteLength
+    if (!firstByteLogged) {
+      firstByteLogged = true
+      logger?.info(`first bytes received (${value.byteLength})`)
+    }
     buffer += decoder.decode(value, { stream: true })
-    let idx: number
-    while ((idx = buffer.indexOf('\n\n')) !== -1) {
-      const rawFrame = buffer.slice(0, idx)
-      buffer = buffer.slice(idx + 2)
+    let match: RegExpExecArray | null
+    while ((match = FRAME_BOUNDARY.exec(buffer)) !== null) {
+      const rawFrame = buffer.slice(0, match.index)
+      buffer = buffer.slice(match.index + match[0].length)
       const frame = parseFrame(rawFrame)
       if (!frame) continue
-      yield* interpretFrame(frame)
+      totalFrames++
+      yield* interpretFrame(frame, logger)
     }
   }
-  // Final flush
   if (buffer.trim().length > 0) {
     const frame = parseFrame(buffer)
-    if (frame) yield* interpretFrame(frame)
+    if (frame) yield* interpretFrame(frame, logger)
   }
 }
 
@@ -257,7 +285,13 @@ function parseFrame(raw: string): SseFrame | null {
   return { event, data: dataLines.join('\n') }
 }
 
-function* interpretFrame(frame: SseFrame): Generator<AiProxyStreamEvent> {
+function* interpretFrame(
+  frame: SseFrame,
+  logger?: AiLogger
+): Generator<AiProxyStreamEvent> {
+  logger?.debug(
+    `frame event=${frame.event ?? '<default>'} data[0..80]=${frame.data.slice(0, 80)}`
+  )
   if (frame.data === '[DONE]') return
   if (frame.event === 'metadata') {
     try {
