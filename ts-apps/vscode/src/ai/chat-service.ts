@@ -90,9 +90,7 @@ export class ChatService {
 
     try {
       const messages = await this.assembleMessages(params, isNew)
-      const existing = await this.opts.store.load(localId)
       let serverConversationId: string | undefined = params.conversationId
-      let serverModel: string | undefined = existing?.model
 
       let assistantText = ''
       let finished = false
@@ -108,7 +106,6 @@ export class ChatService {
         )) {
           if (ev.kind === 'metadata') {
             serverConversationId = ev.conversationId
-            serverModel = ev.model
             this.emit({
               kind: 'started',
               conversationId: ev.conversationId,

@@ -127,7 +127,7 @@ export function registerAiChatHandlers(deps: {
   messenger.onNotification(AiUsageSubscribe, () => {
     if (usageTimer) return
     const tick = (): void =>
-      void fetchUsage(auth, logger).then((u) => {
+      void fetchUsage().then((u) => {
         if (u) {
           messenger.sendNotification(AiUsageUpdate, frontend, u)
         }
@@ -225,9 +225,10 @@ async function searchMentions(query: string): Promise<AiMentionCandidate[]> {
  * Cloud expose a usage endpoint we can read, this returns null so the
  * UI keeps the gauge at zero. A subsequent commit wires it up.
  */
-async function fetchUsage(
-  _auth: AuthManager,
-  _logger: AiLogger
-): Promise<{ used: number; limit: number; blockOnOverage: boolean } | null> {
+async function fetchUsage(): Promise<{
+  used: number
+  limit: number
+  blockOnOverage: boolean
+} | null> {
   return null
 }
