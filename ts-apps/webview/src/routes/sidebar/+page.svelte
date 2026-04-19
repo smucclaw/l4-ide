@@ -33,6 +33,7 @@
   import ToolCard from '$lib/components/tool-card.svelte'
   import InspectorPanel from '$lib/components/inspector-panel.svelte'
   import DocsPanel from '$lib/components/docs-panel.svelte'
+  import AiChatPanel from '$lib/components/ai/ai-chat-panel.svelte'
 
   let functions: ExportedFunctionInfo[] = $state([])
   let activeFileUri: string = $state('')
@@ -45,7 +46,7 @@
   })
   let initialized: boolean = $state(false)
   let previewDebounceTimer: ReturnType<typeof setTimeout> | null = null
-  let activeTab: 'docs' | 'inspector' | 'preview' | 'deployments' =
+  let activeTab: 'ai-chat' | 'docs' | 'inspector' | 'preview' | 'deployments' =
     $state('docs')
   let menuOpen: boolean = $state(false)
 
@@ -739,6 +740,13 @@
   <div class="tab-bar">
     <button
       class="tab"
+      class:active={activeTab === 'ai-chat'}
+      onclick={() => (activeTab = 'ai-chat')}
+    >
+      Legalese AI
+    </button>
+    <button
+      class="tab"
       class:active={activeTab === 'docs'}
       onclick={() => (activeTab = 'docs')}
     >
@@ -768,6 +776,9 @@
   </div>
 
   <div class="tab-content">
+    <div class="tab-pane" hidden={activeTab !== 'ai-chat'}>
+      <AiChatPanel {messenger} {connectionStatus} />
+    </div>
     <div class="tab-pane" hidden={activeTab !== 'docs'}>
       <DocsPanel {messenger} />
     </div>
