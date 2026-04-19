@@ -11,6 +11,37 @@
   type ColorizedEntry = { header: string; body: string; contentKey: string }
   let colorized: Record<string, ColorizedEntry> = $state({})
 
+  /**
+   * Format a result value string by converting commas into line-breaks with
+   * indentation based on parenthesis nesting depth. Parentheses that wrap
+   * record values (e.g. `(Foo WITH a = 1, b = 2)`) are stripped.
+   */
+  function formatResultValue(text: string): string {
+    let result = ''
+    let depth = 0
+    const indent = () => '\n' + '  '.repeat(depth)
+
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i]
+      if (ch === '(') {
+        depth++
+      } else if (ch === ')') {
+        depth = Math.max(0, depth - 1)
+      } else if (ch === ',') {
+        if (text[i + 1] === ' ') i++
+        result += indent()
+      } else if (text.startsWith(' WITH ', i)) {
+        depth++
+        result += ' WITH'
+        result += indent()
+        i += 5
+      } else {
+        result += ch
+      }
+    }
+    return result
+  }
+
   $effect(() => {
     if (!monaco) return
     const m = monaco
@@ -18,17 +49,18 @@
       id: s.directiveId,
       lineContent: s.lineContent,
       prettyText: s.prettyText,
+      formattedPretty: formatResultValue(s.prettyText),
       contentKey: `${s.lineContent}\0${s.prettyText}`,
     }))
     // Read colorized without tracking to avoid a reactive cycle
     // (the effect only re-runs when `sections` changes, not when `colorized` changes)
     const current = untrack(() => colorized)
-    for (const { id, lineContent, prettyText, contentKey } of toColorize) {
+    for (const { id, lineContent, formattedPretty, contentKey } of toColorize) {
       if (current[id]?.contentKey === contentKey) continue
       const truncated = lineContent.trim()
       Promise.all([
         m.editor.colorize(truncated, 'jl4', { tabSize: 2 }),
-        m.editor.colorize(prettyText, 'jl4', { tabSize: 2 }),
+        m.editor.colorize(formattedPretty, 'jl4', { tabSize: 2 }),
       ]).then(([header, body]) => {
         colorized = {
           ...colorized,
@@ -438,7 +470,9 @@
                   <pre class="result-code">{@html colorized[section.directiveId]
                       .body}</pre>
                 {:else}
-                  <pre class="result-code">{section.prettyText}</pre>
+                  <pre class="result-code">{formatResultValue(
+                      section.prettyText
+                    )}</pre>
                 {/if}
               </div>
             {/if}
