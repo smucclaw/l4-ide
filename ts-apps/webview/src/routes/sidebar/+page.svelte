@@ -777,7 +777,11 @@
 
   <div class="tab-content">
     <div class="tab-pane" hidden={activeTab !== 'ai-chat'}>
-      <AiChatPanel {messenger} {connectionStatus} />
+      <AiChatPanel
+        {messenger}
+        {connectionStatus}
+        visible={activeTab === 'ai-chat'}
+      />
     </div>
     <div class="tab-pane" hidden={activeTab !== 'docs'}>
       <DocsPanel {messenger} />
