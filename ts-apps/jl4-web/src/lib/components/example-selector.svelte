@@ -14,7 +14,7 @@
       class="example-button external"
       onclick={() => window.open('https://legalese.com/l4', '_blank')}
     >
-      Visit the L4 Documentation
+      L4 Documentation
     </button>
     <button
       class="example-button external"
