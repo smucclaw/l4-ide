@@ -110,6 +110,46 @@
   .streaming-md :global(p) {
     margin: 8px 0 10px;
   }
+  /* Headings. Browser defaults wildly overshoot for a sidebar-scale
+     chat: 2em for h1 on top of 21px default line-height visually
+     breaks the conversation flow. Scale everything to the body font
+     with modest top/bottom breathing room, tapering h3+ to near-body
+     weight so nested outlines stay readable in a narrow column.
+     First-child collapse kills the extra top margin when a heading
+     opens an assistant message. */
+  .streaming-md :global(h1),
+  .streaming-md :global(h2),
+  .streaming-md :global(h3),
+  .streaming-md :global(h4),
+  .streaming-md :global(h5),
+  .streaming-md :global(h6) {
+    color: var(--vscode-foreground);
+    font-weight: 600;
+    line-height: 1.25;
+    margin: 14px 0 6px;
+  }
+  .streaming-md :global(h1:first-child),
+  .streaming-md :global(h2:first-child),
+  .streaming-md :global(h3:first-child),
+  .streaming-md :global(h4:first-child),
+  .streaming-md :global(h5:first-child),
+  .streaming-md :global(h6:first-child) {
+    margin-top: 0;
+  }
+  .streaming-md :global(h1) {
+    font-size: 1.25em;
+  }
+  .streaming-md :global(h2) {
+    font-size: 1.15em;
+  }
+  .streaming-md :global(h3) {
+    font-size: 1.05em;
+  }
+  .streaming-md :global(h4),
+  .streaming-md :global(h5),
+  .streaming-md :global(h6) {
+    font-size: 1em;
+  }
   .streaming-md :global(ul),
   .streaming-md :global(ol) {
     margin: 8px 0 10px;
@@ -128,6 +168,16 @@
   .streaming-md :global(table) {
     border-collapse: collapse;
     margin: 8px 0 10px;
+  }
+  /* Horizontal rule: the default 1px solid line reads heavier than a
+     prose break needs in a narrow sidebar. Swap to a half-opacity
+     widget-border hairline with generous margin so `---` feels like a
+     gentle pause rather than a visual block. */
+  .streaming-md :global(hr) {
+    border: none;
+    border-top: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
+    opacity: 0.5;
+    margin: 14px 0;
   }
   .streaming-md :global(th),
   .streaming-md :global(td) {

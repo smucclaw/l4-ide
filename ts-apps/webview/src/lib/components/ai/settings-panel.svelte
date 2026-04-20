@@ -184,10 +184,14 @@
     flex-direction: column;
     gap: 8px;
   }
+  /* Match the history panel's group labels (`Today`, `Yesterday`,
+     etc.) so section headings in Settings read as the same kind of
+     quiet, uppercase subheader instead of a primary foreground title. */
   .section-title {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--vscode-foreground);
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
   }
   .section-help {
     font-size: 11px;

@@ -45,7 +45,13 @@
   }
   const fileChanges = $derived.by<FileChange[]>(() => {
     if (!blocks) return []
-    const out: FileChange[] = []
+    // Dedupe by `path+action` so repeated edits to the same file
+    // collapse into a single row. We keep the LATEST callId because
+    // its pre-edit snapshot is the one we want the diff view to use
+    // — earlier edits' snapshots have already been superseded. Order
+    // of first appearance is preserved; de-duplication just skips the
+    // repeats.
+    const byKey = new Map<string, FileChange>()
     for (const b of blocks) {
       if (b.kind !== 'tool-call' || b.call.status !== 'done') continue
       const call = b.call
@@ -57,23 +63,14 @@
       try {
         const args = JSON.parse(call.argsJson) as { path?: string }
         if (!args.path) continue
-        out.push({ path: args.path, action, callId: call.callId })
+        const key = `${action}:${args.path}`
+        byKey.set(key, { path: args.path, action, callId: call.callId })
       } catch {
         // ignore malformed args
       }
     }
-    return out
+    return [...byKey.values()]
   })
-
-  function showAllDiffs(): void {
-    for (const c of fileChanges) {
-      if (c.action === 'edited' || c.action === 'created') {
-        onOpenFileDiff(c.callId)
-      } else {
-        onOpenFile(c.callId)
-      }
-    }
-  }
 </script>
 
 <div class="assistant-row">
@@ -92,19 +89,28 @@
             onOpenDiff={onOpenFileDiff}
           />
         {:else if block.kind === 'tool-activity'}
+          <!-- Same chrome as a tool-call row (colored dot + bold label
+               + monospace target + right-aligned status) so server-side
+               activity reads as another tool entry instead of a different
+               visual category. No click target because these are
+               read-only backend events. -->
           <div
-            class="activity"
+            class="tool-call"
             class:is-error={block.activity.status === 'error'}
           >
-            <span class="activity-dot" aria-hidden="true"
-              >{block.activity.status === 'done'
-                ? '✓'
-                : block.activity.status === 'error'
-                  ? '✕'
-                  : '…'}</span
-            >
-            <span class="activity-tool">{block.activity.tool}</span>
-            <span class="activity-msg">{block.activity.message}</span>
+            <div class="tool-row">
+              <span class="dot" aria-hidden="true"></span>
+              <span class="action">Legalesing...</span>
+              {#if block.activity.message !== 'Legalesing...'}
+                <span class="target plain">{block.activity.message}</span>
+              {/if}
+              <span class="status status-{block.activity.status}">
+                {#if block.activity.status === 'running'}…
+                {:else if block.activity.status === 'done'}✓
+                {:else if block.activity.status === 'error'}failed
+                {/if}
+              </span>
+            </div>
           </div>
         {/if}
       {/each}
@@ -126,13 +132,6 @@
         <div class="review-header">
           <span class="review-title"
             >Files changed this turn ({fileChanges.length})</span
-          >
-          <button
-            type="button"
-            class="review-all"
-            onclick={showAllDiffs}
-            title="Open every changed file's applied diff in sequence"
-            >Show all diffs</button
           >
         </div>
         <ul class="review-list">
@@ -185,32 +184,51 @@
     top: -4px;
     right: 0;
   } */
-  /* Server-side tool activity: muted row between message paragraphs,
-     no action affordances. */
-  .activity {
+  /* Tool-activity rows reuse the exact visual chrome used by
+     tool-call rows (see tool-call-row.svelte). Styles are duplicated
+     here because Svelte scopes CSS per-component; extracting into a
+     global sheet would pull every page's .tool-call rules along with
+     it. Keep the two blocks in sync. */
+  .tool-call {
+    font-size: 12px;
+    padding: 6px 2px 8px;
+    color: var(--vscode-descriptionForeground);
+  }
+  .tool-row {
     display: flex;
     align-items: baseline;
     gap: 6px;
+  }
+  .dot {
+    background: #c8376a;
+    line-height: 1;
+    flex-shrink: 0;
+    margin-right: 2px;
+    padding: 0.2em;
+    border-radius: 0.2em;
+    margin-bottom: -0.2em;
+  }
+  .action {
+    color: var(--vscode-foreground);
+    font-weight: 600;
+  }
+  .target.plain {
+    color: var(--vscode-foreground);
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 0.92em;
+    text-decoration: none;
+  }
+  .status {
+    margin-left: auto;
     font-size: 11px;
     color: var(--vscode-descriptionForeground);
-    padding: 2px 0;
   }
-  .activity.is-error {
+  .status-error {
     color: var(--vscode-errorForeground, #d7263d);
   }
-  .activity-dot {
-    font-size: 10px;
-    flex-shrink: 0;
-  }
-  .activity-tool {
-    font-family: var(--vscode-editor-font-family, monospace);
+  .status-done {
     color: var(--vscode-foreground);
-    opacity: 0.7;
-  }
-  .activity-msg {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    opacity: 0.6;
   }
   /* Turn-end review card: quiet panel listing files the assistant
      touched this turn so the user can scan blast radius at a glance. */
@@ -231,18 +249,6 @@
   .review-title {
     color: var(--vscode-foreground);
     font-weight: 600;
-  }
-  .review-all {
-    background: transparent;
-    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
-    color: var(--vscode-foreground);
-    padding: 2px 8px;
-    font-size: 11px;
-    border-radius: 3px;
-    cursor: pointer;
-  }
-  .review-all:hover {
-    border-color: var(--vscode-foreground);
   }
   .review-list {
     list-style: none;

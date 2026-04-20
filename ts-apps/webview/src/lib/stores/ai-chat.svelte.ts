@@ -436,19 +436,23 @@ export function createAiChatStore(
     const turn = conv.turns[conv.turns.length - 1]
     if (!turn || turn.role !== 'assistant') return
     if (!turn.blocks) turn.blocks = []
-    // Dedupe by tool name: if the last block is a tool-activity for the
-    // same tool, update it in place so a long `running → running → done`
-    // sequence collapses into one row instead of flooding the chat.
+    // Dedupe policy:
+    //   - Same tool + same message as the tail → treat as a status
+    //     update on the existing block (don't push a new row). This
+    //     is what swallows a `running → running → done` burst that
+    //     keeps re-emitting the same status text.
+    //   - Same tool but a new message → the activity is reporting
+    //     real progress, so push a new row even if the previous one
+    //     is still "running" (it effectively terminates when the next
+    //     message arrives).
     const tail = turn.blocks[turn.blocks.length - 1]
     if (
       tail &&
       tail.kind === 'tool-activity' &&
       tail.activity.tool === params.tool &&
-      tail.activity.status !== 'done' &&
-      tail.activity.status !== 'error'
+      tail.activity.message === params.message
     ) {
       tail.activity.status = params.status
-      tail.activity.message = params.message
       return
     }
     turn.blocks.push({

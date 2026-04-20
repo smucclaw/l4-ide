@@ -1,6 +1,7 @@
 import * as vscode from 'vscode'
 import * as path from 'path'
 import { promises as fs, existsSync } from 'fs'
+import { fetchL4Diagnostics } from './lsp.js'
 
 /**
  * Built-in filesystem tools. All paths are workspace-relative; absolute
@@ -88,6 +89,29 @@ export interface FsReadArgs {
  *  real workspaces; more than this shunts into `nextFrom` paging. */
 const DIR_PAGE_LIMIT = 100
 
+/**
+ * For `.l4` files, append the exact same diagnostics payload the
+ * `lsp__diagnostics` tool would produce for this path. Runs on every
+ * `fs__read_file` / `fs__create_file` / `fs__edit_file` so the model
+ * doesn't need a separate round-trip to confirm the file compiles.
+ * Shape stays consistent with `lsp__diagnostics` so agent prompts can
+ * parse one JSON format regardless of which tool surfaced it. Failures
+ * are swallowed — the primary tool result is more important than the
+ * diagnostic annotation.
+ */
+async function appendL4Diagnostics(
+  r: ResolvedPath,
+  body: string
+): Promise<string> {
+  if (!r.fsPath.toLowerCase().endsWith('.l4')) return body
+  try {
+    const diagnostics = await fetchL4Diagnostics(r.uri)
+    return `${body}\n\n${diagnostics}`
+  } catch {
+    return body
+  }
+}
+
 /** Skip these at any depth to keep listings useful — they're almost
  *  always noise the model doesn't want to reason about. */
 const DIR_IGNORES = new Set(['.git', 'node_modules', '.DS_Store'])
@@ -109,7 +133,8 @@ export async function fsReadFile(args: FsReadArgs): Promise<string> {
   const buf = await fs.readFile(r.fsPath, 'utf-8')
   // Newline-normalize so downstream tools that rely on \n splits don't
   // get confused by Windows CRLF.
-  return buf.replace(/\r\n/g, '\n')
+  const body = buf.replace(/\r\n/g, '\n')
+  return appendL4Diagnostics(r, body)
 }
 
 async function fsListDirectory(
@@ -184,7 +209,10 @@ export async function fsCreateFile(args: FsCreateArgs): Promise<string> {
   // own fs__read_file / fs.readFile) see the new content immediately.
   const doc = await vscode.workspace.openTextDocument(r.uri)
   if (doc.isDirty) await doc.save()
-  return `Created ${r.relative} (${args.content.length} chars)`
+  return appendL4Diagnostics(
+    r,
+    `Created ${r.relative} (${args.content.length} chars)`
+  )
 }
 
 export interface FsEditArgs {
@@ -243,7 +271,10 @@ export async function fsEditFile(args: FsEditArgs): Promise<string> {
     )
   }
   if (doc.isDirty) await doc.save()
-  return `Edited ${r.relative} (${args.old.split('\n').length} → ${args.new.split('\n').length} lines changed)`
+  return appendL4Diagnostics(
+    r,
+    `Edited ${r.relative} (${args.old.split('\n').length} → ${args.new.split('\n').length} lines changed)`
+  )
 }
 
 export interface FsDeleteArgs {
