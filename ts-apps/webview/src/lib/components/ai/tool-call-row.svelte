@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { RenderedToolCall } from '$lib/stores/ai-chat.svelte'
+  import { colorize } from '@repo/l4-highlight'
 
   /**
    * Tools exposed by the l4-rules MCP server fall into two buckets.
@@ -124,6 +125,96 @@
     }
   })
 
+  // Rule evaluations (the l4-rules__ namespace minus the infrastructure
+  // tools) get a richer expanded view: a distinct Arguments section and
+  // a Result section formatted the same way the Inspector tab renders
+  // #EVAL output — parens collapsed into indentation, L4 tokens syntax-
+  // highlighted. `startTime` and `events` are surfaced separately in
+  // the args so the reader's eye lands on them: they're the contract-
+  // state inputs, everything else is ordinary rule arguments.
+  const isRuleCall = $derived.by(() => {
+    if (!call.name.startsWith('l4-rules__')) return false
+    const sub = call.name.slice('l4-rules__'.length)
+    return !L4_RULES_INFRASTRUCTURE.has(sub)
+  })
+
+  function partitionRuleArgs(a: Record<string, unknown>): {
+    primary: Record<string, unknown>
+    startTime: unknown | undefined
+    events: unknown | undefined
+  } {
+    const { startTime, events, ...primary } = a
+    return { primary, startTime, events }
+  }
+  const ruleArgs = $derived.by(() =>
+    isRuleCall ? partitionRuleArgs(args) : null
+  )
+
+  /**
+   * Mirror of inspector-panel's formatResultValue: break commas into
+   * indented lines, drop the parens that were only there to group a
+   * record, and turn ` WITH ` into a block-opening indent. Keeps the
+   * AI rule-result readout visually congruent with #EVAL in Inspector.
+   */
+  function formatResultValue(text: string): string {
+    let out = ''
+    let depth = 0
+    const indent = (): string => '\n' + '  '.repeat(depth)
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i]
+      if (ch === '(') {
+        depth++
+      } else if (ch === ')') {
+        depth = Math.max(0, depth - 1)
+      } else if (ch === ',') {
+        if (text[i + 1] === ' ') i++
+        out += indent()
+      } else if (text.startsWith(' WITH ', i)) {
+        depth++
+        out += ' WITH' + indent()
+        i += 5
+      } else {
+        out += ch
+      }
+    }
+    return out
+  }
+
+  // Try to extract a human-facing value from the MCP result. MCP tools
+  // return `content[]` as text blocks that mcp-client.ts flattens to a
+  // single string — often that's already the pretty value, sometimes
+  // it's wrapped JSON. Unwrap common shapes ({value}, {result}, raw
+  // scalars) so we can pass the value to the L4 colorizer.
+  function unwrapResultValue(raw: string): string {
+    const trimmed = raw.trim()
+    if (!trimmed) return raw
+    try {
+      const parsed = JSON.parse(trimmed)
+      if (parsed === null || parsed === undefined) return trimmed
+      if (typeof parsed === 'string') return parsed
+      if (typeof parsed === 'number' || typeof parsed === 'boolean')
+        return String(parsed)
+      if (typeof parsed === 'object') {
+        const obj = parsed as Record<string, unknown>
+        for (const k of ['value', 'result', 'output']) {
+          if (typeof obj[k] === 'string') return obj[k] as string
+          if (typeof obj[k] === 'number' || typeof obj[k] === 'boolean')
+            return String(obj[k])
+        }
+        return JSON.stringify(parsed, null, 2)
+      }
+      return trimmed
+    } catch {
+      return trimmed
+    }
+  }
+
+  const ruleResultHtml = $derived.by(() => {
+    if (!isRuleCall || !call.result) return null
+    const value = unwrapResultValue(call.result)
+    return colorize(formatResultValue(value))
+  })
+
   const hasDetails = $derived(
     call.status === 'done'
       ? !!prettyResult
@@ -177,7 +268,46 @@
     {/if}
   </div>
 
-  {#if expanded && call.status === 'done' && prettyResult}
+  {#if expanded && call.status === 'done' && isRuleCall && ruleArgs}
+    <div class="rule-details">
+      <section class="rule-section">
+        <h4 class="rule-section-title">Arguments</h4>
+        <pre class="rule-block">{JSON.stringify(
+            ruleArgs.primary,
+            null,
+            2
+          )}</pre>
+        {#if ruleArgs.startTime !== undefined}
+          <div class="rule-subfield">
+            <span class="rule-subfield-label">startTime</span>
+            <pre class="rule-block rule-block-inline">{JSON.stringify(
+                ruleArgs.startTime,
+                null,
+                2
+              )}</pre>
+          </div>
+        {/if}
+        {#if ruleArgs.events !== undefined}
+          <div class="rule-subfield">
+            <span class="rule-subfield-label">events</span>
+            <pre class="rule-block rule-block-inline">{JSON.stringify(
+                ruleArgs.events,
+                null,
+                2
+              )}</pre>
+          </div>
+        {/if}
+      </section>
+      <section class="rule-section">
+        <h4 class="rule-section-title">Result</h4>
+        {#if ruleResultHtml}
+          <pre class="rule-block rule-result">{@html ruleResultHtml}</pre>
+        {:else}
+          <pre class="rule-block rule-result empty">(no result)</pre>
+        {/if}
+      </section>
+    </div>
+  {:else if expanded && call.status === 'done' && prettyResult}
     <pre class="details">{prettyResult}</pre>
   {:else if expanded && call.status === 'error' && call.error}
     <pre class="details err-details">{call.error}</pre>
@@ -276,5 +406,64 @@
   }
   .err-details {
     color: var(--vscode-errorForeground, #d7263d);
+  }
+  /* Rule-eval expanded view: two stacked panels (Arguments, Result)
+     styled close to the Inspector tab's result section so reading a
+     rule call here feels like reading an #EVAL there. */
+  .rule-details {
+    margin: 4px 0 0 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .rule-section {
+    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .rule-section-title {
+    margin: 0;
+    padding: 4px 8px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--vscode-descriptionForeground);
+    background: var(--vscode-sideBarSectionHeader-background, transparent);
+    border-bottom: 1px solid
+      var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
+  }
+  .rule-block {
+    margin: 0;
+    padding: 6px 8px;
+    background: var(--vscode-editor-background);
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--vscode-foreground);
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 320px;
+    overflow-y: auto;
+    tab-size: 2;
+  }
+  .rule-block-inline {
+    border-top: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
+  }
+  .rule-subfield {
+    display: flex;
+    flex-direction: column;
+  }
+  .rule-subfield-label {
+    padding: 3px 8px;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--vscode-descriptionForeground);
+    background: var(--vscode-editor-background);
+    border-top: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
+  }
+  .rule-result.empty {
+    color: var(--vscode-descriptionForeground);
+    font-style: italic;
   }
 </style>

@@ -13,32 +13,47 @@ import type { AiLogger } from './logger.js'
  * The ai-proxy owns the canonical LLM history; this store is just for
  * rendering and history navigation. Layout:
  *
- *   {globalStorageUri}/ai/conversations/{id}.json           — live
- *   {globalStorageUri}/ai/conversations/{id}.deleted-{ms}.json — tombstoned
+ *   {globalStorageUri}/ai/conversations/{userKey}/{id}.json           — live
+ *   {globalStorageUri}/ai/conversations/{userKey}/{id}.deleted-{ms}.json — tombstoned
  *
- * Deletion renames; a future cleanup job reaps tombstones.
+ * `userKey` is derived from the signed-in Legalese Cloud user id so a
+ * logout + login as a different user yields an entirely different
+ * conversation list, even on the same machine. Self-hosted / signed-
+ * out sessions bucket under `anonymous`. Deletion renames; a future
+ * cleanup job reaps tombstones.
  */
 export class ConversationStore {
-  private readonly baseDir: string
+  private readonly rootDir: string
 
   constructor(
     context: vscode.ExtensionContext,
-    private readonly logger: AiLogger
+    private readonly logger: AiLogger,
+    private readonly getUserKey: () => string
   ) {
-    this.baseDir = path.join(
+    this.rootDir = path.join(
       context.globalStorageUri.fsPath,
       'ai',
       'conversations'
     )
   }
 
+  /** Per-user subdirectory resolved on every call so user switches
+   *  take effect immediately without requiring the store to be
+   *  reconstructed. */
+  private baseDir(): string {
+    const key = this.getUserKey()
+    const safe = /^[a-zA-Z0-9_-]+$/.test(key) ? key : 'anonymous'
+    return path.join(this.rootDir, safe)
+  }
+
   async list(): Promise<AiConversationSummary[]> {
-    const files = await this.safeReaddir(this.baseDir)
+    const dir = this.baseDir()
+    const files = await this.safeReaddir(dir)
     const summaries: AiConversationSummary[] = []
     for (const f of files) {
       if (!f.endsWith('.json') || f.includes('.deleted-')) continue
       try {
-        const raw = await fs.readFile(path.join(this.baseDir, f), 'utf-8')
+        const raw = await fs.readFile(path.join(dir, f), 'utf-8')
         const conv = JSON.parse(raw) as AiConversation
         summaries.push({
           id: conv.id,
@@ -77,7 +92,8 @@ export class ConversationStore {
     if (!isSafeId(conv.id)) {
       throw new Error(`Invalid conversation id: ${conv.id}`)
     }
-    await fs.mkdir(this.baseDir, { recursive: true })
+    const dir = this.baseDir()
+    await fs.mkdir(dir, { recursive: true })
     const p = this.filePath(conv.id)
     const tmp = `${p}.tmp-${Math.random().toString(36).slice(2, 10)}`
     try {
@@ -93,7 +109,7 @@ export class ConversationStore {
   async delete(id: string): Promise<boolean> {
     if (!isSafeId(id)) return false
     const src = this.filePath(id)
-    const dst = path.join(this.baseDir, `${id}.deleted-${Date.now()}.json`)
+    const dst = path.join(this.baseDir(), `${id}.deleted-${Date.now()}.json`)
     try {
       await fs.rename(src, dst)
       return true
@@ -147,7 +163,7 @@ export class ConversationStore {
   }
 
   private filePath(id: string): string {
-    return path.join(this.baseDir, `${id}.json`)
+    return path.join(this.baseDir(), `${id}.json`)
   }
 
   private async safeReaddir(dir: string): Promise<string[]> {

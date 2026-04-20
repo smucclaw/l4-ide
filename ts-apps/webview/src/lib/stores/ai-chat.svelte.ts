@@ -564,7 +564,18 @@ export function createAiChatStore(
   }
 
   function onAuthStatus(params: { signedIn: boolean }): void {
+    const prevSignedIn = signedIn
     signedIn = params.signedIn
+    // Auth flips (sign in, sign out, user swap) invalidate the cached
+    // history list — it was scoped to the previous user's on-disk
+    // folder. Drop any currently-loaded conversation too: if it
+    // belonged to the previous user it would now 404 on reload, and
+    // leaving its rendered messages on screen under a different
+    // identity is exactly the cross-user leak we're guarding against.
+    if (prevSignedIn !== params.signedIn) {
+      currentId = null
+      void refreshHistory()
+    }
   }
 
   function onActiveFile(params: {

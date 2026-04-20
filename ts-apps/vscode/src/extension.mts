@@ -502,7 +502,9 @@ export async function activate(context: ExtensionContext) {
   const aiLogger = new AiLogger()
   context.subscriptions.push(aiLogger)
   const aiProxy = new AiProxyClient({ auth, logger: aiLogger })
-  const aiStore = new ConversationStore(context, aiLogger)
+  const aiStore = new ConversationStore(context, aiLogger, () =>
+    auth.getUserStorageKey()
+  )
   // The tool dispatcher needs a handle on the messenger + service to
   // request approval and emit status updates, so we register with
   // setter-injection after construction: the dispatcher takes a
