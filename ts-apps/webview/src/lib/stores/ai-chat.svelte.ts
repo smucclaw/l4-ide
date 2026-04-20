@@ -7,6 +7,7 @@ import {
   AiConversationDelete,
   AiConversationList,
   AiConversationLoad,
+  AiFileOpen,
   AiFileOpenDiff,
   AiMentionSearch,
   AiUsageSubscribe,
@@ -17,6 +18,16 @@ import {
   type AiChatStartParams,
   type AiMentionCandidate,
 } from 'jl4-client-rpc'
+
+export interface ActiveFileInfo {
+  /** Editor basename, e.g. "insurance-premium.l4". Null when no file is
+   *  open. */
+  name: string | null
+  /** Workspace-relative path (or absolute if outside every workspace
+   *  folder). Null when no file is open. */
+  path: string | null
+  inWorkspace: boolean
+}
 
 /**
  * A single turn that's either already stored in the conversation
@@ -31,17 +42,25 @@ export interface RenderedTurn {
    * turns (nothing to cancel). */
   turnId?: string
   role: 'user' | 'assistant'
+  /** Concatenated assistant text for retry / copy / persistence. For
+   * display the UI iterates `blocks` instead, which preserves the
+   * interleaving of text and tool calls as they arrived. */
   content: string
   /** True while tokens are still streaming into this bubble. */
   streaming?: boolean
   /** Populated on failure; the bubble shows it as an error footer. */
   error?: { message: string; code?: string }
-  /** Tool calls the model invoked during this assistant turn, in the
-   *  order they were emitted. Rendered inline in the bubble below the
-   *  text. Each is keyed by `callId` so status updates can update the
-   *  right row as the extension host executes the call. */
-  toolCalls?: RenderedToolCall[]
+  /** Chronological render log of what the model emitted on this turn.
+   *  A text block grows as tokens arrive; a new tool-call block opens
+   *  when the model invokes a tool; once the tool result lands, the
+   *  next delta opens a fresh text block. Only populated on assistant
+   *  turns. */
+  blocks?: AssistantBlock[]
 }
+
+export type AssistantBlock =
+  | { kind: 'text'; text: string }
+  | { kind: 'tool-call'; call: RenderedToolCall }
 
 export interface RenderedToolCall {
   callId: string
@@ -61,6 +80,42 @@ interface ConversationState {
   turns: RenderedTurn[]
   /** True while an in-flight stream is attached to this conversation. */
   streaming: boolean
+}
+
+/** Parse `_meta.blocks` saved by chat-service into the webview's
+ *  AssistantBlock shape. Returns null if the meta has no blocks. Shapes
+ *  that don't match are dropped so a partially-written history entry
+ *  still renders as text. */
+function extractPersistedBlocks(meta: unknown): AssistantBlock[] | null {
+  if (!meta || typeof meta !== 'object') return null
+  const raw = (meta as { blocks?: unknown }).blocks
+  if (!Array.isArray(raw) || raw.length === 0) return null
+  const out: AssistantBlock[] = []
+  for (const b of raw as Array<Record<string, unknown>>) {
+    if (b.kind === 'text' && typeof b.text === 'string') {
+      out.push({ kind: 'text', text: b.text })
+    } else if (
+      b.kind === 'tool-call' &&
+      typeof b.callId === 'string' &&
+      typeof b.name === 'string' &&
+      typeof b.argsJson === 'string'
+    ) {
+      const status =
+        b.status === 'done' || b.status === 'error' ? b.status : 'done'
+      out.push({
+        kind: 'tool-call',
+        call: {
+          callId: b.callId,
+          name: b.name,
+          argsJson: b.argsJson,
+          status,
+          result: typeof b.result === 'string' ? b.result : undefined,
+          error: typeof b.error === 'string' ? b.error : undefined,
+        },
+      })
+    }
+  }
+  return out.length > 0 ? out : null
 }
 
 /**
@@ -84,6 +139,16 @@ export function createAiChatStore(
   let blockOnOverage = $state<boolean>(false)
   let signedIn = $state<boolean>(false)
   const draftsByConv = $state<Record<string, string>>({})
+  let activeFile = $state<ActiveFileInfo>({
+    name: null,
+    path: null,
+    inWorkspace: false,
+  })
+  // Whether the active file's `<editor-context>` block should be
+  // appended to the next send. Persists across conversations — a
+  // user who toggles it off wants it off for subsequent prompts too,
+  // until they toggle it back on.
+  let includeActiveFile = $state<boolean>(true)
 
   function ensureCurrent(): ConversationState {
     if (!currentId) {
@@ -135,15 +200,27 @@ export function createAiChatStore(
         title: conv.title,
         turns: conv.messages
           .filter((m) => m.role === 'user' || m.role === 'assistant')
-          .map((m, i) => ({
-            id: `${conv.id}:${i}`,
-            role: m.role as 'user' | 'assistant',
-            content: typeof m.content === 'string' ? m.content : '',
-          })),
+          .map((m, i) => {
+            const content = typeof m.content === 'string' ? m.content : ''
+            const turn: RenderedTurn = {
+              id: `${conv.id}:${i}`,
+              role: m.role as 'user' | 'assistant',
+              content,
+            }
+            if (m.role === 'assistant') {
+              const persisted = extractPersistedBlocks(m._meta)
+              if (persisted) turn.blocks = persisted
+              else if (content) turn.blocks = [{ kind: 'text', text: content }]
+            }
+            return turn
+          }),
         streaming: false,
       }
       conversations[conv.id] = state
       currentId = conv.id
+      // Loading an existing conversation is not a fresh start — default
+      // to off so a follow-up turn doesn't silently re-ship the file.
+      includeActiveFile = false
     } catch {
       // ignore
     }
@@ -165,6 +242,9 @@ export function createAiChatStore(
   function newConversation(): void {
     currentId = null
     delete conversations['__new__']
+    // Fresh conversation → default to attaching the editor file with
+    // the first message.
+    includeActiveFile = true
   }
 
   function send(
@@ -186,6 +266,7 @@ export function createAiChatStore(
       role: 'assistant',
       content: '',
       streaming: true,
+      blocks: [],
     })
     conv.streaming = true
 
@@ -198,6 +279,7 @@ export function createAiChatStore(
       kind: m.kind,
       label: m.label,
     }))
+    const wasIncludingActiveFile = includeActiveFile
     try {
       m.sendNotification(AiChatStart, HOST_EXTENSION, {
         conversationId,
@@ -205,7 +287,13 @@ export function createAiChatStore(
         text,
         mentions: mentionsPlain,
         attachments: [],
+        includeActiveFile: wasIncludingActiveFile,
       })
+      // Attaching the active file is one-shot: once this turn's
+      // <editor-context> is in flight, flip the toggle off so the
+      // next turn defaults to "no file" unless the user opts in
+      // again. Matches Cursor / Claude Code "@file" semantics.
+      if (wasIncludingActiveFile) includeActiveFile = false
       // eslint-disable-next-line no-console
       console.log('[ai-chat] dispatched AiChatStart', {
         turnId,
@@ -270,9 +358,16 @@ export function createAiChatStore(
   function onTextDelta(params: { conversationId: string; text: string }): void {
     const conv = conversations[params.conversationId]
     if (!conv) return
-    const last = conv.turns[conv.turns.length - 1]
-    if (!last || last.role !== 'assistant') return
-    last.content += params.text
+    const turn = conv.turns[conv.turns.length - 1]
+    if (!turn || turn.role !== 'assistant') return
+    turn.content += params.text
+    if (!turn.blocks) turn.blocks = []
+    const lastBlock = turn.blocks[turn.blocks.length - 1]
+    if (lastBlock && lastBlock.kind === 'text') {
+      lastBlock.text += params.text
+    } else {
+      turn.blocks.push({ kind: 'text', text: params.text })
+    }
   }
 
   function onDone(params: {
@@ -319,28 +414,35 @@ export function createAiChatStore(
     if (!convId) return
     const conv = conversations[convId] ?? conversations['__new__']
     if (!conv) return
-    const last = conv.turns[conv.turns.length - 1]
-    if (!last || last.role !== 'assistant') return
-    if (!last.toolCalls) last.toolCalls = []
-    const existing = last.toolCalls.find((tc) => tc.callId === params.callId)
-    if (existing) {
-      existing.status = params.status
-      if (params.result !== undefined) existing.result = params.result
-      if (params.errorMessage !== undefined)
-        existing.error = params.errorMessage
-      // Refresh name/args if the status update has better data.
-      if (params.name) existing.name = params.name
-      if (params.argsJson) existing.argsJson = params.argsJson
-    } else {
-      last.toolCalls.push({
+    const turn = conv.turns[conv.turns.length - 1]
+    if (!turn || turn.role !== 'assistant') return
+    if (!turn.blocks) turn.blocks = []
+    // Merge a status update into an existing tool-call block; otherwise
+    // append a new block in chronological position so the row sits where
+    // the model actually invoked the tool.
+    const existing = turn.blocks.find(
+      (b) => b.kind === 'tool-call' && b.call.callId === params.callId
+    )
+    if (existing && existing.kind === 'tool-call') {
+      const c = existing.call
+      c.status = params.status
+      if (params.result !== undefined) c.result = params.result
+      if (params.errorMessage !== undefined) c.error = params.errorMessage
+      if (params.name) c.name = params.name
+      if (params.argsJson) c.argsJson = params.argsJson
+      return
+    }
+    turn.blocks.push({
+      kind: 'tool-call',
+      call: {
         callId: params.callId,
         name: params.name,
         argsJson: params.argsJson,
         status: params.status,
         result: params.result,
         error: params.errorMessage,
-      })
-    }
+      },
+    })
   }
 
   function approveTool(
@@ -359,6 +461,31 @@ export function createAiChatStore(
     m?.sendNotification(AiFileOpenDiff, HOST_EXTENSION, { callId })
   }
 
+  function openFile(callId: string): void {
+    const m = getMessenger()
+    m?.sendNotification(AiFileOpen, HOST_EXTENSION, { callId })
+  }
+
+  /** First tool call in the current conversation that's awaiting user
+   *  approval, or null if none. The bottom action bar reads this so
+   *  it can surface Accept/Reject buttons in place of the spinner. */
+  function getPendingApproval(): RenderedToolCall | null {
+    const conv = getConversation()
+    if (!conv) return null
+    for (const turn of conv.turns) {
+      if (turn.role !== 'assistant' || !turn.blocks) continue
+      for (const block of turn.blocks) {
+        if (
+          block.kind === 'tool-call' &&
+          block.call.status === 'pending-approval'
+        ) {
+          return block.call
+        }
+      }
+    }
+    return null
+  }
+
   function onUsageUpdate(params: {
     used: number
     limit: number
@@ -371,6 +498,23 @@ export function createAiChatStore(
 
   function onAuthStatus(params: { signedIn: boolean }): void {
     signedIn = params.signedIn
+  }
+
+  function onActiveFile(params: {
+    uri: string | null
+    name: string | null
+    path: string | null
+    inWorkspace: boolean
+  }): void {
+    activeFile = {
+      name: params.name,
+      path: params.path,
+      inWorkspace: params.inWorkspace,
+    }
+  }
+
+  function toggleIncludeActiveFile(): void {
+    includeActiveFile = !includeActiveFile
   }
 
   function usageSubscribe(): void {
@@ -429,6 +573,13 @@ export function createAiChatStore(
     get signedIn() {
       return signedIn
     },
+    get activeFile() {
+      return activeFile
+    },
+    get includeActiveFile() {
+      return includeActiveFile
+    },
+    toggleIncludeActiveFile,
     // Actions.
     refreshHistory,
     loadConversation,
@@ -443,6 +594,10 @@ export function createAiChatStore(
     searchMentions,
     approveTool,
     openFileDiff,
+    openFile,
+    get pendingApproval() {
+      return getPendingApproval()
+    },
     // Event handlers — wired into the messenger from the top-level panel.
     onStarted,
     onTextDelta,
@@ -451,6 +606,7 @@ export function createAiChatStore(
     onToolCall,
     onUsageUpdate,
     onAuthStatus,
+    onActiveFile,
   }
 }
 
@@ -462,6 +618,9 @@ export type AiChatStore = {
   readonly dailyLimit: number
   readonly blockOnOverage: boolean
   readonly signedIn: boolean
+  readonly activeFile: ActiveFileInfo
+  readonly includeActiveFile: boolean
+  toggleIncludeActiveFile: () => void
   refreshHistory: () => Promise<void>
   loadConversation: (id: string) => Promise<void>
   deleteConversation: (id: string) => Promise<void>
@@ -478,6 +637,8 @@ export type AiChatStore = {
     decision: 'allow' | 'deny' | 'alwaysAllow'
   ) => void
   openFileDiff: (callId: string) => void
+  openFile: (callId: string) => void
+  readonly pendingApproval: RenderedToolCall | null
   onStarted: (params: { conversationId: string; model: string }) => void
   onTextDelta: (params: { conversationId: string; text: string }) => void
   onDone: (params: { conversationId: string; finishReason: string }) => void
@@ -501,6 +662,12 @@ export type AiChatStore = {
     blockOnOverage: boolean
   }) => void
   onAuthStatus: (params: { signedIn: boolean }) => void
+  onActiveFile: (params: {
+    uri: string | null
+    name: string | null
+    path: string | null
+    inWorkspace: boolean
+  }) => void
 }
 
 // Satisfy the TypeScript import of the standard-library shape we

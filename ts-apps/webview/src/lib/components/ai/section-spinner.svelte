@@ -15,30 +15,6 @@
   aria-label="Loading"
 >
   <svg width={size} height={size} viewBox="0 0 72 72" overflow="visible">
-    <style>
-      @keyframes spotlight-run {
-        0% {
-          stroke-dashoffset: 0;
-        }
-        100% {
-          stroke-dashoffset: -500;
-        }
-      }
-      @keyframes shimmer-sweep {
-        0% {
-          stop-opacity: 0;
-        }
-        40% {
-          stop-opacity: 0.35;
-        }
-        60% {
-          stop-opacity: 0.35;
-        }
-        100% {
-          stop-opacity: 0;
-        }
-      }
-    </style>
     <defs>
       <linearGradient
         id="{id}-grad"
@@ -99,6 +75,34 @@
 </span>
 
 <style>
+  /* Keyframes live at the global scope (via the -global- prefix Svelte
+     respects). Without this, Svelte 5 rewrites the keyframe name when
+     scoping the stylesheet but leaves the `animation: spotlight-run`
+     reference below unscoped if it doesn't see a same-block match —
+     leading to a dead animation on .hl even though the class binds. */
+  @keyframes -global-section-spotlight-run {
+    0% {
+      stroke-dashoffset: 0;
+    }
+    100% {
+      stroke-dashoffset: -500;
+    }
+  }
+  @keyframes -global-section-shimmer-sweep {
+    0% {
+      stop-opacity: 0;
+    }
+    40% {
+      stop-opacity: 0.35;
+    }
+    60% {
+      stop-opacity: 0.35;
+    }
+    100% {
+      stop-opacity: 0;
+    }
+  }
+
   .wrap {
     display: inline-flex;
     align-items: center;
@@ -123,18 +127,18 @@
     stroke-dasharray: 80 420;
     stroke-linecap: round;
     stroke-linejoin: round;
-    animation: spotlight-run 2.5s linear infinite;
+    animation: section-spotlight-run 2.5s linear infinite;
   }
   .fill {
     stroke: none;
   }
   .shimmer-1 {
-    animation: shimmer-sweep 2.5s ease-in-out infinite;
+    animation: section-shimmer-sweep 2.5s ease-in-out infinite;
   }
   .shimmer-2 {
-    animation: shimmer-sweep 2.5s ease-in-out 0.4s infinite;
+    animation: section-shimmer-sweep 2.5s ease-in-out 0.4s infinite;
   }
   .shimmer-3 {
-    animation: shimmer-sweep 2.5s ease-in-out 0.8s infinite;
+    animation: section-shimmer-sweep 2.5s ease-in-out 0.8s infinite;
   }
 </style>

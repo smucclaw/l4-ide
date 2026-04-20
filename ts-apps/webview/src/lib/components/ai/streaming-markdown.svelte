@@ -55,12 +55,23 @@
   const committedHtml = $derived(
     (marked.parse(committed, { renderer, async: false }) as string) || ''
   )
+
+  // Match the in-flight block's geometry to whatever element marked
+  // will produce once this slice commits, so the content doesn't
+  // visibly settle a few pixels when the cut advances. Only a handful
+  // of block kinds are worth detecting here; everything else renders
+  // as a paragraph by default.
+  const trailingKind = $derived<'code' | 'paragraph'>(
+    /^\s*```/.test(trailing) ? 'code' : 'paragraph'
+  )
 </script>
 
 <div class="streaming-md">
   {@html committedHtml}
   {#if trailing}
-    <div class="in-flight">{trailing}<span class="cursor">▋</span></div>
+    <div class="in-flight in-flight-{trailingKind}">
+      {trailing}<span class="cursor">▋</span>
+    </div>
   {/if}
 </div>
 
@@ -97,11 +108,11 @@
     color: var(--l4-tok-identifier, #4ec9b0);
   }
   .streaming-md :global(p) {
-    margin: 4px 0 10px;
+    margin: 8px 0 10px;
   }
   .streaming-md :global(ul),
   .streaming-md :global(ol) {
-    margin: 4px 0 10px;
+    margin: 8px 0 10px;
     padding-left: 20px;
   }
   .streaming-md :global(li) {
@@ -116,7 +127,7 @@
   }
   .streaming-md :global(table) {
     border-collapse: collapse;
-    margin: 6px 0 10px;
+    margin: 8px 0 10px;
   }
   .streaming-md :global(th),
   .streaming-md :global(td) {
@@ -124,17 +135,30 @@
     padding: 4px 8px;
   }
 
-  /* In-flight block: plain foreground text on the normal background
-     with no special margin. Uses a <div> (not <pre>) so it doesn't
-     pick up the pre border above. */
+  /* In-flight block: mirrors the paragraph or pre geometry that marked
+     will emit once the cut advances, so committing doesn't shift the
+     content downward by the margin/padding delta. */
   .in-flight {
     white-space: pre-wrap;
     word-break: break-word;
-    font-family: inherit;
     color: inherit;
+  }
+  .in-flight-paragraph {
+    font-family: inherit;
     background: transparent;
     padding: 0;
-    margin: 0;
+    margin: 8px 0 10px;
+  }
+  .in-flight-code {
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 12px;
+    line-height: 1.45;
+    background: var(--vscode-editor-background);
+    border: 1px solid var(--vscode-panel-border, #444);
+    border-radius: 4px;
+    padding: 8px 10px;
+    margin: 8px 0;
+    overflow-x: auto;
   }
 
   .cursor {

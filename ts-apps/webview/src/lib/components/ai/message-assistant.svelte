@@ -2,61 +2,55 @@
   import StreamingMarkdown from './streaming-markdown.svelte'
   import ErrorBubble from './error-bubble.svelte'
   import CopyButton from './copy-button.svelte'
-  import SectionSpinner from './section-spinner.svelte'
   import ToolCallRow from './tool-call-row.svelte'
-  import type { RenderedToolCall } from '$lib/stores/ai-chat.svelte'
+  import type { AssistantBlock } from '$lib/stores/ai-chat.svelte'
 
   let {
     content,
     streaming,
     error,
-    toolCalls,
+    blocks,
     onRetry,
     onSignIn,
-    onApproveTool,
+    onOpenFile,
     onOpenFileDiff,
   }: {
     content: string
     streaming: boolean
     error?: { message: string; code?: string }
-    toolCalls?: RenderedToolCall[]
+    blocks?: AssistantBlock[]
     onRetry?: () => void
     onSignIn?: () => void
-    onApproveTool: (
-      callId: string,
-      decision: 'allow' | 'deny' | 'alwaysAllow'
-    ) => void
+    onOpenFile: (callId: string) => void
     onOpenFileDiff: (callId: string) => void
   } = $props()
 
-  // Spinner only while we're pre-first-token with no tool activity.
-  // Once either text or a tool row lands, swap to the real content.
-  const showSpinner = $derived(
-    streaming && !content && !error && (!toolCalls || toolCalls.length === 0)
-  )
+  // Stable keys for the block iteration. Text blocks don't carry an
+  // id, so we use the index; tool-call blocks key by callId.
+  function blockKey(b: AssistantBlock, i: number): string {
+    return b.kind === 'tool-call' ? `tc:${b.call.callId}` : `tx:${i}`
+  }
 </script>
 
 <div class="assistant-row">
   <div class="assistant-bubble">
-    {#if showSpinner}
-      <div class="waiting">
-        <SectionSpinner size={52} />
-      </div>
-    {:else}
-      {#if content}
-        <StreamingMarkdown text={content} {streaming} />
-      {/if}
-      {#if toolCalls && toolCalls.length > 0}
-        <div class="tool-calls">
-          {#each toolCalls as call (call.callId)}
-            <ToolCallRow
-              {call}
-              onApprove={onApproveTool}
-              onOpenDiff={onOpenFileDiff}
-            />
-          {/each}
-        </div>
-      {/if}
+    {#if blocks && blocks.length > 0}
+      {#each blocks as block, i (blockKey(block, i))}
+        {#if block.kind === 'text'}
+          <StreamingMarkdown
+            text={block.text}
+            streaming={streaming && i === blocks.length - 1}
+          />
+        {:else}
+          <ToolCallRow
+            call={block.call}
+            {onOpenFile}
+            onOpenDiff={onOpenFileDiff}
+          />
+        {/if}
+      {/each}
+    {:else if content}
+      <StreamingMarkdown text={content} {streaming} />
     {/if}
     {#if !streaming && content}
       <div class="assistant-copy">
@@ -90,16 +84,5 @@
     position: absolute;
     top: -4px;
     right: 0;
-  }
-  .waiting {
-    display: flex;
-    align-items: center;
-    padding: 6px 0 8px;
-  }
-  .tool-calls {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 4px 0 2px;
   }
 </style>

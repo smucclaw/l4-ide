@@ -12,6 +12,8 @@ import { buildEditorContextMessage } from './editor-context.js'
 import { buildWorkspaceBootstrapMessage } from './workspace-bootstrap.js'
 import { BUILTIN_TOOLS } from './tool-registry.js'
 import type { ToolDispatcher } from './tool-dispatcher.js'
+import { categoryForTool, getPermission } from './permissions.js'
+import type { McpToolClient } from './mcp-client.js'
 
 /**
  * Events the chat service emits while running a turn. The sidebar
@@ -53,6 +55,21 @@ export type ChatServiceEvent =
 
 export type ChatServiceEmitter = (event: ChatServiceEvent) => void
 
+/** Chronological record of what happened inside an assistant turn, saved
+ *  as `_meta.blocks` on the assistant message so the webview can
+ *  reconstruct the original text + tool-call row layout on reload. */
+export type PersistedBlock =
+  | { kind: 'text'; text: string }
+  | {
+      kind: 'tool-call'
+      callId: string
+      name: string
+      argsJson: string
+      status: 'running' | 'done' | 'error'
+      result?: string
+      error?: string
+    }
+
 export interface ChatServiceOptions {
   auth: AuthManager
   client: VSCodeL4LanguageClient
@@ -60,6 +77,7 @@ export interface ChatServiceOptions {
   proxy: AiProxyClient
   logger: AiLogger
   dispatcher: ToolDispatcher
+  mcp: McpToolClient
 }
 
 /**
@@ -103,9 +121,11 @@ export class ChatService {
 
     // Outer loop state: tracks the server conversation id once metadata
     // arrives, the running total of assistant text emitted this turn,
-    // and whether we've already emitted a `done` for the UI.
+    // and the chronological block list (for persistence + replay on
+    // reload).
     let serverConversationId: string | undefined = params.conversationId
     let totalAssistantText = ''
+    const turnBlocks: PersistedBlock[] = []
 
     // Initial POST body: editor/workspace context + the new user turn.
     let nextMessages = await this.assembleMessages(params, isNew).catch(
@@ -147,6 +167,7 @@ export class ChatService {
             isNew,
             userText: params.text,
             abortSignal: abortController.signal,
+            blocks: turnBlocks,
             onMetadata: (md) => {
               serverConversationId = md.conversationId
             },
@@ -159,7 +180,10 @@ export class ChatService {
             await this.persistAssistantTurn(
               serverConversationId,
               totalAssistantText,
-              finishReason === 'aborted' ? { aborted: true } : undefined
+              {
+                blocks: turnBlocks,
+                ...(finishReason === 'aborted' ? { aborted: true } : {}),
+              }
             )
           }
           this.emit({
@@ -204,12 +228,42 @@ export class ChatService {
                 error: (result as { error: string }).error,
                 code: (result as { code?: string }).code,
               })
+          // Update the persisted block with the final outcome so the
+          // replayed row shows the right status after reload.
+          const block = turnBlocks.find(
+            (b) => b.kind === 'tool-call' && b.callId === call.callId
+          )
+          if (block && block.kind === 'tool-call') {
+            block.status = result.ok ? 'done' : 'error'
+            if (result.ok) block.result = result.output
+            else block.error = (result as { error: string }).error
+          }
           toolMessages.push({
             role: 'tool',
             content,
             tool_call_id: call.callId,
             name: call.name,
           })
+        }
+
+        // If the user hit Stop (or sent a new message) while we were
+        // awaiting approval, the abort signal is now set and the
+        // approvals were auto-denied. Don't start another proxy
+        // round-trip — finalize as aborted.
+        if (abortController.signal.aborted) {
+          if (serverConversationId) {
+            await this.persistAssistantTurn(
+              serverConversationId,
+              totalAssistantText,
+              { aborted: true, blocks: turnBlocks }
+            )
+          }
+          this.emit({
+            kind: 'done',
+            conversationId: serverConversationId ?? turnId,
+            finishReason: 'aborted',
+          })
+          break
         }
 
         // Next iteration sends only the tool results; the proxy's
@@ -222,7 +276,7 @@ export class ChatService {
           await this.persistAssistantTurn(
             serverConversationId,
             totalAssistantText,
-            { aborted: true }
+            { aborted: true, blocks: turnBlocks }
           )
         }
         this.emit({
@@ -268,6 +322,9 @@ export class ChatService {
     isNew: boolean
     userText: string
     abortSignal: AbortSignal
+    /** Chronological record the outer loop persists as `_meta.blocks`
+     *  so the webview can rebuild rows on reload. Mutated in place. */
+    blocks: PersistedBlock[]
     onMetadata: (md: { conversationId: string; model: string }) => void
   }): Promise<{
     finishReason: string
@@ -280,6 +337,7 @@ export class ChatService {
       messages,
       conversationId,
       abortSignal,
+      blocks,
       onMetadata,
     } = opts
     const pendingCalls: Array<{
@@ -291,13 +349,25 @@ export class ChatService {
     let finishReason = 'stop'
     let local: string | undefined = conversationId
 
+    // Merge the current MCP server's deployed rules into the tool list
+    // alongside our built-in fs/lsp/l4/meta tools. The MCP list is
+    // cached in-process for a few seconds so multi-iteration turns
+    // don't hit the local proxy every round.
+    const mcpTools = await this.opts.mcp.listTools().catch((err) => {
+      this.opts.logger.warn(
+        `chat-service: mcp tools/list failed: ${err instanceof Error ? err.message : String(err)}`
+      )
+      return []
+    })
+    const tools = [...BUILTIN_TOOLS, ...mcpTools]
+
     for await (const ev of this.opts.proxy.stream(
       {
         messages,
         conversationId,
         // Client-declared tools every request; harmless when the model
         // doesn't call any.
-        tools: BUILTIN_TOOLS,
+        tools,
         stream: true,
       },
       abortSignal
@@ -330,6 +400,9 @@ export class ChatService {
         }
       } else if (ev.kind === 'text-delta') {
         assistantText += ev.text
+        const tail = blocks[blocks.length - 1]
+        if (tail && tail.kind === 'text') tail.text += ev.text
+        else blocks.push({ kind: 'text', text: ev.text })
         this.emit({
           kind: 'text-delta',
           conversationId: local ?? turnId,
@@ -349,16 +422,29 @@ export class ChatService {
           name: ev.name,
           argsJson: ev.argsJson,
         })
-        // Surface the call to the UI as "running" (actual permission
-        // + execution happens in the dispatcher below). The webview
-        // shows the tool row immediately for responsive feel.
+        // Pre-compute the initial status based on the user's permission
+        // setting so the tool row renders in its real state from the
+        // first frame (no merge race between the initial emit and the
+        // dispatcher's later notifyStatus). `ask` → pending-approval so
+        // the bottom Accept/Reject bar shows immediately.
+        const category = categoryForTool(ev.name)
+        const permission = category ? getPermission(category) : null
+        const initialStatus: 'pending-approval' | 'running' =
+          permission === 'ask' ? 'pending-approval' : 'running'
+        blocks.push({
+          kind: 'tool-call',
+          callId: ev.callId,
+          name: ev.name,
+          argsJson: ev.argsJson,
+          status: 'running',
+        })
         this.emit({
           kind: 'tool-call',
           conversationId: local ?? turnId,
           callId: ev.callId,
           name: ev.name,
           argsJson: ev.argsJson,
-          status: 'running',
+          status: initialStatus,
         })
       } else if (ev.kind === 'done') {
         finishReason = ev.finishReason
@@ -398,8 +484,13 @@ export class ChatService {
   ): Promise<AiChatMessage[]> {
     const messages: AiChatMessage[] = []
 
-    const editorCtx = buildEditorContextMessage()
-    if (editorCtx) messages.push(editorCtx)
+    // `includeActiveFile !== false` honors the default (send it) and
+    // an explicit `true`; only `false` suppresses. The chat-input UI
+    // exposes a per-send toggle for this.
+    if (params.includeActiveFile !== false) {
+      const editorCtx = buildEditorContextMessage()
+      if (editorCtx) messages.push(editorCtx)
+    }
 
     if (isNew) {
       const bootstrap = await buildWorkspaceBootstrapMessage(this.opts.client)

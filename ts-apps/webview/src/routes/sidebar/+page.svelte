@@ -1138,7 +1138,7 @@
         {:else if activeFileName}
           No exported rules in {activeFileName}
         {:else}
-          No file open
+          No L4 file open
         {/if}
       </span>
     </div>

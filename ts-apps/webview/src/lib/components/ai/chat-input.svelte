@@ -282,6 +282,50 @@
       </button>
     </div>
     <div class="right-actions">
+      {#if store.activeFile.name}
+        <button
+          type="button"
+          class="active-file-btn"
+          class:excluded={!store.includeActiveFile}
+          onclick={() => store.toggleIncludeActiveFile()}
+          title={store.includeActiveFile
+            ? `Including "${store.activeFile.path ?? store.activeFile.name}" in this turn's context. Click to exclude.`
+            : `"${store.activeFile.path ?? store.activeFile.name}" is excluded from this turn's context. Click to include.`}
+        >
+          {#if store.includeActiveFile}
+            <!-- Document glyph: the file IS attached. -->
+            <svg
+              class="active-file-icon"
+              viewBox="0 0 16 16"
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.4"
+              stroke-linejoin="round"
+            >
+              <path d="M4 2h5l3 3v9H4z" />
+              <path d="M9 2v3h3" />
+            </svg>
+          {:else}
+            <!-- Eye-with-slash: the file is invisible to the model. -->
+            <svg
+              class="active-file-icon"
+              viewBox="0 0 16 16"
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.4"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M2 8s2.2-3.5 6-3.5S14 8 14 8s-2.2 3.5-6 3.5S2 8 2 8z" />
+              <circle cx="8" cy="8" r="1.5" />
+              <path d="M3 13L13 3" />
+            </svg>
+          {/if}
+          <span class="active-file-label">{store.activeFile.name}</span>
+        </button>
+      {/if}
       <button
         class="icon-btn muted"
         title="Attach files (coming soon)"
@@ -414,6 +458,42 @@
   .icon-btn.muted:disabled {
     opacity: 0.35;
     cursor: not-allowed;
+  }
+  /* Active-file chip: intentionally flat (no border, no background).
+     Slightly muted label color so it reads as secondary, not a primary
+     CTA. The icon flips between a document glyph (included) and an
+     eye-with-slash (excluded) to signal whether the file ships with
+     the next turn. */
+  .active-file-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: transparent;
+    border: none;
+    padding: 2px 6px 2px 4px;
+    height: 24px;
+    cursor: pointer;
+    color: var(--vscode-descriptionForeground);
+    font-family: var(--vscode-font-family, inherit);
+    font-size: 12px;
+    max-width: 180px;
+  }
+  .active-file-btn:hover {
+    color: var(--vscode-foreground);
+  }
+  .active-file-btn.excluded {
+    opacity: 0.65;
+  }
+  .active-file-icon {
+    width: 13px;
+    height: 13px;
+    flex-shrink: 0;
+    display: block;
+  }
+  .active-file-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .submit-btn {
     display: inline-flex;

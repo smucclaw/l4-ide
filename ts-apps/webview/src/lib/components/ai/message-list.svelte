@@ -2,22 +2,36 @@
   import { tick } from 'svelte'
   import UserMessage from './message-user.svelte'
   import AssistantMessage from './message-assistant.svelte'
-  import type { RenderedTurn } from '$lib/stores/ai-chat.svelte'
+  import SectionSpinner from './section-spinner.svelte'
+  import type {
+    RenderedTurn,
+    RenderedToolCall,
+  } from '$lib/stores/ai-chat.svelte'
 
   let {
     turns,
+    streaming,
+    pendingApproval,
     onRetry,
     onSignIn,
     onApproveTool,
+    onOpenFile,
     onOpenFileDiff,
   }: {
     turns: RenderedTurn[]
+    /** True while the current conversation has an open stream. Drives
+     *  the bottom-of-chat § spinner. */
+    streaming: boolean
+    /** First tool call awaiting approval, if any. When present, the
+     *  bottom action bar replaces the spinner with Accept / Reject. */
+    pendingApproval: RenderedToolCall | null
     onRetry?: () => void
     onSignIn?: () => void
     onApproveTool: (
       callId: string,
       decision: 'allow' | 'deny' | 'alwaysAllow'
     ) => void
+    onOpenFile: (callId: string) => void
     onOpenFileDiff: (callId: string) => void
   } = $props()
 
@@ -68,10 +82,10 @@
         content={turn.content}
         streaming={!!turn.streaming}
         error={turn.error}
-        toolCalls={turn.toolCalls}
+        blocks={turn.blocks}
         {onRetry}
         {onSignIn}
-        {onApproveTool}
+        {onOpenFile}
         {onOpenFileDiff}
       />
     {/if}
@@ -80,6 +94,39 @@
     <button class="jump-btn" onclick={jumpToLatest} title="Jump to latest">
       ↓ Latest
     </button>
+  {/if}
+
+  <!-- Bottom-of-chat status. Shows Accept/Reject for any pending
+       tool-call approval; otherwise the § spinner while the stream
+       is live; otherwise nothing. -->
+  {#if pendingApproval}
+    <div class="bottom-approve" role="group" aria-label="Approve tool call">
+      <div class="bottom-approve-label">
+        Allow <strong>{pendingApproval.name}</strong>?
+      </div>
+      <div class="bottom-approve-btns">
+        <button
+          class="approve-btn allow"
+          onclick={() => onApproveTool(pendingApproval!.callId, 'allow')}
+          >Accept</button
+        >
+        <button
+          class="approve-btn always"
+          title="Always allow this category of tool"
+          onclick={() => onApproveTool(pendingApproval!.callId, 'alwaysAllow')}
+          >Always accept</button
+        >
+        <button
+          class="approve-btn deny"
+          onclick={() => onApproveTool(pendingApproval!.callId, 'deny')}
+          >Reject</button
+        >
+      </div>
+    </div>
+  {:else if streaming}
+    <div class="bottom-spinner">
+      <SectionSpinner size={42} />
+    </div>
   {/if}
 </div>
 
@@ -107,5 +154,53 @@
     font-size: 11px;
     cursor: pointer;
     margin-top: 8px;
+  }
+  .bottom-spinner {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 4px 0 16px;
+  }
+  .bottom-approve {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 0 16px;
+  }
+  .bottom-approve-label {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    text-align: center;
+  }
+  .bottom-approve-label strong {
+    color: var(--vscode-foreground);
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-weight: normal;
+  }
+  .bottom-approve-btns {
+    display: flex;
+    gap: 6px;
+  }
+  .approve-btn {
+    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
+    background: transparent;
+    color: var(--vscode-foreground);
+    padding: 3px 14px;
+    font-size: 12px;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+  .approve-btn:hover {
+    border-color: var(--vscode-foreground);
+  }
+  .approve-btn.allow {
+    background: #c8376a;
+    border-color: transparent;
+    color: #fff;
+  }
+  .approve-btn.allow:hover {
+    background: #d94d7e;
+    border-color: transparent;
   }
 </style>

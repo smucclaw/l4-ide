@@ -3,6 +3,7 @@
   import type { Messenger } from 'vscode-messenger-webview'
   import { HOST_EXTENSION } from 'vscode-messenger-common'
   import {
+    AiActiveFile,
     AiAuthStatus,
     AiChatDone,
     AiChatError,
@@ -53,6 +54,7 @@
     m.onNotification(AiChatToolCall, (p) => store.onToolCall(p))
     m.onNotification(AiUsageUpdate, (p) => store.onUsageUpdate(p))
     m.onNotification(AiAuthStatus, (p) => store.onAuthStatus(p))
+    m.onNotification(AiActiveFile, (p) => store.onActiveFile(p))
   }
 
   // Attach handlers as soon as the messenger prop is non-null. An
@@ -141,7 +143,6 @@
       <p class="cta-text">
         Sign in to Legalese Cloud to start composing rules with AI.
       </p>
-      <button class="cta-button" onclick={signIn}>Sign in</button>
     </div>
   {:else}
     {#if showEmptyState}
@@ -149,10 +150,13 @@
     {:else if showChat && store.current}
       <MessageList
         turns={store.current.turns}
+        streaming={store.current.streaming}
+        pendingApproval={store.pendingApproval}
         {onRetry}
         onSignIn={signIn}
         onApproveTool={(callId, decision) =>
           store.approveTool(callId, decision)}
+        onOpenFile={(callId) => store.openFile(callId)}
         onOpenFileDiff={(callId) => store.openFileDiff(callId)}
       />
     {/if}
@@ -204,19 +208,5 @@
     font-size: 13px;
     max-width: 280px;
     line-height: 1.4;
-  }
-
-  .cta-button {
-    background: var(--vscode-button-background);
-    color: var(--vscode-button-foreground);
-    border: none;
-    padding: 6px 14px;
-    border-radius: 2px;
-    cursor: pointer;
-    font-size: 13px;
-  }
-
-  .cta-button:hover {
-    background: var(--vscode-button-hoverBackground);
   }
 </style>

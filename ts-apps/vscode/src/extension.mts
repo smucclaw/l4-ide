@@ -45,8 +45,10 @@ import { AiLogger } from './ai/logger.js'
 import { AiProxyClient } from './ai/ai-proxy-client.js'
 import { ConversationStore } from './ai/conversation-store.js'
 import { ChatService } from './ai/chat-service.js'
-import { ToolDispatcher, previewProposedContent } from './ai/tool-dispatcher.js'
+import { ToolDispatcher } from './ai/tool-dispatcher.js'
 import { registerAiChatHandlers } from './ai/register.js'
+import { recordDirectiveResults } from './ai/tools/l4-evaluate.js'
+import { McpToolClient } from './ai/mcp-client.js'
 
 /***********************************************
      decode for RenderAsLadderInfo
@@ -516,12 +518,17 @@ export async function activate(context: ExtensionContext) {
   const toolStatusChannel: {
     emit: (
       callId: string,
-      status: 'running' | 'done' | 'error',
+      status: 'pending-approval' | 'running' | 'done' | 'error',
       detail?: { result?: string; error?: string }
     ) => void
   } = {
     emit: () => undefined,
   }
+  const aiMcpClient = new McpToolClient(mcpProxy, aiLogger)
+  // Bust the MCP tool cache when the connection state flips: a newly
+  // connected jl4-service might expose a different set of deployed
+  // rules than we had cached from the disconnected fallback path.
+  context.subscriptions.push(auth.onDidChange(() => aiMcpClient.invalidate()))
   const dispatcher = new ToolDispatcher({
     logger: aiLogger,
     requestApproval: async (call) =>
@@ -530,16 +537,7 @@ export async function activate(context: ExtensionContext) {
       }),
     notifyStatus: (callId, status, detail) =>
       toolStatusChannel.emit(callId, status, detail),
-    getProposedDiff: async (call) => {
-      try {
-        return await previewProposedContent(
-          call.name,
-          JSON.parse(call.argsJson)
-        )
-      } catch {
-        return null
-      }
-    },
+    mcp: aiMcpClient,
   })
   const chatService = new ChatService({
     auth,
@@ -548,6 +546,7 @@ export async function activate(context: ExtensionContext) {
     proxy: aiProxy,
     logger: aiLogger,
     dispatcher,
+    mcp: aiMcpClient,
   })
   context.subscriptions.push(
     registerAiChatHandlers({
@@ -559,6 +558,7 @@ export async function activate(context: ExtensionContext) {
       logger: aiLogger,
       approvalPending,
       toolStatusChannel,
+      dispatcher,
     })
   )
 
@@ -642,6 +642,10 @@ export async function activate(context: ExtensionContext) {
           lineContent: string
         }>
       }) => {
+        // Mirror the results into the AI tool's cache so a later
+        // l4__evaluate call can surface them without a second compile.
+        recordDirectiveResults(params.uri, params.results)
+
         // Refresh sidebar — the LSP just finished compiling this file,
         // so exported functions may have changed
         const editor = vscode.window.activeTextEditor

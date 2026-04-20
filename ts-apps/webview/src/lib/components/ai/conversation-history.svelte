@@ -138,6 +138,7 @@
     display: flex;
     align-items: stretch;
     padding: 0 4px;
+    margin-bottom: 1px;
   }
   .history-row.active .row-main {
     background: var(

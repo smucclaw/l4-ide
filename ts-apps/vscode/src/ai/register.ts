@@ -2,6 +2,7 @@ import * as vscode from 'vscode'
 import type { Messenger } from 'vscode-messenger'
 import type { WebviewTypeMessageParticipant } from 'vscode-messenger-common'
 import {
+  AiActiveFile,
   AiAuthStatus,
   AiChatAbort,
   AiChatApproveTool,
@@ -15,6 +16,7 @@ import {
   AiConversationList,
   AiConversationLoad,
   AiConversationNew,
+  AiFileOpen,
   AiFileOpenDiff,
   AiMentionSearch,
   AiUsageSubscribe,
@@ -22,12 +24,14 @@ import {
   AiUsageUpdate,
   type AiMentionCandidate,
 } from 'jl4-client-rpc'
+import * as nodePath from 'path'
 import type { AuthManager } from '../auth.js'
 import type { ChatService, ChatServiceEvent } from './chat-service.js'
 import type { ConversationStore } from './conversation-store.js'
 import type { AiLogger } from './logger.js'
 import { categoryForTool, setPermission } from './permissions.js'
-import { previewProposedContent } from './tools/fs.js'
+import { resolveFileUri } from './tools/fs.js'
+import type { ToolDispatcher } from './tool-dispatcher.js'
 
 /**
  * Wire every AI-chat RPC into the sidebar messenger. Called after
@@ -51,10 +55,12 @@ export function registerAiChatHandlers(deps: {
   toolStatusChannel: {
     emit: (
       callId: string,
-      status: 'running' | 'done' | 'error',
+      status: 'pending-approval' | 'running' | 'done' | 'error',
       detail?: { result?: string; error?: string }
     ) => void
   }
+  /** Used to recover pre-edit snapshots for the applied-diff viewer. */
+  dispatcher: ToolDispatcher
 }): vscode.Disposable {
   const {
     messenger,
@@ -65,6 +71,7 @@ export function registerAiChatHandlers(deps: {
     logger,
     approvalPending,
     toolStatusChannel,
+    dispatcher,
   } = deps
   logger.info(
     'registerAiChatHandlers: installing handlers on sidebar messenger'
@@ -146,6 +153,20 @@ export function registerAiChatHandlers(deps: {
     })
   }
 
+  /** Drain every outstanding approval resolver as `deny`. Called on
+   *  stop/new-message: the user's implicit "no" to any tool request
+   *  still on screen. Safe to call when the map is empty. */
+  const denyAllPendingApprovals = (reason: string): void => {
+    if (approvalPending.size === 0) return
+    logger.info(
+      `denying ${approvalPending.size} pending approval(s) (${reason})`
+    )
+    for (const [callId, resolver] of approvalPending) {
+      resolver('deny')
+      approvalPending.delete(callId)
+    }
+  }
+
   // ── Webview → extension handlers.
   // NB: sync handler — vscode-messenger calls the handler and forgets
   // about the return value, so there's no benefit to `async` here, and
@@ -159,6 +180,9 @@ export function registerAiChatHandlers(deps: {
     } catch (logErr) {
       logger.error('chat/start log-line failed', logErr)
     }
+    // Any pending approval from a previous turn is implicitly rejected
+    // when the user starts a new one.
+    denyAllPendingApprovals('new message')
     void service.start(params).catch((err) => {
       logger.error('chat/start failed', err)
     })
@@ -166,6 +190,9 @@ export function registerAiChatHandlers(deps: {
 
   messenger.onNotification(AiChatAbort, ({ turnId }) => {
     logger.info(`chat/abort received (turn=${turnId})`)
+    // Resolve any pending approval as 'deny' so the dispatcher can
+    // unblock and the outer loop can observe the abort signal.
+    denyAllPendingApprovals('abort')
     service.abort(turnId)
   })
 
@@ -198,16 +225,46 @@ export function registerAiChatHandlers(deps: {
     }
   })
 
-  messenger.onNotification(AiFileOpenDiff, async ({ callId }) => {
+  // Plain open — for fs__read_file and fs__create_file. Shows the
+  // current on-disk file in the editor. For a create that hasn't
+  // landed yet the file won't exist; we silently no-op in that case.
+  messenger.onNotification(AiFileOpen, async ({ callId }) => {
     const meta = callArgs.get(callId)
     if (!meta) return
     try {
-      const preview = await previewProposedContent(
-        meta.name,
-        JSON.parse(meta.argsJson)
+      const args = JSON.parse(meta.argsJson) as { path?: string }
+      if (!args.path) return
+      const uri = resolveFileUri(args.path)
+      if (!uri) return
+      await vscode.commands.executeCommand('vscode.open', uri)
+    } catch (err) {
+      logger.warn(
+        `file/open failed: ${err instanceof Error ? err.message : String(err)}`
       )
-      if (!preview) return
-      await openProposalDiff(preview)
+    }
+  })
+
+  // Applied-diff view — for fs__edit_file and (post-run) fs__create_file.
+  // Uses the pre-run snapshot the dispatcher captured so the diff
+  // reflects the actual delta the tool wrote to disk, not a
+  // speculative preview.
+  messenger.onNotification(AiFileOpenDiff, async ({ callId }) => {
+    const snapshot = dispatcher.snapshotFor(callId)
+    if (!snapshot) {
+      // Fallback: no snapshot means the tool didn't run (yet). Just
+      // open the target file if we can resolve it.
+      const meta = callArgs.get(callId)
+      if (!meta) return
+      const uri = dispatcher.resolveFile({
+        callId,
+        name: meta.name,
+        argsJson: meta.argsJson,
+      })
+      if (uri) await vscode.commands.executeCommand('vscode.open', uri)
+      return
+    }
+    try {
+      await openAppliedDiff(snapshot)
     } catch (err) {
       logger.warn(
         `file/openDiff failed: ${err instanceof Error ? err.message : String(err)}`
@@ -273,7 +330,14 @@ export function registerAiChatHandlers(deps: {
   let nonceCounter = 0
   const proposedProvider: vscode.TextDocumentContentProvider = {
     provideTextDocumentContent(uri) {
-      const nonce = uri.path.split('/').pop()
+      // Nonce is the first path segment (see openAppliedDiff below).
+      // An earlier version dropped it at the end of the filename and
+      // then tried to recover it via split('/').pop() — which matches
+      // the entire filename, so the lookup missed and the "before"
+      // side came back empty, making the diff show the whole file as
+      // added.
+      const parts = uri.path.split('/').filter(Boolean)
+      const nonce = parts[0]
       return (nonce && proposedByNonce.get(nonce)) ?? ''
     },
   }
@@ -282,51 +346,26 @@ export function registerAiChatHandlers(deps: {
     proposedProvider
   )
 
-  async function openProposalDiff(preview: {
+  async function openAppliedDiff(snapshot: {
+    callId: string
+    uri: vscode.Uri
     relativePath: string
-    current: string
-    proposed: string
+    before: string
   }): Promise<void> {
-    const nonce = `${++nonceCounter}-${Date.now().toString(36)}`
-    proposedByNonce.set(nonce, preview.proposed)
-    // File extension matters — the diff editor uses it to pick the
-    // language mode for syntax highlighting.
-    const ext = preview.relativePath.split('.').pop() ?? 'txt'
-    const proposedUri = vscode.Uri.parse(
-      `l4-ai-proposed:/${preview.relativePath}.${nonce}.${ext}`
+    // "Before" side: the virtual doc holds the pre-edit snapshot so
+    // VSCode's diff gutter paints red/green against the now-current
+    // on-disk file.
+    const nonce = `${snapshot.callId}-${++nonceCounter}`
+    proposedByNonce.set(nonce, snapshot.before)
+    const beforeUri = vscode.Uri.parse(
+      `l4-ai-proposed:/${nonce}/${snapshot.relativePath}`
     )
-    const currentUri = await resolveCurrentUri(preview.relativePath)
-    // If the current file doesn't exist yet (create flow), synthesize a
-    // second virtual doc for the empty side.
-    const left =
-      currentUri ??
-      (() => {
-        const emptyNonce = `empty-${nonce}`
-        proposedByNonce.set(emptyNonce, '')
-        return vscode.Uri.parse(
-          `l4-ai-proposed:/${preview.relativePath}.${emptyNonce}.${ext}`
-        )
-      })()
     await vscode.commands.executeCommand(
       'vscode.diff',
-      left,
-      proposedUri,
-      `Legalese AI — ${preview.relativePath}`
+      beforeUri,
+      snapshot.uri,
+      `Legalese AI — ${snapshot.relativePath}`
     )
-  }
-
-  async function resolveCurrentUri(
-    relative: string
-  ): Promise<vscode.Uri | null> {
-    const folders = vscode.workspace.workspaceFolders ?? []
-    if (folders.length === 0) return null
-    const candidate = vscode.Uri.joinPath(folders[0]!.uri, relative)
-    try {
-      await vscode.workspace.fs.stat(candidate)
-      return candidate
-    } catch {
-      return null
-    }
   }
 
   // Push auth status whenever the AuthManager fires; the webview uses
@@ -341,10 +380,42 @@ export function registerAiChatHandlers(deps: {
   void auth.getConnectionState().then(pushAuthStatus)
   const authSub = auth.onDidChange((state) => pushAuthStatus(state))
 
+  // Push the currently-active editor file so the chat-input can render
+  // the "include this file" chip. Pushed on every change, plus once at
+  // registration so the chip appears immediately when the AI tab opens.
+  const pushActiveFile = (editor: vscode.TextEditor | undefined): void => {
+    if (!editor) {
+      messenger.sendNotification(AiActiveFile, frontend, {
+        uri: null,
+        name: null,
+        path: null,
+        inWorkspace: false,
+      })
+      return
+    }
+    const uri = editor.document.uri
+    const folder = vscode.workspace.getWorkspaceFolder(uri)
+    const inWorkspace = !!folder
+    const relOrAbs = inWorkspace
+      ? vscode.workspace.asRelativePath(uri, false)
+      : uri.fsPath
+    messenger.sendNotification(AiActiveFile, frontend, {
+      uri: uri.toString(),
+      name: nodePath.basename(uri.fsPath),
+      path: relOrAbs,
+      inWorkspace,
+    })
+  }
+  pushActiveFile(vscode.window.activeTextEditor)
+  const activeFileSub = vscode.window.onDidChangeActiveTextEditor((e) =>
+    pushActiveFile(e)
+  )
+
   return {
     dispose(): void {
       if (usageTimer) clearInterval(usageTimer)
       authSub.dispose()
+      activeFileSub.dispose()
       schemeReg.dispose()
     },
   }

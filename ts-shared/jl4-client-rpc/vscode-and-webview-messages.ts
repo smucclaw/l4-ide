@@ -403,6 +403,10 @@ export interface AiChatStartParams {
   mentions: Array<{ kind: 'file' | 'symbol' | 'selection'; label: string }>
   /** Attachment hints (Phase 3); Phase 1 always empty. */
   attachments: Array<{ kind: 'text' | 'pdf'; path: string }>
+  /** When false, the extension omits the per-turn `<editor-context>`
+   * system message so the active file doesn't leak into context.
+   * Defaults to true if unset. */
+  includeActiveFile?: boolean
 }
 
 export const AiChatStart: NotificationType<AiChatStartParams> = {
@@ -451,14 +455,39 @@ export const AiChatApproveTool: NotificationType<{
   method: 'aiChatApproveTool',
 }
 
-/** Webview → extension: open a VSCode diff editor comparing the
- * current on-disk contents against the proposal staged by an in-flight
- * tool call (fs__create_file / fs__edit_file). Triggered by cmd+click
- * on the filename inside a tool-call row. */
+/** Webview → extension: open the target file of a tool call in a
+ * regular editor tab. Used for `fs__read_file` and `fs__create_file`
+ * when the user cmd+clicks the filename. */
+export const AiFileOpen: NotificationType<{
+  callId: string
+}> = {
+  method: 'aiFileOpen',
+}
+
+/** Webview → extension: open a VSCode diff editor showing the applied
+ * delta of a `fs__edit_file` (or `fs__create_file`) call. The "before"
+ * side is the pre-run snapshot the dispatcher captured, and the "after"
+ * side is the current on-disk file, so the gutter paints red/green for
+ * the changes that were actually written. */
 export const AiFileOpenDiff: NotificationType<{
   callId: string
 }> = {
   method: 'aiFileOpenDiff',
+}
+
+/** Extension → webview: the AI chat's view of the active editor file.
+ * Pushed on activeTextEditor changes. `name` is the display basename;
+ * `path` is the workspace-relative path (or absolute if the file is
+ * outside every loaded workspace folder). `inWorkspace` flips to
+ * false for outside-workspace files — the fs tools refuse those, and
+ * the UI can surface that to the user. */
+export const AiActiveFile: NotificationType<{
+  uri: string | null
+  name: string | null
+  path: string | null
+  inWorkspace: boolean
+}> = {
+  method: 'aiActiveFile',
 }
 
 /** Extension → webview: incremental assistant text. */
