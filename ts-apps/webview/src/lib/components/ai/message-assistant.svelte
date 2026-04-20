@@ -200,13 +200,14 @@
     gap: 6px;
   }
   .dot {
+    position: relative;
     background: #c8376a;
     line-height: 1;
     flex-shrink: 0;
     margin-right: 2px;
     padding: 0.2em;
     border-radius: 0.2em;
-    margin-bottom: -0.2em;
+    top: -0.15em;
   }
   .action {
     color: var(--vscode-foreground);

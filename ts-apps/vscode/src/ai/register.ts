@@ -99,10 +99,19 @@ export function registerAiChatHandlers(deps: {
     'registerAiChatHandlers: installing handlers on sidebar messenger'
   )
 
-  /** Latest argsJson keyed by tool-call id, captured when the dispatcher
-   *  asks the UI for approval. Used by `file/openDiff` to render the
-   *  proposed contents for fs__create_file / fs__edit_file. */
-  const callArgs = new Map<string, { name: string; argsJson: string }>()
+  /** Latest argsJson keyed by tool-call id, captured when the
+   *  dispatcher asks the UI for approval. Used by `file/openDiff` to
+   *  render the proposed contents for fs__create_file /
+   *  fs__edit_file, AND by `toolStatusChannel.emit` to route status
+   *  updates back to the right conversation — without the stored
+   *  conversationId here, follow-up status pushes ship with an empty
+   *  id and the webview would otherwise fall back to the user's
+   *  currently-focused conversation (which breaks when several chats
+   *  stream concurrently). */
+  const callArgs = new Map<
+    string,
+    { name: string; argsJson: string; conversationId: string }
+  >()
 
   // ── Forward chat service events to the webview as typed notifications.
   const emit = (event: ChatServiceEvent): void => {
@@ -148,6 +157,7 @@ export function registerAiChatHandlers(deps: {
         callArgs.set(event.callId, {
           name: event.name,
           argsJson: event.argsJson,
+          conversationId: event.conversationId,
         })
         messenger.sendNotification(AiChatToolCall, frontend, {
           conversationId: event.conversationId,
@@ -178,7 +188,7 @@ export function registerAiChatHandlers(deps: {
   toolStatusChannel.emit = (callId, status, detail) => {
     const meta = callArgs.get(callId)
     messenger.sendNotification(AiChatToolCall, frontend, {
-      conversationId: '',
+      conversationId: meta?.conversationId ?? '',
       callId,
       name: meta?.name ?? '',
       argsJson: meta?.argsJson ?? '{}',

@@ -366,10 +366,16 @@ export function createAiChatStore(
     const newKey = '__new__'
     const pending = conversations[newKey]
     if (pending && !pending.id) {
+      // Migrate the pre-started stub into its server-assigned id.
+      // Only move `currentId` along if the user is still looking at
+      // the stub — if they've already switched to a different chat
+      // while this one was resolving its id (e.g. via the history
+      // panel), leave their view alone. Moving currentId would yank
+      // their UI to the just-started conversation mid-read.
       pending.id = params.conversationId
       conversations[params.conversationId] = pending
       delete conversations[newKey]
-      currentId = params.conversationId
+      if (currentId === newKey) currentId = params.conversationId
     } else if (!conversations[params.conversationId]) {
       conversations[params.conversationId] = {
         id: params.conversationId,
@@ -412,8 +418,15 @@ export function createAiChatStore(
     message: string
     code?: string
   }): void {
+    // Route strictly by `params.conversationId`. An error on a brand-
+    // new conversation that failed before `started` landed is emitted
+    // by the extension with the turnId as the fallback id — that
+    // lands under `__new__` which is the webview's pre-started bucket.
     const conv =
-      conversations[params.conversationId] ?? conversations['__new__']
+      conversations[params.conversationId] ??
+      (conversations['__new__']?.id === null
+        ? conversations['__new__']
+        : undefined)
     if (!conv) return
     const last = conv.turns[conv.turns.length - 1]
     if (last && last.role === 'assistant') {
@@ -429,9 +442,13 @@ export function createAiChatStore(
     status: 'running' | 'done' | 'error'
     message: string
   }): void {
-    const convId = params.conversationId || currentId
-    if (!convId) return
-    const conv = conversations[convId] ?? conversations['__new__']
+    // Route strictly by conversationId. Falling back to `currentId`
+    // crosstalks multiple concurrent streams into whichever chat the
+    // user has open. The extension is now expected to always populate
+    // `conversationId` — an empty value here means a bug upstream,
+    // better to drop the event than misroute it.
+    if (!params.conversationId) return
+    const conv = conversations[params.conversationId]
     if (!conv) return
     const turn = conv.turns[conv.turns.length - 1]
     if (!turn || turn.role !== 'assistant') return
@@ -474,12 +491,13 @@ export function createAiChatStore(
     result?: string
     errorMessage?: string
   }): void {
-    // conversationId may be empty when the dispatcher fires a status
-    // update for a callId that's already been placed in a bucket; fall
-    // back to the current conversation in that case.
-    const convId = params.conversationId || currentId
-    if (!convId) return
-    const conv = conversations[convId] ?? conversations['__new__']
+    // Route strictly by conversationId. The extension's
+    // `toolStatusChannel` now always populates it via the callId map
+    // maintained in register.ts, so a missing value here is a bug
+    // signal — drop the event rather than risk writing to the user's
+    // currently-focused chat.
+    if (!params.conversationId) return
+    const conv = conversations[params.conversationId]
     if (!conv) return
     const turn = conv.turns[conv.turns.length - 1]
     if (!turn || turn.role !== 'assistant') return

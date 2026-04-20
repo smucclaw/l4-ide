@@ -126,29 +126,15 @@
   })
 
   // Rule evaluations (the l4-rules__ namespace minus the infrastructure
-  // tools) get a richer expanded view: a distinct Arguments section and
-  // a Result section formatted the same way the Inspector tab renders
-  // #EVAL output — parens collapsed into indentation, L4 tokens syntax-
-  // highlighted. `startTime` and `events` are surfaced separately in
-  // the args so the reader's eye lands on them: they're the contract-
-  // state inputs, everything else is ordinary rule arguments.
+  // tools) get a richer expanded view: the arguments that went in and
+  // the returned value, both in one panel separated by a hairline, with
+  // the result formatted the same way the Inspector tab renders #EVAL
+  // output (parens collapsed into indentation, L4 tokens highlighted).
   const isRuleCall = $derived.by(() => {
     if (!call.name.startsWith('l4-rules__')) return false
     const sub = call.name.slice('l4-rules__'.length)
     return !L4_RULES_INFRASTRUCTURE.has(sub)
   })
-
-  function partitionRuleArgs(a: Record<string, unknown>): {
-    primary: Record<string, unknown>
-    startTime: unknown | undefined
-    events: unknown | undefined
-  } {
-    const { startTime, events, ...primary } = a
-    return { primary, startTime, events }
-  }
-  const ruleArgs = $derived.by(() =>
-    isRuleCall ? partitionRuleArgs(args) : null
-  )
 
   /**
    * Mirror of inspector-panel's formatResultValue: break commas into
@@ -180,38 +166,30 @@
     return out
   }
 
-  // Try to extract a human-facing value from the MCP result. MCP tools
-  // return `content[]` as text blocks that mcp-client.ts flattens to a
-  // single string — often that's already the pretty value, sometimes
-  // it's wrapped JSON. Unwrap common shapes ({value}, {result}, raw
-  // scalars) so we can pass the value to the L4 colorizer.
-  function unwrapResultValue(raw: string): string {
-    const trimmed = raw.trim()
-    if (!trimmed) return raw
+  // l4-rules MCP tools wrap their output as
+  //   { "contents": { "result": { "value": "..." }, ... } }
+  // We only ever want contents.result.value here — everything else
+  // (types, traces, diagnostics) is noise for the chat view. If the
+  // shape doesn't match we fall back to null so the result row
+  // silently disappears rather than showing something misleading.
+  function extractRuleResultValue(raw: string): string | null {
     try {
-      const parsed = JSON.parse(trimmed)
-      if (parsed === null || parsed === undefined) return trimmed
-      if (typeof parsed === 'string') return parsed
-      if (typeof parsed === 'number' || typeof parsed === 'boolean')
-        return String(parsed)
-      if (typeof parsed === 'object') {
-        const obj = parsed as Record<string, unknown>
-        for (const k of ['value', 'result', 'output']) {
-          if (typeof obj[k] === 'string') return obj[k] as string
-          if (typeof obj[k] === 'number' || typeof obj[k] === 'boolean')
-            return String(obj[k])
-        }
-        return JSON.stringify(parsed, null, 2)
-      }
-      return trimmed
+      const parsed = JSON.parse(raw.trim()) as unknown
+      const contents = (parsed as { contents?: unknown } | null)?.contents
+      const result = (contents as { result?: unknown } | null)?.result
+      const value = (result as { value?: unknown } | null)?.value
+      if (value === undefined || value === null) return null
+      if (typeof value === 'string') return value
+      return JSON.stringify(value, null, 2)
     } catch {
-      return trimmed
+      return null
     }
   }
 
   const ruleResultHtml = $derived.by(() => {
     if (!isRuleCall || !call.result) return null
-    const value = unwrapResultValue(call.result)
+    const value = extractRuleResultValue(call.result)
+    if (value === null) return null
     return colorize(formatResultValue(value))
   })
 
@@ -268,44 +246,13 @@
     {/if}
   </div>
 
-  {#if expanded && call.status === 'done' && isRuleCall && ruleArgs}
+  {#if expanded && call.status === 'done' && isRuleCall}
     <div class="rule-details">
-      <section class="rule-section">
-        <h4 class="rule-section-title">Arguments</h4>
-        <pre class="rule-block">{JSON.stringify(
-            ruleArgs.primary,
-            null,
-            2
-          )}</pre>
-        {#if ruleArgs.startTime !== undefined}
-          <div class="rule-subfield">
-            <span class="rule-subfield-label">startTime</span>
-            <pre class="rule-block rule-block-inline">{JSON.stringify(
-                ruleArgs.startTime,
-                null,
-                2
-              )}</pre>
-          </div>
-        {/if}
-        {#if ruleArgs.events !== undefined}
-          <div class="rule-subfield">
-            <span class="rule-subfield-label">events</span>
-            <pre class="rule-block rule-block-inline">{JSON.stringify(
-                ruleArgs.events,
-                null,
-                2
-              )}</pre>
-          </div>
-        {/if}
-      </section>
-      <section class="rule-section">
-        <h4 class="rule-section-title">Result</h4>
-        {#if ruleResultHtml}
-          <pre class="rule-block rule-result">{@html ruleResultHtml}</pre>
-        {:else}
-          <pre class="rule-block rule-result empty">(no result)</pre>
-        {/if}
-      </section>
+      <pre class="rule-block rule-args">{JSON.stringify(args, null, 2)}</pre>
+      {#if ruleResultHtml}
+        <hr class="rule-sep" />
+        <pre class="rule-block rule-result">{@html ruleResultHtml}</pre>
+      {/if}
     </div>
   {:else if expanded && call.status === 'done' && prettyResult}
     <pre class="details">{prettyResult}</pre>
@@ -329,13 +276,14 @@
     gap: 6px;
   }
   .dot {
+    position: relative;
     background: #c8376a;
     line-height: 1;
     flex-shrink: 0;
     margin-right: 2px;
     padding: 0.2em;
     border-radius: 0.2em;
-    margin-bottom: -0.2em;
+    top: -0.15em;
   }
   .action {
     color: var(--vscode-foreground);
@@ -407,36 +355,21 @@
   .err-details {
     color: var(--vscode-errorForeground, #d7263d);
   }
-  /* Rule-eval expanded view: two stacked panels (Arguments, Result)
-     styled close to the Inspector tab's result section so reading a
-     rule call here feels like reading an #EVAL there. */
+  /* Rule-eval expanded view: one bordered panel holding the call args
+     and the returned value, separated by a hairline. Result rendering
+     matches the Inspector tab's #EVAL block so the two views read
+     identically. */
   .rule-details {
     margin: 4px 0 0 18px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .rule-section {
     border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
     border-radius: 4px;
+    background: var(--vscode-editor-background);
     overflow: hidden;
-  }
-  .rule-section-title {
-    margin: 0;
-    padding: 4px 8px;
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--vscode-descriptionForeground);
-    background: var(--vscode-sideBarSectionHeader-background, transparent);
-    border-bottom: 1px solid
-      var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
   }
   .rule-block {
     margin: 0;
     padding: 6px 8px;
-    background: var(--vscode-editor-background);
+    background: transparent;
     font-family: var(--vscode-editor-font-family, monospace);
     font-size: 11px;
     line-height: 1.5;
@@ -447,23 +380,9 @@
     overflow-y: auto;
     tab-size: 2;
   }
-  .rule-block-inline {
+  .rule-sep {
+    margin: 0;
+    border: none;
     border-top: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
-  }
-  .rule-subfield {
-    display: flex;
-    flex-direction: column;
-  }
-  .rule-subfield-label {
-    padding: 3px 8px;
-    font-size: 10px;
-    font-weight: 600;
-    color: var(--vscode-descriptionForeground);
-    background: var(--vscode-editor-background);
-    border-top: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
-  }
-  .rule-result.empty {
-    color: var(--vscode-descriptionForeground);
-    font-style: italic;
   }
 </style>
