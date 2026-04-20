@@ -346,7 +346,12 @@ export const SidebarConnectionStatusChanged: NotificationType<GetSidebarConnecti
  */
 export interface AiChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
-  content: string | null
+  /** String for plain-text turns (the common case). When the turn
+   *  carries multimodal attachments, a user message instead ships an
+   *  OpenAI-shaped array of `content parts` (see `AiChatContentPart`)
+   *  that the ai-proxy translates to each provider's native block
+   *  shape. */
+  content: string | AiChatContentPart[] | null
   tool_calls?: Array<{
     id: string
     type: 'function'
@@ -357,6 +362,16 @@ export interface AiChatMessage {
   /** Client-only UI metadata (ignored by the server). */
   _meta?: Record<string, unknown>
 }
+
+/** OpenAI Chat Completions multimodal content parts. Kept narrow on
+ *  purpose — only the two shapes we emit today. */
+export type AiChatContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } }
+  | {
+      type: 'file'
+      file: { filename: string; file_data: string }
+    }
 
 /** Thin envelope around an OpenAI message list. Persists locally in the
  * extension's globalStorage and is replayed into the webview on reopen. */
@@ -401,12 +416,55 @@ export interface AiChatStartParams {
    * references client-side; extension just forwards). Phase 1 sends
    * empty list; `@` mention work arrives in a later commit. */
   mentions: Array<{ kind: 'file' | 'symbol' | 'selection'; label: string }>
-  /** Attachment hints (Phase 3); Phase 1 always empty. */
-  attachments: Array<{ kind: 'text' | 'pdf'; path: string }>
+  /** Multimodal attachments assembled by the webview via
+   * `AiChatPickAttachment`. The extension ships these as OpenAI-shaped
+   * `image_url` / `file` content parts on the user message; the
+   * ai-proxy translates to the provider's native shape. `.docx` /
+   * `.xlsx` are never shipped — they aren't native on either API, so
+   * the picker nudges the user to save as PDF. */
+  attachments: AiChatAttachment[]
   /** When false, the extension omits the per-turn `<editor-context>`
    * system message so the active file doesn't leak into context.
    * Defaults to true if unset. */
   includeActiveFile?: boolean
+}
+
+export interface AiChatAttachment {
+  kind: 'image' | 'pdf'
+  /** Display name (basename). */
+  name: string
+  /** IANA MIME type, e.g. `image/png` or `application/pdf`. */
+  mediaType: string
+  /** Base64-encoded file bytes (no data-URL prefix). */
+  dataBase64: string
+}
+
+/** Webview asks the extension to preview a staged attachment in-editor.
+ *  The extension writes the bytes to a temporary file under
+ *  `globalStorage/ai/previews/` and tries to open it: for PDFs it
+ *  attempts `vscode.open` (works if a PDF custom editor like
+ *  `tomoki1207.pdf` is installed), falling back to
+ *  `env.openExternal` (the OS default viewer). Images route straight
+ *  through `vscode.open` — VSCode renders those natively. */
+export const AiChatPreviewAttachment: NotificationType<{
+  name: string
+  mediaType: string
+  dataBase64: string
+}> = {
+  method: 'aiChatPreviewAttachment',
+}
+
+/** Webview asks the extension to show a native file picker and return
+ *  the selected file as an `AiChatAttachment`. The `accept` hint
+ *  filters the picker dialog: `"text-or-pdf"` allows PDFs + common
+ *  text MIME types; `"spreadsheet"` prompts the user to export as PDF
+ *  first (returns null); `"any"` allows images + PDFs. Returns null on
+ *  cancel. */
+export const AiChatPickAttachment: RequestType<
+  { accept: 'any' | 'text-or-pdf' | 'spreadsheet' },
+  { attachment: AiChatAttachment | null; note?: string }
+> = {
+  method: 'aiChatPickAttachment',
 }
 
 export const AiChatStart: NotificationType<AiChatStartParams> = {
@@ -568,6 +626,17 @@ export const AiChatTextDelta: NotificationType<{
   text: string
 }> = {
   method: 'aiChatTextDelta',
+}
+
+/** Extension → webview: incremental reasoning / thinking text. Rendered
+ * as a collapsed-by-default block that expands to show italic gray
+ * text. Forwarded from the ai-proxy's `event: thinking_delta` SSE
+ * frames. */
+export const AiChatThinkingDelta: NotificationType<{
+  conversationId: string
+  text: string
+}> = {
+  method: 'aiChatThinkingDelta',
 }
 
 /** Extension → webview: turn finished. `finishReason` matches the

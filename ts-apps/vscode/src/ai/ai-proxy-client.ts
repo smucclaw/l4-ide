@@ -33,6 +33,7 @@ export type AiProxyStreamEvent =
       version?: string
     }
   | { kind: 'text-delta'; text: string }
+  | { kind: 'thinking-delta'; text: string }
   | {
       kind: 'tool-activity'
       tool: string
@@ -310,6 +311,17 @@ function* interpretFrame(
       }
     } catch {
       // ignore malformed metadata
+    }
+    return
+  }
+  if (frame.event === 'thinking_delta') {
+    try {
+      const payload = JSON.parse(frame.data) as { text?: string }
+      if (payload.text) {
+        yield { kind: 'thinking-delta', text: payload.text }
+      }
+    } catch {
+      // ignore malformed thinking_delta
     }
     return
   }

@@ -171,6 +171,25 @@
     store.abort()
   }
 
+  // Attachment picker state. `attachBusy` guards against double-clicks
+  // while the native dialog is open; `attachNote` surfaces soft warnings
+  // ("this PDF might eat a lot of context") and rejection reasons from
+  // the extension's size/type validation.
+  let attachBusy = $state(false)
+  let attachNote = $state<string | null>(null)
+
+  async function pickAttachment(): Promise<void> {
+    if (attachBusy) return
+    attachBusy = true
+    attachNote = null
+    try {
+      const res = await store.pickAttachment('any')
+      if (res.note) attachNote = res.note
+    } finally {
+      attachBusy = false
+    }
+  }
+
   // Sync the textarea from the store ONLY when the active conversation
   // changes. Earlier versions of this effect also depended on `text`,
   // which made it re-run on every keystroke — and race with `setDraft`,
@@ -198,6 +217,59 @@
       onPick={pickMention}
       onCancel={() => (mentionState = null)}
     />
+  {/if}
+
+  {#if store.stagedAttachments.length > 0}
+    <div class="attachment-strip" role="list" aria-label="Staged attachments">
+      {#each store.stagedAttachments as att, i (att.name + i)}
+        <span class="attachment-chip" role="listitem">
+          <button
+            type="button"
+            class="chip-body"
+            title="Preview {att.name}"
+            onclick={() => store.previewAttachment(att)}
+          >
+            <svg
+              class="chip-icon"
+              viewBox="0 0 16 16"
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.4"
+              stroke-linejoin="round"
+            >
+              {#if att.kind === 'image'}
+                <rect x="2" y="3" width="12" height="10" rx="1.5" />
+                <circle cx="6" cy="7" r="1.2" />
+                <path d="M14 11l-3.5-3.5L4 13" />
+              {:else}
+                <path d="M4 2h5l3 3v9H4z" />
+                <path d="M9 2v3h3" />
+              {/if}
+            </svg>
+            <span class="chip-name">{att.name}</span>
+          </button>
+          <button
+            type="button"
+            class="chip-remove"
+            title="Remove attachment"
+            aria-label="Remove attachment"
+            onclick={() => store.removeAttachment(i)}>✕</button
+          >
+        </span>
+      {/each}
+    </div>
+  {/if}
+  {#if attachNote}
+    <div class="attachment-note" role="status">
+      {attachNote}
+      <button
+        type="button"
+        class="note-dismiss"
+        aria-label="Dismiss note"
+        onclick={() => (attachNote = null)}>✕</button
+      >
+    </div>
   {/if}
 
   <textarea
@@ -327,10 +399,11 @@
         </button>
       {/if}
       <button
-        class="icon-btn muted"
-        title="Attach files (coming soon)"
-        aria-label="Attach files"
-        disabled
+        class="icon-btn"
+        title={attachBusy ? 'Picking attachment…' : 'Attach an image or PDF'}
+        aria-label="Attach an image or PDF"
+        disabled={disabled || attachBusy}
+        onclick={pickAttachment}
       >
         <svg viewBox="0 0 16 16" aria-hidden="true">
           <path
@@ -496,6 +569,89 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  /* Staged attachments ride above the textarea as a compact chip row.
+     Each chip shows a kind-specific glyph, the filename, and a remove
+     button. Uses widget-border / description-foreground so it blends
+     into the input box rather than standing out. */
+  .attachment-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 6px 8px 0;
+  }
+  .attachment-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 4px 2px 6px;
+    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
+    border-radius: 3px;
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    max-width: 220px;
+  }
+  .chip-body {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: transparent;
+    border: none;
+    padding: 0;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    overflow: hidden;
+  }
+  .chip-body:hover .chip-name {
+    color: var(--vscode-foreground);
+    text-decoration: underline;
+  }
+  .chip-icon {
+    width: 12px;
+    height: 12px;
+    flex-shrink: 0;
+  }
+  .chip-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .chip-remove {
+    background: transparent;
+    border: none;
+    color: var(--vscode-descriptionForeground);
+    cursor: pointer;
+    font-size: 10px;
+    padding: 0 2px;
+  }
+  .chip-remove:hover {
+    color: var(--vscode-foreground);
+  }
+  .attachment-note {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 6px;
+    margin: 4px 8px 0;
+    padding: 6px 8px;
+    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
+    border-radius: 3px;
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    line-height: 1.4;
+  }
+  .note-dismiss {
+    background: transparent;
+    border: none;
+    color: var(--vscode-descriptionForeground);
+    cursor: pointer;
+    font-size: 11px;
+    padding: 0 2px;
+    flex-shrink: 0;
+  }
+  .note-dismiss:hover {
+    color: var(--vscode-foreground);
   }
   .submit-btn {
     display: inline-flex;

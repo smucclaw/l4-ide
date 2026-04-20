@@ -32,8 +32,14 @@
   function blockKey(b: AssistantBlock, i: number): string {
     if (b.kind === 'tool-call') return `tc:${b.call.callId}`
     if (b.kind === 'tool-activity') return `ta:${b.activity.tool}:${i}`
+    if (b.kind === 'thinking') return `th:${i}`
     return `tx:${i}`
   }
+
+  // Per-block expanded state for thinking blocks, keyed by `i`. Stays
+  // collapsed by default — the model's reasoning stream is high-volume
+  // noise the user rarely wants to read in full.
+  const thinkingExpanded = $state<Record<number, boolean>>({})
 
   // Turn-end review card: once the turn has finished, summarize which
   // files the assistant created/edited so the user can scan for blast
@@ -88,6 +94,29 @@
             {onOpenFile}
             onOpenDiff={onOpenFileDiff}
           />
+        {:else if block.kind === 'thinking'}
+          <!-- Collapsed-by-default reasoning block. Chevron flips when
+               toggled; expanded body renders as italic gray text with
+               preserved whitespace so chain-of-thought indentation
+               stays intact. -->
+          <div class="thinking">
+            <button
+              type="button"
+              class="thinking-toggle"
+              onclick={() => (thinkingExpanded[i] = !thinkingExpanded[i])}
+              aria-expanded={!!thinkingExpanded[i]}
+            >
+              <span class="thinking-chev"
+                >{thinkingExpanded[i] ? '▾' : '▸'}</span
+              >
+              <span class="thinking-label"
+                >Thinking{streaming && i === blocks.length - 1 ? '…' : ''}</span
+              >
+            </button>
+            {#if thinkingExpanded[i]}
+              <div class="thinking-body">{block.text}</div>
+            {/if}
+          </div>
         {:else if block.kind === 'tool-activity'}
           <!-- Same chrome as a tool-call row (colored dot + bold label
                + monospace target + right-aligned status) so server-side
@@ -230,6 +259,48 @@
   .status-done {
     color: var(--vscode-foreground);
     opacity: 0.6;
+  }
+  /* Thinking block: chevron-prefixed toggle, collapsed by default;
+     expanded body is italic and grayer than body text so it reads as
+     the model talking to itself. */
+  .thinking {
+    margin: 4px 0;
+  }
+  .thinking-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: transparent;
+    border: none;
+    padding: 2px 0;
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    cursor: pointer;
+  }
+  .thinking-toggle:hover {
+    color: var(--vscode-foreground);
+  }
+  .thinking-chev {
+    font-size: 10px;
+    width: 10px;
+    display: inline-block;
+    text-align: center;
+  }
+  .thinking-label {
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .thinking-body {
+    margin-top: 4px;
+    padding: 6px 10px;
+    border-left: 2px solid
+      var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
+    color: var(--vscode-descriptionForeground);
+    font-style: italic;
+    font-size: 12px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
   }
   /* Turn-end review card: quiet panel listing files the assistant
      touched this turn so the user can scan blast radius at a glance. */

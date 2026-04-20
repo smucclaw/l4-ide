@@ -11,6 +11,7 @@
     AiChatSeedDraft,
     AiChatStarted,
     AiChatTextDelta,
+    AiChatThinkingDelta,
     AiChatToolActivity,
     AiChatToolCall,
     AiUsageUpdate,
@@ -54,6 +55,7 @@
     // lifetime of the webview; a reload clears everything.
     m.onNotification(AiChatStarted, (p) => store.onStarted(p))
     m.onNotification(AiChatTextDelta, (p) => store.onTextDelta(p))
+    m.onNotification(AiChatThinkingDelta, (p) => store.onThinkingDelta(p))
     m.onNotification(AiChatDone, (p) => store.onDone(p))
     m.onNotification(AiChatError, (p) => store.onError(p))
     m.onNotification(AiChatToolCall, (p) => store.onToolCall(p))
@@ -105,14 +107,17 @@
     historyOpen = true
   }
 
-  function onSeedSelect(seed: {
+  async function onSeedSelect(seed: {
     prompt: string
     needsFile: 'text-or-pdf' | 'spreadsheet' | null
-  }): void {
-    // File picker lives in Phase 3 (attachments). For Phase 1 we drop
-    // the seed text into the draft so the user sees something, and
-    // they can paste content or just hit send for the no-file seed.
+  }): Promise<void> {
     store.setDraft(seed.prompt)
+    if (!seed.needsFile) return
+    // Seeds that need a file pop the picker right away so the user's
+    // next action is confirming their file rather than clicking a
+    // second button. Spreadsheets route through the same picker — the
+    // extension nudges the user to save as PDF inside the dialog.
+    await store.pickAttachment(seed.needsFile)
   }
 
   async function onLoadConversation(id: string): Promise<void> {

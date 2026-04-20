@@ -10,6 +10,8 @@ import {
   AiChatAskUser,
   AiChatDone,
   AiChatError,
+  AiChatPickAttachment,
+  AiChatPreviewAttachment,
   AiChatStart,
   AiChatStarted,
   AiChatTextDelta,
@@ -27,11 +29,14 @@ import {
   AiUsageSubscribe,
   AiUsageUnsubscribe,
   AiUsageUpdate,
+  type AiChatAttachment,
   type AiMentionCandidate,
   type AiPermissionCategory,
   type AiPermissionValue,
 } from 'jl4-client-rpc'
 import * as nodePath from 'path'
+import * as os from 'os'
+import { promises as fsPromises } from 'fs'
 import type { AuthManager } from '../auth.js'
 import type { ChatService, ChatServiceEvent } from './chat-service.js'
 import type { ConversationStore } from './conversation-store.js'
@@ -407,6 +412,23 @@ export function registerAiChatHandlers(deps: {
     )
   })
 
+  messenger.onRequest(AiChatPickAttachment, async ({ accept }) => {
+    return handlePickAttachment(accept)
+  })
+
+  messenger.onNotification(
+    AiChatPreviewAttachment,
+    async ({ name, mediaType, dataBase64 }) => {
+      try {
+        await previewAttachment({ name, mediaType, dataBase64 }, logger)
+      } catch (err) {
+        logger.warn(
+          `attachment/preview failed: ${err instanceof Error ? err.message : String(err)}`
+        )
+      }
+    }
+  )
+
   messenger.onRequest(AiMentionSearch, async ({ query }) => {
     const items = await searchMentions(query)
     return { items }
@@ -539,6 +561,163 @@ export function registerAiChatHandlers(deps: {
  * logged but never surfaced — the UI already treats local delete as the
  * source of truth for display.
  */
+/** Handle an `AiChatPickAttachment` request: pop VSCode's native open
+ *  dialog with a filter appropriate for the requested accept mode,
+ *  read the chosen file, and return its bytes as a base64-encoded
+ *  `AiChatAttachment`.
+ *
+ *  Size caps are tighter than the providers' hard network limits
+ *  because the real bottleneck is the model's context window, not the
+ *  upload size:
+ *   - Images: Anthropic's 5 MB per-image hard cap (OpenAI allows more).
+ *   - PDFs: hard cap 10 MB (providers accept up to 32 MB / 100 pages,
+ *     but Anthropic's own token estimates are ~1500–3000 tokens per
+ *     page — a 100-page PDF fills or blows through a 200k context).
+ *     A soft warning fires past 2 MB to nudge the user toward
+ *     splitting. */
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024
+const MAX_PDF_BYTES = 10 * 1024 * 1024
+const SOFT_PDF_WARN_BYTES = 2 * 1024 * 1024
+
+const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'gif']
+
+function mediaTypeForExtension(ext: string): string | null {
+  switch (ext.toLowerCase()) {
+    case 'png':
+      return 'image/png'
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg'
+    case 'webp':
+      return 'image/webp'
+    case 'gif':
+      return 'image/gif'
+    case 'pdf':
+      return 'application/pdf'
+    default:
+      return null
+  }
+}
+
+async function handlePickAttachment(
+  accept: 'any' | 'text-or-pdf' | 'spreadsheet'
+): Promise<{ attachment: AiChatAttachment | null; note?: string }> {
+  if (accept === 'spreadsheet') {
+    // Neither OpenAI nor Anthropic accepts .xlsx/.docx directly on
+    // Chat Completions. Nudge the user to export as PDF rather than
+    // parsing the spreadsheet client-side.
+    const choice = await vscode.window.showInformationMessage(
+      'Neither Legalese AI nor its providers can read Excel/Word files directly. Export to PDF first, then attach the PDF.',
+      'Pick a PDF'
+    )
+    if (choice !== 'Pick a PDF') {
+      return { attachment: null }
+    }
+    accept = 'text-or-pdf'
+  }
+
+  const filters: Record<string, string[]> =
+    accept === 'text-or-pdf'
+      ? { 'Text or PDF': ['pdf', 'txt', 'md'] }
+      : { 'Image or PDF': [...IMAGE_EXTENSIONS, 'pdf'] }
+
+  const uris = await vscode.window.showOpenDialog({
+    canSelectFiles: true,
+    canSelectFolders: false,
+    canSelectMany: false,
+    filters,
+    openLabel: 'Attach',
+  })
+  if (!uris || uris.length === 0) return { attachment: null }
+  const uri = uris[0]!
+  const name = nodePath.basename(uri.fsPath)
+  const ext = (name.split('.').pop() ?? '').toLowerCase()
+  const mediaType = mediaTypeForExtension(ext)
+  if (!mediaType) {
+    return {
+      attachment: null,
+      note: `Unsupported attachment type ".${ext}". Supported: images, PDF.`,
+    }
+  }
+  let buf: Buffer
+  try {
+    buf = await fsPromises.readFile(uri.fsPath)
+  } catch (err) {
+    return {
+      attachment: null,
+      note: `Could not read file: ${err instanceof Error ? err.message : String(err)}`,
+    }
+  }
+  const kind: AiChatAttachment['kind'] = ext === 'pdf' ? 'pdf' : 'image'
+  const cap = kind === 'pdf' ? MAX_PDF_BYTES : MAX_IMAGE_BYTES
+  const sizeMb = (buf.byteLength / 1024 / 1024).toFixed(1)
+  if (buf.byteLength > cap) {
+    const capMb = cap / 1024 / 1024
+    return {
+      attachment: null,
+      note:
+        kind === 'pdf'
+          ? `${name} is ${sizeMb} MB — PDFs are capped at ${capMb} MB here so they don't blow through the model's context window. Split or compress first.`
+          : `${name} is ${sizeMb} MB — images are capped at ${capMb} MB (Anthropic's per-image limit). Resize or recompress first.`,
+    }
+  }
+  // Soft warning: big PDF still fits the hard cap but will chew up a
+  // meaningful slice of the context budget. Warn once; user can ignore.
+  let softNote: string | undefined
+  if (kind === 'pdf' && buf.byteLength > SOFT_PDF_WARN_BYTES) {
+    softNote = `${name} is ${sizeMb} MB — at ~1.5–3k tokens per PDF page this can eat a large slice of the model's context window. Consider splitting the document if the assistant starts missing detail.`
+  }
+  return {
+    attachment: {
+      kind,
+      name,
+      mediaType,
+      dataBase64: buf.toString('base64'),
+    },
+    ...(softNote ? { note: softNote } : {}),
+  }
+}
+
+/** Drop the attachment bytes into a temp file so VSCode / the OS can
+ *  open them. Images go straight through `vscode.open` (VSCode has a
+ *  native image viewer). PDFs try `vscode.open` too — it succeeds when
+ *  a PDF custom editor like `tomoki1207.pdf` is installed — and fall
+ *  back to `env.openExternal` so the user at least gets Preview /
+ *  Acrobat when it isn't. */
+async function previewAttachment(
+  att: { name: string; mediaType: string; dataBase64: string },
+  logger: AiLogger
+): Promise<void> {
+  const dir = nodePath.join(os.tmpdir(), 'legalese-ai-previews')
+  await fsPromises.mkdir(dir, { recursive: true })
+  // Prefix with the epoch millis so repeated previews don't fight over
+  // the same filename (and the OS viewer doesn't silently reuse a
+  // cached open).
+  const target = nodePath.join(dir, `${Date.now()}-${att.name}`)
+  await fsPromises.writeFile(target, Buffer.from(att.dataBase64, 'base64'))
+  const uri = vscode.Uri.file(target)
+  const isPdf = att.mediaType === 'application/pdf'
+  const hasPdfEditor = !!vscode.extensions.getExtension('tomoki1207.pdf')
+  if (isPdf && !hasPdfEditor) {
+    // No inline PDF editor — open externally. vscode.open on a raw PDF
+    // URI without a registered custom editor shows the "binary file"
+    // warning, which is worse UX than the OS default viewer.
+    await vscode.env.openExternal(uri)
+    logger.info(
+      `attachment/preview: opened ${att.name} externally (install tomoki1207.pdf for in-editor PDFs)`
+    )
+    return
+  }
+  try {
+    await vscode.commands.executeCommand('vscode.open', uri)
+  } catch (err) {
+    logger.warn(
+      `attachment/preview: vscode.open failed, falling back to external: ${err instanceof Error ? err.message : String(err)}`
+    )
+    await vscode.env.openExternal(uri)
+  }
+}
+
 async function deleteServerConversation(
   auth: AuthManager,
   id: string,

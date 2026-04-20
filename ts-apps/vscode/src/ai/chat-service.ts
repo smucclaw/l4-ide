@@ -23,6 +23,7 @@ import type { McpToolClient } from './mcp-client.js'
 export type ChatServiceEvent =
   | { kind: 'started'; conversationId: string; model: string }
   | { kind: 'text-delta'; conversationId: string; text: string }
+  | { kind: 'thinking-delta'; conversationId: string; text: string }
   | {
       kind: 'tool-activity'
       conversationId: string
@@ -408,6 +409,12 @@ export class ChatService {
           conversationId: local ?? turnId,
           text: ev.text,
         })
+      } else if (ev.kind === 'thinking-delta') {
+        this.emit({
+          kind: 'thinking-delta',
+          conversationId: local ?? turnId,
+          text: ev.text,
+        })
       } else if (ev.kind === 'tool-activity') {
         this.emit({
           kind: 'tool-activity',
@@ -497,10 +504,40 @@ export class ChatService {
       if (bootstrap) messages.push(bootstrap)
     }
 
-    messages.push({
-      role: 'user',
-      content: params.text,
-    })
+    // Multimodal user content: when the webview has staged attachments,
+    // ship them as OpenAI-shaped content parts alongside the text so
+    // the ai-proxy can pass them through to OpenAI as-is or translate
+    // to Anthropic's image/document block shape. Attachments without
+    // text still include an empty text part so the provider knows the
+    // turn isn't unintentional.
+    if (params.attachments && params.attachments.length > 0) {
+      const parts: Array<
+        | { type: 'text'; text: string }
+        | { type: 'image_url'; image_url: { url: string } }
+        | { type: 'file'; file: { filename: string; file_data: string } }
+      > = [{ type: 'text', text: params.text }]
+      for (const att of params.attachments) {
+        if (att.kind === 'image') {
+          parts.push({
+            type: 'image_url',
+            image_url: {
+              url: `data:${att.mediaType};base64,${att.dataBase64}`,
+            },
+          })
+        } else {
+          parts.push({
+            type: 'file',
+            file: {
+              filename: att.name,
+              file_data: `data:${att.mediaType};base64,${att.dataBase64}`,
+            },
+          })
+        }
+      }
+      messages.push({ role: 'user', content: parts })
+    } else {
+      messages.push({ role: 'user', content: params.text })
+    }
     return messages
   }
 

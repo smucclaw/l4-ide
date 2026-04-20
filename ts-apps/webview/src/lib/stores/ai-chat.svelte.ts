@@ -4,6 +4,8 @@ import {
   AiChatAbort,
   AiChatAnswerUser,
   AiChatApproveTool,
+  AiChatPickAttachment,
+  AiChatPreviewAttachment,
   AiChatStart,
   AiConversationDelete,
   AiConversationList,
@@ -15,6 +17,7 @@ import {
   AiPermissionsSet,
   AiUsageSubscribe,
   AiUsageUnsubscribe,
+  type AiChatAttachment,
   type AiConversation,
   type AiConversationSummary,
   type AiChatMessage,
@@ -73,6 +76,7 @@ export type AssistantBlock =
   | { kind: 'text'; text: string }
   | { kind: 'tool-call'; call: RenderedToolCall }
   | { kind: 'tool-activity'; activity: RenderedToolActivity }
+  | { kind: 'thinking'; text: string }
 
 export interface RenderedToolActivity {
   /** Keyed tool name (server-side, e.g. `search_l4_docs`). */
@@ -174,6 +178,10 @@ export function createAiChatStore(
   // Current meta__ask_user question awaiting an answer, or null. The
   // MessageList renders a card for this when present.
   let pendingQuestion = $state<PendingQuestion | null>(null)
+  // Attachments the user has staged for the next send. Cleared after a
+  // successful dispatch (mirrors the stagedMentions flow). PDFs and
+  // images only; the extension refuses spreadsheets.
+  let stagedAttachments = $state<AiChatAttachment[]>([])
 
   function ensureCurrent(): ConversationState {
     if (!currentId) {
@@ -305,13 +313,21 @@ export function createAiChatStore(
       label: m.label,
     }))
     const wasIncludingActiveFile = includeActiveFile
+    // Snapshot attachments into plain objects — Svelte $state proxies
+    // survive postMessage, plain objects do not need special handling.
+    const attachmentsPlain: AiChatAttachment[] = stagedAttachments.map((a) => ({
+      kind: a.kind,
+      name: a.name,
+      mediaType: a.mediaType,
+      dataBase64: a.dataBase64,
+    }))
     try {
       m.sendNotification(AiChatStart, HOST_EXTENSION, {
         conversationId,
         turnId,
         text,
         mentions: mentionsPlain,
-        attachments: [],
+        attachments: attachmentsPlain,
         includeActiveFile: wasIncludingActiveFile,
       })
       // Attaching the active file is one-shot: once this turn's
@@ -319,6 +335,8 @@ export function createAiChatStore(
       // next turn defaults to "no file" unless the user opts in
       // again. Matches Cursor / Claude Code "@file" semantics.
       if (wasIncludingActiveFile) includeActiveFile = false
+      // Attachments are one-shot too — they were mine, they're yours now.
+      stagedAttachments = []
       // eslint-disable-next-line no-console
       console.log('[ai-chat] dispatched AiChatStart', {
         turnId,
@@ -434,6 +452,27 @@ export function createAiChatStore(
       last.error = { message: params.message, code: params.code }
     }
     conv.streaming = false
+  }
+
+  function onThinkingDelta(params: {
+    conversationId: string
+    text: string
+  }): void {
+    if (!params.conversationId) return
+    const conv = conversations[params.conversationId]
+    if (!conv) return
+    const turn = conv.turns[conv.turns.length - 1]
+    if (!turn || turn.role !== 'assistant') return
+    if (!turn.blocks) turn.blocks = []
+    // Merge consecutive thinking deltas into one block so the whole
+    // reasoning stream reads as a single collapsible panel instead of
+    // a row per token.
+    const tail = turn.blocks[turn.blocks.length - 1]
+    if (tail && tail.kind === 'thinking') {
+      tail.text += params.text
+      return
+    }
+    turn.blocks.push({ kind: 'thinking', text: params.text })
   }
 
   function onToolActivity(params: {
@@ -691,6 +730,45 @@ export function createAiChatStore(
     m?.sendNotification(AiPermissionsSet, HOST_EXTENSION, { category, value })
   }
 
+  /** Pop the extension's native file picker for an attachment. Returns
+   *  `{ ok: true }` when the staged list gained a file, or `{ ok: false,
+   *   note }` when the user cancelled / the file was rejected (too big,
+   *  unsupported type, etc.) so callers can surface a friendly note. */
+  async function pickAttachment(
+    accept: 'any' | 'text-or-pdf' | 'spreadsheet'
+  ): Promise<{ ok: boolean; note?: string }> {
+    const m = getMessenger()
+    if (!m) return { ok: false }
+    try {
+      const res = await m.sendRequest(AiChatPickAttachment, HOST_EXTENSION, {
+        accept,
+      })
+      if (res.attachment) {
+        stagedAttachments = [...stagedAttachments, res.attachment]
+        return { ok: true }
+      }
+      return { ok: false, note: res.note }
+    } catch (err) {
+      return {
+        ok: false,
+        note: err instanceof Error ? err.message : String(err),
+      }
+    }
+  }
+
+  function removeAttachment(index: number): void {
+    stagedAttachments = stagedAttachments.filter((_, i) => i !== index)
+  }
+
+  function previewAttachment(att: AiChatAttachment): void {
+    const m = getMessenger()
+    m?.sendNotification(AiChatPreviewAttachment, HOST_EXTENSION, {
+      name: att.name,
+      mediaType: att.mediaType,
+      dataBase64: att.dataBase64,
+    })
+  }
+
   async function searchMentions(query: string): Promise<AiMentionCandidate[]> {
     const m = getMessenger()
     if (!m) return []
@@ -736,6 +814,12 @@ export function createAiChatStore(
     get pendingQuestion() {
       return pendingQuestion
     },
+    get stagedAttachments() {
+      return stagedAttachments
+    },
+    pickAttachment,
+    removeAttachment,
+    previewAttachment,
     toggleIncludeActiveFile,
     answerQuestion,
     getPermissions,
@@ -761,6 +845,7 @@ export function createAiChatStore(
     // Event handlers — wired into the messenger from the top-level panel.
     onStarted,
     onTextDelta,
+    onThinkingDelta,
     onDone,
     onError,
     onToolCall,
@@ -785,6 +870,12 @@ export type AiChatStore = {
   readonly pendingQuestion: PendingQuestion | null
   toggleIncludeActiveFile: () => void
   answerQuestion: (answer: string) => void
+  readonly stagedAttachments: AiChatAttachment[]
+  pickAttachment: (
+    accept: 'any' | 'text-or-pdf' | 'spreadsheet'
+  ) => Promise<{ ok: boolean; note?: string }>
+  removeAttachment: (index: number) => void
+  previewAttachment: (att: AiChatAttachment) => void
   getPermissions: () => Promise<Record<AiPermissionCategory, AiPermissionValue>>
   setPermission: (
     category: AiPermissionCategory,
@@ -810,6 +901,7 @@ export type AiChatStore = {
   readonly pendingApproval: RenderedToolCall | null
   onStarted: (params: { conversationId: string; model: string }) => void
   onTextDelta: (params: { conversationId: string; text: string }) => void
+  onThinkingDelta: (params: { conversationId: string; text: string }) => void
   onDone: (params: { conversationId: string; finishReason: string }) => void
   onError: (params: {
     conversationId: string

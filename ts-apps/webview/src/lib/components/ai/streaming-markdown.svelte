@@ -1,6 +1,14 @@
 <script lang="ts">
   import { marked } from 'marked'
+  import markedKatex from 'marked-katex-extension'
+  import 'katex/dist/katex.min.css'
   import { colorize } from '@repo/l4-highlight'
+
+  // Wire KaTeX through marked so `$…$` / `$$…$$` in an assistant
+  // response renders as math instead of literal dollar signs. `throwOnError`
+  // stays false so a typo in the expression degrades to the raw source
+  // in a red span rather than ejecting the whole render pipeline.
+  marked.use(markedKatex({ throwOnError: false }))
 
   let { text, streaming }: { text: string; streaming: boolean } = $props()
 
