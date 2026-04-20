@@ -3,18 +3,22 @@
   import UserMessage from './message-user.svelte'
   import AssistantMessage from './message-assistant.svelte'
   import SectionSpinner from './section-spinner.svelte'
+  import AskUserCard from './ask-user-card.svelte'
   import type {
     RenderedTurn,
     RenderedToolCall,
+    PendingQuestion,
   } from '$lib/stores/ai-chat.svelte'
 
   let {
     turns,
     streaming,
     pendingApproval,
+    pendingQuestion,
     onRetry,
     onSignIn,
     onApproveTool,
+    onAnswerQuestion,
     onOpenFile,
     onOpenFileDiff,
   }: {
@@ -25,12 +29,15 @@
     /** First tool call awaiting approval, if any. When present, the
      *  bottom action bar replaces the spinner with Accept / Reject. */
     pendingApproval: RenderedToolCall | null
+    /** Active meta__ask_user question awaiting an answer, or null. */
+    pendingQuestion: PendingQuestion | null
     onRetry?: () => void
     onSignIn?: () => void
     onApproveTool: (
       callId: string,
       decision: 'allow' | 'deny' | 'alwaysAllow'
     ) => void
+    onAnswerQuestion: (answer: string) => void
     onOpenFile: (callId: string) => void
     onOpenFileDiff: (callId: string) => void
   } = $props()
@@ -38,6 +45,8 @@
   let scrollEl = $state<HTMLDivElement>()
   let stickToBottom = $state(true)
   let showJumpButton = $state(false)
+  let stickyUserIndex = $state<number>(-1)
+  let userMessageOffsets: { index: number; offsetTop: number }[] = []
 
   function onScroll(): void {
     if (!scrollEl) return
@@ -45,7 +54,47 @@
       scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight < 40
     stickToBottom = near
     showJumpButton = !near
+
+    // Find the last user message whose offsetTop is less than scrollTop
+    const scrollTop = scrollEl.scrollTop
+    let lastUserAboveScroll = -1
+
+    for (const { index, offsetTop } of userMessageOffsets) {
+      if (offsetTop < scrollTop) {
+        lastUserAboveScroll = index
+      } else {
+        break
+      }
+    }
+
+    stickyUserIndex = lastUserAboveScroll
   }
+
+  // Update offsets when turns change
+  $effect(() => {
+    if (!scrollEl) return
+    // Trigger on turns change
+    turns.length
+
+    // Wait for DOM to update
+    queueMicrotask(() => {
+      if (!scrollEl) return
+      const offsets: { index: number; offsetTop: number }[] = []
+      const children = scrollEl.children
+
+      for (let i = 0; i < children.length; i++) {
+        const child = children[i] as HTMLElement
+        if (!child.classList.contains('user-message-wrapper')) continue
+
+        const userIndex = parseInt(child.dataset.userIndex || '-1', 10)
+        if (userIndex >= 0) {
+          offsets.push({ index: userIndex, offsetTop: child.offsetTop })
+        }
+      }
+
+      userMessageOffsets = offsets
+    })
+  })
 
   async function jumpToLatest(): Promise<void> {
     await tick()
@@ -74,9 +123,15 @@
 </script>
 
 <div class="message-list" bind:this={scrollEl} onscroll={onScroll}>
-  {#each turns as turn (turn.id)}
+  {#each turns as turn, i (turn.id)}
     {#if turn.role === 'user'}
-      <UserMessage content={turn.content} />
+      {@const userIndex =
+        turns.slice(0, i + 1).filter((t) => t.role === 'user').length - 1}
+      <UserMessage
+        content={turn.content}
+        shouldStick={stickyUserIndex === userIndex}
+        {userIndex}
+      />
     {:else}
       <AssistantMessage
         content={turn.content}
@@ -94,6 +149,14 @@
     <button class="jump-btn" onclick={jumpToLatest} title="Jump to latest">
       ↓ Latest
     </button>
+  {/if}
+
+  <!-- Question card for an active meta__ask_user. Rendered above the
+       spinner / approval bar so the user can't miss it. Dispatcher is
+       blocked on their reply, so this is the only meaningful action
+       they can take. -->
+  {#if pendingQuestion}
+    <AskUserCard question={pendingQuestion} onAnswer={onAnswerQuestion} />
   {/if}
 
   <!-- Bottom-of-chat status. Shows Accept/Reject for any pending
@@ -125,7 +188,7 @@
     </div>
   {:else if streaming}
     <div class="bottom-spinner">
-      <SectionSpinner size={42} />
+      <SectionSpinner size={44} />
     </div>
   {/if}
 </div>
@@ -137,15 +200,12 @@
     min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
-    padding: 8px 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
+    padding: 0 10px 16px;
+    display: block;
   }
   .jump-btn {
     position: sticky;
-    bottom: 8px;
-    align-self: center;
+    bottom: 4px;
     background: var(--vscode-sideBar-background, rgba(128, 128, 128, 0.3));
     color: var(--vscode-button-secondaryForeground, inherit);
     border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
@@ -154,6 +214,7 @@
     font-size: 11px;
     cursor: pointer;
     margin-top: 8px;
+    margin-right: -10px;
   }
   .bottom-spinner {
     display: flex;

@@ -5,10 +5,13 @@
   import {
     AiActiveFile,
     AiAuthStatus,
+    AiChatAskUser,
     AiChatDone,
     AiChatError,
+    AiChatSeedDraft,
     AiChatStarted,
     AiChatTextDelta,
+    AiChatToolActivity,
     AiChatToolCall,
     AiUsageUpdate,
     RequestSidebarLogin,
@@ -19,6 +22,7 @@
   import ChatInput from './chat-input.svelte'
   import EmptyState from './empty-state.svelte'
   import ConversationHistory from './conversation-history.svelte'
+  import SettingsPanel from './settings-panel.svelte'
 
   let {
     messenger,
@@ -41,6 +45,7 @@
   })
 
   let historyOpen = $state(false)
+  let settingsOpen = $state(false)
   let subscribed = false
 
   function subscribeToMessenger(m: InstanceType<typeof Messenger>): void {
@@ -52,9 +57,12 @@
     m.onNotification(AiChatDone, (p) => store.onDone(p))
     m.onNotification(AiChatError, (p) => store.onError(p))
     m.onNotification(AiChatToolCall, (p) => store.onToolCall(p))
+    m.onNotification(AiChatToolActivity, (p) => store.onToolActivity(p))
     m.onNotification(AiUsageUpdate, (p) => store.onUsageUpdate(p))
     m.onNotification(AiAuthStatus, (p) => store.onAuthStatus(p))
     m.onNotification(AiActiveFile, (p) => store.onActiveFile(p))
+    m.onNotification(AiChatAskUser, (p) => store.onAskUser(p))
+    m.onNotification(AiChatSeedDraft, (p) => store.setDraft(p.text))
   }
 
   // Attach handlers as soon as the messenger prop is non-null. An
@@ -117,7 +125,7 @@
   }
 
   function openSettings(): void {
-    // Phase 2 content — for now this is a no-op button. See AI_CHAT_PLAN.
+    settingsOpen = true
   }
 
   // Retry replays the last user message after clearing the errored
@@ -152,10 +160,12 @@
         turns={store.current.turns}
         streaming={store.current.streaming}
         pendingApproval={store.pendingApproval}
+        pendingQuestion={store.pendingQuestion}
         {onRetry}
         onSignIn={signIn}
         onApproveTool={(callId, decision) =>
           store.approveTool(callId, decision)}
+        onAnswerQuestion={(answer) => store.answerQuestion(answer)}
         onOpenFile={(callId) => store.openFile(callId)}
         onOpenFileDiff={(callId) => store.openFileDiff(callId)}
       />
@@ -169,6 +179,10 @@
         onDelete={onDeleteConversation}
         onClose={() => (historyOpen = false)}
       />
+    {/if}
+
+    {#if settingsOpen}
+      <SettingsPanel {store} onClose={() => (settingsOpen = false)} />
     {/if}
 
     <ChatInput

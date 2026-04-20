@@ -2,6 +2,7 @@ import type { Messenger } from 'vscode-messenger-webview'
 import { HOST_EXTENSION } from 'vscode-messenger-common'
 import {
   AiChatAbort,
+  AiChatAnswerUser,
   AiChatApproveTool,
   AiChatStart,
   AiConversationDelete,
@@ -10,6 +11,8 @@ import {
   AiFileOpen,
   AiFileOpenDiff,
   AiMentionSearch,
+  AiPermissionsGet,
+  AiPermissionsSet,
   AiUsageSubscribe,
   AiUsageUnsubscribe,
   type AiConversation,
@@ -17,7 +20,15 @@ import {
   type AiChatMessage,
   type AiChatStartParams,
   type AiMentionCandidate,
+  type AiPermissionCategory,
+  type AiPermissionValue,
 } from 'jl4-client-rpc'
+
+export interface PendingQuestion {
+  callId: string
+  question: string
+  choices?: string[]
+}
 
 export interface ActiveFileInfo {
   /** Editor basename, e.g. "insurance-premium.l4". Null when no file is
@@ -61,6 +72,17 @@ export interface RenderedTurn {
 export type AssistantBlock =
   | { kind: 'text'; text: string }
   | { kind: 'tool-call'; call: RenderedToolCall }
+  | { kind: 'tool-activity'; activity: RenderedToolActivity }
+
+export interface RenderedToolActivity {
+  /** Keyed tool name (server-side, e.g. `search_l4_docs`). */
+  tool: string
+  /** Most recent status across the merged run — `done`/`error` stick. */
+  status: 'running' | 'done' | 'error'
+  /** Most recent message; prior messages of the same run are dropped
+   *  once the next one arrives. */
+  message: string
+}
 
 export interface RenderedToolCall {
   callId: string
@@ -149,6 +171,9 @@ export function createAiChatStore(
   // user who toggles it off wants it off for subsequent prompts too,
   // until they toggle it back on.
   let includeActiveFile = $state<boolean>(true)
+  // Current meta__ask_user question awaiting an answer, or null. The
+  // MessageList renders a card for this when present.
+  let pendingQuestion = $state<PendingQuestion | null>(null)
 
   function ensureCurrent(): ConversationState {
     if (!currentId) {
@@ -398,6 +423,44 @@ export function createAiChatStore(
     conv.streaming = false
   }
 
+  function onToolActivity(params: {
+    conversationId: string
+    tool: string
+    status: 'running' | 'done' | 'error'
+    message: string
+  }): void {
+    const convId = params.conversationId || currentId
+    if (!convId) return
+    const conv = conversations[convId] ?? conversations['__new__']
+    if (!conv) return
+    const turn = conv.turns[conv.turns.length - 1]
+    if (!turn || turn.role !== 'assistant') return
+    if (!turn.blocks) turn.blocks = []
+    // Dedupe by tool name: if the last block is a tool-activity for the
+    // same tool, update it in place so a long `running → running → done`
+    // sequence collapses into one row instead of flooding the chat.
+    const tail = turn.blocks[turn.blocks.length - 1]
+    if (
+      tail &&
+      tail.kind === 'tool-activity' &&
+      tail.activity.tool === params.tool &&
+      tail.activity.status !== 'done' &&
+      tail.activity.status !== 'error'
+    ) {
+      tail.activity.status = params.status
+      tail.activity.message = params.message
+      return
+    }
+    turn.blocks.push({
+      kind: 'tool-activity',
+      activity: {
+        tool: params.tool,
+        status: params.status,
+        message: params.message,
+      },
+    })
+  }
+
   function onToolCall(params: {
     conversationId: string
     callId: string
@@ -517,6 +580,29 @@ export function createAiChatStore(
     includeActiveFile = !includeActiveFile
   }
 
+  function onAskUser(params: {
+    callId: string
+    question: string
+    choices?: string[]
+  }): void {
+    pendingQuestion = {
+      callId: params.callId,
+      question: params.question,
+      choices: params.choices,
+    }
+  }
+
+  function answerQuestion(answer: string): void {
+    const q = pendingQuestion
+    if (!q) return
+    pendingQuestion = null
+    const m = getMessenger()
+    m?.sendNotification(AiChatAnswerUser, HOST_EXTENSION, {
+      callId: q.callId,
+      answer,
+    })
+  }
+
   function usageSubscribe(): void {
     const m = getMessenger()
     m?.sendNotification(AiUsageSubscribe, HOST_EXTENSION, undefined as never)
@@ -535,6 +621,41 @@ export function createAiChatStore(
   function getDraft(): string {
     const key = currentId ?? '__new__'
     return draftsByConv[key] ?? ''
+  }
+
+  async function getPermissions(): Promise<
+    Record<AiPermissionCategory, AiPermissionValue>
+  > {
+    const m = getMessenger()
+    const empty = {
+      'fs.read': 'always',
+      'fs.create': 'always',
+      'fs.edit': 'always',
+      'fs.delete': 'always',
+      'lsp.evaluate': 'always',
+      'l4.evaluate': 'always',
+      'mcp.l4Rules': 'always',
+      'meta.askUser': 'always',
+    } as Record<AiPermissionCategory, AiPermissionValue>
+    if (!m) return empty
+    try {
+      const res = await m.sendRequest(
+        AiPermissionsGet,
+        HOST_EXTENSION,
+        undefined as never
+      )
+      return res.values
+    } catch {
+      return empty
+    }
+  }
+
+  function setPermission(
+    category: AiPermissionCategory,
+    value: AiPermissionValue
+  ): void {
+    const m = getMessenger()
+    m?.sendNotification(AiPermissionsSet, HOST_EXTENSION, { category, value })
   }
 
   async function searchMentions(query: string): Promise<AiMentionCandidate[]> {
@@ -579,7 +700,13 @@ export function createAiChatStore(
     get includeActiveFile() {
       return includeActiveFile
     },
+    get pendingQuestion() {
+      return pendingQuestion
+    },
     toggleIncludeActiveFile,
+    answerQuestion,
+    getPermissions,
+    setPermission,
     // Actions.
     refreshHistory,
     loadConversation,
@@ -604,9 +731,11 @@ export function createAiChatStore(
     onDone,
     onError,
     onToolCall,
+    onToolActivity,
     onUsageUpdate,
     onAuthStatus,
     onActiveFile,
+    onAskUser,
   }
 }
 
@@ -620,7 +749,14 @@ export type AiChatStore = {
   readonly signedIn: boolean
   readonly activeFile: ActiveFileInfo
   readonly includeActiveFile: boolean
+  readonly pendingQuestion: PendingQuestion | null
   toggleIncludeActiveFile: () => void
+  answerQuestion: (answer: string) => void
+  getPermissions: () => Promise<Record<AiPermissionCategory, AiPermissionValue>>
+  setPermission: (
+    category: AiPermissionCategory,
+    value: AiPermissionValue
+  ) => void
   refreshHistory: () => Promise<void>
   loadConversation: (id: string) => Promise<void>
   deleteConversation: (id: string) => Promise<void>
@@ -656,6 +792,12 @@ export type AiChatStore = {
     result?: string
     errorMessage?: string
   }) => void
+  onToolActivity: (params: {
+    conversationId: string
+    tool: string
+    status: 'running' | 'done' | 'error'
+    message: string
+  }) => void
   onUsageUpdate: (params: {
     used: number
     limit: number
@@ -667,6 +809,11 @@ export type AiChatStore = {
     name: string | null
     path: string | null
     inWorkspace: boolean
+  }) => void
+  onAskUser: (params: {
+    callId: string
+    question: string
+    choices?: string[]
   }) => void
 }
 

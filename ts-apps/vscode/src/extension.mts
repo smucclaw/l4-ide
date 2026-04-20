@@ -512,6 +512,7 @@ export async function activate(context: ExtensionContext) {
     string,
     (decision: 'allow' | 'deny') => void
   >()
+  const askUserPending = new Map<string, (answer: string) => void>()
   // The dispatcher emits tool status updates through this channel; the
   // sidebar's registerAiChatHandlers replaces the stub `emit` with one
   // that forwards to the webview via the shared messenger.
@@ -523,6 +524,13 @@ export async function activate(context: ExtensionContext) {
     ) => void
   } = {
     emit: () => undefined,
+  }
+  // Channel the dispatcher uses to push a meta__ask_user question to
+  // the webview. register.ts fills this in once the messenger exists.
+  const askUserChannel: {
+    ask: (callId: string, question: string, choices?: string[]) => void
+  } = {
+    ask: () => undefined,
   }
   const aiMcpClient = new McpToolClient(mcpProxy, aiLogger)
   // Bust the MCP tool cache when the connection state flips: a newly
@@ -538,6 +546,11 @@ export async function activate(context: ExtensionContext) {
     notifyStatus: (callId, status, detail) =>
       toolStatusChannel.emit(callId, status, detail),
     mcp: aiMcpClient,
+    askUser: (callId, question, choices) =>
+      new Promise<string>((resolve) => {
+        askUserPending.set(callId, resolve)
+        askUserChannel.ask(callId, question, choices)
+      }),
   })
   const chatService = new ChatService({
     auth,
@@ -557,7 +570,9 @@ export async function activate(context: ExtensionContext) {
       store: aiStore,
       logger: aiLogger,
       approvalPending,
+      askUserPending,
       toolStatusChannel,
+      askUserChannel,
       dispatcher,
     })
   )
@@ -581,6 +596,45 @@ export async function activate(context: ExtensionContext) {
     vscode.commands.registerCommand('l4.openSidebar', () => {
       vscode.commands.executeCommand(`${SIDEBAR_WEBVIEW_TYPE}.focus`)
     })
+  )
+
+  // Right-click → "Ask Legalese AI about this". Quotes the editor
+  // selection (falls back to the whole file when nothing is
+  // selected), reveals the sidebar, switches to the AI tab, and
+  // seeds the chat draft so the user can type their question on the
+  // next line.
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'legaleseAi.askAboutSelection',
+      async () => {
+        const editor = vscode.window.activeTextEditor
+        if (!editor) {
+          vscode.window.showInformationMessage(
+            'Open a file first, then select the text you want to ask about.'
+          )
+          return
+        }
+        const sel = editor.selection
+        const body = sel.isEmpty
+          ? editor.document.getText()
+          : editor.document.getText(sel)
+        const rel = vscode.workspace.asRelativePath(editor.document.uri, false)
+        const lang = editor.document.languageId || ''
+        const range = sel.isEmpty
+          ? ''
+          : ` (lines ${sel.start.line + 1}–${sel.end.line + 1})`
+        const draft = `About \`${rel}\`${range}:\n\n\`\`\`${lang}\n${body}\n\`\`\`\n\n`
+        await sidebarProvider.revealSidebar()
+        await sidebarProvider.waitUntilReady()
+        sidebarProvider.switchToTab('ai-chat')
+        const { AiChatSeedDraft } = await import('jl4-client-rpc')
+        sidebarMessenger.sendNotification(
+          AiChatSeedDraft,
+          sidebarWebviewFrontend,
+          { text: draft }
+        )
+      }
+    )
   )
 
   // Refresh sidebar token colors on theme change (alongside panels)

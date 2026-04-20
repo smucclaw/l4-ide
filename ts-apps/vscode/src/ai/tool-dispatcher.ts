@@ -10,6 +10,7 @@ import {
 } from './tools/fs.js'
 import { lspDiagnostics } from './tools/lsp.js'
 import { l4Evaluate } from './tools/l4-evaluate.js'
+import { metaAskUser, type AskUserAdapter } from './tools/ask-user.js'
 import { MCP_L4_RULES_PREFIX, type McpToolClient } from './mcp-client.js'
 import {
   categoryForTool,
@@ -52,6 +53,9 @@ export interface ToolDispatcherOptions {
     detail?: { result?: string; error?: string }
   ) => void
   mcp: McpToolClient
+  /** Invoked when the model calls `meta__ask_user`. Resolves with the
+   *  user's free-text answer, or '' if they skipped. */
+  askUser: AskUserAdapter
 }
 
 /** Snapshot captured before a fs__edit_file / fs__create_file runs, so
@@ -140,7 +144,12 @@ export class ToolDispatcher {
       // render the actual applied diff afterwards (not a "proposed"
       // preview that may never have been committed).
       await this.snapshotIfMutating(call, args)
-      const output = await this.execute(call.name, args, call.argsJson)
+      const output = await this.execute(
+        call.callId,
+        call.name,
+        args,
+        call.argsJson
+      )
       this.opts.notifyStatus(call.callId, 'done', { result: output })
       return { ok: true, output }
     } catch (err) {
@@ -177,6 +186,7 @@ export class ToolDispatcher {
   }
 
   private async execute(
+    callId: string,
     name: string,
     args: unknown,
     argsJson: string
@@ -198,17 +208,11 @@ export class ToolDispatcher {
       case 'l4__evaluate':
         return l4Evaluate(args as { path: string; timeoutMs?: number })
       case 'meta__ask_user':
-        // Stub: the interactive question panel is still in flight (see
-        // AI_CHAT_PLAN Phase 2). Declaring the tool + returning a stable
-        // result keeps the upstream LLM call from failing when the model
-        // emits a meta__ask_user tool_call it learned about from the
-        // ai-proxy system prompt. Once the UI lands, this returns the
-        // user's actual answer.
-        return JSON.stringify({
-          answered: false,
-          note: 'The interactive question panel is not yet wired up. Do not retry meta__ask_user — ask your clarifying question directly in your assistant text so the user can reply in chat, or make your best-informed decision and proceed.',
-          echoedArgs: args,
-        })
+        return metaAskUser(
+          callId,
+          args as { question: string; choices?: string[] },
+          this.opts.askUser
+        )
       default:
         throw new Error(`No executor for tool: ${name}`)
     }

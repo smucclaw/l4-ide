@@ -5,12 +5,15 @@ import {
   AiActiveFile,
   AiAuthStatus,
   AiChatAbort,
+  AiChatAnswerUser,
   AiChatApproveTool,
+  AiChatAskUser,
   AiChatDone,
   AiChatError,
   AiChatStart,
   AiChatStarted,
   AiChatTextDelta,
+  AiChatToolActivity,
   AiChatToolCall,
   AiConversationDelete,
   AiConversationList,
@@ -19,17 +22,26 @@ import {
   AiFileOpen,
   AiFileOpenDiff,
   AiMentionSearch,
+  AiPermissionsGet,
+  AiPermissionsSet,
   AiUsageSubscribe,
   AiUsageUnsubscribe,
   AiUsageUpdate,
   type AiMentionCandidate,
+  type AiPermissionCategory,
+  type AiPermissionValue,
 } from 'jl4-client-rpc'
 import * as nodePath from 'path'
 import type { AuthManager } from '../auth.js'
 import type { ChatService, ChatServiceEvent } from './chat-service.js'
 import type { ConversationStore } from './conversation-store.js'
 import type { AiLogger } from './logger.js'
-import { categoryForTool, setPermission } from './permissions.js'
+import {
+  categoryForTool,
+  getPermission,
+  setPermission,
+  type PermissionCategory,
+} from './permissions.js'
 import { resolveFileUri } from './tools/fs.js'
 import type { ToolDispatcher } from './tool-dispatcher.js'
 
@@ -49,6 +61,9 @@ export function registerAiChatHandlers(deps: {
   /** Map of pending approval promises keyed by callId. Populated by
    * the tool dispatcher; drained by the webview's approve/deny message. */
   approvalPending: Map<string, (decision: 'allow' | 'deny') => void>
+  /** Map of pending meta__ask_user promises keyed by callId. Resolves
+   * with the user's answer (empty string = skipped). */
+  askUserPending: Map<string, (answer: string) => void>
   /** Mutable channel the dispatcher uses to emit status updates for
    * each tool call. We fill in the `emit` function here so the
    * dispatcher can forward to the webview via the same messenger. */
@@ -58,6 +73,11 @@ export function registerAiChatHandlers(deps: {
       status: 'pending-approval' | 'running' | 'done' | 'error',
       detail?: { result?: string; error?: string }
     ) => void
+  }
+  /** Channel the dispatcher uses to push a meta__ask_user question to
+   *  the webview. We fill in the `ask` function here. */
+  askUserChannel: {
+    ask: (callId: string, question: string, choices?: string[]) => void
   }
   /** Used to recover pre-edit snapshots for the applied-diff viewer. */
   dispatcher: ToolDispatcher
@@ -70,7 +90,9 @@ export function registerAiChatHandlers(deps: {
     store,
     logger,
     approvalPending,
+    askUserPending,
     toolStatusChannel,
+    askUserChannel,
     dispatcher,
   } = deps
   logger.info(
@@ -112,10 +134,15 @@ export function registerAiChatHandlers(deps: {
         })
         break
       case 'tool-activity':
-        // Phase 2 wires the UI for this; for Phase 1 we just log.
         logger.debug(
           `tool_activity ${event.status} ${event.tool}: ${event.message}`
         )
+        messenger.sendNotification(AiChatToolActivity, frontend, {
+          conversationId: event.conversationId,
+          tool: event.tool,
+          status: event.status,
+          message: event.message,
+        })
         break
       case 'tool-call':
         callArgs.set(event.callId, {
@@ -140,6 +167,14 @@ export function registerAiChatHandlers(deps: {
   // can forward them to the webview as AiChatToolCall notifications
   // with matching callId. One tool call may fire multiple updates
   // (running → done) — the webview merges by callId.
+  askUserChannel.ask = (callId, question, choices) => {
+    messenger.sendNotification(AiChatAskUser, frontend, {
+      callId,
+      question,
+      choices,
+    })
+  }
+
   toolStatusChannel.emit = (callId, status, detail) => {
     const meta = callArgs.get(callId)
     messenger.sendNotification(AiChatToolCall, frontend, {
@@ -167,6 +202,20 @@ export function registerAiChatHandlers(deps: {
     }
   }
 
+  /** Resolve every pending ask-user with an empty answer (= skipped).
+   *  Mirrors denyAllPendingApprovals for the meta__ask_user path so
+   *  a stop/new-message doesn't leave the dispatcher hanging forever. */
+  const skipAllPendingQuestions = (reason: string): void => {
+    if (askUserPending.size === 0) return
+    logger.info(
+      `skipping ${askUserPending.size} pending meta__ask_user question(s) (${reason})`
+    )
+    for (const [callId, resolver] of askUserPending) {
+      resolver('')
+      askUserPending.delete(callId)
+    }
+  }
+
   // ── Webview → extension handlers.
   // NB: sync handler — vscode-messenger calls the handler and forgets
   // about the return value, so there's no benefit to `async` here, and
@@ -183,6 +232,7 @@ export function registerAiChatHandlers(deps: {
     // Any pending approval from a previous turn is implicitly rejected
     // when the user starts a new one.
     denyAllPendingApprovals('new message')
+    skipAllPendingQuestions('new message')
     void service.start(params).catch((err) => {
       logger.error('chat/start failed', err)
     })
@@ -193,7 +243,21 @@ export function registerAiChatHandlers(deps: {
     // Resolve any pending approval as 'deny' so the dispatcher can
     // unblock and the outer loop can observe the abort signal.
     denyAllPendingApprovals('abort')
+    skipAllPendingQuestions('abort')
     service.abort(turnId)
+  })
+
+  // Webview posts the user's answer to a meta__ask_user question.
+  // Empty `answer` = skip (the dispatcher treats this as "use your
+  // best guess" per the tool contract).
+  messenger.onNotification(AiChatAnswerUser, ({ callId, answer }) => {
+    const resolver = askUserPending.get(callId)
+    askUserPending.delete(callId)
+    if (!resolver) {
+      logger.warn(`meta__ask_user: no pending question for ${callId}`)
+      return
+    }
+    resolver(answer ?? '')
   })
 
   // Tool approval: resolve the pending promise the dispatcher is
@@ -292,6 +356,45 @@ export function registerAiChatHandlers(deps: {
   messenger.onNotification(AiConversationNew, () => {
     // No-op in extension today — the webview owns "new conversation"
     // state. Reserved for future server-side cleanup hooks.
+  })
+
+  const ALL_PERMISSION_CATEGORIES: PermissionCategory[] = [
+    'fs.read',
+    'fs.create',
+    'fs.edit',
+    'fs.delete',
+    'lsp.evaluate',
+    'l4.evaluate',
+    'mcp.l4Rules',
+    'meta.askUser',
+  ]
+  messenger.onRequest(AiPermissionsGet, async () => {
+    const values: Record<AiPermissionCategory, AiPermissionValue> = {
+      'fs.read': 'always',
+      'fs.create': 'always',
+      'fs.edit': 'always',
+      'fs.delete': 'always',
+      'lsp.evaluate': 'always',
+      'l4.evaluate': 'always',
+      'mcp.l4Rules': 'always',
+      'meta.askUser': 'always',
+    }
+    for (const cat of ALL_PERMISSION_CATEGORIES) {
+      values[cat as AiPermissionCategory] = getPermission(
+        cat
+      ) as AiPermissionValue
+    }
+    return { values }
+  })
+  messenger.onNotification(AiPermissionsSet, ({ category, value }) => {
+    void setPermission(
+      category as PermissionCategory,
+      value as 'never' | 'ask' | 'always'
+    ).catch((err) =>
+      logger.warn(
+        `permissions/set: ${category}=${value} failed: ${err instanceof Error ? err.message : String(err)}`
+      )
+    )
   })
 
   messenger.onRequest(AiMentionSearch, async ({ query }) => {

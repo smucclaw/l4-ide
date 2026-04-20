@@ -1,6 +1,28 @@
 <script lang="ts">
   import type { RenderedToolCall } from '$lib/stores/ai-chat.svelte'
 
+  /**
+   * Tools exposed by the l4-rules MCP server fall into two buckets.
+   *
+   *   Category 1 — "L4 Deployments" infrastructure tools: file I/O and
+   *                index/search over the user's deployed rules. They
+   *                don't evaluate business logic; they just let the
+   *                agent browse what's available.
+   *   Category 2 — "L4 Rule" evaluations: every other tool name in the
+   *                namespace is a deployed rule the agent can invoke
+   *                with inputs. The inspection / ladder rendering is
+   *                reserved for this bucket.
+   *
+   * Keeping this set in sync with the MCP server's built-ins; anything
+   * not in here is treated as a rule.
+   */
+  const L4_RULES_INFRASTRUCTURE = new Set([
+    'list_files',
+    'read_file',
+    'search_identifier',
+    'search_text',
+  ])
+
   let {
     call,
     onOpenFile,
@@ -54,16 +76,20 @@
     if (name === 'l4__evaluate')
       return { label: 'Evaluate', target: path, click: 'open' }
     if (name === 'meta__ask_user')
-      return { label: 'Ask user', target: null, click: null }
-    if (name.startsWith('l4-rules__'))
-      // Show the rule name (minus the namespace prefix) as the target
-      // so the chat reads `• Rule qualifies-for-discount` instead of
-      // dumping the full mangled function name.
+      return { label: 'Question', target: null, click: null }
+    if (name.startsWith('l4-rules__')) {
+      const sub = name.slice('l4-rules__'.length)
+      // Infrastructure tools (list_files / read_file / search_*) are
+      // deployment inventory, not rule evaluations — label them
+      // distinctly so the user sees at a glance whether the agent is
+      // browsing deployments or actually running a rule.
+      const isInfra = L4_RULES_INFRASTRUCTURE.has(sub)
       return {
-        label: 'L4 Rules',
-        target: name.slice('l4-rules__'.length),
+        label: isInfra ? 'L4 Deployments' : 'L4 Rule',
+        target: sub,
         click: null,
       }
+    }
     return { label: name, target: null, click: null }
   }
 
@@ -84,6 +110,32 @@
       e.preventDefault()
       fire()
     }
+  }
+
+  // Pretty-print the tool result for the expandable details panel.
+  // Most tools return JSON strings; we try-parse and re-stringify with
+  // indentation. If it's plain text, just show it verbatim.
+  const prettyResult = $derived.by(() => {
+    if (!call.result) return null
+    try {
+      return JSON.stringify(JSON.parse(call.result), null, 2)
+    } catch {
+      return call.result
+    }
+  })
+
+  const hasDetails = $derived(
+    call.status === 'done'
+      ? !!prettyResult
+      : call.status === 'error'
+        ? !!call.error
+        : false
+  )
+
+  let expanded = $state(false)
+  function toggle(): void {
+    if (!hasDetails) return
+    expanded = !expanded
   }
 </script>
 
@@ -113,11 +165,23 @@
       {:else if call.status === 'error'}failed
       {/if}
     </span>
+    {#if hasDetails}
+      <button
+        type="button"
+        class="expand-btn"
+        onclick={toggle}
+        title={expanded ? 'Hide details' : 'Show details'}
+        aria-expanded={expanded}
+        aria-label="Toggle details">{expanded ? '▾' : '▸'}</button
+      >
+    {/if}
   </div>
 
-  <!-- {#if call.status === 'error' && call.error}
-    <div class="err">{call.error}</div>
-  {/if} -->
+  {#if expanded && call.status === 'done' && prettyResult}
+    <pre class="details">{prettyResult}</pre>
+  {:else if expanded && call.status === 'error' && call.error}
+    <pre class="details err-details">{call.error}</pre>
+  {/if}
 </div>
 
 <style>
@@ -149,6 +213,7 @@
   }
   .target,
   .target.plain {
+    text-align: left;
     color: var(--vscode-foreground);
     font-family: var(--vscode-editor-font-family, monospace);
     font-size: 0.92em;
@@ -182,5 +247,34 @@
     font-size: 11px;
     white-space: pre-wrap;
     word-break: break-word;
+  }
+  .expand-btn {
+    background: transparent;
+    border: none;
+    color: var(--vscode-descriptionForeground);
+    font-size: 11px;
+    padding: 0 2px;
+    margin-left: 2px;
+    cursor: pointer;
+  }
+  .expand-btn:hover {
+    color: var(--vscode-foreground);
+  }
+  .details {
+    margin: 4px 0 0 18px;
+    padding: 6px 8px;
+    background: var(--vscode-editor-background);
+    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
+    border-radius: 4px;
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 11px;
+    color: var(--vscode-foreground);
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+  .err-details {
+    color: var(--vscode-errorForeground, #d7263d);
   }
 </style>

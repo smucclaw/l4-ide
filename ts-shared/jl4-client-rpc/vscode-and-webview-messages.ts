@@ -455,6 +455,78 @@ export const AiChatApproveTool: NotificationType<{
   method: 'aiChatApproveTool',
 }
 
+export type AiPermissionCategory =
+  | 'fs.read'
+  | 'fs.create'
+  | 'fs.edit'
+  | 'fs.delete'
+  | 'lsp.evaluate'
+  | 'l4.evaluate'
+  | 'mcp.l4Rules'
+  | 'meta.askUser'
+
+export type AiPermissionValue = 'never' | 'ask' | 'always'
+
+/** Webview asks for the current permission values. */
+export const AiPermissionsGet: RequestType<
+  void,
+  { values: Record<AiPermissionCategory, AiPermissionValue> }
+> = {
+  method: 'aiPermissionsGet',
+}
+
+/** Webview sets a single permission value. Extension persists to
+ *  VSCode configuration under `legaleseAi.permissions.*`. */
+export const AiPermissionsSet: NotificationType<{
+  category: AiPermissionCategory
+  value: AiPermissionValue
+}> = {
+  method: 'aiPermissionsSet',
+}
+
+/** Extension → webview: a server-side tool activity event (from the
+ * ai-proxy's backend tools like `search_l4_docs`). Deduped client-side
+ * by `tool`+`status` so long sequences collapse into a single row. */
+export const AiChatToolActivity: NotificationType<{
+  conversationId: string
+  tool: string
+  status: 'running' | 'done' | 'error'
+  message: string
+}> = {
+  method: 'aiChatToolActivity',
+}
+
+/** Extension → webview: seed the chat input with text from an outside
+ * entry point (e.g. the "Ask Legalese AI about this" editor code
+ * action). The webview calls `setDraft` with this string. */
+export const AiChatSeedDraft: NotificationType<{
+  text: string
+}> = {
+  method: 'aiChatSeedDraft',
+}
+
+/** Extension → webview: the model invoked `meta__ask_user`. The webview
+ * renders a question card above the in-progress assistant text. */
+export const AiChatAskUser: NotificationType<{
+  callId: string
+  question: string
+  /** Optional fixed set of choices; when empty the UI renders a
+   *  free-form input. */
+  choices?: string[]
+}> = {
+  method: 'aiChatAskUser',
+}
+
+/** Webview → extension: the user answered a meta__ask_user question.
+ * Pass an empty string for `answer` to signal "skip / use your best
+ * guess". */
+export const AiChatAnswerUser: NotificationType<{
+  callId: string
+  answer: string
+}> = {
+  method: 'aiChatAnswerUser',
+}
+
 /** Webview → extension: open the target file of a tool call in a
  * regular editor tab. Used for `fs__read_file` and `fs__create_file`
  * when the user cmd+clicks the filename. */

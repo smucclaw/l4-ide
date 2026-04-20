@@ -395,6 +395,8 @@
     background: var(--vscode-input-background);
     margin: 0px;
     transition: border-color 0.12s ease-out;
+    box-shadow: 0 0 10px 2px
+      var(--vscode-input-background, rgba(127, 127, 127, 0.12));
   }
   .chat-input-box:focus-within {
     border-color: var(--vscode-foreground, #ccc);
