@@ -144,7 +144,14 @@ processTypecheckedFile logger deployId filepath content moduleContext
             -- Look up the import environment from the shared session
             importEnv = Map.findWithDefault Jl4.emptyEvalEnvironment filepath evalMap
 
-        -- Build shared context for all functions from this file
+        -- Build shared context for all functions from this file.
+        -- `collectAllDeclares` walks the entry file + every
+        -- transitively-imported module's DECLAREs. We stash the full
+        -- list on the shared context so the direct-AST evaluator
+        -- ('buildModuleInfo') can resolve record parameter types that
+        -- live in IMPORT'd files — e.g. the ASEAN Cosmetic Directive's
+        -- `Cosmetic Product` record declared in ACD_Declarations.l4
+        -- while the @export lives in ACD_Information.l4.
         let shared = Jl4.SharedModuleContext
               { Jl4.sharedModule = resolvedModule
               , Jl4.sharedEnvironment = env
@@ -152,6 +159,7 @@ processTypecheckedFile logger deployId filepath content moduleContext
               , Jl4.sharedModuleContext = moduleContext
               , Jl4.sharedImportEnv = importEnv
               , Jl4.sharedSource = content
+              , Jl4.sharedAllDeclares = Map.elems allDeclares
               }
 
         fns <- forM exports $ \export -> do
@@ -278,6 +286,12 @@ buildFromCborBundle logger deployId bundles sources storedMeta = do
                     , compiledEntityInfo = ei
                     , compiledDecide = decide
                     , compiledImportEnv = importEnv
+                    -- `sbDeclares` is the bundle's cached map of every
+                    -- DECLARE across the entry module and its
+                    -- transitive imports — exactly what the direct-AST
+                    -- evaluator needs to resolve cross-file record
+                    -- types (see Backend.Jl4.buildModuleInfo).
+                    , compiledAllDeclares = Map.elems bundle.sbDeclares
                     }
 
               let runFn = Jl4.createRunFunctionFromCompiled filepath apiDecl compiled content moduleContext
