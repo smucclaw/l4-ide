@@ -4,16 +4,24 @@
   let {
     items,
     currentId,
+    streamingIds,
     onLoad,
     onDelete,
     onClose,
   }: {
     items: AiConversationSummary[]
     currentId: string | null
+    /** Ids of conversations currently attached to a live stream. The
+     *  row for each shows a small spinner so the user can see which
+     *  chats are burning tokens in the background — a defence against
+     *  silent ghost-sessions. */
+    streamingIds: string[]
     onLoad: (id: string) => void
     onDelete: (id: string) => void
     onClose: () => void
   } = $props()
+
+  const streamingSet = $derived(new Set(streamingIds))
 
   function relativeTime(iso: string): string {
     const d = new Date(iso).getTime()
@@ -71,7 +79,16 @@
               onclick={() => onLoad(item.id)}
               title={item.title}
             >
-              <span class="row-title">{item.title || 'Untitled'}</span>
+              <span class="row-title">
+                {#if streamingSet.has(item.id)}
+                  <span
+                    class="streaming-dot"
+                    aria-label="Streaming"
+                    title="A turn is still running in this conversation"
+                  ></span>
+                {/if}
+                {item.title || 'Untitled'}
+              </span>
               <span class="row-meta">{relativeTime(item.lastActiveAt)}</span>
             </button>
             <button
@@ -169,6 +186,30 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  /* Pulsing crimson dot — same accent colour as the sidebar's
+     active-tab underline, so a streaming chat in the history list
+     reads as "live" without needing a label. Kept small and
+     non-interactive; users still click the row to open it. */
+  .streaming-dot {
+    flex-shrink: 0;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #c8376a;
+    animation: streaming-pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes streaming-pulse {
+    0%,
+    100% {
+      opacity: 0.35;
+    }
+    50% {
+      opacity: 1;
+    }
   }
   .row-meta {
     font-size: 10px;

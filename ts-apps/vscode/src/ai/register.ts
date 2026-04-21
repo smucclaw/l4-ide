@@ -241,7 +241,15 @@ export function registerAiChatHandlers(deps: {
   // with matching callId. One tool call may fire multiple updates
   // (running → done) — the webview merges by callId.
   askUserChannel.ask = (callId, question, choices) => {
+    // Carry the conversationId so the webview can attach the question
+    // card to the right conversation even if the user has flipped to a
+    // different one in the history panel while the tool call was in
+    // flight. callArgs is populated in the `emit` handler above when
+    // the tool-call SSE frame lands, so by the time the dispatcher
+    // reaches this ask path we always have the mapping.
+    const meta = callArgs.get(callId)
     messenger.sendNotification(AiChatAskUser, frontend, {
+      conversationId: meta?.conversationId ?? '',
       callId,
       question,
       choices,
@@ -744,6 +752,17 @@ function mediaTypeForExtension(ext: string): string | null {
       return 'image/gif'
     case 'pdf':
       return 'application/pdf'
+    // The `text-or-pdf` picker advertises .txt / .md as valid choices
+    // for the Get Started seed flows ("policy document", BRS, etc.) —
+    // any "supported" file. Without these cases mediaTypeForExtension
+    // returned null and the dispatch rejected them with
+    // "Unsupported attachment type" immediately after the user hit
+    // OK in the dialog, so the file silently never reached the chat.
+    case 'txt':
+      return 'text/plain'
+    case 'md':
+    case 'markdown':
+      return 'text/markdown'
     default:
       return null
   }
@@ -799,7 +818,14 @@ async function handlePickAttachment(
       note: `Could not read file: ${err instanceof Error ? err.message : String(err)}`,
     }
   }
-  const kind: AiChatAttachment['kind'] = ext === 'pdf' ? 'pdf' : 'image'
+  // Route any non-image extension through the 'pdf' bucket so
+  // chat-service assembleMessages ships it as a file content part
+  // (text/plain, text/markdown, application/pdf all translate 1:1
+  // to the provider's document block shape). Only bitmap images
+  // still use image_url parts. The `pdf` kind name is a legacy
+  // misnomer; intent is "file document".
+  const isImage = IMAGE_EXTENSIONS.includes(ext)
+  const kind: AiChatAttachment['kind'] = isImage ? 'image' : 'pdf'
   const cap = kind === 'pdf' ? MAX_PDF_BYTES : MAX_IMAGE_BYTES
   const sizeMb = (buf.byteLength / 1024 / 1024).toFixed(1)
   if (buf.byteLength > cap) {

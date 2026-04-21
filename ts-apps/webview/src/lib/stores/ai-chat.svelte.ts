@@ -198,9 +198,16 @@ export function createAiChatStore(
   // user who toggles it off wants it off for subsequent prompts too,
   // until they toggle it back on.
   let includeActiveFile = $state<boolean>(true)
-  // Current meta__ask_user question awaiting an answer, or null. The
-  // MessageList renders a card for this when present.
-  let pendingQuestion = $state<PendingQuestion | null>(null)
+  // Pending meta__ask_user questions awaiting an answer, keyed by the
+  // conversationId the call belongs to. Scoped per-conversation so
+  // switching chats via the history panel doesn't surface another
+  // conversation's card against the wrong turns. `currentId`'s entry
+  // is surfaced via `pendingQuestion`.
+  const pendingQuestionsByConv = $state<Record<string, PendingQuestion>>({})
+  // Also track which conversationId originated a given callId so
+  // answerQuestion / skip paths can find the right bucket even when
+  // the user has navigated away from the originating chat.
+  const pendingQuestionConvByCallId = $state<Record<string, string>>({})
   // Attachments the user has staged for the next send. Cleared after a
   // successful dispatch (mirrors the stagedMentions flow). PDFs and
   // images only; the extension refuses spreadsheets.
@@ -245,6 +252,28 @@ export function createAiChatStore(
   async function loadConversation(id: string): Promise<void> {
     const m = getMessenger()
     if (!m) return
+    // If we already have an in-memory state for this conversation,
+    // prefer it over whatever is on disk. Two reasons:
+    //   1. A stream might still be attached — the in-flight text /
+    //      tool-call deltas live in memory only; replacing with the
+    //      disk snapshot would clobber the live turn and freeze the
+    //      UI for the rest of the stream.
+    //   2. Even after a turn completes, the disk snapshot isn't
+    //      authoritative for the in-memory `blocks` shape (the chat
+    //      service writes it via `persistAssistantTurn` at
+    //      end-of-turn; the extension-host's event log is richer in
+    //      the meantime). Using the in-memory state keeps the
+    //      rendered history consistent with what the user saw while
+    //      the turn was running.
+    // Only when we have no in-memory state at all do we fetch from
+    // disk — that covers app restarts and conversations authored on
+    // another machine.
+    const cached = conversations[id]
+    if (cached) {
+      currentId = id
+      includeActiveFile = false
+      return
+    }
     try {
       const res = await m.sendRequest(AiConversationLoad, HOST_EXTENSION, {
         id,
@@ -398,11 +427,10 @@ export function createAiChatStore(
     }
 
     if (currentId) delete draftsByConv[currentId]
-    // A brand-new turn supersedes any still-open meta__ask_user card;
-    // clear it locally so the UI doesn't show a stale question once
-    // the new turn's output starts streaming. The extension drains
-    // its side on AiChatStart (see register.ts skipAllPendingQuestions).
-    pendingQuestion = null
+    // A brand-new turn supersedes any still-open meta__ask_user card
+    // for *this* conversation. Cards on other conversations keep their
+    // pending state — the user may flip back to answer them.
+    if (currentId) clearPendingQuestionFor(currentId)
   }
 
   function abort(): void {
@@ -422,10 +450,23 @@ export function createAiChatStore(
     last.streaming = false
     conv.streaming = false
     // Stopping the turn also dismisses any pending meta__ask_user
-    // card — the extension's abort handler drains the resolver on its
-    // side; clearing here keeps the webview in sync so the card
-    // disappears immediately.
-    pendingQuestion = null
+    // card for this conversation — the extension's abort handler
+    // drains the resolver on its side; clearing here keeps the
+    // webview in sync so the card disappears immediately. Other
+    // conversations' cards stay untouched.
+    if (currentId) clearPendingQuestionFor(currentId)
+  }
+
+  /** Drop any pending meta__ask_user card attached to `convId`.
+   *  Used by abort / new-turn / answer paths that supersede the
+   *  prior question. */
+  function clearPendingQuestionFor(convId: string): void {
+    const existing = pendingQuestionsByConv[convId]
+    if (!existing) return
+    delete pendingQuestionsByConv[convId]
+    if (pendingQuestionConvByCallId[existing.callId] === convId) {
+      delete pendingQuestionConvByCallId[existing.callId]
+    }
   }
 
   // ── Event handlers, invoked by the webview's message pump.
@@ -702,21 +743,35 @@ export function createAiChatStore(
   }
 
   function onAskUser(params: {
+    conversationId: string
     callId: string
     question: string
     choices?: string[]
   }): void {
-    pendingQuestion = {
+    // Route strictly by the conversation the call belongs to. The
+    // extension populates `conversationId` from its callArgs map, so
+    // an empty value signals a bug upstream — drop the event rather
+    // than attach the card to an unrelated chat. If the user has
+    // flipped conversations, the card will materialize as soon as
+    // they navigate back.
+    if (!params.conversationId) return
+    pendingQuestionsByConv[params.conversationId] = {
       callId: params.callId,
       question: params.question,
       choices: params.choices,
     }
+    pendingQuestionConvByCallId[params.callId] = params.conversationId
   }
 
   function answerQuestion(answer: string): void {
-    const q = pendingQuestion
+    // Answer the card attached to the *currently-viewed* conversation
+    // — the same one `pendingQuestion` surfaces to MessageList. If
+    // the user is looking at a different chat, there's no card on
+    // screen, so answering via this path is a no-op.
+    if (!currentId) return
+    const q = pendingQuestionsByConv[currentId]
     if (!q) return
-    pendingQuestion = null
+    clearPendingQuestionFor(currentId)
     const m = getMessenger()
     m?.sendNotification(AiChatAnswerUser, HOST_EXTENSION, {
       callId: q.callId,
@@ -875,7 +930,26 @@ export function createAiChatStore(
       return includeActiveFile
     },
     get pendingQuestion() {
-      return pendingQuestion
+      // Surface only the card for the *current* conversation so the
+      // user never sees a question belonging to a different chat they
+      // flipped through. Other conversations' cards stay in the
+      // bucket and re-appear when the user navigates back.
+      if (!currentId) return null
+      return pendingQuestionsByConv[currentId] ?? null
+    },
+    /** Ids of conversations with an in-flight stream. The history
+     *  panel renders a spinner on these rows so the user can see at
+     *  a glance that a chat is still burning tokens even when it
+     *  isn't the currently-focused one — defence against silent
+     *  "ghost session" token spend. */
+    get streamingConversationIds() {
+      const ids: string[] = []
+      for (const key of Object.keys(conversations)) {
+        const conv = conversations[key]
+        if (!conv) continue
+        if (conv.streaming && conv.id) ids.push(conv.id)
+      }
+      return ids
     },
     get stagedAttachments() {
       return stagedAttachments
@@ -935,6 +1009,7 @@ export type AiChatStore = {
   readonly activeFile: ActiveFileInfo
   readonly includeActiveFile: boolean
   readonly pendingQuestion: PendingQuestion | null
+  readonly streamingConversationIds: string[]
   toggleIncludeActiveFile: () => void
   answerQuestion: (answer: string) => void
   readonly stagedAttachments: AiChatAttachment[]
@@ -1005,6 +1080,7 @@ export type AiChatStore = {
     inWorkspace: boolean
   }) => void
   onAskUser: (params: {
+    conversationId: string
     callId: string
     question: string
     choices?: string[]

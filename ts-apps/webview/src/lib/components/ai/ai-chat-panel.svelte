@@ -172,6 +172,7 @@
       <ConversationHistory
         items={store.history}
         currentId={store.currentId}
+        streamingIds={store.streamingConversationIds}
         onLoad={onLoadConversation}
         onDelete={onDeleteConversation}
         onClose={() => (historyOpen = false)}

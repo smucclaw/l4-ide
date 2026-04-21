@@ -23,13 +23,13 @@
     },
     {
       label:
-        'Convert my investment contract into accurate L4 and create test scenarios for a next investment round for me to play around with',
+        'Convert my investment contract into accurate L4 and create scenarios for a next investment round',
       prompt:
         'Convert the attached investment contract into accurate L4, faithfully modelling the economic terms (valuation, cap table changes, dilution, pro-rata, liquidation preferences, anti-dilution). Annotate each rule with a @desc pointing at the contract clause. Then create a set of test scenarios for a plausible next investment round I can play around with — vary round size, pre-money valuation and new-investor stake — and include L4 expressions I can evaluate to see how outcomes shift across the scenarios.',
     },
     {
       label:
-        'Create a well tested L4 API or WebMCP endpoint from my business requirement specification document so my website forms can verify inputs against it',
+        'Create L4 APIs from my business requirement spec document so my website forms can verify against it',
       prompt:
         'Read the attached business requirement specification and create a well-tested L4 API / WebMCP endpoint that my website forms can POST against to verify user input. Derive the input schema and the validation rules from the spec, mark the verification function with @export so it ships as both a REST endpoint and a WebMCP tool, write test scenarios covering the happy path plus the edge cases the spec calls out, and run them with l4__evaluate so I can see they pass before deploying.',
     },

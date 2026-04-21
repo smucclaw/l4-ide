@@ -568,8 +568,12 @@ export const AiChatSeedDraft: NotificationType<{
 }
 
 /** Extension → webview: the model invoked `meta__ask_user`. The webview
- * renders a question card above the in-progress assistant text. */
+ * renders a question card above the in-progress assistant text in the
+ * conversation the call belongs to. `conversationId` is required so
+ * the store can route the card to the correct conversation even if the
+ * user has since flipped to another one via the history panel. */
 export const AiChatAskUser: NotificationType<{
+  conversationId: string
   callId: string
   question: string
   /** Optional fixed set of choices; when empty the UI renders a

@@ -448,8 +448,12 @@
     padding-top: 2px;
   }
   /* Hairline between the Input pre and the Output section — makes
-     the two sections visually distinct inside the shared panel. */
-  .section-label:has(+ .rule-result) {
+     the two sections visually distinct inside the shared panel.
+     Scoped to `:not(:first-child)` so the generic-output case
+     (Output as the only section) doesn't double up with the
+     panel's own top border, which read as a stacked pair of
+     lines above the code box. */
+  .section-label:not(:first-child):has(+ .rule-result) {
     border-top: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
     margin-top: 4px;
   }
