@@ -532,9 +532,16 @@ export class ChatService {
     // Multimodal user content: when the webview has staged attachments,
     // ship them as OpenAI-shaped content parts alongside the text so
     // the ai-proxy can pass them through to OpenAI as-is or translate
-    // to Anthropic's image/document block shape. Attachments without
-    // text still include an empty text part so the provider knows the
-    // turn isn't unintentional.
+    // to Anthropic's image/document block shape.
+    //
+    // Anthropic's ai-sdk adapter only accepts PDFs in `file` parts
+    // ("'Non-PDF files in user messages' functionality not
+    // supported."), so plain text / markdown attachments can't use
+    // the file block. Inline them as an additional `text` content
+    // part wrapped with a filename marker instead — works across
+    // every provider and keeps the source attribution visible to the
+    // model. PDFs still go through as file blocks; images still use
+    // image_url parts.
     if (params.attachments && params.attachments.length > 0) {
       const parts: Array<
         | { type: 'text'; text: string }
@@ -548,6 +555,25 @@ export class ChatService {
             image_url: {
               url: `data:${att.mediaType};base64,${att.dataBase64}`,
             },
+          })
+        } else if (att.mediaType.startsWith('text/')) {
+          // Decode utf-8 and inline. The wrapper tag mirrors the
+          // `<editor-context>` / `<mention-context>` shape the model
+          // already sees for filesystem content, so it treats the
+          // body as an attached document rather than an ambiguous
+          // second prompt.
+          let body: string
+          try {
+            body = Buffer.from(att.dataBase64, 'base64').toString('utf-8')
+          } catch (err) {
+            this.opts.logger.warn(
+              `assembleMessages: failed to decode text attachment ${att.name}: ${err instanceof Error ? err.message : String(err)}`
+            )
+            continue
+          }
+          parts.push({
+            type: 'text',
+            text: `<attached-file name="${att.name}" mediaType="${att.mediaType}">\n${body}\n</attached-file>`,
           })
         } else {
           parts.push({

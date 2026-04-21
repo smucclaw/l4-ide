@@ -87,7 +87,7 @@
                     title="A turn is still running in this conversation"
                   ></span>
                 {/if}
-                {item.title || 'Untitled'}
+                <span class="row-title-text">{item.title || 'Untitled'}</span>
               </span>
               <span class="row-meta">{relativeTime(item.lastActiveAt)}</span>
             </button>
@@ -156,6 +156,10 @@
     align-items: stretch;
     padding: 0 4px;
     margin-bottom: 1px;
+    /* Let the row shrink past its content-size — without this the
+       flex parent forces the panel wider to fit a long title, which
+       pushes the delete icon off-screen on narrow sidebars. */
+    min-width: 0;
   }
   .history-row.active .row-main {
     background: var(
@@ -176,19 +180,33 @@
     padding: 6px 8px;
     color: var(--vscode-foreground);
     border-radius: 3px;
+    /* Same min-width:0 dance — `.row-main` is a flex child of
+       `.history-row` and its default `min-width: auto` = intrinsic
+       content size, which would swell the whole panel on long
+       titles. */
+    min-width: 0;
   }
   .row-main:hover {
     background: var(--vscode-list-hoverBackground);
   }
   .row-title {
     flex: 1;
+    min-width: 0;
     font-size: 12px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
     display: inline-flex;
     align-items: center;
     gap: 6px;
+    /* The inner `.row-title-text` carries the ellipsis. Keeping the
+       overflow rules only on the text element (not this flex
+       container) is what lets the dot + text layout render and the
+       text clip independently. */
+  }
+  .row-title-text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   /* Pulsing crimson dot — same accent colour as the sidebar's
      active-tab underline, so a streaming chat in the history list
