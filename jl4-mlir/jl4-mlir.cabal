@@ -97,6 +97,7 @@ test-suite jl4-mlir-test
   hs-source-dirs: test
   main-is: Main.hs
   build-depends:
+    bytestring,
     jl4-core,
     jl4-mlir,
     text >= 2 && < 2.1.2,
