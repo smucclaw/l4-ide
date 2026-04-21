@@ -54,6 +54,10 @@ data CompiledModule = CompiledModule
   , compiledEntityInfo :: !EntityInfo
   , compiledDecide :: !(Decide Resolved)
   , compiledImportEnv :: !EvalEnv.Environment        -- ^ Evaluator environment from imports
+  , compiledAllDeclares :: ![Declare Resolved]       -- ^ DECLAREs from the entry file AND every transitively-imported file.
+                                                     -- Consulted by 'buildModuleInfo' so a record parameter
+                                                     -- whose type is defined in an IMPORT'd file resolves —
+                                                     -- the entry module's own 'flattenDeclares' wouldn't see it.
   }
   deriving (Generic)
 
@@ -71,6 +75,10 @@ data SharedModuleContext = SharedModuleContext
   , sharedModuleContext :: !ModuleContext
   , sharedImportEnv :: !EvalEnv.Environment
   , sharedSource :: !Text
+  , sharedAllDeclares :: ![Declare Resolved]
+    -- ^ DECLAREs from the entry file + every transitively-imported
+    --   file. Carried through into 'CompiledModule.compiledAllDeclares'
+    --   so direct-AST evaluation can resolve cross-file record types.
   }
 
 -- | Build shared context from an already-typechecked module.
@@ -92,6 +100,11 @@ buildSharedContext filepath source moduleContext resolvedModule env entityInfo =
     , sharedModuleContext = moduleContext
     , sharedImportEnv = importEnv
     , sharedSource = source
+    -- Fallback path (single-file compile, no bundle info): the best we
+    -- can do is the entry module's own DECLAREs. The bundle-compile
+    -- path in Compiler.hs overrides this with the full cross-file set
+    -- via 'buildSharedContextWithDeclares'.
+    , sharedAllDeclares = moduleDeclaresOnly resolvedModule
     }
 
 -- | Build a CompiledModule for a single function, reusing shared context.
@@ -105,6 +118,7 @@ buildCompiledFromShared shared funName = runExceptT $ do
     , compiledEntityInfo = shared.sharedEntityInfo
     , compiledDecide = decide
     , compiledImportEnv = shared.sharedImportEnv
+    , compiledAllDeclares = shared.sharedAllDeclares
     }
  where
   evalErrorToText :: EvaluatorError -> Text
@@ -214,13 +228,18 @@ precompileModule filepath source moduleContext funName = runExceptT $ do
   -- environment to be pre-computed (it only evaluates the current module fresh)
   importEnv <- liftIO $ buildImportEnvironment filepath source moduleContext tcRes.entityInfo
 
-  -- Build the compiled module
+  -- Build the compiled module. precompileModule is the single-file
+  -- fallback — bundle compilation populates `compiledAllDeclares` from
+  -- the full import graph in Compiler.hs. Here we only have the entry
+  -- module's AST, so we fall back to its own declarations; that's the
+  -- best we can do without re-running the whole bundle typecheck.
   pure CompiledModule
     { compiledModule = tcRes.module'
     , compiledEnvironment = tcRes.environment
     , compiledEntityInfo = tcRes.entityInfo
     , compiledDecide = decide
     , compiledImportEnv = importEnv
+    , compiledAllDeclares = moduleDeclaresOnly tcRes.module'
     }
  where
   evalErrorToText :: EvaluatorError -> Text
@@ -310,11 +329,11 @@ data ModuleInfo = ModuleInfo
     -- ^ enum type unique -> [(variant name, variant constructor ref)]
   }
 
-buildModuleInfo :: Module Resolved -> ModuleInfo
-buildModuleInfo (MkModule _ _ section) = ModuleInfo
-  { miRecords      = Map.fromList [ r | Just r <- map recordFor (flattenDeclares section) ]
-  , miEnumVariants = Map.fromList [ r | Just r <- map enumFor   (flattenDeclares section) ]
-  }
+-- | Flatten a module's own top-level + nested DECLAREs. Does not
+-- follow IMPORTs — use 'compiledAllDeclares' (populated at bundle
+-- compile time) when cross-file types need to resolve.
+moduleDeclaresOnly :: Module Resolved -> [Declare Resolved]
+moduleDeclaresOnly (MkModule _ _ section) = flattenDeclares section
   where
     flattenDeclares :: Section Resolved -> [Declare Resolved]
     flattenDeclares (MkSection _ _ _ decls) = concatMap step decls
@@ -322,6 +341,13 @@ buildModuleInfo (MkModule _ _ section) = ModuleInfo
         step (Declare _ d)  = [d]
         step (Section _ s') = flattenDeclares s'
         step _              = []
+
+buildModuleInfo :: [Declare Resolved] -> ModuleInfo
+buildModuleInfo decls = ModuleInfo
+  { miRecords      = Map.fromList [ r | Just r <- map recordFor decls ]
+  , miEnumVariants = Map.fromList [ r | Just r <- map enumFor   decls ]
+  }
+  where
 
     recordFor :: Declare Resolved -> Maybe (Unique, (Resolved, [(Text, Type' Resolved)]))
     -- A 'RecordDecl' carries its value-level constructor in the 'Maybe n'
@@ -565,7 +591,7 @@ evaluateDirectAST compiled params assumeRefs assumeValues traceLevel includeGrap
   -- Build once per call: a lookup of every record / enum declaration in
   -- the compiled module so 'fnLiteralToExprTyped' can construct record
   -- literals and enum variants without re-running the typechecker.
-  let moduleInfo = buildModuleInfo compiled.compiledModule
+  let moduleInfo = buildModuleInfo compiled.compiledAllDeclares
       paramTypes = extractParamTypes compiled.compiledDecide
       paramMap   = Map.fromList [(name, val) | (name, Just val) <- params]
       assumeMap  = Map.fromList [(name, val) | (name, Just val) <- assumeValues]
