@@ -15,6 +15,7 @@ import {
   AiChatStart,
   AiChatStarted,
   AiChatTextDelta,
+  AiChatThinkingDelta,
   AiChatToolActivity,
   AiChatToolCall,
   AiConversationDelete,
@@ -129,6 +130,17 @@ export function registerAiChatHandlers(deps: {
         break
       case 'text-delta':
         messenger.sendNotification(AiChatTextDelta, frontend, {
+          conversationId: event.conversationId,
+          text: event.text,
+        })
+        break
+      case 'thinking-delta':
+        // Reasoning / "extended thinking" deltas forwarded untouched
+        // to the webview. The store accumulates consecutive frames
+        // into one `thinking` block that renders as a
+        // collapsed-by-default "Thinking…" toggle in
+        // message-assistant.svelte.
+        messenger.sendNotification(AiChatThinkingDelta, frontend, {
           conversationId: event.conversationId,
           text: event.text,
         })
@@ -581,6 +593,13 @@ const SOFT_PDF_WARN_BYTES = 2 * 1024 * 1024
 
 const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'gif']
 
+// Office formats the providers can't read directly. We still let the
+// user *pick* one (so they don't get stuck wondering why their file is
+// greyed out in the dialog) but we reject it after-the-fact with a note
+// nudging them to export to PDF first. The seed picker passes through
+// here when the user clicks the spreadsheet seed.
+const OFFICE_EXTENSIONS = ['xlsx', 'xls', 'docx', 'doc', 'pptx', 'ppt']
+
 function mediaTypeForExtension(ext: string): string | null {
   switch (ext.toLowerCase()) {
     case 'png':
@@ -602,24 +621,19 @@ function mediaTypeForExtension(ext: string): string | null {
 async function handlePickAttachment(
   accept: 'any' | 'text-or-pdf' | 'spreadsheet'
 ): Promise<{ attachment: AiChatAttachment | null; note?: string }> {
-  if (accept === 'spreadsheet') {
-    // Neither OpenAI nor Anthropic accepts .xlsx/.docx directly on
-    // Chat Completions. Nudge the user to export as PDF rather than
-    // parsing the spreadsheet client-side.
-    const choice = await vscode.window.showInformationMessage(
-      'Neither Legalese AI nor its providers can read Excel/Word files directly. Export to PDF first, then attach the PDF.',
-      'Pick a PDF'
-    )
-    if (choice !== 'Pick a PDF') {
-      return { attachment: null }
-    }
-    accept = 'text-or-pdf'
-  }
-
+  // The "spreadsheet" seed lets the user *try* to pick an Office file —
+  // the picker shows .xlsx/.docx/.pptx alongside PDF/text so it isn't
+  // greyed out. We surface the "export to PDF first" nudge only after
+  // they actually choose one of those formats; PDFs and text files go
+  // through unchanged.
   const filters: Record<string, string[]> =
     accept === 'text-or-pdf'
       ? { 'Text or PDF': ['pdf', 'txt', 'md'] }
-      : { 'Image or PDF': [...IMAGE_EXTENSIONS, 'pdf'] }
+      : accept === 'spreadsheet'
+        ? {
+            'Document or PDF': ['pdf', 'txt', 'md', ...OFFICE_EXTENSIONS],
+          }
+        : { 'Image or PDF': [...IMAGE_EXTENSIONS, 'pdf'] }
 
   const uris = await vscode.window.showOpenDialog({
     canSelectFiles: true,
@@ -632,6 +646,12 @@ async function handlePickAttachment(
   const uri = uris[0]!
   const name = nodePath.basename(uri.fsPath)
   const ext = (name.split('.').pop() ?? '').toLowerCase()
+  if (OFFICE_EXTENSIONS.includes(ext)) {
+    return {
+      attachment: null,
+      note: 'Neither Legalese AI nor its providers can read Excel, Word or PowerPoint files directly. Export to PDF first, then attach the PDF.',
+    }
+  }
   const mediaType = mediaTypeForExtension(ext)
   if (!mediaType) {
     return {

@@ -70,7 +70,21 @@ export interface RenderedTurn {
    *  next delta opens a fresh text block. Only populated on assistant
    *  turns. */
   blocks?: AssistantBlock[]
+  /** Chips shown at the top of a user message — the attachments and
+   *  (if enabled) the active file that went with this turn's request.
+   *  Set once at submit time from the staged state in the chat input;
+   *  never mutated afterwards. Only populated on user turns. */
+  chips?: UserTurnChip[]
 }
+
+/** A chip echoed at the top of a user message — mirrors what was
+ *  staged in the chat input at submit time: PDF / image attachments
+ *  and (when the active-file toggle was on) the active editor file.
+ *  Kept minimal because these are UI-only badges, not re-usable
+ *  payloads. */
+export type UserTurnChip =
+  | { kind: 'image' | 'pdf'; name: string }
+  | { kind: 'active-file'; name: string; path: string }
 
 export type AssistantBlock =
   | { kind: 'text'; text: string }
@@ -288,10 +302,26 @@ export function createAiChatStore(
     if (!m || !text.trim()) return
     const conv = ensureCurrent()
     const turnId = `turn_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+    // Snapshot the staged-context chips — attachments + (when the
+    // chip was on) the active file — so the user message can echo
+    // what actually went to the model. Plain objects to dodge the
+    // $state-proxy postMessage clone issue elsewhere.
+    const turnChips: UserTurnChip[] = []
+    for (const att of stagedAttachments) {
+      turnChips.push({ kind: att.kind, name: att.name })
+    }
+    if (includeActiveFile && activeFile.name && activeFile.path) {
+      turnChips.push({
+        kind: 'active-file',
+        name: activeFile.name,
+        path: activeFile.path,
+      })
+    }
     conv.turns.push({
       id: `user:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
       role: 'user',
       content: text,
+      ...(turnChips.length > 0 ? { chips: turnChips } : {}),
     })
     conv.turns.push({
       id: `asst:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
@@ -359,6 +389,11 @@ export function createAiChatStore(
     }
 
     if (currentId) delete draftsByConv[currentId]
+    // A brand-new turn supersedes any still-open meta__ask_user card;
+    // clear it locally so the UI doesn't show a stale question once
+    // the new turn's output starts streaming. The extension drains
+    // its side on AiChatStart (see register.ts skipAllPendingQuestions).
+    pendingQuestion = null
   }
 
   function abort(): void {
@@ -377,6 +412,11 @@ export function createAiChatStore(
     // event races or never arrives, the UI still unlocks.
     last.streaming = false
     conv.streaming = false
+    // Stopping the turn also dismisses any pending meta__ask_user
+    // card — the extension's abort handler drains the resolver on its
+    // side; clearing here keeps the webview in sync so the card
+    // disappears immediately.
+    pendingQuestion = null
   }
 
   // ── Event handlers, invoked by the webview's message pump.

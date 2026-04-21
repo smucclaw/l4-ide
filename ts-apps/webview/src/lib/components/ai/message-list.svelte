@@ -16,7 +16,6 @@
     pendingApproval,
     pendingQuestion,
     onRetry,
-    onSignIn,
     onApproveTool,
     onAnswerQuestion,
     onOpenFile,
@@ -32,7 +31,6 @@
     /** Active meta__ask_user question awaiting an answer, or null. */
     pendingQuestion: PendingQuestion | null
     onRetry?: () => void
-    onSignIn?: () => void
     onApproveTool: (
       callId: string,
       decision: 'allow' | 'deny' | 'alwaysAllow'
@@ -129,6 +127,7 @@
         turns.slice(0, i + 1).filter((t) => t.role === 'user').length - 1}
       <UserMessage
         content={turn.content}
+        chips={turn.chips}
         shouldStick={stickyUserIndex === userIndex}
         {userIndex}
       />
@@ -139,7 +138,6 @@
         error={turn.error}
         blocks={turn.blocks}
         {onRetry}
-        {onSignIn}
         {onOpenFile}
         {onOpenFileDiff}
       />
@@ -186,9 +184,14 @@
         >
       </div>
     </div>
-  {:else if streaming}
+  {:else if streaming && !pendingQuestion}
+    <!-- Hide the section-sign spinner while a meta__ask_user is
+         pending: the turn is technically still open but the stream
+         is paused awaiting the user, so showing the running indicator
+         would falsely imply the model is doing work. The question
+         card above already signals the state. -->
     <div class="bottom-spinner">
-      <SectionSpinner size={44} />
+      <SectionSpinner size={48} />
     </div>
   {/if}
 </div>

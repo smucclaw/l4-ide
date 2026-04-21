@@ -116,6 +116,7 @@
   .bg {
     fill: none;
     stroke: #d1d5db;
+    stroke-opacity: 0.75;
     stroke-width: 0.7;
     stroke-linecap: round;
     stroke-linejoin: round;

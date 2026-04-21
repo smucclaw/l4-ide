@@ -52,3 +52,38 @@ function workspaceRelative(uri: vscode.Uri): string {
   if (!folder) return uri.fsPath
   return vscode.workspace.asRelativePath(uri, false)
 }
+
+/**
+ * Build a `<mention-context>` system message for any `@`-mentions on
+ * this turn. The user's text already carries the literal `@<label>`
+ * token (so the visual chip survives), but the model treats it as an
+ * arbitrary string until something tells it the token resolves to a
+ * file path it can open. We surface those resolved paths separately
+ * so the model knows which fs__read_file calls would actually work.
+ *
+ * Returns null when there are no mentions, or when every mention is a
+ * non-path kind (selection / symbol — those are handled elsewhere).
+ */
+export function buildMentionContextMessage(
+  mentions: Array<{ kind: 'file' | 'symbol' | 'selection'; label: string }>
+): AiChatMessage | null {
+  if (!mentions || mentions.length === 0) return null
+  const files = mentions
+    .filter((m) => m.kind === 'file')
+    .map((m) => m.label)
+    .filter((label) => label.length > 0)
+  if (files.length === 0) return null
+  // Dedupe while preserving the order the user picked them in.
+  const seen = new Set<string>()
+  const unique = files.filter((f) =>
+    seen.has(f) ? false : (seen.add(f), true)
+  )
+  const lines: string[] = []
+  lines.push('<mention-context>')
+  lines.push(
+    'The `@<path>` tokens in the user message resolve to these workspace files. Call fs__read_file on the path if you need the body:'
+  )
+  for (const f of unique) lines.push(`  - ${f}`)
+  lines.push('</mention-context>')
+  return { role: 'system', content: lines.join('\n') }
+}

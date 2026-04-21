@@ -210,8 +210,44 @@
 
 <div class="tool-call" class:is-error={call.status === 'error'}>
   <div class="tool-row">
-    <span class="dot" aria-hidden="true"></span>
-    <span class="action">{view.label}</span>
+    <!-- Leading chevron acts as the expand handle. Same glyph
+         (`&#9002;`) the deployment tool-card and inspector-panel use,
+         painted in the chat's primary crimson by default; turns red
+         on error and gold when awaiting approval, so the row's state
+         reads at a glance without needing a separate status column on
+         the right. Disabled-looking (no pointer) when there's nothing
+         to expand. -->
+    <button
+      type="button"
+      class="expand-lead status-{call.status}"
+      class:expanded
+      class:has-details={hasDetails}
+      onclick={hasDetails ? toggle : undefined}
+      aria-expanded={hasDetails ? expanded : undefined}
+      aria-label={hasDetails
+        ? expanded
+          ? 'Hide details'
+          : 'Show details'
+        : undefined}
+      tabindex={hasDetails ? 0 : -1}>&#9002;</button
+    >
+    {#if hasDetails}
+      <!-- When the row has something to expand, the label itself
+           also toggles — bigger hit area than the chevron alone and
+           matches Cursor / Claude Code habits. Falls back to a plain
+           <span> otherwise so the row isn't a tab-stop with no
+           action. -->
+      <button
+        type="button"
+        class="action action-btn"
+        onclick={toggle}
+        aria-expanded={expanded}
+        aria-label={expanded ? 'Hide details' : 'Show details'}
+        >{view.label}</button
+      >
+    {:else}
+      <span class="action">{view.label}</span>
+    {/if}
     {#if view.target}
       {#if view.click}
         <button
@@ -227,30 +263,19 @@
         <span class="target plain">{view.target}</span>
       {/if}
     {/if}
-    <span class="status status-{call.status}">
-      {#if call.status === 'pending-approval'}…
-      {:else if call.status === 'running'}…
-      {:else if call.status === 'done'}✓
-      {:else if call.status === 'error'}failed
-      {/if}
-    </span>
-    {#if hasDetails}
-      <button
-        type="button"
-        class="expand-btn"
-        onclick={toggle}
-        title={expanded ? 'Hide details' : 'Show details'}
-        aria-expanded={expanded}
-        aria-label="Toggle details">{expanded ? '▾' : '▸'}</button
-      >
-    {/if}
   </div>
 
   {#if expanded && call.status === 'done' && isRuleCall}
+    <!-- Match the deployment tool-card's expand layout: INPUT / OUTPUT
+         section labels (small-caps, description-foreground) with a
+         hairline separator between them. Keeps chat tool-expansion
+         visually consistent with the sidebar's Deploy / Deployments
+         cards. -->
     <div class="rule-details">
+      <div class="section-label">Input</div>
       <pre class="rule-block rule-args">{JSON.stringify(args, null, 2)}</pre>
       {#if ruleResultHtml}
-        <hr class="rule-sep" />
+        <div class="section-label">Output</div>
         <pre class="rule-block rule-result">{@html ruleResultHtml}</pre>
       {/if}
     </div>
@@ -275,19 +300,60 @@
     align-items: baseline;
     gap: 6px;
   }
-  .dot {
-    position: relative;
-    background: #c8376a;
+  /* Expand handle — same `&#9002;` glyph the deployment tool-card and
+     inspector-panel use. Lives IN FRONT of the row so the row reads
+     as "open this". Painted in the chat's primary crimson by default;
+     red on error; gold when awaiting approval. When there's nothing
+     to expand (still running, no result yet) the chevron stays visible
+     but isn't clickable — callers can see state without a second
+     widget. */
+  .expand-lead {
+    background: transparent;
+    border: none;
+    padding: 0 2px;
+    margin-right: 0;
+    font-size: 11px;
     line-height: 1;
     flex-shrink: 0;
-    margin-right: 2px;
-    padding: 0.2em;
-    border-radius: 0.2em;
-    top: -0.15em;
+    color: #c8376a;
+    transition: transform 0.15s;
+    transform-origin: 25% 50%;
+    cursor: default;
+  }
+  .expand-lead.has-details {
+    cursor: pointer;
+  }
+  .expand-lead.expanded {
+    transform: rotate(90deg);
+  }
+  .expand-lead.status-error {
+    color: var(--vscode-errorForeground, #d7263d);
+  }
+  .expand-lead.status-pending-approval {
+    /* Warning amber — same kind of "act on me" signal VSCode uses for
+       editor warnings. `--vscode-editorWarning-foreground` maps to
+       gold in every bundled theme. */
+    color: var(--vscode-editorWarning-foreground, #e0a84a);
   }
   .action {
     color: var(--vscode-foreground);
     font-weight: 600;
+  }
+  /* Button variant of .action: keep the span form's typography
+     intact (font-weight: 600, color, etc.) — using the `font`
+     shorthand here would reset weight/family from the default button
+     styles, which is why the label lost its bold. Only reset the
+     default button chrome. */
+  .action-btn {
+    background: transparent;
+    border: none;
+    padding: 0;
+    color: var(--vscode-foreground);
+    font-family: inherit;
+    font-size: inherit;
+    font-weight: 600;
+    line-height: inherit;
+    cursor: pointer;
   }
   .target,
   .target.plain {
@@ -307,36 +373,12 @@
   .target-btn:hover {
     text-decoration: underline;
   }
-  .status {
-    margin-left: auto;
-    font-size: 11px;
-    color: var(--vscode-descriptionForeground);
-  }
-  .status-error {
-    color: var(--vscode-errorForeground, #d7263d);
-  }
-  .status-done {
-    color: var(--vscode-foreground);
-    opacity: 0.6;
-  }
   .err {
     margin-top: 4px;
     color: var(--vscode-errorForeground, #d7263d);
     font-size: 11px;
     white-space: pre-wrap;
     word-break: break-word;
-  }
-  .expand-btn {
-    background: transparent;
-    border: none;
-    color: var(--vscode-descriptionForeground);
-    font-size: 11px;
-    padding: 0 2px;
-    margin-left: 2px;
-    cursor: pointer;
-  }
-  .expand-btn:hover {
-    color: var(--vscode-foreground);
   }
   .details {
     margin: 4px 0 0 18px;
@@ -380,9 +422,24 @@
     overflow-y: auto;
     tab-size: 2;
   }
-  .rule-sep {
-    margin: 0;
-    border: none;
+  /* Matches the deployment tool-card's section labels (small-caps,
+     letter-spaced, muted) so the AI chat's expanded rule card reads
+     the same as the sidebar Deploy / Deployments cards. */
+  .section-label {
+    font-size: 0.82em;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--vscode-descriptionForeground);
+    opacity: 0.7;
+    padding: 6px 8px 2px;
+  }
+  .section-label + .rule-block {
+    padding-top: 2px;
+  }
+  /* Hairline between the Input pre and the Output section — makes
+     the two sections visually distinct inside the shared panel. */
+  .section-label:has(+ .rule-result) {
     border-top: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
+    margin-top: 4px;
   }
 </style>

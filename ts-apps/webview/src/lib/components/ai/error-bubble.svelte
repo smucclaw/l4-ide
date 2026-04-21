@@ -3,15 +3,12 @@
     message,
     code,
     onRetry,
-    onSignIn,
   }: {
     message: string
     code?: string
     onRetry?: () => void
-    onSignIn?: () => void
   } = $props()
 
-  const isAuth = $derived(code === 'unauthenticated')
   const isQuota = $derived(
     code === 'daily_token_limit_exceeded' || code === 'rate_limited'
   )
@@ -21,13 +18,11 @@
   <div class="err-icon">⚠</div>
   <div class="err-body">
     <div class="err-message">{message}</div>
-    <div class="err-actions">
-      {#if isAuth && onSignIn}
-        <button class="err-btn" onclick={onSignIn}>Sign in</button>
-      {:else if !isQuota && onRetry}
+    {#if !isQuota && onRetry}
+      <div class="err-actions">
         <button class="err-btn" onclick={onRetry}>Retry</button>
-      {/if}
-    </div>
+      </div>
+    {/if}
   </div>
 </div>
 
@@ -36,15 +31,8 @@
     display: flex;
     gap: 8px;
     align-items: flex-start;
-    background: var(
-      --vscode-inputValidation-errorBackground,
-      rgba(255, 90, 90, 0.08)
-    );
-    border: 1px solid
-      var(--vscode-inputValidation-errorBorder, rgba(255, 90, 90, 0.4));
     color: var(--vscode-foreground);
-    border-radius: 4px;
-    padding: 8px 10px;
+    padding: 4px 0;
     margin: 6px 0;
     font-size: 12px;
   }
@@ -67,8 +55,8 @@
     gap: 6px;
   }
   /* Match the chat's primary CTA (Submit / Deploy) crimson rather than
-     VSCode's default theme button blue, so the retry / sign-in action
-     reads as part of the AI tab's visual family. */
+     VSCode's default theme button blue, so the retry action reads as
+     part of the AI tab's visual family. */
   .err-btn {
     background: #c8376a;
     color: #fff;

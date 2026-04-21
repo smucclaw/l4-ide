@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte'
   import type { Messenger } from 'vscode-messenger-webview'
-  import { HOST_EXTENSION } from 'vscode-messenger-common'
   import {
     AiActiveFile,
     AiAuthStatus,
@@ -15,7 +14,6 @@
     AiChatToolActivity,
     AiChatToolCall,
     AiUsageUpdate,
-    RequestSidebarLogin,
     type GetSidebarConnectionStatusResponse,
   } from 'jl4-client-rpc'
   import { createAiChatStore } from '$lib/stores/ai-chat.svelte'
@@ -94,14 +92,6 @@
     }
   })
 
-  function signIn(): void {
-    messenger?.sendNotification(
-      RequestSidebarLogin,
-      HOST_EXTENSION,
-      undefined as never
-    )
-  }
-
   function openHistory(): void {
     void store.refreshHistory()
     historyOpen = true
@@ -167,7 +157,6 @@
         pendingApproval={store.pendingApproval}
         pendingQuestion={store.pendingQuestion}
         {onRetry}
-        onSignIn={signIn}
         onApproveTool={(callId, decision) =>
           store.approveTool(callId, decision)}
         onAnswerQuestion={(answer) => store.answerQuestion(answer)}

@@ -158,8 +158,17 @@
   function submit(): void {
     const trimmed = text.trim()
     if (!trimmed || disabled) return
-    store.send(trimmed, stagedMentions)
-    stagedMentions = []
+    // Hijack the main input while the model is waiting on a
+    // meta__ask_user question: sending the typed text answers the
+    // question (the dispatcher resumes the same turn) instead of
+    // starting a new one. The ask-user card above no longer renders
+    // its own input/send — everything routes through here.
+    if (store.pendingQuestion) {
+      store.answerQuestion(trimmed)
+    } else {
+      store.send(trimmed, stagedMentions)
+      stagedMentions = []
+    }
     text = ''
     store.setDraft('')
     mentionState = null
@@ -278,7 +287,9 @@
     bind:value={text}
     oninput={onInput}
     onkeydown={onKeydown}
-    placeholder="Ask anything about your rules or L4…"
+    placeholder={store.pendingQuestion
+      ? 'Answer the question above…'
+      : 'Ask anything about your rules or L4…'}
     rows="1"
     {disabled}
   ></textarea>
@@ -416,7 +427,12 @@
           />
         </svg>
       </button>
-      {#if isStreaming}
+      {#if isStreaming && !(store.pendingQuestion && text.trim())}
+        <!-- Stop button: visible while the turn is streaming UNLESS
+             the model is paused on a meta__ask_user question and the
+             user has typed something — in that case the button flips
+             to a Send so a single Enter submits the answer rather
+             than forcing the user to hunt for a separate affordance. -->
         <button
           class="submit-btn stop"
           onclick={abort}
@@ -439,8 +455,10 @@
           class="submit-btn"
           onclick={submit}
           disabled={disabled || !text.trim()}
-          title="Send (Enter)"
-          aria-label="Send"
+          title={store.pendingQuestion
+            ? 'Answer the question (Enter)'
+            : 'Send (Enter)'}
+          aria-label={store.pendingQuestion ? 'Answer' : 'Send'}
         >
           <svg viewBox="0 0 16 16" aria-hidden="true">
             <path
@@ -530,10 +548,6 @@
     color: var(--vscode-foreground);
     background: rgba(128, 128, 128, 0.14);
   }
-  .icon-btn.muted:disabled {
-    opacity: 0.35;
-    cursor: not-allowed;
-  }
   /* Active-file chip: intentionally flat (no border, no background).
      Slightly muted label color so it reads as secondary, not a primary
      CTA. The icon flips between a document glyph (included) and an
@@ -585,7 +599,10 @@
     align-items: center;
     gap: 4px;
     padding: 2px 4px 2px 6px;
-    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
+    /* Mild gray fill instead of an outline — reads as a captured
+       value rather than an empty bordered box. Same look used on the
+       user message's echoed chips in message-user.svelte. */
+    background: rgba(128, 128, 128, 0.14);
     border-radius: 3px;
     font-size: 11px;
     color: var(--vscode-descriptionForeground);

@@ -8,7 +8,10 @@ import type { VSCodeL4LanguageClient } from '../vscode-l4-language-client.js'
 import { AiProxyClient, AiProxyError } from './ai-proxy-client.js'
 import type { ConversationStore } from './conversation-store.js'
 import type { AiLogger } from './logger.js'
-import { buildEditorContextMessage } from './editor-context.js'
+import {
+  buildEditorContextMessage,
+  buildMentionContextMessage,
+} from './editor-context.js'
 import { buildWorkspaceBootstrapMessage } from './workspace-bootstrap.js'
 import { BUILTIN_TOOLS } from './tool-registry.js'
 import type { ToolDispatcher } from './tool-dispatcher.js'
@@ -498,6 +501,16 @@ export class ChatService {
       const editorCtx = buildEditorContextMessage()
       if (editorCtx) messages.push(editorCtx)
     }
+
+    // @-mention context: the user's text already contains the literal
+    // `@<path>` token, but on its own that's just a string the model
+    // could read as ASCII art. Mirror the editor-context shape and tell
+    // the model these tokens resolve to real workspace paths it can
+    // open with fs__read_file. Without this hint, follow-up turns where
+    // the user attaches an extra file via @ never see the body — the
+    // model has no signal that the @-token is anything actionable.
+    const mentionCtx = buildMentionContextMessage(params.mentions)
+    if (mentionCtx) messages.push(mentionCtx)
 
     if (isNew) {
       const bootstrap = await buildWorkspaceBootstrapMessage(this.opts.client)

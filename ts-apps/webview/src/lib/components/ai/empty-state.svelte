@@ -19,21 +19,21 @@
     {
       label: 'Turn my policy document into L4 for use as MCP',
       prompt:
-        'Turn this policy document into precise and easily auditable L4 rules for use as an MCP tool with the goal to allow an AI agent to check compliance.',
+        'Turn the attached policy document into precise and easily auditable L4 rules for use as an MCP tool, so an AI agent can check compliance against them.',
       needsFile: 'text-or-pdf',
     },
     {
       label: 'Convert my spreadsheet into REST APIs I can use as webhooks',
       prompt:
-        'Convert this spreadsheet into REST API endpoints I can use as webhooks.',
+        'Convert the attached spreadsheet into REST API endpoints I can use as webhooks.',
       needsFile: 'spreadsheet',
     },
     {
       label:
         'Help me convert a legal text to L4 and create example scenarios challenging the rules',
       prompt:
-        'Help me convert a legal text to L4 and create example scenarios challenging the rules.',
-      needsFile: null,
+        'Convert the attached legal text to L4 and then create example scenarios that challenge the resulting rules.',
+      needsFile: 'text-or-pdf',
     },
   ]
 </script>

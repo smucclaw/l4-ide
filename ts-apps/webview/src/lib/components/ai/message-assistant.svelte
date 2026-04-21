@@ -11,7 +11,6 @@
     error,
     blocks,
     onRetry,
-    onSignIn,
     onOpenFile,
     onOpenFileDiff,
   }: {
@@ -20,7 +19,6 @@
     error?: { message: string; code?: string }
     blocks?: AssistantBlock[]
     onRetry?: () => void
-    onSignIn?: () => void
     onOpenFile: (callId: string) => void
     onOpenFileDiff: (callId: string) => void
   } = $props()
@@ -118,11 +116,10 @@
             {/if}
           </div>
         {:else if block.kind === 'tool-activity'}
-          <!-- Same chrome as a tool-call row (colored dot + bold label
-               + monospace target + right-aligned status) so server-side
-               activity reads as another tool entry instead of a different
-               visual category. No click target because these are
-               read-only backend events. -->
+          <!-- Server-side activity keeps the crimson dot up front (no
+               expand chevron — nothing to expand on read-only backend
+               events) + bold label + monospace message. No right-side
+               status; the dot and message together are enough. -->
           <div
             class="tool-call"
             class:is-error={block.activity.status === 'error'}
@@ -133,12 +130,6 @@
               {#if block.activity.message !== 'Legalesing...'}
                 <span class="target plain">{block.activity.message}</span>
               {/if}
-              <span class="status status-{block.activity.status}">
-                {#if block.activity.status === 'running'}…
-                {:else if block.activity.status === 'done'}✓
-                {:else if block.activity.status === 'error'}failed
-                {/if}
-              </span>
             </div>
           </div>
         {/if}
@@ -186,12 +177,7 @@
       </div>
     {/if}
     {#if error}
-      <ErrorBubble
-        message={error.message}
-        code={error.code}
-        {onRetry}
-        {onSignIn}
-      />
+      <ErrorBubble message={error.message} code={error.code} {onRetry} />
     {/if}
   </div>
 </div>
@@ -233,7 +219,7 @@
     background: #c8376a;
     line-height: 1;
     flex-shrink: 0;
-    margin-right: 2px;
+    margin: 0 8px 0 2px;
     padding: 0.2em;
     border-radius: 0.2em;
     top: -0.15em;
