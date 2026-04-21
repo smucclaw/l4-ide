@@ -384,6 +384,10 @@ export interface AiConversation {
   createdAt: string
   lastActiveAt: string
   messages: AiChatMessage[]
+  /** L4 VSCode extension version that created this conversation.
+   *  Stamped once at creation and never rewritten so support can trace
+   *  a saved transcript back to the exact build that produced it. */
+  extensionVersion?: string
 }
 
 /** Lightweight row for the history overlay — avoids shipping full

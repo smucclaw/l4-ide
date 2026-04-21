@@ -45,35 +45,105 @@
   type FileChange = {
     path: string
     action: 'created' | 'edited' | 'deleted'
+    /** Call id whose snapshot the diff/open view should anchor to.
+     *  For `created` this points at the CREATE call (the file exists
+     *  post-creation; opening it shows the new content as a plain
+     *  editor tab — no diff). For `edited` it points at the FIRST
+     *  edit call in the turn, so the applied-diff view shows the
+     *  full turn-wide delta rather than just the last edit. */
     callId: string
   }
   const fileChanges = $derived.by<FileChange[]>(() => {
     if (!blocks) return []
-    // Dedupe by `path+action` so repeated edits to the same file
-    // collapse into a single row. We keep the LATEST callId because
-    // its pre-edit snapshot is the one we want the diff view to use
-    // — earlier edits' snapshots have already been superseded. Order
-    // of first appearance is preserved; de-duplication just skips the
-    // repeats.
-    const byKey = new Map<string, FileChange>()
+    // Aggregate into a single row per path so the card shows one
+    // outcome per file for the whole turn, not every intermediate
+    // step. Rules:
+    //   created + (edited*) → created (click opens file as a tab)
+    //   created + deleted → dropped (net effect = nothing)
+    //   edited (only)      → edited  (click opens applied diff)
+    //   deleted (only)     → deleted (click opens file)
+    type PathState = {
+      created: boolean
+      edited: boolean
+      deleted: boolean
+      firstCreateId: string | null
+      firstEditId: string | null
+      firstDeleteId: string | null
+      /** Order of first appearance so the card preserves the path
+       *  ordering the user saw the tool rows in. */
+      order: number
+    }
+    const byPath = new Map<string, PathState>()
+    let nextOrder = 0
     for (const b of blocks) {
       if (b.kind !== 'tool-call' || b.call.status !== 'done') continue
       const call = b.call
-      let action: FileChange['action'] | null = null
-      if (call.name === 'fs__edit_file') action = 'edited'
-      else if (call.name === 'fs__create_file') action = 'created'
-      else if (call.name === 'fs__delete_file') action = 'deleted'
-      if (!action) continue
+      let kind: 'created' | 'edited' | 'deleted' | null = null
+      if (call.name === 'fs__edit_file') kind = 'edited'
+      else if (call.name === 'fs__create_file') kind = 'created'
+      else if (call.name === 'fs__delete_file') kind = 'deleted'
+      if (!kind) continue
+      let path: string | undefined
       try {
-        const args = JSON.parse(call.argsJson) as { path?: string }
-        if (!args.path) continue
-        const key = `${action}:${args.path}`
-        byKey.set(key, { path: args.path, action, callId: call.callId })
+        path = (JSON.parse(call.argsJson) as { path?: string }).path
       } catch {
-        // ignore malformed args
+        continue
+      }
+      if (!path) continue
+      let state = byPath.get(path)
+      if (!state) {
+        state = {
+          created: false,
+          edited: false,
+          deleted: false,
+          firstCreateId: null,
+          firstEditId: null,
+          firstDeleteId: null,
+          order: nextOrder++,
+        }
+        byPath.set(path, state)
+      }
+      if (kind === 'created') {
+        state.created = true
+        if (!state.firstCreateId) state.firstCreateId = call.callId
+      } else if (kind === 'edited') {
+        state.edited = true
+        if (!state.firstEditId) state.firstEditId = call.callId
+      } else {
+        state.deleted = true
+        if (!state.firstDeleteId) state.firstDeleteId = call.callId
       }
     }
-    return [...byKey.values()]
+    const rows: Array<FileChange & { order: number }> = []
+    for (const [path, s] of byPath) {
+      // Created then deleted in the same turn cancels out — nothing
+      // for the user to look at afterwards, so drop the row entirely.
+      if (s.created && s.deleted) continue
+      if (s.created) {
+        rows.push({
+          path,
+          action: 'created',
+          callId: s.firstCreateId!,
+          order: s.order,
+        })
+      } else if (s.deleted) {
+        rows.push({
+          path,
+          action: 'deleted',
+          callId: s.firstDeleteId!,
+          order: s.order,
+        })
+      } else if (s.edited) {
+        rows.push({
+          path,
+          action: 'edited',
+          callId: s.firstEditId!,
+          order: s.order,
+        })
+      }
+    }
+    rows.sort((a, b) => a.order - b.order)
+    return rows.map(({ path, action, callId }) => ({ path, action, callId }))
   })
 </script>
 
@@ -164,12 +234,12 @@
                 type="button"
                 class="review-path"
                 onclick={() =>
-                  change.action === 'deleted'
-                    ? onOpenFile(change.callId)
-                    : onOpenFileDiff(change.callId)}
-                title={change.action === 'deleted'
-                  ? 'Open file'
-                  : 'Open applied diff'}>{change.path}</button
+                  change.action === 'edited'
+                    ? onOpenFileDiff(change.callId)
+                    : onOpenFile(change.callId)}
+                title={change.action === 'edited'
+                  ? 'Open applied diff'
+                  : 'Open file'}>{change.path}</button
               >
             </li>
           {/each}

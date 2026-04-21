@@ -197,6 +197,18 @@
       if (deployView === 'deploy-form') return 'Deploy Now'
       if (activeTab === 'deployments' && deployments.length > 0)
         return 'Open in web browser'
+      // Tabs that aren't the Deploy tab surface the button as
+      // "Preview" — one click jumps to Deploy and shows the tool
+      // cards (which is already the default Deploy-tab view).
+      // Keeps the footer useful without forcing users to hunt for
+      // the Deploy tab manually when they've authored an @export.
+      if (
+        activeTab === 'ai-chat' ||
+        activeTab === 'docs' ||
+        activeTab === 'inspector'
+      ) {
+        return 'Preview'
+      }
       return 'Deploy'
     }
     if (conn.status === 'connecting') return 'Connecting...'
@@ -221,15 +233,16 @@
     if (activeTab === 'deployments') {
       return deployments.length === 0
     }
-    // Disable on non-deploy tabs (Docs, Inspector, AI chat). These
-    // tabs don't own the footer Deploy action, so the button should
-    // read "Deploy" but be inert while the user is on them.
+    // Non-deploy tabs surface a "Preview" button that jumps to the
+    // Deploy tab. Enabled iff the active file has at least one rule
+    // ready for export — otherwise the Deploy tab would just show
+    // the empty "Open an L4 file containing valid rules" hint.
     if (
       activeTab === 'inspector' ||
       activeTab === 'docs' ||
       activeTab === 'ai-chat'
     )
-      return true
+      return functions.length === 0
     if (deployView === 'preview' && functions.length === 0) return true
     return false
   }
@@ -555,6 +568,15 @@
         continueDeploy()
       } else if (activeTab === 'deployments' && deployments.length > 0) {
         openServiceUrl()
+      } else if (
+        activeTab === 'ai-chat' ||
+        activeTab === 'docs' ||
+        activeTab === 'inspector'
+      ) {
+        // "Preview" click jumps to the Deploy tab so the cards the
+        // button promised become visible. The Deploy tab's own
+        // footer action then reverts to the regular "Deploy" flow.
+        activeTab = 'preview'
       } else {
         showDeployForm()
       }

@@ -598,7 +598,7 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    padding: 2px 4px 2px 6px;
+    padding: 2px 2px 2px 4px;
     /* Mild gray fill instead of an outline — reads as a captured
        value rather than an empty bordered box. Same look used on the
        user message's echoed chips in message-user.svelte. */

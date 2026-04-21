@@ -143,7 +143,13 @@
       />
     {/if}
   {/each}
-  {#if showJumpButton}
+  {#if showJumpButton && !pendingQuestion}
+    <!-- Hide the sticky scroll-assist while a meta__ask_user card is
+         active: the question card is the only thing the user can act
+         on, and the sticky button would otherwise float above it at
+         the bottom of the viewport (its container is the whole scroll
+         region, so it keeps painting regardless of the card's
+         position) and draw the eye away from the required action. -->
     <button class="jump-btn" onclick={jumpToLatest} title="Jump to latest">
       ↓ Latest
     </button>

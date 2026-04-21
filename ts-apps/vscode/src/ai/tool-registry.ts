@@ -17,7 +17,14 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
     function: {
       name: 'fs__read_file',
       description:
-        'Read a UTF-8 text file, or list the contents of a directory. When `path` points at a file, returns the file contents as a string. When `path` points at a directory, returns a JSON object with `entries[]` (up to 100 names per page, directories first), plus `total`, `from`, `count`, `hasMore`, and `nextFrom`. To walk a large folder, re-call with `from: <previous nextFrom>`. `.git`, `node_modules`, and `.DS_Store` are filtered out.',
+        'Read a UTF-8 text file, or list the contents of a directory. ' +
+        'FILES: returns up to 100 lines or 4000 characters, whichever is smaller. ' +
+        'When the file fits in one response the body is returned raw; when it does not, ' +
+        'the response is prefixed with a `[fs__read_file] <path>: lines <start>–<end> of <total> (… chars). More remains — call fs__read_file again with startLine=<next> …` header so you can page through. ' +
+        'Use `startLine` / `endLine` to target a specific slice. ' +
+        'DIRECTORIES: returns a JSON object with `entries[]` (up to 100 names per page, directories first), plus `total`, `from`, `count`, `hasMore`, and `nextFrom`. ' +
+        'To walk a large folder, re-call with `from: <previous nextFrom>`. ' +
+        '`.git`, `node_modules`, and `.DS_Store` are filtered out.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -31,6 +38,16 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
             type: 'number',
             description:
               'Optional. When `path` is a directory, skip this many sorted entries before reading the next 100. Use the `nextFrom` value returned by a previous call to page through larger folders. Ignored for file reads.',
+          },
+          startLine: {
+            type: 'number',
+            description:
+              'Optional. For file reads: 1-based inclusive line to start at. Defaults to 1. Ignored for directory listings.',
+          },
+          endLine: {
+            type: 'number',
+            description:
+              'Optional. For file reads: 1-based inclusive line to end at. Defaults to `startLine + 99`. The response is still capped at 100 lines / 4000 characters even if a larger range is requested. Ignored for directory listings.',
           },
         },
         required: ['path'],

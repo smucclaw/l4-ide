@@ -1,5 +1,6 @@
 import * as vscode from 'vscode'
 import type { AiChatMessage } from 'jl4-client-rpc'
+import type { AuthManager } from '../auth.js'
 
 /**
  * Build the per-turn `<editor-context>` system message that tells the
@@ -44,6 +45,41 @@ export function buildEditorContextMessage(): AiChatMessage | null {
     for (const f of visibleFiles) lines.push(`  - ${f}`)
   }
   lines.push('</editor-context>')
+  return { role: 'system', content: lines.join('\n') }
+}
+
+/**
+ * Build a `<session-context>` system message carrying the runtime
+ * facts the model otherwise has no way to know: today's date/time
+ * (with the user's IANA timezone), the org-specific deployment URL
+ * the user is signed in to, and the L4 VSCode extension build the
+ * request is coming from. Sent as an additional system message so it
+ * doesn't invalidate the ai-proxy's cached L4 prompt prefix, and only
+ * on the first turn of a conversation (matches workspace-exports).
+ */
+export function buildSessionContextMessage(
+  auth: AuthManager,
+  extensionVersion: string
+): AiChatMessage | null {
+  const lines: string[] = []
+  lines.push('<session-context>')
+  const now = new Date()
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+  // ISO timestamp for precision + a human-readable form in the local
+  // zone so the model can cite a date naturally.
+  lines.push(`currentTime: ${now.toISOString()}`)
+  lines.push(
+    `localTime: ${now.toLocaleString(undefined, { timeZone: tz, timeZoneName: 'short' })}`
+  )
+  lines.push(`timezone: ${tz}`)
+  const deploymentUrl = auth.getEffectiveServiceUrl()
+  if (deploymentUrl) {
+    lines.push(`deploymentUrl: ${deploymentUrl}`)
+  } else {
+    lines.push('deploymentUrl: (none — user not signed in)')
+  }
+  lines.push(`l4VscodeExtensionVersion: ${extensionVersion}`)
+  lines.push('</session-context>')
   return { role: 'system', content: lines.join('\n') }
 }
 

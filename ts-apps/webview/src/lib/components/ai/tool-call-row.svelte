@@ -280,9 +280,20 @@
       {/if}
     </div>
   {:else if expanded && call.status === 'done' && prettyResult}
-    <pre class="details">{prettyResult}</pre>
+    <!-- Generic tool output: wrap in the same bordered panel as the
+         rule-eval expand so every tool-call expansion shares one
+         visual shape. Inputs are intentionally omitted — they're
+         already visible on the row itself (target + label), so
+         surfacing them a second time inside the panel is noise. -->
+    <div class="rule-details">
+      <div class="section-label">Output</div>
+      <pre class="rule-block rule-result">{prettyResult}</pre>
+    </div>
   {:else if expanded && call.status === 'error' && call.error}
-    <pre class="details err-details">{call.error}</pre>
+    <div class="rule-details">
+      <div class="section-label">Output</div>
+      <pre class="rule-block rule-result err-details">{call.error}</pre>
+    </div>
   {/if}
 </div>
 

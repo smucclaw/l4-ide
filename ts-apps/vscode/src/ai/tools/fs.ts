@@ -83,11 +83,27 @@ export interface FsReadArgs {
   /** For directory paths: offset into the sorted entries list. Use the
    *  `nextFrom` value from a previous page to walk larger folders. */
   from?: number
+  /** For file paths: 1-based inclusive line to start reading at.
+   *  Defaults to 1. */
+  startLine?: number
+  /** For file paths: 1-based inclusive line to stop reading at. If
+   *  omitted, reads up to `startLine + FILE_LINE_LIMIT - 1`. The
+   *  response is clamped to FILE_LINE_LIMIT lines even if a larger
+   *  range is requested, and further clamped to FILE_CHAR_LIMIT
+   *  characters if the lines are wide. */
+  endLine?: number
 }
 
 /** Hard cap per directory-listing response. A single page covers most
  *  real workspaces; more than this shunts into `nextFrom` paging. */
 const DIR_PAGE_LIMIT = 100
+
+/** Hard caps per file-read response. Picked so a single call surfaces
+ *  enough to read a typical function or section without letting a
+ *  30 kLOC file blow up the agent's context window in one shot. The
+ *  model pages via `startLine`/`endLine` when a file is bigger. */
+const FILE_LINE_LIMIT = 100
+const FILE_CHAR_LIMIT = 4000
 
 /**
  * For `.l4` files, append the exact same diagnostics payload the
@@ -133,8 +149,86 @@ export async function fsReadFile(args: FsReadArgs): Promise<string> {
   const buf = await fs.readFile(r.fsPath, 'utf-8')
   // Newline-normalize so downstream tools that rely on \n splits don't
   // get confused by Windows CRLF.
-  const body = buf.replace(/\r\n/g, '\n')
+  const full = buf.replace(/\r\n/g, '\n')
+  const body = sliceFileRead(r, full, args.startLine, args.endLine)
   return appendL4Diagnostics(r, body)
+}
+
+/**
+ * Apply the `startLine` / `endLine` window and the FILE_LINE_LIMIT /
+ * FILE_CHAR_LIMIT caps to a file's body. When the slice is the full
+ * file AND fits both caps, returns the raw content so short files
+ * (the common case) read the same as before. When truncated, prepends
+ * a single metadata line the model can parse to issue a follow-up
+ * call (`startLine: <nextStartLine>`).
+ */
+function sliceFileRead(
+  r: ResolvedPath,
+  full: string,
+  startLineRaw: number | undefined,
+  endLineRaw: number | undefined
+): string {
+  // Split without losing a trailing empty line from a final `\n` — we
+  // want exactly `totalLines === count('\n') + 1` for the metadata.
+  const lines = full.split('\n')
+  const totalLines = lines.length
+
+  const startLine = clampInt(startLineRaw ?? 1, 1, Math.max(1, totalLines))
+  const requestedEnd =
+    endLineRaw !== undefined
+      ? clampInt(endLineRaw, startLine, totalLines)
+      : totalLines
+  // Hard 100-line cap even if the caller asks for more. Prevents a
+  // tool call with `endLine: 99999` from smuggling the entire file in
+  // one shot.
+  const capByLines = Math.min(
+    requestedEnd,
+    startLine + FILE_LINE_LIMIT - 1,
+    totalLines
+  )
+
+  // Slice by lines first, then tighten further if the selected window
+  // blows past the char budget. Tighten at line boundaries so the
+  // returned text is never mid-line (the model would struggle to
+  // reason about the partial).
+  let endLine = capByLines
+  let sliced = lines.slice(startLine - 1, endLine).join('\n')
+  while (sliced.length > FILE_CHAR_LIMIT && endLine > startLine) {
+    endLine--
+    sliced = lines.slice(startLine - 1, endLine).join('\n')
+  }
+  // Edge case: even the single starting line exceeds the char cap.
+  // Truncate mid-line as a last resort and flag it in the metadata.
+  let lineClipped = false
+  if (sliced.length > FILE_CHAR_LIMIT) {
+    sliced = sliced.slice(0, FILE_CHAR_LIMIT)
+    lineClipped = true
+  }
+
+  const isFullFile = startLine === 1 && endLine === totalLines && !lineClipped
+  if (isFullFile) return sliced
+
+  const hasMore = endLine < totalLines || lineClipped
+  const nextStartLine = hasMore
+    ? lineClipped
+      ? startLine // same line — caller can retry with a narrower endLine
+      : endLine + 1
+    : null
+  const header =
+    `[fs__read_file] ${r.relative}: lines ${startLine}\u2013${endLine} of ${totalLines}` +
+    ` (${sliced.length} chars${lineClipped ? ', mid-line clipped at FILE_CHAR_LIMIT' : ''})` +
+    (hasMore
+      ? `. More remains — call fs__read_file again with startLine=${nextStartLine} for the next page.`
+      : '.')
+  return `${header}\n${sliced}`
+}
+
+function clampInt(n: number, lo: number, hi: number): number {
+  if (!Number.isFinite(n)) return lo
+  const rounded = Math.floor(n)
+  if (rounded < lo) return lo
+  if (rounded > hi) return hi
+  return rounded
 }
 
 async function fsListDirectory(

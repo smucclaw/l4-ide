@@ -57,6 +57,15 @@ import type { ToolDispatcher } from './tool-dispatcher.js'
  * same Messenger instance; there's no collision since their methods
  * don't overlap.
  */
+/** Minimal adapter the sidebar provider implements so this module
+ *  can decide whether to post events to the webview now or queue
+ *  them until the user flips back. Typed narrowly so tests can
+ *  swap in a stub without pulling in a whole mock WebviewView. */
+export interface WebviewVisibilityAdapter {
+  isVisible(): boolean
+  onDidChangeVisibility: vscode.Event<boolean>
+}
+
 export function registerAiChatHandlers(deps: {
   messenger: Messenger
   frontend: WebviewTypeMessageParticipant
@@ -87,6 +96,13 @@ export function registerAiChatHandlers(deps: {
   }
   /** Used to recover pre-edit snapshots for the applied-diff viewer. */
   dispatcher: ToolDispatcher
+  /** Sidebar webview visibility. When the user switches activity-bar
+   *  items, the chat stream keeps running in the extension host but
+   *  `webview.postMessage` calls land on a hidden view that may or
+   *  may not replay them to the DOM. We instead buffer chat events
+   *  here and flush on the next visible-transition so the UI catches
+   *  up to the live conversation state. */
+  visibility: WebviewVisibilityAdapter
 }): vscode.Disposable {
   const {
     messenger,
@@ -100,6 +116,7 @@ export function registerAiChatHandlers(deps: {
     toolStatusChannel,
     askUserChannel,
     dispatcher,
+    visibility,
   } = deps
   logger.info(
     'registerAiChatHandlers: installing handlers on sidebar messenger'
@@ -120,7 +137,16 @@ export function registerAiChatHandlers(deps: {
   >()
 
   // ── Forward chat service events to the webview as typed notifications.
-  const emit = (event: ChatServiceEvent): void => {
+  //
+  // `sendNow` does the actual postMessage. When the webview is
+  // hidden (user switched activity-bar items, tab, etc.) we route
+  // the event into `buffer.push` instead — vscode.Webview#postMessage
+  // on a hidden view can silently drop in practice even with
+  // retainContextWhenHidden, and a turn that streams dozens of
+  // deltas while hidden otherwise strands them in limbo until the
+  // next event manages to land. Buffering + flush-on-visible is the
+  // fix that matches what the plan doc §12/Phase-1 calls for.
+  const sendNow = (event: ChatServiceEvent): void => {
     switch (event.kind) {
       case 'started':
         messenger.sendNotification(AiChatStarted, frontend, {
@@ -188,7 +214,27 @@ export function registerAiChatHandlers(deps: {
         break
     }
   }
+  const buffer = new ChatEventBuffer(logger)
+  const emit = (event: ChatServiceEvent): void => {
+    if (!visibility.isVisible()) {
+      buffer.push(event)
+      return
+    }
+    sendNow(event)
+  }
   service.setEmitter(emit)
+  // Drain on the visible-transition. Subscribing unconditionally
+  // (not only on `visible=true`) is cheap and avoids a window where
+  // a rapid hidden→visible→hidden sequence leaves events stuck.
+  const visibilitySub = visibility.onDidChangeVisibility((visible) => {
+    if (!visible) return
+    const pending = buffer.flush()
+    if (pending.length === 0) return
+    logger.info(
+      `webview became visible — replaying ${pending.length} buffered chat event(s)`
+    )
+    for (const ev of pending) sendNow(ev)
+  })
 
   // The dispatcher emits status updates through this channel so we
   // can forward them to the webview as AiChatToolCall notifications
@@ -564,7 +610,92 @@ export function registerAiChatHandlers(deps: {
       authSub.dispose()
       activeFileSub.dispose()
       schemeReg.dispose()
+      visibilitySub.dispose()
+      buffer.drop()
     },
+  }
+}
+
+/**
+ * Queue of chat-service events accumulated while the sidebar
+ * webview is hidden. Coalesces:
+ *
+ *   - Consecutive `text-delta` / `thinking-delta` frames for the
+ *     same conversation → one concatenated frame. Otherwise a turn
+ *     that streams thousands of tokens while hidden fills the
+ *     buffer with one entry per token.
+ *   - `tool-call` updates keyed by callId → the latest status wins.
+ *     We only care about the final state when replaying; the
+ *     webview's store merges by callId anyway, so showing the
+ *     full progression adds no information.
+ *
+ * `tool-activity`, `started`, `done`, and `error` are kept
+ * verbatim — their ordering carries meaning (e.g. `done` after
+ * the last text-delta is what flips the streaming spinner off).
+ *
+ * A hard cap on buffer length (`MAX_ENTRIES`) guards against an
+ * unbounded chat running against a long-hidden webview.
+ */
+export class ChatEventBuffer {
+  private static readonly MAX_ENTRIES = 5000
+  private events: ChatServiceEvent[] = []
+
+  constructor(private readonly logger: AiLogger) {}
+
+  push(event: ChatServiceEvent): void {
+    if (event.kind === 'text-delta') {
+      const tail = this.events[this.events.length - 1]
+      if (
+        tail &&
+        tail.kind === 'text-delta' &&
+        tail.conversationId === event.conversationId
+      ) {
+        tail.text += event.text
+        return
+      }
+    }
+    if (event.kind === 'thinking-delta') {
+      const tail = this.events[this.events.length - 1]
+      if (
+        tail &&
+        tail.kind === 'thinking-delta' &&
+        tail.conversationId === event.conversationId
+      ) {
+        tail.text += event.text
+        return
+      }
+    }
+    if (event.kind === 'tool-call') {
+      const idx = this.events.findIndex(
+        (e) => e.kind === 'tool-call' && e.callId === event.callId
+      )
+      if (idx >= 0) {
+        this.events[idx] = event
+        return
+      }
+    }
+    this.events.push(event)
+    if (this.events.length > ChatEventBuffer.MAX_ENTRIES) {
+      // Drop the oldest to cap memory; in the extremely unlikely
+      // case the user keeps the sidebar hidden through > MAX_ENTRIES
+      // distinct events, the webview will see a truncated replay —
+      // still better than either dropping everything or blowing
+      // out the process.
+      this.events.shift()
+      this.logger.warn(
+        `ChatEventBuffer exceeded ${ChatEventBuffer.MAX_ENTRIES}; dropping oldest event`
+      )
+    }
+  }
+
+  flush(): ChatServiceEvent[] {
+    const out = this.events
+    this.events = []
+    return out
+  }
+
+  drop(): void {
+    this.events = []
   }
 }
 

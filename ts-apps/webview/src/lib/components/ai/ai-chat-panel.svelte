@@ -97,17 +97,14 @@
     historyOpen = true
   }
 
-  async function onSeedSelect(seed: {
-    prompt: string
-    needsFile: 'text-or-pdf' | 'spreadsheet' | null
-  }): Promise<void> {
+  async function onSeedSelect(seed: { prompt: string }): Promise<void> {
+    // Every seed is document-driven: pre-fill the prompt, then
+    // immediately pop the file picker so the user's next action is
+    // confirming their source file rather than clicking a second
+    // button. The picker accepts text + PDF — the two formats the
+    // providers can read natively.
     store.setDraft(seed.prompt)
-    if (!seed.needsFile) return
-    // Seeds that need a file pop the picker right away so the user's
-    // next action is confirming their file rather than clicking a
-    // second button. Spreadsheets route through the same picker — the
-    // extension nudges the user to save as PDF inside the dialog.
-    await store.pickAttachment(seed.needsFile)
+    await store.pickAttachment('text-or-pdf')
   }
 
   async function onLoadConversation(id: string): Promise<void> {
@@ -142,9 +139,12 @@
 
 <div class="ai-panel">
   {#if showUnauth}
-    <div class="signin-cta">
-      <p class="cta-text">
-        Sign in to Legalese Cloud to start composing rules with AI.
+    <!-- Mirrors the Deployments tab empty-state (same element shape,
+         class names and hint text styling) so the two tabs read the
+         same when signed-out. Consistency beats cleverness here. -->
+    <div class="empty-state">
+      <p class="hint">
+        Sign in with Legalese Cloud to start composing rules with AI.
       </p>
     </div>
   {:else}
@@ -199,22 +199,24 @@
     box-sizing: border-box;
   }
 
-  .signin-cta {
+  /* Mirror the Deployments tab's empty-state styling verbatim so the
+     two tabs look identical when the user is signed out. Kept as an
+     AI-tab-local copy because Svelte CSS is component-scoped;
+     extracting to a global sheet here would drag in every page's
+     `.empty-state` at once. */
+  .empty-state {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 12px;
     flex: 1;
     text-align: center;
-    padding: 24px 16px;
+    color: var(--vscode-descriptionForeground);
   }
 
-  .cta-text {
-    margin: 0;
-    color: var(--vscode-descriptionForeground);
-    font-size: 13px;
-    max-width: 280px;
-    line-height: 1.4;
+  .empty-state .hint {
+    font-size: 0.95em;
+    line-height: 1.2;
+    max-width: 200px;
   }
 </style>

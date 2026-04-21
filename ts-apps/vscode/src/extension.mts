@@ -544,6 +544,12 @@ export async function activate(context: ExtensionContext) {
         askUserChannel.ask(callId, question, choices)
       }),
   })
+  // Pulled from the extension's own packageJSON so a bumped release
+  // (and users running older pre-release builds) are both stamped
+  // correctly into the initial conversation context.
+  const extensionVersion =
+    (context.extension?.packageJSON as { version?: string } | undefined)
+      ?.version ?? 'unknown'
   const chatService = new ChatService({
     auth,
     client,
@@ -552,7 +558,22 @@ export async function activate(context: ExtensionContext) {
     logger: aiLogger,
     dispatcher,
     mcp: aiMcpClient,
+    extensionVersion,
   })
+
+  // Instantiate the sidebar provider BEFORE wiring AI chat handlers
+  // so the handlers can subscribe to its visibility event and buffer
+  // chat events while the webview is hidden. The provider itself
+  // doesn't need the webview resolved to answer isVisible() — it
+  // returns false pre-resolve, which is the right default (queue
+  // until the view paints).
+  const sidebarProvider = new SidebarProvider(
+    context,
+    sidebarMessenger,
+    auth,
+    outputChannel
+  )
+
   context.subscriptions.push(
     registerAiChatHandlers({
       messenger: sidebarMessenger,
@@ -566,15 +587,10 @@ export async function activate(context: ExtensionContext) {
       toolStatusChannel,
       askUserChannel,
       dispatcher,
+      visibility: sidebarProvider,
     })
   )
 
-  const sidebarProvider = new SidebarProvider(
-    context,
-    sidebarMessenger,
-    auth,
-    outputChannel
-  )
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(
       SIDEBAR_WEBVIEW_TYPE,

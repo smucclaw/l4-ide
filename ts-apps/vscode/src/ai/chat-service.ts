@@ -11,6 +11,7 @@ import type { AiLogger } from './logger.js'
 import {
   buildEditorContextMessage,
   buildMentionContextMessage,
+  buildSessionContextMessage,
 } from './editor-context.js'
 import { buildWorkspaceBootstrapMessage } from './workspace-bootstrap.js'
 import { BUILTIN_TOOLS } from './tool-registry.js'
@@ -82,6 +83,11 @@ export interface ChatServiceOptions {
   logger: AiLogger
   dispatcher: ToolDispatcher
   mcp: McpToolClient
+  /** Extension version string (e.g. "1.4.0"). Injected into the
+   *  first-turn `<session-context>` system message and stamped on
+   *  locally-persisted conversations so support can correlate
+   *  transcripts with a specific extension build. */
+  extensionVersion: string
 }
 
 /**
@@ -394,7 +400,8 @@ export class ChatService {
               '',
               ev.model,
               titleFromUserMessage(opts.userText),
-              messages.filter((m) => m.role === 'user')
+              messages.filter((m) => m.role === 'user'),
+              this.opts.extensionVersion
             )
             .catch((err) =>
               this.opts.logger.warn(
@@ -513,6 +520,11 @@ export class ChatService {
     if (mentionCtx) messages.push(mentionCtx)
 
     if (isNew) {
+      const session = buildSessionContextMessage(
+        this.opts.auth,
+        this.opts.extensionVersion
+      )
+      if (session) messages.push(session)
       const bootstrap = await buildWorkspaceBootstrapMessage(this.opts.client)
       if (bootstrap) messages.push(bootstrap)
     }

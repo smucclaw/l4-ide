@@ -133,7 +133,8 @@ export class ConversationStore {
     userId: string,
     model: string,
     titleHint: string,
-    messages: AiChatMessage[]
+    messages: AiChatMessage[],
+    extensionVersion?: string
   ): Promise<AiConversation> {
     let conv = await this.load(id)
     const now = new Date().toISOString()
@@ -147,6 +148,7 @@ export class ConversationStore {
         createdAt: now,
         lastActiveAt: now,
         messages: [],
+        ...(extensionVersion ? { extensionVersion } : {}),
       }
     }
     conv.messages.push(...messages)
