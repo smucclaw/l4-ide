@@ -66,9 +66,12 @@
     display: flex;
     gap: 6px;
   }
+  /* Match the chat's primary CTA (Submit / Deploy) crimson rather than
+     VSCode's default theme button blue, so the retry / sign-in action
+     reads as part of the AI tab's visual family. */
   .err-btn {
-    background: var(--vscode-button-background);
-    color: var(--vscode-button-foreground);
+    background: #c8376a;
+    color: #fff;
     border: none;
     padding: 3px 10px;
     border-radius: 2px;
@@ -76,6 +79,6 @@
     font-size: 12px;
   }
   .err-btn:hover {
-    background: var(--vscode-button-hoverBackground);
+    background: #d94d7e;
   }
 </style>
