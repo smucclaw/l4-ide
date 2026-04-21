@@ -62,7 +62,7 @@
     m.onNotification(AiAuthStatus, (p) => store.onAuthStatus(p))
     m.onNotification(AiActiveFile, (p) => store.onActiveFile(p))
     m.onNotification(AiChatAskUser, (p) => store.onAskUser(p))
-    m.onNotification(AiChatSeedDraft, (p) => store.setDraft(p.text))
+    m.onNotification(AiChatSeedDraft, (p) => store.seedDraft(p.text))
   }
 
   // Attach handlers as soon as the messenger prop is non-null. An
@@ -102,8 +102,11 @@
     // immediately pop the file picker so the user's next action is
     // confirming their source file rather than clicking a second
     // button. The picker accepts text + PDF — the two formats the
-    // providers can read natively.
-    store.setDraft(seed.prompt)
+    // providers can read natively. Use `seedDraft` (not `setDraft`)
+    // so the chat-input's sync effect picks the change up; plain
+    // `setDraft` is reserved for the textarea's oninput so keystrokes
+    // don't re-trigger the sync and race with a stale getDraft read.
+    store.seedDraft(seed.prompt)
     await store.pickAttachment('text-or-pdf')
   }
 
@@ -200,16 +203,19 @@
   }
 
   /* Mirror the Deployments tab's empty-state styling verbatim so the
-     two tabs look identical when the user is signed out. Kept as an
-     AI-tab-local copy because Svelte CSS is component-scoped;
-     extracting to a global sheet here would drag in every page's
-     `.empty-state` at once. */
+     two tabs look identical when the user is signed out. Height is
+     fixed at 40vh (matching the Deployments tab) so the hint line
+     sits at ~20vh from the top instead of centered across the full
+     panel height — that vertical anchor is what makes the two tabs
+     feel interchangeable at a glance. Kept as an AI-tab-local copy
+     because Svelte CSS is component-scoped; extracting to a global
+     sheet would drag in every page's `.empty-state` at once. */
   .empty-state {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    flex: 1;
+    height: 40vh;
     text-align: center;
     color: var(--vscode-descriptionForeground);
   }

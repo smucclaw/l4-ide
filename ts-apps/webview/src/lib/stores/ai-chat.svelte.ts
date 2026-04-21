@@ -179,6 +179,15 @@ export function createAiChatStore(
   let blockOnOverage = $state<boolean>(false)
   let signedIn = $state<boolean>(false)
   const draftsByConv = $state<Record<string, string>>({})
+  // Version counter bumped whenever an *external* caller (Get Started
+  // seed button, right-click "Ask Legalese AI about this" command, the
+  // AiChatSeedDraft host notification) writes the draft via
+  // `seedDraft`. Chat-input watches this alongside `currentId` to
+  // decide when to resync its local `text` binding from the store.
+  // Keeping the counter separate from `setDraft` (which the textarea's
+  // own oninput calls) means keystrokes never retrigger the sync and
+  // can't race with a stale getDraft() read.
+  let draftSeedVersion = $state<number>(0)
   let activeFile = $state<ActiveFileInfo>({
     name: null,
     path: null,
@@ -730,6 +739,20 @@ export function createAiChatStore(
     draftsByConv[key] = text
   }
 
+  /**
+   * Write the draft from an external source (seed button, right-click
+   * command, host notification) and bump `draftSeedVersion` so the
+   * chat-input effect picks it up on the next tick. Use this instead
+   * of `setDraft` whenever the caller is NOT the textarea's own
+   * oninput — `setDraft` skips the version bump specifically to keep
+   * keystrokes off the sync path.
+   */
+  function seedDraft(text: string): void {
+    const key = currentId ?? '__new__'
+    draftsByConv[key] = text
+    draftSeedVersion++
+  }
+
   function getDraft(): string {
     const key = currentId ?? '__new__'
     return draftsByConv[key] ?? ''
@@ -874,7 +897,11 @@ export function createAiChatStore(
     usageSubscribe,
     usageUnsubscribe,
     setDraft,
+    seedDraft,
     getDraft,
+    get draftSeedVersion() {
+      return draftSeedVersion
+    },
     searchMentions,
     approveTool,
     openFileDiff,
@@ -930,7 +957,9 @@ export type AiChatStore = {
   usageSubscribe: () => void
   usageUnsubscribe: () => void
   setDraft: (text: string) => void
+  seedDraft: (text: string) => void
   getDraft: () => string
+  readonly draftSeedVersion: number
   searchMentions: (query: string) => Promise<AiMentionCandidate[]>
   approveTool: (
     callId: string,

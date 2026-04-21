@@ -198,16 +198,18 @@
       if (activeTab === 'deployments' && deployments.length > 0)
         return 'Open in web browser'
       // Tabs that aren't the Deploy tab surface the button as
-      // "Preview" — one click jumps to Deploy and shows the tool
-      // cards (which is already the default Deploy-tab view).
+      // "Deploy preview" — one click jumps to Deploy and shows the
+      // tool cards (which is already the default Deploy-tab view).
       // Keeps the footer useful without forcing users to hunt for
-      // the Deploy tab manually when they've authored an @export.
+      // the Deploy tab manually when they've authored an @export,
+      // while the label makes the target action (a deploy, via the
+      // preview step) clear.
       if (
         activeTab === 'ai-chat' ||
         activeTab === 'docs' ||
         activeTab === 'inspector'
       ) {
-        return 'Preview'
+        return 'Deploy preview'
       }
       return 'Deploy'
     }

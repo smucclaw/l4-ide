@@ -199,17 +199,24 @@
     }
   }
 
-  // Sync the textarea from the store ONLY when the active conversation
-  // changes. Earlier versions of this effect also depended on `text`,
-  // which made it re-run on every keystroke — and race with `setDraft`,
-  // clobbering the character the user just typed. Pin the effect to
-  // `currentId` alone via a tracked sentinel and use $state.snapshot
-  // to sidestep Svelte's fine-grained tracking for the draft read.
+  // Sync the textarea from the store on two signals:
+  //   1. active conversation switched → pull the new conv's draft.
+  //   2. `draftSeedVersion` bumped by store.seedDraft() → pull the
+  //      externally-seeded text (Get Started button, right-click
+  //      "Ask Legalese AI about this", host AiChatSeedDraft).
+  //
+  // We deliberately do NOT depend on `text` itself, because that
+  // races with setDraft on every keystroke and clobbers the most
+  // recent character. `store.setDraft` is keystroke-only and does
+  // not bump the version, so typing never retriggers this effect.
   let lastSyncedId: string | null | undefined = undefined
+  let lastSyncedSeedVersion = -1
   $effect(() => {
     const id = store.currentId
-    if (id === lastSyncedId) return
+    const seedVersion = store.draftSeedVersion
+    if (id === lastSyncedId && seedVersion === lastSyncedSeedVersion) return
     lastSyncedId = id
+    lastSyncedSeedVersion = seedVersion
     const next = store.getDraft()
     if (next !== text) {
       text = next
