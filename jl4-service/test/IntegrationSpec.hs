@@ -38,7 +38,7 @@ import Network.Wai.Handler.Warp (testWithApplication)
 import System.Directory (removeDirectoryRecursive, doesDirectoryExist)
 import System.IO.Error (isPermissionError)
 
-import TestData (qualifiesJL4, recordJL4, maybeParamJL4, saleContractJL4, deonticExportJL4, deonticRecordPartyJL4, spacedFieldsJL4, assumeParamJL4)
+import TestData (qualifiesJL4, recordJL4, maybeParamJL4, saleContractJL4, deonticExportJL4, deonticRecordPartyJL4, spacedFieldsJL4, assumeParamJL4, importedRecordDeclJL4, importedRecordMainJL4)
 
 spec :: SpecWith ()
 spec = describe "integration" do
@@ -133,6 +133,33 @@ spec = describe "integration" do
               Map.lookup "age" fieldMap `shouldBe` Just (FnLitInt 30)
             other ->
               expectationFailure ("Expected FnObject with named fields, got: " <> show other)
+
+  describe "record parameter declared in an imported file" do
+    -- Regression: before the fix, the direct-AST fast path's
+    -- `buildModuleInfo` only walked the entry module's own
+    -- `flattenDeclares`, so a DECLARE that lived in an IMPORTed file
+    -- wasn't in `miRecords`. `lookupRecord` missed → evaluation bailed
+    -- with "FnObject but expected type is not a known record" for any
+    -- rule whose parameter was a cross-file record. The ASEAN Cosmetic
+    -- Directive deployment surfaced this in production. This test
+    -- pins the behaviour so we can't regress again.
+    it "resolves the record type across IMPORT boundaries" do
+      withServiceFromSources
+        "imported-record"
+        [ ("imported_record_decl.l4", importedRecordDeclJL4)
+        , ("imported_record_main.l4", importedRecordMainJL4)
+        ] \baseUrl mgr -> do
+          resp <- evalFunction baseUrl mgr "imported-record" "applicant-is-an-adult"
+            (Aeson.object
+              [ "arguments" Aeson..= Aeson.object
+                  [ "applicant" Aeson..= Aeson.object
+                      [ "name" Aeson..= ("Alice" :: Text)
+                      , "age" Aeson..= (30 :: Int)
+                      ]
+                  ]
+              ])
+          assertSuccess resp \r ->
+            Map.lookup "value" r.fnResult `shouldBe` Just (FnLitBool True)
 
   describe "MAYBE parameter handling" do
     it "handles NOTHING (null) for a MAYBE parameter" do
