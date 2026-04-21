@@ -16,9 +16,14 @@ import L4.MLIR.Dialect.Arith
 import L4.MLIR.Dialect.SCF
 import L4.MLIR.Runtime.Builtins (builtinDeclarations)
 import L4.MLIR.Lower (lowerProgramWithInfo)
+import L4.MLIR.Schema (bundleExports, encodeBundle)
 
-import L4.API.VirtualFS (checkWithImports, emptyVFS)
-import L4.Import.Resolution (TypeCheckWithDepsResult(..))
+import qualified Data.ByteString.Lazy as LBS
+import qualified Data.Text.Encoding as TE
+
+import L4.API.VirtualFS (checkWithImports, checkWithImportsAndUri, emptyVFS, vfsFromList)
+import L4.Import.Resolution (TypeCheckWithDepsResult(..), ResolvedImport(..))
+import L4.TypeCheck.Types (CheckResult(..))
 
 main :: IO ()
 main = do
@@ -30,6 +35,7 @@ main = do
     , test "arithmetic ops"                    testArithOps
     , test "@export ASSUMEs become args"       testExportAssumePromotion
     , test "internal callers fill via extern"  testInternalCallFillsAssumes
+    , test "schema picks up imported DECLAREs" testSchemaUsesImportedDeclares
     ]
   if and results
     then do
@@ -193,3 +199,44 @@ testInternalCallFillsAssumes = do
       pure $ T.isInfixOf "func.call @age()" mlir
           && T.isInfixOf "func.call @is_adult" mlir
       && Text.isInfixOf "arith.cmpf" mlir
+
+-- | When the @export-ed function's parameter type is DECLAREd in an
+-- IMPORTed module (not in the main file), the schema must still expand
+-- the record's fields. Regression test for the ASEAN Cosmetic Directive
+-- case where Information.l4 imports Declarations.l4 and the schema came
+-- out as bare {"type":"object"}.
+testSchemaUsesImportedDeclares :: IO Bool
+testSchemaUsesImportedDeclares = do
+  let declarations = T.unlines
+        [ "DECLARE Widget HAS"
+        , "    `serial`  IS A STRING"
+        , "    `weight`  IS A NUMBER"
+        ]
+      info = T.unlines
+        [ "IMPORT declarations"
+        , ""
+        , "@export Inspect a widget"
+        , "GIVEN w IS A Widget"
+        , "GIVETH A BOOLEAN"
+        , "DECIDE `widget ok` IS w's weight > 0"
+        ]
+      vfs = vfsFromList [("declarations", declarations)]
+  case checkWithImportsAndUri vfs "info" info of
+    Left errs -> do
+      putStrLn $ "\n    typecheck failed: " <> show errs
+      pure False
+    Right tc -> do
+      let mainMod = tc.tcdModule
+          depMods = map (\ri -> ri.riTypeChecked.program) tc.tcdResolvedImports
+          bundle  = bundleExports "info.wasm" "test" mainMod depMods
+          json    = TE.decodeUtf8 (LBS.toStrict (encodeBundle bundle))
+      -- The two field names must appear in the schema — they only show
+      -- up if the imported DECLARE was reachable from typeToParameter.
+      let ok = T.isInfixOf "\"serial\"" json
+            && T.isInfixOf "\"weight\"" json
+            && T.isInfixOf "\"propertyOrder\"" json
+      unless ok $
+        putStrLn $ "\n    schema missing imported fields. got:\n    " <> T.unpack json
+      pure ok
+  where
+    unless b act = if b then pure () else act
