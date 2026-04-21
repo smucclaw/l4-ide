@@ -325,6 +325,28 @@ function* interpretFrame(
     }
     return
   }
+  if (frame.event === 'error') {
+    // The ai-proxy emits this after an SSE stream has already
+    // started (headers sent) but the generate/stream pass threw —
+    // e.g. Anthropic returning a non-retryable error mid-turn.
+    // The webview's store handler maps this to `turn.error` and
+    // the ErrorBubble component renders the user-facing message +
+    // Retry button.
+    try {
+      const payload = JSON.parse(frame.data) as {
+        message?: string
+        code?: string
+      }
+      yield {
+        kind: 'error',
+        message: payload.message ?? 'Upstream LLM call failed',
+        code: payload.code,
+      }
+    } catch {
+      yield { kind: 'error', message: 'Upstream LLM call failed' }
+    }
+    return
+  }
   if (frame.event === 'tool_activity') {
     try {
       const payload = JSON.parse(frame.data) as {

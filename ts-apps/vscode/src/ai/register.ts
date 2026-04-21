@@ -752,17 +752,32 @@ function mediaTypeForExtension(ext: string): string | null {
       return 'image/gif'
     case 'pdf':
       return 'application/pdf'
-    // The `text-or-pdf` picker advertises .txt / .md as valid choices
-    // for the Get Started seed flows ("policy document", BRS, etc.) —
-    // any "supported" file. Without these cases mediaTypeForExtension
-    // returned null and the dispatch rejected them with
-    // "Unsupported attachment type" immediately after the user hit
-    // OK in the dialog, so the file silently never reached the chat.
+    // Text-inlineable formats. The `text-or-pdf` picker advertises
+    // these as valid choices for the Get Started seed flows (policy
+    // doc, BRS, contract, …). chat-service.assembleMessages inlines
+    // any text-adjacent mediaType as a `<attached-file>`-wrapped
+    // content part — providers' `file` blocks only accept PDFs, so
+    // anything else has to ride in the text channel.
     case 'txt':
+    case 'log':
       return 'text/plain'
     case 'md':
     case 'markdown':
       return 'text/markdown'
+    case 'csv':
+      return 'text/csv'
+    case 'tsv':
+      return 'text/tab-separated-values'
+    case 'json':
+      return 'application/json'
+    case 'yaml':
+    case 'yml':
+      return 'application/x-yaml'
+    case 'xml':
+      return 'application/xml'
+    case 'html':
+    case 'htm':
+      return 'text/html'
     default:
       return null
   }
@@ -776,12 +791,30 @@ async function handlePickAttachment(
   // greyed out. We surface the "export to PDF first" nudge only after
   // they actually choose one of those formats; PDFs and text files go
   // through unchanged.
+  const TEXT_LIKE_EXTENSIONS = [
+    'txt',
+    'log',
+    'md',
+    'markdown',
+    'csv',
+    'tsv',
+    'json',
+    'yaml',
+    'yml',
+    'xml',
+    'html',
+    'htm',
+  ]
   const filters: Record<string, string[]> =
     accept === 'text-or-pdf'
-      ? { 'Text or PDF': ['pdf', 'txt', 'md'] }
+      ? { 'Text or PDF': ['pdf', ...TEXT_LIKE_EXTENSIONS] }
       : accept === 'spreadsheet'
         ? {
-            'Document or PDF': ['pdf', 'txt', 'md', ...OFFICE_EXTENSIONS],
+            'Document or PDF': [
+              'pdf',
+              ...TEXT_LIKE_EXTENSIONS,
+              ...OFFICE_EXTENSIONS,
+            ],
           }
         : { 'Image or PDF': [...IMAGE_EXTENSIONS, 'pdf'] }
 

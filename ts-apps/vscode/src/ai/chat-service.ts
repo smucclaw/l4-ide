@@ -556,7 +556,7 @@ export class ChatService {
               url: `data:${att.mediaType};base64,${att.dataBase64}`,
             },
           })
-        } else if (att.mediaType.startsWith('text/')) {
+        } else if (isTextLikeMediaType(att.mediaType)) {
           // Decode utf-8 and inline. The wrapper tag mirrors the
           // `<editor-context>` / `<mention-context>` shape the model
           // already sees for filesystem content, so it treats the
@@ -631,6 +631,25 @@ export class ChatService {
 
 function titleFromUserMessage(text: string): string {
   return text.trim().slice(0, 80) || 'New conversation'
+}
+
+/**
+ * Media types we inline as a text content part instead of shipping
+ * as a `file` block. Anthropic rejects non-PDF file blocks
+ * ("'Non-PDF files in user messages' functionality not supported"),
+ * so the only way to pass e.g. `.json` / `.yaml` / `.csv` through is
+ * to decode as UTF-8 and wrap with `<attached-file>` markers in a
+ * text content part. Covers `text/*` plus the `application/*` types
+ * whose payloads are conventionally UTF-8 documents.
+ */
+function isTextLikeMediaType(mediaType: string): boolean {
+  if (mediaType.startsWith('text/')) return true
+  return (
+    mediaType === 'application/json' ||
+    mediaType === 'application/xml' ||
+    mediaType === 'application/x-yaml' ||
+    mediaType === 'application/yaml'
+  )
 }
 
 // Re-export so register.ts can type-check emitted events.
