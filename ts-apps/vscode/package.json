@@ -1,7 +1,7 @@
 {
   "name": "l4-vscode",
   "displayName": "L4 Rules-as-code",
-  "description": "Write, test, and deploy legal rules as executable code — with MCP for AI agents, WebMCP for browser AI, syntax highlighting, IntelliSense, ladder diagrams, and cloud deployment",
+  "description": "Write, test, and deploy legal rules as executable code — with a built-in Legalese AI chat, MCP for AI agents, WebMCP for browser AI, syntax highlighting, IntelliSense, ladder diagrams, and cloud deployment",
   "license": "Apache-2.0",
   "version": "1.3.0",
   "publisher": "legalese",
@@ -107,7 +107,7 @@
             "scope": "machine-overridable",
             "type": "number",
             "default": 19415,
-            "markdownDescription": "Local port for the L4 MCP proxy server. AI tools (Claude Code, Copilot, Cursor) connect to this port to access L4 rules."
+            "markdownDescription": "Local port for the L4 MCP proxy server. Legalese AI (built in), Cursor, GitHub Copilot, and other MCP-speaking agents connect to this port to access L4 rules."
           }
         }
       }

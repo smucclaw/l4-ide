@@ -10,9 +10,9 @@ Welcome to the L4 language documentation. L4 is a domain-specific language for l
 
 New to L4? Start here:
 
-1. **[Get L4](https://marketplace.visualstudio.com/items?itemName=Legalese.l4-vscode)** - Download the L4 VS Code extension with Copilot and Claude Code integration
+1. **[Get L4](https://marketplace.visualstudio.com/items?itemName=Legalese.l4-vscode)** - Download the L4 VS Code extension with Legalese AI and MCP tools
 2. **[Your First L4 File](tutorials/getting-started/first-l4-file.md)** - Hands-on in 15 minutes
-3. **[Composing L4 with AI](tutorials/llm-integration/composing-l4-with-ai.md)** - Draft L4 from prose using Claude Code
+3. **[Composing L4 with AI](tutorials/llm-integration/composing-l4-with-ai.md)** - Draft L4 from prose using Legalese AI
 4. **[Foundation Course](courses/foundation/README.md)** - Learn L4 systematically
 
 ---

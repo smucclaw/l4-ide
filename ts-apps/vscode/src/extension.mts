@@ -432,7 +432,9 @@ export async function activate(context: ExtensionContext) {
   const mcpProxy = new McpProxy(
     auth,
     outputChannel,
-    context.globalState,
+    // globalState slot kept for call-site compatibility; no persistent
+    // Claude-setup flag is stored any more.
+    undefined,
     context.extensionUri.fsPath
   )
   context.subscriptions.push(mcpProxy)
@@ -453,24 +455,12 @@ export async function activate(context: ExtensionContext) {
     })
   )
 
-  // Startup offer flow:
-  //
-  //   1. If ~/.claude.json exists AND the user hasn't previously
-  //      declined Claude Code setup, offer "Add L4 Tools to Claude Code?".
-  //      Accepting co-installs the l4 CLI silently because the
-  //      writing-l4-rules skill invokes it.
-  //
-  //   2. If the user declined in (1), or ~/.claude.json is missing, or
-  //      Claude Code is already fully configured but l4 isn't on PATH,
-  //      fall through to the separate "Install L4 CLI?" prompt.
-  //
-  // Runs in the background so activation isn't blocked.
+  // Startup offer flow: only the L4 CLI prompt. The Legalese AI
+  // integration (MCP + writing-l4-rules skill) is now opt-in via the
+  // sidebar dropdown — no implicit startup modal that nudges the user
+  // toward another tool.
   void (async () => {
-    const outcome = await mcpProxy.offerClaudeCodeSetup()
-    outputChannel.appendLine(`[startup] Claude Code setup outcome: ${outcome}`)
-    if (outcome !== 'accepted-co-installed') {
-      await maybeOfferInstallL4Cli(context, outputChannel)
-    }
+    await maybeOfferInstallL4Cli(context, outputChannel)
   })()
 
   // Auto-connect on startup (runs in background, doesn't block activation)
