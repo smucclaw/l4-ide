@@ -5,7 +5,7 @@ Can be imported into L4 files with `IMPORT daydate`. Automatically imports `date
 
 ### Location
 
-[jl4-core/libraries/daydate.l4](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/libraries/daydate.l4)
+[jl4-core/libraries/daydate.l4](https://github.com/legalese/l4-ide/blob/main/jl4-core/libraries/daydate.l4)
 
 ### Features
 
@@ -60,4 +60,4 @@ Can be imported into L4 files with `IMPORT daydate`. Automatically imports `date
 
 [daydate-example.l4](daydate-example.l4)
 
-**See [daydate.l4](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/libraries/daydate.l4) source for all functions.**
+**See [daydate.l4](https://github.com/legalese/l4-ide/blob/main/jl4-core/libraries/daydate.l4) source for all functions.**

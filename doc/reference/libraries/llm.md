@@ -4,7 +4,7 @@ LLM API integration for calling language models from L4 code. Import it into L4 
 
 ### Location
 
-[jl4-core/libraries/llm.l4](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/libraries/llm.l4)
+[jl4-core/libraries/llm.l4](https://github.com/legalese/l4-ide/blob/main/jl4-core/libraries/llm.l4)
 
 ### Supported Providers
 

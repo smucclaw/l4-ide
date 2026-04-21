@@ -103,7 +103,7 @@ L4 has been piloted with organizations in both public and private sectors:
 ## Community
 
 - **[Discord](https://discord.gg/Q7a7NSEdNy)** — chat with the community
-- **[GitHub Issues](https://github.com/smucclaw/l4-ide/issues)** — report bugs, request features
+- **[GitHub Issues](https://github.com/legalese/l4-ide/issues)** — report bugs, request features
 - **[Legalese](https://legalese.com)** — professional implementation services
 
 L4 is published under the [Apache-2.0 License](LICENSE).

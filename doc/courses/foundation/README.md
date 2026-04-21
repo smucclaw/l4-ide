@@ -141,4 +141,4 @@ Additional examples in the repository:
 
 - **Stuck?** Check the [Reference](../../reference/README.md) for syntax details
 - **Confused?** Read [Concepts](../../concepts/README.md) for deeper explanations
-- **Bug?** Report via [GitHub Issues](https://github.com/smucclaw/l4-ide/issues)
+- **Bug?** Report via [GitHub Issues](https://github.com/legalese/l4-ide/issues)

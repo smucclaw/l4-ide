@@ -5,7 +5,7 @@ Can be imported into L4 files with `IMPORT datetime`. Automatically imports `day
 
 ### Location
 
-[jl4-core/libraries/datetime.l4](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/libraries/datetime.l4)
+[jl4-core/libraries/datetime.l4](https://github.com/legalese/l4-ide/blob/main/jl4-core/libraries/datetime.l4)
 
 ### Prerequisites
 
@@ -91,4 +91,4 @@ All number-based constructors accept an optional trailing `tz` (STRING) for expl
 
 [datetime-example.l4](datetime-example.l4)
 
-**See [datetime.l4](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/libraries/datetime.l4) source for all functions.**
+**See [datetime.l4](https://github.com/legalese/l4-ide/blob/main/jl4-core/libraries/datetime.l4) source for all functions.**

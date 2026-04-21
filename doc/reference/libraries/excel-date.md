@@ -5,7 +5,7 @@ Can be imported into L4 files with `IMPORT excel-date`.
 
 ### Location
 
-[jl4-core/libraries/excel-date.l4](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/libraries/excel-date.l4)
+[jl4-core/libraries/excel-date.l4](https://github.com/legalese/l4-ide/blob/main/jl4-core/libraries/excel-date.l4)
 
 ### Features
 
@@ -16,4 +16,4 @@ Can be imported into L4 files with `IMPORT excel-date`.
 
 **Note:** Excel date tests are computationally intensive due to large library imports.
 
-**See [excel-date.l4](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/libraries/excel-date.l4) source.**
+**See [excel-date.l4](https://github.com/legalese/l4-ide/blob/main/jl4-core/libraries/excel-date.l4) source.**

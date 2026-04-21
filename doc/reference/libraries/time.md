@@ -5,7 +5,7 @@ Can be imported into L4 files with `IMPORT time`.
 
 ### Location
 
-[jl4-core/libraries/time.l4](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/libraries/time.l4)
+[jl4-core/libraries/time.l4](https://github.com/legalese/l4-ide/blob/main/jl4-core/libraries/time.l4)
 
 ### Features
 
@@ -67,4 +67,4 @@ Can be imported into L4 files with `IMPORT time`.
 
 [time-example.l4](time-example.l4)
 
-**See [time.l4](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/libraries/time.l4) source for all functions.**
+**See [time.l4](https://github.com/legalese/l4-ide/blob/main/jl4-core/libraries/time.l4) source for all functions.**

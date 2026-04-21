@@ -6,7 +6,7 @@ import { VersionedDocId } from './versioned-doc-id.js'
 ************************
 
 The following is pretty much adapted / copied from the interfaces sketched at
-https://github.com/smucclaw/lam4/blob/main/experiments/ide-interfaces/l4extensionprototype/src/interfaces/decisionLogicIRNode.ts
+https://github.com/legalese/lam4/blob/main/experiments/ide-interfaces/l4extensionprototype/src/interfaces/decisionLogicIRNode.ts
 
 The main difference is that I'm experimenting with using Effect schemas,
 in order to get functionality like serialization/deserialization, generation of the corresponding JSON Schemas, and better error messages.

@@ -4,7 +4,7 @@ The prelude can be imported into every L4 program with `IMPORT prelude` and prov
 
 ### Location
 
-[jl4-core/libraries/prelude.l4](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/libraries/prelude.l4)
+[jl4-core/libraries/prelude.l4](https://github.com/legalese/l4-ide/blob/main/jl4-core/libraries/prelude.l4)
 
 ### Key Functions
 
@@ -139,4 +139,4 @@ The prelude can be imported into every L4 program with `IMPORT prelude` and prov
 
 [prelude-example.l4](prelude-example.l4)
 
-**See [prelude.l4](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/libraries/prelude.l4) source for all functions.**
+**See [prelude.l4](https://github.com/legalese/l4-ide/blob/main/jl4-core/libraries/prelude.l4) source for all functions.**

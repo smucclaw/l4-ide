@@ -19,7 +19,7 @@
     <button
       class="example-button external"
       onclick={() =>
-        window.open('https://github.com/smucclaw/l4-ide', '_blank')}
+        window.open('https://github.com/legalese/l4-ide', '_blank')}
     >
       L4-IDE on Github
     </button>

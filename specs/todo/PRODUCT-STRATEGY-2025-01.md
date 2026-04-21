@@ -96,7 +96,7 @@ _Problem:_ Cryptic errors discourage continued use
 
 _Evidence:_
 
-- [Issue #313](https://github.com/smucclaw/l4-ide/issues/313): Hover shows `x10` instead of actual variable name `x`
+- [Issue #313](https://github.com/legalese/l4-ide/issues/313): Hover shows `x10` instead of actual variable name `x`
 - [Issue #708](https://github.com/smucclaw/l4-ide/issues/708): WHERE indentation mistakes cause silent mis-attachment
 - No LSP diagnostic for common mixfix mistakes
 - GraphViz traces excellent but lack "click to expand" for large trees
