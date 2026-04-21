@@ -432,7 +432,7 @@ _Priority:_ **P2 - Post-Sprint Week 3-4**
 
 ### ✅ Closed (Completed in Recent Work)
 
-- [**#634**](https://github.com/smucclaw/l4-ide/issues/634) - BREACH syntax ([PR #726](https://github.com/smucclaw/l4-ide/pull/726)) ✅
+- [**#634**](https://github.com/smucclaw/l4-ide/issues/634) - BREACH syntax ([PR #726](https://github.com/legalese/l4-ide/pull/726)) ✅
 - [**#629**](https://github.com/smucclaw/l4-ide/issues/629) - CI/CD builds (CLOSED by user - 80% done, artifacts remaining) ⏳
 
 ### 📝 Updated with Progress Comments
@@ -770,9 +770,9 @@ _Priority:_ **P2 - Post-Sprint Week 3-4**
 
 ### Code Repositories
 
-- Main Repo: https://github.com/smucclaw/l4-ide
-- Issues: https://github.com/smucclaw/l4-ide/issues
-- PRs: https://github.com/smucclaw/l4-ide/pulls
+- Main Repo: https://github.com/legalese/l4-ide
+- Issues: https://github.com/legalese/l4-ide/issues
+- PRs: https://github.com/legalese/l4-ide/pulls
 
 ### Production Services
 

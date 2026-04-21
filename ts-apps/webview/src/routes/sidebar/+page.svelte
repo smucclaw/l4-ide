@@ -1030,8 +1030,8 @@
         </div>
         <aside class="deployment-info-note" role="note">
           <p>
-            Deployments are automatically available in your VS Code Copilot and
-            Claude Code assistant as local MCP tools.
+            Deployments are automatically available to Legalese AI, VS Code
+            Copilot, and any other MCP-speaking agent as local MCP tools.
           </p>
           <p>
             They're also available as REST API's, online MCP server and WebMCP
