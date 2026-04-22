@@ -10,6 +10,7 @@
     streaming,
     error,
     blocks,
+    usage,
     onRetry,
     onOpenFile,
     onOpenFileDiff,
@@ -18,10 +19,22 @@
     streaming: boolean
     error?: { message: string; code?: string }
     blocks?: AssistantBlock[]
+    usage?: { promptTokens: number; completionTokens: number }
     onRetry?: () => void
     onOpenFile: (callId: string) => void
     onOpenFileDiff: (callId: string) => void
   } = $props()
+
+  // Token badge — "• 1.2k in / 380 out" at the bottom of a
+  // completed assistant bubble. Only renders after the stream
+  // finishes (terminal chunk carries usage) and when the numbers
+  // are actually present; tool-pause turns and pure-error turns
+  // skip it silently.
+  function formatTokenCount(n: number): string {
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`
+    return `${n}`
+  }
 
   // Stable keys for the block iteration. Text blocks don't carry an
   // id, so we use the index; tool-call blocks key by callId;
@@ -249,6 +262,19 @@
     {#if error}
       <ErrorBubble message={error.message} code={error.code} {onRetry} />
     {/if}
+    {#if !streaming && !error && usage}
+      <!-- Per-turn token footer. Kept quiet (small, grey, dotted
+           separator) so it reads as metadata rather than content.
+           Prompt tokens come first because they dominate the cost
+           on a long context; completion tokens second so users can
+           spot overflowing answers. -->
+      <div class="usage-badge" title="Tokens consumed by this turn">
+        <span class="usage-dot">·</span>
+        <span>{formatTokenCount(usage.promptTokens)} in</span>
+        <span class="usage-sep">/</span>
+        <span>{formatTokenCount(usage.completionTokens)} out</span>
+      </div>
+    {/if}
   </div>
 </div>
 
@@ -419,5 +445,25 @@
   }
   .review-path:hover {
     text-decoration: underline;
+  }
+  /* Token badge — ambient "I/O budget used" line at the bottom of
+     a finished assistant bubble. Small, grey, trailing space above
+     so it reads as metadata rather than content. */
+  .usage-badge {
+    margin-top: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    color: var(--vscode-descriptionForeground);
+    opacity: 0.65;
+    font-family: var(--vscode-editor-font-family, monospace);
+  }
+  .usage-dot {
+    font-size: 14px;
+    line-height: 1;
+  }
+  .usage-sep {
+    opacity: 0.6;
   }
 </style>

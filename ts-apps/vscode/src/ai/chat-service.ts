@@ -165,7 +165,7 @@ export class ChatService {
       // and run the stream again. Loop exits on `stop`, `length`,
       // `content_filter`, `aborted`, or an error.
       for (let iteration = 0; ; iteration++) {
-        const { finishReason, pendingCalls, assistantText } =
+        const { finishReason, pendingCalls, assistantText, usage } =
           await this.runStreamIteration({
             turnId,
             iteration,
@@ -208,6 +208,7 @@ export class ChatService {
             kind: 'done',
             conversationId: serverConversationId ?? turnId,
             finishReason,
+            usage,
           })
           if (isNew && serverConversationId && finishReason === 'stop') {
             this.generateTitleInBackground(serverConversationId, params.text)
@@ -352,6 +353,10 @@ export class ChatService {
     finishReason: string
     pendingCalls: Array<{ callId: string; name: string; argsJson: string }>
     assistantText: string
+    /** Cumulative prompt + completion tokens reported by the
+     *  server on the terminal chunk, if any. Absent for
+     *  tool_calls pauses (no terminal chunk yet). */
+    usage?: { promptTokens: number; completionTokens: number }
   }> {
     const {
       turnId,
@@ -370,6 +375,7 @@ export class ChatService {
     }> = []
     let assistantText = ''
     let finishReason = 'stop'
+    let usage: { promptTokens: number; completionTokens: number } | undefined
     let local: string | undefined = conversationId
 
     // Merge the current MCP server's deployed rules into the tool list
@@ -483,6 +489,7 @@ export class ChatService {
         })
       } else if (ev.kind === 'done') {
         finishReason = ev.finishReason
+        if (ev.usage) usage = ev.usage
       } else if (ev.kind === 'error') {
         this.emit({
           kind: 'error',
@@ -495,7 +502,7 @@ export class ChatService {
       }
     }
 
-    return { finishReason, pendingCalls, assistantText }
+    return { finishReason, pendingCalls, assistantText, usage }
   }
 
   abort(turnId: string): void {

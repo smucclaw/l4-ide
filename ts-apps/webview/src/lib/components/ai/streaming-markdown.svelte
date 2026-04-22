@@ -43,18 +43,26 @@
 
   // Custom renderer: L4 code via @repo/l4-highlight (matches the Docs
   // and Inspector tabs); other code blocks render as plain HTML so
-  // the webview CSS can style them consistently.
+  // the webview CSS can style them consistently. Every code block is
+  // wrapped in a `.code-block-wrap` so we can position a Copy
+  // button in its top-right. Click handling is delegated on the
+  // container — marked's output is injected via @html and can't
+  // bind Svelte handlers directly.
   const renderer = new marked.Renderer()
   renderer.code = ({ text: code, lang }) => {
-    if (lang === 'l4' || lang === 'l4-file') {
-      return `<pre><code class="language-l4">${colorize(code)}</code></pre>`
-    }
-    const escaped = code
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-    const cls = lang ? ` class="language-${lang}"` : ''
-    return `<pre><code${cls}>${escaped}</code></pre>`
+    const highlighted =
+      lang === 'l4' || lang === 'l4-file'
+        ? `<code class="language-l4">${colorize(code)}</code>`
+        : `<code${lang ? ` class="language-${lang}"` : ''}>${code
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')}</code>`
+    // Store the raw (un-escaped, un-highlighted) source on a data
+    // attribute so the copy handler yields the exact text the
+    // assistant produced — not the HTML-entity-expanded version
+    // and not the highlighter's colorized markup.
+    const encodedSource = encodeURIComponent(code)
+    return `<div class="code-block-wrap"><pre>${highlighted}</pre><button type="button" class="code-copy-btn" data-copy-src="${encodedSource}" title="Copy code" aria-label="Copy code"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="9" height="9" rx="1.5"/><path d="M4 10H3V3.5A1.5 1.5 0 0 1 4.5 2H10"/></svg><span class="code-copy-label">Copy</span></button></div>`
   }
   // Links open externally — but the webview host intercepts clicks on
   // http(s) links via VSCode; keep default rendering.
@@ -72,9 +80,42 @@
   const trailingKind = $derived<'code' | 'paragraph'>(
     /^\s*```/.test(trailing) ? 'code' : 'paragraph'
   )
+
+  // Delegated click handler for `.code-copy-btn` buttons injected by
+  // the marked renderer. We can't bind Svelte handlers through
+  // `{@html}`, so one listener on the outer div catches every
+  // button click and reads the source from its data attribute.
+  // Shows a 1.5s "Copied" state so the user has visual confirmation.
+  function onCopyClick(e: MouseEvent): void {
+    const target = e.target as HTMLElement | null
+    const btn = target?.closest?.('.code-copy-btn') as HTMLButtonElement | null
+    if (!btn) return
+    e.preventDefault()
+    const encoded = btn.dataset.copySrc
+    if (!encoded) return
+    const source = decodeURIComponent(encoded)
+    void navigator.clipboard.writeText(source).then(
+      () => {
+        btn.classList.add('code-copy-btn-done')
+        const label = btn.querySelector('.code-copy-label')
+        const prior = label ? label.textContent : null
+        if (label) label.textContent = 'Copied'
+        setTimeout(() => {
+          btn.classList.remove('code-copy-btn-done')
+          if (label && prior !== null) label.textContent = prior
+        }, 1500)
+      },
+      () => {
+        // Clipboard write denied — unusual in a VSCode webview.
+        // Silently drop; the user can still select + Cmd+C.
+      }
+    )
+  }
 </script>
 
-<div class="streaming-md">
+<!-- svelte-ignore a11y_click_events_have_key_events -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="streaming-md" onclick={onCopyClick}>
   {@html committedHtml}
   {#if trailing}
     <div class="in-flight in-flight-{trailingKind}">
@@ -86,7 +127,16 @@
 <style>
   /* Fenced code block: thin border panel, no filled background.
      Matches the ToolCard card style so prose + code sit on the same
-     sidebar surface. */
+     sidebar surface. Wrapped in `.code-block-wrap` so a Copy button
+     can sit in the corner without escaping the `<pre>`'s scroll
+     container. */
+  .streaming-md :global(.code-block-wrap) {
+    position: relative;
+    margin: 8px 0;
+  }
+  .streaming-md :global(.code-block-wrap pre) {
+    margin: 0;
+  }
   .streaming-md :global(pre) {
     background: var(--vscode-editor-background);
     padding: 8px 10px;
@@ -96,6 +146,46 @@
     margin: 8px 0;
     font-size: 12px;
     line-height: 1.45;
+  }
+  /* Copy button — bottom-right of the code block. Faded until the
+     wrap is hovered so it doesn't compete with the code for
+     attention, then firms up on hover. Enters a green "Copied"
+     state for 1.5s after a successful write. */
+  .streaming-md :global(.code-copy-btn) {
+    position: absolute;
+    right: 6px;
+    bottom: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    font-size: 10px;
+    line-height: 1;
+    font-family: var(--vscode-font-family, sans-serif);
+    color: var(--vscode-descriptionForeground);
+    background: var(--vscode-sideBar-background, rgba(0, 0, 0, 0.2));
+    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.4));
+    border-radius: 3px;
+    cursor: pointer;
+    opacity: 0;
+    transition:
+      opacity 0.12s ease-out,
+      color 0.12s ease-out,
+      border-color 0.12s ease-out;
+  }
+  .streaming-md :global(.code-block-wrap:hover .code-copy-btn),
+  .streaming-md :global(.code-copy-btn:focus-visible) {
+    opacity: 0.9;
+  }
+  .streaming-md :global(.code-copy-btn:hover) {
+    opacity: 1;
+    color: var(--vscode-foreground);
+    border-color: var(--vscode-foreground);
+  }
+  .streaming-md :global(.code-copy-btn-done) {
+    opacity: 1 !important;
+    color: #78c47c;
+    border-color: #78c47c;
   }
   .streaming-md :global(pre code) {
     background: none;

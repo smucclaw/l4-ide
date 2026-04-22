@@ -75,6 +75,10 @@ export interface RenderedTurn {
    *  Set once at submit time from the staged state in the chat input;
    *  never mutated afterwards. Only populated on user turns. */
   chips?: UserTurnChip[]
+  /** Per-turn token totals from the server's terminal chunk, surfaced
+   *  on the assistant bubble as a small badge so users can see
+   *  expensive turns + catch quota drift before the 429. */
+  usage?: { promptTokens: number; completionTokens: number }
 }
 
 /** A chip echoed at the top of a user message — mirrors what was
@@ -566,11 +570,22 @@ export function createAiChatStore(
   function onDone(params: {
     conversationId: string
     finishReason: string
+    usage?: { promptTokens: number; completionTokens: number }
   }): void {
     const conv = conversations[params.conversationId]
     if (!conv) return
     const last = conv.turns[conv.turns.length - 1]
-    if (last) last.streaming = false
+    if (last) {
+      last.streaming = false
+      // Stash per-turn token totals on the assistant bubble so the
+      // renderer can show a small "• 1.2k tokens" badge. Helps the
+      // user see which turns are expensive and catches quota drift
+      // before the 429. `usage` is undefined on tool-call pauses
+      // (no terminal chunk yet) and on early errors.
+      if (params.usage && last.role === 'assistant') {
+        last.usage = params.usage
+      }
+    }
     conv.streaming = false
     void refreshHistory()
   }
@@ -1113,7 +1128,11 @@ export type AiChatStore = {
   onStarted: (params: { conversationId: string; model: string }) => void
   onTextDelta: (params: { conversationId: string; text: string }) => void
   onThinkingDelta: (params: { conversationId: string; text: string }) => void
-  onDone: (params: { conversationId: string; finishReason: string }) => void
+  onDone: (params: {
+    conversationId: string
+    finishReason: string
+    usage?: { promptTokens: number; completionTokens: number }
+  }) => void
   onError: (params: {
     conversationId: string
     message: string

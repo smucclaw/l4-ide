@@ -501,12 +501,15 @@ export function registerAiChatHandlers(deps: {
     return { items }
   })
 
-  // Usage polling is Phase 1-polish; subscribing starts a 30s timer.
+  // Usage polling. Subscribing starts a 30s timer that hits
+  // /v1/usage and forwards the result to the webview. The server
+  // caches the result for 10s inside TokenQuota, so a 30s cadence
+  // is cheap and catches bursts quickly enough for the gauge UX.
   let usageTimer: NodeJS.Timeout | undefined
   messenger.onNotification(AiUsageSubscribe, () => {
     if (usageTimer) return
     const tick = (): void =>
-      void fetchUsage().then((u) => {
+      void fetchUsage(auth, logger).then((u) => {
         if (u) {
           messenger.sendNotification(AiUsageUpdate, frontend, u)
         }
@@ -1005,14 +1008,51 @@ async function searchMentions(query: string): Promise<AiMentionCandidate[]> {
 }
 
 /**
- * Pull today's token usage. Placeholder: until the ai-proxy or Legalese
- * Cloud expose a usage endpoint we can read, this returns null so the
- * UI keeps the gauge at zero. A subsequent commit wires it up.
+ * GET /v1/usage on the ai-proxy. Returns the calling org's
+ * current-day token total, effective daily limit, and whether
+ * blockOnOverage is set. Failures return null — the webview's
+ * gauge gracefully sits at zero rather than disrupting the chat
+ * UI when the poller hits a transient 5xx or a 401 during auth
+ * refresh.
  */
-async function fetchUsage(): Promise<{
+async function fetchUsage(
+  auth: AuthManager,
+  logger: AiLogger
+): Promise<{
   used: number
   limit: number
   blockOnOverage: boolean
 } | null> {
-  return null
+  try {
+    const headers = await auth.getAuthHeaders()
+    if (!headers.Authorization) return null
+    const { AI_ENDPOINT } = await import('./ai-proxy-client.js')
+    const res = await fetch(`${AI_ENDPOINT}/v1/usage`, {
+      method: 'GET',
+      headers,
+      signal: AbortSignal.timeout(8000),
+    })
+    if (!res.ok) {
+      logger.debug(`fetchUsage: ${res.status} ${res.statusText}`)
+      return null
+    }
+    const body = (await res.json()) as {
+      used?: number
+      limit?: number
+      blockOnOverage?: boolean
+    }
+    if (typeof body.used !== 'number' || typeof body.limit !== 'number') {
+      return null
+    }
+    return {
+      used: body.used,
+      limit: body.limit,
+      blockOnOverage: !!body.blockOnOverage,
+    }
+  } catch (err) {
+    logger.debug(
+      `fetchUsage failed: ${err instanceof Error ? err.message : String(err)}`
+    )
+    return null
+  }
 }

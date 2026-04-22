@@ -137,6 +137,7 @@
         streaming={!!turn.streaming}
         error={turn.error}
         blocks={turn.blocks}
+        usage={turn.usage}
         {onRetry}
         {onOpenFile}
         {onOpenFileDiff}
