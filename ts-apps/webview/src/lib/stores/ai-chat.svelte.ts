@@ -742,6 +742,15 @@ export function createAiChatStore(
     includeActiveFile = !includeActiveFile
   }
 
+  /** Force the "attach active file" chip on or off. Used by the Get
+   *  Started seed flows to switch the chip *off* once a document
+   *  attachment lands — otherwise the user accidentally ships both
+   *  their current editor file AND the seed document, doubling up
+   *  the context budget for nearly the same information. */
+  function setIncludeActiveFile(value: boolean): void {
+    includeActiveFile = value
+  }
+
   function onAskUser(params: {
     conversationId: string
     callId: string
@@ -958,6 +967,7 @@ export function createAiChatStore(
     removeAttachment,
     previewAttachment,
     toggleIncludeActiveFile,
+    setIncludeActiveFile,
     answerQuestion,
     getPermissions,
     setPermission,
@@ -1011,6 +1021,7 @@ export type AiChatStore = {
   readonly pendingQuestion: PendingQuestion | null
   readonly streamingConversationIds: string[]
   toggleIncludeActiveFile: () => void
+  setIncludeActiveFile: (value: boolean) => void
   answerQuestion: (answer: string) => void
   readonly stagedAttachments: AiChatAttachment[]
   pickAttachment: (

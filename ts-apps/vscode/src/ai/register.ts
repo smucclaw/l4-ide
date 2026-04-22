@@ -30,6 +30,7 @@ import {
   AiUsageSubscribe,
   AiUsageUnsubscribe,
   AiUsageUpdate,
+  WebviewFrontendIsReadyNotification,
   type AiChatAttachment,
   type AiMentionCandidate,
   type AiPermissionCategory,
@@ -612,6 +613,23 @@ export function registerAiChatHandlers(deps: {
     pushActiveFile(e)
   )
 
+  // Resend the initial snapshot (active file + auth status) on every
+  // webview-ready signal. The first push above runs at extension
+  // activation — long before the webview has called
+  // `acquireVsCodeApi` / wired its `onNotification` hooks — so the
+  // notification is queued against nothing and lost. Without this
+  // replay, opening the AI tab cold shows no "attach active file"
+  // chip until the user switches editor tabs. The sidebar's Deploy
+  // tab already uses the same replay-on-ready pattern in
+  // extension.mts; this brings the AI chat into line.
+  const readySub = messenger.onNotification(
+    WebviewFrontendIsReadyNotification,
+    () => {
+      pushActiveFile(vscode.window.activeTextEditor)
+      void auth.getConnectionState().then(pushAuthStatus)
+    }
+  )
+
   return {
     dispose(): void {
       if (usageTimer) clearInterval(usageTimer)
@@ -620,6 +638,11 @@ export function registerAiChatHandlers(deps: {
       schemeReg.dispose()
       visibilitySub.dispose()
       buffer.drop()
+      // vscode-messenger's onNotification returns the messenger
+      // itself (fluent), not a Disposable. The registration lives
+      // for the extension's lifetime; nothing to free here. Kept
+      // referenced so the closure doesn't get GCed prematurely.
+      void readySub
     },
   }
 }

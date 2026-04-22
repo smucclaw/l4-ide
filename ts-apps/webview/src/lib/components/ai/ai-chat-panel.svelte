@@ -107,7 +107,14 @@
     // `setDraft` is reserved for the textarea's oninput so keystrokes
     // don't re-trigger the sync and race with a stale getDraft read.
     store.seedDraft(seed.prompt)
-    await store.pickAttachment('text-or-pdf')
+    const res = await store.pickAttachment('text-or-pdf')
+    // Switch the "attach active file" chip off once a seed document
+    // lands. Otherwise the first submit ships BOTH the editor's
+    // active file AND the seed document as context — nearly
+    // duplicated input that doubles token spend for no extra signal.
+    // The user can still toggle it back on if they genuinely want
+    // both. No-op on cancel (no attachment, no change).
+    if (res.ok) store.setIncludeActiveFile(false)
   }
 
   async function onLoadConversation(id: string): Promise<void> {
