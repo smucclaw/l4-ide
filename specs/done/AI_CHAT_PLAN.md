@@ -271,72 +271,72 @@ Typed discriminated union over `postMessage`.
 ```ts
 type ChatRequest =
   | {
-      kind: 'chat/start'
-      conversationId?: string
-      text: string
-      attachments: Attachment[]
-      mentions: Mention[]
+      kind: "chat/start";
+      conversationId?: string;
+      text: string;
+      attachments: Attachment[];
+      mentions: Mention[];
     }
-  | { kind: 'chat/abort'; conversationId: string }
+  | { kind: "chat/abort"; conversationId: string }
   | {
-      kind: 'chat/approveTool'
-      callId: string
-      decision: 'allow' | 'deny' | 'alwaysAllow'
+      kind: "chat/approveTool";
+      callId: string;
+      decision: "allow" | "deny" | "alwaysAllow";
     }
-  | { kind: 'chat/answerQuestion'; callId: string; answer: string } // meta__ask_user
-  | { kind: 'conversation/list' }
-  | { kind: 'conversation/load'; id: string }
-  | { kind: 'conversation/delete'; id: string }
-  | { kind: 'conversation/new' }
-  | { kind: 'mention/search'; query: string } // @-mention autocomplete
-  | { kind: 'settings/get' }
-  | { kind: 'settings/update'; patch: Partial<AiSettings> }
-  | { kind: 'file/openDiff'; path: string; proposedContent: string }
-  | { kind: 'usage/subscribe' }
-  | { kind: 'usage/unsubscribe' } // poll only when tab visible
+  | { kind: "chat/answerQuestion"; callId: string; answer: string } // meta__ask_user
+  | { kind: "conversation/list" }
+  | { kind: "conversation/load"; id: string }
+  | { kind: "conversation/delete"; id: string }
+  | { kind: "conversation/new" }
+  | { kind: "mention/search"; query: string } // @-mention autocomplete
+  | { kind: "settings/get" }
+  | { kind: "settings/update"; patch: Partial<AiSettings> }
+  | { kind: "file/openDiff"; path: string; proposedContent: string }
+  | { kind: "usage/subscribe" }
+  | { kind: "usage/unsubscribe" }; // poll only when tab visible
 ```
 
 **Extension → webview (streamed):**
 
 ```ts
 type ChatEvent =
-  | { kind: 'chat/started'; conversationId: string; model: string }
-  | { kind: 'chat/textDelta'; conversationId: string; text: string }
-  | { kind: 'chat/thinkingDelta'; conversationId: string; text: string }
+  | { kind: "chat/started"; conversationId: string; model: string }
+  | { kind: "chat/textDelta"; conversationId: string; text: string }
+  | { kind: "chat/thinkingDelta"; conversationId: string; text: string }
   | {
-      kind: 'chat/toolActivity'
-      conversationId: string
-      tool: string
-      status: 'running' | 'done' | 'error'
-      message: string
+      kind: "chat/toolActivity";
+      conversationId: string;
+      tool: string;
+      status: "running" | "done" | "error";
+      message: string;
     }
   | {
-      kind: 'chat/toolCall'
-      conversationId: string
-      callId: string
-      name: string
-      args: unknown
-      status: 'pending-approval' | 'running' | 'done' | 'error'
-      result?: unknown
-      errorMessage?: string
+      kind: "chat/toolCall";
+      conversationId: string;
+      callId: string;
+      name: string;
+      args: unknown;
+      status: "pending-approval" | "running" | "done" | "error";
+      result?: unknown;
+      errorMessage?: string;
     }
   | {
-      kind: 'chat/done'
-      conversationId: string
-      finishReason: 'stop' | 'tool_calls' | 'length' | 'error'
-      usage?: { promptTokens: number; completionTokens: number }
+      kind: "chat/done";
+      conversationId: string;
+      finishReason: "stop" | "tool_calls" | "length" | "error";
+      usage?: { promptTokens: number; completionTokens: number };
     }
-  | { kind: 'chat/error'; conversationId: string; message: string }
-  | { kind: 'conversation/list'; items: ConversationSummary[] }
-  | { kind: 'conversation/loaded'; conversation: Conversation }
-  | { kind: 'mention/results'; query: string; items: MentionCandidate[] }
+  | { kind: "chat/error"; conversationId: string; message: string }
+  | { kind: "conversation/list"; items: ConversationSummary[] }
+  | { kind: "conversation/loaded"; conversation: Conversation }
+  | { kind: "mention/results"; query: string; items: MentionCandidate[] }
   | {
-      kind: 'usage/update'
-      used: number
-      limit: number
-      blockOnOverage: boolean
+      kind: "usage/update";
+      used: number;
+      limit: number;
+      blockOnOverage: boolean;
     }
-  | { kind: 'settings/value'; settings: AiSettings }
+  | { kind: "settings/value"; settings: AiSettings };
 ```
 
 Each event carries a `conversationId` so the webview can ignore stale
