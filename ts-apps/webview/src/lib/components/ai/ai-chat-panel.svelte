@@ -130,16 +130,18 @@
     settingsOpen = true
   }
 
-  // Retry replays the last user message after clearing the errored
-  // assistant bubble. Sign-in pops the existing login flow.
+  // Retry asks the server to run another turn against the existing
+  // conversation state — no duplicated user message. The user's
+  // original prompt is already persisted on disk from the aborted
+  // attempt (ai-proxy saves the conversation on create, before the
+  // stream starts), so the model has everything it needs to produce
+  // a fresh response. Drop the errored assistant bubble first so the
+  // new stream has a clean place to land.
   function onRetry(): void {
     const conv = store.current
-    if (!conv) return
-    const lastUser = [...conv.turns].reverse().find((t) => t.role === 'user')
-    if (!lastUser) return
-    // Drop the errored assistant bubble so the retry cleanly appends.
+    if (!conv || !conv.id) return
     conv.turns = conv.turns.filter((t) => !t.error)
-    store.send(lastUser.content)
+    store.continueTurn()
   }
 
   const showUnauth = $derived(!store.signedIn)

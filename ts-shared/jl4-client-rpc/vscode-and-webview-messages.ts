@@ -431,6 +431,15 @@ export interface AiChatStartParams {
    * system message so the active file doesn't leak into context.
    * Defaults to true if unset. */
   includeActiveFile?: boolean
+  /** Retry path: when true, the extension skips adding a user
+   * message to the outgoing body and just asks the server to run
+   * another turn against the conversation's existing on-disk
+   * state. Used by the ErrorBubble "Retry" button so a
+   * mid-stream failure doesn't double-insert the user's original
+   * turn. The server-side conversation already has the user
+   * message from the original turn (persisted on create), so the
+   * model has what it needs. */
+  continueTurn?: boolean
 }
 
 export interface AiChatAttachment {

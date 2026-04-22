@@ -433,6 +433,60 @@ export function createAiChatStore(
     if (currentId) clearPendingQuestionFor(currentId)
   }
 
+  /**
+   * Retry the last turn *without* re-posting the user message. The
+   * server persisted the user's original turn on first-request
+   * create, so asking it to run another pass against that existing
+   * history gets us a fresh assistant response without duplicating
+   * the prompt. Used by the ErrorBubble "Retry" button.
+   *
+   * Caller should first strip any errored assistant bubbles from
+   * `conv.turns` — we only append a new streaming placeholder and
+   * dispatch AiChatStart with `continueTurn: true`.
+   */
+  function continueTurn(): void {
+    const m = getMessenger()
+    const conv = getConversation()
+    if (!m || !conv || !conv.id) return
+    const turnId = `turn_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+    conv.turns.push({
+      id: `asst:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
+      turnId,
+      role: 'assistant',
+      content: '',
+      streaming: true,
+      blocks: [],
+    })
+    conv.streaming = true
+    try {
+      m.sendNotification(AiChatStart, HOST_EXTENSION, {
+        conversationId: conv.id,
+        turnId,
+        // Empty text + empty attachments / mentions — the extension
+        // side's `continueTurn` branch in assembleMessages skips the
+        // user role entirely so the server just runs another pass
+        // against the conversation's on-disk history.
+        text: '',
+        mentions: [],
+        attachments: [],
+        continueTurn: true,
+      })
+    } catch (err) {
+      const last = conv.turns[conv.turns.length - 1]
+      if (last && last.role === 'assistant') {
+        last.streaming = false
+        last.error = {
+          message: err instanceof Error ? err.message : String(err),
+          code: 'send_failed',
+        }
+      }
+      conv.streaming = false
+    }
+    // A retry supersedes any pending meta__ask_user card attached
+    // to this conversation — mirrors the `send()` path.
+    if (currentId) clearPendingQuestionFor(currentId)
+  }
+
   function abort(): void {
     const m = getMessenger()
     if (!m) return
@@ -977,6 +1031,7 @@ export function createAiChatStore(
     deleteConversation,
     newConversation,
     send,
+    continueTurn,
     abort,
     usageSubscribe,
     usageUnsubscribe,
@@ -1039,6 +1094,7 @@ export type AiChatStore = {
   deleteConversation: (id: string) => Promise<void>
   newConversation: () => void
   send: (text: string, mentions?: AiChatStartParams['mentions']) => void
+  continueTurn: () => void
   abort: () => void
   usageSubscribe: () => void
   usageUnsubscribe: () => void

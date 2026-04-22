@@ -529,6 +529,27 @@ export class ChatService {
       if (bootstrap) messages.push(bootstrap)
     }
 
+    // Retry path: skip the user message entirely. The server
+    // already has the user's turn on disk from the aborted attempt
+    // (persisted on conversation create), and extractDelta drops
+    // any body.messages lacking a trailing user role — so the
+    // server just runs another turn against the existing history.
+    // We still need at least one body message to pass the server's
+    // "messages array is required" guard; if the body is empty
+    // here (no editor context, no mentions, not a new convo), push
+    // a "continue" system hint that extractDelta will skip and the
+    // provider layer will merge into the prompt anyway.
+    if (params.continueTurn) {
+      if (messages.length === 0) {
+        messages.push({
+          role: 'system',
+          content:
+            'The user hit Retry after a mid-stream failure. Continue the conversation from the last user message in the history.',
+        })
+      }
+      return messages
+    }
+
     // Multimodal user content: when the webview has staged attachments,
     // ship them as OpenAI-shaped content parts alongside the text so
     // the ai-proxy can pass them through to OpenAI as-is or translate
