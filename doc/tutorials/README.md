@@ -33,7 +33,7 @@ Export your L4 functions as live REST API endpoints:
 
 Working with AI and language models in L4:
 
-- **[Composing L4 with AI](llm-integration/composing-l4-with-ai.md)** - Draft L4 from prose using Legalese AI
+- **[Composing L4 with AI](llm-integration/composing-l4-with-ai.md)** - Draft L4 from prose using Claude Code
 - **[LLM Getting Started](llm-integration/llm-getting-started.md)** - Basics of LLM integration
 - **[Legislative Ingestion](llm-integration/legislative-ingestion.md)** - LLM-assisted encoding
 

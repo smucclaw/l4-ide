@@ -85,7 +85,7 @@ The decision service / jl4-service resolves `IMPORT prelude` by looking for `pre
 ## Deployment Steps
 
 ```bash
-cd ~/src/legalese/l4-ide/nix-service
+cd ~/src/smucclaw/l4-ide/nix-service
 nixos-rebuild switch --flake '.#jl4-dev' --target-host root@dev.jl4.legalese.com
 ```
 

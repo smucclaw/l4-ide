@@ -58,22 +58,3 @@ textarea:not([rows]) {
 :target {
   scroll-margin-block: 5ex;
 }
-
-/* ===== Focus rings ===============================================
-
-Both VSCode (via `--vscode-focusBorder`) and the browser's default
-`:focus-visible` outline tend to render orange in dark themes. We
-rebrand both to the crimson used by the Deploy / Submit primary
-buttons so keyboard focus stays on-brand across every tab — inputs,
-buttons, the docs tab, the chat input, etc. */
-:root {
-  --vscode-focusBorder: #c8376a;
-}
-:focus-visible {
-  outline: 1px solid #c8376a;
-  outline-offset: 1px;
-}
-/* Let elements that already paint their own focus style (the chat
-   input box uses a border-color shift, for example) keep control by
-   setting `outline: none` locally — it beats the universal rule
-   above without any extra specificity. */

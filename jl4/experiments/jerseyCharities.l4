@@ -32,7 +32,7 @@ ASSUME Return IS A TYPE
 ASSUME Section IS A TYPE
 ASSUME Information IS A TYPE
 
--- do we have extension support? https://github.com/legalese/l4-ide/issues/238
+-- do we have extension support? https://github.com/smucclaw/l4-ide/issues/238
 -- until we do, let's just manually reproduce, i think that should work
 DECLARE Governor
     HAS name               IS A STRING

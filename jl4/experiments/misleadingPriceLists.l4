@@ -14,7 +14,7 @@ IMPORT prelude
 
 §§ `Misleading Price Lists`
 
-// https://github.com/legalese/l4-ide/issues/439
+// https://github.com/smucclaw/l4-ide/issues/439
 GIVEN prem       IS A  Premises
       officer    IS AN Enforcement Officer
       proprietor IS A  Proprietor

@@ -665,7 +665,7 @@ jobs:
       - name: Create tag name
         id: tag-name
         run: |
-          TAG_NAME="l4-ide-build-${{ github.run_number }}"
+          TAG_NAME="vscode-wasm-build-${{ github.run_number }}"
           echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
 
       - name: Create Git Tag

@@ -70,7 +70,7 @@ The REPL provides live evaluation, module reloading (`:load`, `:reload`), query 
 
 ## VS Code Extension
 
-Provides syntax highlighting, type checking, inline evaluation, `@export` previews, deployment management, a built-in Legalese AI chat tab, and an automatically-registered local MCP server for any AI agent that speaks the protocol (Copilot, Claude Code, Cursor, ...). Connects to [Legalese Cloud](https://legalese.cloud) or a self-hosted `jl4-service` instance. See [ts-apps/vscode/README.md](ts-apps/vscode/README.md).
+Provides syntax highlighting, type checking, inline evaluation, `@export` previews, deployment management, and an automatically-registered local MCP server that bridges Claude Code, Cursor, and VS Code Copilot to your L4 code. Connects to [Legalese Cloud](https://legalese.cloud) or a self-hosted `jl4-service` instance. See [ts-apps/vscode/README.md](ts-apps/vscode/README.md).
 
 ## Trace Visualization
 

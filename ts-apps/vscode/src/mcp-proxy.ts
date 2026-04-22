@@ -18,23 +18,33 @@ import { installL4Cli } from './install-cli.js'
  * the user's credentials. When disconnected or unauthenticated, returns
  * an empty tool list so the server stays registered but inert.
  */
+const CLAUDE_SETUP_DISMISSED_KEY = 'l4.claudeCodeSetupDismissed'
+
+export type ClaudeSetupOutcome =
+  | 'no-proxy' // proxy never started — abort
+  | 'no-config' // ~/.claude.json doesn't exist
+  | 'unparseable-config' // ~/.claude.json exists but isn't valid JSON
+  | 'already-configured' // both MCP + skill already installed
+  | 'dismissed-previously' // user previously clicked "Never"
+  | 'user-declined' // user just clicked "No" or closed the dialog
+  | 'accepted-co-installed' // user clicked "Yes" — we installed both tools AND the CLI
+
 export class McpProxy implements vscode.Disposable {
   private server: http.Server | null = null
   private port: number = 0
   private mcpRegistration: vscode.Disposable | undefined
   private outputChannel: vscode.OutputChannel
+  private globalState: vscode.Memento | undefined
   private extensionPath: string | undefined
 
   constructor(
     private readonly auth: AuthManager,
     outputChannel: vscode.OutputChannel,
-    // Kept as an arg for call-site compatibility even though we no
-    // longer persist any state — the auto-add startup flow (which used
-    // `l4.claudeCodeSetupDismissed`) has been removed.
-    _globalState?: vscode.Memento,
+    globalState?: vscode.Memento,
     extensionPath?: string
   ) {
     this.outputChannel = outputChannel
+    this.globalState = globalState
     this.extensionPath = extensionPath
   }
 
@@ -304,6 +314,90 @@ export class McpProxy implements vscode.Disposable {
       )
     } catch {
       // Config doesn't exist or isn't parseable — skip silently
+    }
+  }
+
+  /**
+   * Outcome of the startup "Add L4 Tools to Claude Code?" flow. The
+   * caller uses this to decide whether to fall through to the standalone
+   * "Install L4 CLI?" prompt — which we want in every branch *except*
+   * `accepted-co-installed`, because that path already co-installs the
+   * CLI as part of the Claude setup.
+   */
+
+  /**
+   * If Claude Code is installed but any component of the L4 tools
+   * (MCP server or writing-l4-rules skill) is missing, offer to add
+   * the full set.  Returns a tag describing what happened so the
+   * startup flow can fall through to the CLI install prompt when
+   * appropriate.
+   */
+  async offerClaudeCodeSetup(): Promise<ClaudeSetupOutcome> {
+    if (!this.port) return 'no-proxy'
+
+    const claudeConfigPath = path.join(os.homedir(), '.claude.json')
+    try {
+      fs.accessSync(claudeConfigPath, fs.constants.R_OK)
+    } catch {
+      return 'no-config' // Claude Code not installed
+    }
+
+    // Inspect the current state of both components.
+    let mcpPresent = false
+    try {
+      const raw = fs.readFileSync(claudeConfigPath, 'utf-8')
+      const config = JSON.parse(raw)
+      mcpPresent = !!config?.mcpServers?.['l4-rules']
+    } catch {
+      return 'unparseable-config' // Don't touch it
+    }
+    const skillPresent = this.isWritingL4RulesSkillInstalled()
+
+    // Everything already in place — just keep the port in sync silently.
+    if (mcpPresent && skillPresent) {
+      this.updateClaudeCodePort()
+      return 'already-configured'
+    }
+
+    // At least one component is missing. Respect a prior "Never".
+    if (this.globalState?.get<boolean>(CLAUDE_SETUP_DISMISSED_KEY)) {
+      return 'dismissed-previously'
+    }
+
+    const action = await vscode.window.showInformationMessage(
+      'Add L4 Tools to Claude Code?',
+      'Yes',
+      'No',
+      'Never'
+    )
+    if (action === 'Never') {
+      this.globalState?.update(CLAUDE_SETUP_DISMISSED_KEY, true)
+      return 'user-declined'
+    }
+    if (action !== 'Yes') return 'user-declined'
+
+    // installL4Tools co-installs the L4 CLI silently (see its body),
+    // so the caller does NOT need to prompt separately.
+    this.installL4Tools(claudeConfigPath)
+    return 'accepted-co-installed'
+  }
+
+  /**
+   * True if ~/.claude/skills/writing-l4-rules/SKILL.md exists.
+   * Used to decide whether the skill half of the L4 tools is installed.
+   */
+  private isWritingL4RulesSkillInstalled(): boolean {
+    const skillMdPath = path.join(
+      os.homedir(),
+      '.claude',
+      'skills',
+      'writing-l4-rules',
+      'SKILL.md'
+    )
+    try {
+      return fs.statSync(skillMdPath).isFile()
+    } catch {
+      return false
     }
   }
 
