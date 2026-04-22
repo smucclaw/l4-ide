@@ -204,7 +204,7 @@ export class ToolDispatcher {
       case 'fs__delete_file':
         return fsDeleteFile(args as { path: string })
       case 'lsp__diagnostics':
-        return lspDiagnostics(args as { path: string; source?: string })
+        return lspDiagnostics(args as { path: string })
       case 'l4__evaluate':
         return l4Evaluate(args as { path: string; timeoutMs?: number })
       case 'meta__ask_user':

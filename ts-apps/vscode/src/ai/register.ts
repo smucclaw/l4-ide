@@ -804,6 +804,12 @@ function mediaTypeForExtension(ext: string): string | null {
     case 'html':
     case 'htm':
       return 'text/html'
+    // L4 source. Not an IANA type; the AI SDK's inline-text path in
+    // chat-service classifies by `text/` prefix, so use `text/plain`
+    // and let the filename attribute in the <attached-file> wrapper
+    // tell the model it's L4.
+    case 'l4':
+      return 'text/plain'
     default:
       return null
   }
@@ -830,6 +836,7 @@ async function handlePickAttachment(
     'xml',
     'html',
     'htm',
+    'l4',
   ]
   const filters: Record<string, string[]> =
     accept === 'text-or-pdf'
@@ -842,7 +849,16 @@ async function handlePickAttachment(
               ...OFFICE_EXTENSIONS,
             ],
           }
-        : { 'Image or PDF': [...IMAGE_EXTENSIONS, 'pdf'] }
+        : {
+            // `any` is the paperclip button in chat-input. Offers the
+            // full set of supported attachables — images + PDF + any
+            // text-adjacent source (L4, YAML, CSV, markdown, …).
+            // Previously this filter was just images + PDF, so users
+            // couldn't attach their .l4 / .txt files through the
+            // paperclip even though chat-service's inline-text path
+            // already knew how to ship them.
+            Attachable: [...IMAGE_EXTENSIONS, 'pdf', ...TEXT_LIKE_EXTENSIONS],
+          }
 
   const uris = await vscode.window.showOpenDialog({
     canSelectFiles: true,

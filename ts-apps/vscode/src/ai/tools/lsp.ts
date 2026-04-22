@@ -11,10 +11,6 @@ import { resolveFileUri } from './fs.js'
 
 export interface LspDiagnosticsArgs {
   path: string
-  /** Optional source filter. `"jl4"` returns only the L4 language-
-   *  server's diagnostics; omitted returns everything VSCode knows
-   *  about the file. Default: no filter. */
-  source?: string
 }
 
 type DiagSeverity = 'error' | 'warning' | 'info' | 'hint'
@@ -32,7 +28,7 @@ export async function lspDiagnostics(
     )
   }
   try {
-    return await fetchL4Diagnostics(uri, { source: args.source })
+    return await fetchL4Diagnostics(uri)
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     throw new Error(`lsp__diagnostics: failed to open ${args.path}: ${msg}`)
@@ -50,10 +46,7 @@ export async function lspDiagnostics(
  * is hidden, it's just ~5× fewer tokens than the pretty-printed JSON
  * for the same payload.
  */
-export async function fetchL4Diagnostics(
-  uri: vscode.Uri,
-  options?: { source?: string }
-): Promise<string> {
+export async function fetchL4Diagnostics(uri: vscode.Uri): Promise<string> {
   // Opening a document triggers the LSP to parse + type-check it. If
   // it's already open in an editor this is effectively a no-op.
   await vscode.workspace.openTextDocument(uri)
@@ -71,12 +64,7 @@ export async function fetchL4Diagnostics(
       u.toString() === uri.toString() ||
       u.fsPath.toLowerCase() === uri.fsPath.toLowerCase()
   )
-  const all = match?.[1] ?? []
-  const filtered = options?.source
-    ? all.filter(
-        (d) => (d.source ?? '').toLowerCase() === options.source!.toLowerCase()
-      )
-    : all
+  const filtered = match?.[1] ?? []
   const rel = vscode.workspace.asRelativePath(uri, false)
   if (filtered.length === 0) {
     return `--- L4 diagnostics for ${rel}: clean ---`

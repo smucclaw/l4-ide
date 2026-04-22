@@ -418,7 +418,9 @@
       {/if}
       <button
         class="icon-btn"
-        title={attachBusy ? 'Picking attachment…' : 'Attach an image or PDF'}
+        title={attachBusy
+          ? 'Picking attachment…'
+          : 'Attach an image, PDF, or text file (.l4, .md, .json, …)'}
         aria-label="Attach an image or PDF"
         disabled={disabled || attachBusy}
         onclick={pickAttachment}

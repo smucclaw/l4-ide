@@ -80,30 +80,32 @@ function resolveWorkspacePath(p: string): ResolvedPath {
 
 export interface FsReadArgs {
   path: string
-  /** For directory paths: offset into the sorted entries list. Use the
-   *  `nextFrom` value from a previous page to walk larger folders. */
-  from?: number
-  /** For file paths: 1-based inclusive line to start reading at.
-   *  Defaults to 1. */
+  /** 1-based inclusive start line in the target's text output.
+   *  For files this is a source-line number; for directories it's
+   *  the position in the sorted entry listing (1 = first entry).
+   *  Default 1. Applied after `pattern` when both are set. */
   startLine?: number
-  /** For file paths: 1-based inclusive line to stop reading at. If
-   *  omitted, reads up to `startLine + FILE_LINE_LIMIT - 1`. The
-   *  response is clamped to FILE_LINE_LIMIT lines even if a larger
-   *  range is requested, and further clamped to FILE_CHAR_LIMIT
-   *  characters if the lines are wide. */
+  /** 1-based inclusive end line. Default: read to the end of the
+   *  output, capped at `startLine + 99` (100-line ceiling). */
   endLine?: number
+  /** Optional keyword filter. Narrows the output to lines
+   *  matching this pattern — parsed as a case-insensitive regex,
+   *  falls back to literal substring when the regex doesn't
+   *  compile. For files, matching lines are returned with 2 lines
+   *  of surrounding context; for directories, matching entries
+   *  only. Use this to jump to a named section or symbol without
+   *  paging through preceding lines. */
+  pattern?: string
 }
 
-/** Hard cap per directory-listing response. A single page covers most
- *  real workspaces; more than this shunts into `nextFrom` paging. */
-const DIR_PAGE_LIMIT = 100
-
-/** Hard caps per file-read response. Picked so a single call surfaces
- *  enough to read a typical function or section without letting a
- *  30 kLOC file blow up the agent's context window in one shot. The
- *  model pages via `startLine`/`endLine` when a file is bigger. */
-const FILE_LINE_LIMIT = 100
-const FILE_CHAR_LIMIT = 4000
+/** Hard caps per response. Picked so a single call surfaces enough
+ *  to read a typical function or section without letting a 30 kLOC
+ *  file blow up the agent's context window. The model pages via
+ *  `startLine`/`endLine` when a target is bigger. Applied uniformly
+ *  to files and directories. */
+const LINE_LIMIT = 100
+const CHAR_LIMIT = 4000
+const PATTERN_CONTEXT_LINES = 2
 
 /**
  * For `.l4` files, append the exact same diagnostics payload the
@@ -132,6 +134,23 @@ async function appendL4Diagnostics(
  *  always noise the model doesn't want to reason about. */
 const DIR_IGNORES = new Set(['.git', 'node_modules', '.DS_Store'])
 
+/**
+ * Read a file (one source line per output line) or list a directory
+ * (one entry per output line, `name/` for subdirs, `name` for files,
+ * dirs sorted first). Same shape for both so the model learns one
+ * rule. Pagination via `startLine`/`endLine`, search via `pattern`.
+ *
+ * Response: a compact header line describing what came back, then
+ * the selected lines. Header examples:
+ *   [<path> 1-40/40]                               — full file/dir
+ *   [<path> 1-100/489, next startLine=101]         — paginated
+ *   [<path> pattern="..." matches=3 chunks=2/2]    — grep result
+ *   [<path> pattern="..." matches=0]               — no hits
+ *
+ * For grep mode, matching lines are prefixed `>>>` and context
+ * lines `   ` so the model can distinguish hits from surroundings;
+ * non-contiguous chunks are separated by `---`.
+ */
 export async function fsReadFile(args: FsReadArgs): Promise<string> {
   const r = resolveWorkspacePath(args.path)
   let stat: Awaited<ReturnType<typeof fs.stat>>
@@ -143,84 +162,214 @@ export async function fsReadFile(args: FsReadArgs): Promise<string> {
     }
     throw err
   }
-  if (stat.isDirectory()) {
-    return await fsListDirectory(r, args.from ?? 0)
+
+  // Materialise the target as a list of lines regardless of kind.
+  // Files: one source line per entry. Directories: one entry per
+  // entry, with a trailing `/` for subdirs. Diagnostics are NOT
+  // auto-appended for .l4 reads any more — earlier versions did
+  // this and trained the model to over-read; use lsp__diagnostics
+  // explicitly.
+  let lines: string[]
+  const isDir = stat.isDirectory()
+  if (isDir) {
+    const raw = await fs.readdir(r.fsPath, { withFileTypes: true })
+    const filtered = raw.filter((e) => !DIR_IGNORES.has(e.name))
+    filtered.sort((a, b) => {
+      const rank = (e: typeof a): number => (e.isDirectory() ? 0 : 1)
+      const d = rank(a) - rank(b)
+      return d !== 0 ? d : a.name.localeCompare(b.name)
+    })
+    lines = filtered.map((e) => (e.isDirectory() ? `${e.name}/` : e.name))
+  } else {
+    const buf = await fs.readFile(r.fsPath, 'utf-8')
+    lines = buf.replace(/\r\n/g, '\n').split('\n')
   }
-  const buf = await fs.readFile(r.fsPath, 'utf-8')
-  // Newline-normalize so downstream tools that rely on \n splits don't
-  // get confused by Windows CRLF.
-  const full = buf.replace(/\r\n/g, '\n')
-  const body = sliceFileRead(r, full, args.startLine, args.endLine)
-  return appendL4Diagnostics(r, body)
+
+  // Pattern (grep mode) takes precedence — once a pattern is set
+  // the output is keyword-focused and startLine/endLine narrow
+  // WITHIN that focus.
+  if (typeof args.pattern === 'string' && args.pattern.length > 0) {
+    return grepLines(
+      r,
+      lines,
+      args.pattern,
+      isDir,
+      args.startLine,
+      args.endLine
+    )
+  }
+  return sliceLines(r, lines, args.startLine, args.endLine)
 }
 
 /**
- * Apply the `startLine` / `endLine` window and the FILE_LINE_LIMIT /
- * FILE_CHAR_LIMIT caps to a file's body. When the slice is the full
- * file AND fits both caps, returns the raw content so short files
- * (the common case) read the same as before. When truncated, prepends
- * a single metadata line the model can parse to issue a follow-up
- * call (`startLine: <nextStartLine>`).
+ * Cap a line array to LINE_LIMIT / CHAR_LIMIT, optionally starting
+ * at a specific 1-based line, and render with a compact header.
+ * Used for the no-pattern path of fsReadFile (files AND directories).
  */
-function sliceFileRead(
+function sliceLines(
   r: ResolvedPath,
-  full: string,
+  lines: string[],
   startLineRaw: number | undefined,
   endLineRaw: number | undefined
 ): string {
-  // Split without losing a trailing empty line from a final `\n` — we
-  // want exactly `totalLines === count('\n') + 1` for the metadata.
-  const lines = full.split('\n')
-  const totalLines = lines.length
-
-  const startLine = clampInt(startLineRaw ?? 1, 1, Math.max(1, totalLines))
+  const total = lines.length
+  const startLine = clampInt(startLineRaw ?? 1, 1, Math.max(1, total))
   const requestedEnd =
-    endLineRaw !== undefined
-      ? clampInt(endLineRaw, startLine, totalLines)
-      : totalLines
-  // Hard 100-line cap even if the caller asks for more. Prevents a
-  // tool call with `endLine: 99999` from smuggling the entire file in
-  // one shot.
-  const capByLines = Math.min(
-    requestedEnd,
-    startLine + FILE_LINE_LIMIT - 1,
-    totalLines
-  )
-
-  // Slice by lines first, then tighten further if the selected window
-  // blows past the char budget. Tighten at line boundaries so the
-  // returned text is never mid-line (the model would struggle to
-  // reason about the partial).
+    endLineRaw !== undefined ? clampInt(endLineRaw, startLine, total) : total
+  // Hard line cap even if the caller asks for more — prevents an
+  // endLine: 99999 from smuggling the whole target back.
+  const capByLines = Math.min(requestedEnd, startLine + LINE_LIMIT - 1, total)
   let endLine = capByLines
-  let sliced = lines.slice(startLine - 1, endLine).join('\n')
-  while (sliced.length > FILE_CHAR_LIMIT && endLine > startLine) {
+  let body = lines.slice(startLine - 1, endLine).join('\n')
+  while (body.length > CHAR_LIMIT && endLine > startLine) {
     endLine--
-    sliced = lines.slice(startLine - 1, endLine).join('\n')
+    body = lines.slice(startLine - 1, endLine).join('\n')
   }
-  // Edge case: even the single starting line exceeds the char cap.
-  // Truncate mid-line as a last resort and flag it in the metadata.
+  // Edge case: even a single line exceeds the char cap. Clip
+  // mid-line; the header's next-startLine stays at the same line
+  // so the model can retry with a narrower window.
   let lineClipped = false
-  if (sliced.length > FILE_CHAR_LIMIT) {
-    sliced = sliced.slice(0, FILE_CHAR_LIMIT)
+  if (body.length > CHAR_LIMIT) {
+    body = body.slice(0, CHAR_LIMIT)
     lineClipped = true
   }
+  const fitsInOneCall = startLine === 1 && endLine === total && !lineClipped
+  if (fitsInOneCall) {
+    return `[${r.relative} 1-${total}/${total}]\n${body}`
+  }
+  const nextStartLine = lineClipped ? startLine : endLine + 1
+  const hasMore = endLine < total || lineClipped
+  const header = hasMore
+    ? `[${r.relative} ${startLine}-${endLine}/${total}, next startLine=${nextStartLine}]`
+    : `[${r.relative} ${startLine}-${endLine}/${total}]`
+  return `${header}\n${body}`
+}
 
-  const isFullFile = startLine === 1 && endLine === totalLines && !lineClipped
-  if (isFullFile) return sliced
+/**
+ * Grep mode: filter `lines` down to those matching `pattern`,
+ * then apply the same caps as `sliceLines`. For files, each match
+ * carries PATTERN_CONTEXT_LINES of surrounding context (overlapping
+ * chunks merged); for directories, matching entries are returned
+ * verbatim (context is meaningless for a listing).
+ *
+ * When `startLine`/`endLine` are also set, they further narrow the
+ * pattern's match window to file lines inside that range — lets
+ * the model search within a specific section.
+ *
+ * Output:
+ *   [<path> pattern="…" matches=N chunks=K/total]
+ *   >>> 42: matching line
+ *       43: context
+ *   ---
+ *       86: context
+ *   >>> 87: another match
+ */
+function grepLines(
+  r: ResolvedPath,
+  lines: string[],
+  patternRaw: string,
+  isDir: boolean,
+  startLineRaw: number | undefined,
+  endLineRaw: number | undefined
+): string {
+  const total = lines.length
+  const rangeStart = clampInt(startLineRaw ?? 1, 1, Math.max(1, total)) - 1
+  const rangeEnd =
+    endLineRaw !== undefined
+      ? clampInt(endLineRaw, rangeStart + 1, total)
+      : total
 
-  const hasMore = endLine < totalLines || lineClipped
-  const nextStartLine = hasMore
-    ? lineClipped
-      ? startLine // same line — caller can retry with a narrower endLine
-      : endLine + 1
-    : null
+  let matcher: (line: string) => boolean
+  try {
+    const re = new RegExp(patternRaw, 'i')
+    matcher = (line) => re.test(line)
+  } catch {
+    const needle = patternRaw.toLowerCase()
+    matcher = (line) => line.toLowerCase().includes(needle)
+  }
+
+  const matchIdx: number[] = []
+  for (let i = rangeStart; i < rangeEnd; i++) {
+    if (matcher(lines[i]!)) matchIdx.push(i)
+  }
+  const patternLabel = JSON.stringify(patternRaw)
+  if (matchIdx.length === 0) {
+    return `[${r.relative} pattern=${patternLabel} matches=0]`
+  }
+
+  // Directories have no "context" — just return the matching entries
+  // as lines, applying the char/line caps.
+  if (isDir) {
+    const matchedLines = matchIdx.map((i) => `${i + 1}: ${lines[i]!}`)
+    let body = matchedLines.slice(0, LINE_LIMIT).join('\n')
+    while (body.length > CHAR_LIMIT && body.includes('\n')) {
+      body = body.slice(0, body.lastIndexOf('\n'))
+    }
+    const shown = body ? body.split('\n').length : 0
+    const truncated = shown < matchIdx.length
+    const header =
+      `[${r.relative} pattern=${patternLabel} matches=${matchIdx.length}` +
+      (truncated ? `, shown=${shown}/${matchIdx.length}]` : `]`)
+    return `${header}\n${body}`
+  }
+
+  // Files: expand each match to a [start, end] context window and
+  // merge overlapping / adjacent windows so consecutive near-hits
+  // produce one chunk instead of N.
+  type Chunk = { start: number; end: number; hits: Set<number> }
+  const chunks: Chunk[] = []
+  for (const i of matchIdx) {
+    const start = Math.max(0, i - PATTERN_CONTEXT_LINES)
+    const end = Math.min(total - 1, i + PATTERN_CONTEXT_LINES)
+    const tail = chunks[chunks.length - 1]
+    if (tail && start <= tail.end + 1) {
+      tail.end = Math.max(tail.end, end)
+      tail.hits.add(i)
+    } else {
+      chunks.push({ start, end, hits: new Set([i]) })
+    }
+  }
+
+  const rendered: string[] = []
+  let renderedLineCount = 0
+  let renderedCharCount = 0
+  let chunksShown = 0
+  let truncated = false
+  for (const chunk of chunks) {
+    const chunkLines: string[] = []
+    for (let i = chunk.start; i <= chunk.end; i++) {
+      const prefix = chunk.hits.has(i) ? '>>>' : '   '
+      const line = `${prefix} ${i + 1}: ${lines[i]!}`
+      const projectedLines = renderedLineCount + chunkLines.length + 1
+      const projectedChars =
+        renderedCharCount +
+        chunkLines.reduce((a, l) => a + l.length + 1, 0) +
+        line.length +
+        1
+      if (projectedLines > LINE_LIMIT || projectedChars > CHAR_LIMIT) {
+        truncated = true
+        break
+      }
+      chunkLines.push(line)
+    }
+    if (chunkLines.length === 0) {
+      truncated = true
+      break
+    }
+    rendered.push(chunkLines.join('\n'))
+    renderedLineCount += chunkLines.length
+    renderedCharCount += chunkLines.reduce((a, l) => a + l.length + 1, 0)
+    chunksShown++
+    if (truncated) break
+  }
+
   const header =
-    `[fs__read_file] ${r.relative}: lines ${startLine}\u2013${endLine} of ${totalLines}` +
-    ` (${sliced.length} chars${lineClipped ? ', mid-line clipped at FILE_CHAR_LIMIT' : ''})` +
-    (hasMore
-      ? `. More remains — call fs__read_file again with startLine=${nextStartLine} for the next page.`
-      : '.')
-  return `${header}\n${sliced}`
+    `[${r.relative} pattern=${patternLabel} matches=${matchIdx.length} ` +
+    `chunks=${chunksShown}/${chunks.length}` +
+    (truncated
+      ? `, truncated — narrow the pattern or use startLine/endLine for a specific range]`
+      : `]`)
+  return `${header}\n${rendered.join('\n---\n')}`
 }
 
 function clampInt(n: number, lo: number, hi: number): number {
@@ -231,43 +380,6 @@ function clampInt(n: number, lo: number, hi: number): number {
   return rounded
 }
 
-async function fsListDirectory(
-  r: ResolvedPath,
-  fromRaw: number
-): Promise<string> {
-  const raw = await fs.readdir(r.fsPath, { withFileTypes: true })
-  const filtered = raw.filter((e) => !DIR_IGNORES.has(e.name))
-  // Directories first, then files, alphabetical within each group.
-  filtered.sort((a, b) => {
-    const rank = (e: typeof a): number => (e.isDirectory() ? 0 : 1)
-    const d = rank(a) - rank(b)
-    return d !== 0 ? d : a.name.localeCompare(b.name)
-  })
-  const total = filtered.length
-  const from = Math.max(0, Math.min(Math.floor(fromRaw), total))
-  const slice = filtered.slice(from, from + DIR_PAGE_LIMIT)
-  const entries = slice.map((e) => ({
-    name: e.name,
-    kind: e.isDirectory() ? ('directory' as const) : ('file' as const),
-  }))
-  const nextFrom = from + entries.length
-  const hasMore = nextFrom < total
-  return JSON.stringify(
-    {
-      kind: 'directory',
-      path: r.relative || '.',
-      total,
-      from,
-      count: entries.length,
-      entries,
-      hasMore,
-      nextFrom: hasMore ? nextFrom : null,
-    },
-    null,
-    2
-  )
-}
-
 export interface FsCreateArgs {
   path: string
   content: string
@@ -275,6 +387,21 @@ export interface FsCreateArgs {
 
 export async function fsCreateFile(args: FsCreateArgs): Promise<string> {
   const r = resolveWorkspacePath(args.path)
+  // Validate `content` BEFORE touching disk. Without this guard a
+  // model call that omits `content` (Anthropic doesn't strictly
+  // enforce `required` on tool_use params) raced through:
+  //   1. `edit.createFile` creates the empty file,
+  //   2. `edit.insert(uri, pos, undefined)` inside applyEdit
+  //      throws "Cannot read properties of undefined",
+  //   3. the dispatcher propagates the error to the model,
+  //   4. the model retries with content, and gets
+  //      "File already exists" because step 1 succeeded.
+  // Failing fast here keeps step 1 from ever running.
+  if (typeof args.content !== 'string') {
+    throw new Error(
+      "fs__create_file: 'content' is required (as a string). Pass an empty string if you want an empty file."
+    )
+  }
   try {
     await fs.access(r.fsPath)
     throw new Error(`File already exists: ${r.relative}`)
@@ -311,10 +438,20 @@ export async function fsCreateFile(args: FsCreateArgs): Promise<string> {
 
 export interface FsEditArgs {
   path: string
-  /** Exact text to replace; must appear EXACTLY ONCE. */
+  /** Exact text to replace. When `startLine` is omitted (or 0),
+   *  must appear EXACTLY ONCE in the file. When `startLine` is set,
+   *  the first occurrence strictly after that line is taken — no
+   *  global uniqueness required. */
   old: string
   /** Replacement text. */
   new: string
+  /** Optional 1-based line number to anchor the search. When set,
+   *  the edit targets the first occurrence of `old` that starts on
+   *  a line STRICTLY AFTER `startLine` (so earlier identical
+   *  snippets are skipped). Default 0 = search the whole file.
+   *  Leave generous slack (~5-10 lines) below the expected line —
+   *  multi-round turns shift line numbers as prior edits land. */
+  startLine?: number
 }
 
 /**
@@ -331,26 +468,74 @@ export interface FsEditArgs {
  */
 export async function fsEditFile(args: FsEditArgs): Promise<string> {
   const r = resolveWorkspacePath(args.path)
-  if (!args.old) {
+  if (typeof args.old !== 'string' || args.old.length === 0) {
     throw new Error(`fs__edit_file: 'old' must be a non-empty string`)
+  }
+  // Same defensive check we use in fs__create_file: fail fast when
+  // the model omitted `new` before any LSP edit machinery spins up.
+  // Empty-string replacements are valid (it's how we delete a
+  // snippet), so the typeof check allows "" but rejects undefined.
+  if (typeof args.new !== 'string') {
+    throw new Error(
+      "fs__edit_file: 'new' is required (as a string). Pass an empty string to delete the 'old' snippet."
+    )
   }
   const doc = await vscode.workspace.openTextDocument(r.uri)
   const currentText = doc.getText().replace(/\r\n/g, '\n')
-  const occurrences = countOccurrences(currentText, args.old)
-  if (occurrences === 0) {
-    throw new Error(
-      `fs__edit_file: the 'old' snippet was not found in ${r.relative}`
-    )
+
+  // When `startLine` is set, drop the lines at/before it from the
+  // search window. The replace still applies to the real document
+  // so we track the absolute offset that corresponds to the
+  // window's start. Without startLine, the window is the whole
+  // file and the `old` snippet must be unique in it; with startLine
+  // set we just take the first match in the window (earlier
+  // identical snippets are intentionally skipped).
+  const anchorLine =
+    typeof args.startLine === 'number' && Number.isFinite(args.startLine)
+      ? Math.max(0, Math.floor(args.startLine))
+      : 0
+  let searchOffset = 0
+  if (anchorLine > 0) {
+    const allLines = currentText.split('\n')
+    if (anchorLine >= allLines.length) {
+      throw new Error(
+        `fs__edit_file: startLine=${args.startLine} is past the end of ${r.relative} (${allLines.length} lines).`
+      )
+    }
+    // Offset of the line AFTER the anchor — `anchorLine` lines plus
+    // that many newlines.
+    searchOffset =
+      allLines.slice(0, anchorLine).reduce((n, l) => n + l.length, 0) +
+      anchorLine
   }
-  if (occurrences > 1) {
-    throw new Error(
-      `fs__edit_file: the 'old' snippet appears ${occurrences} times in ${r.relative}. Include more surrounding lines to make it unique.`
-    )
+  const searchWindow = currentText.slice(searchOffset)
+
+  if (anchorLine === 0) {
+    const occurrences = countOccurrences(searchWindow, args.old)
+    if (occurrences === 0) {
+      throw new Error(
+        `fs__edit_file: the 'old' snippet was not found in ${r.relative}`
+      )
+    }
+    if (occurrences > 1) {
+      throw new Error(
+        `fs__edit_file: the 'old' snippet appears ${occurrences} times in ${r.relative}. Include more surrounding lines to make it unique, or pass startLine=<line> to anchor.`
+      )
+    }
   }
+
   // Compute the Range to replace. Using the live document's positionAt
   // keeps the offset-to-(line,col) mapping authoritative — works the
   // same way the LSP sees text.
-  const startOffset = currentText.indexOf(args.old)
+  const hit = searchWindow.indexOf(args.old)
+  if (hit === -1) {
+    throw new Error(
+      anchorLine === 0
+        ? `fs__edit_file: the 'old' snippet was not found in ${r.relative}`
+        : `fs__edit_file: the 'old' snippet was not found in ${r.relative} after line ${anchorLine}`
+    )
+  }
+  const startOffset = searchOffset + hit
   const endOffset = startOffset + args.old.length
   const range = new vscode.Range(
     doc.positionAt(startOffset),
