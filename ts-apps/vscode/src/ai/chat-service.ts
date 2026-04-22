@@ -403,6 +403,11 @@ export class ChatService {
         // server so no duplicate user message lands in the stored
         // transcript.
         ...(continueTurn ? { continueTurn: true } : {}),
+        // Register this turn with the proxy's TurnRegistry so a
+        // reattach call (future: manual, or auto on stream error
+        // once we've got since-cursor protocol) can pick up the
+        // buffered frames after a disconnect.
+        turnId: opts.turnId,
       },
       abortSignal
     )) {

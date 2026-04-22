@@ -27,6 +27,12 @@ export interface AiProxyChatRequest {
    *  conversation's existing history. Empty `messages` is allowed
    *  in this mode. */
   continueTurn?: boolean
+  /** Client-generated turn id — registered server-side so we can
+   *  reattach via `GET /v1/chat/turns/{turnId}/stream` after a
+   *  disconnect and pick up missed deltas. Required for reattach
+   *  to work (the server falls back to a UUID when absent, but
+   *  the client can't reconstruct that id). */
+  turnId?: string
 }
 
 /** Event union emitted by {@link streamChatCompletions} while parsing SSE. */
@@ -117,6 +123,50 @@ export class AiProxyClient {
     this.opts.logger.info(
       `response ${res.status} ${res.statusText} (content-type=${res.headers.get('content-type') ?? '?'})`
     )
+    if (!res.ok || !res.body) {
+      let body = ''
+      try {
+        body = await res.text()
+      } catch {
+        // ignore
+      }
+      const message = extractErrorMessage(body) ?? `HTTP ${res.status}`
+      const code = extractErrorCode(body) ?? httpStatusToCode(res.status)
+      throw new AiProxyError(message, code, res.status)
+    }
+    yield* parseSse(res.body, this.opts.logger)
+  }
+
+  /**
+   * GET /v1/chat/turns/{turnId}/stream. Rebinds to an existing
+   * server-side turn after a client disconnect and replays + tails
+   * the SSE buffer. Throws AiProxyError on 404 (turn unknown or
+   * reaped) so the caller can fall back to a fresh request.
+   * Same SSE parse path as `stream()`.
+   */
+  async *reattach(
+    turnId: string,
+    abortSignal: AbortSignal
+  ): AsyncGenerator<AiProxyStreamEvent> {
+    const url = `${AI_ENDPOINT}/v1/chat/turns/${encodeURIComponent(turnId)}/stream`
+    const headers = await this.opts.auth.getAuthHeaders()
+    if (!headers.Authorization) {
+      throw new AiProxyError(
+        'No Legalese Cloud session found. Sign in from the sidebar to use AI chat.',
+        'unauthenticated',
+        401
+      )
+    }
+    this.opts.logger.info(`GET ${url} (reattach)`)
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: { ...headers, Accept: 'text/event-stream' },
+      signal: abortSignal,
+    })
+    this.opts.logger.info(`reattach response ${res.status} ${res.statusText}`)
+    if (res.status === 404) {
+      throw new AiProxyError('Turn not found or expired', 'not_found', 404)
+    }
     if (!res.ok || !res.body) {
       let body = ''
       try {
