@@ -409,14 +409,12 @@ export function createAiChatStore(
       if (wasIncludingActiveFile) includeActiveFile = false
       // Attachments are one-shot too — they were mine, they're yours now.
       stagedAttachments = []
-      // eslint-disable-next-line no-console
       console.log('[ai-chat] dispatched AiChatStart', {
         turnId,
         conversationId,
         textLen: text.length,
       })
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('[ai-chat] sendNotification(AiChatStart) threw', err)
       const last = conv.turns[conv.turns.length - 1]
       if (last && last.role === 'assistant') {

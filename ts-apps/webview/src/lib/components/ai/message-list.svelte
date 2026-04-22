@@ -72,6 +72,7 @@
   $effect(() => {
     if (!scrollEl) return
     // Trigger on turns change
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
     turns.length
 
     // Wait for DOM to update
@@ -107,7 +108,6 @@
   // "Jump to latest" affordance.
   $effect(() => {
     // Track changes by reading every turn's content length.
-    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
     turns.map((t) => t.content.length)
     if (stickToBottom && scrollEl) {
       // Microtask so the DOM has grown before we measure.
