@@ -178,6 +178,14 @@ export class ChatService {
             userText: params.text,
             abortSignal: abortController.signal,
             blocks: turnBlocks,
+            // `continueTurn` only applies to iteration 0 — that's
+            // the retry-from-error-bubble path where the caller
+            // wants the server to run against its stored history
+            // without accepting any delta. Subsequent iterations
+            // are tool-round follow-ups and always carry real
+            // tool-result delta, so continueTurn must be false
+            // there or the results would be dropped.
+            continueTurn: iteration === 0 && !!params.continueTurn,
             onMetadata: (md) => {
               serverConversationId = md.conversationId
             },
@@ -335,6 +343,10 @@ export class ChatService {
     /** Chronological record the outer loop persists as `_meta.blocks`
      *  so the webview can rebuild rows on reload. Mutated in place. */
     blocks: PersistedBlock[]
+    /** Pass `continueTurn: true` through to the server so it skips
+     *  extractDelta + appendMessages and runs another pass against
+     *  the stored history. Only meaningful on iteration 0. */
+    continueTurn: boolean
     onMetadata: (md: { conversationId: string; model: string }) => void
   }): Promise<{
     finishReason: string
@@ -348,6 +360,7 @@ export class ChatService {
       conversationId,
       abortSignal,
       blocks,
+      continueTurn,
       onMetadata,
     } = opts
     const pendingCalls: Array<{
@@ -379,6 +392,11 @@ export class ChatService {
         // doesn't call any.
         tools,
         stream: true,
+        // Explicit retry verb; see outer loop for why only iteration
+        // 0 may carry this. The proxy skips extractDelta on the
+        // server so no duplicate user message lands in the stored
+        // transcript.
+        ...(continueTurn ? { continueTurn: true } : {}),
       },
       abortSignal
     )) {
@@ -529,26 +547,14 @@ export class ChatService {
       if (bootstrap) messages.push(bootstrap)
     }
 
-    // Retry path: skip the user message entirely. The server
-    // already has the user's turn on disk from the aborted attempt
-    // (persisted on conversation create), and extractDelta drops
-    // any body.messages lacking a trailing user role — so the
-    // server just runs another turn against the existing history.
-    // We still need at least one body message to pass the server's
-    // "messages array is required" guard; if the body is empty
-    // here (no editor context, no mentions, not a new convo), push
-    // a "continue" system hint that extractDelta will skip and the
-    // provider layer will merge into the prompt anyway.
-    if (params.continueTurn) {
-      if (messages.length === 0) {
-        messages.push({
-          role: 'system',
-          content:
-            'The user hit Retry after a mid-stream failure. Continue the conversation from the last user message in the history.',
-        })
-      }
-      return messages
-    }
+    // Retry path: skip the user message entirely. The server's
+    // explicit `continueTurn: true` flag (set in runStreamIteration
+    // for iteration 0 when the outer loop was invoked via Retry)
+    // tells the proxy to bypass extractDelta and run another pass
+    // against the stored history. body.messages can be empty — the
+    // proxy allows it when continueTurn is set, so we don't need
+    // the old "continue" system-hint workaround.
+    if (params.continueTurn) return messages
 
     // Multimodal user content: when the webview has staged attachments,
     // ship them as OpenAI-shaped content parts alongside the text so

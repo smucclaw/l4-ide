@@ -22,6 +22,11 @@ export interface AiProxyChatRequest {
   conversationId?: string
   model?: string
   stream: true
+  /** Explicit retry/resume verb. When true the ai-proxy skips
+   *  extractDelta and runs another turn against the stored
+   *  conversation's existing history. Empty `messages` is allowed
+   *  in this mode. */
+  continueTurn?: boolean
 }
 
 /** Event union emitted by {@link streamChatCompletions} while parsing SSE. */
