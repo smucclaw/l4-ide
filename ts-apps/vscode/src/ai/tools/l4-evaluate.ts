@@ -1,5 +1,6 @@
 import * as vscode from 'vscode'
 import { resolveFileUri } from './fs.js'
+import { fetchL4Diagnostics } from './lsp.js'
 
 /**
  * l4__evaluate — report the L4 language server's most-recent evaluation
@@ -91,6 +92,19 @@ export async function l4Evaluate(args: L4EvaluateArgs): Promise<string> {
     const msg = err instanceof Error ? err.message : String(err)
     throw new Error(`l4__evaluate: failed to open ${args.path}: ${msg}`)
   }
+
+  // Diagnostics gate: if the file doesn't type-check, directive
+  // evaluation results are either stale (from a prior good compile)
+  // or empty (the LSP skipped evaluation this round). Either way
+  // they're misleading — return the diagnostics text instead so the
+  // model fixes the errors first. `fetchL4Diagnostics` already opens
+  // the doc + waits for publishDiagnostics to settle, so we don't
+  // need an extra settle delay here.
+  const diagnostics = await fetchL4Diagnostics(uri).catch(() => null)
+  if (diagnostics && !/:\s*clean\s*---/.test(diagnostics)) {
+    return diagnostics
+  }
+
   const uriStr = uri.toString()
   const timeoutMs = Math.min(args.timeoutMs ?? 6000, 15000)
   if (!cache.has(uriStr)) {

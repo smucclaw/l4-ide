@@ -129,7 +129,7 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
     function: {
       name: 'l4__evaluate',
       description:
-        "Returns the L4 server's latest results for every `#EVAL` / `#CHECK` / `#TRACE` directive in the file: `{ path, count, results[{ directiveId, line, success, value }] }`. `success: false` = the directive evaluated to False (CHECK) or threw. `value` is pretty-printed. Call after fs__edit_file to confirm runtime behaviour of existing directives.",
+        "Returns the L4 server's latest results for every `#EVAL` / `#CHECK` / `#TRACE` directive in the file: `{ path, count, results[{ directiveId, line, success, value }] }`. Runs lsp diagnostics first internally.",
       parameters: {
         type: 'object',
         additionalProperties: false,

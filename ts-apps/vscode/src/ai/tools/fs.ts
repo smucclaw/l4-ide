@@ -366,9 +366,7 @@ function grepLines(
   const header =
     `[${r.relative} pattern=${patternLabel} matches=${matchIdx.length} ` +
     `chunks=${chunksShown}/${chunks.length}` +
-    (truncated
-      ? `, truncated — narrow the pattern or use startLine/endLine for a specific range]`
-      : `]`)
+    (truncated ? `, truncated]` : `]`)
   return `${header}\n${rendered.join('\n---\n')}`
 }
 
