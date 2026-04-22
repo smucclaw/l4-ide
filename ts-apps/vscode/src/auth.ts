@@ -47,6 +47,11 @@ export class AuthManager {
   private verifyGen = 0
   private manuallyDisconnected = false
   private cloudOrgSlug: string | undefined
+  // Stable per-user identifier pulled from /auth/session. Used to scope
+  // on-disk state (e.g. conversation history) per signed-in user so
+  // logging out and back in as someone else yields a different view.
+  // Undefined in self-hosted mode (API-key-only) and when signed out.
+  private cloudUserId: string | undefined
   private readonly disposables: vscode.Disposable[] = []
 
   constructor(
@@ -64,6 +69,7 @@ export class AuthManager {
           )
           await this.secrets.delete(SECRET_KEY_SESSION)
           this.cloudOrgSlug = undefined
+          this.cloudUserId = undefined
           this.manuallyDisconnected = false
           this.invalidate()
           await this.verifyConnection()
@@ -138,9 +144,37 @@ export class AuthManager {
   async logout(): Promise<void> {
     await this.secrets.delete(SECRET_KEY_SESSION)
     this.cloudOrgSlug = undefined
+    this.cloudUserId = undefined
     this.manuallyDisconnected = true
     this.invalidate()
     await this.verifyConnection()
+  }
+
+  /**
+   * Stable identifier for the signed-in Legalese Cloud user, if any.
+   * Callers scoping local state (conversation history, per-user caches)
+   * should key off this and fall back to an `anonymous`-style bucket
+   * when it's undefined (self-hosted mode or signed-out).
+   */
+  getUserId(): string | undefined {
+    return this.cloudUserId
+  }
+
+  /**
+   * Derives a filesystem-safe key from the current user identity.
+   * Returns `anonymous` when no Legalese Cloud user is signed in so
+   * self-hosted / signed-out state still has a stable bucket — just
+   * not one that collides with any real user's.
+   */
+  getUserStorageKey(): string {
+    const id = this.cloudUserId
+    if (!id) return 'anonymous'
+    // Keep only characters we know are safe across macOS/Win/Linux
+    // filesystems. A WorkOS user id (`user_01H...`) already satisfies
+    // this, but the guard means any future identity shape can't inject
+    // a path separator.
+    const safe = id.replace(/[^a-zA-Z0-9_-]/g, '_')
+    return safe.length > 0 ? safe : 'anonymous'
   }
 
   /**
@@ -198,11 +232,18 @@ export class AuthManager {
       if (resp.ok) {
         const session = (await resp.json()) as {
           organization?: { slug: string; name: string }
+          user?: { id?: string; email?: string }
         }
         if (session.organization) {
           this.cloudOrgSlug = session.organization.slug
           this.outputChannel.appendLine(
             `[auth] Resolved org: ${session.organization.name} (${session.organization.slug})`
+          )
+        }
+        if (session.user?.id) {
+          this.cloudUserId = session.user.id
+          this.outputChannel.appendLine(
+            `[auth] Signed in as ${session.user.email ?? session.user.id}`
           )
         }
       }
@@ -338,11 +379,18 @@ export class AuthManager {
           if (resp.ok) {
             const session = (await resp.json()) as {
               organization?: { slug: string; name: string }
+              user?: { id?: string; email?: string }
             }
             if (session.organization) {
               this.cloudOrgSlug = session.organization.slug
               this.outputChannel.appendLine(
                 `[auth] Restored org: ${session.organization.name} (${session.organization.slug})`
+              )
+            }
+            if (session.user?.id) {
+              this.cloudUserId = session.user.id
+              this.outputChannel.appendLine(
+                `[auth] Restored user: ${session.user.email ?? session.user.id}`
               )
             }
           } else if (resp.status === 401 || resp.status === 403) {

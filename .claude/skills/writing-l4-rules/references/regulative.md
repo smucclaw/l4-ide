@@ -25,7 +25,6 @@ Deep dive on L4's regulative machinery: obligations, permissions, prohibitions, 
 
 ```l4
 PARTY   actor
-WHO     qualifier              -- optional
 MUST    action parameters      -- or MAY / SHANT / DO
 WITHIN  deadline
 HENCE   nextState              -- optional; consequence on success
