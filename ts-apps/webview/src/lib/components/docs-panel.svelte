@@ -476,7 +476,7 @@
   }
 
   .search-input:focus {
-    border-color: var(--vscode-foreground, #ccc);
+    border-color: #c8376a;
   }
 
   .search-results {

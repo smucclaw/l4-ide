@@ -21,7 +21,7 @@ license-file: LICENSE
 
 source-repository head
   type: git
-  location: https://github.com/legalese/l4-ide/tree/main/jl4-actus-analyzer
+  location: https://github.com/smucclaw/l4-ide/tree/main/jl4-actus-analyzer
 
 common defaults
   default-language: GHC2021

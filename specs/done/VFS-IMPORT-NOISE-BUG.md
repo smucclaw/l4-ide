@@ -39,7 +39,7 @@ The file **is found** — but not before emitting error-severity diagnostics for
 
 ## Location
 
-`/Users/mengwong/src/legalese/l4-ide/jl4-core/src/` — likely in import resolution / VFS handling code.
+`/Users/mengwong/src/smucclaw/l4-ide/jl4-core/src/` — likely in import resolution / VFS handling code.
 
 ## Workaround
 

@@ -33,7 +33,6 @@
   import ToolCard from '$lib/components/tool-card.svelte'
   import InspectorPanel from '$lib/components/inspector-panel.svelte'
   import DocsPanel from '$lib/components/docs-panel.svelte'
-  import AiChatPanel from '$lib/components/ai/ai-chat-panel.svelte'
 
   let functions: ExportedFunctionInfo[] = $state([])
   let activeFileUri: string = $state('')
@@ -46,7 +45,7 @@
   })
   let initialized: boolean = $state(false)
   let previewDebounceTimer: ReturnType<typeof setTimeout> | null = null
-  let activeTab: 'ai-chat' | 'docs' | 'inspector' | 'preview' | 'deployments' =
+  let activeTab: 'docs' | 'inspector' | 'preview' | 'deployments' =
     $state('docs')
   let menuOpen: boolean = $state(false)
 
@@ -92,15 +91,6 @@
   $effect(() => {
     if (activeTab !== 'deployments') {
       undeployConfirm = null
-    }
-  })
-
-  // Reset the Deploy-tab flow when switching away so the footer action
-  // button returns to its idle "Deploy" label instead of remaining on
-  // "Deploy Now" / "Verifying..." while the user is on another tab.
-  $effect(() => {
-    if (activeTab !== 'preview' && deployView !== 'preview') {
-      deployView = 'preview'
     }
   })
 
@@ -197,20 +187,6 @@
       if (deployView === 'deploy-form') return 'Deploy Now'
       if (activeTab === 'deployments' && deployments.length > 0)
         return 'Open in web browser'
-      // Tabs that aren't the Deploy tab surface the button as
-      // "Deploy preview" — one click jumps to Deploy and shows the
-      // tool cards (which is already the default Deploy-tab view).
-      // Keeps the footer useful without forcing users to hunt for
-      // the Deploy tab manually when they've authored an @export,
-      // while the label makes the target action (a deploy, via the
-      // preview step) clear.
-      if (
-        activeTab === 'ai-chat' ||
-        activeTab === 'docs' ||
-        activeTab === 'inspector'
-      ) {
-        return 'Deploy preview'
-      }
       return 'Deploy'
     }
     if (conn.status === 'connecting') return 'Connecting...'
@@ -235,16 +211,8 @@
     if (activeTab === 'deployments') {
       return deployments.length === 0
     }
-    // Non-deploy tabs surface a "Preview" button that jumps to the
-    // Deploy tab. Enabled iff the active file has at least one rule
-    // ready for export — otherwise the Deploy tab would just show
-    // the empty "Open an L4 file containing valid rules" hint.
-    if (
-      activeTab === 'inspector' ||
-      activeTab === 'docs' ||
-      activeTab === 'ai-chat'
-    )
-      return functions.length === 0
+    // Disable on non-deploy tabs
+    if (activeTab === 'inspector' || activeTab === 'docs') return true
     if (deployView === 'preview' && functions.length === 0) return true
     return false
   }
@@ -570,15 +538,6 @@
         continueDeploy()
       } else if (activeTab === 'deployments' && deployments.length > 0) {
         openServiceUrl()
-      } else if (
-        activeTab === 'ai-chat' ||
-        activeTab === 'docs' ||
-        activeTab === 'inspector'
-      ) {
-        // "Preview" click jumps to the Deploy tab so the cards the
-        // button promised become visible. The Deploy tab's own
-        // footer action then reverts to the regular "Deploy" flow.
-        activeTab = 'preview'
       } else {
         showDeployForm()
       }
@@ -780,13 +739,6 @@
   <div class="tab-bar">
     <button
       class="tab"
-      class:active={activeTab === 'ai-chat'}
-      onclick={() => (activeTab = 'ai-chat')}
-    >
-      Legalese AI
-    </button>
-    <button
-      class="tab"
       class:active={activeTab === 'docs'}
       onclick={() => (activeTab = 'docs')}
     >
@@ -816,13 +768,6 @@
   </div>
 
   <div class="tab-content">
-    <div class="tab-pane" hidden={activeTab !== 'ai-chat'}>
-      <AiChatPanel
-        {messenger}
-        {connectionStatus}
-        visible={activeTab === 'ai-chat'}
-      />
-    </div>
     <div class="tab-pane" hidden={activeTab !== 'docs'}>
       <DocsPanel {messenger} />
     </div>
@@ -1054,8 +999,8 @@
         </div>
         <aside class="deployment-info-note" role="note">
           <p>
-            Deployments are automatically available to Legalese AI, VS Code
-            Copilot, and any other MCP-speaking agent as local MCP tools.
+            Deployments are automatically available in your VS Code Copilot and
+            Claude Code assistant as local MCP tools.
           </p>
           <p>
             They're also available as REST API's, online MCP server and WebMCP
@@ -1162,7 +1107,7 @@
         {:else if activeFileName}
           No exported rules in {activeFileName}
         {:else}
-          No L4 file open
+          No file open
         {/if}
       </span>
     </div>
@@ -1423,7 +1368,7 @@
   }
 
   .form-input:focus {
-    border-color: var(--vscode-foreground, #ccc);
+    border-color: #c8376a;
   }
 
   .form-error {

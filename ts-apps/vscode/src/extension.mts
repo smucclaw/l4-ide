@@ -41,14 +41,6 @@ import {
 } from './sidebar-provider.js'
 import { AuthManager } from './auth.js'
 import { ServiceClient } from './service-client.js'
-import { AiLogger } from './ai/logger.js'
-import { AiProxyClient } from './ai/ai-proxy-client.js'
-import { ConversationStore } from './ai/conversation-store.js'
-import { ChatService } from './ai/chat-service.js'
-import { ToolDispatcher } from './ai/tool-dispatcher.js'
-import { registerAiChatHandlers } from './ai/register.js'
-import { recordDirectiveResults } from './ai/tools/l4-evaluate.js'
-import { McpToolClient } from './ai/mcp-client.js'
 
 /***********************************************
      decode for RenderAsLadderInfo
@@ -440,9 +432,7 @@ export async function activate(context: ExtensionContext) {
   const mcpProxy = new McpProxy(
     auth,
     outputChannel,
-    // globalState slot kept for call-site compatibility; no persistent
-    // Claude-setup flag is stored any more.
-    undefined,
+    context.globalState,
     context.extensionUri.fsPath
   )
   context.subscriptions.push(mcpProxy)
@@ -463,12 +453,24 @@ export async function activate(context: ExtensionContext) {
     })
   )
 
-  // Startup offer flow: only the L4 CLI prompt. The Legalese AI
-  // integration (MCP + writing-l4-rules skill) is now opt-in via the
-  // sidebar dropdown — no implicit startup modal that nudges the user
-  // toward another tool.
+  // Startup offer flow:
+  //
+  //   1. If ~/.claude.json exists AND the user hasn't previously
+  //      declined Claude Code setup, offer "Add L4 Tools to Claude Code?".
+  //      Accepting co-installs the l4 CLI silently because the
+  //      writing-l4-rules skill invokes it.
+  //
+  //   2. If the user declined in (1), or ~/.claude.json is missing, or
+  //      Claude Code is already fully configured but l4 isn't on PATH,
+  //      fall through to the separate "Install L4 CLI?" prompt.
+  //
+  // Runs in the background so activation isn't blocked.
   void (async () => {
-    await maybeOfferInstallL4Cli(context, outputChannel)
+    const outcome = await mcpProxy.offerClaudeCodeSetup()
+    outputChannel.appendLine(`[startup] Claude Code setup outcome: ${outcome}`)
+    if (outcome !== 'accepted-co-installed') {
+      await maybeOfferInstallL4Cli(context, outputChannel)
+    }
   })()
 
   // Auto-connect on startup (runs in background, doesn't block activation)
@@ -486,111 +488,12 @@ export async function activate(context: ExtensionContext) {
     (directiveId) => openInspectorSections.delete(directiveId)
   )
 
-  // Legalese AI services — independent from the jl4 service URL flow.
-  // The proxy endpoint is hardcoded (see ai-proxy-client.ts) and only
-  // overridable via the LEGALESE_AI_ENDPOINT env var for local dev.
-  const aiLogger = new AiLogger()
-  context.subscriptions.push(aiLogger)
-  const aiProxy = new AiProxyClient({ auth, logger: aiLogger })
-  const aiStore = new ConversationStore(context, aiLogger, () =>
-    auth.getUserStorageKey()
-  )
-  // The tool dispatcher needs a handle on the messenger + service to
-  // request approval and emit status updates, so we register with
-  // setter-injection after construction: the dispatcher takes a
-  // callback pair, both of which get filled in below by the
-  // registerAiChatHandlers pipeline.
-  const approvalPending = new Map<
-    string,
-    (decision: 'allow' | 'deny') => void
-  >()
-  const askUserPending = new Map<string, (answer: string) => void>()
-  // The dispatcher emits tool status updates through this channel; the
-  // sidebar's registerAiChatHandlers replaces the stub `emit` with one
-  // that forwards to the webview via the shared messenger.
-  const toolStatusChannel: {
-    emit: (
-      callId: string,
-      status: 'pending-approval' | 'running' | 'done' | 'error',
-      detail?: { result?: string; error?: string }
-    ) => void
-  } = {
-    emit: () => undefined,
-  }
-  // Channel the dispatcher uses to push a meta__ask_user question to
-  // the webview. register.ts fills this in once the messenger exists.
-  const askUserChannel: {
-    ask: (callId: string, question: string, choices?: string[]) => void
-  } = {
-    ask: () => undefined,
-  }
-  const aiMcpClient = new McpToolClient(mcpProxy, aiLogger)
-  // Bust the MCP tool cache when the connection state flips: a newly
-  // connected jl4-service might expose a different set of deployed
-  // rules than we had cached from the disconnected fallback path.
-  context.subscriptions.push(auth.onDidChange(() => aiMcpClient.invalidate()))
-  const dispatcher = new ToolDispatcher({
-    logger: aiLogger,
-    requestApproval: async (call) =>
-      new Promise<'allow' | 'deny'>((resolve) => {
-        approvalPending.set(call.callId, resolve)
-      }),
-    notifyStatus: (callId, status, detail) =>
-      toolStatusChannel.emit(callId, status, detail),
-    mcp: aiMcpClient,
-    askUser: (callId, question, choices) =>
-      new Promise<string>((resolve) => {
-        askUserPending.set(callId, resolve)
-        askUserChannel.ask(callId, question, choices)
-      }),
-  })
-  // Pulled from the extension's own packageJSON so a bumped release
-  // (and users running older pre-release builds) are both stamped
-  // correctly into the initial conversation context.
-  const extensionVersion =
-    (context.extension?.packageJSON as { version?: string } | undefined)
-      ?.version ?? 'unknown'
-  const chatService = new ChatService({
-    auth,
-    client,
-    store: aiStore,
-    proxy: aiProxy,
-    logger: aiLogger,
-    dispatcher,
-    mcp: aiMcpClient,
-    extensionVersion,
-  })
-
-  // Instantiate the sidebar provider BEFORE wiring AI chat handlers
-  // so the handlers can subscribe to its visibility event and buffer
-  // chat events while the webview is hidden. The provider itself
-  // doesn't need the webview resolved to answer isVisible() — it
-  // returns false pre-resolve, which is the right default (queue
-  // until the view paints).
   const sidebarProvider = new SidebarProvider(
     context,
     sidebarMessenger,
     auth,
     outputChannel
   )
-
-  context.subscriptions.push(
-    registerAiChatHandlers({
-      messenger: sidebarMessenger,
-      frontend: sidebarWebviewFrontend,
-      auth,
-      service: chatService,
-      store: aiStore,
-      logger: aiLogger,
-      approvalPending,
-      askUserPending,
-      toolStatusChannel,
-      askUserChannel,
-      dispatcher,
-      visibility: sidebarProvider,
-    })
-  )
-
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(
       SIDEBAR_WEBVIEW_TYPE,
@@ -604,45 +507,6 @@ export async function activate(context: ExtensionContext) {
     vscode.commands.registerCommand('l4.openSidebar', () => {
       vscode.commands.executeCommand(`${SIDEBAR_WEBVIEW_TYPE}.focus`)
     })
-  )
-
-  // Right-click → "Ask Legalese AI about this". Quotes the editor
-  // selection (falls back to the whole file when nothing is
-  // selected), reveals the sidebar, switches to the AI tab, and
-  // seeds the chat draft so the user can type their question on the
-  // next line.
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      'legaleseAi.askAboutSelection',
-      async () => {
-        const editor = vscode.window.activeTextEditor
-        if (!editor) {
-          vscode.window.showInformationMessage(
-            'Open a file first, then select the text you want to ask about.'
-          )
-          return
-        }
-        const sel = editor.selection
-        const body = sel.isEmpty
-          ? editor.document.getText()
-          : editor.document.getText(sel)
-        const rel = vscode.workspace.asRelativePath(editor.document.uri, false)
-        const lang = editor.document.languageId || ''
-        const range = sel.isEmpty
-          ? ''
-          : ` (lines ${sel.start.line + 1}–${sel.end.line + 1})`
-        const draft = `About \`${rel}\`${range}:\n\n\`\`\`${lang}\n${body}\n\`\`\`\n\n`
-        await sidebarProvider.revealSidebar()
-        await sidebarProvider.waitUntilReady()
-        sidebarProvider.switchToTab('ai-chat')
-        const { AiChatSeedDraft } = await import('jl4-client-rpc')
-        sidebarMessenger.sendNotification(
-          AiChatSeedDraft,
-          sidebarWebviewFrontend,
-          { text: draft }
-        )
-      }
-    )
   )
 
   // Refresh sidebar token colors on theme change (alongside panels)
@@ -704,10 +568,6 @@ export async function activate(context: ExtensionContext) {
           lineContent: string
         }>
       }) => {
-        // Mirror the results into the AI tool's cache so a later
-        // l4__evaluate call can surface them without a second compile.
-        recordDirectiveResults(params.uri, params.results)
-
         // Refresh sidebar — the LSP just finished compiling this file,
         // so exported functions may have changed
         const editor = vscode.window.activeTextEditor

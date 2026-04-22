@@ -452,8 +452,7 @@ callReadFile reqId arguments = do
       mLines = getStringArg "lines" arguments
 
   case (mDeployment, mPath) of
-    (Just deployId, Just rawPath) -> do
-      let path = normalizeReadFilePath deployId rawPath
+    (Just deployId, Just path) -> do
       mContent <- liftIO $ BundleStore.loadSingleFile env.bundleStore deployId (Text.unpack path)
       case mContent of
         Nothing ->
@@ -472,20 +471,6 @@ callReadFile reqId arguments = do
           pure $ mcpTextResult reqId result False
     _ ->
       pure $ jsonRpcError reqId (-32602) "Missing required arguments: deployment, path"
-
--- | Normalize a path argument for read_file.
--- list_files emits paths like "/deployments/<deployId>/files/<relPath>",
--- but loadSingleFile wants a relative path. Strip the prefix if present,
--- whether it matches the given deployment or any other deployment id.
--- Also tolerate a leading slash.
-normalizeReadFilePath :: Text -> Text -> Text
-normalizeReadFilePath deployId path
-  | Just rest <- Text.stripPrefix ("/deployments/" <> deployId <> "/files/") path = rest
-  | Just rest <- Text.stripPrefix "/deployments/" path
-  , (_, rest') <- Text.breakOn "/files/" rest
-  , Just rest'' <- Text.stripPrefix "/files/" rest' = rest''
-  | Just rest <- Text.stripPrefix "/" path = rest
-  | otherwise = path
 
 -- | search_identifier: search for L4 identifier definitions and references.
 callSearchIdentifier :: Maybe Aeson.Value -> Aeson.Value -> AppM Aeson.Value

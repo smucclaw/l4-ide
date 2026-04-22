@@ -1,15 +1,14 @@
 # L4 Rules-as-code Language Support and Tools
 
-Language support for L4 rules-as-code with a built-in Legalese AI chat, MCP for AI agents like Claude Code and Copilot, WebMCP for browser AI, syntax highlighting, IntelliSense, CLI, decision graph visualizations, result inspection, and Legalese Cloud deployment.
+Language support for L4 rules-as-code with MCP for AI agents, Claude Code and Copilot integration, WebMCP for browser AI, syntax highlighting, IntelliSense, CLI, decision graph visualizations, result inspection, and Legalese Cloud deployment.
 
 Documentation: https://legalese.com/l4
 
 ## Features
 
-- **Legalese AI**: Built-in chat tab for composing and iterating on L4 rules with an assistant that knows L4 and can drive the fs / LSP / MCP tool set directly.
-- **MCP Server (Model Context Protocol)**: Expose deployed L4 rules as tools that any AI agent can discover and call
-  - Built-in MCP proxy server registers automatically with VS Code
-  - Legalese AI (in-editor) and any MCP-speaking agent (Cursor, Copilot, Claude Code, third parties) can discover and invoke your L4 functions as structured tools
+- **MCP Server (Model Context Protocol)**: Expose deployed L4 rules as tools that AI agents can discover and call
+  - Built-in MCP proxy server registers automatically with VS Code and Claude Code
+  - AI agents (Claude, Cursor, Copilot) can discover and invoke your L4 functions as structured tools
   - Scoped access — expose all rules org-wide or restrict to specific deployments
   - Authenticated via Legalese Cloud or API key for self-hosted setups
 - **WebMCP — Browser AI Integration**: Let browser-based AI agents call your L4 rules from any web page
@@ -89,9 +88,9 @@ Once you deploy L4 rules, they are automatically available as MCP tools that AI 
 
 ### Local MCP Proxy (VS Code)
 
-The extension starts a local MCP proxy server automatically. Legalese AI (built in), along with any external MCP-speaking agent (Cursor, GitHub Copilot, Claude Code, third-party clients), can connect to it to discover and invoke your deployed L4 functions.
+The extension starts a local MCP proxy server automatically. AI tools like Claude Code, Cursor, and GitHub Copilot can connect to it to discover and invoke your deployed L4 functions.
 
-The proxy registers with VS Code's built-in MCP system. The default port is `19415` (configurable via `jl4.mcpPort`). The "Add L4 Tools to Claude Code" dropdown action in the sidebar wires the same MCP endpoint plus the writing-l4-rules skill into a local Claude Code installation on demand.
+The proxy registers with VS Code's built-in MCP system and updates Claude Code's config automatically if installed. The default port is `19415` (configurable via `jl4.mcpPort`).
 
 ### Remote MCP Endpoints
 
