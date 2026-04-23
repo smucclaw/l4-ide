@@ -103,7 +103,11 @@ GIVEN a IS A NUMBER
 
 §§ `Expanded version`
 
-@export Determine if a person is a British Citizen and totally do everything they ever wanted.
+-- Note: this function is NOT @export. The legal modelling uses function-typed
+-- ASSUMEs (mother of, father of, is born in the United Kingdom after
+-- commencement, …) as uninterpreted predicates. A function-typed ASSUME
+-- can't be evaluated to a concrete value at runtime, so exporting such
+-- a function would fail with "assumed term" errors on invocation.
 GIVEN p IS A Person @desc Attributes of Person in question and everything we should ever know about this person is here.
       a IS A BOOLEAN
 GIVETH A BOOLEAN

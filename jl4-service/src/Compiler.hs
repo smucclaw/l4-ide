@@ -12,6 +12,7 @@ import Backend.Api (EvalBackend (..), FunctionDeclaration (..))
 import Shared (validateNoSanitizationCollisions)
 import Backend.CodeGen (isDeonticType)
 import L4.FunctionSchema (Parameters (..), Parameter (..), typeToParameter, declaresFromModule)
+import L4.TypeCheck.Types (CheckErrorWithContext (..), CheckError (..))
 import BundleStore (SerializedBundle (..), StoredMetadata (..))
 import Types
 import Control.Monad (forM, unless)
@@ -121,7 +122,21 @@ processTypecheckedFile logger deployId filepath content moduleContext
   tcResult@Rules.TypeCheckResult{module' = resolvedModule, environment = env, entityInfo = ei, errors = tcErrors}
   evalMap = do
     let exports = enrichReturnTypes ei $ getExportedFunctions resolvedModule
-    if null exports
+        exportFnTypeErrs =
+          [ "Function type inputs are not supported for @export (parameter "
+              <> resolvedText paramName <> " of "
+              <> resolvedText fnName <> ")"
+          | MkCheckErrorWithContext{kind = ExportFunctionTypeInput fnName paramName} <- tcErrors
+          ]
+    if not (null exportFnTypeErrs)
+      then do
+        logWarn logger "Deploy rejected: @export function has FUNCTION-typed input"
+          [ ("deploymentId", toJSON deployId)
+          , ("file", toJSON filepath)
+          , ("errors", toJSON exportFnTypeErrs)
+          ]
+        pure (filepath, Left (Text.intercalate "; " exportFnTypeErrs))
+      else if null exports
       then pure (filepath, Right ([], []))
       else do
         let implicitParams = extractImplicitAssumeParams tcErrors
@@ -129,7 +144,14 @@ processTypecheckedFile logger deployId filepath content moduleContext
             -- Look up the import environment from the shared session
             importEnv = Map.findWithDefault Jl4.emptyEvalEnvironment filepath evalMap
 
-        -- Build shared context for all functions from this file
+        -- Build shared context for all functions from this file.
+        -- `collectAllDeclares` walks the entry file + every
+        -- transitively-imported module's DECLAREs. We stash the full
+        -- list on the shared context so the direct-AST evaluator
+        -- ('buildModuleInfo') can resolve record parameter types that
+        -- live in IMPORT'd files — e.g. the ASEAN Cosmetic Directive's
+        -- `Cosmetic Product` record declared in ACD_Declarations.l4
+        -- while the @export lives in ACD_Information.l4.
         let shared = Jl4.SharedModuleContext
               { Jl4.sharedModule = resolvedModule
               , Jl4.sharedEnvironment = env
@@ -137,6 +159,7 @@ processTypecheckedFile logger deployId filepath content moduleContext
               , Jl4.sharedModuleContext = moduleContext
               , Jl4.sharedImportEnv = importEnv
               , Jl4.sharedSource = content
+              , Jl4.sharedAllDeclares = Map.elems allDeclares
               }
 
         fns <- forM exports $ \export -> do
@@ -263,6 +286,12 @@ buildFromCborBundle logger deployId bundles sources storedMeta = do
                     , compiledEntityInfo = ei
                     , compiledDecide = decide
                     , compiledImportEnv = importEnv
+                    -- `sbDeclares` is the bundle's cached map of every
+                    -- DECLARE across the entry module and its
+                    -- transitive imports — exactly what the direct-AST
+                    -- evaluator needs to resolve cross-file record
+                    -- types (see Backend.Jl4.buildModuleInfo).
+                    , compiledAllDeclares = Map.elems bundle.sbDeclares
                     }
 
               let runFn = Jl4.createRunFunctionFromCompiled filepath apiDecl compiled content moduleContext
@@ -427,6 +456,10 @@ extractDeonticTypeNames ty@(TyApp _ _ [partyTy, actionTy])
     typeName (TyApp _ n _) = rawNameToText (rawName (getActual n))
     typeName _ = "Unknown"
 extractDeonticTypeNames _ = Nothing
+
+-- | Extract display text from a Resolved name.
+resolvedText :: Resolved -> Text
+resolvedText = rawNameToText . rawName . getActual
 
 -- | Collect all DECLARE entries from a TypeCheckResult and its transitive imports.
 collectAllDeclares :: Rules.TypeCheckResult -> Map Text (Declare Resolved)

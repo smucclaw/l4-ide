@@ -93,6 +93,7 @@ import L4.TypeCheck.Unify
 import L4.TypeCheck.With as X
 import qualified L4.Utils.IntervalMap as IV
 import L4.Mixfix (MixfixInfo(..), MixfixPatternToken(..), extractMixfixInfo, canonicalMixfixName, firstKeyword)
+import qualified L4.Export as Export
 
 import Control.Applicative
 import Data.Monoid
@@ -175,9 +176,10 @@ doCheckProgramWithDependencies checkState checkEnv program =
                 -- Combine mixfix registry from imports with this module's local definitions
                 -- so importing modules can use mixfix functions defined here
                 combinedMixfixRegistry = unionMixfixRegistry localMixfixRegistry env.mixfixRegistry
+                exportErrs = Export.validateExportInputs rprog
             in MkCheckResult
               { program = rprog
-              , errors = substErrs ++ moreErrs
+              , errors = substErrs ++ moreErrs ++ exportErrs
               , substitution = s'.substitution
               , environment = env.environment
               , entityInfo = env.entityInfo
@@ -2606,16 +2608,17 @@ _editDistance s1 s2
         transform [] _ = []  -- Should never happen, pattern for exhaustiveness
 
 -- | Rebuild the annotation for a mixfix App when args have been restructured.
--- The original annotation has holes for all parsed args (including keyword placeholders),
--- but the restructured args only contain the actual data args.
--- We create a new annotation with holes for only the actual args.
+-- The generic ToConcreteNodes instance for App expects exactly two holes in the
+-- payload (one for the function name, one for the args list as a whole), so we
+-- must preserve that shape — emitting one hole per restructured arg would cause
+-- `toNodes` to fail with InsufficientHoleFit, which in turn makes
+-- `rangeOfNode` return Nothing for any enclosing node (e.g. a #EVAL directive,
+-- breaking the "Track result" code lens on mixfix call sites).
 rebuildMixfixAppAnno :: Anno -> Name -> [Expr Name] -> Anno
 rebuildMixfixAppAnno origAnn funcName args =
-  -- Keep the original source range from the annotation
-  -- but rebuild the payload with just holes for the actual args
   let funcHole = mkHoleWithSrcRange funcName
-      argHoles = map mkHoleWithSrcRange args
-      newPayload = funcHole : argHoles
+      argsHole = mkHoleWithSrcRangeHint (rangeOf args)
+      newPayload = [funcHole, argsHole]
   in fixAnnoSrcRange $ set #payload newPayload origAnn
 
 -- | Flatten a binary mixfix application into a list of (Either Expr Keyword).
@@ -3222,6 +3225,12 @@ prettyCheckError (SuppliedComputedField fieldName) =
   , ""
   , "Computed fields are automatically derived from their MEANS expression."
   , "Remove this field from the constructor."
+  ]
+prettyCheckError (ExportFunctionTypeInput _fnName paramName) =
+  [ "Function type inputs are not supported for @export."
+  , "The parameter "
+      <> quotedName (getActual paramName)
+      <> " has a function type."
   ]
 
 -- | Pretty print mixfix match errors with helpful suggestions.

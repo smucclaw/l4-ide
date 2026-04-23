@@ -4,6 +4,7 @@
 build
 .continue
 .claude/settings.local.json
+.claude/*.lock
 # Build Outputs
 ## Built Visual Studio Code Extensions
 .cabal

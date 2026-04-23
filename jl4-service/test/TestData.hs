@@ -14,6 +14,9 @@ module TestData (
   deonticExportJL4,
   deonticRecordPartyJL4,
   spacedFieldsJL4,
+  assumeParamJL4,
+  importedRecordDeclJL4,
+  importedRecordMainJL4,
 ) where
 
 import Backend.Jl4 as Jl4
@@ -170,6 +173,20 @@ GIVETH A BOOLEAN
 DECIDE compute_qualifies IF walks AND eats AND drinks
 |]
 
+-- | L4 source with a module-level ASSUME referenced by an @export.
+-- Exercises the ASSUME→parameter promotion path in the direct-AST
+-- evaluator: the caller supplies both the GIVEN and the ASSUME value.
+assumeParamJL4 :: Text
+assumeParamJL4 =
+  [i|
+ASSUME age IS A NUMBER
+
+@export Check adult status
+GIVEN threshold IS A NUMBER
+GIVETH A BOOLEAN
+DECIDE is_adult IF age >= threshold
+|]
+
 -- | L4 source returning a record type, for testing named fields in JSON output.
 recordJL4 :: Text
 recordJL4 =
@@ -272,6 +289,30 @@ GIVEN `first name` IS A STRING
       `is a citizen` IS A BOOLEAN
 GIVETH A BOOLEAN
 DECIDE `check person` IF `is a citizen`
+|]
+
+-- | Two-file fixture: a DECLARE'd record lives in the imported file and
+-- the @export'd function in the main file takes it as a parameter. Used
+-- to check that cross-file record parameters are resolvable on
+-- /evaluation — a regression site for the direct-AST fast path that
+-- only walks the entry module's own section for DECLAREs.
+importedRecordDeclJL4 :: Text
+importedRecordDeclJL4 =
+  [i|
+DECLARE Applicant HAS
+    name IS A STRING
+    age  IS A NUMBER
+|]
+
+importedRecordMainJL4 :: Text
+importedRecordMainJL4 =
+  [i|
+IMPORT imported_record_decl.l4
+
+@export
+GIVEN applicant IS A Applicant
+GIVETH A BOOLEAN
+DECIDE `applicant is an adult` IS applicant's age >= 18
 |]
 
 deonticRecordPartyJL4 :: Text

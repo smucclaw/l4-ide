@@ -335,6 +335,427 @@ export const SidebarConnectionStatusChanged: NotificationType<GetSidebarConnecti
     method: 'sidebarConnectionStatusChanged',
   }
 
+/*************************************************************
+            Legalese AI chat tab messages
+**************************************************************/
+
+/** An OpenAI-shaped chat message. The server-side ai-proxy accepts the
+ * standard OpenAI format including role "user" | "assistant" | "tool",
+ * tool_calls on assistant, tool_call_id on tool. Phase 1 only exchanges
+ * plain user/assistant text; later phases carry richer shapes.
+ */
+export interface AiChatMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool'
+  /** String for plain-text turns (the common case). When the turn
+   *  carries multimodal attachments, a user message instead ships an
+   *  OpenAI-shaped array of `content parts` (see `AiChatContentPart`)
+   *  that the ai-proxy translates to each provider's native block
+   *  shape. */
+  content: string | AiChatContentPart[] | null
+  tool_calls?: Array<{
+    id: string
+    type: 'function'
+    function: { name: string; arguments: string }
+  }>
+  tool_call_id?: string
+  name?: string
+  /** Client-only UI metadata (ignored by the server). */
+  _meta?: Record<string, unknown>
+}
+
+/** OpenAI Chat Completions multimodal content parts. Kept narrow on
+ *  purpose — only the two shapes we emit today. */
+export type AiChatContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } }
+  | {
+      type: 'file'
+      file: { filename: string; file_data: string }
+    }
+
+/** Thin envelope around an OpenAI message list. Persists locally in the
+ * extension's globalStorage and is replayed into the webview on reopen. */
+export interface AiConversation {
+  id: string
+  orgId: string
+  userId: string
+  model: string
+  title: string
+  createdAt: string
+  lastActiveAt: string
+  messages: AiChatMessage[]
+  /** L4 VSCode extension version that created this conversation.
+   *  Stamped once at creation and never rewritten so support can trace
+   *  a saved transcript back to the exact build that produced it. */
+  extensionVersion?: string
+}
+
+/** Lightweight row for the history overlay — avoids shipping full
+ * message arrays for the listing. */
+export interface AiConversationSummary {
+  id: string
+  title: string
+  model: string
+  createdAt: string
+  lastActiveAt: string
+  messageCount: number
+}
+
+/** Start (or continue) a streaming chat turn. Extension responds via
+ * the AiChat* notifications below, keyed by conversationId. Omitting the
+ * id starts a new conversation; the `AiChatStarted` event carries the
+ * fresh id back. */
+export interface AiChatStartParams {
+  /** Server-assigned conversation id for follow-up turns. Omit to
+   * start a new conversation; the `AiChatStarted` event carries the
+   * fresh id back. */
+  conversationId?: string
+  /** Client-generated per-turn id, opaque to the server. Used as the
+   * abort-correlation key so the webview can cancel a specific
+   * in-flight request regardless of whether the server has assigned a
+   * conversationId yet. */
+  turnId: string
+  text: string
+  /** Resolved file or symbol mentions (already expanded to content
+   * references client-side; extension just forwards). Phase 1 sends
+   * empty list; `@` mention work arrives in a later commit. */
+  mentions: Array<{ kind: 'file' | 'symbol' | 'selection'; label: string }>
+  /** Multimodal attachments assembled by the webview via
+   * `AiChatPickAttachment`. The extension ships these as OpenAI-shaped
+   * `image_url` / `file` content parts on the user message; the
+   * ai-proxy translates to the provider's native shape. `.docx` /
+   * `.xlsx` are never shipped — they aren't native on either API, so
+   * the picker nudges the user to save as PDF. */
+  attachments: AiChatAttachment[]
+  /** When false, the extension omits the per-turn `<editor-context>`
+   * system message so the active file doesn't leak into context.
+   * Defaults to true if unset. */
+  includeActiveFile?: boolean
+  /** Retry path: when true, the extension skips adding a user
+   * message to the outgoing body and just asks the server to run
+   * another turn against the conversation's existing on-disk
+   * state. Used by the ErrorBubble "Retry" button so a
+   * mid-stream failure doesn't double-insert the user's original
+   * turn. The server-side conversation already has the user
+   * message from the original turn (persisted on create), so the
+   * model has what it needs. */
+  continueTurn?: boolean
+}
+
+export interface AiChatAttachment {
+  kind: 'image' | 'pdf'
+  /** Display name (basename). */
+  name: string
+  /** IANA MIME type, e.g. `image/png` or `application/pdf`. */
+  mediaType: string
+  /** Base64-encoded file bytes (no data-URL prefix). */
+  dataBase64: string
+}
+
+/** Webview asks the extension to preview a staged attachment in-editor.
+ *  The extension writes the bytes to a temporary file under
+ *  `globalStorage/ai/previews/` and tries to open it: for PDFs it
+ *  attempts `vscode.open` (works if a PDF custom editor like
+ *  `tomoki1207.pdf` is installed), falling back to
+ *  `env.openExternal` (the OS default viewer). Images route straight
+ *  through `vscode.open` — VSCode renders those natively. */
+export const AiChatPreviewAttachment: NotificationType<{
+  name: string
+  mediaType: string
+  dataBase64: string
+}> = {
+  method: 'aiChatPreviewAttachment',
+}
+
+/** Webview asks the extension to show a native file picker and return
+ *  the selected file as an `AiChatAttachment`. The `accept` hint
+ *  filters the picker dialog: `"text-or-pdf"` allows PDFs + common
+ *  text MIME types; `"spreadsheet"` prompts the user to export as PDF
+ *  first (returns null); `"any"` allows images + PDFs. Returns null on
+ *  cancel. */
+export const AiChatPickAttachment: RequestType<
+  { accept: 'any' | 'text-or-pdf' | 'spreadsheet' },
+  { attachment: AiChatAttachment | null; note?: string }
+> = {
+  method: 'aiChatPickAttachment',
+}
+
+export const AiChatStart: NotificationType<AiChatStartParams> = {
+  method: 'aiChatStart',
+}
+
+/** Cancel an in-flight turn by its client-generated `turnId`. The
+ * conversation id isn't used here because the server hasn't necessarily
+ * assigned one yet when the user clicks Stop. */
+export const AiChatAbort: NotificationType<{ turnId: string }> = {
+  method: 'aiChatAbort',
+}
+
+/** Extension → webview: turn started, id + model assigned. */
+export const AiChatStarted: NotificationType<{
+  conversationId: string
+  model: string
+}> = {
+  method: 'aiChatStarted',
+}
+
+/** Extension → webview: a client-side tool was invoked by the model.
+ * Phase 2 payload carries everything the UI needs to render an inline
+ * row (name, arguments) and reflect status updates without a second
+ * round-trip. `status` may step through pending-approval → running →
+ * done / error over the lifetime of a single callId. */
+export const AiChatToolCall: NotificationType<{
+  conversationId: string
+  callId: string
+  name: string
+  argsJson: string
+  status: 'pending-approval' | 'running' | 'done' | 'error'
+  result?: string
+  errorMessage?: string
+}> = {
+  method: 'aiChatToolCall',
+}
+
+/** Webview → extension: user made a decision on a pending-approval
+ * tool call. `alwaysAllow` permanently bumps the matching permission
+ * setting to `always`. */
+export const AiChatApproveTool: NotificationType<{
+  callId: string
+  decision: 'allow' | 'deny' | 'alwaysAllow'
+}> = {
+  method: 'aiChatApproveTool',
+}
+
+export type AiPermissionCategory =
+  | 'fs.read'
+  | 'fs.create'
+  | 'fs.edit'
+  | 'fs.delete'
+  | 'lsp.evaluate'
+  | 'l4.evaluate'
+  | 'mcp.l4Rules'
+  | 'meta.askUser'
+
+export type AiPermissionValue = 'never' | 'ask' | 'always'
+
+/** Webview asks for the current permission values. */
+export const AiPermissionsGet: RequestType<
+  void,
+  { values: Record<AiPermissionCategory, AiPermissionValue> }
+> = {
+  method: 'aiPermissionsGet',
+}
+
+/** Webview sets a single permission value. Extension persists to
+ *  VSCode configuration under `legaleseAi.permissions.*`. */
+export const AiPermissionsSet: NotificationType<{
+  category: AiPermissionCategory
+  value: AiPermissionValue
+}> = {
+  method: 'aiPermissionsSet',
+}
+
+/** Extension → webview: a server-side tool activity event (from the
+ * ai-proxy's backend tools like `search_l4_docs`). Deduped client-side
+ * by `tool`+`status` so long sequences collapse into a single row. */
+export const AiChatToolActivity: NotificationType<{
+  conversationId: string
+  tool: string
+  status: 'running' | 'done' | 'error'
+  message: string
+}> = {
+  method: 'aiChatToolActivity',
+}
+
+/** Extension → webview: seed the chat input with text from an outside
+ * entry point (e.g. the "Ask Legalese AI about this" editor code
+ * action). The webview calls `setDraft` with this string. */
+export const AiChatSeedDraft: NotificationType<{
+  text: string
+}> = {
+  method: 'aiChatSeedDraft',
+}
+
+/** Extension → webview: the model invoked `meta__ask_user`. The webview
+ * renders a question card above the in-progress assistant text in the
+ * conversation the call belongs to. `conversationId` is required so
+ * the store can route the card to the correct conversation even if the
+ * user has since flipped to another one via the history panel. */
+export const AiChatAskUser: NotificationType<{
+  conversationId: string
+  callId: string
+  question: string
+  /** Optional fixed set of choices; when empty the UI renders a
+   *  free-form input. */
+  choices?: string[]
+}> = {
+  method: 'aiChatAskUser',
+}
+
+/** Webview → extension: the user answered a meta__ask_user question.
+ * Pass an empty string for `answer` to signal "skip / use your best
+ * guess". */
+export const AiChatAnswerUser: NotificationType<{
+  callId: string
+  answer: string
+}> = {
+  method: 'aiChatAnswerUser',
+}
+
+/** Webview → extension: open the target file of a tool call in a
+ * regular editor tab. Used for `fs__read_file` and `fs__create_file`
+ * when the user cmd+clicks the filename. */
+export const AiFileOpen: NotificationType<{
+  callId: string
+}> = {
+  method: 'aiFileOpen',
+}
+
+/** Webview → extension: open a VSCode diff editor showing the applied
+ * delta of a `fs__edit_file` (or `fs__create_file`) call. The "before"
+ * side is the pre-run snapshot the dispatcher captured, and the "after"
+ * side is the current on-disk file, so the gutter paints red/green for
+ * the changes that were actually written. */
+export const AiFileOpenDiff: NotificationType<{
+  callId: string
+}> = {
+  method: 'aiFileOpenDiff',
+}
+
+/** Extension → webview: the AI chat's view of the active editor file.
+ * Pushed on activeTextEditor changes. `name` is the display basename;
+ * `path` is the workspace-relative path (or absolute if the file is
+ * outside every loaded workspace folder). `inWorkspace` flips to
+ * false for outside-workspace files — the fs tools refuse those, and
+ * the UI can surface that to the user. */
+export const AiActiveFile: NotificationType<{
+  uri: string | null
+  name: string | null
+  path: string | null
+  inWorkspace: boolean
+}> = {
+  method: 'aiActiveFile',
+}
+
+/** Extension → webview: incremental assistant text. */
+export const AiChatTextDelta: NotificationType<{
+  conversationId: string
+  text: string
+}> = {
+  method: 'aiChatTextDelta',
+}
+
+/** Extension → webview: incremental reasoning / thinking text. Rendered
+ * as a collapsed-by-default block that expands to show italic gray
+ * text. Forwarded from the ai-proxy's `event: thinking_delta` SSE
+ * frames. */
+export const AiChatThinkingDelta: NotificationType<{
+  conversationId: string
+  text: string
+}> = {
+  method: 'aiChatThinkingDelta',
+}
+
+/** Extension → webview: turn finished. `finishReason` matches the
+ * OpenAI set: 'stop' | 'tool_calls' | 'length' | 'content_filter' | 'error'.
+ */
+export const AiChatDone: NotificationType<{
+  conversationId: string
+  finishReason: string
+  usage?: { promptTokens: number; completionTokens: number }
+}> = {
+  method: 'aiChatDone',
+}
+
+/** Extension → webview: something went wrong mid-turn. `code` is
+ * optional and maps to http codes / OpenAI error codes for clients to
+ * switch on (`daily_token_limit_exceeded`, `unauthenticated`, etc.). */
+export const AiChatError: NotificationType<{
+  conversationId: string
+  message: string
+  code?: string
+}> = {
+  method: 'aiChatError',
+}
+
+/** Webview asks for the list of locally-tracked conversations. */
+export const AiConversationList: RequestType<
+  void,
+  { items: AiConversationSummary[] }
+> = {
+  method: 'aiConversationList',
+}
+
+/** Load a single conversation by id from local storage. */
+export const AiConversationLoad: RequestType<
+  { id: string },
+  { conversation: AiConversation | null }
+> = {
+  method: 'aiConversationLoad',
+}
+
+/** Rename-delete locally + on the server. */
+export const AiConversationDelete: RequestType<
+  { id: string },
+  { ok: boolean }
+> = {
+  method: 'aiConversationDelete',
+}
+
+/** Webview asks for a fresh conversation id (drops local state; starts
+ * blank). Currently a notification because no response is needed —
+ * state transitions happen in the webview's own store. */
+export const AiConversationNew: NotificationType<void> = {
+  method: 'aiConversationNew',
+}
+
+/** Push from extension: auth state changed (signed-in, cloud session
+ * status). The AI tab uses this to enable/disable input. Separate from
+ * `SidebarConnectionStatusChanged` because the AI tab cares about
+ * cloud-specific auth, not generic service-url reachability. */
+export const AiAuthStatus: NotificationType<{
+  signedIn: boolean
+  userId?: string
+  orgSlug?: string
+}> = {
+  method: 'aiAuthStatus',
+}
+
+/** `@` mention autocomplete: returns matching files / workspace symbols.
+ * Phase 1 populates this from the active editor + workspace file
+ * search; later we augment with exported symbol names. */
+export interface AiMentionCandidate {
+  kind: 'file' | 'symbol' | 'selection'
+  label: string
+  /** URI for file candidates; export name for symbols; empty for selection. */
+  target: string
+}
+
+export const AiMentionSearch: RequestType<
+  { query: string },
+  { items: AiMentionCandidate[] }
+> = {
+  method: 'aiMentionSearch',
+}
+
+/** Usage polling: webview tells the extension when to poll (tab
+ * visible + conversation loaded → subscribe; otherwise unsubscribe). */
+export const AiUsageSubscribe: NotificationType<void> = {
+  method: 'aiUsageSubscribe',
+}
+
+export const AiUsageUnsubscribe: NotificationType<void> = {
+  method: 'aiUsageUnsubscribe',
+}
+
+export const AiUsageUpdate: NotificationType<{
+  used: number
+  limit: number
+  blockOnOverage: boolean
+}> = {
+  method: 'aiUsageUpdate',
+}
+
 /*******************************************************************************
  Convert between L4 RPC types and vscode-messenger's Request/Notification types
 ********************************************************************************/

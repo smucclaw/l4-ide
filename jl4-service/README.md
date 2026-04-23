@@ -328,7 +328,7 @@ The proxy injects these headers to control what jl4-service includes in response
 **Configuration attributes:**
 
 - `data-scope` — Filter by deployment and/or function: `deploy-id` (one deployment), `id1,id2` (multiple), `id/function-name` (specific function), `*/function-name` (function across all deployments). Default: all.
-- `data-tools` — Comma-separated list of tool categories: `rules` (one tool per rule), `rule-tools` (search/schema/evaluate), `file-tools` (list/read/search files), `auto` (default: `rules` if ≤20, otherwise `rule-tools`), `all` (everything). Example: `rules,file-tools`.
+- `data-tools` — Comma-separated list of tool categories: `rules` (one tool per rule), `rule-tools` (search/schema/evaluate), `file-tools` (list/read/search files), `auto` (default: `rules` if ≤10, otherwise `rule-tools`), `all` (everything). Example: `rules,file-tools`.
 - `data-api-key` — API key for cloud-hosted deployments on [Legalese Cloud](https://legalese.cloud). Not needed for self-hosted instances.
 
 ## CLI Options

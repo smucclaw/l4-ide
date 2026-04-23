@@ -10,9 +10,9 @@ Welcome to the L4 language documentation. L4 is a domain-specific language for l
 
 New to L4? Start here:
 
-1. **[Get L4](https://marketplace.visualstudio.com/items?itemName=Legalese.l4-vscode)** - Download the L4 VS Code extension with Copilot and Claude Code integration
+1. **[Get L4](https://marketplace.visualstudio.com/items?itemName=Legalese.l4-vscode)** - Download the L4 VS Code extension with Legalese AI and MCP tools
 2. **[Your First L4 File](tutorials/getting-started/first-l4-file.md)** - Hands-on in 15 minutes
-3. **[Composing L4 with AI](tutorials/llm-integration/composing-l4-with-ai.md)** - Draft L4 from prose using Claude Code
+3. **[Composing L4 with AI](tutorials/llm-integration/composing-l4-with-ai.md)** - Draft L4 from prose using Legalese AI
 4. **[Foundation Course](courses/foundation/README.md)** - Learn L4 systematically
 
 ---
@@ -115,16 +115,16 @@ Understand the "why" behind L4:
 ## Community & Support
 
 - **[Discord](https://discord.gg/Q7a7NSEdNy)** - Chat with the community
-- **[GitHub Issues](https://github.com/smucclaw/l4-ide/issues)** - Report bugs, request features
+- **[GitHub Issues](https://github.com/legalese/l4-ide/issues)** - Report bugs, request features
 - **[Legalese Services](https://legalese.com)** - Professional implementation services
 
 ---
 
 ## Developer Resources
 
-- **[Latest Stable Build](https://github.com/smucclaw/l4-ide/releases)** - [![L4-IDE](https://img.shields.io/github/v/release/smucclaw/l4-ide?color=brightgreen&logo=github&label=L4-IDE)](https://github.com/smucclaw/l4-ide/releases/latest)
-- **[L4 IDE Repository](https://github.com/smucclaw/l4-ide)** - Open-Source code
+- **[Latest Stable Build](https://github.com/legalese/l4-ide/releases)** - [![L4-IDE](https://img.shields.io/github/v/release/legalese/l4-ide?color=brightgreen&logo=github&label=L4-IDE)](https://github.com/legalese/l4-ide/releases/latest)
+- **[L4 IDE Repository](https://github.com/legalese/l4-ide)** - Open-Source code
 
 ---
 
-L4 is published under the [Apache-2.0 License](https://github.com/smucclaw/l4-ide/blob/main/LICENSE).
+L4 is published under the [Apache-2.0 License](https://github.com/legalese/l4-ide/blob/main/LICENSE).

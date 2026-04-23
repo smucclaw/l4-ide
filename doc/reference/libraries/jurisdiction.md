@@ -4,7 +4,7 @@ Jurisdiction definitions for multi-jurisdictional legal rules. Uses ISO 3166 cou
 
 ### Location
 
-[jl4-core/libraries/jurisdiction.l4](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/libraries/jurisdiction.l4)
+[jl4-core/libraries/jurisdiction.l4](https://github.com/legalese/l4-ide/blob/main/jl4-core/libraries/jurisdiction.l4)
 
 ### Features
 

@@ -6,7 +6,7 @@ import Test.Hspec
 
 import Backend.Api (FnLiteral (..), EvaluatorError (..), ParameterMismatch (..), prettyEvaluatorError)
 import L4.FunctionSchema (Parameters (..), Parameter (..))
-import Shared (sanitizePropertyName, buildPropertyReverseMap, remapFnLiteralKeys, remapArguments, validateNoSanitizationCollisions, sanitizeFieldNamesInText)
+import Shared (sanitizePropertyName, sanitizePropertyNames, buildPropertyReverseMap, remapFnLiteralKeys, remapArguments, validateNoSanitizationCollisions, sanitizeFieldNamesInText)
 
 import qualified Data.Map.Strict as Map
 import Data.Text (Text)
@@ -35,6 +35,58 @@ spec = describe "Sanitization" $ do
 
     it "returns _unnamed for empty result" $
       sanitizePropertyName "``" `shouldBe` "_unnamed"
+
+    it "truncates names longer than 60 chars (leaving room for a 4-char dedup suffix)" $ do
+      let longName = "the person has an unspent conviction for providing misleading information"
+          result = sanitizePropertyName longName
+      Text.length result `shouldSatisfy` (<= 60)
+      result `shouldSatisfy` Text.isPrefixOf "the-person-has-an-unspent-conviction"
+
+    it "drops trailing hyphen after truncation" $ do
+      let longName = Text.replicate 32 "a " <> "b"
+          result = sanitizePropertyName longName
+      Text.length result `shouldSatisfy` (<= 60)
+      Text.last result `shouldNotBe` '-'
+
+    it "truncated names match Anthropic's property key regex" $ do
+      let longName = "the person has an unspent conviction for providing misleading information"
+          result = sanitizePropertyName longName
+      result `shouldSatisfy` Text.all (\c -> c `elem` ("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-" :: String))
+      Text.length result `shouldSatisfy` (\n -> n >= 1 && n <= 60)
+
+  describe "sanitizePropertyNames (dedup)" $ do
+    it "returns identity-ish map when no collisions" $ do
+      let m = sanitizePropertyNames ["foo bar", "baz qux"]
+      Map.lookup "foo bar" m `shouldBe` Just "foo-bar"
+      Map.lookup "baz qux" m `shouldBe` Just "baz-qux"
+
+    it "disambiguates names that truncate to the same 60-char prefix" $ do
+      -- Both start with 60+ identical chars, differ only past char 60
+      let a = Text.replicate 60 "a" <> " SUFFIX_A"
+          b = Text.replicate 60 "a" <> " SUFFIX_B"
+          m = sanitizePropertyNames [a, b]
+      case (Map.lookup a m, Map.lookup b m) of
+        (Just sa, Just sb) -> do
+          sa `shouldNotBe` sb
+          Text.length sa `shouldSatisfy` (<= 64)
+          Text.length sb `shouldSatisfy` (<= 64)
+        _ -> expectationFailure "Both names should be in the dedup map"
+
+    it "is deterministic across calls (stable hash suffix)" $ do
+      let a = Text.replicate 60 "a" <> " SUFFIX_A"
+          b = Text.replicate 60 "a" <> " SUFFIX_B"
+          m1 = sanitizePropertyNames [a, b]
+          m2 = sanitizePropertyNames [b, a]
+      m1 `shouldBe` m2
+
+    it "dedup suffixes satisfy Anthropic's regex" $ do
+      let a = Text.replicate 60 "a" <> " X"
+          b = Text.replicate 60 "a" <> " Y"
+          m = sanitizePropertyNames [a, b]
+      mapM_ (\v -> do
+        v `shouldSatisfy` Text.all (\c -> c `elem` ("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-" :: String))
+        Text.length v `shouldSatisfy` (\n -> n >= 1 && n <= 64)
+        ) (Map.elems m)
 
   describe "buildPropertyReverseMap" $ do
     it "maps sanitized names back to originals" $ do

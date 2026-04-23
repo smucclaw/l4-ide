@@ -27,8 +27,12 @@ ASSUME conduct IS A FUNCTION FROM Receiver TO Conduct
 ASSUME effect IS A FUNCTION FROM Conduct TO Effect
 ASSUME `is unreasonable` IS A FUNCTION FROM Conduct TO BOOLEAN
 
-GIVEN person     IS A Person      -- person issuing the notice
-      receiver   IS A Receiver    -- target of the notice
+-- Note: this function is NOT @export. Its body calls function-typed
+-- ASSUMEs (`is authorised`, `is detrimental`, …) which stay uninterpreted
+-- at runtime — exporting it would produce a tool that fails with
+-- "assumed term" errors on every invocation.
+GIVEN person     IS A Person      @desc person issuing the notice
+      receiver   IS A Receiver    @desc target of the notice
 DECIDE `may issue a community protection notice` IF
       `is authorised` person
   AND    `is an individual aged 16 or over` receiver

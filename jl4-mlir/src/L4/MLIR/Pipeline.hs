@@ -128,6 +128,7 @@ compileToPipeline config filepath = do
             (Text.pack (baseName <> ".wasm"))
             (computeVersion filepath)  -- placeholder — real one in Compiler.hs
             mainModule
+            depModules
 
       case config.outputTarget of
         EmitMLIR -> do

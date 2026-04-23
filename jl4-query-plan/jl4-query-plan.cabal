@@ -6,7 +6,7 @@ tested-with: GHC==9.10.2
 
 source-repository head
   type: git
-  location: https://github.com/smucclaw/l4-ide/tree/main/jl4-query-plan
+  location: https://github.com/legalese/l4-ide/tree/main/jl4-query-plan
 
 common defaults
   default-language: GHC2021

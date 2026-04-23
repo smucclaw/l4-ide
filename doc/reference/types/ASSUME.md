@@ -60,6 +60,40 @@ DECIDE isEligible IS
 - When evaluated directly, assumed values remain symbolic
 - Assumed values are typically bound via `#CHECK ... WITH` or `#TRACE ... WITH`
 
+## ASSUME and `@export`
+
+When a module-level ASSUME is referenced by an `@export`-decorated DECIDE, it
+is promoted to a parameter of the exported function and must be supplied by
+the caller at request time (alongside the function's `GIVEN` parameters).
+ASSUMEs not referenced by any exported function remain module-level
+assumptions and are unaffected.
+
+```l4
+ASSUME age IS A NUMBER         -- promoted to a parameter of `isAdult`
+ASSUME unused IS A BOOLEAN     -- stays assumed (no @export uses it)
+
+@export Check if the subject is an adult
+DECIDE isAdult IS age >= 18
+```
+
+### Function-typed inputs are not supported for `@export`
+
+An `@export` function cannot accept a function-typed input, whether declared
+as a `GIVEN` parameter or as a referenced ASSUME:
+
+```l4
+-- ✘ Rejected at typecheck / deploy time
+ASSUME predicate IS A FUNCTION FROM NUMBER TO BOOLEAN
+@export Apply the predicate
+DECIDE `applies` IF predicate OF 42
+```
+
+Functions can't be passed over JSON (REST/MCP), and function-typed ASSUMEs
+stay uninterpreted at runtime — so any call would fail with an "assumed
+term" error rather than return a value. The typechecker emits
+`Function type inputs are not supported for @export` and the service
+refuses to deploy such bundles.
+
 ## Binding Assumed Values
 
 ```l4

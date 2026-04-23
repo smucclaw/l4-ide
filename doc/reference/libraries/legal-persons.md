@@ -4,7 +4,7 @@ Legal entity type definitions for natural persons and corporate entities. Import
 
 ### Location
 
-[jl4-core/libraries/legal-persons.l4](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/libraries/legal-persons.l4)
+[jl4-core/libraries/legal-persons.l4](https://github.com/legalese/l4-ide/blob/main/jl4-core/libraries/legal-persons.l4)
 
 ### Features
 

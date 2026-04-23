@@ -103,7 +103,7 @@ Known gaps:
 
 ## Performance
 
-Benchmark on the [auth-proxy](https://github.com/smucclaw/jl4-auth-proxy) `validation/test.l4` fixture — 12 exported functions, 100 calls each = 1,200 calls total. Both backends serve HTTP on loopback, accept the same `{arguments: ...}` body, and return the same `SimpleResponse` envelope.
+Benchmark on the [auth-proxy](https://github.com/legalese/jl4-auth-proxy) `validation/test.l4` fixture — 12 exported functions, 100 calls each = 1,200 calls total. Both backends serve HTTP on loopback, accept the same `{arguments: ...}` body, and return the same `SimpleResponse` envelope.
 
 | Backend                                       |  Wall time | Per-call avg | Server RSS |
 | --------------------------------------------- | ---------: | -----------: | ---------: |

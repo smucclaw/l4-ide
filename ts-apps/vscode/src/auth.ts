@@ -16,6 +16,19 @@ export interface ConnectionState {
 export const LEGALESE_CLOUD_DOMAIN = 'legalese.cloud'
 const SECRET_KEY_SESSION = 'l4.sessionToken'
 
+function sameState(
+  a: ConnectionState | undefined,
+  b: ConnectionState
+): boolean {
+  return (
+    a !== undefined &&
+    a.status === b.status &&
+    a.serviceUrl === b.serviceUrl &&
+    a.connected === b.connected &&
+    a.error === b.error
+  )
+}
+
 /**
  * Manages authentication state for connecting to jl4-service / legalese.cloud.
  *
@@ -29,8 +42,16 @@ export class AuthManager {
   readonly onDidChange = this.onDidChangeEmitter.event
 
   private cachedState: ConnectionState | undefined
+  // Bumped whenever auth inputs change (settings, session token, disconnect).
+  // An in-flight verifyConnection discards its result if the generation moved.
+  private verifyGen = 0
   private manuallyDisconnected = false
   private cloudOrgSlug: string | undefined
+  // Stable per-user identifier pulled from /auth/session. Used to scope
+  // on-disk state (e.g. conversation history) per signed-in user so
+  // logging out and back in as someone else yields a different view.
+  // Undefined in self-hosted mode (API-key-only) and when signed out.
+  private cloudUserId: string | undefined
   private readonly disposables: vscode.Disposable[] = []
 
   constructor(
@@ -48,14 +69,10 @@ export class AuthManager {
           )
           await this.secrets.delete(SECRET_KEY_SESSION)
           this.cloudOrgSlug = undefined
+          this.cloudUserId = undefined
           this.manuallyDisconnected = false
-          this.cachedState = undefined
-          // If a service URL is now set, attempt to connect automatically
-          if (this.getServiceUrl()) {
-            await this.verifyConnection()
-          } else {
-            this.invalidateAndNotify()
-          }
+          this.invalidate()
+          await this.verifyConnection()
         }
       })
     )
@@ -117,7 +134,7 @@ export class AuthManager {
   async setSessionToken(token: string): Promise<void> {
     await this.secrets.store(SECRET_KEY_SESSION, token)
     this.manuallyDisconnected = false
-    this.cachedState = undefined
+    this.invalidate()
   }
 
   /**
@@ -127,10 +144,37 @@ export class AuthManager {
   async logout(): Promise<void> {
     await this.secrets.delete(SECRET_KEY_SESSION)
     this.cloudOrgSlug = undefined
+    this.cloudUserId = undefined
     this.manuallyDisconnected = true
-    this.cachedState = undefined
-    const state = await this.getConnectionState()
-    this.onDidChangeEmitter.fire(state)
+    this.invalidate()
+    await this.verifyConnection()
+  }
+
+  /**
+   * Stable identifier for the signed-in Legalese Cloud user, if any.
+   * Callers scoping local state (conversation history, per-user caches)
+   * should key off this and fall back to an `anonymous`-style bucket
+   * when it's undefined (self-hosted mode or signed-out).
+   */
+  getUserId(): string | undefined {
+    return this.cloudUserId
+  }
+
+  /**
+   * Derives a filesystem-safe key from the current user identity.
+   * Returns `anonymous` when no Legalese Cloud user is signed in so
+   * self-hosted / signed-out state still has a stable bucket — just
+   * not one that collides with any real user's.
+   */
+  getUserStorageKey(): string {
+    const id = this.cloudUserId
+    if (!id) return 'anonymous'
+    // Keep only characters we know are safe across macOS/Win/Linux
+    // filesystems. A WorkOS user id (`user_01H...`) already satisfies
+    // this, but the guard means any future identity shape can't inject
+    // a path separator.
+    const safe = id.replace(/[^a-zA-Z0-9_-]/g, '_')
+    return safe.length > 0 ? safe : 'anonymous'
   }
 
   /**
@@ -143,7 +187,7 @@ export class AuthManager {
 
     if (serviceUrl) {
       this.manuallyDisconnected = false
-      this.cachedState = undefined
+      this.invalidate()
       await this.verifyConnection()
       return
     }
@@ -188,11 +232,18 @@ export class AuthManager {
       if (resp.ok) {
         const session = (await resp.json()) as {
           organization?: { slug: string; name: string }
+          user?: { id?: string; email?: string }
         }
         if (session.organization) {
           this.cloudOrgSlug = session.organization.slug
           this.outputChannel.appendLine(
             `[auth] Resolved org: ${session.organization.name} (${session.organization.slug})`
+          )
+        }
+        if (session.user?.id) {
+          this.cloudUserId = session.user.id
+          this.outputChannel.appendLine(
+            `[auth] Signed in as ${session.user.email ?? session.user.id}`
           )
         }
       }
@@ -202,72 +253,41 @@ export class AuthManager {
       )
     }
 
+    this.invalidate()
     await this.verifyConnection()
   }
 
   async getConnectionState(): Promise<ConnectionState> {
     if (this.cachedState) return this.cachedState
-
-    const serviceUrl = this.getEffectiveServiceUrl()
-
-    this.outputChannel.appendLine(
-      `[auth] getConnectionState: serviceUrl=${JSON.stringify(serviceUrl)} disconnected=${this.manuallyDisconnected}`
-    )
-
-    let state: ConnectionState
-
-    if (this.manuallyDisconnected || !serviceUrl) {
-      state = {
-        status: 'not-configured',
-        serviceUrl,
-        connected: false,
-      }
-    } else {
-      // Have a URL but haven't verified yet — report as connecting
-      state = {
-        status: 'connecting',
-        serviceUrl,
-        connected: false,
-      }
-    }
-
-    this.cachedState = state
-    return state
+    // No cache → trigger a verify. It emits 'connecting' synchronously-ish,
+    // then commits a terminal state. Returning its promise means the caller
+    // always gets an authoritative state, not a transient 'connecting'.
+    return this.verifyConnection()
   }
 
   /**
    * Verify the connection by hitting /service/health.
-   * Only returns 'connected' if that request succeeds with a 200.
+   * Safe to call concurrently: each call runs independently but only the
+   * most recent (by generation) commits its result.
    */
   async verifyConnection(): Promise<ConnectionState> {
-    this.cachedState = undefined
+    const gen = ++this.verifyGen
     const serviceUrl = this.getEffectiveServiceUrl()
 
     if (this.manuallyDisconnected || !serviceUrl) {
-      const state: ConnectionState = {
+      return this.commit(gen, {
         status: 'not-configured',
         serviceUrl,
         connected: false,
-      }
-      this.cachedState = state
-      this.onDidChangeEmitter.fire(state)
-      return state
+      })
     }
 
-    // Emit connecting state while we verify
-    const connectingState: ConnectionState = {
-      status: 'connecting',
-      serviceUrl,
-      connected: false,
-    }
-    this.cachedState = connectingState
-    this.onDidChangeEmitter.fire(connectingState)
+    this.commit(gen, { status: 'connecting', serviceUrl, connected: false })
 
     // Run health check and a minimum delay in parallel so the
     // "Connecting..." state is visible for at least 1 second.
     const minDelay = new Promise((r) => setTimeout(r, 1000))
 
-    let result: ConnectionState
     try {
       const headers = await this.getAuthHeaders()
       // Legalese Cloud: check health on the service domain (org may be idle/suspended).
@@ -284,35 +304,53 @@ export class AuthManager {
       ])
 
       if (resp.ok) {
-        result = { status: 'connected', serviceUrl, connected: true }
-      } else if (resp.status === 401 || resp.status === 403) {
-        result = {
-          status: 'error',
+        return this.commit(gen, {
+          status: 'connected',
           serviceUrl,
-          connected: false,
-          error: 'Authentication failed. Check your API key or re-login.',
-        }
-      } else {
-        result = {
-          status: 'error',
-          serviceUrl,
-          connected: false,
-          error: `Service responded with ${resp.status}`,
-        }
+          connected: true,
+        })
       }
+      const error =
+        resp.status === 401 || resp.status === 403
+          ? 'Authentication failed. Check your API key or re-login.'
+          : `Service responded with ${resp.status}`
+      return this.commit(gen, {
+        status: 'error',
+        serviceUrl,
+        connected: false,
+        error,
+      })
     } catch {
       await minDelay
-      result = {
+      return this.commit(gen, {
         status: 'error',
         serviceUrl,
         connected: false,
         error: `Could not connect to ${serviceUrl}`,
-      }
+      })
     }
+  }
 
-    this.cachedState = result
-    this.onDidChangeEmitter.fire(result)
-    return result
+  /**
+   * Invalidate cached state and any in-flight verify. Callers that mutate
+   * auth inputs (settings, session token, disconnect) must call this so a
+   * stale verify doesn't overwrite the new reality.
+   */
+  private invalidate(): void {
+    this.verifyGen++
+    this.cachedState = undefined
+  }
+
+  /**
+   * Commit a verify result. No-op if a newer verify has started (gen moved)
+   * or if the state is identical to what's already cached (dedup emits).
+   */
+  private commit(gen: number, state: ConnectionState): ConnectionState {
+    if (gen !== this.verifyGen) return this.cachedState ?? state
+    if (sameState(this.cachedState, state)) return state
+    this.cachedState = state
+    this.onDidChangeEmitter.fire(state)
+    return state
   }
 
   /**
@@ -321,66 +359,55 @@ export class AuthManager {
    * If in Legalese Cloud mode with a stored session token, resolve the org and verify.
    */
   async initialize(): Promise<void> {
-    const serviceUrl = this.getServiceUrl()
-
-    if (serviceUrl) {
-      this.outputChannel.appendLine(
-        '[auth] Service URL configured, attempting auto-connect'
-      )
-      await this.verifyConnection()
-      return
-    }
-
-    // Legalese Cloud: check for existing session token
-    const token = await this.secrets.get(SECRET_KEY_SESSION)
-    if (token) {
-      this.outputChannel.appendLine(
-        '[auth] Found stored session token, verifying Legalese Cloud session'
-      )
-      try {
-        const resp = await fetch(
-          `https://${LEGALESE_CLOUD_DOMAIN}/auth/session`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-            signal: AbortSignal.timeout(10000),
-          }
-        )
-        if (resp.ok) {
-          const session = (await resp.json()) as {
-            organization?: { slug: string; name: string }
-          }
-          if (session.organization) {
-            this.cloudOrgSlug = session.organization.slug
-            this.outputChannel.appendLine(
-              `[auth] Restored org: ${session.organization.name} (${session.organization.slug})`
-            )
-          }
-        } else if (resp.status === 401 || resp.status === 403) {
-          this.outputChannel.appendLine(
-            '[auth] Stored session token is invalid, clearing'
-          )
-          await this.secrets.delete(SECRET_KEY_SESSION)
-          this.invalidateAndNotify()
-          return
-        }
-      } catch (err) {
+    // For Legalese Cloud mode, try to resolve the org slug from the stored
+    // session token before verifying. Any failure here is non-fatal:
+    // verifyConnection() below will produce a terminal state regardless.
+    if (!this.getServiceUrl()) {
+      const token = await this.secrets.get(SECRET_KEY_SESSION)
+      if (token) {
         this.outputChannel.appendLine(
-          `[auth] Failed to verify session: ${err instanceof Error ? err.message : String(err)}`
+          '[auth] Found stored session token, resolving Legalese Cloud org'
         )
-      }
-
-      // If we resolved an org slug, verify by fetching deployments
-      if (this.cloudOrgSlug) {
-        await this.verifyConnection()
+        try {
+          const resp = await fetch(
+            `https://${LEGALESE_CLOUD_DOMAIN}/auth/session`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+              signal: AbortSignal.timeout(10000),
+            }
+          )
+          if (resp.ok) {
+            const session = (await resp.json()) as {
+              organization?: { slug: string; name: string }
+              user?: { id?: string; email?: string }
+            }
+            if (session.organization) {
+              this.cloudOrgSlug = session.organization.slug
+              this.outputChannel.appendLine(
+                `[auth] Restored org: ${session.organization.name} (${session.organization.slug})`
+              )
+            }
+            if (session.user?.id) {
+              this.cloudUserId = session.user.id
+              this.outputChannel.appendLine(
+                `[auth] Restored user: ${session.user.email ?? session.user.id}`
+              )
+            }
+          } else if (resp.status === 401 || resp.status === 403) {
+            this.outputChannel.appendLine(
+              '[auth] Stored session token is invalid, clearing'
+            )
+            await this.secrets.delete(SECRET_KEY_SESSION)
+          }
+        } catch (err) {
+          this.outputChannel.appendLine(
+            `[auth] Failed to verify session: ${err instanceof Error ? err.message : String(err)}`
+          )
+        }
       }
     }
-  }
 
-  private invalidateAndNotify() {
-    this.cachedState = undefined
-    this.getConnectionState().then((state) => {
-      this.onDidChangeEmitter.fire(state)
-    })
+    await this.verifyConnection()
   }
 
   dispose() {

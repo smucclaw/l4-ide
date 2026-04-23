@@ -1,6 +1,6 @@
 -- Test file for quoted section names with dereferencing
 -- This file tests that section dereferencing works with quoted identifiers
--- See: https://github.com/smucclaw/l4-ide/issues/756
+-- See: https://github.com/legalese/l4-ide/issues/756
 
 § `section alpha`
 ASSUME a1 IS A BOOLEAN

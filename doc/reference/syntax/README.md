@@ -427,4 +427,4 @@ Example: `{- Block comment -}`
 
 - **[GLOSSARY](../GLOSSARY.md)** - Complete feature index
 - **[Functions](../functions/README.md)** - Function keywords
-- **[Specifications](https://github.com/smucclaw/l4-ide/tree/main/specs)** - Technical specifications
+- **[Specifications](https://github.com/legalese/l4-ide/tree/main/specs)** - Technical specifications

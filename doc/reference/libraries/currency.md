@@ -5,7 +5,7 @@ Can be imported into L4 files with `IMPORT currency`.
 
 ### Location
 
-[jl4-core/libraries/currency.l4](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/libraries/currency.l4)
+[jl4-core/libraries/currency.l4](https://github.com/legalese/l4-ide/blob/main/jl4-core/libraries/currency.l4)
 
 ### Features
 

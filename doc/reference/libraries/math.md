@@ -4,7 +4,7 @@ Mathematical functions beyond basic arithmetic. Provides safe wrappers around nu
 
 ### Location
 
-[jl4-core/libraries/math.l4](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/libraries/math.l4)
+[jl4-core/libraries/math.l4](https://github.com/legalese/l4-ide/blob/main/jl4-core/libraries/math.l4)
 
 ### Constants
 
@@ -33,4 +33,4 @@ Mathematical functions beyond basic arithmetic. Provides safe wrappers around nu
 
 [math-example.l4](math-example.l4)
 
-**See [math.l4](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/libraries/math.l4) source for all functions.**
+**See [math.l4](https://github.com/legalese/l4-ide/blob/main/jl4-core/libraries/math.l4) source for all functions.**

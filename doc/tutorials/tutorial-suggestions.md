@@ -225,7 +225,7 @@ Have an idea for a tutorial? Submit it here!
 
 ### How to Suggest
 
-1. Open a [GitHub Issue](https://github.com/smucclaw/l4-ide/issues) with:
+1. Open a [GitHub Issue](https://github.com/legalese/l4-ide/issues) with:
 
    - Tutorial title
    - Target audience
@@ -293,7 +293,7 @@ _(Tutorials will be moved here as they are completed)_
 
 Looking for tutorial ideas? Check:
 
-- [GitHub Issues](https://github.com/smucclaw/l4-ide/issues) - User questions
-- [Discussion Forum](https://github.com/smucclaw/l4-ide/discussions) - Common topics
+- [GitHub Issues](https://github.com/legalese/l4-ide/issues) - User questions
+- [Discussion Forum](https://github.com/legalese/l4-ide/discussions) - Common topics
 - [Course Modules](../courses/README.md) - Expand on course topics
 - Real-world L4 projects - What would have helped?

@@ -1172,7 +1172,16 @@
               class="h-full"
               class:hidden-pane={rightPaneView !== 'inspector'}
             >
-              <InspectorPanel bind:this={inspectorPanel} {monaco} />
+              <InspectorPanel
+                bind:this={inspectorPanel}
+                {monaco}
+                onRevealSource={(_uri, line) => {
+                  if (!editor) return
+                  editor.revealLineInCenter(line)
+                  editor.setPosition({ lineNumber: line, column: 1 })
+                  editor.focus()
+                }}
+              />
             </div>
           </div>
           <style>

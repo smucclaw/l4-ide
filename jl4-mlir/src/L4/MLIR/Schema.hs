@@ -121,9 +121,13 @@ sanitizeWasmSymbol name =
 
 -- | Build the schema bundle for all @\@export@\-ed functions in a module.
 -- The bundle is then serialized to disk as @.schema.json@.
-bundleExports :: Text -> Text -> Module Resolved -> WasmBundle
-bundleExports wasmPath version resolvedModule =
-  let declares = declaresFromModule resolvedModule
+bundleExports :: Text -> Text -> Module Resolved -> [Module Resolved] -> WasmBundle
+bundleExports wasmPath version resolvedModule depModules =
+  -- Merge DECLAREs from imported modules so record/enum types defined in
+  -- IMPORTed files are visible when expanding parameter schemas. The main
+  -- module's declares take precedence on key collision.
+  let declares = Map.unions (declaresFromModule resolvedModule
+                            : map declaresFromModule depModules)
       exports  = getExportedFunctions resolvedModule
   in WasmBundle
        { bundleWasmFile = wasmPath

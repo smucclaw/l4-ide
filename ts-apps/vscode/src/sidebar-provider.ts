@@ -52,6 +52,15 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   private ready = false
   private readyResolve: (() => void) | undefined
   private readyPromise: Promise<void>
+  /** Fires with `true` when the webview becomes visible and `false`
+   *  when it goes hidden (activity-bar switch, editor tab, layout
+   *  change). Consumers that accumulate UI events for the webview
+   *  drain on the true-transition so a chat streaming in the
+   *  background catches up as soon as the user flips back. Fires
+   *  before the event buffer drains, i.e. subscribers are free to
+   *  check `isVisible()` directly. */
+  private readonly visibilityEmitter = new vscode.EventEmitter<boolean>()
+  readonly onDidChangeVisibility = this.visibilityEmitter.event
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -79,6 +88,13 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         )
       }
     })
+  }
+
+  /** Current visibility. False when the view hasn't been resolved
+   *  yet, so consumers that optimistically buffer before the first
+   *  resolve don't drop frames on the floor. */
+  isVisible(): boolean {
+    return this.view?.visible ?? false
   }
 
   resolveWebviewView(
@@ -109,6 +125,20 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
     this.messenger.registerWebviewView(webviewView)
 
+    // Fire the initial visibility state on resolve so downstream
+    // buffers know whether to start flowing directly or to queue
+    // events until the view actually paints. We also forward every
+    // subsequent flip — the "hidden → visible" transition is the
+    // cue to drain any events that piled up while the user was off
+    // on a different activity-bar item.
+    this.visibilityEmitter.fire(webviewView.visible)
+    webviewView.onDidChangeVisibility(() => {
+      this.outputChannel.appendLine(
+        `[sidebar] visibility change (visible=${webviewView.visible})`
+      )
+      this.visibilityEmitter.fire(webviewView.visible)
+    })
+
     webviewView.onDidDispose(() => {
       this.outputChannel.appendLine('[sidebar] webview disposed')
       this.view = undefined
@@ -116,6 +146,11 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       this.readyPromise = new Promise((resolve) => {
         this.readyResolve = resolve
       })
+      // A disposed view is not visible; signal so buffers switch to
+      // queue-mode and don't try to post into a dead webview. When
+      // the user re-opens the sidebar, resolveWebviewView above fires
+      // the visible-true event and the buffer drains.
+      this.visibilityEmitter.fire(false)
     })
   }
 

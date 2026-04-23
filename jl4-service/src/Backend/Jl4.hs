@@ -34,7 +34,7 @@ import qualified Data.Map.Strict as StrictMap
 
 import Backend.Api
 import Backend.CodeGen (generateEvalWrapper, generateDeonticEvalWrapper, GeneratedCode(..))
-import L4.Export (extractAssumeParamTypes)
+import L4.Export (extractAssumeParamTypes, extractAssumeParamResolveds)
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Aeson
 import qualified Data.Scientific as Scientific
@@ -54,6 +54,10 @@ data CompiledModule = CompiledModule
   , compiledEntityInfo :: !EntityInfo
   , compiledDecide :: !(Decide Resolved)
   , compiledImportEnv :: !EvalEnv.Environment        -- ^ Evaluator environment from imports
+  , compiledAllDeclares :: ![Declare Resolved]       -- ^ DECLAREs from the entry file AND every transitively-imported file.
+                                                     -- Consulted by 'buildModuleInfo' so a record parameter
+                                                     -- whose type is defined in an IMPORT'd file resolves —
+                                                     -- the entry module's own 'flattenDeclares' wouldn't see it.
   }
   deriving (Generic)
 
@@ -71,6 +75,10 @@ data SharedModuleContext = SharedModuleContext
   , sharedModuleContext :: !ModuleContext
   , sharedImportEnv :: !EvalEnv.Environment
   , sharedSource :: !Text
+  , sharedAllDeclares :: ![Declare Resolved]
+    -- ^ DECLAREs from the entry file + every transitively-imported
+    --   file. Carried through into 'CompiledModule.compiledAllDeclares'
+    --   so direct-AST evaluation can resolve cross-file record types.
   }
 
 -- | Build shared context from an already-typechecked module.
@@ -92,6 +100,11 @@ buildSharedContext filepath source moduleContext resolvedModule env entityInfo =
     , sharedModuleContext = moduleContext
     , sharedImportEnv = importEnv
     , sharedSource = source
+    -- Fallback path (single-file compile, no bundle info): the best we
+    -- can do is the entry module's own DECLAREs. The bundle-compile
+    -- path in Compiler.hs overrides this with the full cross-file set
+    -- via 'buildSharedContextWithDeclares'.
+    , sharedAllDeclares = moduleDeclaresOnly resolvedModule
     }
 
 -- | Build a CompiledModule for a single function, reusing shared context.
@@ -105,6 +118,7 @@ buildCompiledFromShared shared funName = runExceptT $ do
     , compiledEntityInfo = shared.sharedEntityInfo
     , compiledDecide = decide
     , compiledImportEnv = shared.sharedImportEnv
+    , compiledAllDeclares = shared.sharedAllDeclares
     }
  where
   evalErrorToText :: EvaluatorError -> Text
@@ -214,13 +228,18 @@ precompileModule filepath source moduleContext funName = runExceptT $ do
   -- environment to be pre-computed (it only evaluates the current module fresh)
   importEnv <- liftIO $ buildImportEnvironment filepath source moduleContext tcRes.entityInfo
 
-  -- Build the compiled module
+  -- Build the compiled module. precompileModule is the single-file
+  -- fallback — bundle compilation populates `compiledAllDeclares` from
+  -- the full import graph in Compiler.hs. Here we only have the entry
+  -- module's AST, so we fall back to its own declarations; that's the
+  -- best we can do without re-running the whole bundle typecheck.
   pure CompiledModule
     { compiledModule = tcRes.module'
     , compiledEnvironment = tcRes.environment
     , compiledEntityInfo = tcRes.entityInfo
     , compiledDecide = decide
     , compiledImportEnv = importEnv
+    , compiledAllDeclares = moduleDeclaresOnly tcRes.module'
     }
  where
   evalErrorToText :: EvaluatorError -> Text
@@ -310,11 +329,11 @@ data ModuleInfo = ModuleInfo
     -- ^ enum type unique -> [(variant name, variant constructor ref)]
   }
 
-buildModuleInfo :: Module Resolved -> ModuleInfo
-buildModuleInfo (MkModule _ _ section) = ModuleInfo
-  { miRecords      = Map.fromList [ r | Just r <- map recordFor (flattenDeclares section) ]
-  , miEnumVariants = Map.fromList [ r | Just r <- map enumFor   (flattenDeclares section) ]
-  }
+-- | Flatten a module's own top-level + nested DECLAREs. Does not
+-- follow IMPORTs — use 'compiledAllDeclares' (populated at bundle
+-- compile time) when cross-file types need to resolve.
+moduleDeclaresOnly :: Module Resolved -> [Declare Resolved]
+moduleDeclaresOnly (MkModule _ _ section) = flattenDeclares section
   where
     flattenDeclares :: Section Resolved -> [Declare Resolved]
     flattenDeclares (MkSection _ _ _ decls) = concatMap step decls
@@ -322,6 +341,13 @@ buildModuleInfo (MkModule _ _ section) = ModuleInfo
         step (Declare _ d)  = [d]
         step (Section _ s') = flattenDeclares s'
         step _              = []
+
+buildModuleInfo :: [Declare Resolved] -> ModuleInfo
+buildModuleInfo decls = ModuleInfo
+  { miRecords      = Map.fromList [ r | Just r <- map recordFor decls ]
+  , miEnumVariants = Map.fromList [ r | Just r <- map enumFor   decls ]
+  }
+  where
 
     recordFor :: Declare Resolved -> Maybe (Unique, (Resolved, [(Text, Type' Resolved)]))
     -- A 'RecordDecl' carries its value-level constructor in the 'Maybe n'
@@ -493,17 +519,20 @@ evaluateWithCompiled filepath fnDecl compiled sourceText modContext params trace
   -- entries for missing parameters so requiresWrapperEvaluation can detect them
   let expectedParams = map fst (extractParamTypes compiled.compiledDecide)
       inputMap = Map.fromList params
-      -- join flattens Maybe (Maybe FnLiteral) -> Maybe FnLiteral:
-      -- - Nothing (not in input) -> Nothing
-      -- - Just Nothing (explicit unknown) -> Nothing
-      -- - Just (Just v) (provided value) -> Just v
+      -- join flattens Maybe (Maybe FnLiteral) -> Maybe FnLiteral
       fullParams = [(name, join $ Map.lookup name inputMap) | name <- expectedParams]
+      -- ASSUMEs referenced by the function body — promoted to parameters in
+      -- the schema and bound locally via LetIn in the direct-AST path.
+      assumeRefs = extractAssumeParamResolveds compiled.compiledModule compiled.compiledDecide
+      assumeNameOf r = rawNameToText (rawName (getActual r))
+      assumeValues = [(assumeNameOf r, join $ Map.lookup (assumeNameOf r) inputMap) | (r, _) <- assumeRefs]
 
-  -- Check if we need to fall back to wrapper-based evaluation
-  -- (for FnObject, FnUncertain, FnUnknown, missing params which require JSONDECODE)
-  if requiresWrapperEvaluation fullParams
-    then evaluateWithWrapper filepath fnDecl compiled sourceText modContext fullParams traceLevel includeGraphViz
-    else evaluateDirectAST compiled fullParams traceLevel includeGraphViz
+  -- Fall back to the wrapper path only for values the direct path can't express
+  -- as AST (FnObject / FnUncertain / FnUnknown / missing non-MAYBE). ASSUMEs
+  -- are handled directly via LetIn bindings.
+  if requiresWrapperEvaluation (fullParams ++ assumeValues)
+    then evaluateWithWrapper filepath fnDecl compiled sourceText modContext params traceLevel includeGraphViz
+    else evaluateDirectAST compiled fullParams assumeRefs assumeValues traceLevel includeGraphViz
 
 -- | Evaluate a deontic function with startTime and events via EVALTRACE wrapper.
 -- Always uses the wrapper path since events need to go through L4 typechecking.
@@ -544,20 +573,29 @@ evaluateWithCompiledDeontic filepath fnDecl compiled sourceText modContext param
     Just [] -> throwError $ InterpreterError "L4: No #EVAL found in the program."
     Just _xs -> throwError $ InterpreterError "L4: More than ONE #EVAL found in the program."
 
--- | Direct AST evaluation (fast path) - for simple types without FnObject
+-- | Direct AST evaluation (fast path) - for simple types without FnObject.
+-- Referenced ASSUMEs are bound via a LET expression /around the inlined body/
+-- (not around the call). A closure-based call captures its defining env, so
+-- a LetIn wrapping @App fn [...]@ wouldn't reach the body — instead we
+-- bind both GIVEN parameters and referenced ASSUMEs as local decls and
+-- evaluate the body expression directly.
 evaluateDirectAST
   :: CompiledModule
-  -> [(Text, Maybe FnLiteral)]
+  -> [(Text, Maybe FnLiteral)]            -- ^ GIVEN params (positional for the call)
+  -> [(Resolved, Type' Resolved)]         -- ^ ASSUMEs referenced by the body
+  -> [(Text, Maybe FnLiteral)]            -- ^ ASSUME values (keyed by name)
   -> TraceLevel
   -> Bool
   -> ExceptT EvaluatorError IO ResponseWithReason
-evaluateDirectAST compiled params traceLevel includeGraphViz = do
+evaluateDirectAST compiled params assumeRefs assumeValues traceLevel includeGraphViz = do
   -- Build once per call: a lookup of every record / enum declaration in
   -- the compiled module so 'fnLiteralToExprTyped' can construct record
   -- literals and enum variants without re-running the typechecker.
-  let moduleInfo = buildModuleInfo compiled.compiledModule
+  let moduleInfo = buildModuleInfo compiled.compiledAllDeclares
       paramTypes = extractParamTypes compiled.compiledDecide
       paramMap   = Map.fromList [(name, val) | (name, Just val) <- params]
+      assumeMap  = Map.fromList [(name, val) | (name, Just val) <- assumeValues]
+      MkDecide _ _ (MkAppForm _ _ givenResolveds _) body = compiled.compiledDecide
 
   argExprs <- forM paramTypes $ \(name, ty) ->
     case fnLiteralToExprTyped moduleInfo ty (Map.lookup name paramMap) of
@@ -565,11 +603,34 @@ evaluateDirectAST compiled params traceLevel includeGraphViz = do
         throwError $ InterpreterError ("Parameter '" <> name <> "': " <> err)
       Right e -> pure e
 
-  -- Get the function's Resolved name from the compiled decide
-  let funResolved = getFunctionResolved compiled.compiledDecide
+  -- Emit a LocalDecide binding `name = valueExpr` — used for both GIVEN
+  -- parameters (from call args) and referenced ASSUMEs. The LocalDecide
+  -- reuses the parameter's/ASSUME's own Resolved so the body's refs
+  -- (which share the same Unique) resolve to this local binding.
+  let mkLocalBinding :: Resolved -> Expr Resolved -> LocalDecl Resolved
+      mkLocalBinding r valueExpr = LocalDecide emptyAnno $
+        MkDecide emptyAnno
+          (MkTypeSig emptyAnno (MkGivenSig emptyAnno []) Nothing)
+          (MkAppForm emptyAnno r [] Nothing)
+          valueExpr
 
-  -- Build the function call expression directly as AST
-  let callExpr = buildFunctionCallExpr funResolved argExprs
+  assumeBindings <- forM assumeRefs $ \(assumeRes, assumeTy) -> do
+    let nm = rawNameToText (rawName (getActual assumeRes))
+    case fnLiteralToExprTyped moduleInfo assumeTy (Map.lookup nm assumeMap) of
+      Left err ->
+        throwError $ InterpreterError ("ASSUME '" <> nm <> "': " <> err)
+      Right valueExpr -> pure (mkLocalBinding assumeRes valueExpr)
+
+  -- If there are no ASSUME refs, use the closure-based call — it's the
+  -- well-trodden path and semantically equivalent to inlining. When ASSUMEs
+  -- are involved, inline the body with LET bindings for both GIVENs and
+  -- ASSUMEs so the body sees our local bindings instead of the closure's
+  -- captured module-level env (where ASSUMEs are still ValAssumed).
+  let funResolved = getFunctionResolved compiled.compiledDecide
+      callExpr = case assumeBindings of
+        [] -> buildFunctionCallExpr funResolved argExprs
+        _  -> let givenBindings = zipWith mkLocalBinding givenResolveds argExprs
+              in LetIn emptyAnno (assumeBindings <> givenBindings) body
 
   -- Configure evaluation with tracing based on trace level
   let evalTracePolicy = case traceLevel of

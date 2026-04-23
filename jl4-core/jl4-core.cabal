@@ -161,6 +161,7 @@ test-suite jl4-core-test
     TemporalContextSpec
     MixfixParserSpec
     UUID5Spec
+    ExportValidationSpec
   build-tool-depends:
     hspec-discover:hspec-discover
   build-depends:

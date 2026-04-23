@@ -5,11 +5,43 @@
 
   interface Props {
     monaco?: typeof Monaco
+    onRevealSource?: (fileUri: string, line: number) => void
   }
-  let { monaco }: Props = $props()
+  let { monaco, onRevealSource }: Props = $props()
 
   type ColorizedEntry = { header: string; body: string; contentKey: string }
   let colorized: Record<string, ColorizedEntry> = $state({})
+
+  /**
+   * Format a result value string by converting commas into line-breaks with
+   * indentation based on parenthesis nesting depth. Parentheses that wrap
+   * record values (e.g. `(Foo WITH a = 1, b = 2)`) are stripped.
+   */
+  function formatResultValue(text: string): string {
+    let result = ''
+    let depth = 0
+    const indent = () => '\n' + '  '.repeat(depth)
+
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i]
+      if (ch === '(') {
+        depth++
+      } else if (ch === ')') {
+        depth = Math.max(0, depth - 1)
+      } else if (ch === ',') {
+        if (text[i + 1] === ' ') i++
+        result += indent()
+      } else if (text.startsWith(' WITH ', i)) {
+        depth++
+        result += ' WITH'
+        result += indent()
+        i += 5
+      } else {
+        result += ch
+      }
+    }
+    return result
+  }
 
   $effect(() => {
     if (!monaco) return
@@ -18,17 +50,18 @@
       id: s.directiveId,
       lineContent: s.lineContent,
       prettyText: s.prettyText,
+      formattedPretty: formatResultValue(s.prettyText),
       contentKey: `${s.lineContent}\0${s.prettyText}`,
     }))
     // Read colorized without tracking to avoid a reactive cycle
     // (the effect only re-runs when `sections` changes, not when `colorized` changes)
     const current = untrack(() => colorized)
-    for (const { id, lineContent, prettyText, contentKey } of toColorize) {
+    for (const { id, lineContent, formattedPretty, contentKey } of toColorize) {
       if (current[id]?.contentKey === contentKey) continue
       const truncated = lineContent.trim()
       Promise.all([
         m.editor.colorize(truncated, 'jl4', { tabSize: 2 }),
-        m.editor.colorize(prettyText, 'jl4', { tabSize: 2 }),
+        m.editor.colorize(formattedPretty, 'jl4', { tabSize: 2 }),
       ]).then(([header, body]) => {
         colorized = {
           ...colorized,
@@ -370,81 +403,109 @@
     </div>
   {:else}
     {#each fileGroups as group (group.fileUri)}
-      {#if hasMultipleFiles}
-        <div class="file-header">
-          <button
-            class="collapse-toggle"
-            onclick={() => toggleFileCollapse(group.fileUri)}
-            title={collapsedFiles.has(group.fileUri)
-              ? 'Expand file'
-              : 'Collapse file'}
-          >
-            <span
-              class="chevron"
-              class:rotated={!collapsedFiles.has(group.fileUri)}>&#9002;</span
+      <div
+        class="file-group"
+        class:collapsed={hasMultipleFiles && collapsedFiles.has(group.fileUri)}
+      >
+        {#if hasMultipleFiles}
+          <div class="file-header">
+            <button
+              class="file-header-toggle"
+              onclick={() => toggleFileCollapse(group.fileUri)}
+              title={collapsedFiles.has(group.fileUri)
+                ? 'Expand file'
+                : 'Collapse file'}
             >
-          </button>
-          <span class="file-name" title={group.fileUri}
-            >{group.displayName}</span
-          >
-          <button
-            class="remove-all-btn"
-            onclick={() => removeFileGroup(group.fileUri)}
-            title="Remove all results from this file"
-          >
-            Remove all
-          </button>
-        </div>
-      {/if}
-
-      {#if !hasMultipleFiles || !collapsedFiles.has(group.fileUri)}
-        {#each group.sections as section (section.renderKey)}
-          <div
-            id="section-{section.directiveId}"
-            class="result-section {successClass(section.success)}"
-          >
-            <div class="section-header">
-              <button
-                class="collapse-toggle"
-                onclick={() => toggleCollapse(section.directiveId)}
-                title={section.collapsed ? 'Expand' : 'Collapse'}
+              <span
+                class="chevron"
+                class:rotated={!collapsedFiles.has(group.fileUri)}>&#9002;</span
               >
-                <span class="chevron" class:rotated={!section.collapsed}
-                  >&#9002;</span
-                >
-              </button>
-              {#if !section.stale}
-                <span class="source-location">{section.srcLine}:</span>
-              {/if}
-              <span class="directive-label" title={section.lineContent.trim()}>
-                {#if colorized[section.directiveId]}
-                  {@html colorized[section.directiveId].header}
-                {:else}
-                  {section.lineContent.trim()}
-                {/if}
-              </span>
-              <button
-                class="dismiss-btn"
-                onclick={() => removeSection(section.directiveId)}
-                title="Remove this result"
+              <span class="file-name" title={group.fileUri}
+                >{group.displayName}</span
               >
-                &#10005;
-              </button>
-            </div>
-
-            {#if !section.collapsed}
-              <div class="section-body">
-                {#if colorized[section.directiveId]}
-                  <pre class="result-code">{@html colorized[section.directiveId]
-                      .body}</pre>
-                {:else}
-                  <pre class="result-code">{section.prettyText}</pre>
-                {/if}
-              </div>
-            {/if}
+            </button>
+            <span class="file-result-count">
+              {group.sections.length} result{group.sections.length !== 1
+                ? 's'
+                : ''}
+            </span>
+            <button
+              class="remove-all-btn"
+              onclick={(e: MouseEvent) => {
+                e.stopPropagation()
+                removeFileGroup(group.fileUri)
+              }}
+              title="Remove all results from this file"
+            >
+              Remove all
+            </button>
           </div>
-        {/each}
-      {/if}
+        {/if}
+
+        {#if !hasMultipleFiles || !collapsedFiles.has(group.fileUri)}
+          {#each group.sections as section (section.renderKey)}
+            <div
+              id="section-{section.directiveId}"
+              class="result-section {successClass(section.success)}"
+            >
+              <div class="section-header">
+                <button
+                  class="section-header-toggle"
+                  onclick={(e: MouseEvent) => {
+                    if ((e.metaKey || e.ctrlKey) && onRevealSource)
+                      onRevealSource(section.fileUri, section.srcLine)
+                    else toggleCollapse(section.directiveId)
+                  }}
+                  title={onRevealSource
+                    ? (section.collapsed ? 'Expand' : 'Collapse') +
+                      ' (⌘/Ctrl-click to reveal source)'
+                    : section.collapsed
+                      ? 'Expand'
+                      : 'Collapse'}
+                >
+                  <span class="chevron" class:rotated={!section.collapsed}
+                    >&#9002;</span
+                  >
+                  {#if !section.stale}
+                    <span class="source-location">{section.srcLine}:</span>
+                  {/if}
+                  <span
+                    class="directive-label"
+                    title={section.lineContent.trim()}
+                  >
+                    {#if colorized[section.directiveId]}
+                      {@html colorized[section.directiveId].header}
+                    {:else}
+                      {section.lineContent.trim()}
+                    {/if}
+                  </span>
+                </button>
+                <button
+                  class="dismiss-btn"
+                  onclick={() => removeSection(section.directiveId)}
+                  title="Remove this result"
+                >
+                  &#10005;
+                </button>
+              </div>
+
+              {#if !section.collapsed}
+                <div class="section-body">
+                  {#if colorized[section.directiveId]}
+                    <pre class="result-code">{@html colorized[
+                        section.directiveId
+                      ].body}</pre>
+                  {:else}
+                    <pre class="result-code">{formatResultValue(
+                        section.prettyText
+                      )}</pre>
+                  {/if}
+                </div>
+              {/if}
+            </div>
+          {/each}
+        {/if}
+      </div>
     {/each}
   {/if}
 </div>
@@ -478,20 +539,43 @@
     max-width: 200px;
   }
 
+  .file-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .file-group.collapsed {
+    margin-bottom: 0;
+  }
+
   .file-header {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 4px 8px;
-    margin-top: 4px;
-    margin-bottom: 4px;
     background: #e8e7e6;
     border: 1px solid #ddd;
     border-radius: 4px;
-    cursor: default;
     user-select: none;
     font-size: 0.85em;
     font-weight: 500;
+  }
+
+  .file-header-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+    padding: 4px 8px;
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: inherit;
+    font-weight: inherit;
+    text-align: left;
   }
 
   .file-name {
@@ -502,15 +586,22 @@
     min-width: 0;
   }
 
+  .file-result-count {
+    font-size: 0.85em;
+    color: #777;
+    opacity: 0.8;
+    flex-shrink: 0;
+    padding: 0 4px;
+  }
+
   .remove-all-btn {
-    margin-left: auto;
     background: none;
     border: none;
     color: #1e1d1c;
     cursor: pointer;
     opacity: 0.5;
     font-size: 0.9em;
-    padding: 0 1px;
+    padding: 4px 8px;
     flex-shrink: 0;
   }
 
@@ -520,40 +611,45 @@
 
   .result-section {
     border: 1px solid #ddd;
+    border-left-width: 3px;
     border-radius: 4px;
-    margin-bottom: 8px;
     overflow: hidden;
   }
 
   .result-section.success {
-    border-left: 2px solid #75beff;
+    border-left: 3px solid #75beff;
   }
 
   .result-section.failure {
-    border-left: 2px solid #f14c4c;
+    border-left: 3px solid #f14c4c;
   }
 
   .section-header {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 3px 4px 3px 8px;
     background: #f0efee;
-    cursor: default;
     user-select: none;
     min-width: 0;
   }
 
-  .collapse-toggle {
-    background: none;
-    border: none;
-    color: #1e1d1c;
-    cursor: pointer;
-    padding: 0;
-    font-size: 10px;
+  .section-header:hover {
+    background: #e8e7e6;
+  }
+
+  .section-header-toggle {
     display: flex;
     align-items: center;
-    flex-shrink: 0;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+    padding: 3px 4px 3px 8px;
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: inherit;
+    text-align: left;
   }
 
   .chevron {

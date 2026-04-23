@@ -1033,6 +1033,6 @@ _Estimates assume one developer working full-time with no blockers._
 **Date**: 2025-12-26
 **Branch**: mengwong/query-ai
 **Commits**: 6 total (2a374e81, 9bd6d057, 1c30accb, 1a649b4d, 4864b412, a0d66b8e)
-**PR**: #719 - https://github.com/smucclaw/l4-ide/pull/719
+**PR**: #719 - https://github.com/legalese/l4-ide/pull/719
 **Status**: All phases complete - ready for review and merge
 **Next Step**: Review PR, address feedback, merge to main

@@ -12,8 +12,11 @@ module L4.Export (
   buildTypeDescMap,
   assumesFromModule,
   extractAssumeParamTypes,
+  extractAssumeParamResolveds,
   extractImplicitAssumeParams,
   hasTypeInferenceVars,
+  validateExportInputs,
+  isExportedDecide,
 ) where
 
 import Base
@@ -30,7 +33,7 @@ import qualified Data.Set as Set
 import L4.Annotation (getAnno)
 import L4.Syntax
 import L4.TypeCheck.Environment (maybeUnique)
-import L4.TypeCheck.Types (CheckErrorWithContext(..), CheckError(..), CheckEntity(..), EntityInfo)
+import L4.TypeCheck.Types (CheckErrorWithContext(..), CheckError(..), CheckEntity(..), CheckErrorContext(..), EntityInfo)
 import Optics
 
 type TypeDescMap = Map.Map Unique Text
@@ -259,30 +262,39 @@ collectTypeSynonyms (MkModule _ _ section) =
     Section _ sub -> goSection sub
     _ -> []
 
--- | Check if a type is a function type, expanding type synonyms.
--- This handles types like `DECLARE Pred IS A FUNCTION FROM NUMBER TO BOOLEAN`
--- followed by `ASSUME p IS A Pred`.
+-- | Check if a type /contains/ a function type anywhere — expanding type
+-- synonyms and recursing into parameterised type constructors
+-- (@MAYBE OF (FUNCTION FROM A TO B)@, @LIST OF FUNCTION …@, etc.).
+-- @\@export@ cannot accept any such parameter because functions can't be
+-- passed over JSON regardless of their wrapper.
 isFunctionTypeExpanded :: Map.Map Unique (Type' Resolved) -> Type' Resolved -> Bool
 isFunctionTypeExpanded synonyms = go Set.empty
  where
   go visited ty = case ty of
     Fun {} -> True
     Forall _ _ inner -> go visited inner
-    TyApp _ name [] ->
+    TyApp _ name args ->
       let u = getUnique name
-      in if Set.member u visited
-            then False  -- Prevent infinite recursion on cyclic synonyms
-            else case Map.lookup u synonyms of
-              Just expanded -> go (Set.insert u visited) expanded
-              Nothing -> False
+          expansion = case Map.lookup u synonyms of
+            Just expanded | not (Set.member u visited) ->
+              go (Set.insert u visited) expanded
+            _ -> False
+      in expansion || any (go visited) args
     _ -> False
 
--- | Collect all free variable references (by Unique) from an expression.
--- Uses cosmosOf gplate for recursive traversal of the expression AST.
-collectFreeRefs :: Expr Resolved -> Set.Set Unique
-collectFreeRefs =
+-- | Collect the 'Unique' of every identifier the expression references —
+-- whether it appears as a plain variable (@App _ ref []@) or as a function
+-- applied to arguments (@App _ ref [arg, ...]@). This is the single canonical
+-- dependency collector for an expression body.
+--
+-- Upstream callers (e.g. 'extractAssumedDependencies') intersect this set
+-- with a pre-filtered map (e.g. 'assumesFromModule' drops function-typed
+-- ASSUMEs), so semantic specialization happens at the filter step rather
+-- than in the collector itself.
+collectReferencedUniques :: Expr Resolved -> Set.Set Unique
+collectReferencedUniques =
   foldMapOf (cosmosOf (gplate @(Expr Resolved))) $ \case
-    App _ (Ref _ uniq _) [] -> Set.singleton uniq
+    App _ (Ref _ uniq _) _ -> Set.singleton uniq
     _ -> Set.empty
 
 -- | Extract ASSUME declarations that are referenced by a DECIDE body.
@@ -294,7 +306,7 @@ extractAssumedDependencies
   -> [ExportedParam]
 extractAssumedDependencies typeDescMap assumes (MkDecide _ _ _ body) =
   let
-    referencedUniques = collectFreeRefs body
+    referencedUniques = collectReferencedUniques body
     matchingAssumes =
       [ assume
       | (uniq, assume) <- Map.toList assumes
@@ -328,22 +340,33 @@ extractAssumeParamTypes
   :: Module Resolved
   -> Decide Resolved
   -> [(Text, Type' Resolved)]
-extractAssumeParamTypes mod' (MkDecide _ _ _ body) =
+extractAssumeParamTypes mod' decide =
+  [ (resolvedToText r, ty) | (r, ty) <- extractAssumeParamResolveds mod' decide ]
+
+-- | Like 'extractAssumeParamTypes' but returns the 'Resolved' name instead of
+-- its textual form. Consumers that need to bind the ASSUME in a local scope
+-- (e.g. MLIR lowering) need the Resolved so subsequent in-scope references
+-- resolve to the local binding.
+extractAssumeParamResolveds
+  :: Module Resolved
+  -> Decide Resolved
+  -> [(Resolved, Type' Resolved)]
+extractAssumeParamResolveds mod' (MkDecide _ _ _ body) =
   let
     assumes = assumesFromModule mod'
-    referencedUniques = collectFreeRefs body
+    referencedUniques = collectReferencedUniques body
     matchingAssumes =
       [ assume
       | (uniq, assume) <- Map.toList assumes
       , Set.member uniq referencedUniques
       ]
   in
-    mapMaybe assumeToTypeInfo matchingAssumes
+    mapMaybe assumeToResolvedInfo matchingAssumes
  where
-  assumeToTypeInfo :: Assume Resolved -> Maybe (Text, Type' Resolved)
-  assumeToTypeInfo (MkAssume _ _ (MkAppForm _ name _ _) (Just ty)) =
-    Just (resolvedToText name, ty)
-  assumeToTypeInfo _ = Nothing
+  assumeToResolvedInfo :: Assume Resolved -> Maybe (Resolved, Type' Resolved)
+  assumeToResolvedInfo (MkAssume _ _ (MkAppForm _ name _ _) (Just ty)) =
+    Just (name, ty)
+  assumeToResolvedInfo _ = Nothing
 
 -- | Check if a type contains any unresolved inference variables.
 -- Types with inference variables cannot be used for implicit ASSUMEs
@@ -378,3 +401,84 @@ extractImplicitAssumeParams errors =
   | MkCheckErrorWithContext{kind = OutOfScopeError name ty} <- errors
   , not (hasTypeInferenceVars ty)
   ]
+
+-- | Validate that no @export-decorated DECIDE has a function-typed input —
+-- either a GIVEN parameter, or a module-level ASSUME the body calls.
+-- Function-typed inputs can't be evaluated end-to-end: GIVENs can't be
+-- passed over JSON, and function-typed ASSUMEs stay 'ValAssumed' at
+-- runtime, causing a stuck "assumed term" error when the body invokes them.
+validateExportInputs :: Module Resolved -> [CheckErrorWithContext]
+validateExportInputs mod' =
+  let synonyms = collectTypeSynonyms mod'
+      assumes  = allAssumesFromModule mod'
+  in concatMap (checkOneExport synonyms assumes) (collectExportedDecides mod')
+
+-- | Collect every DECIDE whose description carries the @export flag.
+collectExportedDecides :: Module Resolved -> [Decide Resolved]
+collectExportedDecides (MkModule _ _ section) = goSection section
+ where
+  goSection (MkSection _ _ _ decls) = decls >>= goDecl
+  goDecl = \case
+    Decide _ d | isExportedDecide d -> [d]
+    Section _ sub -> goSection sub
+    _ -> []
+
+isExportedDecide :: Decide Resolved -> Bool
+isExportedDecide decide =
+  case getAnno decide ^. annDesc of
+    Just desc -> (parseDescText (getDesc desc)).flags.isExport
+    Nothing   -> False
+
+-- | Like 'assumesFromModule' but WITHOUT the function-type filter —
+-- so the validator sees every ASSUME and can flag function-typed ones.
+allAssumesFromModule :: Module Resolved -> Map.Map Unique (Assume Resolved)
+allAssumesFromModule (MkModule _ _ section) =
+  Map.fromList (collectSection section)
+ where
+  collectSection (MkSection _ _ _ decls) = decls >>= collectDecl
+  collectDecl = \case
+    Assume _ assume@(MkAssume _ _ (MkAppForm _ name _ _) _) ->
+      [(getUnique name, assume)]
+    Section _ sub -> collectSection sub
+    _ -> []
+
+checkOneExport
+  :: Map.Map Unique (Type' Resolved)
+  -> Map.Map Unique (Assume Resolved)
+  -> Decide Resolved
+  -> [CheckErrorWithContext]
+checkOneExport synonyms assumes decide@(MkDecide _ tySig (MkAppForm _ fnName _ _) _) =
+  checkGivenFunctionInputs synonyms fnName tySig
+  ++ checkAssumeFunctionInputs synonyms assumes fnName decide
+
+checkGivenFunctionInputs
+  :: Map.Map Unique (Type' Resolved)
+  -> Resolved
+  -> TypeSig Resolved
+  -> [CheckErrorWithContext]
+checkGivenFunctionInputs synonyms fnName (MkTypeSig _ (MkGivenSig _ names) _) =
+  [ mkExportFunErr fnName paramName
+  | MkOptionallyTypedName _ paramName (Just ty) <- names
+  , isFunctionTypeExpanded synonyms ty
+  ]
+
+checkAssumeFunctionInputs
+  :: Map.Map Unique (Type' Resolved)
+  -> Map.Map Unique (Assume Resolved)
+  -> Resolved
+  -> Decide Resolved
+  -> [CheckErrorWithContext]
+checkAssumeFunctionInputs synonyms assumes fnName (MkDecide _ _ _ body) =
+  let referencedUniques = collectReferencedUniques body
+  in [ mkExportFunErr fnName paramName
+     | (uniq, MkAssume _ _ (MkAppForm _ paramName _ _) (Just ty)) <- Map.toList assumes
+     , Set.member uniq referencedUniques
+     , isFunctionTypeExpanded synonyms ty
+     ]
+
+mkExportFunErr :: Resolved -> Resolved -> CheckErrorWithContext
+mkExportFunErr fnName paramName =
+  MkCheckErrorWithContext
+    { kind    = ExportFunctionTypeInput fnName paramName
+    , context = WhileCheckingDecide (getActual fnName) None
+    }

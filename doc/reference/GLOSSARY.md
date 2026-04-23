@@ -359,4 +359,4 @@ Metadata annotations for documentation and generation.
 - **[Courses](../courses/README.md)** - Learning paths
 - **[Tutorials](../tutorials/README.md)** - Task-oriented guides
 - **[Concepts](../concepts/README.md)** - Understanding L4's design
-- **[Specifications](https://github.com/smucclaw/l4-ide/tree/main/specs)** - Technical specifications
+- **[Specifications](https://github.com/legalese/l4-ide/tree/main/specs)** - Technical specifications

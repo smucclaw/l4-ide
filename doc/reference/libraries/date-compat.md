@@ -4,7 +4,7 @@ Backwards compatibility layer for legacy DATE syntax. Import with `IMPORT date-c
 
 ### Location
 
-[jl4-core/libraries/date-compat.l4](https://github.com/smucclaw/l4-ide/blob/main/jl4-core/libraries/date-compat.l4)
+[jl4-core/libraries/date-compat.l4](https://github.com/legalese/l4-ide/blob/main/jl4-core/libraries/date-compat.l4)
 
 ### Purpose
 

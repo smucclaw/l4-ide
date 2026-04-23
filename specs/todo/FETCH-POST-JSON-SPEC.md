@@ -735,6 +735,6 @@ If changing existing `FETCH`:
 ## References
 
 - **Anthropic API Documentation**: https://docs.anthropic.com/claude/reference/messages_post
-- **L4 Prelude**: https://github.com/smucclaw/l4-ide/blob/main/jl4-core/libraries/prelude.l4
+- **L4 Prelude**: https://github.com/legalese/l4-ide/blob/main/jl4-core/libraries/prelude.l4
 - **Production L4 Projects**: Real-world L4 projects with LLM integration
 - **Existing FETCH Sample**: `l4-encodings/sample-fetch-uuid.l4`
