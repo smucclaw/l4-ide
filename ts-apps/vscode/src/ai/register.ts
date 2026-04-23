@@ -615,6 +615,13 @@ export function registerAiChatHandlers(deps: {
   const activeFileSub = vscode.window.onDidChangeActiveTextEditor((e) =>
     pushActiveFile(e)
   )
+  // Belt-and-suspenders: onDidChangeActiveTextEditor is meant to fire
+  // with undefined when the last editor closes, but in practice the
+  // chip sometimes lingers. Re-sync on any visible-editor change so
+  // the chip clears as soon as the tab is gone.
+  const visibleFileSub = vscode.window.onDidChangeVisibleTextEditors(() =>
+    pushActiveFile(vscode.window.activeTextEditor)
+  )
 
   // Resend the initial snapshot (active file + auth status) on every
   // webview-ready signal. The first push above runs at extension
@@ -638,6 +645,7 @@ export function registerAiChatHandlers(deps: {
       if (usageTimer) clearInterval(usageTimer)
       authSub.dispose()
       activeFileSub.dispose()
+      visibleFileSub.dispose()
       schemeReg.dispose()
       visibilitySub.dispose()
       buffer.drop()
