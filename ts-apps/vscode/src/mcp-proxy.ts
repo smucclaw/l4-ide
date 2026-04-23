@@ -204,32 +204,127 @@ export class McpProxy implements vscode.Disposable {
     })
   }
 
+  /** Minimum interval between "sign in again" prompts. */
+  private static readonly REAUTH_PROMPT_COOLDOWN_MS = 15 * 60 * 1000
+  private lastReauthPromptAt = 0
+
   /**
-   * Dispatch a JSON-RPC request. If connected to a service, forward it.
-   * Otherwise handle locally with empty/error responses.
+   * Dispatch a JSON-RPC request. If a service URL is configured, forward
+   * it; otherwise return a local stub so the server stays registered.
+   *
+   * On each successful forward, ride any `Set-Cookie: wos-session=…` the
+   * auth proxy emits so our Bearer token rotates in lockstep with the
+   * server's transparent refresh. On 401/403, re-verify connection state
+   * (to clear a stale green dot) and prompt for re-login.
    */
   private async dispatch(body: string): Promise<string> {
     const serviceUrl = this.auth.getEffectiveServiceUrl()
 
-    // If connected, forward to the remote service
-    if (serviceUrl) {
-      try {
-        const headers = await this.auth.getAuthHeaders()
-        const resp = await fetch(`${serviceUrl}/.mcp`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...headers },
-          body,
-        })
-        const text = await resp.text()
-        if (resp.ok && text) return text
-        // Empty or error response — fall through to local handling
-      } catch {
-        // Service unreachable — fall through to local handling
-      }
+    if (!serviceUrl) return this.handleLocally(body)
+
+    let resp: Response
+    try {
+      const headers = await this.auth.getAuthHeaders()
+      resp = await fetch(`${serviceUrl}/.mcp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body,
+      })
+    } catch (err) {
+      this.outputChannel.appendLine(
+        `[mcp-proxy] fetch ${serviceUrl}/.mcp failed: ${err instanceof Error ? err.message : String(err)}`
+      )
+      return this.errorResponse(
+        body,
+        -32002,
+        `L4 service unreachable at ${serviceUrl}`
+      )
     }
 
-    // Not connected or service unreachable — handle locally
-    return this.handleLocally(body)
+    await this.captureRefreshedSession(resp)
+
+    if (resp.status === 401 || resp.status === 403) {
+      const preview = await resp.text().catch(() => '')
+      this.outputChannel.appendLine(
+        `[mcp-proxy] ${serviceUrl}/.mcp responded ${resp.status}${preview ? `: ${preview.slice(0, 200)}` : ''}`
+      )
+      void this.auth.verifyConnection()
+      this.maybePromptReauth()
+      return this.errorResponse(
+        body,
+        -32001,
+        'L4 authentication expired — sign in again'
+      )
+    }
+
+    const text = await resp.text()
+    if (resp.ok && text) return text
+
+    this.outputChannel.appendLine(
+      `[mcp-proxy] ${serviceUrl}/.mcp responded ${resp.status} (body ${text ? `${text.length}B` : 'empty'})`
+    )
+    return this.errorResponse(
+      body,
+      -32002,
+      `L4 service error (HTTP ${resp.status})`
+    )
+  }
+
+  /**
+   * If the auth proxy rotated the sealed session, grab the new value from
+   * Set-Cookie and persist it so the next request uses the refreshed token.
+   */
+  private async captureRefreshedSession(resp: Response): Promise<void> {
+    // getSetCookie() returns one entry per Set-Cookie header (Node 20+);
+    // fall back to the comma-joined get('set-cookie') on older runtimes.
+    const headers = resp.headers as Headers & {
+      getSetCookie?: () => string[]
+    }
+    const cookies = headers.getSetCookie
+      ? headers.getSetCookie()
+      : headers.get('set-cookie')
+        ? [headers.get('set-cookie') as string]
+        : []
+    for (const c of cookies) {
+      const m = c.match(/(?:^|;\s*)wos-session=([^;\s]+)/)
+      if (m) {
+        const current = await this.auth.getSessionToken()
+        if (m[1] !== current) {
+          await this.auth.setSessionToken(m[1])
+          this.outputChannel.appendLine(
+            '[mcp-proxy] Rotated session token from Set-Cookie'
+          )
+        }
+        return
+      }
+    }
+  }
+
+  /** Build a JSON-RPC error reusing the inbound request id. */
+  private errorResponse(body: string, code: number, message: string): string {
+    let id: unknown = null
+    try {
+      id = (JSON.parse(body) as { id?: unknown }).id ?? null
+    } catch {
+      // leave id null
+    }
+    return JSON.stringify({ jsonrpc: '2.0', id, error: { code, message } })
+  }
+
+  private maybePromptReauth(): void {
+    const now = Date.now()
+    if (now - this.lastReauthPromptAt < McpProxy.REAUTH_PROMPT_COOLDOWN_MS) {
+      return
+    }
+    this.lastReauthPromptAt = now
+    void vscode.window
+      .showWarningMessage(
+        'L4 session expired. Sign in again to keep using L4 tools.',
+        'Sign in'
+      )
+      .then((choice) => {
+        if (choice === 'Sign in') void this.auth.login()
+      })
   }
 
   /** Handle requests locally when no service is available. */
