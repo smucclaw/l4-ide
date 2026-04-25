@@ -687,33 +687,64 @@ export function createAiChatStore(
     result?: string
     errorMessage?: string
   }): void {
-    // Route strictly by conversationId. The extension's
-    // `toolStatusChannel` now always populates it via the callId map
-    // maintained in register.ts, so a missing value here is a bug
-    // signal — drop the event rather than risk writing to the user's
-    // currently-focused chat.
-    if (!params.conversationId) return
-    const conv = conversations[params.conversationId]
-    if (!conv) return
-    const turn = conv.turns[conv.turns.length - 1]
-    if (!turn || turn.role !== 'assistant') return
-    if (!turn.blocks) turn.blocks = []
-    // Merge a status update into an existing tool-call block; otherwise
-    // append a new block in chronological position so the row sits where
-    // the model actually invoked the tool.
-    const existing = turn.blocks.find(
-      (b) => b.kind === 'tool-call' && b.call.callId === params.callId
-    )
-    if (existing && existing.kind === 'tool-call') {
-      const c = existing.call
+    // Status updates for an EXISTING tool call must merge into the
+    // block wherever it already lives — not just the latest turn or
+    // the named conversation. When the user submits a new message
+    // while a tool was awaiting approval, the old assistant turn is
+    // no longer the tail; when the dispatcher fires
+    // `notifyStatus('error')` before the SSE `tool-call` event has
+    // populated callArgs, the conversationId field is empty. Both
+    // cases need to find the existing block by callId regardless of
+    // its location, otherwise the row gets stuck at its initial
+    // status (e.g. "running" → never flips to "error" → pulsating dot
+    // never becomes the expandable error card).
+    const updateBlock = (block: AssistantBlock): boolean => {
+      if (block.kind !== 'tool-call') return false
+      if (block.call.callId !== params.callId) return false
+      const c = block.call
       c.status = params.status
       if (params.result !== undefined) c.result = params.result
       if (params.errorMessage !== undefined) c.error = params.errorMessage
       if (params.name) c.name = params.name
       if (params.argsJson) c.argsJson = params.argsJson
-      return
+      return true
     }
-    turn.blocks.push({
+
+    // Fast path: the conversation we were told about. Scan all turns,
+    // not just the tail.
+    if (params.conversationId) {
+      const conv = conversations[params.conversationId]
+      if (conv) {
+        for (const turn of conv.turns) {
+          if (turn.role !== 'assistant' || !turn.blocks) continue
+          if (turn.blocks.some(updateBlock)) return
+        }
+      }
+    }
+
+    // Fallback: scan every loaded conversation for the block. Picks
+    // up late dispatcher status updates whose conversationId field
+    // was empty (callArgs not yet populated when notifyStatus fired).
+    for (const id in conversations) {
+      const conv = conversations[id]
+      for (const turn of conv.turns) {
+        if (turn.role !== 'assistant' || !turn.blocks) continue
+        if (turn.blocks.some(updateBlock)) return
+      }
+    }
+
+    // No existing block — this is a brand-new tool call, so it must
+    // attach to the current (latest) assistant turn of the named
+    // conversation. Without a conversationId or a matching assistant
+    // tail, the event arrived out of band; drop it rather than spawn
+    // an orphan row in the wrong place.
+    if (!params.conversationId) return
+    const conv = conversations[params.conversationId]
+    if (!conv || !conv.turns.length) return
+    const tail = conv.turns[conv.turns.length - 1]
+    if (!tail || tail.role !== 'assistant') return
+    if (!tail.blocks) tail.blocks = []
+    tail.blocks.push({
       kind: 'tool-call',
       call: {
         callId: params.callId,

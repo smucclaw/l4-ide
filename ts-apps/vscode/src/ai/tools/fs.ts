@@ -380,26 +380,25 @@ function clampInt(n: number, lo: number, hi: number): number {
 
 export interface FsCreateArgs {
   path: string
-  content: string
 }
 
+/**
+ * Sentinel content for newly-created files. The model fills the file
+ * via follow-up `fs__edit_file` calls — anchoring on this exact line
+ * guarantees a unique target, which avoids the "whole-file replace"
+ * fallback path that's harder for the model to reason about.
+ */
+export const FS_CREATE_FILE_SEED = '// new file content\n'
+
+/**
+ * Create a file seeded with FS_CREATE_FILE_SEED. The model fills it
+ * via follow-up `fs__edit_file` calls (anchored on the seed line, or
+ * via `old: ""` for a whole-file rewrite). Keeps the create surface
+ * narrow and avoids the "model calls create with the whole file
+ * inline" pattern that wastes tokens.
+ */
 export async function fsCreateFile(args: FsCreateArgs): Promise<string> {
   const r = resolveWorkspacePath(args.path)
-  // Validate `content` BEFORE touching disk. Without this guard a
-  // model call that omits `content` (Anthropic doesn't strictly
-  // enforce `required` on tool_use params) raced through:
-  //   1. `edit.createFile` creates the empty file,
-  //   2. `edit.insert(uri, pos, undefined)` inside applyEdit
-  //      throws "Cannot read properties of undefined",
-  //   3. the dispatcher propagates the error to the model,
-  //   4. the model retries with content, and gets
-  //      "File already exists" because step 1 succeeded.
-  // Failing fast here keeps step 1 from ever running.
-  if (typeof args.content !== 'string') {
-    throw new Error(
-      "fs__create_file: 'content' is required (as a string). Pass an empty string if you want an empty file."
-    )
-  }
   try {
     await fs.access(r.fsPath)
     throw new Error(`File already exists: ${r.relative}`)
@@ -417,7 +416,7 @@ export async function fsCreateFile(args: FsCreateArgs): Promise<string> {
   await fs.mkdir(path.dirname(r.fsPath), { recursive: true })
   const edit = new vscode.WorkspaceEdit()
   edit.createFile(r.uri, { overwrite: false })
-  edit.insert(r.uri, new vscode.Position(0, 0), args.content)
+  edit.insert(r.uri, new vscode.Position(0, 0), FS_CREATE_FILE_SEED)
   const ok = await vscode.workspace.applyEdit(edit)
   if (!ok) {
     throw new Error(
@@ -428,10 +427,10 @@ export async function fsCreateFile(args: FsCreateArgs): Promise<string> {
   // own fs__read_file / fs.readFile) see the new content immediately.
   const doc = await vscode.workspace.openTextDocument(r.uri)
   if (doc.isDirty) await doc.save()
-  return appendL4Diagnostics(
-    r,
-    `Created ${r.relative} (${args.content.length} chars)`
-  )
+  // Skip the appendL4Diagnostics tail — a freshly-created file has no
+  // real content to type-check, and the Edit tool the model uses next
+  // will run diagnostics naturally.
+  return `Created ${r.relative} (seeded with "${FS_CREATE_FILE_SEED.trimEnd()}").`
 }
 
 export interface FsEditArgs {
@@ -466,8 +465,10 @@ export interface FsEditArgs {
  */
 export async function fsEditFile(args: FsEditArgs): Promise<string> {
   const r = resolveWorkspacePath(args.path)
-  if (typeof args.old !== 'string' || args.old.length === 0) {
-    throw new Error(`fs__edit_file: 'old' must be a non-empty string`)
+  if (typeof args.old !== 'string') {
+    throw new Error(
+      "fs__edit_file: 'old' must be a string. Pass '' to replace the entire file (typical right after fs__create_file)."
+    )
   }
   // Same defensive check we use in fs__create_file: fail fast when
   // the model omitted `new` before any LSP edit machinery spins up.
@@ -478,7 +479,48 @@ export async function fsEditFile(args: FsEditArgs): Promise<string> {
       "fs__edit_file: 'new' is required (as a string). Pass an empty string to delete the 'old' snippet."
     )
   }
+  // Edit MUST NOT auto-create. If the path doesn't resolve to an
+  // existing file, fail loudly with a message that points the model
+  // at fs__create_file. openTextDocument can otherwise be coerced
+  // (e.g. on `untitled:` schemes) into producing an in-memory buffer
+  // that then races with the model's expectations.
+  try {
+    await fs.access(r.fsPath)
+  } catch {
+    throw new Error(
+      `fs__edit_file: ${r.relative} does not exist. Use fs__create_file to create it first, then call fs__edit_file to add content.`
+    )
+  }
   const doc = await vscode.workspace.openTextDocument(r.uri)
+  // `old === ""` is the explicit "fill / overwrite" verb. Replace the
+  // entire current file with `new`. Pairs naturally with
+  // fs__create_file, which seeds an empty file the model then fills
+  // with one whole-file edit. Implemented as a real replace (not
+  // applyEdit replace over a 0-length range, which would APPEND), so
+  // an existing non-empty file is genuinely overwritten — that's the
+  // contract callers need so a "rewrite this file end-to-end" call is
+  // possible without two hops.
+  if (args.old.length === 0) {
+    const fullRange = new vscode.Range(
+      new vscode.Position(0, 0),
+      doc.positionAt(doc.getText().length)
+    )
+    const edit = new vscode.WorkspaceEdit()
+    edit.replace(r.uri, fullRange, args.new)
+    const ok = await vscode.workspace.applyEdit(edit)
+    if (!ok) {
+      throw new Error(
+        `fs__edit_file: VSCode refused to apply the edit to ${r.relative} (file may be read-only).`
+      )
+    }
+    if (doc.isDirty) await doc.save()
+    return withDocsHintOnError(
+      await appendL4Diagnostics(
+        r,
+        `Wrote ${r.relative} (${args.new.split('\n').length} lines)`
+      )
+    )
+  }
   const currentText = doc.getText().replace(/\r\n/g, '\n')
 
   // When `startLine` is set, drop the lines at/before it from the
@@ -548,10 +590,26 @@ export async function fsEditFile(args: FsEditArgs): Promise<string> {
     )
   }
   if (doc.isDirty) await doc.save()
-  return appendL4Diagnostics(
-    r,
-    `Edited ${r.relative} (${args.old.split('\n').length} → ${args.new.split('\n').length} lines changed)`
+  return withDocsHintOnError(
+    await appendL4Diagnostics(
+      r,
+      `Edited ${r.relative} (${args.old.split('\n').length} → ${args.new.split('\n').length} lines changed)`
+    )
   )
+}
+
+/**
+ * Append a `search_l4_docs` hint when the diagnostics block reports at
+ * least one error. Detected by the header that
+ * `fetchL4Diagnostics` produces — the count summary contains
+ * "N error" / "N errors" only when the error count is non-zero.
+ *
+ * Scoped to fs__edit_file: we only nudge the model toward
+ * doc-search after a code edit landed, not on every read or create.
+ */
+function withDocsHintOnError(text: string): string {
+  if (!/\b\d+ errors?\b/.test(text)) return text
+  return `${text}\n\nUse \`search_l4_docs\` tool to learn more about L4 syntax and keyword use.`
 }
 
 export interface FsDeleteArgs {
@@ -565,7 +623,7 @@ export async function fsDeleteFile(args: FsDeleteArgs): Promise<string> {
     recursive: false,
     useTrash: true,
   })
-  return `Moved ${r.relative} to Trash`
+  return `Moved ${r.relative} to trash`
 }
 
 function countOccurrences(haystack: string, needle: string): number {

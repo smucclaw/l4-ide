@@ -65,16 +65,49 @@ export type AiProxyStreamEvent =
   | { kind: 'error'; message: string; code?: string }
 
 /**
- * ai-proxy URL. Hardcoded to the production endpoint. The
- * `LEGALESE_AI_ENDPOINT` env var is an undocumented escape hatch for
- * developers running a local proxy — set it in the shell that launches
- * VSCode (`LEGALESE_AI_ENDPOINT=http://localhost:3333 code .`). Not
- * exposed as a user-facing setting because end users should never need
- * to pick a different server.
+ * Production ai-proxy URL. The `LEGALESE_AI_ENDPOINT` env var stays as
+ * an undocumented escape hatch for developers running on a non-default
+ * port. End users flip the `legaleseAi.localMode` setting instead —
+ * see `getAiEndpoint` below.
  */
-export const AI_ENDPOINT = (
+const PROD_AI_ENDPOINT = (
   process.env.LEGALESE_AI_ENDPOINT ?? 'https://ai.legalese.cloud'
 ).replace(/\/$/, '')
+
+/** Local ai-proxy URL used when `legaleseAi.localMode` is enabled. */
+const LOCAL_AI_ENDPOINT = 'http://127.0.0.1:3000'
+
+/**
+ * True when the user has flipped `legaleseAi.localMode` on. Read fresh
+ * each request so toggling the setting takes effect without a reload.
+ */
+export function isLocalMode(): boolean {
+  try {
+    // Lazy import: this module is also pulled into non-extension
+    // contexts (tests) where `vscode` isn't on the runtime path.
+    // Falling back to false there is the right default.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const vscode = require('vscode') as typeof import('vscode')
+    return (
+      vscode.workspace
+        .getConfiguration()
+        .get<boolean>('legaleseAi.localMode') === true
+    )
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Resolve the active ai-proxy base URL. Re-evaluated per call so the
+ * setting toggle applies immediately to subsequent requests.
+ */
+export function getAiEndpoint(): string {
+  return isLocalMode() ? LOCAL_AI_ENDPOINT : PROD_AI_ENDPOINT
+}
+
+/** Back-compat: callers that want a snapshot of the production URL. */
+export const AI_ENDPOINT = PROD_AI_ENDPOINT
 
 export interface AiProxyClientOptions {
   auth: AuthManager
@@ -94,9 +127,18 @@ export class AiProxyClient {
     request: AiProxyChatRequest,
     abortSignal: AbortSignal
   ): AsyncGenerator<AiProxyStreamEvent> {
-    const url = `${AI_ENDPOINT}/v1/chat/completions`
+    const endpoint = getAiEndpoint()
+    const local = isLocalMode()
+    const url = `${endpoint}/v1/chat/completions`
     const headers = await this.opts.auth.getAuthHeaders()
-    const hasAuth = !!headers.Authorization
+    let hasAuth = !!headers.Authorization
+    if (!hasAuth && local) {
+      // Local proxy in dev mode ignores Authorization but still
+      // requires the header to exist. Stamp a synthetic value so the
+      // request goes through without forcing a real sign-in.
+      headers.Authorization = 'Bearer dev-local'
+      hasAuth = true
+    }
     this.opts.logger.info(
       `POST ${url} (conversationId=${request.conversationId ?? '<new>'}, auth=${hasAuth ? 'bearer' : 'none'})`
     )
@@ -148,8 +190,12 @@ export class AiProxyClient {
     turnId: string,
     abortSignal: AbortSignal
   ): AsyncGenerator<AiProxyStreamEvent> {
-    const url = `${AI_ENDPOINT}/v1/chat/turns/${encodeURIComponent(turnId)}/stream`
+    const endpoint = getAiEndpoint()
+    const url = `${endpoint}/v1/chat/turns/${encodeURIComponent(turnId)}/stream`
     const headers = await this.opts.auth.getAuthHeaders()
+    if (!headers.Authorization && isLocalMode()) {
+      headers.Authorization = 'Bearer dev-local'
+    }
     if (!headers.Authorization) {
       throw new AiProxyError(
         'No Legalese Cloud session found. Sign in from the sidebar to use AI chat.',
@@ -187,8 +233,11 @@ export class AiProxyClient {
    * conversation files on the server.
    */
   async summarizeTitle(firstUserMessage: string): Promise<string | null> {
-    const url = `${AI_ENDPOINT}/v1/chat/completions`
+    const url = `${getAiEndpoint()}/v1/chat/completions`
     const headers = await this.opts.auth.getAuthHeaders()
+    if (!headers.Authorization && isLocalMode()) {
+      headers.Authorization = 'Bearer dev-local'
+    }
     const body = {
       model: 'legalese-summize-4',
       messages: [

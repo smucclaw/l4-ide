@@ -46,18 +46,14 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
     function: {
       name: 'fs__create_file',
       description:
-        'Fails if the file already exists — use fs__edit_file to modify an existing file.',
+        'Create a file seeded with a single line "// new file content". Fails if the file already exists. To fill it, follow up with fs__edit_file — either anchor on the exact seed line or pass old:"" to overwrite the whole file.',
       parameters: {
         type: 'object',
         additionalProperties: false,
         properties: {
           path: { type: 'string', description: 'Workspace path.' },
-          content: {
-            type: 'string',
-            description: 'Full UTF-8 contents. Pass "" for an empty file.',
-          },
         },
-        required: ['path', 'content'],
+        required: ['path'],
       },
     },
   },
@@ -66,7 +62,7 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
     function: {
       name: 'fs__edit_file',
       description:
-        'String-anchored find/replace. Without `startLine`, `old` must appear in the file EXACTLY ONCE — include surrounding context lines if the natural snippet repeats. With `startLine`, the first occurrence after that line is taken.',
+        'String-anchored find/replace. Without `startLine`, `old` must appear in the file EXACTLY ONCE — include surrounding context lines if the natural snippet repeats. With `startLine`, the first occurrence after that line is taken. Pass `old: ""` to replace the ENTIRE file with `new` — use this right after fs__create_file to fill the new file with content.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -75,7 +71,7 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
           old: {
             type: 'string',
             description:
-              'Exact text to replace. Must be unique in the file unless `startLine` is set.',
+              'Exact text to replace. Must be unique in the file unless `startLine` is set. Pass an empty string ("") to overwrite the entire file with `new`.',
           },
           new: {
             type: 'string',
@@ -166,6 +162,26 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
           },
         },
         required: ['question'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'meta__post_status_update',
+      description:
+        'Stream a brief progress update to the user mid-turn. The text renders inline in the chat as plain assistant prose (not as a tool-call card). Use during long multi-step tasks (doc lookups, validation loops, multi-file drafting) so the user sees what you are doing instead of a silent spinner. Keep it under ~120 characters, present tense, no markdown headings or bullets. Do not repeat the same status, and do not duplicate your final answer.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          text: {
+            type: 'string',
+            description:
+              'Short user-facing status sentence. Plain prose. Will be appended to the assistant message as if you had written it inline.',
+          },
+        },
+        required: ['text'],
       },
     },
   },

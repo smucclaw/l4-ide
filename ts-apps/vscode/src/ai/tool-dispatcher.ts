@@ -102,6 +102,14 @@ export class ToolDispatcher {
    * message in the follow-up chat request.
    */
   async run(call: ToolCall): Promise<ToolResult> {
+    // Status updates render as plain assistant prose upstream — the
+    // chat-service has already streamed the text into the message
+    // bubble before this dispatcher runs. Skip the permission gate
+    // and the notifyStatus side-channel so the webview never sees a
+    // tool-call card synthesised from a phantom status event.
+    if (call.name === 'meta__post_status_update') {
+      return { ok: true, output: 'ok' }
+    }
     const category = categoryForTool(call.name)
     if (!category) {
       this.opts.logger.warn(`tool/unknown: ${call.name}`)
@@ -198,7 +206,7 @@ export class ToolDispatcher {
       case 'fs__read_file':
         return fsReadFile(args as { path: string; from?: number })
       case 'fs__create_file':
-        return fsCreateFile(args as { path: string; content: string })
+        return fsCreateFile(args as { path: string })
       case 'fs__edit_file':
         return fsEditFile(args as { path: string; old: string; new: string })
       case 'fs__delete_file':

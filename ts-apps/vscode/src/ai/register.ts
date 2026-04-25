@@ -198,11 +198,6 @@ export function registerAiChatHandlers(deps: {
         })
         break
       case 'tool-call':
-        callArgs.set(event.callId, {
-          name: event.name,
-          argsJson: event.argsJson,
-          conversationId: event.conversationId,
-        })
         messenger.sendNotification(AiChatToolCall, frontend, {
           conversationId: event.conversationId,
           callId: event.callId,
@@ -217,6 +212,18 @@ export function registerAiChatHandlers(deps: {
   }
   const buffer = new ChatEventBuffer(logger)
   const emit = (event: ChatServiceEvent): void => {
+    // Populate callArgs eagerly — BEFORE the visibility branch — so
+    // the dispatcher's later notifyStatus events (which read this map
+    // to resolve conversationId / name / argsJson for AiChatToolCall)
+    // never see an empty map even when the SSE event itself is sitting
+    // in the visibility buffer waiting to be flushed.
+    if (event.kind === 'tool-call') {
+      callArgs.set(event.callId, {
+        name: event.name,
+        argsJson: event.argsJson,
+        conversationId: event.conversationId,
+      })
+    }
     if (!visibility.isVisible()) {
       buffer.push(event)
       return
@@ -258,15 +265,23 @@ export function registerAiChatHandlers(deps: {
   }
 
   toolStatusChannel.emit = (callId, status, detail) => {
+    // Route through the same buffered emitter the chat-service uses
+    // so dispatcher-side status updates (running → done / error) are
+    // visibility-aware. Going direct via messenger.sendNotification
+    // here causes the failure update to drop silently when the
+    // webview is hidden, leaving the row stuck on its initial
+    // "running" state once the webview becomes visible again — the
+    // pulsating-dot-never-flips-to-expandable bug.
     const meta = callArgs.get(callId)
-    messenger.sendNotification(AiChatToolCall, frontend, {
+    emit({
+      kind: 'tool-call',
       conversationId: meta?.conversationId ?? '',
       callId,
       name: meta?.name ?? '',
       argsJson: meta?.argsJson ?? '{}',
       status,
       result: detail?.result,
-      errorMessage: detail?.error,
+      error: detail?.error,
     })
   }
 
@@ -984,9 +999,12 @@ async function deleteServerConversation(
   logger: AiLogger
 ): Promise<void> {
   try {
-    const { AI_ENDPOINT } = await import('./ai-proxy-client.js')
+    const { getAiEndpoint, isLocalMode } = await import('./ai-proxy-client.js')
     const headers = await auth.getAuthHeaders()
-    const res = await fetch(`${AI_ENDPOINT}/v1/conversations/${id}`, {
+    if (!headers.Authorization && isLocalMode()) {
+      headers.Authorization = 'Bearer dev-local'
+    }
+    const res = await fetch(`${getAiEndpoint()}/v1/conversations/${id}`, {
       method: 'DELETE',
       headers,
     })
@@ -1049,9 +1067,12 @@ async function fetchUsage(
 } | null> {
   try {
     const headers = await auth.getAuthHeaders()
+    const { getAiEndpoint, isLocalMode } = await import('./ai-proxy-client.js')
+    if (!headers.Authorization && isLocalMode()) {
+      headers.Authorization = 'Bearer dev-local'
+    }
     if (!headers.Authorization) return null
-    const { AI_ENDPOINT } = await import('./ai-proxy-client.js')
-    const res = await fetch(`${AI_ENDPOINT}/v1/usage`, {
+    const res = await fetch(`${getAiEndpoint()}/v1/usage`, {
       method: 'GET',
       headers,
       signal: AbortSignal.timeout(8000),

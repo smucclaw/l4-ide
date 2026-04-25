@@ -463,6 +463,32 @@ export class ChatService {
           message: ev.message,
         })
       } else if (ev.kind === 'tool-call') {
+        // Status updates render as plain assistant prose, not as a
+        // tool-call card. The model still goes through the normal
+        // tool-result loop (so it can stop after the update), but the
+        // user-visible side is a streamed text fragment merged into
+        // the current assistant bubble. The dispatcher's executor for
+        // this tool is a no-op that just returns "ok".
+        if (ev.name === 'meta__post_status_update') {
+          const text = extractStatusUpdateText(ev.argsJson)
+          if (text) {
+            assistantText += text
+            const tail = blocks[blocks.length - 1]
+            if (tail && tail.kind === 'text') tail.text += text
+            else blocks.push({ kind: 'text', text })
+            this.emit({
+              kind: 'text-delta',
+              conversationId: local ?? turnId,
+              text,
+            })
+          }
+          pendingCalls.push({
+            callId: ev.callId,
+            name: ev.name,
+            argsJson: ev.argsJson,
+          })
+          continue
+        }
         pendingCalls.push({
           callId: ev.callId,
           name: ev.name,
@@ -670,6 +696,25 @@ export class ChatService {
 
 function titleFromUserMessage(text: string): string {
   return text.trim().slice(0, 80) || 'New conversation'
+}
+
+/**
+ * Pull the user-facing text out of a `meta__post_status_update` call.
+ * Returns `null` if the args don't parse or the `text` field is missing
+ * — the caller treats that as "render nothing" and still acks the model.
+ */
+function extractStatusUpdateText(argsJson: string): string | null {
+  if (!argsJson || !argsJson.trim()) return null
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(argsJson)
+  } catch {
+    return null
+  }
+  if (!parsed || typeof parsed !== 'object') return null
+  const text = (parsed as { text?: unknown }).text
+  if (typeof text !== 'string' || text.length === 0) return null
+  return text
 }
 
 /**

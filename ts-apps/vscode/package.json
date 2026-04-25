@@ -110,6 +110,17 @@
             "markdownDescription": "Local port for the L4 MCP proxy server. Legalese AI (built in), Cursor, GitHub Copilot, and other MCP-speaking agents connect to this port to access L4 rules."
           }
         }
+      },
+      {
+        "title": "Legalese AI",
+        "properties": {
+          "legaleseAi.localMode": {
+            "scope": "machine-overridable",
+            "type": "boolean",
+            "default": false,
+            "markdownDescription": "Run Legalese AI in local mode for development purposes."
+          }
+        }
       }
     ],
     "languages": [

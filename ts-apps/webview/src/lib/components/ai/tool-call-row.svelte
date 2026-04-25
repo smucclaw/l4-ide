@@ -206,61 +206,87 @@
     if (!hasDetails) return
     expanded = !expanded
   }
+
+  // While `fs__edit_file` is in flight we render the row in the
+  // dot-prefixed style (same chrome as the server-side tool-activity
+  // rows in message-assistant.svelte) — no chevron, not expandable,
+  // dot pulsating. The instant the call resolves to `done` or
+  // `error`, the row swaps to the standard chevron card so the user
+  // can expand the diff or the error message. `fs__create_file`
+  // doesn't pulse because it's now a near-instant no-op (creates a
+  // single-line empty file); the regular chevron row is fine. The
+  // `pending-approval` state also stays on the chevron variant so the
+  // gold "act on me" cue is preserved.
+  const isPulsating = $derived(
+    call.name === 'fs__edit_file' && call.status === 'running'
+  )
 </script>
 
 <div class="tool-call" class:is-error={call.status === 'error'}>
   <div class="tool-row">
-    <!-- Leading chevron acts as the expand handle. Same glyph
+    {#if isPulsating}
+      <!-- In-flight create / edit. Dot-prefixed, non-expandable; the
+           dot pulsates to signal "still working". Once the call
+           resolves the row swaps to the chevron variant below and
+           becomes expandable. -->
+      <span class="dot pulsating" aria-hidden="true"></span>
+      <span class="action">{view.label}</span>
+      {#if view.target}
+        <span class="target plain">{view.target}</span>
+      {/if}
+    {:else}
+      <!-- Leading chevron acts as the expand handle. Same glyph
          (`&#9002;`) the deployment tool-card and inspector-panel use,
          painted in the chat's primary crimson by default; turns red
          on error and gold when awaiting approval, so the row's state
          reads at a glance without needing a separate status column on
          the right. Disabled-looking (no pointer) when there's nothing
          to expand. -->
-    <button
-      type="button"
-      class="expand-lead status-{call.status}"
-      class:expanded
-      class:has-details={hasDetails}
-      onclick={hasDetails ? toggle : undefined}
-      aria-expanded={hasDetails ? expanded : undefined}
-      aria-label={hasDetails
-        ? expanded
-          ? 'Hide details'
-          : 'Show details'
-        : undefined}
-      tabindex={hasDetails ? 0 : -1}>&#9002;</button
-    >
-    {#if hasDetails}
-      <!-- When the row has something to expand, the label itself
+      <button
+        type="button"
+        class="expand-lead status-{call.status}"
+        class:expanded
+        class:has-details={hasDetails}
+        onclick={hasDetails ? toggle : undefined}
+        aria-expanded={hasDetails ? expanded : undefined}
+        aria-label={hasDetails
+          ? expanded
+            ? 'Hide details'
+            : 'Show details'
+          : undefined}
+        tabindex={hasDetails ? 0 : -1}>&#9002;</button
+      >
+      {#if hasDetails}
+        <!-- When the row has something to expand, the label itself
            also toggles — bigger hit area than the chevron alone and
            matches Cursor / Claude Code habits. Falls back to a plain
            <span> otherwise so the row isn't a tab-stop with no
            action. -->
-      <button
-        type="button"
-        class="action action-btn"
-        onclick={toggle}
-        aria-expanded={expanded}
-        aria-label={expanded ? 'Hide details' : 'Show details'}
-        >{view.label}</button
-      >
-    {:else}
-      <span class="action">{view.label}</span>
-    {/if}
-    {#if view.target}
-      {#if view.click}
         <button
           type="button"
-          class="target target-btn"
-          title={view.click === 'diff'
-            ? 'Click to open applied diff'
-            : 'Click to open the file'}
-          onclick={onTargetClick}
-          onkeydown={onTargetKeydown}>{view.target}</button
+          class="action action-btn"
+          onclick={toggle}
+          aria-expanded={expanded}
+          aria-label={expanded ? 'Hide details' : 'Show details'}
+          >{view.label}</button
         >
       {:else}
-        <span class="target plain">{view.target}</span>
+        <span class="action">{view.label}</span>
+      {/if}
+      {#if view.target}
+        {#if view.click}
+          <button
+            type="button"
+            class="target target-btn"
+            title={view.click === 'diff'
+              ? 'Click to open applied diff'
+              : 'Click to open the file'}
+            onclick={onTargetClick}
+            onkeydown={onTargetKeydown}>{view.target}</button
+          >
+        {:else}
+          <span class="target plain">{view.target}</span>
+        {/if}
       {/if}
     {/if}
   </div>
@@ -456,5 +482,53 @@
   .section-label:not(:first-child):has(+ .rule-result) {
     border-top: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
     margin-top: 4px;
+  }
+
+  /* Crimson square dot — same shape and offsets used by the
+     server-side `tool-activity` rows in message-assistant.svelte. Kept
+     in sync visually so a running create/edit reads the same as a
+     server activity row. Pulsates while the call is in flight; the
+     row swaps to the chevron variant once the result lands. */
+  .dot {
+    position: relative;
+    background: #c8376a;
+    line-height: 1;
+    flex-shrink: 0;
+    margin: 0 8px 0 2px;
+    padding: 0.2em;
+    border-radius: 0.2em;
+    top: -0.15em;
+  }
+  .dot.pulsating {
+    animation: tool-dot-pulse 1.1s ease-in-out infinite;
+  }
+  @keyframes tool-dot-pulse {
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.45;
+      transform: scale(0.78);
+    }
+  }
+  /* Honour the user's reduced-motion preference — fade only, no
+     transform-driven pulse. */
+  @media (prefers-reduced-motion: reduce) {
+    .dot.pulsating {
+      animation-duration: 1.6s;
+    }
+    @keyframes tool-dot-pulse {
+      0%,
+      100% {
+        opacity: 1;
+        transform: none;
+      }
+      50% {
+        opacity: 0.5;
+        transform: none;
+      }
+    }
   }
 </style>
