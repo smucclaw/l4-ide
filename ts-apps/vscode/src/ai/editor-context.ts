@@ -10,19 +10,52 @@ import type { AuthManager } from '../auth.js'
  * message (after ai-proxy's cached L4 reference) so it doesn't break
  * the provider's prompt cache. Only built when the user has the
  * "attach active file" chip enabled for this turn.
+ *
+ * `chipSnapshot`, when provided, is the active-file state the
+ * webview was showing at send time. It overrides
+ * `vscode.window.activeTextEditor` so the system message reflects
+ * exactly what the user saw on the chip — even across multi-window
+ * setups (each window has its own activeTextEditor) or focus
+ * changes between chip update and request assembly. cursorLine /
+ * selection / openFiles still come from the live editor (those are
+ * inherently editor-scoped and the snapshot doesn't carry them).
  */
-export function buildEditorContextMessage(): AiChatMessage | null {
+export function buildEditorContextMessage(chipSnapshot?: {
+  name: string
+  path: string
+}): AiChatMessage | null {
   const editor = vscode.window.activeTextEditor
   const visibleFiles = vscode.window.visibleTextEditors
     .filter(
       (e) => e.document.languageId === 'l4' || e.document.languageId === 'jl4'
     )
     .map((e) => workspaceRelative(e.document.uri))
-  if (!editor && visibleFiles.length === 0) return null
+  if (!chipSnapshot && !editor && visibleFiles.length === 0) return null
 
   const lines: string[] = []
   lines.push('<editor-context>')
-  if (editor) {
+  if (chipSnapshot) {
+    // Snapshot wins — use the path the webview chip was showing at
+    // send time. We can still surface live cursorLine/selection from
+    // the local activeTextEditor IFF its document path matches the
+    // snapshot (otherwise those fields would describe a different
+    // file than the activeFile line).
+    lines.push(
+      `activeFile: ${chipSnapshot.path} (call fs__read_file on this path if you need the body)`
+    )
+    if (editor) {
+      const editorRel = workspaceRelative(editor.document.uri)
+      if (editorRel === chipSnapshot.path) {
+        const pos = editor.selection.active
+        lines.push(`cursorLine: ${pos.line + 1}`)
+        const sel = editor.document.getText(editor.selection)
+        if (sel.trim().length > 0) {
+          lines.push('selection: |')
+          for (const sline of sel.split('\n')) lines.push(`  ${sline}`)
+        }
+      }
+    }
+  } else if (editor) {
     const uri = editor.document.uri
     const rel = workspaceRelative(uri)
     const outsideWorkspace =

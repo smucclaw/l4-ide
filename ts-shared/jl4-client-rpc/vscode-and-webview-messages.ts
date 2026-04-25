@@ -431,6 +431,19 @@ export interface AiChatStartParams {
    * system message so the active file doesn't leak into context.
    * Defaults to true if unset. */
   includeActiveFile?: boolean
+  /** Snapshot of the active-file chip the webview was showing at
+   * send time. The extension's `buildEditorContextMessage` uses
+   * THIS instead of re-querying `vscode.window.activeTextEditor` at
+   * assemble time, which prevents two divergence cases:
+   *   1. Multi-window setups — each VSCode window has its own
+   *      activeTextEditor, but the user reasons about "what the
+   *      chip showed" in the window they last clicked on.
+   *   2. Focus-change races — between the webview's last chip
+   *      update and the extension assembling the request, the
+   *      activeTextEditor can shift to a different file.
+   * Omit when the chip is off (no active-file context wanted) or
+   * when the webview has no active file to show. */
+  activeFile?: { path: string; name: string; uri?: string }
   /** Retry path: when true, the extension skips adding a user
    * message to the outgoing body and just asks the server to run
    * another turn against the conversation's existing on-disk

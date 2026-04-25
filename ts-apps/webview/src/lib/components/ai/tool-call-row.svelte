@@ -49,50 +49,109 @@
   })
 
   type ClickMode = 'open' | 'diff' | null
+  /** Each tool gets two labels:
+   *   - `running`: present-continuous, used while the call is
+   *     in-flight ("Editing…"). Conveys "the model is working on
+   *     this right now" instead of just naming the verb.
+   *   - `settled`: noun/past-participle, used once the call resolves
+   *     to done / error ("Edit"). Pairs with the chevron that opens
+   *     the result / diff.
+   */
   const view = $derived.by(() => viewFor(call.name, args))
 
   function viewFor(
     name: string,
     a: Record<string, unknown>
-  ): { label: string; target: string | null; click: ClickMode } {
+  ): {
+    running: string
+    settled: string
+    target: string | null
+    click: ClickMode
+  } {
     const path = typeof a.path === 'string' ? a.path : null
     if (name === 'fs__read_file')
-      return { label: 'Read', target: path, click: 'open' }
+      // "Read" works as both base and past tense (read/read/read) —
+      // settled label stays unchanged.
+      return {
+        running: 'Reading…',
+        settled: 'Read',
+        target: path,
+        click: 'open',
+      }
     if (name === 'fs__create_file')
-      return { label: 'Create', target: path, click: 'open' }
+      return {
+        running: 'Creating…',
+        settled: 'Created',
+        target: path,
+        click: 'open',
+      }
     if (name === 'fs__edit_file')
       return {
-        label: 'Edit',
+        running: 'Editing…',
+        settled: 'Edited',
         target: path,
         // Diff only makes sense once the edit has landed — before that
         // just open the file so the user can see the context.
         click: call.status === 'done' ? 'diff' : 'open',
       }
     if (name === 'fs__delete_file')
-      return { label: 'Delete', target: path, click: null }
+      return {
+        running: 'Deleting…',
+        settled: 'Deleted',
+        target: path,
+        click: null,
+      }
     if (name === 'lsp__diagnostics')
       // Same tabular open as read — the user can inspect the file
       // while its diagnostics are shown in the Problems panel.
-      return { label: 'Check', target: path, click: 'open' }
+      return {
+        running: 'Checking…',
+        settled: 'Checked',
+        target: path,
+        click: 'open',
+      }
     if (name === 'l4__evaluate')
-      return { label: 'Evaluate', target: path, click: 'open' }
+      return {
+        running: 'Evaluating…',
+        settled: 'Evaluated',
+        target: path,
+        click: 'open',
+      }
     if (name === 'meta__ask_user')
-      return { label: 'Question', target: null, click: null }
+      return {
+        running: 'Asking…',
+        settled: 'Asked',
+        target: null,
+        click: null,
+      }
     if (name.startsWith('l4-rules__')) {
       const sub = name.slice('l4-rules__'.length)
       // Infrastructure tools (list_files / read_file / search_*) are
       // deployment inventory, not rule evaluations — label them
       // distinctly so the user sees at a glance whether the agent is
-      // browsing deployments or actually running a rule.
+      // browsing deployments or actually running a rule. Same label
+      // running and settled — MCP rule names are user-deployed and
+      // a present-continuous variant doesn't add useful info beyond
+      // the pulsating dot already conveying activity.
       const isInfra = L4_RULES_INFRASTRUCTURE.has(sub)
+      const mcpLabel = isInfra ? 'L4 Deployments' : 'L4 Rule'
       return {
-        label: isInfra ? 'L4 Deployments' : 'L4 Rule',
+        running: mcpLabel,
+        settled: mcpLabel,
         target: sub,
         click: null,
       }
     }
-    return { label: name, target: null, click: null }
+    return { running: name, settled: name, target: null, click: null }
   }
+
+  /** Active label — present-continuous while running / pending
+   *  approval, settled noun once the call resolves. */
+  const label = $derived(
+    call.status === 'running' || call.status === 'pending-approval'
+      ? view.running
+      : view.settled
+  )
 
   function fire(): void {
     if (view.click === 'diff') onOpenDiff(call.callId)
@@ -207,19 +266,18 @@
     expanded = !expanded
   }
 
-  // While `fs__edit_file` is in flight we render the row in the
+  // While ANY tool call is in flight we render the row in the
   // dot-prefixed style (same chrome as the server-side tool-activity
   // rows in message-assistant.svelte) — no chevron, not expandable,
   // dot pulsating. The instant the call resolves to `done` or
   // `error`, the row swaps to the standard chevron card so the user
-  // can expand the diff or the error message. `fs__create_file`
-  // doesn't pulse because it's now a near-instant no-op (creates a
-  // single-line empty file); the regular chevron row is fine. The
-  // `pending-approval` state also stays on the chevron variant so the
-  // gold "act on me" cue is preserved.
-  const isPulsating = $derived(
-    call.name === 'fs__edit_file' && call.status === 'running'
-  )
+  // can expand the diff or the error message. The proxy now streams
+  // partial tool-call frames as soon as the model commits to a tool
+  // name (toolCallStreaming) so the pulsating dot appears
+  // immediately — even before the args JSON has finished streaming.
+  // `pending-approval` stays on the chevron variant so the gold
+  // "act on me" cue is preserved.
+  const isPulsating = $derived(call.status === 'running')
 </script>
 
 <div class="tool-call" class:is-error={call.status === 'error'}>
@@ -230,7 +288,7 @@
            resolves the row swaps to the chevron variant below and
            becomes expandable. -->
       <span class="dot pulsating" aria-hidden="true"></span>
-      <span class="action">{view.label}</span>
+      <span class="action">{label}</span>
       {#if view.target}
         <span class="target plain">{view.target}</span>
       {/if}
@@ -268,10 +326,10 @@
           onclick={toggle}
           aria-expanded={expanded}
           aria-label={expanded ? 'Hide details' : 'Show details'}
-          >{view.label}</button
+          >{label}</button
         >
       {:else}
-        <span class="action">{view.label}</span>
+        <span class="action">{label}</span>
       {/if}
       {#if view.target}
         {#if view.click}

@@ -201,10 +201,16 @@
         {:else if block.kind === 'tool-activity'}
           <!-- Server-side activity keeps the crimson dot up front (no
                expand chevron — nothing to expand on read-only backend
-               events) + bold label + monospace message. No right-side
-               status; the dot and message together are enough. -->
+               events) + bold label + monospace message. The dot
+               pulses iff this row is the trailing element in the
+               assistant bubble — driven by `:last-child` in the
+               <style> below, no JS bookkeeping. As soon as another
+               block (text-delta, another activity, a tool-call) is
+               appended after it, the row falls out of `:last-child`
+               and the dot freezes solid. Errored rows opt out via
+               the `is-error` class. -->
           <div
-            class="tool-call"
+            class="tool-call tool-activity-row"
             class:is-error={block.activity.status === 'error'}
           >
             <div class="tool-row">
@@ -319,6 +325,42 @@
     padding: 0.2em;
     border-radius: 0.2em;
     top: -0.15em;
+  }
+  /* Pulsate the activity dot on the trailing row only. Once another
+     block (text, tool-call, another activity) lands AFTER this row,
+     it stops being `:last-child` and the dot freezes. Errored rows
+     opt out via the `is-error` class so the user notices the
+     failure visually. Pure CSS — no JS bookkeeping or per-block
+     reactive state. */
+  .tool-activity-row:last-child:not(.is-error) .dot {
+    animation: tool-activity-dot-pulse 1.1s ease-in-out infinite;
+  }
+  @keyframes tool-activity-dot-pulse {
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.45;
+      transform: scale(0.78);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .tool-activity-row:last-child:not(.is-error) .dot {
+      animation-duration: 1.6s;
+    }
+    @keyframes tool-activity-dot-pulse {
+      0%,
+      100% {
+        opacity: 1;
+        transform: none;
+      }
+      50% {
+        opacity: 0.5;
+        transform: none;
+      }
+    }
   }
   .action {
     color: var(--vscode-foreground);

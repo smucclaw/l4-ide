@@ -489,11 +489,43 @@ export class ChatService {
           })
           continue
         }
-        pendingCalls.push({
-          callId: ev.callId,
-          name: ev.name,
-          argsJson: ev.argsJson,
-        })
+        // Dedupe by callId: the proxy emits TWO tool_calls SSE chunks
+        // per call now (an early `tool-input-start` frame with empty
+        // args so the webview can pop a pulsating-dot row immediately,
+        // followed by a final `tool-call` frame with the parsed args).
+        // Without dedup we'd end up running the tool twice — and the
+        // dispatcher would POST two tool_result messages back to the
+        // proxy for the same toolCallId, which Anthropic rejects on
+        // the next turn ("each tool_use must have a single result").
+        // Update the existing pendingCall / block in place when the
+        // callId is already known; otherwise push a new entry as
+        // before.
+        const existingCall = pendingCalls.find((c) => c.callId === ev.callId)
+        if (existingCall) {
+          if (ev.argsJson) existingCall.argsJson = ev.argsJson
+          if (ev.name) existingCall.name = ev.name
+        } else {
+          pendingCalls.push({
+            callId: ev.callId,
+            name: ev.name,
+            argsJson: ev.argsJson,
+          })
+        }
+        const existingBlock = blocks.find(
+          (b) => b.kind === 'tool-call' && b.callId === ev.callId
+        )
+        if (existingBlock && existingBlock.kind === 'tool-call') {
+          if (ev.argsJson) existingBlock.argsJson = ev.argsJson
+          if (ev.name) existingBlock.name = ev.name
+        } else {
+          blocks.push({
+            kind: 'tool-call',
+            callId: ev.callId,
+            name: ev.name,
+            argsJson: ev.argsJson,
+            status: 'running',
+          })
+        }
         // Pre-compute the initial status based on the user's permission
         // setting so the tool row renders in its real state from the
         // first frame (no merge race between the initial emit and the
@@ -503,13 +535,10 @@ export class ChatService {
         const permission = category ? getPermission(category) : null
         const initialStatus: 'pending-approval' | 'running' =
           permission === 'ask' ? 'pending-approval' : 'running'
-        blocks.push({
-          kind: 'tool-call',
-          callId: ev.callId,
-          name: ev.name,
-          argsJson: ev.argsJson,
-          status: 'running',
-        })
+        // Re-emit on every frame — the webview's onToolCall merges by
+        // callId, so the early frame creates the row and subsequent
+        // frames update it (notably argsJson goes from "" → real args
+        // when the final tool-call lands).
         this.emit({
           kind: 'tool-call',
           conversationId: local ?? turnId,
@@ -561,7 +590,12 @@ export class ChatService {
     // an explicit `true`; only `false` suppresses. The chat-input UI
     // exposes a per-send toggle for this.
     if (params.includeActiveFile !== false) {
-      const editorCtx = buildEditorContextMessage()
+      // Prefer the chip snapshot the webview captured at send time
+      // (immune to multi-window / focus-race drift). Fall back to
+      // live activeTextEditor when the webview didn't send one
+      // (older builds, or "include active file" toggled on without a
+      // file open at the moment of the send).
+      const editorCtx = buildEditorContextMessage(params.activeFile)
       if (editorCtx) messages.push(editorCtx)
     }
 

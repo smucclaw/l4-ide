@@ -393,6 +393,14 @@ export function createAiChatStore(
       mediaType: a.mediaType,
       dataBase64: a.dataBase64,
     }))
+    // Snapshot the chip's current active-file state so the extension
+    // can echo it verbatim into the <editor-context> system message
+    // instead of re-querying vscode.window.activeTextEditor (which
+    // can drift across multi-window setups and focus changes).
+    const activeFileSnapshot =
+      wasIncludingActiveFile && activeFile.name && activeFile.path
+        ? { name: activeFile.name, path: activeFile.path }
+        : undefined
     try {
       m.sendNotification(AiChatStart, HOST_EXTENSION, {
         conversationId,
@@ -401,6 +409,7 @@ export function createAiChatStore(
         mentions: mentionsPlain,
         attachments: attachmentsPlain,
         includeActiveFile: wasIncludingActiveFile,
+        ...(activeFileSnapshot ? { activeFile: activeFileSnapshot } : {}),
       })
       // Attaching the active file is one-shot: once this turn's
       // <editor-context> is in flight, flip the toggle off so the
@@ -449,7 +458,40 @@ export function createAiChatStore(
   function continueTurn(): void {
     const m = getMessenger()
     const conv = getConversation()
-    if (!m || !conv || !conv.id) return
+    if (!m || !conv) return
+
+    // No server-assigned conversationId yet → the very first turn
+    // failed before the proxy emitted its `metadata` SSE frame, so
+    // there is no on-disk history to resume against. Fall back to
+    // re-sending the last user message as a fresh request — same
+    // effect as the user retyping it. Without this fallback Retry
+    // silently no-ops, which is the bug the user hit when the proxy
+    // crashed on their first prompt.
+    if (!conv.id) {
+      const lastUserTurn = [...conv.turns]
+        .reverse()
+        .find((t) => t.role === 'user')
+      if (!lastUserTurn || !lastUserTurn.content.trim()) return
+      // Drop trailing errored assistant bubble(s) so the resend lands
+      // a fresh user→assistant pair instead of being sandwiched under
+      // a stale error.
+      while (
+        conv.turns.length > 0 &&
+        conv.turns[conv.turns.length - 1]!.role === 'assistant'
+      ) {
+        conv.turns.pop()
+      }
+      // Drop the user turn — send() will re-append it. Routing
+      // through send() keeps the chips / mentions / attachments
+      // path consistent and avoids duplicating the AiChatStart
+      // construction here. Chips re-derive from current staging,
+      // which is the closest we can get to the original send.
+      const text = lastUserTurn.content
+      conv.turns = conv.turns.filter((t) => t.id !== lastUserTurn.id)
+      send(text)
+      return
+    }
+
     const turnId = `turn_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
     conv.turns.push({
       id: `asst:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
