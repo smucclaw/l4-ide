@@ -602,6 +602,19 @@ export async function fsEditFile(args: FsEditArgs): Promise<string> {
     )
   }
   const doc = await vscode.workspace.openTextDocument(r.uri)
+  // Preserve the file's line-ending style across the edit. The model
+  // always sends LF in `args.old` / `args.new`; if the document is
+  // CRLF we normalize both to CRLF so (a) byte offsets computed from
+  // the search match the live document text (positionAt walks the
+  // raw buffer including \r), and (b) the inserted snippet stays
+  // uniformly CRLF instead of dropping LF runs into a CRLF file.
+  // Without this, a single edit to a CRLF file silently flattened
+  // the whole file to LF — the LF-only `args.new` was spliced in
+  // as-is and applyEdit + save preserved the result wholesale.
+  // `replace(/\r?\n/g, …)` accepts whichever form the model sent.
+  const docEol = doc.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n'
+  const oldNormalized = args.old.replace(/\r?\n/g, docEol)
+  const newNormalized = args.new.replace(/\r?\n/g, docEol)
   // `old === ""` is the explicit "fill / overwrite" verb. Replace the
   // entire current file with `new`. Pairs naturally with
   // fs__create_file, which seeds an empty file the model then fills
@@ -616,7 +629,7 @@ export async function fsEditFile(args: FsEditArgs): Promise<string> {
       doc.positionAt(doc.getText().length)
     )
     const edit = new vscode.WorkspaceEdit()
-    edit.replace(r.uri, fullRange, args.new)
+    edit.replace(r.uri, fullRange, newNormalized)
     const ok = await vscode.workspace.applyEdit(edit)
     if (!ok) {
       throw new Error(
@@ -637,7 +650,9 @@ export async function fsEditFile(args: FsEditArgs): Promise<string> {
       )
     )
   }
-  const currentText = doc.getText().replace(/\r\n/g, '\n')
+  // Search the raw document text (no LF normalization) so offsets
+  // line up 1:1 with what positionAt expects below.
+  const currentText = doc.getText()
 
   // When `startLine` is set, drop the lines at/before it from the
   // search window. The replace still applies to the real document
@@ -652,22 +667,22 @@ export async function fsEditFile(args: FsEditArgs): Promise<string> {
       : 0
   let searchOffset = 0
   if (anchorLine > 0) {
-    const allLines = currentText.split('\n')
+    const allLines = currentText.split(docEol)
     if (anchorLine >= allLines.length) {
       throw new Error(
         `fs__edit_file: startLine=${args.startLine} is past the end of ${r.relative} (${allLines.length} lines).`
       )
     }
     // Offset of the line AFTER the anchor — `anchorLine` lines plus
-    // that many newlines.
+    // that many line terminators (\n or \r\n depending on the file).
     searchOffset =
       allLines.slice(0, anchorLine).reduce((n, l) => n + l.length, 0) +
-      anchorLine
+      anchorLine * docEol.length
   }
   const searchWindow = currentText.slice(searchOffset)
 
   if (anchorLine === 0) {
-    const occurrences = countOccurrences(searchWindow, args.old)
+    const occurrences = countOccurrences(searchWindow, oldNormalized)
     if (occurrences === 0) {
       throw new Error(
         `fs__edit_file: the 'old' snippet was not found in ${r.relative}`
@@ -683,7 +698,7 @@ export async function fsEditFile(args: FsEditArgs): Promise<string> {
   // Compute the Range to replace. Using the live document's positionAt
   // keeps the offset-to-(line,col) mapping authoritative — works the
   // same way the LSP sees text.
-  const hit = searchWindow.indexOf(args.old)
+  const hit = searchWindow.indexOf(oldNormalized)
   if (hit === -1) {
     throw new Error(
       anchorLine === 0
@@ -692,13 +707,13 @@ export async function fsEditFile(args: FsEditArgs): Promise<string> {
     )
   }
   const startOffset = searchOffset + hit
-  const endOffset = startOffset + args.old.length
+  const endOffset = startOffset + oldNormalized.length
   const range = new vscode.Range(
     doc.positionAt(startOffset),
     doc.positionAt(endOffset)
   )
   const edit = new vscode.WorkspaceEdit()
-  edit.replace(r.uri, range, args.new)
+  edit.replace(r.uri, range, newNormalized)
   const ok = await vscode.workspace.applyEdit(edit)
   if (!ok) {
     throw new Error(
