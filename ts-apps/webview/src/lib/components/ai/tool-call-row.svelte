@@ -198,6 +198,38 @@
     return !L4_RULES_INFRASTRUCTURE.has(sub)
   })
 
+  // l4-rules MCP tools wrap their output as
+  //   { "contents": { "result": { "value": "..." }, ... } }
+  // We only ever want contents.result.value here — everything else
+  // (types, traces, diagnostics) is noise for the chat view. If the
+  // shape doesn't match we fall back to null so the result row
+  // silently disappears rather than showing something misleading.
+  function extractRuleResultValue(raw: string): string | null {
+    try {
+      const parsed = JSON.parse(raw.trim()) as unknown
+      const contents = (parsed as { contents?: unknown } | null)?.contents
+      const result = (contents as { result?: unknown } | null)?.result
+      const value = (result as { value?: unknown } | null)?.value
+      if (value === undefined || value === null) return null
+      if (typeof value === 'string') return value
+      return JSON.stringify(value, null, 2)
+    } catch {
+      return null
+    }
+  }
+
+  // Schema-less fallback: when the function-schema fetch hasn't
+  // resolved (or failed), show the extracted result value as plain
+  // text. No L4 colorize and no indentation pass — both look wrong
+  // on JSON-shaped payloads (the colorizer paints random tokens that
+  // happen to overlap with L4 keywords; the indenter splits commas
+  // mid-JSON-array). The schema-driven `returnL4` takes precedence
+  // in the JSX whenever it's available.
+  const ruleResultText = $derived.by(() => {
+    if (!isRuleCall || !call.result) return null
+    return extractRuleResultValue(call.result)
+  })
+
   // Render-meta for L4-syntax rendering of rule arguments.
   // Lazy-fetched: we only ask the extension for the schema once the
   // row's expand panel is opened on a rule call, and cache the result
@@ -262,10 +294,9 @@
   // L4-rendered return value, walked alongside `returnSchema`. Covers
   // every value shape the evaluator emits — records (constructor-wrapped
   // single-key objects), enums (bare strings matching schema.enum),
-  // primitives, and arrays. When the schema isn't available the
-  // Output section is omitted rather than dumping a heuristically-
-  // formatted JSON string (which over-indents on nested records and
-  // scrambles JSON-shaped non-record values).
+  // primitives, and arrays. When the schema isn't available the JSX
+  // falls back to `ruleResultText` (plain extracted value, no
+  // formatting, no colorize).
   const returnL4 = $derived.by(() => {
     if (!isRuleCall || !renderMeta?.returnSchema || !call.result) return null
     try {
@@ -437,6 +468,9 @@
       {#if returnL4}
         <div class="section-label">Output</div>
         <pre class="rule-block rule-result">{@html returnL4}</pre>
+      {:else if ruleResultText}
+        <div class="section-label">Output</div>
+        <pre class="rule-block rule-result">{ruleResultText}</pre>
       {/if}
     </div>
   {:else if expanded && call.status === 'done' && prettyResult}
