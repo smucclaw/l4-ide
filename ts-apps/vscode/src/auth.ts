@@ -91,6 +91,13 @@ export class AuthManager {
     )
   }
 
+  private getAiApiKeyFromSettings(): string {
+    return (
+      vscode.workspace.getConfiguration('legaleseAi').get<string>('apiKey') ??
+      ''
+    )
+  }
+
   /**
    * Whether the user is in Legalese Cloud mode (no serviceUrl configured,
    * authenticated via browser login with a session token).
@@ -111,6 +118,36 @@ export class AuthManager {
     if (session) return { Authorization: `Bearer ${session}` }
 
     return {}
+  }
+
+  /**
+   * Auth headers for the Legalese AI proxy.
+   * Prefers `legaleseAi.apiKey` when set; otherwise falls back to the
+   * shared flow (jl4 service API key, then browser-login session).
+   * Keeping this distinct from `getAuthHeaders` lets users mix a
+   * self-hosted jl4 service (with `jl4.serviceApiKey`) and a separate
+   * Legalese AI key — neither setting clobbers the other.
+   */
+  async getAiAuthHeaders(): Promise<Record<string, string>> {
+    const aiKey = this.getAiApiKeyFromSettings()
+    if (aiKey) return { Authorization: `Bearer ${aiKey}` }
+    return this.getAuthHeaders()
+  }
+
+  /**
+   * Whether the Legalese AI surface (chat tab, ask-about-selection)
+   * has credentials it can use. True when EITHER:
+   *  - `legaleseAi.apiKey` is set, OR
+   *  - the user has a verified Legalese Cloud session (cloudUserId is
+   *    populated only after a successful GET /auth/session round-trip,
+   *    so this rules out stale/forged tokens).
+   *
+   * Deliberately independent of the jl4-service connection: a
+   * self-hosted jl4 service does NOT imply Legalese AI access.
+   */
+  isAiUsable(): boolean {
+    if (this.getAiApiKeyFromSettings()) return true
+    return this.cloudUserId !== undefined
   }
 
   /**

@@ -12,6 +12,8 @@ import Backend.Api
 import Backend.DecisionQueryPlan (QueryAtom (..), QueryOutcome (..), QueryImpact (..), QueryInput (..), QueryAsk (..), QueryPlanResponse (..))
 import L4.FunctionSchema (Parameters (..), Parameter (..))
 import ControlPlane (DeploymentStatusResponse (..))
+import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.KeyMap as Aeson.KeyMap
 import qualified Data.Map as Map
 import qualified Data.Text as Text
 import Schema ()
@@ -31,6 +33,33 @@ spec = do
           parseQueryParam (Text.pack $ show n) === Right (FnLitInt n)
         Hspec.prop "Bool" $ \(n :: Bool) ->
           parseQueryParam (Text.pack $ show n) === Right (FnLitBool n)
+
+    describe "Parameter x-l4-type" do
+      it "serialises parameterL4Type as \"x-l4-type\" only when set" do
+        let p = Parameter
+              { parameterType = "object"
+              , parameterAlias = Nothing
+              , parameterFormat = Nothing
+              , parameterEnum = []
+              , parameterDescription = ""
+              , parameterProperties = Nothing
+              , parameterPropertyOrder = Nothing
+              , parameterItems = Nothing
+              , parameterRequired = Nothing
+              , parameterL4Type = Just "Child Order"
+              }
+        case Aeson.toJSON p of
+          Aeson.Object o ->
+            Aeson.KeyMap.lookup "x-l4-type" o `shouldBe` Just (Aeson.String "Child Order")
+          v -> expectationFailure ("Expected JSON object, got: " <> show v)
+      it "omits x-l4-type when parameterL4Type is Nothing" do
+        let p = Parameter "string" Nothing Nothing [] "" Nothing Nothing Nothing Nothing Nothing
+        case Aeson.toJSON p of
+          Aeson.Object o ->
+            Aeson.KeyMap.member "x-l4-type" o `shouldBe` False
+          v -> expectationFailure ("Expected JSON object, got: " <> show v)
+      Hspec.prop "round-trips through JSON" $ \p ->
+        Aeson.fromJSON (Aeson.toJSON (p :: Parameter)) === Aeson.Success p
 
 -- ----------------------------------------------------------------------------
 -- Arbitrary instances
@@ -93,7 +122,7 @@ instance Arbitrary Parameters where
 instance Arbitrary Parameter where
   arbitrary = Q.sized $ \n ->
     if n <= 0
-      then Parameter <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> pure Nothing <*> pure Nothing <*> pure Nothing <*> pure Nothing
+      then Parameter <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> pure Nothing <*> pure Nothing <*> pure Nothing <*> pure Nothing <*> pure Nothing
       else
         Parameter
           <$> arbitrary
@@ -105,9 +134,10 @@ instance Arbitrary Parameter where
           <*> Q.resize (n `div` 4) arbitrary
           <*> Q.resize (n `div` 4) arbitrary
           <*> Q.resize (n `div` 4) arbitrary
+          <*> arbitrary
 
 instance Arbitrary Function where
-  arbitrary = Types.Function <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+  arbitrary = Types.Function <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
 
 instance Arbitrary EvalBackend where
   arbitrary = Q.chooseEnum (minBound, maxBound)
@@ -223,7 +253,7 @@ instance Arbitrary DeploymentMetadata where
     <*> pure (UTCTime (fromGregorian 2025 1 1) 0)
 
 instance Arbitrary FunctionSummary where
-  arbitrary = FunctionSummary <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+  arbitrary = FunctionSummary <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
 
 instance Arbitrary FileEntry where
   arbitrary = FileEntry <$> arbitrary <*> arbitrary

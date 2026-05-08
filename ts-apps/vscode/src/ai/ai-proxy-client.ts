@@ -130,7 +130,7 @@ export class AiProxyClient {
     const endpoint = getAiEndpoint()
     const local = isLocalMode()
     const url = `${endpoint}/v1/chat/completions`
-    const headers = await this.opts.auth.getAuthHeaders()
+    const headers = await this.opts.auth.getAiAuthHeaders()
     let hasAuth = !!headers.Authorization
     if (!hasAuth && local) {
       // Local proxy in dev mode ignores Authorization but still
@@ -192,7 +192,7 @@ export class AiProxyClient {
   ): AsyncGenerator<AiProxyStreamEvent> {
     const endpoint = getAiEndpoint()
     const url = `${endpoint}/v1/chat/turns/${encodeURIComponent(turnId)}/stream`
-    const headers = await this.opts.auth.getAuthHeaders()
+    const headers = await this.opts.auth.getAiAuthHeaders()
     if (!headers.Authorization && isLocalMode()) {
       headers.Authorization = 'Bearer dev-local'
     }
@@ -234,7 +234,7 @@ export class AiProxyClient {
    */
   async summarizeTitle(firstUserMessage: string): Promise<string | null> {
     const url = `${getAiEndpoint()}/v1/chat/completions`
-    const headers = await this.opts.auth.getAuthHeaders()
+    const headers = await this.opts.auth.getAiAuthHeaders()
     if (!headers.Authorization && isLocalMode()) {
       headers.Authorization = 'Bearer dev-local'
     }

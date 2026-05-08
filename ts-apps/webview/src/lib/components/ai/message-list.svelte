@@ -10,11 +10,14 @@
     PendingQuestion,
   } from '$lib/stores/ai-chat.svelte'
 
+  import type { Messenger } from 'vscode-messenger-webview'
+
   let {
     turns,
     streaming,
     pendingApproval,
     pendingQuestion,
+    messenger,
     onRetry,
     onApproveTool,
     onAnswerQuestion,
@@ -30,6 +33,9 @@
     pendingApproval: RenderedToolCall | null
     /** Active meta__ask_user question awaiting an answer, or null. */
     pendingQuestion: PendingQuestion | null
+    /** Webview→extension messenger; threaded into AssistantMessage so
+     *  tool-call cards can fetch render-meta on demand. */
+    messenger: InstanceType<typeof Messenger> | null
     onRetry?: () => void
     onApproveTool: (
       callId: string,
@@ -138,6 +144,7 @@
         error={turn.error}
         blocks={turn.blocks}
         usage={turn.usage}
+        {messenger}
         {onRetry}
         {onOpenFile}
         {onOpenFileDiff}

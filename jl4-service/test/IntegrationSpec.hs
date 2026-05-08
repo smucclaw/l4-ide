@@ -551,6 +551,45 @@ spec = describe "integration" do
         lookupKey "name" body `shouldBe` Just (Aeson.String "compute_qualifies")
         lookupKey "returnType" body `shouldSatisfy` Maybe.isJust
 
+    -- The function-schema endpoint is the single source of truth for chat-side
+    -- render metadata: it must surface "x-l4-type" recursively on record/enum
+    -- nodes plus a full structured "returnSchema" so the chat can render
+    -- arguments and results back into L4 syntax.
+    it "function-schema endpoint surfaces x-l4-type and returnSchema for record types" do
+      withServiceFromSources "fn-render-meta" [("record.l4", recordJL4)] \baseUrl mgr -> do
+        req <- parseRequest (baseUrl <> "/deployments/fn-render-meta/functions/make_person")
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 200
+        let body = decodeObject (responseBody resp)
+        -- returnSchema present and tagged with the L4 record name
+        case lookupKey "returnSchema" body of
+          Just (Aeson.Object rs) -> do
+            Aeson.KeyMap.lookup "x-l4-type" rs `shouldBe` Just (Aeson.String "Person")
+            Aeson.KeyMap.lookup "type" rs `shouldBe` Just (Aeson.String "object")
+          other ->
+            expectationFailure ("Expected returnSchema object with x-l4-type, got: " <> show other)
+
+    it "OpenAPI spec strips x-l4-type so the LLM-facing surface stays byte-clean" do
+      withServiceFromSources "no-l4ext-openapi" [("record.l4", recordJL4)] \baseUrl mgr -> do
+        req <- parseRequest (baseUrl <> "/deployments/no-l4ext-openapi/openapi.json")
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 200
+        let bs = LBS.toStrict (responseBody resp)
+        BS.isInfixOf "x-l4-type" bs `shouldBe` False
+
+    it "MCP tools/list strips x-l4-type from inputSchema" do
+      withServiceFromSources "no-l4ext-mcp" [("record.l4", recordJL4)] \baseUrl mgr -> do
+        let mcpReq = Aeson.object
+              [ "jsonrpc" Aeson..= ("2.0" :: Text)
+              , "id" Aeson..= (1 :: Int)
+              , "method" Aeson..= ("tools/list" :: Text)
+              ]
+        req <- buildJsonPost (baseUrl <> "/.mcp") mcpReq
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 200
+        let bs = LBS.toStrict (responseBody resp)
+        BS.isInfixOf "x-l4-type" bs `shouldBe` False
+
     it "returns OpenAPI 3.0 spec via per-deployment openapi.json" do
       withServiceFromSources "openapi" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
         req <- parseRequest (baseUrl <> "/deployments/openapi/openapi.json")
