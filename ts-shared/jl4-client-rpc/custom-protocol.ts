@@ -173,6 +173,18 @@ export interface FunctionParameter {
   propertyOrder?: string[]
   items?: FunctionParameter
   required?: string[]
+  /** L4 user-declared type name (record/enum) when this node came
+   *  from a DECLARE. Drives chat-side rendering of JSON values into
+   *  L4 syntax (e.g. `Person WITH name IS …`). */
+  'x-l4-type'?: string
+  /** Sanitised form of this property's key in its parent's
+   *  `properties` object — matches the LLM-facing name in the MCP
+   *  inputSchema. Set by jl4-service at the function-schema
+   *  endpoint when the sanitised form differs from the original
+   *  key. Lets chat clients map LLM tool-call payloads (which use
+   *  the sanitised keys) back to the schema's original L4 names
+   *  without re-implementing the server's sanitisation. */
+  'x-sanitized-name'?: string
 }
 
 export interface FunctionParameters {

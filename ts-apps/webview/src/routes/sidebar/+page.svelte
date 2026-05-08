@@ -20,6 +20,7 @@
     ListSidebarDeployments,
     RequestSidebarDeploy,
     RequestSidebarUndeploy,
+    RequestSidebarDownloadDeployment,
     GetSidebarDeploymentOpenApi,
     GetSidebarDeploymentStatus,
     ShowNotification,
@@ -70,6 +71,8 @@
   let deployments: SidebarDeploymentInfo[] = $state([])
   let deploymentsLoading: boolean = $state(false)
   let undeployingId: string | null = $state(null)
+  let downloadingId: string | null = $state(null)
+  let openDeploymentMenuId: string | null = $state(null)
   let collapsedDeployments: Set<string> = $state(new Set())
   let undeployConfirm: SidebarDeploymentInfo | null = $state(null)
 
@@ -92,7 +95,23 @@
   $effect(() => {
     if (activeTab !== 'deployments') {
       undeployConfirm = null
+      openDeploymentMenuId = null
     }
+  })
+
+  // Dismiss the per-deployment dropdown when the user clicks anywhere
+  // outside any deployment-menu wrapper. Listener is only attached
+  // while a menu is open so we don't pay for it on every click.
+  $effect(() => {
+    if (openDeploymentMenuId === null) return
+    const onPointerDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null
+      if (!target?.closest('.deployment-menu-wrapper')) {
+        openDeploymentMenuId = null
+      }
+    }
+    window.addEventListener('mousedown', onPointerDown)
+    return () => window.removeEventListener('mousedown', onPointerDown)
   })
 
   // Reset the Deploy-tab flow when switching away so the footer action
@@ -523,8 +542,48 @@
     }
   }
 
+  function toggleDeploymentMenu(deploymentId: string) {
+    openDeploymentMenuId =
+      openDeploymentMenuId === deploymentId ? null : deploymentId
+  }
+
+  function closeDeploymentMenu() {
+    openDeploymentMenuId = null
+  }
+
   function requestUndeploy(dep: SidebarDeploymentInfo) {
     undeployConfirm = dep
+  }
+
+  async function requestDownload(dep: SidebarDeploymentInfo) {
+    if (!messenger) return
+    closeDeploymentMenu()
+    downloadingId = dep.deploymentId
+    try {
+      const res = await messenger.sendRequest(
+        RequestSidebarDownloadDeployment,
+        HOST_EXTENSION,
+        { deploymentId: dep.deploymentId }
+      )
+      if (res.cancelled) return
+      if (res.success) {
+        notify(
+          'info',
+          `Saved ${res.fileCount} file${res.fileCount === 1 ? '' : 's'} to ${res.folderPath}`
+        )
+      } else {
+        notify('error', res.error ?? `Failed to download "${dep.deploymentId}"`)
+      }
+    } catch (err) {
+      notify(
+        'error',
+        err instanceof Error
+          ? err.message
+          : `Failed to download "${dep.deploymentId}"`
+      )
+    } finally {
+      downloadingId = null
+    }
   }
 
   function cancelUndeploy() {
@@ -817,11 +876,7 @@
 
   <div class="tab-content">
     <div class="tab-pane" hidden={activeTab !== 'ai-chat'}>
-      <AiChatPanel
-        {messenger}
-        {connectionStatus}
-        visible={activeTab === 'ai-chat'}
-      />
+      <AiChatPanel {messenger} visible={activeTab === 'ai-chat'} />
     </div>
     <div class="tab-pane" hidden={activeTab !== 'docs'}>
       <DocsPanel {messenger} />
@@ -980,6 +1035,11 @@
           {:else}
             <div class="deployments-list">
               {#each deployments as dep (dep.deploymentId)}
+                {@const canDownload =
+                  !!dep.hasFiles &&
+                  (dep.status === 'ready' || dep.status === 'pending')}
+                {@const canUndeploy = true}
+                {@const showMenu = canDownload || canUndeploy}
                 <div
                   class="deployment-group"
                   class:collapsed={collapsedDeployments.has(dep.deploymentId)}
@@ -1013,19 +1073,62 @@
                         {/if}
                       </span>
                     </button>
-                    <button
-                      class="undeploy-btn"
-                      disabled={undeployingId === dep.deploymentId}
-                      onclick={(e: MouseEvent) => {
-                        e.stopPropagation()
-                        requestUndeploy(dep)
-                      }}
-                      title="Undeploy"
-                    >
-                      {undeployingId === dep.deploymentId
-                        ? 'Removing...'
-                        : 'Undeploy'}
-                    </button>
+                    {#if showMenu}
+                      <div class="deployment-menu-wrapper">
+                        <button
+                          class="deployment-menu-btn"
+                          aria-label="Deployment actions"
+                          aria-haspopup="menu"
+                          aria-expanded={openDeploymentMenuId ===
+                            dep.deploymentId}
+                          title="Deployment actions"
+                          onclick={(e: MouseEvent) => {
+                            e.stopPropagation()
+                            toggleDeploymentMenu(dep.deploymentId)
+                          }}
+                        >
+                          {#if downloadingId === dep.deploymentId || undeployingId === dep.deploymentId}
+                            <span class="menu-spinner" aria-hidden="true"
+                            ></span>
+                          {:else}
+                            &#8943;
+                          {/if}
+                        </button>
+                        {#if openDeploymentMenuId === dep.deploymentId}
+                          <div class="dropdown-menu deployment-dropdown-menu">
+                            {#if canDownload}
+                              <button
+                                class="menu-item"
+                                disabled={downloadingId === dep.deploymentId}
+                                onclick={(e: MouseEvent) => {
+                                  e.stopPropagation()
+                                  requestDownload(dep)
+                                }}
+                              >
+                                {downloadingId === dep.deploymentId
+                                  ? 'Downloading...'
+                                  : 'Download'}
+                              </button>
+                            {/if}
+                            {#if canUndeploy}
+                              <button
+                                class="menu-item menu-item-danger"
+                                disabled={undeployingId === dep.deploymentId}
+                                onclick={(e: MouseEvent) => {
+                                  e.stopPropagation()
+                                  closeDeploymentMenu()
+                                  requestUndeploy(dep)
+                                }}
+                              >
+                                {undeployingId === dep.deploymentId
+                                  ? 'Removing...'
+                                  : 'Undeploy'}
+                              </button>
+                            {/if}
+                          </div>
+                        {/if}
+                      </div>
+                    {/if}
                   </div>
                   {#if !collapsedDeployments.has(dep.deploymentId)}
                     {#if dep.error}
@@ -1644,26 +1747,88 @@
     color: var(--vscode-errorForeground, #f48771);
   }
 
-  .undeploy-btn {
-    font-size: 0.85em;
-    padding: 2px 8px 2px 8px;
-    border-radius: 3px;
-    border: none;
-    background: none;
-    color: var(--vscode-foreground);
-    cursor: pointer;
-    opacity: 0.5;
+  .deployment-menu-wrapper {
+    position: relative;
     flex-shrink: 0;
   }
 
-  .undeploy-btn:hover:not(:disabled) {
-    opacity: 1;
-    color: #f14c4c;
+  .deployment-menu-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    margin: 0 2px;
+    border: none;
+    border-radius: 3px;
+    background: none;
+    color: var(--vscode-foreground);
+    cursor: pointer;
+    font-size: 1.2em;
+    line-height: 1;
+    opacity: 0.5;
   }
 
-  .undeploy-btn:disabled {
-    opacity: 0.4;
+  .deployment-menu-btn:hover,
+  .deployment-menu-btn[aria-expanded='true'] {
+    opacity: 1;
+    background: var(
+      --vscode-toolbar-hoverBackground,
+      rgba(255, 255, 255, 0.08)
+    );
+  }
+
+  /* Combined selector to outweigh `.dropdown-menu` (defined later in
+   * this stylesheet for the status-footer menu, which anchors
+   * bottom-left). The deployment menu must instead drop *below* its
+   * trigger and align to the trigger's right edge so it expands
+   * leftward and stays inside the sidebar panel.
+   *
+   * Background / border / shadow are repeated here (rather than
+   * relying on the base `.dropdown-menu` cascade) so this menu
+   * visually matches the connection-status footer dropdown
+   * unconditionally, regardless of stylesheet ordering. */
+  .dropdown-menu.deployment-dropdown-menu {
+    position: absolute;
+    top: calc(100% + 2px);
+    bottom: auto;
+    right: 0;
+    left: auto;
+    min-width: 140px;
+    background: var(--vscode-menu-background, #252526);
+    border: 1px solid var(--vscode-menu-border, #454545);
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    z-index: 100;
+    padding: 4px 0;
+  }
+
+  .menu-item:disabled {
+    opacity: 0.5;
     cursor: default;
+  }
+
+  .menu-item-danger:not(:disabled):hover {
+    color: #f14c4c;
+    background: var(--vscode-menu-selectionBackground, #04395e);
+  }
+
+  .menu-spinner {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border: 1.5px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: menu-spin 0.7s linear infinite;
+    opacity: 0.7;
+  }
+
+  @keyframes menu-spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .menu-wrapper {
@@ -1721,6 +1886,7 @@
   .menu-item {
     display: block;
     width: 100%;
+    box-sizing: border-box;
     padding: 5px 12px;
     font-size: 0.92em;
     text-align: left;

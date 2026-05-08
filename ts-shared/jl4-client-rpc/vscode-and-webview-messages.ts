@@ -1,6 +1,7 @@
 import type {
   L4RpcRequestType,
   L4RpcNotificationType,
+  FunctionParameter,
 } from './custom-protocol.js'
 import {
   makeL4RpcRequestType,
@@ -191,6 +192,11 @@ export interface SidebarDeploymentInfo {
   status?: 'pending' | 'compiling' | 'ready' | 'failed'
   error?: string
   functions: ExportedFunctionInfo[]
+  /** True when the backend returned a non-empty `metadata.files` list.
+   * Empty/missing on a `ready` deployment indicates the proxy stripped
+   * the file list (read scope absent), so the Download action should
+   * be hidden from the deployment menu. */
+  hasFiles?: boolean
 }
 
 /** Sidebar requests list of deployments */
@@ -230,6 +236,28 @@ export const RequestSidebarUndeploy: RequestType<
   { success: boolean; error?: string }
 > = {
   method: 'requestSidebarUndeploy',
+}
+
+/** Sidebar requests download of a deployment's sources to disk.
+ * The extension owns the folder picker and disk writes; the webview
+ * just sends the deployment id and surfaces the result. */
+export interface SidebarDownloadDeploymentResponse {
+  success: boolean
+  /** Absolute path of the folder the files were written to. */
+  folderPath?: string
+  /** Number of files written on success. */
+  fileCount?: number
+  /** True when the user cancelled the folder picker or the
+   * overwrite prompt — UI should stay quiet. */
+  cancelled?: boolean
+  error?: string
+}
+
+export const RequestSidebarDownloadDeployment: RequestType<
+  { deploymentId: string },
+  SidebarDownloadDeploymentResponse
+> = {
+  method: 'requestSidebarDownloadDeployment',
 }
 
 /** Sidebar polls deployment compilation status */
@@ -640,6 +668,26 @@ export const AiPermissionsSet: NotificationType<{
   value: AiPermissionValue
 }> = {
   method: 'aiPermissionsSet',
+}
+
+/** Webview asks the extension for the L4 render-meta of an MCP tool.
+ *  The extension parses `[deployId/fnName]` from the cached MCP tool
+ *  description, fetches `/deployments/{id}/functions/{fn}` (cached by
+ *  deployment version), and returns the structured schemas with
+ *  `x-l4-type` annotations recursively. Used by the chat tool-call
+ *  card to render JSON arguments back into L4 syntax. Returns
+ *  `{ kind: 'unavailable' }` if the tool isn't an l4-rules rule, or
+ *  if the fetch fails — the caller falls back to plain JSON view. */
+export const AiToolRenderMeta: RequestType<
+  { toolName: string },
+  | {
+      kind: 'meta'
+      parameters: FunctionParameter
+      returnSchema?: FunctionParameter
+    }
+  | { kind: 'unavailable' }
+> = {
+  method: 'aiToolRenderMeta',
 }
 
 /** Extension → webview: a server-side tool activity event (from the

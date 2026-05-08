@@ -1,10 +1,7 @@
 import * as vscode from 'vscode'
+import { createHash } from 'crypto'
 
-export type ConnectionStatus =
-  | 'connected'
-  | 'not-configured'
-  | 'connecting'
-  | 'error'
+type ConnectionStatus = 'connected' | 'not-configured' | 'connecting' | 'error'
 
 export interface ConnectionState {
   status: ConnectionStatus
@@ -91,6 +88,13 @@ export class AuthManager {
     )
   }
 
+  private getAiApiKeyFromSettings(): string {
+    return (
+      vscode.workspace.getConfiguration('legaleseAi').get<string>('apiKey') ??
+      ''
+    )
+  }
+
   /**
    * Whether the user is in Legalese Cloud mode (no serviceUrl configured,
    * authenticated via browser login with a session token).
@@ -111,6 +115,36 @@ export class AuthManager {
     if (session) return { Authorization: `Bearer ${session}` }
 
     return {}
+  }
+
+  /**
+   * Auth headers for the Legalese AI proxy.
+   * Prefers `legaleseAi.apiKey` when set; otherwise falls back to the
+   * shared flow (jl4 service API key, then browser-login session).
+   * Keeping this distinct from `getAuthHeaders` lets users mix a
+   * self-hosted jl4 service (with `jl4.serviceApiKey`) and a separate
+   * Legalese AI key — neither setting clobbers the other.
+   */
+  async getAiAuthHeaders(): Promise<Record<string, string>> {
+    const aiKey = this.getAiApiKeyFromSettings()
+    if (aiKey) return { Authorization: `Bearer ${aiKey}` }
+    return this.getAuthHeaders()
+  }
+
+  /**
+   * Whether the Legalese AI surface (chat tab, ask-about-selection)
+   * has credentials it can use. True when EITHER:
+   *  - `legaleseAi.apiKey` is set, OR
+   *  - the user has a verified Legalese Cloud session (cloudUserId is
+   *    populated only after a successful GET /auth/session round-trip,
+   *    so this rules out stale/forged tokens).
+   *
+   * Deliberately independent of the jl4-service connection: a
+   * self-hosted jl4 service does NOT imply Legalese AI access.
+   */
+  isAiUsable(): boolean {
+    if (this.getAiApiKeyFromSettings()) return true
+    return this.cloudUserId !== undefined
   }
 
   /**
@@ -152,29 +186,45 @@ export class AuthManager {
 
   /**
    * Stable identifier for the signed-in Legalese Cloud user, if any.
-   * Callers scoping local state (conversation history, per-user caches)
-   * should key off this and fall back to an `anonymous`-style bucket
-   * when it's undefined (self-hosted mode or signed-out).
+   * Undefined in self-hosted / api-key-only / signed-out modes. For
+   * scoping on-disk state, prefer `getUserStorageKey()` which also
+   * covers the api-key case.
    */
   getUserId(): string | undefined {
     return this.cloudUserId
   }
 
   /**
-   * Derives a filesystem-safe key from the current user identity.
-   * Returns `anonymous` when no Legalese Cloud user is signed in so
-   * self-hosted / signed-out state still has a stable bucket — just
-   * not one that collides with any real user's.
+   * Filesystem-safe identity key for scoping local state (conversation
+   * history, per-user caches). Mirrors the ai-proxy's `creatorId` so
+   * the local layout matches the server: each api key gets its own
+   * silo, each WorkOS user gets theirs. Returns `undefined` when no
+   * credential is available — callers should treat that as "no
+   * history" rather than collapsing into a shared bucket.
+   *
+   * Order matches outbound auth precedence (`getAiAuthHeaders`):
+   * api key wins over session when both are configured.
    */
-  getUserStorageKey(): string {
+  getUserStorageKey(): string | undefined {
+    const aiKey = this.getAiApiKeyFromSettings()
+    if (aiKey) {
+      // Hash so the secret never lands on disk. 16 hex chars = 64 bits,
+      // collision-resistant for the small number of keys a single user
+      // might rotate through.
+      const digest = createHash('sha256')
+        .update(aiKey)
+        .digest('hex')
+        .slice(0, 16)
+      return `apikey-${digest}`
+    }
     const id = this.cloudUserId
-    if (!id) return 'anonymous'
+    if (!id) return undefined
     // Keep only characters we know are safe across macOS/Win/Linux
     // filesystems. A WorkOS user id (`user_01H...`) already satisfies
     // this, but the guard means any future identity shape can't inject
     // a path separator.
     const safe = id.replace(/[^a-zA-Z0-9_-]/g, '_')
-    return safe.length > 0 ? safe : 'anonymous'
+    return safe.length > 0 ? safe : undefined
   }
 
   /**

@@ -16,7 +16,6 @@
     AiChatToolCall,
     AiChatTurnSpawn,
     AiUsageUpdate,
-    type GetSidebarConnectionStatusResponse,
   } from 'jl4-client-rpc'
   import { createAiChatStore } from '$lib/stores/ai-chat.svelte'
   import MessageList from './message-list.svelte'
@@ -27,23 +26,19 @@
 
   let {
     messenger,
-    connectionStatus,
     visible,
   }: {
     messenger: InstanceType<typeof Messenger> | null
-    connectionStatus: GetSidebarConnectionStatusResponse
     visible: boolean
   } = $props()
 
   const store = createAiChatStore(() => messenger)
 
-  // Seed the signed-in flag from the existing sidebar connection status
-  // so the unauth CTA isn't shown while the auth-status notification is
-  // still in flight. The AiAuthStatus notification overrides this as
-  // soon as it arrives.
-  $effect(() => {
-    store.onAuthStatus({ signedIn: connectionStatus.connected })
-  })
+  // The jl4-service connection is independent of Legalese AI
+  // credentials (a self-hosted service does NOT imply AI access).
+  // The store defaults `signedIn` to false; the extension fires
+  // AiAuthStatus on register so the correct value arrives before the
+  // user has a chance to interact.
 
   let historyOpen = $state(false)
   let settingsOpen = $state(false)
@@ -173,6 +168,7 @@
         pipelineActive={store.pipelineActive}
         pendingApproval={store.pendingApproval}
         pendingQuestion={store.pendingQuestion}
+        {messenger}
         {onRetry}
         onApproveTool={(callId, decision) =>
           store.approveTool(callId, decision)}

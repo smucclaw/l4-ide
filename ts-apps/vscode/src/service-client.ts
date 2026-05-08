@@ -118,6 +118,35 @@ export class ServiceClient {
   }
 
   /**
+   * Fetch the source files of a deployment as
+   * `{ files: [{ path, totalLines, exports, content }] }`.
+   * Used to materialise a deployment to disk via the sidebar Download
+   * action. Backed by `GET /deployments/{id}/files` (no query params),
+   * which returns every `.l4` source in a single response.
+   */
+  async getDeploymentFiles(deploymentId: string): Promise<{
+    files: Array<{
+      path: string
+      totalLines: number
+      exports: string[]
+      content: string
+    }>
+  }> {
+    const encodedId = encodeURIComponent(deploymentId)
+    const resp = await this.request(`/deployments/${encodedId}/files`)
+    if (!resp.ok)
+      await throwWithBody(resp, `GET /deployments/${encodedId}/files`)
+    return (await resp.json()) as {
+      files: Array<{
+        path: string
+        totalLines: number
+        exports: string[]
+        content: string
+      }>
+    }
+  }
+
+  /**
    * Get the OpenAPI 3.0 spec for a single deployment.
    */
   async getDeploymentOpenApi(deploymentId: string): Promise<unknown> {
@@ -125,6 +154,30 @@ export class ServiceClient {
     const resp = await this.request(`/deployments/${encodedId}/openapi.json`)
     if (!resp.ok)
       await throwWithBody(resp, `GET /deployments/${encodedId}/openapi.json`)
+    return resp.json()
+  }
+
+  /**
+   * Get a single function's schema. Returns the raw JSON shape of
+   * jl4-service's `FunctionSummary` — `parameters` plus the structured
+   * `returnSchema` (when present), with `x-l4-type` annotations on
+   * record/enum nodes. Used by the chat tool-call card to render
+   * arguments back into L4 syntax.
+   */
+  async getFunctionSchema(
+    deploymentId: string,
+    functionName: string
+  ): Promise<unknown> {
+    const encodedId = encodeURIComponent(deploymentId)
+    const encodedFn = encodeURIComponent(functionName)
+    const resp = await this.request(
+      `/deployments/${encodedId}/functions/${encodedFn}`
+    )
+    if (!resp.ok)
+      await throwWithBody(
+        resp,
+        `GET /deployments/${encodedId}/functions/${encodedFn}`
+      )
     return resp.json()
   }
 

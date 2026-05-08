@@ -198,6 +198,7 @@ emptyParam t = Parameter
   , parameterPropertyOrder = Nothing
   , parameterItems         = Nothing
   , parameterRequired      = Nothing
+  , parameterL4Type        = Nothing
   }
 
 

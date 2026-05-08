@@ -30,6 +30,7 @@ import {
   AiMentionSearch,
   AiPermissionsGet,
   AiPermissionsSet,
+  AiToolRenderMeta,
   AiUsageSubscribe,
   AiUsageUnsubscribe,
   AiUsageUpdate,
@@ -44,9 +45,12 @@ import * as os from 'os'
 import { promises as fsPromises } from 'fs'
 import type { AuthManager } from '../auth.js'
 import { isLocalMode } from './ai-proxy-client.js'
+import type { ServiceClient } from '../service-client.js'
 import type { ChatService, ChatServiceEvent } from './chat-service.js'
 import type { ConversationStore } from './conversation-store.js'
 import type { AiLogger } from './logger.js'
+import { MCP_L4_RULES_PREFIX } from './mcp-client.js'
+import type { McpToolClient } from './mcp-client.js'
 import {
   categoryForTool,
   getPermission,
@@ -108,6 +112,13 @@ export function registerAiChatHandlers(deps: {
    *  here and flush on the next visible-transition so the UI catches
    *  up to the live conversation state. */
   visibility: WebviewVisibilityAdapter
+  /** MCP client — used by the chat-side render-meta lookup to resolve
+   *  a sanitized tool name back to its `(deployId, fnName)` pair. */
+  mcp: McpToolClient
+  /** REST client for jl4-service — used to fetch the function-schema
+   *  endpoint (`/deployments/{id}/functions/{fn}`) for chat tool-call
+   *  rendering. */
+  serviceClient: ServiceClient
 }): vscode.Disposable {
   const {
     messenger,
@@ -122,6 +133,8 @@ export function registerAiChatHandlers(deps: {
     askUserChannel,
     dispatcher,
     visibility,
+    mcp,
+    serviceClient,
   } = deps
   logger.info(
     'registerAiChatHandlers: installing handlers on sidebar messenger'
@@ -572,6 +585,63 @@ export function registerAiChatHandlers(deps: {
     }
   )
 
+  // Function-schema cache for chat tool-call rendering. The chat
+  // expand panel asks for the schema of a rule's inputs/outputs so it
+  // can render JSON args back into L4 syntax. We hit
+  // `/deployments/{id}/functions/{fn}` once per deployment version
+  // and cache the result; the deploymentVersion changes whenever the
+  // user re-deploys the same id, so the cache invalidates naturally.
+  type RenderMeta = {
+    parameters: import('jl4-client-rpc').FunctionParameter
+    returnSchema?: import('jl4-client-rpc').FunctionParameter
+  }
+  const renderMetaCache = new Map<
+    string,
+    { version: string; meta: RenderMeta }
+  >()
+  messenger.onRequest(AiToolRenderMeta, async ({ toolName }) => {
+    if (!toolName.startsWith(MCP_L4_RULES_PREFIX)) {
+      return { kind: 'unavailable' as const }
+    }
+    // Make sure listTools() has populated the targetMap. Cheap when
+    // the cache is warm (≤3s).
+    await mcp.listTools().catch(() => undefined)
+    const target = mcp.getToolTarget(toolName)
+    if (!target) return { kind: 'unavailable' as const }
+    const cacheKey = `${target.deployId}/${target.fnName}`
+    try {
+      // Look up the deployment's current version so we invalidate
+      // automatically on redeploy (the version is a SHA-256 of all
+      // source contents — changes whenever any rule body changes).
+      const status = await serviceClient.getDeploymentStatus(target.deployId)
+      const version =
+        (status.metadata as { version?: string } | undefined)?.version ?? ''
+      const cached = renderMetaCache.get(cacheKey)
+      if (cached && cached.version === version) {
+        return { kind: 'meta' as const, ...cached.meta }
+      }
+      const summary = (await serviceClient.getFunctionSchema(
+        target.deployId,
+        target.fnName
+      )) as {
+        parameters?: import('jl4-client-rpc').FunctionParameter
+        returnSchema?: import('jl4-client-rpc').FunctionParameter
+      }
+      if (!summary.parameters) return { kind: 'unavailable' as const }
+      const meta: RenderMeta = {
+        parameters: summary.parameters,
+        returnSchema: summary.returnSchema,
+      }
+      renderMetaCache.set(cacheKey, { version, meta })
+      return { kind: 'meta' as const, ...meta }
+    } catch (err) {
+      logger.warn(
+        `aiToolRenderMeta(${toolName}) failed: ${err instanceof Error ? err.message : String(err)}`
+      )
+      return { kind: 'unavailable' as const }
+    }
+  })
+
   messenger.onRequest(AiMentionSearch, async ({ query }) => {
     const items = await searchMentions(query)
     return { items }
@@ -649,17 +719,24 @@ export function registerAiChatHandlers(deps: {
     )
   }
 
-  // Push auth status whenever the AuthManager fires; the webview uses
-  // this to enable/disable the input. The "signed in" criterion is
-  // deliberately broad: any connected auth context (Legalese Cloud
-  // session or a configured sk_* API key) can talk to ai.legalese.cloud.
-  const pushAuthStatus = (state: { connected: boolean }): void => {
+  // Push auth status whenever something that affects AI credentials
+  // changes. The "signed in" criterion is deliberately narrow: only a
+  // verified Legalese Cloud session OR a configured `legaleseAi.apiKey`
+  // counts. A self-hosted jl4-service connection does NOT imply Legalese
+  // AI access, so we don't unlock the AI tab just because the deploy
+  // panel happens to be connected to localhost.
+  const pushAuthStatus = (): void => {
     messenger.sendNotification(AiAuthStatus, frontend, {
-      signedIn: state.connected,
+      signedIn: auth.isAiUsable(),
     })
   }
-  void auth.getConnectionState().then(pushAuthStatus)
-  const authSub = auth.onDidChange((state) => pushAuthStatus(state))
+  // Kick off a connection-state verify so cloudUserId gets populated
+  // (or cleared) before we push, but don't gate the push on `connected`.
+  void auth.getConnectionState().then(() => pushAuthStatus())
+  const authSub = auth.onDidChange(() => pushAuthStatus())
+  const aiKeyConfigSub = vscode.workspace.onDidChangeConfiguration((e) => {
+    if (e.affectsConfiguration('legaleseAi.apiKey')) pushAuthStatus()
+  })
 
   // Push the currently-active editor file so the chat-input can render
   // the "include this file" chip. Pushed on every change, plus once at
@@ -720,6 +797,7 @@ export function registerAiChatHandlers(deps: {
     dispose(): void {
       if (usageTimer) clearInterval(usageTimer)
       authSub.dispose()
+      aiKeyConfigSub.dispose()
       activeFileSub.dispose()
       visibleFileSub.dispose()
       schemeReg.dispose()
@@ -1061,7 +1139,7 @@ async function deleteServerConversation(
 ): Promise<void> {
   try {
     const { getAiEndpoint, isLocalMode } = await import('./ai-proxy-client.js')
-    const headers = await auth.getAuthHeaders()
+    const headers = await auth.getAiAuthHeaders()
     if (!headers.Authorization && isLocalMode()) {
       headers.Authorization = 'Bearer dev-local'
     }
@@ -1127,7 +1205,7 @@ async function fetchUsage(
   blockOnOverage: boolean
 } | null> {
   try {
-    const headers = await auth.getAuthHeaders()
+    const headers = await auth.getAiAuthHeaders()
     const { getAiEndpoint, isLocalMode } = await import('./ai-proxy-client.js')
     if (!headers.Authorization && isLocalMode()) {
       headers.Authorization = 'Bearer dev-local'

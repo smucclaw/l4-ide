@@ -1,6 +1,12 @@
 <script lang="ts">
   import type { RenderedToolCall } from '$lib/stores/ai-chat.svelte'
   import { colorize } from '@repo/l4-highlight'
+  import { AiToolRenderMeta, type FunctionParameter } from 'jl4-client-rpc'
+  import type { Messenger } from 'vscode-messenger-webview'
+  import {
+    renderArgumentsAsL4,
+    renderJsonAsL4,
+  } from '$lib/utils/render-l4-value'
 
   /**
    * Tools exposed by the l4-rules MCP server fall into two buckets.
@@ -26,10 +32,16 @@
 
   let {
     call,
+    messenger,
     onOpenFile,
     onOpenDiff,
   }: {
     call: RenderedToolCall
+    /** Webview→extension messenger; used to fetch render metadata
+     *  (arg/return schema with `x-l4-type`) on demand for L4-syntax
+     *  rendering of rule call arguments. Optional: when null the row
+     *  falls back to plain JSON. */
+    messenger: InstanceType<typeof Messenger> | null
     /** Simple open: shows the target file in a regular editor tab.
      *  Used for read / create / delete rows. */
     onOpenFile: (callId: string) => void
@@ -186,36 +198,6 @@
     return !L4_RULES_INFRASTRUCTURE.has(sub)
   })
 
-  /**
-   * Mirror of inspector-panel's formatResultValue: break commas into
-   * indented lines, drop the parens that were only there to group a
-   * record, and turn ` WITH ` into a block-opening indent. Keeps the
-   * AI rule-result readout visually congruent with #EVAL in Inspector.
-   */
-  function formatResultValue(text: string): string {
-    let out = ''
-    let depth = 0
-    const indent = (): string => '\n' + '  '.repeat(depth)
-    for (let i = 0; i < text.length; i++) {
-      const ch = text[i]
-      if (ch === '(') {
-        depth++
-      } else if (ch === ')') {
-        depth = Math.max(0, depth - 1)
-      } else if (ch === ',') {
-        if (text[i + 1] === ' ') i++
-        out += indent()
-      } else if (text.startsWith(' WITH ', i)) {
-        depth++
-        out += ' WITH' + indent()
-        i += 5
-      } else {
-        out += ch
-      }
-    }
-    return out
-  }
-
   // l4-rules MCP tools wrap their output as
   //   { "contents": { "result": { "value": "..." }, ... } }
   // We only ever want contents.result.value here — everything else
@@ -236,11 +218,103 @@
     }
   }
 
-  const ruleResultHtml = $derived.by(() => {
+  // Schema-less fallback: when the function-schema fetch hasn't
+  // resolved (or failed), show the extracted result value as plain
+  // text. No L4 colorize and no indentation pass — both look wrong
+  // on JSON-shaped payloads (the colorizer paints random tokens that
+  // happen to overlap with L4 keywords; the indenter splits commas
+  // mid-JSON-array). The schema-driven `returnL4` takes precedence
+  // in the JSX whenever it's available.
+  const ruleResultText = $derived.by(() => {
     if (!isRuleCall || !call.result) return null
-    const value = extractRuleResultValue(call.result)
-    if (value === null) return null
-    return colorize(formatResultValue(value))
+    return extractRuleResultValue(call.result)
+  })
+
+  // Render-meta for L4-syntax rendering of rule arguments.
+  // Lazy-fetched: we only ask the extension for the schema once the
+  // row's expand panel is opened on a rule call, and cache the result
+  // for the lifetime of this component.
+  let renderMeta = $state<{
+    parameters: FunctionParameter
+    returnSchema?: FunctionParameter
+  } | null>(null)
+  let renderMetaFetched = false
+  async function ensureRenderMeta(): Promise<void> {
+    if (renderMetaFetched || !messenger || !isRuleCall) return
+    renderMetaFetched = true
+    try {
+      const res = await messenger.sendRequest(
+        AiToolRenderMeta,
+        { type: 'extension' },
+        { toolName: call.name }
+      )
+      if (res.kind === 'meta') {
+        renderMeta = {
+          parameters: res.parameters,
+          returnSchema: res.returnSchema,
+        }
+      }
+    } catch {
+      // Network / proxy hiccup — the row falls back to JSON view.
+    }
+  }
+
+  // Pre-fetch render-meta as soon as the row mounts on a rule call,
+  // not on first expand. The previous on-expand fire produced a
+  // visible flicker — the panel briefly painted the JSON fallback
+  // before the schema arrived and the L4 view swapped in. Fetching
+  // up front means by the time the user clicks the chevron the
+  // metadata is already in memory and the L4 view renders on the
+  // first frame. The extension caches by deployment version, so the
+  // cost across many cards in a long conversation is one roundtrip
+  // per distinct (deployId, fnName).
+  $effect(() => {
+    if (isRuleCall) void ensureRenderMeta()
+  })
+
+  // L4-rendered argument block. Falls back to null when we don't have
+  // a schema yet (or the tool isn't a rule), and the panel shows
+  // pretty-printed JSON instead.
+  const argsL4 = $derived.by(() => {
+    if (!isRuleCall || !renderMeta) return null
+    try {
+      // Rule calls wrap their args under `arguments`; deontic functions
+      // also carry top-level `startTime` / `events`. We render only the
+      // `arguments` payload here — the simulation envelope is rare and
+      // not user-edited L4 syntax anyway, so JSON is fine for it.
+      const inner =
+        typeof args.arguments === 'object' && args.arguments !== null
+          ? (args.arguments as Record<string, unknown>)
+          : args
+      // The schema's `arguments` property mirrors the JSON shape for
+      // deontic functions; for non-deontic the schema IS the args
+      // object itself.
+      const argsSchema =
+        renderMeta.parameters.properties?.arguments ?? renderMeta.parameters
+      return colorize(renderArgumentsAsL4(inner, argsSchema))
+    } catch {
+      return null
+    }
+  })
+
+  // L4-rendered return value, walked alongside `returnSchema`. Covers
+  // every value shape the evaluator emits — records (constructor-wrapped
+  // single-key objects), enums (bare strings matching schema.enum),
+  // primitives, and arrays. When the schema isn't available the JSX
+  // falls back to `ruleResultText` (plain extracted value, no
+  // formatting, no colorize).
+  const returnL4 = $derived.by(() => {
+    if (!isRuleCall || !renderMeta?.returnSchema || !call.result) return null
+    try {
+      const parsed = JSON.parse(call.result.trim()) as unknown
+      const contents = (parsed as { contents?: unknown } | null)?.contents
+      const result = (contents as { result?: unknown } | null)?.result
+      const value = (result as { value?: unknown } | null)?.value
+      if (value === undefined || value === null) return null
+      return colorize(renderJsonAsL4(value, renderMeta.returnSchema))
+    } catch {
+      return null
+    }
   })
 
   const hasDetails = $derived(
@@ -387,13 +461,22 @@
          section labels (small-caps, description-foreground) with a
          hairline separator between them. Keeps chat tool-expansion
          visually consistent with the sidebar's Deploy / Deployments
-         cards. -->
+         cards. The Input pre-renders as L4 syntax (Type WITH …) once
+         the function-schema metadata loads; until then we show the
+         raw JSON the model sent so there's never a blank state. -->
     <div class="rule-details">
       <div class="section-label">Input</div>
-      <pre class="rule-block rule-args">{JSON.stringify(args, null, 2)}</pre>
-      {#if ruleResultHtml}
+      {#if argsL4}
+        <pre class="rule-block rule-args">{@html argsL4}</pre>
+      {:else}
+        <pre class="rule-block rule-args">{JSON.stringify(args, null, 2)}</pre>
+      {/if}
+      {#if returnL4}
         <div class="section-label">Output</div>
-        <pre class="rule-block rule-result">{@html ruleResultHtml}</pre>
+        <pre class="rule-block rule-result">{@html returnL4}</pre>
+      {:else if ruleResultText}
+        <div class="section-label">Output</div>
+        <pre class="rule-block rule-result">{ruleResultText}</pre>
       {/if}
     </div>
   {:else if expanded && call.status === 'done' && prettyResult}
@@ -554,10 +637,12 @@
     font-size: 11px;
     line-height: 1.5;
     color: var(--vscode-foreground);
-    white-space: pre-wrap;
-    word-break: break-word;
+    /* Preserve indentation; long lines scroll horizontally instead of
+       wrapping. Word-wrap obscures the L4-syntax indentation pattern
+       (e.g. `LIST` items, nested `WITH` blocks). */
+    white-space: pre;
+    overflow: auto;
     max-height: 320px;
-    overflow-y: auto;
     tab-size: 2;
   }
   /* Matches the deployment tool-card's section labels (small-caps,

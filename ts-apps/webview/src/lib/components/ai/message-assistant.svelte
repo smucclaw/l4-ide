@@ -5,6 +5,8 @@
   import ToolCallRow from './tool-call-row.svelte'
   import type { AssistantBlock } from '$lib/stores/ai-chat.svelte'
 
+  import type { Messenger } from 'vscode-messenger-webview'
+
   let {
     content,
     streaming,
@@ -12,6 +14,7 @@
     error,
     blocks,
     usage,
+    messenger,
     onRetry,
     onOpenFile,
     onOpenFileDiff,
@@ -28,6 +31,9 @@
     error?: { message: string; code?: string }
     blocks?: AssistantBlock[]
     usage?: { promptTokens: number; completionTokens: number }
+    /** Webview→extension messenger; threaded into ToolCallRow so the
+     *  tool-call card can fetch L4 render-meta on demand. */
+    messenger: InstanceType<typeof Messenger> | null
     onRetry?: () => void
     onOpenFile: (callId: string) => void
     onOpenFileDiff: (callId: string) => void
@@ -180,6 +186,7 @@
         {:else if block.kind === 'tool-call'}
           <ToolCallRow
             call={block.call}
+            {messenger}
             {onOpenFile}
             onOpenDiff={onOpenFileDiff}
           />

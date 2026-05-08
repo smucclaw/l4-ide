@@ -285,5 +285,5 @@ spec = describe "Sanitization" $ do
 
 -- | Helper to create a simple Parameter with no nested properties.
 simpleParam :: Text -> Parameter
-simpleParam ty = Parameter ty Nothing Nothing [] "" Nothing Nothing Nothing Nothing
+simpleParam ty = Parameter ty Nothing Nothing [] "" Nothing Nothing Nothing Nothing Nothing
 
