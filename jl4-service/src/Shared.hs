@@ -18,6 +18,9 @@ module Shared (
   buildPropertyReverseMap,
   remapFnLiteralKeys,
   remapArguments,
+  -- * Render-meta annotation
+  annotateSanitizedNames,
+  AnnotatedFunctionSummary (..),
   -- * Error text sanitization
   sanitizeFieldNamesInText,
   -- * Collision detection
@@ -204,6 +207,7 @@ sanitizeParameterValue p =
   let base = Aeson.KeyMap.delete "alias"
            $ Aeson.KeyMap.delete "propertyOrder"
            $ Aeson.KeyMap.delete "x-l4-type"
+           $ Aeson.KeyMap.delete "x-sanitized-name"
            $ Aeson.KeyMap.delete "properties"
            $ Aeson.KeyMap.delete "items"
            $ Aeson.KeyMap.delete "required"
@@ -253,6 +257,74 @@ buildNestedReverseMap props =
   collectFromParameter p =
     maybe mempty buildNestedReverseMap p.parameterProperties
     <> maybe mempty (maybe mempty buildNestedReverseMap . (.parameterProperties)) p.parameterItems
+
+-- | Wrapper around 'FunctionSummary' whose 'ToJSON' instance enriches
+-- the `parameters` and `returnSchema` fields with `x-sanitized-name`
+-- annotations on every property. Used as the response type of the
+-- function-schema endpoint so chat clients can resolve LLM-facing
+-- sanitised keys back to original L4 names without re-implementing
+-- the sanitisation algorithm.
+newtype AnnotatedFunctionSummary = AnnotatedFunctionSummary FunctionSummary
+
+instance Aeson.ToJSON AnnotatedFunctionSummary where
+  toJSON (AnnotatedFunctionSummary fs) =
+    let update k m = case Aeson.KeyMap.lookup k m of
+          Nothing -> m
+          Just v -> Aeson.KeyMap.insert k (annotateSanitizedNames v) m
+    in case Aeson.toJSON fs of
+      Aeson.Object o -> Aeson.Object (update "returnSchema" (update "parameters" o))
+      v -> v
+
+-- | Annotate every property in a JSON-encoded parameter schema with its
+-- sanitised name, so the chat-side renderer can map between LLM-facing
+-- payloads (which use sanitised keys) and the schema's original keys
+-- without duplicating the sanitisation logic.
+--
+-- For each `properties` object encountered (at any depth), this walks
+-- the keys, computes the deduplicated sanitised name via the same
+-- 'sanitizePropertyNames' map the MCP exporter uses, and injects an
+-- `x-sanitized-name` field into each child schema whenever the
+-- sanitised form differs from the original key.
+--
+-- The function-schema endpoint applies this to `parameters` and
+-- `returnSchema` before responding. MCP and OpenAPI strip the
+-- annotation (it's redundant in MCP — keys are already sanitised —
+-- and reserved for the render-meta surface in OpenAPI).
+annotateSanitizedNames :: Aeson.Value -> Aeson.Value
+annotateSanitizedNames (Aeson.Object obj) =
+  let
+    -- Recurse into well-known schema slots first so nested properties
+    -- get their own per-level sanitisation map computed.
+    update :: Aeson.Key.Key -> (Aeson.Value -> Aeson.Value) -> Aeson.KeyMap.KeyMap Aeson.Value -> Aeson.KeyMap.KeyMap Aeson.Value
+    update k f m = case Aeson.KeyMap.lookup k m of
+      Nothing -> m
+      Just v -> Aeson.KeyMap.insert k (f v) m
+    obj' = update "properties" annotatePropertiesObject obj
+    obj'' = update "items" annotateSanitizedNames obj'
+  in Aeson.Object obj''
+annotateSanitizedNames (Aeson.Array arr) =
+  Aeson.Array (fmap annotateSanitizedNames arr)
+annotateSanitizedNames v = v
+
+-- | Apply 'annotateSanitizedNames' to each child schema in a JSON
+-- `properties` object, attaching `x-sanitized-name` to the children
+-- whose key differs from its sanitised form.
+annotatePropertiesObject :: Aeson.Value -> Aeson.Value
+annotatePropertiesObject (Aeson.Object props) =
+  let origKeys = map Aeson.Key.toText (Aeson.KeyMap.keys props)
+      nameMap = sanitizePropertyNames origKeys
+      annotateChild origKey child =
+        let san = Map.findWithDefault (sanitizePropertyName origKey) origKey nameMap
+            recursed = annotateSanitizedNames child
+        in if san == origKey
+             then recursed
+             else case recursed of
+               Aeson.Object o ->
+                 Aeson.Object (Aeson.KeyMap.insert "x-sanitized-name" (Aeson.String san) o)
+               other -> other
+      pairs = [(k, annotateChild (Aeson.Key.toText k) v) | (k, v) <- Aeson.KeyMap.toList props]
+  in Aeson.Object (Aeson.KeyMap.fromList pairs)
+annotatePropertiesObject v = annotateSanitizedNames v
 
 -- | Recursively remap keys in FnObject (and nested FnArray/FnObject) values
 -- using the sanitized -> original reverse map.

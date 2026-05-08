@@ -6,11 +6,15 @@ import type { FunctionParameter } from 'jl4-client-rpc'
  *
  * Indentation is driven directly by the structural depth of the value
  * — each nested record opens a new `WITH` block at the parent's
- * indent + 2 spaces, and every field lives on its own line. This
- * matches the visual shape of the Inspector's `#EVAL` formatter for
- * flat records, and stays correct for arbitrary nesting (the
- * inspector's regex pass over a flattened L4 string can't tell where
- * a nested record ends, which over-indents anything past it).
+ * indent + 2 spaces, and every field lives on its own line.
+ *
+ * Field-name resolution bridges the gap between the LLM-facing
+ * sanitised property names (hyphens replacing whitespace, applied by
+ * jl4-service's MCP exporter) and the original spaced names that
+ * the function-schema endpoint preserves: each child schema carries
+ * an `x-sanitized-name` annotation when its key was sanitised, so we
+ * can map a value-key like `event-type` back to the schema-key
+ * `event type` without duplicating the server's sanitisation.
  *
  * Examples:
  *   { Person: { name: "Alice", age: 30 } }   + schema with x-l4-type "Person"
@@ -48,14 +52,21 @@ export function renderArgumentsAsL4(
   const order = argsSchema.propertyOrder ?? Object.keys(props)
   const seen = new Set<string>()
   const lines: string[] = []
-  for (const k of order) {
-    if (!(k in args)) continue
-    seen.add(k)
-    lines.push(`${k} IS ${formatNode(args[k], props[k], 0)}`)
+  for (const origKey of order) {
+    const fieldSchema = props[origKey]
+    const vk = findValueKey(origKey, fieldSchema, args)
+    if (vk === null) continue
+    seen.add(vk)
+    lines.push(
+      `${quoteIdent(origKey)} IS ${formatNode(args[vk], fieldSchema, 0)}`
+    )
   }
   for (const k of Object.keys(args)) {
     if (seen.has(k)) continue
-    lines.push(`${k} IS ${formatNode(args[k], props[k], 0)}`)
+    const { originalKey, schema: fieldSchema } = lookupSchemaFor(props, k)
+    lines.push(
+      `${quoteIdent(originalKey)} IS ${formatNode(args[k], fieldSchema, 0)}`
+    )
   }
   return lines.join('\n')
 }
@@ -66,14 +77,6 @@ export function renderArgumentsAsL4(
  * panel's local formatter so a pre-rendered L4 string from the server
  * (e.g. an enum or scalar result) renders consistently with the
  * structural renderer above.
- *
- *   `Person WITH name IS "Alice", age IS 30`
- *     → "Person WITH\n  name IS \"Alice\"\n  age IS 30"
- *
- * Note: nested records WITHOUT delimiting parens drift right and
- * never come back — the inspector formatter has no way to detect
- * the close of an inner record. For schema-known values prefer
- * {@link renderJsonAsL4}, which uses tree depth directly.
  */
 export function formatL4Indentation(text: string): string {
   let out = ''
@@ -134,7 +137,24 @@ function formatArray(
 ): string {
   if (value.length === 0) return 'LIST'
   const parts = value.map((v) => formatNode(v, itemsSchema, depth + 1))
-  return `LIST ${parts.join(', ')}`
+  // Multi-line when any item rendered onto multiple lines (records,
+  // nested lists). Flat primitive lists stay inline.
+  const anyMulti = parts.some((p) => p.includes('\n'))
+  if (!anyMulti) return `LIST ${parts.join(', ')}`
+  const indent = '  '.repeat(depth + 1)
+  return `LIST\n${parts.map((p) => indent + indentContinuationLines(p, indent)).join(',\n')}`
+}
+
+/**
+ * Indent every line after the first by the given prefix. Used when an
+ * already-multiline child string is dropped into a list slot — each
+ * subsequent line needs the same leading indent so the L4 block stays
+ * vertically aligned under its bullet.
+ */
+function indentContinuationLines(s: string, indent: string): string {
+  const [first, ...rest] = s.split('\n')
+  if (rest.length === 0) return first ?? ''
+  return [first, ...rest.map((line) => indent + line)].join('\n')
 }
 
 function formatObject(
@@ -158,11 +178,11 @@ function formatObject(
     const wrapperMatches = typeName === ctor
     if (wrapperMatches || !typeName) {
       if (Array.isArray(inner)) {
-        if (inner.length === 0) return ctor
+        if (inner.length === 0) return quoteIdent(ctor)
         if (inner.length === 1) {
-          return `${ctor} ${formatNode(inner[0], undefined, depth + 1)}`
+          return `${quoteIdent(ctor)} ${formatNode(inner[0], undefined, depth + 1)}`
         }
-        return `${ctor} ${formatArray(inner, undefined, depth)}`
+        return `${quoteIdent(ctor)} ${formatArray(inner, undefined, depth)}`
       }
       if (inner !== null && typeof inner === 'object') {
         return formatObject(
@@ -171,7 +191,7 @@ function formatObject(
           depth
         )
       }
-      return `${ctor} ${formatNode(inner, undefined, depth + 1)}`
+      return `${quoteIdent(ctor)} ${formatNode(inner, undefined, depth + 1)}`
     }
   }
 
@@ -180,26 +200,81 @@ function formatObject(
   // has no anonymous-record syntax, so inventing one would mislead.
   if (!typeName || !props) return JSON.stringify(value, null, 2)
 
-  // Field rendering follows the schema's declared order, with any
-  // out-of-band keys appended so unexpected payload still surfaces.
+  // Field rendering follows the schema's declared order, then any
+  // out-of-band keys append. Each child schema carries its
+  // `x-sanitized-name` so a value-key from the LLM (sanitised form)
+  // still resolves to the original schema key without duplicating
+  // the server's sanitiser.
   const order = schema?.propertyOrder ?? Object.keys(props)
   const seen = new Set<string>()
   const fields: string[] = []
-  for (const k of order) {
-    if (!(k in value)) continue
-    seen.add(k)
-    fields.push(`${k} IS ${formatNode(value[k], props[k], depth + 1)}`)
+  for (const origKey of order) {
+    const fieldSchema = props[origKey]
+    const vk = findValueKey(origKey, fieldSchema, value)
+    if (vk === null) continue
+    seen.add(vk)
+    fields.push(
+      `${quoteIdent(origKey)} IS ${formatNode(value[vk], fieldSchema, depth + 1)}`
+    )
   }
   for (const k of Object.keys(value)) {
     if (seen.has(k)) continue
-    fields.push(`${k} IS ${formatNode(value[k], props[k], depth + 1)}`)
+    const { originalKey, schema: fieldSchema } = lookupSchemaFor(props, k)
+    fields.push(
+      `${quoteIdent(originalKey)} IS ${formatNode(value[k], fieldSchema, depth + 1)}`
+    )
   }
-  if (fields.length === 0) return typeName
+  if (fields.length === 0) return quoteIdent(typeName)
 
-  // Inspector-style indentation, but driven by tree depth (not regex
-  // over a flattened string), so nested records are correctly
-  // dedented when they end. Each field at this record's level lives
-  // on its own line at indent = (depth + 1) * 2 spaces.
   const indent = '  '.repeat(depth + 1)
-  return `${typeName} WITH\n${fields.map((f) => indent + f).join('\n')}`
+  return `${quoteIdent(typeName)} WITH\n${fields.map((f) => indent + indentContinuationLines(f, indent)).join('\n')}`
+}
+
+/**
+ * Backtick-wrap an identifier that contains whitespace, matching the
+ * `quoteIdent` helper jl4-service uses when emitting record literals.
+ * L4's parser requires backticks around multi-word identifiers; rendering
+ * them without wrappers produces invalid L4.
+ */
+function quoteIdent(name: string): string {
+  return /\s/.test(name) ? `\`${name}\`` : name
+}
+
+/**
+ * Find which key in `value` corresponds to the schema's `origKey`.
+ * Tries a direct match first, then the child schema's
+ * `x-sanitized-name` annotation (which the server fills in when the
+ * sanitised form differs from the original key).
+ */
+function findValueKey(
+  origKey: string,
+  fieldSchema: FunctionParameter | undefined,
+  value: Record<string, unknown>
+): string | null {
+  if (origKey in value) return origKey
+  const sanitised = fieldSchema?.['x-sanitized-name']
+  if (sanitised && sanitised !== origKey && sanitised in value) return sanitised
+  return null
+}
+
+/**
+ * Reverse lookup — when iterating over the value's keys (which may
+ * be the LLM's sanitised names), find the original schema key plus
+ * its parameter node. Falls back to the value key itself with an
+ * undefined schema when no match is found, so unrecognised payload
+ * still surfaces with sensible labelling.
+ */
+function lookupSchemaFor(
+  props: Record<string, FunctionParameter> | undefined,
+  valueKey: string
+): { originalKey: string; schema: FunctionParameter | undefined } {
+  if (!props) return { originalKey: valueKey, schema: undefined }
+  const direct = props[valueKey]
+  if (direct) return { originalKey: valueKey, schema: direct }
+  for (const [orig, p] of Object.entries(props)) {
+    if (p['x-sanitized-name'] === valueKey) {
+      return { originalKey: orig, schema: p }
+    }
+  }
+  return { originalKey: valueKey, schema: undefined }
 }

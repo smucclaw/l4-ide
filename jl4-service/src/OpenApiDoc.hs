@@ -371,7 +371,8 @@ stripNonOpenApiFields (Aeson.Object obj) =
   Aeson.Object $ Aeson.KeyMap.map stripNonOpenApiFields
                $ Aeson.KeyMap.delete "alias"
                $ Aeson.KeyMap.delete "propertyOrder"
-               $ Aeson.KeyMap.delete "x-l4-type" obj
+               $ Aeson.KeyMap.delete "x-l4-type"
+               $ Aeson.KeyMap.delete "x-sanitized-name" obj
 stripNonOpenApiFields (Aeson.Array arr) =
   Aeson.Array $ fmap stripNonOpenApiFields arr
 stripNonOpenApiFields v = v
