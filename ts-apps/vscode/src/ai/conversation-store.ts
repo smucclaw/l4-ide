@@ -16,11 +16,12 @@ import type { AiLogger } from './logger.js'
  *   {globalStorageUri}/ai/conversations/{userKey}/{id}.json           — live
  *   {globalStorageUri}/ai/conversations/{userKey}/{id}.deleted-{ms}.json — tombstoned
  *
- * `userKey` is derived from the signed-in Legalese Cloud user id so a
- * logout + login as a different user yields an entirely different
- * conversation list, even on the same machine. Self-hosted / signed-
- * out sessions bucket under `anonymous`. Deletion renames; a future
- * cleanup job reaps tombstones.
+ * `userKey` mirrors the ai-proxy's `creatorId` (api-key hash or
+ * WorkOS user id) so each silo on the server has a matching local
+ * folder. When `getUserKey` returns undefined the store is disabled:
+ * reads return empty, writes are dropped with a warning. Chat is
+ * gated on `isAiUsable()` upstream so this only fires on misuse.
+ * Deletion renames; a future cleanup job reaps tombstones.
  */
 export class ConversationStore {
   private readonly rootDir: string
@@ -28,7 +29,7 @@ export class ConversationStore {
   constructor(
     context: vscode.ExtensionContext,
     private readonly logger: AiLogger,
-    private readonly getUserKey: () => string
+    private readonly getUserKey: () => string | undefined
   ) {
     this.rootDir = path.join(
       context.globalStorageUri.fsPath,
@@ -39,15 +40,16 @@ export class ConversationStore {
 
   /** Per-user subdirectory resolved on every call so user switches
    *  take effect immediately without requiring the store to be
-   *  reconstructed. */
-  private baseDir(): string {
+   *  reconstructed. Returns undefined when no credential is available. */
+  private baseDir(): string | undefined {
     const key = this.getUserKey()
-    const safe = /^[a-zA-Z0-9_-]+$/.test(key) ? key : 'anonymous'
-    return path.join(this.rootDir, safe)
+    if (!key || !/^[a-zA-Z0-9_-]+$/.test(key)) return undefined
+    return path.join(this.rootDir, key)
   }
 
   async list(): Promise<AiConversationSummary[]> {
     const dir = this.baseDir()
+    if (!dir) return []
     const files = await this.safeReaddir(dir)
     const summaries: AiConversationSummary[] = []
     for (const f of files) {
@@ -76,8 +78,10 @@ export class ConversationStore {
 
   async load(id: string): Promise<AiConversation | null> {
     if (!isSafeId(id)) return null
+    const p = this.filePath(id)
+    if (!p) return null
     try {
-      const raw = await fs.readFile(this.filePath(id), 'utf-8')
+      const raw = await fs.readFile(p, 'utf-8')
       return JSON.parse(raw) as AiConversation
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null
@@ -93,8 +97,14 @@ export class ConversationStore {
       throw new Error(`Invalid conversation id: ${conv.id}`)
     }
     const dir = this.baseDir()
+    if (!dir) {
+      this.logger.warn(
+        `conv-store: save dropped for ${conv.id} — no user key (signed out / no api key)`
+      )
+      return
+    }
     await fs.mkdir(dir, { recursive: true })
-    const p = this.filePath(conv.id)
+    const p = path.join(dir, `${conv.id}.json`)
     const tmp = `${p}.tmp-${Math.random().toString(36).slice(2, 10)}`
     try {
       await fs.writeFile(tmp, JSON.stringify(conv))
@@ -108,8 +118,10 @@ export class ConversationStore {
   /** Rename-delete; no unlink. */
   async delete(id: string): Promise<boolean> {
     if (!isSafeId(id)) return false
-    const src = this.filePath(id)
-    const dst = path.join(this.baseDir(), `${id}.deleted-${Date.now()}.json`)
+    const dir = this.baseDir()
+    if (!dir) return false
+    const src = path.join(dir, `${id}.json`)
+    const dst = path.join(dir, `${id}.deleted-${Date.now()}.json`)
     try {
       await fs.rename(src, dst)
       return true
@@ -164,8 +176,10 @@ export class ConversationStore {
     await this.save(conv)
   }
 
-  private filePath(id: string): string {
-    return path.join(this.baseDir(), `${id}.json`)
+  private filePath(id: string): string | undefined {
+    const dir = this.baseDir()
+    if (!dir) return undefined
+    return path.join(dir, `${id}.json`)
   }
 
   private async safeReaddir(dir: string): Promise<string[]> {
