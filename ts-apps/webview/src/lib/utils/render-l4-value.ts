@@ -121,11 +121,49 @@ function formatNode(
 function formatString(value: string, schema?: FunctionParameter): string {
   // Enum constructors render as bare identifiers (with backticks for
   // multi-word names — L4 requires backticks around any identifier
-  // containing whitespace). Non-enum strings render as quoted literals.
+  // containing whitespace).
   if (schema?.enum && schema.enum.length > 0 && schema.enum.includes(value)) {
     return quoteIdent(value)
   }
+  // Date-typed strings render in human-friendly `Mon D YYYY` form
+  // (e.g. "Sep 3 2026") instead of the quoted ISO 8601 the LLM emits.
+  // Display-only — not valid L4 source, but the chat tool-call card
+  // is purely a render surface, not a copy-paste-back affordance.
+  if (schema?.format === 'date') {
+    const human = renderIsoDateHuman(value)
+    if (human !== null) return human
+  }
   return `"${escapeL4String(value)}"`
+}
+
+const SHORT_MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+] as const
+
+/**
+ * Parse an ISO 8601 date (`YYYY-MM-DD` or full ISO datetime) and
+ * render as `Mon D YYYY`. Returns null when the input doesn't parse,
+ * so the caller can fall back to the quoted-string form.
+ *
+ * Reads UTC components so a date-only input like `2026-09-03` (which
+ * `Date(string)` interprets as UTC midnight) doesn't shift to the
+ * previous day in negative-offset locales.
+ */
+function renderIsoDateHuman(iso: string): string | null {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  return `${SHORT_MONTHS[d.getUTCMonth()]} ${d.getUTCDate()} ${d.getUTCFullYear()}`
 }
 
 function escapeL4String(s: string): string {
