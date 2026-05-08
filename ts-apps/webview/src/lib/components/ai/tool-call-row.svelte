@@ -631,10 +631,12 @@
     font-size: 11px;
     line-height: 1.5;
     color: var(--vscode-foreground);
-    white-space: pre-wrap;
-    word-break: break-word;
+    /* Preserve indentation; long lines scroll horizontally instead of
+       wrapping. Word-wrap obscures the L4-syntax indentation pattern
+       (e.g. `LIST` items, nested `WITH` blocks). */
+    white-space: pre;
+    overflow: auto;
     max-height: 320px;
-    overflow-y: auto;
     tab-size: 2;
   }
   /* Matches the deployment tool-card's section labels (small-caps,

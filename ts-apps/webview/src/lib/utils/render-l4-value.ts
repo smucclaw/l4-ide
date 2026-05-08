@@ -119,9 +119,11 @@ function formatNode(
 }
 
 function formatString(value: string, schema?: FunctionParameter): string {
-  // Enum constructors render bare; non-enum strings are quoted.
+  // Enum constructors render as bare identifiers (with backticks for
+  // multi-word names — L4 requires backticks around any identifier
+  // containing whitespace). Non-enum strings render as quoted literals.
   if (schema?.enum && schema.enum.length > 0 && schema.enum.includes(value)) {
-    return value
+    return quoteIdent(value)
   }
   return `"${escapeL4String(value)}"`
 }
@@ -141,20 +143,12 @@ function formatArray(
   // nested lists). Flat primitive lists stay inline.
   const anyMulti = parts.some((p) => p.includes('\n'))
   if (!anyMulti) return `LIST ${parts.join(', ')}`
+  // Item bullet sits at the LIST owner's depth+1 indent. Each item's
+  // own multi-line content already carries absolute depth-driven
+  // indents from its formatObject — only the bullet (first line)
+  // needs the prefix; subsequent lines stand on their own.
   const indent = '  '.repeat(depth + 1)
-  return `LIST\n${parts.map((p) => indent + indentContinuationLines(p, indent)).join(',\n')}`
-}
-
-/**
- * Indent every line after the first by the given prefix. Used when an
- * already-multiline child string is dropped into a list slot — each
- * subsequent line needs the same leading indent so the L4 block stays
- * vertically aligned under its bullet.
- */
-function indentContinuationLines(s: string, indent: string): string {
-  const [first, ...rest] = s.split('\n')
-  if (rest.length === 0) return first ?? ''
-  return [first, ...rest.map((line) => indent + line)].join('\n')
+  return `LIST\n${parts.map((p) => indent + p).join(',\n')}`
 }
 
 function formatObject(
@@ -226,8 +220,12 @@ function formatObject(
   }
   if (fields.length === 0) return quoteIdent(typeName)
 
+  // Field lines: each `field IS …` sits at this record's depth+1
+  // indent. Multi-line field values (nested records / arrays) carry
+  // their own absolute depth-driven indents already, so we only
+  // prefix the bullet (first line) — subsequent lines stand alone.
   const indent = '  '.repeat(depth + 1)
-  return `${quoteIdent(typeName)} WITH\n${fields.map((f) => indent + indentContinuationLines(f, indent)).join('\n')}`
+  return `${quoteIdent(typeName)} WITH\n${fields.map((f) => indent + f).join('\n')}`
 }
 
 /**
