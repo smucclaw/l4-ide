@@ -30,7 +30,7 @@ module Types (
 
 import Backend.Api (EvalBackend, FnLiteral, RunFunction, EvaluatorError, ResponseWithReason, GraphVizResponse, responseTag)
 import Backend.DecisionQueryPlan (CachedDecisionQuery)
-import L4.FunctionSchema (Parameters)
+import L4.FunctionSchema (Parameters, Parameter)
 import Backend.Jl4 (CompiledModule, ModuleContext)
 import BundleStore (BundleStore)
 import Control.Applicative ((<|>))
@@ -101,6 +101,11 @@ data FunctionSummary = FunctionSummary
   , fsParameters  :: !Parameters
   , fsReturnType  :: !Text
   -- ^ Display name of the return type (e.g. "BOOLEAN", "NUMBER", "DEONTIC").
+  , fsReturnSchema :: !(Maybe Parameter)
+  -- ^ Structured JSON Schema of the return type, with x-l4-type annotations
+  -- on each record/enum node. Populated only by the function-schema endpoint
+  -- response from the live in-memory Function; left 'Nothing' in cached
+  -- metadata to avoid unnecessary persistence (always recomputable on compile).
   , fsSection     :: !(Maybe Text)
   -- ^ L4 section header (§§) this function belongs to.
   , fsIsDeontic   :: !Bool
@@ -112,13 +117,13 @@ data FunctionSummary = FunctionSummary
   deriving stock (Show, Generic)
 
 instance ToJSON FunctionSummary where
-  toJSON fs = Aeson.object
+  toJSON fs = Aeson.object $
     [ "name"        .= fs.fsName
     , "description" .= fs.fsDescription
     , "parameters"  .= fs.fsParameters
     , "returnType"  .= fs.fsReturnType
     , "section"     .= fs.fsSection
-    ]
+    ] <> maybe [] (\rs -> ["returnSchema" .= rs]) fs.fsReturnSchema
 
 instance FromJSON FunctionSummary where
   parseJSON = Aeson.withObject "FunctionSummary" $ \o ->
@@ -127,6 +132,7 @@ instance FromJSON FunctionSummary where
       <*> (o .: "description" <|> o .: "fsDescription")
       <*> (o .: "parameters"  <|> o .: "fsParameters")
       <*> (o .: "returnType"  <|> o .: "fsReturnType")
+      <*> o .:? "returnSchema"
       <*> (o .:? "section"    <|> o .:? "fsSection")
       <*> pure False  -- isDeontic: internal only, not in JSON
       <*> (o .:? "sourceFile" <|> o .:? "fsSourceFile")
@@ -219,6 +225,10 @@ data Function = Function
   -- ^ Type name for the action parameter of a DEONTIC function (e.g. "Contract Action")
   , returnType            :: !Text
   -- ^ Display name of the return type (e.g. "BOOLEAN", "NUMBER", "DEONTIC").
+  , returnSchema          :: !(Maybe Parameter)
+  -- ^ Structured JSON Schema of the return type, with x-l4-type annotations
+  -- on each record/enum node. In-memory only — used by the function-schema
+  -- endpoint so chat clients can render results back into L4 syntax.
   , isDeontic             :: !Bool
   -- ^ Whether this function returns a DEONTIC (needs startTime + events params).
   }
@@ -237,7 +247,8 @@ instance ToJSON Function where
             , "returnType" .= fn.returnType
             ] <>
             maybe [] (\pt -> ["deonticPartyType" .= pt]) fn.deonticPartyType <>
-            maybe [] (\at -> ["deonticActionType" .= at]) fn.deonticActionType)
+            maybe [] (\at -> ["deonticActionType" .= at]) fn.deonticActionType <>
+            maybe [] (\rs -> ["returnSchema" .= rs]) fn.returnSchema)
       ]
 
 instance FromJSON Function where
@@ -258,6 +269,7 @@ instance FromJSON Function where
             <*> p .:? "deonticPartyType"
             <*> p .:? "deonticActionType"
             <*> p .:? "returnType" .!= "unknown"
+            <*> p .:? "returnSchema"
             <*> p .:? "isDeontic" .!= False
       )
       props

@@ -1,6 +1,7 @@
 import type {
   L4RpcRequestType,
   L4RpcNotificationType,
+  FunctionParameter,
 } from './custom-protocol.js'
 import {
   makeL4RpcRequestType,
@@ -571,6 +572,26 @@ export const AiPermissionsSet: NotificationType<{
   value: AiPermissionValue
 }> = {
   method: 'aiPermissionsSet',
+}
+
+/** Webview asks the extension for the L4 render-meta of an MCP tool.
+ *  The extension parses `[deployId/fnName]` from the cached MCP tool
+ *  description, fetches `/deployments/{id}/functions/{fn}` (cached by
+ *  deployment version), and returns the structured schemas with
+ *  `x-l4-type` annotations recursively. Used by the chat tool-call
+ *  card to render JSON arguments back into L4 syntax. Returns
+ *  `{ kind: 'unavailable' }` if the tool isn't an l4-rules rule, or
+ *  if the fetch fails — the caller falls back to plain JSON view. */
+export const AiToolRenderMeta: RequestType<
+  { toolName: string },
+  | {
+      kind: 'meta'
+      parameters: FunctionParameter
+      returnSchema?: FunctionParameter
+    }
+  | { kind: 'unavailable' }
+> = {
+  method: 'aiToolRenderMeta',
 }
 
 /** Extension → webview: a server-side tool activity event (from the

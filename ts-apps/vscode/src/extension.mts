@@ -588,6 +588,8 @@ export async function activate(context: ExtensionContext) {
       askUserChannel,
       dispatcher,
       visibility: sidebarProvider,
+      mcp: aiMcpClient,
+      serviceClient,
     })
   )
 

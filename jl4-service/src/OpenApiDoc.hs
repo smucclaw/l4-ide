@@ -362,12 +362,16 @@ batchRequestSchema fn =
     ]
 
 -- | Recursively strip non-OpenAPI-compliant fields from parameter schemas.
--- Removes "alias" and "propertyOrder" which are L4-specific extensions.
+-- Removes "alias", "propertyOrder", and "x-l4-type" which are L4-specific
+-- extensions. The latter is consumed by the function-schema endpoint
+-- (`GET /deployments/{id}/functions/{fn}`) for chat-side rendering and is
+-- not part of the OpenAPI surface.
 stripNonOpenApiFields :: Aeson.Value -> Aeson.Value
 stripNonOpenApiFields (Aeson.Object obj) =
   Aeson.Object $ Aeson.KeyMap.map stripNonOpenApiFields
                $ Aeson.KeyMap.delete "alias"
-               $ Aeson.KeyMap.delete "propertyOrder" obj
+               $ Aeson.KeyMap.delete "propertyOrder"
+               $ Aeson.KeyMap.delete "x-l4-type" obj
 stripNonOpenApiFields (Aeson.Array arr) =
   Aeson.Array $ fmap stripNonOpenApiFields arr
 stripNonOpenApiFields v = v

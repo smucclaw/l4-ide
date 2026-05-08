@@ -198,11 +198,12 @@ sanitizeParameters (MkParameters props reqProps) =
 
 -- | Sanitize a Parameter value for MCP tool schemas.
 -- Recursively rebuilds nested object properties with per-level dedup and
--- strips non-standard fields (alias, propertyOrder).
+-- strips non-standard fields (alias, propertyOrder, x-l4-type).
 sanitizeParameterValue :: Parameter -> Aeson.Value
 sanitizeParameterValue p =
   let base = Aeson.KeyMap.delete "alias"
            $ Aeson.KeyMap.delete "propertyOrder"
+           $ Aeson.KeyMap.delete "x-l4-type"
            $ Aeson.KeyMap.delete "properties"
            $ Aeson.KeyMap.delete "items"
            $ Aeson.KeyMap.delete "required"

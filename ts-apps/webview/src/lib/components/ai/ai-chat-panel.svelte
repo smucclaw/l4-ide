@@ -35,13 +35,12 @@
 
   const store = createAiChatStore(() => messenger)
 
-  // Seed the signed-in flag from the existing sidebar connection status
-  // so the unauth CTA isn't shown while the auth-status notification is
-  // still in flight. The AiAuthStatus notification overrides this as
-  // soon as it arrives.
-  $effect(() => {
-    store.onAuthStatus({ signedIn: connectionStatus.connected })
-  })
+  // No seed from connectionStatus: the jl4-service connection is
+  // independent of Legalese AI credentials (a self-hosted service does
+  // NOT imply AI access). The store defaults `signedIn` to false; the
+  // extension fires AiAuthStatus on register so the correct value
+  // arrives before the user has a chance to interact.
+  // The `connectionStatus` prop stays for the deploy/MCP UI under it.
 
   let historyOpen = $state(false)
   let settingsOpen = $state(false)
@@ -168,6 +167,7 @@
         streaming={store.current.streaming}
         pendingApproval={store.pendingApproval}
         pendingQuestion={store.pendingQuestion}
+        {messenger}
         {onRetry}
         onApproveTool={(callId, decision) =>
           store.approveTool(callId, decision)}

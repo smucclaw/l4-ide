@@ -129,6 +129,30 @@ export class ServiceClient {
   }
 
   /**
+   * Get a single function's schema. Returns the raw JSON shape of
+   * jl4-service's `FunctionSummary` — `parameters` plus the structured
+   * `returnSchema` (when present), with `x-l4-type` annotations on
+   * record/enum nodes. Used by the chat tool-call card to render
+   * arguments back into L4 syntax.
+   */
+  async getFunctionSchema(
+    deploymentId: string,
+    functionName: string
+  ): Promise<unknown> {
+    const encodedId = encodeURIComponent(deploymentId)
+    const encodedFn = encodeURIComponent(functionName)
+    const resp = await this.request(
+      `/deployments/${encodedId}/functions/${encodedFn}`
+    )
+    if (!resp.ok)
+      await throwWithBody(
+        resp,
+        `GET /deployments/${encodedId}/functions/${encodedFn}`
+      )
+    return resp.json()
+  }
+
+  /**
    * Health check.
    */
   async getHealth(): Promise<ServiceHealth> {

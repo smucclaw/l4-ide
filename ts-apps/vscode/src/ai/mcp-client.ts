@@ -46,6 +46,11 @@ export class McpToolClient {
    *  every listTools(); consulted by callTool() to reverse the
    *  `[^a-zA-Z0-9_-]` sanitization we applied for OpenAI compliance. */
   private nameMap = new Map<string, string>()
+  /** sanitized-prefixed-name → (deployId, fnName) parsed from the
+   *  tool description's trailing `[deployId/fnName]` token. Used by
+   *  the chat tool-call card to fetch the function-schema endpoint
+   *  on demand for L4-syntax rendering. */
+  private targetMap = new Map<string, { deployId: string; fnName: string }>()
   private initialized = false
 
   constructor(
@@ -69,9 +74,12 @@ export class McpToolClient {
       if (!this.initialized) await this.initialize(url)
       const listed = await this.rpc<McpListResult>(url, 'tools/list', {})
       this.nameMap.clear()
+      this.targetMap.clear()
       const tools = (listed?.tools ?? []).map((t) => {
         const tool = this.toAiProxyTool(t)
         this.nameMap.set(tool.function.name, t.name)
+        const target = parseToolDescriptionTarget(t.description)
+        if (target) this.targetMap.set(tool.function.name, target)
         return tool
       })
       this.cache = { at: Date.now(), tools }
@@ -137,6 +145,22 @@ export class McpToolClient {
   /** Force a cache refresh on the next listTools() call. */
   invalidate(): void {
     this.cache = null
+    this.targetMap.clear()
+  }
+
+  /**
+   * Map a sanitized prefixed tool name (e.g. `l4-rules__make_person`)
+   * back to its `(deployId, fnName)` pair. The MCP server stamps
+   * `[deployId/fnName]` into each tool's description; we parse that
+   * out during listTools() and cache the mapping. Returns null for
+   * file-infra tools (`list_files`, `read_file`, etc.) and when no
+   * listTools() has happened yet. The caller may want to call
+   * `listTools()` first to populate the map.
+   */
+  getToolTarget(
+    prefixedName: string
+  ): { deployId: string; fnName: string } | null {
+    return this.targetMap.get(prefixedName) ?? null
   }
 
   private async initialize(url: string): Promise<void> {
@@ -221,4 +245,22 @@ export class McpToolClient {
  *  the final prefixed name so the sanitization has to be deterministic. */
 function sanitizeToolName(s: string): string {
   return s.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 48)
+}
+
+/** Parse the `[deployId/fnName]` token MCP server stamps onto every
+ *  rule-evaluation tool's description (see jl4-service McpServer.hs:
+ *  `"L4 Rule: " <> fsDescription <> " [" <> deployId <> "/" <> fsName <> "]"`).
+ *  Returns null when no token is present (file-infra tools, custom
+ *  descriptions). The fnName is allowed to contain spaces — only the
+ *  closing bracket terminates it. */
+function parseToolDescriptionTarget(
+  description: string | undefined
+): { deployId: string; fnName: string } | null {
+  if (!description) return null
+  // Anchor on the LAST `[…/…]` so a description that itself contains
+  // brackets earlier (rare, but possible in user-provided text) doesn't
+  // mis-match. Greedy `.*` to consume everything before the final tag.
+  const m = description.match(/\[([^/\]]+)\/([^\]]+)\]\s*$/)
+  if (!m) return null
+  return { deployId: m[1]!, fnName: m[2]! }
 }

@@ -173,6 +173,10 @@ export interface FunctionParameter {
   propertyOrder?: string[]
   items?: FunctionParameter
   required?: string[]
+  /** L4 user-declared type name (record/enum) when this node came
+   *  from a DECLARE. Drives chat-side rendering of JSON values into
+   *  L4 syntax (e.g. `Person WITH name IS …`). */
+  'x-l4-type'?: string
 }
 
 export interface FunctionParameters {

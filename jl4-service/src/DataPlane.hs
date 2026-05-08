@@ -207,6 +207,7 @@ getFunctionHandler deployId fnName = do
     , fsDescription = fn.description
     , fsParameters = fn.parameters
     , fsReturnType = fn.returnType
+    , fsReturnSchema = fn.returnSchema
     , fsSection = Nothing
     , fsIsDeontic = fn.isDeontic
     , fsSourceFile = sourceFile
