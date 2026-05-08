@@ -259,11 +259,17 @@
     }
   }
 
-  // Whenever the row is expanded on a rule call, kick off the fetch.
-  // Cheap when already cached client-side; the extension caches by
-  // deployment version so repeat opens hit memory.
+  // Pre-fetch render-meta as soon as the row mounts on a rule call,
+  // not on first expand. The previous on-expand fire produced a
+  // visible flicker — the panel briefly painted the JSON fallback
+  // before the schema arrived and the L4 view swapped in. Fetching
+  // up front means by the time the user clicks the chevron the
+  // metadata is already in memory and the L4 view renders on the
+  // first frame. The extension caches by deployment version, so the
+  // cost across many cards in a long conversation is one roundtrip
+  // per distinct (deployId, fnName).
   $effect(() => {
-    if (expanded && isRuleCall) void ensureRenderMeta()
+    if (isRuleCall) void ensureRenderMeta()
   })
 
   // L4-rendered argument block. Falls back to null when we don't have
