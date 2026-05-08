@@ -1,0 +1,20 @@
+-- LIST with comma-separated items where the first item starts on
+-- the line after the LIST keyword. Regression test: previously the
+-- parser captured the column of LIST itself as the indent threshold,
+-- so items on the next line at a smaller column failed (`unexpected 1`).
+
+DECIDE numbers IS LIST
+  1,
+  2,
+  3
+
+DECIDE strings IS LIST
+  "alpha",
+  "beta",
+  "gamma"
+
+#EVAL numbers
+#ASSERT numbers EQUALS LIST 1, 2, 3
+
+#EVAL strings
+#ASSERT strings EQUALS LIST "alpha", "beta", "gamma"
