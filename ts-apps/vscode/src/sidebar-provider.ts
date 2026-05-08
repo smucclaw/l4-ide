@@ -19,6 +19,7 @@ import {
   ListSidebarDeployments,
   RequestSidebarDeploy,
   RequestSidebarUndeploy,
+  RequestSidebarDownloadDeployment,
   GetSidebarDeploymentOpenApi,
   GetSidebarDeploymentStatus,
   GetSidebarDocsContent,
@@ -312,6 +313,11 @@ export function initializeSidebarMessenger(
           deploymentId: dep.id,
           status: dep.status as 'pending' | 'compiling' | 'ready' | 'failed',
           error: dep.error,
+          // Backend omits `metadata.files` entirely when the read scope is
+          // absent (proxy strips it via X-Include-Files: false). A non-empty
+          // list means the user is allowed to read sources — gate the
+          // sidebar's Download action on this.
+          hasFiles: (dep.metadata?.files?.length ?? 0) > 0,
           functions: (dep.metadata?.functions ?? []).map((fn) => ({
             name: fn.name,
             description: fn.description ?? '',
@@ -410,6 +416,107 @@ export function initializeSidebarMessenger(
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       outputChannel.appendLine(`[sidebar] Undeploy failed: ${msg}`)
+      return { success: false, error: msg }
+    }
+  })
+
+  // Handle download deployment request: prompt for a folder, fetch all
+  // source files from the service, and write `{folder}/{deploymentId}/*`.
+  messenger.onRequest(RequestSidebarDownloadDeployment, async (params) => {
+    const { deploymentId } = params
+    outputChannel.appendLine(`[sidebar] Download requested: ${deploymentId}`)
+    try {
+      // Default to the active file's workspace folder (multi-root aware),
+      // else the first workspace folder, else the user's home dir.
+      const activeUri = vscode.window.activeTextEditor?.document.uri
+      const activeFolder = activeUri
+        ? vscode.workspace.getWorkspaceFolder(activeUri)
+        : undefined
+      const defaultUri =
+        activeFolder?.uri ?? vscode.workspace.workspaceFolders?.[0]?.uri
+
+      const picked = await vscode.window.showOpenDialog({
+        canSelectFiles: false,
+        canSelectFolders: true,
+        canSelectMany: false,
+        defaultUri,
+        openLabel: 'Save here',
+        title: `Download deployment "${deploymentId}"`,
+      })
+      if (!picked || picked.length === 0) {
+        return { success: false, cancelled: true }
+      }
+      const parentUri = picked[0]
+
+      // Sanitise the deployment id for use as a path segment. The backend
+      // already restricts ids to [a-zA-Z0-9_-] (validateDeploymentId), but
+      // strip path separators defensively so a malformed id can never
+      // escape the chosen folder.
+      const safeName = deploymentId.replace(/[/\\]/g, '_')
+      const targetUri = vscode.Uri.joinPath(parentUri, safeName)
+
+      // Conflict check: warn if the target folder already contains files,
+      // give the user a chance to bail.
+      let targetExists = false
+      try {
+        const entries = await vscode.workspace.fs.readDirectory(targetUri)
+        targetExists = entries.length > 0
+      } catch {
+        // Folder doesn't exist yet — fine, we'll create it.
+      }
+      if (targetExists) {
+        const choice = await vscode.window.showWarningMessage(
+          `Folder "${safeName}" already exists in the chosen location. Overwrite files with the same name?`,
+          { modal: true },
+          'Overwrite'
+        )
+        if (choice !== 'Overwrite') {
+          return { success: false, cancelled: true }
+        }
+      }
+
+      // Single round-trip: GET /deployments/{id}/files returns every
+      // .l4 source with its content inline.
+      const { files } = await serviceClient.getDeploymentFiles(deploymentId)
+      if (files.length === 0) {
+        return {
+          success: false,
+          error:
+            'No files returned for this deployment. You may not have permission to download its sources.',
+        }
+      }
+
+      await vscode.workspace.fs.createDirectory(targetUri)
+
+      // Path-traversal guard: each file path must be a clean relative
+      // path. Reject anything containing ".." segments before joining.
+      for (const file of files) {
+        const segments = file.path.split(/[/\\]+/).filter((s) => s.length > 0)
+        if (segments.some((s) => s === '..' || s === '.')) {
+          throw new Error(
+            `Refusing to write file with unsafe path: ${file.path}`
+          )
+        }
+        const fileUri = vscode.Uri.joinPath(targetUri, ...segments)
+        const parentDir = vscode.Uri.joinPath(fileUri, '..')
+        await vscode.workspace.fs.createDirectory(parentDir)
+        await vscode.workspace.fs.writeFile(
+          fileUri,
+          Buffer.from(file.content, 'utf8')
+        )
+      }
+
+      outputChannel.appendLine(
+        `[sidebar] Wrote ${files.length} file(s) to ${targetUri.fsPath}`
+      )
+      return {
+        success: true,
+        folderPath: targetUri.fsPath,
+        fileCount: files.length,
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      outputChannel.appendLine(`[sidebar] Download failed: ${msg}`)
       return { success: false, error: msg }
     }
   })

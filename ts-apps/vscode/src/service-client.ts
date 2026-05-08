@@ -118,6 +118,35 @@ export class ServiceClient {
   }
 
   /**
+   * Fetch the source files of a deployment as
+   * `{ files: [{ path, totalLines, exports, content }] }`.
+   * Used to materialise a deployment to disk via the sidebar Download
+   * action. Backed by `GET /deployments/{id}/files` (no query params),
+   * which returns every `.l4` source in a single response.
+   */
+  async getDeploymentFiles(deploymentId: string): Promise<{
+    files: Array<{
+      path: string
+      totalLines: number
+      exports: string[]
+      content: string
+    }>
+  }> {
+    const encodedId = encodeURIComponent(deploymentId)
+    const resp = await this.request(`/deployments/${encodedId}/files`)
+    if (!resp.ok)
+      await throwWithBody(resp, `GET /deployments/${encodedId}/files`)
+    return (await resp.json()) as {
+      files: Array<{
+        path: string
+        totalLines: number
+        exports: string[]
+        content: string
+      }>
+    }
+  }
+
+  /**
    * Get the OpenAPI 3.0 spec for a single deployment.
    */
   async getDeploymentOpenApi(deploymentId: string): Promise<unknown> {

@@ -14,7 +14,6 @@
     AiChatToolActivity,
     AiChatToolCall,
     AiUsageUpdate,
-    type GetSidebarConnectionStatusResponse,
   } from 'jl4-client-rpc'
   import { createAiChatStore } from '$lib/stores/ai-chat.svelte'
   import MessageList from './message-list.svelte'
@@ -25,22 +24,19 @@
 
   let {
     messenger,
-    connectionStatus,
     visible,
   }: {
     messenger: InstanceType<typeof Messenger> | null
-    connectionStatus: GetSidebarConnectionStatusResponse
     visible: boolean
   } = $props()
 
   const store = createAiChatStore(() => messenger)
 
-  // No seed from connectionStatus: the jl4-service connection is
-  // independent of Legalese AI credentials (a self-hosted service does
-  // NOT imply AI access). The store defaults `signedIn` to false; the
-  // extension fires AiAuthStatus on register so the correct value
-  // arrives before the user has a chance to interact.
-  // The `connectionStatus` prop stays for the deploy/MCP UI under it.
+  // The jl4-service connection is independent of Legalese AI
+  // credentials (a self-hosted service does NOT imply AI access).
+  // The store defaults `signedIn` to false; the extension fires
+  // AiAuthStatus on register so the correct value arrives before the
+  // user has a chance to interact.
 
   let historyOpen = $state(false)
   let settingsOpen = $state(false)
