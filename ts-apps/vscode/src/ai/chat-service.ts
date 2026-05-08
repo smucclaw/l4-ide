@@ -65,9 +65,8 @@ export type ChatServiceEvent =
    *  bubble keyed off `subTurnId` so subsequent text-delta /
    *  tool-call events route to it. */
   | { kind: 'turn-spawn'; conversationId: string; subTurnId: string }
-  /** Fired each time the chat service folds queued user messages into
-   *  the live pipeline (either appended after a tool round or seeded
-   *  into a fresh sub-turn). `injectionIds` lists the webview-minted
+  /** Fired each time the chat service drains queued user messages
+   *  into a fresh sub-turn. `injectionIds` lists the webview-minted
    *  ids of the messages just consumed — the webview removes the
    *  matching entries from its pending-queue array. An unack'd id
    *  stays in the array so a dropped event surfaces as a stuck
@@ -139,10 +138,13 @@ export class ChatService {
   private readonly active = new Map<string, AbortController>()
   /** FIFO queue of user messages submitted via the webview's "send
    *  during streaming" path, keyed by the in-flight turn's `turnId`.
-   *  Drained at every tool-call boundary (appended as `role:'user'`
-   *  after the tool results) and at every natural finish (used to
-   *  seed a fresh sub-turn). Cleared on abort and on the turn's
-   *  ultimate exit from `start()`. */
+   *  Drained at the next sub-turn boundary — either after the model
+   *  finishes naturally, or after the current tool round completes
+   *  (whichever comes first). The drained messages seed a fresh
+   *  sub-turn whose request body carries the leftover tool results
+   *  alongside the new user delta so the proxy commits a clean
+   *  assistant→tool→user sequence. Cleared on abort and on the
+   *  turn's ultimate exit from `start()`. */
   private readonly injections = new Map<string, QueuedUserMessage[]>()
   private emitter: ChatServiceEmitter = () => undefined
 
@@ -194,11 +196,13 @@ export class ChatService {
    * Sub-turn loop: a single `start()` call may produce multiple
    * assistant turns when the user keeps submitting while the model
    * is working. Each iteration of the outer loop runs one
-   * tool-call-aware sub-turn against the proxy; if there are queued
-   * user messages after that sub-turn finishes naturally, the loop
-   * spawns another sub-turn (signalled to the webview via
-   * `turn-spawn`) seeded with the queued text. The original `turnId`
-   * remains the stable abort key for the entire pipeline.
+   * tool-call-aware sub-turn against the proxy; whenever the queue
+   * has at least one pending user message, the current sub-turn
+   * ends at its next intersection — either a natural finish or a
+   * tool-round boundary — and the loop spawns a follow-up sub-turn
+   * (signalled to the webview via `turn-spawn`) seeded with the
+   * drained user text plus any leftover tool results. The original
+   * `turnId` remains the stable abort key for the entire pipeline.
    */
   async start(params: AiChatStartParams): Promise<void> {
     const isNewConversation = !params.conversationId
@@ -221,6 +225,14 @@ export class ChatService {
     // The very first sub-turn uses the original params; subsequent
     // sub-turns get their params synthesized from the drained queue.
     let activeParams: AiChatStartParams = params
+    // Tool results carried over from the prior sub-turn when it ended
+    // at a tool-round boundary because of mid-turn user input. We
+    // prepend these to the next sub-turn's request body so the proxy
+    // sees a clean assistant(tool_calls) → tool(results) → user
+    // sequence and commits the tool_use/tool_result pair to history
+    // before the model's next response. Empty (or unset) on the first
+    // sub-turn and after a natural-finish drain.
+    let prependedToolResults: AiChatMessage[] | undefined
 
     try {
       while (true) {
@@ -246,6 +258,10 @@ export class ChatService {
             code: 'internal_error',
           })
           return
+        }
+        if (prependedToolResults && prependedToolResults.length > 0) {
+          nextMessages = [...prependedToolResults, ...nextMessages]
+          prependedToolResults = undefined
         }
 
         if (!isFirstSubTurn) {
@@ -308,10 +324,11 @@ export class ChatService {
           serverConversationId = subTurnResult.serverConversationId
         }
 
-        // Pipeline exits unless the sub-turn finished naturally AND
-        // there's still a queued user message to drain into a new
-        // sub-turn. Anything else (error, abort, length cap) is a
-        // hard stop.
+        // Pipeline exits unless this sub-turn ended at a queue
+        // boundary (natural finish OR tool-round-boundary-with-queued-
+        // input) AND the queue still has at least one message to
+        // drive a follow-up sub-turn. Anything else (error, abort,
+        // length cap) is a hard stop.
         if (subTurnResult.terminate) break
         const queue = this.injections.get(turnId) ?? []
         if (queue.length === 0) break
@@ -327,6 +344,12 @@ export class ChatService {
           injectionIds: drained.map((m) => m.injectionId),
         })
         activeParams = mergeQueuedAsParams(activeParams, drained)
+        // Carry over any tool results the prior sub-turn produced
+        // mid-round so the next sub-turn's request body commits
+        // them to the proxy's history before the model's fresh
+        // response. Undefined when the prior sub-turn finished
+        // naturally (no leftover tool round to wrap up).
+        prependedToolResults = subTurnResult.leftoverToolMessages
         subTurnIndex++
       }
     } catch (err) {
@@ -349,12 +372,17 @@ export class ChatService {
 
   /**
    * Run one sub-turn end-to-end: open the proxy stream, drive the
-   * tool-call loop, drain any user messages queued during tool
-   * boundaries (appending them as `role:'user'` after the tool
-   * results), persist the assistant text, and emit `done`. Returns
-   * a `terminate` flag the outer pipeline uses to decide whether
-   * another sub-turn should be spawned from the queue or the whole
-   * pipeline should exit.
+   * tool-call loop, persist the assistant text, and emit `done`.
+   * Returns a `terminate` flag the outer pipeline uses to decide
+   * whether another sub-turn should be spawned from the queue or the
+   * whole pipeline should exit.
+   *
+   * Mid-turn user input (queued via `inject()` while the model is
+   * working) ends this sub-turn at the next tool-round boundary —
+   * the leftover `toolMessages` come back as `leftoverToolMessages`
+   * so the outer loop can prepend them to the next sub-turn's
+   * request and the proxy still sees a complete
+   * assistant(tool_calls) → tool(results) → user sequence.
    */
   private async runSubTurn(opts: {
     turnId: string
@@ -365,7 +393,16 @@ export class ChatService {
     nextMessages: AiChatMessage[]
     abortController: AbortController
     onMetadata: (md: { conversationId: string; model: string }) => void
-  }): Promise<{ terminate: boolean; serverConversationId?: string }> {
+  }): Promise<{
+    terminate: boolean
+    serverConversationId?: string
+    /** Tool results produced in this sub-turn's last tool round but
+     *  not yet handed to the model — set when the sub-turn ended at
+     *  a tool-round boundary because of mid-turn user input. The
+     *  outer pipeline prepends them to the next sub-turn's request
+     *  body. Undefined on natural finish / error / abort. */
+    leftoverToolMessages?: AiChatMessage[]
+  }> {
     const {
       turnId,
       activeParams,
@@ -512,91 +549,43 @@ export class ChatService {
           return { terminate: true, serverConversationId }
         }
 
-        // Drain any user messages queued during this tool round and
-        // fold their text INTO the last tool result's content,
-        // wrapped with a `<user-feedback>` marker so the model can
-        // tell apart the tool's own output from the user's
-        // mid-turn comment. Plumbing the feedback through the tool
-        // channel (rather than as a separate `role:'user'` after
-        // the tool results) keeps every provider on the cleanest
-        // expected message shape — assistant(tool_calls) → tool —
-        // and avoids the model occasionally stalling when it sees
-        // an unexpected user turn arrive in the same round it just
-        // requested tools for.
-        //
-        // If a queued message brought attachments, those still
-        // need to ride a separate `role:'user'` after the tool
-        // results — file/image content can't go through the tool
-        // channel. Text-only injections take the fold-into-tool
-        // path; injects with attachments use a hybrid (folded text
-        // marker + role:user content parts for the bytes).
+        // Mid-turn user input: if anything was queued via inject()
+        // during this tool round, end the sub-turn here instead of
+        // looping back into another assistant call. The outer
+        // pipeline drains the queue, emits `queue-consumed` +
+        // `turn-spawn`, and seeds the next sub-turn with these
+        // tool results prepended to the new user delta — the
+        // proxy gets a clean assistant(tool_calls) → tool(results)
+        // → user sequence in one request. Folding the feedback
+        // into the tool result's `content` (the previous design)
+        // mis-encoded a user redirect as tool output and confused
+        // the model.
         const queuedDuringTool = this.injections.get(turnId) ?? []
-        const userMessagesForAttachments: AiChatMessage[] = []
-        if (queuedDuringTool.length > 0 && toolMessages.length > 0) {
-          const drained = queuedDuringTool.splice(0, queuedDuringTool.length)
-          const lastToolMessage = toolMessages[toolMessages.length - 1]!
-          const feedbackText = drained
-            .map((m) => m.text)
-            .filter((t) => t.length > 0)
-            .join('\n\n')
-          if (
-            feedbackText.length > 0 &&
-            typeof lastToolMessage.content === 'string'
-          ) {
-            lastToolMessage.content = `${lastToolMessage.content}\n\n<user-feedback>\n${feedbackText}\n</user-feedback>`
-          }
-          // Attachment-bearing injections still need a real user
-          // message for the bytes. Keep them as content-parts; the
-          // text body is stripped down to a backreference so the
-          // model isn't told the same thing twice.
-          for (const m of drained) {
-            if (!m.attachments || m.attachments.length === 0) continue
-            const userMsg = (
-              await this.assembleQueuedUserMessages([
-                { ...m, text: '(attachments for the user-feedback above)' },
-              ])
-            )[0]
-            if (userMsg) userMessagesForAttachments.push(userMsg)
-          }
-          // Persist a normal user-bubble message locally for each
-          // queued submit so the on-disk transcript matches what
-          // the user saw. The proxy's stored history will record
-          // the folded tool content separately — that's the
-          // model-facing shape; this is the user-facing replay.
+        if (queuedDuringTool.length > 0) {
           if (serverConversationId) {
-            const userMessagesForReplay: AiChatMessage[] =
-              await this.assembleQueuedUserMessages(drained)
-            if (userMessagesForReplay.length > 0) {
-              await this.opts.store
-                .appendMessages(
-                  serverConversationId,
-                  '',
-                  '',
-                  '',
-                  titleFromUserMessage(drained[0]?.text ?? ''),
-                  userMessagesForReplay,
-                  this.opts.extensionVersion
-                )
-                .catch((err) =>
-                  this.opts.logger.warn(
-                    `chat-service: injected-user save failed: ${err instanceof Error ? err.message : String(err)}`
-                  )
-                )
-            }
+            await this.persistAssistantTurn(
+              serverConversationId,
+              totalAssistantText,
+              { blocks: turnBlocks }
+            )
           }
           this.emit({
-            kind: 'queue-consumed',
+            kind: 'done',
             conversationId: serverConversationId ?? turnId,
-            injectionIds: drained.map((m) => m.injectionId),
+            finishReason: 'stop',
           })
+          return {
+            terminate: false,
+            serverConversationId,
+            leftoverToolMessages: toolMessages,
+          }
         }
 
-        // Next iteration: tool results (with any user feedback
-        // folded into the last result's content) plus a separate
-        // role:user only when the injection carried attachments.
-        // The proxy's stored history already includes the assistant
-        // tool_calls so we don't re-send them.
-        nextMessages = [...toolMessages, ...userMessagesForAttachments]
+        // No queued user input — continue the inner loop with the
+        // tool results as the next request body. The proxy's stored
+        // history already includes the assistant tool_calls so we
+        // don't re-send them.
+        nextMessages = [...toolMessages]
       }
     } catch (err) {
       if (abortController.signal.aborted) {
@@ -633,68 +622,6 @@ export class ChatService {
       })
       return { terminate: true, serverConversationId }
     }
-  }
-
-  /**
-   * Build `role:'user'` messages for the drained queued items. Mirrors
-   * the multimodal-content logic in `assembleMessages` — text-only
-   * goes through as `content: string`; attachments + text go through
-   * as an OpenAI-shaped content-parts array.
-   */
-  private async assembleQueuedUserMessages(
-    drained: QueuedUserMessage[]
-  ): Promise<AiChatMessage[]> {
-    const out: AiChatMessage[] = []
-    for (const m of drained) {
-      if (!m.attachments || m.attachments.length === 0) {
-        out.push({ role: 'user', content: m.text })
-        continue
-      }
-      // Reuse the same content-parts shape `assembleMessages`
-      // produces for the initial user message. Inline this branch
-      // rather than refactor — sharing the loop body would force
-      // assembleMessages to take an injection-mode flag and that
-      // method is already long.
-      const parts: Array<
-        | { type: 'text'; text: string }
-        | { type: 'image_url'; image_url: { url: string } }
-        | { type: 'file'; file: { filename: string; file_data: string } }
-      > = [{ type: 'text', text: m.text }]
-      for (const att of m.attachments) {
-        if (att.kind === 'image') {
-          parts.push({
-            type: 'image_url',
-            image_url: {
-              url: `data:${att.mediaType};base64,${att.dataBase64}`,
-            },
-          })
-        } else if (isTextLikeMediaType(att.mediaType)) {
-          let body: string
-          try {
-            body = Buffer.from(att.dataBase64, 'base64').toString('utf-8')
-          } catch (err) {
-            this.opts.logger.warn(
-              `injected-user: failed to decode text attachment ${att.name}: ${err instanceof Error ? err.message : String(err)}`
-            )
-            continue
-          }
-          parts.push({
-            type: 'text',
-            text: `<attached-file name="${att.name}" mediaType="${att.mediaType}">\n${body}\n</attached-file>`,
-          })
-        } else {
-          parts.push({
-            type: 'file',
-            file: {
-              filename: att.name,
-              file_data: `data:${att.mediaType};base64,${att.dataBase64}`,
-            },
-          })
-        }
-      }
-      out.push({ role: 'user', content: parts })
-    }
-    return out
   }
 
   /**
@@ -1090,7 +1017,12 @@ export class ChatService {
     text: string,
     meta?: Record<string, unknown>
   ): Promise<void> {
-    if (!text) return
+    // A sub-turn ending at a tool-round boundary may have produced
+    // tool-call rows but no streamed text yet — still worth saving so
+    // reload doesn't lose the tool-call history.
+    const blocks = (meta as { blocks?: PersistedBlock[] } | undefined)?.blocks
+    const hasBlocks = Array.isArray(blocks) && blocks.length > 0
+    if (!text && !hasBlocks) return
     const existing = await this.opts.store.load(conversationId)
     if (!existing) return
     existing.messages.push({

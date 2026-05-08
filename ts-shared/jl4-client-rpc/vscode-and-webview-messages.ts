@@ -511,18 +511,15 @@ export const AiChatAbort: NotificationType<{ turnId: string }> = {
 }
 
 /** Webview → extension: append a user message to an in-flight turn's
- * queue. The extension routes the message based on what the model
- * does next:
- *   - If the current iteration finishes with `tool_calls`, the queued
- *     message(s) are appended as `role:'user'` messages right after
- *     the `role:'tool'` results in the next request body. The model
- *     sees tool results and the user follow-up in the same combined
- *     turn.
- *   - If the current iteration finishes naturally (`stop`/`length`),
- *     the extension emits `done` for the just-finished sub-turn, then
- *     immediately spawns a fresh sub-turn (signalled via
- *     `AiChatTurnSpawn`) seeded with the queued text(s) joined by
- *     blank lines.
+ * queue. The extension ends the current sub-turn at its next
+ * intersection — either a natural finish (`stop`/`length`) or the
+ * end of the in-flight tool round — and spawns a fresh sub-turn
+ * (signalled via `AiChatTurnSpawn`) seeded with the drained user
+ * text. When the prior sub-turn ended mid-tool-round, its leftover
+ * `role:'tool'` results ride along on the new sub-turn's request so
+ * the proxy commits a clean assistant(tool_calls) → tool(results)
+ * → user sequence; otherwise the new sub-turn just carries the
+ * editor-context + user delta.
  *
  * The webview is expected to render the user bubble immediately at
  * `send()` time for instant visual feedback; this notification just
@@ -570,12 +567,11 @@ export const AiChatTurnSpawn: NotificationType<{
 }
 
 /** Extension → webview: the listed `injectionIds` (minted by the
- * webview at send-time and echoed back here) have been folded into
- * the current pipeline — either appended after tool results, or
- * used as the seed for a fresh sub-turn. The webview removes the
- * matching entries from its pending-queue array; an unack'd id
- * stays in the array so a dropped event surfaces as a stuck
- * pipeline rather than a silent miscount. */
+ * webview at send-time and echoed back here) have been drained into
+ * a fresh sub-turn. The webview removes the matching entries from
+ * its pending-queue array (so the user bubbles flip from greyed-out
+ * to full opacity); an unack'd id stays in the array so a dropped
+ * event surfaces as a stuck pipeline rather than a silent miscount. */
 export const AiChatQueueConsumed: NotificationType<{
   conversationId: string
   injectionIds: string[]
