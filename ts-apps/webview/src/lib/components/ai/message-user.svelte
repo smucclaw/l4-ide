@@ -7,18 +7,29 @@
     chips,
     shouldStick = false,
     userIndex = -1,
+    pending = false,
   }: {
     content: string
     chips?: UserTurnChip[]
     shouldStick?: boolean
     userIndex?: number
+    /** True for a user bubble that's still queued in the extension's
+     *  inject pipeline (the extension has not yet echoed
+     *  `queue-consumed` for it). Renders the bubble at reduced
+     *  opacity so the user can see it landed but isn't part of the
+     *  active model request yet, and excludes it from the
+     *  scroll-sticky header set (the data-pending attribute below
+     *  is read by message-list's offset collector). */
+    pending?: boolean
   } = $props()
 </script>
 
 <div
   class="user-row user-message-wrapper"
   class:sticky={shouldStick}
+  class:pending
   data-user-index={userIndex}
+  data-pending={pending ? 'true' : 'false'}
 >
   <div class="user-bubble">
     {#if chips && chips.length > 0}
@@ -77,6 +88,16 @@
     padding-top: 0px;
     top: 0px;
     z-index: 10;
+  }
+  /* Pending injection — the extension hasn't yet echoed
+     consumption of this submit. Reads as "queued" rather than
+     "sent": dim the bubble + chips so the user can see it landed
+     but understand it isn't part of the active model request yet.
+     Snaps back to full opacity once `onQueueConsumed` clears the
+     pending flag in the store. */
+  .user-row.pending .user-bubble {
+    opacity: 0.55;
+    transition: opacity 0.15s ease-out;
   }
   .user-bubble {
     position: relative;

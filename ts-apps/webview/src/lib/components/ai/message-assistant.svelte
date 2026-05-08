@@ -10,6 +10,7 @@
   let {
     content,
     streaming,
+    pipelineActive = false,
     error,
     blocks,
     usage,
@@ -20,6 +21,13 @@
   }: {
     content: string
     streaming: boolean
+    /** True until every queued user message has been folded into the
+     *  pipeline. Suppresses the per-turn usage badge and the "Files
+     *  changed" review card so they don't render mid-pipeline (when
+     *  this turn is "done" but more processing is still queued).
+     *  Defaults to false so untouched callers keep the prior
+     *  behaviour of showing the cards as soon as the turn settles. */
+    pipelineActive?: boolean
     error?: { message: string; code?: string }
     blocks?: AssistantBlock[]
     usage?: { promptTokens: number; completionTokens: number }
@@ -239,7 +247,7 @@
       </div>
     {/if} -->
 
-    {#if !streaming && fileChanges.length > 0}
+    {#if !streaming && !pipelineActive && fileChanges.length > 0}
       <div
         class="review-card"
         role="group"
@@ -275,7 +283,7 @@
     {#if error}
       <ErrorBubble message={error.message} code={error.code} {onRetry} />
     {/if}
-    {#if !streaming && !error && usage}
+    {#if !streaming && !pipelineActive && !error && usage}
       <!-- Per-turn token footer. Kept quiet (small, grey, dotted
            separator) so it reads as metadata rather than content.
            Prompt tokens come first because they dominate the cost

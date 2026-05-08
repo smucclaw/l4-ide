@@ -436,12 +436,15 @@
           />
         </svg>
       </button>
-      {#if isStreaming && !(store.pendingQuestion && text.trim())}
-        <!-- Stop button: visible while the turn is streaming UNLESS
-             the model is paused on a meta__ask_user question and the
-             user has typed something — in that case the button flips
-             to a Send so a single Enter submits the answer rather
-             than forcing the user to hunt for a separate affordance. -->
+      {#if isStreaming && !text.trim()}
+        <!-- Stop button: visible while the turn is streaming AND the
+             input is empty. Once the user types anything, the button
+             flips to Send so a single click queues a follow-up
+             (which the store routes through AiChatInject — folded
+             into the next tool round or seeded into a fresh
+             sub-turn). Same behaviour applies when the model is
+             paused on a meta__ask_user question: typed text turns
+             the button into Send so a single Enter answers. -->
         <button
           class="submit-btn stop"
           onclick={abort}

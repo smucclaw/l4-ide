@@ -7,12 +7,14 @@
     AiChatAskUser,
     AiChatDone,
     AiChatError,
+    AiChatQueueConsumed,
     AiChatSeedDraft,
     AiChatStarted,
     AiChatTextDelta,
     AiChatThinkingDelta,
     AiChatToolActivity,
     AiChatToolCall,
+    AiChatTurnSpawn,
     AiUsageUpdate,
   } from 'jl4-client-rpc'
   import { createAiChatStore } from '$lib/stores/ai-chat.svelte'
@@ -53,6 +55,8 @@
     m.onNotification(AiChatError, (p) => store.onError(p))
     m.onNotification(AiChatToolCall, (p) => store.onToolCall(p))
     m.onNotification(AiChatToolActivity, (p) => store.onToolActivity(p))
+    m.onNotification(AiChatTurnSpawn, (p) => store.onTurnSpawn(p))
+    m.onNotification(AiChatQueueConsumed, (p) => store.onQueueConsumed(p))
     m.onNotification(AiUsageUpdate, (p) => store.onUsageUpdate(p))
     m.onNotification(AiAuthStatus, (p) => store.onAuthStatus(p))
     m.onNotification(AiActiveFile, (p) => store.onActiveFile(p))
@@ -161,6 +165,7 @@
       <MessageList
         turns={store.current.turns}
         streaming={store.current.streaming}
+        pipelineActive={store.pipelineActive}
         pendingApproval={store.pendingApproval}
         pendingQuestion={store.pendingQuestion}
         {messenger}

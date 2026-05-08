@@ -10,14 +10,17 @@ import {
   AiChatAskUser,
   AiChatDone,
   AiChatError,
+  AiChatInject,
   AiChatPickAttachment,
   AiChatPreviewAttachment,
+  AiChatQueueConsumed,
   AiChatStart,
   AiChatStarted,
   AiChatTextDelta,
   AiChatThinkingDelta,
   AiChatToolActivity,
   AiChatToolCall,
+  AiChatTurnSpawn,
   AiConversationDelete,
   AiConversationList,
   AiConversationLoad,
@@ -41,6 +44,7 @@ import * as nodePath from 'path'
 import * as os from 'os'
 import { promises as fsPromises } from 'fs'
 import type { AuthManager } from '../auth.js'
+import { isLocalMode } from './ai-proxy-client.js'
 import type { ServiceClient } from '../service-client.js'
 import type { ChatService, ChatServiceEvent } from './chat-service.js'
 import type { ConversationStore } from './conversation-store.js'
@@ -150,6 +154,19 @@ export function registerAiChatHandlers(deps: {
     { name: string; argsJson: string; conversationId: string }
   >()
 
+  /** Per-conversation set of "tool activity has fired this turn".
+   *  Used to suppress `thinking-delta` events that arrive AFTER tool
+   *  activity in non-local mode — production OpenRouter presets emit
+   *  reasoning blocks between every tool round, which clutters the
+   *  chat log without adding insight (the model has already chosen
+   *  its next move by the time the user reads the reasoning). Local
+   *  mode keeps every reasoning block since that's what dev mode is
+   *  for: inspecting the model end-to-end. Reset on `started`,
+   *  `done`, or `error` so the next turn starts clean. Tool-activity
+   *  dedupe in the webview store remains intact because suppressed
+   *  thinking blocks never reach it. */
+  const seenToolActivity = new Set<string>()
+
   // ── Forward chat service events to the webview as typed notifications.
   //
   // `sendNow` does the actual postMessage. When the webview is
@@ -163,6 +180,7 @@ export function registerAiChatHandlers(deps: {
   const sendNow = (event: ChatServiceEvent): void => {
     switch (event.kind) {
       case 'started':
+        seenToolActivity.delete(event.conversationId)
         messenger.sendNotification(AiChatStarted, frontend, {
           conversationId: event.conversationId,
           model: event.model,
@@ -180,12 +198,22 @@ export function registerAiChatHandlers(deps: {
         // into one `thinking` block that renders as a
         // collapsed-by-default "Thinking…" toggle in
         // message-assistant.svelte.
+        //
+        // Suppress when we've already seen tool activity this turn
+        // and we're talking to the prod proxy — keeps the chat log
+        // focused on actions taken instead of running commentary
+        // between tool rounds. Local mode (dev) bypasses the gate so
+        // operators can inspect every reasoning chunk end-to-end.
+        if (seenToolActivity.has(event.conversationId) && !isLocalMode()) {
+          break
+        }
         messenger.sendNotification(AiChatThinkingDelta, frontend, {
           conversationId: event.conversationId,
           text: event.text,
         })
         break
       case 'done':
+        seenToolActivity.delete(event.conversationId)
         messenger.sendNotification(AiChatDone, frontend, {
           conversationId: event.conversationId,
           finishReason: event.finishReason,
@@ -193,6 +221,7 @@ export function registerAiChatHandlers(deps: {
         })
         break
       case 'error':
+        seenToolActivity.delete(event.conversationId)
         messenger.sendNotification(AiChatError, frontend, {
           conversationId: event.conversationId,
           message: event.message,
@@ -203,6 +232,7 @@ export function registerAiChatHandlers(deps: {
         logger.debug(
           `tool_activity ${event.status} ${event.tool}: ${event.message}`
         )
+        seenToolActivity.add(event.conversationId)
         messenger.sendNotification(AiChatToolActivity, frontend, {
           conversationId: event.conversationId,
           tool: event.tool,
@@ -211,6 +241,7 @@ export function registerAiChatHandlers(deps: {
         })
         break
       case 'tool-call':
+        seenToolActivity.add(event.conversationId)
         messenger.sendNotification(AiChatToolCall, frontend, {
           conversationId: event.conversationId,
           callId: event.callId,
@@ -219,6 +250,23 @@ export function registerAiChatHandlers(deps: {
           status: event.status,
           result: event.result,
           errorMessage: event.error,
+        })
+        break
+      case 'turn-spawn':
+        // A queued user message spawned a follow-up sub-turn under
+        // the same conversation. Reset per-turn flags so the next
+        // sub-turn's reasoning blocks aren't pre-suppressed by the
+        // prior one's tool activity.
+        seenToolActivity.delete(event.conversationId)
+        messenger.sendNotification(AiChatTurnSpawn, frontend, {
+          conversationId: event.conversationId,
+          subTurnId: event.subTurnId,
+        })
+        break
+      case 'queue-consumed':
+        messenger.sendNotification(AiChatQueueConsumed, frontend, {
+          conversationId: event.conversationId,
+          injectionIds: event.injectionIds,
         })
         break
     }
@@ -355,6 +403,21 @@ export function registerAiChatHandlers(deps: {
     denyAllPendingApprovals('abort')
     skipAllPendingQuestions('abort')
     service.abort(turnId)
+  })
+
+  // Mid-turn user message: append to the in-flight turn's queue.
+  // The chat-service routes it as either follow-up role:user after a
+  // tool round, or as the seed for a fresh sub-turn once the model
+  // finishes naturally — see ChatService.start() for the routing
+  // logic. The user bubble is already on screen (the webview
+  // pushed it at send-time for instant feedback); this notification
+  // just tells the extension where to plug the text into the model
+  // request.
+  messenger.onNotification(AiChatInject, (params) => {
+    logger.info(
+      `chat/inject received (turn=${params?.turnId ?? '?'}, conv=${params?.conversationId ?? '?'}, textLen=${params?.text?.length ?? 0})`
+    )
+    service.inject(params)
   })
 
   // Webview posts the user's answer to a meta__ask_user question.

@@ -538,6 +538,75 @@ export const AiChatAbort: NotificationType<{ turnId: string }> = {
   method: 'aiChatAbort',
 }
 
+/** Webview → extension: append a user message to an in-flight turn's
+ * queue. The extension ends the current sub-turn at its next
+ * intersection — either a natural finish (`stop`/`length`) or the
+ * end of the in-flight tool round — and spawns a fresh sub-turn
+ * (signalled via `AiChatTurnSpawn`) seeded with the drained user
+ * text. When the prior sub-turn ended mid-tool-round, its leftover
+ * `role:'tool'` results ride along on the new sub-turn's request so
+ * the proxy commits a clean assistant(tool_calls) → tool(results)
+ * → user sequence; otherwise the new sub-turn just carries the
+ * editor-context + user delta.
+ *
+ * The webview is expected to render the user bubble immediately at
+ * `send()` time for instant visual feedback; this notification just
+ * tells the extension where to plug the text in. */
+export interface AiChatInjectParams {
+  /** Turn id of the in-flight turn this message attaches to. The
+   *  extension uses this to look up the right queue. */
+  turnId: string
+  /** Webview-minted id for THIS specific injection. The extension
+   *  echoes it back in `AiChatQueueConsumed` so the webview can
+   *  remove the right entry from its pending-queue array (and
+   *  unstyle the matching user bubble) instead of decrementing a
+   *  raw counter. Lets a dropped/duplicated event fail loudly
+   *  rather than silently miscount. */
+  injectionId: string
+  /** Conversation the in-flight turn belongs to. Used as a sanity
+   *  check; the extension drops the inject if this doesn't match the
+   *  active turn's conversation. */
+  conversationId: string
+  text: string
+  mentions: Array<{ kind: 'file' | 'symbol' | 'selection'; label: string }>
+  attachments: AiChatAttachment[]
+  includeActiveFile?: boolean
+  activeFile?: { path: string; name: string }
+}
+
+export const AiChatInject: NotificationType<AiChatInjectParams> = {
+  method: 'aiChatInject',
+}
+
+/** Extension → webview: a new sub-turn has spawned within an
+ * existing turn's lifecycle because queued user messages remained
+ * after the model finished naturally. The webview should mount a
+ * fresh streaming assistant placeholder under `subTurnId` so abort,
+ * text-deltas, and tool-call events route to it. The conversation id
+ * is unchanged — only the per-turn abort key advances.
+ *
+ * Emitted BEFORE any `text-delta` of the new sub-turn lands so the
+ * placeholder always exists by the time content arrives. */
+export const AiChatTurnSpawn: NotificationType<{
+  conversationId: string
+  subTurnId: string
+}> = {
+  method: 'aiChatTurnSpawn',
+}
+
+/** Extension → webview: the listed `injectionIds` (minted by the
+ * webview at send-time and echoed back here) have been drained into
+ * a fresh sub-turn. The webview removes the matching entries from
+ * its pending-queue array (so the user bubbles flip from greyed-out
+ * to full opacity); an unack'd id stays in the array so a dropped
+ * event surfaces as a stuck pipeline rather than a silent miscount. */
+export const AiChatQueueConsumed: NotificationType<{
+  conversationId: string
+  injectionIds: string[]
+}> = {
+  method: 'aiChatQueueConsumed',
+}
+
 /** Extension → webview: turn started, id + model assigned. */
 export const AiChatStarted: NotificationType<{
   conversationId: string

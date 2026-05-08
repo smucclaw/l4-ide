@@ -34,7 +34,7 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
           pattern: {
             type: 'string',
             description:
-              'Case-insensitive regex; literal-substring fallback. For files, matches carry 2 lines of context (hits prefixed `>>>`, context `   `, chunks joined `---`). For directories, matching entries only.',
+              'Case-insensitive regex; literal-substring fallback. For files, matches carry 2 lines of context (hits prefixed `>>>`, context `   `, chunks joined `---`). For directories, the tree is walked recursively and file CONTENTS are grepped — results emitted as `<path>:<lineno>: <text>` rows.',
           },
         },
         required: ['path'],

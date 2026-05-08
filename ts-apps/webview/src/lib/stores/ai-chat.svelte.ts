@@ -4,6 +4,7 @@ import {
   AiChatAbort,
   AiChatAnswerUser,
   AiChatApproveTool,
+  AiChatInject,
   AiChatPickAttachment,
   AiChatPreviewAttachment,
   AiChatStart,
@@ -55,6 +56,16 @@ export interface RenderedTurn {
    * even before the server assigns a conversationId. Absent on user
    * turns (nothing to cancel). */
   turnId?: string
+  /** For user turns submitted DURING an in-flight pipeline (the
+   *  inject path): the webview-minted id we shipped in the
+   *  AiChatInject notification. The store keeps the matching entry
+   *  in `conv.queuedInjections` until the extension echoes the id
+   *  back via `queue-consumed`; the bubble renders greyed-out and
+   *  is excluded from the scroll-sticky set while the entry is
+   *  live. Absent on the initial user turn of a sub-turn (those go
+   *  straight into the request, never queued) and on assistant
+   *  turns. */
+  injectionId?: string
   role: 'user' | 'assistant'
   /** Concatenated assistant text for retry / copy / persistence. For
    * display the UI iterates `blocks` instead, which preserves the
@@ -124,6 +135,21 @@ interface ConversationState {
   turns: RenderedTurn[]
   /** True while an in-flight stream is attached to this conversation. */
   streaming: boolean
+  /** Active turnId for any in-flight stream. Drives the inject path:
+   *  when the user submits while `streaming` is true, the new
+   *  message rides on this id rather than starting a fresh
+   *  `AiChatStart`. Null between turns. */
+  activeTurnId: string | null
+  /** Pending user-message injections — one entry per `AiChatInject`
+   *  the webview has dispatched but the extension has not yet
+   *  echoed back via `queue-consumed`. Each entry carries the
+   *  injection's id (the correlation key the extension echoes) and
+   *  the corresponding user-bubble id (so we can grey out / unstyle
+   *  the matching turn). Length drives the `pipelineActive` gate
+   *  and the scroll-sticky exclusion set. The whole array clears on
+   *  `abort()` and on `onError()` since both reasons halt the
+   *  pipeline server-side. */
+  queuedInjections: Array<{ injectionId: string; userTurnId: string }>
 }
 
 /** Parse `_meta.blocks` saved by chat-service into the webview's
@@ -226,6 +252,8 @@ export function createAiChatStore(
           title: null,
           turns: [],
           streaming: false,
+          activeTurnId: null,
+          queuedInjections: [],
         }
       }
       currentId = localKey
@@ -304,6 +332,8 @@ export function createAiChatStore(
             return turn
           }),
         streaming: false,
+        activeTurnId: null,
+        queuedInjections: [],
       }
       conversations[conv.id] = state
       currentId = conv.id
@@ -343,14 +373,7 @@ export function createAiChatStore(
     const m = getMessenger()
     if (!m || !text.trim()) return
     const conv = ensureCurrent()
-    // Freeze any tool-call / tool-activity dots that are still
-    // pulsating on prior turns of this conversation. Usually the prior
-    // assistant turn has already settled, but if the user fires a new
-    // turn before the previous stream's terminal `done` reached us
-    // (rare but possible — disconnect + reattach window) those rows
-    // would otherwise pulse forever next to the new bubble.
-    for (const t of conv.turns) cancelInflightToolCalls(t)
-    const turnId = `turn_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+
     // Snapshot the staged-context chips — attachments + (when the
     // chip was on) the active file — so the user message can echo
     // what actually went to the model. Plain objects to dodge the
@@ -366,12 +389,106 @@ export function createAiChatStore(
         path: activeFile.path,
       })
     }
+    const mentionsPlain = mentions.map((m) => ({
+      kind: m.kind,
+      label: m.label,
+    }))
+    const wasIncludingActiveFile = includeActiveFile
+    const attachmentsPlain: AiChatAttachment[] = stagedAttachments.map((a) => ({
+      kind: a.kind,
+      name: a.name,
+      mediaType: a.mediaType,
+      dataBase64: a.dataBase64,
+    }))
+    const activeFileSnapshot =
+      wasIncludingActiveFile && activeFile.name && activeFile.path
+        ? { name: activeFile.name, path: activeFile.path }
+        : undefined
+
+    // Drop any trailing errored assistant turns so a fresh user
+    // submit doesn't get sandwiched under a stale error footer.
+    // Forward progress (a new send) is the user's signal that
+    // they've moved on from the failure; keeping the bubble would
+    // just clutter the chat.
+    dropTrailingErroredAssistantTurns(conv)
+
+    // Always push the user bubble immediately for instant visual
+    // feedback. The chips snapshot persists with the turn so
+    // re-renders never drift from what the user submitted. We mint
+    // the user-turn id up front so a queued submit can correlate
+    // the bubble with its pending injection (greyed-out style +
+    // sticky-scroll exclusion until the extension echoes consumption).
+    const userTurnId = `user:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`
+    const isInject = conv.streaming && !!conv.activeTurnId
+    const injectionId = isInject
+      ? `inj_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+      : undefined
     conv.turns.push({
-      id: `user:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
+      id: userTurnId,
       role: 'user',
       content: text,
       ...(turnChips.length > 0 ? { chips: turnChips } : {}),
+      ...(injectionId ? { injectionId } : {}),
     })
+
+    // Mid-turn submit: we already have a streaming assistant bubble
+    // attached to `activeTurnId`. Hand the new message off to the
+    // extension's inject queue rather than starting a fresh turn.
+    // The chat-service routes it as either follow-up `role:'user'`
+    // after the next tool round or as the seed for a new sub-turn
+    // once the model finishes naturally — see `ChatService.start()`.
+    // No new assistant placeholder yet: if the extension folds the
+    // message into a tool round, the existing bubble keeps growing;
+    // if it spawns a sub-turn, the `turn-spawn` event will tell us
+    // to mount one.
+    if (isInject && injectionId) {
+      const conversationIdForInject = conv.id ?? ''
+      conv.queuedInjections.push({ injectionId, userTurnId })
+      try {
+        m.sendNotification(AiChatInject, HOST_EXTENSION, {
+          turnId: conv.activeTurnId!,
+          injectionId,
+          conversationId: conversationIdForInject,
+          text,
+          mentions: mentionsPlain,
+          attachments: attachmentsPlain,
+          includeActiveFile: wasIncludingActiveFile,
+          ...(activeFileSnapshot ? { activeFile: activeFileSnapshot } : {}),
+        })
+        if (wasIncludingActiveFile) includeActiveFile = false
+        stagedAttachments = []
+        console.log('[ai-chat] dispatched AiChatInject', {
+          turnId: conv.activeTurnId,
+          injectionId,
+          textLen: text.length,
+          queuedLen: conv.queuedInjections.length,
+        })
+      } catch (err) {
+        // Failed dispatch: roll back the pending entry and clear
+        // the bubble's injectionId so it renders in the normal
+        // "consumed" style. The user can resubmit; the bubble
+        // itself stays so they can copy from it.
+        conv.queuedInjections = conv.queuedInjections.filter(
+          (q) => q.injectionId !== injectionId
+        )
+        const tail = conv.turns[conv.turns.length - 1]
+        if (tail && tail.id === userTurnId) tail.injectionId = undefined
+        console.error('[ai-chat] sendNotification(AiChatInject) threw', err)
+      }
+      if (currentId) delete draftsByConv[currentId]
+      if (currentId) clearPendingQuestionFor(currentId)
+      return
+    }
+
+    // Fresh turn (no active stream): freeze any pulsating tool-call
+    // / tool-activity dots on prior turns of this conversation.
+    // Usually the prior assistant turn has already settled, but if
+    // the user fires a new turn before the previous stream's
+    // terminal `done` reached us (disconnect + reattach window)
+    // those rows would otherwise pulse forever next to the new
+    // bubble.
+    for (const t of conv.turns) cancelInflightToolCalls(t)
+    const turnId = `turn_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
     conv.turns.push({
       id: `asst:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
       turnId,
@@ -381,33 +498,9 @@ export function createAiChatStore(
       blocks: [],
     })
     conv.streaming = true
+    conv.activeTurnId = turnId
 
     const conversationId = conv.id ?? undefined
-    // The `mentions` array from the caller is usually a Svelte $state
-    // proxy. postMessage() can't structured-clone proxies across the
-    // webview → extension bridge ("DataCloneError: [object Array]
-    // could not be cloned"), so we hand over a plain-object copy.
-    const mentionsPlain = mentions.map((m) => ({
-      kind: m.kind,
-      label: m.label,
-    }))
-    const wasIncludingActiveFile = includeActiveFile
-    // Snapshot attachments into plain objects — Svelte $state proxies
-    // survive postMessage, plain objects do not need special handling.
-    const attachmentsPlain: AiChatAttachment[] = stagedAttachments.map((a) => ({
-      kind: a.kind,
-      name: a.name,
-      mediaType: a.mediaType,
-      dataBase64: a.dataBase64,
-    }))
-    // Snapshot the chip's current active-file state so the extension
-    // can echo it verbatim into the <editor-context> system message
-    // instead of re-querying vscode.window.activeTextEditor (which
-    // can drift across multi-window setups and focus changes).
-    const activeFileSnapshot =
-      wasIncludingActiveFile && activeFile.name && activeFile.path
-        ? { name: activeFile.name, path: activeFile.path }
-        : undefined
     try {
       m.sendNotification(AiChatStart, HOST_EXTENSION, {
         conversationId,
@@ -441,6 +534,7 @@ export function createAiChatStore(
         }
       }
       conv.streaming = false
+      conv.activeTurnId = null
       return
     }
 
@@ -449,6 +543,22 @@ export function createAiChatStore(
     // for *this* conversation. Cards on other conversations keep their
     // pending state — the user may flip back to answer them.
     if (currentId) clearPendingQuestionFor(currentId)
+  }
+
+  /** Drop any trailing assistant turns whose only outcome was an
+   *  error. Called by `send()` and `continueTurn()` so forward
+   *  progress (a new submit / a retry) clears the prior failure
+   *  bubble instead of leaving it hanging above the new exchange.
+   *  Conservative: stops as soon as we hit a non-errored or
+   *  non-assistant turn so a successful response further back
+   *  stays put. */
+  function dropTrailingErroredAssistantTurns(conv: ConversationState): void {
+    while (conv.turns.length > 0) {
+      const tail = conv.turns[conv.turns.length - 1]!
+      if (tail.role !== 'assistant') break
+      if (!tail.error) break
+      conv.turns.pop()
+    }
   }
 
   /**
@@ -501,8 +611,10 @@ export function createAiChatStore(
 
     // Freeze any pulsating tool blocks left over on prior turns
     // before pushing a fresh assistant bubble — same rationale as in
-    // send().
+    // send(). Also drop trailing errored assistant turns so the
+    // retry's new bubble doesn't sit under the stale failure.
     for (const t of conv.turns) cancelInflightToolCalls(t)
+    dropTrailingErroredAssistantTurns(conv)
     const turnId = `turn_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
     conv.turns.push({
       id: `asst:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
@@ -513,6 +625,7 @@ export function createAiChatStore(
       blocks: [],
     })
     conv.streaming = true
+    conv.activeTurnId = turnId
     try {
       m.sendNotification(AiChatStart, HOST_EXTENSION, {
         conversationId: conv.id,
@@ -536,6 +649,7 @@ export function createAiChatStore(
         }
       }
       conv.streaming = false
+      conv.activeTurnId = null
     }
     // A retry supersedes any pending meta__ask_user card attached
     // to this conversation — mirrors the `send()` path.
@@ -548,22 +662,41 @@ export function createAiChatStore(
     const conv = getConversation()
     if (!conv) return
     // Abort by the per-turn id the webview generated at send time.
-    // The server's conversationId isn't needed here — we're cancelling
-    // our own HTTP request, and turnId is the canonical handle for
-    // that request on both sides.
-    const last = conv.turns[conv.turns.length - 1]
-    if (!last || !last.turnId || !last.streaming) return
-    m.sendNotification(AiChatAbort, HOST_EXTENSION, { turnId: last.turnId })
-    // Flip local streaming state right away. If the extension's 'done'
-    // event races or never arrives, the UI still unlocks.
-    last.streaming = false
+    // Prefer the conv-level activeTurnId because mid-turn injects
+    // can leave the streaming assistant turn somewhere other than
+    // the tail of conv.turns (a queued user bubble lives after it).
+    // Fall back to scanning for the streaming assistant if the
+    // active id was never recorded — covers the rare race where
+    // the user clicks Stop between send() and the activeTurnId
+    // assignment.
+    const turnId =
+      conv.activeTurnId ??
+      conv.turns.find((t) => t.role === 'assistant' && t.streaming)?.turnId ??
+      null
+    if (!turnId) return
+    m.sendNotification(AiChatAbort, HOST_EXTENSION, { turnId })
+    // Flip local streaming state right away. If the extension's
+    // `done` event races or never arrives, the UI still unlocks.
+    for (const t of conv.turns) {
+      if (t.role !== 'assistant') continue
+      if (!t.streaming) continue
+      t.streaming = false
+      cancelInflightToolCalls(t)
+    }
     conv.streaming = false
-    cancelInflightToolCalls(last)
-    // Stopping the turn also dismisses any pending meta__ask_user
-    // card for this conversation — the extension's abort handler
-    // drains the resolver on its side; clearing here keeps the
-    // webview in sync so the card disappears immediately. Other
-    // conversations' cards stay untouched.
+    conv.activeTurnId = null
+    // Stop also wipes any user messages queued in the extension's
+    // inject pipeline — the chat-service drops them when its abort
+    // signal trips. Clear the local pending list so the
+    // pipeline-active gate releases immediately and any greyed-out
+    // user bubbles pop back to their normal style.
+    if (conv.queuedInjections.length > 0) {
+      const cancelled = new Set(conv.queuedInjections.map((q) => q.userTurnId))
+      for (const t of conv.turns) {
+        if (t.role === 'user' && cancelled.has(t.id)) t.injectionId = undefined
+      }
+      conv.queuedInjections = []
+    }
     if (currentId) clearPendingQuestionFor(currentId)
   }
 
@@ -626,6 +759,79 @@ export function createAiChatStore(
         title: null,
         turns: [],
         streaming: true,
+        activeTurnId: null,
+        queuedInjections: [],
+      }
+    }
+  }
+
+  /** A queued user message has spawned a fresh sub-turn under the
+   *  same conversation. Mount a new streaming assistant placeholder
+   *  for the sub-turn so subsequent text-deltas / tool-calls route
+   *  to it. The user bubble(s) for this sub-turn were already
+   *  pushed into conv.turns at send-time; this just adds the
+   *  assistant placeholder above which they sit.
+   *
+   *  Note: `conv.activeTurnId` deliberately stays pinned to the
+   *  pipeline's root turnId — that's the abort handle the
+   *  chat-service registered with its AbortController, and
+   *  sub-turn ids are NOT in the extension's active map. The
+   *  placeholder's own `turnId` field gets the sub-turn id for
+   *  debugging only. */
+  function onTurnSpawn(params: {
+    conversationId: string
+    subTurnId: string
+  }): void {
+    const conv = conversations[params.conversationId]
+    if (!conv) return
+    // Freeze any pulsating dots on prior assistant turns now that a
+    // new sub-turn is taking over. The previous sub-turn already
+    // received its own `done`, so its `streaming` flag is off — but
+    // its trailing tool-activity rows would otherwise stay
+    // animation-eligible until something appended after them.
+    for (const t of conv.turns) {
+      if (t.role === 'assistant') t.streaming = false
+    }
+    conv.turns.push({
+      id: `asst:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
+      turnId: params.subTurnId,
+      role: 'assistant',
+      content: '',
+      streaming: true,
+      blocks: [],
+    })
+    conv.streaming = true
+  }
+
+  /** The extension has folded the listed `injectionIds` into the
+   *  pipeline. Remove the matching entries from `queuedInjections`
+   *  (so `pipelineActive` releases once everything has been
+   *  consumed) and clear the `injectionId` field on each
+   *  corresponding user bubble so it stops rendering greyed-out and
+   *  becomes eligible for scroll-stickiness.
+   *
+   *  Stale ids (already removed by abort/error, or never enqueued —
+   *  shouldn't happen but cheap to defend against) are silently
+   *  ignored. */
+  function onQueueConsumed(params: {
+    conversationId: string
+    injectionIds: string[]
+  }): void {
+    const conv = conversations[params.conversationId]
+    if (!conv) return
+    if (!params.injectionIds || params.injectionIds.length === 0) return
+    const consumed = new Set(params.injectionIds)
+    const consumedTurnIds = new Set<string>()
+    conv.queuedInjections = conv.queuedInjections.filter((q) => {
+      if (!consumed.has(q.injectionId)) return true
+      consumedTurnIds.add(q.userTurnId)
+      return false
+    })
+    if (consumedTurnIds.size > 0) {
+      for (const t of conv.turns) {
+        if (t.role === 'user' && consumedTurnIds.has(t.id)) {
+          t.injectionId = undefined
+        }
       }
     }
   }
@@ -633,7 +839,18 @@ export function createAiChatStore(
   function onTextDelta(params: { conversationId: string; text: string }): void {
     const conv = conversations[params.conversationId]
     if (!conv) return
-    const turn = conv.turns[conv.turns.length - 1]
+    // Target the most recent streaming assistant turn, not blindly
+    // the tail — mid-turn injects leave queued user bubbles after
+    // the in-flight assistant, and we need to keep streaming text
+    // into the assistant turn that owns the active stream.
+    const turn =
+      findLastStreamingAssistant(conv) ??
+      // Fallback: the tail-only logic still works for
+      // disconnect+reattach paths where `streaming` got reset by
+      // an early `done` but more text-deltas arrived afterward.
+      (conv.turns[conv.turns.length - 1]?.role === 'assistant'
+        ? conv.turns[conv.turns.length - 1]
+        : null)
     if (!turn || turn.role !== 'assistant') return
     turn.content += params.text
     if (!turn.blocks) turn.blocks = []
@@ -652,19 +869,32 @@ export function createAiChatStore(
   }): void {
     const conv = conversations[params.conversationId]
     if (!conv) return
-    const last = conv.turns[conv.turns.length - 1]
-    if (last) {
-      last.streaming = false
+    // Find the streaming assistant turn — usually the tail, but
+    // mid-turn injects can leave queued user bubbles after it. Walk
+    // backwards so we settle the most recent one in flight.
+    const streamingTurn = findLastStreamingAssistant(conv)
+    if (streamingTurn) {
+      streamingTurn.streaming = false
       // Stash per-turn token totals on the assistant bubble so the
       // renderer can show a small "• 1.2k tokens" badge. Helps the
       // user see which turns are expensive and catches quota drift
       // before the 429. `usage` is undefined on tool-call pauses
-      // (no terminal chunk yet) and on early errors.
-      if (params.usage && last.role === 'assistant') {
-        last.usage = params.usage
+      // (no terminal chunk yet) and on early errors. The badge
+      // itself is gated on the conversation-level pipelineActive
+      // flag in message-assistant.svelte so it stays hidden until
+      // every queued follow-up has been consumed.
+      if (params.usage) {
+        streamingTurn.usage = params.usage
       }
     }
-    conv.streaming = false
+    // Pipeline `streaming` only flips off when there are no more
+    // queued user messages waiting to spawn a follow-up sub-turn.
+    // The chat-service's `turn-spawn` event will set it back to
+    // true if more work is incoming.
+    if (conv.queuedInjections.length === 0) {
+      conv.streaming = false
+      conv.activeTurnId = null
+    }
     void refreshHistory()
   }
 
@@ -683,12 +913,40 @@ export function createAiChatStore(
         ? conversations['__new__']
         : undefined)
     if (!conv) return
-    const last = conv.turns[conv.turns.length - 1]
-    if (last && last.role === 'assistant') {
-      last.streaming = false
-      last.error = { message: params.message, code: params.code }
+    const streamingTurn = findLastStreamingAssistant(conv)
+    if (streamingTurn) {
+      streamingTurn.streaming = false
+      streamingTurn.error = { message: params.message, code: params.code }
     }
+    // An error halts the whole pipeline — the chat-service exits
+    // start() without draining further queued messages — so clear
+    // the pending list. The corresponding user bubbles stay on
+    // screen (un-greyed, with their injectionId cleared) so the
+    // user can copy from them or resubmit.
     conv.streaming = false
+    conv.activeTurnId = null
+    if (conv.queuedInjections.length > 0) {
+      const cancelled = new Set(conv.queuedInjections.map((q) => q.userTurnId))
+      for (const t of conv.turns) {
+        if (t.role === 'user' && cancelled.has(t.id)) t.injectionId = undefined
+      }
+      conv.queuedInjections = []
+    }
+  }
+
+  /** Find the most recent assistant turn that's still streaming.
+   *  Walks back from the tail because mid-turn injects can leave
+   *  queued user bubbles after the in-flight assistant. Returns
+   *  null if nothing's currently streaming. */
+  function findLastStreamingAssistant(
+    conv: ConversationState
+  ): RenderedTurn | null {
+    for (let i = conv.turns.length - 1; i >= 0; i--) {
+      const t = conv.turns[i]!
+      if (t.role !== 'assistant') continue
+      if (t.streaming) return t
+    }
+    return null
   }
 
   function onThinkingDelta(params: {
@@ -698,7 +956,11 @@ export function createAiChatStore(
     if (!params.conversationId) return
     const conv = conversations[params.conversationId]
     if (!conv) return
-    const turn = conv.turns[conv.turns.length - 1]
+    const turn =
+      findLastStreamingAssistant(conv) ??
+      (conv.turns[conv.turns.length - 1]?.role === 'assistant'
+        ? conv.turns[conv.turns.length - 1]
+        : null)
     if (!turn || turn.role !== 'assistant') return
     if (!turn.blocks) turn.blocks = []
     // Merge consecutive thinking deltas into one block so the whole
@@ -726,7 +988,11 @@ export function createAiChatStore(
     if (!params.conversationId) return
     const conv = conversations[params.conversationId]
     if (!conv) return
-    const turn = conv.turns[conv.turns.length - 1]
+    const turn =
+      findLastStreamingAssistant(conv) ??
+      (conv.turns[conv.turns.length - 1]?.role === 'assistant'
+        ? conv.turns[conv.turns.length - 1]
+        : null)
     if (!turn || turn.role !== 'assistant') return
     if (!turn.blocks) turn.blocks = []
     // Dedupe policy:
@@ -814,17 +1080,23 @@ export function createAiChatStore(
     }
 
     // No existing block — this is a brand-new tool call, so it must
-    // attach to the current (latest) assistant turn of the named
-    // conversation. Without a conversationId or a matching assistant
-    // tail, the event arrived out of band; drop it rather than spawn
-    // an orphan row in the wrong place.
+    // attach to the streaming assistant turn of the named
+    // conversation. Walk backwards to find it (mid-turn injects
+    // can leave queued user bubbles after the in-flight assistant
+    // so the tail isn't always the right target). Without a
+    // conversationId or any streaming assistant, the event arrived
+    // out of band; drop it rather than spawn an orphan row.
     if (!params.conversationId) return
     const conv = conversations[params.conversationId]
     if (!conv || !conv.turns.length) return
-    const tail = conv.turns[conv.turns.length - 1]
-    if (!tail || tail.role !== 'assistant') return
-    if (!tail.blocks) tail.blocks = []
-    tail.blocks.push({
+    const target =
+      findLastStreamingAssistant(conv) ??
+      (conv.turns[conv.turns.length - 1]?.role === 'assistant'
+        ? conv.turns[conv.turns.length - 1]!
+        : null)
+    if (!target || target.role !== 'assistant') return
+    if (!target.blocks) target.blocks = []
+    target.blocks.push({
       kind: 'tool-call',
       call: {
         callId: params.callId,
@@ -1123,6 +1395,18 @@ export function createAiChatStore(
       if (!currentId) return null
       return pendingQuestionsByConv[currentId] ?? null
     },
+    /** True while the current conversation has either an in-flight
+     *  stream OR queued user messages still waiting to be folded
+     *  into the model request. Drives the per-turn usage badge and
+     *  the "Files changed" review card on completed assistant
+     *  bubbles — both stay hidden until the whole pipeline settles
+     *  so the user doesn't see a "turn complete" badge in the
+     *  middle of a multi-message exchange. */
+    get pipelineActive() {
+      const conv = getConversation()
+      if (!conv) return false
+      return conv.streaming || conv.queuedInjections.length > 0
+    },
     /** Ids of conversations with an in-flight stream. The history
      *  panel renders a spinner on these rows so the user can see at
      *  a glance that a chat is still burning tokens even when it
@@ -1179,6 +1463,8 @@ export function createAiChatStore(
     onError,
     onToolCall,
     onToolActivity,
+    onTurnSpawn,
+    onQueueConsumed,
     onUsageUpdate,
     onAuthStatus,
     onActiveFile,
@@ -1197,6 +1483,7 @@ export type AiChatStore = {
   readonly activeFile: ActiveFileInfo
   readonly includeActiveFile: boolean
   readonly pendingQuestion: PendingQuestion | null
+  readonly pipelineActive: boolean
   readonly streamingConversationIds: string[]
   toggleIncludeActiveFile: () => void
   setIncludeActiveFile: (value: boolean) => void
@@ -1260,6 +1547,11 @@ export type AiChatStore = {
     tool: string
     status: 'running' | 'done' | 'error'
     message: string
+  }) => void
+  onTurnSpawn: (params: { conversationId: string; subTurnId: string }) => void
+  onQueueConsumed: (params: {
+    conversationId: string
+    injectionIds: string[]
   }) => void
   onUsageUpdate: (params: {
     used: number

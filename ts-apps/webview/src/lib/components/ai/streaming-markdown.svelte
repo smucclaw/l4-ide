@@ -248,13 +248,32 @@
   .streaming-md :global(h6) {
     font-size: 1em;
   }
+  /* Tailwind's preflight (loaded via app.css) strips list-style on
+     ul/ol globally. Restore disc / decimal markers here so assistant
+     prose actually shows bullets and numbers, and switch nested ul
+     levels through circle → square the way browsers default. */
   .streaming-md :global(ul),
   .streaming-md :global(ol) {
     margin: 8px 0 10px;
     padding-left: 20px;
   }
+  .streaming-md :global(ul) {
+    list-style: disc outside;
+  }
+  .streaming-md :global(ul ul) {
+    list-style-type: circle;
+  }
+  .streaming-md :global(ul ul ul) {
+    list-style-type: square;
+  }
+  .streaming-md :global(ol) {
+    list-style: decimal outside;
+  }
   .streaming-md :global(li) {
     margin: 2px 0;
+  }
+  .streaming-md :global(li::marker) {
+    color: var(--vscode-descriptionForeground);
   }
   .streaming-md :global(a) {
     color: var(--vscode-textLink-foreground);
