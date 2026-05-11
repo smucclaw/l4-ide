@@ -35,7 +35,9 @@ where
 
 import Base
 
+import Data.Char (isSpace)
 import qualified Data.List as List
+import qualified Data.Text as Text
 import qualified Generics.SOP as SOP
 import L4.Annotation
 import L4.Syntax
@@ -688,7 +690,7 @@ attachLeadingDesc node ann =
     Nothing -> pure ann
     Just nodeRange -> do
       matches <- takeMatchingDescs (descPrecedesNode nodeRange)
-      pure $ maybe ann (\d -> setDesc d.payload ann) (lastMaybe matches)
+      pure $ maybe ann (\d -> setDesc d.payload ann) (pickLeadingDesc matches)
 
 attachLeadingOrInlineDesc :: (HasSrcRange a) => a -> Anno -> State DescS Anno
 attachLeadingOrInlineDesc node ann =
@@ -706,6 +708,24 @@ attachLeadingOrInlineDesc node ann =
         (Just leadingD, Just inlineD) -> do
           addDescWarning $ DescDuplicatePreferInline leadingD inlineD
           pure $ setDesc inlineD.payload ann
+
+-- | Choose which leading desc to attach to a node when there are multiple
+-- candidates. Prefers the latest match that carries an @export\/@default
+-- keyword so the export marker is still detected when @desc lines sit
+-- between the @export annotation and the function definition.
+-- Falls back to the latest match (closest to the node) otherwise.
+pickLeadingDesc :: [DescWithSpan] -> Maybe DescWithSpan
+pickLeadingDesc matches =
+  case lastMaybe (filter (descIsExportMarked . (.payload)) matches) of
+    Just d  -> Just d
+    Nothing -> lastMaybe matches
+
+-- | True if a Desc's text begins with the @export or @default keyword,
+-- mirroring how 'L4.Export.parseDescText' consumes the leading tokens.
+descIsExportMarked :: Desc -> Bool
+descIsExportMarked d =
+  let token = Text.toLower (Text.takeWhile (not . isSpace) (Text.stripStart (getDesc d)))
+  in token == "export" || token == "default"
 
 addDescWarning :: DescWarning -> State DescS ()
 addDescWarning w = modify' $ \s -> s{descWarnings = w : s.descWarnings}
