@@ -109,7 +109,7 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
     function: {
       name: 'l4__evaluate',
       description:
-        "Type-check + evaluate. If the file has any LSP diagnostics, returns them as a human-readable block (1-indexed line/column, severity, message, source, code) so you can fix the errors first. If the file is clean, returns `{ path, count, results[{ directiveId, line, success, value }] }` — the L4 server's latest results for every `#EVAL` / `#CHECK` / `#TRACE` directive. Call this after every fs__edit_file / fs__create_file to confirm the file still type-checks AND get fresh evaluation results in one round-trip.",
+        'Type-check and run `#EVAL`/`#CHECK`/`#TRACE`. Returns diagnostics if not clean, else directive results. Default `mode:"changed"` surfaces only directives that moved/failed/were added since the last call. Call after each edit.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -117,8 +117,25 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
           path: { type: 'string', description: 'Workspace path.' },
           timeoutMs: {
             type: 'number',
+            description: 'Max compile wait ms (default 6000, cap 15000).',
+          },
+          mode: {
+            type: 'string',
+            enum: ['changed', 'full', 'summary'],
             description:
-              'Max ms to wait for a fresh compile before returning empty. Default 6000, max 15000.',
+              '`changed` (default), `full` (every value), `summary` (counts; failing ids only).',
+          },
+          lineRange: {
+            type: 'array',
+            items: { type: 'number' },
+            minItems: 2,
+            maxItems: 2,
+            description: '[start, end] 1-based source-line filter.',
+          },
+          directiveIds: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Allowlist of directive ids.',
           },
         },
         required: ['path'],

@@ -211,7 +211,15 @@ export class ToolDispatcher {
       case 'fs__delete_file':
         return fsDeleteFile(args as { path: string })
       case 'l4__evaluate':
-        return l4Evaluate(args as { path: string; timeoutMs?: number })
+        return l4Evaluate(
+          args as {
+            path: string
+            timeoutMs?: number
+            mode?: 'changed' | 'full' | 'summary'
+            lineRange?: [number, number]
+            directiveIds?: string[]
+          }
+        )
       case 'meta__ask_user':
         return metaAskUser(
           callId,

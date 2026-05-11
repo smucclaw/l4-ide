@@ -360,17 +360,17 @@ Just enough to write most rules without a round-trip. Anything not here, check <
 
 ### Types
 
-| L4                            | Meaning                                             |
-| ----------------------------- | --------------------------------------------------- |
-| `NUMBER`                      | Integers and rationals                              |
-| `STRING`                      | Text                                                |
-| `BOOLEAN`                     | `TRUE` / `FALSE`                                    |
-| `DATE` / `TIME` / `DATETIME`  | Calendar date / time-of-day (wallclock) / instant   |
-| `LIST OF T`                   | Ordered collection                                  |
-| `MAYBE T`                     | Optional (`JUST x` / `NOTHING`)                     |
-| `EITHER A B`                  | Choice (`LEFT x` / `RIGHT y`)                       |
-| `DECLARE T HAS ...`           | Record                                              |
-| `DECLARE T IS ONE OF a, b, c` | Enum (optionally with per-constructor `HAS` fields) |
+| L4                            | Meaning                                                                                           |
+| ----------------------------- | ------------------------------------------------------------------------------------------------- |
+| `NUMBER`                      | Integers and rationals (use `_` as a visual thousand separator, e.g. `100_000`; 0.4% for percent) |
+| `STRING`                      | Text                                                                                              |
+| `BOOLEAN`                     | `TRUE` / `FALSE`                                                                                  |
+| `DATE` / `TIME` / `DATETIME`  | Calendar date / time-of-day (wallclock) / instant                                                 |
+| `LIST OF T`                   | Ordered collection                                                                                |
+| `MAYBE T`                     | Optional (`JUST x` / `NOTHING`)                                                                   |
+| `EITHER A B`                  | Choice (`LEFT x` / `RIGHT y`)                                                                     |
+| `DECLARE T HAS ...`           | Record                                                                                            |
+| `DECLARE T IS ONE OF a, b, c` | Enum (optionally with per-constructor `HAS` fields)                                               |
 
 `TODAY` returns `DATE`. `CURRENTTIME` returns `TIME`. Both need e.g. `TIMEZONE IS "America/New_York"` in scope to return a value.
 `NOW` returns `DATETIME` and defaults to `"Etc/UTC"`.

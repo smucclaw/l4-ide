@@ -6,6 +6,13 @@ packages:
   jl4-query-plan
   jl4-wasm
 
+-- Pin the Hackage index to the same snapshot as cabal.project. Without
+-- this, fresh CI builds pull the latest packages and resolve `some` to
+-- a version (>=1.0.6) where `GEq` / `GCompare` gained `EqP` / `OrdP`
+-- superclasses, which the pinned `lsp-types` doesn't yet provide
+-- instances for — local cached resolutions hide the break, CI doesn't.
+index-state: 2025-03-31T10:46:26Z
+
 -- Ignore all other packages in the repo
 -- (jl4-lsp, the l4 CLI, and jl4-service have non-WASM deps)
 
