@@ -243,13 +243,15 @@ For complete documentation, see **[Syntax Reference](syntax/README.md)**.
 
 ## Literals
 
-| Literal Type | Syntax                    | Example         |
-| ------------ | ------------------------- | --------------- |
-| **Integer**  | Digits                    | `42`, `-17`     |
-| **Rational** | Digits with decimal point | `3.14`, `-0.5`  |
-| **String**   | Double quotes             | `"hello world"` |
-| **Boolean**  | TRUE or FALSE             | `TRUE`, `FALSE` |
-| **List**     | LIST or FOLLOWED BY       | `LIST 1, 2, 3`  |
+| Literal Type | Syntax                               | Example                           |
+| ------------ | ------------------------------------ | --------------------------------- |
+| **Integer**  | Digits                               | `42`, `-17`, `100_000`            |
+| **Rational** | Digits with decimal point or percent | `3.14`, `-0.5`, `1_000.5`, `0.3%` |
+| **String**   | Double quotes                        | `"hello world"`                   |
+| **Boolean**  | TRUE or FALSE                        | `TRUE`, `FALSE`                   |
+| **List**     | LIST or FOLLOWED BY                  | `LIST 1, 2, 3`                    |
+
+Numeric literals accept `_` between digits as a visual thousand-separator (`100_000` = `100000`). Underscores must not lead or trail the digit run.
 
 ---
 
