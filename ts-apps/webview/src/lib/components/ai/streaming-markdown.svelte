@@ -275,6 +275,18 @@
   .streaming-md :global(li::marker) {
     color: var(--vscode-descriptionForeground);
   }
+  .streaming-md :global(blockquote) {
+    border-left: 3px solid var(--vscode-panel-border, #444);
+    margin: 8px 0;
+    padding: 6px 12px;
+    color: var(--vscode-descriptionForeground);
+  }
+  .streaming-md :global(blockquote > :first-child) {
+    margin-top: 0;
+  }
+  .streaming-md :global(blockquote > :last-child) {
+    margin-bottom: 0;
+  }
   .streaming-md :global(a) {
     color: var(--vscode-textLink-foreground);
     text-decoration: none;
