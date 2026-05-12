@@ -182,6 +182,27 @@
     return JSON.stringify(entries)
   }
 
+  // Slice the directive body — inclusive [start.line .. end.line]
+  // source-line range, joined by '\n' — out of the editor's monaco
+  // model. Both `SrcPos`es are 1-indexed; `getLineContent` is also
+  // 1-indexed, so we can pass them through directly. Returns '' when
+  // the model is unavailable.
+  function sliceBodyFromModel(
+    model: monaco.editor.ITextModel | null,
+    range: DirectiveResult['range']
+  ): string {
+    if (!model) return ''
+    const total = model.getLineCount()
+    const start = Math.max(1, range.start.line)
+    const end = Math.min(total, range.end.line)
+    if (end < start) return ''
+    const lines: string[] = []
+    for (let ln = start; ln <= end; ln++) {
+      lines.push(model.getLineContent(ln))
+    }
+    return lines.join('\n')
+  }
+
   function getCurrentAtomBindings(): {
     fnName: string
     bindings: Record<string, boolean>
@@ -538,15 +559,23 @@
                   showVisualizer = true
                   await tick()
                   const directiveId = `${srcPos.line}:${srcPos.column}`
-                  const lineContent =
-                    editor?.getModel()?.getLineContent(srcPos.line) ?? ''
+                  // `body` is the directive's full source span — the
+                  // inclusive [range.start.line .. range.end.line]
+                  // slice joined by '\n', read from the live editor
+                  // model. Multi-line directives stay distinct from
+                  // visually identical leading lines.
+                  const directiveResult = result as DirectiveResult
+                  const body = sliceBodyFromModel(
+                    editor?.getModel() ?? null,
+                    directiveResult.range
+                  )
                   const fileUri =
                     editor?.getModel()?.uri.toString() ?? verDocId.uri
                   inspectorPanel?.addOrScrollToResult(
                     directiveId,
                     srcPos,
-                    result as DirectiveResult,
-                    lineContent,
+                    directiveResult,
+                    body,
                     fileUri
                   )
                 }
@@ -648,7 +677,7 @@
             directiveId: string
             prettyText: string
             success: boolean | null
-            lineContent: string
+            body: string
           }>
         }) => {
           inspectorPanel?.syncSections(params.results, params.uri)
@@ -687,15 +716,18 @@
                 showVisualizer = true
                 await tick() // Wait for InspectorPanel to mount if pane was closed
                 const directiveId = `${srcPos.line}:${srcPos.column}`
-                const lineContent =
-                  editor?.getModel()?.getLineContent(srcPos.line) ?? ''
+                const directiveResult = result as DirectiveResult
+                const body = sliceBodyFromModel(
+                  editor?.getModel() ?? null,
+                  directiveResult.range
+                )
                 const fileUri =
                   editor?.getModel()?.uri.toString() ?? verDocId.uri
                 inspectorPanel?.addOrScrollToResult(
                   directiveId,
                   srcPos,
-                  result,
-                  lineContent,
+                  directiveResult,
+                  body,
                   fileUri
                 )
               }

@@ -27,6 +27,7 @@ import {
   AiConversationNew,
   AiFileOpen,
   AiFileOpenDiff,
+  AiGetActiveFileSelection,
   AiMentionSearch,
   AiPermissionsGet,
   AiPermissionsSet,
@@ -183,6 +184,7 @@ export function registerAiChatHandlers(deps: {
         seenToolActivity.delete(event.conversationId)
         messenger.sendNotification(AiChatStarted, frontend, {
           conversationId: event.conversationId,
+          turnId: event.turnId,
           model: event.model,
         })
         break
@@ -738,18 +740,19 @@ export function registerAiChatHandlers(deps: {
     if (e.affectsConfiguration('legaleseAi.apiKey')) pushAuthStatus()
   })
 
-  // Push the currently-active editor file so the chat-input can render
-  // the "include this file" chip. Pushed on every change, plus once at
-  // registration so the chip appears immediately when the AI tab opens.
-  const pushActiveFile = (editor: vscode.TextEditor | undefined): void => {
+  // Identify the active editor file for the chat-input's "include
+  // this file" chip: workspace-relative path, basename, workspace
+  // membership. Pushed on tab / visible-editor changes.
+  const activeFileIdentity = (
+    editor: vscode.TextEditor | undefined
+  ): {
+    uri: string | null
+    name: string | null
+    path: string | null
+    inWorkspace: boolean
+  } => {
     if (!editor) {
-      messenger.sendNotification(AiActiveFile, frontend, {
-        uri: null,
-        name: null,
-        path: null,
-        inWorkspace: false,
-      })
-      return
+      return { uri: null, name: null, path: null, inWorkspace: false }
     }
     const uri = editor.document.uri
     const folder = vscode.workspace.getWorkspaceFolder(uri)
@@ -757,12 +760,19 @@ export function registerAiChatHandlers(deps: {
     const relOrAbs = inWorkspace
       ? vscode.workspace.asRelativePath(uri, false)
       : uri.fsPath
-    messenger.sendNotification(AiActiveFile, frontend, {
+    return {
       uri: uri.toString(),
       name: nodePath.basename(uri.fsPath),
       path: relOrAbs,
       inWorkspace,
-    })
+    }
+  }
+  const pushActiveFile = (editor: vscode.TextEditor | undefined): void => {
+    messenger.sendNotification(
+      AiActiveFile,
+      frontend,
+      activeFileIdentity(editor)
+    )
   }
   pushActiveFile(vscode.window.activeTextEditor)
   const activeFileSub = vscode.window.onDidChangeActiveTextEditor((e) =>
@@ -775,6 +785,25 @@ export function registerAiChatHandlers(deps: {
   const visibleFileSub = vscode.window.onDidChangeVisibleTextEditors(() =>
     pushActiveFile(vscode.window.activeTextEditor)
   )
+  // Note: we deliberately do NOT subscribe to onDidChangeTextEditorSelection.
+  // It would fire on every cursor move (10–30 events/sec while typing) just
+  // to keep the webview's cached `activeFile.selection` warm. Instead the
+  // chat input fires a one-shot AiGetActiveFileSelection request at submit
+  // time (handler below) — the webview gets the freshest range exactly when
+  // it needs it, with zero polling between submits.
+
+  messenger.onRequest(AiGetActiveFileSelection, async () => {
+    const editor = vscode.window.activeTextEditor
+    const base = activeFileIdentity(editor)
+    if (!editor || editor.selection.isEmpty) return base
+    return {
+      ...base,
+      selection: {
+        startLine: editor.selection.start.line + 1,
+        endLine: editor.selection.end.line + 1,
+      },
+    }
+  })
 
   // Resend the initial snapshot (active file + auth status) on every
   // webview-ready signal. The first push above runs at extension

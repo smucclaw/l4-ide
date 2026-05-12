@@ -24,7 +24,7 @@
     structuredValue: unknown | null
     srcLine: number
     srcColumn: number
-    lineContent: string
+    body: string
     collapsed: boolean
     stale: boolean
   }
@@ -138,7 +138,7 @@
                 structuredValue: msg.result.structuredValue,
                 srcLine: msg.srcPos.line,
                 srcColumn: msg.srcPos.column,
-                lineContent: msg.lineContent,
+                body: msg.body,
                 stale: false,
               }
             : s
@@ -162,7 +162,7 @@
       structuredValue: msg.result.structuredValue,
       srcLine: msg.srcPos.line,
       srcColumn: msg.srcPos.column,
-      lineContent: msg.lineContent,
+      body: msg.body,
       collapsed: false,
       stale: false,
     }
@@ -218,13 +218,13 @@
       newCol: number
       prettyText: string
       success: boolean | null
-      lineContent: string
+      body: string
     }
     const remappings = new Map<string, RemapEntry>()
     const matchedResultIds = new Set<string>()
 
-    const sectionsByContent = Map.groupBy(toSync, (s) => s.lineContent)
-    const resultsByContent = Map.groupBy(results, (r) => r.lineContent)
+    const sectionsByContent = Map.groupBy(toSync, (s) => s.body)
+    const resultsByContent = Map.groupBy(results, (r) => r.body)
 
     for (const [content, sects] of sectionsByContent) {
       const matchingResults = resultsByContent.get(content)
@@ -238,7 +238,7 @@
           newCol: parseCol(r.directiveId),
           prettyText: r.prettyText,
           success: r.success,
-          lineContent: r.lineContent,
+          body: r.body,
         })
         matchedResultIds.add(r.directiveId)
       } else {
@@ -263,7 +263,7 @@
               newCol: parseCol(best.directiveId),
               prettyText: best.prettyText,
               success: best.success,
-              lineContent: best.lineContent,
+              body: best.body,
             })
           }
         }
@@ -284,7 +284,7 @@
           newCol: parseCol(positionalMatch.directiveId),
           prettyText: positionalMatch.prettyText,
           success: positionalMatch.success,
-          lineContent: positionalMatch.lineContent,
+          body: positionalMatch.body,
         })
         matchedResultIds.add(positionalMatch.directiveId)
       }
@@ -300,7 +300,7 @@
           srcColumn: remap.newCol,
           prettyText: remap.prettyText,
           success: remap.success,
-          lineContent: remap.lineContent,
+          body: remap.body,
           stale: false,
         }
       }
@@ -370,12 +370,23 @@
     return result
   }
 
+  // `body` carries the directive's full body (possibly multi-line)
+  // since the LSP started populating it that way. The inspector header is
+  // a one-line affair, so render sites collapse to the first non-blank line.
+  function firstLineOf(text: string): string {
+    for (const line of text.split(/\r?\n/)) {
+      const t = line.trim()
+      if (t.length > 0) return t
+    }
+    return ''
+  }
+
   const colorized: Record<string, ColorizedEntry> = $derived(
     Object.fromEntries(
       sections.map((s) => [
         s.directiveId,
         {
-          header: colorize(s.lineContent.trim()),
+          header: colorize(firstLineOf(s.body)),
           body: colorize(formatResultValue(s.prettyText)),
         },
       ])
@@ -454,12 +465,9 @@
                   {#if !section.stale}
                     <span class="source-location">{section.srcLine}:</span>
                   {/if}
-                  <span
-                    class="directive-label"
-                    title={section.lineContent.trim()}
-                  >
+                  <span class="directive-label" title={section.body.trim()}>
                     {@html colorized[section.directiveId]?.header ??
-                      escapeHtml(section.lineContent.trim())}
+                      escapeHtml(firstLineOf(section.body))}
                   </span>
                 </button>
                 <button

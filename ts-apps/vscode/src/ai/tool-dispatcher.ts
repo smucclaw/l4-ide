@@ -120,7 +120,7 @@ export class ToolDispatcher {
     }
     const permission = getPermission(category)
     this.opts.logger.info(
-      `tool/dispatch ${call.name} (category=${category}, permission=${permission})`
+      `tool/dispatch ${call.name} (category=${category}, permission=${permission}) args=${call.argsJson}`
     )
     if (permission === 'never') {
       this.opts.notifyStatus(call.callId, 'error', {
@@ -215,9 +215,7 @@ export class ToolDispatcher {
           args as {
             path: string
             timeoutMs?: number
-            mode?: 'changed' | 'full' | 'summary'
-            lineRange?: [number, number]
-            directiveIds?: string[]
+            mode?: 'changed' | 'full'
           }
         )
       case 'meta__ask_user':

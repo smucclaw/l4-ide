@@ -74,13 +74,25 @@ parseSrcPos = withObject "SrcPos" $ \obj ->
 -- Response
 ------------------------------------------------------
 
+-- | Response shape for `l4/evalDirectiveResult`.
+--
+-- @range@ exposes the directive's full source extent (start + end) so
+-- the client can slice the directive body out of the document — a
+-- single-line directive has @start.line == end.line@.
 data DirectiveResult = DirectiveResult
   { directiveType :: Text
   , prettyText :: Text
   , success :: Maybe Bool
   , structuredValue :: Maybe Aeson.Value
+  , range :: SrcRange
   }
   deriving stock (Eq, Show, Generic)
+
+srcRangeToJson :: SrcRange -> Aeson.Value
+srcRangeToJson (MkSrcRange s e _ _) = object
+  [ "start" .= srcPosToJson s
+  , "end" .= srcPosToJson e
+  ]
 
 instance ToJSON DirectiveResult where
   toJSON r = object
@@ -88,22 +100,45 @@ instance ToJSON DirectiveResult where
     , "prettyText" .= r.prettyText
     , "success" .= r.success
     , "structuredValue" .= r.structuredValue
+    , "range" .= srcRangeToJson r.range
     ]
 
 instance FromJSON DirectiveResult where
-  parseJSON = withObject "DirectiveResult" $ \obj ->
-    DirectiveResult
-      <$> obj .: "directiveType"
-      <*> obj .: "prettyText"
-      <*> obj .: "success"
-      <*> obj .: "structuredValue"
+  parseJSON = withObject "DirectiveResult" $ \obj -> do
+    directiveType' <- obj .: "directiveType"
+    prettyText' <- obj .: "prettyText"
+    success' <- obj .: "success"
+    structuredValue' <- obj .: "structuredValue"
+    rangeVal <- obj .: "range"
+    range' <- parseSrcRange rangeVal
+    pure $ DirectiveResult directiveType' prettyText' success' structuredValue' range'
+
+parseSrcRange :: Aeson.Value -> Parser SrcRange
+parseSrcRange = withObject "SrcRange" $ \obj -> do
+  startVal <- obj .: "start"
+  endVal <- obj .: "end"
+  start' <- parseSrcPos startVal
+  end' <- parseSrcPos endVal
+  -- length and moduleUri are server-internal; clients only ever
+  -- need start/end. Reconstruct placeholder values for the round-trip.
+  pure $ MkSrcRange start' end' 0 (toNormalizedUri (LSP.Uri ""))
 
 ------------------------------------------------------
 -- Converting EvalDirectiveResult to DirectiveResult
 ------------------------------------------------------
 
-evalDirectiveToResult :: ConstructorFieldNames -> Text -> EL.EvalDirectiveResult -> DirectiveResult
-evalDirectiveToResult fields dirType (EL.MkEvalDirectiveResult _range res mtrace) =
+-- | Convert an eval result to a response. The caller must supply the
+-- directive's @SrcRange@ — even though @EL.EvalDirectiveResult@ already
+-- carries one, the @#CHECK@ path constructs results from
+-- @CheckInfo@ where the range lives elsewhere. Forcing it as an
+-- argument keeps the two paths uniform.
+evalDirectiveToResult
+  :: ConstructorFieldNames
+  -> Text
+  -> SrcRange
+  -> EL.EvalDirectiveResult
+  -> DirectiveResult
+evalDirectiveToResult fields dirType rng (EL.MkEvalDirectiveResult _range res mtrace) =
   DirectiveResult
     { directiveType = dirType
     , prettyText = EL.prettyEvalDirectiveResultWithFields fields (EL.MkEvalDirectiveResult _range res mtrace)
@@ -115,6 +150,7 @@ evalDirectiveToResult fields dirType (EL.MkEvalDirectiveResult _range res mtrace
         EL.Assertion b -> Just (Aeson.toJSON b)
         EL.Reduction (Left _) -> Nothing
         EL.Reduction (Right nf) -> Just (nfToJson nf)
+    , range = rng
     }
 
 ------------------------------------------------------
@@ -180,11 +216,14 @@ type DirectiveResultsUpdatedMethodName = "l4/directiveResultsUpdated"
 
 -- | A single directive result entry for the notification.
 -- @directiveId@ is @"line:col"@ (1-indexed, no URI prefix).
+-- @body@ carries the directive's full source body (the inclusive
+-- @[start.line .. end.line]@ slice joined by @\\n@). Render sites
+-- collapse it to a single line for one-line headers.
 data DirectiveUpdateItem = DirectiveUpdateItem
   { directiveId :: Text
   , prettyText  :: Text
   , success     :: Maybe Bool
-  , lineContent :: Text
+  , body        :: Text
   } deriving stock (Eq, Show, Generic)
 
 instance ToJSON DirectiveUpdateItem where
@@ -192,7 +231,7 @@ instance ToJSON DirectiveUpdateItem where
     [ "directiveId" .= u.directiveId
     , "prettyText"  .= u.prettyText
     , "success"     .= u.success
-    , "lineContent" .= u.lineContent
+    , "body"        .= u.body
     ]
 
 instance FromJSON DirectiveUpdateItem where
@@ -201,7 +240,7 @@ instance FromJSON DirectiveUpdateItem where
       <$> obj .: "directiveId"
       <*> obj .: "prettyText"
       <*> obj .: "success"
-      <*> obj .: "lineContent"
+      <*> obj .: "body"
 
 data DirectiveResultsUpdatedParams = DirectiveResultsUpdatedParams
   { uri     :: Text
@@ -222,20 +261,24 @@ instance FromJSON DirectiveResultsUpdatedParams where
 
 -- | Convert an 'EL.EvalDirectiveResult' to a 'DirectiveUpdateItem'.
 -- Returns 'Nothing' if the result carries no source range.
+--
+-- @body@ is the directive's full source span — the inclusive
+-- @[start.line .. end.line]@ slice joined by @\\n@. Render sites are
+-- responsible for truncating to a single line for one-line headers.
 evalDirectiveToUpdateItem
   :: ConstructorFieldNames
-  -> (Int -> Text)          -- ^ get raw line content by 1-indexed line number
+  -> (Int -> Int -> Text)   -- ^ slice raw source lines, inclusive 1-indexed [startLine, endLine]
   -> EL.EvalDirectiveResult
   -> Maybe DirectiveUpdateItem
-evalDirectiveToUpdateItem fields getLineContent (EL.MkEvalDirectiveResult (Just rng@(MkSrcRange (MkSrcPos lineNo colNo) _ _ _)) res mtrace) =
+evalDirectiveToUpdateItem fields getLines (EL.MkEvalDirectiveResult (Just rng@(MkSrcRange (MkSrcPos startLine colNo) (MkSrcPos endLine _) _ _)) res mtrace) =
   Just DirectiveUpdateItem
-    { directiveId = Text.pack (show lineNo) <> ":" <> Text.pack (show colNo)
+    { directiveId = Text.pack (show startLine) <> ":" <> Text.pack (show colNo)
     , prettyText  = EL.prettyEvalDirectiveResultWithFields fields (EL.MkEvalDirectiveResult (Just rng) res mtrace)
     , success     = case res of
         EL.Assertion b         -> Just b
         EL.Reduction (Right _) -> Just True
         EL.Reduction (Left _)  -> Just False
-    , lineContent = getLineContent lineNo
+    , body        = getLines startLine endLine
     }
 evalDirectiveToUpdateItem _ _ _ = Nothing
 

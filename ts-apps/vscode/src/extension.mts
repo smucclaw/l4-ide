@@ -261,8 +261,27 @@ export async function activate(context: ExtensionContext) {
   // Value: info needed to re-request the result from the LSP
   const openInspectorSections = new Map<
     string,
-    { uri: string; srcPos: SrcPos; directiveType: string; lineContent: string }
+    { uri: string; srcPos: SrcPos; directiveType: string; body: string }
   >()
+
+  // Slice the directive body — the inclusive [start.line .. end.line]
+  // source-line range, joined by '\n' — out of `doc`. Falls back to an
+  // empty string when the document isn't available. Both `SrcPos`es
+  // are 1-indexed; `document.lineAt` is 0-indexed.
+  const sliceBody = (
+    doc: vscode.TextDocument | undefined,
+    range: DirectiveResult['range']
+  ): string => {
+    if (!doc) return ''
+    const start = Math.max(1, range.start.line)
+    const end = Math.min(doc.lineCount, range.end.line)
+    if (end < start) return ''
+    const lines: string[] = []
+    for (let ln = start; ln <= end; ln++) {
+      lines.push(doc.lineAt(ln - 1).text)
+    }
+    return lines.join('\n')
+  }
 
   const clientOptions: LanguageClientOptions = {
     documentSelector: [{ scheme: 'file', language: langId, pattern: '**/*' }],
@@ -383,15 +402,20 @@ export async function activate(context: ExtensionContext) {
 
           const directiveId = `${verDocId.uri}:${srcPos.line}:${srcPos.column}`
           const editor = vscode.window.activeTextEditor
-          const lineContent =
-            editor?.document.lineAt(srcPos.line - 1).text ?? ''
+          // `body` is the directive's full source span — the inclusive
+          // [range.start.line .. range.end.line] slice joined by '\n'.
+          // The server now returns the directive's `range` on every
+          // DirectiveResult, so a multi-line directive surfaces with
+          // its full body for inspector matching + later diff.
+          const directiveResult = result as DirectiveResult
+          const body = sliceBody(editor?.document, directiveResult.range)
 
           // Track the section so it receives live updates when the file changes
           openInspectorSections.set(directiveId, {
             uri: verDocId.uri,
             srcPos,
             directiveType,
-            lineContent,
+            body,
           })
 
           // Reveal the sidebar, wait for it to be ready, then switch to inspector
@@ -406,8 +430,8 @@ export async function activate(context: ExtensionContext) {
             {
               directiveId,
               srcPos,
-              result: result as DirectiveResult,
-              lineContent,
+              result: directiveResult,
+              body,
             }
           )
 
@@ -703,7 +727,7 @@ export async function activate(context: ExtensionContext) {
           directiveId: string
           prettyText: string
           success: boolean | null
-          lineContent: string
+          body: string
         }>
       }) => {
         // Mirror the results into the AI tool's cache so a later
