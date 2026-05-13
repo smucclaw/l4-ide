@@ -46,7 +46,7 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
     function: {
       name: 'fs__create_file',
       description:
-        'Create a file seeded with a single line "// new file content". Fails if the file already exists. To fill it, follow up with fs__edit_file — either anchor on the exact seed line or pass old:"" to overwrite the whole file.',
+        'Create a file seeded with a single line "// new file content". Fails if the file already exists. To fill it, follow up with fs__edit_file.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -109,7 +109,7 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
     function: {
       name: 'l4__evaluate',
       description:
-        'Type-check and run `#EVAL`/`#CHECK`/`#TRACE`. Returns diagnostics if not clean, else directive results. Default `mode:"changed"` surfaces only directives that moved/failed/were added since the last call. Call after each edit.',
+        'Type-check and run `#EVAL`/`#CHECK`/`#TRACE`. Returns errors if not clean, else directive results.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -121,21 +121,9 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
           },
           mode: {
             type: 'string',
-            enum: ['changed', 'full', 'summary'],
+            enum: ['changed', 'full'],
             description:
-              '`changed` (default), `full` (every value), `summary` (counts; failing ids only).',
-          },
-          lineRange: {
-            type: 'array',
-            items: { type: 'number' },
-            minItems: 2,
-            maxItems: 2,
-            description: '[start, end] 1-based source-line filter.',
-          },
-          directiveIds: {
-            type: 'array',
-            items: { type: 'string' },
-            description: 'Allowlist of directive ids.',
+              '`full` (default) prints every directive value. `changed` prints only directives added or whose value changed since the last l4__evaluate call; collapses to a single count line when nothing moved.',
           },
         },
         required: ['path'],
@@ -171,7 +159,7 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
     function: {
       name: 'meta__post_status_update',
       description:
-        'Stream a brief progress update to the user mid-turn. The text renders inline in the chat as plain assistant prose (not as a tool-call card). Use during long multi-step tasks (doc lookups, validation loops, multi-file drafting) so the user sees what you are doing instead of a silent spinner. Keep it under ~120 characters, present tense, no markdown headings or bullets. Do not repeat the same status, and do not duplicate your final answer.',
+        'Stream a brief progress update to the user mid-turn. The text renders inline as plain assistant prose (not as a tool-call card). Use during long multi-step tasks (doc lookups, validation loops, multi-file drafting) Keep it under ~120 characters, present tense, no markdown headings. Do not repeat same status, and do not duplicate final answer.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -179,7 +167,7 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
           text: {
             type: 'string',
             description:
-              'Short user-facing status sentence. Plain prose. Will be appended to the assistant message as if you had written it inline.',
+              'Short user-facing status sentence. Plain prose. Will be appended to the assistant message as if written it inline.',
           },
         },
         required: ['text'],

@@ -13,6 +13,7 @@ import {
   AiConversationLoad,
   AiFileOpen,
   AiFileOpenDiff,
+  AiGetActiveFileSelection,
   AiMentionSearch,
   AiPermissionsGet,
   AiPermissionsSet,
@@ -96,10 +97,17 @@ export interface RenderedTurn {
  *  staged in the chat input at submit time: PDF / image attachments
  *  and (when the active-file toggle was on) the active editor file.
  *  Kept minimal because these are UI-only badges, not re-usable
- *  payloads. */
+ *  payloads. The optional selection range on `active-file` is the
+ *  range the chip was advertising at send time (1-based, inclusive). */
 export type UserTurnChip =
   | { kind: 'image' | 'pdf'; name: string }
-  | { kind: 'active-file'; name: string; path: string }
+  | {
+      kind: 'active-file'
+      name: string
+      path: string
+      selectionStartLine?: number
+      selectionEndLine?: number
+    }
 
 export type AssistantBlock =
   | { kind: 'text'; text: string }
@@ -196,19 +204,41 @@ function extractPersistedBlocks(meta: unknown): AssistantBlock[] | null {
 export function createAiChatStore(
   getMessenger: () => Messenger | null
 ): AiChatStore {
+  // Server-assigned id of the conversation the user is currently
+  // viewing, or null when they're composing a fresh chat that hasn't
+  // received its id from the proxy yet. Only ever holds real server
+  // ids — the not-yet-started state lives in `pendingConversation`
+  // below.
   let currentId = $state<string | null>(null)
   // Plain-object bag (not Map). Svelte 5's `$state` deep-proxies object
   // properties, so nested mutations (`conv.streaming = false`) reliably
   // notify reactive reads. Reactive Map does not proxy values returned
   // from .get(), which made `$derived(store.current?.streaming)` go
-  // stale after abort.
+  // stale after abort. Only keyed by real server ids — see
+  // `pendingConversation` for the buffer used between local submit and
+  // `AiChatStarted`.
   const conversations = $state<Record<string, ConversationState>>({})
+  // Buffer for a conversation whose first turn is in flight but
+  // hasn't been assigned a server id yet. Holds the user bubble and
+  // the streaming assistant placeholder; `onStarted` promotes it into
+  // `conversations[realId]` and clears the slot. At most one of these
+  // can exist; `newConversation()` wipes it. Decoupling the
+  // pre-started state from `conversations` keeps the latter clean of
+  // sentinels and lets every event handler look up by real id without
+  // a magic-string fallback.
+  let pendingConversation = $state<ConversationState | null>(null)
   let history = $state<AiConversationSummary[]>([])
   let usedToday = $state<number>(0)
   let dailyLimit = $state<number>(0)
   let blockOnOverage = $state<boolean>(false)
   let signedIn = $state<boolean>(false)
   const draftsByConv = $state<Record<string, string>>({})
+  // Draft for the not-yet-started conversation. Mirrors
+  // `pendingConversation`'s lifecycle: lives while the user is
+  // composing for a fresh chat, gets cleared by a successful submit
+  // or by `newConversation()`. Keeping it out of `draftsByConv`
+  // means the map only ever holds drafts keyed by real server ids.
+  let pendingDraft = $state<string>('')
   // Version counter bumped whenever an *external* caller (Get Started
   // seed button, right-click "Ask Legalese AI about this" command, the
   // AiChatSeedDraft host notification) writes the draft via
@@ -244,26 +274,31 @@ export function createAiChatStore(
   let stagedAttachments = $state<AiChatAttachment[]>([])
 
   function ensureCurrent(): ConversationState {
-    if (!currentId) {
-      const localKey = '__new__'
-      if (!conversations[localKey]) {
-        conversations[localKey] = {
-          id: null,
-          title: null,
-          turns: [],
-          streaming: false,
-          activeTurnId: null,
-          queuedInjections: [],
-        }
+    if (currentId) return conversations[currentId]!
+    if (!pendingConversation) {
+      pendingConversation = {
+        id: null,
+        title: null,
+        turns: [],
+        streaming: false,
+        activeTurnId: null,
+        queuedInjections: [],
       }
-      currentId = localKey
     }
-    return conversations[currentId!]!
+    return pendingConversation
   }
 
   function getConversation(): ConversationState | null {
-    if (!currentId) return null
-    return conversations[currentId] ?? null
+    if (currentId) return conversations[currentId] ?? null
+    return pendingConversation
+  }
+
+  /** Clear the draft for whichever conversation the user is currently
+   *  composing in — established (keyed in draftsByConv) or pending
+   *  (the standalone slot). Called after a successful submit. */
+  function clearCurrentDraft(): void {
+    if (currentId) delete draftsByConv[currentId]
+    else pendingDraft = ''
   }
 
   async function refreshHistory(): Promise<void> {
@@ -360,19 +395,51 @@ export function createAiChatStore(
 
   function newConversation(): void {
     currentId = null
-    delete conversations['__new__']
+    pendingConversation = null
+    // Intentionally leave `pendingDraft` alone — original behavior:
+    // an unsent draft survives a "new chat" click (mirrors the way
+    // `draftsByConv['__new__']` used to persist across deletions of
+    // the conversations bucket). A successful submit clears it via
+    // `clearCurrentDraft()`.
     // Fresh conversation → default to attaching the editor file with
     // the first message.
     includeActiveFile = true
   }
 
-  function send(
+  async function send(
     text: string,
     mentions: AiChatStartParams['mentions'] = []
-  ): void {
+  ): Promise<void> {
     const m = getMessenger()
     if (!m || !text.trim()) return
     const conv = ensureCurrent()
+
+    const wasIncludingActiveFile = includeActiveFile
+
+    // Fire a one-shot request to learn the freshest active-file
+    // state (including the current selection range) so the user
+    // bubble's chip can render `:start-end` if the user had text
+    // selected at submit time. Falls back to the cached chip state
+    // if the round-trip fails. Skipped entirely when the active-
+    // file chip toggle is off this turn.
+    let chipPath: string | null = null
+    let chipName: string | null = null
+    let chipSelection: { startLine: number; endLine: number } | undefined
+    if (wasIncludingActiveFile) {
+      try {
+        const fresh = await m.sendRequest(
+          AiGetActiveFileSelection,
+          HOST_EXTENSION,
+          undefined as never
+        )
+        chipPath = fresh.path
+        chipName = fresh.name
+        chipSelection = fresh.selection
+      } catch {
+        chipPath = activeFile.path
+        chipName = activeFile.name
+      }
+    }
 
     // Snapshot the staged-context chips — attachments + (when the
     // chip was on) the active file — so the user message can echo
@@ -382,18 +449,23 @@ export function createAiChatStore(
     for (const att of stagedAttachments) {
       turnChips.push({ kind: att.kind, name: att.name })
     }
-    if (includeActiveFile && activeFile.name && activeFile.path) {
+    if (chipName && chipPath) {
       turnChips.push({
         kind: 'active-file',
-        name: activeFile.name,
-        path: activeFile.path,
+        name: chipName,
+        path: chipPath,
+        ...(chipSelection
+          ? {
+              selectionStartLine: chipSelection.startLine,
+              selectionEndLine: chipSelection.endLine,
+            }
+          : {}),
       })
     }
     const mentionsPlain = mentions.map((m) => ({
       kind: m.kind,
       label: m.label,
     }))
-    const wasIncludingActiveFile = includeActiveFile
     const attachmentsPlain: AiChatAttachment[] = stagedAttachments.map((a) => ({
       kind: a.kind,
       name: a.name,
@@ -401,9 +473,7 @@ export function createAiChatStore(
       dataBase64: a.dataBase64,
     }))
     const activeFileSnapshot =
-      wasIncludingActiveFile && activeFile.name && activeFile.path
-        ? { name: activeFile.name, path: activeFile.path }
-        : undefined
+      chipName && chipPath ? { name: chipName, path: chipPath } : undefined
 
     // Drop any trailing errored assistant turns so a fresh user
     // submit doesn't get sandwiched under a stale error footer.
@@ -475,7 +545,7 @@ export function createAiChatStore(
         if (tail && tail.id === userTurnId) tail.injectionId = undefined
         console.error('[ai-chat] sendNotification(AiChatInject) threw', err)
       }
-      if (currentId) delete draftsByConv[currentId]
+      clearCurrentDraft()
       if (currentId) clearPendingQuestionFor(currentId)
       return
     }
@@ -538,7 +608,7 @@ export function createAiChatStore(
       return
     }
 
-    if (currentId) delete draftsByConv[currentId]
+    clearCurrentDraft()
     // A brand-new turn supersedes any still-open meta__ask_user card
     // for *this* conversation. Cards on other conversations keep their
     // pending state — the user may flip back to answer them.
@@ -605,7 +675,7 @@ export function createAiChatStore(
       // which is the closest we can get to the original send.
       const text = lastUserTurn.content
       conv.turns = conv.turns.filter((t) => t.id !== lastUserTurn.id)
-      send(text)
+      void send(text)
       return
     }
 
@@ -739,20 +809,36 @@ export function createAiChatStore(
   }
 
   // ── Event handlers, invoked by the webview's message pump.
-  function onStarted(params: { conversationId: string; model: string }): void {
-    const newKey = '__new__'
-    const pending = conversations[newKey]
-    if (pending && !pending.id) {
-      // Migrate the pre-started stub into its server-assigned id.
-      // Only move `currentId` along if the user is still looking at
-      // the stub — if they've already switched to a different chat
-      // while this one was resolving its id (e.g. via the history
-      // panel), leave their view alone. Moving currentId would yank
-      // their UI to the just-started conversation mid-read.
-      pending.id = params.conversationId
-      conversations[params.conversationId] = pending
-      delete conversations[newKey]
-      if (currentId === newKey) currentId = params.conversationId
+  function onStarted(params: {
+    conversationId: string
+    turnId: string
+    model: string
+  }): void {
+    // Promote the pre-started buffer into a real conversation, but
+    // ONLY when the started event matches the buffer's turnId. This
+    // is the load-bearing check that closes the rapid-fire race: if
+    // the user submitted conv #1, hit new-chat, then submitted conv
+    // #2, there are two distinct turnIds in flight. Conv #1's
+    // `started` (carrying turnId_1) arrives while `pendingConversation`
+    // already holds conv #2's buffer (activeTurnId === turnId_2) — the
+    // mismatch sends conv #1's started through the else branch, where
+    // it lands as a fresh empty entry (visible via history). Conv
+    // #2's `started` later matches and migrates correctly.
+    if (
+      pendingConversation &&
+      !pendingConversation.id &&
+      pendingConversation.activeTurnId === params.turnId
+    ) {
+      // Only advance `currentId` if the user is still looking at the
+      // fresh-chat view (currentId === null) — if they've switched
+      // to a different chat while this one was resolving its id (e.g.
+      // via the history panel), leave their view alone. Moving
+      // currentId would yank their UI to the just-started
+      // conversation mid-read.
+      pendingConversation.id = params.conversationId
+      conversations[params.conversationId] = pendingConversation
+      if (currentId === null) currentId = params.conversationId
+      pendingConversation = null
     } else if (!conversations[params.conversationId]) {
       conversations[params.conversationId] = {
         id: params.conversationId,
@@ -903,15 +989,12 @@ export function createAiChatStore(
     message: string
     code?: string
   }): void {
-    // Route strictly by `params.conversationId`. An error on a brand-
-    // new conversation that failed before `started` landed is emitted
-    // by the extension with the turnId as the fallback id — that
-    // lands under `__new__` which is the webview's pre-started bucket.
+    // Route by real conversation id, falling back to the pre-started
+    // buffer when the first turn errored before `AiChatStarted`
+    // could land (the extension emits the turnId as a placeholder
+    // conversationId in that race — neither key matches a real entry).
     const conv =
-      conversations[params.conversationId] ??
-      (conversations['__new__']?.id === null
-        ? conversations['__new__']
-        : undefined)
+      conversations[params.conversationId] ?? pendingConversation ?? null
     if (!conv) return
     const streamingTurn = findLastStreamingAssistant(conv)
     if (streamingTurn) {
@@ -1249,8 +1332,8 @@ export function createAiChatStore(
   }
 
   function setDraft(text: string): void {
-    const key = currentId ?? '__new__'
-    draftsByConv[key] = text
+    if (currentId) draftsByConv[currentId] = text
+    else pendingDraft = text
   }
 
   /**
@@ -1262,14 +1345,14 @@ export function createAiChatStore(
    * keystrokes off the sync path.
    */
   function seedDraft(text: string): void {
-    const key = currentId ?? '__new__'
-    draftsByConv[key] = text
+    if (currentId) draftsByConv[currentId] = text
+    else pendingDraft = text
     draftSeedVersion++
   }
 
   function getDraft(): string {
-    const key = currentId ?? '__new__'
-    return draftsByConv[key] ?? ''
+    if (currentId) return draftsByConv[currentId] ?? ''
+    return pendingDraft
   }
 
   async function getPermissions(): Promise<
@@ -1503,7 +1586,10 @@ export type AiChatStore = {
   loadConversation: (id: string) => Promise<void>
   deleteConversation: (id: string) => Promise<void>
   newConversation: () => void
-  send: (text: string, mentions?: AiChatStartParams['mentions']) => void
+  send: (
+    text: string,
+    mentions?: AiChatStartParams['mentions']
+  ) => Promise<void>
   continueTurn: () => void
   abort: () => void
   usageSubscribe: () => void
@@ -1520,7 +1606,11 @@ export type AiChatStore = {
   openFileDiff: (callId: string) => void
   openFile: (callId: string) => void
   readonly pendingApproval: RenderedToolCall | null
-  onStarted: (params: { conversationId: string; model: string }) => void
+  onStarted: (params: {
+    conversationId: string
+    turnId: string
+    model: string
+  }) => void
   onTextDelta: (params: { conversationId: string; text: string }) => void
   onThinkingDelta: (params: { conversationId: string; text: string }) => void
   onDone: (params: {

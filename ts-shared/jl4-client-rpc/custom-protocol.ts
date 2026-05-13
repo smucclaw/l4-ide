@@ -149,6 +149,11 @@ export interface DirectiveResult {
   prettyText: string
   success: boolean | null
   structuredValue: unknown | null
+  /** The directive's source range. `end` lets callers slice the
+   *  full directive body out of the document — a single-line
+   *  directive has `start.line === end.line`. Both `SrcPos`es are
+   *  1-indexed (line, column). */
+  range: { start: SrcPos; end: SrcPos }
 }
 
 /**

@@ -62,7 +62,9 @@ export interface AddInspectorResultMessage {
   directiveId: string
   srcPos: SrcPos
   result: DirectiveResult
-  lineContent: string
+  /** Full directive body (source-range slice joined by `\n`). Render
+   *  sites collapse to the first non-blank line for one-line headers. */
+  body: string
 }
 
 export const AddInspectorResult: RequestType<
@@ -98,7 +100,8 @@ export interface SyncInspectorResultsMessage {
     directiveId: string
     prettyText: string
     success: boolean | null
-    lineContent: string
+    /** Full directive body (source-range slice joined by `\n`). */
+    body: string
   }>
 }
 
@@ -474,10 +477,13 @@ export interface AiChatStartParams {
    * Live cursor / selection / openFiles still come from the
    * extension's own window — they're inherently editor-scoped.
    * The extension only surfaces them when the snapshot's path
-   * matches the live activeTextEditor (i.e. same window, same
-   * file); otherwise it suppresses them so the system message is
-   * a coherent point-in-time view rather than a Frankenstein. */
-  activeFile?: { path: string; name: string }
+   * matches a visible editor (i.e. same window, same file);
+   * otherwise it suppresses them so the system message is a
+   * coherent point-in-time view rather than a Frankenstein. */
+  activeFile?: {
+    path: string
+    name: string
+  }
   /** Retry path: when true, the extension skips adding a user
    * message to the outgoing body and just asks the server to run
    * another turn against the conversation's existing on-disk
@@ -571,7 +577,10 @@ export interface AiChatInjectParams {
   mentions: Array<{ kind: 'file' | 'symbol' | 'selection'; label: string }>
   attachments: AiChatAttachment[]
   includeActiveFile?: boolean
-  activeFile?: { path: string; name: string }
+  activeFile?: {
+    path: string
+    name: string
+  }
 }
 
 export const AiChatInject: NotificationType<AiChatInjectParams> = {
@@ -607,12 +616,39 @@ export const AiChatQueueConsumed: NotificationType<{
   method: 'aiChatQueueConsumed',
 }
 
-/** Extension → webview: turn started, id + model assigned. */
+/** Extension → webview: turn started, id + model assigned. `turnId`
+ * is the same client-generated key the webview shipped on
+ * `AiChatStart` — echoed back so the webview can match this `started`
+ * event to the exact pending buffer it belongs to. Without this, a
+ * rapid sequence of new-chat submissions can land each one's
+ * `started` against the WRONG local buffer (last-writer-wins on the
+ * single pending slot), attaching one turn's bubbles to another
+ * turn's server id. */
 export const AiChatStarted: NotificationType<{
   conversationId: string
+  turnId: string
   model: string
 }> = {
   method: 'aiChatStarted',
+}
+
+/** Webview → extension: ask for the current active file + selection
+ * synchronously. Called by the chat input at submit time so the
+ * webview can render the user bubble's chip with a `:start-end`
+ * range badge that matches what `<editor-context>` will end up
+ * carrying — without needing a per-keystroke selection-change
+ * subscription. Returns null fields when no editor is active. */
+export const AiGetActiveFileSelection: RequestType<
+  void,
+  {
+    uri: string | null
+    name: string | null
+    path: string | null
+    inWorkspace: boolean
+    selection?: { startLine: number; endLine: number }
+  }
+> = {
+  method: 'aiGetActiveFileSelection',
 }
 
 /** Extension → webview: a client-side tool was invoked by the model.
@@ -762,7 +798,9 @@ export const AiFileOpenDiff: NotificationType<{
  * `path` is the workspace-relative path (or absolute if the file is
  * outside every loaded workspace folder). `inWorkspace` flips to
  * false for outside-workspace files — the fs tools refuse those, and
- * the UI can surface that to the user. */
+ * the UI can surface that to the user. Selection range is NOT pushed
+ * here; the webview fetches it on demand via
+ * `AiGetActiveFileSelection` at submit time. */
 export const AiActiveFile: NotificationType<{
   uri: string | null
   name: string | null

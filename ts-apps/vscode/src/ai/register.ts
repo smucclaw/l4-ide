@@ -27,6 +27,7 @@ import {
   AiConversationNew,
   AiFileOpen,
   AiFileOpenDiff,
+  AiGetActiveFileSelection,
   AiMentionSearch,
   AiPermissionsGet,
   AiPermissionsSet,
@@ -183,6 +184,7 @@ export function registerAiChatHandlers(deps: {
         seenToolActivity.delete(event.conversationId)
         messenger.sendNotification(AiChatStarted, frontend, {
           conversationId: event.conversationId,
+          turnId: event.turnId,
           model: event.model,
         })
         break
@@ -599,6 +601,17 @@ export function registerAiChatHandlers(deps: {
     string,
     { version: string; meta: RenderMeta }
   >()
+  // In-flight dedup so N concurrent rows for the same rule collapse to
+  // one upstream `getDeploymentStatus` + `getFunctionSchema` pair. All
+  // callers await the same promise and resolve together.
+  type RenderMetaResult =
+    | {
+        kind: 'meta'
+        parameters: RenderMeta['parameters']
+        returnSchema?: RenderMeta['returnSchema']
+      }
+    | { kind: 'unavailable' }
+  const renderMetaInFlight = new Map<string, Promise<RenderMetaResult>>()
   messenger.onRequest(AiToolRenderMeta, async ({ toolName }) => {
     if (!toolName.startsWith(MCP_L4_RULES_PREFIX)) {
       return { kind: 'unavailable' as const }
@@ -609,36 +622,46 @@ export function registerAiChatHandlers(deps: {
     const target = mcp.getToolTarget(toolName)
     if (!target) return { kind: 'unavailable' as const }
     const cacheKey = `${target.deployId}/${target.fnName}`
+    const existing = renderMetaInFlight.get(cacheKey)
+    if (existing) return existing
+    const work = (async (): Promise<RenderMetaResult> => {
+      try {
+        // Look up the deployment's current version so we invalidate
+        // automatically on redeploy (the version is a SHA-256 of all
+        // source contents — changes whenever any rule body changes).
+        const status = await serviceClient.getDeploymentStatus(target.deployId)
+        const version =
+          (status.metadata as { version?: string } | undefined)?.version ?? ''
+        const cached = renderMetaCache.get(cacheKey)
+        if (cached && cached.version === version) {
+          return { kind: 'meta' as const, ...cached.meta }
+        }
+        const summary = (await serviceClient.getFunctionSchema(
+          target.deployId,
+          target.fnName
+        )) as {
+          parameters?: import('jl4-client-rpc').FunctionParameter
+          returnSchema?: import('jl4-client-rpc').FunctionParameter
+        }
+        if (!summary.parameters) return { kind: 'unavailable' as const }
+        const meta: RenderMeta = {
+          parameters: summary.parameters,
+          returnSchema: summary.returnSchema,
+        }
+        renderMetaCache.set(cacheKey, { version, meta })
+        return { kind: 'meta' as const, ...meta }
+      } catch (err) {
+        logger.warn(
+          `aiToolRenderMeta(${toolName}) failed: ${err instanceof Error ? err.message : String(err)}`
+        )
+        return { kind: 'unavailable' as const }
+      }
+    })()
+    renderMetaInFlight.set(cacheKey, work)
     try {
-      // Look up the deployment's current version so we invalidate
-      // automatically on redeploy (the version is a SHA-256 of all
-      // source contents — changes whenever any rule body changes).
-      const status = await serviceClient.getDeploymentStatus(target.deployId)
-      const version =
-        (status.metadata as { version?: string } | undefined)?.version ?? ''
-      const cached = renderMetaCache.get(cacheKey)
-      if (cached && cached.version === version) {
-        return { kind: 'meta' as const, ...cached.meta }
-      }
-      const summary = (await serviceClient.getFunctionSchema(
-        target.deployId,
-        target.fnName
-      )) as {
-        parameters?: import('jl4-client-rpc').FunctionParameter
-        returnSchema?: import('jl4-client-rpc').FunctionParameter
-      }
-      if (!summary.parameters) return { kind: 'unavailable' as const }
-      const meta: RenderMeta = {
-        parameters: summary.parameters,
-        returnSchema: summary.returnSchema,
-      }
-      renderMetaCache.set(cacheKey, { version, meta })
-      return { kind: 'meta' as const, ...meta }
-    } catch (err) {
-      logger.warn(
-        `aiToolRenderMeta(${toolName}) failed: ${err instanceof Error ? err.message : String(err)}`
-      )
-      return { kind: 'unavailable' as const }
+      return await work
+    } finally {
+      renderMetaInFlight.delete(cacheKey)
     }
   })
 
@@ -738,18 +761,19 @@ export function registerAiChatHandlers(deps: {
     if (e.affectsConfiguration('legaleseAi.apiKey')) pushAuthStatus()
   })
 
-  // Push the currently-active editor file so the chat-input can render
-  // the "include this file" chip. Pushed on every change, plus once at
-  // registration so the chip appears immediately when the AI tab opens.
-  const pushActiveFile = (editor: vscode.TextEditor | undefined): void => {
+  // Identify the active editor file for the chat-input's "include
+  // this file" chip: workspace-relative path, basename, workspace
+  // membership. Pushed on tab / visible-editor changes.
+  const activeFileIdentity = (
+    editor: vscode.TextEditor | undefined
+  ): {
+    uri: string | null
+    name: string | null
+    path: string | null
+    inWorkspace: boolean
+  } => {
     if (!editor) {
-      messenger.sendNotification(AiActiveFile, frontend, {
-        uri: null,
-        name: null,
-        path: null,
-        inWorkspace: false,
-      })
-      return
+      return { uri: null, name: null, path: null, inWorkspace: false }
     }
     const uri = editor.document.uri
     const folder = vscode.workspace.getWorkspaceFolder(uri)
@@ -757,12 +781,19 @@ export function registerAiChatHandlers(deps: {
     const relOrAbs = inWorkspace
       ? vscode.workspace.asRelativePath(uri, false)
       : uri.fsPath
-    messenger.sendNotification(AiActiveFile, frontend, {
+    return {
       uri: uri.toString(),
       name: nodePath.basename(uri.fsPath),
       path: relOrAbs,
       inWorkspace,
-    })
+    }
+  }
+  const pushActiveFile = (editor: vscode.TextEditor | undefined): void => {
+    messenger.sendNotification(
+      AiActiveFile,
+      frontend,
+      activeFileIdentity(editor)
+    )
   }
   pushActiveFile(vscode.window.activeTextEditor)
   const activeFileSub = vscode.window.onDidChangeActiveTextEditor((e) =>
@@ -775,6 +806,25 @@ export function registerAiChatHandlers(deps: {
   const visibleFileSub = vscode.window.onDidChangeVisibleTextEditors(() =>
     pushActiveFile(vscode.window.activeTextEditor)
   )
+  // Note: we deliberately do NOT subscribe to onDidChangeTextEditorSelection.
+  // It would fire on every cursor move (10–30 events/sec while typing) just
+  // to keep the webview's cached `activeFile.selection` warm. Instead the
+  // chat input fires a one-shot AiGetActiveFileSelection request at submit
+  // time (handler below) — the webview gets the freshest range exactly when
+  // it needs it, with zero polling between submits.
+
+  messenger.onRequest(AiGetActiveFileSelection, async () => {
+    const editor = vscode.window.activeTextEditor
+    const base = activeFileIdentity(editor)
+    if (!editor || editor.selection.isEmpty) return base
+    return {
+      ...base,
+      selection: {
+        startLine: editor.selection.start.line + 1,
+        endLine: editor.selection.end.line + 1,
+      },
+    }
+  })
 
   // Resend the initial snapshot (active file + auth status) on every
   // webview-ready signal. The first push above runs at extension

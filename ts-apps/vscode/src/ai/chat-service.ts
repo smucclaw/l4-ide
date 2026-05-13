@@ -27,7 +27,7 @@ import type { McpToolClient } from './mcp-client.js'
  * notification.
  */
 export type ChatServiceEvent =
-  | { kind: 'started'; conversationId: string; model: string }
+  | { kind: 'started'; conversationId: string; turnId: string; model: string }
   | { kind: 'text-delta'; conversationId: string; text: string }
   | { kind: 'thinking-delta'; conversationId: string; text: string }
   | {
@@ -725,6 +725,7 @@ export class ChatService {
           this.emit({
             kind: 'started',
             conversationId: ev.conversationId,
+            turnId: opts.turnId,
             model: ev.model,
           })
           // Seed the local file with the user turn so a crash mid-stream

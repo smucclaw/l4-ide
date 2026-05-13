@@ -2,6 +2,26 @@ import * as vscode from 'vscode'
 import * as path from 'path'
 import { promises as fs, existsSync } from 'fs'
 import { fetchL4Diagnostics } from './lsp.js'
+import {
+  awaitDirectiveResults,
+  createDirectiveSnapshotStore,
+  getCachedDirectiveResults,
+  renderDirectiveResults,
+} from './directive-snapshot.js'
+
+/**
+ * Per-tool directive snapshot store for `fs__edit_file`. Keeping this
+ * separate from `l4__evaluate`'s store means an edit can report
+ * "what changed since the last edit" independently from
+ * "what changed since the last l4__evaluate call".
+ */
+const editStore = createDirectiveSnapshotStore()
+
+/** How long to wait (ms) after applyEdit for the LSP to push fresh
+ *  directive results before computing the diff. The LSP normally
+ *  finishes a small file in under 100ms; we give it a bit more
+ *  headroom but bail rather than block the tool turn. */
+const DIRECTIVE_PUSH_WAIT_MS = 1000
 
 /**
  * Built-in filesystem tools. All paths are workspace-relative; absolute
@@ -125,10 +145,44 @@ async function appendL4Diagnostics(
   if (!r.fsPath.toLowerCase().endsWith('.l4')) return body
   try {
     const diagnostics = await fetchL4Diagnostics(r.uri)
-    return `${body}\n\n${diagnostics}`
+    // Errors gate everything: the model needs to fix them before any
+    // directive-level diff is meaningful. Return the diagnostics block
+    // verbatim — same payload `l4__evaluate` surfaces in that case.
+    if (/\b\d+ errors?\b/.test(diagnostics)) {
+      return `${body}\n${diagnostics}`
+    }
+    // Clean compile: emit a compact directive diff against the
+    // edit-tool's snapshot. A fully-clean call with zero changes
+    // collapses to a single header line.
+    const diffBlock = await computeEditDiff(r)
+    return `${body}\n${diffBlock}`
   } catch {
     return body
   }
+}
+
+/** Build the directive-diff tail attached to a successful edit. Uses
+ *  the edit-tool's private snapshot store (NOT l4__evaluate's) so the
+ *  two tools' "what changed since I last spoke" views stay
+ *  independent. Always renders in `changed` mode — the edit's purpose
+ *  is "did this write move any directive values?", which the full
+ *  catalog would drown. Waits briefly for the LSP to push fresh
+ *  directive results post-edit; falls back to whatever's in the cache
+ *  on timeout. */
+async function computeEditDiff(r: ResolvedPath): Promise<string> {
+  const uriStr = r.uri.toString()
+  // After applyEdit + save the LSP recompiles and pushes a fresh
+  // result set. We always wait for the next push (even if a stale
+  // cache entry exists) so the diff reflects post-edit state. The
+  // timeout caps the worst-case tool latency.
+  await awaitDirectiveResults(uriStr, DIRECTIVE_PUSH_WAIT_MS)
+  const results = getCachedDirectiveResults(uriStr) ?? []
+  return renderDirectiveResults({
+    results,
+    store: editStore,
+    uri: uriStr,
+    mode: 'changed',
+  })
 }
 
 /** Skip these at any depth to keep listings useful — they're almost
@@ -537,6 +591,15 @@ export async function fsCreateFile(args: FsCreateArgs): Promise<string> {
   // own fs__read_file / fs.readFile) see the new content immediately.
   const doc = await vscode.workspace.openTextDocument(r.uri)
   if (doc.isDirty) await doc.save()
+  // Surface the new file as a visible tab so the user sees what the
+  // model just created without having to expand the tool-call row and
+  // click. `preserveFocus: true` keeps the cursor wherever the user
+  // was — usually the chat input — instead of stealing focus into the
+  // editor mid-conversation.
+  await vscode.window.showTextDocument(doc, {
+    preview: false,
+    preserveFocus: true,
+  })
   // Skip the appendL4Diagnostics tail — a freshly-created file has no
   // real content to type-check, and the Edit tool the model uses next
   // will run diagnostics naturally.
@@ -702,8 +765,8 @@ export async function fsEditFile(args: FsEditArgs): Promise<string> {
   if (hit === -1) {
     throw new Error(
       anchorLine === 0
-        ? `fs__edit_file: the 'old' snippet was not found in ${r.relative}`
-        : `fs__edit_file: the 'old' snippet was not found in ${r.relative} after line ${anchorLine}`
+        ? `fs__edit_file: 'old' snippet not found in ${r.relative}`
+        : `fs__edit_file: 'old' snippet not found in ${r.relative} after line ${anchorLine}`
     )
   }
   const startOffset = searchOffset + hit
@@ -717,7 +780,7 @@ export async function fsEditFile(args: FsEditArgs): Promise<string> {
   const ok = await vscode.workspace.applyEdit(edit)
   if (!ok) {
     throw new Error(
-      `fs__edit_file: VSCode refused to apply the edit to ${r.relative} (file may be read-only).`
+      `fs__edit_file: VSCode refused to apply edit to ${r.relative} (file may be read-only).`
     )
   }
   if (doc.isDirty) await doc.save()
@@ -733,7 +796,7 @@ export async function fsEditFile(args: FsEditArgs): Promise<string> {
   return withDocsHintOnError(
     await appendL4Diagnostics(
       r,
-      `[${r.relative} ${editStartLine}-${editEndLine}] Edited ${r.relative} (${args.old.split('\n').length} → ${args.new.split('\n').length} lines changed)`
+      `[${r.relative} ${editStartLine}-${editEndLine}] (Edited ${args.old.split('\n').length} → ${args.new.split('\n').length} lines)`
     )
   )
 }
@@ -749,7 +812,7 @@ export async function fsEditFile(args: FsEditArgs): Promise<string> {
  */
 function withDocsHintOnError(text: string): string {
   if (!/\b\d+ errors?\b/.test(text)) return text
-  return `${text}\n\nUse \`search_l4_docs\` tool to learn more about L4 syntax and keyword use.`
+  return `${text}\n\nUse \`search_l4_docs\` tool to learn L4 syntax and keyword use`
 }
 
 export interface FsDeleteArgs {

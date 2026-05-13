@@ -38,9 +38,8 @@ export async function fetchL4Diagnostics(uri: vscode.Uri): Promise<string> {
       u.fsPath.toLowerCase() === uri.fsPath.toLowerCase()
   )
   const filtered = match?.[1] ?? []
-  const rel = vscode.workspace.asRelativePath(uri, false)
   if (filtered.length === 0) {
-    return `--- L4 diagnostics for ${rel}: clean ---`
+    return `--- L4 diagnostics: clean ---`
   }
   const counts = {
     error: filtered.filter(
@@ -65,11 +64,10 @@ export async function fetchL4Diagnostics(uri: vscode.Uri): Promise<string> {
   ]
     .filter(Boolean)
     .join(', ')
-  const header = `--- L4 diagnostics for ${rel}: ${filtered.length} issue${filtered.length === 1 ? '' : 's'} (${summary}) ---`
+  const header = `--- L4 diagnostics: ${filtered.length} issue${filtered.length === 1 ? '' : 's'} (${summary}) ---`
   const lines = filtered.map((d) => {
     const sev = severityName(d.severity)
     const line = d.range.start.line + 1
-    const col = d.range.start.character + 1
     const source = d.source ?? ''
     const code =
       d.code === undefined
@@ -81,7 +79,7 @@ export async function fetchL4Diagnostics(uri: vscode.Uri): Promise<string> {
     // avoid trailing brackets on diagnostics that carry neither.
     const tag =
       source || code ? ` [${[source, code].filter(Boolean).join(':')}]` : ''
-    return `  ${sev} ${line}:${col} — ${d.message}${tag}`
+    return `${sev} ${line} → ${d.message}${tag}`
   })
   return `${header}\n${lines.join('\n')}`
 }

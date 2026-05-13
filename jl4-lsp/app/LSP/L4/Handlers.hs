@@ -180,25 +180,31 @@ scheduleDirectiveResultsNotification ide doc nuri = do
     case mEvalResults of
       Nothing -> pure ()
       Just evalResults -> do
-        let getLineContent lineNo = case mRope of
+        -- `body` carries the directive's full source span (the inclusive
+        -- [startLine, endLine] slice joined by '\n'), so multi-line
+        -- directives stay distinguishable. Render sites truncate to one
+        -- line when a header is wanted.
+        let getLines startLine endLine = case mRope of
               Nothing   -> ""
               Just rope ->
                 let ls = Text.lines (Rope.toText rope)
-                in if lineNo > 0 && lineNo <= length ls
-                   then ls !! (lineNo - 1)
+                    s  = max 1 startLine
+                    e  = min (length ls) endLine
+                in if s <= e
+                   then Text.intercalate "\n" (take (e - s + 1) (drop (s - 1) ls))
                    else ""
             conFields    = maybe mempty (extractConstructorFieldNames . (.entityInfo)) mTcResult
-            evalUpdates  = Maybe.mapMaybe (Inspector.evalDirectiveToUpdateItem conFields getLineContent) evalResults
+            evalUpdates  = Maybe.mapMaybe (Inspector.evalDirectiveToUpdateItem conFields getLines) evalResults
             checkUpdates =
               [ Inspector.DirectiveUpdateItem
-                  { directiveId = Text.pack (show lineNo) <> ":" <> Text.pack (show colNo)
+                  { directiveId = Text.pack (show startLine) <> ":" <> Text.pack (show colNo)
                   , prettyText  = Text.intercalate "\n" (prettyCheckErrorWithContext info)
                   , success     = Just True
-                  , lineContent = getLineContent lineNo
+                  , body        = getLines startLine endLine
                   }
               | Just tcResult <- [mTcResult]
               , info <- tcResult.infos
-              , Just (MkSrcRange (MkSrcPos lineNo colNo) _ _ _) <- [rangeOf info]
+              , Just (MkSrcRange (MkSrcPos startLine colNo) (MkSrcPos endLine _) _ _) <- [rangeOf info]
               ]
         LSP.runLspT env $
           sendNotification
@@ -764,9 +770,14 @@ handlers evalConfig recorder =
                     matchesPos (EL.MkEvalDirectiveResult rng _ _) = fmap (.start) rng == Just targetPos
                     matchingResult = List.find matchesPos results
                 case matchingResult of
-                  Just evalRes ->
+                  Just evalRes@(EL.MkEvalDirectiveResult (Just rng) _ _) ->
                     pure $ Right $ Aeson.toJSON $
-                      Inspector.evalDirectiveToResult conFields reqParams.directiveType evalRes
+                      Inspector.evalDirectiveToResult conFields reqParams.directiveType rng evalRes
+                  Just _ -> pure $ Left $ TResponseError
+                    { _code = InR ErrorCodes_InvalidRequest
+                    , _message = "Directive result at the given position has no source range"
+                    , _xdata = Nothing
+                    }
                   Nothing | reqParams.directiveType == "#CHECK" -> do
                     -- #CHECK results come from the type checker (CheckInfo), not the evaluator.
                     -- Look for a CheckInfo item on the same line as the target position.
@@ -787,13 +798,20 @@ handlers evalConfig recorder =
                             , _message = "No #CHECK result found at the given position"
                             , _xdata = Nothing
                             }
-                          Just info ->
-                            pure $ Right $ Aeson.toJSON $ Inspector.DirectiveResult
-                              { directiveType = "#CHECK"
-                              , prettyText = Text.intercalate "\n" (prettyCheckErrorWithContext info)
-                              , success = Just True
-                              , structuredValue = Nothing
+                          Just info -> case rangeOf info of
+                            Nothing -> pure $ Left $ TResponseError
+                              { _code = InR ErrorCodes_InvalidRequest
+                              , _message = "#CHECK result at the given position has no source range"
+                              , _xdata = Nothing
                               }
+                            Just rng ->
+                              pure $ Right $ Aeson.toJSON $ Inspector.DirectiveResult
+                                { directiveType = "#CHECK"
+                                , prettyText = Text.intercalate "\n" (prettyCheckErrorWithContext info)
+                                , success = Just True
+                                , structuredValue = Nothing
+                                , range = rng
+                                }
                   Nothing -> pure $ Left $ TResponseError
                     { _code = InR ErrorCodes_InvalidRequest
                     , _message = "No directive result found at the given position"

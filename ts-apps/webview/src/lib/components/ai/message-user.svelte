@@ -64,6 +64,17 @@
               {/if}
             </svg>
             <span class="chip-name">{chip.name}</span>
+            {#if chip.kind === 'active-file' && chip.selectionStartLine !== undefined && chip.selectionEndLine !== undefined}
+              <!-- Show the 1-based inclusive line range the chip was
+                   advertising at send time (e.g. `:1-33`). The model
+                   sees the same range in `<editor-context>`. -->
+              <span class="chip-range">
+                :{chip.selectionStartLine}{chip.selectionEndLine !==
+                chip.selectionStartLine
+                  ? `-${chip.selectionEndLine}`
+                  : ''}
+              </span>
+            {/if}
           </span>
         {/each}
       </div>
@@ -149,6 +160,11 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .chip-range {
+    flex-shrink: 0;
+    opacity: 0.75;
+    font-variant-numeric: tabular-nums;
   }
   /* When the user bubble is stuck to the top of the scroll area, cap
      it at ~3 lines so a long prompt doesn't occlude the assistant

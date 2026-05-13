@@ -238,10 +238,10 @@
     parameters: FunctionParameter
     returnSchema?: FunctionParameter
   } | null>(null)
-  let renderMetaFetched = false
+  let renderMetaInFlight = false
   async function ensureRenderMeta(): Promise<void> {
-    if (renderMetaFetched || !messenger || !isRuleCall) return
-    renderMetaFetched = true
+    if (renderMeta || renderMetaInFlight || !messenger || !isRuleCall) return
+    renderMetaInFlight = true
     try {
       const res = await messenger.sendRequest(
         AiToolRenderMeta,
@@ -254,8 +254,14 @@
           returnSchema: res.returnSchema,
         }
       }
+      // `unavailable` responses leave `renderMeta` null and the
+      // in-flight flag clears below, so the next effect tick retries
+      // once the call settles (the MCP tool list may not have been
+      // populated yet when the first row mounted on a streaming turn).
     } catch {
-      // Network / proxy hiccup — the row falls back to JSON view.
+      // Network / proxy hiccup — retry on the next effect tick.
+    } finally {
+      renderMetaInFlight = false
     }
   }
 
@@ -268,8 +274,16 @@
   // first frame. The extension caches by deployment version, so the
   // cost across many cards in a long conversation is one roundtrip
   // per distinct (deployId, fnName).
+  //
+  // We re-trigger on `call.status` so the second attempt happens once
+  // the call moves to running/done — by then the extension's MCP
+  // target map is warm. Without this, multiple rows for the same rule
+  // in a streaming turn would race the MCP list refresh, the early
+  // ones would get `unavailable`, and only the last row (mounting
+  // after the list settled) would render as L4.
   $effect(() => {
-    if (isRuleCall) void ensureRenderMeta()
+    void call.status
+    if (isRuleCall && !renderMeta) void ensureRenderMeta()
   })
 
   // L4-rendered argument block. Falls back to null when we don't have

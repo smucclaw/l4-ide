@@ -43,22 +43,33 @@
     return result
   }
 
+  // `body` carries the directive's full body (possibly multi-line).
+  // The inspector header is a one-line affair, so render sites collapse
+  // to the first non-blank line.
+  function firstLineOf(text: string): string {
+    for (const line of text.split(/\r?\n/)) {
+      const t = line.trim()
+      if (t.length > 0) return t
+    }
+    return ''
+  }
+
   $effect(() => {
     if (!monaco) return
     const m = monaco
     const toColorize = sections.map((s) => ({
       id: s.directiveId,
-      lineContent: s.lineContent,
+      body: s.body,
       prettyText: s.prettyText,
       formattedPretty: formatResultValue(s.prettyText),
-      contentKey: `${s.lineContent}\0${s.prettyText}`,
+      contentKey: `${s.body}\0${s.prettyText}`,
     }))
     // Read colorized without tracking to avoid a reactive cycle
     // (the effect only re-runs when `sections` changes, not when `colorized` changes)
     const current = untrack(() => colorized)
-    for (const { id, lineContent, formattedPretty, contentKey } of toColorize) {
+    for (const { id, body, formattedPretty, contentKey } of toColorize) {
       if (current[id]?.contentKey === contentKey) continue
-      const truncated = lineContent.trim()
+      const truncated = firstLineOf(body)
       Promise.all([
         m.editor.colorize(truncated, 'jl4', { tabSize: 2 }),
         m.editor.colorize(formattedPretty, 'jl4', { tabSize: 2 }),
@@ -92,7 +103,7 @@
     structuredValue: unknown | null
     srcLine: number
     srcColumn: number
-    lineContent: string
+    body: string
     collapsed: boolean
     stale: boolean
   }
@@ -151,7 +162,7 @@
     directiveId: string,
     srcPos: SrcPos,
     result: DirectiveResult,
-    lineContent: string,
+    body: string,
     fileUri: string = ''
   ): 'ok' | 'scrolled' {
     const existing = sections.find((s) => s.directiveId === directiveId)
@@ -167,7 +178,7 @@
                 structuredValue: result.structuredValue,
                 srcLine: srcPos.line,
                 srcColumn: srcPos.column,
-                lineContent,
+                body,
                 stale: false,
               }
             : s
@@ -191,7 +202,7 @@
       structuredValue: result.structuredValue,
       srcLine: srcPos.line,
       srcColumn: srcPos.column,
-      lineContent,
+      body,
       collapsed: false,
       stale: false,
     }
@@ -243,7 +254,7 @@
       directiveId: string
       prettyText: string
       success: boolean | null
-      lineContent: string
+      body: string
     }>,
     uri?: string
   ) {
@@ -272,14 +283,14 @@
       newCol: number
       prettyText: string
       success: boolean | null
-      lineContent: string
+      body: string
     }
     const remappings = new Map<string, RemapEntry>()
     const matchedResultIds = new Set<string>()
 
     // Pass 1 (PRIMARY): content-based matching
-    const sectionsByContent = Map.groupBy(toSync, (s) => s.lineContent)
-    const resultsByContent = Map.groupBy(results, (r) => r.lineContent)
+    const sectionsByContent = Map.groupBy(toSync, (s) => s.body)
+    const resultsByContent = Map.groupBy(results, (r) => r.body)
 
     for (const [content, sects] of sectionsByContent) {
       const matchingResults = resultsByContent.get(content)
@@ -293,7 +304,7 @@
           newCol: parseCol(r.directiveId),
           prettyText: r.prettyText,
           success: r.success,
-          lineContent: r.lineContent,
+          body: r.body,
         })
         matchedResultIds.add(r.directiveId)
       } else {
@@ -318,7 +329,7 @@
               newCol: parseCol(best.directiveId),
               prettyText: best.prettyText,
               success: best.success,
-              lineContent: best.lineContent,
+              body: best.body,
             })
           }
         }
@@ -340,7 +351,7 @@
           newCol: parseCol(positionalMatch.directiveId),
           prettyText: positionalMatch.prettyText,
           success: positionalMatch.success,
-          lineContent: positionalMatch.lineContent,
+          body: positionalMatch.body,
         })
         matchedResultIds.add(positionalMatch.directiveId)
       }
@@ -357,7 +368,7 @@
           srcColumn: remap.newCol,
           prettyText: remap.prettyText,
           success: remap.success,
-          lineContent: remap.lineContent,
+          body: remap.body,
           stale: false,
         }
       }
@@ -469,14 +480,11 @@
                   {#if !section.stale}
                     <span class="source-location">{section.srcLine}:</span>
                   {/if}
-                  <span
-                    class="directive-label"
-                    title={section.lineContent.trim()}
-                  >
+                  <span class="directive-label" title={section.body.trim()}>
                     {#if colorized[section.directiveId]}
                       {@html colorized[section.directiveId].header}
                     {:else}
-                      {section.lineContent.trim()}
+                      {firstLineOf(section.body)}
                     {/if}
                   </span>
                 </button>
