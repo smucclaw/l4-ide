@@ -480,7 +480,14 @@
          raw JSON the model sent so there's never a blank state. -->
     <div class="rule-details">
       <div class="section-label">Input</div>
-      {#if argsL4}
+      {#if Object.keys(args).length === 0}
+        <!-- Zero-arg rule call: the empty `{}` JSON the model sent
+             reads as "the rule was invoked with no inputs," which L4
+             writes as `NOTHING`. Render the keyword instead of the
+             literal `{}` so a no-arg evaluation matches how a human
+             would have transcribed the same call. -->
+        <pre class="rule-block rule-args">{@html colorize('NOTHING')}</pre>
+      {:else if argsL4}
         <pre class="rule-block rule-args">{@html argsL4}</pre>
       {:else}
         <pre class="rule-block rule-args">{JSON.stringify(args, null, 2)}</pre>
