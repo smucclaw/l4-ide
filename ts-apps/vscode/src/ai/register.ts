@@ -601,6 +601,17 @@ export function registerAiChatHandlers(deps: {
     string,
     { version: string; meta: RenderMeta }
   >()
+  // In-flight dedup so N concurrent rows for the same rule collapse to
+  // one upstream `getDeploymentStatus` + `getFunctionSchema` pair. All
+  // callers await the same promise and resolve together.
+  type RenderMetaResult =
+    | {
+        kind: 'meta'
+        parameters: RenderMeta['parameters']
+        returnSchema?: RenderMeta['returnSchema']
+      }
+    | { kind: 'unavailable' }
+  const renderMetaInFlight = new Map<string, Promise<RenderMetaResult>>()
   messenger.onRequest(AiToolRenderMeta, async ({ toolName }) => {
     if (!toolName.startsWith(MCP_L4_RULES_PREFIX)) {
       return { kind: 'unavailable' as const }
@@ -611,36 +622,46 @@ export function registerAiChatHandlers(deps: {
     const target = mcp.getToolTarget(toolName)
     if (!target) return { kind: 'unavailable' as const }
     const cacheKey = `${target.deployId}/${target.fnName}`
+    const existing = renderMetaInFlight.get(cacheKey)
+    if (existing) return existing
+    const work = (async (): Promise<RenderMetaResult> => {
+      try {
+        // Look up the deployment's current version so we invalidate
+        // automatically on redeploy (the version is a SHA-256 of all
+        // source contents — changes whenever any rule body changes).
+        const status = await serviceClient.getDeploymentStatus(target.deployId)
+        const version =
+          (status.metadata as { version?: string } | undefined)?.version ?? ''
+        const cached = renderMetaCache.get(cacheKey)
+        if (cached && cached.version === version) {
+          return { kind: 'meta' as const, ...cached.meta }
+        }
+        const summary = (await serviceClient.getFunctionSchema(
+          target.deployId,
+          target.fnName
+        )) as {
+          parameters?: import('jl4-client-rpc').FunctionParameter
+          returnSchema?: import('jl4-client-rpc').FunctionParameter
+        }
+        if (!summary.parameters) return { kind: 'unavailable' as const }
+        const meta: RenderMeta = {
+          parameters: summary.parameters,
+          returnSchema: summary.returnSchema,
+        }
+        renderMetaCache.set(cacheKey, { version, meta })
+        return { kind: 'meta' as const, ...meta }
+      } catch (err) {
+        logger.warn(
+          `aiToolRenderMeta(${toolName}) failed: ${err instanceof Error ? err.message : String(err)}`
+        )
+        return { kind: 'unavailable' as const }
+      }
+    })()
+    renderMetaInFlight.set(cacheKey, work)
     try {
-      // Look up the deployment's current version so we invalidate
-      // automatically on redeploy (the version is a SHA-256 of all
-      // source contents — changes whenever any rule body changes).
-      const status = await serviceClient.getDeploymentStatus(target.deployId)
-      const version =
-        (status.metadata as { version?: string } | undefined)?.version ?? ''
-      const cached = renderMetaCache.get(cacheKey)
-      if (cached && cached.version === version) {
-        return { kind: 'meta' as const, ...cached.meta }
-      }
-      const summary = (await serviceClient.getFunctionSchema(
-        target.deployId,
-        target.fnName
-      )) as {
-        parameters?: import('jl4-client-rpc').FunctionParameter
-        returnSchema?: import('jl4-client-rpc').FunctionParameter
-      }
-      if (!summary.parameters) return { kind: 'unavailable' as const }
-      const meta: RenderMeta = {
-        parameters: summary.parameters,
-        returnSchema: summary.returnSchema,
-      }
-      renderMetaCache.set(cacheKey, { version, meta })
-      return { kind: 'meta' as const, ...meta }
-    } catch (err) {
-      logger.warn(
-        `aiToolRenderMeta(${toolName}) failed: ${err instanceof Error ? err.message : String(err)}`
-      )
-      return { kind: 'unavailable' as const }
+      return await work
+    } finally {
+      renderMetaInFlight.delete(cacheKey)
     }
   })
 

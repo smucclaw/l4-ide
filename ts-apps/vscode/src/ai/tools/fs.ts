@@ -591,6 +591,15 @@ export async function fsCreateFile(args: FsCreateArgs): Promise<string> {
   // own fs__read_file / fs.readFile) see the new content immediately.
   const doc = await vscode.workspace.openTextDocument(r.uri)
   if (doc.isDirty) await doc.save()
+  // Surface the new file as a visible tab so the user sees what the
+  // model just created without having to expand the tool-call row and
+  // click. `preserveFocus: true` keeps the cursor wherever the user
+  // was — usually the chat input — instead of stealing focus into the
+  // editor mid-conversation.
+  await vscode.window.showTextDocument(doc, {
+    preview: false,
+    preserveFocus: true,
+  })
   // Skip the appendL4Diagnostics tail — a freshly-created file has no
   // real content to type-check, and the Edit tool the model uses next
   // will run diagnostics naturally.
