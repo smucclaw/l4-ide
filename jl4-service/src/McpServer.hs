@@ -231,10 +231,13 @@ fileToolDefinitions =
     ]
   ]
 
--- | Sanitize a name for use as a tool name.
+-- | Sanitize a name for use as a tool name. Allowed chars match
+-- Anthropic's tool-name regex `^[a-zA-Z0-9_-]{1,64}$` exactly — no
+-- dots, even though MCP spec is more permissive. Dots in the source
+-- name are remapped to hyphens.
 sanitizeName :: Int -> Text -> Text
 sanitizeName maxLen name =
-  let s = Text.map (\c -> if isAlphaNum c || c == '_' || c == '.' || c == '-' then c else '-') name
+  let s = Text.map (\c -> if isAlphaNum c || c == '_' || c == '-' then c else '-') name
       s' = collapseHyphens $ Text.dropWhile (== '-') $ Text.dropWhileEnd (== '-') s
       s'' = if Text.null s' || not (isAlphaStart (Text.head s'))
             then "_" <> s' else s'
@@ -247,7 +250,9 @@ sanitizeName maxLen name =
 
 -- | Build unique tool names from metadata entries.
 -- Uses the same 60-char logic as WebMCPPage.hs buildToolNames:
--- function-name only, with .deployment-prefix on collision.
+-- function-name only, with -deployment-prefix on collision. The
+-- separator must stay inside Anthropic's tool-name regex
+-- `^[a-zA-Z0-9_-]{1,64}$`, so we use `-` (not `.`).
 buildToolNames :: [(Text, FunctionSummary)] -> [(Text, Text, FunctionSummary)]
 buildToolNames entries =
   let maxLen = 60
@@ -263,7 +268,7 @@ buildToolNames entries =
       _ ->
         -- Collision: add deployment prefix
         let deps = [(sanitizeName maxLen deployId, deployId, fn) | (deployId, fn) <- grp]
-        in [ let suffix = "." <> Text.take prefixLen sanitizedDep
+        in [ let suffix = "-" <> Text.take prefixLen sanitizedDep
                  baseName = sanitizeName (maxLen - Text.length suffix) fn.fsName
                  prefixLen = findUniquePrefix sanitizedDep
                    [sd | (sd, _, _) <- deps, sd /= sanitizedDep]

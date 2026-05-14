@@ -135,11 +135,13 @@ jsonError msg = Aeson.encode $ object ["error" .= msg]
 
 -- | Raw property name sanitization: replaces special characters with hyphens
 -- and collapses consecutive hyphens. Does NOT truncate.
--- Preserves alphanumeric, underscore, dot, and hyphen.
+-- Preserves alphanumeric, underscore, and hyphen — matches Anthropic's
+-- tool/property name regex `^[a-zA-Z0-9_-]{1,64}$` (no dots allowed,
+-- even though MCP spec is more permissive).
 -- Used for structural collision detection (so "foo bar" vs "foo-bar" still collide).
 sanitizePropertyNameRaw :: Text -> Text
 sanitizePropertyNameRaw name =
-  let s = Text.map (\c -> if isAlphaNum c || c == '_' || c == '.' || c == '-' then c else '-') name
+  let s = Text.map (\c -> if isAlphaNum c || c == '_' || c == '-' then c else '-') name
       s' = collapseHyphens $ Text.dropWhile (== '-') $ Text.dropWhileEnd (== '-') s
   in if Text.null s' then "_unnamed" else s'
  where
