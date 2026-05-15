@@ -12,57 +12,22 @@
 
   let { text, streaming }: { text: string; streaming: boolean } = $props()
 
-  /**
-   * Block-by-block streaming: while tokens are still arriving, split
-   * the buffer at the last "safe" newline-newline boundary and parse
-   * the committed prefix with the full block parser. The trailing
-   * in-flight block is classified (code-fence / heading / list /
-   * blockquote / paragraph) and rendered with the same semantic
-   * element marked would emit on commit, so inline marks
-   * (bold/italic/links/inline-code/$math$) format live and code
-   * fences pick up L4 syntax colors as they stream. The cursor sits
-   * at the end of the in-flight block's content.
-   */
-  function findSafeCut(s: string): number {
-    // If we're inside an open ``` fence, cut before it.
-    const fenceMatches = s.match(/```/g)
-    const fenceCount = fenceMatches?.length ?? 0
-    if (fenceCount % 2 === 1) {
-      const lastFenceStart = s.lastIndexOf('```')
-      const safeBefore = s.lastIndexOf('\n\n', lastFenceStart)
-      return safeBefore > 0 ? safeBefore + 2 : 0
-    }
-    // Otherwise the last \n\n is a safe cut point (preceded by a
-    // complete block). If we never saw one, nothing committed yet.
-    const idx = s.lastIndexOf('\n\n')
-    return idx > 0 ? idx + 2 : 0
-  }
-
-  const committed = $derived(
-    streaming ? text.slice(0, findSafeCut(text)) : text
-  )
-  const trailing = $derived(streaming ? text.slice(committed.length) : '')
-
-  const CURSOR = '<span class="cursor">▋</span>'
-
-  function escapeHtml(s: string): string {
-    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  }
-
-  // Code block rendering shared between marked's committed pass and
-  // the in-flight trailing pass. `streaming` controls cursor injection
-  // so the committed version emits exactly the same DOM minus the
-  // blinking caret — no visual settle when a fence commits.
-  function renderCodeBlock(
-    code: string,
-    lang: string | undefined,
-    streaming: boolean
-  ): string {
-    const cursor = streaming ? CURSOR : ''
+  // Custom renderer: L4 code via @repo/l4-highlight (matches the Docs
+  // and Inspector tabs); other code blocks render as plain HTML so
+  // the webview CSS can style them consistently. Every code block is
+  // wrapped in a `.code-block-wrap` so we can position a Copy
+  // button in its top-right. Click handling is delegated on the
+  // container — marked's output is injected via @html and can't
+  // bind Svelte handlers directly.
+  const renderer = new marked.Renderer()
+  renderer.code = ({ text: code, lang }) => {
     const highlighted =
       lang === 'l4' || lang === 'l4-file'
-        ? `<code class="language-l4">${colorize(code)}${cursor}</code>`
-        : `<code${lang ? ` class="language-${lang}"` : ''}>${escapeHtml(code)}${cursor}</code>`
+        ? `<code class="language-l4">${colorize(code)}</code>`
+        : `<code${lang ? ` class="language-${lang}"` : ''}>${code
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')}</code>`
     // Store the raw (un-escaped, un-highlighted) source on a data
     // attribute so the copy handler yields the exact text the
     // assistant produced — not the HTML-entity-expanded version
@@ -70,132 +35,45 @@
     const encodedSource = encodeURIComponent(code)
     return `<div class="code-block-wrap"><pre>${highlighted}</pre><button type="button" class="code-copy-btn" data-copy-src="${encodedSource}" title="Copy code" aria-label="Copy code"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="9" height="9" rx="1.5"/><path d="M4 10H3V3.5A1.5 1.5 0 0 1 4.5 2H10"/></svg><span class="code-copy-label">Copy</span></button></div>`
   }
-
-  // Custom renderer: L4 code via @repo/l4-highlight (matches the Docs
-  // and Inspector tabs); other code blocks render as plain HTML so
-  // the webview CSS can style them consistently. Click handling is
-  // delegated on the container — marked's output is injected via
-  // @html and can't bind Svelte handlers directly.
-  const renderer = new marked.Renderer()
-  renderer.code = ({ text: code, lang }) => renderCodeBlock(code, lang, false)
   // Links open externally — but the webview host intercepts clicks on
   // http(s) links via VSCode; keep default rendering.
   marked.setOptions({ breaks: false, gfm: true })
 
-  const committedHtml = $derived(
-    (marked.parse(committed, { renderer, async: false }) as string) || ''
-  )
+  const CURSOR = '<span class="cursor">▋</span>'
 
-  function parseInline(src: string): string {
-    return marked.parseInline(src, { async: false }) as string
+  // Parse the whole buffer on every update. An open ``` fence
+  // mid-stream would put marked into "consume rest of doc as code"
+  // mode and produce a giant unstyled blob, so synthesize a closing
+  // fence first — once the real close lands the synthetic one drops
+  // out. Reactivity is per-block: each <StreamingMarkdown> instance
+  // re-runs marked only on its own block's text, never on the full
+  // conversation.
+  const html = $derived.by(() => {
+    if (!text) return ''
+    const fences = (text.match(/```/g) ?? []).length
+    const safe = fences % 2 === 1 ? text + '\n```' : text
+    const parsed = marked.parse(safe, { renderer, async: false }) as string
+    return streaming ? withCursor(parsed) : parsed
+  })
+
+  // Inject the blinking caret inside the last "leaf" element's body
+  // so it sits inline at the end of the last word/glyph rather than
+  // dropping to its own line below a block-level <p>. Code panels
+  // (from renderer.code) end in `</button></div>`, so we go inside
+  // the last `</code>` for those.
+  function withCursor(parsedHtml: string): string {
+    const trimmed = parsedHtml.replace(/\s+$/, '')
+    if (/<\/button><\/div>$/.test(trimmed)) {
+      const idx = trimmed.lastIndexOf('</code>')
+      if (idx >= 0) return trimmed.slice(0, idx) + CURSOR + trimmed.slice(idx)
+    }
+    const m = trimmed.match(/<\/(p|li|h[1-6]|blockquote|td|th)>(?:<\/[^>]+>)*$/)
+    if (m) {
+      const idx = m.index ?? trimmed.length
+      return trimmed.slice(0, idx) + CURSOR + trimmed.slice(idx)
+    }
+    return trimmed + CURSOR
   }
-
-  // Classify the in-flight slice and render it as the same semantic
-  // element marked would emit on commit. Inline marks parse live via
-  // marked.parseInline; the cursor lands at the end of the content.
-  function renderTrailing(s: string): string {
-    if (!s) return ''
-
-    // Code fence — `findSafeCut` routes the entire open fence into
-    // trailing, so this matches the opening ``` plus everything
-    // after. No synthetic close needed; the cursor sits at the cut.
-    const fence = s.match(/^\s*```([^\n`]*)\n?([\s\S]*)$/)
-    if (fence) {
-      const lang = (fence[1] ?? '').trim()
-      const code = fence[2] ?? ''
-      return renderCodeBlock(code, lang, true)
-    }
-
-    // ATX heading — single line only. If a newline appears after the
-    // heading text, the user has moved on to a paragraph and we fall
-    // through to the paragraph path (acceptable: it briefly looks
-    // like prose, then commits as a heading at \n\n).
-    const heading = s.match(/^(#{1,6})\s+([^\n]*)$/)
-    if (heading) {
-      const level = heading[1].length
-      return `<h${level}>${parseInline(heading[2])}${CURSOR}</h${level}>`
-    }
-
-    const lines = s.split('\n')
-
-    // Unordered list — every line is either a new item or a lazy
-    // continuation of the previous one. Cursor pins to the last item.
-    if (lines.length > 0 && /^[-*+]\s+/.test(lines[0])) {
-      const items: string[] = []
-      let current: string | null = null
-      let ok = true
-      for (const line of lines) {
-        const m = line.match(/^[-*+]\s+(.*)$/)
-        if (m) {
-          if (current !== null) items.push(current)
-          current = m[1]
-        } else if (current !== null) {
-          current += '\n' + line
-        } else {
-          ok = false
-          break
-        }
-      }
-      if (ok && current !== null) {
-        items.push(current)
-        const lis = items
-          .map(
-            (it, i) =>
-              `<li>${parseInline(it)}${i === items.length - 1 ? CURSOR : ''}</li>`
-          )
-          .join('')
-        return `<ul>${lis}</ul>`
-      }
-    }
-
-    // Ordered list — preserve the starting number so `5. foo\n6. bar`
-    // doesn't restart at 1 mid-stream.
-    const olFirst = lines[0]?.match(/^(\d+)[.)]\s+/)
-    if (olFirst) {
-      const start = parseInt(olFirst[1], 10)
-      const items: string[] = []
-      let current: string | null = null
-      let ok = true
-      for (const line of lines) {
-        const m = line.match(/^\d+[.)]\s+(.*)$/)
-        if (m) {
-          if (current !== null) items.push(current)
-          current = m[1]
-        } else if (current !== null) {
-          current += '\n' + line
-        } else {
-          ok = false
-          break
-        }
-      }
-      if (ok && current !== null) {
-        items.push(current)
-        const lis = items
-          .map(
-            (it, i) =>
-              `<li>${parseInline(it)}${i === items.length - 1 ? CURSOR : ''}</li>`
-          )
-          .join('')
-        const startAttr = start !== 1 ? ` start="${start}"` : ''
-        return `<ol${startAttr}>${lis}</ol>`
-      }
-    }
-
-    // Blockquote — strip leading `>` from each line, parse the body
-    // as a single inline run wrapped in <p> to match marked's
-    // committed output.
-    if (lines.every((l) => l === '' || /^>\s?/.test(l))) {
-      const body = lines.map((l) => l.replace(/^>\s?/, '')).join('\n')
-      return `<blockquote><p>${parseInline(body)}${CURSOR}</p></blockquote>`
-    }
-
-    // Paragraph — default. parseInline handles bold/italic/links/
-    // inline-code/$math$; internal newlines collapse to whitespace
-    // (matches `breaks: false`).
-    return `<p>${parseInline(s)}${CURSOR}</p>`
-  }
-
-  const trailingHtml = $derived(renderTrailing(trailing))
 
   // Delegated click handler for `.code-copy-btn` buttons injected by
   // the marked renderer. We can't bind Svelte handlers through
@@ -232,7 +110,7 @@
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="streaming-md" onclick={onCopyClick}>
-  {@html committedHtml}{@html trailingHtml}
+  {@html html}
 </div>
 
 <style>
@@ -425,9 +303,8 @@
     padding: 4px 8px;
   }
 
-  /* Cursor is injected via {@html} (inside trailing markdown or a
-     code block), so Svelte's scoped-CSS analyzer can't see it —
-     scope it globally and keep it confined to .streaming-md. */
+  /* Streaming caret. Injected via {@html} so the selector must be
+     :global() to survive Svelte's scoped-CSS pruning. */
   .streaming-md :global(.cursor) {
     display: inline-block;
     margin-left: 1px;
