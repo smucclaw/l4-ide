@@ -218,26 +218,26 @@ export class McpProxy implements vscode.Disposable {
    * (to clear a stale green dot) and prompt for re-login.
    */
   private async dispatch(body: string): Promise<string> {
-    const serviceUrl = this.auth.getEffectiveServiceUrl()
+    const mcpUrl = this.auth.getEffectiveMcpUrl()
 
-    if (!serviceUrl) return this.handleLocally(body)
+    if (!mcpUrl) return this.handleLocally(body)
 
     let resp: Response
     try {
       const headers = await this.auth.getAuthHeaders()
-      resp = await fetch(`${serviceUrl}/.mcp`, {
+      resp = await fetch(mcpUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...headers },
         body,
       })
     } catch (err) {
       this.outputChannel.appendLine(
-        `[mcp-proxy] fetch ${serviceUrl}/.mcp failed: ${err instanceof Error ? err.message : String(err)}`
+        `[mcp-proxy] fetch ${mcpUrl} failed: ${err instanceof Error ? err.message : String(err)}`
       )
       return this.errorResponse(
         body,
         -32002,
-        `L4 service unreachable at ${serviceUrl}`
+        `L4 service unreachable at ${mcpUrl}`
       )
     }
 
@@ -246,7 +246,7 @@ export class McpProxy implements vscode.Disposable {
     if (resp.status === 401 || resp.status === 403) {
       const preview = await resp.text().catch(() => '')
       this.outputChannel.appendLine(
-        `[mcp-proxy] ${serviceUrl}/.mcp responded ${resp.status}${preview ? `: ${preview.slice(0, 200)}` : ''}`
+        `[mcp-proxy] ${mcpUrl} responded ${resp.status}${preview ? `: ${preview.slice(0, 200)}` : ''}`
       )
       void this.auth.verifyConnection()
       this.maybePromptReauth()
@@ -261,7 +261,7 @@ export class McpProxy implements vscode.Disposable {
     if (resp.ok && text) return text
 
     this.outputChannel.appendLine(
-      `[mcp-proxy] ${serviceUrl}/.mcp responded ${resp.status} (body ${text ? `${text.length}B` : 'empty'})`
+      `[mcp-proxy] ${mcpUrl} responded ${resp.status} (body ${text ? `${text.length}B` : 'empty'})`
     )
     return this.errorResponse(
       body,

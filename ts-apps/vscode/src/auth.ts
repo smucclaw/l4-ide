@@ -161,6 +161,21 @@ export class AuthManager {
     return ''
   }
 
+  /**
+   * The effective MCP endpoint URL. Distinct from the service URL because
+   * Legalese Cloud serves MCP from a dedicated origin (`mcp.legalese.cloud`)
+   * with the org slug as the path, while self-hosted jl4-service exposes
+   * MCP at `/.mcp` on the service URL.
+   */
+  getEffectiveMcpUrl(): string {
+    const configured = this.getServiceUrl()
+    if (configured) return `${configured.replace(/\/$/, '')}/.mcp`
+    if (this.cloudOrgSlug) {
+      return `https://mcp.${LEGALESE_CLOUD_DOMAIN}/${this.cloudOrgSlug}`
+    }
+    return ''
+  }
+
   async getSessionToken(): Promise<string | undefined> {
     return this.secrets.get(SECRET_KEY_SESSION)
   }
