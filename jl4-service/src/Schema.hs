@@ -129,6 +129,7 @@ instance ToSchema FunctionSummary where
     textRef <- declareSchemaRef (Proxy @Text)
     mTextRef <- declareSchemaRef (Proxy @(Maybe Text))
     paramsRef <- declareSchemaRef (Proxy @Parameters)
+    mParamRef <- declareSchemaRef (Proxy @(Maybe Parameter))
     pure $
       NamedSchema (Just "FunctionSummary") $
         mempty
@@ -138,6 +139,7 @@ instance ToSchema FunctionSummary where
                , ("description", textRef)
                , ("parameters", paramsRef)
                , ("returnType", textRef)
+               , ("returnSchema", mParamRef)
                , ("section", mTextRef)
                ]
           & required .~ ["name", "description", "parameters", "returnType"]
@@ -163,6 +165,7 @@ instance ToSchema Function where
     textRef <- declareSchemaRef (Proxy @Text)
     parametersRef <- declareSchemaRef (Proxy @Parameters)
     evalBackendsRef <- declareSchemaRef (Proxy @[EvalBackend])
+    mParamRef <- declareSchemaRef (Proxy @(Maybe Parameter))
     pure $
       NamedSchema (Just "Function") $
         mempty
@@ -180,6 +183,7 @@ instance ToSchema Function where
                            , ("description", textRef)
                            , ("supportedBackends", evalBackendsRef)
                            , ("parameters", parametersRef)
+                           , ("returnSchema", mParamRef)
                            ]
                  )
                ]
@@ -223,6 +227,7 @@ instance ToSchema Parameter where
                , ("properties", nestedPropsSchema)
                , ("propertyOrder", mTextListSchema)
                , ("items", itemsSchema)
+               , ("x-l4-type", mTextSchema)
                ]
           & required .~ ["type"]
           & example

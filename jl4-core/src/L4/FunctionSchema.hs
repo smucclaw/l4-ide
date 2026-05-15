@@ -40,6 +40,7 @@ data Parameter = Parameter
   , parameterPropertyOrder :: !(Maybe [Text]) -- Field order for object types (declaration order when available)
   , parameterItems :: !(Maybe Parameter) -- Array items schema for array types
   , parameterRequired :: !(Maybe [Text]) -- Required field names for nested object types
+  , parameterL4Type :: !(Maybe Text) -- L4 user-declared type name (record/enum) when this node came from a DECLARE; serialised as "x-l4-type"
   }
   deriving stock (Show, Read, Ord, Eq, Generic)
 
@@ -84,6 +85,9 @@ instance ToJSON Parameter where
         ++ case p.parameterRequired of
           Nothing -> []
           Just req -> ["required" .= req]
+        ++ case p.parameterL4Type of
+          Nothing -> []
+          Just l4ty -> ["x-l4-type" .= l4ty]
 
 instance FromJSON Parameter where
   parseJSON = Aeson.withObject "Parameter" $ \p ->
@@ -97,6 +101,7 @@ instance FromJSON Parameter where
       <*> p .:? "propertyOrder"
       <*> p .:? "items"
       <*> p .:? "required"
+      <*> p .:? "x-l4-type"
 
 declaresFromModule :: Module Resolved -> Map Text (Declare Resolved)
 declaresFromModule (MkModule _ _ section) =
@@ -153,6 +158,7 @@ typeToParameter declares visited ty =
       , parameterPropertyOrder = Nothing
       , parameterItems = Nothing
       , parameterRequired = Nothing
+      , parameterL4Type = Nothing
       }
 
   typeNameToParameter :: Resolved -> Parameter
@@ -209,11 +215,13 @@ typeToParameter declares visited ty =
                 , parameterProperties = Just props
                 , parameterPropertyOrder = Just fieldOrder
                 , parameterRequired = Just requiredFields
+                , parameterL4Type = Just typeName
                 }
           EnumDecl _ constructors ->
             (emptyParam "string")
               { parameterDescription = Maybe.fromMaybe "" (fmap getDesc (declAnn Optics.^. annDesc))
               , parameterEnum = [resolvedNameText c | MkConDecl _ c _ <- constructors]
+              , parameterL4Type = Just typeName
               }
           SynonymDecl _ inner ->
             typeToParameter declares (Set.insert typeName visited) inner
@@ -287,6 +295,7 @@ parametersFromDecideWithErrors resolvedModule decide@(MkDecide _ (MkTypeSig _ (M
       , parameterPropertyOrder = Nothing
       , parameterItems = Nothing
       , parameterRequired = Nothing
+      , parameterL4Type = Nothing
       }
 
 -- | Check if a type annotation is MAYBE (i.e., the parameter is optional).

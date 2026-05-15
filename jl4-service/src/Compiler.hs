@@ -88,7 +88,7 @@ compileBundle logger deployId sources = do
           let fnMap = Map.fromList [(fn.fnImpl.name, fn) | fn <- allFunctions]
 
           now <- getCurrentTime
-          let summaries = [FunctionSummary { fsName = fn.fnImpl.name, fsDescription = fn.fnImpl.description, fsParameters = fn.fnImpl.parameters, fsReturnType = fn.fnImpl.returnType, fsSection = Nothing, fsIsDeontic = fn.fnImpl.isDeontic, fsSourceFile = Just (Text.pack fp) } | (fp, fn) <- allFunctionsWithFile]
+          let summaries = [FunctionSummary { fsName = fn.fnImpl.name, fsDescription = fn.fnImpl.description, fsParameters = fn.fnImpl.parameters, fsReturnType = fn.fnImpl.returnType, fsReturnSchema = Nothing, fsSection = Nothing, fsIsDeontic = fn.fnImpl.isDeontic, fsSourceFile = Just (Text.pack fp) } | (fp, fn) <- allFunctionsWithFile]
               version = computeVersion sources
               fileEntries = buildFileEntries deployId sources summaries
               meta = DeploymentMetadata
@@ -314,7 +314,7 @@ buildFromCborBundle logger deployId bundles sources storedMeta = do
       let fnMap = Map.fromList [(fn.fnImpl.name, fn) | fn <- allFns]
 
       now <- getCurrentTime
-      let summaries = [FunctionSummary { fsName = fn.fnImpl.name, fsDescription = fn.fnImpl.description, fsParameters = fn.fnImpl.parameters, fsReturnType = fn.fnImpl.returnType, fsSection = Nothing, fsIsDeontic = fn.fnImpl.isDeontic, fsSourceFile = Just (Text.pack fp) } | (fp, fn) <- allFnsWithFile]
+      let summaries = [FunctionSummary { fsName = fn.fnImpl.name, fsDescription = fn.fnImpl.description, fsParameters = fn.fnImpl.parameters, fsReturnType = fn.fnImpl.returnType, fsReturnSchema = Nothing, fsSection = Nothing, fsIsDeontic = fn.fnImpl.isDeontic, fsSourceFile = Just (Text.pack fp) } | (fp, fn) <- allFnsWithFile]
           version = storedMeta.smVersion
           fileEntries = buildFileEntries deployId sources summaries
           meta = DeploymentMetadata
@@ -359,13 +359,13 @@ exportToFunction declares implicitParams export =
           ( (typeToParameter declares Set.empty partyTy) { parameterDescription = "The party performing the action" }
           , (typeToParameter declares Set.empty actionTy) { parameterDescription = "The action performed" }
           )
-        _ -> ( Parameter "object" Nothing Nothing [] "The party performing the action" Nothing Nothing Nothing Nothing
-             , Parameter "object" Nothing Nothing [] "The action performed" Nothing Nothing Nothing Nothing
+        _ -> ( Parameter "object" Nothing Nothing [] "The party performing the action" Nothing Nothing Nothing Nothing Nothing
+             , Parameter "object" Nothing Nothing [] "The action performed" Nothing Nothing Nothing Nothing Nothing
              )
       finalParams = if isDeontic
         then mergedParams
           { parameterMap = mergedParams.parameterMap <> Map.fromList
-              [ ("startTime", Parameter "number" Nothing Nothing [] "Start time for contract simulation" Nothing Nothing Nothing Nothing)
+              [ ("startTime", Parameter "number" Nothing Nothing [] "Start time for contract simulation" Nothing Nothing Nothing Nothing Nothing)
               , ("events", Parameter
                   { parameterType = "array"
                   , parameterAlias = Nothing
@@ -383,18 +383,26 @@ exportToFunction declares implicitParams export =
                       , parameterProperties = Just $ Map.fromList
                           [ ("party", partyParam)
                           , ("action", actionParam)
-                          , ("at", Parameter "number" Nothing Nothing [] "Timestamp" Nothing Nothing Nothing Nothing)
+                          , ("at", Parameter "number" Nothing Nothing [] "Timestamp" Nothing Nothing Nothing Nothing Nothing)
                           ]
                       , parameterPropertyOrder = Just ["party", "action", "at"]
                       , parameterItems = Nothing
                       , parameterRequired = Just ["party", "action", "at"]
+                      , parameterL4Type = Nothing
                       }
                   , parameterRequired = Nothing
+                  , parameterL4Type = Nothing
                   })
               ]
           , required = mergedParams.required <> ["startTime", "events"]
           }
         else mergedParams
+      -- Structured return schema (with x-l4-type annotations on record/enum nodes).
+      -- For DEONTIC functions the surface return shape is the simulation envelope,
+      -- not the user's record type, so we leave the structured schema unset there.
+      mReturnSchema = case export.exportReturnType of
+        Just retTy | not isDeontic -> Just (typeToParameter declares Set.empty retTy)
+        _ -> Nothing
   in Function
     { name = export.exportName
     , description =
@@ -405,6 +413,7 @@ exportToFunction declares implicitParams export =
     , deonticPartyType = mPartyType
     , deonticActionType = mActionType
     , returnType = returnTypeDisplay export.exportReturnType
+    , returnSchema = mReturnSchema
     , isDeontic = isDeontic
     }
 
@@ -420,7 +429,7 @@ parametersFromExport declares params =
 paramToParameter :: Map Text (Declare Resolved) -> ExportedParam -> Parameter
 paramToParameter declares param =
   let p0 = maybe
-              (Parameter "object" Nothing Nothing [] "" Nothing Nothing Nothing Nothing)
+              (Parameter "object" Nothing Nothing [] "" Nothing Nothing Nothing Nothing Nothing)
               (typeToParameter declares Set.empty)
               param.paramType
   in p0

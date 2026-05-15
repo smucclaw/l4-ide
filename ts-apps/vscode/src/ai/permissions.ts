@@ -20,20 +20,20 @@ export type PermissionCategory =
   | 'fs.create'
   | 'fs.edit'
   | 'fs.delete'
-  | 'lsp.evaluate'
   | 'l4.evaluate'
   | 'mcp.l4Rules'
   | 'meta.askUser'
+  | 'meta.statusUpdate'
 
 const CATEGORY_SETTING: Record<PermissionCategory, string> = {
   'fs.read': 'legaleseAi.permissions.readFiles',
   'fs.create': 'legaleseAi.permissions.createFiles',
   'fs.edit': 'legaleseAi.permissions.editFiles',
   'fs.delete': 'legaleseAi.permissions.deleteFiles',
-  'lsp.evaluate': 'legaleseAi.permissions.lspDiagnostics',
   'l4.evaluate': 'legaleseAi.permissions.evaluateL4',
   'mcp.l4Rules': 'legaleseAi.permissions.runDeployedRules',
   'meta.askUser': 'legaleseAi.permissions.askUser',
+  'meta.statusUpdate': 'legaleseAi.permissions.statusUpdate',
 }
 
 const DEFAULTS: Record<PermissionCategory, PermissionValue> = {
@@ -42,11 +42,13 @@ const DEFAULTS: Record<PermissionCategory, PermissionValue> = {
   'fs.edit': 'always',
   // Destructive. Always confirm unless the user explicitly opts out.
   'fs.delete': 'ask',
-  'lsp.evaluate': 'always',
   'l4.evaluate': 'always',
   'mcp.l4Rules': 'always',
   // `meta__ask_user` has no side effects — it IS the user prompt.
   'meta.askUser': 'always',
+  // `meta__post_status_update` only writes a line of prose into the
+  // assistant bubble. Always allowed; never prompt.
+  'meta.statusUpdate': 'always',
 }
 
 export function getPermission(category: PermissionCategory): PermissionValue {
@@ -79,9 +81,9 @@ export function categoryForTool(toolName: string): PermissionCategory | null {
   if (toolName === 'fs__create_file') return 'fs.create'
   if (toolName === 'fs__edit_file') return 'fs.edit'
   if (toolName === 'fs__delete_file') return 'fs.delete'
-  if (toolName === 'lsp__diagnostics') return 'lsp.evaluate'
   if (toolName === 'l4__evaluate') return 'l4.evaluate'
   if (toolName === 'meta__ask_user') return 'meta.askUser'
+  if (toolName === 'meta__post_status_update') return 'meta.statusUpdate'
   if (toolName.startsWith('l4-rules__')) return 'mcp.l4Rules'
   return null
 }

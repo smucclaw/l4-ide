@@ -1,79 +1,54 @@
 import * as vscode from 'vscode'
 import { resolveFileUri } from './fs.js'
 import { fetchL4Diagnostics } from './lsp.js'
+import {
+  awaitDirectiveResults,
+  createDirectiveSnapshotStore,
+  getCachedDirectiveResults,
+  hasCachedDirectiveResults,
+  renderDirectiveResults,
+} from './directive-snapshot.js'
 
 /**
  * l4__evaluate — report the L4 language server's most-recent evaluation
  * results for a file's directives (`#EVAL`, `#CHECK`, `#TRACE`, …).
  *
  * The jl4-lsp broadcasts every directive result via the
- * `l4/directiveResultsUpdated` notification after each compile. We tap
- * that notification from extension.mts (see `registerDirectiveCache`
- * below) and mirror the latest per-URI payload here. When the tool
- * runs, it opens the target file (forcing a compile if it's cold) and
- * returns the cached results.
+ * `l4/directiveResultsUpdated` notification after each compile.
+ * `directive-snapshot.ts` owns the per-URI live cache and the shared
+ * snapshot factory.
  *
- * A dedicated MCP-style evaluation endpoint (run a function on user-
- * supplied inputs) is a future phase — this first pass only surfaces
- * what the LSP already computes for directives that are literally
- * written into the source.
+ * Output modes:
+ *   - `"full"` (default) — every directive verbose. Maximises utility
+ *     for the model when it explicitly invokes the tool.
+ *   - `"changed"` — only directives added or whose value changed since
+ *     the last l4__evaluate call; everything else folds into a count.
+ *     Heavy bulk runs (e.g. 44 scenarios where 43 are unchanged)
+ *     compress from thousands of tokens to dozens. When nothing moved,
+ *     collapses to a single `"<N> unchanged"` header.
+ *
+ * Either way the snapshot is refreshed every call so subsequent
+ * `"changed"` queries always diff against the most recent baseline.
  */
 
-export type DirectiveResultRow = {
-  directiveId: string
-  prettyText: string
-  success: boolean | null
-  lineContent: string
-}
+// Public re-exports so `extension.mts` and other consumers don't need
+// to know about the new file split.
+export type { DirectiveResultRow } from './directive-snapshot.js'
+export { recordDirectiveResults } from './directive-snapshot.js'
 
-type Cache = Map<string, DirectiveResultRow[]>
+// Private snapshot store for l4__evaluate. fs__edit_file uses its own
+// store instance (see fs.ts) so the two tools don't pollute each
+// other's "what did I last report" view.
+const evaluateStore = createDirectiveSnapshotStore()
 
-// Shared cache: populated by extension.mts, read by the tool executor.
-// A module-level singleton is the cheapest way to bridge the LSP
-// notification stream and an on-demand tool call without plumbing
-// handles through every layer.
-const cache: Cache = new Map()
-const waiters = new Map<string, Array<() => void>>()
-
-/** Called from extension.mts whenever `l4/directiveResultsUpdated`
- *  fires. Updates the cache and wakes anyone awaiting fresh results
- *  for that URI. */
-export function recordDirectiveResults(
-  uri: string,
-  results: DirectiveResultRow[]
-): void {
-  cache.set(uri, results)
-  const list = waiters.get(uri)
-  if (list) {
-    waiters.delete(uri)
-    for (const fn of list) fn()
-  }
-}
-
-/** Await the NEXT push of results for `uri`, or resolve immediately
- *  if a push arrives before the timeout. */
-function waitForNextResults(uri: string, timeoutMs: number): Promise<void> {
-  return new Promise((resolve) => {
-    const list = waiters.get(uri) ?? []
-    list.push(resolve)
-    waiters.set(uri, list)
-    setTimeout(() => {
-      const still = waiters.get(uri)
-      if (still) {
-        waiters.set(
-          uri,
-          still.filter((fn) => fn !== resolve)
-        )
-      }
-      resolve()
-    }, timeoutMs)
-  })
-}
+export type L4EvaluateMode = 'changed' | 'full'
 
 export interface L4EvaluateArgs {
   path: string
   /** How long to wait (ms) for a fresh LSP push if the cache is cold. */
   timeoutMs?: number
+  /** Output mode. Default `"full"`. */
+  mode?: L4EvaluateMode
 }
 
 export async function l4Evaluate(args: L4EvaluateArgs): Promise<string> {
@@ -84,53 +59,78 @@ export async function l4Evaluate(args: L4EvaluateArgs): Promise<string> {
       `l4__evaluate: cannot resolve path ${args.path}. Only files inside a loaded workspace folder are supported.`
     )
   }
-  // Loading the doc triggers a compile in the LSP if it's cold; if
-  // it's already loaded this is a no-op.
+  // Loading the doc triggers an LSP compile if cold; if already open
+  // it's a no-op. We hold a reference only to keep VSCode from
+  // garbage-collecting the in-memory TextDocument before the LSP
+  // settles.
+  let doc: vscode.TextDocument
   try {
-    await vscode.workspace.openTextDocument(uri)
+    doc = await vscode.workspace.openTextDocument(uri)
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     throw new Error(`l4__evaluate: failed to open ${args.path}: ${msg}`)
   }
 
-  // Diagnostics gate: if the file doesn't type-check, directive
+  // Diagnostics gate: if the file fails to type-check, directive
   // evaluation results are either stale (from a prior good compile)
-  // or empty (the LSP skipped evaluation this round). Either way
-  // they're misleading — return the diagnostics text instead so the
-  // model fixes the errors first. `fetchL4Diagnostics` already opens
-  // the doc + waits for publishDiagnostics to settle, so we don't
-  // need an extra settle delay here.
+  // or empty (the LSP skipped evaluation this round) — return
+  // diagnostics so the model fixes the errors first. Match `fs.ts`'s
+  // edit-time check: gate strictly on `\d+ error[s]` in the
+  // diagnostic header. Info/hint diagnostics (jl4 emits one per
+  // directive trace) and warnings don't suppress evaluation — the
+  // model still wants the directive results in those cases.
   const diagnostics = await fetchL4Diagnostics(uri).catch(() => null)
-  if (diagnostics && !/:\s*clean\s*---/.test(diagnostics)) {
+  if (diagnostics && /\b\d+ errors?\b/.test(diagnostics)) {
     return diagnostics
   }
 
   const uriStr = uri.toString()
   const timeoutMs = Math.min(args.timeoutMs ?? 6000, 15000)
-  if (!cache.has(uriStr)) {
-    // Cache miss — wait for the next directiveResultsUpdated for this
-    // URI. If evaluation fails or the file has no directives, the LSP
-    // still posts an empty list.
-    await waitForNextResults(uriStr, timeoutMs)
+  if (!hasCachedDirectiveResults(uriStr)) {
+    await awaitDirectiveResults(uriStr, timeoutMs)
   }
-  const results = cache.get(uriStr) ?? []
+  const results = getCachedDirectiveResults(uriStr) ?? []
   const rel = vscode.workspace.asRelativePath(uri, false)
-  return JSON.stringify(
-    {
-      path: rel,
-      count: results.length,
-      note:
-        results.length === 0
-          ? 'No directives evaluated. Add a #EVAL line referencing a function, or wait for the LSP to finish compiling.'
-          : undefined,
-      results: results.map((r) => ({
-        directiveId: r.directiveId,
-        line: r.lineContent,
-        success: r.success,
-        value: r.prettyText,
-      })),
-    },
-    null,
-    2
-  )
+  const mode = args.mode ?? 'full'
+
+  const directiveLines = results
+    .map((r) => parseLineFromDirectiveId(r.directiveId))
+    .filter((n) => n > 0)
+  const header = buildHeader(rel, directiveLines, doc.lineCount)
+  const block = renderDirectiveResults({
+    results,
+    store: evaluateStore,
+    uri: uriStr,
+    mode,
+  })
+
+  if (results.length === 0) {
+    return `${header}\n${block}\n(Add a #EVAL line referencing a function, or wait for the LSP to finish compiling.)`
+  }
+  return `${header}\n${block}`
+}
+
+/**
+ * Build the `[<path> <start>-<end>/<total>]` header — same shape
+ * `fs__read_file` uses so the model can scan tool outputs uniformly.
+ * `start-end` is the line span of the directives this call evaluated
+ * (min..max of their source lines); `total` is the file's line count.
+ * When there are no parseable directive lines, falls back to `0/total`
+ * so the row still anchors to the file.
+ */
+function buildHeader(
+  rel: string,
+  directiveLines: number[],
+  totalFileLines: number
+): string {
+  if (directiveLines.length === 0) return `[${rel} 0/${totalFileLines}]`
+  const min = Math.min(...directiveLines)
+  const max = Math.max(...directiveLines)
+  return `[${rel} ${min}-${max}/${totalFileLines}]`
+}
+
+function parseLineFromDirectiveId(directiveId: string): number {
+  const head = directiveId.split(':', 1)[0]
+  const n = Number(head)
+  return Number.isFinite(n) ? n : 0
 }

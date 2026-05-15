@@ -5,21 +5,35 @@
   import ToolCallRow from './tool-call-row.svelte'
   import type { AssistantBlock } from '$lib/stores/ai-chat.svelte'
 
+  import type { Messenger } from 'vscode-messenger-webview'
+
   let {
     content,
     streaming,
+    pipelineActive = false,
     error,
     blocks,
     usage,
+    messenger,
     onRetry,
     onOpenFile,
     onOpenFileDiff,
   }: {
     content: string
     streaming: boolean
+    /** True until every queued user message has been folded into the
+     *  pipeline. Suppresses the per-turn usage badge and the "Files
+     *  changed" review card so they don't render mid-pipeline (when
+     *  this turn is "done" but more processing is still queued).
+     *  Defaults to false so untouched callers keep the prior
+     *  behaviour of showing the cards as soon as the turn settles. */
+    pipelineActive?: boolean
     error?: { message: string; code?: string }
     blocks?: AssistantBlock[]
     usage?: { promptTokens: number; completionTokens: number }
+    /** Webview→extension messenger; threaded into ToolCallRow so the
+     *  tool-call card can fetch L4 render-meta on demand. */
+    messenger: InstanceType<typeof Messenger> | null
     onRetry?: () => void
     onOpenFile: (callId: string) => void
     onOpenFileDiff: (callId: string) => void
@@ -161,7 +175,7 @@
 </script>
 
 <div class="assistant-row">
-  <div class="assistant-bubble">
+  <div class="assistant-bubble" class:is-streaming={streaming}>
     {#if blocks && blocks.length > 0}
       {#each blocks as block, i (blockKey(block, i))}
         {#if block.kind === 'text'}
@@ -172,6 +186,7 @@
         {:else if block.kind === 'tool-call'}
           <ToolCallRow
             call={block.call}
+            {messenger}
             {onOpenFile}
             onOpenDiff={onOpenFileDiff}
           />
@@ -201,10 +216,16 @@
         {:else if block.kind === 'tool-activity'}
           <!-- Server-side activity keeps the crimson dot up front (no
                expand chevron — nothing to expand on read-only backend
-               events) + bold label + monospace message. No right-side
-               status; the dot and message together are enough. -->
+               events) + bold label + monospace message. The dot
+               pulses iff this row is the trailing element in the
+               assistant bubble — driven by `:last-child` in the
+               <style> below, no JS bookkeeping. As soon as another
+               block (text-delta, another activity, a tool-call) is
+               appended after it, the row falls out of `:last-child`
+               and the dot freezes solid. Errored rows opt out via
+               the `is-error` class. -->
           <div
-            class="tool-call"
+            class="tool-call tool-activity-row"
             class:is-error={block.activity.status === 'error'}
           >
             <div class="tool-row">
@@ -226,7 +247,7 @@
       </div>
     {/if} -->
 
-    {#if !streaming && fileChanges.length > 0}
+    {#if !streaming && !pipelineActive && fileChanges.length > 0}
       <div
         class="review-card"
         role="group"
@@ -262,7 +283,7 @@
     {#if error}
       <ErrorBubble message={error.message} code={error.code} {onRetry} />
     {/if}
-    {#if !streaming && !error && usage}
+    {#if !streaming && !pipelineActive && !error && usage}
       <!-- Per-turn token footer. Kept quiet (small, grey, dotted
            separator) so it reads as metadata rather than content.
            Prompt tokens come first because they dominate the cost
@@ -319,6 +340,54 @@
     padding: 0.2em;
     border-radius: 0.2em;
     top: -0.15em;
+  }
+  /* Pulsate the activity dot on the trailing row only, AND only
+     while the turn is still streaming. Three independent gates,
+     all expressed in CSS:
+       1. `:last-child`  — once another block lands AFTER this row
+          (text, tool-call, another activity), it stops being last
+          and the dot freezes. "No new info from the model yet" is
+          encoded as DOM position, no JS bookkeeping.
+       2. `:not(.is-error)` — errored rows opt out so the failure
+          reads visually.
+       3. `.assistant-bubble.is-streaming` — once the turn settles
+          (server `done`, user Stop, new turn supersedes this one),
+          the bubble loses `is-streaming` and every dot under it
+          freezes. No status mutation needed — activity rows aren't
+          really "errored" just because the user stopped the run. */
+  .assistant-bubble.is-streaming
+    .tool-activity-row:last-child:not(.is-error)
+    .dot {
+    animation: tool-activity-dot-pulse 1.1s ease-in-out infinite;
+  }
+  @keyframes tool-activity-dot-pulse {
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.45;
+      transform: scale(0.78);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .assistant-bubble.is-streaming
+      .tool-activity-row:last-child:not(.is-error)
+      .dot {
+      animation-duration: 1.6s;
+    }
+    @keyframes tool-activity-dot-pulse {
+      0%,
+      100% {
+        opacity: 1;
+        transform: none;
+      }
+      50% {
+        opacity: 0.5;
+        transform: none;
+      }
+    }
   }
   .action {
     color: var(--vscode-foreground);

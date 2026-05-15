@@ -1,6 +1,7 @@
 import type {
   L4RpcRequestType,
   L4RpcNotificationType,
+  FunctionParameter,
 } from './custom-protocol.js'
 import {
   makeL4RpcRequestType,
@@ -61,7 +62,9 @@ export interface AddInspectorResultMessage {
   directiveId: string
   srcPos: SrcPos
   result: DirectiveResult
-  lineContent: string
+  /** Full directive body (source-range slice joined by `\n`). Render
+   *  sites collapse to the first non-blank line for one-line headers. */
+  body: string
 }
 
 export const AddInspectorResult: RequestType<
@@ -97,7 +100,8 @@ export interface SyncInspectorResultsMessage {
     directiveId: string
     prettyText: string
     success: boolean | null
-    lineContent: string
+    /** Full directive body (source-range slice joined by `\n`). */
+    body: string
   }>
 }
 
@@ -191,6 +195,11 @@ export interface SidebarDeploymentInfo {
   status?: 'pending' | 'compiling' | 'ready' | 'failed'
   error?: string
   functions: ExportedFunctionInfo[]
+  /** True when the backend returned a non-empty `metadata.files` list.
+   * Empty/missing on a `ready` deployment indicates the proxy stripped
+   * the file list (read scope absent), so the Download action should
+   * be hidden from the deployment menu. */
+  hasFiles?: boolean
 }
 
 /** Sidebar requests list of deployments */
@@ -230,6 +239,28 @@ export const RequestSidebarUndeploy: RequestType<
   { success: boolean; error?: string }
 > = {
   method: 'requestSidebarUndeploy',
+}
+
+/** Sidebar requests download of a deployment's sources to disk.
+ * The extension owns the folder picker and disk writes; the webview
+ * just sends the deployment id and surfaces the result. */
+export interface SidebarDownloadDeploymentResponse {
+  success: boolean
+  /** Absolute path of the folder the files were written to. */
+  folderPath?: string
+  /** Number of files written on success. */
+  fileCount?: number
+  /** True when the user cancelled the folder picker or the
+   * overwrite prompt — UI should stay quiet. */
+  cancelled?: boolean
+  error?: string
+}
+
+export const RequestSidebarDownloadDeployment: RequestType<
+  { deploymentId: string },
+  SidebarDownloadDeploymentResponse
+> = {
+  method: 'requestSidebarDownloadDeployment',
 }
 
 /** Sidebar polls deployment compilation status */
@@ -431,6 +462,28 @@ export interface AiChatStartParams {
    * system message so the active file doesn't leak into context.
    * Defaults to true if unset. */
   includeActiveFile?: boolean
+  /** Snapshot of the active-file chip the webview was showing at
+   * send time. The extension uses this in
+   * `buildEditorContextMessage` instead of re-querying
+   * `vscode.window.activeTextEditor` at assemble time. Prevents
+   * two divergence cases:
+   *   1. Multi-window setups — each VSCode window has its own
+   *      activeTextEditor, but the user reasons about "what the
+   *      chip showed" in the window they last clicked on.
+   *   2. Focus-change races — between the webview's last chip
+   *      update and the extension assembling the request, the
+   *      activeTextEditor can shift to a different file.
+   *
+   * Live cursor / selection / openFiles still come from the
+   * extension's own window — they're inherently editor-scoped.
+   * The extension only surfaces them when the snapshot's path
+   * matches a visible editor (i.e. same window, same file);
+   * otherwise it suppresses them so the system message is a
+   * coherent point-in-time view rather than a Frankenstein. */
+  activeFile?: {
+    path: string
+    name: string
+  }
   /** Retry path: when true, the extension skips adding a user
    * message to the outgoing body and just asks the server to run
    * another turn against the conversation's existing on-disk
@@ -491,12 +544,111 @@ export const AiChatAbort: NotificationType<{ turnId: string }> = {
   method: 'aiChatAbort',
 }
 
-/** Extension → webview: turn started, id + model assigned. */
+/** Webview → extension: append a user message to an in-flight turn's
+ * queue. The extension ends the current sub-turn at its next
+ * intersection — either a natural finish (`stop`/`length`) or the
+ * end of the in-flight tool round — and spawns a fresh sub-turn
+ * (signalled via `AiChatTurnSpawn`) seeded with the drained user
+ * text. When the prior sub-turn ended mid-tool-round, its leftover
+ * `role:'tool'` results ride along on the new sub-turn's request so
+ * the proxy commits a clean assistant(tool_calls) → tool(results)
+ * → user sequence; otherwise the new sub-turn just carries the
+ * editor-context + user delta.
+ *
+ * The webview is expected to render the user bubble immediately at
+ * `send()` time for instant visual feedback; this notification just
+ * tells the extension where to plug the text in. */
+export interface AiChatInjectParams {
+  /** Turn id of the in-flight turn this message attaches to. The
+   *  extension uses this to look up the right queue. */
+  turnId: string
+  /** Webview-minted id for THIS specific injection. The extension
+   *  echoes it back in `AiChatQueueConsumed` so the webview can
+   *  remove the right entry from its pending-queue array (and
+   *  unstyle the matching user bubble) instead of decrementing a
+   *  raw counter. Lets a dropped/duplicated event fail loudly
+   *  rather than silently miscount. */
+  injectionId: string
+  /** Conversation the in-flight turn belongs to. Used as a sanity
+   *  check; the extension drops the inject if this doesn't match the
+   *  active turn's conversation. */
+  conversationId: string
+  text: string
+  mentions: Array<{ kind: 'file' | 'symbol' | 'selection'; label: string }>
+  attachments: AiChatAttachment[]
+  includeActiveFile?: boolean
+  activeFile?: {
+    path: string
+    name: string
+  }
+}
+
+export const AiChatInject: NotificationType<AiChatInjectParams> = {
+  method: 'aiChatInject',
+}
+
+/** Extension → webview: a new sub-turn has spawned within an
+ * existing turn's lifecycle because queued user messages remained
+ * after the model finished naturally. The webview should mount a
+ * fresh streaming assistant placeholder under `subTurnId` so abort,
+ * text-deltas, and tool-call events route to it. The conversation id
+ * is unchanged — only the per-turn abort key advances.
+ *
+ * Emitted BEFORE any `text-delta` of the new sub-turn lands so the
+ * placeholder always exists by the time content arrives. */
+export const AiChatTurnSpawn: NotificationType<{
+  conversationId: string
+  subTurnId: string
+}> = {
+  method: 'aiChatTurnSpawn',
+}
+
+/** Extension → webview: the listed `injectionIds` (minted by the
+ * webview at send-time and echoed back here) have been drained into
+ * a fresh sub-turn. The webview removes the matching entries from
+ * its pending-queue array (so the user bubbles flip from greyed-out
+ * to full opacity); an unack'd id stays in the array so a dropped
+ * event surfaces as a stuck pipeline rather than a silent miscount. */
+export const AiChatQueueConsumed: NotificationType<{
+  conversationId: string
+  injectionIds: string[]
+}> = {
+  method: 'aiChatQueueConsumed',
+}
+
+/** Extension → webview: turn started, id + model assigned. `turnId`
+ * is the same client-generated key the webview shipped on
+ * `AiChatStart` — echoed back so the webview can match this `started`
+ * event to the exact pending buffer it belongs to. Without this, a
+ * rapid sequence of new-chat submissions can land each one's
+ * `started` against the WRONG local buffer (last-writer-wins on the
+ * single pending slot), attaching one turn's bubbles to another
+ * turn's server id. */
 export const AiChatStarted: NotificationType<{
   conversationId: string
+  turnId: string
   model: string
 }> = {
   method: 'aiChatStarted',
+}
+
+/** Webview → extension: ask for the current active file + selection
+ * synchronously. Called by the chat input at submit time so the
+ * webview can render the user bubble's chip with a `:start-end`
+ * range badge that matches what `<editor-context>` will end up
+ * carrying — without needing a per-keystroke selection-change
+ * subscription. Returns null fields when no editor is active. */
+export const AiGetActiveFileSelection: RequestType<
+  void,
+  {
+    uri: string | null
+    name: string | null
+    path: string | null
+    inWorkspace: boolean
+    selection?: { startLine: number; endLine: number }
+  }
+> = {
+  method: 'aiGetActiveFileSelection',
 }
 
 /** Extension → webview: a client-side tool was invoked by the model.
@@ -531,7 +683,6 @@ export type AiPermissionCategory =
   | 'fs.create'
   | 'fs.edit'
   | 'fs.delete'
-  | 'lsp.evaluate'
   | 'l4.evaluate'
   | 'mcp.l4Rules'
   | 'meta.askUser'
@@ -553,6 +704,26 @@ export const AiPermissionsSet: NotificationType<{
   value: AiPermissionValue
 }> = {
   method: 'aiPermissionsSet',
+}
+
+/** Webview asks the extension for the L4 render-meta of an MCP tool.
+ *  The extension parses `[deployId/fnName]` from the cached MCP tool
+ *  description, fetches `/deployments/{id}/functions/{fn}` (cached by
+ *  deployment version), and returns the structured schemas with
+ *  `x-l4-type` annotations recursively. Used by the chat tool-call
+ *  card to render JSON arguments back into L4 syntax. Returns
+ *  `{ kind: 'unavailable' }` if the tool isn't an l4-rules rule, or
+ *  if the fetch fails — the caller falls back to plain JSON view. */
+export const AiToolRenderMeta: RequestType<
+  { toolName: string },
+  | {
+      kind: 'meta'
+      parameters: FunctionParameter
+      returnSchema?: FunctionParameter
+    }
+  | { kind: 'unavailable' }
+> = {
+  method: 'aiToolRenderMeta',
 }
 
 /** Extension → webview: a server-side tool activity event (from the
@@ -627,7 +798,9 @@ export const AiFileOpenDiff: NotificationType<{
  * `path` is the workspace-relative path (or absolute if the file is
  * outside every loaded workspace folder). `inWorkspace` flips to
  * false for outside-workspace files — the fs tools refuse those, and
- * the UI can surface that to the user. */
+ * the UI can surface that to the user. Selection range is NOT pushed
+ * here; the webview fetches it on demand via
+ * `AiGetActiveFileSelection` at submit time. */
 export const AiActiveFile: NotificationType<{
   uri: string | null
   name: string | null

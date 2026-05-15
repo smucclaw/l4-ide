@@ -41,14 +41,9 @@
       hint: 'Send a file in your workspace to trash',
     },
     {
-      id: 'lsp.evaluate',
-      label: 'Run L4 diagnostics',
-      hint: 'Check L4 files for validity (LSP)',
-    },
-    {
       id: 'l4.evaluate',
-      label: 'Evaluate L4 directives',
-      hint: 'Evaluate the results of #EVAL, #TRACE, ...',
+      label: 'Run L4 diagnostics',
+      hint: 'Check L4 files for validity and run directives via LSP (#EVAL, #ASSERT, #TRACE, ...)',
     },
     {
       id: 'mcp.l4Rules',

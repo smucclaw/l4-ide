@@ -7,14 +7,15 @@
     AiChatAskUser,
     AiChatDone,
     AiChatError,
+    AiChatQueueConsumed,
     AiChatSeedDraft,
     AiChatStarted,
     AiChatTextDelta,
     AiChatThinkingDelta,
     AiChatToolActivity,
     AiChatToolCall,
+    AiChatTurnSpawn,
     AiUsageUpdate,
-    type GetSidebarConnectionStatusResponse,
   } from 'jl4-client-rpc'
   import { createAiChatStore } from '$lib/stores/ai-chat.svelte'
   import MessageList from './message-list.svelte'
@@ -25,23 +26,19 @@
 
   let {
     messenger,
-    connectionStatus,
     visible,
   }: {
     messenger: InstanceType<typeof Messenger> | null
-    connectionStatus: GetSidebarConnectionStatusResponse
     visible: boolean
   } = $props()
 
   const store = createAiChatStore(() => messenger)
 
-  // Seed the signed-in flag from the existing sidebar connection status
-  // so the unauth CTA isn't shown while the auth-status notification is
-  // still in flight. The AiAuthStatus notification overrides this as
-  // soon as it arrives.
-  $effect(() => {
-    store.onAuthStatus({ signedIn: connectionStatus.connected })
-  })
+  // The jl4-service connection is independent of Legalese AI
+  // credentials (a self-hosted service does NOT imply AI access).
+  // The store defaults `signedIn` to false; the extension fires
+  // AiAuthStatus on register so the correct value arrives before the
+  // user has a chance to interact.
 
   let historyOpen = $state(false)
   let settingsOpen = $state(false)
@@ -58,6 +55,8 @@
     m.onNotification(AiChatError, (p) => store.onError(p))
     m.onNotification(AiChatToolCall, (p) => store.onToolCall(p))
     m.onNotification(AiChatToolActivity, (p) => store.onToolActivity(p))
+    m.onNotification(AiChatTurnSpawn, (p) => store.onTurnSpawn(p))
+    m.onNotification(AiChatQueueConsumed, (p) => store.onQueueConsumed(p))
     m.onNotification(AiUsageUpdate, (p) => store.onUsageUpdate(p))
     m.onNotification(AiAuthStatus, (p) => store.onAuthStatus(p))
     m.onNotification(AiActiveFile, (p) => store.onActiveFile(p))
@@ -166,8 +165,10 @@
       <MessageList
         turns={store.current.turns}
         streaming={store.current.streaming}
+        pipelineActive={store.pipelineActive}
         pendingApproval={store.pendingApproval}
         pendingQuestion={store.pendingQuestion}
+        {messenger}
         {onRetry}
         onApproveTool={(callId, decision) =>
           store.approveTool(callId, decision)}

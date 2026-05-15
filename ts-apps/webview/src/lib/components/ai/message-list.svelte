@@ -10,11 +10,15 @@
     PendingQuestion,
   } from '$lib/stores/ai-chat.svelte'
 
+  import type { Messenger } from 'vscode-messenger-webview'
+
   let {
     turns,
     streaming,
+    pipelineActive,
     pendingApproval,
     pendingQuestion,
+    messenger,
     onRetry,
     onApproveTool,
     onAnswerQuestion,
@@ -25,11 +29,19 @@
     /** True while the current conversation has an open stream. Drives
      *  the bottom-of-chat § spinner. */
     streaming: boolean
+    /** True until every queued user message has been folded into the
+     *  pipeline. Forwarded to AssistantMessage to gate the per-turn
+     *  usage badge and the "Files changed" review card so they only
+     *  appear once nothing else is pending. */
+    pipelineActive: boolean
     /** First tool call awaiting approval, if any. When present, the
      *  bottom action bar replaces the spinner with Accept / Reject. */
     pendingApproval: RenderedToolCall | null
     /** Active meta__ask_user question awaiting an answer, or null. */
     pendingQuestion: PendingQuestion | null
+    /** Webview→extension messenger; threaded into AssistantMessage so
+     *  tool-call cards can fetch render-meta on demand. */
+    messenger: InstanceType<typeof Messenger> | null
     onRetry?: () => void
     onApproveTool: (
       callId: string,
@@ -53,7 +65,11 @@
     stickToBottom = near
     showJumpButton = !near
 
-    // Find the last user message whose offsetTop is less than scrollTop
+    // Find the last user message whose offsetTop is less than
+    // scrollTop. Only consumed bubbles are eligible for stickiness
+    // — pending injections are filtered out at offset-collection
+    // time below, so they never appear in this list and can never
+    // become the sticky header.
     const scrollTop = scrollEl.scrollTop
     let lastUserAboveScroll = -1
 
@@ -84,6 +100,10 @@
       for (let i = 0; i < children.length; i++) {
         const child = children[i] as HTMLElement
         if (!child.classList.contains('user-message-wrapper')) continue
+        // Pending injections opt out of stickiness — they shouldn't
+        // become the floating header until the extension has
+        // actually consumed them.
+        if (child.dataset.pending === 'true') continue
 
         const userIndex = parseInt(child.dataset.userIndex || '-1', 10)
         if (userIndex >= 0) {
@@ -125,19 +145,23 @@
     {#if turn.role === 'user'}
       {@const userIndex =
         turns.slice(0, i + 1).filter((t) => t.role === 'user').length - 1}
+      {@const pending = !!turn.injectionId}
       <UserMessage
         content={turn.content}
         chips={turn.chips}
-        shouldStick={stickyUserIndex === userIndex}
+        shouldStick={!pending && stickyUserIndex === userIndex}
         {userIndex}
+        {pending}
       />
     {:else}
       <AssistantMessage
         content={turn.content}
         streaming={!!turn.streaming}
+        {pipelineActive}
         error={turn.error}
         blocks={turn.blocks}
         usage={turn.usage}
+        {messenger}
         {onRetry}
         {onOpenFile}
         {onOpenFileDiff}

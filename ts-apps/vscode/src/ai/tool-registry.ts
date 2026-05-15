@@ -17,7 +17,7 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
     function: {
       name: 'fs__read_file',
       description:
-        'Read a file or list a directory, one line per entry. Response prefixed with `[<path> <start>-<end>/<total>]` (or `[<path> pattern="…" matches=N chunks=K/M]` with `pattern`); a trailing `, next startLine=<n>` marks more available. Hard cap 100 lines / 4000 chars per call. Directories: `name/` for subdirs, directories first. `.git`, `node_modules`, `.DS_Store` hidden.',
+        'Read a file or list a directory, one line per entry. Response prefixed with `[<path> <start>-<end>/<total>]` (or `[<path> pattern="…" matches=N chunks=K/M]` with `pattern`); when `<end> < <total>` more lines remain — call again with `startLine=<end>+1`. Hard cap 100 lines / 4000 chars per call. Directories: `name/` for subdirs, directories first. `.git`, `node_modules`, `.DS_Store` hidden.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -34,7 +34,7 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
           pattern: {
             type: 'string',
             description:
-              'Case-insensitive regex; literal-substring fallback. For files, matches carry 2 lines of context (hits prefixed `>>>`, context `   `, chunks joined `---`). For directories, matching entries only.',
+              'Case-insensitive regex; literal-substring fallback. For files, matches carry 2 lines of context (hits prefixed `>>>`, context `   `, chunks joined `---`). For directories, the tree is walked recursively and file CONTENTS are grepped — results emitted as `<path>:<lineno>: <text>` rows.',
           },
         },
         required: ['path'],
@@ -46,18 +46,14 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
     function: {
       name: 'fs__create_file',
       description:
-        'Fails if the file already exists — use fs__edit_file to modify an existing file.',
+        'Create a file seeded with a single line "// new file content". Fails if the file already exists. To fill it, follow up with fs__edit_file.',
       parameters: {
         type: 'object',
         additionalProperties: false,
         properties: {
           path: { type: 'string', description: 'Workspace path.' },
-          content: {
-            type: 'string',
-            description: 'Full UTF-8 contents. Pass "" for an empty file.',
-          },
         },
-        required: ['path', 'content'],
+        required: ['path'],
       },
     },
   },
@@ -66,7 +62,7 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
     function: {
       name: 'fs__edit_file',
       description:
-        'String-anchored find/replace. Without `startLine`, `old` must appear in the file EXACTLY ONCE — include surrounding context lines if the natural snippet repeats. With `startLine`, the first occurrence after that line is taken.',
+        'String-anchored find/replace. Without `startLine`, `old` must appear in the file EXACTLY ONCE — include surrounding context lines if the natural snippet repeats. With `startLine`, the first occurrence after that line is taken. Pass `old: ""` to replace the ENTIRE file with `new` — use this right after fs__create_file to fill the new file with content.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -75,7 +71,7 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
           old: {
             type: 'string',
             description:
-              'Exact text to replace. Must be unique in the file unless `startLine` is set.',
+              'Exact text to replace. Must be unique in the file unless `startLine` is set. Pass an empty string ("") to overwrite the entire file with `new`.',
           },
           new: {
             type: 'string',
@@ -111,25 +107,9 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
   {
     type: 'function',
     function: {
-      name: 'lsp__diagnostics',
-      description:
-        "Fetch the L4 language server's current diagnostics for a file. Call after every fs__edit_file / fs__create_file to verify the file still type-checks. Returns `{ total, counts, diagnostics[{ line, column, severity, message, source, code }] }` with 1-indexed positions; empty `diagnostics[]` = clean.",
-      parameters: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          path: { type: 'string', description: 'Workspace path.' },
-        },
-        required: ['path'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
       name: 'l4__evaluate',
       description:
-        "Returns the L4 server's latest results for every `#EVAL` / `#CHECK` / `#TRACE` directive in the file: `{ path, count, results[{ directiveId, line, success, value }] }`. Runs lsp diagnostics first internally.",
+        'Type-check and run `#EVAL`/`#CHECK`/`#TRACE`. Returns errors if not clean, else directive results.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -137,8 +117,13 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
           path: { type: 'string', description: 'Workspace path.' },
           timeoutMs: {
             type: 'number',
+            description: 'Max compile wait ms (default 6000, cap 15000).',
+          },
+          mode: {
+            type: 'string',
+            enum: ['changed', 'full'],
             description:
-              'Max ms to wait for a fresh compile before returning empty. Default 6000, max 15000.',
+              '`full` (default) prints every directive value. `changed` prints only directives added or whose value changed since the last l4__evaluate call; collapses to a single count line when nothing moved.',
           },
         },
         required: ['path'],
@@ -166,6 +151,26 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
           },
         },
         required: ['question'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'meta__post_status_update',
+      description:
+        'Stream a brief progress update to the user mid-turn. The text renders inline as plain assistant prose (not as a tool-call card). Use during long multi-step tasks (doc lookups, validation loops, multi-file drafting) Keep it under ~120 characters, present tense, no markdown headings. Do not repeat same status, and do not duplicate final answer.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          text: {
+            type: 'string',
+            description:
+              'Short user-facing status sentence. Plain prose. Will be appended to the assistant message as if written it inline.',
+          },
+        },
+        required: ['text'],
       },
     },
   },

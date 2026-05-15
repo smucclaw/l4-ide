@@ -12,35 +12,6 @@
 
   let { text, streaming }: { text: string; streaming: boolean } = $props()
 
-  /**
-   * Block-by-block streaming: while tokens are still arriving, split
-   * the buffer at the last "safe" newline-newline boundary and only
-   * parse the committed prefix. The trailing in-flight block renders
-   * as plain preformatted text with a blinking cursor until its
-   * enclosing block closes, at which point the cut moves forward and
-   * that block is committed. No flicker from half-parsed code fences
-   * or lists.
-   */
-  function findSafeCut(s: string): number {
-    // If we're inside an open ``` fence, cut before it.
-    const fenceMatches = s.match(/```/g)
-    const fenceCount = fenceMatches?.length ?? 0
-    if (fenceCount % 2 === 1) {
-      const lastFenceStart = s.lastIndexOf('```')
-      const safeBefore = s.lastIndexOf('\n\n', lastFenceStart)
-      return safeBefore > 0 ? safeBefore + 2 : 0
-    }
-    // Otherwise the last \n\n is a safe cut point (preceded by a
-    // complete block). If we never saw one, nothing committed yet.
-    const idx = s.lastIndexOf('\n\n')
-    return idx > 0 ? idx + 2 : 0
-  }
-
-  const committed = $derived(
-    streaming ? text.slice(0, findSafeCut(text)) : text
-  )
-  const trailing = $derived(streaming ? text.slice(committed.length) : '')
-
   // Custom renderer: L4 code via @repo/l4-highlight (matches the Docs
   // and Inspector tabs); other code blocks render as plain HTML so
   // the webview CSS can style them consistently. Every code block is
@@ -68,18 +39,41 @@
   // http(s) links via VSCode; keep default rendering.
   marked.setOptions({ breaks: false, gfm: true })
 
-  const committedHtml = $derived(
-    (marked.parse(committed, { renderer, async: false }) as string) || ''
-  )
+  const CURSOR = '<span class="cursor">▋</span>'
 
-  // Match the in-flight block's geometry to whatever element marked
-  // will produce once this slice commits, so the content doesn't
-  // visibly settle a few pixels when the cut advances. Only a handful
-  // of block kinds are worth detecting here; everything else renders
-  // as a paragraph by default.
-  const trailingKind = $derived<'code' | 'paragraph'>(
-    /^\s*```/.test(trailing) ? 'code' : 'paragraph'
-  )
+  // Parse the whole buffer on every update. An open ``` fence
+  // mid-stream would put marked into "consume rest of doc as code"
+  // mode and produce a giant unstyled blob, so synthesize a closing
+  // fence first — once the real close lands the synthetic one drops
+  // out. Reactivity is per-block: each <StreamingMarkdown> instance
+  // re-runs marked only on its own block's text, never on the full
+  // conversation.
+  const html = $derived.by(() => {
+    if (!text) return ''
+    const fences = (text.match(/```/g) ?? []).length
+    const safe = fences % 2 === 1 ? text + '\n```' : text
+    const parsed = marked.parse(safe, { renderer, async: false }) as string
+    return streaming ? withCursor(parsed) : parsed
+  })
+
+  // Inject the blinking caret inside the last "leaf" element's body
+  // so it sits inline at the end of the last word/glyph rather than
+  // dropping to its own line below a block-level <p>. Code panels
+  // (from renderer.code) end in `</button></div>`, so we go inside
+  // the last `</code>` for those.
+  function withCursor(parsedHtml: string): string {
+    const trimmed = parsedHtml.replace(/\s+$/, '')
+    if (/<\/button><\/div>$/.test(trimmed)) {
+      const idx = trimmed.lastIndexOf('</code>')
+      if (idx >= 0) return trimmed.slice(0, idx) + CURSOR + trimmed.slice(idx)
+    }
+    const m = trimmed.match(/<\/(p|li|h[1-6]|blockquote|td|th)>(?:<\/[^>]+>)*$/)
+    if (m) {
+      const idx = m.index ?? trimmed.length
+      return trimmed.slice(0, idx) + CURSOR + trimmed.slice(idx)
+    }
+    return trimmed + CURSOR
+  }
 
   // Delegated click handler for `.code-copy-btn` buttons injected by
   // the marked renderer. We can't bind Svelte handlers through
@@ -116,12 +110,7 @@
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="streaming-md" onclick={onCopyClick}>
-  {@html committedHtml}
-  {#if trailing}
-    <div class="in-flight in-flight-{trailingKind}">
-      {trailing}<span class="cursor">▋</span>
-    </div>
-  {/if}
+  {@html html}
 </div>
 
 <style>
@@ -248,13 +237,44 @@
   .streaming-md :global(h6) {
     font-size: 1em;
   }
+  /* Tailwind's preflight (loaded via app.css) strips list-style on
+     ul/ol globally. Restore disc / decimal markers here so assistant
+     prose actually shows bullets and numbers, and switch nested ul
+     levels through circle → square the way browsers default. */
   .streaming-md :global(ul),
   .streaming-md :global(ol) {
     margin: 8px 0 10px;
     padding-left: 20px;
   }
+  .streaming-md :global(ul) {
+    list-style: disc outside;
+  }
+  .streaming-md :global(ul ul) {
+    list-style-type: circle;
+  }
+  .streaming-md :global(ul ul ul) {
+    list-style-type: square;
+  }
+  .streaming-md :global(ol) {
+    list-style: decimal outside;
+  }
   .streaming-md :global(li) {
     margin: 2px 0;
+  }
+  .streaming-md :global(li::marker) {
+    color: var(--vscode-descriptionForeground);
+  }
+  .streaming-md :global(blockquote) {
+    border-left: 3px solid var(--vscode-panel-border, #444);
+    margin: 8px 0;
+    padding: 6px 12px;
+    color: var(--vscode-descriptionForeground);
+  }
+  .streaming-md :global(blockquote > :first-child) {
+    margin-top: 0;
+  }
+  .streaming-md :global(blockquote > :last-child) {
+    margin-bottom: 0;
   }
   .streaming-md :global(a) {
     color: var(--vscode-textLink-foreground);
@@ -283,39 +303,15 @@
     padding: 4px 8px;
   }
 
-  /* In-flight block: mirrors the paragraph or pre geometry that marked
-     will emit once the cut advances, so committing doesn't shift the
-     content downward by the margin/padding delta. */
-  .in-flight {
-    white-space: pre-wrap;
-    word-break: break-word;
-    color: inherit;
-  }
-  .in-flight-paragraph {
-    font-family: inherit;
-    background: transparent;
-    padding: 0;
-    margin: 8px 0 10px;
-  }
-  .in-flight-code {
-    font-family: var(--vscode-editor-font-family, monospace);
-    font-size: 12px;
-    line-height: 1.45;
-    background: var(--vscode-editor-background);
-    border: 1px solid var(--vscode-panel-border, #444);
-    border-radius: 4px;
-    padding: 8px 10px;
-    margin: 8px 0;
-    overflow-x: auto;
-  }
-
-  .cursor {
+  /* Streaming caret. Injected via {@html} so the selector must be
+     :global() to survive Svelte's scoped-CSS pruning. */
+  .streaming-md :global(.cursor) {
     display: inline-block;
     margin-left: 1px;
     animation: blink 0.9s steps(1) infinite;
   }
 
-  @keyframes blink {
+  @keyframes -global-blink {
     50% {
       opacity: 0;
     }

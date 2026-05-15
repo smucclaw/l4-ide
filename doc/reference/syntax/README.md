@@ -299,6 +299,8 @@ result MEANS defs.taxableIncome   -- via alias
 **Integers:** `42`, `-17`, `0`  
 **Rationals:** `3.14`, `-0.5`, `2.718`
 
+**Thousand separators:** Underscores may appear between digits as a visual grouping aid. They are stripped before the numeric value is computed, so `100_000` is exactly `100000` and `1_000_000.50_5` is exactly `1000000.505`. A literal must start with a digit and must not end with an underscore (so `_100` and `100_` are rejected).
+
 ### Strings
 
 **Basic:** `"hello world"`, `"L4 language"`  

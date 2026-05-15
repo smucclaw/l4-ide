@@ -10,19 +10,73 @@ import type { AuthManager } from '../auth.js'
  * message (after ai-proxy's cached L4 reference) so it doesn't break
  * the provider's prompt cache. Only built when the user has the
  * "attach active file" chip enabled for this turn.
+ *
+ * `chipSnapshot`, when provided, is the active-file state the
+ * webview was showing at send time. It overrides
+ * `vscode.window.activeTextEditor` so the system message reflects
+ * exactly what the user saw on the chip — even across multi-window
+ * setups (each window has its own activeTextEditor) or focus
+ * changes between chip update and request assembly. cursorLine /
+ * selection / openFiles still come from the live editor (those are
+ * inherently editor-scoped and the snapshot doesn't carry them).
  */
-export function buildEditorContextMessage(): AiChatMessage | null {
+export function buildEditorContextMessage(chipSnapshot?: {
+  name: string
+  path: string
+}): AiChatMessage | null {
   const editor = vscode.window.activeTextEditor
   const visibleFiles = vscode.window.visibleTextEditors
     .filter(
       (e) => e.document.languageId === 'l4' || e.document.languageId === 'jl4'
     )
     .map((e) => workspaceRelative(e.document.uri))
-  if (!editor && visibleFiles.length === 0) return null
+  if (!chipSnapshot && !editor && visibleFiles.length === 0) return null
 
   const lines: string[] = []
   lines.push('<editor-context>')
-  if (editor) {
+
+  // Find the editor that's actually showing the chip's path. We look
+  // through every visible editor (not just `activeTextEditor`) so a
+  // focus race between chip update and request assembly — or the
+  // sidebar webview itself momentarily owning focus — can't drop
+  // the selection. activeTextEditor is preferred when it matches so
+  // split-pane setups use the focused pane.
+  let snapshotEditor: vscode.TextEditor | undefined
+  if (chipSnapshot) {
+    if (
+      editor &&
+      workspaceRelative(editor.document.uri) === chipSnapshot.path
+    ) {
+      snapshotEditor = editor
+    } else {
+      snapshotEditor = vscode.window.visibleTextEditors.find(
+        (e) => workspaceRelative(e.document.uri) === chipSnapshot.path
+      )
+    }
+  }
+  const snapshotMatchesLiveEditor = !!snapshotEditor
+
+  if (chipSnapshot) {
+    // Snapshot wins — use the path the webview chip was showing at
+    // send time. Live editor state (cursor / selection / openFiles)
+    // only flows through when SOME visible editor in this window
+    // shows the same file. The selection range (`selectionLines: A-B`)
+    // is emitted as a pointer, not as content — the model can call
+    // `fs__read_file` with a line range if it actually wants the
+    // bytes, which keeps the system message tight on context.
+    lines.push(
+      `activeFile: ${chipSnapshot.path} (call fs__read_file on this path if you need the body)`
+    )
+    if (snapshotEditor) {
+      const pos = snapshotEditor.selection.active
+      lines.push(`cursorLine: ${pos.line + 1}`)
+      if (!snapshotEditor.selection.isEmpty) {
+        const startLine = snapshotEditor.selection.start.line + 1
+        const endLine = snapshotEditor.selection.end.line + 1
+        lines.push(`selectionLines: ${startLine}-${endLine}`)
+      }
+    }
+  } else if (editor) {
     const uri = editor.document.uri
     const rel = workspaceRelative(uri)
     const outsideWorkspace =
@@ -34,13 +88,19 @@ export function buildEditorContextMessage(): AiChatMessage | null {
         : `activeFile: ${rel} (call fs__read_file on this path if you need the body)`
     )
     lines.push(`cursorLine: ${pos.line + 1}`)
-    const sel = editor.document.getText(editor.selection)
-    if (sel.trim().length > 0) {
-      lines.push('selection: |')
-      for (const sline of sel.split('\n')) lines.push(`  ${sline}`)
+    if (!editor.selection.isEmpty) {
+      const startLine = editor.selection.start.line + 1
+      const endLine = editor.selection.end.line + 1
+      lines.push(`selectionLines: ${startLine}-${endLine}`)
     }
   }
-  if (visibleFiles.length > 0) {
+  // Only surface `openFiles` from the live window when there's no
+  // snapshot OR the snapshot points at a file that's also visible
+  // in this window. Otherwise the visible-files list belongs to a
+  // different VSCode window than the activeFile line and would
+  // mislead the model.
+  const showOpenFiles = !chipSnapshot || snapshotMatchesLiveEditor
+  if (showOpenFiles && visibleFiles.length > 0) {
     lines.push('openFiles:')
     for (const f of visibleFiles) lines.push(`  - ${f}`)
   }
