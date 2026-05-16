@@ -337,32 +337,107 @@
 
   type ColorizedEntry = { header: string; body: string }
   /**
-   * Format a result value string by converting commas into line-breaks
-   * with indentation based on parenthesis nesting depth.
-   * Parentheses that wrap record values (e.g. `(Foo WITH ...)`) are stripped.
+   * Re-lay-out an L4 value string for the inspector. The string comes
+   * from the LSP already in named-field (`Type WITH name IS …`) form;
+   * this only handles whitespace/indentation, never field-name lookup.
+   *
+   * Layout rules, all driven off a small frame stack so depth unwinds
+   * correctly when a construct ends:
+   *  - `LIST ` holding records/constructors → own line, elements indented;
+   *    scalar lists keep the legacy comma-per-line behaviour.
+   *  - ` WITH ` → break, fields indented one level deeper.
+   *  - comma + `<ident> IS …` → WITH-field separator (break at field depth).
+   *  - comma + `<Type> WITH …` → next element of the nearest enclosing
+   *    LIST (depth pops back to that list's element level).
+   *  - ` OF ` → constructor application stays flat; commas in its
+   *    positional arg list are literal until a `)` or one of the
+   *    structural commas above ends the run.
+   *  - `(` / `)` strip and save/restore depth + OF state.
    */
   function formatResultValue(text: string): string {
     let result = ''
     let depth = 0
+    let inOf = false
+    type Frame = {
+      kind: 'list' | 'with' | 'paren'
+      depth: number
+      inOf: boolean
+    }
+    const stack: Frame[] = []
     const indent = () => '\n' + '  '.repeat(depth)
+    // `<ident> IS ` / `<ident> WITH ` where ident is a backticked name
+    // or a plain identifier. OF positional args are never named bindings,
+    // so these lookaheads unambiguously mark structural boundaries.
+    const isFieldAssign = (s: string): boolean =>
+      /^(?:`[^`]*`|[A-Za-z_]\w*) IS /.test(s)
+    const isRecordStart = (s: string): boolean =>
+      /^(?:`[^`]*`|[A-Za-z_]\w*) WITH /.test(s)
 
     for (let i = 0; i < text.length; i++) {
       const ch = text[i]
-      if (ch === '(') {
+
+      if (
+        text.startsWith('LIST ', i) &&
+        (i === 0 || text[i - 1] === ' ' || text[i - 1] === '(') &&
+        (text.indexOf(' WITH ', i) !== -1 || text.indexOf(' OF ', i) !== -1)
+      ) {
+        result += 'LIST'
+        stack.push({ kind: 'list', depth, inOf })
         depth++
-        // Strip the opening paren — the content will be indented
-      } else if (ch === ')') {
-        depth = Math.max(0, depth - 1)
-        // Strip the closing paren
-      } else if (ch === ',') {
-        // Skip optional space after comma
-        if (text[i + 1] === ' ') i++
         result += indent()
+        inOf = false
+        i += 4 // 'LIST'; loop's i++ eats the trailing space
+        continue
+      }
+
+      if (ch === '(') {
+        stack.push({ kind: 'paren', depth, inOf })
+        depth++
+        inOf = false
+      } else if (ch === ')') {
+        let restored = false
+        while (stack.length > 0) {
+          const f = stack.pop()!
+          if (f.kind === 'paren') {
+            depth = f.depth
+            inOf = f.inOf
+            restored = true
+            break
+          }
+        }
+        if (!restored) depth = Math.max(0, depth - 1)
+      } else if (ch === ',') {
+        const hasSpace = text[i + 1] === ' '
+        const rest = text.slice(hasSpace ? i + 2 : i + 1)
+        if (hasSpace) i++
+        if (isFieldAssign(rest)) {
+          result += indent()
+          inOf = false
+        } else if (isRecordStart(rest)) {
+          while (stack.length > 0 && stack[stack.length - 1].kind !== 'list') {
+            stack.pop()
+          }
+          const top = stack[stack.length - 1]
+          depth = top ? top.depth + 1 : Math.max(0, depth - 1)
+          result += indent()
+          inOf = false
+        } else if (inOf) {
+          result += ', '
+        } else {
+          result += indent()
+          inOf = false
+        }
       } else if (text.startsWith(' WITH ', i)) {
+        stack.push({ kind: 'with', depth, inOf })
         depth++
         result += ' WITH'
         result += indent()
-        i += 5 // skip " WITH"
+        inOf = false
+        i += 5
+      } else if (text.startsWith(' OF ', i)) {
+        result += ' OF '
+        inOf = true
+        i += 3
       } else {
         result += ch
       }

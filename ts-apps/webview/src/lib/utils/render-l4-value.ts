@@ -71,37 +71,6 @@ export function renderArgumentsAsL4(
   return lines.join('\n')
 }
 
-/**
- * Re-indent an L4 source string by folding parenthesis nesting into
- * indentation and breaking on commas / `WITH`. Mirrors the Inspector
- * panel's local formatter so a pre-rendered L4 string from the server
- * (e.g. an enum or scalar result) renders consistently with the
- * structural renderer above.
- */
-export function formatL4Indentation(text: string): string {
-  let out = ''
-  let depth = 0
-  const indent = (): string => '\n' + '  '.repeat(depth)
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i]
-    if (ch === '(') {
-      depth++
-    } else if (ch === ')') {
-      depth = Math.max(0, depth - 1)
-    } else if (ch === ',') {
-      if (text[i + 1] === ' ') i++
-      out += indent()
-    } else if (text.startsWith(' WITH ', i)) {
-      depth++
-      out += ' WITH' + indent()
-      i += 5
-    } else {
-      out += ch
-    }
-  }
-  return out
-}
-
 function formatNode(
   value: unknown,
   schema: FunctionParameter | undefined,
