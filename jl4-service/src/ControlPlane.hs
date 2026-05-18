@@ -13,6 +13,7 @@ module ControlPlane (
 
 import qualified BundleStore
 import L4.FunctionSchema (Parameters (..))
+import Compatibility (FnIface, ifaceFromFunction, ifaceFromSummary, detectBreakingChanges)
 import Compiler (compileBundle, computeVersion)
 import DeploymentLoader (triggerCompilationIfPending)
 import Logging (logInfo, logWarn, logError)
@@ -107,6 +108,7 @@ postDeploymentHandler multipart = do
 
   -- Extract zip from multipart file
   sourceMap <- extractSourcesFromMultipart multipart
+  let mDesc = extractDescription multipart
 
   -- Compute version hash and check for existing deployment with same sources
   let version = computeVersion sourceMap
@@ -138,6 +140,7 @@ postDeploymentHandler multipart = do
       let storedMeta = BundleStore.StoredMetadata
             { BundleStore.smVersion = version
             , BundleStore.smCreatedAt = Text.pack (show now)
+            , BundleStore.smDescription = mDesc
             }
 
       liftIO $ BundleStore.saveBundle env.bundleStore (deployId.unDeploymentId) sourceMap storedMeta
@@ -168,7 +171,8 @@ postDeploymentHandler multipart = do
               [("deploymentId", toJSON deployId.unDeploymentId)]
             atomically $ modifyTVar' env.deploymentRegistry $
               Map.insert deployId (DeploymentFailed "Compilation timed out")
-          Just (Right (fns, meta, bundles)) -> do
+          Just (Right (fns, meta0, bundles)) -> do
+            let meta = meta0 { metaDescription = mDesc }
             BundleStore.saveBundleCbor env.bundleStore (deployId.unDeploymentId) bundles
             BundleStore.saveMetadataCache env.bundleStore (deployId.unDeploymentId) (Aeson.encode meta)
               `catch` \(e :: SomeException) ->
@@ -269,57 +273,88 @@ putDeploymentHandler deployIdText multipart = do
 
   validateDeploymentId deployIdText
 
-  -- Check deployment exists
+  -- Check deployment exists; capture its current description (so a
+  -- source-only PUT that omits the field preserves it) and its current
+  -- interface for the backwards-compatibility guard.
   registry <- liftIO $ readTVarIO env.deploymentRegistry
-  case Map.lookup deployId registry of
+  (existingDesc, mOldIfaces) <- case Map.lookup deployId registry of
     Nothing -> throwError err404
-    Just _ -> pure ()
+    Just st -> pure (stateDescription st, currentIfaces st)
 
   -- Extract sources
   sourceMap <- extractSourcesFromMultipart multipart
+  let mDesc = extractDescription multipart <|> existingDesc
 
-  -- Save to store
   now <- liftIO getCurrentTime
-  let version = computeVersion sourceMap
+  let cfg = env.options
+      version = computeVersion sourceMap
       storedMeta = BundleStore.StoredMetadata
         { BundleStore.smVersion = version
         , BundleStore.smCreatedAt = Text.pack (show now)
+        , BundleStore.smDescription = mDesc
         }
+      compileTimeoutMicros = cfg.compileTimeout * 1_000_000
+      compileMemLimitBytes = fromIntegral cfg.maxCompileMemoryMb * 1024 * 1024 :: Int64
 
-  liftIO $ BundleStore.saveBundle env.bundleStore (deployId.unDeploymentId) sourceMap storedMeta
+  -- Compile the new bundle synchronously so the compatibility guard can
+  -- reject the update before anything is persisted or swapped in. The
+  -- old version stays live throughout (registry is untouched until a
+  -- compatible bundle is registered below).
+  let compileLimited = do
+        setAllocationCounter compileMemLimitBytes
+        enableAllocationLimit
+        compileBundle env.logger deployId.unDeploymentId sourceMap
+  mResult <- liftIO $ timeout compileTimeoutMicros compileLimited
+    `catch` \AllocationLimitExceeded -> pure Nothing
 
-  let compileTimeoutMicros = env.options.compileTimeout * 1_000_000
-
-  -- Compile in background; old version stays active until new compilation completes
-  _ <- liftIO $ async $ do
-    mResult <- timeout compileTimeoutMicros $ compileBundle env.logger deployId.unDeploymentId sourceMap
-    case mResult of
-      Nothing ->
-        logError env.logger "PUT compilation timed out"
-          [("deploymentId", toJSON deployId.unDeploymentId)]
-      Just (Right (fns, meta, bundles)) -> do
-        -- Save CBOR cache for fast restart
-        BundleStore.saveBundleCbor env.bundleStore (deployId.unDeploymentId) bundles
-        BundleStore.saveMetadataCache env.bundleStore (deployId.unDeploymentId) (Aeson.encode meta)
-          `catch` \(e :: SomeException) ->
-            logWarn env.logger "Failed to save metadata cache (non-fatal)"
-              [ ("deploymentId", toJSON deployId.unDeploymentId)
-              , ("error", toJSON (displayException e))
-              ]
-        atomically $ modifyTVar' env.deploymentRegistry $
-          Map.insert deployId (DeploymentReady fns meta)
-      Just (Left err) ->
-        logWarn env.logger "PUT compilation failed"
-          [ ("deploymentId", toJSON deployId.unDeploymentId)
-          , ("error", toJSON err)
-          ]
-
-  pure DeploymentStatusResponse
-    { dsId = deployId.unDeploymentId
-    , dsStatus = "compiling"
-    , dsMetadata = Nothing
-    , dsError = Nothing
-    }
+  case mResult of
+    Nothing -> do
+      liftIO $ logWarn env.logger "PUT rejected: compilation timed out or exceeded memory limit"
+        [("deploymentId", toJSON deployId.unDeploymentId)]
+      throwError err400
+        { errBody = jsonError "Update rejected: compilation timed out or exceeded the memory limit" }
+    Just (Left err) -> do
+      liftIO $ logWarn env.logger "PUT rejected: compilation failed"
+        [ ("deploymentId", toJSON deployId.unDeploymentId)
+        , ("error", toJSON err)
+        ]
+      throwError err400
+        { errBody = jsonError ("Update rejected: compilation failed: " <> err) }
+    Just (Right (fns, meta0, bundles)) -> do
+      let newIfaces = map (ifaceFromFunction . (.fnImpl)) (Map.elems fns)
+          breaking = maybe [] (`detectBreakingChanges` newIfaces) mOldIfaces
+      case breaking of
+        (_:_) -> do
+          liftIO $ logWarn env.logger "PUT rejected: backwards-incompatible interface change"
+            [ ("deploymentId", toJSON deployId.unDeploymentId)
+            , ("changes", toJSON breaking)
+            ]
+          throwError err409
+            { errBody = jsonError $
+                "Update rejected — it would break existing integrations: "
+                  <> Text.intercalate "; " breaking
+            }
+        [] -> do
+          let meta = meta0 { metaDescription = mDesc }
+          liftIO $ do
+            BundleStore.saveBundle env.bundleStore (deployId.unDeploymentId) sourceMap storedMeta
+            BundleStore.saveBundleCbor env.bundleStore (deployId.unDeploymentId) bundles
+            BundleStore.saveMetadataCache env.bundleStore (deployId.unDeploymentId) (Aeson.encode meta)
+              `catch` \(e :: SomeException) ->
+                logWarn env.logger "Failed to save metadata cache (non-fatal)"
+                  [ ("deploymentId", toJSON deployId.unDeploymentId)
+                  , ("error", toJSON (displayException e))
+                  ]
+            atomically $ modifyTVar' env.deploymentRegistry $
+              Map.insert deployId (DeploymentReady fns meta)
+            logInfo env.logger "Deployment updated (interface-compatible)"
+              [("deploymentId", toJSON deployId.unDeploymentId)]
+          pure DeploymentStatusResponse
+            { dsId = deployId.unDeploymentId
+            , dsStatus = "ready"
+            , dsMetadata = Just meta
+            , dsError = Nothing
+            }
 
 -- | DELETE /deployments/{id} — remove a deployment
 deleteDeploymentHandler :: Text -> AppM NoContent
@@ -398,6 +433,45 @@ validateDeploymentId deployId = do
 -- | Check if a zip entry path is safe (no path traversal).
 isPathSafe :: FilePath -> Bool
 isPathSafe path = ".." `notElem` splitDirectories path
+
+-- | Maximum stored length of the operator-supplied deployment description.
+-- Bounds the downstream system-prompt token budget and the
+-- prompt-injection surface.
+maxDescriptionLength :: Int
+maxDescriptionLength = 4000
+
+-- | Extract and sanitize the optional operator-supplied deployment
+-- description ("Intended use") from the multipart form.
+-- Trimmed, length-capped, and 'Nothing' when absent or blank.
+extractDescription :: MultipartData Mem -> Maybe Text
+extractDescription multipart =
+  case lookupInput "description" multipart of
+    Right raw ->
+      let trimmed = Text.strip raw
+      in if Text.null trimmed
+           then Nothing
+           else Just (Text.take maxDescriptionLength trimmed)
+    Left _ -> Nothing
+
+-- | The operator-supplied description currently associated with a
+-- deployment state, if any. Used to preserve the description across a
+-- source-only PUT that omits the field.
+stateDescription :: DeploymentState -> Maybe Text
+stateDescription (DeploymentReady _ meta)        = meta.metaDescription
+stateDescription (DeploymentPending (Just meta)) = meta.metaDescription
+stateDescription _                               = Nothing
+
+-- | The currently-deployed interface for the backwards-compatibility
+-- guard. Uses the live in-memory functions when ready (full schema,
+-- including the structured return shape) or the cached metadata when
+-- only that is available. 'Nothing' (compiling / failed / no cache)
+-- means there is no prior interface to break, so the guard is skipped.
+currentIfaces :: DeploymentState -> Maybe [FnIface]
+currentIfaces (DeploymentReady fns _)        =
+  Just (map (ifaceFromFunction . (.fnImpl)) (Map.elems fns))
+currentIfaces (DeploymentPending (Just meta)) =
+  Just (map ifaceFromSummary meta.metaFunctions)
+currentIfaces _                              = Nothing
 
 -- | Extract sources from a multipart zip upload with validation.
 extractSourcesFromMultipart :: MultipartData Mem -> AppM (Map FilePath Text)

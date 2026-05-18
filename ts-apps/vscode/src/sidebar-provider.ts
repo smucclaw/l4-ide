@@ -21,6 +21,7 @@ import {
   RequestSidebarUndeploy,
   RequestSidebarDownloadDeployment,
   GetSidebarDeploymentOpenApi,
+  GetSidebarDeploymentSchemas,
   GetSidebarDeploymentStatus,
   GetSidebarDocsContent,
   RequestNewL4File,
@@ -38,6 +39,7 @@ import {
   RemoveInspectorResult,
   SidebarConnectionStatusChanged,
   type GetSidebarConnectionStatusResponse,
+  type RemoteFunctionSchema,
 } from 'jl4-client-rpc'
 import { getTokenColors } from './theme-colors.js'
 
@@ -392,7 +394,8 @@ export function initializeSidebarMessenger(
       const result = await serviceClient.deploy(
         params.deploymentId,
         zipBuffer,
-        isUpdate
+        isUpdate,
+        params.mission
       )
       outputChannel.appendLine(
         `[sidebar] Deploy succeeded: ${result.id} (${result.status})`
@@ -533,6 +536,43 @@ export function initializeSidebarMessenger(
         `[sidebar] Error fetching deployment OpenAPI: ${err instanceof Error ? err.message : String(err)}`
       )
       return { openapi: null }
+    }
+  })
+
+  // Fetch the deployed functions' full schemas (per-function endpoint) so
+  // the sidebar can recursively diff them against the local interface.
+  // Returns { functions: null } when the deployment does not exist yet
+  // (or is unreachable) — a first deploy can't break anything.
+  messenger.onRequest(GetSidebarDeploymentSchemas, async (params) => {
+    try {
+      const fns = await serviceClient.listDeploymentFunctions(
+        params.deploymentId
+      )
+      const functions = await Promise.all(
+        fns.map(async (f) => {
+          const schema = (await serviceClient.getFunctionSchema(
+            params.deploymentId,
+            f.name
+          )) as {
+            name?: string
+            parameters?: RemoteFunctionSchema['parameters']
+            returnType?: string
+            returnSchema?: RemoteFunctionSchema['returnSchema']
+          }
+          return {
+            name: schema.name ?? f.name,
+            parameters: schema.parameters,
+            returnType: schema.returnType,
+            returnSchema: schema.returnSchema,
+          }
+        })
+      )
+      return { functions }
+    } catch (err) {
+      outputChannel.appendLine(
+        `[sidebar] Error fetching deployment schemas: ${err instanceof Error ? err.message : String(err)}`
+      )
+      return { functions: null }
     }
   })
 

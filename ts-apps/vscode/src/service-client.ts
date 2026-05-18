@@ -61,7 +61,8 @@ export class ServiceClient {
   async deploy(
     deploymentId: string,
     zipBuffer: Uint8Array,
-    isUpdate: boolean
+    isUpdate: boolean,
+    description?: string
   ): Promise<DeployResponse> {
     const blob = new Blob([zipBuffer], { type: 'application/zip' })
     const formData = new FormData()
@@ -74,6 +75,12 @@ export class ServiceClient {
     // For POST, include the deployment ID in the form data
     if (!isUpdate) {
       formData.append('id', deploymentId)
+    }
+
+    // Operator-supplied "Intended use". Omitted (not sent
+    // empty) when blank so a source-only PUT preserves the stored value.
+    if (description && description.trim().length > 0) {
+      formData.append('description', description.trim())
     }
 
     const resp = await this.request(path, {
@@ -155,6 +162,22 @@ export class ServiceClient {
     if (!resp.ok)
       await throwWithBody(resp, `GET /deployments/${encodedId}/openapi.json`)
     return resp.json()
+  }
+
+  /**
+   * List a deployment's exported function names.
+   * Backed by `GET /deployments/{id}/functions` → `[{ name, description }]`.
+   * Used (together with {@link getFunctionSchema}) by the sidebar to
+   * recover the deployed interface for breaking-change detection.
+   */
+  async listDeploymentFunctions(
+    deploymentId: string
+  ): Promise<Array<{ name: string }>> {
+    const encodedId = encodeURIComponent(deploymentId)
+    const resp = await this.request(`/deployments/${encodedId}/functions`)
+    if (!resp.ok)
+      await throwWithBody(resp, `GET /deployments/${encodedId}/functions`)
+    return (await resp.json()) as Array<{ name: string }>
   }
 
   /**

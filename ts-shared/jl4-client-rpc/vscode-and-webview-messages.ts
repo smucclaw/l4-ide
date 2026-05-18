@@ -2,6 +2,7 @@ import type {
   L4RpcRequestType,
   L4RpcNotificationType,
   FunctionParameter,
+  FunctionParameters,
 } from './custom-protocol.js'
 import {
   makeL4RpcRequestType,
@@ -214,6 +215,8 @@ export const ListSidebarDeployments: RequestType<
 export interface SidebarDeployParams {
   deploymentId: string
   fileUri: string
+  /** Operator-supplied "Intended use" for this deployment. */
+  mission?: string
 }
 
 export interface SidebarDeployResponse {
@@ -282,6 +285,33 @@ export const GetSidebarDeploymentOpenApi: RequestType<
   { openapi: unknown }
 > = {
   method: 'getSidebarDeploymentOpenApi',
+}
+
+/**
+ * A deployed function's interface, normalized from jl4-service's
+ * per-function schema endpoint (`GET /deployments/{id}/functions/{fn}`)
+ * for recursive breaking-change detection.
+ */
+export interface RemoteFunctionSchema {
+  name: string
+  /** Full input schema (recursive: properties / items / required / enum). */
+  parameters?: FunctionParameters
+  /** Display name of the return type (e.g. "BOOLEAN", "DEONTIC"). */
+  returnType?: string
+  /** Structured schema of the return value, when the deployment exposes it. */
+  returnSchema?: FunctionParameter
+}
+
+/**
+ * Sidebar requests the deployed functions' full schemas for recursive
+ * breaking-change detection. `functions` is `null` when the deployment
+ * does not exist yet (a first deploy — nothing to break).
+ */
+export const GetSidebarDeploymentSchemas: RequestType<
+  { deploymentId: string },
+  { functions: RemoteFunctionSchema[] | null }
+> = {
+  method: 'getSidebarDeploymentSchemas',
 }
 
 /** Sidebar asks extension to open a URL in the browser */

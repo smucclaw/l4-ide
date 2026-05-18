@@ -205,6 +205,10 @@ export interface ExportedFunctionInfo {
   returnType: string
   isDeontic: boolean
   parameters: FunctionParameters
+  /** Structured schema of the return value (absent for DEONTIC functions).
+   *  Mirrors jl4-service's per-function `returnSchema`, enabling a
+   *  recursive return-value compatibility diff at deploy time. */
+  returnSchema?: FunctionParameter
   srcLine?: number
 }
 

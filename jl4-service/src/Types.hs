@@ -76,6 +76,12 @@ data DeploymentMetadata = DeploymentMetadata
   , metaVersion   :: !Text
   -- ^ SHA-256 hex digest of all source contents (sorted by path).
   , metaCreatedAt :: !UTCTime
+  , metaDescription :: !(Maybe Text)
+  -- ^ Operator-supplied "Intended use" describing what this
+  -- deployment is for. Surfaced as OpenAPI @info.description@, in the
+  -- @GET /deployments/{id}@ metadata, and as MCP @initialize@ instructions.
+  -- Set at deploy time (not derived from sources) and preserved across
+  -- source-only redeploys.
   }
   deriving stock (Show, Generic)
 
@@ -85,6 +91,7 @@ instance ToJSON DeploymentMetadata where
     , "createdAt" .= dm.metaCreatedAt
     ] <> (if null dm.metaFunctions then [] else ["functions" .= dm.metaFunctions])
       <> (if null dm.metaFiles then [] else ["files" .= dm.metaFiles])
+      <> maybe [] (\d -> ["description" .= d]) dm.metaDescription
 
 instance FromJSON DeploymentMetadata where
   parseJSON = Aeson.withObject "DeploymentMetadata" $ \o ->
@@ -93,6 +100,7 @@ instance FromJSON DeploymentMetadata where
       <*> (o .:? "files" .!= [] <|> o .:? "metaFiles" .!= [])
       <*> (o .: "version"    <|> o .: "metaVersion")
       <*> (o .: "createdAt"  <|> o .: "metaCreatedAt")
+      <*> (o .:? "description" <|> o .:? "metaDescription")
 
 -- | Summary of a single exported function within a deployment.
 data FunctionSummary = FunctionSummary

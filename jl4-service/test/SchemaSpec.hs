@@ -251,6 +251,7 @@ instance Arbitrary DeploymentMetadata where
     <*> arbitrary
     <*> arbitrary
     <*> pure (UTCTime (fromGregorian 2025 1 1) 0)
+    <*> arbitrary
 
 instance Arbitrary FunctionSummary where
   arbitrary = FunctionSummary <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary

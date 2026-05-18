@@ -67,7 +67,11 @@ loadAndRegister logger options registry store deployId = do
       compileFreshAndCache logger compileTimeoutMicros compileMemLimitMb store deployId sources
 
   case result of
-    Right (fns, meta) -> do
+    Right (fns, meta0) -> do
+      -- The operator-supplied description is not derived from sources, so
+      -- the compiler/CBOR rebuild can't reproduce it — restore it from the
+      -- persisted StoredMetadata.
+      let meta = meta0 { metaDescription = storedMeta.smDescription }
       atomically $ modifyTVar' registry $
         Map.insert (DeploymentId deployId) (DeploymentReady fns meta)
       -- Cache the full metadata to disk so it survives restarts.
