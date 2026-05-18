@@ -32,13 +32,13 @@
 
 <div class="deployment-metadata">
   {#if onBack}
-    <button class="back-btn" onclick={onBack}>&larr; Back</button>
+    <button class="back-btn" onclick={onBack}>&larr; Change deployment</button>
   {/if}
 
   <div class="screen-heading">
     {heading}
     {#if deploymentId}
-      <span class="screen-heading-sub">{deploymentId}</span>
+      <span class="screen-heading-sub">for {deploymentId}</span>
     {/if}
   </div>
 
