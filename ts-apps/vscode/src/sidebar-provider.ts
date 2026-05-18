@@ -236,6 +236,7 @@ interface DeploymentResponse {
     files?: Array<{ path: string; exports: string[] }>
     version?: string
     createdAt?: string
+    description?: string
   }
 }
 
@@ -316,6 +317,7 @@ export function initializeSidebarMessenger(
           deploymentId: dep.id,
           status: dep.status as 'pending' | 'compiling' | 'ready' | 'failed',
           error: dep.error,
+          description: dep.metadata?.description,
           // Backend omits `metadata.files` entirely when the read scope is
           // absent (proxy strips it via X-Include-Files: false). A non-empty
           // list means the user is allowed to read sources — gate the
@@ -383,13 +385,17 @@ export function initializeSidebarMessenger(
 
       const zipBuffer = createZip(files)
 
-      // Check if deployment already exists via its OpenAPI spec
+      // PUT (isUpdate) goes through the backwards-compatibility gate;
+      // POST overwrites ungated. When the user has reviewed and
+      // confirmed the breaking changes, force POST.
       let isUpdate = false
-      try {
-        await serviceClient.getDeploymentOpenApi(params.deploymentId)
-        isUpdate = true
-      } catch {
-        // Deployment doesn't exist — new deploy
+      if (!params.overwrite) {
+        try {
+          await serviceClient.getDeploymentOpenApi(params.deploymentId)
+          isUpdate = true
+        } catch {
+          // Deployment doesn't exist — new deploy
+        }
       }
 
       const result = await serviceClient.deploy(

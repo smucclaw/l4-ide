@@ -488,7 +488,12 @@ returnTypeDisplay (Just ty)
   | isDeonticType ty = "DEONTIC"
   | otherwise = case ty of
       TyApp _ n args ->
-        let nameText = Text.toUpper (rawNameToText (rawName (getActual n)))
+        -- Preserve the type's declared casing. Built-in types
+        -- (BOOLEAN, NUMBER, …) are already upper-case at their
+        -- definition; user DECLAREd types keep their original case so
+        -- this string matches what the LSP reports, otherwise the
+        -- deploy sidebar sees a spurious return-type "change".
+        let nameText = rawNameToText (rawName (getActual n))
          in if null args
               then nameText
               else nameText <> " " <> Text.intercalate " " (map (returnTypeDisplay . Just) args)

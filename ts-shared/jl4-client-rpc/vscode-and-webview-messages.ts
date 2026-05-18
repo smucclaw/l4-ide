@@ -195,6 +195,9 @@ export interface SidebarDeploymentInfo {
   deploymentId: string
   status?: 'pending' | 'compiling' | 'ready' | 'failed'
   error?: string
+  /** Operator-supplied "Intended use" (metadata.description), so a
+   *  redeploy can pre-populate the field instead of starting blank. */
+  description?: string
   functions: ExportedFunctionInfo[]
   /** True when the backend returned a non-empty `metadata.files` list.
    * Empty/missing on a `ready` deployment indicates the proxy stripped
@@ -217,6 +220,10 @@ export interface SidebarDeployParams {
   fileUri: string
   /** Operator-supplied "Intended use" for this deployment. */
   mission?: string
+  /** Force an overwrite via POST (ungated), bypassing the PUT
+   *  backwards-compatibility gate. Set after the user reviews and
+   *  confirms the breaking changes. */
+  overwrite?: boolean
 }
 
 export interface SidebarDeployResponse {

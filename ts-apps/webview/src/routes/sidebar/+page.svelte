@@ -65,8 +65,9 @@
   let deploymentIdError: string = $state('')
   // Operator-supplied "Intended use" for the deployment.
   // First of a planned set of per-deployment configuration fields.
-  // Always starts blank — the mission screen is an authoring step, not
-  // an editor of remote state, so it never reloads the deployed value.
+  // Blank for a fresh deployment; pre-populated from the deployed
+  // metadata.description when redeploying an existing id, so the user
+  // sees/edits the current value rather than silently blanking it.
   let deploymentMission: string = $state('')
   let breakingChanges: BreakingChange[] = $state([])
   let verifying: boolean = $state(false)
@@ -301,6 +302,10 @@
 
   function selectExistingDeployment(id: string) {
     deploymentIdInput = id
+    // Redeploy: pre-populate "Intended use" from the deployed metadata
+    // so it shows/edits the current value instead of starting blank.
+    const dep = deployments.find((d) => d.deploymentId === id)
+    deploymentMission = dep?.description ?? ''
   }
 
   /**
@@ -319,6 +324,15 @@
       return
     }
     deploymentIdError = ''
+    // If the (typed or selected) id matches an existing deployment and
+    // the user hasn't entered anything, pre-fill "Intended use" from the
+    // deployed metadata so a redeploy preserves/shows it.
+    if (!deploymentMission.trim()) {
+      const match = deployments.find(
+        (d) => d.deploymentId === sanitizeDeploymentId(raw)
+      )
+      if (match?.description) deploymentMission = match.description
+    }
     deployView = 'mission'
   }
 
@@ -618,10 +632,12 @@
   }
 
   async function deployAnyway() {
-    await executeDeploy(sanitizeDeploymentId(deploymentIdInput))
+    // User reviewed the breaking changes and chose to proceed: overwrite
+    // the existing deployment via POST (ungated), bypassing the PUT gate.
+    await executeDeploy(sanitizeDeploymentId(deploymentIdInput), true)
   }
 
-  async function executeDeploy(deploymentId: string) {
+  async function executeDeploy(deploymentId: string, overwrite = false) {
     if (!messenger || !activeFileUri) return
     deploying = true
     try {
@@ -632,6 +648,7 @@
           deploymentId,
           fileUri: activeFileUri,
           mission: deploymentMission.trim() || undefined,
+          overwrite,
         }
       )
       if (result.success) {
@@ -666,22 +683,27 @@
           }
         }
         deploying = false
-        deployView = 'preview'
         if (outcome === 'applied') {
-          await fetchDeployments()
+          // Switch to the deployments tab *before* awaiting the list
+          // fetch, otherwise the deploy panel repaints its Preview
+          // screen for the duration of the round-trip (visible flicker).
+          deployView = 'preview'
           activeTab = 'deployments'
           notify('info', `Deployed "${did}" successfully.`)
+          await fetchDeployments()
         } else if (outcome === 'rejected') {
+          deployView = 'preview'
           notify(
             'error',
             `Deploy "${did}" rejected: ${error ?? 'compilation error'}`
           )
         } else {
+          deployView = 'preview'
+          activeTab = 'deployments'
           notify(
             'warning',
             `Deploying "${did}" — still in progress. Refresh later.`
           )
-          activeTab = 'deployments'
         }
       } else {
         notify('error', result.error ?? 'Deploy failed')
