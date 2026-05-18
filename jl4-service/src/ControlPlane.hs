@@ -37,7 +37,7 @@ import qualified Data.Map.Strict as Map
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text.Encoding
-import Data.Time (getCurrentTime)
+import Data.Time (addUTCTime, getCurrentTime)
 import Data.UUID.V4 (nextRandom)
 import qualified Data.UUID as UUID
 import GHC.Generics (Generic)
@@ -251,7 +251,7 @@ getDeploymentHandler vis deployIdText = do
   liftIO $ logInfo env.logger "Deployment retrieved"
     [("deploymentId", toJSON deployIdText)]
   registry <- liftIO $ readTVarIO env.deploymentRegistry
-  case Map.lookup deployId registry of
+  baseResp <- case Map.lookup deployId registry of
     Nothing -> throwError err404
     Just (DeploymentPending _) -> do
       triggerCompilationIfPending deployId
@@ -261,6 +261,42 @@ getDeploymentHandler vis deployIdText = do
         Nothing -> throwError err404
         Just state' -> pure (stateToResponse env.options.debug vis FnSimple deployId state')
     Just state -> pure (stateToResponse env.options.debug vis FnSimple deployId state)
+  applyPendingUpdate env deployId baseResp
+
+-- | Overlay the outcome of an in-flight async PUT onto the status
+-- response. The live (old) deployment keeps its real state in the
+-- registry; this only changes what the status endpoint reports:
+--
+--   * 'UpdateCompiling' → "compiling" (so a deploy poll keeps waiting
+--     instead of seeing the still-live old version as "ready").
+--   * 'UpdateRejected' → "failed" + reason for every poller until the
+--     TTL lapses, then the (still-stale) marker self-clears and the true
+--     live state is reported again. The deployment list endpoint never
+--     consults this map, so it always reflects the true live state.
+applyPendingUpdate
+  :: AppEnv -> DeploymentId -> DeploymentStatusResponse -> AppM DeploymentStatusResponse
+applyPendingUpdate env deployId resp = do
+  pending <- liftIO $ readTVarIO env.pendingUpdates
+  case Map.lookup deployId pending of
+    Nothing -> pure resp
+    Just UpdateCompiling ->
+      pure resp { dsStatus = "compiling", dsMetadata = Nothing, dsError = Nothing }
+    Just (UpdateRejected msg expiry) -> do
+      now <- liftIO getCurrentTime
+      if now < expiry
+        then pure resp { dsStatus = "failed", dsMetadata = Nothing, dsError = Just msg }
+        else do
+          -- Stale: drop it (only if it is still the same expired
+          -- rejection — a concurrent new PUT may have replaced it with
+          -- 'UpdateCompiling', which must be preserved) and report the
+          -- real, still-live deployment state.
+          liftIO $ atomically $ modifyTVar' env.pendingUpdates $
+            Map.update
+              (\case
+                  UpdateRejected _ e | e <= now -> Nothing
+                  keep -> Just keep)
+              deployId
+          pure resp
 
 -- | PUT /deployments/{id} — replace a deployment bundle
 putDeploymentHandler :: Text -> MultipartData Mem -> AppM DeploymentStatusResponse
@@ -268,7 +304,7 @@ putDeploymentHandler deployIdText multipart = do
   env <- asks id
   let deployId = DeploymentId deployIdText
 
-  liftIO $ logInfo env.logger "Deployment updated"
+  liftIO $ logInfo env.logger "Deployment update requested"
     [("deploymentId", toJSON deployIdText)]
 
   validateDeploymentId deployIdText
@@ -296,47 +332,49 @@ putDeploymentHandler deployIdText multipart = do
       compileTimeoutMicros = cfg.compileTimeout * 1_000_000
       compileMemLimitBytes = fromIntegral cfg.maxCompileMemoryMb * 1024 * 1024 :: Int64
 
-  -- Compile the new bundle synchronously so the compatibility guard can
-  -- reject the update before anything is persisted or swapped in. The
-  -- old version stays live throughout (registry is untouched until a
-  -- compatible bundle is registered below).
-  let compileLimited = do
+  -- Mark the update in progress so the status endpoint reports
+  -- "compiling" rather than the still-live old version's "ready".
+  liftIO $ atomically $ modifyTVar' env.pendingUpdates $
+    Map.insert deployId UpdateCompiling
+
+  -- Compile + compatibility-check in the background. The request returns
+  -- 202 immediately (proxy-friendly for large bundles); the old version
+  -- keeps serving until a compatible bundle is registered. Outcome is
+  -- surfaced via GET /deployments/{id} (see 'applyPendingUpdate').
+  let reject msg = do
+        logWarn env.logger "PUT update rejected"
+          [ ("deploymentId", toJSON deployId.unDeploymentId)
+          , ("reason", toJSON msg)
+          ]
+        -- Keep the rejection visible to pollers for a bounded window
+        -- (120s), then it self-clears in 'applyPendingUpdate'. Also
+        -- superseded eagerly by the next PUT or a successful update.
+        rejectedAt <- getCurrentTime
+        let expiry = addUTCTime 120 rejectedAt
+        atomically $ modifyTVar' env.pendingUpdates $
+          Map.insert deployId (UpdateRejected msg expiry)
+      compileLimited = do
         setAllocationCounter compileMemLimitBytes
         enableAllocationLimit
         compileBundle env.logger deployId.unDeploymentId sourceMap
-  mResult <- liftIO $ timeout compileTimeoutMicros compileLimited
-    `catch` \AllocationLimitExceeded -> pure Nothing
 
-  case mResult of
-    Nothing -> do
-      liftIO $ logWarn env.logger "PUT rejected: compilation timed out or exceeded memory limit"
-        [("deploymentId", toJSON deployId.unDeploymentId)]
-      throwError err400
-        { errBody = jsonError "Update rejected: compilation timed out or exceeded the memory limit" }
-    Just (Left err) -> do
-      liftIO $ logWarn env.logger "PUT rejected: compilation failed"
-        [ ("deploymentId", toJSON deployId.unDeploymentId)
-        , ("error", toJSON err)
-        ]
-      throwError err400
-        { errBody = jsonError ("Update rejected: compilation failed: " <> err) }
-    Just (Right (fns, meta0, bundles)) -> do
-      let newIfaces = map (ifaceFromFunction . (.fnImpl)) (Map.elems fns)
-          breaking = maybe [] (`detectBreakingChanges` newIfaces) mOldIfaces
-      case breaking of
-        (_:_) -> do
-          liftIO $ logWarn env.logger "PUT rejected: backwards-incompatible interface change"
-            [ ("deploymentId", toJSON deployId.unDeploymentId)
-            , ("changes", toJSON breaking)
-            ]
-          throwError err409
-            { errBody = jsonError $
-                "Update rejected — it would break existing integrations: "
-                  <> Text.intercalate "; " breaking
-            }
-        [] -> do
-          let meta = meta0 { metaDescription = mDesc }
-          liftIO $ do
+  _ <- liftIO $ async $ do
+    mResult <- timeout compileTimeoutMicros compileLimited
+      `catch` \AllocationLimitExceeded -> pure Nothing
+    case mResult of
+      Nothing ->
+        reject "Update rejected: compilation timed out or exceeded the memory limit"
+      Just (Left err) ->
+        reject ("Update rejected: compilation failed: " <> err)
+      Just (Right (fns, meta0, bundles)) -> do
+        let newIfaces = map (ifaceFromFunction . (.fnImpl)) (Map.elems fns)
+            breaking = maybe [] (`detectBreakingChanges` newIfaces) mOldIfaces
+        case breaking of
+          (_:_) ->
+            reject $ "Update rejected — it would break existing integrations: "
+                       <> Text.intercalate "; " breaking
+          [] -> do
+            let meta = meta0 { metaDescription = mDesc }
             BundleStore.saveBundle env.bundleStore (deployId.unDeploymentId) sourceMap storedMeta
             BundleStore.saveBundleCbor env.bundleStore (deployId.unDeploymentId) bundles
             BundleStore.saveMetadataCache env.bundleStore (deployId.unDeploymentId) (Aeson.encode meta)
@@ -345,16 +383,19 @@ putDeploymentHandler deployIdText multipart = do
                   [ ("deploymentId", toJSON deployId.unDeploymentId)
                   , ("error", toJSON (displayException e))
                   ]
-            atomically $ modifyTVar' env.deploymentRegistry $
-              Map.insert deployId (DeploymentReady fns meta)
+            atomically $ do
+              modifyTVar' env.deploymentRegistry $
+                Map.insert deployId (DeploymentReady fns meta)
+              modifyTVar' env.pendingUpdates $ Map.delete deployId
             logInfo env.logger "Deployment updated (interface-compatible)"
               [("deploymentId", toJSON deployId.unDeploymentId)]
-          pure DeploymentStatusResponse
-            { dsId = deployId.unDeploymentId
-            , dsStatus = "ready"
-            , dsMetadata = Just meta
-            , dsError = Nothing
-            }
+
+  pure DeploymentStatusResponse
+    { dsId = deployId.unDeploymentId
+    , dsStatus = "compiling"
+    , dsMetadata = Nothing
+    , dsError = Nothing
+    }
 
 -- | DELETE /deployments/{id} — remove a deployment
 deleteDeploymentHandler :: Text -> AppM NoContent

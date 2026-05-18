@@ -3,6 +3,7 @@
 module Types (
   DeploymentId (..),
   DeploymentState (..),
+  PendingUpdate (..),
   DeploymentMetadata (..),
   FunctionSummary (..),
   FileEntry (..),
@@ -67,6 +68,20 @@ data DeploymentState
   -- ^ Compiled and ready to serve evaluation requests.
   | DeploymentFailed !Text
   -- ^ Compilation failed; the error message is stored.
+
+-- | Outcome of an in-flight asynchronous PUT update, tracked separately
+-- from 'DeploymentState' so the live (old) deployment keeps serving
+-- while the new bundle compiles and is compatibility-checked. Surfaced
+-- via @GET \/deployments\/{id}@. 'UpdateRejected' carries an expiry: it
+-- is reported to every poller until the TTL lapses, then self-clears so
+-- a healthy deployment does not appear permanently failed (it is also
+-- cleared eagerly by the next PUT or a successful update).
+data PendingUpdate
+  = UpdateCompiling
+  -- ^ New bundle is compiling / being compatibility-checked.
+  | UpdateRejected !Text !UTCTime
+  -- ^ Update rejected (breaking change, compile failure, or timeout),
+  -- with the instant after which this marker is considered stale.
 
 -- | Metadata persisted alongside a deployment bundle.
 data DeploymentMetadata = DeploymentMetadata
@@ -501,6 +516,10 @@ instance ToJSON BatchResponse where
 -- | Shared application environment threaded through all handlers.
 data AppEnv = MkAppEnv
   { deploymentRegistry :: TVar (Map DeploymentId DeploymentState)
+  , pendingUpdates     :: TVar (Map DeploymentId PendingUpdate)
+  -- ^ In-flight async PUT outcomes, keyed by deployment id. Does not
+  -- replace the live entry in 'deploymentRegistry' — the old version
+  -- stays served until a compatible bundle is registered.
   , bundleStore        :: BundleStore
   , serverName         :: Maybe Text
   , logger             :: Logger

@@ -25,6 +25,7 @@ import Control.Concurrent.STM (newTVarIO)
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Map.Strict as Map
+import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text.Encoding
@@ -102,23 +103,34 @@ spec = describe "PUT deployment compatibility guard (end-to-end)" do
 
       r <- deployPut baseUrl mgr "guard-compat" Nothing compatSrc
       statusCode' r `shouldBe` 202
-      -- PUT is synchronous: a compatible update is live immediately.
-      dsStatusOf r `shouldBe` Just "ready"
+      -- PUT is async: it returns "compiling" and the gate runs in the
+      -- background; the old version keeps serving until it lands.
+      dsStatusOf r `shouldBe` Just "compiling"
+      pollUntilReady baseUrl mgr "guard-compat"
 
       -- Compatible logic is OR: same inputs now ⇒ True.
       evalQualifies baseUrl mgr "guard-compat" False True True
         `shouldReturnResult` FnLitBool True
 
-  it "rejects a breaking PUT with 409 and leaves the deployment intact" do
+  it "rejects a breaking PUT asynchronously and leaves the deployment intact" do
     withService $ \baseUrl mgr -> do
       _ <- deployPost baseUrl mgr "guard-break" Nothing baseSrc
       pollUntilReady baseUrl mgr "guard-break"
 
       r <- deployPut baseUrl mgr "guard-break" Nothing breakingSrc
-      statusCode' r `shouldBe` 409
-      let body = Text.Encoding.decodeUtf8 (LBS.toStrict (responseBody r))
-      body `shouldSatisfy` Text.isInfixOf "break"
-      body `shouldSatisfy` Text.isInfixOf "type changed"
+      -- Accepted for processing; rejection is surfaced via the status
+      -- endpoint, not the PUT response.
+      statusCode' r `shouldBe` 202
+      (st, mErr) <- pollOutcome baseUrl mgr "guard-break"
+      st `shouldBe` "failed"
+      let err = fromMaybe "" mErr
+      err `shouldSatisfy` Text.isInfixOf "break"
+      err `shouldSatisfy` Text.isInfixOf "type changed"
+
+      -- TTL'd, not read-and-clear: a second poll still sees the
+      -- rejection (it is not consumed by the first observer).
+      (st2, _) <- statusOnce baseUrl mgr "guard-break"
+      st2 `shouldBe` "failed"
 
       -- The original (boolean) interface must still work unchanged.
       evalQualifies baseUrl mgr "guard-break" True True True
@@ -138,6 +150,7 @@ spec = describe "PUT deployment compatibility guard (end-to-end)" do
 
       r <- deployPut baseUrl mgr "guard-desc" Nothing compatSrc
       statusCode' r `shouldBe` 202
+      pollUntilReady baseUrl mgr "guard-desc"
       deploymentDescription baseUrl mgr "guard-desc"
         `shouldReturn` Just "Intended use: demo"
 
@@ -170,7 +183,8 @@ withService act = do
   cleanDir tmpPath
   store <- initStore tmpPath
   registry <- newTVarIO Map.empty
-  let env = MkAppEnv registry store Nothing logger testOpts
+  pendingUpd <- newTVarIO Map.empty
+  let env = MkAppEnv registry pendingUpd store Nothing logger testOpts
   mgr <- newManager defaultManagerSettings
   testWithApplication (pure $ app env) $ \prt -> do
     let baseUrl = "http://localhost:" <> show prt
@@ -251,6 +265,29 @@ pollUntilReady baseUrl mgr deployId = go (120 :: Int)
       Just s | s.dsStatus == "failed" ->
         expectationFailure ("Deployment failed: " <> show s.dsError)
       _ -> threadDelay 500_000 >> go (n - 1)
+
+-- | Poll until the deployment reaches a terminal status, returning it
+-- with any error message (does not fail the test on "failed").
+pollOutcome :: String -> Manager -> Text -> IO (Text, Maybe Text)
+pollOutcome baseUrl mgr deployId = go (120 :: Int)
+ where
+  go 0 = pure ("timeout", Nothing)
+  go n = do
+    req <- parseRequest (baseUrl <> "/deployments/" <> Text.unpack deployId)
+    resp <- httpLbs req mgr
+    case Aeson.decode (responseBody resp) :: Maybe DeploymentStatusResponse of
+      Just s | s.dsStatus == "ready"  -> pure ("ready", s.dsError)
+      Just s | s.dsStatus == "failed" -> pure ("failed", s.dsError)
+      _ -> threadDelay 500_000 >> go (n - 1)
+
+-- | Single GET /deployments/{id} → (status, error).
+statusOnce :: String -> Manager -> Text -> IO (Text, Maybe Text)
+statusOnce baseUrl mgr deployId = do
+  req <- parseRequest (baseUrl <> "/deployments/" <> Text.unpack deployId)
+  resp <- httpLbs req mgr
+  case Aeson.decode (responseBody resp) :: Maybe DeploymentStatusResponse of
+    Just s  -> pure (s.dsStatus, s.dsError)
+    Nothing -> pure ("undecodable", Nothing)
 
 createZipBundle :: [(FilePath, Text)] -> LBS.ByteString
 createZipBundle entries =
