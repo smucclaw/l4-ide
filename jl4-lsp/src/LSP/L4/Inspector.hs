@@ -318,6 +318,12 @@ data ExportedFunctionSummary = ExportedFunctionSummary
   , returnType :: !Text
   , isDeontic :: !Bool
   , parameters :: !FSchema.Parameters
+  , returnSchema :: !(Maybe FSchema.Parameter)
+  -- ^ Structured JSON Schema of the return type (same shape jl4-service
+  -- serves from its per-function endpoint), so the deploy sidebar can
+  -- recursively diff the return value for backwards compatibility.
+  -- 'Nothing' for DEONTIC functions (the surface return shape is the
+  -- simulation envelope, not the user's record type).
   , srcLine :: !(Maybe Int)
   }
   deriving stock (Eq, Show, Generic)
@@ -331,6 +337,7 @@ instance ToJSON ExportedFunctionSummary where
     , "isDeontic" .= f.isDeontic
     , "parameters" .= f.parameters
     ]
+    ++ maybe [] (\rs -> ["returnSchema" .= rs]) f.returnSchema
     ++ case f.srcLine of
       Nothing -> []
       Just l -> ["srcLine" .= l]
@@ -393,6 +400,12 @@ exportedFunctionToSummary declares ef =
     -- Deontic detection: check if return type pretty-prints as containing "DEONTIC"
     isDeontic' = "DEONTIC" `Text.isInfixOf` Text.toUpper retType
 
+    -- Structured return schema, mirroring jl4-service's Compiler: only for
+    -- non-DEONTIC functions (DEONTIC surfaces the simulation envelope).
+    mReturnSchema = case ef.exportReturnType of
+      Just retTy | not isDeontic' -> Just (FSchema.typeToParameter declares Set.empty retTy)
+      _ -> Nothing
+
     -- Extract line number from the function name's AppForm annotation
     MkDecide _ _ (MkAppForm (Anno _ appRange _) _ _ _) _ = ef.exportDecide
     fnLine = fmap (\r -> r.start.line) appRange
@@ -404,5 +417,6 @@ exportedFunctionToSummary declares ef =
       , returnType = retType
       , isDeontic = isDeontic'
       , parameters = params
+      , returnSchema = mReturnSchema
       , srcLine = fnLine
       }

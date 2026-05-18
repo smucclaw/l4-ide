@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { tick } from 'svelte'
   import UserMessage from './message-user.svelte'
   import AssistantMessage from './message-assistant.svelte'
   import SectionSpinner from './section-spinner.svelte'
@@ -54,7 +53,6 @@
 
   let scrollEl = $state<HTMLDivElement>()
   let stickToBottom = $state(true)
-  let showJumpButton = $state(false)
   let stickyUserIndex = $state<number>(-1)
   let userMessageOffsets: { index: number; offsetTop: number }[] = []
 
@@ -63,7 +61,6 @@
     const near =
       scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight < 40
     stickToBottom = near
-    showJumpButton = !near
 
     // Find the last user message whose offsetTop is less than
     // scrollTop. Only consumed bubbles are eligible for stickiness
@@ -115,17 +112,8 @@
     })
   })
 
-  async function jumpToLatest(): Promise<void> {
-    await tick()
-    if (!scrollEl) return
-    scrollEl.scrollTop = scrollEl.scrollHeight
-    stickToBottom = true
-    showJumpButton = false
-  }
-
   // When new tokens land, auto-scroll only if the user is near the
-  // bottom. Otherwise leave them where they are and surface the
-  // "Jump to latest" affordance.
+  // bottom. Otherwise leave them where they are.
   $effect(() => {
     // Track changes by reading every turn's content length.
     turns.map((t) => t.content.length)
@@ -168,18 +156,6 @@
       />
     {/if}
   {/each}
-  {#if showJumpButton && !pendingQuestion}
-    <!-- Hide the sticky scroll-assist while a meta__ask_user card is
-         active: the question card is the only thing the user can act
-         on, and the sticky button would otherwise float above it at
-         the bottom of the viewport (its container is the whole scroll
-         region, so it keeps painting regardless of the card's
-         position) and draw the eye away from the required action. -->
-    <button class="jump-btn" onclick={jumpToLatest} title="Jump to latest">
-      ↓ Latest
-    </button>
-  {/if}
-
   <!-- Question card for an active meta__ask_user. Rendered above the
        spinner / approval bar so the user can't miss it. Dispatcher is
        blocked on their reply, so this is the only meaningful action
@@ -236,19 +212,6 @@
     overflow-x: hidden;
     padding: 0 10px 16px;
     display: block;
-  }
-  .jump-btn {
-    position: sticky;
-    bottom: 4px;
-    background: var(--vscode-sideBar-background, rgba(128, 128, 128, 0.3));
-    color: var(--vscode-button-secondaryForeground, inherit);
-    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
-    border-radius: 12px;
-    padding: 3px 10px;
-    font-size: 11px;
-    cursor: pointer;
-    margin-top: 8px;
-    margin-right: -10px;
   }
   .bottom-spinner {
     display: flex;

@@ -4,18 +4,21 @@
 module ControlPlane (
   ControlPlaneApi,
   DeploymentStatusResponse (..),
+  UpdateStatusResponse (..),
   controlPlaneHandler,
   -- Individual handlers (re-exported for short routes)
   getDeploymentHandler,
   putDeploymentHandler,
+  getUpdateStatusHandler,
   deleteDeploymentHandler,
 ) where
 
 import qualified BundleStore
 import L4.FunctionSchema (Parameters (..))
+import Compatibility (FnIface, ifaceFromFunction, ifaceFromSummary, detectBreakingChanges)
 import Compiler (compileBundle, computeVersion)
 import DeploymentLoader (triggerCompilationIfPending)
-import Logging (logInfo, logWarn, logError)
+import Logging (logInfo, logWarn)
 import Options (Options (..))
 import Shared (jsonError)
 import Types
@@ -36,7 +39,8 @@ import qualified Data.Map.Strict as Map
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text.Encoding
-import Data.Time (getCurrentTime)
+import Data.Maybe (fromMaybe)
+import Data.Time (UTCTime, diffUTCTime, getCurrentTime)
 import Data.UUID.V4 (nextRandom)
 import qualified Data.UUID as UUID
 import GHC.Generics (Generic)
@@ -55,8 +59,15 @@ data DeploymentStatusResponse = DeploymentStatusResponse
   , dsStatus   :: !Text    -- "pending" | "compiling" | "ready" | "failed"
   , dsMetadata :: !(Maybe DeploymentMetadata)
   , dsError    :: !(Maybe Text)
+  , dsUpdateId :: !(Maybe Text)
+  -- ^ Set only by POST/PUT: the id of the async deploy/update job to
+  -- poll via @GET \/deployments\/{id}\/updates\/{updateId}@.
   }
   deriving stock (Show, Generic)
+
+-- | A status response with no associated update job (GET / list).
+mkStatus :: Text -> Text -> Maybe DeploymentMetadata -> Maybe Text -> DeploymentStatusResponse
+mkStatus i s m e = DeploymentStatusResponse i s m e Nothing
 
 instance ToJSON DeploymentStatusResponse where
   toJSON ds = Aeson.object $
@@ -64,6 +75,7 @@ instance ToJSON DeploymentStatusResponse where
     , "status"   .= ds.dsStatus
     ] <> maybe [] (\m -> ["metadata" .= m]) ds.dsMetadata
       <> maybe [] (\e -> ["error" .= e]) ds.dsError
+      <> maybe [] (\u -> ["updateId" .= u]) ds.dsUpdateId
 
 instance FromJSON DeploymentStatusResponse where
   parseJSON = Aeson.withObject "DeploymentStatusResponse" $ \o ->
@@ -72,11 +84,37 @@ instance FromJSON DeploymentStatusResponse where
       <*> (o Aeson..: "status"   <|> o Aeson..: "dsStatus")
       <*> (o Aeson..:? "metadata" <|> o Aeson..:? "dsMetadata")
       <*> (o Aeson..:? "error"    <|> o Aeson..:? "dsError")
+      <*> (o Aeson..:? "updateId" <|> o Aeson..:? "dsUpdateId")
+
+-- | Status of an async deploy/update job.
+data UpdateStatusResponse = UpdateStatusResponse
+  { usUpdateId     :: !Text
+  , usDeploymentId :: !Text
+  , usStatus       :: !Text   -- "compiling" | "applied" | "rejected"
+  , usError        :: !(Maybe Text)
+  }
+  deriving stock (Show, Generic)
+
+instance ToJSON UpdateStatusResponse where
+  toJSON u = Aeson.object $
+    [ "updateId"     .= u.usUpdateId
+    , "deploymentId" .= u.usDeploymentId
+    , "status"       .= u.usStatus
+    ] <> maybe [] (\e -> ["error" .= e]) u.usError
+
+instance FromJSON UpdateStatusResponse where
+  parseJSON = Aeson.withObject "UpdateStatusResponse" $ \o ->
+    UpdateStatusResponse
+      <$> o Aeson..: "updateId"
+      <*> o Aeson..: "deploymentId"
+      <*> o Aeson..: "status"
+      <*> o Aeson..:? "error"
 
 -- | The control plane API for managing deployments.
 type ControlPlaneApi =
        "deployments" :> MultipartForm Mem (MultipartData Mem) :> Verb 'POST 202 '[JSON] DeploymentStatusResponse
   :<|> "deployments" :> QueryParam "functions" Text :> QueryParam "scope" Text :> Get '[JSON] [DeploymentStatusResponse]
+  :<|> "deployments" :> Capture "deploymentId" Text :> "updates" :> Capture "updateId" Text :> Get '[JSON] UpdateStatusResponse
   :<|> "deployments" :> Capture "deploymentId" Text :> Get '[JSON] DeploymentStatusResponse
   :<|> "deployments" :> Capture "deploymentId" Text :> MultipartForm Mem (MultipartData Mem) :> Verb 'PUT 202 '[JSON] DeploymentStatusResponse
   :<|> "deployments" :> Capture "deploymentId" Text :> DeleteNoContent
@@ -86,11 +124,18 @@ controlPlaneHandler :: Visibility -> ServerT ControlPlaneApi AppM
 controlPlaneHandler vis =
        postDeploymentHandler
   :<|> getDeploymentsHandler vis
+  :<|> getUpdateStatusHandler
   :<|> getDeploymentHandler vis
   :<|> putDeploymentHandler
   :<|> deleteDeploymentHandler
 
--- | POST /deployments — deploy a new bundle
+-- | POST /deployments — create or overwrite a deployment.
+--
+-- Ungated (no backwards-compatibility check — that is PUT's job) but
+-- non-destructive: the work runs as an async job and the old version
+-- (if the id already exists) keeps serving until the job applies; a
+-- brand-new id simply does not exist until then. Returns 202 with an
+-- @updateId@ to poll, or "ready" immediately on a content-hash dedupe.
 postDeploymentHandler :: MultipartData Mem -> AppM DeploymentStatusResponse
 postDeploymentHandler multipart = do
   env <- asks id
@@ -102,14 +147,12 @@ postDeploymentHandler multipart = do
       pure (DeploymentId idText)
     _ -> liftIO $ DeploymentId . Text.pack . UUID.toString <$> nextRandom
 
-  liftIO $ logInfo env.logger "Deployment created"
+  liftIO $ logInfo env.logger "Deployment requested"
     [("deploymentId", toJSON deployId.unDeploymentId)]
 
-  -- Extract zip from multipart file
   sourceMap <- extractSourcesFromMultipart multipart
-
-  -- Compute version hash and check for existing deployment with same sources
-  let version = computeVersion sourceMap
+  let mDesc = extractDescription multipart
+      version = computeVersion sourceMap
 
   registry <- liftIO $ readTVarIO env.deploymentRegistry
   let existingMatch =
@@ -120,77 +163,29 @@ postDeploymentHandler multipart = do
 
   case existingMatch of
     ((existingId, existingMeta):_) ->
-      -- Return existing deployment immediately — no recompile needed
-      pure DeploymentStatusResponse
-        { dsId = existingId.unDeploymentId
-        , dsStatus = "ready"
-        , dsMetadata = Just existingMeta
-        , dsError = Nothing
-        }
+      -- Identical sources already deployed — no recompile, no job.
+      pure (mkStatus existingId.unDeploymentId "ready" (Just existingMeta) Nothing)
     [] -> do
-      -- Check deployment count limit
       let cfg = env.options
-      when (Map.size registry >= cfg.maxDeployments) $
+          isNew = not (Map.member deployId registry)
+      when (isNew && Map.size registry >= cfg.maxDeployments) $
         throwError err400 { errBody = jsonError "Maximum deployment limit reached" }
 
-      -- Normal path: save, register as pending, compile async
       now <- liftIO getCurrentTime
       let storedMeta = BundleStore.StoredMetadata
             { BundleStore.smVersion = version
             , BundleStore.smCreatedAt = Text.pack (show now)
+            , BundleStore.smDescription = mDesc
             }
-
-      liftIO $ BundleStore.saveBundle env.bundleStore (deployId.unDeploymentId) sourceMap storedMeta
-
-      liftIO $ atomically $ modifyTVar' env.deploymentRegistry $
-        Map.insert deployId DeploymentCompiling
-
-      let compileTimeoutMicros = cfg.compileTimeout * 1_000_000
-          compileMemLimitBytes = fromIntegral cfg.maxCompileMemoryMb * 1024 * 1024 :: Int64
-
-      _ <- liftIO $ async $ do
-        let compileLimited = do
-              setAllocationCounter compileMemLimitBytes
-              enableAllocationLimit
-              compileBundle env.logger deployId.unDeploymentId sourceMap
-        mResult <- (timeout compileTimeoutMicros compileLimited)
-          `catch` \AllocationLimitExceeded -> do
-            logError env.logger "Compilation exceeded memory limit"
-              [ ("deploymentId", toJSON deployId.unDeploymentId)
-              , ("maxCompileMemoryMb", toJSON cfg.maxCompileMemoryMb)
-              ]
-            atomically $ modifyTVar' env.deploymentRegistry $
-              Map.insert deployId (DeploymentFailed "Compilation exceeded memory limit")
-            pure Nothing
-        case mResult of
-          Nothing -> do
-            logError env.logger "Compilation timed out"
-              [("deploymentId", toJSON deployId.unDeploymentId)]
-            atomically $ modifyTVar' env.deploymentRegistry $
-              Map.insert deployId (DeploymentFailed "Compilation timed out")
-          Just (Right (fns, meta, bundles)) -> do
-            BundleStore.saveBundleCbor env.bundleStore (deployId.unDeploymentId) bundles
-            BundleStore.saveMetadataCache env.bundleStore (deployId.unDeploymentId) (Aeson.encode meta)
-              `catch` \(e :: SomeException) ->
-                logWarn env.logger "Failed to save metadata cache (non-fatal)"
-                  [ ("deploymentId", toJSON deployId.unDeploymentId)
-                  , ("error", toJSON (displayException e))
-                  ]
-            atomically $ modifyTVar' env.deploymentRegistry $
-              Map.insert deployId (DeploymentReady fns meta)
-          Just (Left err) -> do
-            logWarn env.logger "Compilation failed"
-              [ ("deploymentId", toJSON deployId.unDeploymentId)
-              , ("error", toJSON err)
-              ]
-            atomically $ modifyTVar' env.deploymentRegistry $
-              Map.insert deployId (DeploymentFailed err)
-
+      jobId <- liftIO $ newJob env deployId
+      _ <- liftIO $ async $
+        runDeployJob env deployId jobId sourceMap storedMeta mDesc Nothing
       pure DeploymentStatusResponse
         { dsId = deployId.unDeploymentId
         , dsStatus = "compiling"
         , dsMetadata = Nothing
         , dsError = Nothing
+        , dsUpdateId = Just jobId
         }
 
 -- | GET /deployments — list all deployments.
@@ -258,67 +253,72 @@ getDeploymentHandler vis deployIdText = do
         Just state' -> pure (stateToResponse env.options.debug vis FnSimple deployId state')
     Just state -> pure (stateToResponse env.options.debug vis FnSimple deployId state)
 
--- | PUT /deployments/{id} — replace a deployment bundle
+-- | GET /deployments/{id}/updates/{updateId} — poll an async
+-- deploy/update job. Independent of the live deployment: a job's
+-- progress or failure never changes what GET /deployments/{id} reports.
+getUpdateStatusHandler :: Text -> Text -> AppM UpdateStatusResponse
+getUpdateStatusHandler deployIdText jobId = do
+  env <- asks id
+  now <- liftIO getCurrentTime
+  liftIO $ atomically $ modifyTVar' env.updateJobs (pruneJobs now)
+  jobs <- liftIO $ readTVarIO env.updateJobs
+  case Map.lookup jobId jobs of
+    Just j | j.ujDeploymentId == deployIdText ->
+      pure UpdateStatusResponse
+        { usUpdateId = jobId
+        , usDeploymentId = j.ujDeploymentId
+        , usStatus = case j.ujStatus of
+            JobCompiling  -> "compiling"
+            JobApplied    -> "applied"
+            JobRejected _ -> "rejected"
+        , usError = case j.ujStatus of
+            JobRejected m -> Just m
+            _             -> Nothing
+        }
+    _ -> throwError err404
+
+-- | PUT /deployments/{id} — update an existing deployment.
+--
+-- Enforces the backwards-compatibility gate. Runs as an async job (202
+-- + updateId to poll); the old version keeps serving and nothing is
+-- persisted or swapped unless the new bundle compiles and is compatible.
 putDeploymentHandler :: Text -> MultipartData Mem -> AppM DeploymentStatusResponse
 putDeploymentHandler deployIdText multipart = do
   env <- asks id
   let deployId = DeploymentId deployIdText
 
-  liftIO $ logInfo env.logger "Deployment updated"
+  liftIO $ logInfo env.logger "Deployment update requested"
     [("deploymentId", toJSON deployIdText)]
 
   validateDeploymentId deployIdText
 
-  -- Check deployment exists
+  -- Must already exist. Capture its description (so a source-only PUT
+  -- preserves it) and its current interface (for the compat gate).
   registry <- liftIO $ readTVarIO env.deploymentRegistry
-  case Map.lookup deployId registry of
+  (existingDesc, mOldIfaces) <- case Map.lookup deployId registry of
     Nothing -> throwError err404
-    Just _ -> pure ()
+    Just st -> pure (stateDescription st, currentIfaces st)
 
-  -- Extract sources
   sourceMap <- extractSourcesFromMultipart multipart
+  let mDesc = extractDescription multipart <|> existingDesc
 
-  -- Save to store
   now <- liftIO getCurrentTime
   let version = computeVersion sourceMap
       storedMeta = BundleStore.StoredMetadata
         { BundleStore.smVersion = version
         , BundleStore.smCreatedAt = Text.pack (show now)
+        , BundleStore.smDescription = mDesc
         }
-
-  liftIO $ BundleStore.saveBundle env.bundleStore (deployId.unDeploymentId) sourceMap storedMeta
-
-  let compileTimeoutMicros = env.options.compileTimeout * 1_000_000
-
-  -- Compile in background; old version stays active until new compilation completes
-  _ <- liftIO $ async $ do
-    mResult <- timeout compileTimeoutMicros $ compileBundle env.logger deployId.unDeploymentId sourceMap
-    case mResult of
-      Nothing ->
-        logError env.logger "PUT compilation timed out"
-          [("deploymentId", toJSON deployId.unDeploymentId)]
-      Just (Right (fns, meta, bundles)) -> do
-        -- Save CBOR cache for fast restart
-        BundleStore.saveBundleCbor env.bundleStore (deployId.unDeploymentId) bundles
-        BundleStore.saveMetadataCache env.bundleStore (deployId.unDeploymentId) (Aeson.encode meta)
-          `catch` \(e :: SomeException) ->
-            logWarn env.logger "Failed to save metadata cache (non-fatal)"
-              [ ("deploymentId", toJSON deployId.unDeploymentId)
-              , ("error", toJSON (displayException e))
-              ]
-        atomically $ modifyTVar' env.deploymentRegistry $
-          Map.insert deployId (DeploymentReady fns meta)
-      Just (Left err) ->
-        logWarn env.logger "PUT compilation failed"
-          [ ("deploymentId", toJSON deployId.unDeploymentId)
-          , ("error", toJSON err)
-          ]
-
+  jobId <- liftIO $ newJob env deployId
+  _ <- liftIO $ async $
+    runDeployJob env deployId jobId sourceMap storedMeta mDesc
+      (Just (fromMaybe [] mOldIfaces))
   pure DeploymentStatusResponse
     { dsId = deployId.unDeploymentId
     , dsStatus = "compiling"
     , dsMetadata = Nothing
     , dsError = Nothing
+    , dsUpdateId = Just jobId
     }
 
 -- | DELETE /deployments/{id} — remove a deployment
@@ -346,6 +346,105 @@ deleteDeploymentHandler deployIdText = do
           throwError err409 { errBody = jsonError "Could not remove deployment files — retry later" }
 
 -- ----------------------------------------------------------------------------
+-- Async deploy/update jobs
+-- ----------------------------------------------------------------------------
+
+-- | Retention for terminal (applied/rejected) jobs, in seconds. Long
+-- enough for any client poll loop; in-flight ('JobCompiling') jobs are
+-- never pruned.
+jobRetentionSeconds :: Double
+jobRetentionSeconds = 600
+
+-- | Drop terminal jobs older than the retention window. Bounds the map
+-- to in-flight jobs plus recently-finished ones.
+pruneJobs :: UTCTime -> Map Text UpdateJob -> Map Text UpdateJob
+pruneJobs now = Map.filter keep
+ where
+  keep j = case j.ujStatus of
+    JobCompiling -> True
+    _            -> realToFrac (diffUTCTime now j.ujUpdatedAt) < jobRetentionSeconds
+
+-- | Register a fresh 'JobCompiling' job and return its id.
+newJob :: AppEnv -> DeploymentId -> IO Text
+newJob env deployId = do
+  jobId <- Text.pack . UUID.toString <$> nextRandom
+  now <- getCurrentTime
+  atomically $ modifyTVar' env.updateJobs $
+    pruneJobs now . Map.insert jobId (UpdateJob deployId.unDeploymentId JobCompiling now)
+  pure jobId
+
+-- | Transition a job to a terminal (or any) status.
+setJob :: AppEnv -> Text -> UpdateJobStatus -> IO ()
+setJob env jobId st = do
+  now <- getCurrentTime
+  atomically $ modifyTVar' env.updateJobs $
+    pruneJobs now . Map.adjust (\j -> j { ujStatus = st, ujUpdatedAt = now }) jobId
+
+-- | The background worker shared by POST and PUT: compile (bounded by
+-- the configured time + memory limits), optionally enforce the
+-- backwards-compatibility gate, and on success persist + swap the live
+-- deployment. Nothing is persisted or swapped on rejection, so the old
+-- version (if any) keeps serving untouched.
+--
+-- @mGate@: 'Just' old interfaces ⇒ enforce the compat gate (PUT);
+-- 'Nothing' ⇒ ungated (POST create/overwrite).
+runDeployJob
+  :: AppEnv
+  -> DeploymentId
+  -> Text                        -- ^ job id
+  -> Map FilePath Text           -- ^ sources
+  -> BundleStore.StoredMetadata
+  -> Maybe Text                  -- ^ description to stamp into metadata
+  -> Maybe [FnIface]             -- ^ compat gate (PUT) or Nothing (POST)
+  -> IO ()
+runDeployJob env deployId jobId sourceMap storedMeta mDesc mGate = do
+  let cfg = env.options
+      compileTimeoutMicros = cfg.compileTimeout * 1_000_000
+      compileMemLimitBytes = fromIntegral cfg.maxCompileMemoryMb * 1024 * 1024 :: Int64
+      compileLimited = do
+        setAllocationCounter compileMemLimitBytes
+        enableAllocationLimit
+        compileBundle env.logger deployId.unDeploymentId sourceMap
+      reject msg = do
+        logWarn env.logger "Deploy job rejected"
+          [ ("deploymentId", toJSON deployId.unDeploymentId)
+          , ("jobId", toJSON jobId)
+          , ("reason", toJSON msg)
+          ]
+        setJob env jobId (JobRejected msg)
+  mResult <- timeout compileTimeoutMicros compileLimited
+    `catch` \AllocationLimitExceeded -> pure Nothing
+  case mResult of
+    Nothing ->
+      reject "Update rejected: compilation timed out or exceeded the memory limit"
+    Just (Left err) ->
+      reject ("Update rejected: compilation failed: " <> err)
+    Just (Right (fns, meta0, bundles)) -> do
+      let newIfaces = map (ifaceFromFunction . (.fnImpl)) (Map.elems fns)
+          breaking = maybe [] (`detectBreakingChanges` newIfaces) mGate
+      case breaking of
+        (_:_) ->
+          reject $ "Update rejected — it would break existing integrations: "
+                     <> Text.intercalate "; " breaking
+        [] -> do
+          let meta = meta0 { metaDescription = mDesc }
+          BundleStore.saveBundle env.bundleStore deployId.unDeploymentId sourceMap storedMeta
+          BundleStore.saveBundleCbor env.bundleStore deployId.unDeploymentId bundles
+          BundleStore.saveMetadataCache env.bundleStore deployId.unDeploymentId (Aeson.encode meta)
+            `catch` \(e :: SomeException) ->
+              logWarn env.logger "Failed to save metadata cache (non-fatal)"
+                [ ("deploymentId", toJSON deployId.unDeploymentId)
+                , ("error", toJSON (displayException e))
+                ]
+          atomically $ modifyTVar' env.deploymentRegistry $
+            Map.insert deployId (DeploymentReady fns meta)
+          setJob env jobId JobApplied
+          logInfo env.logger "Deploy job applied"
+            [ ("deploymentId", toJSON deployId.unDeploymentId)
+            , ("jobId", toJSON jobId)
+            ]
+
+-- ----------------------------------------------------------------------------
 -- Helpers
 -- ----------------------------------------------------------------------------
 
@@ -358,8 +457,8 @@ stateToResponse debugMode vis fnMode (DeploymentId did) = \case
     let meta = case mCachedMeta of
           Just m -> Just m { metaFunctions = case fnMode of FnNone -> []; FnSimple -> map simplify m.metaFunctions; FnFull -> m.metaFunctions, metaFiles = if vis.showFiles then m.metaFiles else [] }
           Nothing -> Nothing
-    in DeploymentStatusResponse did "pending" meta Nothing
-  DeploymentCompiling -> DeploymentStatusResponse did "compiling" Nothing Nothing
+    in mkStatus did "pending" meta Nothing
+  DeploymentCompiling -> mkStatus did "compiling" Nothing Nothing
   DeploymentReady _ meta ->
     let filteredMeta = meta
           { metaFunctions = case fnMode of
@@ -367,10 +466,10 @@ stateToResponse debugMode vis fnMode (DeploymentId did) = \case
               FnSimple -> map simplify meta.metaFunctions
               FnFull -> meta.metaFunctions
           , metaFiles = if vis.showFiles then meta.metaFiles else []}
-    in DeploymentStatusResponse did "ready" (Just filteredMeta) Nothing
+    in mkStatus did "ready" (Just filteredMeta) Nothing
   DeploymentFailed err ->
     let errorMsg = if debugMode then Just err else Just "Compilation failed"
-    in DeploymentStatusResponse did "failed" Nothing errorMsg
+    in mkStatus did "failed" Nothing errorMsg
 
 -- | Validate a deployment ID.
 -- Must be <= 36 characters (UUID length), alphanumeric + hyphens + underscores,
@@ -398,6 +497,45 @@ validateDeploymentId deployId = do
 -- | Check if a zip entry path is safe (no path traversal).
 isPathSafe :: FilePath -> Bool
 isPathSafe path = ".." `notElem` splitDirectories path
+
+-- | Maximum stored length of the operator-supplied deployment description.
+-- Bounds the downstream system-prompt token budget and the
+-- prompt-injection surface.
+maxDescriptionLength :: Int
+maxDescriptionLength = 4000
+
+-- | Extract and sanitize the optional operator-supplied deployment
+-- description ("Intended use") from the multipart form.
+-- Trimmed, length-capped, and 'Nothing' when absent or blank.
+extractDescription :: MultipartData Mem -> Maybe Text
+extractDescription multipart =
+  case lookupInput "description" multipart of
+    Right raw ->
+      let trimmed = Text.strip raw
+      in if Text.null trimmed
+           then Nothing
+           else Just (Text.take maxDescriptionLength trimmed)
+    Left _ -> Nothing
+
+-- | The operator-supplied description currently associated with a
+-- deployment state, if any. Used to preserve the description across a
+-- source-only PUT that omits the field.
+stateDescription :: DeploymentState -> Maybe Text
+stateDescription (DeploymentReady _ meta)        = meta.metaDescription
+stateDescription (DeploymentPending (Just meta)) = meta.metaDescription
+stateDescription _                               = Nothing
+
+-- | The currently-deployed interface for the backwards-compatibility
+-- guard. Uses the live in-memory functions when ready (full schema,
+-- including the structured return shape) or the cached metadata when
+-- only that is available. 'Nothing' (compiling / failed / no cache)
+-- means there is no prior interface to break, so the guard is skipped.
+currentIfaces :: DeploymentState -> Maybe [FnIface]
+currentIfaces (DeploymentReady fns _)        =
+  Just (map (ifaceFromFunction . (.fnImpl)) (Map.elems fns))
+currentIfaces (DeploymentPending (Just meta)) =
+  Just (map ifaceFromSummary meta.metaFunctions)
+currentIfaces _                              = Nothing
 
 -- | Extract sources from a multipart zip upload with validation.
 extractSourcesFromMultipart :: MultipartData Mem -> AppM (Map FilePath Text)

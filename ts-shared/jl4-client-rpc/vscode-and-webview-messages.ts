@@ -2,6 +2,7 @@ import type {
   L4RpcRequestType,
   L4RpcNotificationType,
   FunctionParameter,
+  FunctionParameters,
 } from './custom-protocol.js'
 import {
   makeL4RpcRequestType,
@@ -214,11 +215,16 @@ export const ListSidebarDeployments: RequestType<
 export interface SidebarDeployParams {
   deploymentId: string
   fileUri: string
+  /** Operator-supplied "Intended use" for this deployment. */
+  mission?: string
 }
 
 export interface SidebarDeployResponse {
   success: boolean
   deploymentId?: string
+  /** Async deploy/update job id to poll via {@link GetSidebarUpdateStatus}.
+   *  Absent when the deploy resolved immediately (content-hash dedupe). */
+  updateId?: string
   error?: string
 }
 
@@ -276,12 +282,54 @@ export const GetSidebarDeploymentStatus: RequestType<
   method: 'getSidebarDeploymentStatus',
 }
 
+/** Sidebar polls an async deploy/update job (POST/PUT). Distinct from
+ *  the deployment's own status — the live version is unaffected until
+ *  the job applies. */
+export interface SidebarUpdateStatusResponse {
+  status: 'compiling' | 'applied' | 'rejected'
+  error?: string
+}
+
+export const GetSidebarUpdateStatus: RequestType<
+  { deploymentId: string; updateId: string },
+  SidebarUpdateStatusResponse
+> = {
+  method: 'getSidebarUpdateStatus',
+}
+
 /** Sidebar requests deployment OpenAPI spec (for breaking change detection) */
 export const GetSidebarDeploymentOpenApi: RequestType<
   { deploymentId: string },
   { openapi: unknown }
 > = {
   method: 'getSidebarDeploymentOpenApi',
+}
+
+/**
+ * A deployed function's interface, normalized from jl4-service's
+ * per-function schema endpoint (`GET /deployments/{id}/functions/{fn}`)
+ * for recursive breaking-change detection.
+ */
+export interface RemoteFunctionSchema {
+  name: string
+  /** Full input schema (recursive: properties / items / required / enum). */
+  parameters?: FunctionParameters
+  /** Display name of the return type (e.g. "BOOLEAN", "DEONTIC"). */
+  returnType?: string
+  /** Structured schema of the return value, when the deployment exposes it. */
+  returnSchema?: FunctionParameter
+}
+
+/**
+ * Sidebar requests the deployed functions' full schemas for recursive
+ * breaking-change detection. `functions` is `null` when the deployment
+ * does not exist yet (a first deploy — nothing to break).
+ */
+export const GetSidebarDeploymentSchemas: RequestType<
+  { deploymentId: string },
+  { functions: RemoteFunctionSchema[] | null }
+> = {
+  method: 'getSidebarDeploymentSchemas',
 }
 
 /** Sidebar asks extension to open a URL in the browser */

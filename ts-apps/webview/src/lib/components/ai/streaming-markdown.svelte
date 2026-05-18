@@ -50,8 +50,18 @@
   // conversation.
   const html = $derived.by(() => {
     if (!text) return ''
-    const fences = (text.match(/```/g) ?? []).length
-    const safe = fences % 2 === 1 ? text + '\n```' : text
+    // L4 identifiers are backtick-delimited (`group code`,
+    // `is present in`). The model references them in prose and
+    // inconsistently backslash-escapes some (`\``) but not others,
+    // which leaves `marked` mis-pairing the inline-code spans —
+    // swallowing words and leaking stray backslashes. Unescape every
+    // `\`` so backtick usage is uniform and each identifier's pair
+    // stays balanced. Tradeoff (same shape as the fence guard below):
+    // a genuinely-intended literal `\`` in chat prose becomes a code
+    // delimiter, which is vanishingly rare in this L4 chat.
+    const normalized = text.replace(/\\`/g, '`')
+    const fences = (normalized.match(/```/g) ?? []).length
+    const safe = fences % 2 === 1 ? normalized + '\n```' : normalized
     const parsed = marked.parse(safe, { renderer, async: false }) as string
     return streaming ? withCursor(parsed) : parsed
   })

@@ -20,22 +20,84 @@
   function formatResultValue(text: string): string {
     let result = ''
     let depth = 0
+    let inOf = false
+    type Frame = {
+      kind: 'list' | 'with' | 'paren'
+      depth: number
+      inOf: boolean
+    }
+    const stack: Frame[] = []
     const indent = () => '\n' + '  '.repeat(depth)
+    const isFieldAssign = (s: string): boolean =>
+      /^(?:`[^`]*`|[A-Za-z_]\w*) IS /.test(s)
+    const isRecordStart = (s: string): boolean =>
+      /^(?:`[^`]*`|[A-Za-z_]\w*) WITH /.test(s)
 
     for (let i = 0; i < text.length; i++) {
       const ch = text[i]
-      if (ch === '(') {
+
+      if (
+        text.startsWith('LIST ', i) &&
+        (i === 0 || text[i - 1] === ' ' || text[i - 1] === '(') &&
+        (text.indexOf(' WITH ', i) !== -1 || text.indexOf(' OF ', i) !== -1)
+      ) {
+        result += 'LIST'
+        stack.push({ kind: 'list', depth, inOf })
         depth++
-      } else if (ch === ')') {
-        depth = Math.max(0, depth - 1)
-      } else if (ch === ',') {
-        if (text[i + 1] === ' ') i++
         result += indent()
+        inOf = false
+        i += 4
+        continue
+      }
+
+      if (ch === '(') {
+        stack.push({ kind: 'paren', depth, inOf })
+        depth++
+        inOf = false
+      } else if (ch === ')') {
+        let restored = false
+        while (stack.length > 0) {
+          const f = stack.pop()!
+          if (f.kind === 'paren') {
+            depth = f.depth
+            inOf = f.inOf
+            restored = true
+            break
+          }
+        }
+        if (!restored) depth = Math.max(0, depth - 1)
+      } else if (ch === ',') {
+        const hasSpace = text[i + 1] === ' '
+        const rest = text.slice(hasSpace ? i + 2 : i + 1)
+        if (hasSpace) i++
+        if (isFieldAssign(rest)) {
+          result += indent()
+          inOf = false
+        } else if (isRecordStart(rest)) {
+          while (stack.length > 0 && stack[stack.length - 1].kind !== 'list') {
+            stack.pop()
+          }
+          const top = stack[stack.length - 1]
+          depth = top ? top.depth + 1 : Math.max(0, depth - 1)
+          result += indent()
+          inOf = false
+        } else if (inOf) {
+          result += ', '
+        } else {
+          result += indent()
+          inOf = false
+        }
       } else if (text.startsWith(' WITH ', i)) {
+        stack.push({ kind: 'with', depth, inOf })
         depth++
         result += ' WITH'
         result += indent()
+        inOf = false
         i += 5
+      } else if (text.startsWith(' OF ', i)) {
+        result += ' OF '
+        inOf = true
+        i += 3
       } else {
         result += ch
       }

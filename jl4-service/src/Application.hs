@@ -106,10 +106,11 @@ defaultMain = do
   store <- BundleStore.initStore storePath
   BundleStore.cleanupStore logger store
   registry <- newTVarIO Map.empty
+  pendingUpd <- newTVarIO Map.empty
   let effectiveServerName = case options.serverName of
         Just s  -> Just s
         Nothing -> Just ("http://localhost:" <> Text.pack (show options.port))
-      env = MkAppEnv registry store effectiveServerName logger options
+      env = MkAppEnv registry pendingUpd store effectiveServerName logger options
 
   -- Scan existing deployments and register them
   deployIds <- BundleStore.listDeployments store
@@ -221,7 +222,7 @@ app env req sendResp = do
       -- Override serverName with X-L4-Origin header if present (set by auth proxy).
       -- This allows the OpenAPI spec to reflect the org's external URL.
       reqEnv = case lookup "X-L4-Origin" (requestHeaders req) of
-        Just origin -> MkAppEnv env.deploymentRegistry env.bundleStore (Just (Text.Encoding.decodeUtf8 origin)) env.logger env.options
+        Just origin -> MkAppEnv env.deploymentRegistry env.updateJobs env.bundleStore (Just (Text.Encoding.decodeUtf8 origin)) env.logger env.options
         Nothing     -> env
   serve (Proxy @ServiceApi) (serverT reqEnv vis) req sendResp
 

@@ -135,7 +135,7 @@ renderExplorerPageBS registry = LBS.fromStrict $ Text.Encoding.encodeUtf8 $ Text
   , "        <dt>Org-wide (all deployments)</dt>"
   , "        <dd><code>POST /.mcp</code> &mdash; registers rule evaluation and file browsing tools for all deployments.</dd>"
   , "        <dt>Scoped to one deployment</dt>"
-  , "        <dd><code>POST /{deployment-id}/.mcp</code> or <code>POST /deployments/{deployment-id}/.mcp</code></dd>"
+  , "        <dd><code>POST /{deployment-id}/.mcp</code></dd>"
   , "        <dt>Authentication</dt>"
   , "        <dd>For <a href=\"https://legalese.cloud\">Legalese Cloud</a> deployments, send your API key as <code>Authorization: Bearer sk_...</code>.<br><strong>l4:rules</strong> to list tools. <strong>l4:evaluate</strong> to call rule evaluation tools. <strong>l4:read</strong> to call file browsing tools.</dd>"
   , "        <dt>Discovery</dt>"

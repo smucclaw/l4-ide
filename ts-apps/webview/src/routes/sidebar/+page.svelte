@@ -21,18 +21,21 @@
     RequestSidebarDeploy,
     RequestSidebarUndeploy,
     RequestSidebarDownloadDeployment,
-    GetSidebarDeploymentOpenApi,
+    GetSidebarDeploymentSchemas,
     GetSidebarDeploymentStatus,
+    GetSidebarUpdateStatus,
     ShowNotification,
     RequestRevealLocation,
     type WebviewFrontendIsReadyMessage,
     type ExportedFunctionInfo,
     type GetSidebarConnectionStatusResponse,
     type SidebarDeploymentInfo,
+    type RemoteFunctionSchema,
   } from 'jl4-client-rpc'
   import type { WebviewApi } from 'vscode-webview'
   import ToolCard from '$lib/components/tool-card.svelte'
   import InspectorPanel from '$lib/components/inspector-panel.svelte'
+  import DeploymentMetadata from '$lib/components/deployment-metadata.svelte'
   import DocsPanel from '$lib/components/docs-panel.svelte'
   import AiChatPanel from '$lib/components/ai/ai-chat-panel.svelte'
 
@@ -52,10 +55,19 @@
   let menuOpen: boolean = $state(false)
 
   // Deploy flow state
-  type DeployView = 'preview' | 'deploy-form' | 'breaking-warning'
+  // Deploy is a two-step wizard: `deploy-form` picks the deployment id,
+  // `mission` collects deployment-level metadata (description/mission),
+  // then the actual deploy fires. `breaking-warning` interrupts before
+  // the deploy if the new shape would break existing integrations.
+  type DeployView = 'preview' | 'deploy-form' | 'mission' | 'breaking-warning'
   let deployView: DeployView = $state('preview')
   let deploymentIdInput: string = $state('')
   let deploymentIdError: string = $state('')
+  // Operator-supplied "Intended use" for the deployment.
+  // First of a planned set of per-deployment configuration fields.
+  // Always starts blank — the mission screen is an authoring step, not
+  // an editor of remote state, so it never reloads the deployed value.
+  let deploymentMission: string = $state('')
   let breakingChanges: BreakingChange[] = $state([])
   let verifying: boolean = $state(false)
   let deploying: boolean = $state(false)
@@ -213,7 +225,8 @@
       if (deploying) return 'Deploying...'
       if (verifying) return 'Verifying...'
       if (deployView === 'breaking-warning') return 'Deploy Anyway'
-      if (deployView === 'deploy-form') return 'Deploy Now'
+      if (deployView === 'mission') return 'Deploy Now'
+      if (deployView === 'deploy-form') return 'Continue'
       if (activeTab === 'deployments' && deployments.length > 0)
         return 'Open in web browser'
       // Tabs that aren't the Deploy tab surface the button as
@@ -282,41 +295,35 @@
     deploymentIdInput = deriveDeploymentId(activeFileName)
     deploymentIdError = ''
     breakingChanges = []
+    deploymentMission = ''
     deployView = 'deploy-form'
+  }
+
+  function selectExistingDeployment(id: string) {
+    deploymentIdInput = id
+  }
+
+  /**
+   * Step 1 → step 2: validate the deployment id, then advance to the
+   * metadata (mission) screen. The actual deploy fires from there.
+   */
+  function goToMission() {
+    const raw = deploymentIdInput.trim()
+    if (!deploymentIdPattern.test(raw)) {
+      deploymentIdError =
+        'Must be 1-36 chars: letters, numbers, hyphens, underscores, spaces'
+      return
+    }
+    if (raw.startsWith('.')) {
+      deploymentIdError = 'Must not start with a dot'
+      return
+    }
+    deploymentIdError = ''
+    deployView = 'mission'
   }
 
   function cancelDeploy() {
     deployView = 'preview'
-  }
-
-  /** Normalize a per-deployment OpenAPI response (fs-prefixed fields) into a common shape. */
-  function normalizeRemoteFunctions(
-    remoteOpenApi: Record<string, unknown>
-  ): Array<{
-    name: string
-    parameters?: {
-      properties?: Record<string, { type?: string }>
-      required?: string[]
-    }
-    returnType?: string
-  }> {
-    // Per-deployment: { functions: [{ name, parameters, returnType, ... }] }
-    const meta = remoteOpenApi.functions as
-      | Array<Record<string, unknown>>
-      | undefined
-    if (meta) {
-      return meta.map((f) => ({
-        name: (f.name as string) ?? '',
-        parameters: f.parameters as
-          | {
-              properties?: Record<string, { type?: string }>
-              required?: string[]
-            }
-          | undefined,
-        returnType: (f.returnType as string) ?? '',
-      }))
-    }
-    return []
   }
 
   /** A segment of a breaking change message: either plain text or an identifier. */
@@ -331,85 +338,235 @@
     return { text }
   }
 
-  /** Detect breaking changes between local functions and a remote deployment's OpenAPI. */
-  function detectBreakingChanges(
-    localFns: ExportedFunctionInfo[],
-    remoteOpenApi: Record<string, unknown>
-  ): BreakingChange[] {
-    const changes: BreakingChange[] = []
-    const remoteFns = normalizeRemoteFunctions(remoteOpenApi)
-    const remoteByName = new Map(remoteFns.map((f) => [f.name, f]))
+  /** A node in a parameter / return-value JSON schema (structurally a
+   *  superset of both `FunctionParameters` and `FunctionParameter`). */
+  type SchemaNode = {
+    type?: string
+    format?: string
+    enum?: string[]
+    properties?: Record<string, SchemaNode>
+    required?: string[]
+    items?: SchemaNode
+  }
 
-    for (const local of localFns) {
-      const remote = remoteByName.get(local.name)
-      if (!remote) continue // new function, not breaking
+  /** Direction of compatibility: `in` = request parameter (caller sends),
+   *  `out` = return value (caller consumes). The two are mirror images —
+   *  e.g. a *new optional input* is safe, but a *removed output field* is
+   *  not (and vice-versa). */
+  type Dir = 'in' | 'out'
 
-      // Check return type changes
-      if (
-        remote.returnType &&
-        local.returnType &&
-        remote.returnType !== local.returnType
-      ) {
-        changes.push([
-          ident(local.name),
-          txt(' return type changed from '),
-          ident(remote.returnType),
-          txt(' to '),
-          ident(local.returnType),
-        ])
-      }
+  function subject(
+    fn: string,
+    kind: 'parameter' | 'return value',
+    loc: string
+  ): ChangeSegment[] {
+    return loc
+      ? [ident(fn), txt(` ${kind} `), ident(loc)]
+      : [ident(fn), txt(` ${kind}`)]
+  }
 
-      const remoteProps = remote.parameters?.properties ?? {}
-      const localProps = local.parameters?.properties ?? {}
-      const remoteRequired = new Set(remote.parameters?.required ?? [])
-      const localRequired = new Set(local.parameters?.required ?? [])
+  /**
+   * Recursively diff one schema node (old `remote` vs new `local`),
+   * appending a message for every backwards-incompatible change.
+   * Recurses through object `properties` and array `items` so nested
+   * record/list parameters are compared at every depth.
+   */
+  function diffNode(
+    fn: string,
+    kind: 'parameter' | 'return value',
+    loc: string,
+    remote: SchemaNode,
+    local: SchemaNode,
+    dir: Dir,
+    changes: BreakingChange[]
+  ) {
+    const here = () => subject(fn, kind, loc)
 
-      // Removed params
-      for (const name of Object.keys(remoteProps)) {
-        if (!(name in localProps)) {
+    // Type change — once the type differs, deeper structural diffing
+    // would just be noise, so report and stop descending this branch.
+    if (remote.type && local.type && remote.type !== local.type) {
+      changes.push([
+        ...here(),
+        txt(' type changed from '),
+        ident(remote.type),
+        txt(' to '),
+        ident(local.type),
+      ])
+      return
+    }
+
+    // Format change (e.g. plain string → date) is a contract change.
+    const rFmt = remote.format ?? ''
+    const lFmt = local.format ?? ''
+    if (rFmt !== lFmt && (rFmt || lFmt)) {
+      changes.push([
+        ...here(),
+        txt(' format changed from '),
+        ident(rFmt || 'none'),
+        txt(' to '),
+        ident(lFmt || 'none'),
+      ])
+    }
+
+    // Enum (allowed value set).
+    const rEnum = remote.enum ?? []
+    const lEnum = local.enum ?? []
+    if (rEnum.length && lEnum.length) {
+      if (dir === 'in') {
+        const dropped = rEnum.filter((v) => !lEnum.includes(v))
+        if (dropped.length)
           changes.push([
-            ident(local.name),
-            txt(' parameter '),
-            ident(name),
-            txt(' removed'),
+            ...here(),
+            txt(' no longer accepts '),
+            ident(dropped.join(', ')),
+          ])
+      } else {
+        const added = lEnum.filter((v) => !rEnum.includes(v))
+        if (added.length)
+          changes.push([
+            ...here(),
+            txt(' may now return new values '),
+            ident(added.join(', ')),
+          ])
+      }
+    } else if (dir === 'in' && !rEnum.length && lEnum.length) {
+      // Previously any value, now restricted — rejects formerly-valid input.
+      changes.push([
+        ...here(),
+        txt(' is now restricted to a fixed set of values'),
+      ])
+    } else if (dir === 'out' && rEnum.length && !lEnum.length) {
+      // Previously a fixed set, now unbounded — exhaustive consumers break.
+      changes.push([
+        ...here(),
+        txt(' is no longer limited to a fixed set of values'),
+      ])
+    }
+
+    // Object properties.
+    if (remote.properties || local.properties) {
+      const rProps = remote.properties ?? {}
+      const lProps = local.properties ?? {}
+      const rReq = new Set(remote.required ?? [])
+      const lReq = new Set(local.required ?? [])
+
+      for (const key of Object.keys(rProps)) {
+        const childLoc = loc ? `${loc}.${key}` : key
+        if (!(key in lProps)) {
+          changes.push([
+            ...subject(fn, kind, childLoc),
+            dir === 'in' ? txt(' removed') : txt(' no longer returned'),
+          ])
+          continue
+        }
+        // Required-ness tightening.
+        if (dir === 'in' && lReq.has(key) && !rReq.has(key)) {
+          changes.push([
+            ...subject(fn, kind, childLoc),
+            txt(' is now required'),
           ])
         }
-      }
-
-      // New required params
-      for (const name of localRequired) {
-        if (!remoteRequired.has(name) && !(name in remoteProps)) {
+        if (dir === 'out' && rReq.has(key) && !lReq.has(key)) {
           changes.push([
-            ident(local.name),
-            txt(' new required parameter '),
-            ident(name),
+            ...subject(fn, kind, childLoc),
+            txt(' may now be absent from the result'),
           ])
         }
+        diffNode(fn, kind, childLoc, rProps[key], lProps[key], dir, changes)
       }
 
-      // Type changes on existing params
-      for (const [name, localParam] of Object.entries(localProps)) {
-        const remoteParam = remoteProps[name]
-        if (
-          remoteParam &&
-          remoteParam.type &&
-          localParam.type &&
-          remoteParam.type !== localParam.type
-        ) {
+      for (const key of Object.keys(lProps)) {
+        if (key in rProps) continue
+        const childLoc = loc ? `${loc}.${key}` : key
+        // New optional input / new output field → compatible. Only a new
+        // *required* input breaks existing callers.
+        if (dir === 'in' && lReq.has(key)) {
           changes.push([
-            ident(local.name),
-            txt(' parameter '),
-            ident(name),
-            txt(' type changed from '),
-            ident(remoteParam.type),
-            txt(' to '),
-            ident(localParam.type),
+            ident(fn),
+            txt(' has a new required parameter '),
+            ident(childLoc),
           ])
         }
       }
     }
 
-    // Removed functions
+    // Array element schema.
+    if (remote.items || local.items) {
+      diffNode(
+        fn,
+        kind,
+        loc ? `${loc}[]` : '[]',
+        remote.items ?? {},
+        local.items ?? {},
+        dir,
+        changes
+      )
+    }
+  }
+
+  /**
+   * Detect backwards-incompatible changes between the local functions
+   * and the currently-deployed interface (fetched per-function from
+   * jl4-service). New functions and new optional parameters are safe;
+   * removals, renames, type/format changes, required-ness tightening and
+   * enum narrowing are breaking — checked recursively at every depth.
+   */
+  function detectBreakingChanges(
+    localFns: ExportedFunctionInfo[],
+    remoteFns: RemoteFunctionSchema[]
+  ): BreakingChange[] {
+    const changes: BreakingChange[] = []
+    const remoteByName = new Map(remoteFns.map((f) => [f.name, f]))
+
+    for (const local of localFns) {
+      const remote = remoteByName.get(local.name)
+      if (!remote) continue // new function — not breaking
+
+      // Return type (display name, e.g. BOOLEAN / DEONTIC). A change here
+      // also covers deontic ⇄ non-deontic (different request envelope).
+      const returnTypeChanged =
+        !!remote.returnType &&
+        !!local.returnType &&
+        remote.returnType !== local.returnType
+      if (returnTypeChanged) {
+        changes.push([
+          ident(local.name),
+          txt(' return type changed from '),
+          ident(remote.returnType as string),
+          txt(' to '),
+          ident(local.returnType),
+        ])
+      }
+
+      // Recursive parameter (input) diff.
+      diffNode(
+        local.name,
+        'parameter',
+        '',
+        (remote.parameters as unknown as SchemaNode) ?? {},
+        local.parameters as unknown as SchemaNode,
+        'in',
+        changes
+      )
+
+      // Recursive return-value (output) diff — mirror image of inputs:
+      // a removed/renamed output field or a narrowed output type breaks
+      // existing consumers. Only meaningful when the return type itself
+      // is unchanged and both sides expose a structured schema.
+      if (!returnTypeChanged && remote.returnSchema && local.returnSchema) {
+        diffNode(
+          local.name,
+          'return value',
+          '',
+          remote.returnSchema as unknown as SchemaNode,
+          local.returnSchema as unknown as SchemaNode,
+          'out',
+          changes
+        )
+      }
+    }
+
+    // Removed functions.
     for (const remote of remoteFns) {
       if (!localFns.find((f) => f.name === remote.name)) {
         changes.push([txt('rule '), ident(remote.name), txt(' removed')])
@@ -435,18 +592,16 @@
     deploymentIdError = ''
     verifying = true
 
-    // Check for breaking changes if deployment exists
+    // Check for breaking changes against the currently-deployed interface.
     try {
-      const { openapi } = await messenger.sendRequest(
-        GetSidebarDeploymentOpenApi,
+      const { functions: remoteFns } = await messenger.sendRequest(
+        GetSidebarDeploymentSchemas,
         HOST_EXTENSION,
         { deploymentId: id }
       )
-      if (openapi) {
-        const changes = detectBreakingChanges(
-          functions,
-          openapi as Record<string, unknown>
-        )
+      // `null` ⇒ deployment doesn't exist yet ⇒ first deploy, nothing to break.
+      if (remoteFns) {
+        const changes = detectBreakingChanges(functions, remoteFns)
         if (changes.length > 0) {
           breakingChanges = changes
           verifying = false
@@ -455,7 +610,7 @@
         }
       }
     } catch {
-      // Deployment doesn't exist yet — no breaking changes
+      // Schema fetch failed — don't block the deploy on a detection error.
     }
 
     verifying = false
@@ -473,43 +628,58 @@
       const result = await messenger.sendRequest(
         RequestSidebarDeploy,
         HOST_EXTENSION,
-        { deploymentId, fileUri: activeFileUri }
+        {
+          deploymentId,
+          fileUri: activeFileUri,
+          mission: deploymentMission.trim() || undefined,
+        }
       )
       if (result.success) {
-        // Poll lightweight status endpoint until ready/failed
         const did = result.deploymentId ?? deploymentId
-        let status = 'compiling'
+        // No updateId ⇒ resolved immediately (content-hash dedupe).
+        // Otherwise poll the async deploy/update job to a terminal state.
+        let outcome: 'applied' | 'rejected' | 'pending' = result.updateId
+          ? 'pending'
+          : 'applied'
         let error: string | undefined
-        for (let i = 0; i < 60; i++) {
-          await new Promise((r) => setTimeout(r, 1000))
-          try {
-            const resp = await messenger.sendRequest(
-              GetSidebarDeploymentStatus,
-              HOST_EXTENSION,
-              { deploymentId: did }
-            )
-            status = resp.status
-            error = resp.error
-            if (status === 'ready' || status === 'failed') break
-          } catch {
-            // ignore transient errors
+        if (result.updateId) {
+          for (let i = 0; i < 60; i++) {
+            await new Promise((r) => setTimeout(r, 1000))
+            try {
+              const resp = await messenger.sendRequest(
+                GetSidebarUpdateStatus,
+                HOST_EXTENSION,
+                { deploymentId: did, updateId: result.updateId }
+              )
+              error = resp.error
+              if (resp.status === 'applied') {
+                outcome = 'applied'
+                break
+              }
+              if (resp.status === 'rejected') {
+                outcome = 'rejected'
+                break
+              }
+            } catch {
+              // ignore transient errors
+            }
           }
         }
         deploying = false
         deployView = 'preview'
-        if (status === 'ready') {
+        if (outcome === 'applied') {
           await fetchDeployments()
           activeTab = 'deployments'
           notify('info', `Deployed "${did}" successfully.`)
-        } else if (status === 'failed') {
+        } else if (outcome === 'rejected') {
           notify(
             'error',
-            `Deploy "${did}" failed: ${error ?? 'compilation error'}`
+            `Deploy "${did}" rejected: ${error ?? 'compilation error'}`
           )
         } else {
           notify(
             'warning',
-            `Deployed "${did}" — still compiling. Refresh later.`
+            `Deploying "${did}" — still in progress. Refresh later.`
           )
           activeTab = 'deployments'
         }
@@ -625,8 +795,10 @@
         handleUndeploy()
       } else if (deployView === 'breaking-warning') {
         deployAnyway()
-      } else if (deployView === 'deploy-form') {
+      } else if (deployView === 'mission') {
         continueDeploy()
+      } else if (deployView === 'deploy-form') {
+        goToMission()
       } else if (activeTab === 'deployments' && deployments.length > 0) {
         openServiceUrl()
       } else if (
@@ -916,7 +1088,7 @@
                   <button
                     class="existing-dep-btn"
                     class:selected={deploymentIdInput === dep.deploymentId}
-                    onclick={() => (deploymentIdInput = dep.deploymentId)}
+                    onclick={() => selectExistingDeployment(dep.deploymentId)}
                   >
                     {dep.deploymentId}
                     <span class="existing-dep-count"
@@ -930,10 +1102,18 @@
             </div>
           {/if}
         </div>
+      {:else if deployView === 'mission'}
+        <!-- Deployment metadata (step 2) -->
+        <DeploymentMetadata
+          bind:mission={deploymentMission}
+          deploymentId={sanitizeDeploymentId(deploymentIdInput)}
+          heading="Deployment metadata"
+          onBack={() => (deployView = 'deploy-form')}
+        />
       {:else if deployView === 'breaking-warning'}
         <!-- Breaking change warning -->
         <div class="breaking-warning">
-          <button class="back-btn" onclick={() => (deployView = 'deploy-form')}
+          <button class="back-btn" onclick={() => (deployView = 'mission')}
             >&larr; Cancel deployment</button
           >
           <div class="warning-header">&#9888; Breaking changes detected</div>
@@ -1527,6 +1707,18 @@
 
   .form-input:focus {
     border-color: var(--vscode-foreground, #ccc);
+  }
+
+  .form-textarea {
+    font-family: inherit;
+    font-size: inherit;
+    line-height: 1.4;
+    resize: vertical;
+    min-height: 56px;
+  }
+
+  .form-textarea:disabled {
+    opacity: 0.6;
   }
 
   .form-error {

@@ -1383,12 +1383,14 @@ withPendingService' deployId sources act = do
       storedMeta = BundleStore.StoredMetadata
         { BundleStore.smVersion = version
         , BundleStore.smCreatedAt = "2026-01-01T00:00:00Z"
+        , BundleStore.smDescription = Nothing
         }
   BundleStore.saveBundle store deployId sourceMap storedMeta
 
   -- Register as Pending (not compiled)
   registry <- newTVarIO $ Map.singleton (DeploymentId deployId) (DeploymentPending Nothing)
-  let env = MkAppEnv registry store Nothing logger testOptions
+  pendingUpd <- newTVarIO Map.empty
+  let env = MkAppEnv registry pendingUpd store Nothing logger testOptions
 
   mgr <- newManager defaultManagerSettings
   testWithApplication (pure $ app env) \port -> do
@@ -1423,12 +1425,14 @@ withFailedService' deployId sources act = do
       storedMeta = BundleStore.StoredMetadata
         { BundleStore.smVersion = version
         , BundleStore.smCreatedAt = "2026-01-01T00:00:00Z"
+        , BundleStore.smDescription = Nothing
         }
   BundleStore.saveBundle store deployId sourceMap storedMeta
 
   -- Register as Failed
   registry <- newTVarIO $ Map.singleton (DeploymentId deployId) (DeploymentFailed "Test: simulated compilation failure")
-  let env = MkAppEnv registry store Nothing logger testOptions
+  pendingUpd <- newTVarIO Map.empty
+  let env = MkAppEnv registry pendingUpd store Nothing logger testOptions
 
   mgr <- newManager defaultManagerSettings
   testWithApplication (pure $ app env) \port -> do
@@ -1467,7 +1471,8 @@ withServiceFromSources' deployId sources act = do
 
   -- Register directly in the TVar
   registry <- newTVarIO $ Map.singleton (DeploymentId deployId) (DeploymentReady fns meta)
-  let env = MkAppEnv registry store Nothing logger testOptions
+  pendingUpd <- newTVarIO Map.empty
+  let env = MkAppEnv registry pendingUpd store Nothing logger testOptions
 
   mgr <- newManager defaultManagerSettings
   testWithApplication (pure $ app env) \port -> do
@@ -1496,7 +1501,8 @@ withEmptyService' act = do
   store <- initStore tmpPath
   logger <- newLogger False
   registry <- newTVarIO Map.empty
-  let env = MkAppEnv registry store Nothing logger testOptions
+  pendingUpd <- newTVarIO Map.empty
+  let env = MkAppEnv registry pendingUpd store Nothing logger testOptions
 
   mgr <- newManager defaultManagerSettings
   testWithApplication (pure $ app env) \port -> do

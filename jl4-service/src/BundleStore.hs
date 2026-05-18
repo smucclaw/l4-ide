@@ -53,8 +53,12 @@ newtype BundleStore = BundleStore { storePath :: FilePath }
 -- This is the on-disk representation; it matches 'Types.DeploymentMetadata'
 -- but is kept here to avoid circular imports.
 data StoredMetadata = StoredMetadata
-  { smVersion   :: !Text
-  , smCreatedAt :: !Text  -- UTCTime serialized as ISO-8601 string
+  { smVersion     :: !Text
+  , smCreatedAt   :: !Text  -- UTCTime serialized as ISO-8601 string
+  , smDescription :: !(Maybe Text)
+  -- ^ Operator-supplied deployment description ("Intended use").
+  -- Optional for backward compatibility: metadata.json written before this
+  -- field existed decodes with 'Nothing'.
   }
   deriving stock (Show, Generic)
   deriving anyclass (FromJSON, ToJSON)

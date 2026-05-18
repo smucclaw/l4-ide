@@ -62,8 +62,21 @@ parseJsonRpcRequest val = case val of
 
 -- | Route to the appropriate handler based on the JSON-RPC method.
 handleMethod :: Visibility -> Maybe Text -> Maybe Aeson.Value -> Text -> Aeson.Value -> AppM Aeson.Value
-handleMethod _vis _mScope reqId "initialize" _params =
-  pure $ jsonRpcResult reqId $ Aeson.object
+handleMethod _vis mScope reqId "initialize" _params = do
+  -- For a deployment-scoped server, expose the operator-supplied
+  -- "Intended use" via the standard MCP initialize
+  -- `instructions` field. Clients that honour it (e.g. Claude Code) fold
+  -- it into the model's context; others ignore it harmlessly.
+  mInstr <- case mScope of
+    Just scope -> do
+      env <- ask
+      registry <- liftIO $ readTVarIO env.deploymentRegistry
+      pure $ case Map.lookup (DeploymentId scope) registry of
+        Just (DeploymentReady _ meta)        -> meta.metaDescription
+        Just (DeploymentPending (Just meta)) -> meta.metaDescription
+        _                                    -> Nothing
+    Nothing -> pure Nothing
+  pure $ jsonRpcResult reqId $ Aeson.object $
     [ "protocolVersion" .= ("2025-03-26" :: Text)
     , "serverInfo" .= Aeson.object
         [ "name" .= ("L4 Tools" :: Text)
@@ -72,6 +85,7 @@ handleMethod _vis _mScope reqId "initialize" _params =
     , "capabilities" .= Aeson.object
         [ "tools" .= Aeson.object [] ]
     ]
+    <> maybe [] (\d -> ["instructions" .= d]) mInstr
 
 handleMethod _vis _mScope reqId "notifications/initialized" _params =
   pure $ jsonRpcResult reqId (Aeson.object [])

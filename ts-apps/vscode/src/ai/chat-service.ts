@@ -697,7 +697,7 @@ export class ChatService {
     })
     const tools = [...BUILTIN_TOOLS, ...mcpTools]
 
-    for await (const ev of this.opts.proxy.stream(
+    for await (const ev of this.opts.proxy.streamResilient(
       {
         messages,
         conversationId,
@@ -711,12 +711,13 @@ export class ChatService {
         // transcript.
         ...(continueTurn ? { continueTurn: true } : {}),
         // Register this turn with the proxy's TurnRegistry so a
-        // reattach call (future: manual, or auto on stream error
-        // once we've got since-cursor protocol) can pick up the
-        // buffered frames after a disconnect.
+        // mid-stream transport drop auto-reattaches (since-cursor
+        // protocol) and picks up the buffered frames without
+        // re-running the turn.
         turnId: opts.turnId,
       },
-      abortSignal
+      abortSignal,
+      opts.turnId
     )) {
       if (ev.kind === 'metadata') {
         local = ev.conversationId

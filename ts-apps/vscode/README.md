@@ -31,11 +31,14 @@ Documentation: https://legalese.com/l4
   - Real-time updates as you edit your code
   - Visual representation of logical relationships
   - Interactive exploration of rule structures
-- **Result Inspector**: Live evaluation results for `#EVAL`, `#EVALTRACE`, `#CHECK`, and `#ASSERT` directives
+- **Result Inspector**: Live evaluation results for `#EVAL`, `#EVALTRACE`, `#CHECK`, `#TRACE`, and `#ASSERT` directives
   - Click "Track result" above a directive to add it to the inspector
   - Results update automatically as you edit your code
   - Collapsible sections grouped by file
   - Syntax-highlighted output
+- **Docs Browser**: Searchable L4 documentation inside the sidebar
+  - Browse and search the L4 docs without leaving the editor
+  - "Copy into new file" buttons drop example snippets straight into a new L4 file
 
 ## What is L4?
 
@@ -55,16 +58,26 @@ L4 is a domain-specific language designed for expressing legal logic and rules i
 
 ## Using the Sidebar
 
-The L4 sidebar is accessible via the L4 icon in the activity bar. It has three tabs:
+The L4 sidebar is accessible via the L4 icon in the activity bar. It has five tabs:
 
-### Result Inspector
+### Legalese AI
 
-- Open an L4 file with `#EVAL`, `#CHECK`, or `#ASSERT` directives
+- Built-in chat for composing and iterating on L4 rules
+- The assistant can drive the fs / LSP / MCP tool set directly
+
+### Docs
+
+- Searchable L4 documentation rendered inside the sidebar
+- "Copy into new file" buttons paste example snippets into a new L4 file
+
+### Inspector
+
+- Open an L4 file with `#EVAL`, `#EVALTRACE`, `#CHECK`, `#TRACE`, or `#ASSERT` directives
 - Click "Track result" in the CodeLens above a directive
-- The sidebar switches to the Result Inspector tab and shows the evaluation result
+- The sidebar switches to the Inspector tab and shows the evaluation result
 - Results update live as you edit code
 
-### Deploy Preview
+### Deploy
 
 - Shows exported functions from the active L4 file with their parameter schemas, types, and descriptions
 - Updates automatically as you edit
@@ -144,8 +157,16 @@ Use data attributes to customize behavior:
 | Attribute      | Description                                                                                       |
 | -------------- | ------------------------------------------------------------------------------------------------- |
 | `data-scope`   | Filter by deployment/function (e.g. `deploy/*` for all functions, `deploy/fn` for a specific one) |
-| `data-tools`   | Registration mode: `auto` (default), `discovery`, `direct`, or `all`                              |
+| `data-tools`   | Comma-separated tool categories: `auto` (default), `rules`, `rule-tools`, `file-tools`, or `all`  |
 | `data-api-key` | API key for authenticated access                                                                  |
+
+`data-tools` categories:
+
+- `rules` — one tool per exported rule (direct evaluation)
+- `rule-tools` — `search_rules`, `get_rule_schema`, `evaluate_rule` (discovery)
+- `file-tools` — `list_files`, `read_file`, `search_identifier`, `search_text`
+- `auto` (default) — `rules` if ≤10 functions, otherwise `rule-tools`
+- `all` — `rules` + `rule-tools` + `file-tools`
 
 ## Cloud Deploy Setup
 
@@ -219,6 +240,7 @@ DECIDE `can vote` p IF
 - `jl4.serviceUrl`: URL of the jl4-service for deploying rules (leave empty for Legalese Cloud)
 - `jl4.serviceApiKey`: API key for authenticating with a self-hosted jl4-service
 - `jl4.mcpPort`: Port for the local MCP proxy server (default: 19415)
+- `legaleseAi.apiKey`: API key for Legalese AI (used instead of your Legalese Cloud session when set)
 
 ### Custom Language Server Setup
 

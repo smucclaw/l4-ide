@@ -30,9 +30,16 @@ buildOpenApiDoc mServerName vis deployments =
   Aeson.object $
     [ "openapi" .= ("3.0.0" :: Text)
     , "info" .= Aeson.object
-        [ "title" .= ("L4 Deployments" :: Text)
-        , "version" .= ("1.0.0" :: Text)
-        ]
+        ( [ "title" .= ("L4 Deployments" :: Text)
+          , "version" .= ("1.0.0" :: Text)
+          ]
+          -- Surface the operator-supplied "Intended use" as
+          -- the standard OpenAPI info.description when the document is
+          -- scoped to a single deployment.
+          <> case deployments of
+               [(_, dm)] -> maybe [] (\d -> ["description" .= d]) dm.metaDescription
+               _         -> []
+        )
     , "paths" .= buildPaths vis deployments
     ]
     <> maybe [] (\s -> ["servers" .= [Aeson.object ["url" .= s]]]) mServerName

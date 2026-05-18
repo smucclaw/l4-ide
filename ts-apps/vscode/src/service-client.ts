@@ -5,6 +5,16 @@ export interface DeployResponse {
   status: string
   metadata?: unknown
   error?: string
+  /** Set by POST/PUT: id of the async deploy/update job to poll. */
+  updateId?: string
+}
+
+/** Status of an async deploy/update job. */
+export interface UpdateStatusResponse {
+  updateId: string
+  deploymentId: string
+  status: 'compiling' | 'applied' | 'rejected'
+  error?: string
 }
 
 export interface ServiceHealth {
@@ -61,7 +71,8 @@ export class ServiceClient {
   async deploy(
     deploymentId: string,
     zipBuffer: Uint8Array,
-    isUpdate: boolean
+    isUpdate: boolean,
+    description?: string
   ): Promise<DeployResponse> {
     const blob = new Blob([zipBuffer], { type: 'application/zip' })
     const formData = new FormData()
@@ -74,6 +85,12 @@ export class ServiceClient {
     // For POST, include the deployment ID in the form data
     if (!isUpdate) {
       formData.append('id', deploymentId)
+    }
+
+    // Operator-supplied "Intended use". Omitted (not sent
+    // empty) when blank so a source-only PUT preserves the stored value.
+    if (description && description.trim().length > 0) {
+      formData.append('description', description.trim())
     }
 
     const resp = await this.request(path, {
@@ -93,6 +110,27 @@ export class ServiceClient {
     const resp = await this.request(`/deployments/${encodedId}`)
     if (!resp.ok) await throwWithBody(resp, `GET /deployments/${encodedId}`)
     return (await resp.json()) as DeployResponse
+  }
+
+  /**
+   * Poll an async deploy/update job. Independent of the deployment's
+   * own status — the live version is unaffected until the job applies.
+   */
+  async getUpdateStatus(
+    deploymentId: string,
+    updateId: string
+  ): Promise<UpdateStatusResponse> {
+    const encodedId = encodeURIComponent(deploymentId)
+    const encodedJob = encodeURIComponent(updateId)
+    const resp = await this.request(
+      `/deployments/${encodedId}/updates/${encodedJob}`
+    )
+    if (!resp.ok)
+      await throwWithBody(
+        resp,
+        `GET /deployments/${encodedId}/updates/${encodedJob}`
+      )
+    return (await resp.json()) as UpdateStatusResponse
   }
 
   /**
@@ -155,6 +193,22 @@ export class ServiceClient {
     if (!resp.ok)
       await throwWithBody(resp, `GET /deployments/${encodedId}/openapi.json`)
     return resp.json()
+  }
+
+  /**
+   * List a deployment's exported function names.
+   * Backed by `GET /deployments/{id}/functions` → `[{ name, description }]`.
+   * Used (together with {@link getFunctionSchema}) by the sidebar to
+   * recover the deployed interface for breaking-change detection.
+   */
+  async listDeploymentFunctions(
+    deploymentId: string
+  ): Promise<Array<{ name: string }>> {
+    const encodedId = encodeURIComponent(deploymentId)
+    const resp = await this.request(`/deployments/${encodedId}/functions`)
+    if (!resp.ok)
+      await throwWithBody(resp, `GET /deployments/${encodedId}/functions`)
+    return (await resp.json()) as Array<{ name: string }>
   }
 
   /**
