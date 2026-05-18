@@ -222,7 +222,7 @@ app env req sendResp = do
       -- Override serverName with X-L4-Origin header if present (set by auth proxy).
       -- This allows the OpenAPI spec to reflect the org's external URL.
       reqEnv = case lookup "X-L4-Origin" (requestHeaders req) of
-        Just origin -> MkAppEnv env.deploymentRegistry env.pendingUpdates env.bundleStore (Just (Text.Encoding.decodeUtf8 origin)) env.logger env.options
+        Just origin -> MkAppEnv env.deploymentRegistry env.updateJobs env.bundleStore (Just (Text.Encoding.decodeUtf8 origin)) env.logger env.options
         Nothing     -> env
   serve (Proxy @ServiceApi) (serverT reqEnv vis) req sendResp
 

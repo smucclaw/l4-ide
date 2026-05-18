@@ -222,6 +222,9 @@ export interface SidebarDeployParams {
 export interface SidebarDeployResponse {
   success: boolean
   deploymentId?: string
+  /** Async deploy/update job id to poll via {@link GetSidebarUpdateStatus}.
+   *  Absent when the deploy resolved immediately (content-hash dedupe). */
+  updateId?: string
   error?: string
 }
 
@@ -277,6 +280,21 @@ export const GetSidebarDeploymentStatus: RequestType<
   SidebarDeploymentStatusResponse
 > = {
   method: 'getSidebarDeploymentStatus',
+}
+
+/** Sidebar polls an async deploy/update job (POST/PUT). Distinct from
+ *  the deployment's own status — the live version is unaffected until
+ *  the job applies. */
+export interface SidebarUpdateStatusResponse {
+  status: 'compiling' | 'applied' | 'rejected'
+  error?: string
+}
+
+export const GetSidebarUpdateStatus: RequestType<
+  { deploymentId: string; updateId: string },
+  SidebarUpdateStatusResponse
+> = {
+  method: 'getSidebarUpdateStatus',
 }
 
 /** Sidebar requests deployment OpenAPI spec (for breaking change detection) */

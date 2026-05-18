@@ -265,3 +265,4 @@ instance Arbitrary DeploymentStatusResponse where
     <*> Q.elements ["compiling", "ready", "failed"]
     <*> arbitrary
     <*> arbitrary
+    <*> arbitrary

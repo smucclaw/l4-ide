@@ -23,6 +23,7 @@ import {
   GetSidebarDeploymentOpenApi,
   GetSidebarDeploymentSchemas,
   GetSidebarDeploymentStatus,
+  GetSidebarUpdateStatus,
   GetSidebarDocsContent,
   RequestNewL4File,
   RequestOpenUrl,
@@ -398,9 +399,14 @@ export function initializeSidebarMessenger(
         params.mission
       )
       outputChannel.appendLine(
-        `[sidebar] Deploy succeeded: ${result.id} (${result.status})`
+        `[sidebar] Deploy accepted: ${result.id} (${result.status}` +
+          `${result.updateId ? `, job ${result.updateId}` : ''})`
       )
-      return { success: true, deploymentId: result.id }
+      return {
+        success: true,
+        deploymentId: result.id,
+        updateId: result.updateId,
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       outputChannel.appendLine(`[sidebar] Deploy failed: ${msg}`)
@@ -603,6 +609,25 @@ export function initializeSidebarMessenger(
     } catch (err) {
       return {
         status: 'failed' as const,
+        error: err instanceof Error ? err.message : String(err),
+      }
+    }
+  })
+
+  // Poll an async deploy/update job (POST/PUT)
+  messenger.onRequest(GetSidebarUpdateStatus, async (params) => {
+    try {
+      const resp = await serviceClient.getUpdateStatus(
+        params.deploymentId,
+        params.updateId
+      )
+      return {
+        status: resp.status as 'compiling' | 'applied' | 'rejected',
+        error: resp.error,
+      }
+    } catch (err) {
+      return {
+        status: 'rejected' as const,
         error: err instanceof Error ? err.message : String(err),
       }
     }

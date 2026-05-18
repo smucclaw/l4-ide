@@ -3,7 +3,8 @@
 module Types (
   DeploymentId (..),
   DeploymentState (..),
-  PendingUpdate (..),
+  UpdateJob (..),
+  UpdateJobStatus (..),
   DeploymentMetadata (..),
   FunctionSummary (..),
   FileEntry (..),
@@ -69,19 +70,24 @@ data DeploymentState
   | DeploymentFailed !Text
   -- ^ Compilation failed; the error message is stored.
 
--- | Outcome of an in-flight asynchronous PUT update, tracked separately
--- from 'DeploymentState' so the live (old) deployment keeps serving
--- while the new bundle compiles and is compatibility-checked. Surfaced
--- via @GET \/deployments\/{id}@. 'UpdateRejected' carries an expiry: it
--- is reported to every poller until the TTL lapses, then self-clears so
--- a healthy deployment does not appear permanently failed (it is also
--- cleared eagerly by the next PUT or a successful update).
-data PendingUpdate
-  = UpdateCompiling
-  -- ^ New bundle is compiling / being compatibility-checked.
-  | UpdateRejected !Text !UTCTime
-  -- ^ Update rejected (breaking change, compile failure, or timeout),
-  -- with the instant after which this marker is considered stale.
+-- | An asynchronous deploy/update job (POST or PUT). Tracked as its own
+-- resource, distinct from the deployment it targets, so polling a job
+-- never alters what @GET \/deployments\/{id}@ reports about the live
+-- deployment. The live (old) version keeps serving until a job applies.
+data UpdateJob = UpdateJob
+  { ujDeploymentId :: !Text
+  , ujStatus       :: !UpdateJobStatus
+  , ujUpdatedAt    :: !UTCTime
+  -- ^ Last transition time; used to retention-prune terminal jobs.
+  }
+
+data UpdateJobStatus
+  = JobCompiling
+  -- ^ Bundle is compiling / being compatibility-checked.
+  | JobApplied
+  -- ^ The new bundle is compiled, compatible, and now the live version.
+  | JobRejected !Text
+  -- ^ Rejected: breaking change, compile failure, or timeout (reason).
 
 -- | Metadata persisted alongside a deployment bundle.
 data DeploymentMetadata = DeploymentMetadata
@@ -516,10 +522,11 @@ instance ToJSON BatchResponse where
 -- | Shared application environment threaded through all handlers.
 data AppEnv = MkAppEnv
   { deploymentRegistry :: TVar (Map DeploymentId DeploymentState)
-  , pendingUpdates     :: TVar (Map DeploymentId PendingUpdate)
-  -- ^ In-flight async PUT outcomes, keyed by deployment id. Does not
-  -- replace the live entry in 'deploymentRegistry' — the old version
-  -- stays served until a compatible bundle is registered.
+  , updateJobs         :: TVar (Map Text UpdateJob)
+  -- ^ Async deploy/update jobs, keyed by a freshly-minted job id and
+  -- polled via @GET \/deployments\/{id}\/updates\/{updateId}@. Separate
+  -- from 'deploymentRegistry': a job's progress/failure never changes
+  -- what the live deployment reports.
   , bundleStore        :: BundleStore
   , serverName         :: Maybe Text
   , logger             :: Logger

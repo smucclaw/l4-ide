@@ -5,6 +5,16 @@ export interface DeployResponse {
   status: string
   metadata?: unknown
   error?: string
+  /** Set by POST/PUT: id of the async deploy/update job to poll. */
+  updateId?: string
+}
+
+/** Status of an async deploy/update job. */
+export interface UpdateStatusResponse {
+  updateId: string
+  deploymentId: string
+  status: 'compiling' | 'applied' | 'rejected'
+  error?: string
 }
 
 export interface ServiceHealth {
@@ -100,6 +110,27 @@ export class ServiceClient {
     const resp = await this.request(`/deployments/${encodedId}`)
     if (!resp.ok) await throwWithBody(resp, `GET /deployments/${encodedId}`)
     return (await resp.json()) as DeployResponse
+  }
+
+  /**
+   * Poll an async deploy/update job. Independent of the deployment's
+   * own status — the live version is unaffected until the job applies.
+   */
+  async getUpdateStatus(
+    deploymentId: string,
+    updateId: string
+  ): Promise<UpdateStatusResponse> {
+    const encodedId = encodeURIComponent(deploymentId)
+    const encodedJob = encodeURIComponent(updateId)
+    const resp = await this.request(
+      `/deployments/${encodedId}/updates/${encodedJob}`
+    )
+    if (!resp.ok)
+      await throwWithBody(
+        resp,
+        `GET /deployments/${encodedId}/updates/${encodedJob}`
+      )
+    return (await resp.json()) as UpdateStatusResponse
   }
 
   /**

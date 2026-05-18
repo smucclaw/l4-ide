@@ -15,7 +15,7 @@ import Test.Hspec
 import Application (app)
 import Backend.Api (FnLiteral (..), ResponseWithReason (..))
 import BundleStore (initStore)
-import ControlPlane (DeploymentStatusResponse (..))
+import ControlPlane (DeploymentStatusResponse (..), UpdateStatusResponse (..))
 import Logging (newLogger)
 import Options (Options (..))
 import Types
@@ -77,6 +77,15 @@ GIVETH A BOOLEAN
 DECIDE compute_qualifies IF walks >= 1 AND eats AND drinks
 |]
 
+-- | Does not parse — guarantees a compile failure.
+brokenSrc :: Text
+brokenSrc = [i|
+@export default person qualifies
+GIVEN walks IS A BOOLEAN
+GIVETH A BOOLEAN
+DECIDE compute_qualifies IF walks AND AND
+|]
+
 ------------------------------------------------------------------------
 -- Spec
 ------------------------------------------------------------------------
@@ -88,14 +97,14 @@ spec = describe "PUT deployment compatibility guard (end-to-end)" do
     withService $ \baseUrl mgr -> do
       r <- deployPost baseUrl mgr "guard-nodesc" Nothing baseSrc
       statusCode' r `shouldBe` 202
-      pollUntilReady baseUrl mgr "guard-nodesc"
-      desc <- deploymentDescription baseUrl mgr "guard-nodesc"
-      desc `shouldBe` Nothing
+      uid <- mustUpdateId r
+      (st, _) <- pollJob baseUrl mgr "guard-nodesc" uid
+      st `shouldBe` "applied"
+      deploymentDescription baseUrl mgr "guard-nodesc" `shouldReturn` Nothing
 
   it "accepts and applies a compatible PUT (older client omits description)" do
     withService $ \baseUrl mgr -> do
-      _ <- deployPost baseUrl mgr "guard-compat" Nothing baseSrc
-      pollUntilReady baseUrl mgr "guard-compat"
+      deployApplied baseUrl mgr "guard-compat" Nothing baseSrc
 
       -- Base logic is AND: one false ⇒ False.
       evalQualifies baseUrl mgr "guard-compat" False True True
@@ -103,37 +112,54 @@ spec = describe "PUT deployment compatibility guard (end-to-end)" do
 
       r <- deployPut baseUrl mgr "guard-compat" Nothing compatSrc
       statusCode' r `shouldBe` 202
-      -- PUT is async: it returns "compiling" and the gate runs in the
-      -- background; the old version keeps serving until it lands.
+      -- PUT is async: 202 + a job id; the old version keeps serving
+      -- until the job applies. The deployment's own status is unchanged.
       dsStatusOf r `shouldBe` Just "compiling"
-      pollUntilReady baseUrl mgr "guard-compat"
+      uid <- mustUpdateId r
+      (st, _) <- pollJob baseUrl mgr "guard-compat" uid
+      st `shouldBe` "applied"
 
       -- Compatible logic is OR: same inputs now ⇒ True.
       evalQualifies baseUrl mgr "guard-compat" False True True
         `shouldReturnResult` FnLitBool True
 
-  it "rejects a breaking PUT asynchronously and leaves the deployment intact" do
+  it "rejects a breaking PUT via the job, leaving the deployment intact" do
     withService $ \baseUrl mgr -> do
-      _ <- deployPost baseUrl mgr "guard-break" Nothing baseSrc
-      pollUntilReady baseUrl mgr "guard-break"
+      deployApplied baseUrl mgr "guard-break" Nothing baseSrc
 
       r <- deployPut baseUrl mgr "guard-break" Nothing breakingSrc
-      -- Accepted for processing; rejection is surfaced via the status
-      -- endpoint, not the PUT response.
+      -- Accepted for processing; rejection is on the job, not the
+      -- deployment, and never via the PUT response.
       statusCode' r `shouldBe` 202
-      (st, mErr) <- pollOutcome baseUrl mgr "guard-break"
-      st `shouldBe` "failed"
+      uid <- mustUpdateId r
+      (st, mErr) <- pollJob baseUrl mgr "guard-break" uid
+      st `shouldBe` "rejected"
       let err = fromMaybe "" mErr
       err `shouldSatisfy` Text.isInfixOf "break"
       err `shouldSatisfy` Text.isInfixOf "type changed"
 
-      -- TTL'd, not read-and-clear: a second poll still sees the
-      -- rejection (it is not consumed by the first observer).
-      (st2, _) <- statusOnce baseUrl mgr "guard-break"
-      st2 `shouldBe` "failed"
+      -- Retained, not read-and-clear: a second poll still sees it.
+      (st2, _) <- jobOnce baseUrl mgr "guard-break" uid
+      st2 `shouldBe` "rejected"
 
-      -- The original (boolean) interface must still work unchanged.
+      -- The deployment's own status stays truthful (never overridden):
+      -- still "ready", still serving the original interface.
+      deploymentStatusText baseUrl mgr "guard-break" `shouldReturn` "ready"
       evalQualifies baseUrl mgr "guard-break" True True True
+        `shouldReturnResult` FnLitBool True
+
+  it "POST overwrite that fails to compile leaves the old version intact" do
+    withService $ \baseUrl mgr -> do
+      deployApplied baseUrl mgr "guard-postfail" Nothing baseSrc
+
+      r <- deployPost baseUrl mgr "guard-postfail" Nothing brokenSrc
+      statusCode' r `shouldBe` 202
+      uid <- mustUpdateId r
+      (st, _) <- pollJob baseUrl mgr "guard-postfail" uid
+      st `shouldBe` "rejected"
+
+      deploymentStatusText baseUrl mgr "guard-postfail" `shouldReturn` "ready"
+      evalQualifies baseUrl mgr "guard-postfail" True True True
         `shouldReturnResult` FnLitBool True
 
   it "PUT to a non-existent deployment is 404" do
@@ -143,14 +169,15 @@ spec = describe "PUT deployment compatibility guard (end-to-end)" do
 
   it "preserves a description across a source-only PUT (older client omits it)" do
     withService $ \baseUrl mgr -> do
-      _ <- deployPost baseUrl mgr "guard-desc" (Just "Intended use: demo") baseSrc
-      pollUntilReady baseUrl mgr "guard-desc"
+      deployApplied baseUrl mgr "guard-desc" (Just "Intended use: demo") baseSrc
       deploymentDescription baseUrl mgr "guard-desc"
         `shouldReturn` Just "Intended use: demo"
 
       r <- deployPut baseUrl mgr "guard-desc" Nothing compatSrc
       statusCode' r `shouldBe` 202
-      pollUntilReady baseUrl mgr "guard-desc"
+      uid <- mustUpdateId r
+      (st, _) <- pollJob baseUrl mgr "guard-desc" uid
+      st `shouldBe` "applied"
       deploymentDescription baseUrl mgr "guard-desc"
         `shouldReturn` Just "Intended use: demo"
 
@@ -253,41 +280,56 @@ shouldReturnResult act expected = do
     Nothing ->
       expectationFailure ("Undecodable eval response: " <> show (responseBody resp))
 
-pollUntilReady :: String -> Manager -> Text -> IO ()
-pollUntilReady baseUrl mgr deployId = go (120 :: Int)
- where
-  go 0 = expectationFailure ("Deployment " <> Text.unpack deployId <> " never became ready")
-  go n = do
-    req <- parseRequest (baseUrl <> "/deployments/" <> Text.unpack deployId)
-    resp <- httpLbs req mgr
-    case Aeson.decode (responseBody resp) :: Maybe DeploymentStatusResponse of
-      Just s | s.dsStatus == "ready"  -> pure ()
-      Just s | s.dsStatus == "failed" ->
-        expectationFailure ("Deployment failed: " <> show s.dsError)
-      _ -> threadDelay 500_000 >> go (n - 1)
+-- | Extract the async job id from a 202 deploy response, failing the
+-- test if absent (a job-bearing deploy must carry one).
+mustUpdateId :: Response LBS.ByteString -> IO Text
+mustUpdateId r =
+  case Aeson.decode (responseBody r) :: Maybe DeploymentStatusResponse of
+    Just s | Just uid <- s.dsUpdateId -> pure uid
+    _ -> expectationFailure "expected an updateId in the deploy response"
+           >> pure ""
 
--- | Poll until the deployment reaches a terminal status, returning it
--- with any error message (does not fail the test on "failed").
-pollOutcome :: String -> Manager -> Text -> IO (Text, Maybe Text)
-pollOutcome baseUrl mgr deployId = go (120 :: Int)
+-- | Single GET /deployments/{id}/updates/{updateId} → (status, error).
+jobOnce :: String -> Manager -> Text -> Text -> IO (Text, Maybe Text)
+jobOnce baseUrl mgr deployId uid = do
+  req <- parseRequest
+    (baseUrl <> "/deployments/" <> Text.unpack deployId
+              <> "/updates/" <> Text.unpack uid)
+  resp <- httpLbs req mgr
+  case Aeson.decode (responseBody resp) :: Maybe UpdateStatusResponse of
+    Just u  -> pure (u.usStatus, u.usError)
+    Nothing -> pure ("undecodable", Nothing)
+
+-- | Poll a job until it reaches a terminal status (applied/rejected).
+pollJob :: String -> Manager -> Text -> Text -> IO (Text, Maybe Text)
+pollJob baseUrl mgr deployId uid = go (120 :: Int)
  where
   go 0 = pure ("timeout", Nothing)
   go n = do
-    req <- parseRequest (baseUrl <> "/deployments/" <> Text.unpack deployId)
-    resp <- httpLbs req mgr
-    case Aeson.decode (responseBody resp) :: Maybe DeploymentStatusResponse of
-      Just s | s.dsStatus == "ready"  -> pure ("ready", s.dsError)
-      Just s | s.dsStatus == "failed" -> pure ("failed", s.dsError)
-      _ -> threadDelay 500_000 >> go (n - 1)
+    (st, mErr) <- jobOnce baseUrl mgr deployId uid
+    if st == "applied" || st == "rejected"
+      then pure (st, mErr)
+      else threadDelay 500_000 >> go (n - 1)
 
--- | Single GET /deployments/{id} → (status, error).
-statusOnce :: String -> Manager -> Text -> IO (Text, Maybe Text)
-statusOnce baseUrl mgr deployId = do
+-- | Single GET /deployments/{id} → status string (truthful live state).
+deploymentStatusText :: String -> Manager -> Text -> IO Text
+deploymentStatusText baseUrl mgr deployId = do
   req <- parseRequest (baseUrl <> "/deployments/" <> Text.unpack deployId)
   resp <- httpLbs req mgr
   case Aeson.decode (responseBody resp) :: Maybe DeploymentStatusResponse of
-    Just s  -> pure (s.dsStatus, s.dsError)
-    Nothing -> pure ("undecodable", Nothing)
+    Just s  -> pure s.dsStatus
+    Nothing -> pure "undecodable"
+
+-- | POST a bundle and block until its job has applied.
+deployApplied :: String -> Manager -> Text -> Maybe Text -> Text -> IO ()
+deployApplied baseUrl mgr deployId mDesc src = do
+  r <- deployPost baseUrl mgr deployId mDesc src
+  statusCode' r `shouldBe` 202
+  uid <- mustUpdateId r
+  (st, mErr) <- pollJob baseUrl mgr deployId uid
+  st `shouldBe` "applied"
+  -- (mErr is Nothing on success; surfaced here only if it isn't)
+  maybe (pure ()) (\e -> expectationFailure ("unexpected: " <> Text.unpack e)) mErr
 
 createZipBundle :: [(FilePath, Text)] -> LBS.ByteString
 createZipBundle entries =

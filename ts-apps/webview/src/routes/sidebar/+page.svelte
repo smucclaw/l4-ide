@@ -23,6 +23,7 @@
     RequestSidebarDownloadDeployment,
     GetSidebarDeploymentSchemas,
     GetSidebarDeploymentStatus,
+    GetSidebarUpdateStatus,
     ShowNotification,
     RequestRevealLocation,
     type WebviewFrontendIsReadyMessage,
@@ -634,40 +635,51 @@
         }
       )
       if (result.success) {
-        // Poll lightweight status endpoint until ready/failed
         const did = result.deploymentId ?? deploymentId
-        let status = 'compiling'
+        // No updateId ⇒ resolved immediately (content-hash dedupe).
+        // Otherwise poll the async deploy/update job to a terminal state.
+        let outcome: 'applied' | 'rejected' | 'pending' = result.updateId
+          ? 'pending'
+          : 'applied'
         let error: string | undefined
-        for (let i = 0; i < 60; i++) {
-          await new Promise((r) => setTimeout(r, 1000))
-          try {
-            const resp = await messenger.sendRequest(
-              GetSidebarDeploymentStatus,
-              HOST_EXTENSION,
-              { deploymentId: did }
-            )
-            status = resp.status
-            error = resp.error
-            if (status === 'ready' || status === 'failed') break
-          } catch {
-            // ignore transient errors
+        if (result.updateId) {
+          for (let i = 0; i < 60; i++) {
+            await new Promise((r) => setTimeout(r, 1000))
+            try {
+              const resp = await messenger.sendRequest(
+                GetSidebarUpdateStatus,
+                HOST_EXTENSION,
+                { deploymentId: did, updateId: result.updateId }
+              )
+              error = resp.error
+              if (resp.status === 'applied') {
+                outcome = 'applied'
+                break
+              }
+              if (resp.status === 'rejected') {
+                outcome = 'rejected'
+                break
+              }
+            } catch {
+              // ignore transient errors
+            }
           }
         }
         deploying = false
         deployView = 'preview'
-        if (status === 'ready') {
+        if (outcome === 'applied') {
           await fetchDeployments()
           activeTab = 'deployments'
           notify('info', `Deployed "${did}" successfully.`)
-        } else if (status === 'failed') {
+        } else if (outcome === 'rejected') {
           notify(
             'error',
-            `Deploy "${did}" failed: ${error ?? 'compilation error'}`
+            `Deploy "${did}" rejected: ${error ?? 'compilation error'}`
           )
         } else {
           notify(
             'warning',
-            `Deployed "${did}" — still compiling. Refresh later.`
+            `Deploying "${did}" — still in progress. Refresh later.`
           )
           activeTab = 'deployments'
         }
