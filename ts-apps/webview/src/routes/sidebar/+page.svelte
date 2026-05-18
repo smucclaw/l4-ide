@@ -65,8 +65,9 @@
   let deploymentIdError: string = $state('')
   // Operator-supplied "Intended use" for the deployment.
   // First of a planned set of per-deployment configuration fields.
-  // Always starts blank — the mission screen is an authoring step, not
-  // an editor of remote state, so it never reloads the deployed value.
+  // Blank for a fresh deployment; pre-populated from the deployed
+  // metadata.description when redeploying an existing id, so the user
+  // sees/edits the current value rather than silently blanking it.
   let deploymentMission: string = $state('')
   let breakingChanges: BreakingChange[] = $state([])
   let verifying: boolean = $state(false)
@@ -301,6 +302,10 @@
 
   function selectExistingDeployment(id: string) {
     deploymentIdInput = id
+    // Redeploy: pre-populate "Intended use" from the deployed metadata
+    // so it shows/edits the current value instead of starting blank.
+    const dep = deployments.find((d) => d.deploymentId === id)
+    deploymentMission = dep?.description ?? ''
   }
 
   /**
@@ -319,6 +324,15 @@
       return
     }
     deploymentIdError = ''
+    // If the (typed or selected) id matches an existing deployment and
+    // the user hasn't entered anything, pre-fill "Intended use" from the
+    // deployed metadata so a redeploy preserves/shows it.
+    if (!deploymentMission.trim()) {
+      const match = deployments.find(
+        (d) => d.deploymentId === sanitizeDeploymentId(raw)
+      )
+      if (match?.description) deploymentMission = match.description
+    }
     deployView = 'mission'
   }
 

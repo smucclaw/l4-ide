@@ -43,14 +43,14 @@
   </div>
 
   <div class="form-group">
-    <label class="form-label" for="deployment-mission">Intended use</label>
+    <label class="form-label" for="deployment-intended-use">Intended use</label>
     <textarea
-      id="deployment-mission"
+      id="deployment-intended-use"
       class="form-input form-textarea"
       bind:value={mission}
       rows="4"
       maxlength="4000"
-      placeholder="Explain how the deployed rules are to be used. (<4000 chars)"
+      placeholder="Explain how the deployed rules are to be used (<4000 chars)"
     ></textarea>
   </div>
 </div>
