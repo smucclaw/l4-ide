@@ -65,6 +65,40 @@ export type AiProxyStreamEvent =
   | { kind: 'error'; message: string; code?: string }
 
 /**
+ * Mutable resume cursor shared with {@link parseSse}. Tracks the SSE
+ * `id:` of the last frame fully delivered to the consumer so a
+ * reattach after a mid-stream transport drop can ask the proxy to
+ * replay strictly *after* it — no duplicate deltas. 0 = nothing
+ * consumed yet (full replay on reattach).
+ */
+export interface SseCursor {
+  lastEventId: number
+}
+
+/** Bounded reattach policy for {@link AiProxyClient.streamResilient}.
+ *  A handful of quick retries covers laptop-lid / Wi-Fi-roam / ALB
+ *  RST blips without spinning forever on a genuinely dead route. */
+const MAX_REATTACHES = 5
+const REATTACH_BACKOFF_MS = [500, 1000, 2000, 4000, 8000]
+
+/** Abortable sleep — rejects immediately if the signal trips so a
+ *  user "stop" during backoff doesn't wait out the timer. */
+function delay(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) return reject(new DOMException('Aborted', 'AbortError'))
+    const t = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+    const onAbort = (): void => {
+      clearTimeout(t)
+      reject(new DOMException('Aborted', 'AbortError'))
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+  })
+}
+
+/**
  * Production ai-proxy URL. The `LEGALESE_AI_ENDPOINT` env var stays as
  * an undocumented escape hatch for developers running on a non-default
  * port. End users flip the `legaleseAi.localMode` setting instead —
@@ -125,7 +159,8 @@ export class AiProxyClient {
    */
   async *stream(
     request: AiProxyChatRequest,
-    abortSignal: AbortSignal
+    abortSignal: AbortSignal,
+    cursor?: SseCursor
   ): AsyncGenerator<AiProxyStreamEvent> {
     const endpoint = getAiEndpoint()
     const local = isLocalMode()
@@ -176,22 +211,28 @@ export class AiProxyClient {
       const code = extractErrorCode(body) ?? httpStatusToCode(res.status)
       throw new AiProxyError(message, code, res.status)
     }
-    yield* parseSse(res.body, this.opts.logger)
+    yield* parseSse(res.body, this.opts.logger, cursor)
   }
 
   /**
    * GET /v1/chat/turns/{turnId}/stream. Rebinds to an existing
    * server-side turn after a client disconnect and replays + tails
-   * the SSE buffer. Throws AiProxyError on 404 (turn unknown or
+   * the SSE buffer. `sinceId` (the last fully-consumed SSE id) is
+   * sent as `Last-Event-ID` so the proxy replays strictly after it —
+   * no duplicate deltas. Throws AiProxyError on 404 (turn unknown or
    * reaped) so the caller can fall back to a fresh request.
    * Same SSE parse path as `stream()`.
    */
   async *reattach(
     turnId: string,
-    abortSignal: AbortSignal
+    abortSignal: AbortSignal,
+    cursor?: SseCursor
   ): AsyncGenerator<AiProxyStreamEvent> {
     const endpoint = getAiEndpoint()
-    const url = `${endpoint}/v1/chat/turns/${encodeURIComponent(turnId)}/stream`
+    const sinceId = cursor?.lastEventId ?? 0
+    const url =
+      `${endpoint}/v1/chat/turns/${encodeURIComponent(turnId)}/stream` +
+      (sinceId > 0 ? `?since=${sinceId}` : '')
     const headers = await this.opts.auth.getAiAuthHeaders()
     if (!headers.Authorization && isLocalMode()) {
       headers.Authorization = 'Bearer dev-local'
@@ -203,10 +244,16 @@ export class AiProxyClient {
         401
       )
     }
-    this.opts.logger.info(`GET ${url} (reattach)`)
+    this.opts.logger.info(`GET ${url} (reattach, since=${sinceId})`)
     const res = await fetch(url, {
       method: 'GET',
-      headers: { ...headers, Accept: 'text/event-stream' },
+      headers: {
+        ...headers,
+        Accept: 'text/event-stream',
+        // Standard SSE resume header; the proxy also accepts the
+        // `?since=` query above for belt-and-braces.
+        ...(sinceId > 0 ? { 'Last-Event-ID': String(sinceId) } : {}),
+      },
       signal: abortSignal,
     })
     this.opts.logger.info(`reattach response ${res.status} ${res.statusText}`)
@@ -224,7 +271,71 @@ export class AiProxyClient {
       const code = extractErrorCode(body) ?? httpStatusToCode(res.status)
       throw new AiProxyError(message, code, res.status)
     }
-    yield* parseSse(res.body, this.opts.logger)
+    yield* parseSse(res.body, this.opts.logger, cursor)
+  }
+
+  /**
+   * `stream()` with automatic reattach across transient transport
+   * drops (Wi-Fi roam, laptop lid, ALB RST during a long
+   * think/tool-execute gap). The proxy keeps running the turn and
+   * buffers every frame; on a network-level failure we GET the
+   * reattach endpoint with the resume cursor and keep yielding into
+   * the *same* consumer, so the caller sees one continuous event
+   * stream and never has to re-run the turn.
+   *
+   * NOT retried: user abort, and `AiProxyError` (a real HTTP/protocol
+   * outcome — 4xx/5xx, or the proxy's typed mid-stream `error` event
+   * which is yielded, not thrown). Those are terminal by design;
+   * replaying the buffer would just hit the same wall.
+   */
+  async *streamResilient(
+    request: AiProxyChatRequest,
+    abortSignal: AbortSignal,
+    turnId: string
+  ): AsyncGenerator<AiProxyStreamEvent> {
+    const cursor: SseCursor = { lastEventId: 0 }
+    let gen = this.stream(request, abortSignal, cursor)
+    let reattaches = 0
+    for (;;) {
+      try {
+        yield* gen
+        return
+      } catch (err) {
+        if (abortSignal.aborted) throw err
+        if (err instanceof AiProxyError) throw err
+        if (reattaches >= MAX_REATTACHES) {
+          this.opts.logger.warn(
+            `stream interrupted and reattach budget exhausted (${reattaches}); surfacing error`
+          )
+          throw err
+        }
+        const backoff =
+          REATTACH_BACKOFF_MS[
+            Math.min(reattaches, REATTACH_BACKOFF_MS.length - 1)
+          ]
+        reattaches++
+        this.opts.logger.warn(
+          `stream interrupted (${err instanceof Error ? err.message : String(err)}); ` +
+            `reattach ${reattaches}/${MAX_REATTACHES} after ${backoff}ms (since=${cursor.lastEventId})`
+        )
+        try {
+          await delay(backoff, abortSignal)
+        } catch {
+          throw err // aborted during backoff
+        }
+        try {
+          gen = this.reattach(turnId, abortSignal, cursor)
+        } catch (re) {
+          // 404 (turn reaped / wrong task) or auth — can't resume;
+          // surface the ORIGINAL transport error so the UI shows a
+          // retry affordance rather than a confusing "not found".
+          this.opts.logger.warn(
+            `reattach failed (${re instanceof Error ? re.message : String(re)}); surfacing original error`
+          )
+          throw err
+        }
+      }
+    }
   }
 
   /**
@@ -332,7 +443,8 @@ function extractErrorCode(body: string): string | undefined {
  */
 async function* parseSse(
   body: ReadableStream<Uint8Array>,
-  logger?: AiLogger
+  logger?: AiLogger,
+  cursor?: SseCursor
 ): AsyncGenerator<AiProxyStreamEvent> {
   const reader = body.getReader()
   const decoder = new TextDecoder('utf-8')
@@ -362,32 +474,47 @@ async function* parseSse(
       if (!frame) continue
       totalFrames++
       yield* interpretFrame(frame, logger)
+      // Advance the resume cursor only AFTER the consumer has pulled
+      // every event this frame produced — so a reattach asks the
+      // proxy to replay strictly after the last frame we fully
+      // handled, never re-delivering a partially-applied one.
+      if (cursor && frame.id !== undefined) cursor.lastEventId = frame.id
     }
   }
   if (buffer.trim().length > 0) {
     const frame = parseFrame(buffer)
-    if (frame) yield* interpretFrame(frame, logger)
+    if (frame) {
+      yield* interpretFrame(frame, logger)
+      if (cursor && frame.id !== undefined) cursor.lastEventId = frame.id
+    }
   }
 }
 
 interface SseFrame {
   event?: string
   data: string
+  /** SSE `id:` field — monotonic per-turn sequence the proxy stamps
+   *  on every event/data frame. Absent on keepalive comments. */
+  id?: number
 }
 
 function parseFrame(raw: string): SseFrame | null {
   const lines = raw.split('\n')
   let event: string | undefined
+  let id: number | undefined
   const dataLines: string[] = []
   for (const line of lines) {
     if (line.startsWith('event:')) {
       event = line.slice('event:'.length).trim()
     } else if (line.startsWith('data:')) {
       dataLines.push(line.slice('data:'.length).trimStart())
+    } else if (line.startsWith('id:')) {
+      const n = Number.parseInt(line.slice('id:'.length).trim(), 10)
+      if (Number.isFinite(n)) id = n
     }
   }
   if (dataLines.length === 0) return null
-  return { event, data: dataLines.join('\n') }
+  return { event, data: dataLines.join('\n'), id }
 }
 
 function* interpretFrame(
