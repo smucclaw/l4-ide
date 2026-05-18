@@ -196,10 +196,13 @@ export class ServiceClient {
   }
 
   /**
-   * List a deployment's exported function names.
-   * Backed by `GET /deployments/{id}/functions` → `[{ name, description }]`.
-   * Used (together with {@link getFunctionSchema}) by the sidebar to
-   * recover the deployed interface for breaking-change detection.
+   * List a deployment's exported function names. Backed by
+   * `GET /deployments/{id}/functions`, which returns jl4-service's
+   * `SimpleFunction` shape: `[{ "type":"function",
+   * "function":{ "name", "description" } }]`. A bare `[{ name }]`
+   * fallback is kept in case that representation ever changes.
+   * Used (with {@link getFunctionSchema}) by the sidebar to recover the
+   * deployed interface for breaking-change detection.
    */
   async listDeploymentFunctions(
     deploymentId: string
@@ -208,7 +211,13 @@ export class ServiceClient {
     const resp = await this.request(`/deployments/${encodedId}/functions`)
     if (!resp.ok)
       await throwWithBody(resp, `GET /deployments/${encodedId}/functions`)
-    return (await resp.json()) as Array<{ name: string }>
+    const raw = (await resp.json()) as Array<{
+      name?: string
+      function?: { name?: string }
+    }>
+    return raw
+      .map((f) => ({ name: f.function?.name ?? f.name ?? '' }))
+      .filter((f) => f.name.length > 0)
   }
 
   /**

@@ -383,13 +383,17 @@ export function initializeSidebarMessenger(
 
       const zipBuffer = createZip(files)
 
-      // Check if deployment already exists via its OpenAPI spec
+      // PUT (isUpdate) goes through the backwards-compatibility gate;
+      // POST overwrites ungated. When the user has reviewed and
+      // confirmed the breaking changes, force POST.
       let isUpdate = false
-      try {
-        await serviceClient.getDeploymentOpenApi(params.deploymentId)
-        isUpdate = true
-      } catch {
-        // Deployment doesn't exist — new deploy
+      if (!params.overwrite) {
+        try {
+          await serviceClient.getDeploymentOpenApi(params.deploymentId)
+          isUpdate = true
+        } catch {
+          // Deployment doesn't exist — new deploy
+        }
       }
 
       const result = await serviceClient.deploy(

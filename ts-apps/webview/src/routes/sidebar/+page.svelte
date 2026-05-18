@@ -618,10 +618,12 @@
   }
 
   async function deployAnyway() {
-    await executeDeploy(sanitizeDeploymentId(deploymentIdInput))
+    // User reviewed the breaking changes and chose to proceed: overwrite
+    // the existing deployment via POST (ungated), bypassing the PUT gate.
+    await executeDeploy(sanitizeDeploymentId(deploymentIdInput), true)
   }
 
-  async function executeDeploy(deploymentId: string) {
+  async function executeDeploy(deploymentId: string, overwrite = false) {
     if (!messenger || !activeFileUri) return
     deploying = true
     try {
@@ -632,6 +634,7 @@
           deploymentId,
           fileUri: activeFileUri,
           mission: deploymentMission.trim() || undefined,
+          overwrite,
         }
       )
       if (result.success) {

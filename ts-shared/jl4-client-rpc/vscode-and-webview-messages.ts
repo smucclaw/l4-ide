@@ -217,6 +217,10 @@ export interface SidebarDeployParams {
   fileUri: string
   /** Operator-supplied "Intended use" for this deployment. */
   mission?: string
+  /** Force an overwrite via POST (ungated), bypassing the PUT
+   *  backwards-compatibility gate. Set after the user reviews and
+   *  confirms the breaking changes. */
+  overwrite?: boolean
 }
 
 export interface SidebarDeployResponse {
