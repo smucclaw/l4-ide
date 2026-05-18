@@ -683,22 +683,27 @@
           }
         }
         deploying = false
-        deployView = 'preview'
         if (outcome === 'applied') {
-          await fetchDeployments()
+          // Switch to the deployments tab *before* awaiting the list
+          // fetch, otherwise the deploy panel repaints its Preview
+          // screen for the duration of the round-trip (visible flicker).
+          deployView = 'preview'
           activeTab = 'deployments'
           notify('info', `Deployed "${did}" successfully.`)
+          await fetchDeployments()
         } else if (outcome === 'rejected') {
+          deployView = 'preview'
           notify(
             'error',
             `Deploy "${did}" rejected: ${error ?? 'compilation error'}`
           )
         } else {
+          deployView = 'preview'
+          activeTab = 'deployments'
           notify(
             'warning',
             `Deploying "${did}" — still in progress. Refresh later.`
           )
-          activeTab = 'deployments'
         }
       } else {
         notify('error', result.error ?? 'Deploy failed')
