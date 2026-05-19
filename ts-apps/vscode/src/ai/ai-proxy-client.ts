@@ -50,6 +50,19 @@ export type AiProxyStreamEvent =
       tool: string
       status: 'running' | 'done' | 'error'
       message: string
+      /** Verbatim model-supplied arguments. Present only for
+       *  inspectable server tools (L4 rule evaluations); the webview
+       *  uses this to render an L4 Rule card identical to a
+       *  client-side tool-call. */
+      input?: unknown
+      /** Verbatim tool result (set on `done`). */
+      output?: unknown
+      /** Deployed L4 function name when the activity wraps a rule. */
+      ruleId?: string
+      /** Deployment the rule lives in, when scoped. */
+      deploymentId?: string
+      /** Error detail when status is `error`. */
+      error?: string
     }
   | {
       kind: 'tool-call'
@@ -386,6 +399,62 @@ export class AiProxyClient {
       return null
     }
   }
+
+  /**
+   * One-shot "intended use" description for a set of about-to-be-deployed
+   * functions, using the same stateless summize pipeline as
+   * {@link summarizeTitle} (no conversationId, so no junk conversation
+   * files server-side). Returns null on any failure — the caller
+   * surfaces a friendly message.
+   */
+  async describeIntendedUse(functionsJson: string): Promise<string | null> {
+    const url = `${getAiEndpoint()}/v1/chat/completions`
+    const headers = await this.opts.auth.getAiAuthHeaders()
+    if (!headers.Authorization && isLocalMode()) {
+      headers.Authorization = 'Bearer dev-local'
+    }
+    const body = {
+      model: 'legalese-summize-4',
+      messages: [
+        {
+          role: 'user' as const,
+          content:
+            `These are the JSON schemas of a set of L4 legal-logic ` +
+            `functions being deployed as an API. Write a concise ` +
+            `plain-English summary (2-4 sentences) of their high-level ` +
+            `intended use and the circumstances in which these rules ` +
+            `matter. Write for an operator deploying them, not a ` +
+            `programmer: do not enumerate the functions one by one, ` +
+            `restate parameter names, or use markdown. Respond with the ` +
+            `description text only.\n\n${functionsJson.slice(0, 12000)}`,
+        },
+      ],
+    }
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json',
+          Accept: 'text/event-stream',
+        },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok || !res.body) return null
+      let text = ''
+      for await (const ev of parseSse(res.body)) {
+        if (ev.kind === 'text-delta') text += ev.text
+        if (ev.kind === 'done') break
+      }
+      text = text.trim()
+      return text.length > 0 ? text : null
+    } catch (err) {
+      this.opts.logger.warn(
+        `Intended-use generation failed: ${err instanceof Error ? err.message : String(err)}`
+      )
+      return null
+    }
+  }
 }
 
 /**
@@ -585,6 +654,11 @@ function* interpretFrame(
           tool: string
           status: 'running' | 'done' | 'error'
           message: string
+          input?: unknown
+          output?: unknown
+          ruleId?: string
+          deploymentId?: string
+          error?: string
         }>
       }
       for (const a of payload.activities ?? []) {
@@ -593,6 +667,11 @@ function* interpretFrame(
           tool: a.tool,
           status: a.status,
           message: a.message,
+          input: a.input,
+          output: a.output,
+          ruleId: a.ruleId,
+          deploymentId: a.deploymentId,
+          error: a.error,
         }
       }
     } catch {

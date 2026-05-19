@@ -381,6 +381,23 @@
     expanded = !expanded
   }
 
+  // Auto-expand an L4 Rule evaluation the instant it resolves to
+  // `done`: the input/output is the whole point of a rule call (the
+  // user asked "what does this rule say" and the answer just landed),
+  // so making them click the chevron to see it is friction. Generic
+  // tool calls (read/edit/search) stay collapsed — their result is
+  // usually noise the user only opens on demand. Guarded by a
+  // one-shot latch so a manual collapse afterwards sticks: the effect
+  // fires once on the running→done transition and never fights the
+  // user's subsequent toggle.
+  let autoExpanded = false
+  $effect(() => {
+    if (!autoExpanded && isRuleCall && call.status === 'done' && hasDetails) {
+      autoExpanded = true
+      expanded = true
+    }
+  })
+
   // While ANY tool call is in flight we render the row in the
   // dot-prefixed style (same chrome as the server-side tool-activity
   // rows in message-assistant.svelte) — no chevron, not expandable,

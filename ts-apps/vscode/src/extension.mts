@@ -605,6 +605,7 @@ export async function activate(context: ExtensionContext) {
       auth,
       service: chatService,
       store: aiStore,
+      proxy: aiProxy,
       logger: aiLogger,
       approvalPending,
       askUserPending,

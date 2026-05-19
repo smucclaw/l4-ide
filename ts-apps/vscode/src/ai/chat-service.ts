@@ -36,6 +36,11 @@ export type ChatServiceEvent =
       tool: string
       status: 'running' | 'done' | 'error'
       message: string
+      input?: unknown
+      output?: unknown
+      ruleId?: string
+      deploymentId?: string
+      error?: string
     }
   | {
       kind: 'tool-call'
@@ -91,6 +96,24 @@ export type PersistedBlock =
       argsJson: string
       status: 'running' | 'done' | 'error'
       result?: string
+      error?: string
+    }
+  // Only L4-rule server activities are persisted (the proxy ran a
+  // deployed rule). Plain status tickers (doc search etc.) are
+  // intentionally not recorded — they're ephemeral progress noise
+  // with nothing to reconstruct on reload. `ruleKey` mirrors the
+  // webview store's merge key so a `running → done` burst persists
+  // as ONE block.
+  | {
+      kind: 'tool-activity'
+      tool: string
+      ruleId: string
+      ruleKey: string
+      status: 'running' | 'done' | 'error'
+      message: string
+      input?: unknown
+      output?: unknown
+      deploymentId?: string
       error?: string
     }
 
@@ -770,7 +793,57 @@ export class ChatService {
           tool: ev.tool,
           status: ev.status,
           message: ev.message,
+          input: ev.input,
+          output: ev.output,
+          ruleId: ev.ruleId,
+          deploymentId: ev.deploymentId,
+          error: ev.error,
         })
+        // Persist L4-rule activities so they survive a history
+        // reload (the user explicitly wants server rule calls kept;
+        // plain status tickers don't need to be). Identity + merge
+        // mirror the webview store's `ruleActivityIdentity` /
+        // `onToolActivity` exactly so the persisted block and the
+        // live block collapse a `running → done` burst into ONE row
+        // the same way.
+        {
+          const fromInput =
+            ev.input && typeof ev.input === 'object'
+              ? (ev.input as { function_name?: unknown }).function_name
+              : undefined
+          const ruleName =
+            ev.ruleId ?? (typeof fromInput === 'string' ? fromInput : undefined)
+          if (ruleName) {
+            const ruleKey = `${ev.tool}::${ruleName}`
+            const existing = blocks.find(
+              (b) =>
+                b.kind === 'tool-activity' &&
+                b.ruleKey === ruleKey &&
+                b.status === 'running'
+            )
+            if (existing && existing.kind === 'tool-activity') {
+              existing.status = ev.status
+              existing.message = ev.message
+              if (ev.input !== undefined) existing.input = ev.input
+              if (ev.output !== undefined) existing.output = ev.output
+              if (ev.deploymentId) existing.deploymentId = ev.deploymentId
+              if (ev.error !== undefined) existing.error = ev.error
+            } else {
+              blocks.push({
+                kind: 'tool-activity',
+                tool: ev.tool,
+                ruleId: ruleName,
+                ruleKey,
+                status: ev.status,
+                message: ev.message,
+                input: ev.input,
+                output: ev.output,
+                deploymentId: ev.deploymentId,
+                error: ev.error,
+              })
+            }
+          }
+        }
       } else if (ev.kind === 'tool-call') {
         // Status updates render as plain assistant prose, not as a
         // tool-call card. The model still goes through the normal
@@ -1123,7 +1196,11 @@ function mergeQueuedAsParams(
  */
 function markStoppedToolCalls(blocks: PersistedBlock[]): void {
   for (const b of blocks) {
-    if (b.kind !== 'tool-call') continue
+    // Rule-activity blocks pulsate while `running` (ToolCallRow's own
+    // dot animation, independent of stream state), so a Stop'd eval
+    // left at `running` would pulse forever after a reload. Flip it
+    // to error like tool-call rows.
+    if (b.kind !== 'tool-call' && b.kind !== 'tool-activity') continue
     if (b.status === 'running') {
       b.status = 'error'
       b.error = b.error ?? 'Stopped'

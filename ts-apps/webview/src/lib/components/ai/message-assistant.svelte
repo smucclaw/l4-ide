@@ -3,7 +3,11 @@
   import ErrorBubble from './error-bubble.svelte'
   // import CopyButton from './copy-button.svelte'
   import ToolCallRow from './tool-call-row.svelte'
-  import type { AssistantBlock } from '$lib/stores/ai-chat.svelte'
+  import type {
+    AssistantBlock,
+    RenderedToolActivity,
+    RenderedToolCall,
+  } from '$lib/stores/ai-chat.svelte'
 
   import type { Messenger } from 'vscode-messenger-webview'
 
@@ -59,6 +63,44 @@
     if (b.kind === 'tool-activity') return `ta:${b.activity.tool}:${i}`
     if (b.kind === 'thinking') return `th:${i}`
     return `tx:${i}`
+  }
+
+  // Project an L4-rule tool-activity (the proxy ran a deployed rule
+  // server-side) onto the SAME shape a client-side rule tool-call
+  // uses, so it flows through the exact same <ToolCallRow> render
+  // path — one source of truth for the INPUT/OUTPUT card, the L4
+  // colorize, the auto-expand-on-done, the pulsating dot. The only
+  // difference between the two is the trigger (server activity event
+  // vs client tool-call event); the pixels are identical.
+  //
+  // `name` is rebuilt as `l4-rules__<fn>` so ToolCallRow's existing
+  // rule detection (`isRuleCall`) lights up unchanged. `evaluate_rule`
+  // wraps the real args under `arguments` alongside deployment/
+  // function_name routing fields — unwrap that envelope so the card
+  // shows just the rule's inputs, identical to a direct rule call.
+  function ruleCallFor(a: RenderedToolActivity): RenderedToolCall {
+    let argsObj: unknown = a.input
+    if (a.input && typeof a.input === 'object') {
+      const inp = a.input as Record<string, unknown>
+      if ('function_name' in inp || 'deployment' in inp) {
+        const inner =
+          inp.arguments && typeof inp.arguments === 'object'
+            ? (inp.arguments as Record<string, unknown>)
+            : {}
+        argsObj =
+          inp.startTime !== undefined || inp.events !== undefined
+            ? { arguments: inner, startTime: inp.startTime, events: inp.events }
+            : inner
+      }
+    }
+    return {
+      callId: `ta:${a.ruleKey ?? a.tool}`,
+      name: `l4-rules__${a.ruleId ?? a.tool}`,
+      argsJson: JSON.stringify(argsObj ?? {}),
+      status: a.status,
+      result: a.output !== undefined ? JSON.stringify(a.output) : undefined,
+      error: a.error,
+    }
   }
 
   // Per-block expanded state for thinking blocks, keyed by `i`. Stays
@@ -213,17 +255,30 @@
               <div class="thinking-body">{block.text}</div>
             {/if}
           </div>
+        {:else if block.kind === 'tool-activity' && block.activity.ruleKey}
+          <!-- L4-rule activity: the proxy evaluated a deployed rule
+               server-side. Render it through the SAME ToolCallRow as
+               a client-side rule call so the pulsating row, the
+               auto-expanding INPUT/OUTPUT card and the L4 colorize
+               are pixel-identical — the only difference is which
+               event triggered it. -->
+          <ToolCallRow
+            call={ruleCallFor(block.activity)}
+            {messenger}
+            {onOpenFile}
+            onOpenDiff={onOpenFileDiff}
+          />
         {:else if block.kind === 'tool-activity'}
-          <!-- Server-side activity keeps the crimson dot up front (no
-               expand chevron — nothing to expand on read-only backend
-               events) + bold label + monospace message. The dot
-               pulses iff this row is the trailing element in the
-               assistant bubble — driven by `:last-child` in the
-               <style> below, no JS bookkeeping. As soon as another
-               block (text-delta, another activity, a tool-call) is
-               appended after it, the row falls out of `:last-child`
-               and the dot freezes solid. Errored rows opt out via
-               the `is-error` class. -->
+          <!-- Plain status activity (e.g. doc search): keeps the
+               crimson dot up front (no expand chevron — nothing to
+               expand on read-only backend events) + bold label +
+               monospace message. The dot pulses iff this row is the
+               trailing element in the assistant bubble — driven by
+               `:last-child` in the <style> below, no JS bookkeeping.
+               As soon as another block (text-delta, another activity,
+               a tool-call) is appended after it, the row falls out of
+               `:last-child` and the dot freezes solid. Errored rows
+               opt out via the `is-error` class. -->
           <div
             class="tool-call tool-activity-row"
             class:is-error={block.activity.status === 'error'}

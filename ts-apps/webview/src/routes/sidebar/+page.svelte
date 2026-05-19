@@ -22,6 +22,7 @@
     RequestSidebarUndeploy,
     RequestSidebarDownloadDeployment,
     GetSidebarDeploymentSchemas,
+    GenerateSidebarIntendedUse,
     GetSidebarDeploymentStatus,
     GetSidebarUpdateStatus,
     ShowNotification,
@@ -78,6 +79,37 @@
       type,
       message,
     })
+  }
+
+  // Ask the extension to draft the "Intended use" text from the
+  // exported function schemas via the summize model. Returns null when
+  // the field should be left untouched: no messenger yet, or the user
+  // isn't signed in (the extension already showed the sign-in nudge).
+  async function generateIntendedUse(): Promise<string | null> {
+    if (!messenger) return null
+    if (functions.length === 0) {
+      notify('warning', 'No exported functions to describe yet.')
+      return null
+    }
+    try {
+      const res = await messenger.sendRequest(
+        GenerateSidebarIntendedUse,
+        HOST_EXTENSION,
+        { functions }
+      )
+      if ('notSignedIn' in res) return null
+      if ('error' in res) {
+        notify('error', res.error)
+        return null
+      }
+      return res.text
+    } catch (err) {
+      notify(
+        'error',
+        `Could not generate description: ${err instanceof Error ? err.message : String(err)}`
+      )
+      return null
+    }
   }
 
   // Deployments tab state
@@ -1131,6 +1163,7 @@
           deploymentId={sanitizeDeploymentId(deploymentIdInput)}
           heading="Deployment metadata"
           onBack={() => (deployView = 'deploy-form')}
+          onGenerate={generateIntendedUse}
         />
       {:else if deployView === 'breaking-warning'}
         <!-- Breaking change warning -->

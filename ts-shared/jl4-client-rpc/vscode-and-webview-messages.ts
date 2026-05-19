@@ -339,6 +339,20 @@ export const GetSidebarDeploymentSchemas: RequestType<
   method: 'getSidebarDeploymentSchemas',
 }
 
+/**
+ * Sidebar asks the extension to draft an "Intended use" description for
+ * the functions about to be deployed, using the summize model. The
+ * extension itself surfaces the "not signed in" nudge as a VSCode
+ * notification and returns `{ notSignedIn: true }` so the webview just
+ * leaves the field untouched.
+ */
+export const GenerateSidebarIntendedUse: RequestType<
+  { functions: ExportedFunctionInfo[] },
+  { text: string } | { error: string } | { notSignedIn: true }
+> = {
+  method: 'generateSidebarIntendedUse',
+}
+
 /** Sidebar asks extension to open a URL in the browser */
 export const RequestOpenUrl: NotificationType<{ url: string }> = {
   method: 'requestOpenUrl',
@@ -789,6 +803,20 @@ export const AiChatToolActivity: NotificationType<{
   tool: string
   status: 'running' | 'done' | 'error'
   message: string
+  /** Verbatim model-supplied arguments — present only for inspectable
+   *  server tools (L4 rule evaluations). When set alongside `ruleId`
+   *  (or for `evaluate_rule`), the webview renders this activity as an
+   *  L4 Rule card identical to a client-side tool-call instead of the
+   *  minimal status row. */
+  input?: unknown
+  /** Verbatim tool result (set on `done`). */
+  output?: unknown
+  /** Deployed L4 function name when the activity wraps a rule. */
+  ruleId?: string
+  /** Deployment the rule lives in, when scoped. */
+  deploymentId?: string
+  /** Error detail when status is `error`. */
+  error?: string
 }> = {
   method: 'aiChatToolActivity',
 }

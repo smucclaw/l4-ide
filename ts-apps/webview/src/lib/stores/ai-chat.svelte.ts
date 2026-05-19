@@ -123,6 +123,47 @@ export interface RenderedToolActivity {
   /** Most recent message; prior messages of the same run are dropped
    *  once the next one arrives. */
   message: string
+  /** Verbatim model-supplied arguments — present only for inspectable
+   *  server tools that wrap an L4 rule evaluation. Drives the L4 Rule
+   *  card render (see {@link ruleKey}). */
+  input?: unknown
+  /** Verbatim tool result, set once the run reaches `done`. */
+  output?: unknown
+  /** Deployed L4 function name when the activity wraps a rule. */
+  ruleId?: string
+  /** Deployment the rule lives in, when scoped. */
+  deploymentId?: string
+  /** Error detail when status is `error`. */
+  error?: string
+  /** Identity of the rule run, used to merge a `running → done`
+   *  burst into ONE mutating row (mirrors how tool-call rows update
+   *  by callId). Set only for rule activities; `undefined` for plain
+   *  status activities, which keep the legacy tool+message dedupe. */
+  ruleKey?: string
+}
+
+/** Identify an L4-rule tool activity and compute its merge key + the
+ *  deployed function name. Returns null for non-rule activities (plain
+ *  status tickers like `search_l4_docs`), which keep the minimal row.
+ *
+ *  Two shapes carry a rule:
+ *    - direct MCP rule descriptors → `ruleId` is set by the proxy.
+ *    - the generic `evaluate_rule` tool → rule name lives in
+ *      `input.function_name` (proxy can't know it statically).
+ *  Both must also carry `input` so there's something to render. */
+function ruleActivityIdentity(a: {
+  tool: string
+  ruleId?: string
+  input?: unknown
+}): { ruleKey: string; ruleName: string } | null {
+  const fromInput =
+    a.input && typeof a.input === 'object'
+      ? (a.input as { function_name?: unknown }).function_name
+      : undefined
+  const ruleName =
+    a.ruleId ?? (typeof fromInput === 'string' ? fromInput : undefined)
+  if (!ruleName) return null
+  return { ruleKey: `${a.tool}::${ruleName}`, ruleName }
 }
 
 export interface RenderedToolCall {
@@ -189,6 +230,37 @@ function extractPersistedBlocks(meta: unknown): AssistantBlock[] | null {
           status,
           result: typeof b.result === 'string' ? b.result : undefined,
           error: typeof b.error === 'string' ? b.error : undefined,
+        },
+      })
+    } else if (
+      b.kind === 'tool-activity' &&
+      typeof b.tool === 'string' &&
+      typeof b.ruleId === 'string' &&
+      typeof b.ruleKey === 'string'
+    ) {
+      // Persisted L4-rule activity. `ruleKey` being present is what
+      // routes it back through <ToolCallRow> on render (same gate as
+      // a live rule activity). Non-terminal statuses coerce to `done`
+      // — same rule as tool-call blocks above; a Stop'd eval was
+      // already rewritten to `error` at persist time
+      // (markStoppedToolCalls), so anything still `running` here is a
+      // crash-truncated transcript, best shown as a settled card
+      // rather than a row that pulsates forever.
+      const status =
+        b.status === 'done' || b.status === 'error' ? b.status : 'done'
+      out.push({
+        kind: 'tool-activity',
+        activity: {
+          tool: b.tool,
+          status,
+          message: typeof b.message === 'string' ? b.message : '',
+          input: b.input,
+          output: b.output,
+          ruleId: b.ruleId,
+          deploymentId:
+            typeof b.deploymentId === 'string' ? b.deploymentId : undefined,
+          error: typeof b.error === 'string' ? b.error : undefined,
+          ruleKey: b.ruleKey,
         },
       })
     }
@@ -1062,6 +1134,11 @@ export function createAiChatStore(
     tool: string
     status: 'running' | 'done' | 'error'
     message: string
+    input?: unknown
+    output?: unknown
+    ruleId?: string
+    deploymentId?: string
+    error?: string
   }): void {
     // Route strictly by conversationId. Falling back to `currentId`
     // crosstalks multiple concurrent streams into whichever chat the
@@ -1078,6 +1155,56 @@ export function createAiChatStore(
         : null)
     if (!turn || turn.role !== 'assistant') return
     if (!turn.blocks) turn.blocks = []
+
+    // L4-rule activities (the proxy ran a deployed rule on the
+    // server) merge `running → done` into a SINGLE mutating row so
+    // they read exactly like a client-side rule tool-call: the row
+    // appears pulsating the moment the call lands, then swaps to the
+    // expandable INPUT/OUTPUT card in place when the result arrives.
+    // Matched by rule identity rather than tool+message because the
+    // running and done messages differ (describeStart vs
+    // describeDone) — message-based dedupe would split them into two
+    // rows. We scan all blocks (not just the tail): a rule eval can
+    // interleave with text deltas, so the running row is rarely the
+    // immediate predecessor of its own done event.
+    const ruleIdentity = ruleActivityIdentity(params)
+    if (ruleIdentity) {
+      for (let i = turn.blocks.length - 1; i >= 0; i--) {
+        const b = turn.blocks[i]
+        if (
+          b.kind === 'tool-activity' &&
+          b.activity.ruleKey === ruleIdentity.ruleKey &&
+          b.activity.status === 'running'
+        ) {
+          // Update in place. `input` may arrive on the running event
+          // already; keep whichever is non-undefined so a done event
+          // that omits it doesn't blank the card.
+          b.activity.status = params.status
+          b.activity.message = params.message
+          if (params.input !== undefined) b.activity.input = params.input
+          if (params.output !== undefined) b.activity.output = params.output
+          if (params.deploymentId) b.activity.deploymentId = params.deploymentId
+          if (params.error !== undefined) b.activity.error = params.error
+          return
+        }
+      }
+      turn.blocks.push({
+        kind: 'tool-activity',
+        activity: {
+          tool: params.tool,
+          status: params.status,
+          message: params.message,
+          input: params.input,
+          output: params.output,
+          ruleId: ruleIdentity.ruleName,
+          deploymentId: params.deploymentId,
+          error: params.error,
+          ruleKey: ruleIdentity.ruleKey,
+        },
+      })
+      return
+    }
+
     // Dedupe policy:
     //   - Same tool + same message as the tail → treat as a status
     //     update on the existing block (don't push a new row). This
@@ -1637,6 +1764,11 @@ export type AiChatStore = {
     tool: string
     status: 'running' | 'done' | 'error'
     message: string
+    input?: unknown
+    output?: unknown
+    ruleId?: string
+    deploymentId?: string
+    error?: string
   }) => void
   onTurnSpawn: (params: { conversationId: string; subTurnId: string }) => void
   onQueueConsumed: (params: {

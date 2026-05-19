@@ -35,6 +35,7 @@ import {
   AiUsageSubscribe,
   AiUsageUnsubscribe,
   AiUsageUpdate,
+  GenerateSidebarIntendedUse,
   WebviewFrontendIsReadyNotification,
   type AiChatAttachment,
   type AiMentionCandidate,
@@ -46,6 +47,7 @@ import * as os from 'os'
 import { promises as fsPromises } from 'fs'
 import type { AuthManager } from '../auth.js'
 import { isLocalMode } from './ai-proxy-client.js'
+import type { AiProxyClient } from './ai-proxy-client.js'
 import type { ServiceClient } from '../service-client.js'
 import type { ChatService, ChatServiceEvent } from './chat-service.js'
 import type { ConversationStore } from './conversation-store.js'
@@ -82,6 +84,9 @@ export function registerAiChatHandlers(deps: {
   auth: AuthManager
   service: ChatService
   store: ConversationStore
+  /** Stateless one-shot LLM calls (summize). Used here to draft the
+   *  deployment "Intended use" text from the exported function schemas. */
+  proxy: AiProxyClient
   logger: AiLogger
   /** Map of pending approval promises keyed by callId. Populated by
    * the tool dispatcher; drained by the webview's approve/deny message. */
@@ -127,6 +132,7 @@ export function registerAiChatHandlers(deps: {
     auth,
     service,
     store,
+    proxy,
     logger,
     approvalPending,
     askUserPending,
@@ -240,6 +246,11 @@ export function registerAiChatHandlers(deps: {
           tool: event.tool,
           status: event.status,
           message: event.message,
+          input: event.input,
+          output: event.output,
+          ruleId: event.ruleId,
+          deploymentId: event.deploymentId,
+          error: event.error,
         })
         break
       case 'tool-call':
@@ -526,6 +537,35 @@ export function registerAiChatHandlers(deps: {
     // Server-side delete is best-effort; the UI doesn't block on it.
     void deleteServerConversation(auth, id, logger)
     return { ok: localOk }
+  })
+
+  // Draft the deployment "Intended use" text from the exported function
+  // schemas. AI-gated like the chat tab: without a usable Legalese Cloud
+  // session (or AI api key) we surface a sign-in nudge here rather than
+  // round-tripping a failure the webview would have to translate.
+  messenger.onRequest(GenerateSidebarIntendedUse, async ({ functions }) => {
+    if (!auth.isAiUsable()) {
+      void vscode.window.showInformationMessage(
+        'Login to Legalese Cloud to use this feature'
+      )
+      return { notSignedIn: true as const }
+    }
+    try {
+      const text = await proxy.describeIntendedUse(
+        JSON.stringify(functions, null, 2)
+      )
+      if (!text) {
+        return {
+          error: 'Could not generate a description. Please try again.',
+        }
+      }
+      return { text }
+    } catch (err) {
+      logger.warn(
+        `describeIntendedUse failed: ${err instanceof Error ? err.message : String(err)}`
+      )
+      return { error: err instanceof Error ? err.message : String(err) }
+    }
   })
 
   messenger.onNotification(AiConversationNew, () => {

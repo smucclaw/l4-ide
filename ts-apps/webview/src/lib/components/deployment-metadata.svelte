@@ -20,6 +20,11 @@
     heading?: string
     /** When provided, a Back button is rendered and calls this. */
     onBack?: () => void
+    /** When provided, a "Generate" button is rendered under the input.
+     *  Resolves to the drafted text, or null when generation was
+     *  unavailable (e.g. the host already surfaced a sign-in nudge) —
+     *  in which case the field is left untouched. */
+    onGenerate?: () => Promise<string | null>
   }
 
   let {
@@ -27,7 +32,21 @@
     deploymentId,
     heading = 'Deployment metadata',
     onBack,
+    onGenerate,
   }: Props = $props()
+
+  let generating = $state(false)
+
+  async function runGenerate() {
+    if (generating || !onGenerate) return
+    generating = true
+    try {
+      const text = await onGenerate()
+      if (text) mission = text
+    } finally {
+      generating = false
+    }
+  }
 </script>
 
 <div class="deployment-metadata">
@@ -52,6 +71,21 @@
       maxlength="4000"
       placeholder="Explain how the deployed rules are to be used (<4000 chars)"
     ></textarea>
+    {#if onGenerate}
+      <button
+        class="generate-btn"
+        disabled={generating}
+        onclick={runGenerate}
+        title="Draft a description from the deployed function schemas"
+      >
+        {#if generating}
+          <span class="spinner" aria-hidden="true"></span>
+          Generating…
+        {:else}
+          ✨ Generate
+        {/if}
+      </button>
+    {/if}
   </div>
 </div>
 
@@ -123,5 +157,44 @@
     line-height: 1.4;
     resize: vertical;
     min-height: 56px;
+  }
+
+  .generate-btn {
+    margin-top: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: none;
+    border: 1px solid var(--vscode-input-border, #555);
+    color: var(--vscode-descriptionForeground);
+    cursor: pointer;
+    font-size: 0.85em;
+    padding: 3px 10px;
+    border-radius: 3px;
+  }
+
+  .spinner {
+    width: 10px;
+    height: 10px;
+    border: 2px solid var(--vscode-descriptionForeground);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .generate-btn:hover:not(:disabled) {
+    color: var(--vscode-foreground);
+    border-color: var(--vscode-foreground, #ccc);
+  }
+
+  .generate-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
   }
 </style>
