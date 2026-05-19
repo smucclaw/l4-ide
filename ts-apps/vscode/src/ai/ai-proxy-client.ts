@@ -417,16 +417,28 @@ export class AiProxyClient {
       model: 'legalese-summize-4',
       messages: [
         {
-          role: 'user' as const,
+          role: 'system' as const,
           content:
-            `These are the JSON schemas of a set of L4 legal-logic ` +
-            `functions being deployed as an API. Write a concise ` +
-            `plain-English summary (2-4 sentences) of their high-level ` +
-            `intended use and the circumstances in which these rules ` +
-            `matter. Write for an operator deploying them, not a ` +
-            `programmer: do not enumerate the functions one by one, ` +
-            `restate parameter names, or use markdown. Respond with the ` +
-            `description text only.\n\n${functionsJson.slice(0, 12000)}`,
+            `You write the "Intended use" blurb for a deployment of L4 ` +
+            `legal rules. You are given the JSON schemas of the ` +
+            `deployed rules purely as evidence of the subject matter — ` +
+            `they are rules, never "functions", and the schema itself ` +
+            `is an implementation detail the reader does not care ` +
+            `about.\n\n` +
+            `Describe WHY someone would deploy these rules and WHEN ` +
+            `they apply: the real-world legal or business situation ` +
+            `they govern, who relies on them, and the circumstances or ` +
+            `decisions in which they come into play. Do NOT explain ` +
+            `what the rules compute, how they work, their inputs or ` +
+            `outputs, or list them one by one. Think "what this is for", ` +
+            `not "what this does".\n\n` +
+            `Write 2-4 plain-English sentences for a legal or business ` +
+            `operator, not a programmer. No markdown, no preamble — ` +
+            `respond with the blurb text only.`,
+        },
+        {
+          role: 'user' as const,
+          content: `Deployed rule schemas:\n\n${functionsJson.slice(0, 12000)}`,
         },
       ],
     }

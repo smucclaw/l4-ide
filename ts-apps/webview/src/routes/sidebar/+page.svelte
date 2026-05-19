@@ -95,7 +95,10 @@
       const res = await messenger.sendRequest(
         GenerateSidebarIntendedUse,
         HOST_EXTENSION,
-        { functions }
+        // `functions` is a Svelte 5 $state proxy; structured-clone
+        // (postMessage) can't serialize the reactive proxy, so unwrap
+        // to a plain snapshot before crossing the RPC boundary.
+        { functions: $state.snapshot(functions) }
       )
       if ('notSignedIn' in res) return null
       if ('error' in res) {

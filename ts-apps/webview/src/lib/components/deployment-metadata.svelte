@@ -67,7 +67,7 @@
       id="deployment-intended-use"
       class="form-input form-textarea"
       bind:value={mission}
-      rows="4"
+      rows="8"
       maxlength="4000"
       placeholder="Explain how the deployed rules are to be used (<4000 chars)"
     ></textarea>
@@ -156,7 +156,7 @@
     font-size: inherit;
     line-height: 1.4;
     resize: vertical;
-    min-height: 56px;
+    min-height: 112px;
   }
 
   .generate-btn {
