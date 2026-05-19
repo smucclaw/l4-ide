@@ -184,12 +184,12 @@
        deployments tab's positioned wrapper — the rest of the
        extension (tab bar, other panels) keeps working. */
     position: absolute;
-    /* The wrapper this is anchored to sits inside `.tab-content`'s
-       16px padding, so `inset: 0` would leave that padding ring
-       undimmed. Bleed out by exactly that 16px so the dim also
-       covers the padding area around the deployment content.
-       (Stays within `.tab-content` — tab bar / footer untouched.) */
-    inset: -16px;
+    /* Fills `.tab-content-frame` (the non-scrolling visible-area box
+       it's rendered into), so the dim covers the whole visible tab —
+       padding included — and the dialog centres in the viewport
+       regardless of scroll. Tab bar / footer sit outside the frame
+       and stay interactive. */
+    inset: 0;
     z-index: 1000;
     display: flex;
     align-items: center;

@@ -152,7 +152,7 @@
     if (!connectionStatus.isLegaleseCloud || !orgSlug) {
       messenger?.sendNotification(ShowNotification, HOST_EXTENSION, {
         type: 'warning',
-        message: 'Login to Legalese Cloud to use this feature',
+        message: 'Sign in with Legalese Cloud to use this feature',
       })
       return
     }
@@ -173,7 +173,7 @@
     if (integrateMode === 'cloud' && !connectionStatus.orgSlug) {
       messenger?.sendNotification(ShowNotification, HOST_EXTENSION, {
         type: 'warning',
-        message: 'Login to Legalese Cloud to use this feature',
+        message: 'Sign in with Legalese Cloud to use this feature',
       })
       return
     }
@@ -1172,350 +1172,373 @@
     </button>
   </div>
 
-  <div class="tab-content">
-    <div class="tab-pane" hidden={activeTab !== 'ai-chat'}>
-      <AiChatPanel
-        {messenger}
-        visible={activeTab === 'ai-chat'}
-        {deploymentChatRequest}
-      />
-    </div>
-    <div class="tab-pane" hidden={activeTab !== 'docs'}>
-      <DocsPanel {messenger} navTarget={docNav} />
-    </div>
-    <div class="tab-pane" hidden={activeTab !== 'inspector'}>
-      <InspectorPanel {messenger} />
-    </div>
-    {#if activeTab === 'preview'}
-      {#if deployView === 'deploy-form'}
-        <!-- Deploy popover -->
-        <div class="deploy-form">
-          <button class="back-btn" onclick={cancelDeploy}
-            >&larr; Back to preview</button
-          >
-          <div class="form-group">
-            <label class="form-label" for="deployment-id"
-              >Create new deployment</label
-            >
-            <input
-              id="deployment-id"
-              class="form-input"
-              type="text"
-              bind:value={deploymentIdInput}
-              placeholder="Deployment name"
-              maxlength="36"
-            />
-            {#if deploymentIdError}
-              <div class="form-error">{deploymentIdError}</div>
-            {/if}
-          </div>
-          {#if deployments.length > 0}
-            <div class="form-group">
-              <!-- svelte-ignore a11y_label_has_associated_control -->
-              <label class="form-label">Or replace existing</label>
-              <div class="existing-deployments">
-                {#each deployments as dep (dep.deploymentId)}
-                  <button
-                    class="existing-dep-btn"
-                    class:selected={deploymentIdInput === dep.deploymentId}
-                    onclick={() => selectExistingDeployment(dep.deploymentId)}
-                  >
-                    {dep.deploymentId}
-                    <span class="existing-dep-count"
-                      >{dep.functions.length} rule{dep.functions.length !== 1
-                        ? 's'
-                        : ''}</span
-                    >
-                  </button>
-                {/each}
-              </div>
-            </div>
-          {/if}
-        </div>
-      {:else if deployView === 'mission'}
-        <!-- Deployment metadata (step 2) -->
-        <DeploymentMetadata
-          bind:mission={deploymentMission}
-          deploymentId={sanitizeDeploymentId(deploymentIdInput)}
-          heading="Deployment metadata"
-          onBack={() => (deployView = 'deploy-form')}
-          onGenerate={generateIntendedUse}
+  <!-- Frame is the non-scrolling visible-area box: `.tab-content`
+       scrolls inside it, while the Integrate overlay is a sibling of
+       the scroller so it pins to the visible viewport (centred there,
+       not at the middle of the scroll height). -->
+  <div class="tab-content-frame">
+    <div class="tab-content">
+      <div class="tab-pane" hidden={activeTab !== 'ai-chat'}>
+        <AiChatPanel
+          {messenger}
+          visible={activeTab === 'ai-chat'}
+          {deploymentChatRequest}
         />
-      {:else if deployView === 'breaking-warning'}
-        <!-- Breaking change warning -->
-        <div class="breaking-warning">
-          <button class="back-btn" onclick={() => (deployView = 'mission')}
-            >&larr; Cancel deployment</button
-          >
-          <div class="warning-header">&#9888; Breaking changes detected</div>
-          <div class="warning-body">
-            <p class="warning-desc">
-              Deploying the following rules in <strong
-                >{deploymentIdInput}</strong
-              > may break existing integrations:
-            </p>
-            <ul class="breaking-list">
-              {#each breakingChanges as change}
-                <li>
-                  {#if change[0]?.ident}<span class="breaking-ident"
-                      >{change[0].text}</span
-                    ><br />{/if}
-                  {#each change.slice(change[0]?.ident ? 1 : 0) as seg}{#if seg.ident}<span
-                        class="breaking-ident">{seg.text}</span
-                      >{:else}<span>{seg.text}</span>{/if}{/each}
-                </li>
-              {/each}
-            </ul>
-          </div>
-        </div>
-      {:else}
-        <!-- Normal preview -->
-        {#if functions.length === 0}
-          <div class="empty-state">
-            <p class="hint">
-              Open an L4 file containing valid rules marked with @export
-            </p>
-          </div>
-        {:else}
-          <div class="functions-list">
-            {#each functions as func (func.name)}
-              <ToolCard
-                {func}
-                expanded={isCardExpanded('.local/' + func.name)}
-                onToggle={() => toggleCard('.local/' + func.name)}
-                onReveal={func.srcLine
-                  ? () =>
-                      messenger?.sendNotification(
-                        RequestRevealLocation,
-                        HOST_EXTENSION,
-                        { uri: activeFileUri, line: func.srcLine! }
-                      )
-                  : undefined}
-              />
-            {/each}
-          </div>
-        {/if}
-      {/if}
-    {/if}
-    {#if activeTab === 'deployments'}
-      <div class="deployments-tab-wrapper">
-        <div class="deployments-tab-body">
-          {#if undeployConfirm}
+      </div>
+      <div class="tab-pane" hidden={activeTab !== 'docs'}>
+        <DocsPanel {messenger} navTarget={docNav} />
+      </div>
+      <div class="tab-pane" hidden={activeTab !== 'inspector'}>
+        <InspectorPanel {messenger} />
+      </div>
+      {#if activeTab === 'preview'}
+        <div class="preview-pane">
+          {#if deployView === 'deploy-form'}
+            <!-- Deploy popover -->
+            <div class="deploy-form">
+              <button class="back-btn" onclick={cancelDeploy}
+                >&larr; Back to preview</button
+              >
+              <div class="form-group">
+                <label class="form-label" for="deployment-id"
+                  >Create new deployment</label
+                >
+                <input
+                  id="deployment-id"
+                  class="form-input"
+                  type="text"
+                  bind:value={deploymentIdInput}
+                  placeholder="Deployment name"
+                  maxlength="36"
+                />
+                {#if deploymentIdError}
+                  <div class="form-error">{deploymentIdError}</div>
+                {/if}
+              </div>
+              {#if deployments.length > 0}
+                <div class="form-group">
+                  <!-- svelte-ignore a11y_label_has_associated_control -->
+                  <label class="form-label">Or replace existing</label>
+                  <div class="existing-deployments">
+                    {#each deployments as dep (dep.deploymentId)}
+                      <button
+                        class="existing-dep-btn"
+                        class:selected={deploymentIdInput === dep.deploymentId}
+                        onclick={() =>
+                          selectExistingDeployment(dep.deploymentId)}
+                      >
+                        {dep.deploymentId}
+                        <span class="existing-dep-count"
+                          >{dep.functions.length} rule{dep.functions.length !==
+                          1
+                            ? 's'
+                            : ''}</span
+                        >
+                      </button>
+                    {/each}
+                  </div>
+                </div>
+              {/if}
+            </div>
+          {:else if deployView === 'mission'}
+            <!-- Deployment metadata (step 2) -->
+            <DeploymentMetadata
+              bind:mission={deploymentMission}
+              deploymentId={sanitizeDeploymentId(deploymentIdInput)}
+              heading="Deployment metadata"
+              onBack={() => (deployView = 'deploy-form')}
+              onGenerate={generateIntendedUse}
+            />
+          {:else if deployView === 'breaking-warning'}
+            <!-- Breaking change warning -->
             <div class="breaking-warning">
-              <button class="back-btn" onclick={cancelUndeploy}
-                >&larr; Back to deployments</button
+              <button class="back-btn" onclick={() => (deployView = 'mission')}
+                >&larr; Cancel deployment</button
               >
               <div class="warning-header">
-                &#9888; This will break existing integrations
+                &#9888; Breaking changes detected
               </div>
               <div class="warning-body">
                 <p class="warning-desc">
-                  Removing <strong>{undeployConfirm.deploymentId}</strong> will permanently
-                  delete the following rules:
+                  Deploying the following rules in <strong
+                    >{deploymentIdInput}</strong
+                  > may break existing integrations:
                 </p>
                 <ul class="breaking-list">
-                  {#each undeployConfirm.functions as func}
-                    <li><span class="breaking-ident">{func.name}</span></li>
+                  {#each breakingChanges as change}
+                    <li>
+                      {#if change[0]?.ident}<span class="breaking-ident"
+                          >{change[0].text}</span
+                        ><br />{/if}
+                      {#each change.slice(change[0]?.ident ? 1 : 0) as seg}{#if seg.ident}<span
+                            class="breaking-ident">{seg.text}</span
+                          >{:else}<span>{seg.text}</span>{/if}{/each}
+                    </li>
                   {/each}
                 </ul>
               </div>
             </div>
-          {:else if !connectionStatus.connected}
-            <div class="empty-state">
-              <p class="hint">
-                {#if !initialized}
-                  &nbsp;
-                {:else if connectionStatus.serviceUrl}
-                  Connect to {stripProtocol(connectionStatus.serviceUrl)} to view
-                  deployments.
-                {:else}
-                  Sign in with Legalese Cloud to view your deployments.
-                {/if}
-              </p>
-            </div>
-          {:else if deploymentsLoading}
-            <div class="empty-state">
-              <p class="hint">Loading deployments...</p>
-            </div>
-          {:else if deployments.length === 0}
-            <div class="empty-state">
-              <p class="hint">
-                No deployments yet. Deploy an L4 file to get started.
-              </p>
-            </div>
           {:else}
-            <div class="deployments-list">
-              {#each deployments as dep (dep.deploymentId)}
-                {@const canDownload =
-                  !!dep.hasFiles &&
-                  (dep.status === 'ready' || dep.status === 'pending')}
-                {@const canUndeploy = true}
-                {@const showMenu = canDownload || canUndeploy}
-                <div
-                  class="deployment-group"
-                  class:collapsed={collapsedDeployments.has(dep.deploymentId)}
-                >
-                  <div class="deployment-header">
-                    <button
-                      class="deployment-header-toggle"
-                      onclick={() => toggleDeploymentCollapse(dep.deploymentId)}
-                      title={collapsedDeployments.has(dep.deploymentId)
-                        ? 'Expand deployment'
-                        : 'Collapse deployment'}
-                    >
-                      <span
-                        class="chevron"
-                        class:rotated={!collapsedDeployments.has(
-                          dep.deploymentId
-                        )}>&#9002;</span
-                      >
-                      <span class="deployment-id">{dep.deploymentId}</span>
-                      <span class="deployment-fn-count">
-                        {#if dep.error}
-                          Error
-                        {:else if dep.functions.length === 0 && compilingDeployments.has(dep.deploymentId)}
-                          Compiling...
-                        {:else if dep.functions.length === 0}
-                          Uncompiled
-                        {:else}
-                          {dep.functions.length} rule{dep.functions.length !== 1
-                            ? 's'
-                            : ''}
-                        {/if}
-                      </span>
-                    </button>
-                    <div class="deployment-actions">
-                      {#if integrateMode === 'cloud'}
-                        <button
-                          class="deployment-text-btn"
-                          title="Chat with this deployment in Legalese AI"
-                          onclick={(e: MouseEvent) => {
-                            e.stopPropagation()
-                            useInChat(dep)
-                          }}
-                        >
-                          Chat
-                        </button>
-                      {/if}
-                      <button
-                        class="deployment-text-btn"
-                        title="Integration endpoints for this deployment"
-                        aria-haspopup="dialog"
-                        aria-expanded={integrateForId === dep.deploymentId}
-                        onclick={(e: MouseEvent) => {
-                          e.stopPropagation()
-                          toggleIntegrate(dep)
-                        }}
-                      >
-                        Integrate
-                      </button>
-                      {#if showMenu}
-                        <div class="deployment-menu-wrapper">
-                          <button
-                            class="deployment-menu-btn"
-                            aria-label="Deployment actions"
-                            aria-haspopup="menu"
-                            aria-expanded={openDeploymentMenuId ===
-                              dep.deploymentId}
-                            title="Deployment actions"
-                            onclick={(e: MouseEvent) => {
-                              e.stopPropagation()
-                              toggleDeploymentMenu(dep.deploymentId)
-                            }}
-                          >
-                            {#if downloadingId === dep.deploymentId || undeployingId === dep.deploymentId}
-                              <span class="menu-spinner" aria-hidden="true"
-                              ></span>
-                            {:else}
-                              &#8943;
-                            {/if}
-                          </button>
-                          {#if openDeploymentMenuId === dep.deploymentId}
-                            <div class="dropdown-menu deployment-dropdown-menu">
-                              {#if canDownload}
-                                <button
-                                  class="menu-item"
-                                  disabled={downloadingId === dep.deploymentId}
-                                  onclick={(e: MouseEvent) => {
-                                    e.stopPropagation()
-                                    requestDownload(dep)
-                                  }}
-                                >
-                                  {downloadingId === dep.deploymentId
-                                    ? 'Downloading...'
-                                    : 'Download'}
-                                </button>
-                              {/if}
-                              {#if canUndeploy}
-                                <button
-                                  class="menu-item menu-item-danger"
-                                  disabled={undeployingId === dep.deploymentId}
-                                  onclick={(e: MouseEvent) => {
-                                    e.stopPropagation()
-                                    closeDeploymentMenu()
-                                    requestUndeploy(dep)
-                                  }}
-                                >
-                                  {undeployingId === dep.deploymentId
-                                    ? 'Removing...'
-                                    : 'Undeploy'}
-                                </button>
-                              {/if}
-                            </div>
-                          {/if}
-                        </div>
-                      {/if}
-                    </div>
-                  </div>
-                  {#if !collapsedDeployments.has(dep.deploymentId)}
-                    {#if dep.error}
-                      <div class="deployment-error"><pre>{dep.error}</pre></div>
-                    {:else if compilingDeployments.has(dep.deploymentId)}
-                      <div class="deployment-empty">Compiling...</div>
-                    {:else if dep.functions.length > 0}
-                      {#each dep.functions as func (func.name)}
-                        <ToolCard
-                          {func}
-                          expanded={isCardExpanded(
-                            dep.deploymentId + '/' + func.name
-                          )}
-                          onToggle={() =>
-                            toggleCard(dep.deploymentId + '/' + func.name)}
-                        />
-                      {/each}
-                    {:else}
-                      <div class="deployment-empty">No rules</div>
-                    {/if}
-                  {/if}
-                </div>
-              {/each}
-            </div>
+            <!-- Normal preview -->
+            {#if functions.length === 0}
+              <div class="empty-state">
+                <p class="hint">
+                  Open an L4 file containing valid rules marked with @export
+                </p>
+              </div>
+            {:else}
+              <div class="functions-list">
+                {#each functions as func (func.name)}
+                  <ToolCard
+                    {func}
+                    expanded={isCardExpanded('.local/' + func.name)}
+                    onToggle={() => toggleCard('.local/' + func.name)}
+                    onReveal={func.srcLine
+                      ? () =>
+                          messenger?.sendNotification(
+                            RequestRevealLocation,
+                            HOST_EXTENSION,
+                            { uri: activeFileUri, line: func.srcLine! }
+                          )
+                      : undefined}
+                  />
+                {/each}
+              </div>
+            {/if}
           {/if}
         </div>
-        <aside class="deployment-info-note" role="note">
-          <p>
-            Deployments are automatically available to Legalese AI, VS Code
-            Copilot, and any other MCP-speaking agents as MCP tools on this
-            computer.
-          </p>
-          <p>
-            They're also available as REST API's, online MCP server and WebMCP
-            tools {connectionStatus.isLegaleseCloud
-              ? 'as well as OpenAI v1 compatible AI endpoint on the Legalese Cloud'
-              : 'via the connected JL4 service'}.
-          </p>
-        </aside>
-        {#if integrateForId}
-          <DeploymentIntegratePopover
-            deploymentId={integrateForId}
-            mode={integrateMode}
-            orgSlug={connectionStatus.orgSlug ?? ''}
-            host={connectionStatus.serviceUrl}
-            onClose={() => (integrateForId = null)}
-            {onLearnMore}
-          />
-        {/if}
-      </div>
+      {/if}
+      {#if activeTab === 'deployments'}
+        <div class="deployments-tab-wrapper">
+          <div class="deployments-tab-body">
+            {#if undeployConfirm}
+              <div class="breaking-warning">
+                <button class="back-btn" onclick={cancelUndeploy}
+                  >&larr; Back to deployments</button
+                >
+                <div class="warning-header">
+                  &#9888; This will break existing integrations
+                </div>
+                <div class="warning-body">
+                  <p class="warning-desc">
+                    Removing <strong>{undeployConfirm.deploymentId}</strong> will
+                    permanently delete the following rules:
+                  </p>
+                  <ul class="breaking-list">
+                    {#each undeployConfirm.functions as func}
+                      <li><span class="breaking-ident">{func.name}</span></li>
+                    {/each}
+                  </ul>
+                </div>
+              </div>
+            {:else if !connectionStatus.connected}
+              <div class="empty-state">
+                <p class="hint">
+                  {#if !initialized}
+                    &nbsp;
+                  {:else if connectionStatus.serviceUrl}
+                    Connect to {stripProtocol(connectionStatus.serviceUrl)} to view
+                    deployments.
+                  {:else}
+                    Sign in with Legalese Cloud to view your deployments.
+                  {/if}
+                </p>
+              </div>
+            {:else if deploymentsLoading}
+              <div class="empty-state">
+                <p class="hint">Loading deployments...</p>
+              </div>
+            {:else if deployments.length === 0}
+              <div class="empty-state">
+                <p class="hint">
+                  No deployments yet. Deploy an L4 file to get started.
+                </p>
+              </div>
+            {:else}
+              <div class="deployments-list">
+                {#each deployments as dep (dep.deploymentId)}
+                  {@const canDownload =
+                    !!dep.hasFiles &&
+                    (dep.status === 'ready' || dep.status === 'pending')}
+                  {@const canUndeploy = true}
+                  {@const showMenu = canDownload || canUndeploy}
+                  <div
+                    class="deployment-group"
+                    class:collapsed={collapsedDeployments.has(dep.deploymentId)}
+                  >
+                    <div class="deployment-header">
+                      <button
+                        class="deployment-header-toggle"
+                        onclick={() =>
+                          toggleDeploymentCollapse(dep.deploymentId)}
+                        title={collapsedDeployments.has(dep.deploymentId)
+                          ? 'Expand deployment'
+                          : 'Collapse deployment'}
+                      >
+                        <span
+                          class="chevron"
+                          class:rotated={!collapsedDeployments.has(
+                            dep.deploymentId
+                          )}>&#9002;</span
+                        >
+                        <span class="deployment-id">{dep.deploymentId}</span>
+                        <span class="deployment-fn-count">
+                          {#if dep.error}
+                            Error
+                          {:else if dep.functions.length === 0 && compilingDeployments.has(dep.deploymentId)}
+                            Compiling...
+                          {:else if dep.functions.length === 0}
+                            Uncompiled
+                          {:else}
+                            {dep.functions.length} rule{dep.functions.length !==
+                            1
+                              ? 's'
+                              : ''}
+                          {/if}
+                        </span>
+                      </button>
+                      <div class="deployment-actions">
+                        {#if integrateMode === 'cloud'}
+                          <button
+                            class="deployment-text-btn"
+                            title="Chat with this deployment in Legalese AI"
+                            onclick={(e: MouseEvent) => {
+                              e.stopPropagation()
+                              useInChat(dep)
+                            }}
+                          >
+                            Chat
+                          </button>
+                        {/if}
+                        <button
+                          class="deployment-text-btn"
+                          title="Integration endpoints for this deployment"
+                          aria-haspopup="dialog"
+                          aria-expanded={integrateForId === dep.deploymentId}
+                          onclick={(e: MouseEvent) => {
+                            e.stopPropagation()
+                            toggleIntegrate(dep)
+                          }}
+                        >
+                          Integrate
+                        </button>
+                        {#if showMenu}
+                          <div class="deployment-menu-wrapper">
+                            <button
+                              class="deployment-menu-btn"
+                              aria-label="Deployment actions"
+                              aria-haspopup="menu"
+                              aria-expanded={openDeploymentMenuId ===
+                                dep.deploymentId}
+                              title="Deployment actions"
+                              onclick={(e: MouseEvent) => {
+                                e.stopPropagation()
+                                toggleDeploymentMenu(dep.deploymentId)
+                              }}
+                            >
+                              {#if downloadingId === dep.deploymentId || undeployingId === dep.deploymentId}
+                                <span class="menu-spinner" aria-hidden="true"
+                                ></span>
+                              {:else}
+                                &#8943;
+                              {/if}
+                            </button>
+                            {#if openDeploymentMenuId === dep.deploymentId}
+                              <div
+                                class="dropdown-menu deployment-dropdown-menu"
+                              >
+                                {#if canDownload}
+                                  <button
+                                    class="menu-item"
+                                    disabled={downloadingId ===
+                                      dep.deploymentId}
+                                    onclick={(e: MouseEvent) => {
+                                      e.stopPropagation()
+                                      requestDownload(dep)
+                                    }}
+                                  >
+                                    {downloadingId === dep.deploymentId
+                                      ? 'Downloading...'
+                                      : 'Download'}
+                                  </button>
+                                {/if}
+                                {#if canUndeploy}
+                                  <button
+                                    class="menu-item menu-item-danger"
+                                    disabled={undeployingId ===
+                                      dep.deploymentId}
+                                    onclick={(e: MouseEvent) => {
+                                      e.stopPropagation()
+                                      closeDeploymentMenu()
+                                      requestUndeploy(dep)
+                                    }}
+                                  >
+                                    {undeployingId === dep.deploymentId
+                                      ? 'Removing...'
+                                      : 'Undeploy'}
+                                  </button>
+                                {/if}
+                              </div>
+                            {/if}
+                          </div>
+                        {/if}
+                      </div>
+                    </div>
+                    {#if !collapsedDeployments.has(dep.deploymentId)}
+                      {#if dep.error}
+                        <div class="deployment-error">
+                          <pre>{dep.error}</pre>
+                        </div>
+                      {:else if compilingDeployments.has(dep.deploymentId)}
+                        <div class="deployment-empty">Compiling...</div>
+                      {:else if dep.functions.length > 0}
+                        {#each dep.functions as func (func.name)}
+                          <ToolCard
+                            {func}
+                            expanded={isCardExpanded(
+                              dep.deploymentId + '/' + func.name
+                            )}
+                            onToggle={() =>
+                              toggleCard(dep.deploymentId + '/' + func.name)}
+                          />
+                        {/each}
+                      {:else}
+                        <div class="deployment-empty">No rules</div>
+                      {/if}
+                    {/if}
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </div>
+          <aside class="deployment-info-note" role="note">
+            <p>
+              Deployments are automatically available to Legalese AI, VS Code
+              Copilot, and any other MCP-speaking agents as MCP tools on this
+              computer.
+            </p>
+            <p>
+              They're also available as REST API's, online MCP server and WebMCP
+              tools {connectionStatus.isLegaleseCloud
+                ? 'as well as OpenAI v1 compatible AI endpoint on the Legalese Cloud'
+                : 'via the connected JL4 service'}.
+            </p>
+          </aside>
+        </div>
+      {/if}
+    </div>
+    {#if integrateForId && activeTab === 'deployments'}
+      <!-- Sibling of the scroller (not inside it) so the dim + dialog
+           pin to the visible tab viewport and stay centred regardless
+           of how far the deployment list is scrolled. -->
+      <DeploymentIntegratePopover
+        deploymentId={integrateForId}
+        mode={integrateMode}
+        orgSlug={connectionStatus.orgSlug ?? ''}
+        host={connectionStatus.serviceUrl}
+        onClose={() => (integrateForId = null)}
+        {onLearnMore}
+      />
     {/if}
   </div>
 
@@ -1678,14 +1701,38 @@
     border-bottom-color: #c8376a;
   }
 
+  /* Non-scrolling visible-area box. Holds the scroller and the
+     Integrate overlay as siblings so the overlay can pin to the
+     viewport. `min-height: 0` lets the scroller actually scroll
+     instead of stretching the frame to the content height. */
+  .tab-content-frame {
+    position: relative;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  /* The scroller. Padding now lives on each tab's own content (see
+     `.tab-pane`, `.deployments-tab-wrapper`, `.preview-pane`) rather
+     than here, so the Integrate overlay can cover the full visible
+     tab — padding included — with a plain `inset: 0`. */
   .tab-content {
     flex: 1;
     overflow-y: auto;
-    padding: 16px;
+    min-height: 0;
   }
 
   .tab-pane {
     height: 100%;
+    box-sizing: border-box;
+    padding: 16px;
+  }
+
+  /* Deploy ("preview") tab owns its 16px padding too. */
+  .preview-pane {
+    box-sizing: border-box;
+    padding: 16px;
   }
 
   .empty-state {
@@ -1968,9 +2015,10 @@
     display: flex;
     flex-direction: column;
     min-height: 100%;
-    /* Containing block for the Integrate dialog's absolute backdrop,
-       so the dim is scoped to this tab only. */
-    position: relative;
+    box-sizing: border-box;
+    /* This tab owns its 16px padding (no longer inherited from
+       `.tab-content`). */
+    padding: 16px;
   }
 
   .deployments-tab-body {

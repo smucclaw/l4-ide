@@ -546,7 +546,7 @@ export function registerAiChatHandlers(deps: {
   messenger.onRequest(GenerateSidebarIntendedUse, async ({ functions }) => {
     if (!auth.isAiUsable()) {
       void vscode.window.showInformationMessage(
-        'Login to Legalese Cloud to use this feature'
+        'Sign in with Legalese Cloud to use this feature'
       )
       return { notSignedIn: true as const }
     }
