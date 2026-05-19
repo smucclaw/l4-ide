@@ -1,6 +1,6 @@
 # OpenAI-Compatible AI API
 
-Talk to a deployed set of L4 rules using any OpenAI-compatible client. Legalese Cloud serves each deployment as a chat-completions endpoint backed by `legalese-comply-4`, a model tuned for fast, reliable rule evaluation.
+Talk to a deployed set of L4 rules using any OpenAI-compatible client. Legalese Cloud serves each deployment as a chat-completions endpoint backed by `legalese-comply-4`, a model pipeline tuned for fast, reliable rule evaluation.
 
 **Audience:** Developers integrating deployed rules into an app or agent
 **Prerequisites:** A deployment on [Legalese Cloud](https://legalese.cloud) ([Exporting Rules for Deployment](../deploying-rules/exporting-rules-for-deployment.md))
@@ -36,7 +36,7 @@ A key (or session) used against this endpoint needs three scopes — each gates 
 
 | Permission    | Enables                                                                                                                                                                       |
 | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ai:chat`     | Open a conversation against the deployment's `legalese-comply-4` model — the hosted chat-completions surface itself. Without it the request is rejected before any rule runs. |
+| `ai:chat`     | Open a conversation against the deployment's `legalese-comply-4` pipeline — the hosted chat-completions surface itself. Without it the request is rejected before any rule runs. |
 | `l4:rules`    | Let the model **discover** the deployment's exported rules: their names, descriptions and input shapes, so it can pick the right one for the question.                        |
 | `l4:evaluate` | Let the model **run** a chosen rule with the inputs it gathered and read back the typed decision it then explains to the user.                                                |
 
@@ -97,5 +97,5 @@ Streaming (`stream: true`) and multi-turn conversations work exactly as they do 
 ## Notes
 
 - The deployment endpoint only knows the rules you exported in that deployment — it does not have access to your editor, workspace, or other deployments.
-- The model name is always `legalese-comply-4`; other model names are ignored.
+- The model name is always `legalese-comply-4` for our internal comply model pipeline; other model names are ignored.
 - Self-hosted `jl4-service` does **not** expose this AI endpoint. Use the [OpenAPI spec](./openapi-spec.md) or [MCP server](./mcp-server.md) there instead.
