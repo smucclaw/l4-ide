@@ -154,7 +154,7 @@ Three assumptions the policy owner now has to confirm. That's the point.
 - **One clause per prompt** when the source is dense. Aggregate later.
 - **Keep the brief in a file** (e.g. `rules/_brief.md`) and reference it — saves retyping.
 - **Ask for alternatives** when a clause is ambiguous: _"show two encodings and explain the difference"_.
-- **Let Legalese AI prepare for deployment** — once the file is clean, ask it to mark the decision `@export` and walk you through deployment. See [Exporting Functions for Deployment](../deploying-functions/exporting-functions-for-deployment.md).
+- **Let Legalese AI prepare for deployment** — once the file is clean, ask it to mark the decision `@export` and walk you through deployment. See [Exporting Rules for Deployment](../deploying-rules/exporting-rules-for-deployment.md).
 
 ---
 
@@ -176,6 +176,6 @@ Three assumptions the policy owner now has to confirm. That's the point.
 
 ## Next Steps
 
-- [Exporting Functions for Deployment](../deploying-functions/exporting-functions-for-deployment.md) — publish the rule as an API
+- [Exporting Rules for Deployment](../deploying-rules/exporting-rules-for-deployment.md) — publish the rule as an API
 - [Common Patterns](../getting-started/common-patterns.md) — idioms worth knowing when reviewing AI's output
 - [Legislative Ingestion](legislative-ingestion.md) — deeper workflow for statute-scale text

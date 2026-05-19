@@ -23,16 +23,40 @@
   import EmptyState from './empty-state.svelte'
   import ConversationHistory from './conversation-history.svelte'
   import SettingsPanel from './settings-panel.svelte'
+  import DeploymentBanner from './deployment-banner.svelte'
 
   let {
     messenger,
     visible,
+    deploymentChatRequest = null,
   }: {
     messenger: InstanceType<typeof Messenger> | null
     visible: boolean
+    /** Set by the sidebar when the user clicks "Use in chat" on a
+     *  deployment. The `nonce` makes repeat clicks (same deployment)
+     *  re-trigger the effect. */
+    deploymentChatRequest?: {
+      deploymentId: string
+      apiBaseUrl: string
+      /** The deployment's "Intended use" metadata, surfaced in the
+       *  empty-state of the fresh deployment chat. */
+      intendedUse?: string
+      nonce: number
+    } | null
   } = $props()
 
   const store = createAiChatStore(() => messenger)
+
+  // Honour a "Use in chat" request from the Deployment tab. Tracking
+  // the nonce (not deep-equality) lets the user re-enter the same
+  // deployment after closing the banner.
+  let lastDeploymentNonce = -1
+  $effect(() => {
+    const req = deploymentChatRequest
+    if (!req || req.nonce === lastDeploymentNonce) return
+    lastDeploymentNonce = req.nonce
+    store.startDeploymentChat(req.deploymentId, req.apiBaseUrl, req.intendedUse)
+  })
 
   // The jl4-service connection is independent of Legalese AI
   // credentials (a self-hosted service does NOT imply AI access).
@@ -160,7 +184,15 @@
     </div>
   {:else}
     {#if showEmptyState}
-      <EmptyState onSeed={onSeedSelect} />
+      <EmptyState
+        onSeed={onSeedSelect}
+        deployment={store.deploymentBinding
+          ? {
+              deploymentId: store.deploymentBinding.deploymentId,
+              intendedUse: store.deploymentBinding.intendedUse ?? '',
+            }
+          : null}
+      />
     {:else if showChat && store.current}
       <MessageList
         turns={store.current.turns}
@@ -191,6 +223,13 @@
 
     {#if settingsOpen}
       <SettingsPanel {store} onClose={() => (settingsOpen = false)} />
+    {/if}
+
+    {#if store.deploymentBinding}
+      <DeploymentBanner
+        deploymentId={store.deploymentBinding.deploymentId}
+        onClose={() => store.newConversation()}
+      />
     {/if}
 
     <ChatInput

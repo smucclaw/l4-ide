@@ -36,6 +36,11 @@ export type ChatServiceEvent =
       tool: string
       status: 'running' | 'done' | 'error'
       message: string
+      input?: unknown
+      output?: unknown
+      ruleId?: string
+      deploymentId?: string
+      error?: string
     }
   | {
       kind: 'tool-call'
@@ -91,6 +96,24 @@ export type PersistedBlock =
       argsJson: string
       status: 'running' | 'done' | 'error'
       result?: string
+      error?: string
+    }
+  // Only L4-rule server activities are persisted (the proxy ran a
+  // deployed rule). Plain status tickers (doc search etc.) are
+  // intentionally not recorded — they're ephemeral progress noise
+  // with nothing to reconstruct on reload. `ruleKey` mirrors the
+  // webview store's merge key so a `running → done` burst persists
+  // as ONE block.
+  | {
+      kind: 'tool-activity'
+      tool: string
+      ruleId: string
+      ruleKey: string
+      status: 'running' | 'done' | 'error'
+      message: string
+      input?: unknown
+      output?: unknown
+      deploymentId?: string
       error?: string
     }
 
@@ -208,6 +231,25 @@ export class ChatService {
     const isNewConversation = !params.conversationId
     const { turnId } = params
 
+    // Re-resolve the deployment binding for a follow-up turn. The
+    // webview only sends `apiBaseUrl`/`deploymentId` on the FIRST turn
+    // of a "Use in chat" conversation; subsequent turns (and any turn
+    // after a webview reload or history-reopen) arrive without it, so
+    // we recover it from the persisted conversation doc. This keeps a
+    // deployment chat pinned to its endpoint for its whole lifetime.
+    if (!params.apiBaseUrl && params.conversationId) {
+      const stored = await this.opts.store
+        .load(params.conversationId)
+        .catch(() => null)
+      if (stored?.apiBaseUrl) {
+        params = {
+          ...params,
+          apiBaseUrl: stored.apiBaseUrl,
+          deploymentId: stored.deploymentId,
+        }
+      }
+    }
+
     const abortController = new AbortController()
     this.active.set(turnId, abortController)
     this.injections.set(turnId, [])
@@ -290,7 +332,9 @@ export class ChatService {
                   '',
                   titleFromUserMessage(activeParams.text),
                   userMessages,
-                  this.opts.extensionVersion
+                  this.opts.extensionVersion,
+                  activeParams.deploymentId,
+                  activeParams.apiBaseUrl
                 )
                 .catch((err) =>
                   this.opts.logger.warn(
@@ -428,6 +472,8 @@ export class ChatService {
             userText: activeParams.text,
             abortSignal: abortController.signal,
             blocks: turnBlocks,
+            apiBaseUrl: activeParams.apiBaseUrl,
+            deploymentId: activeParams.deploymentId,
             // `continueTurn` only applies to the FIRST iteration of
             // the FIRST sub-turn — that's the retry-from-error-
             // bubble path where the caller wants the server to run
@@ -477,6 +523,13 @@ export class ChatService {
             serverConversationId &&
             finishReason === 'stop'
           ) {
+            // Title generation goes through the default Legalese AI
+            // proxy's stateless summize pipeline regardless of where
+            // the turn itself ran — deployment ("Use in chat") chats
+            // included. Anyone in an AI chat already has AI access
+            // (the panel is gated on it), and the deployment's own
+            // endpoint only serves its comply model, not summize, so
+            // the default proxy is the correct target here.
             this.generateTitleInBackground(
               serverConversationId,
               activeParams.text
@@ -644,6 +697,12 @@ export class ChatService {
     /** Chronological record the outer loop persists as `_meta.blocks`
      *  so the webview can rebuild rows on reload. Mutated in place. */
     blocks: PersistedBlock[]
+    /** Deployment binding (plain-passthrough mode). When `apiBaseUrl`
+     *  is set the request is POSTed there instead of the default
+     *  proxy, no client tools are advertised, and `deploymentId` is
+     *  stamped on the persisted conversation doc. */
+    apiBaseUrl?: string
+    deploymentId?: string
     /** Pass `continueTurn: true` through to the server so it skips
      *  extractDelta + appendMessages and runs another pass against
      *  the stored history. Only meaningful on iteration 0. */
@@ -674,7 +733,9 @@ export class ChatService {
       continueTurn,
       suppressStartedEmit,
       onMetadata,
+      apiBaseUrl,
     } = opts
+    const deploymentMode = !!apiBaseUrl
     const pendingCalls: Array<{
       callId: string
       name: string
@@ -689,13 +750,21 @@ export class ChatService {
     // alongside our built-in fs/lsp/l4/meta tools. The MCP list is
     // cached in-process for a few seconds so multi-iteration turns
     // don't hit the local proxy every round.
-    const mcpTools = await this.opts.mcp.listTools().catch((err) => {
-      this.opts.logger.warn(
-        `chat-service: mcp tools/list failed: ${err instanceof Error ? err.message : String(err)}`
-      )
-      return []
-    })
-    const tools = [...BUILTIN_TOOLS, ...mcpTools]
+    //
+    // Deployment ("Use in chat") mode is a PLAIN PASSTHROUGH: the
+    // deployment's own model owns rule evaluation, so we advertise no
+    // client tools — shipping our local fs/lsp tools would let that
+    // model try to read the operator's filesystem, which is both
+    // wrong and confusing for a deployment-scoped chat.
+    const mcpTools = deploymentMode
+      ? []
+      : await this.opts.mcp.listTools().catch((err) => {
+          this.opts.logger.warn(
+            `chat-service: mcp tools/list failed: ${err instanceof Error ? err.message : String(err)}`
+          )
+          return []
+        })
+    const tools = deploymentMode ? [] : [...BUILTIN_TOOLS, ...mcpTools]
 
     for await (const ev of this.opts.proxy.streamResilient(
       {
@@ -710,6 +779,10 @@ export class ChatService {
         // server so no duplicate user message lands in the stored
         // transcript.
         ...(continueTurn ? { continueTurn: true } : {}),
+        // Deployment-scoped passthrough: POST against
+        // `{apiBaseUrl}/v1/chat/completions` (and reattach there)
+        // instead of the default Legalese AI proxy.
+        ...(apiBaseUrl ? { apiBaseUrl } : {}),
         // Register this turn with the proxy's TurnRegistry so a
         // mid-stream transport drop auto-reattaches (since-cursor
         // protocol) and picks up the buffered frames without
@@ -739,7 +812,9 @@ export class ChatService {
               ev.model,
               titleFromUserMessage(opts.userText),
               messages.filter((m) => m.role === 'user'),
-              this.opts.extensionVersion
+              this.opts.extensionVersion,
+              opts.deploymentId,
+              apiBaseUrl
             )
             .catch((err) =>
               this.opts.logger.warn(
@@ -770,7 +845,57 @@ export class ChatService {
           tool: ev.tool,
           status: ev.status,
           message: ev.message,
+          input: ev.input,
+          output: ev.output,
+          ruleId: ev.ruleId,
+          deploymentId: ev.deploymentId,
+          error: ev.error,
         })
+        // Persist L4-rule activities so they survive a history
+        // reload (the user explicitly wants server rule calls kept;
+        // plain status tickers don't need to be). Identity + merge
+        // mirror the webview store's `ruleActivityIdentity` /
+        // `onToolActivity` exactly so the persisted block and the
+        // live block collapse a `running → done` burst into ONE row
+        // the same way.
+        {
+          const fromInput =
+            ev.input && typeof ev.input === 'object'
+              ? (ev.input as { function_name?: unknown }).function_name
+              : undefined
+          const ruleName =
+            ev.ruleId ?? (typeof fromInput === 'string' ? fromInput : undefined)
+          if (ruleName) {
+            const ruleKey = `${ev.tool}::${ruleName}`
+            const existing = blocks.find(
+              (b) =>
+                b.kind === 'tool-activity' &&
+                b.ruleKey === ruleKey &&
+                b.status === 'running'
+            )
+            if (existing && existing.kind === 'tool-activity') {
+              existing.status = ev.status
+              existing.message = ev.message
+              if (ev.input !== undefined) existing.input = ev.input
+              if (ev.output !== undefined) existing.output = ev.output
+              if (ev.deploymentId) existing.deploymentId = ev.deploymentId
+              if (ev.error !== undefined) existing.error = ev.error
+            } else {
+              blocks.push({
+                kind: 'tool-activity',
+                tool: ev.tool,
+                ruleId: ruleName,
+                ruleKey,
+                status: ev.status,
+                message: ev.message,
+                input: ev.input,
+                output: ev.output,
+                deploymentId: ev.deploymentId,
+                error: ev.error,
+              })
+            }
+          }
+        }
       } else if (ev.kind === 'tool-call') {
         // Status updates render as plain assistant prose, not as a
         // tool-call card. The model still goes through the normal
@@ -909,10 +1034,17 @@ export class ChatService {
   ): Promise<AiChatMessage[]> {
     const messages: AiChatMessage[] = []
 
+    // Deployment ("Use in chat") mode is a plain passthrough to the
+    // deployment's own model: no editor context, @-mention context,
+    // session-context system message, or workspace bootstrap. Only the
+    // user's message (plus any explicit attachments, assembled by the
+    // shared tail below) goes through.
+    const deploymentMode = !!params.apiBaseUrl
+
     // `includeActiveFile !== false` honors the default (send it) and
     // an explicit `true`; only `false` suppresses. The chat-input UI
     // exposes a per-send toggle for this.
-    if (params.includeActiveFile !== false) {
+    if (!deploymentMode && params.includeActiveFile !== false) {
       // Prefer the chip snapshot the webview captured at send time
       // (immune to multi-window / focus-race drift). Fall back to
       // live activeTextEditor when the webview didn't send one
@@ -929,10 +1061,12 @@ export class ChatService {
     // open with fs__read_file. Without this hint, follow-up turns where
     // the user attaches an extra file via @ never see the body — the
     // model has no signal that the @-token is anything actionable.
-    const mentionCtx = buildMentionContextMessage(params.mentions)
-    if (mentionCtx) messages.push(mentionCtx)
+    if (!deploymentMode) {
+      const mentionCtx = buildMentionContextMessage(params.mentions)
+      if (mentionCtx) messages.push(mentionCtx)
+    }
 
-    if (isNew) {
+    if (isNew && !deploymentMode) {
       const session = buildSessionContextMessage(
         this.opts.auth,
         this.opts.extensionVersion
@@ -1123,7 +1257,11 @@ function mergeQueuedAsParams(
  */
 function markStoppedToolCalls(blocks: PersistedBlock[]): void {
   for (const b of blocks) {
-    if (b.kind !== 'tool-call') continue
+    // Rule-activity blocks pulsate while `running` (ToolCallRow's own
+    // dot animation, independent of stream state), so a Stop'd eval
+    // left at `running` would pulse forever after a reload. Flip it
+    // to error like tool-call rows.
+    if (b.kind !== 'tool-call' && b.kind !== 'tool-activity') continue
     if (b.status === 'running') {
       b.status = 'error'
       b.error = b.error ?? 'Stopped'

@@ -33,6 +33,14 @@ export interface AiProxyChatRequest {
    *  to work (the server falls back to a UUID when absent, but
    *  the client can't reconstruct that id). */
   turnId?: string
+  /** Deployment-scoped base URL override
+   *  (`https://ai.legalese.cloud/{orgSlug}/{deploymentId}`). When set,
+   *  `stream()` / `reattach()` POST/GET against this instead of
+   *  `getAiEndpoint()`. The deployment endpoint is the same ai-proxy
+   *  stack, path-scoped, so the SSE `metadata` frame and turn-reattach
+   *  protocol work identically. Local-mode is ignored when this is
+   *  set (a deployment chat always needs real cloud auth). */
+  apiBaseUrl?: string
 }
 
 /** Event union emitted by {@link streamChatCompletions} while parsing SSE. */
@@ -50,6 +58,19 @@ export type AiProxyStreamEvent =
       tool: string
       status: 'running' | 'done' | 'error'
       message: string
+      /** Verbatim model-supplied arguments. Present only for
+       *  inspectable server tools (L4 rule evaluations); the webview
+       *  uses this to render an L4 Rule card identical to a
+       *  client-side tool-call. */
+      input?: unknown
+      /** Verbatim tool result (set on `done`). */
+      output?: unknown
+      /** Deployed L4 function name when the activity wraps a rule. */
+      ruleId?: string
+      /** Deployment the rule lives in, when scoped. */
+      deploymentId?: string
+      /** Error detail when status is `error`. */
+      error?: string
     }
   | {
       kind: 'tool-call'
@@ -162,8 +183,8 @@ export class AiProxyClient {
     abortSignal: AbortSignal,
     cursor?: SseCursor
   ): AsyncGenerator<AiProxyStreamEvent> {
-    const endpoint = getAiEndpoint()
-    const local = isLocalMode()
+    const endpoint = request.apiBaseUrl ?? getAiEndpoint()
+    const local = request.apiBaseUrl ? false : isLocalMode()
     const url = `${endpoint}/v1/chat/completions`
     const headers = await this.opts.auth.getAiAuthHeaders()
     let hasAuth = !!headers.Authorization
@@ -226,15 +247,16 @@ export class AiProxyClient {
   async *reattach(
     turnId: string,
     abortSignal: AbortSignal,
-    cursor?: SseCursor
+    cursor?: SseCursor,
+    apiBaseUrl?: string
   ): AsyncGenerator<AiProxyStreamEvent> {
-    const endpoint = getAiEndpoint()
+    const endpoint = apiBaseUrl ?? getAiEndpoint()
     const sinceId = cursor?.lastEventId ?? 0
     const url =
       `${endpoint}/v1/chat/turns/${encodeURIComponent(turnId)}/stream` +
       (sinceId > 0 ? `?since=${sinceId}` : '')
     const headers = await this.opts.auth.getAiAuthHeaders()
-    if (!headers.Authorization && isLocalMode()) {
+    if (!headers.Authorization && !apiBaseUrl && isLocalMode()) {
       headers.Authorization = 'Bearer dev-local'
     }
     if (!headers.Authorization) {
@@ -324,7 +346,7 @@ export class AiProxyClient {
           throw err // aborted during backoff
         }
         try {
-          gen = this.reattach(turnId, abortSignal, cursor)
+          gen = this.reattach(turnId, abortSignal, cursor, request.apiBaseUrl)
         } catch (re) {
           // 404 (turn reaped / wrong task) or auth — can't resume;
           // surface the ORIGINAL transport error so the UI shows a
@@ -382,6 +404,74 @@ export class AiProxyClient {
     } catch (err) {
       this.opts.logger.warn(
         `Title generation failed: ${err instanceof Error ? err.message : String(err)}`
+      )
+      return null
+    }
+  }
+
+  /**
+   * One-shot "intended use" description for a set of about-to-be-deployed
+   * functions, using the same stateless summize pipeline as
+   * {@link summarizeTitle} (no conversationId, so no junk conversation
+   * files server-side). Returns null on any failure — the caller
+   * surfaces a friendly message.
+   */
+  async describeIntendedUse(functionsJson: string): Promise<string | null> {
+    const url = `${getAiEndpoint()}/v1/chat/completions`
+    const headers = await this.opts.auth.getAiAuthHeaders()
+    if (!headers.Authorization && isLocalMode()) {
+      headers.Authorization = 'Bearer dev-local'
+    }
+    const body = {
+      model: 'legalese-summize-4',
+      messages: [
+        {
+          role: 'system' as const,
+          content:
+            `You write the "Intended use" blurb for a deployment of L4 ` +
+            `legal rules. You are given the JSON schemas of the ` +
+            `deployed rules purely as evidence of the subject matter — ` +
+            `they are rules, never "functions", and the schema itself ` +
+            `is an implementation detail the reader does not care ` +
+            `about.\n\n` +
+            `Describe WHY someone would deploy these rules and WHEN ` +
+            `they apply: the real-world legal or business situation ` +
+            `they govern, who relies on them, and the circumstances or ` +
+            `decisions in which they come into play. Do NOT explain ` +
+            `what the rules compute, how they work, their inputs or ` +
+            `outputs, or list them one by one. Think "what this is for", ` +
+            `not "what this does".\n\n` +
+            `Write 2-4 plain-English sentences for a legal or business ` +
+            `operator, not a programmer. No markdown, no preamble — ` +
+            `respond with the blurb text only.`,
+        },
+        {
+          role: 'user' as const,
+          content: `Deployed rule schemas:\n\n${functionsJson.slice(0, 12000)}`,
+        },
+      ],
+    }
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json',
+          Accept: 'text/event-stream',
+        },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok || !res.body) return null
+      let text = ''
+      for await (const ev of parseSse(res.body)) {
+        if (ev.kind === 'text-delta') text += ev.text
+        if (ev.kind === 'done') break
+      }
+      text = text.trim()
+      return text.length > 0 ? text : null
+    } catch (err) {
+      this.opts.logger.warn(
+        `Intended-use generation failed: ${err instanceof Error ? err.message : String(err)}`
       )
       return null
     }
@@ -585,6 +675,11 @@ function* interpretFrame(
           tool: string
           status: 'running' | 'done' | 'error'
           message: string
+          input?: unknown
+          output?: unknown
+          ruleId?: string
+          deploymentId?: string
+          error?: string
         }>
       }
       for (const a of payload.activities ?? []) {
@@ -593,6 +688,11 @@ function* interpretFrame(
           tool: a.tool,
           status: a.status,
           message: a.message,
+          input: a.input,
+          output: a.output,
+          ruleId: a.ruleId,
+          deploymentId: a.deploymentId,
+          error: a.error,
         }
       }
     } catch {

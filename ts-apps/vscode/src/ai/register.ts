@@ -35,6 +35,7 @@ import {
   AiUsageSubscribe,
   AiUsageUnsubscribe,
   AiUsageUpdate,
+  GenerateSidebarIntendedUse,
   WebviewFrontendIsReadyNotification,
   type AiChatAttachment,
   type AiMentionCandidate,
@@ -46,6 +47,7 @@ import * as os from 'os'
 import { promises as fsPromises } from 'fs'
 import type { AuthManager } from '../auth.js'
 import { isLocalMode } from './ai-proxy-client.js'
+import type { AiProxyClient } from './ai-proxy-client.js'
 import type { ServiceClient } from '../service-client.js'
 import type { ChatService, ChatServiceEvent } from './chat-service.js'
 import type { ConversationStore } from './conversation-store.js'
@@ -82,6 +84,9 @@ export function registerAiChatHandlers(deps: {
   auth: AuthManager
   service: ChatService
   store: ConversationStore
+  /** Stateless one-shot LLM calls (summize). Used here to draft the
+   *  deployment "Intended use" text from the exported function schemas. */
+  proxy: AiProxyClient
   logger: AiLogger
   /** Map of pending approval promises keyed by callId. Populated by
    * the tool dispatcher; drained by the webview's approve/deny message. */
@@ -127,6 +132,7 @@ export function registerAiChatHandlers(deps: {
     auth,
     service,
     store,
+    proxy,
     logger,
     approvalPending,
     askUserPending,
@@ -240,6 +246,11 @@ export function registerAiChatHandlers(deps: {
           tool: event.tool,
           status: event.status,
           message: event.message,
+          input: event.input,
+          output: event.output,
+          ruleId: event.ruleId,
+          deploymentId: event.deploymentId,
+          error: event.error,
         })
         break
       case 'tool-call':
@@ -528,6 +539,35 @@ export function registerAiChatHandlers(deps: {
     return { ok: localOk }
   })
 
+  // Draft the deployment "Intended use" text from the exported function
+  // schemas. AI-gated like the chat tab: without a usable Legalese Cloud
+  // session (or AI api key) we surface a sign-in nudge here rather than
+  // round-tripping a failure the webview would have to translate.
+  messenger.onRequest(GenerateSidebarIntendedUse, async ({ functions }) => {
+    if (!auth.isAiUsable()) {
+      void vscode.window.showInformationMessage(
+        'Sign in with Legalese Cloud to use this feature'
+      )
+      return { notSignedIn: true as const }
+    }
+    try {
+      const text = await proxy.describeIntendedUse(
+        JSON.stringify(functions, null, 2)
+      )
+      if (!text) {
+        return {
+          error: 'Could not generate a description. Please try again.',
+        }
+      }
+      return { text }
+    } catch (err) {
+      logger.warn(
+        `describeIntendedUse failed: ${err instanceof Error ? err.message : String(err)}`
+      )
+      return { error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
   messenger.onNotification(AiConversationNew, () => {
     // No-op in extension today — the webview owns "new conversation"
     // state. Reserved for future server-side cleanup hooks.
@@ -612,24 +652,20 @@ export function registerAiChatHandlers(deps: {
       }
     | { kind: 'unavailable' }
   const renderMetaInFlight = new Map<string, Promise<RenderMetaResult>>()
-  messenger.onRequest(AiToolRenderMeta, async ({ toolName }) => {
-    if (!toolName.startsWith(MCP_L4_RULES_PREFIX)) {
-      return { kind: 'unavailable' as const }
-    }
-    // Make sure listTools() has populated the targetMap. Cheap when
-    // the cache is warm (≤3s).
-    await mcp.listTools().catch(() => undefined)
-    const target = mcp.getToolTarget(toolName)
-    if (!target) return { kind: 'unavailable' as const }
-    const cacheKey = `${target.deployId}/${target.fnName}`
+  // Fetch + cache one function's schema, keyed by (deployId, fnName)
+  // and invalidated on redeploy via the deployment version SHA. Shared
+  // by both the MCP-target path and the direct deployment path.
+  async function resolveRenderMeta(
+    deployId: string,
+    fnName: string,
+    logLabel: string
+  ): Promise<RenderMetaResult> {
+    const cacheKey = `${deployId}/${fnName}`
     const existing = renderMetaInFlight.get(cacheKey)
     if (existing) return existing
     const work = (async (): Promise<RenderMetaResult> => {
       try {
-        // Look up the deployment's current version so we invalidate
-        // automatically on redeploy (the version is a SHA-256 of all
-        // source contents — changes whenever any rule body changes).
-        const status = await serviceClient.getDeploymentStatus(target.deployId)
+        const status = await serviceClient.getDeploymentStatus(deployId)
         const version =
           (status.metadata as { version?: string } | undefined)?.version ?? ''
         const cached = renderMetaCache.get(cacheKey)
@@ -637,8 +673,8 @@ export function registerAiChatHandlers(deps: {
           return { kind: 'meta' as const, ...cached.meta }
         }
         const summary = (await serviceClient.getFunctionSchema(
-          target.deployId,
-          target.fnName
+          deployId,
+          fnName
         )) as {
           parameters?: import('jl4-client-rpc').FunctionParameter
           returnSchema?: import('jl4-client-rpc').FunctionParameter
@@ -652,7 +688,7 @@ export function registerAiChatHandlers(deps: {
         return { kind: 'meta' as const, ...meta }
       } catch (err) {
         logger.warn(
-          `aiToolRenderMeta(${toolName}) failed: ${err instanceof Error ? err.message : String(err)}`
+          `aiToolRenderMeta(${logLabel}) failed: ${err instanceof Error ? err.message : String(err)}`
         )
         return { kind: 'unavailable' as const }
       }
@@ -663,7 +699,31 @@ export function registerAiChatHandlers(deps: {
     } finally {
       renderMetaInFlight.delete(cacheKey)
     }
-  })
+  }
+
+  messenger.onRequest(
+    AiToolRenderMeta,
+    async ({ toolName, deploymentId, fnName }) => {
+      if (!toolName.startsWith(MCP_L4_RULES_PREFIX)) {
+        return { kind: 'unavailable' as const }
+      }
+      // Server-side rule activities (deployment passthrough chats)
+      // hand us the deployment + L4 function name directly. Resolve
+      // from there — the IDE's MCP target map is keyed by sanitized
+      // names and need not even cover the cloud deployment the chat
+      // is bound to.
+      if (deploymentId && fnName) {
+        return resolveRenderMeta(deploymentId, fnName, toolName)
+      }
+      // Client-side rule calls: reverse the sanitized tool name to a
+      // (deployId, fnName) via the MCP target map. Make sure
+      // listTools() has populated it (cheap when warm, ≤3s).
+      await mcp.listTools().catch(() => undefined)
+      const target = mcp.getToolTarget(toolName)
+      if (!target) return { kind: 'unavailable' as const }
+      return resolveRenderMeta(target.deployId, target.fnName, toolName)
+    }
+  )
 
   messenger.onRequest(AiMentionSearch, async ({ query }) => {
     const items = await searchMentions(query)

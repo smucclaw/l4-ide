@@ -246,7 +246,11 @@
       const res = await messenger.sendRequest(
         AiToolRenderMeta,
         { type: 'extension' },
-        { toolName: call.name }
+        {
+          toolName: call.name,
+          ...(call.deploymentId ? { deploymentId: call.deploymentId } : {}),
+          ...(call.ruleFnName ? { fnName: call.ruleFnName } : {}),
+        }
       )
       if (res.kind === 'meta') {
         renderMeta = {
@@ -380,6 +384,32 @@
     if (!hasDetails) return
     expanded = !expanded
   }
+
+  // Auto-expand an L4 Rule evaluation once it resolves to `done` AND
+  // the L4 schema (`renderMeta`) has loaded: the input/output is the
+  // whole point of a rule call, so making the user click the chevron
+  // is friction — but we hold the expand until the schema is in so
+  // the panel paints the L4 view on the first frame instead of
+  // flashing the JSON fallback and swapping. If the schema never
+  // resolves the row simply stays shut (the user can still open it
+  // manually to see the JSON). Generic tool calls (read/edit/search)
+  // never auto-expand.
+  //
+  // One-shot latch so a manual collapse afterwards sticks: the effect
+  // fires once and never fights the user's subsequent toggle.
+  let autoExpanded = false
+  $effect(() => {
+    if (
+      !autoExpanded &&
+      isRuleCall &&
+      call.status === 'done' &&
+      hasDetails &&
+      renderMeta
+    ) {
+      autoExpanded = true
+      expanded = true
+    }
+  })
 
   // While ANY tool call is in flight we render the row in the
   // dot-prefixed style (same chrome as the server-side tool-activity

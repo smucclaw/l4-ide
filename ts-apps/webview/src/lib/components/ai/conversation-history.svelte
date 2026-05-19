@@ -79,15 +79,22 @@
               onclick={() => onLoad(item.id)}
               title={item.title}
             >
-              <span class="row-title">
-                {#if streamingSet.has(item.id)}
-                  <span
-                    class="streaming-dot"
-                    aria-label="Streaming"
-                    title="A turn is still running in this conversation"
-                  ></span>
+              <span class="row-text">
+                <span class="row-title">
+                  {#if streamingSet.has(item.id)}
+                    <span
+                      class="streaming-dot"
+                      aria-label="Streaming"
+                      title="A turn is still running in this conversation"
+                    ></span>
+                  {/if}
+                  <span class="row-title-text">{item.title || 'Untitled'}</span>
+                </span>
+                {#if item.deploymentId}
+                  <span class="row-subtitle" title="Deployment chat"
+                    >{item.deploymentId}</span
+                  >
                 {/if}
-                <span class="row-title-text">{item.title || 'Untitled'}</span>
               </span>
               <span class="row-meta">{relativeTime(item.lastActiveAt)}</span>
             </button>
@@ -188,6 +195,20 @@
   }
   .row-main:hover {
     background: var(--vscode-list-hoverBackground);
+  }
+  .row-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .row-subtitle {
+    font-size: 10px;
+    color: var(--vscode-descriptionForeground);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .row-title {
     flex: 1;

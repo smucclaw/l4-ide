@@ -123,6 +123,47 @@ export interface RenderedToolActivity {
   /** Most recent message; prior messages of the same run are dropped
    *  once the next one arrives. */
   message: string
+  /** Verbatim model-supplied arguments — present only for inspectable
+   *  server tools that wrap an L4 rule evaluation. Drives the L4 Rule
+   *  card render (see {@link ruleKey}). */
+  input?: unknown
+  /** Verbatim tool result, set once the run reaches `done`. */
+  output?: unknown
+  /** Deployed L4 function name when the activity wraps a rule. */
+  ruleId?: string
+  /** Deployment the rule lives in, when scoped. */
+  deploymentId?: string
+  /** Error detail when status is `error`. */
+  error?: string
+  /** Identity of the rule run, used to merge a `running → done`
+   *  burst into ONE mutating row (mirrors how tool-call rows update
+   *  by callId). Set only for rule activities; `undefined` for plain
+   *  status activities, which keep the legacy tool+message dedupe. */
+  ruleKey?: string
+}
+
+/** Identify an L4-rule tool activity and compute its merge key + the
+ *  deployed function name. Returns null for non-rule activities (plain
+ *  status tickers like `search_l4_docs`), which keep the minimal row.
+ *
+ *  Two shapes carry a rule:
+ *    - direct MCP rule descriptors → `ruleId` is set by the proxy.
+ *    - the generic `evaluate_rule` tool → rule name lives in
+ *      `input.function_name` (proxy can't know it statically).
+ *  Both must also carry `input` so there's something to render. */
+function ruleActivityIdentity(a: {
+  tool: string
+  ruleId?: string
+  input?: unknown
+}): { ruleKey: string; ruleName: string } | null {
+  const fromInput =
+    a.input && typeof a.input === 'object'
+      ? (a.input as { function_name?: unknown }).function_name
+      : undefined
+  const ruleName =
+    a.ruleId ?? (typeof fromInput === 'string' ? fromInput : undefined)
+  if (!ruleName) return null
+  return { ruleKey: `${a.tool}::${ruleName}`, ruleName }
 }
 
 export interface RenderedToolCall {
@@ -132,6 +173,11 @@ export interface RenderedToolCall {
   status: 'pending-approval' | 'running' | 'done' | 'error'
   result?: string
   error?: string
+  /** Set when this row is projected from a server-side L4-rule
+   *  activity: lets the render-meta lookup resolve the schema
+   *  straight from the deployment instead of the IDE MCP map. */
+  deploymentId?: string
+  ruleFnName?: string
 }
 
 interface ConversationState {
@@ -148,6 +194,18 @@ interface ConversationState {
    *  message rides on this id rather than starting a fresh
    *  `AiChatStart`. Null between turns. */
   activeTurnId: string | null
+  /** Set when this conversation is bound to a deployment ("Use in
+   *  chat"). Mirrors the persisted `AiConversation` fields so the
+   *  banner survives a history reopen and follow-up turns keep the
+   *  binding. */
+  deploymentId?: string
+  apiBaseUrl?: string
+  /** The deployment's "Intended use" text (its metadata
+   *  `description`). Not persisted to disk — only carried in-memory
+   *  so a fresh deployment chat's empty-state can show it. Reopened
+   *  conversations already have messages, so the empty-state (and
+   *  thus this field) is irrelevant for them. */
+  intendedUse?: string
   /** Pending user-message injections — one entry per `AiChatInject`
    *  the webview has dispatched but the extension has not yet
    *  echoed back via `queue-consumed`. Each entry carries the
@@ -191,6 +249,37 @@ function extractPersistedBlocks(meta: unknown): AssistantBlock[] | null {
           error: typeof b.error === 'string' ? b.error : undefined,
         },
       })
+    } else if (
+      b.kind === 'tool-activity' &&
+      typeof b.tool === 'string' &&
+      typeof b.ruleId === 'string' &&
+      typeof b.ruleKey === 'string'
+    ) {
+      // Persisted L4-rule activity. `ruleKey` being present is what
+      // routes it back through <ToolCallRow> on render (same gate as
+      // a live rule activity). Non-terminal statuses coerce to `done`
+      // — same rule as tool-call blocks above; a Stop'd eval was
+      // already rewritten to `error` at persist time
+      // (markStoppedToolCalls), so anything still `running` here is a
+      // crash-truncated transcript, best shown as a settled card
+      // rather than a row that pulsates forever.
+      const status =
+        b.status === 'done' || b.status === 'error' ? b.status : 'done'
+      out.push({
+        kind: 'tool-activity',
+        activity: {
+          tool: b.tool,
+          status,
+          message: typeof b.message === 'string' ? b.message : '',
+          input: b.input,
+          output: b.output,
+          ruleId: b.ruleId,
+          deploymentId:
+            typeof b.deploymentId === 'string' ? b.deploymentId : undefined,
+          error: typeof b.error === 'string' ? b.error : undefined,
+          ruleKey: b.ruleKey,
+        },
+      })
     }
   }
   return out.length > 0 ? out : null
@@ -232,6 +321,20 @@ export function createAiChatStore(
   let dailyLimit = $state<number>(0)
   let blockOnOverage = $state<boolean>(false)
   let signedIn = $state<boolean>(false)
+  // Active deployment binding ("Use in chat" from the Deployment tab).
+  // Single source of truth for the deployment banner and for stamping
+  // the binding onto the first `AiChatStart` of the conversation.
+  // Set by `startDeploymentChat` / restored by `loadConversation`;
+  // cleared by `newConversation` (closing the banner opens a fresh
+  // chat against the default endpoint again).
+  let deploymentBinding = $state<{
+    deploymentId: string
+    apiBaseUrl: string
+    /** Deployment "Intended use" text, shown in the empty-state of a
+     *  fresh deployment chat. May be empty — the UI falls back to a
+     *  generic prompt then. */
+    intendedUse?: string
+  } | null>(null)
   const draftsByConv = $state<Record<string, string>>({})
   // Draft for the not-yet-started conversation. Mirrors
   // `pendingConversation`'s lifecycle: lives while the user is
@@ -283,6 +386,24 @@ export function createAiChatStore(
         streaming: false,
         activeTurnId: null,
         queuedInjections: [],
+        // Mirror the active deployment binding onto the in-memory
+        // state at creation. Without this the binding lives only on
+        // the persisted disk doc, so re-opening this conversation
+        // from history while it's still cached (the common same-
+        // session case) hits `syncDeploymentBinding(cached)` with
+        // an unbound state and silently drops the banner + endpoint
+        // routing. The object is promoted as-is into
+        // `conversations[id]` by `onStarted`, so stamping it here
+        // carries it through for the whole conversation lifetime.
+        ...(deploymentBinding
+          ? {
+              deploymentId: deploymentBinding.deploymentId,
+              apiBaseUrl: deploymentBinding.apiBaseUrl,
+              ...(deploymentBinding.intendedUse
+                ? { intendedUse: deploymentBinding.intendedUse }
+                : {}),
+            }
+          : {}),
       }
     }
     return pendingConversation
@@ -339,6 +460,7 @@ export function createAiChatStore(
     if (cached) {
       currentId = id
       includeActiveFile = false
+      syncDeploymentBinding(cached)
       return
     }
     try {
@@ -369,12 +491,15 @@ export function createAiChatStore(
         streaming: false,
         activeTurnId: null,
         queuedInjections: [],
+        ...(conv.deploymentId ? { deploymentId: conv.deploymentId } : {}),
+        ...(conv.apiBaseUrl ? { apiBaseUrl: conv.apiBaseUrl } : {}),
       }
       conversations[conv.id] = state
       currentId = conv.id
       // Loading an existing conversation is not a fresh start — default
       // to off so a follow-up turn doesn't silently re-ship the file.
       includeActiveFile = false
+      syncDeploymentBinding(state)
     } catch {
       // ignore
     }
@@ -393,9 +518,47 @@ export function createAiChatStore(
     await refreshHistory()
   }
 
+  /** Align the active deployment binding with the conversation the
+   *  user just switched to: a deployment-bound conversation re-arms
+   *  the banner + endpoint routing; a normal one clears it (so the
+   *  next turn goes to the default endpoint). */
+  function syncDeploymentBinding(state: ConversationState): void {
+    deploymentBinding =
+      state.deploymentId && state.apiBaseUrl
+        ? {
+            deploymentId: state.deploymentId,
+            apiBaseUrl: state.apiBaseUrl,
+            ...(state.intendedUse ? { intendedUse: state.intendedUse } : {}),
+          }
+        : null
+  }
+
+  /** Start a fresh conversation bound to a deployment. The binding is
+   *  sent on the first `AiChatStart` and persisted on the conversation
+   *  doc; closing the banner (`newConversation`) drops it.
+   *  `intendedUse` is the deployment's metadata description — shown in
+   *  the empty-state until the first message is sent. */
+  function startDeploymentChat(
+    deploymentId: string,
+    apiBaseUrl: string,
+    intendedUse?: string
+  ): void {
+    newConversation()
+    deploymentBinding = {
+      deploymentId,
+      apiBaseUrl,
+      ...(intendedUse ? { intendedUse } : {}),
+    }
+    // `newConversation()` defaults the active-file attach on; a
+    // deployment passthrough chat can't use IDE context, so clear it
+    // so no other UI reads a stale "attached" state.
+    includeActiveFile = false
+  }
+
   function newConversation(): void {
     currentId = null
     pendingConversation = null
+    deploymentBinding = null
     // Intentionally leave `pendingDraft` alone — original behavior:
     // an unsent draft survives a "new chat" click (mirrors the way
     // `draftsByConv['__new__']` used to persist across deletions of
@@ -414,7 +577,12 @@ export function createAiChatStore(
     if (!m || !text.trim()) return
     const conv = ensureCurrent()
 
-    const wasIncludingActiveFile = includeActiveFile
+    // A deployment-bound chat is a plain passthrough to the
+    // deployment's model — it has no IDE tools and the extension
+    // strips editor context for it anyway. Force the active-file
+    // attachment off here so the user bubble shows no file chip and
+    // nothing (chip, snapshot, or `includeActiveFile` flag) is sent.
+    const wasIncludingActiveFile = includeActiveFile && !deploymentBinding
 
     // Fire a one-shot request to learn the freshest active-file
     // state (including the current selection range) so the user
@@ -580,6 +748,16 @@ export function createAiChatStore(
         attachments: attachmentsPlain,
         includeActiveFile: wasIncludingActiveFile,
         ...(activeFileSnapshot ? { activeFile: activeFileSnapshot } : {}),
+        // Deployment binding: sent on every turn of a "Use in chat"
+        // conversation. The extension also self-heals it from the
+        // persisted doc on follow-ups, but sending it keeps a brand-
+        // new (not-yet-persisted) conversation's first turn correct.
+        ...(deploymentBinding
+          ? {
+              deploymentId: deploymentBinding.deploymentId,
+              apiBaseUrl: deploymentBinding.apiBaseUrl,
+            }
+          : {}),
       })
       // Attaching the active file is one-shot: once this turn's
       // <editor-context> is in flight, flip the toggle off so the
@@ -708,6 +886,12 @@ export function createAiChatStore(
         mentions: [],
         attachments: [],
         continueTurn: true,
+        ...(deploymentBinding
+          ? {
+              deploymentId: deploymentBinding.deploymentId,
+              apiBaseUrl: deploymentBinding.apiBaseUrl,
+            }
+          : {}),
       })
     } catch (err) {
       const last = conv.turns[conv.turns.length - 1]
@@ -847,6 +1031,19 @@ export function createAiChatStore(
         streaming: true,
         activeTurnId: null,
         queuedInjections: [],
+        // Race fallback (started/turnId mismatch): the pending
+        // buffer wasn't promoted, so seed the binding straight off
+        // the active deployment state — same reason as
+        // `ensureCurrent`, keeps the cached-reopen path bound.
+        ...(deploymentBinding
+          ? {
+              deploymentId: deploymentBinding.deploymentId,
+              apiBaseUrl: deploymentBinding.apiBaseUrl,
+              ...(deploymentBinding.intendedUse
+                ? { intendedUse: deploymentBinding.intendedUse }
+                : {}),
+            }
+          : {}),
       }
     }
   }
@@ -1062,6 +1259,11 @@ export function createAiChatStore(
     tool: string
     status: 'running' | 'done' | 'error'
     message: string
+    input?: unknown
+    output?: unknown
+    ruleId?: string
+    deploymentId?: string
+    error?: string
   }): void {
     // Route strictly by conversationId. Falling back to `currentId`
     // crosstalks multiple concurrent streams into whichever chat the
@@ -1078,6 +1280,56 @@ export function createAiChatStore(
         : null)
     if (!turn || turn.role !== 'assistant') return
     if (!turn.blocks) turn.blocks = []
+
+    // L4-rule activities (the proxy ran a deployed rule on the
+    // server) merge `running → done` into a SINGLE mutating row so
+    // they read exactly like a client-side rule tool-call: the row
+    // appears pulsating the moment the call lands, then swaps to the
+    // expandable INPUT/OUTPUT card in place when the result arrives.
+    // Matched by rule identity rather than tool+message because the
+    // running and done messages differ (describeStart vs
+    // describeDone) — message-based dedupe would split them into two
+    // rows. We scan all blocks (not just the tail): a rule eval can
+    // interleave with text deltas, so the running row is rarely the
+    // immediate predecessor of its own done event.
+    const ruleIdentity = ruleActivityIdentity(params)
+    if (ruleIdentity) {
+      for (let i = turn.blocks.length - 1; i >= 0; i--) {
+        const b = turn.blocks[i]
+        if (
+          b.kind === 'tool-activity' &&
+          b.activity.ruleKey === ruleIdentity.ruleKey &&
+          b.activity.status === 'running'
+        ) {
+          // Update in place. `input` may arrive on the running event
+          // already; keep whichever is non-undefined so a done event
+          // that omits it doesn't blank the card.
+          b.activity.status = params.status
+          b.activity.message = params.message
+          if (params.input !== undefined) b.activity.input = params.input
+          if (params.output !== undefined) b.activity.output = params.output
+          if (params.deploymentId) b.activity.deploymentId = params.deploymentId
+          if (params.error !== undefined) b.activity.error = params.error
+          return
+        }
+      }
+      turn.blocks.push({
+        kind: 'tool-activity',
+        activity: {
+          tool: params.tool,
+          status: params.status,
+          message: params.message,
+          input: params.input,
+          output: params.output,
+          ruleId: ruleIdentity.ruleName,
+          deploymentId: params.deploymentId,
+          error: params.error,
+          ruleKey: ruleIdentity.ruleKey,
+        },
+      })
+      return
+    }
+
     // Dedupe policy:
     //   - Same tool + same message as the tail → treat as a status
     //     update on the existing block (don't push a new row). This
@@ -1464,6 +1716,9 @@ export function createAiChatStore(
     get signedIn() {
       return signedIn
     },
+    get deploymentBinding() {
+      return deploymentBinding
+    },
     get activeFile() {
       return activeFile
     },
@@ -1520,6 +1775,7 @@ export function createAiChatStore(
     loadConversation,
     deleteConversation,
     newConversation,
+    startDeploymentChat,
     send,
     continueTurn,
     abort,
@@ -1563,6 +1819,11 @@ export type AiChatStore = {
   readonly dailyLimit: number
   readonly blockOnOverage: boolean
   readonly signedIn: boolean
+  readonly deploymentBinding: {
+    deploymentId: string
+    apiBaseUrl: string
+    intendedUse?: string
+  } | null
   readonly activeFile: ActiveFileInfo
   readonly includeActiveFile: boolean
   readonly pendingQuestion: PendingQuestion | null
@@ -1586,6 +1847,11 @@ export type AiChatStore = {
   loadConversation: (id: string) => Promise<void>
   deleteConversation: (id: string) => Promise<void>
   newConversation: () => void
+  startDeploymentChat: (
+    deploymentId: string,
+    apiBaseUrl: string,
+    intendedUse?: string
+  ) => void
   send: (
     text: string,
     mentions?: AiChatStartParams['mentions']
@@ -1637,6 +1903,11 @@ export type AiChatStore = {
     tool: string
     status: 'running' | 'done' | 'error'
     message: string
+    input?: unknown
+    output?: unknown
+    ruleId?: string
+    deploymentId?: string
+    error?: string
   }) => void
   onTurnSpawn: (params: { conversationId: string; subTurnId: string }) => void
   onQueueConsumed: (params: {

@@ -74,7 +74,11 @@ Task-focused guides for specific goals:
 
 ### Deployment and Legalese Cloud
 
-- [Exporting Functions for Deployment](tutorials/deploying-functions/exporting-functions-for-deployment.md) - Deploy L4 rules as REST APIs and use with WebMCP (30 min)
+- [Exporting Rules for Deployment](tutorials/deploying-rules/exporting-rules-for-deployment.md) - Deploy L4 rules as REST APIs and use with WebMCP (30 min)
+- [OpenAI-Compatible AI API](tutorials/legalese-cloud/openai-compatible-api.md) - Chat with a deployment's rules from any OpenAI client (10 min)
+- [MCP Server](tutorials/legalese-cloud/mcp-server.md) - Expose deployed rules as Model Context Protocol tools (10 min)
+- [WebMCP Embed Script](tutorials/legalese-cloud/webmcp-embed.md) - Serve your rules from your own website (5 min)
+- [RESTful OpenAPI Specification](tutorials/legalese-cloud/openapi-spec.md) - Generate REST clients from the spec (10 min)
 
 ### LLM Integration
 

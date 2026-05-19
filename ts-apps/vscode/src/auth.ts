@@ -162,6 +162,18 @@ export class AuthManager {
   }
 
   /**
+   * The verified Legalese Cloud organization slug, or undefined when
+   * not signed in to a cloud session (e.g. self-hosted jl4-service, or
+   * API-key-only). Populated by the GET /auth/session round-trip in
+   * the auth callback / `initialize()`. The Deployment tab's "Use in
+   * chat" / "Integrate" affordances use this to build deployment-scoped
+   * URLs (`ai.legalese.cloud/{orgSlug}/{deploymentId}`, etc.).
+   */
+  getCloudOrgSlug(): string | undefined {
+    return this.cloudOrgSlug
+  }
+
+  /**
    * The effective MCP endpoint URL. Distinct from the service URL because
    * Legalese Cloud serves MCP from a dedicated origin (`mcp.legalese.cloud`)
    * with the org slug as the path, while self-hosted jl4-service exposes

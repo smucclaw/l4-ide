@@ -169,6 +169,10 @@ export interface GetSidebarConnectionStatusResponse {
   connected: boolean
   status: 'connected' | 'not-configured' | 'connecting' | 'error'
   isLegaleseCloud: boolean
+  /** Verified Legalese Cloud org slug, when signed in to a cloud
+   *  session. Undefined for self-hosted jl4-service / API-key-only.
+   *  Drives the Deployment tab's deployment-scoped integration URLs. */
+  orgSlug?: string
   error?: string
 }
 
@@ -339,6 +343,20 @@ export const GetSidebarDeploymentSchemas: RequestType<
   method: 'getSidebarDeploymentSchemas',
 }
 
+/**
+ * Sidebar asks the extension to draft an "Intended use" description for
+ * the functions about to be deployed, using the summize model. The
+ * extension itself surfaces the "not signed in" nudge as a VSCode
+ * notification and returns `{ notSignedIn: true }` so the webview just
+ * leaves the field untouched.
+ */
+export const GenerateSidebarIntendedUse: RequestType<
+  { functions: ExportedFunctionInfo[] },
+  { text: string } | { error: string } | { notSignedIn: true }
+> = {
+  method: 'generateSidebarIntendedUse',
+}
+
 /** Sidebar asks extension to open a URL in the browser */
 export const RequestOpenUrl: NotificationType<{ url: string }> = {
   method: 'requestOpenUrl',
@@ -474,6 +492,17 @@ export interface AiConversation {
    *  Stamped once at creation and never rewritten so support can trace
    *  a saved transcript back to the exact build that produced it. */
   extensionVersion?: string
+  /** When set, this conversation is bound to a deployment ("Use in
+   *  chat" from the Deployment tab). Stamped once at creation and
+   *  never rewritten so follow-up turns — even after a webview reload
+   *  or history reopen — keep routing to the same deployment endpoint
+   *  rather than the default Legalese AI proxy. */
+  deploymentId?: string
+  /** Resolved deployment-scoped OpenAI-compatible base URL
+   *  (`https://ai.legalese.cloud/{orgSlug}/{deploymentId}`). Paired
+   *  with `deploymentId`; the chat-service appends `/v1/chat/completions`
+   *  (and the reattach path) against this instead of `getAiEndpoint()`. */
+  apiBaseUrl?: string
 }
 
 /** Lightweight row for the history overlay — avoids shipping full
@@ -485,6 +514,9 @@ export interface AiConversationSummary {
   createdAt: string
   lastActiveAt: string
   messageCount: number
+  /** Present when the conversation is bound to a deployment. The
+   *  history overlay renders it as a small subtitle under the title. */
+  deploymentId?: string
 }
 
 /** Start (or continue) a streaming chat turn. Extension responds via
@@ -548,6 +580,14 @@ export interface AiChatStartParams {
    * message from the original turn (persisted on create), so the
    * model has what it needs. */
   continueTurn?: boolean
+  /** Deployment binding for a "Use in chat" conversation. Sent by the
+   *  webview only on the FIRST turn of a deployment chat; follow-up
+   *  turns omit it and the extension re-resolves the binding from the
+   *  persisted conversation doc (reload / history-reopen safe). When
+   *  set, the extension routes this turn to `apiBaseUrl` as a plain
+   *  passthrough (no local IDE context, tools, or summize title). */
+  deploymentId?: string
+  apiBaseUrl?: string
 }
 
 export interface AiChatAttachment {
@@ -770,7 +810,17 @@ export const AiPermissionsSet: NotificationType<{
  *  `{ kind: 'unavailable' }` if the tool isn't an l4-rules rule, or
  *  if the fetch fails — the caller falls back to plain JSON view. */
 export const AiToolRenderMeta: RequestType<
-  { toolName: string },
+  {
+    toolName: string
+    /** Server-side rule activities (deployment passthrough chats)
+     *  carry the deployment + L4 function name directly. When set,
+     *  the extension resolves the schema straight from
+     *  `/deployments/{deploymentId}/functions/{fnName}` instead of
+     *  the IDE's sanitized MCP target map (which need not cover the
+     *  cloud deployment the chat is bound to). */
+    deploymentId?: string
+    fnName?: string
+  },
   | {
       kind: 'meta'
       parameters: FunctionParameter
@@ -789,6 +839,20 @@ export const AiChatToolActivity: NotificationType<{
   tool: string
   status: 'running' | 'done' | 'error'
   message: string
+  /** Verbatim model-supplied arguments — present only for inspectable
+   *  server tools (L4 rule evaluations). When set alongside `ruleId`
+   *  (or for `evaluate_rule`), the webview renders this activity as an
+   *  L4 Rule card identical to a client-side tool-call instead of the
+   *  minimal status row. */
+  input?: unknown
+  /** Verbatim tool result (set on `done`). */
+  output?: unknown
+  /** Deployed L4 function name when the activity wraps a rule. */
+  ruleId?: string
+  /** Deployment the rule lives in, when scoped. */
+  deploymentId?: string
+  /** Error detail when status is `error`. */
+  error?: string
 }> = {
   method: 'aiChatToolActivity',
 }
