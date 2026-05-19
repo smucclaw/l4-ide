@@ -18,10 +18,10 @@ Reach for the [MCP server](./mcp-server.md) instead when you want a tool-calling
 ## Endpoint
 
 ```
-https://ai.legalese.cloud/{orgSlug}/{deploymentId}
+https://ai.legalese.cloud/{orgSlug}/{deploymentId}/v1
 ```
 
-`{orgSlug}` is your Legalese Cloud organization; `{deploymentId}` is the deployment's name. The VS Code **Integrate** dialog pre-fills both for you. Append the standard OpenAI path — `/v1/chat/completions` — when calling it directly.
+`{orgSlug}` is your Legalese Cloud organization; `{deploymentId}` is the deployment's name. The VS Code **Integrate** dialog pre-fills both for you. Append the standard OpenAI path — `/chat/completions` — when calling it directly.
 
 ## Authentication
 
