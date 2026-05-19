@@ -34,11 +34,11 @@ Send a bearer token in the `Authorization` header. Either:
 
 A key (or session) used against this endpoint needs three scopes — each gates a different step of a chat turn:
 
-| Permission    | Enables                                                                                                                                                                       |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Permission    | Enables                                                                                                                                                                          |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ai:chat`     | Open a conversation against the deployment's `legalese-comply-4` pipeline — the hosted chat-completions surface itself. Without it the request is rejected before any rule runs. |
-| `l4:rules`    | Let the model **discover** the deployment's exported rules: their names, descriptions and input shapes, so it can pick the right one for the question.                        |
-| `l4:evaluate` | Let the model **run** a chosen rule with the inputs it gathered and read back the typed decision it then explains to the user.                                                |
+| `l4:rules`    | Let the model **discover** the deployment's exported rules: their names, descriptions and input shapes, so it can pick the right one for the question.                           |
+| `l4:evaluate` | Let the model **run** a chosen rule with the inputs it gathered and read back the typed decision it then explains to the user.                                                   |
 
 Grant only what the integration needs. A key with `ai:chat` but missing `l4:evaluate`, for example, can hold a conversation but every rule call will fail — the model will say it cannot compute the answer.
 
