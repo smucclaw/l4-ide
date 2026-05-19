@@ -6,8 +6,16 @@
   import { RequestNewL4File } from 'jl4-client-rpc'
   import { colorize } from '@repo/l4-highlight'
 
-  let { messenger }: { messenger: InstanceType<typeof Messenger> | null } =
-    $props()
+  let {
+    messenger,
+    navTarget = null,
+  }: {
+    messenger: InstanceType<typeof Messenger> | null
+    /** Deep-link request from elsewhere in the sidebar (e.g. an
+     *  "Integrate → Learn more" link). The `nonce` makes repeat
+     *  requests for the same URL re-navigate. */
+    navTarget?: { url: string; nonce: number } | null
+  } = $props()
 
   const DOCS_BASE = 'https://legalese.com/l4'
   const SITE_BASE = 'https://legalese.com'
@@ -279,6 +287,16 @@
     currentUrl = url
     loadPage(currentUrl)
   }
+
+  // External deep-link (Integrate → "Learn more"). Track the nonce so
+  // the same target re-navigates on a repeat click.
+  let lastNavNonce = -1
+  $effect(() => {
+    const t = navTarget
+    if (!t || t.nonce === lastNavNonce) return
+    lastNavNonce = t.nonce
+    if (t.url !== currentUrl) navigateTo(t.url)
+  })
 
   function handleClick(e: MouseEvent) {
     // Handle "New file" button on l4-file code blocks

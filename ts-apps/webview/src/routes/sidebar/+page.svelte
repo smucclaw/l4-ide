@@ -39,6 +39,7 @@
   import DeploymentMetadata from '$lib/components/deployment-metadata.svelte'
   import DocsPanel from '$lib/components/docs-panel.svelte'
   import AiChatPanel from '$lib/components/ai/ai-chat-panel.svelte'
+  import DeploymentIntegratePopover from '$lib/components/deployment-integrate-popover.svelte'
 
   let functions: ExportedFunctionInfo[] = $state([])
   let activeFileUri: string = $state('')
@@ -123,6 +124,69 @@
   let openDeploymentMenuId: string | null = $state(null)
   let collapsedDeployments: Set<string> = $state(new Set())
   let undeployConfirm: SidebarDeploymentInfo | null = $state(null)
+  // Which deployment's "Integrate" pop-over is open (deploymentId).
+  let integrateForId: string | null = $state(null)
+  // "Use in chat" hand-off to the AI panel. `nonce` makes a repeat
+  // click on the same deployment re-trigger the panel-side effect.
+  let deploymentChatRequest: {
+    deploymentId: string
+    apiBaseUrl: string
+    intendedUse?: string
+    nonce: number
+  } | null = $state(null)
+  // "Integrate → Learn more" deep-link into the in-app Docs tab.
+  let docNav: { url: string; nonce: number } | null = $state(null)
+  let actionNonce = 0
+
+  // Cloud vs self-hosted shapes the integration affordances:
+  //  - cloud: "Use in chat" is offered; Integrate shows the 4 cloud
+  //    sections (incl. the OpenAI v1 endpoint).
+  //  - self-hosted jl4-service: no "Use in chat"; Integrate shows the
+  //    3 host-scoped sections (no OpenAI v1 endpoint).
+  const integrateMode: 'cloud' | 'self-hosted' = $derived(
+    connectionStatus.isLegaleseCloud ? 'cloud' : 'self-hosted'
+  )
+
+  function useInChat(dep: SidebarDeploymentInfo): void {
+    const orgSlug = connectionStatus.orgSlug
+    if (!connectionStatus.isLegaleseCloud || !orgSlug) {
+      messenger?.sendNotification(ShowNotification, HOST_EXTENSION, {
+        type: 'warning',
+        message: 'Login to Legalese Cloud to use this feature',
+      })
+      return
+    }
+    integrateForId = null
+    openDeploymentMenuId = null
+    deploymentChatRequest = {
+      deploymentId: dep.deploymentId,
+      apiBaseUrl: `https://ai.legalese.cloud/${orgSlug}/${dep.deploymentId}`,
+      ...(dep.description ? { intendedUse: dep.description } : {}),
+      nonce: ++actionNonce,
+    }
+    activeTab = 'ai-chat'
+  }
+
+  function toggleIntegrate(dep: SidebarDeploymentInfo): void {
+    // Self-hosted mode can render without an org slug; cloud mode
+    // needs the verified org slug to build the URLs, so gate on it.
+    if (integrateMode === 'cloud' && !connectionStatus.orgSlug) {
+      messenger?.sendNotification(ShowNotification, HOST_EXTENSION, {
+        type: 'warning',
+        message: 'Login to Legalese Cloud to use this feature',
+      })
+      return
+    }
+    openDeploymentMenuId = null
+    integrateForId =
+      integrateForId === dep.deploymentId ? null : dep.deploymentId
+  }
+
+  function onLearnMore(url: string): void {
+    integrateForId = null
+    docNav = { url, nonce: ++actionNonce }
+    activeTab = 'docs'
+  }
 
   // Track expanded tool cards by key (survives re-renders from file edits)
   // Key format: "deploymentId/functionName" for deploy tab, "preview/functionName" for preview tab
@@ -144,17 +208,22 @@
     if (activeTab !== 'deployments') {
       undeployConfirm = null
       openDeploymentMenuId = null
+      integrateForId = null
     }
   })
 
   // Dismiss the per-deployment dropdown when the user clicks anywhere
   // outside any deployment-menu wrapper. Listener is only attached
   // while a menu is open so we don't pay for it on every click.
+  // Menu-only: the Integrate dialog is a modal that owns its own
+  // dismissal (backdrop click / Esc) and lives outside
+  // `.deployment-actions`, so this must not touch `integrateForId`
+  // or it would close the dialog the instant the user clicks it.
   $effect(() => {
     if (openDeploymentMenuId === null) return
     const onPointerDown = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null
-      if (!target?.closest('.deployment-menu-wrapper')) {
+      if (!target?.closest('.deployment-actions')) {
         openDeploymentMenuId = null
       }
     }
@@ -1105,10 +1174,14 @@
 
   <div class="tab-content">
     <div class="tab-pane" hidden={activeTab !== 'ai-chat'}>
-      <AiChatPanel {messenger} visible={activeTab === 'ai-chat'} />
+      <AiChatPanel
+        {messenger}
+        visible={activeTab === 'ai-chat'}
+        {deploymentChatRequest}
+      />
     </div>
     <div class="tab-pane" hidden={activeTab !== 'docs'}>
-      <DocsPanel {messenger} />
+      <DocsPanel {messenger} navTarget={docNav} />
     </div>
     <div class="tab-pane" hidden={activeTab !== 'inspector'}>
       <InspectorPanel {messenger} />
@@ -1311,62 +1384,88 @@
                         {/if}
                       </span>
                     </button>
-                    {#if showMenu}
-                      <div class="deployment-menu-wrapper">
+                    <div class="deployment-actions">
+                      {#if integrateMode === 'cloud'}
                         <button
-                          class="deployment-menu-btn"
-                          aria-label="Deployment actions"
-                          aria-haspopup="menu"
-                          aria-expanded={openDeploymentMenuId ===
-                            dep.deploymentId}
-                          title="Deployment actions"
+                          class="deployment-text-btn"
+                          title="Chat with this deployment in Legalese AI"
                           onclick={(e: MouseEvent) => {
                             e.stopPropagation()
-                            toggleDeploymentMenu(dep.deploymentId)
+                            useInChat(dep)
                           }}
                         >
-                          {#if downloadingId === dep.deploymentId || undeployingId === dep.deploymentId}
-                            <span class="menu-spinner" aria-hidden="true"
-                            ></span>
-                          {:else}
-                            &#8943;
-                          {/if}
+                          Chat
                         </button>
-                        {#if openDeploymentMenuId === dep.deploymentId}
-                          <div class="dropdown-menu deployment-dropdown-menu">
-                            {#if canDownload}
-                              <button
-                                class="menu-item"
-                                disabled={downloadingId === dep.deploymentId}
-                                onclick={(e: MouseEvent) => {
-                                  e.stopPropagation()
-                                  requestDownload(dep)
-                                }}
-                              >
-                                {downloadingId === dep.deploymentId
-                                  ? 'Downloading...'
-                                  : 'Download'}
-                              </button>
+                      {/if}
+                      <button
+                        class="deployment-text-btn"
+                        title="Integration endpoints for this deployment"
+                        aria-haspopup="dialog"
+                        aria-expanded={integrateForId === dep.deploymentId}
+                        onclick={(e: MouseEvent) => {
+                          e.stopPropagation()
+                          toggleIntegrate(dep)
+                        }}
+                      >
+                        Integrate
+                      </button>
+                      {#if showMenu}
+                        <div class="deployment-menu-wrapper">
+                          <button
+                            class="deployment-menu-btn"
+                            aria-label="Deployment actions"
+                            aria-haspopup="menu"
+                            aria-expanded={openDeploymentMenuId ===
+                              dep.deploymentId}
+                            title="Deployment actions"
+                            onclick={(e: MouseEvent) => {
+                              e.stopPropagation()
+                              toggleDeploymentMenu(dep.deploymentId)
+                            }}
+                          >
+                            {#if downloadingId === dep.deploymentId || undeployingId === dep.deploymentId}
+                              <span class="menu-spinner" aria-hidden="true"
+                              ></span>
+                            {:else}
+                              &#8943;
                             {/if}
-                            {#if canUndeploy}
-                              <button
-                                class="menu-item menu-item-danger"
-                                disabled={undeployingId === dep.deploymentId}
-                                onclick={(e: MouseEvent) => {
-                                  e.stopPropagation()
-                                  closeDeploymentMenu()
-                                  requestUndeploy(dep)
-                                }}
-                              >
-                                {undeployingId === dep.deploymentId
-                                  ? 'Removing...'
-                                  : 'Undeploy'}
-                              </button>
-                            {/if}
-                          </div>
-                        {/if}
-                      </div>
-                    {/if}
+                          </button>
+                          {#if openDeploymentMenuId === dep.deploymentId}
+                            <div class="dropdown-menu deployment-dropdown-menu">
+                              {#if canDownload}
+                                <button
+                                  class="menu-item"
+                                  disabled={downloadingId === dep.deploymentId}
+                                  onclick={(e: MouseEvent) => {
+                                    e.stopPropagation()
+                                    requestDownload(dep)
+                                  }}
+                                >
+                                  {downloadingId === dep.deploymentId
+                                    ? 'Downloading...'
+                                    : 'Download'}
+                                </button>
+                              {/if}
+                              {#if canUndeploy}
+                                <button
+                                  class="menu-item menu-item-danger"
+                                  disabled={undeployingId === dep.deploymentId}
+                                  onclick={(e: MouseEvent) => {
+                                    e.stopPropagation()
+                                    closeDeploymentMenu()
+                                    requestUndeploy(dep)
+                                  }}
+                                >
+                                  {undeployingId === dep.deploymentId
+                                    ? 'Removing...'
+                                    : 'Undeploy'}
+                                </button>
+                              {/if}
+                            </div>
+                          {/if}
+                        </div>
+                      {/if}
+                    </div>
                   </div>
                   {#if !collapsedDeployments.has(dep.deploymentId)}
                     {#if dep.error}
@@ -1396,16 +1495,26 @@
         <aside class="deployment-info-note" role="note">
           <p>
             Deployments are automatically available to Legalese AI, VS Code
-            Copilot, and any other MCP-speaking agent as local MCP tools.
+            Copilot, and any other MCP-speaking agents as MCP tools on this
+            computer.
           </p>
           <p>
             They're also available as REST API's, online MCP server and WebMCP
             tools {connectionStatus.isLegaleseCloud
-              ? 'on the Legalese Cloud'
-              : 'via the connected JL4 service'}. Open the deployments in the
-            web browser to learn more.
+              ? 'as well as OpenAI v1 compatible AI endpoint on the Legalese Cloud'
+              : 'via the connected JL4 service'}.
           </p>
         </aside>
+        {#if integrateForId}
+          <DeploymentIntegratePopover
+            deploymentId={integrateForId}
+            mode={integrateMode}
+            orgSlug={connectionStatus.orgSlug ?? ''}
+            host={connectionStatus.serviceUrl}
+            onClose={() => (integrateForId = null)}
+            {onLearnMore}
+          />
+        {/if}
       </div>
     {/if}
   </div>
@@ -1859,6 +1968,9 @@
     display: flex;
     flex-direction: column;
     min-height: 100%;
+    /* Containing block for the Integrate dialog's absolute backdrop,
+       so the dim is scoped to this tab only. */
+    position: relative;
   }
 
   .deployments-tab-body {
@@ -1995,6 +2107,32 @@
     max-height: 260px;
     overflow-y: auto;
     color: var(--vscode-errorForeground, #f48771);
+  }
+
+  .deployment-actions {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+  }
+
+  /* Text-style action, matching the inspector's "Remove all" /
+     dismiss controls: transparent, foreground-coloured, dimmed until
+     hover. Keeps the deployment header visually quiet. */
+  .deployment-text-btn {
+    background: none;
+    border: none;
+    color: var(--vscode-foreground);
+    cursor: pointer;
+    opacity: 0.6;
+    font-size: 0.85em;
+    flex-shrink: 0;
+    padding: 4px 6px;
+    white-space: nowrap;
+  }
+  .deployment-text-btn:hover {
+    opacity: 1;
   }
 
   .deployment-menu-wrapper {

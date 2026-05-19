@@ -78,6 +78,40 @@
   // wraps the real args under `arguments` alongside deployment/
   // function_name routing fields — unwrap that envelope so the card
   // shows just the rule's inputs, identical to a direct rule call.
+  // The server-side rule activity carries the *raw MCP CallToolResult*
+  // as `output` (`{ content: [{ type: 'text', text: '<json>' }] }`),
+  // because the ai-proxy forwards the JSON-RPC `result` verbatim. A
+  // client-side rule tool-call, by contrast, has already been flattened
+  // to just the joined text by the IDE's mcp-client. ToolCallRow's
+  // INPUT/OUTPUT extraction (`extractRuleResultValue` / `returnL4`)
+  // expects that flattened string — it digs for `.contents.result.value`
+  // directly. So mirror the client-side flatten here: pull the text
+  // parts out of the MCP envelope and join them exactly the way
+  // mcp-client.ts does. Anything that isn't the MCP shape (e.g. an
+  // `{ error, message }` envelope from a failed call) falls through to
+  // the plain JSON stringify so the row still shows something.
+  function normalizeActivityResult(output: unknown): string | undefined {
+    if (output === undefined) return undefined
+    if (
+      output &&
+      typeof output === 'object' &&
+      Array.isArray((output as { content?: unknown }).content)
+    ) {
+      const parts = (
+        output as { content: Array<{ type?: string; text?: string }> }
+      ).content
+      const text = parts
+        .map((c) =>
+          c.type === 'text' && typeof c.text === 'string'
+            ? c.text
+            : JSON.stringify(c)
+        )
+        .join('\n')
+      if (text.length > 0) return text
+    }
+    return JSON.stringify(output)
+  }
+
   function ruleCallFor(a: RenderedToolActivity): RenderedToolCall {
     let argsObj: unknown = a.input
     if (a.input && typeof a.input === 'object') {
@@ -98,8 +132,14 @@
       name: `l4-rules__${a.ruleId ?? a.tool}`,
       argsJson: JSON.stringify(argsObj ?? {}),
       status: a.status,
-      result: a.output !== undefined ? JSON.stringify(a.output) : undefined,
+      result: normalizeActivityResult(a.output),
       error: a.error,
+      // Carry the deployment + L4 function name so the render-meta
+      // lookup can fetch the schema directly (the IDE's MCP target
+      // map need not cover the cloud deployment a passthrough chat
+      // is bound to).
+      ...(a.deploymentId ? { deploymentId: a.deploymentId } : {}),
+      ...(a.ruleId ? { ruleFnName: a.ruleId } : {}),
     }
   }
 

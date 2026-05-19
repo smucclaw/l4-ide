@@ -169,6 +169,10 @@ export interface GetSidebarConnectionStatusResponse {
   connected: boolean
   status: 'connected' | 'not-configured' | 'connecting' | 'error'
   isLegaleseCloud: boolean
+  /** Verified Legalese Cloud org slug, when signed in to a cloud
+   *  session. Undefined for self-hosted jl4-service / API-key-only.
+   *  Drives the Deployment tab's deployment-scoped integration URLs. */
+  orgSlug?: string
   error?: string
 }
 
@@ -488,6 +492,17 @@ export interface AiConversation {
    *  Stamped once at creation and never rewritten so support can trace
    *  a saved transcript back to the exact build that produced it. */
   extensionVersion?: string
+  /** When set, this conversation is bound to a deployment ("Use in
+   *  chat" from the Deployment tab). Stamped once at creation and
+   *  never rewritten so follow-up turns — even after a webview reload
+   *  or history reopen — keep routing to the same deployment endpoint
+   *  rather than the default Legalese AI proxy. */
+  deploymentId?: string
+  /** Resolved deployment-scoped OpenAI-compatible base URL
+   *  (`https://ai.legalese.cloud/{orgSlug}/{deploymentId}`). Paired
+   *  with `deploymentId`; the chat-service appends `/v1/chat/completions`
+   *  (and the reattach path) against this instead of `getAiEndpoint()`. */
+  apiBaseUrl?: string
 }
 
 /** Lightweight row for the history overlay — avoids shipping full
@@ -499,6 +514,9 @@ export interface AiConversationSummary {
   createdAt: string
   lastActiveAt: string
   messageCount: number
+  /** Present when the conversation is bound to a deployment. The
+   *  history overlay renders it as a small subtitle under the title. */
+  deploymentId?: string
 }
 
 /** Start (or continue) a streaming chat turn. Extension responds via
@@ -562,6 +580,14 @@ export interface AiChatStartParams {
    * message from the original turn (persisted on create), so the
    * model has what it needs. */
   continueTurn?: boolean
+  /** Deployment binding for a "Use in chat" conversation. Sent by the
+   *  webview only on the FIRST turn of a deployment chat; follow-up
+   *  turns omit it and the extension re-resolves the binding from the
+   *  persisted conversation doc (reload / history-reopen safe). When
+   *  set, the extension routes this turn to `apiBaseUrl` as a plain
+   *  passthrough (no local IDE context, tools, or summize title). */
+  deploymentId?: string
+  apiBaseUrl?: string
 }
 
 export interface AiChatAttachment {
@@ -784,7 +810,17 @@ export const AiPermissionsSet: NotificationType<{
  *  `{ kind: 'unavailable' }` if the tool isn't an l4-rules rule, or
  *  if the fetch fails — the caller falls back to plain JSON view. */
 export const AiToolRenderMeta: RequestType<
-  { toolName: string },
+  {
+    toolName: string
+    /** Server-side rule activities (deployment passthrough chats)
+     *  carry the deployment + L4 function name directly. When set,
+     *  the extension resolves the schema straight from
+     *  `/deployments/{deploymentId}/functions/{fnName}` instead of
+     *  the IDE's sanitized MCP target map (which need not cover the
+     *  cloud deployment the chat is bound to). */
+    deploymentId?: string
+    fnName?: string
+  },
   | {
       kind: 'meta'
       parameters: FunctionParameter

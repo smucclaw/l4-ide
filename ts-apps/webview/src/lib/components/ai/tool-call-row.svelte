@@ -246,7 +246,11 @@
       const res = await messenger.sendRequest(
         AiToolRenderMeta,
         { type: 'extension' },
-        { toolName: call.name }
+        {
+          toolName: call.name,
+          ...(call.deploymentId ? { deploymentId: call.deploymentId } : {}),
+          ...(call.ruleFnName ? { fnName: call.ruleFnName } : {}),
+        }
       )
       if (res.kind === 'meta') {
         renderMeta = {
@@ -381,18 +385,27 @@
     expanded = !expanded
   }
 
-  // Auto-expand an L4 Rule evaluation the instant it resolves to
-  // `done`: the input/output is the whole point of a rule call (the
-  // user asked "what does this rule say" and the answer just landed),
-  // so making them click the chevron to see it is friction. Generic
-  // tool calls (read/edit/search) stay collapsed — their result is
-  // usually noise the user only opens on demand. Guarded by a
-  // one-shot latch so a manual collapse afterwards sticks: the effect
-  // fires once on the running→done transition and never fights the
-  // user's subsequent toggle.
+  // Auto-expand an L4 Rule evaluation once it resolves to `done` AND
+  // the L4 schema (`renderMeta`) has loaded: the input/output is the
+  // whole point of a rule call, so making the user click the chevron
+  // is friction — but we hold the expand until the schema is in so
+  // the panel paints the L4 view on the first frame instead of
+  // flashing the JSON fallback and swapping. If the schema never
+  // resolves the row simply stays shut (the user can still open it
+  // manually to see the JSON). Generic tool calls (read/edit/search)
+  // never auto-expand.
+  //
+  // One-shot latch so a manual collapse afterwards sticks: the effect
+  // fires once and never fights the user's subsequent toggle.
   let autoExpanded = false
   $effect(() => {
-    if (!autoExpanded && isRuleCall && call.status === 'done' && hasDetails) {
+    if (
+      !autoExpanded &&
+      isRuleCall &&
+      call.status === 'done' &&
+      hasDetails &&
+      renderMeta
+    ) {
       autoExpanded = true
       expanded = true
     }

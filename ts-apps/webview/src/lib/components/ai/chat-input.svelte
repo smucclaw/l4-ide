@@ -61,7 +61,10 @@
    * non-token char dismisses the popup.
    */
   function detectMention(): void {
-    if (!textarea) {
+    // A deployment-bound chat is a plain passthrough to the
+    // deployment's model — it has no IDE tools to resolve `@` file/
+    // symbol mentions, so the feature is disabled entirely there.
+    if (!textarea || store.deploymentBinding) {
       mentionState = null
       return
     }
@@ -378,7 +381,10 @@
       </button>
     </div>
     <div class="right-actions">
-      {#if store.activeFile.name}
+      <!-- No active-file context chip in a deployment-bound chat:
+           it's a passthrough to the deployment's model, which can't
+           read IDE files. -->
+      {#if store.activeFile.name && !store.deploymentBinding}
         <button
           type="button"
           class="active-file-btn"

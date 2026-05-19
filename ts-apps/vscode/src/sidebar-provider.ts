@@ -83,6 +83,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           connected: state.connected,
           status: state.status,
           isLegaleseCloud: auth.isLegaleseCloudSession(),
+          orgSlug: auth.getCloudOrgSlug(),
           error: state.error,
         }
         this.messenger.sendNotification(
@@ -279,6 +280,7 @@ export function initializeSidebarMessenger(
       connected: state.connected,
       status: state.status,
       isLegaleseCloud: auth.isLegaleseCloudSession(),
+      orgSlug: auth.getCloudOrgSlug(),
       error: state.error,
     }
   })

@@ -64,6 +64,7 @@ export class ConversationStore {
           createdAt: conv.createdAt,
           lastActiveAt: conv.lastActiveAt,
           messageCount: conv.messages.length,
+          ...(conv.deploymentId ? { deploymentId: conv.deploymentId } : {}),
         })
       } catch (err) {
         this.logger.warn(
@@ -146,7 +147,9 @@ export class ConversationStore {
     model: string,
     titleHint: string,
     messages: AiChatMessage[],
-    extensionVersion?: string
+    extensionVersion?: string,
+    deploymentId?: string,
+    apiBaseUrl?: string
   ): Promise<AiConversation> {
     let conv = await this.load(id)
     const now = new Date().toISOString()
@@ -161,6 +164,11 @@ export class ConversationStore {
         lastActiveAt: now,
         messages: [],
         ...(extensionVersion ? { extensionVersion } : {}),
+        // Deployment binding is stamped once at creation and never
+        // rewritten — follow-up turns re-resolve it from here so a
+        // reload / history-reopen keeps hitting the same deployment.
+        ...(deploymentId ? { deploymentId } : {}),
+        ...(apiBaseUrl ? { apiBaseUrl } : {}),
       }
     }
     conv.messages.push(...messages)

@@ -173,6 +173,11 @@ export interface RenderedToolCall {
   status: 'pending-approval' | 'running' | 'done' | 'error'
   result?: string
   error?: string
+  /** Set when this row is projected from a server-side L4-rule
+   *  activity: lets the render-meta lookup resolve the schema
+   *  straight from the deployment instead of the IDE MCP map. */
+  deploymentId?: string
+  ruleFnName?: string
 }
 
 interface ConversationState {
@@ -189,6 +194,18 @@ interface ConversationState {
    *  message rides on this id rather than starting a fresh
    *  `AiChatStart`. Null between turns. */
   activeTurnId: string | null
+  /** Set when this conversation is bound to a deployment ("Use in
+   *  chat"). Mirrors the persisted `AiConversation` fields so the
+   *  banner survives a history reopen and follow-up turns keep the
+   *  binding. */
+  deploymentId?: string
+  apiBaseUrl?: string
+  /** The deployment's "Intended use" text (its metadata
+   *  `description`). Not persisted to disk — only carried in-memory
+   *  so a fresh deployment chat's empty-state can show it. Reopened
+   *  conversations already have messages, so the empty-state (and
+   *  thus this field) is irrelevant for them. */
+  intendedUse?: string
   /** Pending user-message injections — one entry per `AiChatInject`
    *  the webview has dispatched but the extension has not yet
    *  echoed back via `queue-consumed`. Each entry carries the
@@ -304,6 +321,20 @@ export function createAiChatStore(
   let dailyLimit = $state<number>(0)
   let blockOnOverage = $state<boolean>(false)
   let signedIn = $state<boolean>(false)
+  // Active deployment binding ("Use in chat" from the Deployment tab).
+  // Single source of truth for the deployment banner and for stamping
+  // the binding onto the first `AiChatStart` of the conversation.
+  // Set by `startDeploymentChat` / restored by `loadConversation`;
+  // cleared by `newConversation` (closing the banner opens a fresh
+  // chat against the default endpoint again).
+  let deploymentBinding = $state<{
+    deploymentId: string
+    apiBaseUrl: string
+    /** Deployment "Intended use" text, shown in the empty-state of a
+     *  fresh deployment chat. May be empty — the UI falls back to a
+     *  generic prompt then. */
+    intendedUse?: string
+  } | null>(null)
   const draftsByConv = $state<Record<string, string>>({})
   // Draft for the not-yet-started conversation. Mirrors
   // `pendingConversation`'s lifecycle: lives while the user is
@@ -355,6 +386,24 @@ export function createAiChatStore(
         streaming: false,
         activeTurnId: null,
         queuedInjections: [],
+        // Mirror the active deployment binding onto the in-memory
+        // state at creation. Without this the binding lives only on
+        // the persisted disk doc, so re-opening this conversation
+        // from history while it's still cached (the common same-
+        // session case) hits `syncDeploymentBinding(cached)` with
+        // an unbound state and silently drops the banner + endpoint
+        // routing. The object is promoted as-is into
+        // `conversations[id]` by `onStarted`, so stamping it here
+        // carries it through for the whole conversation lifetime.
+        ...(deploymentBinding
+          ? {
+              deploymentId: deploymentBinding.deploymentId,
+              apiBaseUrl: deploymentBinding.apiBaseUrl,
+              ...(deploymentBinding.intendedUse
+                ? { intendedUse: deploymentBinding.intendedUse }
+                : {}),
+            }
+          : {}),
       }
     }
     return pendingConversation
@@ -411,6 +460,7 @@ export function createAiChatStore(
     if (cached) {
       currentId = id
       includeActiveFile = false
+      syncDeploymentBinding(cached)
       return
     }
     try {
@@ -441,12 +491,15 @@ export function createAiChatStore(
         streaming: false,
         activeTurnId: null,
         queuedInjections: [],
+        ...(conv.deploymentId ? { deploymentId: conv.deploymentId } : {}),
+        ...(conv.apiBaseUrl ? { apiBaseUrl: conv.apiBaseUrl } : {}),
       }
       conversations[conv.id] = state
       currentId = conv.id
       // Loading an existing conversation is not a fresh start — default
       // to off so a follow-up turn doesn't silently re-ship the file.
       includeActiveFile = false
+      syncDeploymentBinding(state)
     } catch {
       // ignore
     }
@@ -465,9 +518,47 @@ export function createAiChatStore(
     await refreshHistory()
   }
 
+  /** Align the active deployment binding with the conversation the
+   *  user just switched to: a deployment-bound conversation re-arms
+   *  the banner + endpoint routing; a normal one clears it (so the
+   *  next turn goes to the default endpoint). */
+  function syncDeploymentBinding(state: ConversationState): void {
+    deploymentBinding =
+      state.deploymentId && state.apiBaseUrl
+        ? {
+            deploymentId: state.deploymentId,
+            apiBaseUrl: state.apiBaseUrl,
+            ...(state.intendedUse ? { intendedUse: state.intendedUse } : {}),
+          }
+        : null
+  }
+
+  /** Start a fresh conversation bound to a deployment. The binding is
+   *  sent on the first `AiChatStart` and persisted on the conversation
+   *  doc; closing the banner (`newConversation`) drops it.
+   *  `intendedUse` is the deployment's metadata description — shown in
+   *  the empty-state until the first message is sent. */
+  function startDeploymentChat(
+    deploymentId: string,
+    apiBaseUrl: string,
+    intendedUse?: string
+  ): void {
+    newConversation()
+    deploymentBinding = {
+      deploymentId,
+      apiBaseUrl,
+      ...(intendedUse ? { intendedUse } : {}),
+    }
+    // `newConversation()` defaults the active-file attach on; a
+    // deployment passthrough chat can't use IDE context, so clear it
+    // so no other UI reads a stale "attached" state.
+    includeActiveFile = false
+  }
+
   function newConversation(): void {
     currentId = null
     pendingConversation = null
+    deploymentBinding = null
     // Intentionally leave `pendingDraft` alone — original behavior:
     // an unsent draft survives a "new chat" click (mirrors the way
     // `draftsByConv['__new__']` used to persist across deletions of
@@ -486,7 +577,12 @@ export function createAiChatStore(
     if (!m || !text.trim()) return
     const conv = ensureCurrent()
 
-    const wasIncludingActiveFile = includeActiveFile
+    // A deployment-bound chat is a plain passthrough to the
+    // deployment's model — it has no IDE tools and the extension
+    // strips editor context for it anyway. Force the active-file
+    // attachment off here so the user bubble shows no file chip and
+    // nothing (chip, snapshot, or `includeActiveFile` flag) is sent.
+    const wasIncludingActiveFile = includeActiveFile && !deploymentBinding
 
     // Fire a one-shot request to learn the freshest active-file
     // state (including the current selection range) so the user
@@ -652,6 +748,16 @@ export function createAiChatStore(
         attachments: attachmentsPlain,
         includeActiveFile: wasIncludingActiveFile,
         ...(activeFileSnapshot ? { activeFile: activeFileSnapshot } : {}),
+        // Deployment binding: sent on every turn of a "Use in chat"
+        // conversation. The extension also self-heals it from the
+        // persisted doc on follow-ups, but sending it keeps a brand-
+        // new (not-yet-persisted) conversation's first turn correct.
+        ...(deploymentBinding
+          ? {
+              deploymentId: deploymentBinding.deploymentId,
+              apiBaseUrl: deploymentBinding.apiBaseUrl,
+            }
+          : {}),
       })
       // Attaching the active file is one-shot: once this turn's
       // <editor-context> is in flight, flip the toggle off so the
@@ -780,6 +886,12 @@ export function createAiChatStore(
         mentions: [],
         attachments: [],
         continueTurn: true,
+        ...(deploymentBinding
+          ? {
+              deploymentId: deploymentBinding.deploymentId,
+              apiBaseUrl: deploymentBinding.apiBaseUrl,
+            }
+          : {}),
       })
     } catch (err) {
       const last = conv.turns[conv.turns.length - 1]
@@ -919,6 +1031,19 @@ export function createAiChatStore(
         streaming: true,
         activeTurnId: null,
         queuedInjections: [],
+        // Race fallback (started/turnId mismatch): the pending
+        // buffer wasn't promoted, so seed the binding straight off
+        // the active deployment state — same reason as
+        // `ensureCurrent`, keeps the cached-reopen path bound.
+        ...(deploymentBinding
+          ? {
+              deploymentId: deploymentBinding.deploymentId,
+              apiBaseUrl: deploymentBinding.apiBaseUrl,
+              ...(deploymentBinding.intendedUse
+                ? { intendedUse: deploymentBinding.intendedUse }
+                : {}),
+            }
+          : {}),
       }
     }
   }
@@ -1591,6 +1716,9 @@ export function createAiChatStore(
     get signedIn() {
       return signedIn
     },
+    get deploymentBinding() {
+      return deploymentBinding
+    },
     get activeFile() {
       return activeFile
     },
@@ -1647,6 +1775,7 @@ export function createAiChatStore(
     loadConversation,
     deleteConversation,
     newConversation,
+    startDeploymentChat,
     send,
     continueTurn,
     abort,
@@ -1690,6 +1819,11 @@ export type AiChatStore = {
   readonly dailyLimit: number
   readonly blockOnOverage: boolean
   readonly signedIn: boolean
+  readonly deploymentBinding: {
+    deploymentId: string
+    apiBaseUrl: string
+    intendedUse?: string
+  } | null
   readonly activeFile: ActiveFileInfo
   readonly includeActiveFile: boolean
   readonly pendingQuestion: PendingQuestion | null
@@ -1713,6 +1847,11 @@ export type AiChatStore = {
   loadConversation: (id: string) => Promise<void>
   deleteConversation: (id: string) => Promise<void>
   newConversation: () => void
+  startDeploymentChat: (
+    deploymentId: string,
+    apiBaseUrl: string,
+    intendedUse?: string
+  ) => void
   send: (
     text: string,
     mentions?: AiChatStartParams['mentions']

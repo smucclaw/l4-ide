@@ -22,9 +22,13 @@ Write functions that read like legal prose:
 
 ## Deployment and Legalese Cloud
 
-Export your L4 functions as live REST API endpoints:
+Export your L4 rules as live REST API endpoints:
 
-- **[Exporting Functions for Deployment](deploying-functions/exporting-functions-for-deployment.md)** - Mark functions with `@export`, deploy from VS Code, and call them via REST or WebMCP
+- **[Exporting Rules for Deployment](deploying-rules/exporting-rules-for-deployment.md)** - Mark rules with `@export`, deploy from VS Code, and call them via REST or WebMCP
+- **[OpenAI-Compatible AI API](legalese-cloud/openai-compatible-api.md)** - Chat with a deployment's rules from any OpenAI client (`legalese-comply-4`)
+- **[MCP Server](legalese-cloud/mcp-server.md)** - Expose deployed rules as Model Context Protocol tools
+- **[WebMCP Embed Script](legalese-cloud/webmcp-embed.md)** - One embed tag so your website serves its own rules
+- **[RESTful OpenAPI Specification](legalese-cloud/openapi-spec.md)** - Generate clients and call rules as plain REST
 
 **Audience:** L4 authors ready to share their rules
 **Prerequisites:** Basic L4 knowledge

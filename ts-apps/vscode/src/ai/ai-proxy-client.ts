@@ -33,6 +33,14 @@ export interface AiProxyChatRequest {
    *  to work (the server falls back to a UUID when absent, but
    *  the client can't reconstruct that id). */
   turnId?: string
+  /** Deployment-scoped base URL override
+   *  (`https://ai.legalese.cloud/{orgSlug}/{deploymentId}`). When set,
+   *  `stream()` / `reattach()` POST/GET against this instead of
+   *  `getAiEndpoint()`. The deployment endpoint is the same ai-proxy
+   *  stack, path-scoped, so the SSE `metadata` frame and turn-reattach
+   *  protocol work identically. Local-mode is ignored when this is
+   *  set (a deployment chat always needs real cloud auth). */
+  apiBaseUrl?: string
 }
 
 /** Event union emitted by {@link streamChatCompletions} while parsing SSE. */
@@ -175,8 +183,8 @@ export class AiProxyClient {
     abortSignal: AbortSignal,
     cursor?: SseCursor
   ): AsyncGenerator<AiProxyStreamEvent> {
-    const endpoint = getAiEndpoint()
-    const local = isLocalMode()
+    const endpoint = request.apiBaseUrl ?? getAiEndpoint()
+    const local = request.apiBaseUrl ? false : isLocalMode()
     const url = `${endpoint}/v1/chat/completions`
     const headers = await this.opts.auth.getAiAuthHeaders()
     let hasAuth = !!headers.Authorization
@@ -239,15 +247,16 @@ export class AiProxyClient {
   async *reattach(
     turnId: string,
     abortSignal: AbortSignal,
-    cursor?: SseCursor
+    cursor?: SseCursor,
+    apiBaseUrl?: string
   ): AsyncGenerator<AiProxyStreamEvent> {
-    const endpoint = getAiEndpoint()
+    const endpoint = apiBaseUrl ?? getAiEndpoint()
     const sinceId = cursor?.lastEventId ?? 0
     const url =
       `${endpoint}/v1/chat/turns/${encodeURIComponent(turnId)}/stream` +
       (sinceId > 0 ? `?since=${sinceId}` : '')
     const headers = await this.opts.auth.getAiAuthHeaders()
-    if (!headers.Authorization && isLocalMode()) {
+    if (!headers.Authorization && !apiBaseUrl && isLocalMode()) {
       headers.Authorization = 'Bearer dev-local'
     }
     if (!headers.Authorization) {
@@ -337,7 +346,7 @@ export class AiProxyClient {
           throw err // aborted during backoff
         }
         try {
-          gen = this.reattach(turnId, abortSignal, cursor)
+          gen = this.reattach(turnId, abortSignal, cursor, request.apiBaseUrl)
         } catch (re) {
           // 404 (turn reaped / wrong task) or auth — can't resume;
           // surface the ORIGINAL transport error so the UI shows a

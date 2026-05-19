@@ -1,12 +1,30 @@
 <script lang="ts">
   let {
     onSeed,
+    deployment = null,
   }: {
     /** Invoked with the pre-filled text for the selected seed. The
      * parent drops it into the textarea and triggers the file picker
      * — every seed expects a source document. */
     onSeed: (seed: { prompt: string }) => void
+    /** Set when the chat is bound to a deployment ("Use in chat").
+     *  In that mode we replace the generic "Get started" seeds with
+     *  an info box describing what this deployment is for. */
+    deployment?: {
+      deploymentId: string
+      intendedUse: string
+    } | null
   } = $props()
+
+  // Fallback when the deployment has no "Intended use" metadata set.
+  const FALLBACK_INTENDED_USE =
+    'Ask questions regarding the rules in this deployment or attach files that should be checked for compliance'
+
+  const intendedUseText = $derived(
+    deployment?.intendedUse?.trim()
+      ? deployment.intendedUse.trim()
+      : FALLBACK_INTENDED_USE
+  )
 
   // Each seed: (1) opens a file picker for the user's source document,
   // (2) drops a pre-crafted prompt into the input so the only thing
@@ -37,14 +55,21 @@
 </script>
 
 <div class="empty-state">
-  <p class="empty-heading">Get started</p>
-  <div class="seed-buttons">
-    {#each seeds as seed}
-      <button class="seed-button" type="button" onclick={() => onSeed(seed)}>
-        {seed.label}
-      </button>
-    {/each}
-  </div>
+  {#if deployment}
+    <div class="deployment-info" role="note">
+      <p class="info-heading">Intended use</p>
+      <p class="info-body">{intendedUseText}</p>
+    </div>
+  {:else}
+    <p class="empty-heading">Get started</p>
+    <div class="seed-buttons">
+      {#each seeds as seed}
+        <button class="seed-button" type="button" onclick={() => onSeed(seed)}>
+          {seed.label}
+        </button>
+      {/each}
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -63,6 +88,29 @@
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.06em;
+  }
+  .deployment-info {
+    width: 100%;
+    max-width: 320px;
+    box-sizing: border-box;
+    padding: 14px 16px;
+  }
+  .info-heading {
+    margin: 0 0 8px;
+    color: var(--vscode-descriptionForeground);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .info-body {
+    margin: 0;
+    color: var(--vscode-descriptionForeground);
+    /* A shade more transparent than the "Intended use" title so the
+       heading stays the visual anchor. */
+    opacity: 0.75;
+    font-size: 13px;
+    line-height: 1.5;
+    white-space: pre-wrap;
   }
   .seed-buttons {
     display: flex;

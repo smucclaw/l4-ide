@@ -1,25 +1,25 @@
-# Exporting Functions for Deployment
+# Exporting Rules for Deployment
 
 Turn your L4 rules into live REST API endpoints on [Legalese Cloud](https://legalese.cloud) that applications and AI agents can call.
 
 **Audience:** L4 authors ready to share their rules with the world
 **Prerequisites:** Basic L4 knowledge ([Your First L4 File](../getting-started/first-l4-file.md))
 **Time:** 20 minutes
-**Goal:** Mark functions for export, deploy them from VS Code to Legalese Cloud, and call them via the REST API
+**Goal:** Mark rules for export, deploy them from VS Code to Legalese Cloud, and call them via the REST API
 
 ---
 
 ## What You'll Build
 
-An insurance premium calculator with two exported functions: one to compute a premium and one to check discount eligibility. You will deploy them from VS Code to the Legalese Cloud and call them as a REST API.
+An insurance premium calculator with two exported rules: one to compute a premium and one to check discount eligibility. You will deploy them from VS Code to the Legalese Cloud and call them as a REST API.
 
 **Complete example:** [insurance-premium.l4](insurance-premium.l4)
 
 ---
 
-## Step 1: Mark Functions with `@export`
+## Step 1: Mark Rules with `@export`
 
-The `@export` annotation tells L4 which functions should be exposed as API endpoints. Place it directly above a `DECIDE` or `MEANS` definition:
+The `@export` annotation tells L4 which rules should be exposed as API endpoints. Place it directly above a `DECIDE` or `MEANS` definition:
 
 ```l4
 @export Calculate the insurance premium for an applicant
@@ -31,17 +31,17 @@ DECIDE `calculate premium` IS
     ELSE applicant's `age` * 60
 ```
 
-Without `@export`, a function stays internal — only usable within the file, never exposed to the outside world.
+Without `@export`, a rule stays internal — only usable within the file, never exposed to the outside world.
 
-### The `@export` annotation for functions explained
+### The `@export` annotation for rules explained
 
-| Syntax                          | Meaning                                                                      |
-| ------------------------------- | ---------------------------------------------------------------------------- |
-| `@export <description>`         | Export this function with a human-readable description                       |
-| `@export default <description>` | Export as the **default** function (used when no function name is specified) |
-| `@desc <description>`           | Internal description only — **not** exported                                 |
+| Syntax                          | Meaning                                                              |
+| ------------------------------- | -------------------------------------------------------------------- |
+| `@export <description>`         | Export this rule with a human-readable description                   |
+| `@export default <description>` | Export as the **default** rule (used when no rule name is specified) |
+| `@desc <description>`           | Internal description only — **not** exported                         |
 
-The description text becomes the function's documentation in the generated API schema. Use it above the GIVEN/GIVETH parameter or return type definitions.
+The description text becomes the rule's documentation in the generated API schema. Use it above the GIVEN/GIVETH parameter or return type definitions.
 
 ### Parameter descriptions with `@desc`
 
@@ -68,19 +68,19 @@ Before deploying, make sure your file compiles and the exports look right.
 2. Open the **L4 sidebar** panel
 3. Click the **Deploy** tab
 
-The Deploy tab shows a preview of all exported functions discovered in the active file — their names, descriptions, parameters, and return types. If the list is empty, your file either has no `@export` annotations or contains errors.
+The Deploy tab shows a preview of all exported rules discovered in the active file — their names, descriptions, parameters, and return types. If the list is empty, your file either has no `@export` annotations or contains errors.
 
 ---
 
 ## Step 3: Deploy from VS Code
 
 1. Make sure your extension is properly connected to your free [Legalese Cloud](https://legalese.cloud) account.
-2. Verify the exported functions preview looks correct
+2. Verify the exported rules preview looks correct
 3. Click **Deploy**
 4. Enter a **deployment name** (e.g. `insurance-premium`) — this becomes part of the API URL. The name must be 1–36 characters, using only letters, numbers, hyphens, and underscores.
 5. Click **Deploy Now**
 
-The extension uploads your file to the L4 service, which compiles it and makes the functions available as REST endpoints.
+The extension uploads your file to the L4 service, which compiles it and makes the rules available as REST endpoints.
 
 ### Deployment status
 
@@ -95,7 +95,7 @@ After deploying, the status progresses through:
 
 ### Updating an existing deployment
 
-When you deploy to a name that already exists, the extension checks for **breaking changes** — such as removed parameters, changed return types, or renamed functions. If breaking changes are detected, you will see a warning before confirming the update.
+When you deploy to a name that already exists, the extension checks for **breaking changes** — such as removed parameters, changed return types, or renamed rules. If breaking changes are detected, you will see a warning before confirming the update.
 
 ---
 
@@ -105,31 +105,31 @@ Switch to the **Deployments** tab in the sidebar to see all active deployments. 
 
 - The deployment name
 - The number of exported rules
-- Each function's name, description, and parameters
+- Each rule's name, description, and parameters
 
 From here you can:
 
-- **Expand/collapse** deployments to inspect their functions
+- **Expand/collapse** deployments to inspect their rules
 - **Undeploy** a deployment to remove it (with a confirmation prompt, since this breaks existing integrations)
 
 ---
 
 ## Step 5: Call the API
 
-Once a deployment is **Ready**, its functions are available as REST endpoints. You can visit your Legalese Cloud home directory to see them at `https://{your-org}.legalese.cloud`.
+Once a deployment is **Ready**, its rules are available as REST endpoints. You can visit your Legalese Cloud home directory to see them at `https://{your-org}.legalese.cloud`.
 
-### List available functions
+### List available rules
 
 Here are some ways you can use the REST API from your command line:
 
 ```bash
-curl https://{your-org}.legalese.cloud/deployments/insurance-premium/functions
+curl https://{your-org}.legalese.cloud/deployments/insurance-premium/rules
 ```
 
-### Evaluate the default function
+### Evaluate the default rule
 
 ```bash
-curl -X POST http://your-service/deployments/insurance-premium/functions/calculate-premium/evaluation \
+curl -X POST http://your-service/deployments/insurance-premium/rules/calculate-premium/evaluation \
   -H "Content-Type: application/json" \
   -d '{
     "arguments": {
@@ -142,10 +142,10 @@ curl -X POST http://your-service/deployments/insurance-premium/functions/calcula
   }'
 ```
 
-### Evaluate a specific function
+### Evaluate a specific rule
 
 ```bash
-curl -X POST http://your-service/deployments/insurance-premium/functions/qualifies_for_discount/evaluation \
+curl -X POST http://your-service/deployments/insurance-premium/rules/qualifies_for_discount/evaluation \
   -H "Content-Type: application/json" \
   -d '{
     "arguments": {
@@ -163,7 +163,7 @@ curl -X POST http://your-service/deployments/insurance-premium/functions/qualifi
 Not sure which inputs matter? Use the query-plan endpoint to ask only the questions that affect the outcome:
 
 ```bash
-curl -X POST http://your-service/deployments/insurance-premium/functions/calculate-premium/query-plan \
+curl -X POST http://your-service/deployments/insurance-premium/rules/calculate-premium/query-plan \
   -H "Content-Type: application/json" \
   -d '{"arguments": {"applicant": {"is existing customer": true}}}'
 ```
@@ -174,11 +174,11 @@ This returns which inputs are still needed, ranked by their impact on the result
 
 ## Step 6: Expose to AI Agents
 
-Once deployed, your L4 functions are automatically available to AI agents through two complementary protocols: **MCP** for server-side tool use and **WebMCP** for browser-based agents.
+Once deployed, your L4 rules are automatically available to AI agents through two complementary protocols: **MCP** for server-side tool use and **WebMCP** for browser-based agents.
 
 ### MCP (Model Context Protocol)
 
-The L4 service includes a built-in [MCP](https://modelcontextprotocol.io/) server that exposes your deployed functions as structured tools over JSON-RPC 2.0. LLM tool-use clients, agent frameworks, and IDE extensions can connect to it directly — no browser required.
+The L4 service includes a built-in [MCP](https://modelcontextprotocol.io/) server that exposes your deployed rules as structured tools over JSON-RPC 2.0. LLM tool-use clients, agent frameworks, and IDE extensions can connect to it directly — no browser required.
 
 **Discover available tools:**
 
@@ -221,7 +221,7 @@ The service logs every MCP tool call as structured JSON — the same format used
 The L4 service provides a JavaScript snippet you can embed on any web page:
 
 ```html
-<!-- Expose all deployed functions as WebMCP tools -->
+<!-- Expose all deployed rules as WebMCP tools -->
 <script src="https://{your-org}.legalese.cloud/.webmcp/embed.js"></script>
 
 <!-- Scope to specific deployments -->
@@ -231,7 +231,7 @@ The L4 service provides a JavaScript snippet you can embed on any web page:
 ></script>
 ```
 
-The script registers discovery tools (`search_rules`, `get_rule_schema`, `evaluate_rule`) that browser AI agents can call to find and invoke your L4 rules. When the number of functions is small (≤ 20), direct per-function tools are also registered.
+The script registers discovery tools (`search_rules`, `get_rule_schema`, `evaluate_rule`) that browser AI agents can call to find and invoke your L4 rules. When the number of rules is small (≤ 20), direct per-rule tools are also registered.
 
 You can explore your deployments and grab the embed snippet from the service's built-in deployment explorer at the service root URL.
 
@@ -239,14 +239,14 @@ You can explore your deployments and grab the embed snippet from the service's b
 
 ## Summary
 
-| Step     | What you do                                              |
-| -------- | -------------------------------------------------------- |
-| Annotate | Add `@export` (and optionally `default`) above functions |
-| Describe | Add `@desc` to parameters for API documentation          |
-| Preview  | Check the Deploy tab in VS Code                          |
-| Deploy   | Click Deploy, choose a name, confirm                     |
-| Manage   | Use the Deployments tab to inspect and undeploy          |
-| Call     | Use the REST API, MCP, or embed WebMCP on a web page     |
+| Step     | What you do                                          |
+| -------- | ---------------------------------------------------- |
+| Annotate | Add `@export` (and optionally `default`) above rules |
+| Describe | Add `@desc` to parameters for API documentation      |
+| Preview  | Check the Deploy tab in VS Code                      |
+| Deploy   | Click Deploy, choose a name, confirm                 |
+| Manage   | Use the Deployments tab to inspect and undeploy      |
+| Call     | Use the REST API, MCP, or embed WebMCP on a web page |
 
 ---
 
@@ -255,7 +255,7 @@ You can explore your deployments and grab the embed snippet from the service's b
 ### Forgetting `@export`
 
 ```l4
--- ❌ No @export — this function won't be deployed
+-- ❌ No @export — this rule won't be deployed
 GIVEN x IS A NUMBER
 GIVETH A NUMBER
 squared x MEANS x * x
@@ -269,7 +269,7 @@ squared x MEANS x * x
 
 ### Placing `@export` in the wrong position
 
-`@export` must appear directly above the function definition (before `GIVEN` or the function name), not between `GIVETH` and `DECIDE`:
+`@export` must appear directly above the rule definition (before `GIVEN` or the rule name), not between `GIVETH` and `DECIDE`:
 
 ```l4
 -- ❌ Wrong — @export between GIVETH and DECIDE
@@ -278,7 +278,7 @@ GIVETH A NUMBER
 @export Square a number
 squared x MEANS x * x
 
--- ✅ Right — @export before the function
+-- ✅ Right — @export before the rule
 @export Square a number
 GIVEN x IS A NUMBER
 GIVETH A NUMBER

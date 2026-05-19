@@ -12,7 +12,14 @@
 
 ## Deployment
 
-- [Exporting Functions for Deployment](deploying-functions/exporting-functions-for-deployment.md)
+- [Exporting Rules for Deployment](deploying-rules/exporting-rules-for-deployment.md)
+
+## Legalese Cloud
+
+- [OpenAI-Compatible AI API](legalese-cloud/openai-compatible-api.md)
+- [MCP Server](legalese-cloud/mcp-server.md)
+- [WebMCP Embed Script](legalese-cloud/webmcp-embed.md)
+- [RESTful OpenAPI Specification](legalese-cloud/openapi-spec.md)
 
 ## Natural Language
 
