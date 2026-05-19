@@ -44,8 +44,8 @@
     mode === 'cloud'
       ? [
           {
-            label: 'OpenAI v1 compatible AI API',
-            value: `https://ai.legalese.cloud/${orgSlug}/${deploymentId}`,
+            label: 'OpenAI v1 compatible AI chat API',
+            value: `https://ai.legalese.cloud/${orgSlug}/${deploymentId}/v1`,
             hint: 'Uses legalese-comply-4 for fast, reliable rule evaluation',
             doc: 'legalese-cloud/openai-compatible-api.md',
           },

@@ -299,7 +299,9 @@
     onkeydown={onKeydown}
     placeholder={store.pendingQuestion
       ? 'Answer the question above…'
-      : 'Ask anything about your rules or L4…'}
+      : store.deploymentBinding
+        ? 'Ask anything about your rules…'
+        : 'Ask anything about your rules or L4…'}
     rows="1"
     {disabled}
   ></textarea>
