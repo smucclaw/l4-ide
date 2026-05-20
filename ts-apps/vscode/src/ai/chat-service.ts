@@ -35,7 +35,12 @@ export type ChatServiceEvent =
       conversationId: string
       tool: string
       status: 'running' | 'done' | 'error'
+      /** Proxy-supplied bold action prefix (e.g. "L4 Deployments",
+       *  "Compacting...", "Legalesing..."). The webview renders it
+       *  verbatim — no per-tool name mapping on this side. */
+      label?: string
       message: string
+      /** L4 Rule activities only. */
       input?: unknown
       output?: unknown
       ruleId?: string
@@ -857,6 +862,7 @@ export class ChatService {
           conversationId: local ?? turnId,
           tool: ev.tool,
           status: ev.status,
+          label: ev.label,
           message: ev.message,
           input: ev.input,
           output: ev.output,

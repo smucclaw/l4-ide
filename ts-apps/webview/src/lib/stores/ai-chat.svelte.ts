@@ -120,6 +120,11 @@ export interface RenderedToolActivity {
   tool: string
   /** Most recent status across the merged run — `done`/`error` stick. */
   status: 'running' | 'done' | 'error'
+  /** Bold action prefix the row shows in front of `message`. Stamped
+   *  by the proxy ("L4 Deployments", "Compacting...", "Legalesing...").
+   *  Absent for activities emitted by older proxy builds — the row
+   *  falls back to a default label. */
+  label?: string
   /** Most recent message; prior messages of the same run are dropped
    *  once the next one arrives. */
   message: string
@@ -1262,6 +1267,7 @@ export function createAiChatStore(
     conversationId: string
     tool: string
     status: 'running' | 'done' | 'error'
+    label?: string
     message: string
     input?: unknown
     output?: unknown
@@ -1310,6 +1316,7 @@ export function createAiChatStore(
           // that omits it doesn't blank the card.
           b.activity.status = params.status
           b.activity.message = params.message
+          if (params.label !== undefined) b.activity.label = params.label
           if (params.input !== undefined) b.activity.input = params.input
           if (params.output !== undefined) b.activity.output = params.output
           if (params.deploymentId) b.activity.deploymentId = params.deploymentId
@@ -1322,6 +1329,7 @@ export function createAiChatStore(
         activity: {
           tool: params.tool,
           status: params.status,
+          label: params.label,
           message: params.message,
           input: params.input,
           output: params.output,
@@ -1358,6 +1366,7 @@ export function createAiChatStore(
       activity: {
         tool: params.tool,
         status: params.status,
+        label: params.label,
         message: params.message,
       },
     })
@@ -1923,6 +1932,7 @@ export type AiChatStore = {
     conversationId: string
     tool: string
     status: 'running' | 'done' | 'error'
+    label?: string
     message: string
     input?: unknown
     output?: unknown

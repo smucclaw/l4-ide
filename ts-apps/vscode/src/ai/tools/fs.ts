@@ -106,7 +106,7 @@ export interface FsReadArgs {
    *  Default 1. Applied after `pattern` when both are set. */
   startLine?: number
   /** 1-based inclusive end line. Default: read to the end of the
-   *  output, capped at `startLine + 99` (100-line ceiling). */
+   *  output, capped at `startLine + 499` (500-line ceiling). */
   endLine?: number
   /** Optional keyword filter. Narrows the output to lines
    *  matching this pattern — parsed as a case-insensitive regex,
@@ -126,7 +126,7 @@ export interface FsReadArgs {
  *  file blow up the agent's context window. The model pages via
  *  `startLine`/`endLine` when a target is bigger. Applied uniformly
  *  to files and directories. */
-const LINE_LIMIT = 100
+const LINE_LIMIT = 500
 const CHAR_LIMIT = 4000
 const PATTERN_CONTEXT_LINES = 2
 
@@ -198,7 +198,7 @@ const DIR_IGNORES = new Set(['.git', 'node_modules', '.DS_Store'])
  * Response: a compact header line describing what came back, then
  * the selected lines. Header examples:
  *   [<path> 1-40/40]                                  — full file/dir
- *   [<path> 1-100/489]                                — paginated (more after line 100)
+ *   [<path> 1-500/2489]                               — paginated (more after line 500)
  *   [<path> pattern="..." matches=3 chunks=2/2]       — file grep
  *   [<path> pattern="..." matches=0]                  — no hits
  *   [<dir>/ pattern="..." matches=12 files=3]         — recursive dir grep
@@ -547,19 +547,21 @@ export interface FsCreateArgs {
 }
 
 /**
- * Sentinel content for newly-created files. The model fills the file
- * via follow-up `fs__edit_file` calls — anchoring on this exact line
- * guarantees a unique target, which avoids the "whole-file replace"
- * fallback path that's harder for the model to reason about.
+ * Sentinel content for newly-created files. Acts as the unique anchor
+ * for the first follow-up `fs__edit_file` call — the model replaces
+ * this exact line with real content. Required because `fs__edit_file`
+ * needs a non-empty `old` snippet to anchor on; without the seed a
+ * brand-new (empty) file would have nothing to find.
  */
 export const FS_CREATE_FILE_SEED = '// new file content\n'
 
 /**
  * Create a file seeded with FS_CREATE_FILE_SEED. The model fills it
- * via follow-up `fs__edit_file` calls (anchored on the seed line, or
- * via `old: ""` for a whole-file rewrite). Keeps the create surface
- * narrow and avoids the "model calls create with the whole file
- * inline" pattern that wastes tokens.
+ * via follow-up `fs__edit_file` calls — the first one replaces the
+ * seed line, subsequent ones add sections incrementally. Keeps the
+ * create surface narrow and avoids the "model calls create with the
+ * whole file inline" pattern that wastes tokens / risks max_tokens
+ * truncation mid-payload.
  */
 export async function fsCreateFile(args: FsCreateArgs): Promise<string> {
   const r = resolveWorkspacePath(args.path)
@@ -640,7 +642,19 @@ export async function fsEditFile(args: FsEditArgs): Promise<string> {
   const r = resolveWorkspacePath(args.path)
   if (typeof args.old !== 'string') {
     throw new Error(
-      "fs__edit_file: 'old' must be a string. Pass '' to replace the entire file (typical right after fs__create_file)."
+      "fs__edit_file: 'old' must be a non-empty string identifying the snippet to replace."
+    )
+  }
+  // Whole-file replace is intentionally not supported. A single
+  // tool_use carrying the entire file body is the classic max_tokens
+  // truncation trap — Anthropic cuts the args JSON mid-string,
+  // toolCalls comes back empty, the edit silently never lands. For a
+  // freshly-created file: anchor the first edit on the seed line
+  // (`FS_CREATE_FILE_SEED`); for an existing file: replace surgical
+  // sections in multiple smaller fs__edit_file calls.
+  if (args.old.length === 0) {
+    throw new Error(
+      `fs__edit_file: 'old' must be a non-empty anchor snippet. Whole-file replacement is not supported — for a freshly-created file replace the seed line "${FS_CREATE_FILE_SEED.trimEnd()}" first, then build up content via additional fs__edit_file calls. For large rewrites, split into multiple smaller edits.`
     )
   }
   // Same defensive check we use in fs__create_file: fail fast when
@@ -678,41 +692,6 @@ export async function fsEditFile(args: FsEditArgs): Promise<string> {
   const docEol = doc.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n'
   const oldNormalized = args.old.replace(/\r?\n/g, docEol)
   const newNormalized = args.new.replace(/\r?\n/g, docEol)
-  // `old === ""` is the explicit "fill / overwrite" verb. Replace the
-  // entire current file with `new`. Pairs naturally with
-  // fs__create_file, which seeds an empty file the model then fills
-  // with one whole-file edit. Implemented as a real replace (not
-  // applyEdit replace over a 0-length range, which would APPEND), so
-  // an existing non-empty file is genuinely overwritten — that's the
-  // contract callers need so a "rewrite this file end-to-end" call is
-  // possible without two hops.
-  if (args.old.length === 0) {
-    const fullRange = new vscode.Range(
-      new vscode.Position(0, 0),
-      doc.positionAt(doc.getText().length)
-    )
-    const edit = new vscode.WorkspaceEdit()
-    edit.replace(r.uri, fullRange, newNormalized)
-    const ok = await vscode.workspace.applyEdit(edit)
-    if (!ok) {
-      throw new Error(
-        `fs__edit_file: VSCode refused to apply the edit to ${r.relative} (file may be read-only).`
-      )
-    }
-    if (doc.isDirty) await doc.save()
-    // `[<path> 1-N/N]` prefix mirrors fs__read_file's header so the
-    // chat row's parser can lift a "Lines 1-N" suffix out of the
-    // result. /N == total here means "whole file", which the webview
-    // suppresses (a full-file write doesn't need a redundant range
-    // suffix on the row).
-    const newLineCount = args.new.split('\n').length
-    return withDocsHintOnError(
-      await appendL4Diagnostics(
-        r,
-        `[${r.relative} 1-${newLineCount}/${newLineCount}] Wrote ${r.relative} (${newLineCount} lines)`
-      )
-    )
-  }
   // Search the raw document text (no LF normalization) so offsets
   // line up 1:1 with what positionAt expects below.
   const currentText = doc.getText()
