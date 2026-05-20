@@ -333,7 +333,7 @@
             <div class="tool-row">
               <span class="dot" aria-hidden="true"></span>
               <span class="action">{actionLabel}</span>
-              {#if block.activity.message !== actionLabel}
+              {#if block.activity.message && block.activity.message !== actionLabel}
                 <span class="target plain">{block.activity.message}</span>
               {/if}
             </div>
