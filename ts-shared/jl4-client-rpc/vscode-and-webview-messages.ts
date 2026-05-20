@@ -855,14 +855,21 @@ export const AiChatToolActivity: NotificationType<{
   conversationId: string
   tool: string
   status: 'running' | 'done' | 'error'
+  /** Bold action prefix the webview shows in front of `message`
+   *  (e.g. "L4 Deployments", "Compacting...", "Legalesing...",
+   *  "L4 Rule"). Set by the proxy so the webview doesn't need a
+   *  per-tool name → label map. Absent on activities emitted by
+   *  older proxy builds — webview falls back to a sane default. */
+  label?: string
   message: string
-  /** Verbatim model-supplied arguments — present only for inspectable
-   *  server tools (L4 rule evaluations). When set alongside `ruleId`
-   *  (or for `evaluate_rule`), the webview renders this activity as an
+  /** Verbatim model-supplied arguments — present only for L4 Rule
+   *  activities (the proxy emits this only when its descriptor is
+   *  `kind: "rule"`). Combined with `ruleId` (or `evaluate_rule`'s
+   *  `input.function_name`), the webview renders this activity as an
    *  L4 Rule card identical to a client-side tool-call instead of the
    *  minimal status row. */
   input?: unknown
-  /** Verbatim tool result (set on `done`). */
+  /** Verbatim rule result (set on `done`). L4 Rule activities only. */
   output?: unknown
   /** Deployed L4 function name when the activity wraps a rule. */
   ruleId?: string

@@ -309,29 +309,23 @@
             onOpenDiff={onOpenFileDiff}
           />
         {:else if block.kind === 'tool-activity'}
-          <!-- Plain status activity (e.g. doc search): keeps the
-               crimson dot up front (no expand chevron — nothing to
-               expand on read-only backend events) + bold label +
-               monospace message. The dot pulses iff this row is the
-               trailing element in the assistant bubble — driven by
-               `:last-child` in the <style> below, no JS bookkeeping.
-               As soon as another block (text-delta, another activity,
-               a tool-call) is appended after it, the row falls out of
-               `:last-child` and the dot freezes solid. Errored rows
-               opt out via the `is-error` class.
+          <!-- Plain status activity (e.g. doc search, compaction,
+               deployment browsing): bold action label + monospace
+               message + pulsating-then-frozen dot. The label is
+               stamped on the event by the proxy ("L4 Deployments",
+               "Compacting...", "Legalesing...") — no per-tool name
+               mapping lives here, so adding a new server-emitted
+               activity type doesn't require a webview change. Older
+               proxy builds may omit it; fall back to "Activity" so
+               the row still renders.
 
-               The action label is tool-aware: `search_l4_docs` keeps
-               the opaque "Legalesing…" string (its message body IS
-               the label — there's no useful detail to expose), every
-               other inspectable server tool (file infra + meta
-               discovery) is a deployment-browsing call and gets
-               labelled "L4 Deployments" — matching what
-               ToolCallRow shows for the client-side counterpart so
-               the two paths read the same to the user. -->
-          {@const actionLabel =
-            block.activity.tool === 'search_l4_docs'
-              ? 'Legalesing...'
-              : 'L4 Deployments'}
+               The dot pulses iff this row is the trailing element
+               in the assistant bubble — driven by `:last-child` in
+               the <style> below. As soon as another block is
+               appended after it, the row falls out of `:last-child`
+               and the dot freezes solid. Errored rows opt out via
+               the `is-error` class. -->
+          {@const actionLabel = block.activity.label ?? 'Activity'}
           <div
             class="tool-call tool-activity-row"
             class:is-error={block.activity.status === 'error'}

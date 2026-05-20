@@ -58,13 +58,18 @@ export type AiProxyStreamEvent =
       kind: 'tool-activity'
       tool: string
       status: 'running' | 'done' | 'error'
+      /** Bold action prefix the webview shows in front of `message`.
+       *  Stamped by the proxy so the client doesn't need a per-tool
+       *  name → label mapping. May be absent on older proxy events;
+       *  the webview falls back to a sane default in that case. */
+      label?: string
       message: string
-      /** Verbatim model-supplied arguments. Present only for
-       *  inspectable server tools (L4 rule evaluations); the webview
-       *  uses this to render an L4 Rule card identical to a
-       *  client-side tool-call. */
+      /** Verbatim model-supplied arguments. Present only for L4 Rule
+       *  activities (the proxy emits the structured payload only when
+       *  `kind === "rule"`); the webview uses this to render an L4
+       *  Rule card identical to a client-side tool-call. */
       input?: unknown
-      /** Verbatim tool result (set on `done`). */
+      /** Verbatim tool result (set on `done`). L4 Rule activities only. */
       output?: unknown
       /** Deployed L4 function name when the activity wraps a rule. */
       ruleId?: string
@@ -721,6 +726,7 @@ function* interpretFrame(
         activities?: Array<{
           tool: string
           status: 'running' | 'done' | 'error'
+          label?: string
           message: string
           input?: unknown
           output?: unknown
@@ -734,6 +740,7 @@ function* interpretFrame(
           kind: 'tool-activity',
           tool: a.tool,
           status: a.status,
+          label: a.label,
           message: a.message,
           input: a.input,
           output: a.output,
