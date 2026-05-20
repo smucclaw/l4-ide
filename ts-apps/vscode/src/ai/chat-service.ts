@@ -51,6 +51,13 @@ export type ChatServiceEvent =
       status: 'pending-approval' | 'running' | 'done' | 'error'
       result?: string
       error?: string
+      /** For `l4-rules__<sanitised>` calls: original L4 function name
+       *  + deployment id parsed from the MCP description trailer.
+       *  Threaded through to the webview so the tool-call row shows
+       *  the unsanitised name (matching the server-side rule-activity
+       *  card) instead of the wire-level slug with dashes. */
+      ruleFnName?: string
+      deploymentId?: string
     }
   | {
       kind: 'done'
@@ -97,6 +104,12 @@ export type PersistedBlock =
       status: 'running' | 'done' | 'error'
       result?: string
       error?: string
+      /** Original (unsanitised) L4 function name for `l4-rules__*`
+       *  rule calls — preserved so a reloaded transcript shows the
+       *  same row label the user saw live. */
+      ruleFnName?: string
+      /** Deployment id parsed from the MCP description trailer. */
+      deploymentId?: string
     }
   // Only L4-rule server activities are persisted (the proxy ran a
   // deployed rule). Plain status tickers (doc search etc.) are
@@ -959,6 +972,15 @@ export class ChatService {
             argsJson: ev.argsJson,
           })
         }
+        // For `l4-rules__*` calls, resolve the original L4 function
+        // name + deployment from the MCP target map so the row can
+        // display the unsanitised name instead of the wire-level
+        // sanitised slug. listTools() ran earlier in this turn (the
+        // proxy received the tools array), so the map is populated.
+        // For infra tools (list_files / read_file / etc.) and any
+        // non-`l4-rules__` call this returns null and we leave the
+        // fields undefined.
+        const ruleTarget = this.opts.mcp.getToolTarget(ev.name)
         const existingBlock = blocks.find(
           (b) => b.kind === 'tool-call' && b.callId === ev.callId
         )
@@ -972,6 +994,12 @@ export class ChatService {
             name: ev.name,
             argsJson: ev.argsJson,
             status: 'running',
+            ...(ruleTarget
+              ? {
+                  ruleFnName: ruleTarget.fnName,
+                  deploymentId: ruleTarget.deployId,
+                }
+              : {}),
           })
         }
         // Pre-compute the initial status based on the user's permission
@@ -994,6 +1022,12 @@ export class ChatService {
           name: ev.name,
           argsJson: ev.argsJson,
           status: initialStatus,
+          ...(ruleTarget
+            ? {
+                ruleFnName: ruleTarget.fnName,
+                deploymentId: ruleTarget.deployId,
+              }
+            : {}),
         })
       } else if (ev.kind === 'done') {
         finishReason = ev.finishReason

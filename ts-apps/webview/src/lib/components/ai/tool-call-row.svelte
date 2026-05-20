@@ -138,10 +138,15 @@
       // the pulsating dot already conveying activity.
       const isInfra = L4_RULES_INFRASTRUCTURE.has(sub)
       const mcpLabel = isInfra ? 'L4 Deployments' : 'L4 Rule'
+      // For rule evaluations, prefer the original L4 function name
+      // (with spaces) parsed from the MCP description trailer over the
+      // wire-level sanitised slug — matches what the server-side rule
+      // activity card shows for the same rule.
+      const ruleTarget = !isInfra && call.ruleFnName ? call.ruleFnName : sub
       return {
         running: mcpLabel,
         settled: mcpLabel,
-        target: sub,
+        target: ruleTarget,
         click: null,
       }
     }

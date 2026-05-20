@@ -247,6 +247,10 @@ function extractPersistedBlocks(meta: unknown): AssistantBlock[] | null {
           status,
           result: typeof b.result === 'string' ? b.result : undefined,
           error: typeof b.error === 'string' ? b.error : undefined,
+          ruleFnName:
+            typeof b.ruleFnName === 'string' ? b.ruleFnName : undefined,
+          deploymentId:
+            typeof b.deploymentId === 'string' ? b.deploymentId : undefined,
         },
       })
     } else if (
@@ -1367,6 +1371,12 @@ export function createAiChatStore(
     status: 'pending-approval' | 'running' | 'done' | 'error'
     result?: string
     errorMessage?: string
+    /** Original L4 function name (with spaces) for `l4-rules__*` calls;
+     *  threaded through from the MCP target map so the row displays
+     *  the unsanitised name. */
+    ruleFnName?: string
+    /** Deployment id parsed from the MCP description trailer. */
+    deploymentId?: string
   }): void {
     // Status updates for an EXISTING tool call must merge into the
     // block wherever it already lives — not just the latest turn or
@@ -1388,6 +1398,9 @@ export function createAiChatStore(
       if (params.errorMessage !== undefined) c.error = params.errorMessage
       if (params.name) c.name = params.name
       if (params.argsJson) c.argsJson = params.argsJson
+      if (params.ruleFnName !== undefined) c.ruleFnName = params.ruleFnName
+      if (params.deploymentId !== undefined)
+        c.deploymentId = params.deploymentId
       return true
     }
 
@@ -1440,6 +1453,12 @@ export function createAiChatStore(
         status: params.status,
         result: params.result,
         error: params.errorMessage,
+        ...(params.ruleFnName !== undefined
+          ? { ruleFnName: params.ruleFnName }
+          : {}),
+        ...(params.deploymentId !== undefined
+          ? { deploymentId: params.deploymentId }
+          : {}),
       },
     })
   }
@@ -1897,6 +1916,8 @@ export type AiChatStore = {
     status: 'pending-approval' | 'running' | 'done' | 'error'
     result?: string
     errorMessage?: string
+    ruleFnName?: string
+    deploymentId?: string
   }) => void
   onToolActivity: (params: {
     conversationId: string
