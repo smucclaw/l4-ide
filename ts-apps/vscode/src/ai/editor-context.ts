@@ -110,12 +110,15 @@ export function buildEditorContextMessage(chipSnapshot?: {
 
 /**
  * Build a `<session-context>` system message carrying the runtime
- * facts the model otherwise has no way to know: today's date/time
- * (with the user's IANA timezone), the org-specific deployment URL
- * the user is signed in to, and the L4 VSCode extension build the
- * request is coming from. Sent as an additional system message so it
- * doesn't invalidate the ai-proxy's cached L4 prompt prefix, and only
- * on the first turn of a conversation (matches workspace-exports).
+ * facts the model otherwise has no way to know: the org-specific
+ * deployment URL the user is signed in to, and the L4 VSCode
+ * extension build the request is coming from. Sent as an additional
+ * system message so it doesn't invalidate the ai-proxy's cached L4
+ * prompt prefix, and only on the first turn of a conversation (matches
+ * workspace-exports). Date/time/timezone are NOT here — those are
+ * inlined into the user message every turn via
+ * {@link buildCurrentTimeBlock} so they stay fresh on follow-ups
+ * (the proxy filters role:"system" out of the per-turn delta).
  */
 export function buildSessionContextMessage(
   auth: AuthManager,
@@ -123,15 +126,6 @@ export function buildSessionContextMessage(
 ): AiChatMessage | null {
   const lines: string[] = []
   lines.push('<session-context>')
-  const now = new Date()
-  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
-  // ISO timestamp for precision + a human-readable form in the local
-  // zone so the model can cite a date naturally.
-  lines.push(`currentTime: ${now.toISOString()}`)
-  lines.push(
-    `localTime: ${now.toLocaleString(undefined, { timeZone: tz, timeZoneName: 'short' })}`
-  )
-  lines.push(`timezone: ${tz}`)
   const deploymentUrl = auth.getEffectiveServiceUrl()
   if (deploymentUrl) {
     lines.push(`deploymentUrl: ${deploymentUrl}`)
@@ -141,6 +135,26 @@ export function buildSessionContextMessage(
   lines.push(`l4VscodeExtensionVersion: ${extensionVersion}`)
   lines.push('</session-context>')
   return { role: 'system', content: lines.join('\n') }
+}
+
+/**
+ * Build the per-turn `<current-time>` block, inlined as a text content
+ * part on the user message every turn. It rides inside the user
+ * message (not as a `role:"system"` message) because the ai-proxy's
+ * extractDelta filters system messages out of follow-up-turn deltas —
+ * a system message here would only land on turn 1. Inlining keeps the
+ * timestamp fresh on every turn for "today" / "now" / relative-time
+ * reasoning, in the user's IANA zone with a UTC fallback.
+ */
+export function buildCurrentTimeBlock(): string {
+  const now = new Date()
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+  return [
+    '<current-time>',
+    `localTime: ${now.toLocaleString(undefined, { timeZone: tz, timeZoneName: 'short' })}`,
+    `timezone: ${tz}`,
+    '</current-time>',
+  ].join('\n')
 }
 
 function workspaceRelative(uri: vscode.Uri): string {

@@ -1,6 +1,7 @@
 import type { AiChatMessage } from 'jl4-client-rpc'
 import type { AuthManager } from '../auth.js'
 import type { AiLogger } from './logger.js'
+import { buildCurrentTimeBlock } from './editor-context.js'
 
 /**
  * Client-declared tool definition in the OpenAI function-tool shape the
@@ -208,6 +209,14 @@ export class AiProxyClient {
         401
       )
     }
+    // Inline the current-time tag into the trailing user message
+    // (non-mutating clone) so the proxy sees wall-clock context on
+    // every turn. The local conversation store keeps the user's
+    // original text — what the chat bubble shows on reload — while
+    // the wire payload carries the timestamp. role:"system" wouldn't
+    // work here because the proxy's extractDelta filters system
+    // messages out of follow-up-turn deltas.
+    const wireMessages = withCurrentTimeOnLastUser(request.messages)
     const res = await fetch(url, {
       method: 'POST',
       headers: {
@@ -215,7 +224,11 @@ export class AiProxyClient {
         'Content-Type': 'application/json',
         Accept: 'text/event-stream',
       },
-      body: JSON.stringify({ ...request, stream: true }),
+      body: JSON.stringify({
+        ...request,
+        messages: wireMessages,
+        stream: true,
+      }),
       signal: abortSignal,
     })
     this.opts.logger.info(
@@ -501,6 +514,40 @@ function httpStatusToCode(status: number): string {
   if (status === 429) return 'rate_limited'
   if (status >= 500) return 'upstream_error'
   return 'request_failed'
+}
+
+/**
+ * Return a NEW messages array with the {@link buildCurrentTimeBlock}
+ * prepended to the trailing `role:"user"` message's content. Pure —
+ * the input array and its messages aren't mutated, so the caller's
+ * local-store copy stays clean of wire-only metadata. When there's no
+ * user message in the body (tool-result follow-ups, `continueTurn`)
+ * the original array is returned unchanged.
+ */
+function withCurrentTimeOnLastUser(messages: AiChatMessage[]): AiChatMessage[] {
+  let lastUserIdx = -1
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i]!.role === 'user') {
+      lastUserIdx = i
+      break
+    }
+  }
+  if (lastUserIdx < 0) return messages
+  const timeBlock = buildCurrentTimeBlock()
+  const original = messages[lastUserIdx]!
+  const content = original.content
+  let augmented: AiChatMessage['content']
+  if (typeof content === 'string') {
+    augmented = `${timeBlock}\n\n${content}`
+  } else if (Array.isArray(content)) {
+    augmented = [{ type: 'text', text: timeBlock }, ...content]
+  } else {
+    // null content + role:"user" is degenerate; leave it alone.
+    return messages
+  }
+  const next = messages.slice()
+  next[lastUserIdx] = { ...original, content: augmented }
+  return next
 }
 
 function extractErrorMessage(body: string): string | undefined {
