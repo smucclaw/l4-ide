@@ -49,6 +49,7 @@
     connected: false,
     status: 'connecting',
     isLegaleseCloud: false,
+    mcpPort: 19415,
   })
   let initialized: boolean = $state(false)
   let previewDebounceTimer: ReturnType<typeof setTimeout> | null = null
@@ -1521,7 +1522,7 @@
             <p>
               Deployments are automatically available to Legalese AI, VS Code
               Copilot, and any other MCP-speaking agents as MCP tools on this
-              computer.
+              computer on port {connectionStatus.mcpPort}.
             </p>
             <p>
               They're also available as REST API's, online MCP server and WebMCP

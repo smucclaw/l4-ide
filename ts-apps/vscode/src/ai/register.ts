@@ -263,6 +263,8 @@ export function registerAiChatHandlers(deps: {
           status: event.status,
           result: event.result,
           errorMessage: event.error,
+          ruleFnName: event.ruleFnName,
+          deploymentId: event.deploymentId,
         })
         break
       case 'turn-spawn':

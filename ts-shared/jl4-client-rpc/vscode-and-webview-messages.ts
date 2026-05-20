@@ -173,6 +173,10 @@ export interface GetSidebarConnectionStatusResponse {
    *  session. Undefined for self-hosted jl4-service / API-key-only.
    *  Drives the Deployment tab's deployment-scoped integration URLs. */
   orgSlug?: string
+  /** Localhost port the extension's MCP proxy is listening on. Read
+   *  from `jl4.mcpPort` (default 19415) at status time so the sidebar
+   *  can surface the address agents should connect to. */
+  mcpPort: number
   error?: string
 }
 
@@ -759,6 +763,19 @@ export const AiChatToolCall: NotificationType<{
   status: 'pending-approval' | 'running' | 'done' | 'error'
   result?: string
   errorMessage?: string
+  /** For `l4-rules__<sanitised>` calls only: the original (unsanitised)
+   *  L4 function name as written in the user's source — parsed out of
+   *  the MCP tool description trailer. Carries the spaces / mixed case
+   *  the wire-level sanitised tool name had to drop to satisfy the
+   *  `^[a-zA-Z0-9_-]{1,64}$` regex. Lets the row's display align with
+   *  the server-side rule-activity card, which already shows the
+   *  original. Absent for infra tools (`list_files`, etc.) and any
+   *  non-rule call. */
+  ruleFnName?: string
+  /** Deployment id parsed from the same trailer. Lets the chat
+   *  tool-call card resolve render-meta directly from the deployment
+   *  without going through the IDE's sanitized MCP target map. */
+  deploymentId?: string
 }> = {
   method: 'aiChatToolCall',
 }

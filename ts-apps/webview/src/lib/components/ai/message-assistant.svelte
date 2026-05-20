@@ -318,15 +318,28 @@
                As soon as another block (text-delta, another activity,
                a tool-call) is appended after it, the row falls out of
                `:last-child` and the dot freezes solid. Errored rows
-               opt out via the `is-error` class. -->
+               opt out via the `is-error` class.
+
+               The action label is tool-aware: `search_l4_docs` keeps
+               the opaque "Legalesing…" string (its message body IS
+               the label — there's no useful detail to expose), every
+               other inspectable server tool (file infra + meta
+               discovery) is a deployment-browsing call and gets
+               labelled "L4 Deployments" — matching what
+               ToolCallRow shows for the client-side counterpart so
+               the two paths read the same to the user. -->
+          {@const actionLabel =
+            block.activity.tool === 'search_l4_docs'
+              ? 'Legalesing...'
+              : 'L4 Deployments'}
           <div
             class="tool-call tool-activity-row"
             class:is-error={block.activity.status === 'error'}
           >
             <div class="tool-row">
               <span class="dot" aria-hidden="true"></span>
-              <span class="action">Legalesing...</span>
-              {#if block.activity.message !== 'Legalesing...'}
+              <span class="action">{actionLabel}</span>
+              {#if block.activity.message !== actionLabel}
                 <span class="target plain">{block.activity.message}</span>
               {/if}
             </div>
