@@ -27,6 +27,7 @@ import qualified Data.Aeson.Text as Aeson
 import qualified Data.List as List
 import qualified Data.Map as Map
 import qualified Data.Maybe as Maybe
+import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Base.Text as Text
 import qualified Data.Text.Lazy as LazyText
@@ -843,24 +844,40 @@ handlers evalConfig recorder =
                 , _xdata = Nothing
                 }
               Just tcResult -> do
-                let -- Collect all declares from a module and its transitive imports
-                    collectAllDeclares tc =
-                      FSchema.declaresFromModule tc.module'
-                        <> foldMap collectAllDeclares tc.dependencies
-                    -- Collect exports from this module and all transitive imports
-                    collectExports declares tc =
-                      let exps = Export.enrichReturnTypes tc.entityInfo
-                               $ Export.getExportedFunctions tc.module'
-                          here = map (Inspector.exportedFunctionToSummary declares) exps
-                          imported = concatMap (collectExports declares) tc.dependencies
-                      in here <> imported
-                    allDeclares = collectAllDeclares tcResult
-                    summaries = collectExports allDeclares tcResult
-                    -- Collect transitive import URIs from the dependency tree
-                    collectImportUris tc = case tc.module' of
-                      MkModule _ depUri _ ->
-                        fromNormalizedUri depUri : concatMap collectImportUris tc.dependencies
-                    importUris = map getUri $ concatMap collectImportUris tcResult.dependencies
+                let -- `tc.dependencies` is the transitive-import *tree*, so a
+                    -- module reachable via more than one path (a diamond import
+                    -- graph: here safe-obligations → safe-governance → safe-core,
+                    -- with safe-core also pulled in elsewhere) is otherwise
+                    -- walked once per path, duplicating its declares, exports
+                    -- and import URIs. Flatten the tree to each module exactly
+                    -- once, deduping by module URI — NOT by function name: L4
+                    -- permits distinct functions to share a name, so name-based
+                    -- dedup would wrongly collapse two different exports.
+                    moduleUri tc = case tc.module' of MkModule _ u _ -> u
+                    -- Pre-order walk (root first, then deps in import order),
+                    -- skipping any module URI already visited.
+                    flatten seen tc
+                      | moduleUri tc `Set.member` seen = (seen, [])
+                      | otherwise =
+                          let seen0 = Set.insert (moduleUri tc) seen
+                              visitDep (s, acc) d =
+                                let (s', xs) = flatten s d in (s', acc <> xs)
+                              (seenN, deps) =
+                                List.foldl' visitDep (seen0, []) tc.dependencies
+                          in (seenN, tc : deps)
+                    uniqueTcs = snd (flatten Set.empty tcResult)
+                    allDeclares =
+                      foldMap (FSchema.declaresFromModule . (.module')) uniqueTcs
+                    summaries =
+                      concatMap
+                        (\tc -> map (Inspector.exportedFunctionToSummary allDeclares)
+                                  ( Export.enrichReturnTypes tc.entityInfo
+                                  $ Export.getExportedFunctions tc.module' ))
+                        uniqueTcs
+                    -- importUris excludes the root module (head of uniqueTcs).
+                    importUris =
+                      map (getUri . fromNormalizedUri . moduleUri)
+                        (drop 1 uniqueTcs)
                     response = Inspector.GetExportedFunctionsResponse
                       { functions = summaries
                       , importedFiles = importUris
