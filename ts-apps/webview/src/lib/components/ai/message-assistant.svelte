@@ -443,6 +443,14 @@
     border-radius: 0.2em;
     top: -0.15em;
   }
+  /* Errored rows paint the dot in the VSCode error red — same
+     signal client-side tool-call rows use on their chevron
+     (`status-error → --vscode-errorForeground`). Lets the message
+     itself stay state-neutral (no "(failed)" suffix from the
+     server); failure is read off the dot alone. */
+  .tool-activity-row.is-error .dot {
+    background: var(--vscode-errorForeground, #d7263d);
+  }
   /* Pulsate the activity dot on the trailing row only, AND only
      while the turn is still streaming. Three independent gates,
      all expressed in CSS:
