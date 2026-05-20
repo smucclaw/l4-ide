@@ -46,6 +46,16 @@ import { getTokenColors } from './theme-colors.js'
 
 export const SIDEBAR_WEBVIEW_TYPE = 'l4.deployView'
 
+/** Read the MCP proxy port from settings, matching the default in
+ *  mcp-proxy.ts and the package.json contribution. Surfaced in the
+ *  sidebar's connection-status payload so the deployment panel can
+ *  tell users which localhost port agents should connect to. */
+function getMcpPort(): number {
+  return (
+    vscode.workspace.getConfiguration('jl4').get<number>('mcpPort') ?? 19415
+  )
+}
+
 export const sidebarWebviewFrontend: WebviewTypeMessageParticipant = {
   type: 'webview',
   webviewType: SIDEBAR_WEBVIEW_TYPE,
@@ -84,6 +94,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           status: state.status,
           isLegaleseCloud: auth.isLegaleseCloudSession(),
           orgSlug: auth.getCloudOrgSlug(),
+          mcpPort: getMcpPort(),
           error: state.error,
         }
         this.messenger.sendNotification(
@@ -100,6 +111,31 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
    *  resolve don't drop frames on the floor. */
   isVisible(): boolean {
     return this.view?.visible ?? false
+  }
+
+  /**
+   * Re-emit the connection-status notification with the current
+   * snapshot. Called from outside the provider when something the
+   * sidebar displays — but that isn't an auth state change — has
+   * changed (e.g. the MCP port was reconfigured at runtime).
+   */
+  async refreshConnectionStatus(): Promise<void> {
+    if (!this.view) return
+    const state = await this.auth.getConnectionState()
+    const response: GetSidebarConnectionStatusResponse = {
+      serviceUrl: state.serviceUrl,
+      connected: state.connected,
+      status: state.status,
+      isLegaleseCloud: this.auth.isLegaleseCloudSession(),
+      orgSlug: this.auth.getCloudOrgSlug(),
+      mcpPort: getMcpPort(),
+      error: state.error,
+    }
+    this.messenger.sendNotification(
+      SidebarConnectionStatusChanged,
+      sidebarWebviewFrontend,
+      response
+    )
   }
 
   resolveWebviewView(
@@ -281,6 +317,7 @@ export function initializeSidebarMessenger(
       status: state.status,
       isLegaleseCloud: auth.isLegaleseCloudSession(),
       orgSlug: auth.getCloudOrgSlug(),
+      mcpPort: getMcpPort(),
       error: state.error,
     }
   })

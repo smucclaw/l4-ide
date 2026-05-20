@@ -173,6 +173,10 @@ export interface GetSidebarConnectionStatusResponse {
    *  session. Undefined for self-hosted jl4-service / API-key-only.
    *  Drives the Deployment tab's deployment-scoped integration URLs. */
   orgSlug?: string
+  /** Localhost port the extension's MCP proxy is listening on. Read
+   *  from `jl4.mcpPort` (default 19415) at status time so the sidebar
+   *  can surface the address agents should connect to. */
+  mcpPort: number
   error?: string
 }
 

@@ -626,6 +626,28 @@ export async function activate(context: ExtensionContext) {
     )
   )
 
+  // When the user changes the MCP port in Settings, rebind the proxy
+  // on the new port and refresh the sidebar so the displayed port
+  // matches. The MCP server is bound at startup and stays put
+  // otherwise — without this listener, a setting change wouldn't
+  // take effect until the extension is reloaded.
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration(async (e) => {
+      if (!e.affectsConfiguration('jl4.mcpPort')) return
+      outputChannel.appendLine(
+        '[extension] jl4.mcpPort changed — restarting MCP proxy'
+      )
+      try {
+        await mcpProxy.restart()
+      } catch (err) {
+        outputChannel.appendLine(
+          `[extension] MCP proxy restart failed: ${err instanceof Error ? err.message : String(err)}`
+        )
+      }
+      await sidebarProvider.refreshConnectionStatus()
+    })
+  )
+
   // Register command to open/focus the L4 sidebar from the editor title bar
   context.subscriptions.push(
     vscode.commands.registerCommand('l4.openSidebar', () => {
