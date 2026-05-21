@@ -32,6 +32,7 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text.Encoding
 import Data.Time (getCurrentTime)
 import L4.Export (ExportedFunction (..), ExportedParam (..), getExportedFunctions, enrichReturnTypes, extractImplicitAssumeParams)
+import L4.Print (prettyLayout)
 import L4.Syntax (Resolved, Declare(..), Type'(..), RawName(..), getActual, rawName, rawNameToText)
 import Logging (Logger, logInfo, logWarn)
 import qualified LSP.L4.Rules as Rules
@@ -482,25 +483,15 @@ collectAllDeclares tc =
     <> foldMap collectAllDeclares tc.dependencies
 
 -- | Display the return type of an exported function as a user-facing string.
+-- Delegates to 'prettyLayout' so the rendering matches exactly what the LSP
+-- reports for the same type (the deploy-sidebar diff compares the two
+-- strings). The previous bespoke renderer collapsed @DEONTIC P A@ to just
+-- @"DEONTIC"@ and dropped the @OF@ keyword for other parameterized types
+-- (e.g. @LIST NUMBER@ instead of @LIST OF NUMBER@), causing spurious
+-- "return type changed" warnings on every redeploy.
 returnTypeDisplay :: Maybe (Type' Resolved) -> Text
 returnTypeDisplay Nothing = "unknown"
-returnTypeDisplay (Just ty)
-  | isDeonticType ty = "DEONTIC"
-  | otherwise = case ty of
-      TyApp _ n args ->
-        -- Preserve the type's declared casing. Built-in types
-        -- (BOOLEAN, NUMBER, …) are already upper-case at their
-        -- definition; user DECLAREd types keep their original case so
-        -- this string matches what the LSP reports, otherwise the
-        -- deploy sidebar sees a spurious return-type "change".
-        let nameText = rawNameToText (rawName (getActual n))
-         in if null args
-              then nameText
-              else nameText <> " " <> Text.intercalate " " (map (returnTypeDisplay . Just) args)
-      Type _ -> "TYPE"
-      Fun{} -> "FUNCTION"
-      Forall _ _ inner -> returnTypeDisplay (Just inner)
-      InfVar{} -> "unknown"
+returnTypeDisplay (Just ty) = prettyLayout ty
 
 -- | Compute SHA-256 version from sorted source contents.
 computeVersion :: Map FilePath Text -> Text

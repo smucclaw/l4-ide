@@ -103,12 +103,22 @@ export class ServiceClient {
   }
 
   /**
-   * Get deployment status (lightweight, no function schemas).
+   * Get deployment status. `mode` controls how much detail the response's
+   * `metadata.functions[]` carries:
+   *   - `'simple'` (default): name + description only — cheap status poll.
+   *   - `'full'`: full per-function parameter + returnSchema in one round-trip
+   *     (avoids fanning out per-function `getFunctionSchema` calls).
+   *   - `'none'`: omit the functions array entirely.
    */
-  async getDeploymentStatus(deploymentId: string): Promise<DeployResponse> {
+  async getDeploymentStatus(
+    deploymentId: string,
+    mode: 'simple' | 'full' | 'none' = 'simple'
+  ): Promise<DeployResponse> {
     const encodedId = encodeURIComponent(deploymentId)
-    const resp = await this.request(`/deployments/${encodedId}`)
-    if (!resp.ok) await throwWithBody(resp, `GET /deployments/${encodedId}`)
+    const query = mode === 'simple' ? '' : `?functions=${mode}`
+    const resp = await this.request(`/deployments/${encodedId}${query}`)
+    if (!resp.ok)
+      await throwWithBody(resp, `GET /deployments/${encodedId}${query}`)
     return (await resp.json()) as DeployResponse
   }
 
@@ -193,31 +203,6 @@ export class ServiceClient {
     if (!resp.ok)
       await throwWithBody(resp, `GET /deployments/${encodedId}/openapi.json`)
     return resp.json()
-  }
-
-  /**
-   * List a deployment's exported function names. Backed by
-   * `GET /deployments/{id}/functions`, which returns jl4-service's
-   * `SimpleFunction` shape: `[{ "type":"function",
-   * "function":{ "name", "description" } }]`. A bare `[{ name }]`
-   * fallback is kept in case that representation ever changes.
-   * Used (with {@link getFunctionSchema}) by the sidebar to recover the
-   * deployed interface for breaking-change detection.
-   */
-  async listDeploymentFunctions(
-    deploymentId: string
-  ): Promise<Array<{ name: string }>> {
-    const encodedId = encodeURIComponent(deploymentId)
-    const resp = await this.request(`/deployments/${encodedId}/functions`)
-    if (!resp.ok)
-      await throwWithBody(resp, `GET /deployments/${encodedId}/functions`)
-    const raw = (await resp.json()) as Array<{
-      name?: string
-      function?: { name?: string }
-    }>
-    return raw
-      .map((f) => ({ name: f.function?.name ?? f.name ?? '' }))
-      .filter((f) => f.name.length > 0)
   }
 
   /**

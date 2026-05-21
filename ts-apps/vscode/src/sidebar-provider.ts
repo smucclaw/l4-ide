@@ -590,34 +590,32 @@ export function initializeSidebarMessenger(
     }
   })
 
-  // Fetch the deployed functions' full schemas (per-function endpoint) so
-  // the sidebar can recursively diff them against the local interface.
+  // Fetch the deployed functions' full schemas in one round-trip so the
+  // sidebar can recursively diff them against the local interface.
   // Returns { functions: null } when the deployment does not exist yet
   // (or is unreachable) — a first deploy can't break anything.
   messenger.onRequest(GetSidebarDeploymentSchemas, async (params) => {
     try {
-      const fns = await serviceClient.listDeploymentFunctions(
-        params.deploymentId
+      const status = await serviceClient.getDeploymentStatus(
+        params.deploymentId,
+        'full'
       )
-      const functions = await Promise.all(
-        fns.map(async (f) => {
-          const schema = (await serviceClient.getFunctionSchema(
-            params.deploymentId,
-            f.name
-          )) as {
-            name?: string
-            parameters?: RemoteFunctionSchema['parameters']
-            returnType?: string
-            returnSchema?: RemoteFunctionSchema['returnSchema']
+      const meta = status.metadata as
+        | {
+            functions?: Array<{
+              name: string
+              parameters?: RemoteFunctionSchema['parameters']
+              returnType?: string
+              returnSchema?: RemoteFunctionSchema['returnSchema']
+            }>
           }
-          return {
-            name: schema.name ?? f.name,
-            parameters: schema.parameters,
-            returnType: schema.returnType,
-            returnSchema: schema.returnSchema,
-          }
-        })
-      )
+        | undefined
+      const functions = (meta?.functions ?? []).map((f) => ({
+        name: f.name,
+        parameters: f.parameters,
+        returnType: f.returnType,
+        returnSchema: f.returnSchema,
+      }))
       return { functions }
     } catch (err) {
       outputChannel.appendLine(

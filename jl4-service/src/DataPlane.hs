@@ -62,7 +62,7 @@ type ShortRoutes =
 
 type ShortDeploymentRoutes =
        -- GET /{id} → deployment status
-       Get '[JSON] DeploymentStatusResponse
+       QueryParam "functions" Text :> Get '[JSON] DeploymentStatusResponse
        -- PUT /{id} → replace deployment
   :<|> MultipartForm Mem (MultipartData Mem) :> Verb 'PUT 202 '[JSON] DeploymentStatusResponse
        -- DELETE /{id} → remove deployment
