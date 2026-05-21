@@ -333,19 +333,20 @@
       if (deployView === 'breaking-warning') return 'Deploy Anyway'
       if (deployView === 'mission') return 'Deploy Now'
       if (deployView === 'deploy-form') return 'Continue'
-      if (activeTab === 'deployments' && deployments.length > 0)
-        return 'Open in web browser'
       // Tabs that aren't the Deploy tab surface the button as
       // "Deploy preview" — one click jumps to Deploy and shows the
       // tool cards (which is already the default Deploy-tab view).
       // Keeps the footer useful without forcing users to hunt for
       // the Deploy tab manually when they've authored an @export,
       // while the label makes the target action (a deploy, via the
-      // preview step) clear.
+      // preview step) clear. The Deployments tab behaves the same;
+      // opening the live service in a browser lives in the deployment
+      // menu ("Visit …") instead.
       if (
         activeTab === 'ai-chat' ||
         activeTab === 'docs' ||
-        activeTab === 'inspector'
+        activeTab === 'inspector' ||
+        activeTab === 'deployments'
       ) {
         return 'Deploy preview'
       }
@@ -368,19 +369,15 @@
     if (connectionStatus.status !== 'connected') return false
     // Undeploy confirm is always enabled
     if (undeployConfirm) return false
-    // On the deployments tab, the button becomes "Open in web browser"
-    // when at least one deployment exists; otherwise stays disabled.
-    if (activeTab === 'deployments') {
-      return deployments.length === 0
-    }
-    // Non-deploy tabs surface a "Preview" button that jumps to the
-    // Deploy tab. Enabled iff the active file has at least one rule
-    // ready for export — otherwise the Deploy tab would just show
-    // the empty "Open an L4 file containing valid rules" hint.
+    // Non-deploy tabs (including Deployments) surface a "Deploy preview"
+    // button that jumps to the Deploy tab. Enabled iff the active file has
+    // at least one rule ready for export — otherwise the Deploy tab would
+    // just show the empty "Open an L4 file containing valid rules" hint.
     if (
       activeTab === 'inspector' ||
       activeTab === 'docs' ||
-      activeTab === 'ai-chat'
+      activeTab === 'ai-chat' ||
+      activeTab === 'deployments'
     )
       return functions.length === 0
     if (deployView === 'preview' && functions.length === 0) return true
@@ -966,12 +963,11 @@
         continueDeploy()
       } else if (deployView === 'deploy-form') {
         goToMission()
-      } else if (activeTab === 'deployments' && deployments.length > 0) {
-        openServiceUrl()
       } else if (
         activeTab === 'ai-chat' ||
         activeTab === 'docs' ||
-        activeTab === 'inspector'
+        activeTab === 'inspector' ||
+        activeTab === 'deployments'
       ) {
         // "Preview" click jumps to the Deploy tab so the cards the
         // button promised become visible. The Deploy tab's own

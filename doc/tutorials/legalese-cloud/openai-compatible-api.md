@@ -30,7 +30,7 @@ Send a bearer token in the `Authorization` header. Either:
 - **Legalese Cloud session** — sign in from the VS Code sidebar; the extension uses your session automatically.
 - **API key** (for API use only) — create a key in the [Legalese Cloud console](https://legalese.cloud) with the `ai:chat`, `l4:rules` and `l4:evaluate` permissions to use this feature.
 
-### Permissions
+### Legalese Cloud Permissions
 
 A key (or session) used against this endpoint needs three scopes — each gates a different step of a chat turn:
 

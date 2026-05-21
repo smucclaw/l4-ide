@@ -21,7 +21,8 @@ For server-side or agent integrations, use the [MCP server](./mcp-server.md) or 
 
 ```html
 <script
-  src="https://{orgSlug}.legalese.cloud/.webmcp/embed.js"
+  src="https://api.legalese.cloud/.webmcp/embed.js"
+  data-org="{orgSlug}"
   data-scope="*"
   data-tools="auto"
   data-api-key="sk_..."
@@ -32,7 +33,7 @@ For server-side or agent integrations, use the [MCP server](./mcp-server.md) or 
 
 ```html
 <script
-  src="{serviceUrl}/.webmcp/embed.js"
+  src="http://{serviceUrl}/.webmcp/embed.js"
   data-scope="*"
   data-tools="auto"
   data-api-key="sk_..."
@@ -46,6 +47,7 @@ The VS Code **Integrate** dialog pre-fills the correct `src` for your connection
 | Attribute      | Meaning                                                               |
 | -------------- | --------------------------------------------------------------------- |
 | `src`          | The WebMCP loader served by Legalese Cloud / your jl4-service         |
+| `data-org`     | Your organization slug on Legalese Cloud. Unnecessary for jl4-service |
 | `data-scope`   | Which pages the tools are offered on (`*` = the whole site)           |
 | `data-tools`   | `auto` registers every exported rule; or a comma-separated allow-list |
 | `data-api-key` | A Legalese Cloud API key authorizing rule evaluation                  |
@@ -56,9 +58,9 @@ Replace `sk_...` with a real key:
 
 1. Open the [Legalese Cloud console](https://legalese.cloud).
 2. Create an API key scoped to the deployment (or organization) you are embedding and with `l4:rules` and `l4:evaluate` permissions.
-3. Paste it into `data-api-key`.
+3. Paste your organization slug into `data-org` and your API key into `data-api-key`.
 
-### Permissions
+### Legalese Cloud Permissions
 
 | Permission    | Enables                                                                                             |
 | ------------- | --------------------------------------------------------------------------------------------------- |
@@ -74,4 +76,4 @@ Load a page that includes the script and open a WebMCP-aware assistant. Your exp
 ## Notes
 
 - `data-tools="auto"` keeps the tool list in sync with redeploys.
-- A self-hosted `jl4-service` serves the loader at `{serviceUrl}/.webmcp/embed.js`.
+- A self-hosted `jl4-service` serves the loader at `http://{serviceUrl}/.webmcp/embed.js`.

@@ -57,13 +57,13 @@
           },
           {
             label: 'WebMCP embed script',
-            value: `${SCRIPT_OPEN} src="https://${orgSlug}.legalese.cloud/.webmcp/embed.js" data-scope="${deploymentId}" data-tools="auto" data-api-key="sk_...">${SCRIPT_CLOSE}`,
+            value: `${SCRIPT_OPEN} src="https://api.legalese.cloud/.webmcp/embed.js" data-org="${orgSlug}" data-scope="${deploymentId}" data-tools="auto" data-api-key="sk_...">${SCRIPT_CLOSE}`,
             hint: 'Enable your website to serve your rules to visitors',
             doc: 'legalese-cloud/webmcp-embed.md',
           },
           {
             label: 'RESTful OpenAPI JSON specification',
-            value: `https://${orgSlug}.legalese.cloud/${deploymentId}/openapi.json`,
+            value: `https://api.legalese.cloud/${orgSlug}/${deploymentId}/openapi.json`,
             hint: 'Allow 3rd party systems to integrate and evaluate these rules',
             doc: 'legalese-cloud/openapi-spec.md',
           },
@@ -130,6 +130,7 @@
     role="dialog"
     aria-modal="true"
     aria-label="Integrate deployment"
+    tabindex="-1"
     onclick={(e) => e.stopPropagation()}
     onkeydown={null}
   >

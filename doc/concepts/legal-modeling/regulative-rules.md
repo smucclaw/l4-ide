@@ -75,7 +75,7 @@ An event is a triple:
 ```
 
 - **party** — who did it (must match a value of the contract's actor type)
-- **action** — what they did (matched against the contract's action shape — see [PROVIDED and EXACTLY](#provided-and-exactly))
+- **action** — what they did (matched against the contract's action shape — see [Conditional obligations with PROVIDED](#conditional-obligations-with-provided))
 - **timestamp** — a number on the same timeline as the start time and `WITHIN` deadlines
 
 Events are consumed **in order**. As each event is examined, two pieces of internal state move:

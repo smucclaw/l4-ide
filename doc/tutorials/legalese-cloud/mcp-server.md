@@ -26,7 +26,7 @@ https://mcp.legalese.cloud/{orgSlug}/{deploymentId}
 **Self-hosted jl4-service:**
 
 ```
-{serviceUrl}/{deploymentId}/.mcp
+http://{serviceUrl}/{deploymentId}/.mcp
 ```
 
 `{serviceUrl}` is the jl4-service URL configured in the extension settings. The VS Code **Integrate** dialog pre-fills the correct form for whichever connection you are on.
@@ -36,7 +36,7 @@ https://mcp.legalese.cloud/{orgSlug}/{deploymentId}
 - **Legalese Cloud:** authenticate with your Legalese Cloud session via OAuth, or use an API key (`Authorization: Bearer sk_...`) created in the [console](https://legalese.cloud). Uses the `l4:rules`, `l4:evaluate` and `l4:read` permissions.
 - **Self-hosted:** whatever auth your `jl4-service` is configured with (often none for a local instance).
 
-### Permissions
+### Legalese Cloud Permissions
 
 An MCP client does two things — list the tools, then call them — so the key needs the matching scopes:
 
@@ -70,4 +70,4 @@ Once connected, the client's tool list shows your exported rule names. Ask the m
 
 - Tools and their input schemas update automatically when you redeploy.
 - The server only exposes the rules in that one deployment.
-- A self-hosted `jl4-service` serves MCP at `{serviceUrl}/{deploymentId}/.mcp`; there is no separate `mcp.` host.
+- A self-hosted `jl4-service` serves MCP at `http://{serviceUrl}/{deploymentId}/.mcp`; there is no separate `mcp.` host.
