@@ -20,7 +20,6 @@ import {
   RequestSidebarDeploy,
   RequestSidebarUndeploy,
   RequestSidebarDownloadDeployment,
-  GetSidebarDeploymentOpenApi,
   GetSidebarDeploymentSchemas,
   GetSidebarDeploymentStatus,
   GetSidebarUpdateStatus,
@@ -572,21 +571,6 @@ export function initializeSidebarMessenger(
       const msg = err instanceof Error ? err.message : String(err)
       outputChannel.appendLine(`[sidebar] Download failed: ${msg}`)
       return { success: false, error: msg }
-    }
-  })
-
-  // Handle deployment OpenAPI request (for breaking change detection)
-  messenger.onRequest(GetSidebarDeploymentOpenApi, async (params) => {
-    try {
-      const openapi = await serviceClient.getDeploymentOpenApi(
-        params.deploymentId
-      )
-      return { openapi }
-    } catch (err) {
-      outputChannel.appendLine(
-        `[sidebar] Error fetching deployment OpenAPI: ${err instanceof Error ? err.message : String(err)}`
-      )
-      return { openapi: null }
     }
   })
 

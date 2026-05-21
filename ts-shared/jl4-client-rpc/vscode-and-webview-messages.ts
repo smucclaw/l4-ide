@@ -312,14 +312,6 @@ export const GetSidebarUpdateStatus: RequestType<
   method: 'getSidebarUpdateStatus',
 }
 
-/** Sidebar requests deployment OpenAPI spec (for breaking change detection) */
-export const GetSidebarDeploymentOpenApi: RequestType<
-  { deploymentId: string },
-  { openapi: unknown }
-> = {
-  method: 'getSidebarDeploymentOpenApi',
-}
-
 /**
  * A deployed function's interface, normalized from jl4-service's
  * per-function schema endpoint (`GET /deployments/{id}/functions/{fn}`)
