@@ -89,7 +89,7 @@ compileBundle logger deployId sources = do
           let fnMap = Map.fromList [(fn.fnImpl.name, fn) | fn <- allFunctions]
 
           now <- getCurrentTime
-          let summaries = [FunctionSummary { fsName = fn.fnImpl.name, fsDescription = fn.fnImpl.description, fsParameters = fn.fnImpl.parameters, fsReturnType = fn.fnImpl.returnType, fsReturnSchema = Nothing, fsSection = Nothing, fsIsDeontic = fn.fnImpl.isDeontic, fsSourceFile = Just (Text.pack fp) } | (fp, fn) <- allFunctionsWithFile]
+          let summaries = [FunctionSummary { fsName = fn.fnImpl.name, fsDescription = fn.fnImpl.description, fsParameters = fn.fnImpl.parameters, fsReturnType = fn.fnImpl.returnType, fsReturnSchema = fn.fnImpl.returnSchema, fsSection = Nothing, fsIsDeontic = fn.fnImpl.isDeontic, fsSourceFile = Just (Text.pack fp) } | (fp, fn) <- allFunctionsWithFile]
               version = computeVersion sources
               fileEntries = buildFileEntries deployId sources summaries
               meta = DeploymentMetadata
@@ -319,7 +319,7 @@ buildFromCborBundle logger deployId bundles sources storedMeta = do
       let fnMap = Map.fromList [(fn.fnImpl.name, fn) | fn <- allFns]
 
       now <- getCurrentTime
-      let summaries = [FunctionSummary { fsName = fn.fnImpl.name, fsDescription = fn.fnImpl.description, fsParameters = fn.fnImpl.parameters, fsReturnType = fn.fnImpl.returnType, fsReturnSchema = Nothing, fsSection = Nothing, fsIsDeontic = fn.fnImpl.isDeontic, fsSourceFile = Just (Text.pack fp) } | (fp, fn) <- allFnsWithFile]
+      let summaries = [FunctionSummary { fsName = fn.fnImpl.name, fsDescription = fn.fnImpl.description, fsParameters = fn.fnImpl.parameters, fsReturnType = fn.fnImpl.returnType, fsReturnSchema = fn.fnImpl.returnSchema, fsSection = Nothing, fsIsDeontic = fn.fnImpl.isDeontic, fsSourceFile = Just (Text.pack fp) } | (fp, fn) <- allFnsWithFile]
           version = storedMeta.smVersion
           fileEntries = buildFileEntries deployId sources summaries
           meta = DeploymentMetadata

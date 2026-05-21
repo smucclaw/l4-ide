@@ -20,7 +20,7 @@ import Compiler (compileBundle, computeVersion)
 import DeploymentLoader (triggerCompilationIfPending)
 import Logging (logInfo, logWarn)
 import Options (Options (..))
-import Shared (jsonError)
+import Shared (jsonError, encodeMetadataCache)
 import Types
 
 import Control.Applicative ((<|>))
@@ -440,7 +440,7 @@ runDeployJob env deployId jobId sourceMap storedMeta mDesc mGate = do
           let meta = meta0 { metaDescription = mDesc }
           BundleStore.saveBundle env.bundleStore deployId.unDeploymentId sourceMap storedMeta
           BundleStore.saveBundleCbor env.bundleStore deployId.unDeploymentId bundles
-          BundleStore.saveMetadataCache env.bundleStore deployId.unDeploymentId (Aeson.encode meta)
+          BundleStore.saveMetadataCache env.bundleStore deployId.unDeploymentId (encodeMetadataCache meta)
             `catch` \(e :: SomeException) ->
               logWarn env.logger "Failed to save metadata cache (non-fatal)"
                 [ ("deploymentId", toJSON deployId.unDeploymentId)

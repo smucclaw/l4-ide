@@ -21,6 +21,7 @@ module Shared (
   -- * Render-meta annotation
   annotateSanitizedNames,
   AnnotatedFunctionSummary (..),
+  encodeMetadataCache,
   -- * Error text sanitization
   sanitizeFieldNamesInText,
   -- * Collision detection
@@ -128,6 +129,23 @@ collectDeploymentMetadata mScope = do
 -- | Encode an error message as a JSON object: @{\"error\": \"...\"}@
 jsonError :: Text -> LBS.ByteString
 jsonError msg = Aeson.encode $ object ["error" .= msg]
+
+-- | Encode 'DeploymentMetadata' for the on-disk metadata cache, annotating
+-- each function's @parameters@ and @returnSchema@ with @x-sanitized-name@ at
+-- compile time (via 'AnnotatedFunctionSummary'). jl4-service ignores the
+-- annotation when it reloads the cache (Parameter's FromJSON drops unknown
+-- fields and the names are recomputed at response time), but the auth-proxy
+-- reads the raw cache JSON and can serve the annotated function-schema
+-- endpoint — and derive the MCP sanitised-key schema — without
+-- re-implementing the sanitisation algorithm.
+encodeMetadataCache :: DeploymentMetadata -> LBS.ByteString
+encodeMetadataCache meta =
+  Aeson.encode $ case Aeson.toJSON meta of
+    Aeson.Object o
+      | not (null meta.metaFunctions) ->
+          Aeson.Object $ Aeson.KeyMap.insert "functions"
+            (Aeson.toJSON (map AnnotatedFunctionSummary meta.metaFunctions)) o
+    v -> v
 
 -- ----------------------------------------------------------------------------
 -- Property name sanitization and remapping

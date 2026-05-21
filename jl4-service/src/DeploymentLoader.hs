@@ -13,6 +13,7 @@ import BundleStore (BundleStore)
 import Compiler (compileBundle, buildFromCborBundle)
 import Logging (Logger, logInfo, logWarn, logError, logDebug)
 import Options (Options (..))
+import qualified Shared
 import Types
 
 import Control.Concurrent.Async (async)
@@ -20,7 +21,6 @@ import Control.Concurrent.STM (TVar, atomically, modifyTVar', readTVar, retry)
 import Control.Exception (SomeException, catch, displayException)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Reader (asks, ask)
-import qualified Data.Aeson as Aeson
 import Data.Aeson (toJSON)
 import Data.Int (Int64)
 import qualified Data.Map.Strict as Map
@@ -76,7 +76,7 @@ loadAndRegister logger options registry store deployId = do
         Map.insert (DeploymentId deployId) (DeploymentReady fns meta)
       -- Cache the full metadata to disk so it survives restarts.
       -- This is optional — a write failure must not fail the deployment.
-      BundleStore.saveMetadataCache store deployId (Aeson.encode meta)
+      BundleStore.saveMetadataCache store deployId (Shared.encodeMetadataCache meta)
         `catch` \(e :: SomeException) ->
           logWarn logger "Failed to save metadata cache (non-fatal)"
             [ ("deploymentId", toJSON deployId)
