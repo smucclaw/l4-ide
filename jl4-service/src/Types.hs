@@ -132,9 +132,10 @@ data FunctionSummary = FunctionSummary
   -- ^ Display name of the return type (e.g. "BOOLEAN", "NUMBER", "DEONTIC").
   , fsReturnSchema :: !(Maybe Parameter)
   -- ^ Structured JSON Schema of the return type, with x-l4-type annotations
-  -- on each record/enum node. Populated only by the function-schema endpoint
-  -- response from the live in-memory Function; left 'Nothing' in cached
-  -- metadata to avoid unnecessary persistence (always recomputable on compile).
+  -- on each record/enum node. Computed at compile time and persisted in the
+  -- metadata cache so read endpoints (incl. the per-function schema and
+  -- proxy-side EFS rendering) can be served without recompiling. 'Nothing'
+  -- only when the return type has no structured schema.
   , fsSection     :: !(Maybe Text)
   -- ^ L4 section header (§§) this function belongs to.
   , fsIsDeontic   :: !Bool
@@ -152,19 +153,33 @@ instance ToJSON FunctionSummary where
     , "parameters"  .= fs.fsParameters
     , "returnType"  .= fs.fsReturnType
     , "section"     .= fs.fsSection
+    , "isDeontic"   .= fs.fsIsDeontic
     ] <> maybe [] (\rs -> ["returnSchema" .= rs]) fs.fsReturnSchema
 
 instance FromJSON FunctionSummary where
-  parseJSON = Aeson.withObject "FunctionSummary" $ \o ->
-    FunctionSummary
-      <$> (o .: "name"        <|> o .: "fsName")
-      <*> (o .: "description" <|> o .: "fsDescription")
-      <*> (o .: "parameters"  <|> o .: "fsParameters")
-      <*> (o .: "returnType"  <|> o .: "fsReturnType")
-      <*> o .:? "returnSchema"
-      <*> (o .:? "section"    <|> o .:? "fsSection")
-      <*> pure False  -- isDeontic: internal only, not in JSON
-      <*> (o .:? "sourceFile" <|> o .:? "fsSourceFile")
+  parseJSON = Aeson.withObject "FunctionSummary" $ \o -> do
+    name         <- o .: "name"        <|> o .: "fsName"
+    description  <- o .: "description" <|> o .: "fsDescription"
+    parameters   <- o .: "parameters"  <|> o .: "fsParameters"
+    returnType   <- o .: "returnType"  <|> o .: "fsReturnType"
+    returnSchema <- o .:? "returnSchema"
+    section      <- o .:? "section"    <|> o .:? "fsSection"
+    -- isDeontic is now persisted in the metadata cache. For caches written
+    -- before this field existed, fall back to deriving it from the return
+    -- type (the same signal McpServer uses) so older deployments are still
+    -- correct without waiting for a recompile.
+    isDeontic    <- o .:? "isDeontic" .!= ("DEONTIC" `Text.isPrefixOf` returnType)
+    sourceFile   <- o .:? "sourceFile" <|> o .:? "fsSourceFile"
+    pure FunctionSummary
+      { fsName         = name
+      , fsDescription  = description
+      , fsParameters   = parameters
+      , fsReturnType   = returnType
+      , fsReturnSchema = returnSchema
+      , fsSection      = section
+      , fsIsDeontic    = isDeontic
+      , fsSourceFile   = sourceFile
+      }
 
 -- | A source file entry within a deployment.
 data FileEntry = FileEntry
