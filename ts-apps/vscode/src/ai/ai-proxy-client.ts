@@ -1,6 +1,7 @@
 import type { AiChatMessage } from 'jl4-client-rpc'
 import type { AuthManager } from '../auth.js'
 import type { AiLogger } from './logger.js'
+import { buildCurrentTimeBlock } from './editor-context.js'
 
 /**
  * Client-declared tool definition in the OpenAI function-tool shape the
@@ -57,13 +58,18 @@ export type AiProxyStreamEvent =
       kind: 'tool-activity'
       tool: string
       status: 'running' | 'done' | 'error'
+      /** Bold action prefix the webview shows in front of `message`.
+       *  Stamped by the proxy so the client doesn't need a per-tool
+       *  name → label mapping. May be absent on older proxy events;
+       *  the webview falls back to a sane default in that case. */
+      label?: string
       message: string
-      /** Verbatim model-supplied arguments. Present only for
-       *  inspectable server tools (L4 rule evaluations); the webview
-       *  uses this to render an L4 Rule card identical to a
-       *  client-side tool-call. */
+      /** Verbatim model-supplied arguments. Present only for L4 Rule
+       *  activities (the proxy emits the structured payload only when
+       *  `kind === "rule"`); the webview uses this to render an L4
+       *  Rule card identical to a client-side tool-call. */
       input?: unknown
-      /** Verbatim tool result (set on `done`). */
+      /** Verbatim tool result (set on `done`). L4 Rule activities only. */
       output?: unknown
       /** Deployed L4 function name when the activity wraps a rule. */
       ruleId?: string
@@ -208,6 +214,14 @@ export class AiProxyClient {
         401
       )
     }
+    // Inline the current-time tag into the trailing user message
+    // (non-mutating clone) so the proxy sees wall-clock context on
+    // every turn. The local conversation store keeps the user's
+    // original text — what the chat bubble shows on reload — while
+    // the wire payload carries the timestamp. role:"system" wouldn't
+    // work here because the proxy's extractDelta filters system
+    // messages out of follow-up-turn deltas.
+    const wireMessages = withCurrentTimeOnLastUser(request.messages)
     const res = await fetch(url, {
       method: 'POST',
       headers: {
@@ -215,7 +229,11 @@ export class AiProxyClient {
         'Content-Type': 'application/json',
         Accept: 'text/event-stream',
       },
-      body: JSON.stringify({ ...request, stream: true }),
+      body: JSON.stringify({
+        ...request,
+        messages: wireMessages,
+        stream: true,
+      }),
       signal: abortSignal,
     })
     this.opts.logger.info(
@@ -503,6 +521,40 @@ function httpStatusToCode(status: number): string {
   return 'request_failed'
 }
 
+/**
+ * Return a NEW messages array with the {@link buildCurrentTimeBlock}
+ * prepended to the trailing `role:"user"` message's content. Pure —
+ * the input array and its messages aren't mutated, so the caller's
+ * local-store copy stays clean of wire-only metadata. When there's no
+ * user message in the body (tool-result follow-ups, `continueTurn`)
+ * the original array is returned unchanged.
+ */
+function withCurrentTimeOnLastUser(messages: AiChatMessage[]): AiChatMessage[] {
+  let lastUserIdx = -1
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i]!.role === 'user') {
+      lastUserIdx = i
+      break
+    }
+  }
+  if (lastUserIdx < 0) return messages
+  const timeBlock = buildCurrentTimeBlock()
+  const original = messages[lastUserIdx]!
+  const content = original.content
+  let augmented: AiChatMessage['content']
+  if (typeof content === 'string') {
+    augmented = `${timeBlock}\n\n${content}`
+  } else if (Array.isArray(content)) {
+    augmented = [{ type: 'text', text: timeBlock }, ...content]
+  } else {
+    // null content + role:"user" is degenerate; leave it alone.
+    return messages
+  }
+  const next = messages.slice()
+  next[lastUserIdx] = { ...original, content: augmented }
+  return next
+}
+
 function extractErrorMessage(body: string): string | undefined {
   try {
     const parsed = JSON.parse(body) as {
@@ -674,6 +726,7 @@ function* interpretFrame(
         activities?: Array<{
           tool: string
           status: 'running' | 'done' | 'error'
+          label?: string
           message: string
           input?: unknown
           output?: unknown
@@ -687,6 +740,7 @@ function* interpretFrame(
           kind: 'tool-activity',
           tool: a.tool,
           status: a.status,
+          label: a.label,
           message: a.message,
           input: a.input,
           output: a.output,

@@ -120,6 +120,11 @@ export interface RenderedToolActivity {
   tool: string
   /** Most recent status across the merged run — `done`/`error` stick. */
   status: 'running' | 'done' | 'error'
+  /** Bold action prefix the row shows in front of `message`. Stamped
+   *  by the proxy ("L4 Deployments", "Compacting...", "Legalesing...").
+   *  Absent for activities emitted by older proxy builds — the row
+   *  falls back to a default label. */
+  label?: string
   /** Most recent message; prior messages of the same run are dropped
    *  once the next one arrives. */
   message: string
@@ -247,6 +252,10 @@ function extractPersistedBlocks(meta: unknown): AssistantBlock[] | null {
           status,
           result: typeof b.result === 'string' ? b.result : undefined,
           error: typeof b.error === 'string' ? b.error : undefined,
+          ruleFnName:
+            typeof b.ruleFnName === 'string' ? b.ruleFnName : undefined,
+          deploymentId:
+            typeof b.deploymentId === 'string' ? b.deploymentId : undefined,
         },
       })
     } else if (
@@ -1258,6 +1267,7 @@ export function createAiChatStore(
     conversationId: string
     tool: string
     status: 'running' | 'done' | 'error'
+    label?: string
     message: string
     input?: unknown
     output?: unknown
@@ -1306,6 +1316,7 @@ export function createAiChatStore(
           // that omits it doesn't blank the card.
           b.activity.status = params.status
           b.activity.message = params.message
+          if (params.label !== undefined) b.activity.label = params.label
           if (params.input !== undefined) b.activity.input = params.input
           if (params.output !== undefined) b.activity.output = params.output
           if (params.deploymentId) b.activity.deploymentId = params.deploymentId
@@ -1318,6 +1329,7 @@ export function createAiChatStore(
         activity: {
           tool: params.tool,
           status: params.status,
+          label: params.label,
           message: params.message,
           input: params.input,
           output: params.output,
@@ -1354,6 +1366,7 @@ export function createAiChatStore(
       activity: {
         tool: params.tool,
         status: params.status,
+        label: params.label,
         message: params.message,
       },
     })
@@ -1367,6 +1380,12 @@ export function createAiChatStore(
     status: 'pending-approval' | 'running' | 'done' | 'error'
     result?: string
     errorMessage?: string
+    /** Original L4 function name (with spaces) for `l4-rules__*` calls;
+     *  threaded through from the MCP target map so the row displays
+     *  the unsanitised name. */
+    ruleFnName?: string
+    /** Deployment id parsed from the MCP description trailer. */
+    deploymentId?: string
   }): void {
     // Status updates for an EXISTING tool call must merge into the
     // block wherever it already lives — not just the latest turn or
@@ -1388,6 +1407,9 @@ export function createAiChatStore(
       if (params.errorMessage !== undefined) c.error = params.errorMessage
       if (params.name) c.name = params.name
       if (params.argsJson) c.argsJson = params.argsJson
+      if (params.ruleFnName !== undefined) c.ruleFnName = params.ruleFnName
+      if (params.deploymentId !== undefined)
+        c.deploymentId = params.deploymentId
       return true
     }
 
@@ -1440,6 +1462,12 @@ export function createAiChatStore(
         status: params.status,
         result: params.result,
         error: params.errorMessage,
+        ...(params.ruleFnName !== undefined
+          ? { ruleFnName: params.ruleFnName }
+          : {}),
+        ...(params.deploymentId !== undefined
+          ? { deploymentId: params.deploymentId }
+          : {}),
       },
     })
   }
@@ -1897,11 +1925,14 @@ export type AiChatStore = {
     status: 'pending-approval' | 'running' | 'done' | 'error'
     result?: string
     errorMessage?: string
+    ruleFnName?: string
+    deploymentId?: string
   }) => void
   onToolActivity: (params: {
     conversationId: string
     tool: string
     status: 'running' | 'done' | 'error'
+    label?: string
     message: string
     input?: unknown
     output?: unknown

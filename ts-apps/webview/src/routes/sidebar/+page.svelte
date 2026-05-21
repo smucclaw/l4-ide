@@ -49,6 +49,7 @@
     connected: false,
     status: 'connecting',
     isLegaleseCloud: false,
+    mcpPort: 19415,
   })
   let initialized: boolean = $state(false)
   let previewDebounceTimer: ReturnType<typeof setTimeout> | null = null
@@ -1288,7 +1289,11 @@
               </div>
             {:else}
               <div class="functions-list">
-                {#each functions as func (func.name)}
+                <!-- Not keyed by func.name: L4 allows distinct exports to
+                     share a name, and a keyed each throws on duplicate keys.
+                     The list is replaced wholesale on each LSP response, so
+                     there is no cross-update identity to preserve. -->
+                {#each functions as func}
                   <ToolCard
                     {func}
                     expanded={isCardExpanded('.local/' + func.name)}
@@ -1492,7 +1497,9 @@
                       {:else if compilingDeployments.has(dep.deploymentId)}
                         <div class="deployment-empty">Compiling...</div>
                       {:else if dep.functions.length > 0}
-                        {#each dep.functions as func (func.name)}
+                        <!-- Unkeyed: see note on the preview functions list;
+                             func.name is not a safe key. -->
+                        {#each dep.functions as func}
                           <ToolCard
                             {func}
                             expanded={isCardExpanded(
@@ -1515,7 +1522,7 @@
             <p>
               Deployments are automatically available to Legalese AI, VS Code
               Copilot, and any other MCP-speaking agents as MCP tools on this
-              computer.
+              computer on port {connectionStatus.mcpPort}.
             </p>
             <p>
               They're also available as REST API's, online MCP server and WebMCP

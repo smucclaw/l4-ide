@@ -309,24 +309,31 @@
             onOpenDiff={onOpenFileDiff}
           />
         {:else if block.kind === 'tool-activity'}
-          <!-- Plain status activity (e.g. doc search): keeps the
-               crimson dot up front (no expand chevron — nothing to
-               expand on read-only backend events) + bold label +
-               monospace message. The dot pulses iff this row is the
-               trailing element in the assistant bubble — driven by
-               `:last-child` in the <style> below, no JS bookkeeping.
-               As soon as another block (text-delta, another activity,
-               a tool-call) is appended after it, the row falls out of
-               `:last-child` and the dot freezes solid. Errored rows
-               opt out via the `is-error` class. -->
+          <!-- Plain status activity (e.g. doc search, compaction,
+               deployment browsing): bold action label + monospace
+               message + pulsating-then-frozen dot. The label is
+               stamped on the event by the proxy ("L4 Deployments",
+               "Compacting...", "Legalesing...") — no per-tool name
+               mapping lives here, so adding a new server-emitted
+               activity type doesn't require a webview change. Older
+               proxy builds may omit it; fall back to "Activity" so
+               the row still renders.
+
+               The dot pulses iff this row is the trailing element
+               in the assistant bubble — driven by `:last-child` in
+               the <style> below. As soon as another block is
+               appended after it, the row falls out of `:last-child`
+               and the dot freezes solid. Errored rows opt out via
+               the `is-error` class. -->
+          {@const actionLabel = block.activity.label ?? 'Activity'}
           <div
             class="tool-call tool-activity-row"
             class:is-error={block.activity.status === 'error'}
           >
             <div class="tool-row">
               <span class="dot" aria-hidden="true"></span>
-              <span class="action">Legalesing...</span>
-              {#if block.activity.message !== 'Legalesing...'}
+              <span class="action">{actionLabel}</span>
+              {#if block.activity.message && block.activity.message !== actionLabel}
                 <span class="target plain">{block.activity.message}</span>
               {/if}
             </div>
@@ -435,6 +442,14 @@
     padding: 0.2em;
     border-radius: 0.2em;
     top: -0.15em;
+  }
+  /* Errored rows paint the dot in the VSCode error red — same
+     signal client-side tool-call rows use on their chevron
+     (`status-error → --vscode-errorForeground`). Lets the message
+     itself stay state-neutral (no "(failed)" suffix from the
+     server); failure is read off the dot alone. */
+  .tool-activity-row.is-error .dot {
+    background: var(--vscode-errorForeground, #d7263d);
   }
   /* Pulsate the activity dot on the trailing row only, AND only
      while the turn is still streaming. Three independent gates,

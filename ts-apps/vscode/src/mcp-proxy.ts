@@ -524,14 +524,38 @@ export class McpProxy implements vscode.Disposable {
     }
   }
 
-  dispose(): void {
+  /**
+   * Tear down the listening server + VS Code MCP registration without
+   * destroying the McpProxy instance. After a stop, {@link start} can
+   * be called again to bind a (possibly different) port. Shared by
+   * {@link dispose} and {@link restart}.
+   */
+  private async stop(): Promise<void> {
     this.mcpRegistration?.dispose()
     this.mcpRegistration = undefined
     if (this.server) {
-      this.server.close()
+      const server = this.server
+      await new Promise<void>((resolve) => server.close(() => resolve()))
       this.server = null
       this.port = 0
       this.outputChannel.appendLine('[mcp-proxy] Stopped')
     }
+  }
+
+  /**
+   * Restart the proxy on whatever port `jl4.mcpPort` currently
+   * resolves to. Used when the user changes the port setting at
+   * runtime — without restart the old socket stays bound and the
+   * VS Code MCP registration keeps the stale URL.
+   */
+  async restart(): Promise<void> {
+    await this.stop()
+    await this.start()
+  }
+
+  dispose(): void {
+    // Fire-and-forget on dispose — VS Code doesn't await disposables
+    // and a hanging close() shouldn't block shutdown.
+    void this.stop()
   }
 }

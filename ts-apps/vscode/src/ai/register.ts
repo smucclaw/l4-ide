@@ -245,6 +245,7 @@ export function registerAiChatHandlers(deps: {
           conversationId: event.conversationId,
           tool: event.tool,
           status: event.status,
+          label: event.label,
           message: event.message,
           input: event.input,
           output: event.output,
@@ -263,6 +264,8 @@ export function registerAiChatHandlers(deps: {
           status: event.status,
           result: event.result,
           errorMessage: event.error,
+          ruleFnName: event.ruleFnName,
+          deploymentId: event.deploymentId,
         })
         break
       case 'turn-spawn':

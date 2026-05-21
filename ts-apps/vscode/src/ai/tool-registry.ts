@@ -17,7 +17,7 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
     function: {
       name: 'fs__read_file',
       description:
-        'Read a file or list a directory, one line per entry. Response prefixed with `[<path> <start>-<end>/<total>]` (or `[<path> pattern="…" matches=N chunks=K/M]` with `pattern`); when `<end> < <total>` more lines remain — call again with `startLine=<end>+1`. Hard cap 100 lines / 4000 chars per call. Directories: `name/` for subdirs, directories first. `.git`, `node_modules`, `.DS_Store` hidden.',
+        'Read a file or list a directory, one line per entry. Response prefixed with `[<path> <start>-<end>/<total>]` (or `[<path> pattern="…" matches=N chunks=K/M]` with `pattern`); when `<end> < <total>` more lines remain — call again with `startLine=<end>+1`. Hard cap 500 lines / 4000 chars per call. Directories: `name/` for subdirs, directories first. `.git`, `node_modules`, `.DS_Store` hidden.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -29,7 +29,7 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
           startLine: { type: 'number', description: '1-based, default 1.' },
           endLine: {
             type: 'number',
-            description: '1-based inclusive, default startLine+99.',
+            description: '1-based inclusive, default startLine+499.',
           },
           pattern: {
             type: 'string',
@@ -46,7 +46,7 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
     function: {
       name: 'fs__create_file',
       description:
-        'Create a file seeded with a single line "// new file content". Fails if the file already exists. To fill it, follow up with fs__edit_file.',
+        'Create a file seeded with a single line `// new file content`. Fails if the file already exists. To fill it, follow up with fs__edit_file calls: the first replaces the seed line with the initial content; further calls add more sections incrementally. Do NOT try to write the whole file in one giant edit — split into smaller chunks (see fs__edit_file).',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -62,7 +62,7 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
     function: {
       name: 'fs__edit_file',
       description:
-        'String-anchored find/replace. Without `startLine`, `old` must appear in the file EXACTLY ONCE — include surrounding context lines if the natural snippet repeats. With `startLine`, the first occurrence after that line is taken. Pass `old: ""` to replace the ENTIRE file with `new` — use this right after fs__create_file to fill the new file with content.',
+        'String-anchored find/replace. Without `startLine`, `old` must appear in the file EXACTLY ONCE — include surrounding context lines if the natural snippet repeats. With `startLine`, the first occurrence after that line is taken. **`old` must be a non-empty anchor; whole-file replacement is not supported.** For a freshly-created file, anchor the first edit on the seed line `// new file content`, then add more content via further fs__edit_file calls. **Prefer smaller edits — tens of lines per call.** A single edit with a huge `new` payload risks the model hitting max_tokens mid-stream, leaving the file untouched; multiple smaller edits sidestep that entirely.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -71,7 +71,7 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
           old: {
             type: 'string',
             description:
-              'Exact text to replace. Must be unique in the file unless `startLine` is set. Pass an empty string ("") to overwrite the entire file with `new`.',
+              'Exact non-empty text to replace. Must be unique in the file unless `startLine` is set. Empty string is rejected — split big rewrites into multiple smaller fs__edit_file calls.',
           },
           new: {
             type: 'string',
