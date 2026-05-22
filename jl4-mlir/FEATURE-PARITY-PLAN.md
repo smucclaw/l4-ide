@@ -212,33 +212,74 @@ results ([ValueLazy.hs:271-273](../jl4-core/src/L4/Evaluate/ValueLazy.hs)). So
 parity = "compute exactly in rational, round to Double at the end exactly as
 jl4-service does," not "emit rationals on the wire."
 
-Recommended approach — **boxed rationals**:
+**DECISION (locked): MLIR is the sole engine.** So full exact numbers are
+mandatory — no f64 fast path to fall back to, no hybrid routing.
 
-- Represent `NUMBER` as a pointer to a `(numerator, denominator)` bignum pair in
-  linear memory; arithmetic via runtime imports (`__l4_rat_add`, `_sub`, `_mul`,
-  `_div`, `_cmp`, …). Comparison/equality on exact values; `__l4_to_string` and
-  the response marshaler do the final `fromRational → Double` exactly like
-  jl4-core.
-- This abandons the "NUMBER = f64 identity" property that makes the ABI fast,
-  but only for _arithmetic_. The speedup has two independent sources:
-  (1) eliminating the tree-walking interpreter + GHC RTS, and (2) native f64
-  math. Boxed rationals cost (2) for arithmetic-heavy code but keep (1) entirely
-  — so the WASM path still beats both the native Haskell interpreter and the
-  eval-core-as-WASM option (which carries the GHC RTS compiled into WASM). A
-  logic/control-flow-bound rule keeps most of its win; only a money-math-bound
-  rule regresses toward "bignum-arithmetic speed" (still no interpreter, just
-  non-free `__l4_rat_*` calls with allocation + gcd). Booleans/enums/pointers
-  keep the existing boxing.
+### Architecture: BigInt-backed rationals in the runtime (not linear memory)
 
-Alternatives to weigh (see Decisions):
+Matching jl4-core's `Rational` requires _arbitrary precision_ (numerator and
+denominator grow unbounded under repeated `+`/`*`). Bignums don't live naturally
+in wasm linear memory, but the proxy runs Node — which has `BigInt`. So:
 
-- **Hybrid exact-mode:** keep f64 as default; compile a rational variant only
-  for deployments/functions flagged exact (e.g. anything doing money math).
-- **Accept f64 + document divergence**, and route exact-required functions to
-  the fallback engine. Cheapest, but means MLIR is not a full replacement.
+- `NUMBER` becomes an opaque **handle**: an integer index into a per-call
+  JS-side table of `{ num: BigInt, den: BigInt }` (normalised, `den > 0`,
+  `gcd == 1`). The handle is boxed across the ABI exactly like a pointer
+  (integer → f64 bit-pattern). Booleans/enums/strings/records keep their
+  current boxing.
+- All arithmetic is runtime imports — `__l4_rat_add/_sub/_mul/_div/_neg/_cmp`,
+  plus the numeric builtins (`min/max/abs/floor/ceil/round/pow/...`) — computed
+  exactly in `BigInt`. The handle table resets each call alongside the heap.
+- **Consequence (locks an M7 choice):** putting arithmetic in JS `BigInt` ties
+  the eval runtime to Node, so M7 isolation = Node `worker_threads` with
+  terminate-on-timeout, **not** out-of-process wasmtime. Accepted.
 
-Files: `src/L4/MLIR/ABI.hs` (numeric box kind), `src/L4/MLIR/Lower.hs` (all
-arithmetic lowering), `runtime/jl4-runtime.mjs` (bignum rational lib + marshal).
+### Three parity sub-problems (all must be exact)
+
+1. **Exact arithmetic** — `BigInt` rational ops. Straightforward; the only
+   subtlety is normalising (gcd + sign) after every op.
+2. **Output: rational → Double** — jl4-core renders a non-integer result as
+   `fromRational r :: Double` (integers go through the `Integer` path and are
+   emitted exactly, _not_ as Double). `fromRational` is **round-half-to-even**
+   (IEEE default), same as CPython's `long_true_divide` / `float(Fraction)`.
+   The correct BigInt formulation: scale so the quotient mantissa has 53 bits,
+   keep the **exact remainder**, and round with `2·rem vs den` (`>` up; `==`
+   ties-to-even). The exact remainder subsumes guard+sticky, so this is
+   provably correctly-rounded. **Validation oracle:** for operands `< 2^53`,
+   JS `Number(n)/Number(d)` is itself correctly-rounded RNE — brute-check the
+   BigInt path against thousands of random rationals.
+3. **Output: Double → string** — _already matches._ Aeson encodes `Double` via
+   bytestring `doubleDec` = **Ryu (shortest round-trip)**; JS `Number.toString`
+   is spec-mandated shortest round-trip too, so the digits agree (this is why
+   M0 is already byte-identical on fractional outputs). Residual risk: the
+   scientific-notation threshold — validate empirically, normalise if needed.
+4. **Input: JSON number → rational** — jl4-core parses a JSON number to
+   `Scientific` then `toRational`, so `0.1` becomes exactly `1/10`. JS parses
+   `0.1` to the _Double_ `0.1` (≈`0.1000000000000000055`); `toRational` of that
+   diverges. Fix: parse request-body number literals from their **decimal text**
+   (not the parsed Double) into an exact rational. Affects fractional inputs
+   only — integer inputs are exact either way.
+
+### Slices
+
+- **Slice 1 — DONE (pure JS, no ABI change):** `runtime/rational.mjs` — BigInt
+  rational core (`makeRat`, add/sub/mul/div/neg/cmp, normalise) + correctly-
+  rounded `ratToDouble` + `ratToJSONValue` (integer vs Double path) + handle
+  pool. 23 tests in `runtime/rational.test.mjs` pass, including: exact
+  arithmetic (`1/10+2/10 == 3/10`, not f64 `0.30000000000000004`); ties-to-even;
+  the M0 divergence case `199/12000 → 0.016583333333333332` (matching
+  jl4-service, fixing the f64 `…335`); and **20,000 random rationals** verified
+  against the `Number(n)/Number(d)` correctly-rounded oracle. Sub-problems 1+2
+  de-risked.
+- **Slice 2:** ABI/lowering — `NUMBER` box kind becomes a handle; route every
+  arithmetic op + numeric builtin + literal through the runtime; final marshal
+  renders via `ratToDouble`/integer path.
+- **Slice 3:** input decimal→rational parsing in the request marshaler.
+- Gate each slice on the M0 harness: watch `ulp-differs` cells flip to
+  `byte-identical`.
+
+Files: `runtime/rational.mjs` (new), `runtime/jl4-runtime.mjs` (wire in),
+`src/L4/MLIR/ABI.hs` (numeric box kind = handle), `src/L4/MLIR/Lower.hs` (all
+arithmetic/literal/builtin lowering → runtime calls).
 
 ---
 
