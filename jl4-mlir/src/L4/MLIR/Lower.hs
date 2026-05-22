@@ -13,6 +13,7 @@ module L4.MLIR.Lower
   ( lowerModule
   , lowerProgram
   , lowerProgramWithInfo
+  , lowerProgramWithDiagnostics
   , dedupAndSynthExterns
   ) where
 
@@ -86,6 +87,19 @@ data LowerState = LowerState
     -- Non-exported DECIDEs aren't in this map, so they fall back to
     -- the original extern-based ASSUME model.
   , exportAssumeArgs :: Map Text [(Resolved, Type' Resolved)]
+    -- | The function currently being lowered, as its sanitized WASM
+    -- symbol name (matching 'Schema.wasmSymbol'). Set by 'lowerDecide'
+    -- so 'markUnsupported' can attribute a diagnostic to the right
+    -- export. 'Nothing' outside any function body.
+  , currentFunction :: Maybe Text
+    -- | Per-function diagnostics: sanitized WASM symbol name → reasons
+    -- the function cannot be faithfully compiled (e.g. it contains a
+    -- regulative/deontic/IO construct the backend doesn't support). The
+    -- pipeline threads these into the schema so flagged functions are
+    -- marked @supported: false@ and routed to a fallback evaluator
+    -- instead of silently returning FALSE. Empty ⇒ everything lowered
+    -- cleanly.
+  , diagnostics :: Map Text [Text]
   }
 
 type LowerM a = State LowerState a
@@ -108,6 +122,8 @@ initState info = LowerState
   , sourceTypeMap = info
   , localCaptures = Map.empty
   , exportAssumeArgs = Map.empty
+  , currentFunction = Nothing
+  , diagnostics = Map.empty
   }
 
 -- | Look up the ground-truth type for an expression using the typechecker's
@@ -292,6 +308,25 @@ internString str = do
         }
       pure name
 
+-- | Record that the function currently being lowered contains a
+-- construct the MLIR backend cannot faithfully compile, then emit a
+-- uniform-ABI FALSE (0.0) so the IR stays well-formed.
+--
+-- This is the difference between *silent* and *loud* degradation: the
+-- old behaviour emitted 0.0 with no record, so a deployment containing
+-- (say) a deontic rule compiled "successfully" and returned a wrong
+-- FALSE answer. Now the enclosing function is flagged (keyed by its
+-- sanitized WASM symbol, matching 'Schema.wasmSymbol') and the pipeline
+-- marks the schema export @supported: false@ so the proxy routes it to
+-- a fallback evaluator. See FEATURE-PARITY-PLAN.md (M1a).
+markUnsupported :: Text -> LowerM Value
+markUnsupported reason = do
+  mfn <- gets (.currentFunction)
+  forM_ mfn $ \fn ->
+    modify' $ \s ->
+      s { diagnostics = Map.insertWith (\new old -> old ++ new) fn [reason] s.diagnostics }
+  emitVal $ \vid -> arithConstantFloat vid 0.0
+
 -- ---------------------------------------------------------------------------
 -- Module lowering
 -- ---------------------------------------------------------------------------
@@ -317,6 +352,19 @@ lowerProgram = lowerProgramWithInfo IV.empty
 -- 'TypeCheckResult' should pass its @infoMap@ field here.
 lowerProgramWithInfo :: InfoMap -> Module Resolved -> [Module Resolved] -> MLIRModule
 lowerProgramWithInfo info mainMod deps =
+  fst (lowerProgramWithDiagnostics info mainMod deps)
+
+-- | Like 'lowerProgramWithInfo' but also returns the per-function
+-- lowering diagnostics — a map from sanitized WASM symbol name to the
+-- reasons that function cannot be faithfully compiled (unsupported
+-- regulative/IO/lambda constructs). An empty map means every function
+-- lowered cleanly. The pipeline threads these into the schema so the
+-- proxy can mark exports @supported: false@ and route them to a
+-- fallback evaluator instead of trusting a WASM module that would
+-- silently return FALSE.
+lowerProgramWithDiagnostics
+  :: InfoMap -> Module Resolved -> [Module Resolved] -> (MLIRModule, Map Text [Text])
+lowerProgramWithDiagnostics info mainMod deps =
   let mainNames = collectLocalNames mainMod
       exportArgs = collectExportAssumeArgs mainMod
       initial = (initState info) { exportAssumeArgs = exportArgs }
@@ -325,7 +373,7 @@ lowerProgramWithInfo info mainMod deps =
         lowerModuleDecls mainMod
         ) initial
       rawOps = reverse finalState.globals ++ reverse finalState.functions
-  in MLIRModule { moduleOps = rawOps }
+  in (MLIRModule { moduleOps = rawOps }, finalState.diagnostics)
 
 -- | For every @\@export@-decorated DECIDE in the main module, collect the
 -- ASSUME declarations it references. These get promoted to function-level
@@ -784,6 +832,11 @@ lowerDecide (MkDecide _ typeSig appForm body) = do
       givenParams = appFormParams appForm
       (givenArgTypes, sigRetType) = sigToTypesEnv env typeSig
       listElemTys = listElementsFromSig env typeSig
+  -- Attribute any unsupported-construct diagnostics raised while lowering
+  -- this body to this function. Saved/restored so a WHERE/LET helper that
+  -- recurses through 'lowerDecide' doesn't leak its name back to us.
+  oldCurrentFn <- gets (.currentFunction)
+  modify' $ \s -> s { currentFunction = Just funcName }
   -- If this DECIDE is @export-decorated and references ASSUMEs, those
   -- ASSUMEs become additional ABI parameters (see 'collectExportAssumeArgs').
   -- They're appended after the GIVEN params so existing call sites for
@@ -849,6 +902,8 @@ lowerDecide (MkDecide _ typeSig appForm body) = do
           region
 
     modify' $ \s -> s { functions = funcOp : s.functions }
+
+  modify' $ \s -> s { currentFunction = oldCurrentFn }
 
 -- | Extract argument types and return type from a type signature.
 sigToTypesEnv :: TypeEnv -> TypeSig Resolved -> ([MLIRType], MLIRType)
@@ -1332,14 +1387,16 @@ lowerExpr expr expectedTy = case expr of
     InertCtxOr   -> emitVal $ \vid -> arithConstantFloat vid 0.0
     InertCtxNone -> emitVal $ \vid -> arithConstantFloat vid 1.0
 
-  -- Regulative / side-effectful / IO constructs aren't compiled — they
-  -- return a uniform-ABI FALSE (0.0).
-  Regulative{} -> emitVal $ \vid -> arithConstantFloat vid 0.0
-  Event{}      -> emitVal $ \vid -> arithConstantFloat vid 0.0
-  Fetch{}      -> emitVal $ \vid -> arithConstantFloat vid 0.0
-  Post{}       -> emitVal $ \vid -> arithConstantFloat vid 0.0
-  Env{}        -> emitVal $ \vid -> arithConstantFloat vid 0.0
-  Breach{}     -> emitVal $ \vid -> arithConstantFloat vid 0.0
+  -- Regulative / event / IO constructs cannot be faithfully compiled to
+  -- the pure-function WASM ABI: they need the interpreter's temporal
+  -- event-replay + obligation model (see FEATURE-PARITY-PLAN.md M6).
+  -- Flag the enclosing function rather than silently emitting FALSE.
+  Regulative{} -> markUnsupported "REGULATIVE (deontic) construct not supported by the WASM backend"
+  Event{}      -> markUnsupported "EVENT construct not supported by the WASM backend"
+  Fetch{}      -> markUnsupported "FETCH (IO) not supported by the WASM backend"
+  Post{}       -> markUnsupported "POST (IO) not supported by the WASM backend"
+  Env{}        -> markUnsupported "ENV not supported by the WASM backend"
+  Breach{}     -> markUnsupported "BREACH (deontic) construct not supported by the WASM backend"
 
   -- Exponent
   Exponent _ base exp_ -> do
@@ -1838,10 +1895,10 @@ extendTypeSigWith extras (MkTypeSig ann (MkGivenSig gAnn ps) mGiv) =
 
 -- | Lower a lambda expression.
 lowerLambda :: GivenSig Resolved -> Expr Resolved -> MLIRType -> LowerM Value
-lowerLambda (MkGivenSig _ _params) _body _expectedTy = do
-  -- For now, lambdas that appear in L4 are rare and typically get
-  -- inlined by the evaluator. Emit as a local function.
-  emitVal $ \vid -> arithConstantFloat vid 0.0  -- placeholder
+lowerLambda (MkGivenSig _ _params) _body _expectedTy =
+  -- Lambdas aren't lowered yet (higher-order support is incomplete). Flag
+  -- the enclosing function instead of silently emitting FALSE.
+  markUnsupported "lambda / higher-order function not supported by the WASM backend"
 
 -- | Lower a multi-way if (BRANCH ... WHEN guard THEN expr).
 lowerMultiWayIf :: [GuardedExpr Resolved] -> Expr Resolved -> MLIRType -> LowerM Value

@@ -303,10 +303,26 @@ export function createRuntime() {
       __l4_floor: Math.floor,
       __l4_ceil: Math.ceil,
       __l4_round: Math.round,
-      __l4_str_concat: (a) => a,
-      __l4_str_eq: (a, b) => (a === b ? 1 : 0),
-      __l4_str_len: () => 0,
-      __l4_to_string: () => 0,
+      // Strings are NUL-terminated UTF-8 in linear memory, boxed as the
+      // f64 bit-pattern of their pointer. concat allocates a fresh buffer;
+      // the per-call heap reset means we never need to free it.
+      __l4_str_concat: (aF, bF) =>
+        u64ToF64(
+          writeString(
+            readCString(Number(f64ToU64(aF))) +
+              readCString(Number(f64ToU64(bF))),
+          ),
+        ),
+      // Content equality — NOT pointer equality. Two equal strings at
+      // different addresses (e.g. concat results) must compare equal.
+      __l4_str_eq: (aF, bF) =>
+        readCString(Number(f64ToU64(aF))) === readCString(Number(f64ToU64(bF)))
+          ? 1
+          : 0,
+      __l4_str_len: (sF) => readCString(Number(f64ToU64(sF))).length,
+      // NUMBER → STRING. Matches jl4-core's rendering: integer-valued
+      // numbers print with no decimal point, others as a shortest decimal.
+      __l4_to_string: (vF) => u64ToF64(writeString(String(Number(vF)))),
       __l4_list_count: (ptrF) => {
         let n = 0,
           p = Number(f64ToU64(ptrF));

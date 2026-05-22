@@ -15,8 +15,8 @@ import L4.MLIR.Dialect.Func
 import L4.MLIR.Dialect.Arith
 import L4.MLIR.Dialect.SCF
 import L4.MLIR.Runtime.Builtins (builtinDeclarations)
-import L4.MLIR.Lower (lowerProgramWithInfo)
-import L4.MLIR.Schema (bundleExports, encodeBundle)
+import L4.MLIR.Lower (lowerProgramWithInfo, lowerProgramWithDiagnostics)
+import L4.MLIR.Schema (bundleExports, applyDiagnostics, encodeBundle)
 
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Text.Encoding as TE
@@ -36,6 +36,10 @@ main = do
     , test "@export ASSUMEs become args"       testExportAssumePromotion
     , test "internal callers fill via extern"  testInternalCallFillsAssumes
     , test "schema picks up imported DECLAREs" testSchemaUsesImportedDeclares
+    , test "deontic fn flagged unsupported"    testDeonticFlaggedUnsupported
+    , test "plain fn stays supported"          testPlainFunctionSupported
+    , test "state graph baked into schema"     testStateGraphBaked
+    , test "no state graph for plain fn"       testNoStateGraphForPlainFn
     ]
   if and results
     then do
@@ -152,6 +156,108 @@ lowerSource src =
   case checkWithImports emptyVFS src of
     Left errs -> Left errs
     Right r -> Right (renderMLIR (lowerProgramWithInfo r.tcdInfoMap r.tcdModule []))
+
+-- | Lower a source and render its schema JSON *with* per-function
+-- lowering diagnostics applied (the @supported@ / @unsupportedReason@
+-- flags). Mirrors what 'L4.MLIR.Pipeline' does.
+schemaWithDiagnostics :: T.Text -> Either [T.Text] T.Text
+schemaWithDiagnostics src =
+  case checkWithImports emptyVFS src of
+    Left errs -> Left errs
+    Right r ->
+      let (_mlir, diags) = lowerProgramWithDiagnostics r.tcdInfoMap r.tcdModule []
+          bundle = applyDiagnostics diags (bundleExports "test.wasm" "test" r.tcdModule [])
+      in Right (TE.decodeUtf8 (LBS.toStrict (encodeBundle bundle)))
+
+-- | A DEONTIC/regulative function can't be faithfully compiled, so the
+-- schema must mark it @supported: false@ with a reason — rather than the
+-- old behaviour of silently lowering the body to FALSE. (M1a)
+testDeonticFlaggedUnsupported :: IO Bool
+testDeonticFlaggedUnsupported = do
+  let src = T.unlines
+        [ "DECLARE Party IS ONE OF `alice`"
+        , "DECLARE Action IS ONE OF `pay`"
+        , ""
+        , "@export Demo obligation"
+        , "GIVETH A DEONTIC OF Party, Action"
+        , "`demo` MEANS"
+        , "    PARTY `alice`"
+        , "    MUST `pay`"
+        , "    WITHIN 10"
+        , "    HENCE FULFILLED"
+        ]
+  case schemaWithDiagnostics src of
+    Left errs -> do
+      putStrLn $ "\n    typecheck failed: " <> show errs
+      pure False
+    Right json ->
+      pure $ T.isInfixOf "\"supported\":false" json
+          && T.isInfixOf "not supported by the WASM backend" json
+
+-- | A plain decidable function lowers cleanly, so it must stay
+-- @supported: true@ and emit no unsupported flag. (M1a negative control)
+testPlainFunctionSupported :: IO Bool
+testPlainFunctionSupported = do
+  let src = T.unlines
+        [ "@export Adult check"
+        , "GIVEN `age` IS A NUMBER"
+        , "GIVETH A BOOLEAN"
+        , "DECIDE `is_adult` IF `age` >= 18"
+        ]
+  case schemaWithDiagnostics src of
+    Left errs -> do
+      putStrLn $ "\n    typecheck failed: " <> show errs
+      pure False
+    Right json ->
+      pure $ T.isInfixOf "\"supported\":true" json
+          && not (T.isInfixOf "\"supported\":false" json)
+
+-- | A top-level regulative function yields a precomputed state graph in
+-- the schema, with Graphviz DOT rendered at compile time by the same
+-- pure function jl4-service uses. (M3)
+testStateGraphBaked :: IO Bool
+testStateGraphBaked = do
+  let src = T.unlines
+        [ "DECLARE Party IS ONE OF `alice`"
+        , "DECLARE Action IS ONE OF `pay`"
+        , ""
+        , "@export Demo obligation"
+        , "GIVETH A DEONTIC OF Party, Action"
+        , "`demo` MEANS"
+        , "    PARTY `alice`"
+        , "    MUST `pay`"
+        , "    WITHIN 10"
+        , "    HENCE FULFILLED"
+        ]
+  case checkWithImports emptyVFS src of
+    Left errs -> do
+      putStrLn $ "\n    typecheck failed: " <> show errs
+      pure False
+    Right r -> do
+      let bundle = bundleExports "test.wasm" "test" r.tcdModule []
+          json = TE.decodeUtf8 (LBS.toStrict (encodeBundle bundle))
+      pure $ T.isInfixOf "\"stateGraphs\"" json
+          && T.isInfixOf "\"name\":\"demo\"" json
+          && T.isInfixOf "digraph" json
+
+-- | A plain (non-regulative) function has no state graph, so the schema
+-- carries an empty stateGraphs array. (M3 negative control)
+testNoStateGraphForPlainFn :: IO Bool
+testNoStateGraphForPlainFn = do
+  let src = T.unlines
+        [ "@export Adult check"
+        , "GIVEN `age` IS A NUMBER"
+        , "GIVETH A BOOLEAN"
+        , "DECIDE `is_adult` IF `age` >= 18"
+        ]
+  case checkWithImports emptyVFS src of
+    Left errs -> do
+      putStrLn $ "\n    typecheck failed: " <> show errs
+      pure False
+    Right r -> do
+      let bundle = bundleExports "test.wasm" "test" r.tcdModule []
+          json = TE.decodeUtf8 (LBS.toStrict (encodeBundle bundle))
+      pure $ T.isInfixOf "\"stateGraphs\":[]" json
 
 -- | Verify that an @export-decorated DECIDE with a referenced ASSUME
 -- emits a function whose argument count matches GIVEN + ASSUME.

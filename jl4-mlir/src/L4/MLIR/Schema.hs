@@ -19,7 +19,9 @@ module L4.MLIR.Schema
   ( -- * Schema bundle
     WasmBundle (..)
   , FunctionExport (..)
+  , StateGraphExport (..)
   , bundleExports
+  , applyDiagnostics
 
     -- * Name sanitization (must match jl4-service)
   , sanitizePropertyName
@@ -47,6 +49,10 @@ import L4.Syntax
   , rawName, rawNameToText, getActual, getUnique
   )
 import L4.Export (ExportedFunction(..), ExportedParam(..), getExportedFunctions)
+import L4.StateGraph
+  ( extractStateGraphs, stateGraphToDot, defaultStateGraphOptions
+  , StateGraph(..)
+  )
 import L4.FunctionSchema
   ( Parameters(..), Parameter(..), declaresFromModule, typeToParameter
   )
@@ -70,6 +76,13 @@ data FunctionExport = FunctionExport
   , returnType  :: !Text           -- ^ Display string (e.g., "NUMBER", "BOOLEAN", "DEONTIC")
   , isDeontic   :: !Bool
   , paramOrder  :: ![Text]         -- ^ API names in declaration order (for positional marshal)
+  , supported   :: !Bool           -- ^ Can the WASM module faithfully evaluate this function?
+  , unsupportedReason :: !(Maybe Text)
+    -- ^ When 'supported' is 'False', why — e.g. the body contains a
+    -- regulative/deontic/IO construct the backend can't compile. The
+    -- proxy routes such functions to a fallback evaluator instead of
+    -- calling the WASM. 'Nothing' (and @supported = True@) is the
+    -- normal, fully-compilable case.
   }
 
 -- | Complete schema for a compiled @.wasm@ module.
@@ -77,6 +90,23 @@ data WasmBundle = WasmBundle
   { bundleWasmFile :: !Text        -- ^ Relative path to the .wasm binary
   , bundleVersion  :: !Text        -- ^ Content-derived version hash
   , bundleExports  :: ![FunctionExport]
+  , bundleStateGraphs :: ![StateGraphExport]
+    -- ^ Precomputed state graphs for the module (M3). Empty unless the
+    -- module has regulative rules.
+  }
+
+-- | A precomputed state graph, baked into the schema at compile time.
+--
+-- State graphs are a pure function of the regulative structure of the
+-- AST, so we extract and render them (including the Graphviz DOT) here
+-- — byte-identical to what jl4-service produces at request time via
+-- @StateGraph.stateGraphToDot defaultStateGraphOptions@ — and the proxy
+-- serves the @state-graphs@ routes straight from this, with no runtime
+-- evaluation. State graphs are module-level (keyed by their own name),
+-- exactly as jl4-service treats them.
+data StateGraphExport = StateGraphExport
+  { sgeName :: !Text   -- ^ Graph name (= jl4-service's @StateGraphInfo.graphName@)
+  , sgeDot  :: !Text   -- ^ Graphviz DOT, byte-identical to the service's single-graph route
   }
 
 -- ---------------------------------------------------------------------------
@@ -129,10 +159,19 @@ bundleExports wasmPath version resolvedModule depModules =
   let declares = Map.unions (declaresFromModule resolvedModule
                             : map declaresFromModule depModules)
       exports  = getExportedFunctions resolvedModule
+      -- State graphs are module-level and pure: extract once, render the
+      -- DOT with the same options jl4-service uses so the proxy can serve
+      -- the state-graph routes from the schema. Empty for modules with no
+      -- regulative rules.
+      stateGraphs =
+        [ StateGraphExport sg.sgName (stateGraphToDot defaultStateGraphOptions sg)
+        | sg <- extractStateGraphs resolvedModule
+        ]
   in WasmBundle
        { bundleWasmFile = wasmPath
        , bundleVersion  = version
        , bundleExports  = map (buildExport declares) exports
+       , bundleStateGraphs = stateGraphs
        }
 
 buildExport :: Map Text (Declare Resolved) -> ExportedFunction -> FunctionExport
@@ -162,7 +201,40 @@ buildExport declares ef =
        , returnType  = returnTypeDisplay ef.exportReturnType
        , isDeontic   = isDeonticFn
        , paramOrder  = paramOrder_
+       -- Assume compilable; 'applyDiagnostics' downgrades functions the
+       -- lowering flagged as unsupported.
+       , supported   = True
+       , unsupportedReason = Nothing
        }
+
+-- ---------------------------------------------------------------------------
+-- Diagnostics — mark functions the lowering couldn't faithfully compile
+-- ---------------------------------------------------------------------------
+
+-- | Downgrade schema exports according to per-function lowering
+-- diagnostics, keyed by sanitized WASM symbol name (matching
+-- 'wasmSymbol'). A flagged function stays in the schema — so the proxy
+-- still sees it exists and can serve its read-only metadata — but
+-- @supported = False@ tells the proxy to route evaluation to a fallback
+-- engine rather than the WASM module, which cannot evaluate it
+-- correctly. Functions absent from the map are left untouched.
+applyDiagnostics :: Map Text [Text] -> WasmBundle -> WasmBundle
+applyDiagnostics diags wb =
+  wb { bundleExports = map mark wb.bundleExports }
+  where
+    mark fe = case Map.lookup fe.wasmSymbol diags of
+      Nothing      -> fe
+      Just reasons -> fe
+        { supported = False
+        , unsupportedReason = Just (Text.intercalate "; " (uniq reasons))
+        }
+    -- De-duplicate while preserving first-seen order.
+    uniq = go Set.empty
+      where
+        go _ [] = []
+        go seen (r : rs)
+          | r `Set.member` seen = go seen rs
+          | otherwise           = r : go (Set.insert r seen) rs
 
 -- | Convert an ExportedParam to a FunctionSchema Parameter entry.
 buildParamsFromExported :: Map Text (Declare Resolved) -> [ExportedParam] -> Parameters
@@ -289,6 +361,8 @@ instance Aeson.ToJSON FunctionExport where
     , "returnType"  .= fe.returnType
     , "isDeontic"   .= fe.isDeontic
     , "paramOrder"  .= fe.paramOrder
+    , "supported"   .= fe.supported
+    , "unsupportedReason" .= fe.unsupportedReason
     ]
 
 instance Aeson.FromJSON FunctionExport where
@@ -300,6 +374,14 @@ instance Aeson.FromJSON FunctionExport where
     <*> o .:? "returnType"  .!= "unknown"
     <*> o .:? "isDeontic"   .!= False
     <*> o .:? "paramOrder"  .!= []
+    <*> o .:? "supported"   .!= True
+    <*> o .:? "unsupportedReason"
+
+instance Aeson.ToJSON StateGraphExport where
+  toJSON sge = Aeson.object
+    [ "name" .= sge.sgeName
+    , "dot"  .= sge.sgeDot
+    ]
 
 instance Aeson.ToJSON WasmBundle where
   toJSON wb = Aeson.object
@@ -309,6 +391,7 @@ instance Aeson.ToJSON WasmBundle where
         [ (Aeson.Key.fromText fe.apiName, Aeson.toJSON fe)
         | fe <- wb.bundleExports
         ]
+    , "stateGraphs" .= wb.bundleStateGraphs
     ]
 
 encodeBundle :: WasmBundle -> LBS.ByteString
