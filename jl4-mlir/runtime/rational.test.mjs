@@ -1,8 +1,10 @@
-// Tests for the exact rational core (M4 slice 1). Pure JS, no toolchain.
+// Tests for the exact rational core (M4 slice 1) and the rational ABI imports
+// (slice 2a). Pure JS, no toolchain.
 //
 //   node runtime/rational.test.mjs
 
 import {
+  createRuntime,
   makeRat,
   fromInt,
   ratAdd,
@@ -13,7 +15,8 @@ import {
   ratCmp,
   ratToDouble,
   ratToJSONValue,
-} from "./rational.mjs";
+  ratFromDecimalString,
+} from "./jl4-runtime.mjs";
 
 let pass = 0;
 let fail = 0;
@@ -102,6 +105,46 @@ eq(
   2 ** 53 + 4,
 );
 
+// ---- ratFromDecimalString: exact decimal parsing (no Double round-trip) ----
+{
+  const r = ratFromDecimalString("0.1");
+  ok("0.1 -> 1/10 exactly", r.num === 1n && r.den === 10n);
+}
+{
+  const r = ratFromDecimalString("-0.001");
+  ok("-0.001 -> -1/1000", r.num === -1n && r.den === 1000n);
+}
+{
+  const r = ratFromDecimalString("2.5e-3");
+  ok("2.5e-3 -> 1/400", r.num === 1n && r.den === 400n);
+}
+{
+  const r = ratFromDecimalString("42");
+  ok("42 -> 42/1", r.num === 42n && r.den === 1n);
+}
+{
+  const r = ratFromDecimalString("1.50");
+  ok("1.50 -> 3/2", r.num === 3n && r.den === 2n);
+}
+ok(
+  "0.1+0.2 via decimal parse == 3/10 (not f64)",
+  (() => {
+    const s = ratAdd(ratFromDecimalString("0.1"), ratFromDecimalString("0.2"));
+    return s.num === 3n && s.den === 10n;
+  })(),
+);
+ok(
+  "bad decimal throws",
+  (() => {
+    try {
+      ratFromDecimalString("1.2.3");
+      return false;
+    } catch {
+      return true;
+    }
+  })(),
+);
+
 // ---- random oracle: for operands < 2^53, Number(n)/Number(d) is itself
 //      correctly-rounded RNE, so it's an exact reference. ----
 {
@@ -136,6 +179,45 @@ eq(
     mism === 0,
     `(${mism} mismatches)`,
   );
+}
+
+// ---- slice 2a: the __l4_rat_* runtime imports (handles boxed across ABI) ----
+{
+  const rt = createRuntime();
+  rt.attachMemory(new WebAssembly.Memory({ initial: 2 }));
+  const { env } = rt.makeImports();
+  // intern a decimal literal string in linear memory and box its pointer
+  const litF = (s) => rt.u64ToF64(rt.writeString(s));
+  const parse = (s) => env.__l4_rat_parse(litF(s));
+
+  // 0.1 + 0.2 == 0.3 exactly (the canonical f64 failure)
+  const sum = env.__l4_rat_add(parse("0.1"), parse("0.2"));
+  eq("ABI: 0.1+0.2 -> 0.3", env.__l4_rat_to_f64(sum), 0.3);
+
+  // (1/3) computed as 1 / 3, then * 3 == 1
+  const third = env.__l4_rat_div(
+    env.__l4_rat_from_int(1),
+    env.__l4_rat_from_int(3),
+  );
+  const back = env.__l4_rat_mul(third, env.__l4_rat_from_int(3));
+  eq("ABI: (1/3)*3 -> 1", env.__l4_rat_to_f64(back), 1);
+
+  eq("ABI: cmp 0.1 vs 0.2", env.__l4_rat_cmp(parse("0.1"), parse("0.2")), -1);
+  eq(
+    "ABI: sub 0.3-0.1 -> 0.2",
+    env.__l4_rat_to_f64(env.__l4_rat_sub(parse("0.3"), parse("0.1"))),
+    0.2,
+  );
+  eq("ABI: neg", env.__l4_rat_to_f64(env.__l4_rat_neg(parse("1.75"))), -1.75);
+  // f64<->rat shim round-trips
+  eq(
+    "ABI: f64->rat->f64",
+    env.__l4_rat_to_f64(env.__l4_f64_to_rat(1.25)),
+    1.25,
+  );
+  // handles survive a resetHeap (new call) — pool cleared, fresh handles work
+  rt.resetHeap();
+  eq("ABI: after reset, parse works", env.__l4_rat_to_f64(parse("2.5")), 2.5);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

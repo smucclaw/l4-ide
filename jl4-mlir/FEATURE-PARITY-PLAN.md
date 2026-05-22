@@ -270,9 +270,21 @@ in wasm linear memory, but the proxy runs Node — which has `BigInt`. So:
   jl4-service, fixing the f64 `…335`); and **20,000 random rationals** verified
   against the `Number(n)/Number(d)` correctly-rounded oracle. Sub-problems 1+2
   de-risked.
-- **Slice 2:** ABI/lowering — `NUMBER` box kind becomes a handle; route every
-  arithmetic op + numeric builtin + literal through the runtime; final marshal
-  renders via `ratToDouble`/integer path.
+- **Slice 2a — DONE (runtime ABI, dormant):** the rational core is inlined into
+  `runtime/jl4-runtime.mjs` (single embedded source, so the `jl4-mlir run` CLI —
+  which bakes the runtime in via Template Haskell and runs it through `node -e` —
+  stays self-contained with no extra imports). Added a per-call rational pool +
+  `__l4_rat_parse/_from_int/_add/_sub/_mul/_div/_neg/_cmp/_to_f64/_f64_to_rat`
+  imports operating on f64-boxed handles. Dormant until the lowering emits them,
+  so existing eval is untouched: 37 rational/ABI + 14 string tests pass,
+  `jl4-mlir run` verified (`calculate-bonus → 25000`), and the parity harness is
+  unchanged (gate PASS). `runtime/rational.test.mjs` now also exercises the
+  imports end-to-end (`0.1+0.2 → 0.3` through `__l4_rat_*`).
+- **Slice 2b — next:** the lowering itself. `NUMBER` box kind becomes a handle;
+  route every numeric literal (→ `__l4_rat_parse` of the interned decimal),
+  arithmetic op (`arith.addf`→`__l4_rat_add`, etc.), comparison
+  (`arith.cmpf`→`__l4_rat_cmp`), and numeric builtin through the runtime; final
+  marshal renders via `ratToJSONValue`. This is the invasive multi-week core.
 - **Slice 3:** input decimal→rational parsing in the request marshaler.
 - Gate each slice on the M0 harness: watch `ulp-differs` cells flip to
   `byte-identical`.

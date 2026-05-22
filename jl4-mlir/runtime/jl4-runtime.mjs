@@ -6,8 +6,175 @@
 // HTTP wrapper just `import`s `createRuntime` like any other ES module.
 //
 // Everything below is deliberately a single factory function so nothing
-// lives on the module top level — state (heap pointer, memory views,
-// etc.) is scoped per instantiation.
+// stateful lives on the module top level — state (heap pointer, memory
+// views, rational pool, etc.) is scoped per instantiation. The exception
+// is the stateless exact-rational core (M4), kept at module level so the
+// `jl4-mlir run` CLI — which embeds THIS file verbatim and concatenates a
+// launcher — stays a single self-contained source with no extra imports.
+
+// ===========================================================================
+// Exact rational core (M4) — matches jl4-core's arbitrary-precision Rational.
+// Pure, stateless, BigInt-backed. Unit-tested in rational.test.mjs.
+// ===========================================================================
+
+function bgcd(a, b) {
+  if (a < 0n) a = -a;
+  if (b < 0n) b = -b;
+  while (b) {
+    [a, b] = [b, a % b];
+  }
+  return a;
+}
+
+// Build a normalised rational {num, den}, den > 0, gcd(num,den) == 1.
+export function makeRat(num, den) {
+  if (den === 0n) throw new Error("rational: zero denominator");
+  if (den < 0n) {
+    num = -num;
+    den = -den;
+  }
+  if (num === 0n) return { num: 0n, den: 1n };
+  const g = bgcd(num, den);
+  return { num: num / g, den: den / g };
+}
+
+export const fromInt = (i) => ({ num: BigInt(i), den: 1n });
+
+// Parse a decimal literal exactly (no Double round-trip): "123", "1.5",
+// "-0.001", "2.5e-3". This is how both numeric literals (lowering) and JSON
+// number inputs must become rationals so 0.1 is exactly 1/10, matching
+// jl4-core's `Scientific -> toRational` (not the Double 0.1000…0055).
+export function ratFromDecimalString(s) {
+  const str = String(s).trim();
+  const m = /^([+-]?)(\d*)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$/.exec(str);
+  if (!m || (m[2] === "" && (m[3] || "") === "")) {
+    throw new Error("rational: bad decimal literal " + JSON.stringify(s));
+  }
+  const sign = m[1] === "-" ? -1n : 1n;
+  const intPart = m[2] || "0";
+  const frac = m[3] || "";
+  const exp = m[4] ? parseInt(m[4], 10) : 0;
+  let num = BigInt(intPart + frac);
+  let den = 10n ** BigInt(frac.length);
+  if (exp >= 0) num *= 10n ** BigInt(exp);
+  else den *= 10n ** BigInt(-exp);
+  return makeRat(sign * num, den);
+}
+
+export const ratAdd = (a, b) =>
+  makeRat(a.num * b.den + b.num * a.den, a.den * b.den);
+export const ratSub = (a, b) =>
+  makeRat(a.num * b.den - b.num * a.den, a.den * b.den);
+export const ratMul = (a, b) => makeRat(a.num * b.num, a.den * b.den);
+export const ratDiv = (a, b) => {
+  if (b.num === 0n) throw new Error("rational: division by zero");
+  return makeRat(a.num * b.den, a.den * b.num);
+};
+export const ratNeg = (a) => ({ num: -a.num, den: a.den });
+
+// -1 | 0 | 1
+export function ratCmp(a, b) {
+  const l = a.num * b.den;
+  const r = b.num * a.den;
+  return l < r ? -1 : l > r ? 1 : 0;
+}
+
+export const isInteger = (a) => a.den === 1n;
+
+// Exact rational of an IEEE-754 double (every finite double is m·2^e). Used for
+// the f64→rational shim around transcendental builtins (sqrt/ln/sin/…) that are
+// inherently inexact and computed in f64. `ratToDouble(ratFromNumber(x)) === x`.
+export function ratFromNumber(x) {
+  if (!Number.isFinite(x)) throw new Error("rational: non-finite " + x);
+  if (Number.isInteger(x)) return fromInt(BigInt(x));
+  const dv = new DataView(new ArrayBuffer(8));
+  dv.setFloat64(0, x);
+  const bits = dv.getBigUint64(0);
+  const sign = (bits >> 63n) & 1n ? -1n : 1n;
+  const exp = Number((bits >> 52n) & 0x7ffn);
+  const frac = bits & 0xfffffffffffffn;
+  const mant = exp === 0 ? frac : frac | (1n << 52n);
+  const e = exp === 0 ? -1074 : exp - 1075;
+  return e >= 0
+    ? makeRat(sign * mant * (1n << BigInt(e)), 1n)
+    : makeRat(sign * mant, 1n << BigInt(-e));
+}
+
+// Correctly-rounded (round-half-to-even) rational -> IEEE 754 double.
+// Scale so the quotient mantissa has 53 significant bits, keep the EXACT
+// remainder (which subsumes the guard + sticky bits), then round half-to-even
+// using `2*rem vs den`. Provably correctly-rounded; validated against
+// Number(n)/Number(d) (itself correctly-rounded RNE) for operands < 2^53.
+const _bitLen = (x) => (x === 0n ? 0 : x.toString(2).length);
+const _TWO52 = 1n << 52n;
+const _TWO53 = 1n << 53n;
+
+export function ratToDouble(r) {
+  let { num: n, den: d } = r;
+  if (n === 0n) return 0;
+  let sign = 1;
+  if (n < 0n) {
+    sign = -1;
+    n = -n;
+  }
+  let e = _bitLen(n) - _bitLen(d) - 53;
+  const scale = () => (e >= 0 ? [n, d << BigInt(e)] : [n << BigInt(-e), d]);
+  let [num, den] = scale();
+  let mant = num / den;
+  let rem = num % den;
+  if (mant >= _TWO53) {
+    e += 1;
+    [num, den] = scale();
+    mant = num / den;
+    rem = num % den;
+  } else if (mant < _TWO52) {
+    e -= 1;
+    [num, den] = scale();
+    mant = num / den;
+    rem = num % den;
+  }
+  const twice = rem * 2n;
+  if (twice > den || (twice === den && (mant & 1n) === 1n)) {
+    mant += 1n;
+    if (mant === _TWO53) {
+      mant = _TWO52;
+      e += 1;
+    }
+  }
+  return sign * Number(mant) * Math.pow(2, e);
+}
+
+// The JSON value jl4-core would emit: integers exactly (number, or decimal
+// string if outside JS safe-integer range); non-integers as the correctly-
+// rounded Double (which JS serialises shortest-round-trip, matching Aeson Ryu).
+const _MAX_SAFE = BigInt(Number.MAX_SAFE_INTEGER);
+const _MIN_SAFE = BigInt(Number.MIN_SAFE_INTEGER);
+export function ratToJSONValue(r) {
+  if (r.den === 1n) {
+    if (r.num <= _MAX_SAFE && r.num >= _MIN_SAFE) return Number(r.num);
+    return r.num.toString();
+  }
+  return ratToDouble(r);
+}
+
+// Per-call handle pool. NUMBER is represented across the ABI as a handle
+// (index) boxed into the f64 bit-pattern, like a pointer; the pool resets
+// each call alongside the heap.
+export function makeRationalPool() {
+  const table = [];
+  return {
+    alloc(r) {
+      table.push(r);
+      return table.length - 1;
+    },
+    get(h) {
+      return table[h];
+    },
+    reset() {
+      table.length = 0;
+    },
+  };
+}
 
 export function createRuntime() {
   // ---- u64 <-> f64 bit reinterpret (uniform f64 ABI) ----
@@ -32,13 +199,21 @@ export function createRuntime() {
     heapPtr += (nn + 7) & ~7;
     return p;
   };
+  // Per-call exact-rational pool (M4). NUMBER values are handles into this.
+  const ratPool = makeRationalPool();
   const resetHeap = () => {
     heapPtr = 1024;
+    ratPool.reset();
   };
   const attachMemory = (memory) => {
     memView = new DataView(memory.buffer);
     memU8 = new Uint8Array(memory.buffer);
   };
+
+  // Box/unbox a rational handle across the f64 ABI (handle index → f64 bit
+  // pattern, like a pointer). The handle is a small non-negative integer.
+  const ratBox = (r) => u64ToF64(BigInt(ratPool.alloc(r)));
+  const ratUnbox = (f) => ratPool.get(Number(f64ToU64(f)));
 
   function readCString(p) {
     const ptr = Number(p);
@@ -323,6 +498,22 @@ export function createRuntime() {
       // NUMBER → STRING. Matches jl4-core's rendering: integer-valued
       // numbers print with no decimal point, others as a shortest decimal.
       __l4_to_string: (vF) => u64ToF64(writeString(String(Number(vF)))),
+      // ---- Exact-rational NUMBER ABI (M4). Args/results are f64-boxed
+      //      handles into ratPool; resets each call. Dormant until the
+      //      lowering (slice 2b) emits these instead of arith.* float ops. ----
+      __l4_rat_parse: (sPtrF) =>
+        ratBox(ratFromDecimalString(readCString(Number(f64ToU64(sPtrF))))),
+      __l4_rat_from_int: (f) => ratBox(fromInt(BigInt(Math.trunc(Number(f))))),
+      __l4_rat_add: (a, b) => ratBox(ratAdd(ratUnbox(a), ratUnbox(b))),
+      __l4_rat_sub: (a, b) => ratBox(ratSub(ratUnbox(a), ratUnbox(b))),
+      __l4_rat_mul: (a, b) => ratBox(ratMul(ratUnbox(a), ratUnbox(b))),
+      __l4_rat_div: (a, b) => ratBox(ratDiv(ratUnbox(a), ratUnbox(b))),
+      __l4_rat_neg: (a) => ratBox(ratNeg(ratUnbox(a))),
+      // comparison returns a plain numeric -1/0/1 (for branching), not a handle
+      __l4_rat_cmp: (a, b) => ratCmp(ratUnbox(a), ratUnbox(b)),
+      // shims for inherently-inexact builtins (sqrt/ln/sin/pow…): drop to f64
+      __l4_rat_to_f64: (a) => ratToDouble(ratUnbox(a)),
+      __l4_f64_to_rat: (f) => ratBox(ratFromNumber(Number(f))),
       __l4_list_count: (ptrF) => {
         let n = 0,
           p = Number(f64ToU64(ptrF));
