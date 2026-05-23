@@ -31,6 +31,8 @@ import {
   AiMentionSearch,
   AiPermissionsGet,
   AiPermissionsSet,
+  AiPreferencesGet,
+  AiPreferencesSet,
   AiToolRenderMeta,
   AiUsageSubscribe,
   AiUsageUnsubscribe,
@@ -610,6 +612,35 @@ export function registerAiChatHandlers(deps: {
         `permissions/set: ${category}=${value} failed: ${err instanceof Error ? err.message : String(err)}`
       )
     )
+  })
+
+  // VSCode config keys for each chat-panel preference. New entries:
+  // add a key here, a field in the AiPreferences interface, and a
+  // default in the webview's AiPrefs store.
+  const PREF_KEYS = {
+    showReasoning: 'legaleseAi.showReasoning',
+  } as const
+  messenger.onRequest(AiPreferencesGet, () => {
+    const cfg = vscode.workspace.getConfiguration()
+    return {
+      values: {
+        showReasoning: cfg.get<boolean>(PREF_KEYS.showReasoning) === true,
+      },
+    }
+  })
+  messenger.onNotification(AiPreferencesSet, ({ values }) => {
+    const cfg = vscode.workspace.getConfiguration()
+    for (const [key, value] of Object.entries(values)) {
+      const settingKey = PREF_KEYS[key as keyof typeof PREF_KEYS]
+      if (!settingKey) continue
+      void cfg
+        .update(settingKey, value, vscode.ConfigurationTarget.Global)
+        .then(undefined, (err) =>
+          logger.warn(
+            `prefs/set: ${settingKey}=${String(value)} failed: ${err instanceof Error ? err.message : String(err)}`
+          )
+        )
+    }
   })
 
   messenger.onRequest(AiChatPickAttachment, async ({ accept }) => {

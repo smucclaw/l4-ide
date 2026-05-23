@@ -8,6 +8,7 @@
     RenderedToolActivity,
     RenderedToolCall,
   } from '$lib/stores/ai-chat.svelte'
+  import { aiPrefs } from '$lib/stores/ai-prefs.svelte'
 
   import type { Messenger } from 'vscode-messenger-webview'
 
@@ -272,11 +273,12 @@
             {onOpenFile}
             onOpenDiff={onOpenFileDiff}
           />
-        {:else if block.kind === 'thinking'}
+        {:else if block.kind === 'thinking' && aiPrefs.showReasoning}
           <!-- Collapsed-by-default reasoning block. Chevron flips when
                toggled; expanded body renders as italic gray text with
                preserved whitespace so chain-of-thought indentation
-               stays intact. -->
+               stays intact. Hidden entirely when the Preferences toggle
+               is off. -->
           <div class="thinking">
             <button
               type="button"
