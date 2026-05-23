@@ -127,6 +127,17 @@
             "markdownDescription": "Run Legalese AI in local mode for development purposes."
           }
         }
+      },
+      {
+        "title": "Preferences",
+        "properties": {
+          "legaleseAi.showModelReasoning": {
+            "scope": "application",
+            "type": "boolean",
+            "default": false,
+            "markdownDescription": "Show model reasoning in chat."
+          }
+        }
       }
     ],
     "languages": [
