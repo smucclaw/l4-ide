@@ -28,6 +28,7 @@ import {
   type AiPermissionCategory,
   type AiPermissionValue,
 } from 'jl4-client-rpc'
+import { aiPrefs } from '$lib/stores/ai-prefs.svelte'
 
 export interface PendingQuestion {
   callId: string
@@ -1343,7 +1344,21 @@ export function createAiChatStore(
     //     real progress, so push a new row even if the previous one
     //     is still "running" (it effectively terminates when the next
     //     message arrives).
-    const tail = turn.blocks[turn.blocks.length - 1]
+    //
+    // When the user has hidden reasoning ("Show model reasoning"
+    // toggle off in chat settings), the dedupe scan walks past
+    // intervening thinking blocks. Otherwise two identical activity
+    // events sandwiching a hidden think look like duplicate rows.
+    // When reasoning is visible, we want a thinking block to act
+    // as a divider so the user can see "model thought, then status
+    // re-emitted" — so the scan only looks at the immediate tail.
+    let tailIdx = turn.blocks.length - 1
+    if (!aiPrefs.showReasoning) {
+      while (tailIdx >= 0 && turn.blocks[tailIdx]?.kind === 'thinking') {
+        tailIdx--
+      }
+    }
+    const tail = turn.blocks[tailIdx]
     if (
       tail &&
       tail.kind === 'tool-activity' &&
