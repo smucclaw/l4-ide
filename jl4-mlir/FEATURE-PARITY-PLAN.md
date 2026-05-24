@@ -1191,75 +1191,28 @@ filtered out (function-typed param) so this miscount doesn't
 surface — but if a non-filtered helper depended on this bug
 the schema and Lower would still agree.
 
-The remaining gaps cluster around two structural issues no further
-slice has been able to fix cleanly:
+All three previously-documented gaps were closed by slices 4S and 4T:
 
-1. **Constructor-helper expansion** (`calculate-tax` 3,380,
-   `effective-tax-rate` 4,301, `order-total` 6,336). jl4-core's
-   trace shows `single brackets :: LIST TaxBracket OF …` as a leaf —
-   the helper's body events are pruned because it returns a
-   constructor value through a chain of nullary helper calls. Our
-   wasm expands every `<helper>$trace` call into its body trace,
-   so calculate-tax shows `single brackets` and recursively
-   `bracket 10%`, `bracket 12%`, … as nested fn-value frames where
-   jl4-core has collapsed everything to a single leaf with the
-   already-evaluated LIST result. Closing this requires either
-   (a) a static analyser that detects "pure constructor"
-   helpers and suppresses their `$trace` emission, or (b) a
-   runtime-side prune that drops a frame whose body just chains
-   constructors.
+- **Constructor-helper expansion** — closed by slice 4S's
+  `callL4Direct` + force-traced Var-body branches + lazy-NF first-field
+  heuristic in `walkWasmValue`.
+- **Prelude helper-name collision** — closed earlier by slice 4Q's
+  post-closure arity mangling (`go__N`); `unannotatedFnNames` /
+  `unannotatedParams` in slice 4S kept the inferred kinds aligned.
+- **NOT-range collision** — closed by slice 4T's `(SrcRange, Maybe Text)`
+  rangeMap keying via `exprDisambiguator`.
 
-2. **Prelude helper-name collision** (`tickets-available` 1,544,
-   `waitlist-position` 1,661). Multiple WHERE-local `go` helpers
-   exist in the prelude (`foldr`, `foldl`, `count`, `reverse`,
-   `sum`, …). The wasm side mangles them by post-closure arity
-   (`go__2` / `go__3`); after MLIR dedup only ONE definition per
-   mangled name survives. Meanwhile the runtime's
-   `__l4_trace_enter_fn` interns the BARE source name "go", and
-   the schema's `helperTraceMeta` is keyed by sanitized source
-   name too — so every `go` call's nodes resolve against whichever
-   `go` decide won the schema's first-source-order race
-   (currently foldl's), even when wasm is actually executing
-   count's `go__2`. Result: count's `acc + 1` events render with
-   foldl's `op OF acc, x` exampleCode. Closing this requires
-   either propagating the post-closure mangled name down into
-   `__l4_trace_enter_fn`'s string pool (currently impossible —
-   mangling is post-lowering, so the constants are emitted with
-   the unmangled name), or replicating closure-conversion's
-   capture analysis schema-side to compute matching arities.
+### M5 outcome
 
-3. **NOT-range collision** (`loan-is-approved` 580). The parser
-   gives @NOT P@ and the inner @P@ the same `SrcRange`; both
-   `lowerExpr` wrapper calls look up the same range and emit
-   `__l4_trace_enter(id)` back-to-back. Documented in detail in
-   slice 4N's "Known limitation" section.
+**12/12 byte-identical (M0)** and **12/12 trace-byte-identical (M5)**
+on the 12-fn fixture. Regression tests in `test/Main.hs`:
 
-Known limitation surfaced by slice 4K: the prelude has multiple
-WHERE-local helpers that share a source name (most notably `go` —
-defined inside `count`, `foldr`, `foldl`, `reverse`, `sum`, …).
-The wasm side disambiguates via arity mangling after closure
-conversion; the schema side does not, so `helperTraceMeta["go"]`
-picks whichever decide was last in source order. Worst case: a
-helper's trace renders with another helper's exampleCode text —
-text-only divergence past byte ~1500 in
-`tickets-available`/`waitlist-position`.
+- `traceMeta nodes populated`, `AND/OR/NOT marked special`,
+  `fnValue node + enter_fn/exit_fn`, `NOT-range disambiguation`.
 
-Next gaps observed in calculate-tax (now at byte 423):
-
-- WHERE-binding wrappers: jl4-service emits an `<varname>|<rhs>`
-  frame around each WHERE binding's evaluation; our wasm currently
-  inlines the helper's trace without the wrapper.
-- `simplifyEvalTrace` leaf-pruning rules: jl4-core drops trace
-  nodes with empty children + successful results (plus literal /
-  constructor / `__internal__` heuristics); our renderer keeps them.
-- Prelude helper-name disambiguation (above): schema-side arity
-  mangling needs to mirror Lower.hs's post-closure-conversion
-  `dedupAndSynthExterns` step.
-- **Slice 3:** type-driven runtime value pretty-printer matching
-  `Print.prettyLayout NF` for records / constructors / lists / `JUST`.
-- **Slice 4:** match interpreter desugaring shape (property selectors,
-  AND→IF, CONSIDER chains) + `simplifyEvalTrace` pruning rules. The last,
-  trickiest mile.
+The trace-mode sub-matrix has burned down from "no instrumentation
+at all" (slice 1) to byte-for-byte equal with jl4-service's
+reasoning trees.
 
 ---
 
