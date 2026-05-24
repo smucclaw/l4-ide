@@ -338,8 +338,16 @@ export class McpProxy implements vscode.Disposable {
     }
   }
 
-  /** Key our entry uses in VS Code's user-level `mcp.json`. */
-  private static readonly VSCODE_MCP_KEY = 'l4-rules'
+  /** Key our entry uses in VS Code's user-level `mcp.json`. VS Code
+   *  surfaces this key verbatim in the chat picker, so we use the
+   *  display-friendly form rather than a slug. */
+  private static readonly VSCODE_MCP_KEY = 'L4 Rules'
+
+  /** Older keys we may have written and want to migrate away from when
+   *  we encounter them in a user's `mcp.json`. We only delete an entry
+   *  whose URL points at our localhost port — anything else is
+   *  user-owned and left alone. */
+  private static readonly VSCODE_MCP_LEGACY_KEYS = ['l4-rules', 'l4-tools']
 
   /**
    * Write (or refresh) our entry in VS Code's user-level `mcp.json` so
@@ -388,8 +396,26 @@ export class McpProxy implements vscode.Disposable {
       config.servers = {}
     }
 
+    // Migrate away from any legacy key we previously wrote. Only delete
+    // entries whose URL still matches our localhost port — anything
+    // else is the user's own, possibly unrelated, entry.
+    const localhostPrefix = `http://127.0.0.1:${this.port}/`
+    let migratedFromLegacy = false
+    for (const legacyKey of McpProxy.VSCODE_MCP_LEGACY_KEYS) {
+      const legacy = config.servers[legacyKey]
+      if (
+        legacy &&
+        typeof legacy.url === 'string' &&
+        legacy.url.startsWith(localhostPrefix)
+      ) {
+        delete config.servers[legacyKey]
+        migratedFromLegacy = true
+      }
+    }
+
     const existing = config.servers[McpProxy.VSCODE_MCP_KEY]
     if (
+      !migratedFromLegacy &&
       existing &&
       existing.type === desiredEntry.type &&
       existing.url === desiredEntry.url
