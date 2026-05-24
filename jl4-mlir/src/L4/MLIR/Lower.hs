@@ -122,7 +122,15 @@ data LowerState = LowerState
     -- being lowered. Same shape jl4-service's @simplifyEvalTrace@ would
     -- preserve. Built once per function by 'Schema.collectTraceNodes' and
     -- consumed by 'lowerExpr' through 'rangeOf'.
-  , traceNodeMap :: !(Map SrcRange (Int, Int))
+  , traceNodeMap :: !(Map Schema.TraceRangeKey (Int, Int))
+    -- | Node ID of the innermost @__l4_trace_enter@ that hasn't been
+    -- matched by a @__l4_trace_exit@ yet. When the 'lowerExpr' wrapper
+    -- sees an inner expression whose rangeMap lookup returns this same
+    -- id, it skips the duplicate enter/exit — needed because the parser
+    -- sometimes gives @NOT P@ and the inner @P@ the same 'SrcRange', so
+    -- both wrappers would otherwise emit a second nested frame on top
+    -- of the same trace node.
+  , openTraceNode :: !(Maybe Int)
     -- | M5 slice 4D (call-site translation) — sanitized function name
     -- ⟶ ordered list of its parameter source names (e.g.
     -- @"annual_interest_rate"@ ⟶ @["profile"]@). At each function call
@@ -160,6 +168,7 @@ initState info = LowerState
   , diagnostics = Map.empty
   , tracing = False
   , traceNodeMap = Map.empty
+  , openTraceNode = Nothing
   , funcParams = Map.empty
   }
 
@@ -1396,34 +1405,46 @@ lowerExpr expr expectedTy = do
     else do
       rmap <- gets (.traceNodeMap)
       let mEntry = case rangeOf expr of
-            Just rng -> Map.lookup rng rmap
+            Just rng -> Map.lookup (rng, Schema.exprDisambiguator expr) rmap
             Nothing  -> Nothing
       case mEntry of
         Just (nodeId, kind) -> do
-          emitTraceEnter nodeId
-          result <- lowerExprCases expr expectedTy
-          -- For a force-traced @Var@ (App with no args) that resolves to
-          -- a local-binding, refine the schema's best-guess kind using
-          -- the binding's MLIR type. The schema can't always classify a
-          -- @Var@ inside a helper whose 'TypeSig' has un-annotated
-          -- params (e.g. prelude's @go acc l MEANS …@ in @count@) and
-          -- defaults to kind 3, which would make the runtime read the
-          -- NUMBER's f64 bits as a raw pointer. The runtime uses the
-          -- emitted kind here as an override when the schema's kind is
-          -- the default 3.
-          actualKind <- case (kind, expr) of
-            (3, App _ n []) -> do
-              let nm = resolvedName n
-              mMlirTy <- gets (Map.lookup nm . (.bindingTypes))
-              pure $ case mMlirTy of
-                Just ty
-                  | ty == l4NumberType -> 0
-                  | ty == l4BoolType   -> 1
-                  | ty == l4StringType -> 2
-                _ -> kind
-            _ -> pure kind
-          emitTraceExit result actualKind
-          pure result
+          -- Skip the wrapper when the same node is already open — see
+          -- 'openTraceNode' on 'LowerState'. The parser sometimes
+          -- collapses a unary operator and its inner expression into
+          -- a shared 'SrcRange'; Schema's 'rangeMap' keeps the outer
+          -- entry, so 'lowerExpr' on the inner returns the same id
+          -- and would emit a duplicate frame on top of the outer's.
+          alreadyOpen <- gets (.openTraceNode)
+          if alreadyOpen == Just nodeId
+            then lowerExprCases expr expectedTy
+            else do
+              modify' $ \s -> s { openTraceNode = Just nodeId }
+              emitTraceEnter nodeId
+              result <- lowerExprCases expr expectedTy
+              -- For a force-traced @Var@ (App with no args) that resolves to
+              -- a local-binding, refine the schema's best-guess kind using
+              -- the binding's MLIR type. The schema can't always classify a
+              -- @Var@ inside a helper whose 'TypeSig' has un-annotated
+              -- params (e.g. prelude's @go acc l MEANS …@ in @count@) and
+              -- defaults to kind 3, which would make the runtime read the
+              -- NUMBER's f64 bits as a raw pointer. The runtime uses the
+              -- emitted kind here as an override when the schema's kind is
+              -- the default 3.
+              actualKind <- case (kind, expr) of
+                (3, App _ n []) -> do
+                  let nm = resolvedName n
+                  mMlirTy <- gets (Map.lookup nm . (.bindingTypes))
+                  pure $ case mMlirTy of
+                    Just ty
+                      | ty == l4NumberType -> 0
+                      | ty == l4BoolType   -> 1
+                      | ty == l4StringType -> 2
+                    _ -> kind
+                _ -> pure kind
+              emitTraceExit result actualKind
+              modify' $ \s -> s { openTraceNode = alreadyOpen }
+              pure result
         Nothing ->
           lowerExprCases expr expectedTy
 
@@ -2387,7 +2408,7 @@ lowerLocalDecl _scope (LocalDecide _anno decide@(MkDecide dAnno ts appForm body)
       tracingNow <- gets (.tracing)
       tnMap <- gets (.traceNodeMap)
       let mWrapperEntry = case rangeOf decide of
-            Just rng -> Map.lookup rng tnMap
+            Just rng -> Map.lookup (rng, Nothing) tnMap
             Nothing  -> Nothing
       case (tracingNow, mWrapperEntry) of
         (True, Just (wrapperId, wrapperKind)) -> do

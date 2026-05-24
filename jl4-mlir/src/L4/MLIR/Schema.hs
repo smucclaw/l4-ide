@@ -26,6 +26,8 @@ module L4.MLIR.Schema
   , applyDiagnostics
   , collectTraceNodes
   , lookupTypeAt
+  , exprDisambiguator
+  , TraceRangeKey
 
     -- * Name sanitization (must match jl4-service)
   , sanitizePropertyName
@@ -779,7 +781,7 @@ collectTraceNodes
     -- @count@'s @go OF …@ leaf renders as kind 3 and the runtime
     -- reads the NUMBER handle as a raw pointer.
   -> Expr Resolved
-  -> ([TraceNode], Map SrcRange (Int, Int))
+  -> ([TraceNode], Map TraceRangeKey (Int, Int))
 collectTraceNodes infoMap declares paramTypes fnReturnTypes unannotatedParams unannotatedFns rootExpr =
   let (nodes, rangeMap, _next) = goE False 0 [] Map.empty rootExpr
   -- Sort by 'tnId' rather than relying on a single 'reverse'. The
@@ -944,9 +946,9 @@ collectTraceNodes infoMap declares paramTypes fnReturnTypes unannotatedParams un
       :: Bool
       -> Int
       -> [TraceNode]
-      -> Map SrcRange (Int, Int)
+      -> Map TraceRangeKey (Int, Int)
       -> Expr Resolved
-      -> ([TraceNode], Map SrcRange (Int, Int), Int)
+      -> ([TraceNode], Map TraceRangeKey (Int, Int), Int)
     goE forced next acc rmap e
       | not forced && not (traceable e) =
           -- Still recurse, but don't allocate an ID for this node.
@@ -988,8 +990,14 @@ collectTraceNodes infoMap declares paramTypes fnReturnTypes unannotatedParams un
                 , tnBindingLabel = Nothing
                 }
               acc' = node : acc
+              -- Key the rangeMap by '(SrcRange, exprDisambiguator)' so
+              -- two AST nodes sharing a 'SrcRange' but with different
+              -- shapes (e.g. @NOT P@ and the inner @P@ in
+              -- @loan is approved@) get distinct entries. Without this
+              -- the inner node clobbers the outer (or vice versa) and
+              -- Lower's wrapper looks up the wrong nodeId.
               rmap' = case rangeOf e of
-                Just rng -> Map.insert rng (next, kind) rmap
+                Just rng -> Map.insert (rng, exprDisambiguator e) (next, kind) rmap
                 Nothing  -> rmap
           in foldExprChildren goE (next + 1) acc' rmap' e
 
@@ -1097,13 +1105,13 @@ collectTraceNodes infoMap declares paramTypes fnReturnTypes unannotatedParams un
     -- when a new shape is added to jl4-core, the compile error here
     -- forces us to think about whether it deserves a trace node.
     foldExprChildren
-      :: (Bool -> Int -> [TraceNode] -> Map SrcRange (Int, Int) -> Expr Resolved
-          -> ([TraceNode], Map SrcRange (Int, Int), Int))
+      :: (Bool -> Int -> [TraceNode] -> Map TraceRangeKey (Int, Int) -> Expr Resolved
+          -> ([TraceNode], Map TraceRangeKey (Int, Int), Int))
       -> Int
       -> [TraceNode]
-      -> Map SrcRange (Int, Int)
+      -> Map TraceRangeKey (Int, Int)
       -> Expr Resolved
-      -> ([TraceNode], Map SrcRange (Int, Int), Int)
+      -> ([TraceNode], Map TraceRangeKey (Int, Int), Int)
     foldExprChildren k n a r expr = case expr of
       And        _ a' b   -> chain2 k n a r a' b
       Or         _ a' b   -> chain2 k n a r a' b
@@ -1246,8 +1254,13 @@ collectTraceNodes infoMap declares paramTypes fnReturnTypes unannotatedParams un
                   , tnBindingLabel = Just label
                   }
                 a0 = wrapperNode : a
+                -- WHERE-binding wrappers use 'Nothing' as the
+                -- disambiguator — a Decide's range encompasses the
+                -- whole binding ("name IS rhs"), so it can't collide
+                -- with an inner Expr's range. Lower's 'lowerLocalDecl'
+                -- looks up by the same '(rng, Nothing)' key.
                 r0 = case rangeOf decide of
-                  Just rng -> Map.insert rng (n, rhsKind) r
+                  Just rng -> Map.insert (rng, Nothing) (n, rhsKind) r
                   Nothing  -> r
                 -- Recurse into the rhs's CHILDREN (via foldExprChildren,
                 -- not goE) so any Proj / IF / Cmp expressions nested in
@@ -1332,6 +1345,56 @@ typeToRetSchema declares visited ty = case ty of
 -- the typechecker's 'InfoMap'. Mirrors the strategy used by
 -- 'Lower.typeOfExpr': only accept an EXACT range match so we don't pick
 -- up a containing expression's type by mistake.
+-- | Composite key used by the trace 'rangeMap' built by
+-- 'collectTraceNodes'. A bare 'SrcRange' would clobber two AST nodes
+-- that share a range but have different shapes (e.g. @NOT P@ and the
+-- inner @P@ in @loan is approved@'s body); pairing the range with
+-- 'exprDisambiguator' gives them distinct entries so Lower's wrapper
+-- can look up each by its own AST shape.
+type TraceRangeKey = (SrcRange, Maybe Text)
+
+-- | Per-constructor tag used as the disambiguator half of
+-- 'TraceRangeKey'. Returns 'Nothing' for shapes that aren't traced
+-- (or for callers that look up by 'rangeOf decide', which never
+-- collides with an inner expression). The Schema's @goE@ insertions
+-- and Lower's wrapper lookups MUST use this same function so the two
+-- walks produce a matching rangeMap.
+exprDisambiguator :: Expr Resolved -> Maybe Text
+exprDisambiguator = \case
+  And{}        -> Just "And"
+  Or{}         -> Just "Or"
+  RAnd{}       -> Just "RAnd"
+  ROr{}        -> Just "ROr"
+  Implies{}    -> Just "Implies"
+  Equals{}     -> Just "Equals"
+  Not{}        -> Just "Not"
+  Plus{}       -> Just "Plus"
+  Minus{}      -> Just "Minus"
+  Times{}      -> Just "Times"
+  DividedBy{}  -> Just "DividedBy"
+  Modulo{}     -> Just "Modulo"
+  Exponent{}   -> Just "Exponent"
+  Cons{}       -> Just "Cons"
+  Leq{}        -> Just "Leq"
+  Geq{}        -> Just "Geq"
+  Lt{}         -> Just "Lt"
+  Gt{}         -> Just "Gt"
+  Proj{}       -> Just "Proj"
+  Lam{}        -> Just "Lam"
+  App{}        -> Just "App"
+  AppNamed{}   -> Just "AppNamed"
+  IfThenElse{} -> Just "IfThenElse"
+  MultiWayIf{} -> Just "MultiWayIf"
+  Consider{}   -> Just "Consider"
+  Where{}      -> Just "Where"
+  LetIn{}      -> Just "LetIn"
+  Percent{}    -> Just "Percent"
+  List{}       -> Just "List"
+  Concat{}     -> Just "Concat"
+  AsString{}   -> Just "AsString"
+  Lit{}        -> Just "Lit"
+  _            -> Nothing
+
 lookupTypeAt :: HasSrcRange e => InfoMap -> e -> Maybe (Type' Resolved)
 lookupTypeAt info e = case rangeOf e of
   Nothing -> Nothing

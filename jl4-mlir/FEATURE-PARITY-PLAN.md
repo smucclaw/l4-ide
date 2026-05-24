@@ -1131,6 +1131,57 @@ parser-level limitation where @NOT P@ and the inner @P@ share a
 `SrcRange`, so both `lowerExpr` wrappers look up the same node and
 emit duplicate trace events.
 
+### Slice 4T — final cell: NOT-range disambiguation + NOT-desugar taken branch
+
+Closes the last trace-differs cell (`loan-is-approved`) to land at
+**12/12 trace-byte-identical**. Two coordinated fixes:
+
+1. **Trace 'rangeMap' is now keyed by `(SrcRange, Maybe Text)`.**
+   When the parser collapses a unary operator and its inner
+   expression into a shared 'SrcRange' (NOT and its operand here),
+   the old `Map SrcRange (Int, Int)` clobbered one of the two
+   entries — Lower's wrapper then either lost the inner PROJ
+   subtree entirely or duplicated NOT's subtree depending on which
+   side won. A new module-level helper 'exprDisambiguator' pairs
+   each 'SrcRange' with a per-constructor tag (Just "Not", Just
+   "Proj", …); Schema's @goE@ inserts using that key and Lower's
+   wrapper looks up using the same key on the AST expr it's
+   currently lowering, so NOT and the inner PROJ get distinct
+   entries and both fire as expected. WHERE-binding wrappers in
+   'chainLocals' use the sentinel '(rng, Nothing)' — Decide ranges
+   encompass the whole binding and never collide with an Expr
+   range. A defensive 'openTraceNode' field on 'LowerState' guards
+   against any residual same-shape same-range case by skipping a
+   nested wrapper that would re-enter the currently-open node.
+
+2. **'synthesizeNotDesugar' now emits the taken-branch leaf.**
+   The runtime's NOT desugar previously rendered only the @a@
+   input leaf inside @IF a THEN FALSE ELSE TRUE@. svc also emits
+   the _taken_ branch as a leaf — @FALSE@ when @a@ is TRUE, @TRUE@
+   when @a@ is FALSE — mirroring AND/OR's pattern in
+   'synthesizeBoolDesugar'. Adding that second child closes the
+   final byte gap.
+
+Final corpus state:
+
+| Function                             | slice 4S | slice 4T |
+| ------------------------------------ | -------- | -------- |
+| `is-eligible`                        | ✓        | ✓        |
+| `calculate-bonus`                    | ✓        | ✓        |
+| `denial-reason`                      | ✓        | ✓        |
+| `requires-foreign-income-disclosure` | ✓        | ✓        |
+| `monthly-loan-payment`               | ✓        | ✓        |
+| `total-interest-paid`                | ✓        | ✓        |
+| `order-total`                        | ✓        | ✓        |
+| `calculate-tax`                      | ✓        | ✓        |
+| `effective-tax-rate`                 | ✓        | ✓        |
+| `tickets-available`                  | ✓        | ✓        |
+| `waitlist-position`                  | ✓        | ✓        |
+| `loan-is-approved`                   | 580      | ✓        |
+
+**12 trace-byte-identical, 0 trace-differs.** M0 differential
+parity stays at 12/12 byte-identical.
+
 Known still-broken: `freeVarsOfExpr` doesn't catch the
 function-name head of `App _ headRes args` (e.g. @cons@ in
 @cons OF x, go xs@) as a free variable, so foldr's go is

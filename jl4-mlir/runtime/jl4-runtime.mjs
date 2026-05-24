@@ -1633,17 +1633,31 @@ export function createRuntime() {
     const argTruth = frameTruth(frame.children[0], lookupNode);
     const aText =
       argTruth === true ? "TRUE" : argTruth === false ? "FALSE" : "";
+    // Mirror 'synthesizeBoolDesugar' for AND/OR — the IF sub-tree
+    // includes a 'taken-branch' leaf after the @a@ input leaf:
+    //   argTruth === true  → @FALSE@ (the THEN literal)
+    //   argTruth === false → @TRUE@  (the ELSE literal)
+    const ifChildren = [
+      { exampleCode: ["a"], explanation: ["Result: " + aText], children: [] },
+    ];
+    if (argTruth === true) {
+      ifChildren.push({
+        exampleCode: ["FALSE"],
+        explanation: ["Result: FALSE"],
+        children: [],
+      });
+    } else if (argTruth === false) {
+      ifChildren.push({
+        exampleCode: ["TRUE"],
+        explanation: ["Result: TRUE"],
+        children: [],
+      });
+    }
     return [
       {
         exampleCode: ["IF a THEN FALSE ELSE TRUE"],
         explanation: ["Result: " + parentResultText],
-        children: [
-          {
-            exampleCode: ["a"],
-            explanation: ["Result: " + aText],
-            children: [],
-          },
-        ],
+        children: ifChildren,
       },
     ];
   }
