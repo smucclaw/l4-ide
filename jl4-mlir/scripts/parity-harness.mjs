@@ -30,7 +30,11 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync, spawn } from "node:child_process";
-import { createRuntime } from "../runtime/jl4-runtime.mjs";
+import {
+  createRuntime,
+  aesonStringify,
+  wrapEvaluationEnvelope,
+} from "../runtime/jl4-runtime.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
@@ -175,22 +179,24 @@ async function deploy(id, srcFile) {
   throw new Error(`deploy ${id} not ready`);
 }
 
-async function serviceEval(id, fn, args) {
-  const r = await fetch(
-    `${BASE}/deployments/${encodeURIComponent(id)}/functions/${encodeURIComponent(fn)}/evaluation`,
-    {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ arguments: args }),
-    },
-  );
+async function serviceEval(id, fn, args, traceMode) {
+  const url =
+    `${BASE}/deployments/${encodeURIComponent(id)}/functions/${encodeURIComponent(fn)}/evaluation` +
+    (traceMode === "full" ? "?trace=full" : "");
+  const r = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ arguments: args }),
+  });
   return { status: r.status, body: await r.text() };
 }
 
 // ---- main -----------------------------------------------------------------
 const results = [];
 const tally = {};
+const traceTally = {};
 const bump = (k) => (tally[k] = (tally[k] || 0) + 1);
+const bumpTrace = (k) => (traceTally[k] = (traceTally[k] || 0) + 1);
 
 try {
   await waitHealthy();
@@ -236,6 +242,13 @@ try {
       rt.makeImports(),
     );
     rt.attachMemory(instance.exports.memory);
+    // M5 slice 4A — feed all functions' traceMeta to the runtime so
+    // nested `<fn>$trace` calls resolve node IDs against the called
+    // function's table, not the top-level caller's. Helpers (non-@export'd
+    // Decides) get their own $trace variants too, so feed those tables
+    // in alongside the exported ones.
+    rt.setBundleFunctions(schema.functions || {});
+    rt.setBundleHelperTraceMeta(schema.helperTraceMeta || {});
 
     // optional curated cases
     let curated = {};
@@ -260,15 +273,16 @@ try {
       }
       const cases = curated[fnName] || [genArgs(fe.parameters)];
       for (const args of cases) {
-        const svcR = await serviceEval(id, fnName, args);
+        // ----- trace=none: existing matrix -----
+        const svcR = await serviceEval(id, fnName, args, "none");
         let wasmBody = null,
           wasmErr = null;
         try {
           const val = rt.invokeFunction(instance, fe, args);
-          wasmBody = JSON.stringify({
-            contents: { result: { value: val } },
-            tag: "SimpleResponse",
-          });
+          // aesonStringify renders non-integer Doubles the way jl4-service's
+          // Aeson encoder does (bytestring's `doubleDec`) — required for
+          // byte-identity on fractional-NUMBER results.
+          wasmBody = aesonStringify(wrapEvaluationEnvelope({ value: val }));
         } catch (e) {
           wasmErr = String(e.message || e);
         }
@@ -309,6 +323,44 @@ try {
         }
         if (outcome === "wasm-error") rec.wasmError = wasmErr;
         if (outcome === "service-error") rec.serviceStatus = svcR.status;
+
+        // ----- trace=full: M5 slice 1 — record-only, separate verdict -----
+        // Slice 1 has no instrumented codegen, so every cell here is
+        // expected to read `trace-differs`. The column makes the backlog
+        // visible the same way M4's ulp-differs cell tracked the rational
+        // work — and as later slices land it will burn down to byte-id.
+        try {
+          const svcT = await serviceEval(id, fnName, args, "full");
+          const payload = rt.invokeFunctionWithReasoning(instance, fe, args);
+          const wasmTraceBody = aesonStringify(wrapEvaluationEnvelope(payload));
+          const svcOkT = svcT.status >= 200 && svcT.status < 300;
+          let traceOutcome;
+          if (!svcOkT) traceOutcome = "trace-service-error";
+          else if (svcT.body === wasmTraceBody)
+            traceOutcome = "trace-byte-identical";
+          else traceOutcome = "trace-differs";
+          bumpTrace(traceOutcome);
+          rec.trace = { outcome: traceOutcome };
+          if (traceOutcome === "trace-differs") {
+            // Stash just the first diff byte so the report is searchable
+            // without ballooning the JSON file with full reasoning trees.
+            let n = 0;
+            while (
+              n < svcT.body.length &&
+              n < wasmTraceBody.length &&
+              svcT.body[n] === wasmTraceBody[n]
+            )
+              n++;
+            rec.trace.firstDiffByte = n;
+          }
+        } catch (e) {
+          bumpTrace("trace-wasm-error");
+          rec.trace = {
+            outcome: "trace-wasm-error",
+            error: String(e.message || e),
+          };
+        }
+
         results.push(rec);
       }
     }
@@ -321,7 +373,7 @@ try {
 fs.mkdirSync(outDir, { recursive: true });
 fs.writeFileSync(
   path.join(outDir, "parity.json"),
-  JSON.stringify({ tally, results }, null, 2),
+  JSON.stringify({ tally, traceTally, results }, null, 2),
 );
 
 const order = [
@@ -343,6 +395,25 @@ for (const k of order)
 // known f64-vs-rational gap (M4), not a regression.
 const parityFails = (tally["differs"] || 0) + (tally["wasm-error"] || 0);
 txt += `\n${parityFails === 0 ? "PARITY OK" + (tally["ulp-differs"] || 0 ? " (" + tally["ulp-differs"] + " known ULP drift, M4)" : "") : "PARITY MISMATCHES: " + parityFails}\n`;
+
+// M5 slice 1: trace-mode sub-matrix. Currently every cell is expected to
+// be `trace-differs` — the synthetic Reasoning the runtime emits is a
+// one-node stub, not jl4-service's deep tree. The numbers are visible
+// backlog: later slices add instrumented codegen and flip cells to
+// `trace-byte-identical`. Trace-mode results never gate parity.
+const traceOrder = [
+  "trace-byte-identical",
+  "trace-differs",
+  "trace-wasm-error",
+  "trace-service-error",
+];
+const traceTotal = Object.values(traceTally).reduce((a, b) => a + b, 0);
+if (traceTotal > 0) {
+  txt += "\nM5 slice 1 — trace=full sub-matrix (not a gate)\n\n";
+  for (const k of traceOrder)
+    if (traceTally[k]) txt += `  ${String(traceTally[k]).padStart(4)}  ${k}\n`;
+}
+
 fs.writeFileSync(path.join(outDir, "parity.txt"), txt);
 console.log("\n" + txt);
 console.log(`Report: ${path.join(outDir, "parity.txt")} / parity.json`);

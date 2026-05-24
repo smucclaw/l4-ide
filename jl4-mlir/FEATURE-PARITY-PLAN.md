@@ -320,6 +320,896 @@ primitive op, to keep the tree identical.
 Files: `src/L4/MLIR/Lower.hs` (instrumented variant), `runtime/jl4-runtime.mjs`
 (trace sink + serializer), `src/L4/MLIR/Schema.hs` (advertise `fn$trace`).
 
+### Slices
+
+- **Slice 1 — DONE (wire-shape, no codegen yet):** the wasm-server and parity
+  harness understand `?trace=full`; the runtime emits an Aeson-shaped envelope
+  with a `Reasoning` value via `wrapEvaluationEnvelope` / `synthesizeReasoning`.
+  Without instrumented codegen the runtime returns a degenerate one-node tree
+  (function name + `Result: <pretty value>`), so the harness's new trace
+  sub-matrix reads `12 trace-differs`. Aeson key-sorting is on in
+  `aesonStringify` (required for nested Reasoning byte-id), and the M4 main
+  parity matrix is unchanged at 12 byte-identical. The number of
+  `trace-differs` cells is now the visible backlog for later slices — same
+  pattern M4's `ulp-differs` cell played for exact arithmetic.
+- **Slice 2A — DONE (compile-time strings + runtime label):** `FunctionExport`
+  gains a `traceMeta` block (`fnName`, `body`, `params`) populated at
+  `bundleExports` time by running jl4-core's `L4.Print.prettyLayout` on the
+  function head, the `Decide` body, and each parameter — the exact strings
+  jl4-service's interpreter feeds into `Reasoning.exampleCode`, so the
+  runtime never reimplements the pretty-printer in JS. The runtime's
+  `synthesizeReasoning` now uses `traceMeta.fnName` (the backticked source
+  spelling, e.g. `` `is eligible` ``) instead of the sanitized API form. The
+  parity harness's trace sub-matrix is still `12 trace-differs` — the shape
+  is still a one-node stub — but the bytes are closer (correct backticked
+  function name; ground truth for body / param strings is now available to
+  later slices). Covered by `test "traceMeta pretty-print baked"` in the
+  Haskell suite plus a slice-2A JS test in `rational.test.mjs`.
+- **Slice 2B — DONE (ABI + body-root instrumentation):** the trace machinery
+  is wired end-to-end. Lowering now emits a `<fn>$trace` clone for every
+  `Decide` that brackets the body with `__l4_trace_enter(0)` /
+  `__l4_trace_exit(box, kindByte)`; `Runtime.Builtins` declares the two
+  externs; the JS runtime maintains a per-call `tracePool` (stack-based
+  tree builder), and `invokeFunctionWithReasoning` routes to `<fn>$trace`
+  whenever the symbol exists. The resulting Reasoning is the 3-node template
+  (top synthesised application + fn-value child + body subtree from the
+  pool). Result rendering covers NUMBER (rational handle → Aeson Double),
+  BOOLEAN, STRING; records / lists / MAYBE inner values stay "other"
+  (slice 3). All 12 main-parity cells stay `byte-identical` (no regression);
+  the trace sub-matrix is still `12 trace-differs`, but the bytes match
+  much further now (e.g. `is-eligible` 38 → 136, `calculate-bonus` ~40 → 140) — the body root and result rendering line up, the gap is now the
+  body's _children_, which slices 2C/4 close.
+- **Slice 2C — DONE (per-subexpression instrumentation):**
+  `Schema.collectTraceNodes` walks each function body in pre-order,
+  allocates a `TraceNode` for every traceable subexpression (skipping
+  `Lit` and zero-arg `App` — the `Var` pattern — to mirror
+  `simplifyEvalTrace` pruning), and renders each via `Print.prettyLayout`.
+  `InfoMap` flows into `bundleExports` so node `resultKind` is set from
+  the typechecker. The schema's `traceMeta.nodes` array carries
+  `{id, exampleCode, resultKind}` per node. Lowering's `lowerExpr` is
+  split into a wrapper (does the trace bracketing) and `lowerExprCases`
+  (the existing per-shape cases); when `<fn>$trace` is being emitted,
+  the wrapper looks up each expression's `(nodeId, kind)` by source range
+  via `traceNodeMap` (built deterministically by the same
+  `collectTraceNodes` walk) and emits `__l4_trace_enter(id)` /
+  `__l4_trace_exit(box, kind)` around every traceable subexpression.
+  Result: main parity still 12/12 byte-identical, trace sub-matrix still
+  `12 trace-differs`, but `is-eligible`'s `firstDiffByte` jumps from
+  **136 → 245** (the body's first two children — both `Geq` nodes — now
+  match jl4-service exactly). The remaining gap on AND/OR-using
+  functions is the IF-THEN-ELSE subtree the interpreter inserts when
+  expanding `__AND__` / `__OR__` (slice 4). Functions with records-as-args
+  (e.g. `denial-reason`) still diverge early because the top-level
+  "fn OF args" header needs schema-driven value pretty-printing
+  (slice 3). Covered by `test "traceMeta nodes populated"`.
+- **Slice 3 — DONE (schema-driven value pretty-printer + arg-eval trees):**
+  Runtime now ships `prettyL4Value(value, schema)` that walks a JS value
+  using the parameter schema's `x-l4-type` (the L4 user-declared type
+  name baked in by jl4-core's `typeToParameter`) to produce strings
+  matching `Print.prettyLayout NF` byte-for-byte: records →
+  `<TypeName> OF <field1>, <field2>, …` in `propertyOrder`; MAYBE →
+  `JUST OF <inner>` / `NOTHING`, derived from the parent's `required`
+  list; enum tags as bare names; primitives (NUMBER via Aeson Double
+  formatter, BOOLEAN → TRUE/FALSE, STRING JSON-quoted, DATE/TIME
+  pass-through). `synthesizeArgEvalTree(value, schema)` builds the
+  Reasoning subtree jl4-service emits before the body trace for each
+  _compound_ arg (records, JUST-of-record); MAYBE-of-primitive renders
+  in the parent's `exampleCode` but doesn't push its own child node
+  (jl4-service only pushes one when the body forces the field — a lazy
+  semantic we can't detect statically; slice 4). `buildReasoningFromTrace`
+  threads these as the top-level children before fn-value + body, so the
+  child order is `[arg-evals…, fn-value, body]`, matching
+  `traceToReasoning`.
+
+  Result: main parity still 12/12 byte-identical, trace sub-matrix still
+  `12 trace-differs`, but `firstDiffByte` advances on every record-arg
+  function:
+
+  | Function                                                  | slice 2C | slice 3 |
+  | --------------------------------------------------------- | -------- | ------- |
+  | `denial-reason`                                           | 51       | **159** |
+  | `loan-is-approved`                                        | 51       | **159** |
+  | `monthly-loan-payment`                                    | 51       | **159** |
+  | `total-interest-paid`                                     | 51       | **159** |
+  | `calculate-tax`                                           | 69       | **155** |
+  | `effective-tax-rate`                                      | 69       | **155** |
+  | `is-eligible`                                             | 245      | 245     |
+  | `calculate-bonus`                                         | 153      | 153     |
+  | `order-total` / `tickets-available` / `waitlist-position` | 51       | 51      |
+  | `requires-foreign-income-disclosure`                      | 51       | 51      |
+
+  The record-arg functions all match the top-level `<fn> OF (<record>
+OF …)` header plus the first compound arg-eval child. Beyond byte 155,
+  the diff is jl4-core's _lazy WHNF_ treatment: the inner Result line
+  uses `(...)` placeholders for fields that were forced during body
+  evaluation (slice 4's territory). List-of-records args
+  (`order-total` etc.) stay at byte 51 because jl4-core desugars
+  `[a, b, c]` into a deeply-nested `Cons` trace which we currently
+  flatten into a single array node (also slice 4). Covered by 12 new
+  unit tests in `rational.test.mjs` (records, MAYBE wrapping inside
+  records, JSON-quoted strings, enum tags, dates,
+  `synthesizeArgEvalTree`'s "MAYBE-of-primitive doesn't push child"
+  rule, nested record children).
+
+- **Slice 4A — DONE (AND/OR/NOT desugar + nested-call fn-value):**
+  Schema marks @App "**AND**"@ / @"**OR**"@ / @"**NOT**"@ + @And@ /
+  @Or@ / @Not@ AST nodes with a @tnSpecial@ flag. The runtime appends
+  a synthetic @IF a THEN b ELSE FALSE@ sub-tree to each AND frame (and
+  the symmetric forms for OR/NOT), applies short-circuit filtering on
+  the rhs sibling, and renders the _taken_ branch leaf (rhs value for
+  AND-TRUE, FALSE literal for AND-FALSE, etc.). Each `<fn>$trace` now
+  brackets its body with `__l4_trace_enter_fn(symPtr)` /
+  `__l4_trace_exit_fn()` and emits a synthetic fn-value frame at start
+  — so nested calls produce a proper [arg-evals, fn-value, body] tree
+  under the calling App. `callL4` routes user-function calls to the
+  callee's `$trace` variant when tracing. IF-branch `Lit`/`Var`
+  children are force-instrumented (the `ELSE 0` in `calculate-bonus`
+  becomes a real trace leaf). The runtime's trace pool now accumulates
+  multiple top-level roots (since each $trace call pushes both the
+  fn-value AND the body frames), and node lookups are PER-FRAME via
+  the fn-stack so a nested call's IDs resolve against the called
+  function's `traceMeta.nodes`.
+
+  Result: **2 cells flipped to `trace-byte-identical`** — `is-eligible`
+  and `calculate-bonus` (which calls `is-eligible` recursively).
+  Covered by `test "AND/OR/NOT marked special"` and
+  `test "fnValue node + enter_fn/exit_fn"`.
+
+- **Slice 4B — DONE (lazy-NF `(...)` placeholders in Result lines):**
+  `prettyL4Value` gained an `inResult` / `depth` mode so the `Result: …`
+  side of each trace node renders records with jl4-core's lazy-NF
+  placeholder rule. Empirical heuristic (reverse-engineered from
+  jl4-service's traces): a record's NUMBER fields render as `(...)`
+  when EITHER (a) the record is nested inside another record (depth
+  ≥ 1), OR (b) the record has no nested-record fields itself (no
+  sub-record forcing happened, so its own primitives stay
+  addressed). Records that contain nested records keep their direct
+  NUMBER fields as values — only the inner record's fields get the
+  placeholder.
+
+  Result: `denial-reason`, `loan-is-approved`, `monthly-loan-payment`,
+  `total-interest-paid` jump from `firstDiffByte=159` to **376/383**.
+  The remaining diff is jl4-core's per-field lazy-evaluation order
+  (some fields show as values because the body forced them, others
+  stay `(...)`) — that's compile-time-undecidable without static body
+  access analysis, so slice 4D or later.
+
+- **Slice 4C — DONE (Cons-list desugaring):** `prettyL4Value` for
+  arrays now emits jl4-core's `LIST <e1>, <e2>, ...` form (no
+  brackets, compound elements wrapped in parens) and the lazy-NF
+  variant `EMPTY` for empty lists. `synthesizeArgEvalTree` for an
+  array routes through a new `buildConsListChildren` helper that
+  produces the right nested `LIST → CONS head tail → ...` Reasoning
+  tree jl4-service emits — each CONS node has exampleCode
+  `(head) FOLLOWED BY (tail-list)` and children `[head-tree,
+tail-list-tree]`; the empty tail is a `LIST ` leaf with Result
+  `EMPTY`. The lazy-NF (...) rule from slice 4B applies to records
+  inside list elements too.
+
+  Result: `order-total`, `tickets-available`, `waitlist-position`
+  advance from 51 → 173/108/108. The remaining diff is the same
+  body-access lazy-NF issue (slice 4D — `age` is forced as NUMBER in
+  Attendee while `attendee name` / `is member` aren't; we currently
+  apply the inverse heuristic).
+
+- **Slice 4D — DONE (per-field lazy-eval via runtime mark_forced):**
+  Three pieces working together:
+
+  1. **mark_forced runtime ABI.** New `__l4_mark_forced(pathPtr, fieldPtr)`
+     declared in Runtime.Builtins; runtime maintains a per-call
+     `forcedFields: Set<string>`. `prettyL4Value` gained `inResult` +
+     `path` + `forced` opts so a record-field renders as VALUE when
+     `forcedFields.has("path.field")` and as `(...)` otherwise.
+     `synthesizeArgEvalTree` threads `path` through nested records and
+     only pushes a sub-child when the field is forced.
+
+  2. **Lowering emits mark_forced at each Proj.** `staticPathOf`
+     recursively computes the path string for `Proj` expressions whose
+     `record` is a param-rooted chain (`Var` ⟶ name; `Proj` ⟶ inner
+     path + field). `lowerProjection`, in trace mode, emits
+     `__l4_mark_forced(path, field)` before the slot load.
+
+  3. **AND/OR short-circuit at the wasm level.** `lowerBoolop`
+     replaced with `lowerAndShortCircuit` / `lowerOrShortCircuit` for
+     `__AND__`/`__OR__`/`And`/`Or` — uses `scf.if` so the rhs (and
+     any markers in it) only fires when the lhs demands it. This is
+     what makes the marker set match jl4-core's lazy AND/OR.
+
+  4. **Call-site arg-path translation.** New
+     `__l4_trace_push_arg_path` / `__l4_trace_pop_arg_paths` builtins
+     plus a runtime `argPathStack`. At each user-function call in
+     trace mode the lowering pairs each arg with the helper's
+     declared param name (from a new `funcParams` map in
+     `LowerState`) and pushes the binding before the call (one Map
+     per arg, popped after). Markers fired inside the helper get
+     their path's first segment rewritten through the stack (e.g.
+     `profile.bankruptcy history` ⟶ `req.applicant.bankruptcy history`).
+
+  Result: substantial progress on every record-arg cell — 4 functions
+  past 500 bytes matching, the Taxpayer cluster more than doubled,
+  `requires-foreign-income-disclosure` jumped 51 ⟶ 418.
+
+- **Slice 4E — DONE (value-pointer-identity mark_forced):** the path-
+  based marker mechanism is replaced by a cleaner value-pointer
+  approach:
+
+  1. **Marshaler registers compounds by their wasm address.**
+     `marshalStruct` adds each JS object to a per-call `valueByPtr:
+Map<wasmPtr, jsObject>` map, indexed by the linear-memory
+     address the struct was allocated at.
+
+  2. **Marker carries the record's wasm value, not a path string.**
+     `lowerProjection` emits `__l4_mark_forced(recordVal, fieldPtr)`
+     — `recordVal` is the f64-boxed pointer of the record being
+     projected. The runtime looks up the JS object via `valueByPtr`
+     and attaches `value.__forced.add(field)` directly. Helper calls
+     share pointers with their callers, so no path translation is
+     needed (the helper's local `profile` is the SAME wasm pointer
+     as the caller's `req's applicant`).
+
+  3. **Renderer reads `__forced` off the JS object.** `prettyL4Value`
+     in `inResult` mode applies the slice-4B `hasNestedRecord`
+     heuristic at depth 0 (records with a nested-record field
+     render all top-level fields as values; primitives-only records
+     consult `__forced`); at depth ≥ 1 always consults `__forced`.
+     `synthesizeArgEvalTree` likewise pushes sub-children only for
+     forced compound fields by reading `value.__forced`.
+
+  Slice 4D's path-based machinery is no longer needed:
+  `staticPathOf`, `push_arg_path` / `pop_arg_paths` emission, the
+  `funcParams` map and `argPathStack` runtime stack are all retained
+  but unused — keeping the ABI surface intact for older bundles and
+  documented in one place.
+
+  Result: ALL list-arg cells jump significantly. `order-total` flips
+  from 173 to **940** (the biggest single-function gain in M5
+  so far) because list elements share pointers between marshaling
+  and wasm-side iteration — `mark_forced` from inside the recursive
+  list-walk lands on the same JS Attendee object the renderer
+  visits. The remaining cells trade some bytes off vs slice 4D on
+  the LoanRequest cluster (the per-trace-point lazy snapshot jl4-core
+  takes mid-body isn't replicable from wasm — slice 4D's path
+  translation got slightly closer for those particular cells by
+  accident of the rendering order).
+
+Final trace sub-matrix state at end of M5 slice 4E:
+
+| Function                             | slice 4D | slice 4E |
+| ------------------------------------ | -------- | -------- |
+| `is-eligible`                        | ✓        | ✓        |
+| `calculate-bonus`                    | ✓        | ✓        |
+| `order-total`                        | 173      | **940**  |
+| `requires-foreign-income-disclosure` | 418      | 418      |
+| `monthly-loan-payment`               | 551      | 383      |
+| `total-interest-paid`                | 541      | 383      |
+| `denial-reason`                      | 525      | 376      |
+| `loan-is-approved`                   | 541      | 376      |
+| `calculate-tax`                      | 356      | 356      |
+| `effective-tax-rate`                 | 319      | 319      |
+| `tickets-available`                  | 108      | 108      |
+| `waitlist-position`                  | 108      | 108      |
+
+**2 byte-identical, 10 differs.** Sum of bytes matching across the
+10 differing cells: slice 4D `3,640` → slice 4E `3,767` (≈+3.5%
+overall).
+
+- **Slice 4F — DONE (drop the `hasNestedRecord` heuristic):** the
+  slice-4B depth-0 exception ("if the record has nested-record
+  fields, render all its direct fields as values") was based on a
+  misread of jl4-service's trace — it actually applies the lazy-NF
+  `__forced` rule at _every_ depth, including depth 0. Once
+  slice-4E's value-pointer markers populate `__forced` accurately,
+  the same rule generalises. Two trace-result fixes landed alongside:
+  `prettyResultText` accepts an optional `returnType` so the
+  top-level `Result: …` line quotes STRINGs (`JUST OF "x"` vs
+  `JUST OF x`), and `renderTraceResult` for kind `3` (OTHER) now
+  looks up the result's wasm pointer in `valueByPtr` (extended to
+  carry `{value, schema}`) and walks via `prettyL4Value` instead of
+  leaking the raw f64 bit-pattern.
+
+  Result: the LoanRequest cluster recovers everything 4D had while
+  keeping 4E's `order-total` win:
+
+  | Function                             | slice 4E | slice 4F |
+  | ------------------------------------ | -------- | -------- |
+  | `is-eligible`                        | ✓        | ✓        |
+  | `calculate-bonus`                    | ✓        | ✓        |
+  | `order-total`                        | 940      | **940**  |
+  | `monthly-loan-payment`               | 383      | **551**  |
+  | `loan-is-approved`                   | 376      | **541**  |
+  | `total-interest-paid`                | 383      | **541**  |
+  | `denial-reason`                      | 376      | **525**  |
+  | `requires-foreign-income-disclosure` | 418      | **418**  |
+  | `calculate-tax`                      | 356      | **356**  |
+  | `effective-tax-rate`                 | 319      | **319**  |
+  | `tickets-available`                  | 108      | 108      |
+  | `waitlist-position`                  | 108      | 108      |
+
+  **Sum across the 10 differing cells: 4,407 bytes** (vs 3,767 in 4E,
+  3,640 in 4D — **+17%** vs 4E, **+21%** vs 4D). Frame-local
+  `__forced` snapshots turn out NOT to be necessary — the live
+  `__forced` set works fine once we stop overriding it with the
+  depth-0 heuristic.
+
+Two remaining systemic gaps blocking the last 10 cells:
+
+1. **Intermediate-wasm-allocated compounds render as raw pointers.**
+   `valueByPtr` only registers values the marshaler created — but
+   when a body expression CONSTRUCTS a fresh compound (e.g. `IF cond
+THEN JUST OF "..."`), that pointer isn't in the map. Trace nodes
+   whose result is such a compound (kind = 3) fall through to
+   `String(raw)` and emit garbage like `5.494e-321`. Fix would need
+   either per-trace-node return-type metadata + a wasm-side
+   unmarshaller, or compile-time-emitted compound markers that
+   register intermediates in `valueByPtr` as they're built.
+
+2. **Property-selector CONSIDER-chain desugaring.** `req's applicant`
+   in jl4-core desugars to a deeper trace: an extra `attendees OF
+order` (etc.) child wrapping a `CONSIDER LoanRequest WHEN ... THEN
+applicant` node. We currently emit a flat Proj trace. Fix would
+   need the compile-time AST walk to recognise `Proj` and inject the
+   synthetic CONSIDER sub-tree (similar to slice 4A's AND/OR → IF
+   injection).
+
+#### Slice 4G (property-selector desugar) — landed
+
+`Schema.collectTraceNodes` now flags `Proj` expressions with
+`special = "PROJ"` and a `proj` payload (`appForm`, `fieldName`,
+`considerEx`). The runtime renderer expands each into a 4-level
+sub-tree:
+
+```
+record's field                    — original Proj
+  └── field OF record             — App-form (children moved here)
+        ├── (record arg-eval)
+        ├── field                 — fn-value (Result: <function>)
+        └── CONSIDER <Ty> ... THEN field
+              └── field           — bound-var lookup
+```
+
+CONSIDER body indent matches jl4-core's prettyprinter
+(`prefix.length + 1` columns, one past the first field's start).
+
+#### Slice 4H (helper traceMeta exposure) — landed
+
+`bundleHelpers` (a `Map wasmSymbol TraceMeta`) is built for every
+non-@export'd `Decide` in the module tree — top-level helpers and
+WHERE/LET locals alike — and serialized as `helperTraceMeta` in the
+schema JSON. The runtime's `setBundleHelperTraceMeta` merges it
+into `nodesByFn`, so when an instrumented body recurses into a
+helper, the helper's trace_enter calls resolve their node IDs
+against the helper's own table rather than corrupting them with
+the caller's metadata.
+
+Without this, `gross_tax$trace` (called from `calculate_tax$trace`)
+was emitting frames whose `nodeId=2` was looked up in
+`calculate-tax`'s 5-node table, picking up _its_ node 2 ("max OF
+0, ((gross tax OF tp) MINUS (tp's tax credits))") instead of
+gross-tax's "tax across brackets OF income, brackets". The visible
+fallout was wild duplicated subtrees with raw-pointer results like
+`7.273e-321` deep inside calculate-tax's trace.
+
+#### Slice 4I (intermediate-compound rendering) — landed
+
+`TraceNode.tnReturnSchema` carries a minimal layout-aware schema
+(`RSScalar | RSEnum | RSMaybe | RSList | RSRecord`) for every
+`kind=3` (compound) trace node. The runtime's `walkWasmValue`
+decodes the wasm-allocated value at the result pointer using that
+schema and feeds the reconstructed JS object to `prettyL4Value`,
+matching jl4-service's render byte-for-byte. Layout assumptions
+mirror `marshalStruct` / `marshalList` / `marshalMaybe`:
+
+- `RSMaybe` — 16-byte block: tag (0 = NOTHING) + 8-byte payload.
+- `RSList` — cons-cell head; each cell `{ item(8B), tail(8B) }`,
+  NULL tail = end.
+- `RSRecord` — `length fieldOrder * 8` bytes, one 8-byte slot per
+  field in declaration order.
+- `RSScalar` — the raw f64 is the value (decoded per `type`).
+
+Combined slice 4G/4H/4I result on the 12-fn test corpus:
+
+| Function                             | slice 4F | + 4G/4H/4I    |
+| ------------------------------------ | -------- | ------------- |
+| `is-eligible`                        | ✓        | ✓             |
+| `calculate-bonus`                    | ✓        | ✓             |
+| `denial-reason`                      | 525      | **IDENTICAL** |
+| `requires-foreign-income-disclosure` | 418      | **IDENTICAL** |
+| `monthly-loan-payment`               | 551      | **4,665**     |
+| `total-interest-paid`                | 541      | **3,110**     |
+| `order-total`                        | 940      | **1,874**     |
+| `loan-is-approved`                   | 541      | **580**       |
+| `effective-tax-rate`                 | 319      | **505**       |
+| `calculate-tax`                      | 356      | **423**       |
+| `tickets-available`                  | 108      | 108           |
+| `waitlist-position`                  | 108      | 108           |
+
+**4 byte-identical (vs 2 at slice 4F).** Sum across the 8 remaining
+differing cells: **11,373 bytes** (vs 4,407 at slice 4F — **+158%**).
+
+#### Slice 4J (cons-list head pruning + LIST … rule) — landed
+
+Two related lazy-NF rendering fixes for list args:
+
+- `marshalStruct` now initialises `__forced` as an empty non-enumerable
+  `Set` on every JS arg. That lets the renderer distinguish "wasm ran
+  but never forced this compound" (`__forced.size === 0`) from
+  "synthetic context, no wasm" (no `__forced` property at all — the
+  default-to-forced fallback). Non-enumerable keeps `__forced` out of
+  the JSON when the harness re-sends the same args object to
+  jl4-service.
+- `buildConsNodeReasoning` skips the head sub-tree entirely when the
+  head is a record with `__forced.size === 0` — matching jl4-core's
+  lazy NF, which never traces a constructor whose fields stayed
+  Omitted.
+- `prettyL4Value`'s array NF branch collapses to the literal
+  `LIST ...` (three ASCII dots) when every element is an unforced
+  record — mirroring `prettyNFWithConstructorFields`'s
+  `goList Omitted Omitted = "..."` clause in `L4.Print`.
+
+#### Slice 4K (prelude helper trace routing) — landed
+
+Two prelude-helper plumbing fixes so the trace tree reaches the
+helpers' bodies:
+
+- `bundleExports` now collects `Decide`s from dependency modules
+  too (the prelude), not just the main module. The resulting
+  `helperTraceMeta` entries cover prelude `count`/`go`/`max`/`min`
+  etc., so frames pushed inside those bodies resolve their node IDs
+  against the right table.
+- `Lower.hs` intercepts for `min` / `max` / `count` were
+  short-circuiting to runtime calls (`__l4_min` / `__l4_max` /
+  `__l4_list_count`) even in trace mode, skipping the lowered L4
+  body. They now check `tracingNow` and fall through to `callL4`
+  (which routes to `<name>$trace`) when tracing — keeping the
+  fast-path runtime call for the non-traced pass.
+
+Net trace-parity after slice 4G–4K (12-fn corpus):
+
+| Function                             | slice 4F | slice 4G–4K   |
+| ------------------------------------ | -------- | ------------- |
+| `is-eligible`                        | ✓        | ✓             |
+| `calculate-bonus`                    | ✓        | ✓             |
+| `denial-reason`                      | 525      | **IDENTICAL** |
+| `requires-foreign-income-disclosure` | 418      | **IDENTICAL** |
+| `monthly-loan-payment`               | 551      | **4,665**     |
+| `total-interest-paid`                | 541      | **3,110**     |
+| `order-total`                        | 940      | **1,874**     |
+| `waitlist-position`                  | 108      | **1,661**     |
+| `tickets-available`                  | 108      | **1,544**     |
+| `loan-is-approved`                   | 541      | **580**       |
+| `effective-tax-rate`                 | 319      | **505**       |
+| `calculate-tax`                      | 356      | **423**       |
+
+**4 byte-identical (vs 2 at slice 4F).** Sum across the 8 remaining
+differing cells: **14,362 bytes** (vs 4,407 at slice 4F — **+226%**).
+
+#### Slice 4L (Proj `resultKind` from declared field type) — landed
+
+`Schema.resultKindOf` for a `Proj` expression now reads the field's
+declared type out of `declares` directly (via a new `projFieldKind`
+helper), bypassing the InfoMap. The InfoMap's range index doesn't
+always have an entry for an inner Proj — particularly when the Proj
+sits inside a comparison or other wrapping expression — so the
+previous code fell through to the syntactic default and tagged
+`tp's annual income` with `kind=3` (compound). `__l4_trace_exit`
+then handed the renderer the raw f64 of the field's rational handle
+under the compound code path, which `walkWasmValue` couldn't decode
+and fell through to `String(raw)` — printing the (almost always
+near-zero) handle's bit pattern as a decimal.
+
+Result on `effective-tax-rate`: 505 → 1,344 (sum across the 8
+differing cells 14,362 → 15,201 bytes).
+
+#### Slice 4M (WHERE-binding wrappers) — landed
+
+Each zero-arg `WHERE` / `LET IN` binding now gets a wrapper trace
+node so the rendered Reasoning matches jl4-core's `traceToReasoning`
+(`labelExample (Just resolved)`-style 2-string `exampleCode`):
+
+- **Schema** — `TraceNode` gains `tnBindingLabel`. `collectTraceNodes`'
+  `Where`/`LetIn` case walks the locals list through a new
+  `chainLocals` helper that allocates one wrapper per zero-arg
+  `LocalDecide` (`bindingLabel = name`, `exampleCode = rhs-pretty`,
+  `resultKind = resultKindOf rhs`). Multi-arg locals are skipped
+  (they're lambda-lifted to standalone `<fn>$trace` functions).
+  Crucially we do NOT recurse into the rhs here — the wrapper's
+  children come from the helper `$trace`'s own events firing inside
+  the wrapper's enter/exit pair; an extra walk would emit a
+  redundant "rhs outer" node and nest the wrapper inside it.
+- **Schema** — final `collectTraceNodes` step now `sortOn tnId`
+  instead of just `reverse`, because the prepended-then-sorted
+  allocator no longer round-trips to id-sorted order under a simple
+  reverse. (Runtime indexes `traceMeta.nodes` by `id`, so any
+  out-of-order entry would make a frame's `lookupNode` pick up the
+  wrong text.)
+- **Lower.hs** — `lowerLocalDecl` for zero-arg locals brackets the
+  rhs evaluation with `__l4_trace_enter(wrapperId)` /
+  `__l4_trace_exit(value, kind)` in trace mode, looking up the
+  wrapper ID via the `Decide`'s source range in `traceNodeMap`.
+- **Runtime** — `renderFrame` prepends `node.bindingLabel` to the
+  trace node's `exampleCode` array when set, producing
+  `["income", "taxable income OF tp"]` on the wire.
+
+Result on `calculate-tax`: 436 → 2,151; `effective-tax-rate`:
+1,357 → 3,072 (sum across the 8 differing cells 15,227 → 18,657
+bytes, **+22%**).
+
+#### Slice 4N (operator-shape kind classifier + NUMBER var dispatch) — landed
+
+Two correctness fixes for comparisons inside prelude helpers:
+
+- **Schema** — `resultKindOf` for an `App` expression now matches on
+  the operator name (`__GEQ__`, `__LEQ__`, `__PLUS__`, …) and assigns
+  the right kind syntactically. The previous order tried the
+  typechecker's `InfoMap` first, which is keyed off main-module
+  source ranges and never has entries for prelude bodies — so
+  `x AT LEAST y` was getting kind=3 (compound) and the runtime
+  rendered the boxed boolean's raw f64 (`0` or `1`) instead of
+  `TRUE`/`FALSE`. Plus reordered the per-shape cases (`Plus → 0`,
+  `Geq → 1`, …) to try BEFORE the InfoMap so polymorphic types
+  that come back as unresolved variables don't poison the result.
+- **Lower.hs** — `LowerState` gains `bindingL4Types`; `lowerDecide`
+  populates it (alongside the existing MLIR-typed `bindingTypes`)
+  with each param's source-level `Type'` from the `TypeSig`.
+  `isNumberExpr` for a `Var` reference (App with no args) consults
+  this map when `typeOfExpr` returns Nothing — so a NUMBER-typed
+  param's comparison dispatches through `__l4_rat_cmp` instead of
+  comparing rational-pool indices as raw f64. Without this, `max`'s
+  `x AT LEAST y` body did `arith.cmpf oge handle6 handle7` and almost
+  always returned FALSE (the rational handles themselves obey no
+  ordering).
+
+Result: `calculate-tax` 2,151 → 2,190; `effective-tax-rate`
+3,072 → 3,111 (sum 18,657 → 18,735). The remaining diff is a
+trace-shape gap — jl4-core propagates a binding's label down
+through nested call frames (so `income|max OF …` becomes
+`income|IF …` becomes `income|x` for the taken branch), and the
+force-traced `x`/`y` leaves in an IF need their kind set from the
+enclosing function's param table (the schema currently has no
+access to that during the walk).
+
+#### Slice 4O (param-types + label inheritance + enum rendering) — landed
+
+Four related fixes that unlocked the next layer of `traceToReasoning`
+parity:
+
+- **Schema** — `collectTraceNodes` gains a `Map Text (Type' Resolved)`
+  param-type argument. `buildTraceMetaFromDecide` builds it from
+  each `Decide`'s `TypeSig.GivenSig`. `resultKindOf` for `App _ n []`
+  (Var) consults the map first, so a force-traced Var inside an IF
+  branch gets the right kind even when the typechecker's `InfoMap`
+  has no exact-range entry. Same plumbing for the lowering's
+  `collectTraceNodes` call so the wasm-side rangeMap kinds agree.
+- **Schema** — `collectTraceNodes` also takes a function-name →
+  GIVETH-type map. `resultKindOf` for `App f args` (with args)
+  consults it BEFORE the InfoMap — same coverage gap as Var
+  references but for `taxable income tp`, `max 0 x`, etc.
+  Recursive shape rules added for `IfThenElse` / `MultiWayIf` /
+  `Consider` / `Where` / `LetIn` (their kind = the branches' kind),
+  so the outer `IF … THEN … ELSE …` in a prelude body picks up
+  NUMBER instead of falling to kind=3.
+- **Schema** — for colliding helper names (e.g. the two `max`
+  definitions in prelude — one NUMBER, one MAYBE NUMBER),
+  `helperMetas` now uses `Map.fromListWith (\_ keep -> keep)` so
+  the FIRST source-order entry wins, matching wasm-side
+  `shouldSkip`'s dedup. Previously the schema described whichever
+  definition came last in source order, which wasn't necessarily
+  the wasm function that actually runs.
+- **Schema** — `chainLocals` no longer skips the rhs's children:
+  it recurses via `foldExprChildren` (not `goE`) on each
+  zero-arg WHERE/LET binding's rhs so nested `Proj`/`IF`/`Cmp`
+  expressions get their own trace nodes (slice 4G's Proj synth
+  needs them for `brackets for status (tp's filing status)` etc.).
+  We deliberately don't allocate a node for the rhs's OUTER App —
+  the wrapper's enter/exit already brackets the call site.
+- **Lower.hs** — `LowerState` gains `bindingL4Types :: Map Text
+(Type' Resolved)`; `lowerDecide` populates it (alongside
+  `bindingTypes`) from each param's source-level `Type'` from the
+  `TypeSig`. `isNumberExpr` for a Var consults this map when
+  `typeOfExpr` returns Nothing — so a NUMBER-typed param's
+  comparison dispatches through `__l4_rat_cmp` instead of comparing
+  rational-pool indices as raw f64. Without this, `max`'s body did
+  `arith.cmpf oge handle6 handle7` and almost always returned FALSE.
+- **Runtime** — `renderFrame` now propagates a `bindingLabel`
+  down through the LAST child of each frame, matching jl4-core's
+  recursive `(Trace lbl ((expr,kids):rest) val)` rewrite. The
+  effect on the wire: `income|max OF …` becomes `income|IF …`
+  becomes `income|x` (for the taken branch), nested through
+  several levels of call frames.
+- **Runtime** — `walkWasmValue`'s `enum` case now reads the
+  integer tag off the raw f64 and looks up the constructor name
+  in `schema.values`, instead of (mis)dispatching through
+  `walkScalar(raw, "string")` which read a bogus C-string at the
+  tag's bit pattern. Renders `Single`/`Married`/… in trace
+  results instead of `0`/`1`/…
+
+Result: `calculate-tax` 2,190 → 3,380; `effective-tax-rate`
+3,111 → 4,301; `order-total` 1,874 → 3,303; `monthly-loan-payment`
+4,665 → 5,069; `total-interest-paid` 3,110 → 3,514. Sum across the
+8 differing cells: **18,735 → 23,352 bytes (+25%)**.
+
+#### Slice 4P (force-trace literal CONSIDER branches) — landed
+
+`foldBranches` in `collectTraceNodes` now passes @forced=True@ for
+`MkBranch _ _ Lit{}` branch bodies — matching jl4-core's
+@simplifyEvalTrace@, which keeps the literal taken-branch leaf
+("0.199 :: Result: 0.199" for the @WHEN Uninsurable THEN 0.199@
+clause). Non-literal branch bodies (Var references like @WHEN Single
+THEN \`single brackets\`@) stay unforced: those routes go through
+the helper's @<fn>$trace@, and force-tracing them here would emit
+both the force-traced enter/exit AND the helper's body events while
+jl4-core prunes the helper's body when it returns a constructor
+value.
+
+Result: `order-total` 3,303 → 6,336 (+3,033); `monthly-loan-payment`
+5,069 → 5,794; `total-interest-paid` 3,514 → 4,239. Sum across the
+8 differing cells: **23,352 → 27,835 bytes (+19%)**.
+
+#### Slice 4Q (split Double formatters: Aeson vs Fixed) — landed
+
+Trace text and value-level JSON disagree on how to render a
+non-integer Double. jl4-core's @L4.Utils.Ratio.prettyRatio@ uses
+@Data.Scientific.formatScientific Fixed Nothing@ — always decimal,
+never scientific. The value-level JSON encoder still uses Aeson's
+default (Ryu-shortest, scientific when @k=-1@). So the SAME rational
+@1.6583333333333332e-2@ renders as:
+
+- value-level (Aeson): `1.6583333333333332e-2`
+- trace text (Fixed): `0.016583333333333332`
+
+Until now both wasm-side paths went through a single
+`formatAesonDouble`. Forcing it to one mode regressed the other.
+
+Fix: added `formatFixedDouble` (same exponent decode but no
+scientific cutoff — always emits decimal) and routed every trace-text
+caller through it: `renderTraceResult` (kind=0), `prettyResultText`
+(the trace's outer `Result: …` line for the function), and
+`prettyL4Value` (the schema-driven NF prettyprinter for record /
+list / MAYBE results). `aesonStringify` keeps using
+`formatAesonDouble` so the wire bytes for the JSON value stay
+Aeson-shaped.
+
+Result: `monthly-loan-payment` flipped to byte-identical (was 5,794).
+`total-interest-paid` flipped to byte-identical (was 4,239).
+**6 byte-identical (vs 4 at slice 4O).** Sum across the 6 remaining
+differing cells: **27,835 → 17,766 bytes** — the two flips removed
+~10K bytes of remaining diff.
+
+Net trace-parity through slice 4Q (12-fn corpus):
+
+| Function                             | slice 4O | slice 4P  | slice 4Q      |
+| ------------------------------------ | -------- | --------- | ------------- |
+| `is-eligible`                        | ✓        | ✓         | ✓             |
+| `calculate-bonus`                    | ✓        | ✓         | ✓             |
+| `denial-reason`                      | ✓        | ✓         | ✓             |
+| `requires-foreign-income-disclosure` | ✓        | ✓         | ✓             |
+| `monthly-loan-payment`               | 5,069    | 5,794     | **IDENTICAL** |
+| `total-interest-paid`                | 3,514    | 4,239     | **IDENTICAL** |
+| `order-total`                        | 3,303    | **6,336** | 6,336         |
+| `calculate-tax`                      | 3,380    | 3,380     | 3,380         |
+| `effective-tax-rate`                 | 4,301    | 4,301     | 4,301         |
+| `tickets-available`                  | 1,544    | 1,544     | 1,544         |
+| `waitlist-position`                  | 1,661    | 1,661     | 1,661         |
+| `loan-is-approved`                   | 580      | 580       | 580           |
+
+**6 byte-identical, 6 trace-differs.** Sum across the 6 remaining
+differing cells: **17,802 bytes**.
+
+#### Slice 4R (helper-name arity disambiguation) — landed
+
+Three changes working together to fix the prelude `go` collision:
+
+- **Schema** — new `collectAllDecidesWithArity` walks the module
+  tree maintaining a "scope" set of variables visible at each
+  Decide's definition point. Computes each Decide's post-closure
+  arity = source params + captured free vars (free vars in the
+  body that resolve to the enclosing scope, after excluding
+  top-level names and the Decide's own params/self-name). Also
+  inlines `freeVarsOfExpr` from Lower.hs since the two can't share
+  a module without inducing an import cycle (Lower imports Schema
+  for the bundle types).
+- **Schema** — mirrors Lower's `sigHasFunctionParam` filter:
+  Decides with a function-typed parameter are SKIPPED entirely
+  (their bodies become externs in the wasm; their WHERE locals
+  never get a `<fn>$trace`). Without this, foldr's `go` and
+  foldl's `go` would shadow count's `go` at the schema's
+  helperTraceMeta key even though their wasm functions don't
+  exist.
+- **Schema** — `helperTraceMeta` keys are now
+  `<name>__<postClosureArity>` instead of bare `<name>`. The
+  combiner is `fromListWith (\_new old -> old)` (keep-first),
+  matching Lower's `dedupByName` which scans source-chronological
+  order and keeps the first occurrence per mangled name.
+- **Lower.hs** — `lowerDecide` interns `<funcName>__<length params>`
+  (where `params` already includes closure-extended args) as the
+  `__l4_trace_enter_fn` symbol. This is the same key the schema
+  uses, so the runtime's `nodesByFn[sym]` lookup matches per-helper
+  rather than collapsing all `go`s onto one entry.
+- **Runtime** — `setBundleFunctions` builds the export key as
+  `<wasmSymbol>__<paramOrder length>` (minus 2 deontic extras),
+  matching Lower's interning convention for exports too.
+
+Net effect on the 12-fn corpus:
+
+| Function                             | slice 4Q | slice 4R  |
+| ------------------------------------ | -------- | --------- |
+| `is-eligible`                        | ✓        | ✓         |
+| `calculate-bonus`                    | ✓        | ✓         |
+| `denial-reason`                      | ✓        | ✓         |
+| `requires-foreign-income-disclosure` | ✓        | ✓         |
+| `monthly-loan-payment`               | ✓        | ✓         |
+| `total-interest-paid`                | ✓        | ✓         |
+| `order-total`                        | 6,336    | **6,465** |
+| `calculate-tax`                      | 3,380    | 3,380     |
+| `effective-tax-rate`                 | 4,301    | 4,301     |
+| `tickets-available`                  | 1,544    | **1,673** |
+| `waitlist-position`                  | 1,661    | **1,790** |
+| `loan-is-approved`                   | 580      | 580       |
+
+**6 byte-identical, 6 trace-differs.** Sum across the 6 remaining
+differing cells: **17,802 → 18,189 bytes**. tickets-available /
+waitlist-position / order-total each advanced 129 bytes — the
+post-disambiguation lookups now find count's `go` (not foldr's),
+so the trace renders `CONSIDER l WHEN EMPTY THEN acc, …` text
+instead of foldr's `cons OF x, (go OF xs)` text. The new wall
+is force-traced @Var@ bodies in CONSIDER branches (`WHEN EMPTY
+THEN acc` — svc renders @acc :: 1@; our slice 4P only
+force-traces Lit bodies).
+
+### Slice 4S — constructor-helper expansion + Var leaves + lazy-NF heuristics
+
+Closes the constructor-helper expansion gap on calculate-tax /
+effective-tax-rate / order-total, plus the CONSIDER Var-body leaves
+on tickets-available / waitlist-position — all five flip to
+trace-byte-identical.
+
+Three coordinated fixes:
+
+1. **`App _ _ []` (Var) as a single leaf in trace mode.** Schema's
+   `foldBranches` now force-traces CONSIDER branch bodies that are
+   Var references (App with no args), not just Lits. Lower adds
+   `callL4Direct` and routes 0-arg App calls through it whenever
+   `tracing` is true — bypassing the `$trace` dispatch so the
+   helper's body events don't pollute the parent's trace pool.
+   jl4-core treats a bare Var lookup as a single leaf with the
+   helper's already-evaluated value (lazy NF); the parent's
+   force-trace wrapper now provides that leaf, with the correct
+   kind from the schema's resultKindOf chain.
+
+2. **Schema kind inference for un-annotated helpers.** Most prelude
+   helpers (`count`'s `go acc l MEANS …`, `at`'s recursive helper, …)
+   have no explicit GIVEN annotations or GIVETH. Schema previously
+   defaulted these to kind 3 (compound), so a Var leaf on `acc`
+   rendered as a raw pointer (e.g. `2.5e-323`). Two new sets thread
+   through `collectTraceNodes`: `unannotatedParams` (per-Decide,
+   defaults Var leaves to NUMBER kind 0) and `unannotatedFnNames`
+   (bundle-wide, defaults un-annotated helper return types to
+   NUMBER). Lower mirrors the param-set default via a Lower-side
+   kind override in the `lowerExpr` wrapper, consulting
+   `bindingTypes` for the actual MLIR type — the runtime then uses
+   `frame.result.kind` as an override when the schema's kind is
+   the default 3.
+
+3. **`returnSchema` fallback + lazy-NF record heuristic.**
+   `goE`'s and `chainLocals`' retSchema computation now falls back
+   to `fnReturnTypes[head]` when the InfoMap has no entry for the
+   App's range — closing the case where `brackets for status OF (…)`
+   carries kind 3 but no walkable schema. The runtime renderer
+   also unwraps `{__l4_aeson_double: x}` / `{__l4_raw_json: s}`
+   tagged values in `prettyL4Value`'s number branch (was leaking
+   `[object Object]` for record fields decoded from wasm memory),
+   and uses Aeson Ryu form when `inResult` is false (exampleCode
+   mode) vs Fixed form when true (trace's "Result: …" line) —
+   matching jl4-service's split between `prettyLayout` and
+   `prettyRatio`. For body-allocated records walked via
+   `walkWasmValue`, the renderer attaches a `__forced` set
+   containing only the first field — approximating jl4-core's
+   lazy-NF rendering of a LIST element where only the head field
+   has been demanded at the trace observation point (e.g.
+   `TaxBracket OF 0, (...), (...)`).
+
+Net effect on the 12-fn corpus:
+
+| Function                             | slice 4R | slice 4S |
+| ------------------------------------ | -------- | -------- |
+| `is-eligible`                        | ✓        | ✓        |
+| `calculate-bonus`                    | ✓        | ✓        |
+| `denial-reason`                      | ✓        | ✓        |
+| `requires-foreign-income-disclosure` | ✓        | ✓        |
+| `monthly-loan-payment`               | ✓        | ✓        |
+| `total-interest-paid`                | ✓        | ✓        |
+| `order-total`                        | 6,465    | ✓        |
+| `calculate-tax`                      | 3,380    | ✓        |
+| `effective-tax-rate`                 | 4,301    | ✓        |
+| `tickets-available`                  | 1,673    | ✓        |
+| `waitlist-position`                  | 1,790    | ✓        |
+| `loan-is-approved`                   | 580      | 580      |
+
+**11 trace-byte-identical, 1 trace-differs.** The only remaining
+gap is `loan-is-approved`'s NOT-range collision (slice 4N) — a
+parser-level limitation where @NOT P@ and the inner @P@ share a
+`SrcRange`, so both `lowerExpr` wrappers look up the same node and
+emit duplicate trace events.
+
+Known still-broken: `freeVarsOfExpr` doesn't catch the
+function-name head of `App _ headRes args` (e.g. @cons@ in
+@cons OF x, go xs@) as a free variable, so foldr's go is
+incorrectly classified as arity 2 instead of arity 3 by BOTH
+Schema and Lower. We rely on the fact that foldr / foldl are
+filtered out (function-typed param) so this miscount doesn't
+surface — but if a non-filtered helper depended on this bug
+the schema and Lower would still agree.
+
+The remaining gaps cluster around two structural issues no further
+slice has been able to fix cleanly:
+
+1. **Constructor-helper expansion** (`calculate-tax` 3,380,
+   `effective-tax-rate` 4,301, `order-total` 6,336). jl4-core's
+   trace shows `single brackets :: LIST TaxBracket OF …` as a leaf —
+   the helper's body events are pruned because it returns a
+   constructor value through a chain of nullary helper calls. Our
+   wasm expands every `<helper>$trace` call into its body trace,
+   so calculate-tax shows `single brackets` and recursively
+   `bracket 10%`, `bracket 12%`, … as nested fn-value frames where
+   jl4-core has collapsed everything to a single leaf with the
+   already-evaluated LIST result. Closing this requires either
+   (a) a static analyser that detects "pure constructor"
+   helpers and suppresses their `$trace` emission, or (b) a
+   runtime-side prune that drops a frame whose body just chains
+   constructors.
+
+2. **Prelude helper-name collision** (`tickets-available` 1,544,
+   `waitlist-position` 1,661). Multiple WHERE-local `go` helpers
+   exist in the prelude (`foldr`, `foldl`, `count`, `reverse`,
+   `sum`, …). The wasm side mangles them by post-closure arity
+   (`go__2` / `go__3`); after MLIR dedup only ONE definition per
+   mangled name survives. Meanwhile the runtime's
+   `__l4_trace_enter_fn` interns the BARE source name "go", and
+   the schema's `helperTraceMeta` is keyed by sanitized source
+   name too — so every `go` call's nodes resolve against whichever
+   `go` decide won the schema's first-source-order race
+   (currently foldl's), even when wasm is actually executing
+   count's `go__2`. Result: count's `acc + 1` events render with
+   foldl's `op OF acc, x` exampleCode. Closing this requires
+   either propagating the post-closure mangled name down into
+   `__l4_trace_enter_fn`'s string pool (currently impossible —
+   mangling is post-lowering, so the constants are emitted with
+   the unmangled name), or replicating closure-conversion's
+   capture analysis schema-side to compute matching arities.
+
+3. **NOT-range collision** (`loan-is-approved` 580). The parser
+   gives @NOT P@ and the inner @P@ the same `SrcRange`; both
+   `lowerExpr` wrapper calls look up the same range and emit
+   `__l4_trace_enter(id)` back-to-back. Documented in detail in
+   slice 4N's "Known limitation" section.
+
+Known limitation surfaced by slice 4K: the prelude has multiple
+WHERE-local helpers that share a source name (most notably `go` —
+defined inside `count`, `foldr`, `foldl`, `reverse`, `sum`, …).
+The wasm side disambiguates via arity mangling after closure
+conversion; the schema side does not, so `helperTraceMeta["go"]`
+picks whichever decide was last in source order. Worst case: a
+helper's trace renders with another helper's exampleCode text —
+text-only divergence past byte ~1500 in
+`tickets-available`/`waitlist-position`.
+
+Next gaps observed in calculate-tax (now at byte 423):
+
+- WHERE-binding wrappers: jl4-service emits an `<varname>|<rhs>`
+  frame around each WHERE binding's evaluation; our wasm currently
+  inlines the helper's trace without the wrapper.
+- `simplifyEvalTrace` leaf-pruning rules: jl4-core drops trace
+  nodes with empty children + successful results (plus literal /
+  constructor / `__internal__` heuristics); our renderer keeps them.
+- Prelude helper-name disambiguation (above): schema-side arity
+  mangling needs to mirror Lower.hs's post-closure-conversion
+  `dedupAndSynthExterns` step.
+- **Slice 3:** type-driven runtime value pretty-printer matching
+  `Print.prettyLayout NF` for records / constructors / lists / `JUST`.
+- **Slice 4:** match interpreter desugaring shape (property selectors,
+  AND→IF, CONSIDER chains) + `simplifyEvalTrace` pruning rules. The last,
+  trickiest mile.
+
 ---
 
 ## Milestone 6 — Deontic (highest risk, do last)

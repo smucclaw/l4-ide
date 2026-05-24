@@ -40,6 +40,11 @@ main = do
     , test "plain fn stays supported"          testPlainFunctionSupported
     , test "state graph baked into schema"     testStateGraphBaked
     , test "no state graph for plain fn"       testNoStateGraphForPlainFn
+    , test "traceMeta pretty-print baked"      testTraceMetaBaked
+    , test "<fn>$trace symbol emitted"         testTraceSymbolEmitted
+    , test "traceMeta nodes populated"         testTraceMetaNodes
+    , test "AND/OR/NOT marked special"         testTraceSpecialMarkers
+    , test "fnValue node + enter_fn/exit_fn"   testTraceFnValueAndContext
     ]
   if and results
     then do
@@ -166,7 +171,7 @@ schemaWithDiagnostics src =
     Left errs -> Left errs
     Right r ->
       let (_mlir, diags) = lowerProgramWithDiagnostics r.tcdInfoMap r.tcdModule []
-          bundle = applyDiagnostics diags (bundleExports "test.wasm" "test" r.tcdModule [])
+          bundle = applyDiagnostics diags (bundleExports "test.wasm" "test" r.tcdInfoMap r.tcdModule [])
       in Right (TE.decodeUtf8 (LBS.toStrict (encodeBundle bundle)))
 
 -- | A DEONTIC/regulative function can't be faithfully compiled, so the
@@ -234,11 +239,145 @@ testStateGraphBaked = do
       putStrLn $ "\n    typecheck failed: " <> show errs
       pure False
     Right r -> do
-      let bundle = bundleExports "test.wasm" "test" r.tcdModule []
+      let bundle = bundleExports "test.wasm" "test" r.tcdInfoMap r.tcdModule []
           json = TE.decodeUtf8 (LBS.toStrict (encodeBundle bundle))
       pure $ T.isInfixOf "\"stateGraphs\"" json
           && T.isInfixOf "\"name\":\"demo\"" json
           && T.isInfixOf "digraph" json
+
+-- | M5 slice 2A: every exported function's schema entry carries a
+-- @traceMeta@ block with the function name, body, and parameter
+-- references pre-rendered via 'L4.Print.prettyLayout' — the exact
+-- strings jl4-service's interpreter uses inside @Reasoning.exampleCode@.
+-- The runtime consumes these to synthesise a trace tree at request time
+-- without re-implementing the pretty-printer in JavaScript.
+testTraceMetaBaked :: IO Bool
+testTraceMetaBaked = do
+  let src = T.unlines
+        [ "@export Is eligible check"
+        , "GIVEN `years of service` IS A NUMBER"
+        , "GIVETH A BOOLEAN"
+        , "DECIDE `is eligible` IF `years of service` >= 3"
+        ]
+  case checkWithImports emptyVFS src of
+    Left errs -> do
+      putStrLn $ "\n    typecheck failed: " <> show errs
+      pure False
+    Right r -> do
+      let bundle = bundleExports "test.wasm" "test" r.tcdInfoMap r.tcdModule []
+          json = TE.decodeUtf8 (LBS.toStrict (encodeBundle bundle))
+      -- The backticked function name (matches jl4-service's prettyLayout
+      -- of the AppForm head): a multi-word name is wrapped in backticks.
+      let okFnName = T.isInfixOf "\"fnName\":\"`is eligible`\"" json
+      -- The body comes out as `<lhs> AT LEAST <rhs>` after prelude
+      -- operator rendering. Spot-check that the source-level operator
+      -- name and the backticked parameter reference appear; full byte
+      -- equality is what the parity harness's trace sub-matrix tracks
+      -- downstream as later slices land.
+      let okBody = T.isInfixOf "AT LEAST" json
+                && T.isInfixOf "`years of service`" json
+      let okParams = T.isInfixOf "\"params\":[\"years of service\"]" json
+      pure (okFnName && okBody && okParams)
+
+-- | M5 slice 2C: every export carries a @traceMeta.nodes@ array with
+-- one 'TraceNode' per traceable subexpression — pre-rendered via
+-- 'L4.Print.prettyLayout' and tagged with a 'resultKind' the runtime
+-- uses to render @Result: …@ lines. The walk skips 'Lit' and zero-arg
+-- @App@ (the 'Var' pattern), mirroring jl4-service's
+-- @simplifyEvalTrace@ pruning.
+testTraceMetaNodes :: IO Bool
+testTraceMetaNodes = do
+  -- An IF body with a numeric arithmetic branch — that gives us three
+  -- traceable subexpressions: the IfThenElse itself, the Geq guard, and
+  -- the Plus body. Skipped: the Lit 0 / Lit 1 / Lit 2 (Lit) and the
+  -- Var 'age' references (zero-arg App).
+  let src = T.unlines
+        [ "@export Bonus point"
+        , "GIVEN `age` IS A NUMBER"
+        , "GIVETH A NUMBER"
+        , "DECIDE `bonus` IS IF `age` >= 18 THEN `age` PLUS 1 ELSE 0"
+        ]
+  case checkWithImports emptyVFS src of
+    Left errs -> do
+      putStrLn $ "\n    typecheck failed: " <> show errs
+      pure False
+    Right r -> do
+      let bundle = bundleExports "test.wasm" "test" r.tcdInfoMap r.tcdModule []
+          json = TE.decodeUtf8 (LBS.toStrict (encodeBundle bundle))
+      -- IfThenElse → kind 0 (NUMBER, via InfoMap on the whole expression).
+      -- Geq → kind 1 (BOOLEAN). Plus → kind 0.
+      let okIf  = T.isInfixOf "\"id\":0" json && T.isInfixOf "IF " json
+          okGeq = T.isInfixOf "AT LEAST" json
+                && T.isInfixOf "\"resultKind\":1" json
+          okAdd = T.isInfixOf "PLUS" json
+                && T.isInfixOf "\"resultKind\":0" json
+      pure (okIf && okGeq && okAdd)
+
+-- | M5 slice 2B: every lowered Decide gets a second @func.func@ named
+-- @<fn>$trace@ that brackets the body with per-subexpression
+-- @__l4_trace_enter(id)@ / @__l4_trace_exit(boxed, kind)@. The runtime
+-- calls into this when the request asks for @?trace=full@; the untraced
+-- @<fn>@ stays the fast path.
+testTraceSymbolEmitted :: IO Bool
+testTraceSymbolEmitted = do
+  let src = T.unlines
+        [ "@export Adult check"
+        , "GIVEN `age` IS A NUMBER"
+        , "GIVETH A BOOLEAN"
+        , "DECIDE `is_adult` IF `age` >= 18"
+        ]
+  case lowerSource src of
+    Left errs -> do
+      putStrLn $ "\n    typecheck failed: " <> show errs
+      pure False
+    Right mlir ->
+      -- Both symbols must exist, and the trace clone must contain the
+      -- runtime calls. The trace exit's kind byte for BOOLEAN is 1.0.
+      pure $ T.isInfixOf "func.func @is_adult(" mlir
+          && T.isInfixOf "func.func @is_adult$trace(" mlir
+          && T.isInfixOf "@__l4_trace_enter" mlir
+          && T.isInfixOf "@__l4_trace_exit"  mlir
+
+-- | M5 slice 4A: AND/OR (and direct App "__AND__"/"__OR__") nodes get
+-- a @"special"@ marker in the schema so the runtime knows to append a
+-- synthetic IF sub-tree and apply short-circuit filtering. This is the
+-- mechanism that flips `is-eligible` to byte-identical.
+testTraceSpecialMarkers :: IO Bool
+testTraceSpecialMarkers = do
+  let src = T.unlines
+        [ "@export Both"
+        , "GIVEN `age` IS A NUMBER"
+        , "GIVETH A BOOLEAN"
+        , "DECIDE `ok` IS `age` >= 18 AND `age` <= 65"
+        ]
+  case schemaWithDiagnostics src of
+    Left errs -> do
+      putStrLn $ "\n    typecheck failed: " <> show errs
+      pure False
+    Right json ->
+      pure $ T.isInfixOf "\"special\":\"AND\"" json
+
+-- | M5 slice 4A: every `<fn>$trace` clone calls @__l4_trace_enter_fn@
+-- (with the fn's wasm symbol) at entry and @__l4_trace_exit_fn@ at
+-- return, AND emits a fn-value @__l4_trace_enter/exit@ pair so the
+-- runtime sees [fn-value, body] frames per call. Without this, nested
+-- calls would resolve node IDs against the WRONG function's metadata.
+testTraceFnValueAndContext :: IO Bool
+testTraceFnValueAndContext = do
+  let src = T.unlines
+        [ "@export Adult check"
+        , "GIVEN `age` IS A NUMBER"
+        , "GIVETH A BOOLEAN"
+        , "DECIDE `is_adult` IF `age` >= 18"
+        ]
+  case lowerSource src of
+    Left errs -> do
+      putStrLn $ "\n    typecheck failed: " <> show errs
+      pure False
+    Right mlir ->
+      pure $ T.isInfixOf "func.func @is_adult$trace(" mlir
+          && T.isInfixOf "@__l4_trace_enter_fn" mlir
+          && T.isInfixOf "@__l4_trace_exit_fn"  mlir
 
 -- | A plain (non-regulative) function has no state graph, so the schema
 -- carries an empty stateGraphs array. (M3 negative control)
@@ -255,7 +394,7 @@ testNoStateGraphForPlainFn = do
       putStrLn $ "\n    typecheck failed: " <> show errs
       pure False
     Right r -> do
-      let bundle = bundleExports "test.wasm" "test" r.tcdModule []
+      let bundle = bundleExports "test.wasm" "test" r.tcdInfoMap r.tcdModule []
           json = TE.decodeUtf8 (LBS.toStrict (encodeBundle bundle))
       pure $ T.isInfixOf "\"stateGraphs\":[]" json
 
@@ -334,7 +473,7 @@ testSchemaUsesImportedDeclares = do
     Right tc -> do
       let mainMod = tc.tcdModule
           depMods = map (\ri -> ri.riTypeChecked.program) tc.tcdResolvedImports
-          bundle  = bundleExports "info.wasm" "test" mainMod depMods
+          bundle  = bundleExports "info.wasm" "test" tc.tcdInfoMap mainMod depMods
           json    = TE.decodeUtf8 (LBS.toStrict (encodeBundle bundle))
       -- The two field names must appear in the schema — they only show
       -- up if the imported DECLARE was reachable from typeToParameter.

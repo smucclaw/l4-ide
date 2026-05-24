@@ -131,6 +131,7 @@ compileToPipeline config filepath = do
           schemaBundle = applyDiagnostics lowerDiags $ bundleExports
             (Text.pack (baseName <> ".wasm"))
             (computeVersion filepath)  -- placeholder — real one in Compiler.hs
+            tc.infoMap
             mainModule
             depModules
 

@@ -6,7 +6,11 @@
 
 import fs from "node:fs";
 import http from "node:http";
-import { createRuntime } from "../runtime/jl4-runtime.mjs";
+import {
+  createRuntime,
+  aesonStringify,
+  wrapEvaluationEnvelope,
+} from "../runtime/jl4-runtime.mjs";
 
 const [, , schemaPath, wasmPath, portArg] = process.argv;
 if (!schemaPath || !wasmPath) {
@@ -21,6 +25,9 @@ const wasmBuf = fs.readFileSync(wasmPath);
 const rt = createRuntime();
 const { instance } = await WebAssembly.instantiate(wasmBuf, rt.makeImports());
 rt.attachMemory(instance.exports.memory);
+// M5 slice 4A — give the runtime the full schema so nested `<fn>$trace`
+// calls can resolve node IDs against the called function's nodes table.
+rt.setBundleFunctions(schema.functions || {});
 
 // Build name → schema lookup using both sanitized (hyphen) and spaced
 // function names so either routing convention works.
@@ -37,7 +44,7 @@ const server = http.createServer((req, res) => {
     return;
   }
   const m = req.url.match(
-    /\/deployments\/[^/]+\/functions\/([^/]+)\/evaluation/,
+    /\/deployments\/[^/]+\/functions\/([^/]+)\/evaluation(?:\?(.*))?$/,
   );
   if (!m) {
     res.writeHead(404);
@@ -45,6 +52,10 @@ const server = http.createServer((req, res) => {
     return;
   }
   const fnName = decodeURIComponent(m[1]);
+  const query = new URLSearchParams(m[2] || "");
+  // jl4-service accepts both the X-L4-Trace header and the ?trace= query
+  // param; mirror just the query for slice 1 (the harness uses the query).
+  const traceMode = query.get("trace") || "none";
   const meta = fnByName[fnName] || fnByName[fnName.replace(/ /g, "-")];
   if (!meta) {
     res.writeHead(404, { "content-type": "application/json" });
@@ -56,16 +67,16 @@ const server = http.createServer((req, res) => {
   req.on("end", () => {
     try {
       const parsed = body ? JSON.parse(body) : {};
-      const result = rt.invokeFunction(instance, meta, parsed.arguments || {});
+      const args_ = parsed.arguments || {};
+      const payload =
+        traceMode === "full"
+          ? rt.invokeFunctionWithReasoning(instance, meta, args_)
+          : { value: rt.invokeFunction(instance, meta, args_) };
       res.writeHead(200, { "content-type": "application/json" });
-      // Emit keys in alphabetical order to match jl4-service's
-      // Aeson-encoded output byte-for-byte.
-      res.end(
-        JSON.stringify({
-          contents: { result: { value: result } },
-          tag: "SimpleResponse",
-        }),
-      );
+      // aesonStringify matches jl4-service's Aeson-encoded output byte-for-
+      // byte: bytestring's `doubleDec` for fractional NUMBER results, and
+      // alphabetically-sorted object keys for nested Reasoning trees.
+      res.end(aesonStringify(wrapEvaluationEnvelope(payload)));
     } catch (err) {
       res.writeHead(500, { "content-type": "application/json" });
       res.end(JSON.stringify({ error: String(err.message || err) }));
