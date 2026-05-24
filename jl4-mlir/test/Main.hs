@@ -45,6 +45,7 @@ main = do
     , test "traceMeta nodes populated"         testTraceMetaNodes
     , test "AND/OR/NOT marked special"         testTraceSpecialMarkers
     , test "fnValue node + enter_fn/exit_fn"   testTraceFnValueAndContext
+    , test "NOT-range disambiguation"          testTraceNotRangeDisambiguation
     ]
   if and results
     then do
@@ -356,6 +357,34 @@ testTraceSpecialMarkers = do
       pure False
     Right json ->
       pure $ T.isInfixOf "\"special\":\"AND\"" json
+
+-- | M5 slice 4T: a @NOT P@ expression and its inner @P@ may collapse
+-- into the same 'SrcRange' at parse time. The rangeMap is now keyed by
+-- '(SrcRange, exprDisambiguator)', so both get distinct trace nodes
+-- and the wrapper can look up each by its own AST shape. Verify the
+-- schema has BOTH a NOT-tagged node AND a separate PROJ-tagged node
+-- for an expression like @NOT req's flag@.
+testTraceNotRangeDisambiguation :: IO Bool
+testTraceNotRangeDisambiguation = do
+  let src = T.unlines
+        [ "DECLARE LoanRequest HAS"
+        , "    `flag` IS A BOOLEAN"
+        , ""
+        , "@export Check"
+        , "GIVEN req IS A LoanRequest"
+        , "GIVETH A BOOLEAN"
+        , "DECIDE `ok` IS NOT req's `flag`"
+        ]
+  case schemaWithDiagnostics src of
+    Left errs -> do
+      putStrLn $ "\n    typecheck failed: " <> show errs
+      pure False
+    Right json ->
+      -- The NOT subtree must exist as one node; the inner PROJ subtree
+      -- as another. If the rangeMap collapsed them, the PROJ node would
+      -- be missing from the schema (its 'tnSpecial' would be absent).
+      pure $ T.isInfixOf "\"special\":\"NOT\"" json
+          && T.isInfixOf "\"special\":\"PROJ\"" json
 
 -- | M5 slice 4A: every `<fn>$trace` clone calls @__l4_trace_enter_fn@
 -- (with the fn's wasm symbol) at entry and @__l4_trace_exit_fn@ at
