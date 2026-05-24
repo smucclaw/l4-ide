@@ -818,6 +818,27 @@ export const AiPermissionsSet: NotificationType<{
   method: 'aiPermissionsSet',
 }
 
+/** Chat-panel UI preferences. Persisted on the extension side via
+ *  `vscode.workspace.getConfiguration` under `legaleseAi.<key>`, so
+ *  Settings Sync carries them across machines — same mechanism as
+ *  permissions. New entries: add a field here, a default in the
+ *  webview store, and a key mapping in the extension handler. */
+export interface AiPreferences {
+  showReasoning: boolean
+}
+
+/** Webview asks for all current preference values. */
+export const AiPreferencesGet: RequestType<void, { values: AiPreferences }> = {
+  method: 'aiPreferencesGet',
+}
+
+/** Webview pushes a partial preference update. */
+export const AiPreferencesSet: NotificationType<{
+  values: Partial<AiPreferences>
+}> = {
+  method: 'aiPreferencesSet',
+}
+
 /** Webview asks the extension for the L4 render-meta of an MCP tool.
  *  The extension parses `[deployId/fnName]` from the cached MCP tool
  *  description, fetches `/deployments/{id}/functions/{fn}` (cached by

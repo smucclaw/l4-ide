@@ -590,6 +590,159 @@ spec = describe "integration" do
         let bs = LBS.toStrict (responseBody resp)
         BS.isInfixOf "x-l4-type" bs `shouldBe` False
 
+    -- ------------------------------------------------------------------------
+    -- MCP 2026-07-28 spec migration: version negotiation, stateless model,
+    -- Tasks extension surface. Tasks lifecycle against a real slow-compile
+    -- is covered by the out-of-tree smoke test client.
+    -- ------------------------------------------------------------------------
+
+    it "MCP initialize echoes 2026-07-28 when client requests it" do
+      withServiceFromSources "mcp-init-new" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        let mcpReq = Aeson.object
+              [ "jsonrpc" Aeson..= ("2.0" :: Text)
+              , "id" Aeson..= (1 :: Int)
+              , "method" Aeson..= ("initialize" :: Text)
+              , "params" Aeson..= Aeson.object
+                  [ "protocolVersion" Aeson..= ("2026-07-28" :: Text) ]
+              ]
+        req <- buildJsonPost (baseUrl <> "/.mcp") mcpReq
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 200
+        let body = decodeObject (responseBody resp)
+        case lookupKey "result" body of
+          Just (Aeson.Object res) ->
+            Aeson.KeyMap.lookup "protocolVersion" res
+              `shouldBe` Just (Aeson.String "2026-07-28")
+          _ -> expectationFailure "Missing result object"
+
+    it "MCP initialize echoes legacy 2025-03-26 for old clients" do
+      withServiceFromSources "mcp-init-old" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        let mcpReq = Aeson.object
+              [ "jsonrpc" Aeson..= ("2.0" :: Text)
+              , "id" Aeson..= (1 :: Int)
+              , "method" Aeson..= ("initialize" :: Text)
+              , "params" Aeson..= Aeson.object
+                  [ "protocolVersion" Aeson..= ("2025-03-26" :: Text) ]
+              ]
+        req <- buildJsonPost (baseUrl <> "/.mcp") mcpReq
+        resp <- httpLbs req mgr
+        let body = decodeObject (responseBody resp)
+        case lookupKey "result" body of
+          Just (Aeson.Object res) ->
+            Aeson.KeyMap.lookup "protocolVersion" res
+              `shouldBe` Just (Aeson.String "2025-03-26")
+          _ -> expectationFailure "Missing result object"
+
+    it "MCP initialize defaults to latest when client sends unknown version" do
+      withServiceFromSources "mcp-init-unknown" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        let mcpReq = Aeson.object
+              [ "jsonrpc" Aeson..= ("2.0" :: Text)
+              , "id" Aeson..= (1 :: Int)
+              , "method" Aeson..= ("initialize" :: Text)
+              , "params" Aeson..= Aeson.object
+                  [ "protocolVersion" Aeson..= ("9999-99-99" :: Text) ]
+              ]
+        req <- buildJsonPost (baseUrl <> "/.mcp") mcpReq
+        resp <- httpLbs req mgr
+        let body = decodeObject (responseBody resp)
+        case lookupKey "result" body of
+          Just (Aeson.Object res) ->
+            Aeson.KeyMap.lookup "protocolVersion" res
+              `shouldBe` Just (Aeson.String "2026-07-28")
+          _ -> expectationFailure "Missing result object"
+
+    it "MCP initialize advertises Tasks extension under both namespaces" do
+      withServiceFromSources "mcp-init-caps" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        let mcpReq = Aeson.object
+              [ "jsonrpc" Aeson..= ("2.0" :: Text)
+              , "id" Aeson..= (1 :: Int)
+              , "method" Aeson..= ("initialize" :: Text)
+              ]
+        req <- buildJsonPost (baseUrl <> "/.mcp") mcpReq
+        resp <- httpLbs req mgr
+        let bs = LBS.toStrict (responseBody resp)
+        BS.isInfixOf "io.modelcontextprotocol/tasks" bs `shouldBe` True
+        BS.isInfixOf "ext-tasks" bs `shouldBe` True
+
+    it "MCP server is stateless: tools/list works without prior initialize" do
+      -- Two cold POSTs back-to-back, no initialize between them. The new
+      -- stateless model says this MUST work; a server that maintained
+      -- session state would 4xx the second call.
+      withServiceFromSources "mcp-stateless" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        let listReq = Aeson.object
+              [ "jsonrpc" Aeson..= ("2.0" :: Text)
+              , "id" Aeson..= (1 :: Int)
+              , "method" Aeson..= ("tools/list" :: Text)
+              ]
+        r1 <- buildJsonPost (baseUrl <> "/.mcp") listReq >>= flip httpLbs mgr
+        r2 <- buildJsonPost (baseUrl <> "/.mcp") listReq >>= flip httpLbs mgr
+        statusCode' r1 `shouldBe` 200
+        statusCode' r2 `shouldBe` 200
+        responseBody r1 `shouldBe` responseBody r2
+
+    it "MCP tools/list accepts _meta.io.modelcontextprotocol/clientInfo" do
+      withServiceFromSources "mcp-clientinfo" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        let mcpReq = Aeson.object
+              [ "jsonrpc" Aeson..= ("2.0" :: Text)
+              , "id" Aeson..= (1 :: Int)
+              , "method" Aeson..= ("tools/list" :: Text)
+              , "params" Aeson..= Aeson.object
+                  [ "_meta" Aeson..= Aeson.object
+                      [ "io.modelcontextprotocol/clientInfo" Aeson..= Aeson.object
+                          [ "name" Aeson..= ("smoke-test" :: Text)
+                          , "version" Aeson..= ("1.0" :: Text)
+                          ]
+                      ]
+                  ]
+              ]
+        req <- buildJsonPost (baseUrl <> "/.mcp") mcpReq
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 200
+
+    it "MCP tasks/get on unknown id returns server-error code" do
+      withServiceFromSources "mcp-tasks-404" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        let mcpReq = Aeson.object
+              [ "jsonrpc" Aeson..= ("2.0" :: Text)
+              , "id" Aeson..= (1 :: Int)
+              , "method" Aeson..= ("tasks/get" :: Text)
+              , "params" Aeson..= Aeson.object
+                  [ "taskId" Aeson..= ("does-not-exist" :: Text) ]
+              ]
+        req <- buildJsonPost (baseUrl <> "/.mcp") mcpReq
+        resp <- httpLbs req mgr
+        let body = decodeObject (responseBody resp)
+        case lookupKey "error" body of
+          Just (Aeson.Object err) ->
+            Aeson.KeyMap.lookup "code" err `shouldBe` Just (Aeson.Number (-32000))
+          _ -> expectationFailure "Expected error object"
+
+    it "MCP tasks/cancel on unknown id returns server-error code" do
+      withServiceFromSources "mcp-tasks-cancel-404" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        let mcpReq = Aeson.object
+              [ "jsonrpc" Aeson..= ("2.0" :: Text)
+              , "id" Aeson..= (1 :: Int)
+              , "method" Aeson..= ("tasks/cancel" :: Text)
+              , "params" Aeson..= Aeson.object
+                  [ "taskId" Aeson..= ("nope" :: Text) ]
+              ]
+        req <- buildJsonPost (baseUrl <> "/.mcp") mcpReq
+        resp <- httpLbs req mgr
+        let body = decodeObject (responseBody resp)
+        case lookupKey "error" body of
+          Just (Aeson.Object err) ->
+            Aeson.KeyMap.lookup "code" err `shouldBe` Just (Aeson.Number (-32000))
+          _ -> expectationFailure "Expected error object"
+
+    it "MCP discovery exposes supported protocol versions and Tasks extension" do
+      withServiceFromSources "mcp-discovery" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
+        req <- parseRequest (baseUrl <> "/.well-known/mcp")
+        resp <- httpLbs req mgr
+        statusCode' resp `shouldBe` 200
+        let bs = LBS.toStrict (responseBody resp)
+        BS.isInfixOf "2026-07-28" bs `shouldBe` True
+        BS.isInfixOf "supported_protocol_versions" bs `shouldBe` True
+        BS.isInfixOf "io.modelcontextprotocol/tasks" bs `shouldBe` True
+
     it "returns OpenAPI 3.0 spec via per-deployment openapi.json" do
       withServiceFromSources "openapi" [("qualifies.l4", qualifiesJL4)] \baseUrl mgr -> do
         req <- parseRequest (baseUrl <> "/deployments/openapi/openapi.json")
@@ -1390,7 +1543,8 @@ withPendingService' deployId sources act = do
   -- Register as Pending (not compiled)
   registry <- newTVarIO $ Map.singleton (DeploymentId deployId) (DeploymentPending Nothing)
   pendingUpd <- newTVarIO Map.empty
-  let env = MkAppEnv registry pendingUpd store Nothing logger testOptions
+  tasksReg <- newTVarIO Map.empty
+  let env = MkAppEnv registry pendingUpd store Nothing logger testOptions tasksReg
 
   mgr <- newManager defaultManagerSettings
   testWithApplication (pure $ app env) \port -> do
@@ -1432,7 +1586,8 @@ withFailedService' deployId sources act = do
   -- Register as Failed
   registry <- newTVarIO $ Map.singleton (DeploymentId deployId) (DeploymentFailed "Test: simulated compilation failure")
   pendingUpd <- newTVarIO Map.empty
-  let env = MkAppEnv registry pendingUpd store Nothing logger testOptions
+  tasksReg <- newTVarIO Map.empty
+  let env = MkAppEnv registry pendingUpd store Nothing logger testOptions tasksReg
 
   mgr <- newManager defaultManagerSettings
   testWithApplication (pure $ app env) \port -> do
@@ -1472,7 +1627,8 @@ withServiceFromSources' deployId sources act = do
   -- Register directly in the TVar
   registry <- newTVarIO $ Map.singleton (DeploymentId deployId) (DeploymentReady fns meta)
   pendingUpd <- newTVarIO Map.empty
-  let env = MkAppEnv registry pendingUpd store Nothing logger testOptions
+  tasksReg <- newTVarIO Map.empty
+  let env = MkAppEnv registry pendingUpd store Nothing logger testOptions tasksReg
 
   mgr <- newManager defaultManagerSettings
   testWithApplication (pure $ app env) \port -> do
@@ -1502,7 +1658,8 @@ withEmptyService' act = do
   logger <- newLogger False
   registry <- newTVarIO Map.empty
   pendingUpd <- newTVarIO Map.empty
-  let env = MkAppEnv registry pendingUpd store Nothing logger testOptions
+  tasksReg <- newTVarIO Map.empty
+  let env = MkAppEnv registry pendingUpd store Nothing logger testOptions tasksReg
 
   mgr <- newManager defaultManagerSettings
   testWithApplication (pure $ app env) \port -> do

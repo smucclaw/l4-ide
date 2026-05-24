@@ -18,6 +18,7 @@
     AiUsageUpdate,
   } from 'jl4-client-rpc'
   import { createAiChatStore } from '$lib/stores/ai-chat.svelte'
+  import { aiPrefs } from '$lib/stores/ai-prefs.svelte'
   import MessageList from './message-list.svelte'
   import ChatInput from './chat-input.svelte'
   import EmptyState from './empty-state.svelte'
@@ -46,6 +47,7 @@
   } = $props()
 
   const store = createAiChatStore(() => messenger)
+  aiPrefs.init(() => messenger)
 
   // Honour a "Use in chat" request from the Deployment tab. Tracking
   // the nonce (not deep-equality) lets the user re-enter the same
