@@ -13,7 +13,7 @@ Expose a deployment's rules as [Model Context Protocol](https://modelcontextprot
 
 Use the MCP server when an AI client (Claude Desktop, Claude Code, an IDE agent, or your own MCP host) should be able to **call your exported rules as tools** during a conversation. Each exported function becomes one MCP tool with a typed input schema derived from its `GIVEN` parameters.
 
-Prefer the [OpenAPI spec](./openapi-spec.md) for deterministic server-to-server calls, or the [OpenAI-compatible API](./openai-compatible-api.md) for a hosted chat experience.
+Prefer the [OpenAPI spec](./openapi-spec.md) for deterministic server-to-server calls, or the [OpenAI- and Anthropic-compatible AI APIs](./openai-compatible-api.md) for a hosted chat experience.
 
 ## Endpoint
 

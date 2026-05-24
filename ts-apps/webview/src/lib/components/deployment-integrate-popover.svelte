@@ -46,7 +46,17 @@
           {
             label: 'OpenAI v1 compatible AI chat API',
             value: `https://ai.legalese.cloud/${orgSlug}/${deploymentId}/v1`,
-            hint: 'Uses legalese-comply-4 for fast, reliable rule evaluation',
+            hint: 'Use with the OpenAI SDK or POST /chat/completions. Uses legalese-comply-4.',
+            doc: 'legalese-cloud/openai-compatible-api.md',
+          },
+          {
+            label: 'Anthropic Messages compatible AI API',
+            // Anthropic SDK appends /v1/messages itself, so the base
+            // URL stops at the deployment root (no trailing /v1). The
+            // raw endpoint is at .../v1/messages — same proxy, same
+            // pipeline as the OpenAI surface above.
+            value: `https://ai.legalese.cloud/${orgSlug}/${deploymentId}`,
+            hint: 'Use with the Anthropic SDK or POST /v1/messages. Uses legalese-comply-4.',
             doc: 'legalese-cloud/openai-compatible-api.md',
           },
           {

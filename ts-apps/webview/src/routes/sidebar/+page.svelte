@@ -1527,7 +1527,7 @@
             <p>
               They're also available as REST API's, online MCP server and WebMCP
               tools {connectionStatus.isLegaleseCloud
-                ? 'as well as OpenAI v1 compatible AI endpoint on the Legalese Cloud'
+                ? 'as well as OpenAI- and Anthropic-compatible AI endpoints on the Legalese Cloud'
                 : 'via the connected JL4 service'}.
             </p>
           </aside>
