@@ -11,8 +11,9 @@ import { installL4Cli } from './install-cli.js'
  * Local MCP proxy server.
  *
  * Starts on extension activation and stays running for the lifetime of
- * the extension.  Registers with VS Code's MCP system so AI tools
- * (Copilot, Cursor, etc.) discover it automatically.
+ * the extension. Writes itself into VS Code's user-level `mcp.json` so
+ * Copilot Chat (and any other MCP-aware client) discovers it across all
+ * workspaces.
  *
  * When connected to a jl4-service, forwards MCP JSON-RPC requests with
  * the user's credentials. When disconnected or unauthenticated, returns
@@ -21,9 +22,9 @@ import { installL4Cli } from './install-cli.js'
 export class McpProxy implements vscode.Disposable {
   private server: http.Server | null = null
   private port: number = 0
-  private mcpRegistration: vscode.Disposable | undefined
   private outputChannel: vscode.OutputChannel
   private extensionPath: string | undefined
+  private userDataPath: string | undefined
 
   constructor(
     private readonly auth: AuthManager,
@@ -32,13 +33,19 @@ export class McpProxy implements vscode.Disposable {
     // longer persist any state — the auto-add startup flow (which used
     // `l4.claudeCodeSetupDismissed`) has been removed.
     _globalState?: vscode.Memento,
-    extensionPath?: string
+    extensionPath?: string,
+    // Path to VS Code's per-user data dir (the one containing `mcp.json`
+    // and `globalStorage/`). Derived from `context.globalStorageUri` by
+    // the caller so we transparently handle Insiders, VSCodium, portable
+    // installs, remote SSH, etc.
+    userDataPath?: string
   ) {
     this.outputChannel = outputChannel
     this.extensionPath = extensionPath
+    this.userDataPath = userDataPath
   }
 
-  /** Start the proxy and register with VS Code. Call once on activation. */
+  /** Start the proxy and update VS Code's user-level `mcp.json`. Call once on activation. */
   async start(): Promise<void> {
     if (this.server) return
 
@@ -74,84 +81,13 @@ export class McpProxy implements vscode.Disposable {
       `[mcp-proxy] Started on http://127.0.0.1:${this.port}/mcp`
     )
 
-    // Register with VS Code's MCP system so Copilot and other
-    // AI extensions discover the server automatically.
-    this.registerWithVSCode()
-
     // If Claude Code already has l4-rules configured, update the port
     this.updateClaudeCodePort()
-  }
 
-  /**
-   * Register the MCP server with VS Code's language model API.
-   * Uses the registerMcpServerDefinitionProvider API (VS Code 1.99+).
-   */
-  private registerWithVSCode(): void {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const lm = vscode.lm as any
-    if (!lm) {
-      this.outputChannel.appendLine('[mcp-proxy] vscode.lm API not available')
-      return
-    }
-
-    const mcpUrl = `http://127.0.0.1:${this.port}/mcp`
-
-    // VS Code 1.99+ uses registerMcpServerDefinitionProvider
-    // The provider ID must match the one declared in package.json contributes.mcpServerDefinitionProviders
-    if (typeof lm.registerMcpServerDefinitionProvider === 'function') {
-      try {
-        // Check if McpHttpServerDefinition class exists
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const McpHttpServerDefinition = (vscode as any).McpHttpServerDefinition
-        if (McpHttpServerDefinition) {
-          this.mcpRegistration = lm.registerMcpServerDefinitionProvider(
-            'l4-tools',
-            {
-              provideMcpServerDefinitions: () => {
-                return [
-                  new McpHttpServerDefinition({
-                    label: 'L4 Tools',
-                    uri: mcpUrl,
-                  }),
-                ]
-              },
-            }
-          )
-          this.outputChannel.appendLine(
-            '[mcp-proxy] Registered with VS Code MCP (McpHttpServerDefinition)'
-          )
-          return
-        }
-
-        // Fallback: try with plain object if class doesn't exist
-        this.mcpRegistration = lm.registerMcpServerDefinitionProvider(
-          'l4-tools',
-          {
-            provideMcpServerDefinitions: () => {
-              return [
-                {
-                  label: 'L4 Tools',
-                  type: 'http',
-                  uri: mcpUrl,
-                },
-              ]
-            },
-          }
-        )
-        this.outputChannel.appendLine(
-          '[mcp-proxy] Registered with VS Code MCP (plain object)'
-        )
-        return
-      } catch (err) {
-        this.outputChannel.appendLine(
-          `[mcp-proxy] registerMcpServerDefinitionProvider failed: ${err instanceof Error ? err.message : String(err)}`
-        )
-      }
-    }
-
-    this.outputChannel.appendLine(
-      `[mcp-proxy] VS Code MCP API not available - server accessible at ${mcpUrl}`
-    )
+    // Register (or refresh) ourselves in VS Code's user-level mcp.json
+    // so the server is reachable across all workspaces. VS Code watches
+    // this file and prompts the user to trust the server on first sight.
+    this.updateVSCodeMcpJson()
   }
 
   /** The local MCP endpoint URL, or undefined if not running. */
@@ -348,7 +284,7 @@ export class McpProxy implements vscode.Disposable {
           id,
           result: {
             protocolVersion: '2025-03-26',
-            serverInfo: { name: 'L4 Tools', version: '1.3.0' },
+            serverInfo: { name: 'L4 Rules', version: '1.3.0' },
             capabilities: { tools: {} },
           },
         })
@@ -399,6 +335,85 @@ export class McpProxy implements vscode.Disposable {
       )
     } catch {
       // Config doesn't exist or isn't parseable — skip silently
+    }
+  }
+
+  /** Key our entry uses in VS Code's user-level `mcp.json`. */
+  private static readonly VSCODE_MCP_KEY = 'l4-rules'
+
+  /**
+   * Write (or refresh) our entry in VS Code's user-level `mcp.json` so
+   * the MCP server is available globally across all workspaces. Creates
+   * the file if missing. Called on every {@link start} so the URL stays
+   * in sync if `jl4.mcpPort` changes (a port change triggers a restart,
+   * which re-runs this).
+   *
+   * Note: `mcp.json` is JSONC (supports comments). We parse with plain
+   * JSON; if the user has added comments we leave the file alone and
+   * log — better to skip than corrupt their config.
+   */
+  private updateVSCodeMcpJson(): void {
+    if (!this.port || !this.userDataPath) return
+
+    const mcpJsonPath = path.join(this.userDataPath, 'mcp.json')
+    const desiredUrl = `http://127.0.0.1:${this.port}/mcp`
+    const desiredEntry = { type: 'http', url: desiredUrl }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let config: any = {}
+    try {
+      const raw = fs.readFileSync(mcpJsonPath, 'utf-8')
+      if (raw.trim()) {
+        try {
+          config = JSON.parse(raw)
+        } catch (err) {
+          this.outputChannel.appendLine(
+            `[mcp-proxy] Skipped updating ${mcpJsonPath}: not valid JSON (${err instanceof Error ? err.message : String(err)}). If you have comments in the file, remove them or add the entry manually.`
+          )
+          return
+        }
+      }
+    } catch (err) {
+      // ENOENT is fine — we'll create the file. Anything else, give up.
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+        this.outputChannel.appendLine(
+          `[mcp-proxy] Failed to read ${mcpJsonPath}: ${err instanceof Error ? err.message : String(err)}`
+        )
+        return
+      }
+    }
+
+    if (!config || typeof config !== 'object') config = {}
+    if (!config.servers || typeof config.servers !== 'object') {
+      config.servers = {}
+    }
+
+    const existing = config.servers[McpProxy.VSCODE_MCP_KEY]
+    if (
+      existing &&
+      existing.type === desiredEntry.type &&
+      existing.url === desiredEntry.url
+    ) {
+      return // already correct
+    }
+
+    config.servers[McpProxy.VSCODE_MCP_KEY] = {
+      ...(existing ?? {}),
+      ...desiredEntry,
+    }
+
+    try {
+      fs.mkdirSync(path.dirname(mcpJsonPath), { recursive: true })
+      fs.writeFileSync(mcpJsonPath, JSON.stringify(config, null, 2) + '\n')
+      this.outputChannel.appendLine(
+        existing
+          ? `[mcp-proxy] Refreshed ${McpProxy.VSCODE_MCP_KEY} in ${mcpJsonPath} → ${desiredUrl}`
+          : `[mcp-proxy] Added ${McpProxy.VSCODE_MCP_KEY} to ${mcpJsonPath} → ${desiredUrl}`
+      )
+    } catch (err) {
+      this.outputChannel.appendLine(
+        `[mcp-proxy] Failed to write ${mcpJsonPath}: ${err instanceof Error ? err.message : String(err)}`
+      )
     }
   }
 
@@ -525,14 +540,12 @@ export class McpProxy implements vscode.Disposable {
   }
 
   /**
-   * Tear down the listening server + VS Code MCP registration without
-   * destroying the McpProxy instance. After a stop, {@link start} can
-   * be called again to bind a (possibly different) port. Shared by
-   * {@link dispose} and {@link restart}.
+   * Tear down the listening server without destroying the McpProxy
+   * instance. After a stop, {@link start} can be called again to bind
+   * a (possibly different) port. Shared by {@link dispose} and
+   * {@link restart}.
    */
   private async stop(): Promise<void> {
-    this.mcpRegistration?.dispose()
-    this.mcpRegistration = undefined
     if (this.server) {
       const server = this.server
       await new Promise<void>((resolve) => server.close(() => resolve()))
@@ -546,7 +559,7 @@ export class McpProxy implements vscode.Disposable {
    * Restart the proxy on whatever port `jl4.mcpPort` currently
    * resolves to. Used when the user changes the port setting at
    * runtime — without restart the old socket stays bound and the
-   * VS Code MCP registration keeps the stale URL.
+   * URL in `mcp.json` stays stale.
    */
   async restart(): Promise<void> {
     await this.stop()

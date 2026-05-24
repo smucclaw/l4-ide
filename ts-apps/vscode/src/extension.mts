@@ -43,6 +43,7 @@ import { AuthManager } from './auth.js'
 import { ServiceClient } from './service-client.js'
 import { AiLogger } from './ai/logger.js'
 import { AiProxyClient } from './ai/ai-proxy-client.js'
+import { registerChatParticipant } from './chat-participant.js'
 import { ConversationStore } from './ai/conversation-store.js'
 import { ChatService } from './ai/chat-service.js'
 import { ToolDispatcher } from './ai/tool-dispatcher.js'
@@ -460,14 +461,20 @@ export async function activate(context: ExtensionContext) {
   const auth = new AuthManager(context.secrets, outputChannel)
   const serviceClient = new ServiceClient(auth)
 
-  // Start local MCP proxy — always running, returns empty tools when disconnected
+  // Start local MCP proxy — always running, returns empty tools when disconnected.
+  // `context.globalStorageUri` is `<userDataDir>/globalStorage/<publisher>.<ext>`,
+  // so its grandparent is the user data dir that holds `mcp.json`.
+  const userDataPath = path.dirname(
+    path.dirname(context.globalStorageUri.fsPath)
+  )
   const mcpProxy = new McpProxy(
     auth,
     outputChannel,
     // globalState slot kept for call-site compatibility; no persistent
     // Claude-setup flag is stored any more.
     undefined,
-    context.extensionUri.fsPath
+    context.extensionUri.fsPath,
+    userDataPath
   )
   context.subscriptions.push(mcpProxy)
   mcpProxy.start()
@@ -516,6 +523,24 @@ export async function activate(context: ExtensionContext) {
   const aiLogger = new AiLogger()
   context.subscriptions.push(aiLogger)
   const aiProxy = new AiProxyClient({ auth, logger: aiLogger })
+
+  // `l4.login` is the stable command id the `@legalese` chat participant
+  // hands to `stream.button` when the user isn't signed in. The sidebar
+  // calls `auth.login()` directly via its own messenger, so before now
+  // there was no need for a command form.
+  context.subscriptions.push(
+    vscode.commands.registerCommand('l4.login', () => auth.login())
+  )
+
+  context.subscriptions.push(
+    registerChatParticipant({
+      auth,
+      proxy: aiProxy,
+      logger: aiLogger,
+      iconPath: vscode.Uri.joinPath(context.extensionUri, 'static', 'icon.png'),
+    })
+  )
+
   const aiStore = new ConversationStore(context, aiLogger, () =>
     auth.getUserStorageKey()
   )

@@ -42,10 +42,7 @@
     "url": "https://github.com/legalese/l4-ide",
     "directory": "ts-apps/vscode"
   },
-  "activationEvents": [
-    "onLanguage:l4",
-    "onView:l4.deployView"
-  ],
+  "activationEvents": [],
   "contributes": {
     "viewsContainers": {
       "secondarySidebar": [
@@ -181,10 +178,13 @@
         }
       ]
     },
-    "mcpServerDefinitionProviders": [
+    "chatParticipants": [
       {
-        "id": "l4-tools",
-        "label": "L4 Tools"
+        "id": "l4.legalese",
+        "name": "legalese",
+        "fullName": "Legalese",
+        "description": "Computational law: encode, deploy, and reason about L4 rules.",
+        "isSticky": true
       }
     ]
   },
