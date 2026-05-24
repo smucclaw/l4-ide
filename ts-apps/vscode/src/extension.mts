@@ -570,14 +570,15 @@ export async function activate(context: ExtensionContext) {
   // rules than we had cached from the disconnected fallback path.
   context.subscriptions.push(auth.onDidChange(() => aiMcpClient.invalidate()))
 
-  // Register the `@legalese` chat participant now that the MCP tool
-  // client exists — the participant exposes the same deployed-rule
-  // tool list to Copilot Chat that the sidebar uses.
+  // Register the `@legalese` chat participant. Tool discovery happens
+  // inside the participant via `vscode.lm.tools` + BUILTIN_TOOLS, so no
+  // explicit MCP client is wired through here — VS Code's MCP layer
+  // surfaces the L4 Rules server (registered in mcp.json) alongside
+  // any other tools the user has installed.
   context.subscriptions.push(
     registerChatParticipant({
       auth,
       proxy: aiProxy,
-      mcp: aiMcpClient,
       logger: aiLogger,
       iconPath: vscode.Uri.joinPath(context.extensionUri, 'static', 'icon.png'),
     })

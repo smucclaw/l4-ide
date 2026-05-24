@@ -1,10 +1,17 @@
 import * as vscode from 'vscode'
 import { randomUUID } from 'node:crypto'
 import type { AuthManager } from './auth.js'
-import type { AiProxyClient } from './ai/ai-proxy-client.js'
+import type { AiProxyClient, AiProxyTool } from './ai/ai-proxy-client.js'
 import type { AiLogger } from './ai/logger.js'
-import type { McpToolClient } from './ai/mcp-client.js'
-import { MCP_L4_RULES_PREFIX } from './ai/mcp-client.js'
+import { BUILTIN_TOOLS } from './ai/tool-registry.js'
+import {
+  fsCreateFile,
+  fsDeleteFile,
+  fsEditFile,
+  fsReadFile,
+} from './ai/tools/fs.js'
+import { l4Evaluate } from './ai/tools/l4-evaluate.js'
+import { categoryForTool, getPermission } from './ai/permissions.js'
 import type { AiChatMessage } from 'jl4-client-rpc'
 
 /**
@@ -18,12 +25,23 @@ import type { AiChatMessage } from 'jl4-client-rpc'
  * `AiProxyClient` and avoids any cross-talk with the sidebar's
  * `ChatService` / persistence layer.
  *
- * Exposes the L4 Rules MCP tools (whatever rules the user has deployed
- * on the currently-connected jl4-service) to the model. When the model
- * issues a `tool_calls` finish, we dispatch each call through
- * {@link McpToolClient}, append the assistant(tool_calls) + tool result
- * messages to the next request, and re-stream. Capped at
- * {@link MAX_TOOL_ROUNDS} iterations as an infinite-loop guard.
+ * Exposes a unified tool list to the model:
+ *   - the same {@link BUILTIN_TOOLS} the sidebar ships (fs / l4 / meta);
+ *   - every tool VS Code knows about via {@link vscode.lm.tools} — which
+ *     by virtue of our mcp.json registration already includes the L4
+ *     Rules MCP server, plus any other MCP servers / language-model
+ *     tools the user has installed.
+ *
+ * When the model issues a `tool_calls` finish we dispatch each call:
+ *   - built-in names → execute the same handler the sidebar uses (with
+ *     the user's category permission honored — `never` blocks; for v1
+ *     `ask` is treated as `always` because we don't have an inline
+ *     approval surface in the chat panel);
+ *   - everything else → `vscode.lm.invokeTool` (which routes to MCP
+ *     servers and other extension-registered tools, with VS Code
+ *     handling its own confirmation prompts).
+ *
+ * Capped at {@link MAX_TOOL_ROUNDS} iterations as an infinite-loop guard.
  *
  * Tool activity emitted by the proxy (rule evaluations, doc search,
  * compaction status) is surfaced inline: live status via `stream.progress`
@@ -33,7 +51,6 @@ import type { AiChatMessage } from 'jl4-client-rpc'
 export function registerChatParticipant(deps: {
   auth: AuthManager
   proxy: AiProxyClient
-  mcp: McpToolClient
   logger: AiLogger
   iconPath: vscode.Uri
 }): vscode.Disposable {
@@ -62,15 +79,10 @@ export function registerChatParticipant(deps: {
       request.references
     )
 
-    // Fetch the L4-rules MCP tool list once per user turn. Empty list
-    // (no jl4-service connection, no deployed rules) is fine — we just
-    // omit `tools` from the request and the model behaves as before.
-    const tools = await deps.mcp.listTools().catch((err) => {
-      deps.logger.warn(
-        `chat-participant: mcp.listTools failed: ${err instanceof Error ? err.message : String(err)}`
-      )
-      return []
-    })
+    // Build the unified tool list once per user turn. `vscode.lm.tools`
+    // is read once (a snapshot — new tools registered mid-turn won't be
+    // visible to the model until the next user message).
+    const { tools, lmByWireName } = collectTools()
 
     const abort = new AbortController()
     const cancelSub = token.onCancellationRequested(() => abort.abort())
@@ -122,7 +134,9 @@ export function registerChatParticipant(deps: {
                 name: ev.name,
                 argsJson: ev.argsJson,
               })
-              stream.progress(`Calling ${prettyToolName(ev.name)}…`)
+              stream.progress(
+                `Calling ${prettyToolName(ev.name, lmByWireName)}…`
+              )
               break
 
             case 'done':
@@ -161,14 +175,20 @@ export function registerChatParticipant(deps: {
 
         for (const call of pendingCalls) {
           if (token.isCancellationRequested) return {}
-          const pretty = prettyToolName(call.name)
+          const pretty = prettyToolName(call.name, lmByWireName)
           const argsPreview = truncate(prettyArgs(call.argsJson), 240)
           stream.markdown(
             `\n> 🔧 **${pretty}**${argsPreview ? `\\\n> \`${argsPreview}\`` : ''}\n\n`
           )
           let result: string
           try {
-            result = await deps.mcp.callTool(call.name, call.argsJson)
+            result = await dispatchToolCall(
+              call,
+              lmByWireName,
+              request.toolInvocationToken,
+              stream,
+              token
+            )
           } catch (err) {
             result = `Error: ${err instanceof Error ? err.message : String(err)}`
             stream.markdown(`> ${result}\n\n`)
@@ -215,14 +235,178 @@ interface ToolCall {
  *  generous ceiling that still terminates a runaway loop. */
 const MAX_TOOL_ROUNDS = 10
 
-/** Strip the `l4-rules__` prefix and undo the sanitization-friendly
- *  underscores so a tool name shows up in chat the way the user would
- *  recognize the deployed rule. */
-function prettyToolName(prefixedName: string): string {
-  const base = prefixedName.startsWith(MCP_L4_RULES_PREFIX)
-    ? prefixedName.slice(MCP_L4_RULES_PREFIX.length)
-    : prefixedName
-  return base.replace(/_/g, ' ')
+/** Set of built-in tool names — used by `dispatchToolCall` to choose
+ *  between the inline executor switch and `vscode.lm.invokeTool`. */
+const BUILTIN_TOOL_NAMES: ReadonlySet<string> = new Set(
+  BUILTIN_TOOLS.map((t) => t.function.name)
+)
+
+/**
+ * Snapshot `vscode.lm.tools` and merge with the built-ins. Each lm tool's
+ * name is sanitized to satisfy the OpenAI function-name regex
+ * (`[a-zA-Z0-9_-]{1,64}`); the original is kept in `lmByWireName` so
+ * `vscode.lm.invokeTool` can be called with the registered name when
+ * the model picks one.
+ */
+function collectTools(): {
+  tools: AiProxyTool[]
+  lmByWireName: Map<string, vscode.LanguageModelToolInformation>
+} {
+  const lmByWireName = new Map<string, vscode.LanguageModelToolInformation>()
+  const out: AiProxyTool[] = [...BUILTIN_TOOLS]
+  for (const t of vscode.lm.tools) {
+    const wireName = sanitizeToolName(t.name)
+    // Guard against an lm tool colliding with a built-in name (unlikely
+    // but possible if some other extension registers `fs__read_file`).
+    // Built-ins win — they're the ones we have hand-tuned descriptions
+    // and executors for.
+    if (BUILTIN_TOOL_NAMES.has(wireName)) continue
+    lmByWireName.set(wireName, t)
+    out.push({
+      type: 'function',
+      function: {
+        name: wireName,
+        description: t.description || `Tool: ${t.name}`,
+        // VS Code's `inputSchema` is JSON Schema; the ai-proxy passes
+        // it through to the provider verbatim. Some tools ship no
+        // schema — default to an empty object schema so OpenAI accepts
+        // the declaration.
+        parameters:
+          (t.inputSchema as Record<string, unknown> | undefined) ??
+          ({ type: 'object', properties: {} } as Record<string, unknown>),
+      },
+    })
+  }
+  return { tools: out, lmByWireName }
+}
+
+/** OpenAI's function names allow `[a-zA-Z0-9_-]{1,64}`; lm tool names
+ *  may include slashes, dots, spaces (especially MCP-prefixed names).
+ *  Replace anything outside the allowed set with `_` and truncate. */
+function sanitizeToolName(name: string): string {
+  return name.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64)
+}
+
+/**
+ * Execute a single tool call: built-ins go through the same handlers
+ * the sidebar uses (with category permissions honored — `never` blocks);
+ * everything else is dispatched to `vscode.lm.invokeTool`.
+ */
+async function dispatchToolCall(
+  call: ToolCall,
+  lmByWireName: Map<string, vscode.LanguageModelToolInformation>,
+  // Threaded from `request.toolInvocationToken` so VS Code can attach
+  // the tool invocation to this chat session (used for the inline
+  // confirmation UX on tools that opt into it).
+  toolInvocationToken: vscode.ChatParticipantToolToken | undefined,
+  stream: vscode.ChatResponseStream,
+  token: vscode.CancellationToken
+): Promise<string> {
+  const args = parseArgs(call.argsJson)
+
+  if (BUILTIN_TOOL_NAMES.has(call.name)) {
+    return runBuiltin(call.name, args, stream)
+  }
+
+  const lmTool = lmByWireName.get(call.name)
+  if (!lmTool) {
+    return `Unknown tool: ${call.name}`
+  }
+  // `vscode.lm.invokeTool` types `input` as `object`. Tool args from
+  // the model are JSON-decoded into `unknown` upstream; for non-object
+  // arg payloads (rare) we wrap so the call still goes through.
+  const input: object =
+    args && typeof args === 'object' ? (args as object) : { value: args }
+  const result = await vscode.lm.invokeTool(
+    lmTool.name,
+    { input, toolInvocationToken },
+    token
+  )
+  return stringifyLmResult(result)
+}
+
+async function runBuiltin(
+  name: string,
+  args: unknown,
+  stream: vscode.ChatResponseStream
+): Promise<string> {
+  // `meta__post_status_update` is a UI-only tool — the existing
+  // sidebar dispatcher short-circuits it because the text streams
+  // straight into the assistant message. Mirror that here.
+  if (name === 'meta__post_status_update') {
+    const text = (args as { text?: string }).text ?? ''
+    if (text) stream.markdown(text + '\n')
+    return 'ok'
+  }
+  // No inline approval surface in chat yet; punt rather than dispatch
+  // a tool that can't surface a follow-up question.
+  if (name === 'meta__ask_user') {
+    return 'meta__ask_user is not yet supported in @legalese — ask the user directly in your reply, or use the sidebar chat.'
+  }
+
+  const category = categoryForTool(name)
+  if (category) {
+    const perm = getPermission(category)
+    if (perm === 'never') {
+      return `User has disallowed the "${category}" category. Update the setting in the Legalese AI settings to enable it.`
+    }
+    // `ask` is treated as `always` here — the chat panel doesn't have
+    // an inline approval surface yet. The proxy-side L4 rule tools
+    // come through `vscode.lm.invokeTool` (above) and reuse VS Code's
+    // own confirmation flow.
+  }
+
+  switch (name) {
+    case 'fs__read_file':
+      return fsReadFile(args as Parameters<typeof fsReadFile>[0])
+    case 'fs__create_file':
+      return fsCreateFile(args as Parameters<typeof fsCreateFile>[0])
+    case 'fs__edit_file':
+      return fsEditFile(args as Parameters<typeof fsEditFile>[0])
+    case 'fs__delete_file':
+      return fsDeleteFile(args as Parameters<typeof fsDeleteFile>[0])
+    case 'l4__evaluate':
+      return l4Evaluate(args as Parameters<typeof l4Evaluate>[0])
+    default:
+      return `No executor wired for built-in: ${name}`
+  }
+}
+
+function parseArgs(json: string): unknown {
+  if (!json || !json.trim()) return {}
+  try {
+    return JSON.parse(json)
+  } catch (err) {
+    throw new Error(
+      `Invalid tool arguments JSON: ${err instanceof Error ? err.message : String(err)}`
+    )
+  }
+}
+
+/** Collapse a `LanguageModelToolResult` to a single string for the
+ *  proxy's `role: 'tool'` content. Text parts are concatenated;
+ *  non-text parts (prompt-tsx, future shapes) are skipped — they don't
+ *  round-trip through the OpenAI-shaped wire format. */
+function stringifyLmResult(result: vscode.LanguageModelToolResult): string {
+  const parts: string[] = []
+  for (const p of result.content) {
+    if (p instanceof vscode.LanguageModelTextPart) {
+      parts.push(p.value)
+    }
+  }
+  return parts.join('\n')
+}
+
+/** Strip prefixes / sanitization underscores so a tool name shows up in
+ *  chat the way the user would recognize it. Prefers the lm tool's
+ *  original (unsanitized) name when we have it. */
+function prettyToolName(
+  wireName: string,
+  lmByWireName: Map<string, vscode.LanguageModelToolInformation>
+): string {
+  const lmTool = lmByWireName.get(wireName)
+  if (lmTool) return lmTool.name
+  return wireName
 }
 
 /** Render a tool's JSON arguments as a single line for inline display.
