@@ -247,7 +247,8 @@ spec = describe "CBOR serialisation" do
                     -- Step 6: Actually serve requests using rebuilt functions
                     registry <- newTVarIO $ Map.singleton (DeploymentId deployId') (DeploymentReady fns rebuildMeta)
                     pendingUpd <- newTVarIO Map.empty
-                    let env = MkAppEnv registry pendingUpd store Nothing logger testOpts
+                    tasksReg <- newTVarIO Map.empty
+                    let env = MkAppEnv registry pendingUpd store Nothing logger testOpts tasksReg
                     mgrLocal <- newManager defaultManagerSettings
                     testWithApplication (pure $ app env) $ \port' -> do
                       let baseUrl = "http://localhost:" <> show port'
@@ -364,7 +365,8 @@ withCborRebuiltService deployId sources act = do
   -- Register rebuilt functions and serve
   registry <- newTVarIO $ Map.singleton (DeploymentId deployId) (DeploymentReady rebuiltFns meta)
   pendingUpd <- newTVarIO Map.empty
-  let env = MkAppEnv registry pendingUpd store Nothing logger testOpts
+  tasksReg <- newTVarIO Map.empty
+  let env = MkAppEnv registry pendingUpd store Nothing logger testOpts tasksReg
 
   mgrLocal <- newManager defaultManagerSettings
   testWithApplication (pure $ app env) $ \port' -> do
@@ -382,7 +384,8 @@ withEmptyService act = do
   store <- initStore tmpPath
   registry <- newTVarIO Map.empty
   pendingUpd <- newTVarIO Map.empty
-  let env = MkAppEnv registry pendingUpd store Nothing logger testOpts
+  tasksReg <- newTVarIO Map.empty
+  let env = MkAppEnv registry pendingUpd store Nothing logger testOpts tasksReg
 
   mgrLocal <- newManager defaultManagerSettings
   testWithApplication (pure $ app env) $ \port' -> do

@@ -211,7 +211,8 @@ withService act = do
   store <- initStore tmpPath
   registry <- newTVarIO Map.empty
   pendingUpd <- newTVarIO Map.empty
-  let env = MkAppEnv registry pendingUpd store Nothing logger testOpts
+  tasksReg <- newTVarIO Map.empty
+  let env = MkAppEnv registry pendingUpd store Nothing logger testOpts tasksReg
   mgr <- newManager defaultManagerSettings
   testWithApplication (pure $ app env) $ \prt -> do
     let baseUrl = "http://localhost:" <> show prt

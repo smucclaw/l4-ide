@@ -25,6 +25,10 @@ module Types (
   -- * Health
   HealthResponse (..),
   HealthDeploymentCounts (..),
+  -- * MCP Tasks extension
+  TaskId (..),
+  TaskStatus (..),
+  TaskState (..),
   -- * Environment
   AppEnv (..),
   AppM,
@@ -36,6 +40,7 @@ import L4.FunctionSchema (Parameters, Parameter)
 import Backend.Jl4 (CompiledModule, ModuleContext)
 import BundleStore (BundleStore)
 import Control.Applicative ((<|>))
+import Control.Concurrent.Async (Async)
 import Control.Concurrent.STM (TVar)
 import Control.Monad.Trans.Reader (ReaderT)
 import Data.Aeson as Aeson
@@ -519,6 +524,48 @@ instance ToJSON BatchResponse where
       , "summary" .= br.summary
       ]
 
+-- ----------------------------------------------------------------------------
+-- MCP Tasks extension types (2026-07-28 RC)
+-- ----------------------------------------------------------------------------
+
+-- | Opaque identifier for an MCP task.
+newtype TaskId = TaskId { unTaskId :: Text }
+  deriving newtype (Eq, Ord, Show, FromJSON, ToJSON)
+
+-- | Status of an MCP task in its lifecycle.
+data TaskStatus
+  = TaskPending    -- ^ Not yet running (e.g. waiting for compilation to finish).
+  | TaskWorking    -- ^ Active work (evaluation in progress).
+  | TaskCompleted  -- ^ Finished successfully; 'tsResult' carries the @tools/call@ result.
+  | TaskFailed     -- ^ Terminal error; 'tsError' carries the message.
+  | TaskCancelled  -- ^ Cancelled by the client via @tasks/cancel@.
+  deriving stock (Eq, Show)
+
+instance ToJSON TaskStatus where
+  toJSON = Aeson.String . taskStatusText
+
+taskStatusText :: TaskStatus -> Text
+taskStatusText = \case
+  TaskPending -> "pending"
+  TaskWorking -> "working"
+  TaskCompleted -> "completed"
+  TaskFailed -> "failed"
+  TaskCancelled -> "cancelled"
+
+-- | Runtime state for an MCP task. The 'tsAsync' handle is retained so
+-- @tasks/cancel@ can abort in-flight work. Tasks past 'tsTtlSeconds' from
+-- 'tsCreatedAt' are reaped by a background sweeper.
+data TaskState = TaskState
+  { tsStatus     :: !TaskStatus
+  , tsResult     :: !(Maybe Aeson.Value)
+  -- ^ The eventual MCP @tools/call@ result content (already structured
+  -- as @{ content: [...], isError? }@). 'Just' iff status is 'TaskCompleted'.
+  , tsError      :: !(Maybe Text)
+  , tsCreatedAt  :: !UTCTime
+  , tsTtlSeconds :: !Int
+  , tsAsync      :: !(Maybe (Async ()))
+  }
+
 -- | Shared application environment threaded through all handlers.
 data AppEnv = MkAppEnv
   { deploymentRegistry :: TVar (Map DeploymentId DeploymentState)
@@ -531,6 +578,12 @@ data AppEnv = MkAppEnv
   , serverName         :: Maybe Text
   , logger             :: Logger
   , options            :: Options.Options
+  , mcpTasks           :: TVar (Map TaskId TaskState)
+  -- ^ MCP @tools/call@ tasks (2026-07-28 Tasks extension). Keyed by an
+  -- opaque task id. Lifetime is per-process; tasks tied to a deployment
+  -- naturally pin to whichever instance has that deployment loaded
+  -- because the auth proxy already routes deployment-scoped MCP traffic
+  -- with affinity.
   }
 
 -- | The handler monad for all Servant routes.
