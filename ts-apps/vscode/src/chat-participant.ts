@@ -3,6 +3,8 @@ import { randomUUID } from 'node:crypto'
 import type { AuthManager } from './auth.js'
 import type { AiProxyClient } from './ai/ai-proxy-client.js'
 import type { AiLogger } from './ai/logger.js'
+import type { McpToolClient } from './ai/mcp-client.js'
+import { MCP_L4_RULES_PREFIX } from './ai/mcp-client.js'
 import type { AiChatMessage } from 'jl4-client-rpc'
 
 /**
@@ -16,6 +18,13 @@ import type { AiChatMessage } from 'jl4-client-rpc'
  * `AiProxyClient` and avoids any cross-talk with the sidebar's
  * `ChatService` / persistence layer.
  *
+ * Exposes the L4 Rules MCP tools (whatever rules the user has deployed
+ * on the currently-connected jl4-service) to the model. When the model
+ * issues a `tool_calls` finish, we dispatch each call through
+ * {@link McpToolClient}, append the assistant(tool_calls) + tool result
+ * messages to the next request, and re-stream. Capped at
+ * {@link MAX_TOOL_ROUNDS} iterations as an infinite-loop guard.
+ *
  * Tool activity emitted by the proxy (rule evaluations, doc search,
  * compaction status) is surfaced inline: live status via `stream.progress`
  * while running, plus a persistent `> Label: message` line on done so the
@@ -24,6 +33,7 @@ import type { AiChatMessage } from 'jl4-client-rpc'
 export function registerChatParticipant(deps: {
   auth: AuthManager
   proxy: AiProxyClient
+  mcp: McpToolClient
   logger: AiLogger
   iconPath: vscode.Uri
 }): vscode.Disposable {
@@ -33,12 +43,6 @@ export function registerChatParticipant(deps: {
     stream,
     token
   ) => {
-    const messages = await buildMessages(
-      context.history,
-      request.prompt,
-      request.references
-    )
-
     // Pre-flight auth check so we render a sign-in button instead of
     // bubbling a 401 from the proxy. `isAiUsable()` is true when a
     // verified Cloud session exists OR a `legaleseAi.apiKey` setting
@@ -52,58 +56,138 @@ export function registerChatParticipant(deps: {
       return {}
     }
 
+    const messages = await buildMessages(
+      context.history,
+      request.prompt,
+      request.references
+    )
+
+    // Fetch the L4-rules MCP tool list once per user turn. Empty list
+    // (no jl4-service connection, no deployed rules) is fine — we just
+    // omit `tools` from the request and the model behaves as before.
+    const tools = await deps.mcp.listTools().catch((err) => {
+      deps.logger.warn(
+        `chat-participant: mcp.listTools failed: ${err instanceof Error ? err.message : String(err)}`
+      )
+      return []
+    })
+
     const abort = new AbortController()
     const cancelSub = token.onCancellationRequested(() => abort.abort())
+    const turnId = randomUUID()
 
     try {
-      const events = deps.proxy.stream(
-        {
-          messages,
-          stream: true,
-          turnId: randomUUID(),
-        },
-        abort.signal
-      )
+      for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+        if (token.isCancellationRequested) return {}
 
-      for await (const ev of events) {
-        if (token.isCancellationRequested) break
-        switch (ev.kind) {
-          case 'text-delta':
-            stream.markdown(ev.text)
-            break
+        const pendingCalls: ToolCall[] = []
+        let assistantText = ''
+        let finishReason = 'stop'
 
-          case 'tool-activity': {
-            const label = ev.label ?? ev.tool
-            if (ev.status === 'running') {
-              stream.progress(`${label}: ${ev.message}`)
-            } else if (ev.status === 'done') {
-              stream.markdown(`\n> **${label}** — ${ev.message}\n\n`)
-            } else {
-              stream.markdown(
-                `\n> **${label}** failed — ${ev.error ?? ev.message}\n\n`
+        const events = deps.proxy.stream(
+          {
+            messages,
+            stream: true,
+            turnId,
+            ...(tools.length > 0 ? { tools } : {}),
+          },
+          abort.signal
+        )
+
+        for await (const ev of events) {
+          if (token.isCancellationRequested) break
+          switch (ev.kind) {
+            case 'text-delta':
+              assistantText += ev.text
+              stream.markdown(ev.text)
+              break
+
+            case 'tool-activity': {
+              const label = ev.label ?? ev.tool
+              if (ev.status === 'running') {
+                stream.progress(`${label}: ${ev.message}`)
+              } else if (ev.status === 'done') {
+                stream.markdown(`\n> **${label}** — ${ev.message}\n\n`)
+              } else {
+                stream.markdown(
+                  `\n> **${label}** failed — ${ev.error ?? ev.message}\n\n`
+                )
+              }
+              break
+            }
+
+            case 'tool-call':
+              pendingCalls.push({
+                callId: ev.callId,
+                name: ev.name,
+                argsJson: ev.argsJson,
+              })
+              stream.progress(`Calling ${prettyToolName(ev.name)}…`)
+              break
+
+            case 'done':
+              finishReason = ev.finishReason
+              break
+
+            case 'error':
+              deps.logger.warn(
+                `chat-participant: proxy error ${ev.code ?? ''} ${ev.message}`
               )
-            }
-            break
+              return { errorDetails: { message: ev.message } }
+
+            // `metadata`, `thinking-delta`: intentionally ignored.
+            default:
+              break
           }
+        }
 
-          case 'error':
-            deps.logger.warn(
-              `chat-participant: proxy error ${ev.code ?? ''} ${ev.message}`
-            )
-            return {
-              errorDetails: { message: ev.message },
-            }
+        if (finishReason !== 'tool_calls' || pendingCalls.length === 0) {
+          return {}
+        }
 
-          case 'done':
-            return {}
+        // The assistant turn that paused on tool_calls has to go into
+        // the next request as one message containing both the text
+        // (may be empty) and the tool_calls array. The proxy expects
+        // OpenAI shape.
+        messages.push({
+          role: 'assistant',
+          content: assistantText || null,
+          tool_calls: pendingCalls.map((c) => ({
+            id: c.callId,
+            type: 'function' as const,
+            function: { name: c.name, arguments: c.argsJson },
+          })),
+        })
 
-          // `metadata`, `thinking-delta`, `tool-call`: intentionally ignored
-          // in v1. We don't advertise client tools, so the proxy won't emit
-          // `tool-call`. Thinking deltas are noisy for the chat panel.
-          default:
-            break
+        for (const call of pendingCalls) {
+          if (token.isCancellationRequested) return {}
+          const pretty = prettyToolName(call.name)
+          const argsPreview = truncate(prettyArgs(call.argsJson), 240)
+          stream.markdown(
+            `\n> 🔧 **${pretty}**${argsPreview ? `\\\n> \`${argsPreview}\`` : ''}\n\n`
+          )
+          let result: string
+          try {
+            result = await deps.mcp.callTool(call.name, call.argsJson)
+          } catch (err) {
+            result = `Error: ${err instanceof Error ? err.message : String(err)}`
+            stream.markdown(`> ${result}\n\n`)
+          }
+          messages.push({
+            role: 'tool',
+            tool_call_id: call.callId,
+            content: result,
+          })
         }
       }
+
+      // Safety: ran out of rounds before the model returned a `stop`.
+      deps.logger.warn(
+        `chat-participant: hit MAX_TOOL_ROUNDS (${MAX_TOOL_ROUNDS}) without a stop`
+      )
+      stream.markdown(
+        `\n\n_Stopped after ${MAX_TOOL_ROUNDS} tool-call rounds._\n`
+      )
       return {}
     } catch (err) {
       if (abort.signal.aborted) return {}
@@ -118,6 +202,42 @@ export function registerChatParticipant(deps: {
   const participant = vscode.chat.createChatParticipant('l4.legalese', handler)
   participant.iconPath = deps.iconPath
   return participant
+}
+
+interface ToolCall {
+  callId: string
+  name: string
+  argsJson: string
+}
+
+/** Hard cap on assistant↔tool round-trips per user turn. Anthropic /
+ *  OpenAI rarely chain more than 5 calls deep in practice; 10 is a
+ *  generous ceiling that still terminates a runaway loop. */
+const MAX_TOOL_ROUNDS = 10
+
+/** Strip the `l4-rules__` prefix and undo the sanitization-friendly
+ *  underscores so a tool name shows up in chat the way the user would
+ *  recognize the deployed rule. */
+function prettyToolName(prefixedName: string): string {
+  const base = prefixedName.startsWith(MCP_L4_RULES_PREFIX)
+    ? prefixedName.slice(MCP_L4_RULES_PREFIX.length)
+    : prefixedName
+  return base.replace(/_/g, ' ')
+}
+
+/** Render a tool's JSON arguments as a single line for inline display.
+ *  Falls back to the raw string if parsing fails. */
+function prettyArgs(argsJson: string): string {
+  if (!argsJson?.trim()) return ''
+  try {
+    return JSON.stringify(JSON.parse(argsJson))
+  } catch {
+    return argsJson
+  }
+}
+
+function truncate(s: string, n: number): string {
+  return s.length > n ? `${s.slice(0, n - 1)}…` : s
 }
 
 /**

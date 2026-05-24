@@ -532,15 +532,6 @@ export async function activate(context: ExtensionContext) {
     vscode.commands.registerCommand('l4.login', () => auth.login())
   )
 
-  context.subscriptions.push(
-    registerChatParticipant({
-      auth,
-      proxy: aiProxy,
-      logger: aiLogger,
-      iconPath: vscode.Uri.joinPath(context.extensionUri, 'static', 'icon.png'),
-    })
-  )
-
   const aiStore = new ConversationStore(context, aiLogger, () =>
     auth.getUserStorageKey()
   )
@@ -578,6 +569,19 @@ export async function activate(context: ExtensionContext) {
   // connected jl4-service might expose a different set of deployed
   // rules than we had cached from the disconnected fallback path.
   context.subscriptions.push(auth.onDidChange(() => aiMcpClient.invalidate()))
+
+  // Register the `@legalese` chat participant now that the MCP tool
+  // client exists — the participant exposes the same deployed-rule
+  // tool list to Copilot Chat that the sidebar uses.
+  context.subscriptions.push(
+    registerChatParticipant({
+      auth,
+      proxy: aiProxy,
+      mcp: aiMcpClient,
+      logger: aiLogger,
+      iconPath: vscode.Uri.joinPath(context.extensionUri, 'static', 'icon.png'),
+    })
+  )
   const dispatcher = new ToolDispatcher({
     logger: aiLogger,
     requestApproval: async (call) =>
