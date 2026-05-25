@@ -23,7 +23,19 @@ import qualified Data.Text.Encoding as TE
 
 import L4.API.VirtualFS (checkWithImports, checkWithImportsAndUri, emptyVFS, vfsFromList)
 import L4.Import.Resolution (TypeCheckWithDepsResult(..), ResolvedImport(..))
-import L4.TypeCheck.Types (CheckResult(..))
+import L4.TypeCheck (applyFinalSubstitution)
+import L4.TypeCheck.Types (CheckResult(..), EntityInfo)
+
+-- | 'L4.Import.Resolution.typecheckWithDependencies' leaves the main
+-- module's @entityInfo@ un-substituted (it applies the substitution
+-- only to imported modules), so test consumers like
+-- 'enrichReturnTypes' would see 'InfVar' rather than the resolved
+-- 'TyApp' for a @MEANS@-binding's inferred return type. The
+-- production pipeline (LSP rules) substitutes via
+-- 'applyFinalSubstitution' — mirror that here.
+substitutedEntityInfo :: TypeCheckWithDepsResult -> EntityInfo
+substitutedEntityInfo r =
+  applyFinalSubstitution r.tcdSubstitution r.tcdUri r.tcdEntityInfo
 
 main :: IO ()
 main = do
@@ -46,6 +58,7 @@ main = do
     , test "AND/OR/NOT marked special"         testTraceSpecialMarkers
     , test "fnValue node + enter_fn/exit_fn"   testTraceFnValueAndContext
     , test "NOT-range disambiguation"          testTraceNotRangeDisambiguation
+    , test "returnType enriched from EntityInfo" testReturnTypeEnrichedFromEntityInfo
     ]
   if and results
     then do
@@ -172,7 +185,7 @@ schemaWithDiagnostics src =
     Left errs -> Left errs
     Right r ->
       let (_mlir, diags) = lowerProgramWithDiagnostics r.tcdInfoMap r.tcdModule []
-          bundle = applyDiagnostics diags (bundleExports "test.wasm" "test" r.tcdInfoMap r.tcdModule [])
+          bundle = applyDiagnostics diags (bundleExports "test.wasm" "test" r.tcdInfoMap (substitutedEntityInfo r) r.tcdModule [])
       in Right (TE.decodeUtf8 (LBS.toStrict (encodeBundle bundle)))
 
 -- | A DEONTIC/regulative function can't be faithfully compiled, so the
@@ -240,7 +253,7 @@ testStateGraphBaked = do
       putStrLn $ "\n    typecheck failed: " <> show errs
       pure False
     Right r -> do
-      let bundle = bundleExports "test.wasm" "test" r.tcdInfoMap r.tcdModule []
+      let bundle = bundleExports "test.wasm" "test" r.tcdInfoMap (substitutedEntityInfo r) r.tcdModule []
           json = TE.decodeUtf8 (LBS.toStrict (encodeBundle bundle))
       pure $ T.isInfixOf "\"stateGraphs\"" json
           && T.isInfixOf "\"name\":\"demo\"" json
@@ -265,7 +278,7 @@ testTraceMetaBaked = do
       putStrLn $ "\n    typecheck failed: " <> show errs
       pure False
     Right r -> do
-      let bundle = bundleExports "test.wasm" "test" r.tcdInfoMap r.tcdModule []
+      let bundle = bundleExports "test.wasm" "test" r.tcdInfoMap (substitutedEntityInfo r) r.tcdModule []
           json = TE.decodeUtf8 (LBS.toStrict (encodeBundle bundle))
       -- The backticked function name (matches jl4-service's prettyLayout
       -- of the AppForm head): a multi-word name is wrapped in backticks.
@@ -303,7 +316,7 @@ testTraceMetaNodes = do
       putStrLn $ "\n    typecheck failed: " <> show errs
       pure False
     Right r -> do
-      let bundle = bundleExports "test.wasm" "test" r.tcdInfoMap r.tcdModule []
+      let bundle = bundleExports "test.wasm" "test" r.tcdInfoMap (substitutedEntityInfo r) r.tcdModule []
           json = TE.decodeUtf8 (LBS.toStrict (encodeBundle bundle))
       -- IfThenElse → kind 0 (NUMBER, via InfoMap on the whole expression).
       -- Geq → kind 1 (BOOLEAN). Plus → kind 0.
@@ -357,6 +370,29 @@ testTraceSpecialMarkers = do
       pure False
     Right json ->
       pure $ T.isInfixOf "\"special\":\"AND\"" json
+
+-- | An @MEANS@ / @DECIDE … IS@ binding without an explicit @GIVETH@
+-- must still surface a concrete 'returnType' in the schema; otherwise
+-- the runtime unmarshals NUMBER results as raw f64 (rational handles)
+-- and a call like @squared 1@ comes back as @5e-324@ rather than @1@.
+-- 'bundleExports' threads the typechecker's 'EntityInfo' so
+-- 'enrichReturnTypes' can fill in the missing GIVETH.
+testReturnTypeEnrichedFromEntityInfo :: IO Bool
+testReturnTypeEnrichedFromEntityInfo = do
+  let src = T.unlines
+        [ "@export default Cube of a number"
+        , "GIVEN n IS A NUMBER"
+        , "cubed n MEANS n * n * n"
+        ]
+  case schemaWithDiagnostics src of
+    Left errs -> do
+      putStrLn $ "\n    typecheck failed: " <> show errs
+      pure False
+    Right json -> do
+      let ok = T.isInfixOf "\"returnType\":\"NUMBER\"" json
+      if ok then pure ()
+            else putStrLn $ "\n    missing NUMBER returnType. got:\n    " <> T.unpack json
+      pure ok
 
 -- | M5 slice 4T: a @NOT P@ expression and its inner @P@ may collapse
 -- into the same 'SrcRange' at parse time. The rangeMap is now keyed by
@@ -423,7 +459,7 @@ testNoStateGraphForPlainFn = do
       putStrLn $ "\n    typecheck failed: " <> show errs
       pure False
     Right r -> do
-      let bundle = bundleExports "test.wasm" "test" r.tcdInfoMap r.tcdModule []
+      let bundle = bundleExports "test.wasm" "test" r.tcdInfoMap (substitutedEntityInfo r) r.tcdModule []
           json = TE.decodeUtf8 (LBS.toStrict (encodeBundle bundle))
       pure $ T.isInfixOf "\"stateGraphs\":[]" json
 
@@ -502,7 +538,7 @@ testSchemaUsesImportedDeclares = do
     Right tc -> do
       let mainMod = tc.tcdModule
           depMods = map (\ri -> ri.riTypeChecked.program) tc.tcdResolvedImports
-          bundle  = bundleExports "info.wasm" "test" tc.tcdInfoMap mainMod depMods
+          bundle  = bundleExports "info.wasm" "test" tc.tcdInfoMap (substitutedEntityInfo tc) mainMod depMods
           json    = TE.decodeUtf8 (LBS.toStrict (encodeBundle bundle))
       -- The two field names must appear in the schema — they only show
       -- up if the imported DECLARE was reachable from typeToParameter.

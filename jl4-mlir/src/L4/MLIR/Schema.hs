@@ -67,9 +67,9 @@ import L4.Syntax
   )
 import L4.Annotation (HasSrcRange, rangeOf)
 import L4.Parser.SrcSpan (SrcRange(..))
-import L4.TypeCheck.Types (InfoMap)
+import L4.TypeCheck.Types (InfoMap, EntityInfo)
 import qualified L4.Utils.IntervalMap as IV
-import L4.Export (ExportedFunction(..), ExportedParam(..), getExportedFunctions)
+import L4.Export (ExportedFunction(..), ExportedParam(..), getExportedFunctions, enrichReturnTypes)
 import qualified L4.Print as Print
 import L4.StateGraph
   ( extractStateGraphs, stateGraphToDot, defaultStateGraphOptions
@@ -299,14 +299,27 @@ sanitizeWasmSymbol name =
 -- expression's type at request-pretty-printing time. Older call sites
 -- that don't have an 'InfoMap' should use 'bundleExportsNoInfo' (which
 -- passes 'Map.empty') and accept best-effort syntactic result kinds.
-bundleExports :: Text -> Text -> InfoMap -> Module Resolved -> [Module Resolved] -> WasmBundle
-bundleExports wasmPath version infoMap resolvedModule depModules =
+bundleExports
+  :: Text
+  -> Text
+  -> InfoMap
+  -> EntityInfo
+    -- ^ Typechecker's entity-info map. Used by 'enrichReturnTypes' to
+    -- fill in @exportReturnType@ for @MEANS@ / @DECIDE … IS@ decides
+    -- that have no explicit @GIVETH@ — without this the schema's
+    -- 'returnType' falls back to @"unknown"@ and the runtime unmarshals
+    -- a NUMBER return as its raw f64 bit-pattern (e.g.
+    -- @squared 1@ → @5e-324@ instead of @1@).
+  -> Module Resolved
+  -> [Module Resolved]
+  -> WasmBundle
+bundleExports wasmPath version infoMap entInfo resolvedModule depModules =
   -- Merge DECLAREs from imported modules so record/enum types defined in
   -- IMPORTed files are visible when expanding parameter schemas. The main
   -- module's declares take precedence on key collision.
   let declares = Map.unions (declaresFromModule resolvedModule
                             : map declaresFromModule depModules)
-      exports  = getExportedFunctions resolvedModule
+      exports  = enrichReturnTypes entInfo (getExportedFunctions resolvedModule)
       stateGraphs =
         [ StateGraphExport sg.sgName (stateGraphToDot defaultStateGraphOptions sg)
         | sg <- extractStateGraphs resolvedModule
@@ -1560,6 +1573,13 @@ returnTypeDisplay (Just ty)
          in if null args
               then nameText
               else nameText <> " " <> Text.intercalate " " (map (returnTypeDisplay . Just) args)
+      -- Inferred types from the typechecker (used by 'enrichReturnTypes'
+      -- for @MEANS@ / @DECIDE … IS@ decides without an explicit @GIVETH@)
+      -- arrive wrapped in 'Forall' or as a residual 'Fun' return — peel
+      -- them so the JSON carries the underlying scalar name (e.g.
+      -- @"NUMBER"@) the runtime needs to pick the right unmarshaller.
+      Forall _ _ inner -> returnTypeDisplay (Just inner)
+      Fun _ _ ret      -> returnTypeDisplay (Just ret)
       _ -> "TYPE"
 
 -- ---------------------------------------------------------------------------

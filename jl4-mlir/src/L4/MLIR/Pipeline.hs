@@ -132,6 +132,7 @@ compileToPipeline config filepath = do
             (Text.pack (baseName <> ".wasm"))
             (computeVersion filepath)  -- placeholder — real one in Compiler.hs
             tc.infoMap
+            tc.entityInfo
             mainModule
             depModules
 
