@@ -1261,6 +1261,42 @@ Files: `src/L4/MLIR/Lower.hs` (regulative → step fns), `src/L4/MLIR/ABI.hs`
 This milestone is the seam to the auth-proxy integration and can proceed in
 parallel once M1 lands.
 
+### Slice 1 — memory cap, trap recovery, peak telemetry
+
+Lands the runtime side of the four-item list above (everything except
+the worker-threads timeout):
+
+- **Memory ceiling.** `createRuntime({ maxHeapBytes })` defaults to
+  64 MiB; `allocBytes` throws a `MemoryLimitError` once a single eval
+  would push past it. Caps the JS heap pressure from a runaway wasm
+  body (infinite cons chain, unbounded grow) without needing
+  `WebAssembly.Memory(maximum:)` — the bump-pointer is the
+  authoritative allocator at this layer.
+- **Warm instantiation.** `wasm-server.mjs` now compiles the wasm
+  bytes once into a `WebAssembly.Module` and re-instantiates the
+  module after every failed eval — keeps the cold-start cost a
+  one-time tax per process while still recovering from a trap
+  (which leaves the instance unusable per WebAssembly spec) without
+  taking the host down.
+- **Trap isolation.** The request handler maps a `MemoryLimitError`
+  to 413, a `WebAssembly.RuntimeError` (and other exceptions) to 500,
+  and triggers a re-instantiation in either case so the next request
+  starts from a clean memory + a clean runtime state.
+- **Peak-allocation telemetry.** Every response carries
+  `x-jl4-peak-heap-bytes` / `x-jl4-max-heap-bytes` headers, so the
+  proxy can monitor per-eval memory pressure (and raise the cap when
+  a real rule needs it) without instrumenting the wasm itself.
+
+`JL4_MAX_HEAP_BYTES` env override lets ops tune the cap per
+deployment. Regression tests in `runtime/jl4-runtime.test.mjs`
+(memory-cap throws + resetHeap clears state) and a new e2e harness
+at `scripts/wasm-server.test.mjs` (happy path + header surface +
+404 doesn't trigger re-instantiation) lock the contract.
+
+Still to do: per-eval timeout via `worker_threads` (slice 2), wasmtime
+/ wasmer backends (slice 3), per-module worker pool for concurrency
+(slice 4).
+
 ---
 
 ## Decisions required

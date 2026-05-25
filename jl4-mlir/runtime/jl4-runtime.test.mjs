@@ -7,7 +7,12 @@
 //
 //   node runtime/jl4-runtime.test.mjs
 
-import { createRuntime, makeTracePool } from "./jl4-runtime.mjs";
+import {
+  createRuntime,
+  makeTracePool,
+  MemoryLimitError,
+  DEFAULT_MAX_HEAP_BYTES,
+} from "./jl4-runtime.mjs";
 
 const rt = createRuntime();
 rt.attachMemory(new WebAssembly.Memory({ initial: 4 }));
@@ -122,6 +127,53 @@ eq("concat then eq", env.__l4_str_eq(c, box("ab")), 1);
     "function",
   );
 }
+
+// --- M7 slice 1: per-eval memory cap ----------------------------------
+// 'allocBytes' must throw 'MemoryLimitError' once the cumulative
+// allocation since 'resetHeap' would push past 'maxHeapBytes'. Catching
+// gives the HTTP wrapper a chance to surface a 413 and re-instantiate
+// the wasm module on the next request.
+{
+  // 4 KiB cap leaves room for the bump-pointer's leading 1 KiB
+  // reserved region; the test allocates 8 KiB in 1 KiB chunks.
+  const tiny = createRuntime({ maxHeapBytes: 4 * 1024 });
+  tiny.attachMemory(new WebAssembly.Memory({ initial: 1 }));
+  let threw = false;
+  let underCapAllocs = 0;
+  try {
+    for (let i = 0; i < 16; i++) {
+      tiny.allocBytes(1024);
+      underCapAllocs++;
+    }
+  } catch (e) {
+    threw = e instanceof MemoryLimitError;
+  }
+  eq("memory cap: throws MemoryLimitError", threw, true);
+  eq(
+    "memory cap: stopped before exhausting cap",
+    underCapAllocs <= 3, // 3 × 1024 = 3072 ≤ 4096-1024 reserved
+    true,
+  );
+  eq(
+    "memory cap: peak tracked",
+    tiny.getPeakHeapBytes() >= underCapAllocs * 1024,
+    true,
+  );
+  // After resetHeap, the next allocation should succeed again.
+  tiny.resetHeap();
+  let postReset = -1;
+  try {
+    postReset = tiny.allocBytes(512);
+  } catch {
+    postReset = -1;
+  }
+  eq("memory cap: resetHeap clears state", postReset > 0, true);
+  eq("memory cap: resetHeap clears peak", tiny.getPeakHeapBytes(), 512);
+}
+
+// Default cap is 64 MiB — published as a public constant so the HTTP
+// wrapper and tests stay in sync without hard-coding the number.
+eq("memory cap: default constant", DEFAULT_MAX_HEAP_BYTES, 64 * 1024 * 1024);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -455,7 +455,40 @@ export function makeTracePool() {
   };
 }
 
-export function createRuntime() {
+/**
+ * Sentinel error thrown when a single evaluation tries to allocate
+ * past 'maxHeapBytes'. Caught by 'wasm-server.mjs' to surface a 413
+ * (or similar) without taking the host down. The shipping default of
+ * 64 MiB is enough for the M0 corpus's worst-case allocations
+ * (calculate-tax / order-total each peak under 1 MiB) while staying
+ * a comfortable factor under most cloud function memory budgets.
+ */
+export class MemoryLimitError extends Error {
+  constructor(requested, used, limit) {
+    super(
+      "wasm evaluation tried to allocate " +
+        requested +
+        " bytes (used " +
+        used +
+        " of " +
+        limit +
+        " allowed)",
+    );
+    this.name = "MemoryLimitError";
+    this.requested = requested;
+    this.used = used;
+    this.limit = limit;
+  }
+}
+
+export const DEFAULT_MAX_HEAP_BYTES = 64 * 1024 * 1024;
+
+export function createRuntime(opts) {
+  const maxHeapBytes =
+    opts && typeof opts.maxHeapBytes === "number"
+      ? opts.maxHeapBytes
+      : DEFAULT_MAX_HEAP_BYTES;
+
   // ---- u64 <-> f64 bit reinterpret (uniform f64 ABI) ----
   const scratch = new ArrayBuffer(8);
   const sView = new DataView(scratch);
@@ -472,10 +505,24 @@ export function createRuntime() {
   //      module has been instantiated) ----
   let memView, memU8;
   let heapPtr = 1024;
+  // Tracks the max @heapPtr@ value seen since the last 'resetHeap' so
+  // hosts can monitor per-eval allocation pressure even when individual
+  // calls stay under the cap.
+  let peakHeapPtr = 1024;
   const allocBytes = (n) => {
     const nn = Number(n);
+    // Bump-pointer allocator: 8-byte align both the allocation size
+    // and the resulting next-free pointer. Reject when honoring the
+    // request would push 'heapPtr' past 'maxHeapBytes' so a runaway
+    // wasm body (infinite cons chain, unbounded list grow) can't
+    // exhaust the JS heap.
+    const aligned = (nn + 7) & ~7;
+    if (heapPtr + aligned > maxHeapBytes) {
+      throw new MemoryLimitError(aligned, heapPtr - 1024, maxHeapBytes);
+    }
     const p = heapPtr;
-    heapPtr += (nn + 7) & ~7;
+    heapPtr += aligned;
+    if (heapPtr > peakHeapPtr) peakHeapPtr = heapPtr;
     return p;
   };
   // Per-call exact-rational pool (M4). NUMBER values are handles into this.
@@ -498,11 +545,17 @@ export function createRuntime() {
   const forcedFields = new Set();
   const resetHeap = () => {
     heapPtr = 1024;
+    peakHeapPtr = 1024;
     ratPool.reset();
     tracePool.reset();
     forcedFields.clear();
     valueByPtr.clear();
   };
+  // Surface peak-allocation telemetry so the HTTP wrapper can log it
+  // or expose it as a header for monitoring per-eval memory pressure.
+  const getPeakHeapBytes = () => peakHeapPtr - 1024;
+  const getHeapBytes = () => heapPtr - 1024;
+  const getMaxHeapBytes = () => maxHeapBytes;
   const attachMemory = (memory) => {
     memView = new DataView(memory.buffer);
     memU8 = new Uint8Array(memory.buffer);
@@ -2027,6 +2080,10 @@ export function createRuntime() {
     attachMemory,
     resetHeap,
     allocBytes,
+    // M7 — memory cap + peak-allocation telemetry
+    getPeakHeapBytes,
+    getHeapBytes,
+    getMaxHeapBytes,
     // Type reinterpret
     u64ToF64,
     f64ToU64,
