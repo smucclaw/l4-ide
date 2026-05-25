@@ -48,7 +48,7 @@ main = do
     , test "@export ASSUMEs become args"       testExportAssumePromotion
     , test "internal callers fill via extern"  testInternalCallFillsAssumes
     , test "schema picks up imported DECLAREs" testSchemaUsesImportedDeclares
-    , test "deontic fn flagged unsupported"    testDeonticFlaggedUnsupported
+    , test "deontic contract baked into schema" testDeonticSchemaBaked
     , test "plain fn stays supported"          testPlainFunctionSupported
     , test "state graph baked into schema"     testStateGraphBaked
     , test "no state graph for plain fn"       testNoStateGraphForPlainFn
@@ -188,11 +188,14 @@ schemaWithDiagnostics src =
           bundle = applyDiagnostics diags (bundleExports "test.wasm" "test" r.tcdInfoMap (substitutedEntityInfo r) r.tcdModule [])
       in Right (TE.decodeUtf8 (LBS.toStrict (encodeBundle bundle)))
 
--- | A DEONTIC/regulative function can't be faithfully compiled, so the
--- schema must mark it @supported: false@ with a reason — rather than the
--- old behaviour of silently lowering the body to FALSE. (M1a)
-testDeonticFlaggedUnsupported :: IO Bool
-testDeonticFlaggedUnsupported = do
+-- | M6: a DEONTIC function is now SUPPORTED — the runtime handles
+-- the contract via a JS interpreter that walks the schema's
+-- @deonticContract@ tree. The schema must (a) mark it @supported:
+-- true@, (b) carry the regulative AST as @deonticContract@ so the
+-- runtime can walk it, and (c) flag @isDeontic: true@ so callers
+-- know to send @startTime@ + @events@.
+testDeonticSchemaBaked :: IO Bool
+testDeonticSchemaBaked = do
   let src = T.unlines
         [ "DECLARE Party IS ONE OF `alice`"
         , "DECLARE Action IS ONE OF `pay`"
@@ -209,9 +212,26 @@ testDeonticFlaggedUnsupported = do
     Left errs -> do
       putStrLn $ "\n    typecheck failed: " <> show errs
       pure False
-    Right json ->
-      pure $ T.isInfixOf "\"supported\":false" json
-          && T.isInfixOf "not supported by the WASM backend" json
+    Right json -> do
+      let checks :: [(String, Bool)]
+          checks =
+            [ ("isDeontic",    T.isInfixOf "\"isDeontic\":true" json)
+            , ("supported",    T.isInfixOf "\"supported\":true" json)
+            , ("deonticContract key", T.isInfixOf "\"deonticContract\":" json)
+            , ("OBLIGATION kind",     T.isInfixOf "\"kind\":\"OBLIGATION\"" json)
+            , ("MUST modal",          T.isInfixOf "\"modal\":\"MUST\"" json)
+            , ("deadline string",     T.isInfixOf "\"deadline\":\"10\"" json)
+            , ("party serialized",    T.isInfixOf "\"party\":" json)
+            , ("action serialized",   T.isInfixOf "\"action\":" json)
+            , ("FULFILLED kind",      T.isInfixOf "\"kind\":\"FULFILLED\"" json)
+            ]
+      let failures = [name | (name, ok) <- checks, not ok]
+      case failures of
+        [] -> pure True
+        _  -> do
+          putStrLn $ "\n    failing checks: " <> show failures
+          putStrLn $ "    json: " <> T.unpack (T.take 600 json)
+          pure False
 
 -- | A plain decidable function lowers cleanly, so it must stay
 -- @supported: true@ and emit no unsupported flag. (M1a negative control)

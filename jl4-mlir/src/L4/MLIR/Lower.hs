@@ -1800,16 +1800,22 @@ lowerExprCases expr expectedTy = case expr of
     InertCtxOr   -> emitVal $ \vid -> arithConstantFloat vid 0.0
     InertCtxNone -> emitVal $ \vid -> arithConstantFloat vid 1.0
 
-  -- Regulative / event / IO constructs cannot be faithfully compiled to
-  -- the pure-function WASM ABI: they need the interpreter's temporal
-  -- event-replay + obligation model (see FEATURE-PARITY-PLAN.md M6).
-  -- Flag the enclosing function rather than silently emitting FALSE.
-  Regulative{} -> markUnsupported "REGULATIVE (deontic) construct not supported by the WASM backend"
+  -- M6: 'Regulative' / 'Breach' compile to a placeholder body (0.0).
+  -- The runtime detects deontic functions via @schema.isDeontic@ and
+  -- routes them to a JS-side interpreter that walks the
+  -- @deonticContract@ tree against the request's @events@ stream —
+  -- the wasm body is never invoked, so the placeholder is harmless.
+  -- (Event-replay loop intentionally lives in JS so a future
+  -- log-stream sink can resume from a checkpointed intermediate
+  -- state without re-instantiating wasm.)
+  Regulative{} -> emitVal $ \vid -> arithConstantFloat vid 0.0
+  Breach{}     -> emitVal $ \vid -> arithConstantFloat vid 0.0
+  -- Event / IO constructs still aren't supported — they don't have a
+  -- runtime interpretation in the schema yet.
   Event{}      -> markUnsupported "EVENT construct not supported by the WASM backend"
   Fetch{}      -> markUnsupported "FETCH (IO) not supported by the WASM backend"
   Post{}       -> markUnsupported "POST (IO) not supported by the WASM backend"
   Env{}        -> markUnsupported "ENV not supported by the WASM backend"
-  Breach{}     -> markUnsupported "BREACH (deontic) construct not supported by the WASM backend"
 
   -- Exponent
   Exponent _ base exp_ -> do

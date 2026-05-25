@@ -63,6 +63,7 @@ import L4.Syntax
   , Section(..), TopDecl(..), LocalDecl(..)
   , TypeSig(..), GivenSig(..), GivethSig(..), OptionallyTypedName(..)
   , Pattern(..), BranchLhs(..)
+  , Deonton(..), RAction(..), DeonticModal(..)
   , rawName, rawNameToText, getActual, getUnique
   )
 import L4.Annotation (HasSrcRange, rangeOf)
@@ -111,7 +112,35 @@ data FunctionExport = FunctionExport
     -- time. The runtime never re-runs the pretty-printer; everything
     -- byte-identity-relevant is baked here at compile time. 'Nothing'
     -- for unsupported functions and any function we can't pretty-print.
+  , deonticContract :: !(Maybe DeonticContract)
+    -- ^ M6: serialized regulative contract tree. Populated when
+    -- 'isDeontic' is true; the runtime's deontic interpreter walks
+    -- this against the @events@ stream to produce
+    -- FULFILLED / OBLIGATION / BREACH without invoking the wasm
+    -- body. 'Nothing' for non-deontic functions.
   }
+
+-- | M6: pre-baked regulative contract tree, walked by the runtime's
+-- JS deontic interpreter against the @events@ stream supplied at
+-- request time. Mirrors the AST 'Deonton' / 'Breach' / @Fulfilled@
+-- shapes, but pre-renders party / action / deadline expressions as
+-- 'L4.Print.prettyLayout' strings so the runtime never re-runs the
+-- pretty-printer.
+data DeonticContract
+  = DCObligation
+      { dcParty    :: !Text          -- ^ pretty-printed party expression (e.g. @"\`the seller\`"@)
+      , dcAction   :: !Text          -- ^ pretty-printed action pattern (e.g. @"\`deliver the goods\`"@)
+      , dcModal    :: !Text          -- ^ @"MUST"@ | @"MAY"@ | @"MUSTNOT"@ | @"DO"@
+      , dcDeadline :: !(Maybe Text)  -- ^ pretty-printed deadline expression (e.g. @"14"@)
+      , dcHence    :: !(Maybe DeonticContract)
+      , dcLest     :: !(Maybe DeonticContract)
+      }
+  | DCFulfilled
+  | DCBreach
+      { dcBreachBy      :: !(Maybe Text)
+      , dcBreachBecause :: !(Maybe Text)
+      }
+  deriving stock (Eq, Show)
 
 -- | Per-function pretty-printed strings for the M5 trace tree. These
 -- mirror what 'L4.Print.prettyLayout' would emit on the corresponding
@@ -670,6 +699,13 @@ buildExport infoMap declares fnReturnTypes unannotatedFns ef =
       -- match byte-for-byte. Slice 2A populates the outer shell; slice 2B
       -- adds per-subexpression node IDs alongside.
       traceMeta_ = buildTraceMeta infoMap declares fnReturnTypes unannotatedFns ef
+      -- M6: extract the regulative contract structure for deontic
+      -- functions so the runtime's JS interpreter can walk it against
+      -- the @events@ stream. Non-deontic / non-Regulative bodies
+      -- get 'Nothing' and the WASM path stays authoritative.
+      deonticContract_ = if isDeonticFn
+        then extractDeonticContract ef.exportDecide
+        else Nothing
   in FunctionExport
        { apiName     = sanitizeFunctionName name
        , wasmSymbol  = sanitizeWasmSymbol name
@@ -683,7 +719,45 @@ buildExport infoMap declares fnReturnTypes unannotatedFns ef =
        , supported   = True
        , unsupportedReason = Nothing
        , traceMeta   = Just traceMeta_
+       , deonticContract = deonticContract_
        }
+
+-- | M6: walk a 'Decide' body to extract a 'DeonticContract' tree.
+-- The body is a 'Regulative' wrapping a 'Deonton' record; the
+-- 'hence' / 'lest' fields are nested expressions that themselves
+-- are either further 'Regulative's, a bare @FULFILLED@ (parses to
+-- @App _ "FULFILLED" []@), or a 'Breach'. Anything else returns
+-- 'Nothing' so the runtime falls back to a generic error.
+extractDeonticContract :: Decide Resolved -> Maybe DeonticContract
+extractDeonticContract (MkDecide _ _ _ body) = exprToContract body
+
+exprToContract :: Expr Resolved -> Maybe DeonticContract
+exprToContract = \case
+  Regulative _ deonton -> Just (deontonToContract deonton)
+  Breach _ mBy mBec ->
+    Just (DCBreach (Print.prettyLayout <$> mBy) (Print.prettyLayout <$> mBec))
+  App _ headRes []
+    | rawNameToText (rawName (getActual headRes)) `elem` ["Fulfilled", "FULFILLED"] ->
+        Just DCFulfilled
+  _ -> Nothing
+
+deontonToContract :: Deonton Resolved -> DeonticContract
+deontonToContract deonton =
+  DCObligation
+    { dcParty    = Print.prettyLayout (deonton.party)
+    , dcAction   = Print.prettyLayout (deonton.action.action)
+    , dcModal    = modalToText deonton.action.modal
+    , dcDeadline = Print.prettyLayout <$> deonton.due
+    , dcHence    = deonton.hence >>= exprToContract
+    , dcLest     = deonton.lest >>= exprToContract
+    }
+
+modalToText :: DeonticModal -> Text
+modalToText = \case
+  DMust    -> "MUST"
+  DMay     -> "MAY"
+  DMustNot -> "MUSTNOT"
+  DDo      -> "DO"
 
 -- | Build the pretty-printed strings the M5 trace tree needs.
 -- For deontic / unsupported functions we still populate this — the JSON
@@ -1587,7 +1661,7 @@ returnTypeDisplay (Just ty)
 -- ---------------------------------------------------------------------------
 
 instance Aeson.ToJSON FunctionExport where
-  toJSON fe = Aeson.object
+  toJSON fe = Aeson.object $
     [ "name"        .= fe.apiName
     , "wasmSymbol"  .= fe.wasmSymbol
     , "description" .= fe.description
@@ -1598,7 +1672,7 @@ instance Aeson.ToJSON FunctionExport where
     , "supported"   .= fe.supported
     , "unsupportedReason" .= fe.unsupportedReason
     , "traceMeta"   .= fe.traceMeta
-    ]
+    ] ++ maybe [] (\dc -> ["deonticContract" .= dc]) fe.deonticContract
 
 instance Aeson.FromJSON FunctionExport where
   parseJSON = Aeson.withObject "FunctionExport" $ \o -> FunctionExport
@@ -1612,6 +1686,45 @@ instance Aeson.FromJSON FunctionExport where
     <*> o .:? "supported"   .!= True
     <*> o .:? "unsupportedReason"
     <*> o .:? "traceMeta"
+    <*> o .:? "deonticContract"
+
+-- | JSON shape mirrors the runtime's expected interpreter input:
+--   { "kind": "OBLIGATION", "party": "`x`", "action": "`y`",
+--     "modal": "MUST", "deadline": "14",
+--     "hence": <DeonticContract|null>, "lest": <DeonticContract|null> }
+--   { "kind": "FULFILLED" }
+--   { "kind": "BREACH", "by": <string|null>, "because": <string|null> }
+instance Aeson.ToJSON DeonticContract where
+  toJSON DCFulfilled = Aeson.object ["kind" .= ("FULFILLED" :: Text)]
+  toJSON (DCBreach mBy mBec) = Aeson.object
+    [ "kind"    .= ("BREACH" :: Text)
+    , "by"      .= mBy
+    , "because" .= mBec
+    ]
+  toJSON o@DCObligation{} = Aeson.object
+    [ "kind"     .= ("OBLIGATION" :: Text)
+    , "party"    .= o.dcParty
+    , "action"   .= o.dcAction
+    , "modal"    .= o.dcModal
+    , "deadline" .= o.dcDeadline
+    , "hence"    .= o.dcHence
+    , "lest"     .= o.dcLest
+    ]
+
+instance Aeson.FromJSON DeonticContract where
+  parseJSON = Aeson.withObject "DeonticContract" $ \o -> do
+    kind <- o .: "kind"
+    case (kind :: Text) of
+      "FULFILLED" -> pure DCFulfilled
+      "BREACH"    -> DCBreach <$> o .:? "by" <*> o .:? "because"
+      "OBLIGATION" -> DCObligation
+        <$> o .: "party"
+        <*> o .: "action"
+        <*> o .: "modal"
+        <*> o .:? "deadline"
+        <*> o .:? "hence"
+        <*> o .:? "lest"
+      _ -> fail ("unknown DeonticContract kind: " ++ Text.unpack kind)
 
 instance Aeson.ToJSON TraceMeta where
   toJSON tm = Aeson.object

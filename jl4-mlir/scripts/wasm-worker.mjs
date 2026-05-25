@@ -4,8 +4,11 @@
 // terminate + respawn it without taking the HTTP listener down.
 //
 // Protocol:
-//   ⇢ { type: "eval", id, fnName, args, traceMode }
+//   ⇢ { type: "eval", id, fnName, args, traceMode, startTime?, events? }
 //   ⇡ { type: "result", id, status, body, peakHeap, maxHeap, backend }
+//
+// 'startTime' and 'events' are only sent for deontic invocations
+// (M6); the worker merges them into 'args' for the JS interpreter.
 //
 // The parent owns timeout enforcement (the worker has no clean way
 // to interrupt itself mid-call); a timed-out request just leaves
@@ -26,6 +29,7 @@ import {
   aesonStringify,
   wrapEvaluationEnvelope,
   MemoryLimitError,
+  DeonticInputError,
 } from "../runtime/jl4-runtime.mjs";
 import { createBackend } from "../runtime/wasm-backend.mjs";
 
@@ -59,7 +63,7 @@ parentPort.postMessage({ type: "ready", backend: backend.name });
 
 parentPort.on("message", (msg) => {
   if (msg.type !== "eval") return;
-  const { id, fnName, args, traceMode } = msg;
+  const { id, fnName, args, traceMode, startTime, events } = msg;
   const meta = fnByName[fnName] || fnByName[fnName.replace(/ /g, "-")];
   if (!meta) {
     parentPort.postMessage({
@@ -72,21 +76,50 @@ parentPort.on("message", (msg) => {
     });
     return;
   }
+  // M6 — refuse @events@ payloads against a non-deontic function so
+  // a typo / wrong-endpoint call doesn't silently succeed (jl4-service
+  // returns 400 for this case).
+  if (!meta.isDeontic && events !== undefined) {
+    parentPort.postMessage({
+      type: "result",
+      id,
+      status: 400,
+      body: JSON.stringify({
+        error: "events provided for a non-DEONTIC function",
+      }),
+      peakHeap: 0,
+      maxHeap: rt.getMaxHeapBytes(),
+      backend: backend.name,
+    });
+    return;
+  }
+  // For deontic functions the JS interpreter looks 'startTime' /
+  // 'events' off the same args bag — merge them in here so the
+  // runtime stays oblivious to the envelope shape.
+  const effectiveArgs = meta.isDeontic ? { ...args, startTime, events } : args;
   let status = 200;
   let body;
   try {
     const payload =
       traceMode === "full"
-        ? rt.invokeFunctionWithReasoning(instance, meta, args)
-        : { value: rt.invokeFunction(instance, meta, args) };
+        ? rt.invokeFunctionWithReasoning(instance, meta, effectiveArgs)
+        : { value: rt.invokeFunction(instance, meta, effectiveArgs) };
     body = aesonStringify(wrapEvaluationEnvelope(payload));
   } catch (err) {
-    status = err instanceof MemoryLimitError ? 413 : 500;
+    // Map known errors to HTTP statuses; everything else is 500.
+    // 'DeonticInputError' is a client-side input bug — the worker's
+    // wasm state is untouched, so don't trigger a respawn.
+    // 'MemoryLimitError' / wasm traps leave the bump-pointer or the
+    // instance in inconsistent state and ARE fatal.
+    const isFatal = !(err instanceof DeonticInputError);
+    if (err instanceof DeonticInputError) {
+      status = 400;
+    } else if (err instanceof MemoryLimitError) {
+      status = 413;
+    } else {
+      status = 500;
+    }
     body = JSON.stringify({ error: String(err.message || err) });
-    // Tell the parent we're toast — a WebAssembly.RuntimeError leaves
-    // the instance unusable, and MemoryLimitError leaves heap-state
-    // inconsistent enough that the next call would either re-trip the
-    // limit or leak. Either way, parent should kill+respawn.
     parentPort.postMessage({
       type: "result",
       id,
@@ -95,7 +128,7 @@ parentPort.on("message", (msg) => {
       peakHeap: rt.getPeakHeapBytes(),
       maxHeap: rt.getMaxHeapBytes(),
       backend: backend.name,
-      fatal: true,
+      fatal: isFatal,
     });
     return;
   }

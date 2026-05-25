@@ -483,6 +483,148 @@ export class MemoryLimitError extends Error {
 
 export const DEFAULT_MAX_HEAP_BYTES = 64 * 1024 * 1024;
 
+/**
+ * M6 — sentinel for missing / malformed deontic request payloads.
+ * The HTTP wrapper catches this and surfaces a 400 with the
+ * 'message' as the error body, matching jl4-service's
+ * "startTime is required for functions returning DEONTIC" format.
+ */
+export class DeonticInputError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "DeonticInputError";
+  }
+}
+
+// ===========================================================================
+// M6 — deontic interpreter. Walks 'schema.deonticContract' against the
+// request's startTime + events stream, returning a wire-shaped value
+// that mirrors jl4-service byte-for-byte. Inlined here (no separate
+// module) so the CLI's @embedStringFile "runtime/jl4-runtime.mjs"@
+// path stays a single self-contained source.
+//
+// Wire shapes:
+//   "FULFILLED"
+//   { OBLIGATION: { action, deadline, modal, party } }
+//   "BREACH" | { BREACH: { by, because } }   -- when by/because set
+// ===========================================================================
+
+/**
+ * @param contract  - parsed 'deonticContract' tree from the schema.
+ * @param startTime - simulation start time (number).
+ * @param events    - array of { party, action, at } from the request.
+ * @returns the JSON-shaped value to drop under @{value: …}@.
+ */
+export function runDeontic(contract, startTime, events) {
+  const t0 = Number(startTime);
+  const sortedEvents = (events || [])
+    .slice()
+    .sort((a, b) => Number(a.at) - Number(b.at));
+
+  let current = contract;
+  let now = t0;
+  let cursor = 0;
+
+  // Walk the contract. At each obligation we look for a matching
+  // event past 'now'; if none arrives within the deadline window
+  // take the LEST branch (BREACH by default); otherwise advance
+  // the clock to the event time and follow HENCE.
+  while (current && current.kind === "OBLIGATION") {
+    const deadline = current.deadline == null ? null : Number(current.deadline);
+    const absoluteDeadline = deadline == null ? null : now + deadline;
+
+    while (
+      cursor < sortedEvents.length &&
+      Number(sortedEvents[cursor].at) < now
+    ) {
+      cursor++;
+    }
+    let matchingIdx = -1;
+    for (let i = cursor; i < sortedEvents.length; i++) {
+      const ev = sortedEvents[i];
+      if (deonticEventMatchesObligation(ev, current)) {
+        matchingIdx = i;
+        break;
+      }
+    }
+
+    if (matchingIdx === -1) {
+      // No matching event. If any *later* event landed past the
+      // deadline the obligation has lapsed — take LEST. Otherwise
+      // it's the residual state.
+      const haveEventsPastDeadline =
+        absoluteDeadline != null &&
+        sortedEvents.some((e) => Number(e.at) > absoluteDeadline);
+      if (haveEventsPastDeadline) {
+        current = current.lest || { kind: "BREACH" };
+        continue;
+      }
+      return deonticObligationToWire(current);
+    }
+
+    const ev = sortedEvents[matchingIdx];
+    const evTime = Number(ev.at);
+    if (absoluteDeadline != null && evTime > absoluteDeadline) {
+      current = current.lest || { kind: "BREACH" };
+      continue;
+    }
+    now = evTime;
+    cursor = matchingIdx + 1;
+    current = current.hence || { kind: "FULFILLED" };
+  }
+
+  if (!current) return "FULFILLED";
+  switch (current.kind) {
+    case "FULFILLED":
+      return "FULFILLED";
+    case "BREACH":
+      return deonticBreachToWire(current);
+    default:
+      throw new Error(
+        "deontic interpreter: unexpected node kind: " + current.kind,
+      );
+  }
+}
+
+/**
+ * Contract stores party/action as pre-rendered L4 strings (e.g.
+ * @"`the seller`"@), events arrive as bare JSON (@"the seller"@) —
+ * strip the surrounding backticks before comparing so the match is
+ * on the underlying identifier.
+ */
+function deonticEventMatchesObligation(ev, obligation) {
+  const evParty = String(ev.party != null ? ev.party : "");
+  const evAction = String(ev.action != null ? ev.action : "");
+  return (
+    deonticStripBackticks(obligation.party) === evParty &&
+    deonticStripBackticks(obligation.action) === evAction
+  );
+}
+
+function deonticStripBackticks(s) {
+  if (typeof s !== "string") return s;
+  if (s.startsWith("`") && s.endsWith("`")) return s.slice(1, -1);
+  return s;
+}
+
+function deonticObligationToWire(o) {
+  return {
+    OBLIGATION: {
+      action: o.action,
+      deadline: o.deadline == null ? null : String(o.deadline),
+      modal: o.modal,
+      party: o.party,
+    },
+  };
+}
+
+function deonticBreachToWire(b) {
+  if (b.by != null || b.because != null) {
+    return { BREACH: { by: b.by, because: b.because } };
+  }
+  return "BREACH";
+}
+
 export function createRuntime(opts) {
   const maxHeapBytes =
     opts && typeof opts.maxHeapBytes === "number"
@@ -1270,6 +1412,13 @@ export function createRuntime(opts) {
   //      decode the return per the schema's return type. ----
   function invokeFunction(instance, meta, args) {
     resetHeap();
+    // M6 — deontic functions never invoke the wasm body. The JS
+    // interpreter walks 'meta.deonticContract' against the request's
+    // 'startTime' + 'events' fields and returns a wire value the
+    // envelope wrapper can drop into 'SimpleResponse'.
+    if (meta.isDeontic) {
+      return invokeDeontic(meta, args);
+    }
     const props = meta.parameters.properties || {};
     const order = meta.paramOrder || Object.keys(props);
     const required = new Set(meta.parameters.required || order);
@@ -1289,6 +1438,35 @@ export function createRuntime(opts) {
     const fn = instance.exports[meta.wasmSymbol];
     const raw = fn(...marshaled);
     return unmarshalResult(raw, meta.returnType);
+  }
+
+  // ---- M6: deontic dispatch -------------------------------------
+  // The args may carry @startTime@ and @events@ either at the top
+  // level (jl4-service shape) or nested under @arguments@; the HTTP
+  // wrapper hands us the request body's @arguments@ field already,
+  // which conventionally only carries the GIVEN parameters — so
+  // 'startTime' / 'events' live on the *envelope*. To keep
+  // 'invokeFunction' callable from both shapes, look for the fields
+  // on @args@ first.
+  function invokeDeontic(meta, args) {
+    if (!meta.deonticContract) {
+      throw new DeonticInputError(
+        "deontic function has no compiled contract metadata",
+      );
+    }
+    const startTime = args.startTime;
+    const events = args.events;
+    if (startTime === undefined || startTime === null) {
+      throw new DeonticInputError(
+        "startTime is required for functions returning DEONTIC",
+      );
+    }
+    if (events === undefined || events === null) {
+      throw new DeonticInputError(
+        "events is required for functions returning DEONTIC",
+      );
+    }
+    return runDeontic(meta.deonticContract, startTime, events);
   }
 
   // ---- M5 slice 2B: trace-mode invocation via the instrumented `<fn>$trace`.
@@ -1338,6 +1516,13 @@ export function createRuntime(opts) {
   }
 
   function invokeFunctionWithReasoning(instance, meta, args) {
+    // M6 — deontic functions skip wasm entirely; the JS interpreter
+    // owns the value and the reasoning. For now we don't emit a
+    // per-event trace tree (jl4-service's deontic responses are
+    // SimpleResponse without reasoning), so 'reasoning' is empty.
+    if (meta.isDeontic) {
+      return { value: invokeDeontic(meta, args), reasoning: null };
+    }
     const traceSymbol = (meta.wasmSymbol || "") + "$trace";
     if (typeof instance.exports[traceSymbol] === "function") {
       const value = invokeFunctionRaw(instance, meta, args, traceSymbol);

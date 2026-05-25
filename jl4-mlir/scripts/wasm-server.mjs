@@ -243,8 +243,20 @@ const server = http.createServer((req, res) => {
       return;
     }
     const args = parsed.arguments || {};
+    // M6 — deontic functions take @startTime@ + @events@ at the top
+    // level of the request envelope (mirrors jl4-service's API). The
+    // worker decides whether to thread them through based on the
+    // looked-up function's 'isDeontic' flag.
+    const startTime = parsed.startTime;
+    const events = parsed.events;
     try {
-      const result = await pool.exec({ fnName, args, traceMode });
+      const result = await pool.exec({
+        fnName,
+        args,
+        traceMode,
+        startTime,
+        events,
+      });
       const stats = pool.stats();
       res.writeHead(result.status, {
         "content-type": "application/json",
