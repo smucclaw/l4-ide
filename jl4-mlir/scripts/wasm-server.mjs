@@ -4,23 +4,25 @@
 //
 // Usage: node wasm-server.mjs <schema.json> <wasm> [port]
 //
-// M7 hardening — a faulty rule (wasm trap, memory blow-up, exception
-// from the runtime) returns a 500 *and* re-instantiates the module so
-// subsequent requests start from a clean state. WebAssembly traps
-// leave the instance unusable per spec, and the JS-side bump-pointer
-// heap is per-runtime; without re-instantiation the next request
-// would either reuse the leaked state or trap again on the same
-// memory views.
+// M7 hardening — the wasm eval runs in a 'worker_thread'. The parent
+// owns request routing, the timeout budget, and the
+// terminate-and-respawn lifecycle; the worker owns the warm
+// runtime + instance. A trap, OOM, or wall-clock timeout terminates
+// the worker; the parent spawns a fresh one. The HTTP listener
+// keeps serving regardless.
+//
+// Env knobs:
+//   JL4_MAX_HEAP_BYTES   — per-eval memory ceiling (default 64 MiB)
+//   JL4_EVAL_TIMEOUT_MS  — per-eval wall-clock budget (default 5000)
 
 import fs from "node:fs";
 import http from "node:http";
-import {
-  createRuntime,
-  aesonStringify,
-  wrapEvaluationEnvelope,
-  DEFAULT_MAX_HEAP_BYTES,
-  MemoryLimitError,
-} from "../runtime/jl4-runtime.mjs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { Worker } from "node:worker_threads";
+import { DEFAULT_MAX_HEAP_BYTES } from "../runtime/jl4-runtime.mjs";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const [, , schemaPath, wasmPath, portArg] = process.argv;
 if (!schemaPath || !wasmPath) {
@@ -31,36 +33,119 @@ const port = parseInt(portArg || "8766", 10);
 const maxHeapBytes = process.env.JL4_MAX_HEAP_BYTES
   ? parseInt(process.env.JL4_MAX_HEAP_BYTES, 10)
   : DEFAULT_MAX_HEAP_BYTES;
+const evalTimeoutMs = process.env.JL4_EVAL_TIMEOUT_MS
+  ? parseInt(process.env.JL4_EVAL_TIMEOUT_MS, 10)
+  : 5000;
 
-const schema = JSON.parse(fs.readFileSync(schemaPath, "utf8"));
-const wasmBuf = fs.readFileSync(wasmPath);
+// Resolve the schema/wasm paths now so the worker doesn't have to
+// resolve relative to its own __dirname.
+const schemaAbs = path.resolve(schemaPath);
+const wasmAbs = path.resolve(wasmPath);
+const workerPath = path.join(__dirname, "wasm-worker.mjs");
 
-// Single warm instantiation per worker. 'reinstantiate' rebuilds it
-// after a failed eval — same module, fresh memory, fresh runtime
-// state. The wasm bytes get cached in 'wasmModule' so we only pay
-// the compile cost once.
-const wasmModule = await WebAssembly.compile(wasmBuf);
-let rt, instance;
+// ---- worker lifecycle -----------------------------------------------------
+// Single warm worker, replaced on death. 'pending' tracks the in-flight
+// eval so a 'message' event can resolve / a 'terminate' can reject.
+let worker;
+let pending = null; // { id, resolve, reject, timer }
+let nextEvalId = 1;
 
-async function reinstantiate() {
-  rt = createRuntime({ maxHeapBytes });
-  instance = await WebAssembly.instantiate(wasmModule, rt.makeImports());
-  rt.attachMemory(instance.exports.memory);
-  // M5 slice 4A — give the runtime the full schema so nested `<fn>$trace`
-  // calls can resolve node IDs against the called function's nodes table.
-  rt.setBundleFunctions(schema.functions || {});
+async function spawnWorker() {
+  return await new Promise((resolve, reject) => {
+    const w = new Worker(workerPath, {
+      workerData: { schemaPath: schemaAbs, wasmPath: wasmAbs, maxHeapBytes },
+    });
+    w.once("error", reject);
+    w.once("exit", (code) => {
+      // If a request was in flight, surface as a 500. The HTTP handler
+      // already swapped 'worker' in 'evalInWorker'; clear 'pending' so
+      // a stale resolver doesn't leak into the next request.
+      if (pending) {
+        const p = pending;
+        pending = null;
+        clearTimeout(p.timer);
+        p.reject(new Error("worker exited (code=" + code + ") mid-eval"));
+      }
+    });
+    w.on("message", (msg) => {
+      if (msg.type === "ready") {
+        worker = w;
+        worker.on("message", onWorkerMessage);
+        resolve();
+      }
+    });
+  });
 }
 
-await reinstantiate();
-
-// Build name → schema lookup using both sanitized (hyphen) and spaced
-// function names so either routing convention works.
-const fnByName = {};
-for (const [sanitized, meta] of Object.entries(schema.functions)) {
-  fnByName[sanitized] = meta;
-  fnByName[sanitized.replace(/-/g, " ")] = meta;
+function onWorkerMessage(msg) {
+  if (msg.type !== "result") return;
+  if (!pending || pending.id !== msg.id) return;
+  const p = pending;
+  pending = null;
+  clearTimeout(p.timer);
+  p.resolve(msg);
+  // A fatal failure (trap, OOM) leaves the worker's state poisoned.
+  // Tear it down and spawn a fresh one before the next request
+  // arrives — keeps the next caller from inheriting half-allocated
+  // memory or an unusable instance.
+  if (msg.fatal) {
+    void terminateAndRespawn();
+  }
 }
 
+async function terminateAndRespawn() {
+  if (worker) {
+    try {
+      await worker.terminate();
+    } catch {
+      /* worker already gone */
+    }
+    worker = null;
+  }
+  await spawnWorker();
+}
+
+function evalInWorker(fnName, args, traceMode) {
+  return new Promise((resolve, reject) => {
+    if (!worker) {
+      reject(new Error("worker not ready"));
+      return;
+    }
+    if (pending) {
+      reject(new Error("worker busy"));
+      return;
+    }
+    const id = nextEvalId++;
+    const timer = setTimeout(() => {
+      if (pending && pending.id === id) {
+        const p = pending;
+        pending = null;
+        // Terminate first so the next call doesn't try to use a
+        // worker that's still grinding away on the timed-out eval.
+        // The respawn races the reject; that's fine — the
+        // 'worker = null' below blocks new evals until 'spawnWorker'
+        // resolves.
+        const dying = worker;
+        worker = null;
+        if (dying) dying.terminate().catch(() => {});
+        spawnWorker().catch((e) =>
+          console.error("respawn after timeout failed:", e),
+        );
+        p.reject(
+          Object.assign(new Error("eval exceeded " + evalTimeoutMs + "ms"), {
+            status: 504,
+          }),
+        );
+      }
+    }, evalTimeoutMs);
+    pending = { id, resolve, reject, timer };
+    worker.postMessage({ type: "eval", id, fnName, args, traceMode });
+  });
+}
+
+await spawnWorker();
+
+// ---- HTTP listener --------------------------------------------------------
 const server = http.createServer((req, res) => {
   if (req.method !== "POST") {
     res.writeHead(405);
@@ -80,52 +165,35 @@ const server = http.createServer((req, res) => {
   // jl4-service accepts both the X-L4-Trace header and the ?trace= query
   // param; mirror just the query for slice 1 (the harness uses the query).
   const traceMode = query.get("trace") || "none";
-  const meta = fnByName[fnName] || fnByName[fnName.replace(/ /g, "-")];
-  if (!meta) {
-    res.writeHead(404, { "content-type": "application/json" });
-    res.end(JSON.stringify({ error: "Unknown function: " + fnName }));
-    return;
-  }
+
   let body = "";
   req.on("data", (c) => (body += c));
   req.on("end", async () => {
-    let trapped = false;
-    let status = 200;
-    let respBody;
+    let parsed;
     try {
-      const parsed = body ? JSON.parse(body) : {};
-      const args_ = parsed.arguments || {};
-      const payload =
-        traceMode === "full"
-          ? rt.invokeFunctionWithReasoning(instance, meta, args_)
-          : { value: rt.invokeFunction(instance, meta, args_) };
-      // aesonStringify matches jl4-service's Aeson-encoded output byte-for-
-      // byte: bytestring's `doubleDec` for fractional NUMBER results, and
-      // alphabetically-sorted object keys for nested Reasoning trees.
-      respBody = aesonStringify(wrapEvaluationEnvelope(payload));
-    } catch (err) {
-      // 413 for OOM (caller's payload-too-large guess is closer than
-      // 500), 500 for everything else. A 'WebAssembly.RuntimeError'
-      // (trap) leaves the instance unusable per spec — re-instantiate
-      // after the response so the next request starts clean.
-      status = err instanceof MemoryLimitError ? 413 : 500;
-      trapped = err instanceof WebAssembly.RuntimeError || status === 413;
-      respBody = JSON.stringify({ error: String(err.message || err) });
+      parsed = body ? JSON.parse(body) : {};
+    } catch (e) {
+      res.writeHead(400, { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: "invalid JSON: " + e.message }));
+      return;
     }
-    const peak = rt.getPeakHeapBytes();
-    res.writeHead(status, {
-      "content-type": "application/json",
-      "x-jl4-peak-heap-bytes": String(peak),
-      "x-jl4-max-heap-bytes": String(rt.getMaxHeapBytes()),
-    });
-    res.end(respBody);
-    if (trapped) {
-      try {
-        await reinstantiate();
-      } catch (e) {
-        console.error("re-instantiation failed:", e);
-        process.exit(1);
-      }
+    const args = parsed.arguments || {};
+    try {
+      const result = await evalInWorker(fnName, args, traceMode);
+      res.writeHead(result.status, {
+        "content-type": "application/json",
+        "x-jl4-peak-heap-bytes": String(result.peakHeap),
+        "x-jl4-max-heap-bytes": String(result.maxHeap),
+        "x-jl4-eval-timeout-ms": String(evalTimeoutMs),
+      });
+      res.end(result.body);
+    } catch (err) {
+      const status = err.status || 500;
+      res.writeHead(status, {
+        "content-type": "application/json",
+        "x-jl4-eval-timeout-ms": String(evalTimeoutMs),
+      });
+      res.end(JSON.stringify({ error: String(err.message || err) }));
     }
   });
 });

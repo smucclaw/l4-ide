@@ -137,7 +137,56 @@ try {
   );
 } finally {
   server.kill("SIGTERM");
+  await new Promise((r) => server.on("exit", r));
 }
+
+// ---- M7 slice 2: timeout + worker_threads, header surface ----------
+// Verifying a real timed-out eval requires a fixture slow enough to
+// outrun a deliberately short timeout — the M0 corpus is sub-ms, so
+// we'd need a synthetic recursive helper. Instead, lock the header
+// contract here ('x-jl4-eval-timeout-ms' present + reflects the env
+// knob); a manual slow-eval rehearsal lives in
+// 'jl4-mlir/parity-report/' notes.
+{
+  const port2 = 9992;
+  const server2 = spawn(
+    "node",
+    [serverPath, schemaPath, wasmPath, String(port2)],
+    {
+      env: { ...process.env, JL4_EVAL_TIMEOUT_MS: "1234" },
+      stdio: ["ignore", "pipe", "inherit"],
+    },
+  );
+  await new Promise((r) => {
+    server2.stderr ? server2.stderr.on("data", () => {}) : null;
+    setTimeout(r, 300);
+  });
+  try {
+    const r = await fetch(
+      "http://127.0.0.1:" + port2 + "/deployments/x/functions/cubed/evaluation",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ arguments: { n: 1 } }),
+      },
+    );
+    eq(
+      "timeout: env knob plumbed",
+      r.headers.get("x-jl4-eval-timeout-ms"),
+      "1234",
+    );
+  } finally {
+    server2.kill("SIGTERM");
+    await new Promise((r) => server2.on("exit", r));
+  }
+}
+
+// 'cubed n' has no compound args / no list / no record, so its
+// 'walkWasmValue' / marshaling never touches the bump-pointer heap;
+// the OOM-respawn path is exercised instead by the unit test in
+// 'runtime/jl4-runtime.test.mjs' that calls 'allocBytes' directly.
+// A future e2e OOM test would need a fixture that allocates a List
+// or Record argument.
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

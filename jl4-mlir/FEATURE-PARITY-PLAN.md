@@ -1293,9 +1293,39 @@ deployment. Regression tests in `runtime/jl4-runtime.test.mjs`
 at `scripts/wasm-server.test.mjs` (happy path + header surface +
 404 doesn't trigger re-instantiation) lock the contract.
 
-Still to do: per-eval timeout via `worker_threads` (slice 2), wasmtime
-/ wasmer backends (slice 3), per-module worker pool for concurrency
-(slice 4).
+### Slice 2 — worker_threads + per-eval timeout
+
+Moves the wasm runtime + instance into a Node `worker_thread`. The
+parent owns request routing, the wall-clock budget, and the
+terminate-and-respawn lifecycle; the worker owns the warm runtime.
+
+- **Process layout.** `wasm-server.mjs` keeps one warm worker (single
+  in-flight eval at a time — matches the pre-slice-1 throughput
+  shape; a pool comes in slice 4). The worker stays cold-cached
+  across requests; the parent re-spawns it after every fatal failure.
+- **Per-eval timeout.** `JL4_EVAL_TIMEOUT_MS` (default 5000 ms)
+  arms a `setTimeout` for each posted message. If the budget
+  elapses with no reply, the parent `terminate()`s the worker,
+  returns a 504, and starts spawning a replacement. The next
+  request blocks briefly on `spawnWorker()` rather than getting
+  served by a hung worker.
+- **Fatal-failure respawn.** The worker marks `MemoryLimitError`
+  and `WebAssembly.RuntimeError` responses with `fatal: true` so
+  the parent kills + respawns it even on a graceful HTTP-level
+  failure (a trap leaves the wasm instance unusable per spec; an
+  OOM leaves the bump-pointer state inconsistent).
+- **Headers.** `x-jl4-eval-timeout-ms` joins the existing
+  `x-jl4-peak-heap-bytes` / `x-jl4-max-heap-bytes` so the proxy
+  can correlate slow responses with budget.
+
+`scripts/wasm-server.test.mjs` covers the happy path through the
+worker, the 404 short-circuit (no respawn), and the timeout-header
+contract. A true wall-clock timeout assertion needs a fixture
+slow enough to outrun `setTimeout` (>2 ticks) — the M0 corpus is
+sub-ms, so the timeout-path itself is exercised manually for now.
+
+Still to do: wasmtime / wasmer backends (slice 3), per-module
+worker pool for concurrency (slice 4).
 
 ---
 
