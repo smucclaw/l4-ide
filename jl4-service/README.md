@@ -84,14 +84,14 @@ Returns `{"status":"healthy","deployments":{"total":N,"ready":N,"pending":N,"com
 
 Manage deployment lifecycle.
 
-| Method   | Endpoint                          | Description                                                               |
-| -------- | --------------------------------- | ------------------------------------------------------------------------- |
-| `POST`   | `/deployments`                    | Create or overwrite a deployment (multipart: `id` + `sources` zip)        |
-| `GET`    | `/deployments`                    | List all deployments (`?functions=simple\|full\|none`, `?scope=id`)       |
-| `GET`    | `/deployments/{id}`               | Get the **live** deployment status (triggers compilation if pending)      |
-| `GET`    | `/deployments/{id}/updates/{job}` | Poll an async deploy/update job (see below)                               |
-| `PUT`    | `/deployments/{id}`               | Update an existing deployment, enforcing the backwards-compatibility gate |
-| `DELETE` | `/deployments/{id}`               | Remove a deployment                                                       |
+| Method   | Endpoint                          | Description                                                                                           |
+| -------- | --------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `POST`   | `/deployments`                    | Create or overwrite a deployment (multipart: `id` + `sources` zip)                                    |
+| `GET`    | `/deployments`                    | List all deployments (`?functions=simple\|full\|none`, `?scope=id`)                                   |
+| `GET`    | `/deployments/{id}`               | Get the **live** deployment status (`?functions=simple\|full\|none`; triggers compilation if pending) |
+| `GET`    | `/deployments/{id}/updates/{job}` | Poll an async deploy/update job (see below)                                                           |
+| `PUT`    | `/deployments/{id}`               | Update an existing deployment, enforcing the backwards-compatibility gate                             |
+| `DELETE` | `/deployments/{id}`               | Remove a deployment                                                                                   |
 
 Deployment states: `pending` (lazy-load, not yet compiled), `compiling` (compilation in progress), `ready` (compiled and serving), `failed` (compilation error stored). `GET /deployments/{id}` always reflects the **live** deployment only — an in-flight `POST`/`PUT` never changes it.
 
@@ -304,7 +304,7 @@ Deployments are automatically [WebMCP](https://webmachinelearning.github.io/webm
 
 The `/deployments` endpoint serves cached metadata even for pending (lazy-loaded) deployments, so it works immediately after a restart without triggering compilation.
 
-Query parameters for `GET /deployments`:
+Query parameters for `GET /deployments` (and `GET /deployments/{id}`; `scope` is list-only):
 
 - `?functions=simple` — name, description, returnType per function (default)
 - `?functions=full` — include full parameter schemas in function details

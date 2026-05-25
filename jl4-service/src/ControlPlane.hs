@@ -115,7 +115,7 @@ type ControlPlaneApi =
        "deployments" :> MultipartForm Mem (MultipartData Mem) :> Verb 'POST 202 '[JSON] DeploymentStatusResponse
   :<|> "deployments" :> QueryParam "functions" Text :> QueryParam "scope" Text :> Get '[JSON] [DeploymentStatusResponse]
   :<|> "deployments" :> Capture "deploymentId" Text :> "updates" :> Capture "updateId" Text :> Get '[JSON] UpdateStatusResponse
-  :<|> "deployments" :> Capture "deploymentId" Text :> Get '[JSON] DeploymentStatusResponse
+  :<|> "deployments" :> Capture "deploymentId" Text :> QueryParam "functions" Text :> Get '[JSON] DeploymentStatusResponse
   :<|> "deployments" :> Capture "deploymentId" Text :> MultipartForm Mem (MultipartData Mem) :> Verb 'PUT 202 '[JSON] DeploymentStatusResponse
   :<|> "deployments" :> Capture "deploymentId" Text :> DeleteNoContent
 
@@ -200,11 +200,7 @@ getDeploymentsHandler vis mFunctions mScope = do
     [("functions", toJSON mFunctions), ("scope", toJSON mScope)]
   registry <- liftIO $ readTVarIO env.deploymentRegistry
   let debugMode = env.options.debug
-      fnMode = if not vis.showFunctions then FnNone
-               else case mFunctions of
-                 Just "full" -> FnFull
-                 Just "none" -> FnNone
-                 _           -> FnSimple  -- default: name + description
+      fnMode = parseFnMode vis mFunctions
 
   let allResponses = map (\(did, state) ->
         stateToResponse debugMode vis fnMode did state
@@ -225,6 +221,16 @@ getDeploymentsHandler vis mFunctions mScope = do
 -- | Function detail level in deployment responses.
 data FnMode = FnNone | FnSimple | FnFull
 
+-- | Parse the @?functions@ query parameter, honouring the visibility gate.
+-- Defaults to 'FnSimple' (name + description) when unset or unrecognised.
+parseFnMode :: Visibility -> Maybe Text -> FnMode
+parseFnMode vis mFunctions
+  | not vis.showFunctions = FnNone
+  | otherwise = case mFunctions of
+      Just "full" -> FnFull
+      Just "none" -> FnNone
+      _           -> FnSimple
+
 -- | Strip parameters from a FunctionSummary (for ?functions=simple).
 simplify :: FunctionSummary -> FunctionSummary
 simplify fs = fs
@@ -235,12 +241,16 @@ simplify fs = fs
 -- | GET /deployments/{id} — get deployment status.
 -- If the deployment is Pending (lazy-load), compiles it synchronously
 -- before returning the response.
-getDeploymentHandler :: Visibility -> Text -> AppM DeploymentStatusResponse
-getDeploymentHandler vis deployIdText = do
+-- ?functions=full → include full function details (parameters, returnType, section)
+-- ?functions=none → omit functions from metadata
+-- default        → simple function list (name + description)
+getDeploymentHandler :: Visibility -> Text -> Maybe Text -> AppM DeploymentStatusResponse
+getDeploymentHandler vis deployIdText mFunctions = do
   env <- asks id
   let deployId = DeploymentId deployIdText
+      fnMode = parseFnMode vis mFunctions
   liftIO $ logInfo env.logger "Deployment retrieved"
-    [("deploymentId", toJSON deployIdText)]
+    [("deploymentId", toJSON deployIdText), ("functions", toJSON mFunctions)]
   registry <- liftIO $ readTVarIO env.deploymentRegistry
   case Map.lookup deployId registry of
     Nothing -> throwError err404
@@ -250,8 +260,8 @@ getDeploymentHandler vis deployIdText = do
       registry' <- liftIO $ readTVarIO env.deploymentRegistry
       case Map.lookup deployId registry' of
         Nothing -> throwError err404
-        Just state' -> pure (stateToResponse env.options.debug vis FnSimple deployId state')
-    Just state -> pure (stateToResponse env.options.debug vis FnSimple deployId state)
+        Just state' -> pure (stateToResponse env.options.debug vis fnMode deployId state')
+    Just state -> pure (stateToResponse env.options.debug vis fnMode deployId state)
 
 -- | GET /deployments/{id}/updates/{updateId} — poll an async
 -- deploy/update job. Independent of the live deployment: a job's
@@ -502,7 +512,7 @@ isPathSafe path = ".." `notElem` splitDirectories path
 -- Bounds the downstream system-prompt token budget and the
 -- prompt-injection surface.
 maxDescriptionLength :: Int
-maxDescriptionLength = 4000
+maxDescriptionLength = 1500
 
 -- | Extract and sanitize the optional operator-supplied deployment
 -- description ("Intended use") from the multipart form.

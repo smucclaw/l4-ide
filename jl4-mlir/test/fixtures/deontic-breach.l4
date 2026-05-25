@@ -1,0 +1,15 @@
+-- M6 slice 5 parity fixture: explicit BREACH with BY / BECAUSE clauses.
+-- Forces the LEST branch to surface a structured BREACH record so we
+-- can lock the {BREACH: {by, because}} wire shape against jl4-service.
+
+DECLARE Party IS ONE OF `the borrower`
+DECLARE `Repay Action` IS ONE OF `repay loan`
+
+@export default repayment with structured breach
+GIVETH A DEONTIC Party `Repay Action`
+`repayment contract` MEANS
+    PARTY `the borrower`
+    MUST `repay loan`
+    WITHIN 30
+    HENCE FULFILLED
+    LEST BREACH BY `the borrower` BECAUSE "loan was not repaid in time"

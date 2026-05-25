@@ -18,6 +18,7 @@
 
 - [OpenAI- and Anthropic-Compatible AI APIs](legalese-cloud/openai-compatible-api.md)
 - [MCP Server](legalese-cloud/mcp-server.md)
+- [Install as Agent Plugin](legalese-cloud/agent-plugin.md)
 - [WebMCP Embed Script](legalese-cloud/webmcp-embed.md)
 - [RESTful OpenAPI Specification](legalese-cloud/openapi-spec.md)
 

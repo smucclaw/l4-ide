@@ -22,6 +22,7 @@
     host = '',
     onClose,
     onLearnMore,
+    onInstall,
   }: {
     deploymentId: string
     mode: 'cloud' | 'self-hosted'
@@ -29,6 +30,12 @@
     host?: string
     onClose: () => void
     onLearnMore: (docUrl: string) => void
+    /** Cloud mode only: triggered by the install buttons. The host
+     *  wires this to the extension's `RequestInstallDeploymentSkill`
+     *  notification so the plugin bundle is downloaded from the
+     *  hosted `.skill` endpoint and written into the chosen target's
+     *  config — or saved to disk for `download-zip`. */
+    onInstall?: (target: 'claude-code' | 'vscode-chat' | 'download-zip') => void
   } = $props()
 
   interface Section {
@@ -44,19 +51,14 @@
     mode === 'cloud'
       ? [
           {
-            label: 'OpenAI v1 compatible AI chat API',
+            // Same base URL serves both surfaces: the OpenAI SDK uses
+            // this as its baseURL directly, while the Anthropic SDK
+            // appends `/v1/messages` to the parent (drop `/v1` for the
+            // Anthropic SDK baseURL). Showing one row avoids two
+            // copies of nearly the same URL.
+            label: 'AI chat API (OpenAI + Anthropic compatible)',
             value: `https://ai.legalese.cloud/${orgSlug}/${deploymentId}/v1`,
-            hint: 'Use with the OpenAI SDK or POST /chat/completions. Uses legalese-comply-4.',
-            doc: 'legalese-cloud/openai-compatible-api.md',
-          },
-          {
-            label: 'Anthropic Messages compatible AI API',
-            // Anthropic SDK appends /v1/messages itself, so the base
-            // URL stops at the deployment root (no trailing /v1). The
-            // raw endpoint is at .../v1/messages — same proxy, same
-            // pipeline as the OpenAI surface above.
-            value: `https://ai.legalese.cloud/${orgSlug}/${deploymentId}`,
-            hint: 'Use with the Anthropic SDK or POST /v1/messages. Uses legalese-comply-4.',
+            hint: 'OpenAI SDK: use this URL as baseURL. Anthropic SDK: drop the trailing /v1 so the SDK appends /v1/messages itself. Uses legalese-comply-4.',
             doc: 'legalese-cloud/openai-compatible-api.md',
           },
           {
@@ -67,13 +69,13 @@
           },
           {
             label: 'WebMCP embed script',
-            value: `${SCRIPT_OPEN} src="https://${orgSlug}.legalese.cloud/.webmcp/embed.js" data-scope="${deploymentId}" data-tools="auto" data-api-key="sk_...">${SCRIPT_CLOSE}`,
+            value: `${SCRIPT_OPEN} src="https://api.legalese.cloud/.webmcp/embed.js" data-org="${orgSlug}" data-scope="${deploymentId}" data-tools="auto" data-api-key="sk_...">${SCRIPT_CLOSE}`,
             hint: 'Enable your website to serve your rules to visitors',
             doc: 'legalese-cloud/webmcp-embed.md',
           },
           {
             label: 'RESTful OpenAPI JSON specification',
-            value: `https://${orgSlug}.legalese.cloud/${deploymentId}/openapi.json`,
+            value: `https://api.legalese.cloud/${orgSlug}/${deploymentId}/openapi.json`,
             hint: 'Allow 3rd party systems to integrate and evaluate these rules',
             doc: 'legalese-cloud/openapi-spec.md',
           },
@@ -140,6 +142,7 @@
     role="dialog"
     aria-modal="true"
     aria-label="Integrate deployment"
+    tabindex="-1"
     onclick={(e) => e.stopPropagation()}
     onkeydown={null}
   >
@@ -155,6 +158,44 @@
     </div>
 
     <div class="dialog-body">
+      {#if mode === 'cloud' && onInstall}
+        <div class="section install-section">
+          <div class="section-label">Install as AI agent plugin</div>
+          <div class="install-row">
+            <button
+              class="install-btn"
+              onclick={() => onInstall?.('claude-code')}
+              title="Install the deployment's skill folder and MCP server into Claude Code"
+            >
+              Add to Claude Code
+            </button>
+            <button
+              class="install-btn"
+              onclick={() => onInstall?.('vscode-chat')}
+              title="Install the deployment's skill folder and MCP server into VS Code Chat"
+            >
+              Add to VS Code Chat
+            </button>
+            <button
+              class="install-icon-btn"
+              onclick={() => onInstall?.('download-zip')}
+              title="Download the plugin zip"
+              aria-label="Download the plugin zip">⤓</button
+            >
+          </div>
+          <div class="section-hint">
+            Bundles this deployment's SKILL.md and MCP tools as a plugin for
+            Claude Code or VS Code Chat and compatible.
+            <button
+              class="learn-more"
+              onclick={() =>
+                onLearnMore(`${DOCS_BASE}/legalese-cloud/agent-plugin.md`)}
+              >Learn more</button
+            >
+          </div>
+        </div>
+      {/if}
+
       {#each sections as section, i (section.label)}
         <div class="section">
           <div class="section-label">{section.label}</div>
@@ -315,6 +356,53 @@
       --vscode-button-secondaryHoverBackground,
       var(--vscode-list-hoverBackground)
     );
+  }
+
+  .install-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .install-btn {
+    flex: 1;
+    min-width: 140px;
+    padding: 8px 14px;
+    background: var(--vscode-button-secondaryBackground, transparent);
+    color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.95em;
+  }
+  .install-btn:hover {
+    background: var(
+      --vscode-button-secondaryHoverBackground,
+      var(--vscode-list-hoverBackground)
+    );
+  }
+
+  .install-icon-btn {
+    flex-shrink: 0;
+    padding: 0 12px;
+    background: var(--vscode-button-secondaryBackground, transparent);
+    color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1.1em;
+    line-height: 1;
+  }
+  .install-icon-btn:hover {
+    background: var(
+      --vscode-button-secondaryHoverBackground,
+      var(--vscode-list-hoverBackground)
+    );
+  }
+
+  .section-hint code {
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 0.9em;
   }
 
   .section-hint {

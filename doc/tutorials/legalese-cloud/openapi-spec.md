@@ -20,13 +20,13 @@ For conversational or agent-driven use, see the [OpenAI- and Anthropic-compatibl
 **Legalese Cloud:**
 
 ```
-https://{orgSlug}.legalese.cloud/{deploymentId}/openapi.json
+https://api.legalese.cloud/{orgSlug}/{deploymentId}/openapi.json
 ```
 
 **Self-hosted jl4-service:**
 
 ```
-{serviceUrl}/{deploymentId}/openapi.json
+http://{serviceUrl}/{deploymentId}/openapi.json
 ```
 
 The VS Code **Integrate** dialog pre-fills the correct URL for your connection.
@@ -36,7 +36,7 @@ The VS Code **Integrate** dialog pre-fills the correct URL for your connection.
 - **Legalese Cloud:** bearer token — your signed-in session or an API key (`Authorization: Bearer sk_...`) from the [console](https://legalese.cloud). Uses the `l4:rules`, `l4:evaluate` and `l4:read` permissions.
 - **Self-hosted:** whatever auth your `jl4-service` is configured with.
 
-### Permissions
+### Legalese Cloud Permissions
 
 | Permission    | Enables                                                                                                                      |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------- |
@@ -64,7 +64,7 @@ Feed the URL to any OpenAPI tool:
 ```bash
 # openapi-generator
 openapi-generator-cli generate \
-  -i https://{orgSlug}.legalese.cloud/{deploymentId}/openapi.json \
+  -i https://api.legalese.cloud/{orgSlug}/{deploymentId}/openapi.json \
   -g typescript-fetch -o ./generated
 
 # or import the URL into Postman / Insomnia / Swagger UI
@@ -73,7 +73,7 @@ openapi-generator-cli generate \
 ### Call a rule
 
 ```bash
-curl https://{orgSlug}.legalese.cloud/{deploymentId}/<rule-operation> \
+curl https://api.legalese.cloud/{orgSlug}/{deploymentId}/<rule-operation> \
   -H "Authorization: Bearer sk_..." \
   -H "Content-Type: application/json" \
   -d '{ "applicant": { "age": 40, "risk score": 0.8 } }'
@@ -85,4 +85,4 @@ The exact path and request shape for each rule come straight from the spec.
 
 - The spec regenerates on every redeploy, so generated clients stay in sync — re-run codegen after a schema-changing deploy.
 - Responses are the rule's typed decision, suitable for storing as an auditable record.
-- A self-hosted `jl4-service` serves the spec at `{serviceUrl}/{deploymentId}/openapi.json`.
+- A self-hosted `jl4-service` serves the spec at `http://{serviceUrl}/{deploymentId}/openapi.json`.

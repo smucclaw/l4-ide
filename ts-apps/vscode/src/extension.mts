@@ -514,6 +514,7 @@ export async function activate(context: ExtensionContext) {
     serviceClient,
     outputChannel,
     mcpProxy,
+    userDataPath,
     (directiveId) => openInspectorSections.delete(directiveId)
   )
 

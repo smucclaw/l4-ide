@@ -32,7 +32,22 @@ builtinDeclarations = map mkExternDecl runtimeFunctions
 -- helper *before* the pointer is boxed into the ABI.
 runtimeFunctions :: [(Text, [MLIRType], [MLIRType])]
 runtimeFunctions =
-  [ ("__l4_pow",         [l4NumberType, l4NumberType], [l4NumberType])
+  [ -- Exact-rational NUMBER ABI (M4). Args/results are f64-boxed handles
+    -- into the per-call rational pool; the JS adapter does box/unbox.
+    -- @__l4_rat_parse@ takes a string-pool pointer (boxed as f64) and
+    -- builds the rational. @__l4_rat_cmp@ returns -1.0\/0.0\/1.0 as f64.
+    ("__l4_rat_parse",    [l4NumberType], [l4NumberType])
+  , ("__l4_rat_from_int", [l4NumberType], [l4NumberType])
+  , ("__l4_rat_add",      [l4NumberType, l4NumberType], [l4NumberType])
+  , ("__l4_rat_sub",      [l4NumberType, l4NumberType], [l4NumberType])
+  , ("__l4_rat_mul",      [l4NumberType, l4NumberType], [l4NumberType])
+  , ("__l4_rat_div",      [l4NumberType, l4NumberType], [l4NumberType])
+  , ("__l4_rat_mod",      [l4NumberType, l4NumberType], [l4NumberType])
+  , ("__l4_rat_neg",      [l4NumberType], [l4NumberType])
+  , ("__l4_rat_cmp",      [l4NumberType, l4NumberType], [l4NumberType])
+  , ("__l4_rat_to_f64",   [l4NumberType], [l4NumberType])
+  , ("__l4_f64_to_rat",   [l4NumberType], [l4NumberType])
+  , ("__l4_pow",         [l4NumberType, l4NumberType], [l4NumberType])
   , ("__l4_min",         [l4NumberType, l4NumberType], [l4NumberType])
   , ("__l4_max",         [l4NumberType, l4NumberType], [l4NumberType])
   , ("__l4_abs",         [l4NumberType],               [l4NumberType])
@@ -113,6 +128,41 @@ runtimeFunctions =
     -- JSON.
   , ("__l4_json_encode", [l4NumberType], [l4NumberType])
   , ("__l4_json_decode", [l4NumberType], [l4NumberType])
+    -- M5 slice 2B — trace ABI. Both calls are no-ops in the untraced
+    -- `<fn>` variant; the instrumented `<fn>$trace` variant brackets each
+    -- traceable subexpression with these. `__l4_trace_enter` records the
+    -- compile-time-assigned node ID; `__l4_trace_exit` captures the result
+    -- box plus a kind byte (0=NUMBER, 1=BOOLEAN, 2=STRING, 3=OTHER) the
+    -- runtime serialiser uses to render `Result: …` lines.
+  , ("__l4_trace_enter", [l4NumberType], [])
+  , ("__l4_trace_exit",  [l4NumberType, l4NumberType], [])
+    -- M5 slice 4A — each `<fn>$trace` brackets its body with
+    -- `__l4_trace_enter_fn(fnSymbolPtr)` / `__l4_trace_exit_fn()` so
+    -- the runtime knows whose `traceMeta.nodes` table to resolve
+    -- node IDs against when the function recurses into another
+    -- function's `$trace`. The arg is the f64-boxed pointer to a
+    -- NUL-terminated wasm-symbol string in linear memory.
+  , ("__l4_trace_enter_fn", [l4NumberType], [])
+  , ("__l4_trace_exit_fn",  [],             [])
+    -- M5 slice 4D — at each property selector (@record's field@) in
+    -- `<fn>$trace` mode, the lowering emits one of these calls with
+    -- the static path of the record (e.g. @\"req.applicant\"@) and
+    -- the field's source name (e.g. @\"bankruptcy history\"@). The
+    -- runtime accumulates a set of forced @path.field@ keys so the
+    -- arg-eval renderer can show forced fields as values and
+    -- unforced ones as @(...)@ — jl4-core's lazy-NF behaviour.
+  , ("__l4_mark_forced", [l4NumberType, l4NumberType], [])
+    -- M5 slice 4D — when a `<fn>$trace` body calls another L4
+    -- function with a known static path (e.g. @`annual interest rate`
+    -- (req's applicant)@), the caller pushes one binding per compound
+    -- arg before the call:
+    --   `__l4_trace_push_arg_path(helperParamName, callerPath)`
+    -- then a single `__l4_trace_pop_arg_paths()` after the call.
+    -- The runtime applies the top binding when rewriting marker paths
+    -- (so the helper's `profile.bankruptcy history` becomes
+    -- `req.applicant.bankruptcy history`).
+  , ("__l4_trace_push_arg_path", [l4NumberType, l4NumberType], [])
+  , ("__l4_trace_pop_arg_paths", [], [])
   ]
 
 -- | Build an extern function declaration (func.func private).

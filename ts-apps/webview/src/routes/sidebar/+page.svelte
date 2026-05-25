@@ -13,6 +13,7 @@
     RequestOpenConsole,
     RequestOpenExtensionSettings,
     RequestAddL4ToolsToClaudeCode,
+    RequestInstallDeploymentSkill,
     RequestInstallL4Cli,
     RequestCopySignInLink,
     RequestDisconnect,
@@ -333,19 +334,20 @@
       if (deployView === 'breaking-warning') return 'Deploy Anyway'
       if (deployView === 'mission') return 'Deploy Now'
       if (deployView === 'deploy-form') return 'Continue'
-      if (activeTab === 'deployments' && deployments.length > 0)
-        return 'Open in web browser'
       // Tabs that aren't the Deploy tab surface the button as
       // "Deploy preview" — one click jumps to Deploy and shows the
       // tool cards (which is already the default Deploy-tab view).
       // Keeps the footer useful without forcing users to hunt for
       // the Deploy tab manually when they've authored an @export,
       // while the label makes the target action (a deploy, via the
-      // preview step) clear.
+      // preview step) clear. The Deployments tab behaves the same;
+      // opening the live service in a browser lives in the deployment
+      // menu ("Visit …") instead.
       if (
         activeTab === 'ai-chat' ||
         activeTab === 'docs' ||
-        activeTab === 'inspector'
+        activeTab === 'inspector' ||
+        activeTab === 'deployments'
       ) {
         return 'Deploy preview'
       }
@@ -368,19 +370,15 @@
     if (connectionStatus.status !== 'connected') return false
     // Undeploy confirm is always enabled
     if (undeployConfirm) return false
-    // On the deployments tab, the button becomes "Open in web browser"
-    // when at least one deployment exists; otherwise stays disabled.
-    if (activeTab === 'deployments') {
-      return deployments.length === 0
-    }
-    // Non-deploy tabs surface a "Preview" button that jumps to the
-    // Deploy tab. Enabled iff the active file has at least one rule
-    // ready for export — otherwise the Deploy tab would just show
-    // the empty "Open an L4 file containing valid rules" hint.
+    // Non-deploy tabs (including Deployments) surface a "Deploy preview"
+    // button that jumps to the Deploy tab. Enabled iff the active file has
+    // at least one rule ready for export — otherwise the Deploy tab would
+    // just show the empty "Open an L4 file containing valid rules" hint.
     if (
       activeTab === 'inspector' ||
       activeTab === 'docs' ||
-      activeTab === 'ai-chat'
+      activeTab === 'ai-chat' ||
+      activeTab === 'deployments'
     )
       return functions.length === 0
     if (deployView === 'preview' && functions.length === 0) return true
@@ -624,6 +622,28 @@
   }
 
   /**
+   * Remove the DEONTIC simulation-envelope keys ('startTime', 'events')
+   * from a parameter schema's top-level properties/required. These keys
+   * are present in jl4-service's deployed schema but not in the LSP's
+   * local schema, so they would otherwise drive false-positive diffs.
+   * Returns the schema unchanged when not deontic or when no properties
+   * are present.
+   */
+  function stripDeonticEnvelope(
+    schema: SchemaNode | undefined,
+    isDeontic: boolean
+  ): SchemaNode | undefined {
+    if (!isDeontic || !schema || !schema.properties) return schema
+    const props = { ...schema.properties }
+    delete props.startTime
+    delete props.events
+    const required = (schema.required ?? []).filter(
+      (k) => k !== 'startTime' && k !== 'events'
+    )
+    return { ...schema, properties: props, required }
+  }
+
+  /**
    * Detect backwards-incompatible changes between the local functions
    * and the currently-deployed interface (fetched per-function from
    * jl4-service). New functions and new optional parameters are safe;
@@ -641,8 +661,9 @@
       const remote = remoteByName.get(local.name)
       if (!remote) continue // new function — not breaking
 
-      // Return type (display name, e.g. BOOLEAN / DEONTIC). A change here
-      // also covers deontic ⇄ non-deontic (different request envelope).
+      // Return type (display name, e.g. BOOLEAN / DEONTIC OF P, A). A
+      // change here also covers deontic ⇄ non-deontic (different request
+      // envelope).
       const returnTypeChanged =
         !!remote.returnType &&
         !!local.returnType &&
@@ -657,13 +678,30 @@
         ])
       }
 
+      // For DEONTIC functions, jl4-service injects 'startTime' and 'events'
+      // into the deployed parameter schema (the simulation envelope), but
+      // the LSP-derived local schema does not. Strip them on both sides
+      // before diffing so the envelope's presence/absence doesn't show up
+      // as a spurious "parameter removed" breaking change.
+      const isDeontic =
+        (remote.returnType ?? '').startsWith('DEONTIC') ||
+        (local.returnType ?? '').startsWith('DEONTIC')
+      const remoteParams = stripDeonticEnvelope(
+        remote.parameters as unknown as SchemaNode,
+        isDeontic
+      )
+      const localParams = stripDeonticEnvelope(
+        local.parameters as unknown as SchemaNode,
+        isDeontic
+      )
+
       // Recursive parameter (input) diff.
       diffNode(
         local.name,
         'parameter',
         '',
-        (remote.parameters as unknown as SchemaNode) ?? {},
-        local.parameters as unknown as SchemaNode,
+        remoteParams ?? {},
+        localParams ?? {},
         'in',
         changes
       )
@@ -926,12 +964,11 @@
         continueDeploy()
       } else if (deployView === 'deploy-form') {
         goToMission()
-      } else if (activeTab === 'deployments' && deployments.length > 0) {
-        openServiceUrl()
       } else if (
         activeTab === 'ai-chat' ||
         activeTab === 'docs' ||
-        activeTab === 'inspector'
+        activeTab === 'inspector' ||
+        activeTab === 'deployments'
       ) {
         // "Preview" click jumps to the Deploy tab so the cards the
         // button promised become visible. The Deploy tab's own
@@ -1545,6 +1582,16 @@
         host={connectionStatus.serviceUrl}
         onClose={() => (integrateForId = null)}
         {onLearnMore}
+        onInstall={(target) => {
+          const id = integrateForId
+          if (!id) return
+          integrateForId = null
+          messenger?.sendNotification(
+            RequestInstallDeploymentSkill,
+            HOST_EXTENSION,
+            { deploymentId: id, target }
+          )
+        }}
       />
     {/if}
   </div>

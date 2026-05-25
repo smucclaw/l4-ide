@@ -312,14 +312,6 @@ export const GetSidebarUpdateStatus: RequestType<
   method: 'getSidebarUpdateStatus',
 }
 
-/** Sidebar requests deployment OpenAPI spec (for breaking change detection) */
-export const GetSidebarDeploymentOpenApi: RequestType<
-  { deploymentId: string },
-  { openapi: unknown }
-> = {
-  method: 'getSidebarDeploymentOpenApi',
-}
-
 /**
  * A deployed function's interface, normalized from jl4-service's
  * per-function schema endpoint (`GET /deployments/{id}/functions/{fn}`)
@@ -384,6 +376,23 @@ export const RequestOpenExtensionSettings: NotificationType<void> = {
 /** Sidebar asks extension to add L4 tools (MCP server + skill) to Claude Code */
 export const RequestAddL4ToolsToClaudeCode: NotificationType<void> = {
   method: 'requestAddL4ToolsToClaudeCode',
+}
+
+/**
+ * Sidebar asks extension to install a specific deployment as a Claude Code
+ * plugin or a VS Code Chat MCP server. The extension downloads the plugin
+ * bundle from `mcp.legalese.cloud/{slug}/{deploymentId}/.skill` using the
+ * user's session token, then writes the relevant config for the chosen
+ * target (skill folder + ~/.claude.json for Claude Code; per-deployment
+ * entry in VS Code's user-level mcp.json for VS Code Chat).
+ *
+ * Cloud mode only — both targets reference the hosted MCP URL.
+ */
+export const RequestInstallDeploymentSkill: NotificationType<{
+  deploymentId: string
+  target: 'claude-code' | 'vscode-chat' | 'download-zip'
+}> = {
+  method: 'requestInstallDeploymentSkill',
 }
 
 /** Sidebar asks extension to install the bundled `l4` CLI onto the user's PATH */

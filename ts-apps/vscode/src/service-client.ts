@@ -1,4 +1,5 @@
 import type { AuthManager } from './auth.js'
+import { LEGALESE_CLOUD_DOMAIN } from './auth.js'
 
 export interface DeployResponse {
   id: string
@@ -103,12 +104,22 @@ export class ServiceClient {
   }
 
   /**
-   * Get deployment status (lightweight, no function schemas).
+   * Get deployment status. `mode` controls how much detail the response's
+   * `metadata.functions[]` carries:
+   *   - `'simple'` (default): name + description only — cheap status poll.
+   *   - `'full'`: full per-function parameter + returnSchema in one round-trip
+   *     (avoids fanning out per-function `getFunctionSchema` calls).
+   *   - `'none'`: omit the functions array entirely.
    */
-  async getDeploymentStatus(deploymentId: string): Promise<DeployResponse> {
+  async getDeploymentStatus(
+    deploymentId: string,
+    mode: 'simple' | 'full' | 'none' = 'simple'
+  ): Promise<DeployResponse> {
     const encodedId = encodeURIComponent(deploymentId)
-    const resp = await this.request(`/deployments/${encodedId}`)
-    if (!resp.ok) await throwWithBody(resp, `GET /deployments/${encodedId}`)
+    const query = mode === 'simple' ? '' : `?functions=${mode}`
+    const resp = await this.request(`/deployments/${encodedId}${query}`)
+    if (!resp.ok)
+      await throwWithBody(resp, `GET /deployments/${encodedId}${query}`)
     return (await resp.json()) as DeployResponse
   }
 
@@ -196,31 +207,6 @@ export class ServiceClient {
   }
 
   /**
-   * List a deployment's exported function names. Backed by
-   * `GET /deployments/{id}/functions`, which returns jl4-service's
-   * `SimpleFunction` shape: `[{ "type":"function",
-   * "function":{ "name", "description" } }]`. A bare `[{ name }]`
-   * fallback is kept in case that representation ever changes.
-   * Used (with {@link getFunctionSchema}) by the sidebar to recover the
-   * deployed interface for breaking-change detection.
-   */
-  async listDeploymentFunctions(
-    deploymentId: string
-  ): Promise<Array<{ name: string }>> {
-    const encodedId = encodeURIComponent(deploymentId)
-    const resp = await this.request(`/deployments/${encodedId}/functions`)
-    if (!resp.ok)
-      await throwWithBody(resp, `GET /deployments/${encodedId}/functions`)
-    const raw = (await resp.json()) as Array<{
-      name?: string
-      function?: { name?: string }
-    }>
-    return raw
-      .map((f) => ({ name: f.function?.name ?? f.name ?? '' }))
-      .filter((f) => f.name.length > 0)
-  }
-
-  /**
    * Get a single function's schema. Returns the raw JSON shape of
    * jl4-service's `FunctionSummary` — `parameters` plus the structured
    * `returnSchema` (when present), with `x-l4-type` annotations on
@@ -251,5 +237,30 @@ export class ServiceClient {
     const resp = await this.request('/health')
     if (!resp.ok) await throwWithBody(resp, 'GET /health')
     return (await resp.json()) as ServiceHealth
+  }
+
+  /**
+   * Download the plugin-format zip for a deployment from the hosted
+   * MCP endpoint. Returns the raw zip bytes.
+   *
+   * Distinct from the other methods on this class: the request goes to
+   * `mcp.legalese.cloud/{slug}/{id}/.skill` (cloud-only, hosted) rather
+   * than the configured service URL. Self-hosted callers won't have a
+   * cloud slug — they get a thrown Error here, and the popover button
+   * is only rendered in cloud mode.
+   */
+  async getDeploymentSkillBundle(deploymentId: string): Promise<Buffer> {
+    const slug = this.auth.getCloudOrgSlug()
+    if (!slug) {
+      throw new Error('Plugin install requires a Legalese Cloud session.')
+    }
+    const headers = await this.auth.getAuthHeaders()
+    const url = `https://mcp.${LEGALESE_CLOUD_DOMAIN}/${slug}/${encodeURIComponent(
+      deploymentId
+    )}/.skill`
+    const resp = await fetch(url, { headers })
+    if (!resp.ok) await throwWithBody(resp, `GET ${url}`)
+    const ab = await resp.arrayBuffer()
+    return Buffer.from(ab)
   }
 }

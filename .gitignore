@@ -65,4 +65,7 @@ yarn-error.log*
 # Generated skill packages
 writing-l4-rules.skill
 l4-plugin.zip
+
+# jl4-mlir parity-harness report artifacts
+jl4-mlir/parity-report/
 .cache/
