@@ -1247,6 +1247,108 @@ Files: `src/L4/MLIR/Lower.hs` (regulative → step fns), `src/L4/MLIR/ABI.hs`
 (obligation/event layout), `runtime/jl4-runtime.mjs` (replay driver + trace),
 `src/L4/MLIR/Schema.hs` (`isDeontic`, event/party/action types).
 
+### Architecture choice — JS-side interpreter, not step-function codegen
+
+The plan originally proposed a WASM step function per regulative rule. We
+chose the **JS-only** variant after the operator clarified that future
+event flows will come from a log-stream sink with checkpointed intermediate
+state: the interpreter loop needs to live somewhere a checkpoint can be
+snapshotted cheaply (≠ WASM linear memory). The wasm body for a deontic
+function is now an inert `arith.constant 0.0` placeholder; the schema
+bakes the contract tree as JSON metadata and the runtime's
+`runDeontic` walks it against the request's `startTime` + `events`.
+
+### Slice 1 — JS interpreter foundation, simple cascade
+
+Lands the schema/runtime/HTTP plumbing on the canonical
+'the sale contract' fixture (jl4-service's `deonticExportJL4`).
+
+- **Schema** — new `DeonticContract` ADT (`OBLIGATION` / `FULFILLED` /
+  `BREACH`) baked under `FunctionExport.deonticContract`; party / action
+  / deadline pre-rendered via `L4.Print.prettyLayout` so the runtime
+  never re-runs the pretty-printer. `extractDeonticContract` walks
+  `Regulative` / nested HENCE-LEST / bare FULFILLED / `Breach`.
+- **Lower** — `Regulative{}` / `Breach{}` stop `markUnsupported`-ing
+  (they emit an `arith.constant 0.0` placeholder). The wasm body is
+  never invoked for deontic; the runtime detects `meta.isDeontic`
+  and dispatches to `runDeontic`.
+- **Runtime** — new `runDeontic` walker + `DeonticInputError`
+  sentinel. `invokeFunction` / `invokeFunctionWithReasoning` route
+  deontic calls through the JS interpreter. Event matching strips
+  backticks from contract-side strings so '`the seller`' matches
+  the bare '"the seller"' that arrives on the wire.
+- **Worker/server** — `startTime` / `events` forwarded through the
+  worker `eval` message; merged into args when `meta.isDeontic`,
+  refused on non-deontic (400). `DeonticInputError` → 400, non-fatal.
+
+5/5 scenarios byte-identical against jl4-service:
+FULFILLED · initial OBLIGATION · residual OBLIGATION · 400 on missing
+startTime · 400 on missing events.
+
+### Slice 2 — IF guards + record-typed parties
+
+Closes the 'Seatbelt Requirement' fixture
+(jl4-service's `deonticRecordPartyJL4`).
+
+- **Schema** — `DeonticContract` gains `DCIfThenElse { cond, then, else }`
+  for branching on GIVEN parameters; party / action move from a flat
+  `Text` to `DeonticExpr` (`DELiteral` or `DEParam`). New
+  `DeonticGuard` ADT (lit / var / proj / eq / and / or / not / lt /
+  gt / leq / geq) covers IF conditions like
+  `car's number of wheels EQUALS 4`. `exprToGuard` handles both the
+  direct-AST forms (`Equals` / `Plus` / …) and the `App "__OP__"`
+  desugared variants the typechecker leaves depending on context.
+- **Runtime** — `runDeontic` walks `IF` branches via
+  `evalDeonticGuard`; `MAY` modal terminates as FULFILLED when no
+  matching event arrives (permission, not requirement). New
+  `obligationStart` tracks per-obligation start time; deadline
+  surfaces as a JSON _number_ ("remaining") when `now` has
+  advanced past the obligation start, else the original WITHIN
+  literal as a _string_. Record-typed parties get tagged with their
+  L4 type name from the schema's `x-l4-type` stamp
+  (`{Driver: {name: "Alice"}}`).
+
+3/3 scenarios byte-identical:
+4-wheel-FULFILLED · 4-wheel-drive-only OBLIGATION · 3-wheel-FULFILLED.
+
+### Slice 3 — parity-harness wiring
+
+Locks the deontic fixtures into the default harness run so they
+gate every change. Two `.cases.json` sidecars (`deontic-sale.cases.json`
+and `deontic-seatbelt.cases.json`) supply concrete `{arguments,
+startTime, events}` request bodies — the schema-driven `genArgs`
+can't synthesize meaningful event streams, so deontic functions
+without curated cases are surfaced as `skip-no-cases` in the
+report.
+
+Harness changes:
+
+- `serviceEval` accepts an optional `deonticExtras` and merges it
+  into the request body shape `{arguments, startTime, events}`.
+- Each case is now either `{arguments, startTime, events}` (deontic)
+  or a bare args bag (non-deontic). The runtime call merges
+  `startTime` / `events` into the args bag before dispatch.
+
+Net effect — full corpus parity tally:
+
+|                            | M0 byte-identical | M5 trace-byte-identical |
+| -------------------------- | ----------------- | ----------------------- |
+| 12-fn fixture (test.l4)    | ✓ 12              | ✓ 12                    |
+| deontic-sale (3 cases)     | ✓ 3               | trace-differs (no gate) |
+| deontic-seatbelt (3 cases) | ✓ 3               | trace-differs (no gate) |
+| **Total**                  | **18 / 18**       | **12 / 18**             |
+
+The trace-differs cells for deontic are svc's `TraceResponse`
+wrapper (`EVALTRACE OF \`the sale contract\`, 0, (LIST )`etc.) vs
+our`SimpleResponse` (we don't yet reconstruct the wrapper's
+reasoning tree). M5 slice 1 explicitly said trace is not a gate;
+the value path is byte-identical, which is what the proxy needs.
+
+Still open: BREACH/by/because rendering (no fixture exercises it
+yet); error envelopes for events provided to non-deontic functions
+(we 400 with a different message than svc's); the
+'TraceResponse' wrapper itself for full deontic-trace parity.
+
 ---
 
 ## Milestone 7 — Runtime hardening (lands with the proxy work)

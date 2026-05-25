@@ -50,9 +50,12 @@ for (let i = 0; i < argv.length; i++) {
   else files.push(argv[i]);
 }
 if (files.length === 0) {
-  // Default demo set: the rich 12-fn fixture + a deontic file (refused).
+  // Default fixture set: the 12-fn M0/M5 corpus + the two M6
+  // deontic fixtures (simple cascade + record-typed parties).
   files.push(
     path.join(REPO_ROOT, "..", "jl4-auth-proxy", "validation", "test.l4"),
+    path.join(REPO_ROOT, "jl4-mlir", "test", "fixtures", "deontic-sale.l4"),
+    path.join(REPO_ROOT, "jl4-mlir", "test", "fixtures", "deontic-seatbelt.l4"),
   );
 }
 
@@ -179,14 +182,20 @@ async function deploy(id, srcFile) {
   throw new Error(`deploy ${id} not ready`);
 }
 
-async function serviceEval(id, fn, args, traceMode) {
+async function serviceEval(id, fn, args, traceMode, deonticExtras) {
   const url =
     `${BASE}/deployments/${encodeURIComponent(id)}/functions/${encodeURIComponent(fn)}/evaluation` +
     (traceMode === "full" ? "?trace=full" : "");
+  // M6 — deontic functions take @startTime@ + @events@ alongside
+  // @arguments@ at the top level of the request body; non-deontic
+  // calls just send @arguments@.
+  const body = deonticExtras
+    ? { arguments: args, ...deonticExtras }
+    : { arguments: args };
   const r = await fetch(url, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ arguments: args }),
+    body: JSON.stringify(body),
   });
   return { status: r.status, body: await r.text() };
 }
@@ -271,14 +280,50 @@ try {
         bump("refused-unsupported");
         continue;
       }
-      const cases = curated[fnName] || [genArgs(fe.parameters)];
-      for (const args of cases) {
+      // M6 — deontic cases carry @startTime@ and @events@ alongside
+      // @arguments@. A case for a deontic function looks like
+      //   { arguments: {...}, startTime: 0, events: [...] }
+      // and for a regular function is just the args bag
+      //   { foo: 1, ... }.
+      // The harness detects the deontic shape by looking at 'isDeontic'
+      // on the schema. genArgs can't synthesize meaningful events, so
+      // deontic functions without curated cases are skipped (logged).
+      const rawCases =
+        curated[fnName] || (fe.isDeontic ? null : [genArgs(fe.parameters)]);
+      if (rawCases == null) {
+        console.log(
+          `  skip-no-cases  ${id}::${fnName}  (deontic, needs cases.json)`,
+        );
+        results.push({
+          file: id,
+          fn: fnName,
+          outcome: "skip-no-cases",
+        });
+        bump("skip-no-cases");
+        continue;
+      }
+      const cases = rawCases.map((c) =>
+        fe.isDeontic
+          ? {
+              args: c.arguments || {},
+              deontic: {
+                startTime: c.startTime,
+                events: c.events,
+              },
+            }
+          : { args: c, deontic: null },
+      );
+      for (const { args, deontic } of cases) {
         // ----- trace=none: existing matrix -----
-        const svcR = await serviceEval(id, fnName, args, "none");
+        const svcR = await serviceEval(id, fnName, args, "none", deontic);
         let wasmBody = null,
           wasmErr = null;
         try {
-          const val = rt.invokeFunction(instance, fe, args);
+          // For deontic, merge startTime/events into the args bag so
+          // the runtime's 'invokeDeontic' picks them up (mirrors the
+          // wasm-server.mjs path).
+          const effectiveArgs = deontic ? { ...args, ...deontic } : args;
+          const val = rt.invokeFunction(instance, fe, effectiveArgs);
           // aesonStringify renders non-integer Doubles the way jl4-service's
           // Aeson encoder does (bytestring's `doubleDec`) — required for
           // byte-identity on fractional-NUMBER results.
@@ -330,8 +375,13 @@ try {
         // visible the same way M4's ulp-differs cell tracked the rational
         // work — and as later slices land it will burn down to byte-id.
         try {
-          const svcT = await serviceEval(id, fnName, args, "full");
-          const payload = rt.invokeFunctionWithReasoning(instance, fe, args);
+          const svcT = await serviceEval(id, fnName, args, "full", deontic);
+          const effectiveArgsT = deontic ? { ...args, ...deontic } : args;
+          const payload = rt.invokeFunctionWithReasoning(
+            instance,
+            fe,
+            effectiveArgsT,
+          );
           const wasmTraceBody = aesonStringify(wrapEvaluationEnvelope(payload));
           const svcOkT = svcT.status >= 200 && svcT.status < 300;
           let traceOutcome;
