@@ -1335,9 +1335,9 @@ Net effect — full corpus parity tally:
 | -------------------------- | ----------------- | ----------------------- |
 | 12-fn fixture (test.l4)    | ✓ 12              | ✓ 12                    |
 | deontic-sale (3 cases)     | ✓ 3               | ✓ 3 (slice 4)           |
-| deontic-seatbelt (3 cases) | ✓ 3               | trace-differs (no gate) |
+| deontic-seatbelt (3 cases) | ✓ 3               | ✓ 3 (slice 6)           |
 | deontic-breach (2 cases)   | ✓ 2 (slice 5)     | ✓ 2 (slice 5)           |
-| **Total**                  | **20 / 20**       | **17 / 20**             |
+| **Total**                  | **20 / 20**       | **20 / 20**             |
 
 ### Slice 4 — synthesize the deontic `TraceResponse` (parameter-less)
 
@@ -1405,15 +1405,60 @@ DEONTIC"` verbatim (vs the previous custom message), matching
 Net: 2 more byte-identical M0 cells + 2 more trace-byte-identical
 cells (the breach fixture's value + trace responses both line up).
 
-Still open: the **parameterised 'TraceResponse' wrapper** for the
-remaining 3 deontic-seatbelt trace cells. svc generates a
-`CONSIDER decodeArgs OF inputJson WHEN RIGHT args THEN CONSIDER
-args's <param> WHEN JUST unwrapped_<param> THEN JUST OF (EVALTRACE
-…), WHEN NOTHING THEN NOTHING …` wrapper that's substantially
-more synthesizer code than the parity-gain on 3 trace cells
-justifies — deferred until a consumer needs deontic-trace mode on
-a parameterised function. Value parity (the gate that proxy
-callers care about) is already 20/20.
+### Slice 6 — parameterised deontic `TraceResponse` wrapper
+
+Lights up the remaining 3 deontic-seatbelt trace cells, taking the
+trace-mode column to **20 / 20**. Svc generates a much richer
+wrapper for parameterised deontic functions:
+
+```text
+CONSIDER decodeArgs OF inputJson WHEN RIGHT args THEN
+  CONSIDER args's `<p1> (input)` WHEN JUST unwrapped_<p1> THEN
+    CONSIDER args's `<p2> (input)` WHEN JUST unwrapped_<p2> THEN
+      JUST OF (EVALTRACE OF (<fn> OF unwrapped_<p1>, unwrapped_<p2>),
+               <startTime>, (LIST <events>)),
+    WHEN NOTHING THEN NOTHING,
+  WHEN NOTHING THEN NOTHING,
+WHEN LEFT error THEN NOTHING
+```
+
+The synthesizer (`synthesizeParameterizedDeonticReasoning`) walks
+the schema's `deonticContract` to recover the IF guard subtree and
+the chosen branch's value-form, then layers in the decodeArgs
+preamble, per-param `args's <p>` PROJ desugar subtrees, and the
+inner `EVALTRACE` body that mirrors the parameter-less slice-4
+shape. Key details:
+
+- **`CONSIDER InputArgs` continuation indent.** Each PROJ subtree
+  emits `CONSIDER InputArgs WHEN InputArgs <field1>\n<spaces><field2> THEN <selected>`.
+  Svc's Wadler layouter offsets continuation fields one column to
+  the right of where the previous field's first character begins.
+- **Top-level value form.** A bare `PARTY x MAY action` contract
+  value renders with an implicit `\nHENCE FULFILLED` continuation
+  (the IF-evaluated body in seat-3w is `PARTY driver MAY drive` →
+  result text becomes `PARTY driver\nMAY drive\nHENCE FULFILLED`).
+  Contracts inside an explicit HENCE chain don't get this suffix.
+- **`a OF b, c` call frame.** The `a` leaf shows the IF-resolved
+  body (chosen branch's value-form) — not the source IF text.
+  Variable leaves are filtered to those referenced in the chosen
+  body (seat-fulfilled / seat-residual / seat-3w all show only
+  `driver`, never `car`).
+- **`event party N` placeholders.** Record-typed event parties
+  render as `` `event party 0` `` in exampleCode and resolve to
+  `(TypeName OF <fields>)` on Result lines. Single-word actions
+  drop their backticks (`drive` not `` `drive` ``) to match
+  svc's prettyLayout.
+- **Nested CONSIDER continuation shift.** Each newline inside an
+  inner CONSIDER's exampleCode is re-padded by the outer header's
+  width when spliced in, so the cumulative indents of deeply
+  nested `WHEN NOTHING THEN NOTHING` clauses match svc's layout
+  (innermost driver's WHEN NOTHING at column 35 shifts to 94
+  inside the car CONSIDER, then to 148 inside the root).
+
+Net: 3 more trace-byte-identical cells. Full corpus is now
+20/20 on both M0 (value) and M5 (trace) parity. The synthesizer
+is hidden behind `?trace=full`, so it adds zero cost to the
+default `M0` value path.
 
 ---
 

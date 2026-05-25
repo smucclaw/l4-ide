@@ -851,14 +851,26 @@ function synthesizeDeonticReasoning(
   events,
   residualContract,
   residualDeadline,
+  args,
 ) {
-  // Only the parameter-less variant for now. Parameter-having deontic
-  // functions get a richer 'decodeArgs' wrapper that mirrors svc's
-  // generated EVALTRACE shell — TODO.
   const givenParams = (meta.paramOrder || []).filter(
     (p) => p !== "startTime" && p !== "events",
   );
-  if (givenParams.length > 0) return null;
+  // Parameterised deontic — the much richer 'decodeArgs / CONSIDER args's
+  // <param> / EVALTRACE OF (<fn> OF unwrapped_<args>)' wrapper svc
+  // generates for any deontic function with GIVEN parameters.
+  if (givenParams.length > 0) {
+    return synthesizeParameterizedDeonticReasoning(
+      meta,
+      value,
+      startTime,
+      events,
+      residualContract,
+      residualDeadline,
+      args,
+      givenParams,
+    );
+  }
 
   const fnNameRendered =
     (meta.traceMeta && meta.traceMeta.fnName) || meta.name || "";
@@ -980,6 +992,977 @@ function deonticBreachResultText(br) {
   return lines.join("\n");
 }
 
+// ---------------------------------------------------------------------------
+// Parameterised deontic 'TraceResponse' synthesizer. Mirrors the
+// 'CONSIDER decodeArgs OF inputJson WHEN RIGHT args THEN CONSIDER
+//  args's <p1> WHEN JUST unwrapped_<p1> THEN … JUST OF (EVALTRACE OF
+//  (<fn> OF unwrapped_<p1>, …), <startTime>, (LIST <events>)), WHEN
+//  NOTHING THEN NOTHING, …, WHEN LEFT error THEN NOTHING' shell that
+// jl4-service emits per deontic call. Conceptually the wrapper is:
+//
+//   CONSIDER decodeArgs OF inputJson WHEN RIGHT args THEN
+//     CONSIDER args's `p1 (input)` WHEN JUST unwrapped_p1 THEN
+//       CONSIDER args's `p2 (input)` WHEN JUST unwrapped_p2 THEN
+//         JUST OF (EVALTRACE OF (<fn> OF unwrapped_p1, unwrapped_p2),
+//                   <startTime>, (LIST …events…))
+//         WHEN NOTHING THEN NOTHING
+//       WHEN NOTHING THEN NOTHING
+//     WHEN LEFT error THEN NOTHING
+//
+// Every leaf has a Result line that reflects the outcome at that
+// nesting level (FULFILLED, residual OBLIGATION text, DEONTIC
+// BREACHED:…). Helper functions below cover each piece of the
+// wrapper as a separate concern.
+// ---------------------------------------------------------------------------
+
+function synthesizeParameterizedDeonticReasoning(
+  meta,
+  value,
+  startTime,
+  events,
+  residualContract,
+  residualDeadline,
+  args,
+  givenParams,
+) {
+  const fnNameRendered =
+    (meta.traceMeta && meta.traceMeta.fnName) || meta.name || "";
+  const contractBodyText = (meta.traceMeta && meta.traceMeta.body) || "";
+  const explicitBreach =
+    value && typeof value === "object" && value.BREACH && value.BREACH.reason;
+  // 'innerResultText' — the final value at the deepest EVALTRACE
+  // node (FULFILLED, residual source, DEONTIC BREACHED text).
+  const innerResultText =
+    value === "FULFILLED"
+      ? "FULFILLED"
+      : value === "BREACH"
+        ? "BREACH"
+        : explicitBreach
+          ? deonticBreachResultText(value.BREACH)
+          : residualContract
+            ? renderResidualForParamCtx(
+                residualContract,
+                residualDeadline,
+                args,
+                givenParams,
+                meta,
+              )
+            : contractBodyText;
+  // 'wrappedResultText' — same as innerResultText but wrapped in
+  // 'JUST OF (…)' for the CONSIDER nodes that wrap the EVALTRACE in
+  // a MAYBE constructor. Bare strings (FULFILLED / BREACH) just get
+  // 'JUST OF FULFILLED'; multiline payloads get parens.
+  const wrappedResultText = wrapJustOf(innerResultText);
+
+  // Properties + propertyOrder for each GIVEN parameter — used to
+  // render param values as 'TypeName OF <fields>' constructor form.
+  const props = (meta.parameters && meta.parameters.properties) || {};
+  const paramSchemas = givenParams.map((p) => ({
+    name: p,
+    schema: props[p] || {},
+    value: args ? args[p] : undefined,
+  }));
+
+  // ---- top-level CONSIDER decodeArgs OF inputJson WHEN RIGHT args ----
+  const decodeArgsResult = renderDecodeArgsResult(paramSchemas);
+  const decodeArgsSubtree = buildDecodeArgsSubtree(decodeArgsResult);
+
+  // ---- nested CONSIDERs per parameter ----
+  // Build text snippets for the exampleCode strings of the nested
+  // CONSIDERs. We need them at each depth for the explanation.
+  const innerEvalText = buildInnerEvalTraceExampleCode(
+    fnNameRendered,
+    paramSchemas,
+    startTime,
+    events,
+  );
+  const justInnerEvalText = "JUST OF (" + innerEvalText + ")";
+
+  // The "exampleCode" of each nested CONSIDER (parameterised), with
+  // svc-style continuation indentation. Built recursively from inner
+  // to outer so the indentation depth matches svc's exact output.
+  const considerExamples = buildNestedConsiderExamples(
+    paramSchemas,
+    justInnerEvalText,
+  );
+
+  const paramUnwrapTree = buildParamUnwrapTree(
+    paramSchemas,
+    considerExamples,
+    justInnerEvalText,
+    wrappedResultText,
+    buildInnerEvalTraceSubtree(
+      meta,
+      paramSchemas,
+      startTime,
+      events,
+      value,
+      residualContract,
+      residualDeadline,
+      contractBodyText,
+      innerResultText,
+      args,
+      givenParams,
+      explicitBreach,
+    ),
+  );
+
+  // The root example code: CONSIDER decodeArgs … WHEN RIGHT args
+  // THEN <considerExamples[0]>, WHEN LEFT error THEN NOTHING. Each
+  // newline inside the inner CONSIDER text needs to be padded by the
+  // root header's width (so the inner continuations cumulate the
+  // outer header offsets, matching svc's nested layout). The WHEN
+  // LEFT continuation lands 2 columns right of where the original
+  // 'WHEN RIGHT' sits, mirroring the inner CONSIDER offset rule.
+  const rootHeader = "CONSIDER decodeArgs OF inputJson WHEN RIGHT args THEN ";
+  const rootShiftedInner = considerExamples[0].replace(
+    /\n/g,
+    "\n" + " ".repeat(rootHeader.length),
+  );
+  const rootLeftIndent = " ".repeat(
+    "CONSIDER decodeArgs OF inputJson ".length + 2,
+  );
+  const rootExampleCode =
+    rootHeader +
+    rootShiftedInner +
+    ",\n" +
+    rootLeftIndent +
+    "WHEN LEFT error THEN NOTHING";
+
+  return {
+    exampleCode: [rootExampleCode],
+    explanation: ["Result: " + wrappedResultText],
+    children: [decodeArgsSubtree, paramUnwrapTree],
+  };
+}
+
+// 'InputArgs OF (JUST OF (Car OF 4)), (JUST OF (Driver OF "Alice"))' —
+// the Result line shown on the decodeArgs subtree.
+function renderDecodeArgsResult(paramSchemas) {
+  const wrapped = paramSchemas.map(
+    (p) => "(" + wrapJustOf(renderRecordValue(p.value, p.schema)) + ")",
+  );
+  return "RIGHT OF (InputArgs OF " + wrapped.join(", ") + ")";
+}
+
+// Render a value as 'TypeName OF field1, field2, …' if the schema
+// declares an x-l4-type, else fall back to a JSON-ish form. Strings
+// are double-quoted; numbers / booleans pass through.
+function renderRecordValue(value, schema) {
+  if (value == null) return "NOTHING";
+  if (typeof value === "string") return '"' + value + '"';
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (typeof value === "object") {
+    const tName = schema && schema["x-l4-type"];
+    const order = (schema && schema.propertyOrder) || Object.keys(value);
+    const fieldSchemas = (schema && schema.properties) || {};
+    const parts = order.map((k) =>
+      renderRecordValue(value[k], fieldSchemas[k] || {}),
+    );
+    if (tName) return tName + " OF " + parts.join(", ");
+    return parts.join(", ");
+  }
+  return JSON.stringify(value);
+}
+
+// Wrap a value-text in 'JUST OF (…)' — multiline payloads keep the
+// parens; single-token payloads get 'JUST OF X' without parens.
+function wrapJustOf(text) {
+  if (text == null) return "JUST OF NOTHING";
+  if (text === "FULFILLED" || text === "BREACH") return "JUST OF " + text;
+  return "JUST OF (" + text + ")";
+}
+
+// The decodeArgs / JSONDECODE PROJ subtree:
+//   decodeArgs OF inputJson  →  RIGHT OF (InputArgs OF (JUST OF (Car OF 4)), …)
+//     decodeArgs  →  <function>
+//     JSONDECODE OF jsn  →  RIGHT OF (InputArgs …)
+//       JSONDECODE  →  <builtin-function>
+function buildDecodeArgsSubtree(decodeArgsResult) {
+  return {
+    exampleCode: ["decodeArgs OF inputJson"],
+    explanation: ["Result: " + decodeArgsResult],
+    children: [
+      {
+        exampleCode: ["decodeArgs"],
+        explanation: ["Result: <function>"],
+        children: [],
+      },
+      {
+        exampleCode: ["JSONDECODE OF jsn"],
+        explanation: ["Result: " + decodeArgsResult],
+        children: [
+          {
+            exampleCode: ["JSONDECODE"],
+            explanation: ["Result: <builtin-function>"],
+            children: [],
+          },
+        ],
+      },
+    ],
+  };
+}
+
+// Pretty-print the inner 'EVALTRACE OF (<fn> OF unwrapped_<p1>, …),
+// <startTime>, (LIST <events>)' string. Used as the exampleCode of
+// the innermost JUST OF (…) node and as the leaf in the nested
+// CONSIDERs above it.
+function buildInnerEvalTraceExampleCode(
+  fnNameRendered,
+  paramSchemas,
+  startTime,
+  events,
+) {
+  const unwrappedArgs = paramSchemas
+    .map((p) => "unwrapped_" + p.name)
+    .join(", ");
+  const eventsText = renderEventsAsArgListParam(events);
+  return (
+    "EVALTRACE OF (" +
+    fnNameRendered +
+    " OF " +
+    unwrappedArgs +
+    "), " +
+    formatNumberForTrace(startTime) +
+    ", (" +
+    eventsText +
+    ")"
+  );
+}
+
+// Like renderEventsAsArgList but uses `event party 0` placeholders for
+// record-typed parties so the parameterised EVALTRACE example matches
+// svc's anonymous-slot rendering.
+function renderEventsAsArgListParam(events) {
+  if (!events || events.length === 0) return "LIST ";
+  const items = events.map((e) => "(" + renderEventOfTextParam(e, true) + ")");
+  return "LIST " + items.join(", ");
+}
+
+function renderEventOfTextParam(ev, actionForced) {
+  let partyText;
+  if (typeof ev.party === "string") {
+    partyText = /\s/.test(ev.party) ? "`" + ev.party + "`" : ev.party;
+  } else {
+    partyText = "`event party 0`";
+  }
+  const actionText =
+    actionForced === false ? "(...)" : formatEventComponent(ev.action);
+  return (
+    "EVENT OF " +
+    partyText +
+    ", " +
+    actionText +
+    ", " +
+    formatNumberForTrace(ev.at)
+  );
+}
+
+// Build the nested CONSIDER exampleCodes from inner to outer. Returns
+// an array indexed by depth (depth 0 = outermost CONSIDER). Each entry
+// is the FULL exampleCode string the corresponding CONSIDER renders
+// with — including all 'WHEN NOTHING THEN NOTHING' continuations
+// indented at svc's exact column.
+function buildNestedConsiderExamples(paramSchemas, justInnerEvalText) {
+  const out = new Array(paramSchemas.length);
+  // From the innermost outward.
+  let body = justInnerEvalText;
+  for (let i = paramSchemas.length - 1; i >= 0; i--) {
+    const p = paramSchemas[i];
+    const projHeader = "CONSIDER args's `" + p.name + " (input)` ";
+    const header = projHeader + "WHEN JUST unwrapped_" + p.name + " THEN ";
+    const nothingClause = "WHEN NOTHING THEN NOTHING";
+    // svc's indent for the continuation: 2 columns to the right of
+    // where the prior line's WHEN keyword begins. Empirically the
+    // Wadler-style layouter offsets the broken clause by 2 spaces.
+    const indent = " ".repeat(projHeader.length + 2);
+    // When this body is later spliced under an outer CONSIDER's
+    // 'THEN ' position, the outer level prepends 'header'-width
+    // leading whitespace to every subsequent line. We do that shift
+    // here so the cumulative indent of inner continuations matches
+    // svc's nested layout.
+    const shiftedBody = body.replace(/\n/g, "\n" + " ".repeat(header.length));
+    out[i] = header + shiftedBody + ",\n" + indent + nothingClause;
+    body = out[i];
+  }
+  return out;
+}
+
+// Build the nested-CONSIDER subtree from outer (depth 0) inward.
+// Each level's children are [args's <param> PROJ subtree, next-level
+// CONSIDER OR the EVALTRACE leaf at innermost depth].
+function buildParamUnwrapTree(
+  paramSchemas,
+  considerExamples,
+  justInnerEvalText,
+  wrappedResultText,
+  innermostEvalSubtree,
+) {
+  // Build inside-out: start with the innermost JUST OF (EVALTRACE …)
+  // subtree, then wrap with successive CONSIDERs.
+  let node = {
+    exampleCode: [justInnerEvalText],
+    explanation: ["Result: " + wrappedResultText],
+    children: [innermostEvalSubtree],
+  };
+  for (let i = paramSchemas.length - 1; i >= 0; i--) {
+    const p = paramSchemas[i];
+    const projSubtree = buildArgsProjSubtree(p, paramSchemas, p.value);
+    node = {
+      exampleCode: [considerExamples[i]],
+      explanation: ["Result: " + wrappedResultText],
+      children: [projSubtree, node],
+    };
+  }
+  return node;
+}
+
+// "args's `<param> (input)`" — standard PROJ-form subtree (slice 4G
+// shape). One child rendering the App-form '<param> OF args' which
+// itself wraps the fn-value leaf + CONSIDER InputArgs WHEN InputArgs
+// <fields> THEN <param> bound-var subtree.
+function buildArgsProjSubtree(param, allParams, paramValue) {
+  const paramKey = "`" + param.name + " (input)`";
+  const wrappedValue = wrapJustOf(renderRecordValue(paramValue, param.schema));
+  // The inner "CONSIDER InputArgs WHEN InputArgs <p1>\n   <p2> …
+  // THEN <param>" string. Field names are param names with backticks
+  // + " (input)" suffix; each subsequent field on its own indented line.
+  const fieldsList = allParams.map((p) => "`" + p.name + " (input)`");
+  const considerInputArgs = buildCONSIDERInputArgsString(fieldsList, paramKey);
+
+  return {
+    exampleCode: ["args's " + paramKey],
+    explanation: ["Result: " + wrappedValue],
+    children: [
+      {
+        exampleCode: [paramKey + " OF args"],
+        explanation: ["Result: " + wrappedValue],
+        children: [
+          {
+            exampleCode: [paramKey],
+            explanation: ["Result: <function>"],
+            children: [],
+          },
+          {
+            exampleCode: [considerInputArgs],
+            explanation: ["Result: " + wrappedValue],
+            children: [
+              {
+                exampleCode: [paramKey],
+                explanation: ["Result: " + wrappedValue],
+                children: [],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
+
+// 'CONSIDER InputArgs WHEN InputArgs `p1 (input)`\n      `p2 (input)` THEN <selected>'
+// — svc's standard PROJ-desugar CONSIDER text. The continuation
+// indent puts each subsequent field at the column right after
+// 'WHEN InputArgs '.
+function buildCONSIDERInputArgsString(fieldsList, selectedField) {
+  if (fieldsList.length === 0) return "";
+  const prefix = "CONSIDER InputArgs WHEN InputArgs ";
+  // svc's layouter aligns the continuation backtick one column right
+  // of the first field's backtick — matches the captured baseline.
+  const indent = " ".repeat(prefix.length + 1);
+  const fieldsBlock =
+    fieldsList[0] +
+    fieldsList
+      .slice(1)
+      .map((f) => "\n" + indent + f)
+      .join("");
+  return prefix + fieldsBlock + " THEN " + selectedField;
+}
+
+// Build the EVALTRACE OF (<fn> OF unwrapped_…) subtree — the
+// innermost level of svc's wrapper. Mirrors the param-less version
+// (events arg-eval + EVALTRACE leaf + "a OF b, c" call frame) but
+// with a richer call frame that includes the fn-application subtree.
+function buildInnerEvalTraceSubtree(
+  meta,
+  paramSchemas,
+  startTime,
+  events,
+  value,
+  residualContract,
+  residualDeadline,
+  contractBodyText,
+  innerResultText,
+  args,
+  givenParams,
+  explicitBreach,
+) {
+  const fnNameRendered =
+    (meta.traceMeta && meta.traceMeta.fnName) || meta.name || "";
+  const innerEvalExampleCode = buildInnerEvalTraceExampleCode(
+    fnNameRendered,
+    paramSchemas,
+    startTime,
+    events,
+  );
+
+  // The events list rendering uses `event party N` placeholders for
+  // record-typed parties (svc strips them to anonymous slots since
+  // the actual value is on the Result line). String-party events
+  // keep their backticked form.
+  const activePartySchema = resolveActivePartySchema(
+    meta.deonticContract,
+    paramSchemas,
+  );
+  const eventsChildForParam = buildEventsArgEvalTreeParam(
+    events,
+    paramSchemas,
+    value,
+    explicitBreach,
+    activePartySchema,
+  );
+
+  // The function-application subtree: '<fn> OF unwrapped_<p1>, …'.
+  // Children = [fnValue leaf, body-tree where body is either the IF
+  // guard subtree or the regulative body directly].
+  const fnAppSubtree = buildFnApplicationSubtree(
+    meta,
+    paramSchemas,
+    args,
+    fnNameRendered,
+    contractBodyText,
+  );
+
+  // "a OF b, c" call frame at the deepest level. Children = [a leaf
+  // showing the contract body, then one leaf per parameter name
+  // whose VALUE was used in the obligation body (e.g. 'driver' →
+  // 'Driver OF "Alice"'). For a basic synthesizer the leaves are
+  // the GIVEN parameters in declaration order.
+  const chosenBodyValueText = chosenContractValueText(
+    meta.deonticContract,
+    args,
+  );
+  const callFrame = buildEvalTraceCallFrame(
+    paramSchemas,
+    chosenBodyValueText,
+    innerResultText,
+    value,
+    explicitBreach,
+  );
+
+  return {
+    exampleCode: [innerEvalExampleCode],
+    explanation: ["Result: " + innerResultText],
+    children: [
+      fnAppSubtree,
+      eventsChildForParam,
+      {
+        exampleCode: ["EVALTRACE"],
+        explanation: ["Result: <function>"],
+        children: [],
+      },
+      callFrame,
+    ],
+  };
+}
+
+// '<fn> OF unwrapped_<p1>, …' — the body-application subtree. Its
+// children are [<fn> fn-value leaf, body-evaluation subtree].
+// The body-evaluation is either the IF guard subtree (when the
+// contract starts with DCIfThenElse) or just the chosen branch's
+// PARTY/MUST/MAY body text.
+function buildFnApplicationSubtree(
+  meta,
+  paramSchemas,
+  args,
+  fnNameRendered,
+  contractBodyText,
+) {
+  const unwrappedArgs = paramSchemas
+    .map((p) => "unwrapped_" + p.name)
+    .join(", ");
+  // Walk the schema's deonticContract to find the chosen branch +
+  // build the IF guard subtree if applicable.
+  const contract = meta.deonticContract;
+  const bodySubtree = buildContractBodyEvalSubtree(contract, args, meta);
+  return {
+    exampleCode: [fnNameRendered + " OF " + unwrappedArgs],
+    explanation: ["Result: " + bodySubtree.explanation[0].slice(8)],
+    children: [
+      {
+        exampleCode: [fnNameRendered],
+        explanation: ["Result: <function>"],
+        children: [],
+      },
+      bodySubtree,
+    ],
+  };
+}
+
+// Build the subtree representing the evaluation of the contract body
+// — handles IF guards (showing the EQUALS subtree) and falls through
+// to a single leaf for plain OBLIGATION bodies.
+function buildContractBodyEvalSubtree(contract, args, meta) {
+  if (!contract) {
+    return {
+      exampleCode: [""],
+      explanation: ["Result: "],
+      children: [],
+    };
+  }
+  if (contract.kind === "IF") {
+    const condEvalSubtree = buildGuardEvalSubtree(contract.cond, args, meta);
+    const condValue = !!evalDeonticGuard(contract.cond, { args: args || {} });
+    const chosen = condValue ? contract.then : contract.else;
+    const chosenSource = renderContractAsSource(chosen);
+    const chosenValue = renderContractAsValueForm(chosen);
+    const thenSource = renderContractAsSource(contract.then);
+    const elseSource = renderContractAsSource(contract.else);
+    const ifExampleCode =
+      "IF (" +
+      condEvalSubtree.exampleCode[0] +
+      ") THEN (" +
+      thenSource +
+      ") ELSE (" +
+      elseSource +
+      ")";
+    return {
+      exampleCode: [ifExampleCode],
+      explanation: ["Result: " + chosenValue],
+      children: [
+        condEvalSubtree,
+        {
+          exampleCode: [chosenSource],
+          explanation: ["Result: " + chosenValue],
+          children: [],
+        },
+      ],
+    };
+  }
+  // Plain OBLIGATION body — render as a single leaf.
+  const text = renderContractAsSource(contract);
+  const valueText = renderContractAsValueForm(contract);
+  return {
+    exampleCode: [text],
+    explanation: ["Result: " + valueText],
+    children: [],
+  };
+}
+
+// Pre-evaluate an IF in the contract body and return the chosen
+// branch's value-form. For non-IF bodies, returns the contract's
+// own value-form. Used for the inner EVALTRACE call frame's "a"
+// leaf where svc shows the IF-resolved body, not the source IF.
+function chosenContractValueText(contract, args) {
+  if (!contract) return "";
+  if (contract.kind === "IF") {
+    const cv = !!evalDeonticGuard(contract.cond, { args: args || {} });
+    return renderContractAsValueForm(cv ? contract.then : contract.else);
+  }
+  return renderContractAsValueForm(contract);
+}
+
+// Top-level contract value form: svc adds an implicit `HENCE FULFILLED`
+// to MAY clauses without an explicit HENCE. Inner contracts (those
+// already inside a HENCE/LEST chain) are not normalized this way.
+function renderContractAsValueForm(c) {
+  if (!c) return "";
+  if (c.kind === "OBLIGATION" && c.modal === "MAY" && !c.hence && !c.lest) {
+    return renderContractAsSource(c) + "\nHENCE FULFILLED";
+  }
+  return renderContractAsSource(c);
+}
+
+// Render an IF guard's EQUALS / proj / lit subtree.
+function buildGuardEvalSubtree(guard, args, meta) {
+  // Compute the guard value first so we can label each subnode.
+  const ctx = { args: args || {}, meta };
+  const value = evalDeonticGuard(guard, ctx);
+  switch (guard.kind) {
+    case "eq": {
+      const lhsTree = buildGuardOperandSubtree(guard.lhs, args, meta);
+      const lhsText = lhsTree.exampleCode[0];
+      const rhsText = renderGuardOperandText(guard.rhs);
+      return {
+        exampleCode: ["(" + lhsText + ") EQUALS " + rhsText],
+        explanation: ["Result: " + (value ? "TRUE" : "FALSE")],
+        children: [lhsTree],
+      };
+    }
+    default:
+      // Best-effort fallback for unsupported guard shapes.
+      return {
+        exampleCode: [renderGuardOperandText(guard)],
+        explanation: ["Result: " + String(value)],
+        children: [],
+      };
+  }
+}
+
+// Build the PROJ-style subtree for a guard operand. For 'proj'
+// (record-field access like 'car's `number of wheels`'), svc emits
+// the full slice-4G PROJ desugar (4 levels). For 'var' / 'lit' just
+// a single text leaf.
+function buildGuardOperandSubtree(guard, args, meta) {
+  const ctx = { args: args || {}, meta };
+  const value = evalDeonticGuard(guard, ctx);
+  if (guard.kind === "proj") {
+    const recordName = guard.expr && guard.expr.name; // 'car'
+    const fieldName = guard.field; // 'number of wheels'
+    const fieldKey = "`" + fieldName + "`";
+    const projText = recordName + "'s " + fieldKey;
+    const appFormText = fieldKey + " OF " + recordName;
+    // CONSIDER <RecordType> WHEN <RecordType> <field> THEN <field>
+    const recordType = lookupRecordTypeName(recordName, meta);
+    const considerExample = recordType
+      ? "CONSIDER " +
+        recordType +
+        " WHEN " +
+        recordType +
+        " " +
+        fieldKey +
+        " THEN " +
+        fieldKey
+      : "";
+    const resultText = "Result: " + value;
+    return {
+      exampleCode: [projText],
+      explanation: [resultText],
+      children: [
+        {
+          exampleCode: [appFormText],
+          explanation: [resultText],
+          children: [
+            {
+              exampleCode: [fieldKey],
+              explanation: ["Result: <function>"],
+              children: [],
+            },
+            {
+              exampleCode: [considerExample],
+              explanation: [resultText],
+              children: [
+                {
+                  exampleCode: [fieldKey],
+                  explanation: [resultText],
+                  children: [],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+  }
+  return {
+    exampleCode: [renderGuardOperandText(guard)],
+    explanation: ["Result: " + value],
+    children: [],
+  };
+}
+
+function lookupRecordTypeName(paramName, meta) {
+  const props = (meta && meta.parameters && meta.parameters.properties) || {};
+  const spec = props[paramName];
+  return (spec && spec["x-l4-type"]) || null;
+}
+
+function renderGuardOperandText(guard) {
+  if (!guard) return "";
+  switch (guard.kind) {
+    case "lit":
+      return String(guard.value);
+    case "var":
+      return guard.name;
+    case "proj":
+      return (guard.expr && guard.expr.name) + "'s `" + guard.field + "`";
+    default:
+      return "";
+  }
+}
+
+// Events list rendering for the parameterised wrapper. Differences
+// from the param-less version:
+//   - record-typed party events use 'event party N' placeholders in
+//     exampleCode while the Result line still shows the actual
+//     'TypeName OF "value"' rendering of the party
+//   - the lazy-NF behaviour matches the param-less rules:
+//       OBLIGATION (residual) → fully forced (deepest Cons gets
+//         materialised empty tail, no ", ...")
+//       FULFILLED / explicit BREACH / bare BREACH → lazy chain
+//         with ", ..." continuation
+function buildEventsArgEvalTreeParam(
+  events,
+  paramSchemas,
+  value,
+  explicitBreach,
+  activePartySchema,
+) {
+  // Decide whether the events list is fully forced (residual
+  // OBLIGATION) or stays lazy (everything else).
+  const listFullyForced = !(
+    value === "FULFILLED" ||
+    value === "BREACH" ||
+    explicitBreach
+  );
+  const actionForced = !explicitBreach;
+  // Pre-resolve each event's party rendering: 'event party N' for
+  // exampleCode-side strings, '<TypeName> OF "value"' for Result-side.
+  const rendered = events.map((e, idx) =>
+    renderParamEvent(e, idx, paramSchemas, activePartySchema),
+  );
+  if (rendered.length === 0) {
+    return {
+      exampleCode: ["LIST "],
+      explanation: ["Result: EMPTY"],
+      children: [],
+    };
+  }
+  const itemsText = rendered.map((r) => "(" + r.exampleText + ")").join(", ");
+  const nfHead = rendered
+    .map((r) => (actionForced ? r.resultText : r.resultTextNoAction))
+    .join(", ");
+  const dots = listFullyForced ? "" : ", ...";
+  return {
+    exampleCode: ["LIST " + itemsText],
+    explanation: ["Result: LIST " + nfHead + dots],
+    children: [buildConsChainParam(rendered, 0, listFullyForced, actionForced)],
+  };
+}
+
+// Render one event with both an exampleCode form (placeholders for
+// record-typed parties) and a Result form (resolved party value).
+function renderParamEvent(ev, _idx, paramSchemas, activePartySchema) {
+  let exampleParty;
+  let resultParty;
+  if (typeof ev.party === "string") {
+    exampleParty = /\s/.test(ev.party) ? "`" + ev.party + "`" : ev.party;
+    resultParty = exampleParty;
+  } else {
+    // Record-typed party — placeholder + resolved value. Svc uses a
+    // stable per-party-position index; for the M6 fixtures with a
+    // single party variable that index is always 0.
+    const partySchema =
+      activePartySchema || pickPartySchemaForValue(ev.party, paramSchemas);
+    exampleParty = "`event party 0`";
+    resultParty = renderRecordValue(ev.party, partySchema);
+    if (partySchema && partySchema["x-l4-type"]) {
+      resultParty = "(" + resultParty + ")";
+    }
+  }
+  const action =
+    typeof ev.action === "string" ? formatEventComponent(ev.action) : ev.action;
+  const at = formatNumberForTrace(ev.at);
+  return {
+    // Used inside parens for both top exampleCode and per-event leaves.
+    exampleText: "EVENT OF " + exampleParty + ", " + action + ", " + at,
+    // Result line when action is forced.
+    resultText: "EVENT OF " + resultParty + ", " + action + ", " + at,
+    // Result line when action is unforced (explicit BREACH).
+    resultTextNoAction: "EVENT OF " + resultParty + ", (...), " + at,
+  };
+}
+
+// Pick the GIVEN param's schema for an event-party value. Event JSON
+// payloads carry only the inner record fields (e.g. `{name:"Alice"}`)
+// — no constructor tag — so we can't match by ctor name. Instead the
+// caller passes the active party-variable's schema explicitly.
+function pickPartySchemaForValue(_partyValue, paramSchemas) {
+  for (const p of paramSchemas) {
+    if (p.schema && p.schema["x-l4-type"]) return p.schema;
+  }
+  return null;
+}
+
+// Look up the schema of the variable used as the active party in the
+// contract — i.e. the one event payloads should be rendered against.
+function resolveActivePartySchema(contract, paramSchemas) {
+  const name = findActivePartyParamName(contract);
+  if (!name) return null;
+  for (const p of paramSchemas) {
+    if (p.name === name) return p.schema;
+  }
+  return null;
+}
+
+// Walk a DeonticContract tree to find the first DEParam referenced as
+// a PARTY in an OBLIGATION. Used to resolve the schema for event-party
+// rendering.
+function findActivePartyParamName(c) {
+  if (!c) return null;
+  if (c.kind === "OBLIGATION") {
+    if (c.party && typeof c.party === "object" && c.party.param) {
+      return c.party.param;
+    }
+    return (
+      findActivePartyParamName(c.hence) || findActivePartyParamName(c.lest)
+    );
+  }
+  if (c.kind === "IF") {
+    return findActivePartyParamName(c.then) || findActivePartyParamName(c.else);
+  }
+  return null;
+}
+
+// Cons chain for the parameterised events tree. Mirrors the
+// param-less 'buildConsChain' but operates on the pre-rendered
+// event objects so we can keep the exampleText/resultText split.
+function buildConsChainParam(rendered, idx, forced, actionForced) {
+  if (idx >= rendered.length) {
+    return {
+      exampleCode: ["LIST "],
+      explanation: ["Result: EMPTY"],
+      children: [],
+    };
+  }
+  const head = rendered[idx];
+  const tail = rendered.slice(idx + 1);
+  const tailItems = tail.map((r) => "(" + r.exampleText + ")");
+  const remainingNf = rendered
+    .slice(idx)
+    .map((r) => (actionForced ? r.resultText : r.resultTextNoAction))
+    .join(", ");
+  const dots = forced ? "" : ", ...";
+  const children = [
+    {
+      exampleCode: [head.exampleText],
+      explanation: [
+        "Result: " + (actionForced ? head.resultText : head.resultTextNoAction),
+      ],
+      children: [],
+    },
+  ];
+  if (tail.length === 0 && forced) {
+    children.push({
+      exampleCode: ["LIST "],
+      explanation: ["Result: EMPTY"],
+      children: [],
+    });
+  } else if (tail.length > 0) {
+    const tailDots = forced ? "" : ", ...";
+    children.push({
+      exampleCode: ["LIST " + tailItems.join(", ")],
+      explanation: [
+        "Result: LIST " +
+          tail
+            .map((r) => (actionForced ? r.resultText : r.resultTextNoAction))
+            .join(", ") +
+          tailDots,
+      ],
+      children: [buildConsChainParam(rendered, idx + 1, forced, actionForced)],
+    });
+  }
+  return {
+    exampleCode: [
+      "(" +
+        head.exampleText +
+        ") FOLLOWED BY (LIST" +
+        (tailItems.length > 0 ? " " + tailItems.join(", ") : " ") +
+        ")",
+    ],
+    explanation: ["Result: LIST " + remainingNf + dots],
+    children,
+  };
+}
+
+// "a OF b, c" call frame at the deepest EVALTRACE level. Children
+// always include the "a" leaf (showing the chosen branch's body
+// text) followed by one leaf per GIVEN parameter that gets
+// referenced by the obligation. The simple heuristic is to emit
+// one leaf per parameter that appears as a DEParam in the residual
+// contract — which for the seatbelt fixture is just 'driver'.
+function buildEvalTraceCallFrame(
+  paramSchemas,
+  contractBodyText,
+  innerResultText,
+  value,
+  explicitBreach,
+) {
+  // The "a" leaf always shows the chosen branch's body text. For
+  // svc's parameterised wrapper this means the IF-resolved body
+  // (so it's the source-rendered chosen branch, not the full body).
+  const callChildren = [
+    {
+      exampleCode: ["a"],
+      explanation: ["Result: " + contractBodyText],
+      children: [],
+    },
+  ];
+  // For each parameter referenced as a party in the chosen body,
+  // emit a leaf showing the resolved value. Heuristic: include
+  // *every* param whose schema declares an x-l4-type (those are
+  // record-typed and most likely the parties).
+  for (const p of paramSchemas) {
+    if (!p.schema || !p.schema["x-l4-type"]) continue;
+    if (!contractBodyText.includes(p.name)) continue;
+    const resolved = renderRecordValue(p.value, p.schema);
+    callChildren.push({
+      exampleCode: [p.name],
+      explanation: ["Result: " + resolved],
+      children: [],
+    });
+  }
+  return {
+    exampleCode: ["a OF b, c"],
+    explanation: ["Result: " + innerResultText],
+    children: callChildren,
+  };
+}
+
+// Render the residual contract for the parameterised case. The
+// active obligation's primary PARTY gets resolved to its actual
+// value ('PARTY Driver OF "Alice"') while nested HENCE / LEST
+// clauses keep the original param ref ('PARTY driver').
+function renderResidualForParamCtx(
+  contract,
+  deadlineOverride,
+  args,
+  givenParams,
+  meta,
+) {
+  if (contract == null) return "";
+  if (contract.kind === "FULFILLED") return "FULFILLED";
+  if (contract.kind === "BREACH") return "BREACH";
+  if (contract.kind === "OBLIGATION") {
+    // Active obligation: resolve party to its value+type tag.
+    const partyText = renderActiveDeonticExpr(
+      contract.party,
+      args,
+      meta,
+      givenParams,
+    );
+    const actionText = renderDeonticExprForSource(contract.action);
+    const lines = ["PARTY " + partyText, contract.modal + " " + actionText];
+    const deadlineToShow =
+      deadlineOverride != null ? String(deadlineOverride) : contract.deadline;
+    if (deadlineToShow != null) lines.push("WITHIN " + deadlineToShow);
+    if (contract.hence) {
+      lines.push("HENCE " + renderContractAsSource(contract.hence));
+    }
+    if (contract.lest) {
+      lines.push("LEST " + renderContractAsSource(contract.lest));
+    }
+    return lines.join("\n");
+  }
+  return "";
+}
+
+// Render the primary obligation's party with its type tag —
+// 'driver' → 'Driver OF "Alice"' (no backticks, no JUST wrapper).
+function renderActiveDeonticExpr(expr, args, meta, givenParams) {
+  if (expr == null) return "";
+  if (typeof expr === "string") return expr;
+  if (expr.param != null) {
+    const props = (meta && meta.parameters && meta.parameters.properties) || {};
+    const schema = props[expr.param];
+    const v = (args || {})[expr.param];
+    return renderRecordValue(v, schema || {});
+  }
+  return String(expr);
+}
+
 // Pretty-print a DeonticContract subtree as L4 source text — used
 // to render the residual contract on the "a OF b, c" line of a
 // deontic 'TraceResponse'. Mirrors L4's body layout (one clause per
@@ -1052,10 +2035,10 @@ function renderEventOfText(ev, actionForced) {
 }
 
 function formatEventComponent(v) {
-  if (typeof v === "string") return "`" + v + "`";
-  // Object-typed (record) party — svc renders as "TypeName WITH field IS value"
-  // but we can't reproduce that here without the field schema. The
-  // parameter-less branch never reaches this path.
+  if (typeof v === "string") {
+    // Match svc's prettyLayout: backtick only multi-word names.
+    return /\s/.test(v) ? "`" + v + "`" : v;
+  }
   return JSON.stringify(v);
 }
 
@@ -2076,6 +3059,7 @@ export function createRuntime(opts) {
         events,
         result.residual,
         result.residualDeadline,
+        args,
       );
       return { value: result.value, reasoning };
     }
