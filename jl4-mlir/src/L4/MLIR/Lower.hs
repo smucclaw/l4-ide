@@ -39,7 +39,7 @@ import L4.Syntax
   , Info(..)
   , rawName, rawNameToText, getActual
   )
-import L4.Annotation (HasSrcRange, rangeOf)
+import L4.Annotation (HasSrcRange, emptyAnno, rangeOf)
 import L4.Parser.SrcSpan (SrcRange(..))
 import L4.TypeCheck.Types (InfoMap)
 import qualified L4.Utils.IntervalMap as IV
@@ -141,6 +141,11 @@ data LowerState = LowerState
     -- helper's marker paths (@\"profile.bankruptcy history\"@) rewrite
     -- to the caller's view (@\"req.applicant.bankruptcy history\"@).
   , funcParams :: !(Map Text [Text])
+    -- | Names of DECIDEs currently being lowered (the enclosing chain).
+    -- A zero-arg WHERE/LET binding whose body free-vars intersect this
+    -- set is potentially mutually recursive — eager evaluation would
+    -- loop, so 'lowerLocalDecl' lambda-lifts it instead.
+  , pendingDecide :: !(Set.Set Text)
   }
 
 type LowerM a = State LowerState a
@@ -170,6 +175,7 @@ initState info = LowerState
   , traceNodeMap = Map.empty
   , openTraceNode = Nothing
   , funcParams = Map.empty
+  , pendingDecide = Set.empty
   }
 
 -- | Look up the ground-truth type for an expression using the typechecker's
@@ -989,7 +995,12 @@ lowerDecide (MkDecide _ typeSig appForm body) = do
   -- this body to this function. Saved/restored so a WHERE/LET helper that
   -- recurses through 'lowerDecide' doesn't leak its name back to us.
   oldCurrentFn <- gets (.currentFunction)
-  modify' $ \s -> s { currentFunction = Just funcName }
+  oldPending <- gets (.pendingDecide)
+  let rawDecideName = resolvedName (appFormHead' appForm)
+  modify' $ \s -> s
+    { currentFunction = Just funcName
+    , pendingDecide = Set.insert rawDecideName oldPending
+    }
   -- If this DECIDE is @export-decorated and references ASSUMEs, those
   -- ASSUMEs become additional ABI parameters (see 'collectExportAssumeArgs').
   -- They're appended after the GIVEN params so existing call sites for
@@ -1210,7 +1221,10 @@ lowerDecide (MkDecide _ typeSig appForm body) = do
           traceRegion
     modify' $ \s -> s { functions = traceFuncOp : s.functions }
 
-  modify' $ \s -> s { currentFunction = oldCurrentFn }
+  modify' $ \s -> s
+    { currentFunction = oldCurrentFn
+    , pendingDecide = oldPending
+    }
   -- 'traceKind' was used by the slice-2B body-root instrumentation;
   -- in slice 2C the per-node 'lowerExpr' wrapper carries the kind from
   -- 'traceNodeMap'. Keep the binding referenced so it remains live
@@ -1490,21 +1504,35 @@ lowerExprCases expr expectedTy = case expr of
             -- Enum tag: a plain number under the uniform f64 ABI
             Just tag -> emitVal $ \vid -> arithConstantFloat vid (fromIntegral tag)
             Nothing -> do
+              -- Lambda-lifted zero-arg WHERE/LET binding — prepend the
+              -- captured outer-scope values as the call's leading args,
+              -- mirroring the multi-arg App case below.
+              captures <- gets (.localCaptures)
               sigs <- gets (.funcSigs)
               let retTy = case Map.lookup funcN sigs of
                     Just (_, r) -> r
                     Nothing     -> expectedTy
-              -- Nullary call through the uniform f64 ABI. In trace mode,
-              -- skip the @$trace@ dispatch so the helper's body events
-              -- don't pollute the parent's trace pool — jl4-core renders
-              -- a bare Var lookup as a single leaf. The leaf itself is
-              -- emitted by the parent's force-trace wrapper (e.g. the
-              -- CONSIDER branch-body @App _ _ []@ case in 'Schema'
-              -- 'foldBranches').
-              tracingNow <- gets (.tracing)
-              if tracingNow
-                then callL4Direct funcN [] retTy
-                else callL4 funcN [] retTy
+              case Map.lookup funcN captures of
+                Just capturedNames -> do
+                  capturedVals <- forM capturedNames $ \cn -> do
+                    mV <- lookupVar cn
+                    case mV of
+                      Just v -> pure v
+                      Nothing -> emitNumberLiteral 0
+                  let capturePairs = [(v, l4NumberType) | v <- capturedVals]
+                  callL4 funcN capturePairs retTy
+                Nothing -> do
+                  -- Nullary call through the uniform f64 ABI. In trace mode,
+                  -- skip the @$trace@ dispatch so the helper's body events
+                  -- don't pollute the parent's trace pool — jl4-core renders
+                  -- a bare Var lookup as a single leaf. The leaf itself is
+                  -- emitted by the parent's force-trace wrapper (e.g. the
+                  -- CONSIDER branch-body @App _ _ []@ case in 'Schema'
+                  -- 'foldBranches').
+                  tracingNow <- gets (.tracing)
+                  if tracingNow
+                    then callL4Direct funcN [] retTy
+                    else callL4 funcN [] retTy
 
   -- Function application
   App _ n args -> do
@@ -2400,7 +2428,50 @@ lowerLocalDecl :: LocalScope -> LocalDecl Resolved -> LowerM ()
 lowerLocalDecl _scope (LocalDecide _anno decide@(MkDecide dAnno ts appForm body)) = do
   let name = resolvedName (appFormHead' appForm)
       params = appFormParams appForm
+  -- Detect zero-arg WHERE/LET bindings whose body recursively reaches
+  -- back into something that calls this binding (directly or via the
+  -- enclosing function). Eager evaluation of such a binding would
+  -- compile a non-terminating call chain — IF/ELSE never gets to short-
+  -- circuit because the binding body runs at scope entry. We lambda-
+  -- lift these to a zero-arg helper with closure-converted captures so
+  -- the body only fires at use sites that the surrounding control flow
+  -- actually demands.
+  --
+  -- "Self-referential" here means either the binding refers to itself
+  -- or it calls a function whose definition is still being lowered
+  -- (i.e. it's in 'pendingDecide' — the enclosing DECIDE chain).
+  pendingNames <- gets (.pendingDecide)
+  let bodyFree = freeVarsOfExpr body Set.empty
+      isSelfRef = name `Set.member` bodyFree
+      isMutualRec = any (`Set.member` bodyFree) pendingNames
+      shouldLift = isSelfRef || isMutualRec
   case params of
+    [] | shouldLift -> do
+      let funcN = sanitizeName name
+      knownTopLevels <- gets (Set.fromList . Map.keys . (.funcSigs))
+      currentBindings <- gets (Map.keysSet . (.bindings))
+      l4TyMap <- gets (.bindingL4Types)
+      let freeInBody = freeVarsOfExpr body
+            (knownTopLevels <> Set.singleton name)
+          captured = [v | v <- Set.toList freeInBody, v `Set.member` currentBindings]
+          headRes = appFormHead' appForm
+          mkParam c = MkOptionallyTypedName emptyAnno
+                        (renameResolved c headRes)
+                        (Map.lookup c l4TyMap)
+          extraParams = case givenSigParams ts of
+            (template:_) -> [synthParam c template | c <- captured]
+            -- Zero-arg WHERE/LET bindings have no GIVEN clause, so we
+            -- can't clone an existing param as the template. Synthesise
+            -- one per capture using the outer-scope L4 type we recorded
+            -- in 'bindingL4Types' (falls back to untyped, which
+            -- 'lowerDecide' coerces to the uniform f64 ABI).
+            []           -> [mkParam c | c <- captured]
+          newAppForm = extendAppFormWith captured appForm
+          newTs = extendTypeSigWith extraParams ts
+      modify' $ \s -> s
+        { localCaptures = Map.insert funcN captured s.localCaptures
+        }
+      lowerDecide (MkDecide dAnno newTs newAppForm body)
     [] -> do
       -- Zero-arg binding — evaluate once and bind the value.
       -- M5 — in trace mode, wrap the rhs evaluation with a
@@ -2457,7 +2528,12 @@ freeVarsOfExpr expr0 bound0 = go bound0 expr0
         in if nm `Set.member` bound
              then Set.empty
              else Set.singleton nm
-      App _ _ args -> Set.unions (map (go bound) args)
+      App _ n args ->
+        let nm = resolvedName n
+            self = if nm `Set.member` bound
+                     then Set.empty
+                     else Set.singleton nm
+        in Set.unions (self : map (go bound) args)
       AppNamed _ _ named _ ->
         Set.unions [go bound e | MkNamedExpr _ _ e <- named]
       And _ a b        -> Set.union (go bound a) (go bound b)

@@ -98,6 +98,13 @@ data FunctionExport = FunctionExport
   , description :: !Text
   , parameters  :: !Parameters
   , returnType  :: !Text           -- ^ Display string (e.g., "NUMBER", "BOOLEAN", "DEONTIC")
+  , returnSchema :: !(Maybe RetSchema)
+    -- ^ Structured return-type schema. Mirrors what 'TraceNode.tnReturnSchema'
+    -- already supplies per subexpression, but lifted to the function level so
+    -- the JS runtime can unmarshal record-typed returns (pointer-to-struct in
+    -- the wasm ABI) without re-deriving the layout. 'Nothing' when the
+    -- return type wasn't recoverable (scalar/deontic still go through the
+    -- legacy @returnType@ display string).
   , isDeontic   :: !Bool
   , paramOrder  :: ![Text]         -- ^ API names in declaration order (for positional marshal)
   , supported   :: !Bool           -- ^ Can the WASM module faithfully evaluate this function?
@@ -743,12 +750,18 @@ buildExport infoMap declares fnReturnTypes unannotatedFns ef =
       deonticContract_ = if isDeonticFn
         then extractDeonticContract ef.exportDecide
         else Nothing
+      -- Structured return-type schema (records / enums / scalars / lists),
+      -- used by the JS runtime to unmarshal record-typed returns. Falls back
+      -- to 'Nothing' for shapes we can't recover, in which case the runtime
+      -- uses the display 'returnType' string for primitive unmarshaling.
+      returnSchema_ = ef.exportReturnType >>= typeToRetSchema declares Set.empty
   in FunctionExport
        { apiName     = sanitizeFunctionName name
        , wasmSymbol  = sanitizeWasmSymbol name
        , description = Text.strip ef.exportDescription
        , parameters  = paramsWithDeontic
        , returnType  = returnTypeDisplay ef.exportReturnType
+       , returnSchema = returnSchema_
        , isDeontic   = isDeonticFn
        , paramOrder  = paramOrder_
        -- Assume compilable; 'applyDiagnostics' downgrades functions the
@@ -1796,7 +1809,8 @@ instance Aeson.ToJSON FunctionExport where
     , "supported"   .= fe.supported
     , "unsupportedReason" .= fe.unsupportedReason
     , "traceMeta"   .= fe.traceMeta
-    ] ++ maybe [] (\dc -> ["deonticContract" .= dc]) fe.deonticContract
+    ] ++ maybe [] (\rs -> ["returnSchema" .= rs]) fe.returnSchema
+      ++ maybe [] (\dc -> ["deonticContract" .= dc]) fe.deonticContract
 
 instance Aeson.FromJSON FunctionExport where
   parseJSON = Aeson.withObject "FunctionExport" $ \o -> FunctionExport
@@ -1805,6 +1819,7 @@ instance Aeson.FromJSON FunctionExport where
     <*> o .:? "description" .!= ""
     <*> o .: "parameters"
     <*> o .:? "returnType"  .!= "unknown"
+    <*> o .:? "returnSchema"
     <*> o .:? "isDeontic"   .!= False
     <*> o .:? "paramOrder"  .!= []
     <*> o .:? "supported"   .!= True

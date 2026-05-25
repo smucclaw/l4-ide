@@ -2237,8 +2237,13 @@ export function createRuntime(opts) {
   // DATETIME: pointer (bit-cast to f64) to a 2-slot record
   //   [utcSeconds, tzNamePtr].
   const DATE_EPOCH_SHIFT = 4; // 1969-12-28 (Sun) to 1970-01-01 (Thu)
-  const dateFromDMY = (d, m, y) =>
-    Math.floor(Date.UTC(y, m - 1, d) / 86400000) + DATE_EPOCH_SHIFT;
+  // Date.UTC has a Y2K-era quirk where 0..99 silently map to 1900..1999.
+  // Build via setUTCFullYear so AD years like 0001 land in the right century.
+  const dateFromDMY = (d, m, y) => {
+    const dt = new Date(Date.UTC(2000, m - 1, d));
+    dt.setUTCFullYear(y);
+    return Math.floor(dt.getTime() / 86400000) + DATE_EPOCH_SHIFT;
+  };
   const dateToUnixDays = (x) => Number(x) - DATE_EPOCH_SHIFT;
   function parseDateStr(s) {
     const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s));
@@ -2293,14 +2298,13 @@ export function createRuntime(opts) {
     const map = {};
     for (const p of parts)
       if (p.type !== "literal") map[p.type] = parseInt(p.value, 10);
-    const asUTC = Date.UTC(
-      map.year,
-      map.month - 1,
-      map.day,
-      map.hour,
-      map.minute,
-      map.second,
+    // Same Y2K quirk as dateFromDMY — build via setUTCFullYear so
+    // years 0..99 don't silently shift into the 20th century.
+    const dt = new Date(
+      Date.UTC(2000, map.month - 1, map.day, map.hour, map.minute, map.second),
     );
+    dt.setUTCFullYear(map.year);
+    const asUTC = dt.getTime();
     return asUTC - utcMs;
   }
   function datetimeFromDTZ(daysF, secsF, tzPtrF) {
@@ -2528,7 +2532,64 @@ export function createRuntime(opts) {
     else payload = memView.getFloat64(ptr + 8, true);
     return { JUST: [payload] };
   }
-  function unmarshalResult(raw, returnType) {
+  // M7+ — when the schema carries a structured 'returnSchema' (record /
+  // enum / list / maybe), use it to decode the wasm return faithfully.
+  // Records arrive as a pointer (bit-cast to f64) to a struct laid out
+  // by 'Lower.hs' — one 8-byte slot per field in declaration order.
+  function unmarshalWithSchema(raw, schema) {
+    if (!schema) return undefined;
+    switch (schema.kind) {
+      case "scalar":
+        return unmarshalScalar(raw, (schema.type || "").toUpperCase());
+      case "enum":
+        return readEnumTag(raw, schema);
+      case "maybe":
+        return unmarshalMaybeStructured(raw, schema.inner);
+      case "record":
+        return unmarshalRecord(raw, schema);
+      case "list":
+        return undefined; // list returns: not yet decoded structurally
+      default:
+        return undefined;
+    }
+  }
+  function readEnumTag(raw, schema) {
+    const idx = Number(raw);
+    if (Array.isArray(schema.values) && idx >= 0 && idx < schema.values.length)
+      return schema.values[idx];
+    return idx;
+  }
+  function unmarshalMaybeStructured(raw, innerSchema) {
+    const ptr = Number(f64ToU64(raw));
+    if (!ptr) return "NOTHING";
+    const tag = memView.getFloat64(ptr, true);
+    if (tag === 0.0) return "NOTHING";
+    const slot = memView.getFloat64(ptr + 8, true);
+    return { JUST: [unmarshalWithSchema(slot, innerSchema)] };
+  }
+  function unmarshalRecord(raw, schema) {
+    const ptr = Number(f64ToU64(raw));
+    if (!ptr) return null;
+    const out = {};
+    const order = schema.fieldOrder || Object.keys(schema.fields || {});
+    for (let i = 0; i < order.length; i++) {
+      const fname = order[i];
+      const slot = memView.getFloat64(ptr + i * 8, true);
+      out[fname] = unmarshalWithSchema(slot, (schema.fields || {})[fname]);
+    }
+    // Match svc's prettyLayout convention: multi-word constructor
+    // names render with surrounding backticks in the JSON envelope.
+    const tagName = /\s/.test(schema.name)
+      ? "`" + schema.name + "`"
+      : schema.name;
+    return { [tagName]: out };
+  }
+
+  function unmarshalResult(raw, returnType, returnSchema) {
+    if (returnSchema) {
+      const v = unmarshalWithSchema(raw, returnSchema);
+      if (v !== undefined) return v;
+    }
     if (returnType && returnType.indexOf("MAYBE ") === 0)
       return unmarshalMaybe(raw, returnType.slice(6));
     return unmarshalScalar(raw, returnType);
@@ -2941,7 +3002,7 @@ export function createRuntime(opts) {
     });
     const fn = instance.exports[meta.wasmSymbol];
     const raw = fn(...marshaled);
-    return unmarshalResult(raw, meta.returnType);
+    return unmarshalResult(raw, meta.returnType, meta.returnSchema);
   }
 
   // ---- M6: deontic dispatch -------------------------------------
@@ -3099,7 +3160,7 @@ export function createRuntime(opts) {
     });
     const fn = instance.exports[wasmSymbol];
     const raw = fn(...marshaled);
-    return unmarshalResult(raw, meta.returnType);
+    return unmarshalResult(raw, meta.returnType, meta.returnSchema);
   }
 
   // Turn a `tracePool.root` frame (whose nodes carry raw result boxes and
