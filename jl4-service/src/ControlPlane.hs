@@ -512,7 +512,7 @@ isPathSafe path = ".." `notElem` splitDirectories path
 -- Bounds the downstream system-prompt token budget and the
 -- prompt-injection surface.
 maxDescriptionLength :: Int
-maxDescriptionLength = 4000
+maxDescriptionLength = 1500
 
 -- | Extract and sanitize the optional operator-supplied deployment
 -- description ("Intended use") from the multipart form.

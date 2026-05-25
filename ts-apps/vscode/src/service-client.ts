@@ -1,4 +1,5 @@
 import type { AuthManager } from './auth.js'
+import { LEGALESE_CLOUD_DOMAIN } from './auth.js'
 
 export interface DeployResponse {
   id: string
@@ -236,5 +237,30 @@ export class ServiceClient {
     const resp = await this.request('/health')
     if (!resp.ok) await throwWithBody(resp, 'GET /health')
     return (await resp.json()) as ServiceHealth
+  }
+
+  /**
+   * Download the plugin-format zip for a deployment from the hosted
+   * MCP endpoint. Returns the raw zip bytes.
+   *
+   * Distinct from the other methods on this class: the request goes to
+   * `mcp.legalese.cloud/{slug}/{id}/.skill` (cloud-only, hosted) rather
+   * than the configured service URL. Self-hosted callers won't have a
+   * cloud slug — they get a thrown Error here, and the popover button
+   * is only rendered in cloud mode.
+   */
+  async getDeploymentSkillBundle(deploymentId: string): Promise<Buffer> {
+    const slug = this.auth.getCloudOrgSlug()
+    if (!slug) {
+      throw new Error('Plugin install requires a Legalese Cloud session.')
+    }
+    const headers = await this.auth.getAuthHeaders()
+    const url = `https://mcp.${LEGALESE_CLOUD_DOMAIN}/${slug}/${encodeURIComponent(
+      deploymentId
+    )}/.skill`
+    const resp = await fetch(url, { headers })
+    if (!resp.ok) await throwWithBody(resp, `GET ${url}`)
+    const ab = await resp.arrayBuffer()
+    return Buffer.from(ab)
   }
 }

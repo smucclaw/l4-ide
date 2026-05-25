@@ -13,6 +13,7 @@
     RequestOpenConsole,
     RequestOpenExtensionSettings,
     RequestAddL4ToolsToClaudeCode,
+    RequestInstallDeploymentSkill,
     RequestInstallL4Cli,
     RequestCopySignInLink,
     RequestDisconnect,
@@ -1581,6 +1582,16 @@
         host={connectionStatus.serviceUrl}
         onClose={() => (integrateForId = null)}
         {onLearnMore}
+        onInstall={(target) => {
+          const id = integrateForId
+          if (!id) return
+          integrateForId = null
+          messenger?.sendNotification(
+            RequestInstallDeploymentSkill,
+            HOST_EXTENSION,
+            { deploymentId: id, target }
+          )
+        }}
       />
     {/if}
   </div>

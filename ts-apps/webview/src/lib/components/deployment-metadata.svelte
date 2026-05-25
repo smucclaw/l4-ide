@@ -68,8 +68,8 @@
       class="form-input form-textarea"
       bind:value={mission}
       rows="8"
-      maxlength="4000"
-      placeholder="Explain how the deployed rules are to be used (<4000 chars)"
+      maxlength="1500"
+      placeholder="Explain how the deployed rules are to be used (<1500 chars)"
     ></textarea>
     {#if onGenerate}
       <button
