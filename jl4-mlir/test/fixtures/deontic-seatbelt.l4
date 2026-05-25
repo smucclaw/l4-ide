@@ -1,0 +1,28 @@
+-- M6 slice 2 parity fixture: matches jl4-service's 'deonticRecordPartyJL4'.
+-- Adds record-typed parties (Driver), GIVEN parameters (Car / Driver),
+-- and an IF guard that branches on a record-field projection.
+
+DECLARE Car HAS
+    `number of wheels` IS A NUMBER
+
+DECLARE Driver HAS
+    name IS A STRING
+
+DECLARE `Driver Action` IS ONE OF
+    `wear seatbelt`
+    `drive`
+
+@export default seatbelt requirement
+GIVEN car    IS A Car
+      driver IS A Driver
+GIVETH A PROVISION OF Driver, `Driver Action`
+`Seatbelt Requirement` MEANS
+    IF      car's `number of wheels` EQUALS 4
+    THEN    PARTY driver
+            MUST `wear seatbelt`
+            WITHIN 1
+            HENCE
+                PARTY driver
+                MAY `drive`
+    ELSE    PARTY driver
+            MAY `drive`

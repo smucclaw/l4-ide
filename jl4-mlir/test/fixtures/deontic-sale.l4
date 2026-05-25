@@ -1,0 +1,21 @@
+-- M6 parity fixture: matches jl4-service/test/TestData.hs's
+-- 'deonticExportJL4'. Two-tier sale contract — seller MUST deliver
+-- within 14, then buyer MUST pay within 30, then FULFILLED. Either
+-- side missing the deadline → BREACH.
+
+DECLARE Party IS ONE OF `the seller`, `the buyer`
+DECLARE `Contract Action` IS ONE OF `deliver the goods`, `pay the invoice`
+
+@export default sale contract
+GIVETH A DEONTIC Party `Contract Action`
+`the sale contract` MEANS
+    PARTY `the seller`
+    MUST `deliver the goods`
+    WITHIN 14
+    HENCE
+        PARTY `the buyer`
+        MUST `pay the invoice`
+        WITHIN 30
+        HENCE FULFILLED
+        LEST BREACH
+    LEST BREACH
