@@ -1334,20 +1334,51 @@ Net effect — full corpus parity tally:
 |                            | M0 byte-identical | M5 trace-byte-identical |
 | -------------------------- | ----------------- | ----------------------- |
 | 12-fn fixture (test.l4)    | ✓ 12              | ✓ 12                    |
-| deontic-sale (3 cases)     | ✓ 3               | trace-differs (no gate) |
+| deontic-sale (3 cases)     | ✓ 3               | ✓ 3 (after slice 4)     |
 | deontic-seatbelt (3 cases) | ✓ 3               | trace-differs (no gate) |
-| **Total**                  | **18 / 18**       | **12 / 18**             |
+| **Total**                  | **18 / 18**       | **15 / 18**             |
 
-The trace-differs cells for deontic are svc's `TraceResponse`
-wrapper (`EVALTRACE OF \`the sale contract\`, 0, (LIST )`etc.) vs
-our`SimpleResponse` (we don't yet reconstruct the wrapper's
-reasoning tree). M5 slice 1 explicitly said trace is not a gate;
-the value path is byte-identical, which is what the proxy needs.
+### Slice 4 — synthesize the deontic `TraceResponse` (parameter-less)
+
+Reconstructs the synthetic 'EVALTRACE OF <fn>, <startTime>,
+<events>' reasoning tree jl4-service emits for `?trace=full`, so
+the trace-mode column lights up byte-identical for the
+parameter-less deontic fixture (`deontic-sale`'s 3 scenarios).
+
+- `runDeonticInternal` now returns
+  `{value, residual, residualDeadline, ctx}` so the synthesizer
+  can pretty-print the residual contract (the "a OF b, c" Result
+  line shows the remaining `PARTY … MUST … WITHIN <remaining>`
+  text after the cascade so far).
+- New `synthesizeDeonticReasoning` builds the four-part
+  `EVALTRACE` wrapper:
+  events arg-eval Cons chain + `EVALTRACE` fn-value leaf +
+  `a OF b, c` call frame + inner `a` body leaf. Mirrors svc's
+  lazy-NF rendering of the events list — when the outcome is
+  residual OBLIGATION the simulator's full traversal materializes
+  the deepest Cons's empty tail and drops the `", ..."` suffix;
+  for FULFILLED / BREACH the list stays a lazy chain with
+  head-only children + `", ..."` continuation markers.
+- New `renderContractAsSource` pretty-prints a `DeonticContract`
+  subtree back to L4 source (`PARTY …\nMUST …\nWITHIN …\nHENCE …`
+  one clause per line) — used for both Result lines on residual
+  OBLIGATION responses.
+- New `deontic-trace-baseline.json` (captured from jl4-service)
+  drives the e2e test in `/tmp/test-deontic-trace-e2e.mjs` which
+  diffs all 6 deontic trace scenarios byte-for-byte.
+
+Parameterised deontic functions (seatbelt) still surface as
+`trace-differs` — svc generates a much richer wrapper involving
+`decodeArgs` / `JSONDECODE` / `CONSIDER InputArgs WHEN …` that
+mirrors its generated EVALTRACE shell. Synthesising that takes
+substantially more code for parity gain on three test cells;
+deferred until a real consumer needs deontic-trace mode on a
+parameterised function.
 
 Still open: BREACH/by/because rendering (no fixture exercises it
 yet); error envelopes for events provided to non-deontic functions
-(we 400 with a different message than svc's); the
-'TraceResponse' wrapper itself for full deontic-trace parity.
+(we 400 with a different message than svc's); the parameterised
+'TraceResponse' wrapper for the remaining 3 deontic trace cells.
 
 ---
 

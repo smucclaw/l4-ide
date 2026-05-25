@@ -520,6 +520,14 @@ export class DeonticInputError extends Error {
  * @returns the JSON-shaped value to drop under @{value: …}@.
  */
 export function runDeontic(contract, startTime, events, args, meta) {
+  return runDeonticInternal(contract, startTime, events, args, meta).value;
+}
+
+// Internal variant that ALSO returns the residual contract node so
+// the trace synthesiser can pretty-print the right-hand-side of the
+// "a OF b, c" result line ("PARTY buyer MUST pay …" for a sale
+// contract after the seller delivered).
+function runDeonticInternal(contract, startTime, events, args, meta) {
   const t0 = Number(startTime);
   const sortedEvents = (events || [])
     .slice()
@@ -598,7 +606,12 @@ export function runDeontic(contract, startTime, events, args, meta) {
         advanced && absoluteDeadline != null
           ? absoluteDeadline - lastObserved
           : null;
-      return deonticObligationToWire(current, ctx, remainingNum);
+      return {
+        value: deonticObligationToWire(current, ctx, remainingNum),
+        residual: current,
+        residualDeadline: remainingNum,
+        ctx,
+      };
     }
 
     const ev = sortedEvents[matchingIdx];
@@ -613,12 +626,12 @@ export function runDeontic(contract, startTime, events, args, meta) {
     current = current.hence || { kind: "FULFILLED" };
   }
 
-  if (!current) return "FULFILLED";
+  if (!current) return { value: "FULFILLED", residual: null, ctx };
   switch (current.kind) {
     case "FULFILLED":
-      return "FULFILLED";
+      return { value: "FULFILLED", residual: null, ctx };
     case "BREACH":
-      return deonticBreachToWire(current);
+      return { value: deonticBreachToWire(current), residual: null, ctx };
     default:
       throw new Error(
         "deontic interpreter: unexpected node kind: " + current.kind,
@@ -790,6 +803,257 @@ function deonticBreachToWire(b) {
     return { BREACH: { by: b.by, because: b.because } };
   }
   return "BREACH";
+}
+
+// ---------------------------------------------------------------------------
+// M6 — synthesise the 'EVALTRACE' reasoning tree jl4-service emits for
+// '?trace=full' on deontic functions, so the trace-mode parity column
+// reads byte-identical instead of trace-differs.
+//
+// Wire shape (parameter-less variant — matches sale-contract):
+//
+//   { exampleCode: ["EVALTRACE OF <fn>, <startTime>, (<events list>)"],
+//     explanation: ["Result: <pretty-result>"],
+//     children: [
+//       <events arg-eval Cons chain>,
+//       { exampleCode: ["EVALTRACE"], explanation: ["Result: <function>"] },
+//       { exampleCode: ["a OF b, c"], explanation: ["Result: <pretty-result>"],
+//         children: [{ exampleCode: ["a"], explanation: ["Result: <body>"] }] },
+//     ] }
+//
+// Parameterised deontic functions (seatbelt: GIVEN car, driver) emit
+// a much richer 'decodeArgs / JSONDECODE / CONSIDER InputArgs WHEN …'
+// wrapper which isn't worth synthesising for parity gain proportional
+// to the codegen volume — those stay 'trace-differs' for now.
+// ---------------------------------------------------------------------------
+
+function synthesizeDeonticReasoning(
+  meta,
+  value,
+  startTime,
+  events,
+  residualContract,
+  residualDeadline,
+) {
+  // Only the parameter-less variant for now. Parameter-having deontic
+  // functions get a richer 'decodeArgs' wrapper that mirrors svc's
+  // generated EVALTRACE shell — TODO.
+  const givenParams = (meta.paramOrder || []).filter(
+    (p) => p !== "startTime" && p !== "events",
+  );
+  if (givenParams.length > 0) return null;
+
+  const fnNameRendered =
+    (meta.traceMeta && meta.traceMeta.fnName) || meta.name || "";
+  const contractBodyText = (meta.traceMeta && meta.traceMeta.body) || "";
+  // For terminal outcomes (FULFILLED / BREACH) the "Result:" text is
+  // literally the value. For a residual OBLIGATION it's the source
+  // rendering of the OBLIGATION subtree that's still pending — svc
+  // re-pretty-prints the residual rather than the original body.
+  const resultText =
+    value === "FULFILLED"
+      ? "FULFILLED"
+      : value === "BREACH"
+        ? "BREACH"
+        : residualContract
+          ? renderContractAsSource(residualContract, residualDeadline)
+          : contractBodyText;
+  // Inner "a" leaf always shows the ORIGINAL contract body source.
+  const innerResultText = contractBodyText;
+
+  const eventsArgInner = renderEventsAsArgList(events);
+  // svc's lazy-NF behaviour: when the outcome is residual OBLIGATION
+  // the simulator traversed the events list to the end looking for
+  // matches, so the deepest Cons materializes its empty tail
+  // ('LIST ' / Result: EMPTY) and the Result lines drop their
+  // ", ..." continuation marker. For FULFILLED / BREACH the list
+  // wasn't fully forced, so each Cons keeps the ", ..." suffix
+  // and its tail stays a single-child thunk.
+  const listFullyForced = !(value === "FULFILLED" || value === "BREACH");
+  const eventsChild = buildEventsArgEvalTree(events, listFullyForced);
+
+  return {
+    exampleCode: [
+      "EVALTRACE OF " +
+        fnNameRendered +
+        ", " +
+        formatNumberForTrace(startTime) +
+        ", (" +
+        eventsArgInner +
+        ")",
+    ],
+    explanation: ["Result: " + resultText],
+    children: [
+      eventsChild,
+      {
+        exampleCode: ["EVALTRACE"],
+        explanation: ["Result: <function>"],
+        children: [],
+      },
+      {
+        exampleCode: ["a OF b, c"],
+        explanation: ["Result: " + resultText],
+        children: [
+          {
+            exampleCode: ["a"],
+            explanation: ["Result: " + innerResultText],
+            children: [],
+          },
+        ],
+      },
+    ],
+  };
+}
+
+// Pretty-print a DeonticContract subtree as L4 source text — used
+// to render the residual contract on the "a OF b, c" line of a
+// deontic 'TraceResponse'. Mirrors L4's body layout (one clause per
+// line, HENCE / LEST inline at the start of the cascading clause).
+// 'deadline' override carries through if the simulator computed a
+// remaining-time number (otherwise the original WITHIN literal).
+function renderContractAsSource(c, deadlineOverride) {
+  if (c == null) return "";
+  if (c.kind === "FULFILLED") return "FULFILLED";
+  if (c.kind === "BREACH") return "BREACH";
+  if (c.kind === "OBLIGATION") {
+    const partyText = renderDeonticExprForSource(c.party);
+    const actionText = renderDeonticExprForSource(c.action);
+    const lines = ["PARTY " + partyText, c.modal + " " + actionText];
+    const deadlineToShow =
+      deadlineOverride != null ? String(deadlineOverride) : c.deadline;
+    if (deadlineToShow != null) lines.push("WITHIN " + deadlineToShow);
+    if (c.hence) lines.push("HENCE " + renderContractAsSource(c.hence));
+    if (c.lest) lines.push("LEST " + renderContractAsSource(c.lest));
+    return lines.join("\n");
+  }
+  return "";
+}
+
+function renderDeonticExprForSource(e) {
+  if (e == null) return "";
+  if (typeof e === "string") return e; // already a literal text
+  if (e.param != null) return e.param; // bare param name
+  return String(e);
+}
+
+function formatNumberForTrace(n) {
+  // svc renders integer rationals as bare digits, floats via Aeson
+  // double rules. startTime in our corpus is always an integer.
+  return Number.isInteger(Number(n))
+    ? String(Math.trunc(Number(n)))
+    : String(n);
+}
+
+// "events as arg-list" — the inner text of the root's exampleCode:
+//   []        → "LIST "
+//   [e1]      → "LIST (EVENT OF …)"
+//   [e1, e2]  → "LIST (EVENT OF …), (EVENT OF …)"
+function renderEventsAsArgList(events) {
+  if (!events || events.length === 0) return "LIST ";
+  const items = events.map((e) => "(" + renderEventOfText(e) + ")");
+  return "LIST " + items.join(", ");
+}
+
+// "EVENT OF `<party>`, `<action>`, <at>" — the per-event rendering.
+function renderEventOfText(ev) {
+  const partyText = formatEventComponent(ev.party);
+  const actionText = formatEventComponent(ev.action);
+  return (
+    "EVENT OF " +
+    partyText +
+    ", " +
+    actionText +
+    ", " +
+    formatNumberForTrace(ev.at)
+  );
+}
+
+function formatEventComponent(v) {
+  if (typeof v === "string") return "`" + v + "`";
+  // Object-typed (record) party — svc renders as "TypeName WITH field IS value"
+  // but we can't reproduce that here without the field schema. The
+  // parameter-less branch never reaches this path.
+  return JSON.stringify(v);
+}
+
+// Build the events arg-eval subtree — mirrors svc's Cons chain
+// rendering of a LIST argument (M5 slice 4C territory).
+// 'forced' toggles between the two svc rendering modes:
+//   - false (default): tail is lazy ⇒ ", ..." suffix everywhere, the
+//     terminal Cons has a single head-only child (no empty-leaf).
+//   - true: tail is forced ⇒ no ", ..." suffix, the terminal Cons
+//     has both head + empty-leaf children.
+function buildEventsArgEvalTree(events, forced) {
+  if (!events || events.length === 0) {
+    return {
+      exampleCode: ["LIST "],
+      explanation: ["Result: EMPTY"],
+      children: [],
+    };
+  }
+  const itemsText = events
+    .map((e) => "(" + renderEventOfText(e) + ")")
+    .join(", ");
+  const nfHead = events.map(renderEventOfText).join(", ");
+  const dots = forced ? "" : ", ...";
+  return {
+    exampleCode: ["LIST " + itemsText],
+    explanation: ["Result: LIST " + nfHead + dots],
+    children: [buildConsChain(events, 0, forced)],
+  };
+}
+
+function buildConsChain(events, idx, forced) {
+  if (idx >= events.length) {
+    return {
+      exampleCode: ["LIST "],
+      explanation: ["Result: EMPTY"],
+      children: [],
+    };
+  }
+  const head = events[idx];
+  const tail = events.slice(idx + 1);
+  const headText = renderEventOfText(head);
+  const tailItems = tail.map((e) => "(" + renderEventOfText(e) + ")");
+  const remainingNf = events.slice(idx).map(renderEventOfText).join(", ");
+  const dots = forced ? "" : ", ...";
+  // Terminal Cons (no more events after this head): in 'forced' mode
+  // include an empty-leaf as a second child; in lazy mode just the
+  // head leaf with ", ..." continuation.
+  const children = [
+    {
+      exampleCode: [headText],
+      explanation: ["Result: " + headText],
+      children: [],
+    },
+  ];
+  if (tail.length === 0 && forced) {
+    children.push({
+      exampleCode: ["LIST "],
+      explanation: ["Result: EMPTY"],
+      children: [],
+    });
+  } else if (tail.length > 0) {
+    const tailDots = forced ? "" : ", ...";
+    children.push({
+      exampleCode: ["LIST " + tailItems.join(", ")],
+      explanation: [
+        "Result: LIST " + tail.map(renderEventOfText).join(", ") + tailDots,
+      ],
+      children: [buildConsChain(events, idx + 1, forced)],
+    });
+  }
+  return {
+    exampleCode: [
+      "(" +
+        headText +
+        ") FOLLOWED BY (LIST" +
+        (tailItems.length > 0 ? " " + tailItems.join(", ") : " ") +
+        ")",
+    ],
+    explanation: ["Result: LIST " + remainingNf + dots],
+    children,
+  };
 }
 
 export function createRuntime(opts) {
@@ -1689,11 +1953,41 @@ export function createRuntime(opts) {
 
   function invokeFunctionWithReasoning(instance, meta, args) {
     // M6 — deontic functions skip wasm entirely; the JS interpreter
-    // owns the value and the reasoning. For now we don't emit a
-    // per-event trace tree (jl4-service's deontic responses are
-    // SimpleResponse without reasoning), so 'reasoning' is empty.
+    // owns the value AND the reasoning. For the parameter-less
+    // variant (sale-contract pattern) we synthesise an 'EVALTRACE'
+    // wrapper that mirrors svc's TraceResponse byte-for-byte;
+    // parameterised functions fall back to no reasoning (so the
+    // trace-mode column shows 'trace-differs' until the
+    // 'decodeArgs'/'CONSIDER InputArgs' wrapper lands).
     if (meta.isDeontic) {
-      return { value: invokeDeontic(meta, args), reasoning: null };
+      const startTime = args.startTime;
+      const events = args.events;
+      if (startTime === undefined || startTime === null) {
+        throw new DeonticInputError(
+          "startTime is required for functions returning DEONTIC",
+        );
+      }
+      if (events === undefined || events === null) {
+        throw new DeonticInputError(
+          "events is required for functions returning DEONTIC",
+        );
+      }
+      const result = runDeonticInternal(
+        meta.deonticContract,
+        startTime,
+        events,
+        args,
+        meta,
+      );
+      const reasoning = synthesizeDeonticReasoning(
+        meta,
+        result.value,
+        startTime,
+        events,
+        result.residual,
+        result.residualDeadline,
+      );
+      return { value: result.value, reasoning };
     }
     const traceSymbol = (meta.wasmSymbol || "") + "$trace";
     if (typeof instance.exports[traceSymbol] === "function") {
