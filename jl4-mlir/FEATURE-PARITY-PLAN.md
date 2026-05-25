@@ -1334,9 +1334,10 @@ Net effect — full corpus parity tally:
 |                            | M0 byte-identical | M5 trace-byte-identical |
 | -------------------------- | ----------------- | ----------------------- |
 | 12-fn fixture (test.l4)    | ✓ 12              | ✓ 12                    |
-| deontic-sale (3 cases)     | ✓ 3               | ✓ 3 (after slice 4)     |
+| deontic-sale (3 cases)     | ✓ 3               | ✓ 3 (slice 4)           |
 | deontic-seatbelt (3 cases) | ✓ 3               | trace-differs (no gate) |
-| **Total**                  | **18 / 18**       | **15 / 18**             |
+| deontic-breach (2 cases)   | ✓ 2 (slice 5)     | ✓ 2 (slice 5)           |
+| **Total**                  | **20 / 20**       | **17 / 20**             |
 
 ### Slice 4 — synthesize the deontic `TraceResponse` (parameter-less)
 
@@ -1375,10 +1376,44 @@ substantially more code for parity gain on three test cells;
 deferred until a real consumer needs deontic-trace mode on a
 parameterised function.
 
-Still open: BREACH/by/because rendering (no fixture exercises it
-yet); error envelopes for events provided to non-deontic functions
-(we 400 with a different message than svc's); the parameterised
-'TraceResponse' wrapper for the remaining 3 deontic trace cells.
+### Slice 5 — BREACH BY / BECAUSE + non-deontic error wording
+
+Lands the three follow-ups noted at the end of slice 4.
+
+- **`BREACH BY p BECAUSE r` wire shape.** `deonticBreachToWire` was
+  emitting `{by, because}` placeholder fields; svc actually returns
+  `{detail, party, reason: "explicit"}` with the BECAUSE string's
+  surrounding double quotes stripped. Bare `BREACH` (no clauses)
+  stays the literal string sentinel. New fixture
+  `deontic-breach.l4` covers both shapes (lapsed → explicit BREACH,
+  on-time → FULFILLED).
+- **Explicit BREACH trace synthesis.** Extends
+  `synthesizeDeonticReasoning` with the BREACH-outcome shape svc
+  emits: Result text becomes
+  `DEONTIC BREACHED:\n  BREACH\n  BY p\n  BECAUSE "r"`; the
+  `a OF b, c` node gains a second child rendering the
+  `BREACH BY p BECAUSE "r"` clause as the action that triggered
+  the cascade. `renderEventOfText` now takes an `actionForced`
+  flag so the per-event Result lines render the matched action as
+  `(...)` for BREACH outcomes (matching svc's lazy-NF that only
+  forces party + timestamp for the deadline check).
+- **`events`-on-non-deontic 400 wording.** Worker now returns
+  `"startTime and events are only valid for functions returning
+DEONTIC"` verbatim (vs the previous custom message), matching
+  svc's exact bytes for the wrong-endpoint case.
+
+Net: 2 more byte-identical M0 cells + 2 more trace-byte-identical
+cells (the breach fixture's value + trace responses both line up).
+
+Still open: the **parameterised 'TraceResponse' wrapper** for the
+remaining 3 deontic-seatbelt trace cells. svc generates a
+`CONSIDER decodeArgs OF inputJson WHEN RIGHT args THEN CONSIDER
+args's <param> WHEN JUST unwrapped_<param> THEN JUST OF (EVALTRACE
+…), WHEN NOTHING THEN NOTHING …` wrapper that's substantially
+more synthesizer code than the parity-gain on 3 trace cells
+justifies — deferred until a consumer needs deontic-trace mode on
+a parameterised function. Value parity (the gate that proxy
+callers care about) is already 20/20.
 
 ---
 

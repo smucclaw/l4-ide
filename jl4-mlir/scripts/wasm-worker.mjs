@@ -76,16 +76,18 @@ parentPort.on("message", (msg) => {
     });
     return;
   }
-  // M6 — refuse @events@ payloads against a non-deontic function so
-  // a typo / wrong-endpoint call doesn't silently succeed (jl4-service
-  // returns 400 for this case).
-  if (!meta.isDeontic && events !== undefined) {
+  // M6 — refuse @startTime@ / @events@ payloads against a
+  // non-deontic function so a typo / wrong-endpoint call doesn't
+  // silently succeed. Match jl4-service's exact error wording so
+  // proxy clients can parse it identically.
+  if (!meta.isDeontic && (events !== undefined || startTime !== undefined)) {
     parentPort.postMessage({
       type: "result",
       id,
       status: 400,
       body: JSON.stringify({
-        error: "events provided for a non-DEONTIC function",
+        error:
+          "startTime and events are only valid for functions returning DEONTIC",
       }),
       peakHeap: 0,
       maxHeap: rt.getMaxHeapBytes(),

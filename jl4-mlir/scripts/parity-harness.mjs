@@ -50,12 +50,14 @@ for (let i = 0; i < argv.length; i++) {
   else files.push(argv[i]);
 }
 if (files.length === 0) {
-  // Default fixture set: the 12-fn M0/M5 corpus + the two M6
-  // deontic fixtures (simple cascade + record-typed parties).
+  // Default fixture set: the 12-fn M0/M5 corpus + the M6 deontic
+  // fixtures (simple cascade + record-typed parties + explicit
+  // BREACH BY/BECAUSE).
   files.push(
     path.join(REPO_ROOT, "..", "jl4-auth-proxy", "validation", "test.l4"),
     path.join(REPO_ROOT, "jl4-mlir", "test", "fixtures", "deontic-sale.l4"),
     path.join(REPO_ROOT, "jl4-mlir", "test", "fixtures", "deontic-seatbelt.l4"),
+    path.join(REPO_ROOT, "jl4-mlir", "test", "fixtures", "deontic-breach.l4"),
   );
 }
 

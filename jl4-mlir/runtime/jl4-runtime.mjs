@@ -799,10 +799,27 @@ function deonticTagRecord(value, ctx, paramName) {
 }
 
 function deonticBreachToWire(b) {
-  if (b.by != null || b.because != null) {
-    return { BREACH: { by: b.by, because: b.because } };
+  // Bare BREACH (no BY / BECAUSE) wires as the literal string sentinel.
+  if (b == null || (b.by == null && b.because == null)) return "BREACH";
+  // jl4-service wraps explicit @BREACH BY p BECAUSE r@ as a tagged
+  // record { detail, party, reason: "explicit" }. The BECAUSE clause
+  // is an L4 string literal that pretty-prints with surrounding
+  // double quotes; strip them so the wire 'detail' is the bare text.
+  return {
+    BREACH: {
+      detail: stripStringLiteralQuotes(b.because),
+      party: b.by,
+      reason: "explicit",
+    },
+  };
+}
+
+function stripStringLiteralQuotes(s) {
+  if (typeof s !== "string") return s;
+  if (s.length >= 2 && s.startsWith('"') && s.endsWith('"')) {
+    return s.slice(1, -1);
   }
-  return "BREACH";
+  return s;
 }
 
 // ---------------------------------------------------------------------------
@@ -846,31 +863,75 @@ function synthesizeDeonticReasoning(
   const fnNameRendered =
     (meta.traceMeta && meta.traceMeta.fnName) || meta.name || "";
   const contractBodyText = (meta.traceMeta && meta.traceMeta.body) || "";
-  // For terminal outcomes (FULFILLED / BREACH) the "Result:" text is
-  // literally the value. For a residual OBLIGATION it's the source
-  // rendering of the OBLIGATION subtree that's still pending — svc
-  // re-pretty-prints the residual rather than the original body.
+  const explicitBreach =
+    value && typeof value === "object" && value.BREACH && value.BREACH.reason;
+  // For terminal outcomes the "Result:" text is the value rendered as
+  // text. FULFILLED / bare BREACH are literal sentinels; an explicit
+  // 'BREACH BY p BECAUSE r' renders as
+  //   DEONTIC BREACHED:
+  //     BREACH
+  //     BY p
+  //     BECAUSE "r"
+  // Residual OBLIGATION pretty-prints the remaining contract subtree.
   const resultText =
     value === "FULFILLED"
       ? "FULFILLED"
       : value === "BREACH"
         ? "BREACH"
-        : residualContract
-          ? renderContractAsSource(residualContract, residualDeadline)
-          : contractBodyText;
+        : explicitBreach
+          ? deonticBreachResultText(value.BREACH)
+          : residualContract
+            ? renderContractAsSource(residualContract, residualDeadline)
+            : contractBodyText;
   // Inner "a" leaf always shows the ORIGINAL contract body source.
   const innerResultText = contractBodyText;
 
   const eventsArgInner = renderEventsAsArgList(events);
-  // svc's lazy-NF behaviour: when the outcome is residual OBLIGATION
-  // the simulator traversed the events list to the end looking for
-  // matches, so the deepest Cons materializes its empty tail
-  // ('LIST ' / Result: EMPTY) and the Result lines drop their
-  // ", ..." continuation marker. For FULFILLED / BREACH the list
-  // wasn't fully forced, so each Cons keeps the ", ..." suffix
-  // and its tail stays a single-child thunk.
-  const listFullyForced = !(value === "FULFILLED" || value === "BREACH");
-  const eventsChild = buildEventsArgEvalTree(events, listFullyForced);
+  // svc's lazy-NF behaviour for the events list:
+  //   - residual OBLIGATION → simulator traversed to end of list →
+  //     deepest Cons materializes the empty tail + Result lines drop
+  //     the ", ..." suffix.
+  //   - explicit BREACH → simulator forced just enough of the list to
+  //     identify the lapsed event → Cons stays a lazy chain (", ...")
+  //     AND the matched event's action field shows as '(...)' at the
+  //     leaf level (not implemented here — minor cosmetic gap).
+  //   - FULFILLED / bare BREACH → list never fully forced → ", ..."
+  //     chain like the BREACH case.
+  const listFullyForced = !(
+    value === "FULFILLED" ||
+    value === "BREACH" ||
+    explicitBreach
+  );
+  // svc's lazy-NF on the per-event records: an explicit BREACH only
+  // forced the event's PARTY + AT fields (for the BREACH-BY-party
+  // identification and the deadline check) — the ACTION field stays
+  // a thunk and renders as '(...)' in the Result lines. FULFILLED /
+  // OBLIGATION / bare BREACH all force the action through pattern
+  // matching, so it shows in full.
+  const actionForced = !explicitBreach;
+  const eventsChild = buildEventsArgEvalTree(
+    events,
+    listFullyForced,
+    actionForced,
+  );
+
+  // "a OF b, c" children — adds a synthetic BREACH-clause leaf
+  // mirroring svc's behaviour when the simulator reaches an explicit
+  // 'BREACH BY p BECAUSE r'.
+  const callChildren = [
+    {
+      exampleCode: ["a"],
+      explanation: ["Result: " + innerResultText],
+      children: [],
+    },
+  ];
+  if (explicitBreach) {
+    callChildren.push({
+      exampleCode: [renderExplicitBreachClause(value.BREACH)],
+      explanation: ["Result: " + resultText],
+      children: [],
+    });
+  }
 
   return {
     exampleCode: [
@@ -893,16 +954,30 @@ function synthesizeDeonticReasoning(
       {
         exampleCode: ["a OF b, c"],
         explanation: ["Result: " + resultText],
-        children: [
-          {
-            exampleCode: ["a"],
-            explanation: ["Result: " + innerResultText],
-            children: [],
-          },
-        ],
+        children: callChildren,
       },
     ],
   };
+}
+
+// 'BREACH BY <party> BECAUSE "<detail>"' — source form for the extra
+// child node svc inserts under 'a OF b, c' on an explicit-BREACH
+// outcome. 'detail' is the un-quoted L4 string literal; re-quote it
+// so the rendered clause matches the original source.
+function renderExplicitBreachClause(br) {
+  const parts = ["BREACH"];
+  if (br.party != null) parts.push("BY " + br.party);
+  if (br.detail != null) parts.push('BECAUSE "' + br.detail + '"');
+  return parts.join(" ");
+}
+
+// 'DEONTIC BREACHED:\n  BREACH\n  BY p\n  BECAUSE "r"' — the
+// "Result:" line text on every node that ends in an explicit BREACH.
+function deonticBreachResultText(br) {
+  const lines = ["DEONTIC BREACHED:", "  BREACH"];
+  if (br.party != null) lines.push("  BY " + br.party);
+  if (br.detail != null) lines.push('  BECAUSE "' + br.detail + '"');
+  return lines.join("\n");
 }
 
 // Pretty-print a DeonticContract subtree as L4 source text — used
@@ -950,14 +1025,22 @@ function formatNumberForTrace(n) {
 //   [e1, e2]  → "LIST (EVENT OF …), (EVENT OF …)"
 function renderEventsAsArgList(events) {
   if (!events || events.length === 0) return "LIST ";
-  const items = events.map((e) => "(" + renderEventOfText(e) + ")");
+  // exampleCode-position renderings always show the full action
+  // (svc only elides in the per-event Result lines, never in the
+  // top-level EVALTRACE example string).
+  const items = events.map((e) => "(" + renderEventOfText(e, true) + ")");
   return "LIST " + items.join(", ");
 }
 
 // "EVENT OF `<party>`, `<action>`, <at>" — the per-event rendering.
-function renderEventOfText(ev) {
+// 'actionForced' toggles between the full action text (true; used
+// for exampleCode and most Result lines) and '(...)' (false; used
+// when the simulator never demanded the action field — currently
+// only the explicit-BREACH outcome path).
+function renderEventOfText(ev, actionForced) {
   const partyText = formatEventComponent(ev.party);
-  const actionText = formatEventComponent(ev.action);
+  const actionText =
+    actionForced === false ? "(...)" : formatEventComponent(ev.action);
   return (
     "EVENT OF " +
     partyText +
@@ -983,7 +1066,7 @@ function formatEventComponent(v) {
 //     terminal Cons has a single head-only child (no empty-leaf).
 //   - true: tail is forced ⇒ no ", ..." suffix, the terminal Cons
 //     has both head + empty-leaf children.
-function buildEventsArgEvalTree(events, forced) {
+function buildEventsArgEvalTree(events, forced, actionForced) {
   if (!events || events.length === 0) {
     return {
       exampleCode: ["LIST "],
@@ -992,18 +1075,20 @@ function buildEventsArgEvalTree(events, forced) {
     };
   }
   const itemsText = events
-    .map((e) => "(" + renderEventOfText(e) + ")")
+    .map((e) => "(" + renderEventOfText(e, true) + ")")
     .join(", ");
-  const nfHead = events.map(renderEventOfText).join(", ");
+  const nfHead = events
+    .map((e) => renderEventOfText(e, actionForced))
+    .join(", ");
   const dots = forced ? "" : ", ...";
   return {
     exampleCode: ["LIST " + itemsText],
     explanation: ["Result: LIST " + nfHead + dots],
-    children: [buildConsChain(events, 0, forced)],
+    children: [buildConsChain(events, 0, forced, actionForced)],
   };
 }
 
-function buildConsChain(events, idx, forced) {
+function buildConsChain(events, idx, forced, actionForced) {
   if (idx >= events.length) {
     return {
       exampleCode: ["LIST "],
@@ -1013,17 +1098,20 @@ function buildConsChain(events, idx, forced) {
   }
   const head = events[idx];
   const tail = events.slice(idx + 1);
-  const headText = renderEventOfText(head);
-  const tailItems = tail.map((e) => "(" + renderEventOfText(e) + ")");
-  const remainingNf = events.slice(idx).map(renderEventOfText).join(", ");
+  // exampleCode renders use the FULL event text (always); Result-line
+  // renders use the NF text which may elide the action as '(...)'.
+  const headTextFull = renderEventOfText(head, true);
+  const headTextNf = renderEventOfText(head, actionForced);
+  const tailItems = tail.map((e) => "(" + renderEventOfText(e, true) + ")");
+  const remainingNf = events
+    .slice(idx)
+    .map((e) => renderEventOfText(e, actionForced))
+    .join(", ");
   const dots = forced ? "" : ", ...";
-  // Terminal Cons (no more events after this head): in 'forced' mode
-  // include an empty-leaf as a second child; in lazy mode just the
-  // head leaf with ", ..." continuation.
   const children = [
     {
-      exampleCode: [headText],
-      explanation: ["Result: " + headText],
+      exampleCode: [headTextFull],
+      explanation: ["Result: " + headTextNf],
       children: [],
     },
   ];
@@ -1038,15 +1126,17 @@ function buildConsChain(events, idx, forced) {
     children.push({
       exampleCode: ["LIST " + tailItems.join(", ")],
       explanation: [
-        "Result: LIST " + tail.map(renderEventOfText).join(", ") + tailDots,
+        "Result: LIST " +
+          tail.map((e) => renderEventOfText(e, actionForced)).join(", ") +
+          tailDots,
       ],
-      children: [buildConsChain(events, idx + 1, forced)],
+      children: [buildConsChain(events, idx + 1, forced, actionForced)],
     });
   }
   return {
     exampleCode: [
       "(" +
-        headText +
+        headTextFull +
         ") FOLLOWED BY (LIST" +
         (tailItems.length > 0 ? " " + tailItems.join(", ") : " ") +
         ")",
