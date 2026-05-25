@@ -1,5 +1,6 @@
 import type { AuthManager } from './auth.js'
 import { LEGALESE_CLOUD_DOMAIN } from './auth.js'
+import { canonicalToApiHostPath } from './api-host-path.js'
 
 export interface DeployResponse {
   id: string
@@ -39,21 +40,28 @@ async function throwWithBody(resp: Response, context: string): Promise<never> {
  * REST client for jl4-service behind the auth proxy.
  *
  * All requests use the AuthManager for credentials and service URL resolution.
+ * Dataplane callers pass canonical jl4-service paths (`/deployments/...`);
+ * in Legalese Cloud mode the request layer rewrites them to the consolidated
+ * `api.legalese.cloud/{slug}/...` host. Self-hosted callers hit the
+ * configured `jl4.serviceUrl` with the canonical paths unchanged.
  */
 export class ServiceClient {
   constructor(private readonly auth: AuthManager) {}
 
   private async request(path: string, init?: RequestInit): Promise<Response> {
-    const serviceUrl = this.auth.getEffectiveServiceUrl()
-    if (!serviceUrl) {
+    const apiBase = this.auth.getApiBaseUrl()
+    if (!apiBase) {
       throw new Error(
         'No service URL configured. Set jl4.serviceUrl in settings.'
       )
     }
 
-    const headers = await this.auth.getAuthHeaders()
-    const url = `${serviceUrl.replace(/\/$/, '')}${path}`
+    const effectivePath = this.auth.isApiHostMode()
+      ? canonicalToApiHostPath(path)
+      : path
+    const url = `${apiBase.replace(/\/$/, '')}${effectivePath}`
 
+    const headers = await this.auth.getAuthHeaders()
     return fetch(url, {
       ...init,
       headers: {
@@ -231,10 +239,21 @@ export class ServiceClient {
   }
 
   /**
-   * Health check.
+   * Health check. Targets the org subdomain (or self-hosted URL) directly —
+   * `/health` is an ALB-level probe with no `/{slug}` prefix, so it never
+   * routes through `api.legalese.cloud`.
    */
   async getHealth(): Promise<ServiceHealth> {
-    const resp = await this.request('/health')
+    const serviceUrl = this.auth.getEffectiveServiceUrl()
+    if (!serviceUrl) {
+      throw new Error(
+        'No service URL configured. Set jl4.serviceUrl in settings.'
+      )
+    }
+    const headers = await this.auth.getAuthHeaders()
+    const resp = await fetch(`${serviceUrl.replace(/\/$/, '')}/health`, {
+      headers,
+    })
     if (!resp.ok) await throwWithBody(resp, 'GET /health')
     return (await resp.json()) as ServiceHealth
   }

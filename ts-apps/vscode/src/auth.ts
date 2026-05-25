@@ -148,9 +148,13 @@ export class AuthManager {
   }
 
   /**
-   * The effective service URL.
-   * If serviceUrl is configured in settings, use that.
-   * If in Legalese Cloud mode with an org slug, derive from the slug.
+   * The effective service URL — the org subdomain in cloud mode, or the
+   * user-configured URL in self-hosted mode.
+   *
+   * Used for ALB-level endpoints that don't fit the consolidated api host:
+   * the `/health` connectivity ping and any UI surface that wants to show
+   * the user where their data lives. Dataplane traffic (deployments / files /
+   * functions / evaluation) should go through 'getApiBaseUrl' instead.
    */
   getEffectiveServiceUrl(): string {
     const configured = this.getServiceUrl()
@@ -159,6 +163,37 @@ export class AuthManager {
       return `https://${this.cloudOrgSlug}.${LEGALESE_CLOUD_DOMAIN}`
     }
     return ''
+  }
+
+  /**
+   * Base URL for dataplane requests (deployments / files / functions /
+   * openapi / evaluation / updates polling). In cloud mode this resolves to
+   * the consolidated api host with the org slug as the path prefix
+   * (`https://api.legalese.cloud/{slug}`), so a single host serves every
+   * tenant. In self-hosted mode it's the configured `jl4.serviceUrl` and
+   * paths stay in their canonical `/deployments/...` form.
+   *
+   * Callers must combine this with the api-host path scheme when in cloud
+   * mode (see 'isApiHostMode'); the path translation isn't done here so
+   * different callers can keep using canonical paths in self-hosted mode.
+   */
+  getApiBaseUrl(): string {
+    const configured = this.getServiceUrl()
+    if (configured) return configured
+    if (this.cloudOrgSlug) {
+      return `https://api.${LEGALESE_CLOUD_DOMAIN}/${this.cloudOrgSlug}`
+    }
+    return ''
+  }
+
+  /**
+   * Whether dataplane requests should be sent in the api-host path scheme
+   * (`/{id}/fn/{fn}` etc.) instead of the canonical jl4-service scheme
+   * (`/deployments/{id}/functions/{fn}`). True iff the user is on Legalese
+   * Cloud and has no explicit `jl4.serviceUrl` override.
+   */
+  isApiHostMode(): boolean {
+    return !this.getServiceUrl() && this.cloudOrgSlug !== undefined
   }
 
   /**
