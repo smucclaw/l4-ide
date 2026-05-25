@@ -64,6 +64,7 @@ import L4.Syntax
   , TypeSig(..), GivenSig(..), GivethSig(..), OptionallyTypedName(..)
   , Pattern(..), BranchLhs(..)
   , Deonton(..), RAction(..), DeonticModal(..)
+  , Lit(..)
   , rawName, rawNameToText, getActual, getUnique
   )
 import L4.Annotation (HasSrcRange, rangeOf)
@@ -128,10 +129,10 @@ data FunctionExport = FunctionExport
 -- pretty-printer.
 data DeonticContract
   = DCObligation
-      { dcParty    :: !Text          -- ^ pretty-printed party expression (e.g. @"\`the seller\`"@)
-      , dcAction   :: !Text          -- ^ pretty-printed action pattern (e.g. @"\`deliver the goods\`"@)
-      , dcModal    :: !Text          -- ^ @"MUST"@ | @"MAY"@ | @"MUSTNOT"@ | @"DO"@
-      , dcDeadline :: !(Maybe Text)  -- ^ pretty-printed deadline expression (e.g. @"14"@)
+      { dcParty    :: !DeonticExpr    -- ^ party value (literal text or param ref)
+      , dcAction   :: !DeonticExpr    -- ^ action value (literal text or param ref)
+      , dcModal    :: !Text           -- ^ @"MUST"@ | @"MAY"@ | @"MUSTNOT"@ | @"DO"@
+      , dcDeadline :: !(Maybe Text)   -- ^ pretty-printed deadline expression (e.g. @"14"@)
       , dcHence    :: !(Maybe DeonticContract)
       , dcLest     :: !(Maybe DeonticContract)
       }
@@ -140,6 +141,42 @@ data DeonticContract
       { dcBreachBy      :: !(Maybe Text)
       , dcBreachBecause :: !(Maybe Text)
       }
+  | DCIfThenElse
+      { dcCond  :: !DeonticGuard
+      , dcThen  :: !DeonticContract
+      , dcElse  :: !DeonticContract
+      }
+  deriving stock (Eq, Show)
+
+-- | Either a pre-rendered literal expression ('DELiteral' \"`the seller`\")
+-- or a reference to a GIVEN parameter ('DEParam' \"driver\"). The JS
+-- runtime resolves DEParam against the request's @arguments@ bag at
+-- evaluation time, giving record-typed parties their actual value
+-- (which the wire envelope then tags with the record type name).
+data DeonticExpr
+  = DELiteral !Text
+  | DEParam   !Text
+  deriving stock (Eq, Show)
+
+-- | Minimal evaluable AST for IF guards inside deontic contracts.
+-- Walked by the JS runtime against the request's @arguments@ bag.
+-- Covers @<recordParam>'s <field> EQUALS <literal>@, the only shape
+-- the M6 corpus exercises today; new constructors land here as
+-- fixtures need them.
+data DeonticGuard
+  = DGEquals !DeonticGuard !DeonticGuard
+  | DGProj   !DeonticGuard !Text   -- ^ record-field projection
+  | DGVar    !Text                 -- ^ parameter reference
+  | DGLitNum !Double               -- ^ numeric literal
+  | DGLitStr !Text                 -- ^ string literal
+  | DGLitBool !Bool                -- ^ boolean literal
+  | DGAnd    !DeonticGuard !DeonticGuard
+  | DGOr     !DeonticGuard !DeonticGuard
+  | DGNot    !DeonticGuard
+  | DGLt     !DeonticGuard !DeonticGuard
+  | DGGt     !DeonticGuard !DeonticGuard
+  | DGLeq    !DeonticGuard !DeonticGuard
+  | DGGeq    !DeonticGuard !DeonticGuard
   deriving stock (Eq, Show)
 
 -- | Per-function pretty-printed strings for the M5 trace tree. These
@@ -739,18 +776,105 @@ exprToContract = \case
   App _ headRes []
     | rawNameToText (rawName (getActual headRes)) `elem` ["Fulfilled", "FULFILLED"] ->
         Just DCFulfilled
+  -- IF guards inside a deontic body. The interpreter evaluates 'cond'
+  -- against the request's @arguments@ and walks the chosen branch.
+  IfThenElse _ cond thenE elseE -> do
+    cond' <- exprToGuard cond
+    then' <- exprToContract thenE
+    else' <- exprToContract elseE
+    Just (DCIfThenElse cond' then' else')
   _ -> Nothing
 
 deontonToContract :: Deonton Resolved -> DeonticContract
 deontonToContract deonton =
   DCObligation
-    { dcParty    = Print.prettyLayout (deonton.party)
-    , dcAction   = Print.prettyLayout (deonton.action.action)
+    { dcParty    = exprToDeonticExpr (deonton.party)
+    , dcAction   = patternToDeonticExpr (deonton.action.action)
     , dcModal    = modalToText deonton.action.modal
     , dcDeadline = Print.prettyLayout <$> deonton.due
     , dcHence    = deonton.hence >>= exprToContract
     , dcLest     = deonton.lest >>= exprToContract
     }
+
+-- | Classify the party/action expression as either a parameter
+-- reference (so the runtime can resolve it against the request's
+-- @arguments@ bag) or a literal text (party / action names that
+-- pre-render via 'L4.Print.prettyLayout' to a stable string).
+exprToDeonticExpr :: Expr Resolved -> DeonticExpr
+exprToDeonticExpr e = case e of
+  -- Bare Var: pretty-print as the param name without backticks so
+  -- 'DEParam' lookups land in the request's @arguments@ bag.
+  App _ headRes [] ->
+    let nm = rawNameToText (rawName (getActual headRes))
+    in if isLikelyParam nm then DEParam nm else DELiteral (Print.prettyLayout e)
+  _ -> DELiteral (Print.prettyLayout e)
+
+-- | Pattern variant: 'PatVar' is the param-ref shape; everything
+-- else collapses to its pretty-printed form.
+patternToDeonticExpr :: Pattern Resolved -> DeonticExpr
+patternToDeonticExpr p = case p of
+  PatVar _ n ->
+    let nm = rawNameToText (rawName (getActual n))
+    in if isLikelyParam nm then DEParam nm else DELiteral nm
+  _ -> DELiteral (Print.prettyLayout p)
+
+-- | Heuristic: a bare lowercase identifier without surrounding
+-- backticks is likely a GIVEN-param ref ("driver", "car"); anything
+-- backticked or starting with an uppercase letter is a literal
+-- (a ONE-OF constructor like @\`the seller\`@ or @\`Single\`@).
+-- Keeps the classifier simple — the schema's @parameters.properties@
+-- list could disambiguate exactly, but adding that wiring is a
+-- larger refactor than the M6 corpus needs today.
+isLikelyParam :: Text -> Bool
+isLikelyParam t =
+  not (Text.null t) && not (Text.any (`elem` ['`', ' ']) t)
+    && not (Text.head t `elem` ['A'..'Z'])
+
+-- | Walk an Expr into a 'DeonticGuard' (the minimal evaluable AST
+-- the runtime interprets at request time). Returns 'Nothing' for
+-- shapes the JS evaluator doesn't support yet — the contract
+-- extractor then returns 'Nothing' overall, so the runtime falls
+-- back to its standard 'DeonticInputError' / unsupported handling.
+exprToGuard :: Expr Resolved -> Maybe DeonticGuard
+exprToGuard = \case
+  -- Direct AST shapes (Equals / And / Or / etc.).
+  Equals _ a b -> DGEquals <$> exprToGuard a <*> exprToGuard b
+  And    _ a b -> DGAnd    <$> exprToGuard a <*> exprToGuard b
+  Or     _ a b -> DGOr     <$> exprToGuard a <*> exprToGuard b
+  Lt     _ a b -> DGLt     <$> exprToGuard a <*> exprToGuard b
+  Gt     _ a b -> DGGt     <$> exprToGuard a <*> exprToGuard b
+  Leq    _ a b -> DGLeq    <$> exprToGuard a <*> exprToGuard b
+  Geq    _ a b -> DGGeq    <$> exprToGuard a <*> exprToGuard b
+  Not    _ a   -> DGNot    <$> exprToGuard a
+  Proj   _ inner fieldRes -> do
+    inner' <- exprToGuard inner
+    let fname = rawNameToText (rawName (getActual fieldRes))
+    pure (DGProj inner' fname)
+  App _ headRes [] ->
+    let nm = rawNameToText (rawName (getActual headRes))
+    in Just (DGVar nm)
+  Lit _ lit -> Just (litToGuard lit)
+  -- Some operators desugar to @App "__OP__"@ rather than the direct
+  -- AST node depending on parser context. Handle the same set
+  -- transparently so the contract walker doesn't care which form
+  -- the typechecker leaves the AST in.
+  App _ headRes args ->
+    case (rawNameToText (rawName (getActual headRes)), args) of
+      ("__EQUALS__", [a, b]) -> DGEquals <$> exprToGuard a <*> exprToGuard b
+      ("__AND__",    [a, b]) -> DGAnd    <$> exprToGuard a <*> exprToGuard b
+      ("__OR__",     [a, b]) -> DGOr     <$> exprToGuard a <*> exprToGuard b
+      ("__LT__",     [a, b]) -> DGLt     <$> exprToGuard a <*> exprToGuard b
+      ("__GT__",     [a, b]) -> DGGt     <$> exprToGuard a <*> exprToGuard b
+      ("__LEQ__",    [a, b]) -> DGLeq    <$> exprToGuard a <*> exprToGuard b
+      ("__GEQ__",    [a, b]) -> DGGeq    <$> exprToGuard a <*> exprToGuard b
+      ("__NOT__",    [a])    -> DGNot    <$> exprToGuard a
+      _ -> Nothing
+  _ -> Nothing
+
+litToGuard :: Lit -> DeonticGuard
+litToGuard = \case
+  NumericLit _ r -> DGLitNum (realToFrac r)
+  StringLit  _ s -> DGLitStr s
 
 modalToText :: DeonticModal -> Text
 modalToText = \case
@@ -1688,12 +1812,14 @@ instance Aeson.FromJSON FunctionExport where
     <*> o .:? "traceMeta"
     <*> o .:? "deonticContract"
 
--- | JSON shape mirrors the runtime's expected interpreter input:
---   { "kind": "OBLIGATION", "party": "`x`", "action": "`y`",
+-- | JSON shape mirrors the runtime's expected interpreter input.
+--   { "kind": "OBLIGATION", "party": <DeonticExpr>, "action": <DeonticExpr>,
 --     "modal": "MUST", "deadline": "14",
 --     "hence": <DeonticContract|null>, "lest": <DeonticContract|null> }
 --   { "kind": "FULFILLED" }
 --   { "kind": "BREACH", "by": <string|null>, "because": <string|null> }
+--   { "kind": "IF", "cond": <DeonticGuard>,
+--     "then": <DeonticContract>, "else": <DeonticContract> }
 instance Aeson.ToJSON DeonticContract where
   toJSON DCFulfilled = Aeson.object ["kind" .= ("FULFILLED" :: Text)]
   toJSON (DCBreach mBy mBec) = Aeson.object
@@ -1710,6 +1836,12 @@ instance Aeson.ToJSON DeonticContract where
     , "hence"    .= o.dcHence
     , "lest"     .= o.dcLest
     ]
+  toJSON o@DCIfThenElse{} = Aeson.object
+    [ "kind" .= ("IF" :: Text)
+    , "cond" .= o.dcCond
+    , "then" .= o.dcThen
+    , "else" .= o.dcElse
+    ]
 
 instance Aeson.FromJSON DeonticContract where
   parseJSON = Aeson.withObject "DeonticContract" $ \o -> do
@@ -1724,7 +1856,65 @@ instance Aeson.FromJSON DeonticContract where
         <*> o .:? "deadline"
         <*> o .:? "hence"
         <*> o .:? "lest"
+      "IF" -> DCIfThenElse
+        <$> o .: "cond"
+        <*> o .: "then"
+        <*> o .: "else"
       _ -> fail ("unknown DeonticContract kind: " ++ Text.unpack kind)
+
+-- | DeonticExpr ⇄ JSON: literal as a bare string, param ref as
+-- '{"param": "<name>"}'. The runtime branches on @typeof@.
+instance Aeson.ToJSON DeonticExpr where
+  toJSON (DELiteral t) = Aeson.toJSON t
+  toJSON (DEParam   t) = Aeson.object ["param" .= t]
+
+instance Aeson.FromJSON DeonticExpr where
+  parseJSON v = case v of
+    Aeson.String t -> pure (DELiteral t)
+    Aeson.Object o -> DEParam <$> o .: "param"
+    _ -> fail "DeonticExpr: expected string (literal) or {param: name}"
+
+-- | DeonticGuard ⇄ JSON: tagged-record form, mirroring DeonticContract.
+instance Aeson.ToJSON DeonticGuard where
+  toJSON = \case
+    DGLitNum n  -> Aeson.object ["kind" .= ("lit"  :: Text), "type" .= ("number"  :: Text), "value" .= n]
+    DGLitStr s  -> Aeson.object ["kind" .= ("lit"  :: Text), "type" .= ("string"  :: Text), "value" .= s]
+    DGLitBool b -> Aeson.object ["kind" .= ("lit"  :: Text), "type" .= ("boolean" :: Text), "value" .= b]
+    DGVar n     -> Aeson.object ["kind" .= ("var"  :: Text), "name"  .= n]
+    DGProj inner field -> Aeson.object ["kind" .= ("proj" :: Text), "expr" .= inner, "field" .= field]
+    DGEquals a b -> binOp "eq"  a b
+    DGAnd    a b -> binOp "and" a b
+    DGOr     a b -> binOp "or"  a b
+    DGLt     a b -> binOp "lt"  a b
+    DGGt     a b -> binOp "gt"  a b
+    DGLeq    a b -> binOp "leq" a b
+    DGGeq    a b -> binOp "geq" a b
+    DGNot    a   -> Aeson.object ["kind" .= ("not" :: Text), "expr" .= a]
+   where
+    binOp op a b = Aeson.object ["kind" .= (op :: Text), "lhs" .= a, "rhs" .= b]
+
+instance Aeson.FromJSON DeonticGuard where
+  parseJSON = Aeson.withObject "DeonticGuard" $ \o -> do
+    kind <- o .: "kind"
+    case (kind :: Text) of
+      "lit" -> do
+        ty <- o .: "type"
+        case (ty :: Text) of
+          "number"  -> DGLitNum  <$> o .: "value"
+          "string"  -> DGLitStr  <$> o .: "value"
+          "boolean" -> DGLitBool <$> o .: "value"
+          _ -> fail ("unknown DeonticGuard lit type: " ++ Text.unpack ty)
+      "var"  -> DGVar  <$> o .: "name"
+      "proj" -> DGProj <$> o .: "expr" <*> o .: "field"
+      "eq"   -> DGEquals <$> o .: "lhs" <*> o .: "rhs"
+      "and"  -> DGAnd    <$> o .: "lhs" <*> o .: "rhs"
+      "or"   -> DGOr     <$> o .: "lhs" <*> o .: "rhs"
+      "lt"   -> DGLt     <$> o .: "lhs" <*> o .: "rhs"
+      "gt"   -> DGGt     <$> o .: "lhs" <*> o .: "rhs"
+      "leq"  -> DGLeq    <$> o .: "lhs" <*> o .: "rhs"
+      "geq"  -> DGGeq    <$> o .: "lhs" <*> o .: "rhs"
+      "not"  -> DGNot    <$> o .: "expr"
+      _ -> fail ("unknown DeonticGuard kind: " ++ Text.unpack kind)
 
 instance Aeson.ToJSON TraceMeta where
   toJSON tm = Aeson.object

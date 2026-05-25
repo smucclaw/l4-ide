@@ -513,25 +513,36 @@ export class DeonticInputError extends Error {
  * @param contract  - parsed 'deonticContract' tree from the schema.
  * @param startTime - simulation start time (number).
  * @param events    - array of { party, action, at } from the request.
+ * @param args      - request's @arguments@ bag — used to resolve
+ *                    'DEParam' references inside contract nodes
+ *                    (e.g. when the contract says @PARTY driver@ and
+ *                    we need to look up the actual driver value).
  * @returns the JSON-shaped value to drop under @{value: …}@.
  */
-export function runDeontic(contract, startTime, events) {
+export function runDeontic(contract, startTime, events, args, meta) {
   const t0 = Number(startTime);
   const sortedEvents = (events || [])
     .slice()
     .sort((a, b) => Number(a.at) - Number(b.at));
+  const ctx = { args: args || {}, meta: meta || null };
 
   let current = contract;
   let now = t0;
+  let obligationStart = t0; // when the *current* obligation became active
   let cursor = 0;
 
-  // Walk the contract. At each obligation we look for a matching
-  // event past 'now'; if none arrives within the deadline window
-  // take the LEST branch (BREACH by default); otherwise advance
-  // the clock to the event time and follow HENCE.
-  while (current && current.kind === "OBLIGATION") {
-    const deadline = current.deadline == null ? null : Number(current.deadline);
-    const absoluteDeadline = deadline == null ? null : now + deadline;
+  while (current) {
+    if (current.kind === "IF") {
+      const v = evalDeonticGuard(current.cond, ctx);
+      current = v ? current.then : current.else;
+      continue;
+    }
+    if (current.kind !== "OBLIGATION") break;
+
+    const deadlineLit =
+      current.deadline == null ? null : Number(current.deadline);
+    const absoluteDeadline =
+      deadlineLit == null ? null : obligationStart + deadlineLit;
 
     while (
       cursor < sortedEvents.length &&
@@ -542,24 +553,52 @@ export function runDeontic(contract, startTime, events) {
     let matchingIdx = -1;
     for (let i = cursor; i < sortedEvents.length; i++) {
       const ev = sortedEvents[i];
-      if (deonticEventMatchesObligation(ev, current)) {
+      if (deonticEventMatchesObligation(ev, current, ctx)) {
         matchingIdx = i;
         break;
       }
     }
 
+    const modal = current.modal || "MUST";
     if (matchingIdx === -1) {
-      // No matching event. If any *later* event landed past the
-      // deadline the obligation has lapsed — take LEST. Otherwise
-      // it's the residual state.
-      const haveEventsPastDeadline =
+      // No matching event. Find the latest event time the simulator
+      // has 'observed' — anything from 'cursor' onward, capped at
+      // the obligation's deadline (events past the deadline lapse
+      // it before they're observed for this obligation).
+      let lastObserved = now;
+      for (let i = cursor; i < sortedEvents.length; i++) {
+        const et = Number(sortedEvents[i].at);
+        if (absoluteDeadline != null && et > absoluteDeadline) break;
+        if (et > lastObserved) lastObserved = et;
+      }
+
+      // If any event sits strictly past the deadline → obligation
+      // lapsed, take LEST.
+      if (
         absoluteDeadline != null &&
-        sortedEvents.some((e) => Number(e.at) > absoluteDeadline);
-      if (haveEventsPastDeadline) {
+        sortedEvents.some((e) => Number(e.at) > absoluteDeadline)
+      ) {
         current = current.lest || { kind: "BREACH" };
         continue;
       }
-      return deonticObligationToWire(current);
+
+      if (modal === "MAY") {
+        // MAY is a permission — no event = terminal FULFILLED.
+        current = { kind: "FULFILLED" };
+        continue;
+      }
+
+      // Residual OBLIGATION. If 'now' has advanced past the
+      // obligation's start (real events tested against it), surface
+      // the *remaining* time as a JSON number; otherwise hand back
+      // the original WITHIN literal as a string (matches
+      // jl4-service's lazy display of un-instantiated obligations).
+      const advanced = lastObserved > obligationStart;
+      const remainingNum =
+        advanced && absoluteDeadline != null
+          ? absoluteDeadline - lastObserved
+          : null;
+      return deonticObligationToWire(current, ctx, remainingNum);
     }
 
     const ev = sortedEvents[matchingIdx];
@@ -570,6 +609,7 @@ export function runDeontic(contract, startTime, events) {
     }
     now = evTime;
     cursor = matchingIdx + 1;
+    obligationStart = now; // the next obligation in the cascade starts here
     current = current.hence || { kind: "FULFILLED" };
   }
 
@@ -586,19 +626,111 @@ export function runDeontic(contract, startTime, events) {
   }
 }
 
-/**
- * Contract stores party/action as pre-rendered L4 strings (e.g.
- * @"`the seller`"@), events arrive as bare JSON (@"the seller"@) —
- * strip the surrounding backticks before comparing so the match is
- * on the underlying identifier.
- */
-function deonticEventMatchesObligation(ev, obligation) {
-  const evParty = String(ev.party != null ? ev.party : "");
-  const evAction = String(ev.action != null ? ev.action : "");
+// Evaluate a 'DeonticGuard' AST against args. Returns the JS value
+// (boolean, number, string, object); the 'IF' walker treats the
+// result via JS truthiness.
+function evalDeonticGuard(g, ctx) {
+  if (!g) return null;
+  switch (g.kind) {
+    case "lit":
+      return g.value;
+    case "var":
+      return ctx.args ? ctx.args[g.name] : undefined;
+    case "proj": {
+      const obj = evalDeonticGuard(g.expr, ctx);
+      return obj == null ? undefined : obj[g.field];
+    }
+    case "eq":
+      return deonticDeepEqual(
+        evalDeonticGuard(g.lhs, ctx),
+        evalDeonticGuard(g.rhs, ctx),
+      );
+    case "and":
+      return !!(evalDeonticGuard(g.lhs, ctx) && evalDeonticGuard(g.rhs, ctx));
+    case "or":
+      return !!(evalDeonticGuard(g.lhs, ctx) || evalDeonticGuard(g.rhs, ctx));
+    case "not":
+      return !evalDeonticGuard(g.expr, ctx);
+    case "lt":
+      return (
+        Number(evalDeonticGuard(g.lhs, ctx)) <
+        Number(evalDeonticGuard(g.rhs, ctx))
+      );
+    case "gt":
+      return (
+        Number(evalDeonticGuard(g.lhs, ctx)) >
+        Number(evalDeonticGuard(g.rhs, ctx))
+      );
+    case "leq":
+      return (
+        Number(evalDeonticGuard(g.lhs, ctx)) <=
+        Number(evalDeonticGuard(g.rhs, ctx))
+      );
+    case "geq":
+      return (
+        Number(evalDeonticGuard(g.lhs, ctx)) >=
+        Number(evalDeonticGuard(g.rhs, ctx))
+      );
+    default:
+      throw new Error("deontic guard: unknown kind: " + g.kind);
+  }
+}
+
+// Resolve a 'DeonticExpr' (literal string or {param: "name"} ref)
+// against args. Returns the underlying value (object / string).
+function resolveDeonticExpr(expr, ctx) {
+  if (expr == null) return null;
+  if (typeof expr === "string") return expr;
+  if (expr.param != null) {
+    return ctx.args ? ctx.args[expr.param] : undefined;
+  }
+  return expr;
+}
+
+// Match an incoming event against a (possibly parameterized)
+// obligation. Party / action are 'DeonticExpr' — literal text uses
+// backtick-stripped string equality, param refs deep-equal the
+// resolved value.
+function deonticEventMatchesObligation(ev, obligation, ctx) {
+  const obligationParty = resolveDeonticExpr(obligation.party, ctx);
+  const obligationAction = resolveDeonticExpr(obligation.action, ctx);
   return (
-    deonticStripBackticks(obligation.party) === evParty &&
-    deonticStripBackticks(obligation.action) === evAction
+    deonticValueMatches(obligationParty, ev.party) &&
+    deonticValueMatches(obligationAction, ev.action)
   );
+}
+
+function deonticValueMatches(obligationVal, eventVal) {
+  // Both string: compare with backticks stripped from contract side.
+  if (typeof obligationVal === "string" && typeof eventVal === "string") {
+    return deonticStripBackticks(obligationVal) === eventVal;
+  }
+  return deonticDeepEqual(obligationVal, eventVal);
+}
+
+// Deep equality for primitives + plain objects + arrays — enough to
+// match record-typed parties (e.g. {name: "Alice"}) against event
+// payloads of the same shape.
+function deonticDeepEqual(a, b) {
+  if (a === b) return true;
+  if (a == null || b == null) return false;
+  if (typeof a !== typeof b) return false;
+  if (typeof a !== "object") return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a)) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (!deonticDeepEqual(a[i], b[i])) return false;
+    }
+    return true;
+  }
+  const ka = Object.keys(a);
+  const kb = Object.keys(b);
+  if (ka.length !== kb.length) return false;
+  for (const k of ka) {
+    if (!deonticDeepEqual(a[k], b[k])) return false;
+  }
+  return true;
 }
 
 function deonticStripBackticks(s) {
@@ -607,15 +739,50 @@ function deonticStripBackticks(s) {
   return s;
 }
 
-function deonticObligationToWire(o) {
+function deonticObligationToWire(o, ctx, remainingNum) {
+  const resolvedParty = resolveDeonticExpr(o.party, ctx);
+  const resolvedAction = resolveDeonticExpr(o.action, ctx);
+  // Record-typed parties wrap as @{<TypeName>: <fields>}@ — pull
+  // the type name from the request's parameter schema (the wasm
+  // bundle's @x-l4-type@ stamp). Literal-string parties stay as-is.
+  const taggedParty =
+    o.party && o.party.param != null
+      ? deonticTagRecord(resolvedParty, ctx, o.party.param)
+      : resolvedParty;
+  // 'deadline' on the wire: number = "remaining time after observed
+  // events", string = "original WITHIN literal, untouched". The
+  // walker picks which one to pass.
+  const deadline =
+    remainingNum != null
+      ? remainingNum
+      : o.deadline == null
+        ? null
+        : String(o.deadline);
   return {
     OBLIGATION: {
-      action: o.action,
-      deadline: o.deadline == null ? null : String(o.deadline),
+      action: resolvedAction,
+      deadline,
       modal: o.modal,
-      party: o.party,
+      party: taggedParty,
     },
   };
+}
+
+// Wrap a resolved parameter value in its L4 type name when the
+// schema records one (matches jl4-service's @{"Driver": …}@
+// formatting). Strings / numbers / un-typed bags pass through
+// untouched so literal-party contracts don't accidentally gain
+// an outer key.
+function deonticTagRecord(value, ctx, paramName) {
+  if (value == null || typeof value !== "object" || Array.isArray(value)) {
+    return value;
+  }
+  const meta = ctx && ctx.meta;
+  const props = meta && meta.parameters && meta.parameters.properties;
+  const spec = props && props[paramName];
+  const typeName = spec && spec["x-l4-type"];
+  if (!typeName) return value;
+  return { [typeName]: value };
 }
 
 function deonticBreachToWire(b) {
@@ -1466,7 +1633,12 @@ export function createRuntime(opts) {
         "events is required for functions returning DEONTIC",
       );
     }
-    return runDeontic(meta.deonticContract, startTime, events);
+    // Pass the full args bag so 'runDeontic' can resolve 'DEParam'
+    // references inside the contract (party / action / IF guard)
+    // against the request's GIVEN parameter values. Also forward
+    // 'meta' so the interpreter can look up param types (e.g.
+    // 'x-l4-type') for record-typed party serialization.
+    return runDeontic(meta.deonticContract, startTime, events, args, meta);
   }
 
   // ---- M5 slice 2B: trace-mode invocation via the instrumented `<fn>$trace`.
