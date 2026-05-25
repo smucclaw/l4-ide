@@ -460,8 +460,9 @@ export class AiProxyClient {
             `outputs, or list them one by one. Think "what this is for", ` +
             `not "what this does".\n\n` +
             `Write 2-4 plain-English sentences for a legal or business ` +
-            `operator, not a programmer. No markdown, no preamble — ` +
-            `respond with the blurb text only.`,
+            `operator, not a programmer. Stay under 1500 characters ` +
+            `total. No markdown, no preamble — respond with the blurb ` +
+            `text only.`,
         },
         {
           role: 'user' as const,
@@ -486,6 +487,10 @@ export class AiProxyClient {
         if (ev.kind === 'done') break
       }
       text = text.trim()
+      // Mirror the server-side cap (`maxDescriptionLength` in
+      // jl4-service/src/ControlPlane.hs) and the textarea's maxlength so
+      // the drafted text is never longer than the field can hold.
+      if (text.length > 1500) text = text.slice(0, 1500)
       return text.length > 0 ? text : null
     } catch (err) {
       this.opts.logger.warn(
