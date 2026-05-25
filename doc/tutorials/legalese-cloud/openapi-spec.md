@@ -13,7 +13,7 @@ Every deployment publishes an OpenAPI (Swagger) JSON document so third-party sys
 
 Use the OpenAPI spec for **deterministic, server-to-server** integration: each exported rule is a typed REST operation with a documented request and response schema. No model is involved — the same inputs always produce the same decision, which is what you want for backend workflows, batch jobs, and audited systems.
 
-For conversational or agent-driven use, see the [OpenAI-compatible API](./openai-compatible-api.md) or [MCP server](./mcp-server.md).
+For conversational or agent-driven use, see the [OpenAI- and Anthropic-compatible AI APIs](./openai-compatible-api.md) or [MCP server](./mcp-server.md).
 
 ## Endpoint
 
