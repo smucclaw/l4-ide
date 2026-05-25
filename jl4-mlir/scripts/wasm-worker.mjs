@@ -5,7 +5,7 @@
 //
 // Protocol:
 //   ⇢ { type: "eval", id, fnName, args, traceMode }
-//   ⇡ { type: "result", id, status, body, peakHeap, maxHeap }
+//   ⇡ { type: "result", id, status, body, peakHeap, maxHeap, backend }
 //
 // The parent owns timeout enforcement (the worker has no clean way
 // to interrupt itself mid-call); a timed-out request just leaves
@@ -15,6 +15,9 @@
 //   schemaPath   — absolute path to the bundle's .schema.json
 //   wasmPath     — absolute path to the .wasm
 //   maxHeapBytes — per-eval memory ceiling
+//   backend      — wasm runtime name ('v8' default; arbitrary string
+//                  resolves to an ES-module specifier — see
+//                  'runtime/wasm-backend.mjs')
 
 import fs from "node:fs";
 import { parentPort, workerData } from "node:worker_threads";
@@ -24,12 +27,13 @@ import {
   wrapEvaluationEnvelope,
   MemoryLimitError,
 } from "../runtime/jl4-runtime.mjs";
+import { createBackend } from "../runtime/wasm-backend.mjs";
 
 if (!parentPort) {
   throw new Error("wasm-worker must be spawned via Worker, not run directly");
 }
 
-const { schemaPath, wasmPath, maxHeapBytes } = workerData;
+const { schemaPath, wasmPath, maxHeapBytes, backend: backendName } = workerData;
 const schema = JSON.parse(fs.readFileSync(schemaPath, "utf8"));
 const wasmBuf = fs.readFileSync(wasmPath);
 
@@ -37,8 +41,9 @@ const wasmBuf = fs.readFileSync(wasmPath);
 // other failure terminates the worker, so we never need to
 // re-instantiate inside it.
 const rt = createRuntime({ maxHeapBytes });
-const wasmModule = await WebAssembly.compile(wasmBuf);
-const instance = await WebAssembly.instantiate(wasmModule, rt.makeImports());
+const backend = await createBackend(backendName);
+const wasmModule = await backend.compile(wasmBuf);
+const { instance } = await backend.instantiate(wasmModule, rt.makeImports());
 rt.attachMemory(instance.exports.memory);
 rt.setBundleFunctions(schema.functions || {});
 
@@ -50,7 +55,7 @@ for (const [sanitized, meta] of Object.entries(schema.functions)) {
   fnByName[sanitized.replace(/-/g, " ")] = meta;
 }
 
-parentPort.postMessage({ type: "ready" });
+parentPort.postMessage({ type: "ready", backend: backend.name });
 
 parentPort.on("message", (msg) => {
   if (msg.type !== "eval") return;
@@ -89,6 +94,7 @@ parentPort.on("message", (msg) => {
       body,
       peakHeap: rt.getPeakHeapBytes(),
       maxHeap: rt.getMaxHeapBytes(),
+      backend: backend.name,
       fatal: true,
     });
     return;
@@ -100,5 +106,6 @@ parentPort.on("message", (msg) => {
     body,
     peakHeap: rt.getPeakHeapBytes(),
     maxHeap: rt.getMaxHeapBytes(),
+    backend: backend.name,
   });
 });

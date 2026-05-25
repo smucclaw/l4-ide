@@ -1324,8 +1324,56 @@ contract. A true wall-clock timeout assertion needs a fixture
 slow enough to outrun `setTimeout` (>2 ticks) — the M0 corpus is
 sub-ms, so the timeout-path itself is exercised manually for now.
 
-Still to do: wasmtime / wasmer backends (slice 3), per-module
-worker pool for concurrency (slice 4).
+### Slice 3 — backend abstraction (wasmtime / wasmer entry point)
+
+The `runtime/wasm-backend.mjs` module factors `WebAssembly.compile` +
+`WebAssembly.instantiate` behind a tiny interface so alternative
+runtimes can plug in without restructuring the marshaling code:
+
+```js
+{ name, compile(bytes) -> Module, instantiate(Module, imports) -> { instance } }
+```
+
+`createBackend(name)` resolves built-in `'v8'` (the default) or
+treats any other string as an ES-module specifier whose default
+export is a backend record. A missing or invalid module
+**soft-fails** to V8 with a stderr warning — a misconfigured
+`JL4_BACKEND` env doesn't take a deploy down.
+
+`wasm-worker.mjs` consumes the abstraction; `wasm-server.mjs` plumbs
+the env knob through `workerData` and stamps `x-jl4-backend` on
+every response so the proxy can see which runtime served the call.
+V8 stays the only shipped backend; wasmtime/wasmer can land later
+as their own modules without changes here.
+
+Unit tests in `runtime/wasm-backend.test.mjs` cover the V8 default,
+the round-trip on a minimal module, and the missing-module fallback.
+
+### Slice 4 — worker pool for concurrency
+
+Replaces the single in-flight worker with a `createWorkerPool(N)`
+abstraction. Each slot owns one warm worker + runtime + instance;
+requests dispatch to the first idle slot, queue when all are busy.
+
+- `JL4_WORKER_POOL_SIZE` (default 4) sets the slot count.
+- Per-slot lifecycle: a fatal result (`MemoryLimitError` /
+  `WebAssembly.RuntimeError`) or timeout kills the worker; the
+  slot's `exit` handler auto-respawns into the same slot and
+  drains any queued work behind it.
+- `x-jl4-pool-size` / `x-jl4-pool-queued` headers expose queue
+  depth so the proxy can detect saturation.
+- Graceful shutdown: SIGTERM / SIGINT closes the listener, then
+  terminates every worker.
+
+Tests: `scripts/wasm-server.test.mjs` now fires 12 concurrent
+requests against a pool of 3, asserts every response returns the
+correct cubed value, and confirms the pool-size header reflects
+the env knob.
+
+**M7 status:** the four bullets on the original M7 list (per-eval
+timeout, memory ceiling, trap isolation, warm instantiation) are
+done; the proxy seam now has stable runtime hardening + a backend
+extension point for the longer-term wasmtime/wasmer story.
 
 ---
 

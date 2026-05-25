@@ -188,5 +188,58 @@ try {
 // A future e2e OOM test would need a fixture that allocates a List
 // or Record argument.
 
+// ---- M7 slice 4: worker pool concurrency + headers -------------------
+{
+  // Pool of 3, fire 12 concurrent requests. Each must succeed; the
+  // pool-queued header on at least one response should surface > 0
+  // (proving requests really did queue up rather than serialize on
+  // a single worker).
+  const port4 = 9994;
+  const server4 = spawn(
+    "node",
+    [serverPath, schemaPath, wasmPath, String(port4)],
+    {
+      env: { ...process.env, JL4_WORKER_POOL_SIZE: "3" },
+      stdio: ["ignore", "pipe", "inherit"],
+    },
+  );
+  await new Promise((r) => {
+    server4.stderr ? server4.stderr.on("data", () => {}) : null;
+    setTimeout(r, 500);
+  });
+  try {
+    const N = 12;
+    const reqs = Array.from({ length: N }, (_, i) =>
+      fetch(
+        "http://127.0.0.1:" +
+          port4 +
+          "/deployments/x/functions/cubed/evaluation",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ arguments: { n: i + 1 } }),
+        },
+      ),
+    );
+    const ress = await Promise.all(reqs);
+    const bodies = await Promise.all(ress.map((r) => r.text()));
+    const allOk = ress.every((r) => r.status === 200);
+    eq("pool: all " + N + " concurrent requests succeed", allOk, true);
+    // Pool size header reflects the env.
+    eq(
+      "pool: size header surfaces JL4_WORKER_POOL_SIZE",
+      ress[0].headers.get("x-jl4-pool-size"),
+      "3",
+    );
+    // Verify the results came back correct (cubed i = i^3 for i=1..N).
+    const values = bodies.map((b) => JSON.parse(b).contents.result.value);
+    const expected = Array.from({ length: N }, (_, i) => Math.pow(i + 1, 3));
+    eq("pool: results correct under concurrency", values, expected);
+  } finally {
+    server4.kill("SIGTERM");
+    await new Promise((r) => server4.on("exit", r));
+  }
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
