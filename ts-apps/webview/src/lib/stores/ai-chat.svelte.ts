@@ -1547,8 +1547,20 @@ export function createAiChatStore(
     // belonged to the previous user it would now 404 on reload, and
     // leaving its rendered messages on screen under a different
     // identity is exactly the cross-user leak we're guarding against.
+    //
+    // Reset to a fresh-chat view explicitly — clearing only
+    // `currentId` would leave a stale `pendingConversation` buffer or
+    // an active `deploymentBinding` ("Use in chat") in place, so the
+    // panel would still render the previous session's deployment
+    // banner / empty-state after signing back in. Also wipe the
+    // in-memory conversation cache so a stale id never resurfaces.
     if (prevSignedIn !== params.signedIn) {
-      currentId = null
+      newConversation()
+      for (const k of Object.keys(conversations)) delete conversations[k]
+      for (const k of Object.keys(pendingQuestionsByConv))
+        delete pendingQuestionsByConv[k]
+      for (const k of Object.keys(pendingQuestionConvByCallId))
+        delete pendingQuestionConvByCallId[k]
       void refreshHistory()
     }
   }

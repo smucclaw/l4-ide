@@ -160,12 +160,13 @@
   // original prompt is already persisted on disk from the aborted
   // attempt (ai-proxy saves the conversation on create, before the
   // stream starts), so the model has everything it needs to produce
-  // a fresh response. Drop the errored assistant bubble first so the
-  // new stream has a clean place to land.
+  // a fresh response. The store's continueTurn() handles both the
+  // happy path (server-assigned conversationId exists → ask the proxy
+  // to run another pass against stored history) and the
+  // first-turn-error fallback (no id yet → re-send the last user
+  // message as a fresh request). It also drops the trailing errored
+  // assistant bubble itself, so this handler is just a passthrough.
   function onRetry(): void {
-    const conv = store.current
-    if (!conv || !conv.id) return
-    conv.turns = conv.turns.filter((t) => !t.error)
     store.continueTurn()
   }
 
