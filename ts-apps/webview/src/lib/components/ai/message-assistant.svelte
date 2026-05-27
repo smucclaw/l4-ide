@@ -345,6 +345,15 @@
             {onOpenFile}
             onOpenDiff={onOpenFileDiff}
           />
+        {:else if block.kind === 'tool-activity' && block.activity.tool === 'web_search'}
+          <!-- Web-search activities carry the URL citations the
+               upstream model's native search produced. We don't render
+               them inline — they're surfaced in the turn's review card
+               below ("Sources:" section). Rendering a row here would
+               also split the assistant text stream into two text
+               blocks at the moment this block was pushed, breaking
+               any markdown element whose tokens straddle the citation
+               (most visibly tables and fenced code). -->
         {:else if block.kind === 'tool-activity'}
           <!-- Plain status activity (e.g. doc search, compaction,
                deployment browsing): bold action label + monospace
