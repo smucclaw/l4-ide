@@ -255,6 +255,41 @@
     rows.sort((a, b) => a.order - b.order)
     return rows.map(({ path, action, callId }) => ({ path, action, callId }))
   })
+
+  // Turn-end review card: web-search citations the upstream provider
+  // attached to this turn (via Anthropic's native `web_search` tool,
+  // surfaced as `source` parts by the AI SDK and aggregated by the
+  // proxy into the `sources` field of a synthetic `web_search`
+  // activity). Deduped by URL across all activity blocks in case a
+  // single turn fired the search more than once.
+  type Source = { url: string; title?: string }
+  const sources = $derived.by<Source[]>(() => {
+    if (!blocks) return []
+    const byUrl = new Map<string, Source>()
+    for (const b of blocks) {
+      if (b.kind !== 'tool-activity') continue
+      if (b.activity.tool !== 'web_search') continue
+      const list = b.activity.sources
+      if (!Array.isArray(list)) continue
+      for (const s of list) {
+        if (!s || typeof s.url !== 'string' || s.url.length === 0) continue
+        if (byUrl.has(s.url)) continue
+        byUrl.set(s.url, { url: s.url, title: s.title })
+      }
+    }
+    return [...byUrl.values()]
+  })
+
+  // Try to read the domain from a URL for the cite chip's secondary
+  // label. Falls back to the URL itself if parsing fails (e.g.
+  // schemeless or malformed input we received over the wire).
+  function hostnameOf(url: string): string {
+    try {
+      return new URL(url).hostname.replace(/^www\./, '')
+    } catch {
+      return url
+    }
+  }
 </script>
 
 <div class="assistant-row">
@@ -351,37 +386,69 @@
       </div>
     {/if} -->
 
-    {#if !streaming && !pipelineActive && fileChanges.length > 0}
-      <div
-        class="review-card"
-        role="group"
-        aria-label="Files changed this turn"
-      >
-        <div class="review-header">
-          <span class="review-title"
-            >Files changed this turn ({fileChanges.length})</span
+    {#if !streaming && !pipelineActive && (fileChanges.length > 0 || sources.length > 0)}
+      <div class="review-card" role="group" aria-label="Turn review">
+        {#if fileChanges.length > 0}
+          <div class="review-header">
+            <span class="review-title"
+              >Files changed this turn ({fileChanges.length})</span
+            >
+          </div>
+          <ul class="review-list">
+            {#each fileChanges as change (change.callId)}
+              <li class="review-row">
+                <span class="review-action review-action-{change.action}"
+                  >{change.action}</span
+                >
+                <button
+                  type="button"
+                  class="review-path"
+                  onclick={() =>
+                    change.action === 'edited'
+                      ? onOpenFileDiff(change.callId)
+                      : onOpenFile(change.callId)}
+                  title={change.action === 'edited'
+                    ? 'Open applied diff'
+                    : 'Open file'}>{change.path}</button
+                >
+              </li>
+            {/each}
+          </ul>
+        {/if}
+        {#if sources.length > 0}
+          <!-- Sources sub-section. Cites the URLs the upstream provider
+               actually consulted via its native web_search tool — the
+               evidence chain for whatever the assistant just wrote.
+               Spacing above mirrors the gap between the file-changes
+               header and list when both are present, so the two
+               sections read as parallel rows of the same card. -->
+          <div
+            class="review-header"
+            class:review-header-stacked={fileChanges.length > 0}
           >
-        </div>
-        <ul class="review-list">
-          {#each fileChanges as change (change.callId)}
-            <li class="review-row">
-              <span class="review-action review-action-{change.action}"
-                >{change.action}</span
-              >
-              <button
-                type="button"
-                class="review-path"
-                onclick={() =>
-                  change.action === 'edited'
-                    ? onOpenFileDiff(change.callId)
-                    : onOpenFile(change.callId)}
-                title={change.action === 'edited'
-                  ? 'Open applied diff'
-                  : 'Open file'}>{change.path}</button
-              >
-            </li>
-          {/each}
-        </ul>
+            <span class="review-title">Sources ({sources.length})</span>
+          </div>
+          <ul class="review-list">
+            {#each sources as source (source.url)}
+              <li class="review-row review-row-source">
+                <a
+                  class="review-source"
+                  href={source.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={source.url}
+                >
+                  <span class="review-source-title"
+                    >{source.title ?? source.url}</span
+                  >
+                  <span class="review-source-host"
+                    >{hostnameOf(source.url)}</span
+                  >
+                </a>
+              </li>
+            {/each}
+          </ul>
+        {/if}
       </div>
     {/if}
     {#if error}
@@ -626,6 +693,42 @@
   }
   .review-path:hover {
     text-decoration: underline;
+  }
+  /* Sources sub-header — when stacked under the files list, give it
+     a little breathing room so the two sections read as separate
+     rows of the same card rather than one continuous list. */
+  .review-header-stacked {
+    margin-top: 10px;
+  }
+  .review-row-source {
+    align-items: center;
+  }
+  .review-source {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    color: var(--vscode-textLink-foreground, var(--vscode-foreground));
+    text-decoration: none;
+    font-size: 11px;
+    /* Keep long URLs/titles from forcing the card to scroll horizontally
+       — the chip ellipsises instead. */
+    max-width: 100%;
+    overflow: hidden;
+  }
+  .review-source:hover .review-source-title {
+    text-decoration: underline;
+  }
+  .review-source-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .review-source-host {
+    color: var(--vscode-descriptionForeground);
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 10px;
+    opacity: 0.8;
+    flex-shrink: 0;
   }
   /* Token badge — ambient "I/O budget used" line at the bottom of
      a finished assistant bubble. Small, grey, trailing space above

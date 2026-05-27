@@ -77,6 +77,11 @@ export type AiProxyStreamEvent =
       deploymentId?: string
       /** Error detail when status is `error`. */
       error?: string
+      /** URL citations carried by a synthetic `web_search` activity —
+       *  the proxy aggregates `source` parts from the upstream model's
+       *  provider-native web search and emits them on the terminal
+       *  `done` event. Absent on every other activity. */
+      sources?: Array<{ url: string; title?: string }>
     }
   | {
       kind: 'tool-call'
@@ -738,6 +743,7 @@ function* interpretFrame(
           ruleId?: string
           deploymentId?: string
           error?: string
+          sources?: Array<{ url: string; title?: string }>
         }>
       }
       for (const a of payload.activities ?? []) {
@@ -752,6 +758,7 @@ function* interpretFrame(
           ruleId: a.ruleId,
           deploymentId: a.deploymentId,
           error: a.error,
+          sources: a.sources,
         }
       }
     } catch {
