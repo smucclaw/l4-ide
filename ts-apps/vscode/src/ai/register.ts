@@ -254,6 +254,7 @@ export function registerAiChatHandlers(deps: {
           ruleId: event.ruleId,
           deploymentId: event.deploymentId,
           error: event.error,
+          sources: event.sources,
         })
         break
       case 'tool-call':
