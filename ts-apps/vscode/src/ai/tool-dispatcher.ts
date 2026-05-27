@@ -9,6 +9,7 @@ import {
   workspaceRelative,
 } from './tools/fs.js'
 import { l4Evaluate } from './tools/l4-evaluate.js'
+import { l4Refactor, type L4RefactorArgs } from './tools/refactor.js'
 import { metaAskUser, type AskUserAdapter } from './tools/ask-user.js'
 import { MCP_L4_RULES_PREFIX, type McpToolClient } from './mcp-client.js'
 import {
@@ -218,6 +219,8 @@ export class ToolDispatcher {
             mode?: 'changed' | 'full'
           }
         )
+      case 'l4__refactor':
+        return l4Refactor(args as L4RefactorArgs)
       case 'meta__ask_user':
         return metaAskUser(
           callId,

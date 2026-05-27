@@ -46,6 +46,9 @@ export type ChatServiceEvent =
       ruleId?: string
       deploymentId?: string
       error?: string
+      /** Synthetic `web_search` activities only — URL citations the
+       *  upstream model's provider-native web search produced. */
+      sources?: Array<{ url: string; title?: string }>
     }
   | {
       kind: 'tool-call'
@@ -116,23 +119,30 @@ export type PersistedBlock =
       /** Deployment id parsed from the MCP description trailer. */
       deploymentId?: string
     }
-  // Only L4-rule server activities are persisted (the proxy ran a
-  // deployed rule). Plain status tickers (doc search etc.) are
-  // intentionally not recorded — they're ephemeral progress noise
-  // with nothing to reconstruct on reload. `ruleKey` mirrors the
-  // webview store's merge key so a `running → done` burst persists
-  // as ONE block.
+  // Server activities worth preserving across a history reload. Two
+  // shapes share the variant:
+  //
+  //  - L4 Rule activities (the proxy ran a deployed rule): `ruleId` +
+  //    `ruleKey` are both set; `ruleKey` mirrors the webview store's
+  //    merge key so a `running → done` burst persists as ONE block.
+  //  - Synthetic `web_search` activities: `tool === 'web_search'`,
+  //    `sources` carries the URL citation list. No rule fields.
+  //
+  // Other plain status tickers (doc search, compaction, deployment
+  // browsing) are intentionally not recorded — they're ephemeral
+  // progress noise with nothing to reconstruct on reload.
   | {
       kind: 'tool-activity'
       tool: string
-      ruleId: string
-      ruleKey: string
+      ruleId?: string
+      ruleKey?: string
       status: 'running' | 'done' | 'error'
       message: string
       input?: unknown
       output?: unknown
       deploymentId?: string
       error?: string
+      sources?: Array<{ url: string; title?: string }>
     }
 
 export interface ChatServiceOptions {
@@ -869,7 +879,32 @@ export class ChatService {
           ruleId: ev.ruleId,
           deploymentId: ev.deploymentId,
           error: ev.error,
+          sources: ev.sources,
         })
+        // Persist synthetic `web_search` activities — the sources list
+        // is the evidence chain for the assistant's answer, so it must
+        // survive a history reload. Single row per turn keyed on the
+        // fixed `web_search` tool name; `running → done` collapses in
+        // place (the running event has no sources, the done event
+        // carries the full list).
+        if (ev.tool === 'web_search') {
+          const existing = blocks.find(
+            (b) => b.kind === 'tool-activity' && b.tool === 'web_search'
+          )
+          if (existing && existing.kind === 'tool-activity') {
+            existing.status = ev.status
+            existing.message = ev.message
+            if (ev.sources !== undefined) existing.sources = ev.sources
+          } else {
+            blocks.push({
+              kind: 'tool-activity',
+              tool: 'web_search',
+              status: ev.status,
+              message: ev.message,
+              sources: ev.sources,
+            })
+          }
+        }
         // Persist L4-rule activities so they survive a history
         // reload (the user explicitly wants server rule calls kept;
         // plain status tickers don't need to be). Identity + merge

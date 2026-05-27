@@ -146,6 +146,10 @@ export interface RenderedToolActivity {
    *  by callId). Set only for rule activities; `undefined` for plain
    *  status activities, which keep the legacy tool+message dedupe. */
   ruleKey?: string
+  /** URL citations carried by a synthetic `web_search` activity. The
+   *  message-assistant component aggregates these across the turn and
+   *  renders them as the "Sources:" section of the review card. */
+  sources?: Array<{ url: string; title?: string }>
 }
 
 /** Identify an L4-rule tool activity and compute its merge key + the
@@ -288,6 +292,33 @@ function extractPersistedBlocks(meta: unknown): AssistantBlock[] | null {
             typeof b.deploymentId === 'string' ? b.deploymentId : undefined,
           error: typeof b.error === 'string' ? b.error : undefined,
           ruleKey: b.ruleKey,
+        },
+      })
+    } else if (b.kind === 'tool-activity' && b.tool === 'web_search') {
+      // Persisted web-search activity. No rule fields — the only
+      // payload that needs to survive a reload is the citations list;
+      // the dot itself is rendered as the standard plain status row.
+      const status =
+        b.status === 'done' || b.status === 'error' ? b.status : 'done'
+      const sources = Array.isArray(b.sources)
+        ? (b.sources as Array<{ url?: unknown; title?: unknown }>)
+            .filter(
+              (s) =>
+                s && typeof s.url === 'string' && (s.url as string).length > 0
+            )
+            .map((s) => ({
+              url: s.url as string,
+              ...(typeof s.title === 'string' ? { title: s.title } : {}),
+            }))
+        : undefined
+      out.push({
+        kind: 'tool-activity',
+        activity: {
+          tool: 'web_search',
+          status,
+          label: 'Web search',
+          message: typeof b.message === 'string' ? b.message : '',
+          sources,
         },
       })
     }
@@ -1275,6 +1306,7 @@ export function createAiChatStore(
     ruleId?: string
     deploymentId?: string
     error?: string
+    sources?: Array<{ url: string; title?: string }>
   }): void {
     // Route strictly by conversationId. Falling back to `currentId`
     // crosstalks multiple concurrent streams into whichever chat the
@@ -1338,6 +1370,37 @@ export function createAiChatStore(
           deploymentId: params.deploymentId,
           error: params.error,
           ruleKey: ruleIdentity.ruleKey,
+        },
+      })
+      return
+    }
+
+    // Web-search activities merge by tool name (not by message) so
+    // the initial empty-message running event and the final "N sources"
+    // done event collapse into ONE row. Without this branch the
+    // generic dedupe below would split them (different `message`),
+    // showing two web-search rows for a single search burst.
+    if (params.tool === 'web_search') {
+      for (let i = turn.blocks.length - 1; i >= 0; i--) {
+        const b = turn.blocks[i]
+        if (b.kind === 'tool-activity' && b.activity.tool === 'web_search') {
+          b.activity.status = params.status
+          if (params.message) b.activity.message = params.message
+          if (params.label !== undefined) b.activity.label = params.label
+          if (params.sources !== undefined) b.activity.sources = params.sources
+          if (params.error !== undefined) b.activity.error = params.error
+          return
+        }
+      }
+      turn.blocks.push({
+        kind: 'tool-activity',
+        activity: {
+          tool: 'web_search',
+          status: params.status,
+          label: params.label,
+          message: params.message,
+          sources: params.sources,
+          error: params.error,
         },
       })
       return
@@ -1672,6 +1735,7 @@ export function createAiChatStore(
       'fs.edit': 'always',
       'fs.delete': 'always',
       'l4.evaluate': 'always',
+      'l4.refactor': 'always',
       'mcp.l4Rules': 'always',
       'meta.askUser': 'always',
     } as Record<AiPermissionCategory, AiPermissionValue>

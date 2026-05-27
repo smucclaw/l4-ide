@@ -69,7 +69,7 @@ File: percent.l4
   Message:
     The first argument of function 
 
-      MyType (predefined)
+      MyType (defined at percent.l4:6:9-15)
 
     is expected to be of type
 

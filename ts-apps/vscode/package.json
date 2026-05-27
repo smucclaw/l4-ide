@@ -160,6 +160,11 @@
         "command": "legaleseAi.askAboutSelection",
         "title": "Ask Legalese AI about this",
         "category": "Legalese AI"
+      },
+      {
+        "command": "l4.renameIdentifier",
+        "title": "Rename L4 identifier (across imports)",
+        "category": "L4"
       }
     ],
     "menus": {
@@ -175,6 +180,17 @@
           "command": "legaleseAi.askAboutSelection",
           "when": "editorHasSelection",
           "group": "1_legalese@1"
+        },
+        {
+          "command": "l4.renameIdentifier",
+          "when": "resourceLangId == l4",
+          "group": "1_modification@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "l4.renameIdentifier",
+          "when": "resourceLangId == l4"
         }
       ]
     },

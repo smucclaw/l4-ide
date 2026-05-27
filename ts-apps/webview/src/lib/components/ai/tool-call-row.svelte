@@ -120,6 +120,21 @@
         target: path,
         click: 'open',
       }
+    if (name === 'l4__refactor') {
+      // `action` is the discriminator on the refactor tool's args.
+      // Today we ship `rename`; new actions plug in here without
+      // changing the tool name. Falls back to the raw action string
+      // if a future action lands before this map is updated.
+      const action = typeof a.action === 'string' ? a.action : ''
+      const subtitle =
+        action === 'rename' ? 'renaming L4 identifier' : action || 'refactor'
+      return {
+        running: 'Refactoring…',
+        settled: 'Refactoring',
+        target: subtitle,
+        click: path ? 'open' : null,
+      }
+    }
     if (name === 'meta__ask_user')
       return {
         running: 'Asking…',

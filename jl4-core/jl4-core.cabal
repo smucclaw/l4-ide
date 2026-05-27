@@ -163,6 +163,7 @@ test-suite jl4-core-test
     UUID5Spec
     ExportValidationSpec
     NumberLiteralSpec
+    DirectiveRenameSpec
   build-tool-depends:
     hspec-discover:hspec-discover
   build-depends:

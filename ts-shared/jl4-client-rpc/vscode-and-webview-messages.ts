@@ -805,6 +805,7 @@ export type AiPermissionCategory =
   | 'fs.edit'
   | 'fs.delete'
   | 'l4.evaluate'
+  | 'l4.refactor'
   | 'mcp.l4Rules'
   | 'meta.askUser'
 
@@ -907,6 +908,13 @@ export const AiChatToolActivity: NotificationType<{
   deploymentId?: string
   /** Error detail when status is `error`. */
   error?: string
+  /** URL citations carried by a synthetic `web_search` activity — the
+   *  upstream provider ran a native web search (Anthropic's
+   *  `web_search_20250305` via OpenRouter) and the proxy aggregated
+   *  the resulting `url_citation` annotations into this list. Empty /
+   *  absent on every other activity; the webview renders these as the
+   *  "Sources:" section of the turn's review card. */
+  sources?: Array<{ url: string; title?: string }>
 }> = {
   method: 'aiChatToolActivity',
 }
