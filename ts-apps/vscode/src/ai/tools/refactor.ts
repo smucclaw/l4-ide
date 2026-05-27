@@ -78,35 +78,237 @@ export async function l4Refactor(args: L4RefactorArgs): Promise<string> {
 
 const BARE_IDENT_RE = /^[A-Za-z_][A-Za-z0-9_]*$/
 
+/** Cheap, lexer-shape-independent validation: rejects inputs that can
+ *  never be valid identifier text in L4 surface syntax regardless of
+ *  the file they target — annotations (`@…`), directives (`#…`), line
+ *  comments (`--…`), path/URL-shaped strings, multi-line input, and
+ *  stray interior backticks. We deliberately DO NOT do a keyword check
+ *  here: that's the lexer's call, and it depends on the file state, so
+ *  it lives in `classifyAnchorToken` (uses the LSP's semantic tokens).
+ *  Returns the bare name (backticks stripped); the caller re-wraps per
+ *  occurrence. */
+function validateRefactorName(
+  raw: unknown,
+  role: 'oldName' | 'newName'
+): string {
+  if (typeof raw !== 'string' || raw.length === 0) {
+    throw new Error(
+      `l4__refactor (rename): ${role} is required (non-empty string)`
+    )
+  }
+  const name = raw.replace(/^`+|`+$/g, '')
+  if (name.length === 0) {
+    throw new Error(
+      `l4__refactor (rename): ${role} must contain at least one non-backtick character`
+    )
+  }
+  // L4's lexer disallows backticks inside a quoted identifier (see
+  // jl4-core/src/L4/Lexer.hs `quoted`). Reject before we emit text that
+  // wouldn't lex.
+  if (name.includes('`')) {
+    throw new Error(
+      `l4__refactor (rename): ${role} must not contain an interior backtick character.`
+    )
+  }
+  if (/[\r\n]/.test(name)) {
+    throw new Error(
+      `l4__refactor (rename): ${role} must be a single line — got ${JSON.stringify(name)}.`
+    )
+  }
+  // '@' prefixes L4 annotations: @ref, @ref-src, @ref-map, @nlg, @desc,
+  // @export. These attach to declarations; they aren't identifiers
+  // themselves. Reject so a model that pastes "@export" or a
+  // markdown-style "@l4-ide/doc/.../foo.md" gets a clear error.
+  if (name.startsWith('@')) {
+    throw new Error(
+      `l4__refactor (rename): ${role} ${JSON.stringify(name)} starts with '@' — that prefix marks an L4 annotation (@ref, @desc, @export, @nlg), not an identifier. Pass the identifier name as it appears in source.`
+    )
+  }
+  // '#' prefixes L4 directives: #EVAL, #EVALTRACE, #CHECK, #TRACE, #ASSERT.
+  if (name.startsWith('#')) {
+    throw new Error(
+      `l4__refactor (rename): ${role} ${JSON.stringify(name)} starts with '#' — that prefix marks an L4 directive (#EVAL, #CHECK, …), not an identifier.`
+    )
+  }
+  // '--' opens a line comment.
+  if (name.startsWith('--')) {
+    throw new Error(
+      `l4__refactor (rename): ${role} ${JSON.stringify(name)} starts with '--' — that's an L4 line comment, not an identifier.`
+    )
+  }
+  // Path / URL shapes — the model occasionally lifts a doc filename
+  // (e.g. "@l4-ide/doc/tutorials/exporting-rules.md") into this slot.
+  if (name.includes('/') || name.includes('\\')) {
+    throw new Error(
+      `l4__refactor (rename): ${role} ${JSON.stringify(name)} contains a path separator ('/' or '\\'). Pass the identifier as it appears in the source file, not a file path or URL.`
+    )
+  }
+  return name
+}
+
+/** LSP/VSCode semantic-token types that count as identifier-like — the
+ *  things a rename can legitimately target. jl4-lsp emits `variable`
+ *  for plain identifiers and refines to `function`/`class`/`enum`/
+ *  `type`/`typeParameter`/`interface` in typed contexts (see
+ *  jl4-lsp/src/LSP/L4/SemanticTokens.hs). Everything else — `keyword`,
+ *  `comment`, `string`, `number`, `operator`, `macro` (directive),
+ *  `decorator` (annotation) — is not a rename target. */
+const IDENTIFIER_TOKEN_TYPES: ReadonlySet<string> = new Set([
+  'variable',
+  'function',
+  'class',
+  'enum',
+  'enumMember',
+  'interface',
+  'struct',
+  'type',
+  'typeParameter',
+  'parameter',
+  'property',
+  'method',
+  'namespace',
+  'event',
+  'label',
+])
+
+/** Friendlier names for the non-identifier categories jl4-lsp emits.
+ *  Maps the LSP type name to "what the model probably gave us". */
+const NON_IDENTIFIER_LABELS: Readonly<Record<string, string>> = {
+  keyword: 'an L4 keyword',
+  comment: 'inside a comment',
+  string: 'inside a string literal',
+  number: 'a numeric literal',
+  operator: 'an operator',
+  macro: 'an L4 directive (#EVAL/#CHECK/…)',
+  decorator: 'an L4 annotation (@ref/@desc/@export/…)',
+}
+
+/** "Is the cursor on a renameable identifier?" — used by
+ *  `commandRenameIdentifier` to short-circuit with a friendly message
+ *  before opening the rename input box. Combines a cheap text-shape
+ *  pre-filter (`identifierAtPosition`) with an LSP-side classification
+ *  via `classifyAnchorToken`. Returns:
+ *    - `false` when the position clearly isn't an identifier
+ *    - `true`  when the LSP confirms an identifier-like token
+ *    - `null`  when the LSP can't classify (provider not ready, file
+ *              hasn't type-checked yet) — the caller treats `null` the
+ *              same as `true` so the command isn't blocked while the
+ *              LSP is warming up. */
+async function isAtRenameableIdentifier(
+  doc: vscode.TextDocument,
+  pos: vscode.Position
+): Promise<boolean | null> {
+  if (identifierAtPosition(doc, pos) === null) return false
+  const tokenType = await classifyAnchorToken(doc.uri, pos)
+  if (tokenType === null) return null
+  return IDENTIFIER_TOKEN_TYPES.has(tokenType)
+}
+
+/** Walk the delta-encoded semantic tokens (VSCode SemanticTokens.data:
+ *  5-tuples of [deltaLine, deltaStartChar, length, tokenTypeIdx,
+ *  modifierMask]) to find the token whose interval contains `pos`, and
+ *  return its type name via the legend.  Returns `null` if no token
+ *  covers the position or if semantic tokens are unavailable (e.g. the
+ *  file hasn't type-checked yet, the provider isn't ready, or the
+ *  command isn't supported in this host).  A `null` return is treated
+ *  as "no lexer-side check possible" — the downstream references
+ *  provider then catches non-identifier anchors with its own error. */
+async function classifyAnchorToken(
+  uri: vscode.Uri,
+  pos: vscode.Position
+): Promise<string | null> {
+  let legend: vscode.SemanticTokensLegend | undefined
+  let tokens: vscode.SemanticTokens | undefined
+  try {
+    legend = await vscode.commands.executeCommand<
+      vscode.SemanticTokensLegend | undefined
+    >('vscode.provideDocumentSemanticTokensLegend', uri)
+    tokens = await vscode.commands.executeCommand<
+      vscode.SemanticTokens | undefined
+    >('vscode.provideDocumentSemanticTokens', uri)
+  } catch {
+    return null
+  }
+  if (!legend || !tokens || !tokens.data || tokens.data.length === 0) {
+    return null
+  }
+  const data = tokens.data
+  let line = 0
+  let char = 0
+  for (let i = 0; i + 4 < data.length; i += 5) {
+    const deltaLine = data[i]!
+    const deltaStart = data[i + 1]!
+    const length = data[i + 2]!
+    const typeIdx = data[i + 3]!
+    if (deltaLine === 0) {
+      char += deltaStart
+    } else {
+      line += deltaLine
+      char = deltaStart
+    }
+    if (line === pos.line) {
+      if (char <= pos.character && pos.character < char + length) {
+        return legend.tokenTypes[typeIdx] ?? null
+      }
+    } else if (line > pos.line) {
+      break
+    }
+  }
+  return null
+}
+
 /** Escape a string for use inside a JS RegExp pattern. */
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-/** Locate the first source-text occurrence of `oldName` in `doc`,
- *  trying the backticked form first then the bare-identifier form.
- *  Returns the position to send to the references provider — for
- *  backticked names that's the column INSIDE the backticks so the
- *  LSP's lookup at that SrcPos lands on the name token. */
-function findFirstOccurrence(
+/** Enumerate every source-text occurrence of `oldName` in `doc` as a
+ *  position picked STRICTLY INSIDE the name token (mid-character).
+ *  Backticked occurrences come first, then bare-identifier occurrences,
+ *  in the order they appear in the file.
+ *
+ *  Why mid-character: jl4-lsp's `lookupReference` does an interval
+ *  search at the supplied SrcPos and returns refs for EVERY symbol
+ *  whose interval contains that pos. If we point at the first or last
+ *  character of the name, we sit on the boundary of any enclosing AST
+ *  node that starts/ends there too — the LSP then unions in those
+ *  outer nodes' references, which arrive as ranges that don't match
+ *  the name we're renaming. Anchoring one column past the start (and,
+ *  for backticked names, past the opening backtick) keeps us inside
+ *  just the name's interval.
+ *
+ *  Multiple candidates matter because the textual scan happily hits
+ *  occurrences inside `--`-comments or string literals before reaching
+ *  the real declaration. The caller classifies each candidate via the
+ *  LSP and stops on the first identifier-like hit. */
+function findOccurrences(
   doc: vscode.TextDocument,
   oldName: string
-): vscode.Position | null {
+): vscode.Position[] {
   const text = doc.getText()
   const esc = escapeRegExp(oldName)
+  const positions: vscode.Position[] = []
   // Backticked form first — handles names with spaces or punctuation.
-  const backtickMatch = new RegExp('`' + esc + '`').exec(text)
-  if (backtickMatch) {
-    // +1 to step inside the opening backtick onto the identifier itself.
-    return doc.positionAt(backtickMatch.index + 1)
+  const backtickRe = new RegExp('`' + esc + '`', 'g')
+  for (let m = backtickRe.exec(text); m !== null; m = backtickRe.exec(text)) {
+    // Step past the opening backtick AND one char into the name so the
+    // cursor isn't on the boundary of either the backtick token or the
+    // identifier's first character.
+    const offset = oldName.length >= 2 ? 2 : 1
+    positions.push(doc.positionAt(m.index + offset))
   }
   // Bare identifier — require word boundaries so a request to rename
   // `foo` doesn't accidentally start from `foobar`.
   if (BARE_IDENT_RE.test(oldName)) {
-    const wordMatch = new RegExp('\\b' + esc + '\\b').exec(text)
-    if (wordMatch) return doc.positionAt(wordMatch.index)
+    const wordRe = new RegExp('\\b' + esc + '\\b', 'g')
+    for (let m = wordRe.exec(text); m !== null; m = wordRe.exec(text)) {
+      // +1 puts us one column inside the identifier; for a single-char
+      // name fall back to the start (no interior to point at).
+      const offset = oldName.length >= 2 ? 1 : 0
+      positions.push(doc.positionAt(m.index + offset))
+    }
   }
-  return null
+  return positions
 }
 
 /** Decide the literal replacement for a single occurrence: preserve
@@ -126,36 +328,15 @@ async function l4Rename(args: L4RenameArgs): Promise<string> {
   if (!args || typeof args !== 'object') {
     throw new Error('l4__refactor (rename): arguments object is required')
   }
-  if (typeof args.oldName !== 'string' || args.oldName.length === 0) {
-    throw new Error(
-      'l4__refactor (rename): oldName is required (non-empty string)'
-    )
-  }
-  if (typeof args.newName !== 'string' || args.newName.length === 0) {
-    throw new Error(
-      'l4__refactor (rename): newName is required (non-empty string)'
-    )
-  }
-  // Strip any leading/trailing backticks the caller may have included —
-  // we wrap them back on per-occurrence, so accepting `` `foo` `` and
-  // `foo` interchangeably keeps the tool forgiving.
-  const oldName = args.oldName.replace(/^`+|`+$/g, '')
-  const newName = args.newName.replace(/^`+|`+$/g, '')
-  if (!oldName || !newName) {
-    throw new Error(
-      'l4__refactor (rename): oldName / newName must contain at least one non-backtick character'
-    )
-  }
+  // Validate both names against L4's lexical rules up front: rejects
+  // annotations (@ref, @desc, @export), directives (#EVAL, #CHECK),
+  // line comments (--…), path/URL-shaped inputs, reserved keywords,
+  // and stray backticks — each with a specific error message instead
+  // of a downstream "identifier not found".
+  const oldName = validateRefactorName(args.oldName, 'oldName')
+  const newName = validateRefactorName(args.newName, 'newName')
   if (oldName === newName) {
     return `l4__refactor (rename): oldName equals newName ("${oldName}") — nothing to do.`
-  }
-  // L4 disallows a bare backtick inside a quoted identifier (see
-  // jl4-core/src/L4/Lexer.hs `quoted`). Reject before we apply edits
-  // that would silently produce an un-lexable file.
-  if (newName.includes('`')) {
-    throw new Error(
-      'l4__refactor (rename): newName must not contain a backtick character.'
-    )
   }
   const newNameNeedsBackticks = !BARE_IDENT_RE.test(newName)
 
@@ -172,10 +353,33 @@ async function l4Rename(args: L4RenameArgs): Promise<string> {
     )
   }
 
-  const position = findFirstOccurrence(doc, oldName)
-  if (!position) {
+  // The textual scan happily matches occurrences inside `--`-comments
+  // and string literals before reaching the real declaration. Walk
+  // every candidate and ask the LSP's semantic-tokens classifier per
+  // position; keep the first one that classifies as an identifier (or
+  // that the LSP can't classify yet — null falls through, so the
+  // references provider still gets a shot when semantic tokens aren't
+  // warm). Only error out when no candidate is identifier-shaped.
+  const candidates = findOccurrences(doc, oldName)
+  if (candidates.length === 0) {
     throw new Error(
       `l4__refactor (rename): identifier "${oldName}" not found in ${workspaceRelative(uri)}. Pass the identifier exactly as it appears in the source (without backticks).`
+    )
+  }
+  let position: vscode.Position | null = null
+  let lastNonIdentLabel: string | null = null
+  for (const candidate of candidates) {
+    const tokenType = await classifyAnchorToken(uri, candidate)
+    if (tokenType === null || IDENTIFIER_TOKEN_TYPES.has(tokenType)) {
+      position = candidate
+      break
+    }
+    lastNonIdentLabel = NON_IDENTIFIER_LABELS[tokenType] ?? `'${tokenType}'`
+  }
+  if (!position) {
+    const label = lastNonIdentLabel ?? 'not an identifier'
+    throw new Error(
+      `l4__refactor (rename): every textual occurrence of "${oldName}" in ${workspaceRelative(uri)} is ${label} — no identifier-typed occurrence to anchor on. Pass the name of a value, type, or function defined in the file.`
     )
   }
 
@@ -219,7 +423,6 @@ async function l4Rename(args: L4RenameArgs): Promise<string> {
   const edit = new vscode.WorkspaceEdit()
   const filesEdited: string[] = []
   let totalEdits = 0
-  let skipped = 0
 
   for (const [uriStr, locs] of byUri) {
     const targetUri = vscode.Uri.parse(uriStr)
@@ -240,10 +443,7 @@ async function l4Rename(args: L4RenameArgs): Promise<string> {
       // clobber an unrelated token if the LSP ever returns a stale
       // range.
       const trimmed = existing.replace(/^`+|`+$/g, '')
-      if (trimmed !== oldName) {
-        skipped++
-        continue
-      }
+      if (trimmed !== oldName) continue
       edit.replace(
         targetUri,
         loc.range,
@@ -282,9 +482,15 @@ async function l4Rename(args: L4RenameArgs): Promise<string> {
 
   filesEdited.sort()
   const fileSummary = filesEdited.join(', ')
-  const tail =
-    skipped > 0 ? ` Skipped ${skipped} location(s) with mismatching text.` : ''
-  return `Renamed "${oldName}" → "${newName}" — ${totalEdits} occurrence${totalEdits === 1 ? '' : 's'} across ${filesEdited.length} file${filesEdited.length === 1 ? '' : 's'} (${fileSummary}).${tail}`
+  // L4's references provider walks the anchor file's DEPENDENCIES
+  // (imports) and its reverse-deps (importers), not sibling importers.
+  // If the rename only touched the anchor file, hint that anchoring on
+  // the DEFINING file would cover all importers.
+  const hint =
+    filesEdited.length === 1
+      ? ` If "${oldName}" is also used in files that don't import "${filesEdited[0]}", re-run with \`path\` set to the file where "${oldName}" is DEFINED — the rename then propagates to every importer.`
+      : ''
+  return `Renamed "${oldName}" → "${newName}" — ${totalEdits} occurrence${totalEdits === 1 ? '' : 's'} across ${filesEdited.length} file${filesEdited.length === 1 ? '' : 's'} (${fileSummary}).${hint}`
 }
 
 /**
@@ -294,30 +500,41 @@ async function l4Rename(args: L4RenameArgs): Promise<string> {
  * (and bindable to a keystroke by the user).
  */
 export async function commandRenameIdentifier(): Promise<void> {
+  const notOnIdentifier = (): void =>
+    void vscode.window.showInformationMessage(
+      'Cursor position is not targeting a valid L4 identifier.'
+    )
+
   const editor = vscode.window.activeTextEditor
   if (!editor || editor.document.languageId !== 'l4') {
-    void vscode.window.showInformationMessage(
-      'Open an L4 file first, then place the cursor on the identifier to rename.'
-    )
+    notOnIdentifier()
     return
   }
   const doc = editor.document
   const pos = editor.selection.active
   const oldName = identifierAtPosition(doc, pos)
   if (!oldName) {
-    void vscode.window.showInformationMessage(
-      'No identifier under the cursor. Place the cursor on a name (or backtick-quoted name) and try again.'
-    )
+    notOnIdentifier()
+    return
+  }
+  // Confirm via the LSP that the cursor isn't on a keyword/directive/
+  // annotation that just happens to look identifier-shaped to the text
+  // heuristic. `null` means the LSP can't tell yet (file not
+  // type-checked) — fall through and let the rename pipeline make the
+  // final call.
+  const isIdent = await isAtRenameableIdentifier(doc, pos)
+  if (isIdent === false) {
+    notOnIdentifier()
     return
   }
   const newName = await vscode.window.showInputBox({
-    prompt: `Rename "${oldName}" to:`,
+    prompt: `Rename "${oldName}" to (backticks added automatically when the new name contains spaces or punctuation):`,
     value: oldName,
     validateInput: (v) => {
       const trimmed = (v ?? '').trim().replace(/^`+|`+$/g, '')
       if (!trimmed) return 'New name cannot be empty.'
       if (trimmed.includes('`'))
-        return 'Backticks are not allowed inside the name.'
+        return 'Backticks are not allowed inside the name — type it bare; quoting is added on write.'
       return null
     },
   })

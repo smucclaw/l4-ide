@@ -455,7 +455,7 @@ handlers evalConfig recorder =
           revDeps <- use_ GetReverseDependencies nuri
           mconcat <$> uses_ GetReferences (nuri : revDeps)
 
-        let locs = map (\range -> Location (fromNormalizedUri range.moduleUri) (srcRangeToLspRange (Just range))) $ lookupReference pos refs
+        let locs = map (\range -> Location (fromNormalizedUri range.moduleUri) (srcRangeToLspRange (Just range))) $ lookupReference nuri pos refs
         pure (Right (InL locs))
     , requestHandler SMethod_TextDocumentDocumentSymbol $ \ide params -> do
         let uri = params ^. J.textDocument . J.uri
