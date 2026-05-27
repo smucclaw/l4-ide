@@ -47,6 +47,11 @@
       hint: 'Check L4 files for validity and run directives via LSP (#EVAL, #ASSERT, #TRACE, ...)',
     },
     {
+      id: 'l4.refactor',
+      label: 'Refactor L4 code',
+      hint: 'Apply structured L4 refactors (rename across imports; more actions to come)',
+    },
+    {
       id: 'mcp.l4Rules',
       label: 'Access Legalese Cloud Deployments',
       hint: 'Browse and evaluate deployed L4 rules on Legalese Cloud',

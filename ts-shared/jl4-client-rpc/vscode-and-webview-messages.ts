@@ -805,6 +805,7 @@ export type AiPermissionCategory =
   | 'fs.edit'
   | 'fs.delete'
   | 'l4.evaluate'
+  | 'l4.refactor'
   | 'mcp.l4Rules'
   | 'meta.askUser'
 

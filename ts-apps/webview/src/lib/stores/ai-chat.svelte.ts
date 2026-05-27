@@ -1672,6 +1672,7 @@ export function createAiChatStore(
       'fs.edit': 'always',
       'fs.delete': 'always',
       'l4.evaluate': 'always',
+      'l4.refactor': 'always',
       'mcp.l4Rules': 'always',
       'meta.askUser': 'always',
     } as Record<AiPermissionCategory, AiPermissionValue>

@@ -107,6 +107,42 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
   {
     type: 'function',
     function: {
+      name: 'l4__refactor',
+      description:
+        "Apply a structured L4 refactor. The `action` discriminator selects the operation; more actions will be added over time. Today: `rename` substitutes an identifier across the file AND every file that IMPORTs it (driven by the LSP's references provider, so the file must currently type-check — use l4__evaluate first if unsure). Preserves backtick quoting per-occurrence: a source `\\`old name\\`` becomes `\\`new name\\``; if the new name contains spaces or punctuation it's wrapped in backticks everywhere automatically. Pass identifier names WITHOUT surrounding backticks. Prefer this tool over hand-rolling cross-file find/replace via fs__edit_file.",
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          action: {
+            type: 'string',
+            enum: ['rename'],
+            description:
+              'Which refactor to apply. Supported: `rename` — substitute an identifier across the file and every importer. Reserved for future actions (extract, inline, …); pass exactly one of the listed enum values.',
+          },
+          path: {
+            type: 'string',
+            description:
+              'Workspace path of any L4 file the action anchors on. For `rename`, this is a file containing the identifier (usually where it is DEFINED); the rename then propagates through all importers.',
+          },
+          oldName: {
+            type: 'string',
+            description:
+              "Required when action='rename'. Current identifier (no surrounding backticks). Must appear in the source of `path`.",
+          },
+          newName: {
+            type: 'string',
+            description:
+              "Required when action='rename'. New identifier (no surrounding backticks). May contain spaces/punctuation — backticks are added automatically where required.",
+          },
+        },
+        required: ['action', 'path'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'l4__evaluate',
       description:
         'Type-check and run `#EVAL`/`#CHECK`/`#TRACE`. Returns errors if not clean, else directive results.',

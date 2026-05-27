@@ -584,6 +584,7 @@ export function registerAiChatHandlers(deps: {
     'fs.edit',
     'fs.delete',
     'l4.evaluate',
+    'l4.refactor',
     'mcp.l4Rules',
     'meta.askUser',
   ]
@@ -594,6 +595,7 @@ export function registerAiChatHandlers(deps: {
       'fs.edit': 'always',
       'fs.delete': 'always',
       'l4.evaluate': 'always',
+      'l4.refactor': 'always',
       'mcp.l4Rules': 'always',
       'meta.askUser': 'always',
     }

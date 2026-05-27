@@ -49,6 +49,7 @@ import { ChatService } from './ai/chat-service.js'
 import { ToolDispatcher } from './ai/tool-dispatcher.js'
 import { registerAiChatHandlers } from './ai/register.js'
 import { recordDirectiveResults } from './ai/tools/l4-evaluate.js'
+import { commandRenameIdentifier } from './ai/tools/refactor.js'
 import { McpToolClient } from './ai/mcp-client.js'
 
 /***********************************************
@@ -491,6 +492,17 @@ export async function activate(context: ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('l4.installCli', async () => {
       await installL4Cli(context.extensionPath, outputChannel)
+    })
+  )
+
+  // Cross-file rename: anchor on the identifier under the cursor,
+  // ask the user for a new name, then drive the LSP references
+  // provider to substitute every occurrence (including in importing
+  // files). Exposed in the editor context menu and command palette
+  // for L4 files — see package.json `commands` / `menus` entries.
+  context.subscriptions.push(
+    vscode.commands.registerCommand('l4.renameIdentifier', async () => {
+      await commandRenameIdentifier()
     })
   )
 
