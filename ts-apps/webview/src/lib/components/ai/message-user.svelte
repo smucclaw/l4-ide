@@ -122,6 +122,14 @@
     box-shadow: 0 0 16px 2px
       var(--vscode-input-background, rgba(127, 127, 127, 0.12));
   }
+  /* Cap a non-sticky user bubble at half the chat's visible height
+     (`cqh` resolves against the `.message-list` size container) and let
+     it scroll internally rather than dominating the whole chat. The
+     sticky variant has its own 3-line cap below, so we exclude it. */
+  .user-row:not(.sticky) .user-bubble {
+    max-height: 50cqh;
+    overflow-y: auto;
+  }
   .user-text {
     margin: 0;
     white-space: pre-wrap;

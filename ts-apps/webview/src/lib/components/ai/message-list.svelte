@@ -233,6 +233,11 @@
     overflow-x: hidden;
     padding: 0 10px 16px;
     display: block;
+    /* Establish a size container so non-sticky user bubbles can cap
+       themselves at a fraction of the chat's visible height (via `cqh`)
+       rather than the viewport, since the AI chat lives in a sidebar
+       whose height is independent of `vh`. */
+    container-type: size;
   }
   .bottom-spinner {
     display: flex;
