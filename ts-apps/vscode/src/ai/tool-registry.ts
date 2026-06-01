@@ -17,7 +17,7 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
     function: {
       name: 'fs__read_file',
       description:
-        'Read a file or list a directory, one line per entry. Response prefixed with `[<path> <start>-<end>/<total>]` (or `[<path> pattern="…" matches=N chunks=K/M]` with `pattern`); when `<end> < <total>` more lines remain — call again with `startLine=<end>+1`. Hard cap 500 lines / 4000 chars per call. Directories: `name/` for subdirs, directories first. `.git`, `node_modules`, `.DS_Store` hidden.',
+        'Read a file or list a directory, one line per entry. Response prefixed with `[<path> <start>-<end>/<total>]` (or `[<path> keywords="…" matches=N chunks=K/M]` with `search_keywords`); when `<end> < <total>` more lines remain — call again with `startLine=<end>+1`. Hard cap 500 lines / 4000 chars per call. Directories: `name/` for subdirs, directories first. `.git`, `node_modules`, `.DS_Store` hidden.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -31,10 +31,10 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
             type: 'number',
             description: '1-based inclusive, default startLine+499.',
           },
-          pattern: {
+          search_keywords: {
             type: 'string',
             description:
-              'Case-insensitive regex; literal-substring fallback. For files, matches carry 2 lines of context (hits prefixed `>>>`, context `   `, chunks joined `---`). For directories, the tree is walked recursively and file CONTENTS are grepped — results emitted as `<path>:<lineno>: <text>` rows.',
+              'One or more keywords separated by whitespace; a line is a hit if it matches ANY of them (OR). Each keyword is a case-insensitive regex with literal-substring fallback. For files, matches carry 2 lines of context (hits prefixed `>>>`, context `   `, chunks joined `---`). For directories, the tree is walked recursively and file CONTENTS are grepped — results emitted as `<path>:<lineno>: <text>` rows.',
           },
         },
         required: ['path'],

@@ -103,22 +103,23 @@ export interface FsReadArgs {
   /** 1-based inclusive start line in the target's text output.
    *  For files this is a source-line number; for directories it's
    *  the position in the sorted entry listing (1 = first entry).
-   *  Default 1. Applied after `pattern` when both are set. */
+   *  Default 1. Applied after `search_keywords` when both are set. */
   startLine?: number
   /** 1-based inclusive end line. Default: read to the end of the
    *  output, capped at `startLine + 499` (500-line ceiling). */
   endLine?: number
-  /** Optional keyword filter. Narrows the output to lines
-   *  matching this pattern — parsed as a case-insensitive regex,
-   *  falls back to literal substring when the regex doesn't
-   *  compile. For files, matching lines are returned with 2 lines
-   *  of surrounding context. For directories, the tree is walked
+  /** Optional keyword filter. One or more keywords separated by
+   *  whitespace; a line is a hit if it matches ANY of them (OR).
+   *  Each keyword is parsed as a case-insensitive regex, falling
+   *  back to a literal substring when the regex doesn't compile.
+   *  For files, matching lines are returned with 2 lines of
+   *  surrounding context. For directories, the tree is walked
    *  recursively (skipping `.git`, `node_modules`, `.DS_Store`)
    *  and file *contents* are grepped — results are emitted as
    *  `<relative-path>:<lineno>: <text>` so the model can jump to
    *  the file with a follow-up `fs__read_file`. Use this to find
    *  a symbol or string anywhere under the workspace. */
-  pattern?: string
+  search_keywords?: string
 }
 
 /** Hard caps per response. Picked so a single call surfaces enough
@@ -193,15 +194,16 @@ const DIR_IGNORES = new Set(['.git', 'node_modules', '.DS_Store'])
  * Read a file (one source line per output line) or list a directory
  * (one entry per output line, `name/` for subdirs, `name` for files,
  * dirs sorted first). Same shape for both so the model learns one
- * rule. Pagination via `startLine`/`endLine`, search via `pattern`.
+ * rule. Pagination via `startLine`/`endLine`, search via
+ * `search_keywords`.
  *
  * Response: a compact header line describing what came back, then
  * the selected lines. Header examples:
- *   [<path> 1-40/40]                                  — full file/dir
- *   [<path> 1-500/2489]                               — paginated (more after line 500)
- *   [<path> pattern="..." matches=3 chunks=2/2]       — file grep
- *   [<path> pattern="..." matches=0]                  — no hits
- *   [<dir>/ pattern="..." matches=12 files=3]         — recursive dir grep
+ *   [<path> 1-40/40]                                   — full file/dir
+ *   [<path> 1-500/2489]                                — paginated (more after line 500)
+ *   [<path> keywords="..." matches=3 chunks=2/2]       — file grep
+ *   [<path> keywords="..." matches=0]                  — no hits
+ *   [<dir>/ keywords="..." matches=12 files=3]         — recursive dir grep
  *
  * For file grep, matching lines are prefixed `>>>` and context
  * lines `   ` so the model can distinguish hits from surroundings;
@@ -224,15 +226,17 @@ export async function fsReadFile(args: FsReadArgs): Promise<string> {
   }
 
   const isDir = stat.isDirectory()
-  const hasPattern = typeof args.pattern === 'string' && args.pattern.length > 0
+  const hasKeywords =
+    typeof args.search_keywords === 'string' &&
+    args.search_keywords.trim().length > 0
 
-  // Directory + pattern → recursive content grep across the whole
+  // Directory + keywords → recursive content grep across the whole
   // subtree. Different code path because we never want to materialise
   // the entire subtree as a flat `lines[]` (would defeat the cap and
   // burn memory on a big repo) — `grepDirRecursive` walks
   // file-by-file and stops once the cap is hit.
-  if (isDir && hasPattern) {
-    return grepDirRecursive(r, args.pattern!)
+  if (isDir && hasKeywords) {
+    return grepDirRecursive(r, args.search_keywords!)
   }
 
   // Materialise the target as a list of lines regardless of kind.
@@ -256,14 +260,14 @@ export async function fsReadFile(args: FsReadArgs): Promise<string> {
     lines = buf.replace(/\r\n/g, '\n').split('\n')
   }
 
-  // Pattern (grep mode) takes precedence — once a pattern is set
+  // Keywords (grep mode) take precedence — once keywords are set
   // the output is keyword-focused and startLine/endLine narrow
   // WITHIN that focus.
-  if (hasPattern) {
+  if (hasKeywords) {
     return grepLines(
       r,
       lines,
-      args.pattern!,
+      args.search_keywords!,
       isDir,
       args.startLine,
       args.endLine
@@ -308,18 +312,40 @@ function sliceLines(
 }
 
 /**
- * Grep mode: filter `lines` down to those matching `pattern`,
+ * Build a line matcher from a whitespace-separated keyword string.
+ * Splits on runs of whitespace, compiles each keyword as a
+ * case-insensitive regex (literal-substring fallback when it doesn't
+ * compile), and returns a predicate that's true when a line matches
+ * ANY keyword (OR semantics). An empty/blank string matches nothing.
+ */
+function buildKeywordMatcher(raw: string): (line: string) => boolean {
+  const keywords = raw.trim().split(/\s+/).filter(Boolean)
+  if (keywords.length === 0) return () => false
+  const tests = keywords.map((kw): ((line: string) => boolean) => {
+    try {
+      const re = new RegExp(kw, 'i')
+      return (line) => re.test(line)
+    } catch {
+      const needle = kw.toLowerCase()
+      return (line) => line.toLowerCase().includes(needle)
+    }
+  })
+  return (line) => tests.some((t) => t(line))
+}
+
+/**
+ * Grep mode: filter `lines` down to those matching `keywords`,
  * then apply the same caps as `sliceLines`. For files, each match
  * carries PATTERN_CONTEXT_LINES of surrounding context (overlapping
  * chunks merged); for directories, matching entries are returned
  * verbatim (context is meaningless for a listing).
  *
  * When `startLine`/`endLine` are also set, they further narrow the
- * pattern's match window to file lines inside that range — lets
+ * keyword match window to file lines inside that range — lets
  * the model search within a specific section.
  *
  * Output:
- *   [<path> pattern="…" matches=N chunks=K/total]
+ *   [<path> keywords="…" matches=N chunks=K/total]
  *   >>> 42: matching line
  *       43: context
  *   ---
@@ -329,7 +355,7 @@ function sliceLines(
 function grepLines(
   r: ResolvedPath,
   lines: string[],
-  patternRaw: string,
+  keywordsRaw: string,
   isDir: boolean,
   startLineRaw: number | undefined,
   endLineRaw: number | undefined
@@ -341,22 +367,15 @@ function grepLines(
       ? clampInt(endLineRaw, rangeStart + 1, total)
       : total
 
-  let matcher: (line: string) => boolean
-  try {
-    const re = new RegExp(patternRaw, 'i')
-    matcher = (line) => re.test(line)
-  } catch {
-    const needle = patternRaw.toLowerCase()
-    matcher = (line) => line.toLowerCase().includes(needle)
-  }
+  const matcher = buildKeywordMatcher(keywordsRaw)
 
   const matchIdx: number[] = []
   for (let i = rangeStart; i < rangeEnd; i++) {
     if (matcher(lines[i]!)) matchIdx.push(i)
   }
-  const patternLabel = JSON.stringify(patternRaw)
+  const keywordsLabel = JSON.stringify(keywordsRaw)
   if (matchIdx.length === 0) {
-    return `[${r.relative} pattern=${patternLabel} matches=0]`
+    return `[${r.relative} keywords=${keywordsLabel} matches=0]`
   }
 
   // Directories have no "context" — just return the matching entries
@@ -370,7 +389,7 @@ function grepLines(
     const shown = body ? body.split('\n').length : 0
     const truncated = shown < matchIdx.length
     const header =
-      `[${r.relative} pattern=${patternLabel} matches=${matchIdx.length}` +
+      `[${r.relative} keywords=${keywordsLabel} matches=${matchIdx.length}` +
       (truncated ? `, shown=${shown}/${matchIdx.length}]` : `]`)
     return `${header}\n${body}`
   }
@@ -426,7 +445,7 @@ function grepLines(
   }
 
   const header =
-    `[${r.relative} pattern=${patternLabel} matches=${matchIdx.length} ` +
+    `[${r.relative} keywords=${keywordsLabel} matches=${matchIdx.length} ` +
     `chunks=${chunksShown}/${chunks.length}` +
     (truncated ? `, truncated]` : `]`)
   return `${header}\n${rendered.join('\n---\n')}`
@@ -457,16 +476,9 @@ function clampInt(n: number, lo: number, hi: number): number {
  */
 async function grepDirRecursive(
   r: ResolvedPath,
-  patternRaw: string
+  keywordsRaw: string
 ): Promise<string> {
-  let matcher: (line: string) => boolean
-  try {
-    const re = new RegExp(patternRaw, 'i')
-    matcher = (line) => re.test(line)
-  } catch {
-    const needle = patternRaw.toLowerCase()
-    matcher = (line) => line.toLowerCase().includes(needle)
-  }
+  const matcher = buildKeywordMatcher(keywordsRaw)
 
   const rows: string[] = []
   const filesWithMatches = new Set<string>()
@@ -531,12 +543,12 @@ async function grepDirRecursive(
     for (let i = subdirs.length - 1; i >= 0; i--) stack.push(subdirs[i]!)
   }
 
-  const patternLabel = JSON.stringify(patternRaw)
+  const keywordsLabel = JSON.stringify(keywordsRaw)
   if (totalMatches === 0) {
-    return `[${r.relative}/ pattern=${patternLabel} matches=0]`
+    return `[${r.relative}/ keywords=${keywordsLabel} matches=0]`
   }
   const header =
-    `[${r.relative}/ pattern=${patternLabel} matches=${totalMatches} ` +
+    `[${r.relative}/ keywords=${keywordsLabel} matches=${totalMatches} ` +
     `files=${filesWithMatches.size}` +
     (truncated ? `, shown=${rows.length}/${totalMatches}]` : `]`)
   return `${header}\n${rows.join('\n')}`
