@@ -41,6 +41,7 @@
   import DocsPanel from '$lib/components/docs-panel.svelte'
   import AiChatPanel from '$lib/components/ai/ai-chat-panel.svelte'
   import DeploymentIntegratePopover from '$lib/components/deployment-integrate-popover.svelte'
+  import CloudUpsell from '$lib/components/cloud-upsell.svelte'
 
   let functions: ExportedFunctionInfo[] = $state([])
   let activeFileUri: string = $state('')
@@ -1352,7 +1353,10 @@
       {/if}
       {#if activeTab === 'deployments'}
         <div class="deployments-tab-wrapper">
-          <div class="deployments-tab-body">
+          <div
+            class="deployments-tab-body"
+            class:with-info-note={connectionStatus.connected}
+          >
             {#if undeployConfirm}
               <div class="breaking-warning">
                 <button class="back-btn" onclick={cancelUndeploy}
@@ -1374,18 +1378,20 @@
                 </div>
               </div>
             {:else if !connectionStatus.connected}
-              <div class="empty-state">
-                <p class="hint">
-                  {#if !initialized}
-                    &nbsp;
-                  {:else if connectionStatus.serviceUrl}
+              {#if !initialized}
+                <div class="empty-state">
+                  <p class="hint">&nbsp;</p>
+                </div>
+              {:else if connectionStatus.serviceUrl}
+                <div class="empty-state">
+                  <p class="hint">
                     Connect to {stripProtocol(connectionStatus.serviceUrl)} to view
                     deployments.
-                  {:else}
-                    Sign in with Legalese Cloud to view your deployments.
-                  {/if}
-                </p>
-              </div>
+                  </p>
+                </div>
+              {:else}
+                <CloudUpsell context="deployments" onSignIn={handleAction} />
+              {/if}
             {:else if deploymentsLoading}
               <div class="empty-state">
                 <p class="hint">Loading deployments...</p>
@@ -1555,19 +1561,21 @@
               </div>
             {/if}
           </div>
-          <aside class="deployment-info-note" role="note">
-            <p>
-              Deployments are automatically available to Legalese AI, VS Code
-              Copilot, and any other MCP-speaking agents as MCP tools on this
-              computer on port {connectionStatus.mcpPort}.
-            </p>
-            <p>
-              They're also available as REST API's, online MCP server and WebMCP
-              tools {connectionStatus.isLegaleseCloud
-                ? 'as well as OpenAI- and Anthropic-compatible AI endpoints on the Legalese Cloud'
-                : 'via the connected JL4 service'}.
-            </p>
-          </aside>
+          {#if connectionStatus.connected}
+            <aside class="deployment-info-note" role="note">
+              <p>
+                Deployments are automatically available to Legalese AI, VS Code
+                Copilot, and any other MCP-speaking agents as MCP tools on this
+                computer on port {connectionStatus.mcpPort}.
+              </p>
+              <p>
+                They're also available as REST API's, online MCP server and
+                WebMCP tools {connectionStatus.isLegaleseCloud
+                  ? 'as well as OpenAI- and Anthropic-compatible AI endpoints on the Legalese Cloud'
+                  : 'via the connected JL4 service'}.
+              </p>
+            </aside>
+          {/if}
         </div>
       {/if}
     </div>
@@ -2077,6 +2085,14 @@
 
   .deployments-tab-body {
     flex: 1 0 auto;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Only reserve the gap above the info-note when it's actually shown
+     (connected). When disconnected the box should centre in the full
+     tab height, matching the AI tab. */
+  .deployments-tab-body.with-info-note {
     padding-bottom: 24px;
   }
 
