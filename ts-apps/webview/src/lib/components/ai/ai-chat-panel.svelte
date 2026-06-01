@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy } from 'svelte'
   import type { Messenger } from 'vscode-messenger-webview'
+  import { HOST_EXTENSION } from 'vscode-messenger-common'
   import {
     AiActiveFile,
     AiAuthStatus,
@@ -16,6 +17,7 @@
     AiChatToolCall,
     AiChatTurnSpawn,
     AiUsageUpdate,
+    RequestSidebarLogin,
   } from 'jl4-client-rpc'
   import { createAiChatStore } from '$lib/stores/ai-chat.svelte'
   import { aiPrefs } from '$lib/stores/ai-prefs.svelte'
@@ -25,6 +27,7 @@
   import ConversationHistory from './conversation-history.svelte'
   import SettingsPanel from './settings-panel.svelte'
   import DeploymentBanner from './deployment-banner.svelte'
+  import CloudUpsell from '../cloud-upsell.svelte'
 
   let {
     messenger,
@@ -155,6 +158,14 @@
     settingsOpen = true
   }
 
+  function signIn(): void {
+    messenger?.sendNotification(
+      RequestSidebarLogin,
+      HOST_EXTENSION,
+      undefined as never
+    )
+  }
+
   // Retry asks the server to run another turn against the existing
   // conversation state — no duplicated user message. The user's
   // original prompt is already persisted on disk from the aborted
@@ -177,14 +188,9 @@
 
 <div class="ai-panel">
   {#if showUnauth}
-    <!-- Mirrors the Deployments tab empty-state (same element shape,
-         class names and hint text styling) so the two tabs read the
-         same when signed-out. Consistency beats cleverness here. -->
-    <div class="empty-state">
-      <p class="hint">
-        Sign in with Legalese Cloud to start composing rules with AI.
-      </p>
-    </div>
+    <!-- Mirrors the Deployments tab signed-out state — both render the
+         shared Legalese Cloud promo so the two tabs read the same. -->
+    <CloudUpsell context="ai" onSignIn={signIn} />
   {:else}
     {#if showEmptyState}
       <EmptyState
@@ -253,29 +259,5 @@
     height: 100%;
     min-height: 0;
     box-sizing: border-box;
-  }
-
-  /* Mirror the Deployments tab's empty-state styling verbatim so the
-     two tabs look identical when the user is signed out. Height is
-     fixed at 40vh (matching the Deployments tab) so the hint line
-     sits at ~20vh from the top instead of centered across the full
-     panel height — that vertical anchor is what makes the two tabs
-     feel interchangeable at a glance. Kept as an AI-tab-local copy
-     because Svelte CSS is component-scoped; extracting to a global
-     sheet would drag in every page's `.empty-state` at once. */
-  .empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 40vh;
-    text-align: center;
-    color: var(--vscode-descriptionForeground);
-  }
-
-  .empty-state .hint {
-    font-size: 0.95em;
-    line-height: 1.2;
-    max-width: 200px;
   }
 </style>
