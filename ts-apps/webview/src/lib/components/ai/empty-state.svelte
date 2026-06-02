@@ -65,7 +65,8 @@
     <div class="seed-buttons">
       {#each seeds as seed}
         <button class="seed-button" type="button" onclick={() => onSeed(seed)}>
-          {seed.label}
+          <span class="seed-mark" aria-hidden="true">✦</span>
+          <span class="seed-label">{seed.label}</span>
         </button>
       {/each}
     </div>
@@ -120,6 +121,9 @@
     max-width: 320px;
   }
   .seed-button {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
     width: 100%;
     text-align: left;
     background: transparent;
@@ -133,6 +137,13 @@
     transition:
       border-color 0.12s ease-out,
       background-color 0.12s ease-out;
+  }
+  .seed-mark {
+    flex-shrink: 0;
+    color: #c8376a;
+  }
+  .seed-label {
+    flex: 1;
   }
   .seed-button:hover {
     background: rgba(128, 128, 128, 0.08);
