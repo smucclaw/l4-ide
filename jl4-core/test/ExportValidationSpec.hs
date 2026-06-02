@@ -7,8 +7,9 @@ import Data.Text (Text)
 import qualified Data.Text as Text
 
 import L4.API.VirtualFS (checkWithImports, emptyVFS)
-import L4.Export (ExportedFunction(..), getExportedFunctions)
+import L4.Export (ExportedFunction(..), getExportedFunctions, enrichReturnTypes)
 import L4.Import.Resolution (TypeCheckWithDepsResult(..))
+import L4.Print (prettyTypeForDisplay)
 import L4.TypeCheck.Types (CheckErrorWithContext(..), CheckError(..))
 
 -- | Run typecheck on a source snippet and return the list of
@@ -29,6 +30,19 @@ exportedNames source =
   case checkWithImports emptyVFS source of
     Left errs -> Left errs
     Right r -> Right $ map (.exportName) (getExportedFunctions r.tcdModule)
+
+-- | Run typecheck and return the displayed return type of each export,
+-- exactly as the deployed schema / LSP would render it.
+exportedReturnTypes :: Text -> Either [Text] [(Text, Text)]
+exportedReturnTypes source =
+  case checkWithImports emptyVFS source of
+    Left errs -> Left errs
+    Right r ->
+      let exps = enrichReturnTypes r.tcdEntityInfo (getExportedFunctions r.tcdModule)
+      in Right
+        [ (ef.exportName, maybe "unknown" prettyTypeForDisplay ef.exportReturnType)
+        | ef <- exps
+        ]
 
 spec :: Spec
 spec = do
@@ -153,3 +167,31 @@ spec = do
       case exportFnErrors src of
         Left errs -> fail $ "Fatal: " ++ show errs
         Right fns -> length fns `shouldBe` 1
+
+  describe "exported return type display" $ do
+    -- A concrete inferred return type renders normally.
+    it "renders a concrete inferred return type" $ do
+      let src = Text.unlines
+            [ "@export Adds one"
+            , "GIVEN `x` IS A NUMBER"
+            , "`plus one` MEANS `x` + 1"
+            ]
+      exportedReturnTypes src `shouldBe` Right [("plus one", "NUMBER")]
+
+    -- A genuinely polymorphic inferred return type must normalise residual
+    -- inference variables to stable names (a, b, …), never an edit-order
+    -- dependent id like "res184" or "A3" that would make the deployed schema
+    -- non-deterministic and trip the breaking-change check.
+    it "normalises a residual inference variable to a stable type-variable name" $ do
+      let src = Text.unlines
+            [ "IMPORT prelude"
+            , ""
+            , "@export Empty list"
+            , "`xs` MEANS EMPTY"
+            ]
+      case exportedReturnTypes src of
+        Left errs -> fail $ "Fatal: " ++ show errs
+        Right rts -> do
+          rts `shouldBe` [("xs", "LIST OF a")]
+          -- And crucially: no raw inference-variable id leaks.
+          all (not . Text.isInfixOf "res" . snd) rts `shouldBe` True

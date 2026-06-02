@@ -374,7 +374,7 @@
    *
    * Result header formats (set by tools/fs.ts):
    *   read slice:       `[<path> <start>-<end>/<total>]…`
-   *   read pattern hit: `[<path> pattern="…" matches=N chunks=K/M]` (skipped)
+   *   read keyword hit: `[<path> keywords="…" matches=N chunks=K/M]` (skipped)
    *   edit snippet:     `[<path> <start>-<end>] Edited …`
    *   edit whole-file:  `[<path> 1-N/N] Wrote …` (skipped via total rule)
    *

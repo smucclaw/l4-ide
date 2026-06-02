@@ -309,7 +309,11 @@ typecheckWithDependencies lookupModule uri source = do
             , tcdErrors = result.errors
             , tcdSubstitution = result.substitution
             , tcdEnvironment = result.environment
-            , tcdEntityInfo = result.entityInfo
+            -- Zonk so callers see resolved types (e.g. a return type of DATE,
+            -- not the raw inference variable it was unified through). The Shake
+            -- typecheck rule and per-import resolution already do this; doing it
+            -- here keeps the public checkWithImports result consistent.
+            , tcdEntityInfo = applyFinalSubstitution result.substitution uri result.entityInfo
             , tcdMixfixRegistry = result.mixfixRegistry
             , tcdInfoMap = result.infoMap
             , tcdScopeMap = result.scopeMap

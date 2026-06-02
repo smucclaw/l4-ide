@@ -1494,6 +1494,30 @@ spec = describe "integration" do
         Left err -> err `shouldBe` "No .l4 files found in bundle"
         Right _ -> expectationFailure "Expected compilation to fail for empty bundle"
 
+    -- A module with a genuine type error must be rejected with the actual
+    -- error, not compiled into a garbage schema. An @export with no GIVETH
+    -- whose body fails to typecheck used to leave its return type as an
+    -- unresolved inference variable (e.g. "res184"), which then tripped the
+    -- breaking-change check with a baffling "return type changed to res184".
+    it "rejects a module with a type error instead of leaking an inference variable" do
+      logger <- newLogger False
+      let sources = Map.singleton "broken.l4" $ Text.unlines
+            [ "IMPORT prelude"
+            , "IMPORT daydate"
+            , ""
+            , "@export The date this was last updated"
+            , "`last updated on` MEANS Date 2 6"  -- no 2-arg `Date` overload
+            ]
+      result <- compileBundle logger "test" sources
+      case result of
+        Left err -> do
+          err `shouldNotSatisfy` Text.isInfixOf "res"
+          err `shouldSatisfy` (not . Text.null)
+        Right (_fns, meta, _bundles) ->
+          expectationFailure $
+            "Expected rejection, but compiled with return types: "
+              <> show [fs.fsReturnType | fs <- meta.metaFunctions]
+
 -- ----------------------------------------------------------------------------
 -- Helpers
 -- ----------------------------------------------------------------------------
