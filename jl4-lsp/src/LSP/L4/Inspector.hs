@@ -390,7 +390,12 @@ exportedFunctionToSummary declares ef =
     paramPairs = map mkParam ef.exportParams
     params = FSchema.MkParameters
       { parameterMap = Map.fromList paramPairs
-      , required = map fst paramPairs
+      -- Only non-optional params are required. Mirrors jl4-service's
+      -- Compiler.parametersFromExport; marking every param required here
+      -- made the deploy sidebar's breaking-change diff report optional
+      -- params (e.g. MAYBE-typed object inputs) as "now required" on
+      -- every redeploy, since the deployed schema correctly omits them.
+      , required = [ep.paramName | ep <- ef.exportParams, ep.paramRequired]
       }
 
     retType = case ef.exportReturnType of
