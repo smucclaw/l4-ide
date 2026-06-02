@@ -18,7 +18,7 @@ import Data.Ratio (numerator, denominator)
 import GHC.TypeLits (Symbol)
 import Language.LSP.Protocol.Types as LSP
 import L4.Parser.SrcSpan (SrcPos(..), SrcRange(..))
-import L4.Print (prettyLayout, ConstructorFieldNames)
+import L4.Print (prettyLayout, prettyTypeForDisplay, ConstructorFieldNames)
 import L4.Annotation (Anno_(..))
 import L4.Syntax (getActual, Declare, Decide(..), AppForm(..), Resolved)
 
@@ -398,9 +398,12 @@ exportedFunctionToSummary declares ef =
       , required = [ep.paramName | ep <- ef.exportParams, ep.paramRequired]
       }
 
+    -- Use prettyTypeForDisplay (not plain prettyLayout) so residual inference
+    -- variables normalise to stable names; this must match jl4-service's
+    -- returnTypeDisplay since the deploy sidebar diffs the two strings.
     retType = case ef.exportReturnType of
       Nothing -> "unknown"
-      Just ty -> prettyLayout ty
+      Just ty -> prettyTypeForDisplay ty
 
     -- Deontic detection: check if return type pretty-prints as containing "DEONTIC"
     isDeontic' = "DEONTIC" `Text.isInfixOf` Text.toUpper retType

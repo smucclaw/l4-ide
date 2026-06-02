@@ -33,7 +33,7 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text.Encoding
 import Data.Time (getCurrentTime)
 import L4.Export (ExportedFunction (..), ExportedParam (..), getExportedFunctions, enrichReturnTypes, extractImplicitAssumeParams)
-import L4.Print (prettyLayout)
+import L4.Print (prettyTypeForDisplay)
 import L4.Syntax (Resolved, Declare(..), Type'(..), RawName(..), getActual, rawName, rawNameToText)
 import Logging (Logger, logInfo, logWarn)
 import qualified LSP.L4.Rules as Rules
@@ -520,15 +520,17 @@ collectAllDeclares tc =
     <> foldMap collectAllDeclares tc.dependencies
 
 -- | Display the return type of an exported function as a user-facing string.
--- Delegates to 'prettyLayout' so the rendering matches exactly what the LSP
--- reports for the same type (the deploy-sidebar diff compares the two
--- strings). The previous bespoke renderer collapsed @DEONTIC P A@ to just
--- @"DEONTIC"@ and dropped the @OF@ keyword for other parameterized types
--- (e.g. @LIST NUMBER@ instead of @LIST OF NUMBER@), causing spurious
--- "return type changed" warnings on every redeploy.
+-- Delegates to 'prettyTypeForDisplay' so the rendering matches exactly what the
+-- LSP reports for the same type (the deploy-sidebar diff compares the two
+-- strings) AND so residual inference variables render as stable type-variable
+-- names rather than edit-order-dependent ids like @res184@. The previous
+-- bespoke renderer collapsed @DEONTIC P A@ to just @"DEONTIC"@ and dropped the
+-- @OF@ keyword for other parameterized types (e.g. @LIST NUMBER@ instead of
+-- @LIST OF NUMBER@), causing spurious "return type changed" warnings on every
+-- redeploy.
 returnTypeDisplay :: Maybe (Type' Resolved) -> Text
 returnTypeDisplay Nothing = "unknown"
-returnTypeDisplay (Just ty) = prettyLayout ty
+returnTypeDisplay (Just ty) = prettyTypeForDisplay ty
 
 -- | Compute SHA-256 version from sorted source contents.
 computeVersion :: Map FilePath Text -> Text
