@@ -12,7 +12,8 @@ import Backend.Api (EvalBackend (..), FunctionDeclaration (..))
 import Shared (validateNoSanitizationCollisions)
 import Backend.CodeGen (isDeonticType)
 import L4.FunctionSchema (Parameters (..), Parameter (..), typeToParameter, declaresFromModule)
-import L4.TypeCheck.Types (CheckErrorWithContext (..), CheckError (..))
+import L4.TypeCheck.Types (CheckErrorWithContext (..), CheckError (..), Severity (..))
+import L4.TypeCheck (prettyCheckErrorWithContext, severity)
 import BundleStore (SerializedBundle (..), StoredMetadata (..))
 import Types
 import Control.Monad (forM, unless)
@@ -83,7 +84,13 @@ compileBundle logger deployId sources = do
           allBundles = concatMap (either (const []) snd . snd) results
           errors = [err | (_, Left err) <- results]
 
-      if null allFunctions && not (null errors)
+      -- Any file that failed to compile (typecheck errors, unsupported
+      -- @export inputs, …) fails the whole deploy. Previously this only
+      -- rejected when NO file produced functions, so a bundle with one broken
+      -- file and one good file would deploy the good half and silently drop
+      -- the error — and a single broken file would deploy a garbage schema
+      -- built from unresolved inference variables.
+      if not (null errors)
         then pure $ Left $ Text.intercalate "\n" errors
         else do
           let fnMap = Map.fromList [(fn.fnImpl.name, fn) | fn <- allFunctions]
@@ -133,6 +140,21 @@ processTypecheckedFile logger deployId filepath content moduleContext
               <> resolvedText fnName <> ")"
           | MkCheckErrorWithContext{kind = ExportFunctionTypeInput fnName paramName} <- tcErrors
           ]
+        -- Genuine type errors that must block the deploy. We deliberately
+        -- tolerate OutOfScopeError: it's repurposed by extractImplicitAssumeParams
+        -- to derive implicit ASSUME parameters, so a clean model with implicit
+        -- ASSUMEs legitimately carries those. Anything else at SError severity
+        -- (e.g. AmbiguousTermError, IncorrectArgsNumberApp) means the module
+        -- didn't typecheck — compiling it anyway yields a garbage schema with
+        -- unresolved inference variables (e.g. a return type of "res184"), which
+        -- then trips the breaking-change check with a baffling message instead
+        -- of surfacing the real error.
+        blockingErrs =
+          [ Text.intercalate " " (prettyCheckErrorWithContext e)
+          | e@MkCheckErrorWithContext{kind} <- tcErrors
+          , severity e == SError
+          , not (isOutOfScope kind)
+          ]
     if not (null exportFnTypeErrs)
       then do
         logWarn logger "Deploy rejected: @export function has FUNCTION-typed input"
@@ -141,6 +163,14 @@ processTypecheckedFile logger deployId filepath content moduleContext
           , ("errors", toJSON exportFnTypeErrs)
           ]
         pure (filepath, Left (Text.intercalate "; " exportFnTypeErrs))
+      else if not (null blockingErrs)
+      then do
+        logWarn logger "Deploy rejected: module has type errors"
+          [ ("deploymentId", toJSON deployId)
+          , ("file", toJSON filepath)
+          , ("errors", toJSON blockingErrs)
+          ]
+        pure (filepath, Left (Text.intercalate "\n" blockingErrs))
       else if null exports
       then pure (filepath, Right ([], []))
       else do
@@ -475,6 +505,13 @@ extractDeonticTypeNames _ = Nothing
 -- | Extract display text from a Resolved name.
 resolvedText :: Resolved -> Text
 resolvedText = rawNameToText . rawName . getActual
+
+-- | OutOfScopeError is not a deploy-blocking error: it's how the type checker
+-- reports references the compiler turns into implicit ASSUME parameters (see
+-- 'extractImplicitAssumeParams'). Every other SError-severity kind is genuine.
+isOutOfScope :: CheckError -> Bool
+isOutOfScope OutOfScopeError{} = True
+isOutOfScope _                 = False
 
 -- | Collect all DECLARE entries from a TypeCheckResult and its transitive imports.
 collectAllDeclares :: Rules.TypeCheckResult -> Map Text (Declare Resolved)
