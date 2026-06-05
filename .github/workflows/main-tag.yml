@@ -1,8 +1,10 @@
 name: Main Branch Tag
 
+# Manual-only: this release/tag pipeline no longer runs automatically when a PR
+# merges into main. Trigger it from the Actions tab (Run workflow) when you
+# actually want to cut a build/tag.
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 # Only run one release build at a time
 concurrency:
