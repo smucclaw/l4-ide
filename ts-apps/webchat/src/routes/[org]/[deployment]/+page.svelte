@@ -15,7 +15,12 @@
     AiChatToolCall,
     AiUsageUpdate,
   } from 'jl4-client-rpc'
-  import { auth, AI_API_URL } from '$lib/auth/session.svelte'
+  import {
+    auth,
+    authHeaders,
+    AI_API_URL,
+    API_BASE,
+  } from '$lib/auth/session.svelte'
   import { AiBridge } from '$lib/chat/ai-bridge'
   import { createAiChatStore } from '$lib/stores/ai-chat.svelte'
   import { aiPrefs } from '$lib/stores/ai-prefs.svelte'
@@ -26,6 +31,7 @@
 
   const org = $derived($page.params.org ?? '')
   const deployment = $derived($page.params.deployment ?? '')
+  const apiBaseUrl = $derived(`${AI_API_URL}/${org}/${deployment}`)
 
   onMount(() => {
     void auth.init()
@@ -44,12 +50,29 @@
   let store: ReturnType<typeof createAiChatStore> | null = $state(null)
   let messengerRef: InstanceType<typeof Messenger> | null = $state(null)
   let wired = false
+  // The deployment's "Intended use" text (metadata.description), fetched from
+  // the deployment API. Used to seed the empty-state and re-bind on new chat.
+  let intendedUse: string | undefined
+
+  /** GET {API_BASE}/{org}/{deployment} → { metadata: { description } }. */
+  async function fetchIntendedUse(): Promise<string | undefined> {
+    try {
+      const res = await fetch(`${API_BASE}/${org}/${deployment}`, {
+        headers: authHeaders(),
+      })
+      if (!res.ok) return undefined
+      const data = await res.json()
+      const d = data?.metadata?.description
+      return typeof d === 'string' && d.trim() ? d.trim() : undefined
+    } catch {
+      return undefined
+    }
+  }
 
   $effect(() => {
     if (!ready || wired) return
     wired = true
 
-    const apiBaseUrl = `${AI_API_URL}/${org}/${deployment}`
     const b = new AiBridge({
       apiBaseUrl,
       deploymentId: deployment,
@@ -78,10 +101,18 @@
     store = s
     b.signalReady()
     void s.refreshHistory()
-    // Bind this conversation surface to the deployment (sets the binding so the
-    // empty-state shows the deployment's intended use; new turns route here).
+    // Bind immediately (empty-state shows the deployment box with fallback text),
+    // then re-bind with the real intended-use once the metadata fetch resolves —
+    // but only while the chat is still a fresh empty one, so a slow fetch can't
+    // clobber a conversation the user has already started.
     s.startDeploymentChat(deployment, apiBaseUrl)
     s.usageSubscribe()
+    void fetchIntendedUse().then((desc) => {
+      intendedUse = desc
+      if (desc && store === s && !s.current) {
+        s.startDeploymentChat(deployment, apiBaseUrl, desc)
+      }
+    })
   })
 
   onDestroy(() => {
@@ -89,7 +120,11 @@
   })
 
   function newChat(): void {
-    store?.newConversation()
+    // webchat is always deployment-scoped, so a fresh chat must keep the
+    // deployment binding (newConversation() clears it). Re-binding makes the
+    // empty state show the deployment's intended-use box rather than the
+    // generic "Get started" seeds.
+    store?.startDeploymentChat(deployment, apiBaseUrl, intendedUse)
   }
 
   async function selectChat(id: string): Promise<void> {
