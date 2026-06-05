@@ -11,6 +11,8 @@ export const SERVICE_DOMAIN = 'legalese.cloud'
 export const AUTH_API_URL = `https://${SERVICE_DOMAIN}`
 // ai-proxy: deployment-scoped chat lives at {AI_API_URL}/{org}/{deployment}/v1/…
 export const AI_API_URL = 'https://ai.legalese.cloud'
+// Deployment API host: GET {API_BASE}/{org}/{deployment} → { metadata: { description } }
+export const API_BASE = 'https://api.legalese.cloud'
 // Marketing-site console (org/billing/members management).
 export const CONSOLE_URL = 'https://legalese.com/console'
 
