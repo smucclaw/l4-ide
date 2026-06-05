@@ -1,15 +1,9 @@
 <script lang="ts">
   let {
-    onSeed,
     deployment = null,
   }: {
-    /** Invoked with the pre-filled text for the selected seed. The
-     * parent drops it into the textarea and triggers the file picker
-     * — every seed expects a source document. */
-    onSeed: (seed: { prompt: string }) => void
-    /** Set when the chat is bound to a deployment ("Use in chat").
-     *  In that mode we replace the generic "Get started" seeds with
-     *  an info box describing what this deployment is for. */
+    /** The deployment this chat is bound to. webchat is always deployment-
+     *  scoped, so the empty state always shows this info box. */
     deployment?: {
       deploymentId: string
       intendedUse: string
@@ -46,13 +40,6 @@
     flex: 1;
     padding: 24px 16px;
   }
-  .empty-heading {
-    margin: 0;
-    color: var(--vscode-descriptionForeground);
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-  }
   .deployment-info {
     width: 100%;
     max-width: 320px;
@@ -88,36 +75,5 @@
     font-size: 13px;
     line-height: 1.5;
     white-space: pre-wrap;
-  }
-  .seed-buttons {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    width: 100%;
-    max-width: 320px;
-  }
-  .seed-button {
-    width: 100%;
-    text-align: left;
-    background: transparent;
-    color: var(--vscode-foreground);
-    border: 1px solid rgba(128, 128, 128, 0.3);
-    border-radius: 4px;
-    padding: 10px 12px;
-    font-size: 12px;
-    line-height: 1.4;
-    cursor: pointer;
-    transition:
-      border-color 0.12s ease-out,
-      background-color 0.12s ease-out;
-  }
-  .seed-button:hover {
-    background: rgba(128, 128, 128, 0.08);
-    border-color: rgba(180, 180, 180, 0.6);
-  }
-  .seed-button:focus,
-  .seed-button:focus-visible {
-    outline: none;
-    border-color: rgba(200, 200, 200, 0.75);
   }
 </style>

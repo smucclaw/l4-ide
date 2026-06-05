@@ -14,10 +14,6 @@
 
   const showEmptyState = $derived(!store.current)
 
-  function onSeed(seed: { prompt: string }): void {
-    store.seedDraft(seed.prompt)
-  }
-
   function onRetry(): void {
     store.continueTurn()
   }
@@ -26,7 +22,6 @@
 <div class="conversation">
   {#if showEmptyState}
     <EmptyState
-      {onSeed}
       deployment={store.deploymentBinding
         ? {
             deploymentId: store.deploymentBinding.deploymentId,

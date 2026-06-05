@@ -72,6 +72,13 @@
   $effect(() => {
     if (!ready || wired) return
     wired = true
+    void init()
+  })
+
+  async function init(): Promise<void> {
+    // Fetch the deployment's intended-use FIRST so the very first paint of the
+    // empty-state shows the real text — no fallback flash, no re-bind race.
+    intendedUse = await fetchIntendedUse()
 
     const b = new AiBridge({
       apiBaseUrl,
@@ -101,19 +108,10 @@
     store = s
     b.signalReady()
     void s.refreshHistory()
-    // Bind immediately (empty-state shows the deployment box with fallback text),
-    // then re-bind with the real intended-use once the metadata fetch resolves —
-    // but only while the chat is still a fresh empty one, so a slow fetch can't
-    // clobber a conversation the user has already started.
-    s.startDeploymentChat(deployment, apiBaseUrl)
+    // Bind the deployment with its intended-use up front; new turns route here.
+    s.startDeploymentChat(deployment, apiBaseUrl, intendedUse)
     s.usageSubscribe()
-    void fetchIntendedUse().then((desc) => {
-      intendedUse = desc
-      if (desc && store === s && !s.current) {
-        s.startDeploymentChat(deployment, apiBaseUrl, desc)
-      }
-    })
-  })
+  }
 
   onDestroy(() => {
     bridge?.dispose()
