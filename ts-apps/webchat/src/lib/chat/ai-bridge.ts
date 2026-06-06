@@ -6,9 +6,14 @@
 // bridge implements just enough of that messenger surface to run a
 // DEPLOYMENT-SCOPED chat directly from the browser: on `AiChatStart` it streams
 // `POST {apiBaseUrl}/v1/chat/completions` (SSE) and translates each frame into
-// the same notification the host would have sent. Conversation history is the
-// browser's responsibility (the extension's job in the IDE), so the bridge also
-// owns localStorage persistence and assembles the full message array each turn.
+// the same notification the host would have sent.
+//
+// The server owns conversation history: it persists every turn keyed by
+// conversationId and resumes its own copy on follow-ups (the request body only
+// carries the new user turn). The browser keeps just a lightweight {id, title,
+// …} index in localStorage so the sidebar can list history offline; the full
+// transcript — including reconstructed L4 rule cards — is fetched on demand via
+// `GET {apiBaseUrl}/v1/conversations/{id}` when a conversation is reopened.
 //
 // Only the deployment path is implemented — server-side tools (the `comply`
 // pipeline) run in the proxy, so there is no client tool dispatch, MCP, editor
@@ -46,12 +51,13 @@ import {
 } from 'jl4-client-rpc'
 import { authHeaders } from '$lib/auth/session.svelte'
 import {
-  deleteConversation,
+  deleteIndexEntry,
   deriveTitle,
   listSummaries,
-  loadConversation,
-  renameConversation,
-  saveConversation,
+  loadIndexEntry,
+  renameIndexEntry,
+  saveIndexEntry,
+  updateIndexEntry,
 } from './history-store'
 
 type Handler = (params: unknown) => void
@@ -163,9 +169,13 @@ export class AiBridge {
       case AiConversationList:
         return { items: listSummaries(this.cfg.deploymentId) }
       case AiConversationLoad:
-        return { conversation: loadConversation((params as { id: string }).id) }
+        return {
+          conversation: await this.loadConversationFromServer(
+            (params as { id: string }).id
+          ),
+        }
       case AiConversationDelete:
-        deleteConversation((params as { id: string }).id)
+        await this.deleteConversation((params as { id: string }).id)
         return {}
       case AiChatPickAttachment:
         return pickAttachmentFile()
@@ -181,6 +191,68 @@ export class AiBridge {
         // their default rendering.
         return null
     }
+  }
+
+  /** Fetch a conversation's full transcript from the server and assemble
+   *  it into the `AiConversation` shape the store expects. The server
+   *  reconstructs L4 rule tool-calls into `_meta.blocks` (with the
+   *  `ruleId`/`ruleKey` the store's `extractPersistedBlocks` requires);
+   *  we stitch in the title from the local index and the deployment
+   *  binding from cfg so reopening rebinds the banner + endpoint. Returns
+   *  null on any failure so the store surfaces an empty/known-error state
+   *  rather than a stale local copy. */
+  private async loadConversationFromServer(
+    id: string
+  ): Promise<AiConversation | null> {
+    try {
+      const res = await fetch(
+        `${this.cfg.apiBaseUrl}/v1/conversations/${encodeURIComponent(id)}`,
+        { headers: authHeaders() }
+      )
+      if (!res.ok) return null
+      const data = (await res.json()) as {
+        id: string
+        orgId?: string
+        model?: string
+        messages?: AiChatMessage[]
+        createdAt?: string
+        lastActiveAt?: string
+      }
+      const index = loadIndexEntry(id)
+      return {
+        id: data.id,
+        orgId: data.orgId ?? this.cfg.orgSlug,
+        userId: '',
+        model: data.model ?? index?.model ?? '',
+        title: index?.title ?? '',
+        createdAt: data.createdAt ?? nowIso(),
+        lastActiveAt: data.lastActiveAt ?? nowIso(),
+        messages: data.messages ?? [],
+        deploymentId: this.cfg.deploymentId,
+        apiBaseUrl: this.cfg.apiBaseUrl,
+      }
+    } catch {
+      return null
+    }
+  }
+
+  /** "Delete" a conversation: a SOFT delete server-side and a hard drop
+   *  of the local index row. The server's DELETE endpoint only renames
+   *  the transcript file (`…json` → `…deleted-<ts>.json`,
+   *  ConversationStore.softDeleteByRename) — nothing is unlinked, so the
+   *  history stays recoverable. The server copy is the source of truth,
+   *  so we always attempt the remote call; a network failure still
+   *  clears the local index so the sidebar reflects the user's intent. */
+  private async deleteConversation(id: string): Promise<void> {
+    try {
+      await fetch(
+        `${this.cfg.apiBaseUrl}/v1/conversations/${encodeURIComponent(id)}`,
+        { method: 'DELETE', headers: authHeaders() }
+      )
+    } catch {
+      // ignore — local index is cleared regardless below
+    }
+    deleteIndexEntry(id)
   }
 
   /** Fetch a deployed rule's function schema (parameters + returnSchema,
@@ -299,40 +371,46 @@ export class AiBridge {
     const ac = new AbortController()
     this.aborts.set(p.turnId, ac)
 
-    // Resolve / create the conversation. On a brand-new chat we hold a local
-    // id until the server's `metadata` frame assigns the canonical one.
+    // Working id: server-assigned for follow-ups, a local placeholder for
+    // a brand-new chat until the `metadata` frame assigns the canonical id.
     let convId = p.conversationId ?? newId()
     const isNew = !p.conversationId
-    let conv: AiConversation =
-      (p.conversationId && loadConversation(p.conversationId)) ||
-      ({
+
+    // Title: derive from this turn's user text on a new chat; keep the
+    // existing index title on follow-ups.
+    const title = isNew
+      ? deriveTitle([{ role: 'user', content: p.text }])
+      : (loadIndexEntry(convId)?.title ?? '')
+
+    // Outgoing messages. The server owns history: with a conversationId it
+    // resumes its own copy and `extractDelta` keeps only the trailing user
+    // turn, so we send just the new message (or nothing on continueTurn).
+    const outgoing: AiChatMessage[] = p.continueTurn
+      ? []
+      : [
+          {
+            role: 'user',
+            content: buildUserContent(p.text, p.attachments ?? []),
+          },
+        ]
+
+    // Seed the local index row immediately so the sidebar shows a new chat
+    // even before the server responds. Keyed on the placeholder id here;
+    // re-keyed to the server id on the `metadata` frame below.
+    if (isNew) {
+      saveIndexEntry({
         id: convId,
-        orgId: this.cfg.orgSlug,
-        userId: '',
+        title,
         model: '',
-        title: '',
         createdAt: nowIso(),
         lastActiveAt: nowIso(),
-        messages: [],
+        messageCount: 0,
         deploymentId: this.cfg.deploymentId,
-        apiBaseUrl: this.cfg.apiBaseUrl,
-      } satisfies AiConversation)
-
-    // Retry (continueTurn) runs another pass against existing history without
-    // appending a new user message.
-    if (!p.continueTurn) {
-      conv.messages.push({
-        role: 'user',
-        content: buildUserContent(p.text, p.attachments ?? []),
       })
-      if (!conv.title) conv.title = deriveTitle(conv.messages)
     }
-    // Persist the user turn for follow-ups; new chats persist after we know the
-    // server id (on metadata).
-    if (!isNew) saveConversation(conv)
 
     const body = JSON.stringify({
-      messages: conv.messages.map(toWire),
+      messages: outgoing.map(toWire),
       tools: [],
       stream: true,
       turnId: p.turnId,
@@ -371,19 +449,12 @@ export class AiBridge {
     }
 
     // ── Stream ──
-    let assistantText = ''
-    const blocks: PersistBlock[] = []
+    // No client-side transcript persistence: the server stores every turn
+    // and the webchat refetches it on reopen. We only relay SSE frames as
+    // store notifications and maintain the lightweight index row.
+    let model = ''
     let usage: { promptTokens: number; completionTokens: number } | undefined
     let finishReason = 'stop'
-    let started = false
-
-    const ensureTextBlock = (): { kind: 'text'; text: string } => {
-      const last = blocks[blocks.length - 1]
-      if (last && last.kind === 'text') return last
-      const b = { kind: 'text', text: '' } as const
-      blocks.push(b)
-      return b
-    }
 
     try {
       for await (const frame of parseSse(res.body, ac.signal)) {
@@ -399,20 +470,11 @@ export class AiBridge {
         if (event === 'metadata') {
           const serverId = (json.conversationId as string) || convId
           if (isNew && serverId !== convId) {
-            conv.id = serverId
-            renameConversation(convId, serverId)
+            renameIndexEntry(convId, serverId)
           }
           convId = serverId
-          conv = loadConversation(serverId) ?? conv
-          conv.id = serverId
-          if (!isNew) {
-            // already persisted
-          } else {
-            saveConversation(conv)
-          }
-          const model = (json.model as string) || conv.model || ''
-          conv.model = model
-          started = true
+          model = (json.model as string) || model
+          updateIndexEntry(convId, { model, lastActiveAt: nowIso() })
           this.emit(AiChatStarted, {
             conversationId: serverId,
             turnId: p.turnId,
@@ -435,27 +497,12 @@ export class AiBridge {
           const activities = (json.activities as ToolActivityWire[]) ?? []
           for (const a of activities) {
             this.emit(AiChatToolActivity, { conversationId: convId, ...a })
-            blocks.push({
-              kind: 'tool-activity',
-              tool: a.tool,
-              status: a.status,
-              message: a.message ?? '',
-              ...(a.label ? { label: a.label } : {}),
-              ...(a.input !== undefined ? { input: a.input } : {}),
-              ...(a.output !== undefined ? { output: a.output } : {}),
-              ...(a.ruleId ? { ruleId: a.ruleId } : {}),
-              ...(a.deploymentId ? { deploymentId: a.deploymentId } : {}),
-              ...(a.error ? { error: a.error } : {}),
-              ...(a.sources ? { sources: a.sources } : {}),
-            })
           }
         } else {
           // OpenAI chat.completion.chunk
           const choice = (json.choices as ChunkChoice[] | undefined)?.[0]
           const delta = choice?.delta
           if (delta?.content) {
-            assistantText += delta.content
-            ensureTextBlock().text += delta.content
             this.emit(AiChatTextDelta, {
               conversationId: convId,
               text: delta.content,
@@ -498,16 +545,15 @@ export class AiBridge {
       return
     }
 
-    // Persist the assistant turn + finalize.
-    if (started || assistantText) {
-      conv.messages.push({
-        role: 'assistant',
-        content: assistantText,
-        _meta: { blocks },
-      })
-      conv.lastActiveAt = nowIso()
-      saveConversation(conv)
-    }
+    // Finalize: bump the index row (user + assistant turns just landed
+    // server-side). The transcript itself is fetched from the server on
+    // reopen, so there is nothing else to persist locally.
+    const prevCount = loadIndexEntry(convId)?.messageCount ?? 0
+    updateIndexEntry(convId, {
+      lastActiveAt: nowIso(),
+      messageCount: prevCount + outgoing.length + 1,
+      ...(model ? { model } : {}),
+    })
     this.emit(AiChatDone, {
       conversationId: convId,
       finishReason,
@@ -714,7 +760,3 @@ interface ChunkChoice {
   }
   finish_reason?: string
 }
-
-type PersistBlock =
-  | { kind: 'text'; text: string }
-  | ({ kind: 'tool-activity' } & ToolActivityWire & { message: string })
