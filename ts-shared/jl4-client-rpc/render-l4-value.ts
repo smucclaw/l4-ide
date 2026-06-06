@@ -1,4 +1,4 @@
-import type { FunctionParameter } from 'jl4-client-rpc'
+import type { FunctionParameter } from './custom-protocol.js'
 
 /**
  * Render a JSON value as L4 source syntax, using `x-l4-type` annotations

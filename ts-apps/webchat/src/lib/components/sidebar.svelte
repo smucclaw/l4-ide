@@ -65,8 +65,27 @@
             onclick={(e) => {
               e.stopPropagation()
               onDelete?.(item.id)
-            }}>×</button
+            }}
           >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <polyline points="3 6 5 6 21 6" />
+              <path
+                d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+              />
+              <line x1="10" y1="11" x2="10" y2="17" />
+              <line x1="14" y1="11" x2="14" y2="17" />
+            </svg>
+          </button>
         </div>
       {/each}
       {#if items.length === 0}
@@ -168,7 +187,7 @@
     border-radius: 4px;
     background: var(--chat-bg);
     color: var(--vscode-foreground);
-    font: inherit;
+    font-size: 0.85em;
     font-weight: 500;
     cursor: pointer;
     text-align: left;
@@ -209,7 +228,7 @@
     min-width: 0;
     padding: 0.4rem 0.5rem;
     border: none;
-    border-radius: 6px;
+    border-radius: 4px;
     background: transparent;
     color: var(--vscode-foreground);
     font: inherit;
@@ -339,7 +358,7 @@
     right: 0;
     background: var(--chat-bg);
     border: 1px solid var(--vscode-widget-border);
-    border-radius: 8px;
+    border-radius: 6px;
     box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
     padding: 4px;
     z-index: 20;
@@ -347,9 +366,9 @@
   .menu-item {
     display: block;
     width: 100%;
-    padding: 0.45rem 0.55rem;
+    padding: 0.25rem 0.55rem;
     border: none;
-    border-radius: 6px;
+    border-radius: 4px;
     background: transparent;
     color: var(--vscode-foreground);
     font: inherit;

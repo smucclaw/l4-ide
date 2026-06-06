@@ -34,6 +34,7 @@ import {
   AiConversationList,
   AiConversationLoad,
   AiMentionSearch,
+  AiToolRenderMeta,
   AiUsageSubscribe,
   AiUsageUnsubscribe,
   type AiChatAttachment,
@@ -41,6 +42,7 @@ import {
   type AiChatMessage,
   type AiChatStartParams,
   type AiConversation,
+  type FunctionParameter,
 } from 'jl4-client-rpc'
 import { authHeaders } from '$lib/auth/session.svelte'
 import {
@@ -58,8 +60,20 @@ type TypeRef = { method: string }
 export interface BridgeConfig {
   /** `https://ai.legalese.cloud/{orgSlug}/{deploymentId}` */
   apiBaseUrl: string
+  /** Deployment API root for this org — `{API_BASE}/{orgSlug}`. The
+   *  per-function schema endpoint (`/deployments/{id}/functions/{fn}`,
+   *  used for L4-syntax rendering of rule tool-calls) lives here, NOT
+   *  on the ai-proxy `apiBaseUrl`. */
+  serviceBaseUrl: string
   deploymentId: string
   orgSlug: string
+}
+
+/** Response shape of `GET /deployments/{id}/functions/{fn}` — only the
+ *  two schema fields we render with are typed. */
+interface FunctionSchemaResponse {
+  parameters?: FunctionParameter
+  returnSchema?: FunctionParameter
 }
 
 const USAGE_POLL_MS = 30_000
@@ -100,6 +114,11 @@ export class AiBridge {
   private handlers = new Map<string, Handler>()
   private aborts = new Map<string, AbortController>()
   private usageTimer: ReturnType<typeof setInterval> | null = null
+  // Render-meta (function schema) cache, keyed by `${deploymentId}/${fnName}`.
+  // Mirrors the extension's cache so the many tool-call rows in a long
+  // conversation share a single round-trip per distinct rule. We store the
+  // in-flight promise so concurrent rows for the same rule de-dupe too.
+  private renderMeta = new Map<string, Promise<unknown>>()
 
   constructor(private cfg: BridgeConfig) {}
 
@@ -153,11 +172,90 @@ export class AiBridge {
       case AiMentionSearch:
         // No @-mentions in the standalone web chat.
         return { items: [] }
+      case AiToolRenderMeta:
+        return this.resolveRenderMeta(
+          params as { toolName: string; deploymentId?: string; fnName?: string }
+        )
       default:
-        // Unknown request (e.g. tool render-meta lookups) — fail soft so the
-        // copied components fall back to their default rendering.
+        // Unknown request — fail soft so the copied components fall back to
+        // their default rendering.
         return null
     }
+  }
+
+  /** Fetch a deployed rule's function schema (parameters + returnSchema,
+   *  carrying `x-l4-type` annotations) so the tool-call row can render the
+   *  call's arguments and result as L4 syntax instead of raw JSON — the
+   *  same metadata the VSCode extension serves over `AiToolRenderMeta`.
+   *
+   *  The L4 function name comes through on the rule activity (`fnName`);
+   *  we fall back to the sanitised tool-name slug when it's absent. On any
+   *  failure we return `unavailable`, which makes the row keep its JSON
+   *  fallback — so a missing / not-yet-compiled schema degrades
+   *  gracefully. */
+  private async resolveRenderMeta(params: {
+    toolName: string
+    deploymentId?: string
+    fnName?: string
+  }): Promise<
+    | {
+        kind: 'meta'
+        parameters: FunctionParameter
+        returnSchema?: FunctionParameter
+      }
+    | { kind: 'unavailable' }
+  > {
+    const deploymentId = params.deploymentId ?? this.cfg.deploymentId
+    const fnName =
+      params.fnName ??
+      (params.toolName.startsWith('l4-rules__')
+        ? params.toolName.slice('l4-rules__'.length)
+        : params.toolName)
+    if (!deploymentId || !fnName) return { kind: 'unavailable' }
+
+    const cacheKey = `${deploymentId}/${fnName}`
+    let work = this.renderMeta.get(cacheKey) as
+      | Promise<
+          | {
+              kind: 'meta'
+              parameters: FunctionParameter
+              returnSchema?: FunctionParameter
+            }
+          | { kind: 'unavailable' }
+        >
+      | undefined
+    if (!work) {
+      work = (async () => {
+        try {
+          const url =
+            `${this.cfg.serviceBaseUrl}/deployments/` +
+            `${encodeURIComponent(deploymentId)}/functions/` +
+            `${encodeURIComponent(fnName)}`
+          const res = await fetch(url, { headers: authHeaders() })
+          if (!res.ok) return { kind: 'unavailable' as const }
+          const schema = (await res.json()) as FunctionSchemaResponse
+          if (!schema.parameters) return { kind: 'unavailable' as const }
+          return {
+            kind: 'meta' as const,
+            parameters: schema.parameters,
+            ...(schema.returnSchema
+              ? { returnSchema: schema.returnSchema }
+              : {}),
+          }
+        } catch {
+          // Network / parse hiccup — drop the cached rejection below so a
+          // later row can retry.
+          return { kind: 'unavailable' as const }
+        }
+      })()
+      this.renderMeta.set(cacheKey, work)
+    }
+    const result = await work
+    // Don't cache misses: a rule that wasn't compiled yet when the first
+    // row asked may resolve on a later turn. Successful metadata stays
+    // cached for the bridge's lifetime (schemas are stable per deploy).
+    if (result.kind === 'unavailable') this.renderMeta.delete(cacheKey)
+    return result
   }
 
   // Some callers invoke start(); nothing to do here.

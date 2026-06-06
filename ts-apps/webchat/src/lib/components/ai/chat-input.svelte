@@ -144,14 +144,22 @@
     border: 1px solid var(--vscode-input-border, var(--vscode-widget-border));
     border-radius: 12px;
     background: var(--vscode-input-background);
-    padding: 0.5rem 0.6rem 0.4rem;
+    padding: 0 0.4rem 0.4rem 0.4rem;
     margin: 0.5rem 0.75rem 0.75rem;
     display: flex;
     flex-direction: column;
     gap: 0.4rem;
     max-width: 800px;
     width: 100%;
-    font-size: 0.9em;
+    font-size: 0.85em;
+    box-shadow: 0 0 10px 2px
+      var(--vscode-input-background, rgba(127, 127, 127, 0.12));
+  }
+  /* White outline while the textarea (or any control in the box) has
+     focus — `:focus-within` tracks the inner textarea, which itself
+     renders borderless (`outline: none`). */
+  .chat-input-box:focus-within {
+    border-color: #fff;
   }
 
   .attachment-strip {
@@ -193,6 +201,7 @@
     max-height: 200px;
     overflow-y: auto;
     box-sizing: border-box;
+    margin: 0 0.2rem;
   }
   .chat-textarea::placeholder {
     color: var(--vscode-descriptionForeground);

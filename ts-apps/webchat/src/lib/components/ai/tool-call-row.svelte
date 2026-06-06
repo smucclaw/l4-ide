@@ -1,12 +1,13 @@
 <script lang="ts">
   import type { RenderedToolCall } from '$lib/stores/ai-chat.svelte'
   import { colorize } from '@repo/l4-highlight'
-  import { AiToolRenderMeta, type FunctionParameter } from 'jl4-client-rpc'
-  import type { Messenger } from 'vscode-messenger-webview'
   import {
+    AiToolRenderMeta,
     renderArgumentsAsL4,
     renderJsonAsL4,
-  } from '$lib/utils/render-l4-value'
+    type FunctionParameter,
+  } from 'jl4-client-rpc'
+  import type { Messenger } from 'vscode-messenger-webview'
 
   /**
    * Tools exposed by the l4-rules MCP server fall into two buckets.

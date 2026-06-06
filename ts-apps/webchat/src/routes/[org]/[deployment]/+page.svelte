@@ -82,6 +82,9 @@
 
     const b = new AiBridge({
       apiBaseUrl,
+      // Deployment API root — the per-function schema endpoint that powers
+      // L4-syntax rendering of rule tool-calls lives here, not on the proxy.
+      serviceBaseUrl: `${API_BASE}/${org}`,
       deploymentId: deployment,
       orgSlug: org,
     })
