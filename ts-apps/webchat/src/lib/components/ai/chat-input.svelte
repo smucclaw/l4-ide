@@ -152,8 +152,7 @@
     max-width: 800px;
     width: 100%;
     font-size: 0.85em;
-    box-shadow: 0 0 10px 2px
-      var(--vscode-input-background, rgba(127, 127, 127, 0.12));
+    box-shadow: 0 0 10px 2px var(--sidebar-bg);
   }
   /* Outline while the textarea (or any control in the box) has focus —
      `:focus-within` tracks the inner textarea, which itself renders

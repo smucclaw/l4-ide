@@ -119,8 +119,7 @@
     padding: 8px 10px;
     margin-left: -10px;
     margin-right: -10px;
-    box-shadow: 0 0 16px 2px
-      var(--vscode-input-background, rgba(127, 127, 127, 0.12));
+    box-shadow: 0 0 16px 2px var(--sidebar-bg);
   }
   /* Cap a non-sticky user bubble at half the chat's visible height
      (`cqh` resolves against the `.message-list` size container) and let
