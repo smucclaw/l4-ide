@@ -155,11 +155,13 @@
     box-shadow: 0 0 10px 2px
       var(--vscode-input-background, rgba(127, 127, 127, 0.12));
   }
-  /* White outline while the textarea (or any control in the box) has
-     focus — `:focus-within` tracks the inner textarea, which itself
-     renders borderless (`outline: none`). */
+  /* Outline while the textarea (or any control in the box) has focus —
+     `:focus-within` tracks the inner textarea, which itself renders
+     borderless (`outline: none`). Uses the input foreground tone (a soft
+     off-white in dark mode, ~#e6e6e9) rather than pure #fff, which reads
+     too harsh; theme-aware, so it stays visible in light mode too. */
   .chat-input-box:focus-within {
-    border-color: #fff;
+    border-color: var(--vscode-input-foreground);
   }
 
   .attachment-strip {
@@ -201,7 +203,7 @@
     max-height: 200px;
     overflow-y: auto;
     box-sizing: border-box;
-    margin: 0 0.2rem;
+    margin: 0.2rem;
   }
   .chat-textarea::placeholder {
     color: var(--vscode-descriptionForeground);
