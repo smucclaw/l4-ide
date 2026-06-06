@@ -129,6 +129,15 @@ body {
   padding: 0;
 }
 
+/* SvelteKit body wrapper. `display: contents` makes the div transparent to
+   layout so the app root participates directly in the body box. Lives here
+   (an external, self-hosted stylesheet) rather than as an inline
+   `style=""` attribute so the CSP `style-src` can stay strict — no
+   'unsafe-inline'. */
+.app-shell {
+  display: contents;
+}
+
 body {
   font-family: var(--vscode-font-family);
   color: var(--vscode-foreground);

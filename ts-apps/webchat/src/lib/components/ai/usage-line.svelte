@@ -26,7 +26,10 @@
     ? `${formatCount(used)} / ${formatCount(limit)} tokens today`
     : 'Usage data unavailable'}
 >
-  <div class="fill" style="width: {fillPct}%"></div>
+  <!-- `style:` directive (not a `style=""` attribute) so Svelte sets the
+       width via the CSSOM at runtime — exempt from the CSP `style-src`,
+       which lets us keep the policy strict (no 'unsafe-inline'). -->
+  <div class="fill" style:width="{fillPct}%"></div>
 </div>
 
 <style>

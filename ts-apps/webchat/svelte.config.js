@@ -17,6 +17,44 @@ const config = {
       precompress: false,
       strict: false,
     }),
+    // Content-Security-Policy — mirrors the protections on legalese.com/console,
+    // scoped to the domains this app actually talks to:
+    //   - self                → chat.legalese.cloud (shell, JS, CSS)
+    //   - legalese.cloud + *. → auth (apex /auth/session), api. (deployment
+    //                           metadata + function schemas), ai. (chat SSE)
+    //   - workoscdn / google  → WorkOS/Google account profile pictures
+    //
+    // `mode: 'hash'` makes SvelteKit hash its inline hydration-bootstrap script
+    // and append that hash to script-src, so scripts get a strict policy with
+    // NO 'unsafe-inline'. style-src is also strict ('self' only): the app ships
+    // no inline `style=""` attributes (the body wrapper uses an `.app-shell`
+    // class and dynamic widths use Svelte `style:` directives, applied via the
+    // CSSOM, which CSP doesn't govern) and the prod build extracts all CSS to
+    // external files. SvelteKit emits the policy as a <meta> tag on the
+    // prerendered/static pages — the only option on GitHub Pages, which can't
+    // set response headers.
+    csp: {
+      mode: 'hash',
+      directives: {
+        'default-src': ['self'],
+        'script-src': ['self'],
+        'style-src': ['self'],
+        'font-src': ['self'],
+        'img-src': [
+          'self',
+          'https://workoscdn.com',
+          'https://*.googleusercontent.com',
+        ],
+        'connect-src': [
+          'self',
+          'https://legalese.cloud',
+          'https://*.legalese.cloud',
+        ],
+        'frame-src': ['none'],
+        'object-src': ['none'],
+        'base-uri': ['self'],
+      },
+    },
   },
 }
 
