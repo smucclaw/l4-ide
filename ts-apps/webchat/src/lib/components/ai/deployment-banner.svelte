@@ -26,7 +26,7 @@
        two read as one unit. */
     padding: 6px 12px 12px;
     border-radius: 12px 12px 0 0;
-    font-size: 0.85em;
+    font-size: 0.75em;
     /* The action color, heavily knocked back so it reads as a subtle
        tint that adapts to the theme rather than a solid accent bar. */
     background: color-mix(
