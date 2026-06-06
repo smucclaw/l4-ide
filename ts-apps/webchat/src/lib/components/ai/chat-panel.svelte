@@ -49,6 +49,8 @@
 <style>
   .conversation {
     flex: 1 1 auto;
+    max-width: 800px;
+    width: 100%;
     min-height: 0;
     display: flex;
     flex-direction: column;

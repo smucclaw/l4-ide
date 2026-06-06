@@ -182,6 +182,7 @@
     flex: 1 1 auto;
     min-width: 0;
     display: flex;
+    align-items: center;
     flex-direction: column;
     background: var(--chat-bg);
   }

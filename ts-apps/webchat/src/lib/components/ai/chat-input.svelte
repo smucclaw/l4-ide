@@ -149,6 +149,9 @@
     display: flex;
     flex-direction: column;
     gap: 0.4rem;
+    max-width: 800px;
+    width: 100%;
+    font-size: 0.9em;
   }
 
   .attachment-strip {
@@ -213,7 +216,7 @@
     border: none;
     background: transparent;
     cursor: pointer;
-    font-size: 1rem;
+    font-size: 0.75rem;
     padding: 0.25rem;
     border-radius: 6px;
     opacity: 0.8;
