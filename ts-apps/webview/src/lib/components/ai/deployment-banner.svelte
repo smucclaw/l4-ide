@@ -85,7 +85,6 @@
 
   .open-btn:hover {
     opacity: 1;
-    text-decoration: underline;
   }
 
   .close-btn {

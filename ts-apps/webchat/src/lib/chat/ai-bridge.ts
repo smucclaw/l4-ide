@@ -227,9 +227,15 @@ export class AiBridge {
     if (!work) {
       work = (async () => {
         try {
+          // The consolidated api.legalese.cloud/{slug} host uses a
+          // path-slug scheme (jl4-auth-proxy parseApiHostPath): the
+          // canonical jl4-service path /deployments/{id}/functions/{fn}
+          // is exposed here as /{id}/fn/{fn} (no `/deployments` prefix,
+          // `functions` shortened to `fn`). serviceBaseUrl already
+          // carries the /{slug}.
           const url =
-            `${this.cfg.serviceBaseUrl}/deployments/` +
-            `${encodeURIComponent(deploymentId)}/functions/` +
+            `${this.cfg.serviceBaseUrl}/` +
+            `${encodeURIComponent(deploymentId)}/fn/` +
             `${encodeURIComponent(fnName)}`
           const res = await fetch(url, { headers: authHeaders() })
           if (!res.ok) return { kind: 'unavailable' as const }

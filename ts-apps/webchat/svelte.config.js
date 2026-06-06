@@ -39,7 +39,11 @@ const config = {
         'default-src': ['self'],
         'script-src': ['self'],
         'style-src': ['self'],
-        'font-src': ['self'],
+        // `data:` is needed because Vite inlines KaTeX's small woff2 fonts
+        // (math rendering in markdown) as data: URIs under its asset-inline
+        // limit; the rest load from self. A data: font is inert (no script
+        // execution), so this is a safe relaxation.
+        'font-src': ['self', 'data:'],
         'img-src': [
           'self',
           'https://workoscdn.com',

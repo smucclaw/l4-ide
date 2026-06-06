@@ -174,7 +174,10 @@
     gap: 0.25rem;
     padding: 0.1rem 0.4rem;
     border-radius: 6px;
-    background: var(--vscode-list-hoverBackground);
+    /* Light translucent gray fill — matches the attachment chip in the
+       VSCode extension's prompt input (reads as a captured value rather
+       than a solid hover-colored pill). */
+    background: rgba(128, 128, 128, 0.14);
     font-size: 0.78rem;
   }
   .chip-x {
