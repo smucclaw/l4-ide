@@ -17,6 +17,7 @@
     AiChatToolCall,
     AiChatTurnSpawn,
     AiUsageUpdate,
+    RequestOpenUrl,
     RequestSidebarLogin,
   } from 'jl4-client-rpc'
   import { createAiChatStore } from '$lib/stores/ai-chat.svelte'
@@ -237,6 +238,15 @@
     {#if store.deploymentBinding}
       <DeploymentBanner
         deploymentId={store.deploymentBinding.deploymentId}
+        onOpenInBrowser={() => {
+          // apiBaseUrl is always https://ai.legalese.cloud/{org}/{dep};
+          // the public chat UI is the same path on the chat. subdomain.
+          const url = store.deploymentBinding!.apiBaseUrl.replace(
+            'https://ai.legalese.cloud',
+            'https://chat.legalese.cloud'
+          )
+          messenger?.sendNotification(RequestOpenUrl, HOST_EXTENSION, { url })
+        }}
         onClose={() => store.newConversation()}
       />
     {/if}

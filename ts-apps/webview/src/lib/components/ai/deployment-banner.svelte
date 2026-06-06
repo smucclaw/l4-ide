@@ -5,9 +5,13 @@
   // the default Legalese AI endpoint again.
   let {
     deploymentId,
+    onOpenInBrowser,
     onClose,
   }: {
     deploymentId: string
+    /** Open this deployment's chat on chat.legalese.cloud in the user's
+     *  external browser. */
+    onOpenInBrowser: () => void
     onClose: () => void
   } = $props()
 </script>
@@ -16,6 +20,13 @@
   <span class="label">
     Chatting with <span class="dep-id">{deploymentId}</span>
   </span>
+  <button
+    class="open-btn"
+    onclick={onOpenInBrowser}
+    title="Open this deployment chat in your browser"
+    aria-label="Open this deployment chat in your browser"
+    >Open in browser</button
+  >
   <button
     class="close-btn"
     onclick={onClose}
@@ -55,6 +66,26 @@
 
   .dep-id {
     font-weight: 600;
+  }
+
+  /* Bold text-only action (no icon / chrome) sitting just before the
+     close ✕. */
+  .open-btn {
+    background: none;
+    border: none;
+    color: var(--vscode-foreground);
+    cursor: pointer;
+    font: inherit;
+    font-weight: 600;
+    flex-shrink: 0;
+    padding: 0 2px;
+    line-height: 1;
+    opacity: 0.85;
+  }
+
+  .open-btn:hover {
+    opacity: 1;
+    text-decoration: underline;
   }
 
   .close-btn {

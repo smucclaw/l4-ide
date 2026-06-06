@@ -28,6 +28,7 @@
   import NotFound from '$lib/components/not-found.svelte'
   import ChatPanel from '$lib/components/ai/chat-panel.svelte'
   import ChatInput from '$lib/components/ai/chat-input.svelte'
+  import DeploymentBanner from '$lib/components/ai/deployment-banner.svelte'
 
   const org = $derived($page.params.org ?? '')
   const deployment = $derived($page.params.deployment ?? '')
@@ -148,12 +149,9 @@
     </div>
   </div>
 {:else if !orgMatches}
-  <NotFound detail="This deployment isn’t available on your account." />
+  <NotFound detail="This is not a deployment in your account." />
 {:else if !hasChat}
-  <NotFound
-    title="No chat access"
-    detail="Your account doesn’t have AI chat enabled for this organization."
-  />
+  <NotFound detail="This is not a deployment in your account." />
 {:else if store}
   <div class="app">
     <Sidebar
@@ -166,6 +164,9 @@
     />
     <main class="chat-pane">
       <ChatPanel {store} messenger={messengerRef} />
+      {#if store.deploymentBinding}
+        <DeploymentBanner deploymentId={store.deploymentBinding.deploymentId} />
+      {/if}
       <ChatInput {store} disabled={!store.signedIn} />
     </main>
   </div>
