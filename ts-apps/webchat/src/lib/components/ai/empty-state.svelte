@@ -23,9 +23,7 @@
 
 <div class="empty-state">
   <div class="deployment-info" role="note">
-    <p class="info-heading">
-      Intended Use for <code class="dep-id">{deployment?.deploymentId}</code>
-    </p>
+    <p class="info-heading">Intended Use</p>
     <p class="info-body">{intendedUseText}</p>
   </div>
 </div>

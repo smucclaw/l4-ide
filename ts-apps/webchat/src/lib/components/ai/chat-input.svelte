@@ -98,7 +98,7 @@
     bind:value={text}
     class="chat-textarea"
     rows="1"
-    placeholder="Ask about this deployment…"
+    placeholder="Ask anything about your rules…"
     {disabled}
     oninput={onInput}
     onkeydown={onKeydown}
