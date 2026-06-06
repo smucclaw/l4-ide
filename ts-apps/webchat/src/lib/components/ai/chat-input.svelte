@@ -144,8 +144,8 @@
     border: 1px solid var(--vscode-input-border, var(--vscode-widget-border));
     border-radius: 12px;
     background: var(--vscode-input-background);
-    padding: 0 0.4rem 0.4rem 0.4rem;
-    margin: 0.5rem 0.75rem 0.75rem;
+    padding: 0.4rem;
+    margin: 0 0.75rem 0.75rem;
     display: flex;
     flex-direction: column;
     gap: 0.4rem;
