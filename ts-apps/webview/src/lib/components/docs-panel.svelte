@@ -538,8 +538,10 @@
 
   .search-result:hover,
   .search-result.selected {
-    background: var(--vscode-menu-selectionBackground, #04395e);
-    color: var(--vscode-menu-selectionForeground, #fff);
+    /* On-brand crimson highlight (matching Deploy / Submit) rather
+       than the theme's default blue selection color. Kept translucent
+       so it reads as a subtle tint like the previous blue did. */
+    background: color-mix(in srgb, #c8376a 30%, transparent);
   }
 
   .result-title {

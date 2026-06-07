@@ -40,20 +40,15 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 4px 8px 10px 10px;
+    padding: 5px 8px 10px 10px;
     margin-bottom: -4px;
     border-radius: 6px 6px 0 0;
     font-size: 0.85em;
-    /* The VSCode action color, heavily knocked back so it reads as a
-       subtle tint that darkens or lightens with the user's theme
+    /* The crimson primary action color (matching Deploy / Submit),
+       heavily knocked back so it reads as a subtle on-brand tint
        rather than a solid accent bar. */
-    background: color-mix(
-      in srgb,
-      var(--vscode-button-background) 18%,
-      transparent
-    );
+    background: color-mix(in srgb, #c8376a 18%, transparent);
     color: var(--vscode-foreground);
-    border-top: 1px solid var(--vscode-panel-border, transparent);
   }
 
   .label {
