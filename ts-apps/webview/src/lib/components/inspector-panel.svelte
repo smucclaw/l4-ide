@@ -12,8 +12,13 @@
   import { HOST_EXTENSION } from 'vscode-messenger-common'
   import { colorize, escapeHtml } from '@repo/l4-highlight'
 
-  let { messenger }: { messenger: InstanceType<typeof Messenger> | null } =
-    $props()
+  let {
+    messenger,
+    onLearnMore,
+  }: {
+    messenger: InstanceType<typeof Messenger> | null
+    onLearnMore?: (url: string) => void
+  } = $props()
 
   interface ResultSection {
     renderKey: number
@@ -476,6 +481,13 @@
         Click "Track result" above an #EVAL, #EVALTRACE, #CHECK, or #ASSERT
         directive to add it here
       </p>
+      <button
+        class="learn-more"
+        onclick={() =>
+          onLearnMore?.(
+            'https://legalese.com/l4/reference/syntax.md#directives'
+          )}>Learn more</button
+      >
     </div>
   {:else}
     {#each fileGroups as group (group.fileUri)}
@@ -590,6 +602,22 @@
     font-size: 0.95em;
     line-height: 1.2;
     max-width: 200px;
+  }
+
+  .empty-state .learn-more {
+    background: none;
+    border: none;
+    padding: 0;
+    margin-top: 8px;
+    /* Extension primary action colour (crimson), matching the
+       Submit / Deploy CTAs and the active-tab accent. */
+    color: #c8376a;
+    cursor: pointer;
+    font-size: 0.95em;
+  }
+  .empty-state .learn-more:hover {
+    color: #d94d7e;
+    text-decoration: underline;
   }
 
   .file-header {

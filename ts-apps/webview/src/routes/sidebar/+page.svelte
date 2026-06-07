@@ -1228,7 +1228,7 @@
         <DocsPanel {messenger} navTarget={docNav} />
       </div>
       <div class="tab-pane" hidden={activeTab !== 'inspector'}>
-        <InspectorPanel {messenger} />
+        <InspectorPanel {messenger} {onLearnMore} />
       </div>
       {#if activeTab === 'preview'}
         <div class="preview-pane">
@@ -1324,6 +1324,13 @@
                 <p class="hint">
                   Open an L4 file containing valid rules marked with @export
                 </p>
+                <button
+                  class="learn-more"
+                  onclick={() =>
+                    onLearnMore(
+                      'https://legalese.com/l4/tutorials/deploying-rules/exporting-rules-for-deployment.md'
+                    )}>Learn more</button
+                >
               </div>
             {:else}
               <div class="functions-list">
@@ -1811,6 +1818,22 @@
     font-size: 0.95em;
     line-height: 1.2;
     max-width: 200px;
+  }
+
+  .empty-state .learn-more {
+    background: none;
+    border: none;
+    padding: 0;
+    margin-top: 8px;
+    /* Extension primary action colour (crimson), matching the
+       Submit / Deploy CTAs and the active-tab accent. */
+    color: #c8376a;
+    cursor: pointer;
+    font-size: 0.95em;
+  }
+  .empty-state .learn-more:hover {
+    color: #d94d7e;
+    text-decoration: underline;
   }
 
   .functions-list {
