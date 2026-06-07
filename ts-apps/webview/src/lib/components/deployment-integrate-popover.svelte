@@ -33,7 +33,7 @@
     /** Cloud mode only: triggered by the install buttons. The host
      *  wires this to the extension's `RequestInstallDeploymentSkill`
      *  notification so the plugin bundle is downloaded from the
-     *  hosted `.skill` endpoint and written into the chosen target's
+     *  hosted `.plugin` endpoint and written into the chosen target's
      *  config — or saved to disk for `download-zip`. */
     onInstall?: (target: 'claude-code' | 'vscode-chat' | 'download-zip') => void
   } = $props()

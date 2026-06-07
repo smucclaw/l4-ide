@@ -738,7 +738,7 @@ export function initializeSidebarMessenger(
 
   // Install a per-deployment plugin bundle (SKILL.md + hosted MCP entry)
   // into either Claude Code or VS Code Chat. The bundle is downloaded
-  // from the auth-proxy's .skill endpoint with the user's session token.
+  // from the auth-proxy's .plugin endpoint with the user's session token.
   messenger.onNotification(
     RequestInstallDeploymentSkill,
     async ({ deploymentId, target }) => {

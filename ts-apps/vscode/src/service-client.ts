@@ -263,10 +263,13 @@ export class ServiceClient {
    * MCP endpoint. Returns the raw zip bytes.
    *
    * Distinct from the other methods on this class: the request goes to
-   * `mcp.legalese.cloud/{slug}/{id}/.skill` (cloud-only, hosted) rather
+   * `mcp.legalese.cloud/{slug}/{id}/.plugin` (cloud-only, hosted) rather
    * than the configured service URL. Self-hosted callers won't have a
    * cloud slug — they get a thrown Error here, and the popover button
    * is only rendered in cloud mode.
+   *
+   * Uses the `.plugin` route (Claude Code plugin zip). The sibling `.skill`
+   * route is the skills-CLI / agentskills.io discovery surface, not the zip.
    */
   async getDeploymentSkillBundle(deploymentId: string): Promise<Buffer> {
     const slug = this.auth.getCloudOrgSlug()
@@ -276,7 +279,7 @@ export class ServiceClient {
     const headers = await this.auth.getAuthHeaders()
     const url = `https://mcp.${LEGALESE_CLOUD_DOMAIN}/${slug}/${encodeURIComponent(
       deploymentId
-    )}/.skill`
+    )}/.plugin`
     const resp = await fetch(url, { headers })
     if (!resp.ok) await throwWithBody(resp, `GET ${url}`)
     const ab = await resp.arrayBuffer()
