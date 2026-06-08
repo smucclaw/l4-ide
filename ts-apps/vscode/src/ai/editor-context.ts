@@ -138,6 +138,30 @@ export function buildSessionContextMessage(
 }
 
 /**
+ * Build a `<methodology>` system message from the user's free-text
+ * methodology preference (`legaleseAi.methodology`). It's the user's
+ * own standing instruction on how the model should approach the work —
+ * e.g. how to think about encoding natural-language rules in L4 — so it
+ * rides as the last system message before the first user prompt, where
+ * it sits closest to the request it should shape.
+ *
+ * Only meaningful on the first turn of a non-deployment conversation;
+ * the caller gates on `isNew && !deploymentMode`. Returns null when the
+ * preference is unset or blank.
+ */
+export function buildMethodologyContextMessage(): AiChatMessage | null {
+  const raw = vscode.workspace
+    .getConfiguration()
+    .get<string>('legaleseAi.methodology')
+  const text = (raw ?? '').trim()
+  if (!text) return null
+  return {
+    role: 'system',
+    content: ['<methodology>', text, '</methodology>'].join('\n'),
+  }
+}
+
+/**
  * Build the per-turn `<current-time>` block, inlined as a text content
  * part on the user message every turn. It rides inside the user
  * message (not as a `role:"system"` message) because the ai-proxy's

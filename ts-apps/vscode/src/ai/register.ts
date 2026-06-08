@@ -623,12 +623,14 @@ export function registerAiChatHandlers(deps: {
   // default in the webview's AiPrefs store.
   const PREF_KEYS = {
     showReasoning: 'legaleseAi.showReasoning',
+    methodology: 'legaleseAi.methodology',
   } as const
   messenger.onRequest(AiPreferencesGet, () => {
     const cfg = vscode.workspace.getConfiguration()
     return {
       values: {
         showReasoning: cfg.get<boolean>(PREF_KEYS.showReasoning) === true,
+        methodology: cfg.get<string>(PREF_KEYS.methodology) ?? '',
       },
     }
   })

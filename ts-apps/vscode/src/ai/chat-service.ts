@@ -14,6 +14,7 @@ import {
   buildEditorContextMessage,
   buildMentionContextMessage,
   buildSessionContextMessage,
+  buildMethodologyContextMessage,
 } from './editor-context.js'
 import { buildWorkspaceBootstrapMessage } from './workspace-bootstrap.js'
 import { BUILTIN_TOOLS } from './tool-registry.js'
@@ -1149,6 +1150,11 @@ export class ChatService {
       if (session) messages.push(session)
       const bootstrap = await buildWorkspaceBootstrapMessage(this.opts.client)
       if (bootstrap) messages.push(bootstrap)
+      // User's standing methodology, last so it sits closest to the
+      // first user prompt it should shape. Gated on !deploymentMode
+      // (this block) so attached deployments stay a plain passthrough.
+      const methodology = buildMethodologyContextMessage()
+      if (methodology) messages.push(methodology)
     }
 
     // Retry path: skip the user message entirely. The server's

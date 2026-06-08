@@ -88,6 +88,53 @@
     </div>
     <div class="panel-body">
       <section>
+        <div class="section-title">Preferences</div>
+        <label class="pref-row">
+          <div class="pref-name">
+            <div>Show model reasoning in chat</div>
+            <div class="pref-hint">
+              Display the assistant's chain-of-thought "Thinking" blocks
+              alongside its replies.
+            </div>
+          </div>
+          <span
+            class="toggle"
+            class:on={aiPrefs.showReasoning}
+            aria-hidden="true"
+          >
+            <span class="knob"></span>
+          </span>
+          <input
+            class="visually-hidden"
+            type="checkbox"
+            checked={aiPrefs.showReasoning}
+            onchange={(e) =>
+              aiPrefs.setShowReasoning((e.target as HTMLInputElement).checked)}
+          />
+        </label>
+
+        <div class="pref-stack">
+          <div class="pref-name">
+            <div>Methodology</div>
+            <div class="pref-hint">
+              Used as guidance before when encoding natural language rules in
+              L4.
+            </div>
+          </div>
+          <textarea
+            class="methodology-input"
+            rows="4"
+            placeholder="Describe how Legalese AI should think about the encoding of natural language rules"
+            value={aiPrefs.methodology}
+            oninput={(e) =>
+              (aiPrefs.methodology = (e.target as HTMLTextAreaElement).value)}
+            onchange={(e) =>
+              aiPrefs.setMethodology((e.target as HTMLTextAreaElement).value)}
+          ></textarea>
+        </div>
+      </section>
+
+      <section>
         <div class="section-title">Permissions</div>
         <div class="section-help">
           <code>Never</code> blocks the tool, <code>Ask</code> prompts you each
@@ -116,33 +163,6 @@
         {:else}
           <div class="loading">Loading…</div>
         {/if}
-      </section>
-
-      <section>
-        <div class="section-title">Preferences</div>
-        <label class="pref-row">
-          <div class="pref-name">
-            <div>Show model reasoning in chat</div>
-            <div class="pref-hint">
-              Display the assistant's chain-of-thought "Thinking" blocks
-              alongside its replies.
-            </div>
-          </div>
-          <span
-            class="toggle"
-            class:on={aiPrefs.showReasoning}
-            aria-hidden="true"
-          >
-            <span class="knob"></span>
-          </span>
-          <input
-            class="visually-hidden"
-            type="checkbox"
-            checked={aiPrefs.showReasoning}
-            onchange={(e) =>
-              aiPrefs.setShowReasoning((e.target as HTMLInputElement).checked)}
-          />
-        </label>
       </section>
 
       <!-- <section>
@@ -290,6 +310,34 @@
     font-size: 10px;
     color: var(--vscode-descriptionForeground);
     margin-top: 6px;
+  }
+  .pref-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 6px 8px;
+  }
+  .methodology-input {
+    width: 100%;
+    box-sizing: border-box;
+    resize: vertical;
+    min-height: 64px;
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-family: var(--vscode-font-family, sans-serif);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+  .methodology-input::placeholder {
+    color: var(--vscode-input-placeholderForeground);
+  }
+  .methodology-input:focus {
+    outline: 1px solid #c8376a;
+    outline-offset: 0;
+    border-color: #c8376a;
   }
   .toggle {
     flex-shrink: 0;

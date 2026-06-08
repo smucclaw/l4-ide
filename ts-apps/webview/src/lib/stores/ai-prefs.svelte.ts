@@ -19,10 +19,12 @@ type MessengerAccessor = () => InstanceType<typeof Messenger> | null
 
 const DEFAULTS: AiPreferences = {
   showReasoning: false,
+  methodology: '',
 }
 
 class AiPrefs {
   showReasoning = $state(DEFAULTS.showReasoning)
+  methodology = $state(DEFAULTS.methodology)
   private getMessenger: MessengerAccessor = () => null
 
   init(getMessenger: MessengerAccessor): void {
@@ -40,6 +42,7 @@ class AiPrefs {
         undefined as never
       )
       this.showReasoning = res.values.showReasoning
+      this.methodology = res.values.methodology ?? ''
     } catch {
       // leave defaults on RPC failure
     }
@@ -53,6 +56,11 @@ class AiPrefs {
   setShowReasoning(next: boolean): void {
     this.showReasoning = next
     this.push({ showReasoning: next })
+  }
+
+  setMethodology(next: string): void {
+    this.methodology = next
+    this.push({ methodology: next })
   }
 }
 

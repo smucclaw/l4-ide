@@ -835,6 +835,11 @@ export const AiPermissionsSet: NotificationType<{
  *  webview store, and a key mapping in the extension handler. */
 export interface AiPreferences {
   showReasoning: boolean
+  /** Free-text methodology the user wants the model to follow. When
+   *  non-empty, it's injected as a `<methodology>` system message just
+   *  before the first user prompt of a new (non-deployment)
+   *  conversation. Empty string means "no methodology". */
+  methodology: string
 }
 
 /** Webview asks for all current preference values. */
