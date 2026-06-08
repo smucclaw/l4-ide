@@ -183,7 +183,7 @@
     background: var(--chat-bg);
   }
   .chat-pane {
-    flex: 1 1 auto;
+    flex: 10 1 auto;
     min-width: 0;
     display: flex;
     align-items: center;

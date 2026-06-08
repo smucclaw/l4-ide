@@ -185,7 +185,7 @@
     flex-direction: column;
     height: 100%;
     width: 260px;
-    flex: 0 0 260px;
+    flex: 1 0 260px;
     background: var(--sidebar-bg);
     border-right: 1px solid var(--sidebar-border);
     box-sizing: border-box;
