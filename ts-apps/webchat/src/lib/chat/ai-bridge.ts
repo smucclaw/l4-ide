@@ -49,7 +49,7 @@ import {
   type AiConversation,
   type FunctionParameter,
 } from 'jl4-client-rpc'
-import { authHeaders } from '$lib/auth/session.svelte'
+import { AI_API_URL, authHeaders } from '$lib/auth/session.svelte'
 import {
   deleteIndexEntry,
   deriveTitle,
@@ -107,9 +107,7 @@ function buildCurrentTimeBlock(): string {
  *  filters system messages out of follow-up-turn deltas, which would drop the
  *  timestamp. Pure: returns a new array, leaving the locally-stored copy clean
  *  of this wire-only metadata. Mirrors the extension's `withCurrentTimeOnLastUser`. */
-function withCurrentTimeOnLastUser(
-  messages: AiChatMessage[]
-): AiChatMessage[] {
+function withCurrentTimeOnLastUser(messages: AiChatMessage[]): AiChatMessage[] {
   let lastUserIdx = -1
   for (let i = messages.length - 1; i >= 0; i--) {
     if (messages[i]!.role === 'user') {
@@ -606,6 +604,88 @@ export class AiBridge {
       ...(usage ? { usage } : {}),
     })
     this.aborts.delete(p.turnId)
+
+    // Speaking title for the sidebar. On a brand-new chat that finished
+    // cleanly, replace the raw first-message fallback with a 4-6 word summary,
+    // mirroring the extension's `generateTitleInBackground`. Fire-and-forget so
+    // it never blocks turn finalization.
+    if (isNew && finishReason === 'stop' && p.text.trim()) {
+      this.generateTitleInBackground(convId, p.text)
+    }
+  }
+
+  // ── Title generation ─────────────────────────────────────────────────
+
+  /** Replace a new conversation's fallback title with a model-generated one,
+   *  then nudge the sidebar to re-read it. Fire-and-forget: failures leave the
+   *  derived title in place. Mirrors the extension's background titling. */
+  private generateTitleInBackground(
+    conversationId: string,
+    firstUserMessage: string
+  ): void {
+    void this.summarizeTitle(firstUserMessage)
+      .then((title) => {
+        if (!title) return
+        updateIndexEntry(conversationId, { title })
+        // The store refreshes its history list on `AiChatDone`; the title
+        // landed after that fired, so re-emit to pull the new label into the
+        // sidebar. `onDone` is idempotent for an already-settled turn (the
+        // streaming bubble is gone), so this only triggers `refreshHistory`.
+        this.emit(AiChatDone, { conversationId, finishReason: 'stop' })
+      })
+      .catch(() => undefined)
+  }
+
+  /** Stateless 4-6 word title from the first user message via the summize
+   *  model. Mirrors the extension's `summarizeTitle`. Posts to the NON-scoped
+   *  proxy (`AI_API_URL`, no org/deployment path): scoped deployment routes
+   *  force the comply model and 400 on any other, so summize only resolves on
+   *  the default endpoint. Returns null on any failure (caller keeps the
+   *  fallback title). */
+  private async summarizeTitle(
+    firstUserMessage: string
+  ): Promise<string | null> {
+    try {
+      const res = await fetch(`${AI_API_URL}/v1/chat/completions`, {
+        method: 'POST',
+        headers: {
+          ...authHeaders(),
+          'Content-Type': 'application/json',
+          Accept: 'text/event-stream',
+        },
+        body: JSON.stringify({
+          model: 'legalese-summize-4',
+          messages: [
+            {
+              role: 'user',
+              content: `Generate a 4-6 word title for a chat that begins: "${firstUserMessage.slice(
+                0,
+                500
+              )}". Respond with just the title, no quotes, no trailing period.`,
+            },
+          ],
+        }),
+      })
+      if (!res.ok || !res.body) return null
+      const ac = new AbortController()
+      let text = ''
+      for await (const frame of parseSse(res.body, ac.signal)) {
+        if (frame.data === '[DONE]') break
+        if (frame.event === 'metadata' || frame.event === 'error') continue
+        let json: Record<string, unknown>
+        try {
+          json = JSON.parse(frame.data)
+        } catch {
+          continue
+        }
+        const delta = (json.choices as ChunkChoice[] | undefined)?.[0]?.delta
+        if (delta?.content) text += delta.content
+      }
+      text = text.trim().replace(/^["']|["']$/g, '')
+      return text.length > 0 ? text : null
+    } catch {
+      return null
+    }
   }
 
   // ── Usage polling ────────────────────────────────────────────────────
