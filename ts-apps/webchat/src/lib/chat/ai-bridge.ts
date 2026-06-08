@@ -154,12 +154,20 @@ function stripCurrentTimeFromHistory(
     }
     if (Array.isArray(content) && content.length > 0) {
       const first = content[0]!
-      if (
-        first.type === 'text' &&
-        CURRENT_TIME_BLOCK_RE.test(first.text) &&
-        first.text.replace(CURRENT_TIME_BLOCK_RE, '').trim() === ''
-      ) {
-        return { ...m, content: content.slice(1) }
+      if (first.type === 'text' && CURRENT_TIME_BLOCK_RE.test(first.text)) {
+        // The injector adds the block as its own leading part, but the server
+        // may re-serialize the string form (`block\n\n${text}`) into a single
+        // text part — so strip the prefix and drop the part only if nothing
+        // but the block was in it.
+        const stripped = first.text.replace(CURRENT_TIME_BLOCK_RE, '')
+        const rest = content.slice(1)
+        return {
+          ...m,
+          content:
+            stripped.trim() === ''
+              ? rest
+              : [{ ...first, text: stripped }, ...rest],
+        }
       }
     }
     return m
