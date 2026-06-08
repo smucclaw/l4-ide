@@ -88,6 +88,52 @@ function nowIso(): string {
   return new Date().toISOString()
 }
 
+/** A `<current-time>` block carrying the user's local time and timezone, so
+ *  the model can reason about "today"/"now" on every turn. Mirrors the VSCode
+ *  extension's `buildCurrentTimeBlock`. */
+function buildCurrentTimeBlock(): string {
+  const now = new Date()
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+  return [
+    '<current-time>',
+    `localTime: ${now.toLocaleString(undefined, { timeZone: tz, timeZoneName: 'short' })}`,
+    `timezone: ${tz}`,
+    '</current-time>',
+  ].join('\n')
+}
+
+/** Prepend the current-time block to the last user message. Inlined as a text
+ *  part (not a `role:"system"` message) because the proxy's `extractDelta`
+ *  filters system messages out of follow-up-turn deltas, which would drop the
+ *  timestamp. Pure: returns a new array, leaving the locally-stored copy clean
+ *  of this wire-only metadata. Mirrors the extension's `withCurrentTimeOnLastUser`. */
+function withCurrentTimeOnLastUser(
+  messages: AiChatMessage[]
+): AiChatMessage[] {
+  let lastUserIdx = -1
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i]!.role === 'user') {
+      lastUserIdx = i
+      break
+    }
+  }
+  if (lastUserIdx < 0) return messages
+  const timeBlock = buildCurrentTimeBlock()
+  const original = messages[lastUserIdx]!
+  const content = original.content
+  let augmented: AiChatMessage['content']
+  if (typeof content === 'string') {
+    augmented = `${timeBlock}\n\n${content}`
+  } else if (Array.isArray(content)) {
+    augmented = [{ type: 'text', text: timeBlock }, ...content]
+  } else {
+    return messages
+  }
+  const next = messages.slice()
+  next[lastUserIdx] = { ...original, content: augmented }
+  return next
+}
+
 function newId(): string {
   return crypto.randomUUID()
 }
@@ -410,7 +456,7 @@ export class AiBridge {
     }
 
     const body = JSON.stringify({
-      messages: outgoing.map(toWire),
+      messages: withCurrentTimeOnLastUser(outgoing).map(toWire),
       tools: [],
       stream: true,
       turnId: p.turnId,
