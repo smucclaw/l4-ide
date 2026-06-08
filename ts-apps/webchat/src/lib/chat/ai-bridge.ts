@@ -132,6 +132,40 @@ function withCurrentTimeOnLastUser(messages: AiChatMessage[]): AiChatMessage[] {
   return next
 }
 
+/** Matches a leading `<current-time>…</current-time>` block (with any trailing
+ *  whitespace) at the start of a user message. */
+const CURRENT_TIME_BLOCK_RE = /^<current-time>[\s\S]*?<\/current-time>\s*/
+
+/** Undo `withCurrentTimeOnLastUser` for display. The server persists the wire
+ *  message verbatim — including the injected time block — so a transcript
+ *  fetched back on reopen carries it on every user turn. Strip it from the
+ *  reconstructed history so the user sees what they typed, not the wire form.
+ *  String content: drop the leading block. Array content: drop a leading text
+ *  part that is the block (the shape `withCurrentTimeOnLastUser` produces). */
+function stripCurrentTimeFromHistory(
+  messages: AiChatMessage[]
+): AiChatMessage[] {
+  return messages.map((m) => {
+    if (m.role !== 'user') return m
+    const content = m.content
+    if (typeof content === 'string') {
+      const stripped = content.replace(CURRENT_TIME_BLOCK_RE, '')
+      return stripped === content ? m : { ...m, content: stripped }
+    }
+    if (Array.isArray(content) && content.length > 0) {
+      const first = content[0]!
+      if (
+        first.type === 'text' &&
+        CURRENT_TIME_BLOCK_RE.test(first.text) &&
+        first.text.replace(CURRENT_TIME_BLOCK_RE, '').trim() === ''
+      ) {
+        return { ...m, content: content.slice(1) }
+      }
+    }
+    return m
+  })
+}
+
 function newId(): string {
   return crypto.randomUUID()
 }
@@ -271,7 +305,7 @@ export class AiBridge {
         title: index?.title ?? '',
         createdAt: data.createdAt ?? nowIso(),
         lastActiveAt: data.lastActiveAt ?? nowIso(),
-        messages: data.messages ?? [],
+        messages: stripCurrentTimeFromHistory(data.messages ?? []),
         deploymentId: this.cfg.deploymentId,
         apiBaseUrl: this.cfg.apiBaseUrl,
       }
