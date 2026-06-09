@@ -55,21 +55,9 @@ directive-showcase.l4:112:1-31:
   │┌ LIST bob
   │├ bob FOLLOWED BY (LIST )
   ││┌ LIST 
-  ││└ EMPTY││• EMPTY
-  │└ LIST Person OF "Bob", 17│┌ bob FOLLOWED BY (LIST )
-  ││┌ LIST 
-  ││└ EMPTY││• EMPTY
-  │└ LIST Person OF "Bob", 17│• LIST Person OF "Bob", 17
-  └ LIST Person OF "Alice", 30, Person OF "Bob", 17┌ alice FOLLOWED BY (LIST bob)
-  │┌ LIST bob
-  │├ bob FOLLOWED BY (LIST )
-  ││┌ LIST 
-  ││└ EMPTY││• EMPTY
-  │└ LIST Person OF "Bob", 17│┌ bob FOLLOWED BY (LIST )
-  ││┌ LIST 
-  ││└ EMPTY││• EMPTY
-  │└ LIST Person OF "Bob", 17│• LIST Person OF "Bob", 17
-  └ LIST Person OF "Alice", 30, Person OF "Bob", 17• LIST Person OF "Alice", 30, Person OF "Bob", 17
+  ││└ EMPTY
+  │└ LIST Person OF "Bob", 17
+  └ LIST Person OF "Alice", 30, Person OF "Bob", 17
 directive-showcase.l4:113:1-12:
   BOOLEAN
 directive-showcase.l4:117:1-13:
@@ -89,159 +77,44 @@ directive-showcase.l4:127:1-30:
   ─────
   ┌ `is adult` OF alice
   │┌ `is adult`
-  │└ <function>│• <function>
+  │└ <function>
   ├ (p's age) AT LEAST 18
   │┌ p's age
   │├ age OF p
   ││┌ age
-  ││└ <function>││• <function>
+  ││└ <function>
   │├ CONSIDER Person WHEN Person name
   ││                              age THEN age
   │├ age
-  │└ 30│┌ age OF p
-  ││┌ age
-  ││└ <function>││• <function>
-  │├ CONSIDER Person WHEN Person name
-  ││                              age THEN age
-  │├ age
-  │└ 30│┌ CONSIDER Person WHEN Person name
-  ││                              age THEN age
-  │├ age
-  │└ 30│┌ age
-  │└ 30│• 30
-  └ TRUE┌ (p's age) AT LEAST 18
-  │┌ p's age
-  │├ age OF p
-  ││┌ age
-  ││└ <function>││• <function>
-  │├ CONSIDER Person WHEN Person name
-  ││                              age THEN age
-  │├ age
-  │└ 30│┌ age OF p
-  ││┌ age
-  ││└ <function>││• <function>
-  │├ CONSIDER Person WHEN Person name
-  ││                              age THEN age
-  │├ age
-  │└ 30│┌ CONSIDER Person WHEN Person name
-  ││                              age THEN age
-  │├ age
-  │└ 30│┌ age
-  │└ 30│• 30
-  └ TRUE• TRUE
+  │└ 30
+  └ TRUE
 directive-showcase.l4:128:1-35:
   "Minor"
   ─────
   ┌ `age category of` OF bob
   │┌ `age category of`
-  │└ <function>│• <function>
+  │└ <function>
   ├ IF ((p's age) AT LEAST 65) THEN "Senior" ELSE (IF ((p's age) AT LEAST 18) THEN "Adult" ELSE "Minor")
   │┌ (p's age) AT LEAST 65
   ││┌ p's age
   ││├ age OF p
   │││┌ age
-  │││└ <function>│││• <function>
+  │││└ <function>
   ││├ CONSIDER Person WHEN Person name
   │││                              age THEN age
   ││├ age
-  ││└ 17││┌ age OF p
-  │││┌ age
-  │││└ <function>│││• <function>
-  ││├ CONSIDER Person WHEN Person name
-  │││                              age THEN age
-  ││├ age
-  ││└ 17││┌ CONSIDER Person WHEN Person name
-  │││                              age THEN age
-  ││├ age
-  ││└ 17││┌ age
-  ││└ 17││• 17
-  │└ FALSE│• FALSE
+  ││└ 17
+  │└ FALSE
   ├ IF ((p's age) AT LEAST 18) THEN "Adult" ELSE "Minor"
   │┌ (p's age) AT LEAST 18
   ││┌ p's age
   ││├ age OF p
   │││┌ age
-  │││└ <function>│││• <function>
+  │││└ <function>
   ││├ CONSIDER Person WHEN Person name
   │││                              age THEN age
   ││├ age
-  ││└ 17││┌ age OF p
-  │││┌ age
-  │││└ <function>│││• <function>
-  ││├ CONSIDER Person WHEN Person name
-  │││                              age THEN age
-  ││├ age
-  ││└ 17││┌ CONSIDER Person WHEN Person name
-  │││                              age THEN age
-  ││├ age
-  ││└ 17││┌ age
-  ││└ 17││• 17
-  │└ FALSE│• FALSE
+  ││└ 17
+  │└ FALSE
   ├ "Minor"
-  └ "Minor"┌ IF ((p's age) AT LEAST 65) THEN "Senior" ELSE (IF ((p's age) AT LEAST 18) THEN "Adult" ELSE "Minor")
-  │┌ (p's age) AT LEAST 65
-  ││┌ p's age
-  ││├ age OF p
-  │││┌ age
-  │││└ <function>│││• <function>
-  ││├ CONSIDER Person WHEN Person name
-  │││                              age THEN age
-  ││├ age
-  ││└ 17││┌ age OF p
-  │││┌ age
-  │││└ <function>│││• <function>
-  ││├ CONSIDER Person WHEN Person name
-  │││                              age THEN age
-  ││├ age
-  ││└ 17││┌ CONSIDER Person WHEN Person name
-  │││                              age THEN age
-  ││├ age
-  ││└ 17││┌ age
-  ││└ 17││• 17
-  │└ FALSE│• FALSE
-  ├ IF ((p's age) AT LEAST 18) THEN "Adult" ELSE "Minor"
-  │┌ (p's age) AT LEAST 18
-  ││┌ p's age
-  ││├ age OF p
-  │││┌ age
-  │││└ <function>│││• <function>
-  ││├ CONSIDER Person WHEN Person name
-  │││                              age THEN age
-  ││├ age
-  ││└ 17││┌ age OF p
-  │││┌ age
-  │││└ <function>│││• <function>
-  ││├ CONSIDER Person WHEN Person name
-  │││                              age THEN age
-  ││├ age
-  ││└ 17││┌ CONSIDER Person WHEN Person name
-  │││                              age THEN age
-  ││├ age
-  ││└ 17││┌ age
-  ││└ 17││• 17
-  │└ FALSE│• FALSE
-  ├ "Minor"
-  └ "Minor"┌ IF ((p's age) AT LEAST 18) THEN "Adult" ELSE "Minor"
-  │┌ (p's age) AT LEAST 18
-  ││┌ p's age
-  ││├ age OF p
-  │││┌ age
-  │││└ <function>│││• <function>
-  ││├ CONSIDER Person WHEN Person name
-  │││                              age THEN age
-  ││├ age
-  ││└ 17││┌ age OF p
-  │││┌ age
-  │││└ <function>│││• <function>
-  ││├ CONSIDER Person WHEN Person name
-  │││                              age THEN age
-  ││├ age
-  ││└ 17││┌ CONSIDER Person WHEN Person name
-  │││                              age THEN age
-  ││├ age
-  ││└ 17││┌ age
-  ││└ 17││• 17
-  │└ FALSE│• FALSE
-  ├ "Minor"
-  └ "Minor"┌ "Minor"
-  └ "Minor"• "Minor"
+  └ "Minor"
