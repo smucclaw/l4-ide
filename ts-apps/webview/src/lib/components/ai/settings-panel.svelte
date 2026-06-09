@@ -117,8 +117,7 @@
           <div class="pref-name">
             <div>Methodology</div>
             <div class="pref-hint">
-              Used as guidance before when encoding natural language rules in
-              L4.
+              Used as guidance when encoding natural language rules in L4.
             </div>
           </div>
           <textarea
