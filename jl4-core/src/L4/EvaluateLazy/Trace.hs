@@ -7,7 +7,7 @@ import qualified Base.Map as Map
 import qualified Base.Text as Text
 import L4.Syntax
 import L4.Evaluate.ValueLazy
-import L4.EvaluateLazy.Machine (EvalException(..), InternalEvalException(..), UserEvalException(..), prettyEvalException)
+import L4.EvaluateLazy.Exceptions (EvalException(..), InternalEvalException(..), UserEvalException(..), prettyEvalException)
 import L4.Print
 import L4.TypeCheck.Environment.TH (builtinUri)
 import L4.Utils.RevList

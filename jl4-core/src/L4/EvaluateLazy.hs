@@ -21,9 +21,7 @@ module L4.EvaluateLazy
 where
 
 import Base
-import qualified Base.DList as DList
 import qualified Base.Map as Map
-import qualified Base.Set as Set
 import qualified Base.Text as Text
 import L4.EvaluateLazy.Machine
 import L4.EvaluateLazy.Trace
@@ -36,27 +34,18 @@ import L4.TypeCheck.Types (EntityInfo)
 import L4.TemporalContext (EvalClause, TemporalContext, applyEvalClauses, initialTemporalContext)
 import L4.TracePolicy (TracePolicy)
 
-import Control.Concurrent
+import Control.Exception (throwIO, try)
 import Data.Time (UTCTime, getCurrentTime)
 import qualified Data.Time.Format.ISO8601 as ISO8601
 import System.Environment (lookupEnv)
 import qualified Data.Aeson as Aeson
 
 -----------------------------------------------------------------------------
--- The Eval monad and the required types for the monad
+-- Configuration for running evaluations.
+--
+-- The Eval monad itself (and the machine state) lives in
+-- 'L4.EvaluateLazy.Machine'; this module provides the high-level driver.
 -----------------------------------------------------------------------------
-data EvalState =
-  MkEvalState
-    { moduleUri  :: !NormalizedUri
-    , stack      :: !(IORef Stack)
-    , supply     :: !(IORef Int)   -- used for uniques and addresses
-    , evalTrace  :: !(Maybe (IORef (DList EvalTraceAction)))
-    , entityInfo :: !EntityInfo    -- type information for constructors/records
-    , evalTime   :: !UTCTime
-    , temporalContext :: !(IORef TemporalContext)
-    , tracePolicy :: !TracePolicy  -- controls trace collection and output
-    , safeMode   :: !Bool          -- when True, HTTP operations return errors
-    }
 
 data EvalConfig = EvalConfig
   { evalTime :: !(Maybe UTCTime)
@@ -87,37 +76,9 @@ readFixedNowEnv = do
   menv <- lookupEnv "JL4_FIXED_NOW"
   pure $ menv >>= parseFixedNow . Text.pack
 
-newtype Eval a = MkEval (EvalState -> IO (Either EvalException a))
-  deriving (Functor, Applicative, Monad, MonadError EvalException, MonadReader EvalState, MonadIO)
-    via ExceptT EvalException (ReaderT EvalState IO)
-
------------------------------------------------------------------------------
--- Helper functions for the Eval Monad
------------------------------------------------------------------------------
-
-step :: Eval Int
-step = do
-  i <- readRef (.supply)
-  writeRef (.supply) $! i + 1
-  pure i
-
-newUnique :: Eval Unique
-newUnique = do
-  i <- step
-  u <- asks (.moduleUri)
-  pure (MkUnique 'e' i u)
-
-readRef :: (EvalState -> IORef a) -> Eval a
-readRef r = asks r >>= liftIO . readIORef
-
-writeRef :: (EvalState -> IORef a) -> a -> Eval ()
-writeRef r !x = asks r >>= liftIO . flip writeIORef x
-
-getTemporalContext :: Eval TemporalContext
-getTemporalContext = readRef (.temporalContext)
-
+-- | The previous temporal context is restored afterwards.
 setTemporalContext :: TemporalContext -> Eval ()
-setTemporalContext = writeRef (.temporalContext)
+setTemporalContext = putTemporalContext
 
 -- | Apply runtime EVAL clauses for the duration of an action,
 -- restoring the previous temporal context afterwards.
@@ -125,134 +86,9 @@ withEvalClauses :: [EvalClause] -> Eval a -> Eval a
 withEvalClauses clauses action = do
   original <- getTemporalContext
   setTemporalContext (applyEvalClauses clauses original)
-  result <-
-    action `catchError` \e -> do
-      setTemporalContext original
-      throwError e
+  result <- tryEval action
   setTemporalContext original
-  pure result
-
-pushFrame :: (EvalException -> Eval ()) -> Frame -> Eval ()
-pushFrame k frame = do
-  s <- readRef (.stack)
-  if s.size == maximumStackSize
-    then k $ UserEvalException StackOverflow
-    else writeRef (.stack) (over #frames (frame :) s)
-
--- | Pops a stack frame (if any are left) and calls the continuation on it.
-withPoppedFrame :: (Maybe Frame -> Eval a) -> Eval a
-withPoppedFrame k = do
-  traceEval Pop
-  stack <- readRef (.stack)
-  case stack.frames of
-    []       -> k Nothing
-    (f : fs) -> do
-      writeRef (.stack) (MkStack { size = stack.size - 1, frames = fs })
-      k (Just f)
-
--- | For the time being, exceptions are always fatal. But we could
--- in principle have exception we can recover from ...
-exception :: (EvalException -> Eval a) -> EvalException -> Eval a
-exception k exc =
-  withPoppedFrame $ \ case
-    Nothing -> throwError exc
-    Just _f -> k exc
-
-
-tryEval :: Eval a -> Eval (Either EvalException a)
-tryEval = tryError
-
-lookupAndUpdateRef :: Reference -> (Thunk -> (Thunk, a)) -> Eval a
-lookupAndUpdateRef rf f =
-  liftIO $
-    atomicModifyIORef' rf.pointer f
-
-updateRef :: Reference -> Thunk -> Eval ()
-updateRef rf a = lookupAndUpdateRef rf $ const (a, ())
-
-newReference :: Eval Reference
-newReference = do
-  address <- newAddress
-  reference <- liftIO (myThreadId >>= newIORef . blackhole)
-  pure (MkReference address reference)
-
-blackhole :: ThreadId -> Thunk
-blackhole tid =
-  Unevaluated (Set.singleton tid) (error "blackhole") Map.empty
-
-
-
------------------------------------------------------------------------------
--- The Stack of the machine
------------------------------------------------------------------------------
-
-data Stack =
-  MkStack
-    { size   :: !Int
-    , frames :: [Frame]
-    }
-  deriving stock (Generic, Show)
-
-emptyStack :: Stack
-emptyStack = MkStack 0 []
-
-newAddress :: Eval Address
-newAddress = do
-  i <- step
-  u <- asks (.moduleUri)
-  pure (MkAddress u i)
-
-interpMachine :: Machine a -> Eval a
-interpMachine = \ case
-  Config a -> pure a
-  Exception e -> do
-    traceEval (Exit (Left e))
-    exception (interpMachine . Exception) e
-  Allocate' alloc -> case alloc of
-    Recursive expr env -> do
-      rf <- newReference
-      let env' = env rf
-      updateRef rf $ Unevaluated Set.empty expr env'
-      traceEval (Alloc expr rf)
-      pure (rf, env')
-    Value whnf -> do
-      rf <- newReference
-      updateRef rf $ WHNF whnf
-      -- we don't trace this because it is used for allocating values in the initial environment which would be misleading in the trace
-      pure rf
-    PreAllocation r -> do
-      rf <- newReference
-      traceEval (AllocPre r rf)
-      pure (getUnique r, rf)
-  WithPoppedFrame k ->
-    withPoppedFrame (interpMachine . k)
-  PokeThunk rf k -> do
-    tid <- liftIO myThreadId
-    conf <- lookupAndUpdateRef rf (k tid)
-    interpMachine $ pure conf
-  GetEvalTime ->
-    asks (.evalTime)
-  GetTracePolicy ->
-    asks (.tracePolicy)
-  GetSafeMode ->
-    asks (.safeMode)
-  Bind act k -> interpMachine act >>= interpMachine . k
-  LiftIO m -> liftIO m >>= interpMachine . pure
-  PushFrame f -> do
-    traceEval Push
-    pushFrame (interpMachine . Exception) f
-  NewUnique -> newUnique
-  GetEntityInfo -> asks (.entityInfo)
-  GetTemporalContext -> getTemporalContext
-  PutTemporalContext ctx -> setTemporalContext ctx
-  GetModuleUri -> asks (.moduleUri)
-
-traceEval :: EvalTraceAction -> Eval ()
-traceEval ta = do
-  mtr <- asks (.evalTrace)
-  case mtr of
-    Nothing -> pure ()
-    Just tr -> liftIO (modifyIORef' tr (`DList.snoc` ta))
+  either (liftIO . throwIO) pure result
 
 -- | For the given eval action, enable tracing and accumulate a trace.
 --
@@ -276,21 +112,21 @@ runConfig :: Config -> Eval WHNF
 runConfig = \ case
   ForwardMachine env expr -> do
     traceEval (Enter expr)
-    next <- interpMachine (forwardExpr env expr)
+    next <- forwardExpr env expr
     runConfig next
   MatchBranchesMachine scrutinee env branches -> do
-    next <- interpMachine (matchBranches scrutinee env branches)
+    next <- matchBranches scrutinee env branches
     runConfig next
   MatchPatternMachine r env pat -> do
-    next <- interpMachine (matchPattern r env pat)
+    next <- matchPattern r env pat
     runConfig next
   BackwardMachine whnf -> do
     traceEval (Exit (Right whnf))
-    next <- interpMachine (backward whnf)
+    next <- backward whnf
     runConfig next
   EvalRefMachine r -> do
     traceEval (SetRef r)
-    next <- interpMachine (evalRef r)
+    next <- evalRef r
     runConfig next
   DoneMachine whnf ->
     pure whnf
@@ -473,32 +309,34 @@ evalAndNF d r = do
 --
 execEvalModuleWithEnv :: EvalConfig -> EntityInfo -> Environment -> Module Resolved -> IO (Environment, [EvalDirectiveResult])
 execEvalModuleWithEnv evalConfig entityInfo env m@(MkModule _ moduleUri _) = do
-  case evalModuleAndDirectives env m of
-    MkEval f -> do
-      stack     <- newIORef emptyStack
-      supply    <- newIORef 0
-      actualTime <- resolveEvalTime evalConfig
-      let temporalCtx = initialTemporalContext actualTime
-      temporalContext <- newIORef temporalCtx
-      let evalTrace = Nothing
-      r <- f MkEvalState {moduleUri, stack, supply, evalTrace, entityInfo, evalTime = actualTime, temporalContext, tracePolicy = evalConfig.tracePolicy, safeMode = evalConfig.safeMode}
-      case r of
-        Left exc -> do
-          hPutStrLn stderr $ "Eval failure in module: " <> show moduleUri
-          traverse_ (hPutStrLn stderr . Text.unpack) (prettyEvalException exc)
-          -- exceptions at the top-level are unusual; after all, we don't actually
-          -- force any evaluation here, and we catch exceptions for eval directives
-          pure (emptyEnvironment, [])
-        Right result -> pure result
+  st0 <- mkInitialEvalState evalConfig entityInfo moduleUri
+  r <- try (runEval st0 (evalModuleAndDirectives env m))
+  case r of
+    Left exc -> do
+      hPutStrLn stderr $ "Eval failure in module: " <> show moduleUri
+      traverse_ (hPutStrLn stderr . Text.unpack) (prettyEvalException exc)
+      -- exceptions at the top-level are unusual; after all, we don't actually
+      -- force any evaluation here, and we catch exceptions for eval directives
+      pure (emptyEnvironment, [])
+    Right result -> pure result
+
+mkInitialEvalState :: EvalConfig -> EntityInfo -> NormalizedUri -> IO EvalState
+mkInitialEvalState evalConfig entityInfo moduleUri = do
+  stack     <- newIORef emptyStack
+  supply    <- newIORef 0
+  actualTime <- resolveEvalTime evalConfig
+  let temporalCtx = initialTemporalContext actualTime
+  temporalContext <- newIORef temporalCtx
+  let evalTrace = Nothing
+  pure MkEvalState {moduleUri, stack, supply, evalTrace, entityInfo, evalTime = actualTime, temporalContext, tracePolicy = evalConfig.tracePolicy, safeMode = evalConfig.safeMode}
 
 -- TODO: This currently allocates the initial environment once per module.
 -- This isn't a big deal, but can we somehow do this only once per program,
 -- for example by passing this in from the outside?
 evalModuleAndDirectives :: Environment -> Module Resolved -> Eval (Environment, [EvalDirectiveResult])
 evalModuleAndDirectives env m = do
-  (env', directives) <- interpMachine do
-    ienv <- initialEnvironment
-    evalModule (env <> ienv) m
+  ienv <- initialEnvironment
+  (env', directives) <- evalModule (env <> ienv) m
   results <- traverse nfDirective directives
   -- NOTE: We are only returning the new definitions of this module, not any imports.
   -- Depending on future export semantics, this may have to change.
@@ -510,34 +348,25 @@ evalModuleAndDirectives env m = do
 -- then write JSON values into the References for ASSUME'd variables.
 evalModuleAndDirectivesWithJSON :: Aeson.Value -> Environment -> Module Resolved -> Eval (Environment, [EvalDirectiveResult])
 evalModuleAndDirectivesWithJSON json env m = do
-  (env', directives) <- interpMachine do
-    ienv <- initialEnvironment
-    (moduleEnv, dirs) <- evalModule (env <> ienv) m
-    -- Now write JSON values into the pre-allocated References
-    -- The combined environment includes both the initial env and the moduleEnv
-    let combinedEnv = moduleEnv <> env <> ienv
-    writeJSONToReferences json combinedEnv
-    pure (moduleEnv, dirs)
-  results <- traverse nfDirective directives
-  pure (env', results)
+  ienv <- initialEnvironment
+  (moduleEnv, dirs) <- evalModule (env <> ienv) m
+  -- Now write JSON values into the pre-allocated References
+  -- The combined environment includes both the initial env and the moduleEnv
+  let combinedEnv = moduleEnv <> env <> ienv
+  writeJSONToReferences json combinedEnv
+  results <- traverse nfDirective dirs
+  pure (moduleEnv, results)
 
 execEvalModuleWithJSON :: EvalConfig -> EntityInfo -> Aeson.Value -> Module Resolved -> IO (Environment, [EvalDirectiveResult])
 execEvalModuleWithJSON evalConfig entityInfo json m@(MkModule _ moduleUri _) = do
-  case evalModuleAndDirectivesWithJSON json emptyEnvironment m of
-    MkEval f -> do
-      stack <- newIORef emptyStack
-      supply <- newIORef 0
-      actualTime <- resolveEvalTime evalConfig
-      let temporalCtx = initialTemporalContext actualTime
-      temporalContext <- newIORef temporalCtx
-      let evalTrace = Nothing
-      r <- f MkEvalState {moduleUri, stack, supply, evalTrace, entityInfo, evalTime = actualTime, temporalContext, tracePolicy = evalConfig.tracePolicy, safeMode = evalConfig.safeMode}
-      case r of
-        Left exc -> do
-          hPutStrLn stderr $ "Eval failure in module: " <> show moduleUri
-          traverse_ (hPutStrLn stderr . Text.unpack) (prettyEvalException exc)
-          pure (emptyEnvironment, [])
-        Right result -> pure result
+  st0 <- mkInitialEvalState evalConfig entityInfo moduleUri
+  r <- try (runEval st0 (evalModuleAndDirectivesWithJSON json emptyEnvironment m))
+  case r of
+    Left exc -> do
+      hPutStrLn stderr $ "Eval failure in module: " <> show moduleUri
+      traverse_ (hPutStrLn stderr . Text.unpack) (prettyEvalException exc)
+      pure (emptyEnvironment, [])
+    Right result -> pure result
 
 {- | Evaluate an expression in the context of a module and initial environment.
 
