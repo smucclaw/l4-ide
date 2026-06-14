@@ -27,11 +27,14 @@
     GetSidebarDeploymentStatus,
     GetSidebarUpdateStatus,
     ShowNotification,
+    RequestRenderPreview,
+    GetSidebarImportedFiles,
     RequestRevealLocation,
     type WebviewFrontendIsReadyMessage,
     type ExportedFunctionInfo,
     type GetSidebarConnectionStatusResponse,
     type SidebarDeploymentInfo,
+    type SidebarImportedFile,
     type RemoteFunctionSchema,
   } from 'jl4-client-rpc'
   import type { WebviewApi } from 'vscode-webview'
@@ -55,9 +58,101 @@
   })
   let initialized: boolean = $state(false)
   let previewDebounceTimer: ReturnType<typeof setTimeout> | null = null
-  let activeTab: 'ai-chat' | 'docs' | 'inspector' | 'preview' | 'deployments' =
-    $state('docs')
+  let activeTab:
+    | 'ai-chat'
+    | 'docs'
+    | 'inspector'
+    | 'render'
+    | 'preview'
+    | 'deployments' = $state('docs')
   let menuOpen: boolean = $state(false)
+
+  // Render tab state
+  let renderFormat: 'html' | 'akn' | 'text' | 'json' | 'plan' = $state('html')
+  let renderIncludeUnused: boolean = $state(false)
+  let renderNumberSections: boolean = $state(true)
+  let renderNumberClauses: boolean = $state(true)
+  let renderToc: boolean = $state(false)
+  let renderBusy: boolean = $state(false)
+  let renderError: string = $state('')
+  let renderSavedName: string = $state('')
+  // Imports checklist: the modules the active file pulls in, and the set
+  // the user has deselected (excluded) from the render. Default: all
+  // imports excluded — a URI present in `excludedModules` is left out.
+  let importedFiles: SidebarImportedFile[] = $state([])
+  let excludedModules: Set<string> = $state(new Set())
+  let importsLoading: boolean = $state(false)
+
+  async function fetchImportedFiles() {
+    if (!messenger) return
+    importsLoading = true
+    try {
+      const res = await messenger.sendRequest(
+        GetSidebarImportedFiles,
+        HOST_EXTENSION,
+        undefined as never
+      )
+      // Newly-discovered imports default to excluded; a prior include/exclude
+      // decision for an already-known URI is preserved across re-fetches (tab
+      // re-entry, file switches with shared imports). Stale URIs are dropped.
+      const prevKnown = new Set(importedFiles.map((f) => f.uri))
+      importedFiles = res.files
+      excludedModules = new Set(
+        res.files
+          .map((f) => f.uri)
+          .filter((uri) => !prevKnown.has(uri) || excludedModules.has(uri))
+      )
+    } catch {
+      importedFiles = []
+    } finally {
+      importsLoading = false
+    }
+  }
+
+  function toggleModule(uri: string) {
+    const next = new Set(excludedModules)
+    if (next.has(uri)) next.delete(uri)
+    else next.add(uri)
+    excludedModules = next
+  }
+
+  // Refresh the imports checklist when the Render tab is shown or the
+  // active file changes underneath it.
+  $effect(() => {
+    if (activeTab === 'render' && activeFileUri && messenger) {
+      fetchImportedFiles()
+    }
+  })
+
+  async function renderPreview() {
+    if (!messenger) return
+    renderBusy = true
+    renderError = ''
+    renderSavedName = ''
+    try {
+      const res = await messenger.sendRequest(
+        RequestRenderPreview,
+        HOST_EXTENSION,
+        {
+          format: renderFormat,
+          includeUnused: renderIncludeUnused,
+          numberSections: renderNumberSections,
+          numberClauses: renderNumberClauses,
+          toc: renderToc,
+          excludeModules: [...excludedModules],
+        }
+      )
+      if (!res.success) {
+        renderError = res.error ?? 'Render failed.'
+      } else if (res.savedPath) {
+        renderSavedName = res.savedPath.split('/').pop() ?? res.savedPath
+      }
+    } catch (e) {
+      renderError = e instanceof Error ? e.message : String(e)
+    } finally {
+      renderBusy = false
+    }
+  }
 
   // Deploy flow state
   // Deploy is a two-step wizard: `deploy-form` picks the deployment id,
@@ -1197,6 +1292,13 @@
     </button>
     <button
       class="tab"
+      class:active={activeTab === 'render'}
+      onclick={() => (activeTab = 'render')}
+    >
+      Render
+    </button>
+    <button
+      class="tab"
       class:active={activeTab === 'preview'}
       onclick={() => (activeTab = 'preview')}
     >
@@ -1229,6 +1331,76 @@
       </div>
       <div class="tab-pane" hidden={activeTab !== 'inspector'}>
         <InspectorPanel {messenger} {onLearnMore} />
+      </div>
+      <div class="tab-pane render-pane" hidden={activeTab !== 'render'}>
+        <p class="render-intro">
+          Render this L4 file as a formatted legal document. Definitions, rules
+          and decision logic are laid out deterministically; test fixtures and
+          unused imports are omitted.
+        </p>
+        <div class="form-group">
+          <label class="form-label" for="render-format">Format</label>
+          <select
+            id="render-format"
+            class="form-input"
+            bind:value={renderFormat}
+          >
+            <option value="html">HTML preview</option>
+            <option value="akn">Akoma Ntoso (XML)</option>
+            <option value="text">Plain text</option>
+            <option value="json">Document IR (JSON)</option>
+            <option value="plan">Export plan (JSON)</option>
+          </select>
+        </div>
+        <label class="render-check">
+          <input type="checkbox" bind:checked={renderNumberSections} />
+          Number sections (§ 1, 1.1)
+        </label>
+        <label class="render-check">
+          <input type="checkbox" bind:checked={renderNumberClauses} />
+          Number clauses (1., 2.)
+        </label>
+        <label class="render-check">
+          <input type="checkbox" bind:checked={renderToc} />
+          Table of contents (HTML)
+        </label>
+        <label class="render-check">
+          <input type="checkbox" bind:checked={renderIncludeUnused} />
+          Include unused imported definitions
+        </label>
+        {#if importedFiles.length > 0}
+          <div class="render-imports">
+            <div class="render-imports-title">Imported files</div>
+            <p class="render-imports-hint">
+              Uncheck a file to leave its definitions out of the render.
+            </p>
+            {#each importedFiles as file (file.uri)}
+              <label class="render-check render-import-row">
+                <input
+                  type="checkbox"
+                  checked={!excludedModules.has(file.uri)}
+                  onchange={() => toggleModule(file.uri)}
+                />
+                {file.label}
+              </label>
+            {/each}
+          </div>
+        {:else if importsLoading}
+          <div class="render-imports-empty">Loading imported files…</div>
+        {/if}
+        <button
+          class="render-btn"
+          onclick={renderPreview}
+          disabled={renderBusy}
+        >
+          {renderBusy ? 'Rendering…' : 'Generate preview'}
+        </button>
+        {#if renderSavedName}
+          <div class="render-saved">Saved {renderSavedName}</div>
+        {/if}
+        {#if renderError}
+          <div class="form-error">{renderError}</div>
+        {/if}
       </div>
       {#if activeTab === 'preview'}
         <div class="preview-pane">
@@ -1750,7 +1922,7 @@
 
   .tab {
     flex: 1;
-    padding: 6px 8px;
+    padding: 6px 2px;
     background: none;
     border: none;
     border-bottom: 1px solid transparent;
@@ -1759,6 +1931,9 @@
     font-size: 0.92em;
     opacity: 0.6;
     transition: opacity 0.15s;
+    /* Keep multi-word labels (e.g. "Legalese AI") on a single line
+       when the sidebar narrows, rather than wrapping to two rows. */
+    white-space: nowrap;
   }
 
   .tab:hover {
@@ -2023,6 +2198,75 @@
   .form-error {
     color: #f14c4c;
     margin-top: 2px;
+  }
+
+  .render-pane {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .render-intro {
+    margin: 0;
+    font-size: 12px;
+    opacity: 0.8;
+    line-height: 1.4;
+  }
+  .render-check {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .render-btn {
+    margin-top: 4px;
+    padding: 6px 12px;
+    border: none;
+    border-radius: 3px;
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .render-btn:hover:not(:disabled) {
+    background: var(--vscode-button-hoverBackground);
+  }
+  .render-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+  .render-saved {
+    font-size: 12px;
+    opacity: 0.75;
+  }
+  .render-imports {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 10px;
+    border: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+    border-radius: 4px;
+  }
+  .render-imports-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    opacity: 0.8;
+  }
+  .render-imports-hint {
+    margin: 0 0 2px;
+    font-size: 11px;
+    opacity: 0.7;
+    line-height: 1.4;
+  }
+  .render-import-row {
+    word-break: break-word;
+  }
+  .render-imports-empty {
+    font-size: 12px;
+    opacity: 0.7;
   }
 
   .existing-deployments {

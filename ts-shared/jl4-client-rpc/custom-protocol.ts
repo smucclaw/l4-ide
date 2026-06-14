@@ -228,3 +228,58 @@ export const GetExportedFunctionsRequestType = makeL4RpcRequestType<
   GetExportedFunctionsParams,
   GetExportedFunctionsResponse
 >('l4/getExportedFunctions')
+
+// ---------------------------------------------------------------------------
+// l4/exportDocument — deterministic L4 → formatted document
+// ---------------------------------------------------------------------------
+
+export interface ExportDocumentParams {
+  verDocId: { uri: string; version: number }
+  /** "html" (default) | "text" | "akn" | "json" */
+  format?: string
+  /** Render imported definitions/rules not referenced by this document. */
+  includeUnused?: boolean
+  numberSections?: boolean
+  numberClauses?: boolean
+  /** Prepend a linked table of contents (HTML). */
+  toc?: boolean
+  /** Module URIs to exclude from the render (deselected imports). */
+  excludeModules?: string[]
+}
+
+export interface ExportDocumentResult {
+  format: string
+  /** The rendered document in the requested format (empty for "json"). */
+  content: string
+  /** The structured document IR (always present). */
+  ir: unknown
+}
+
+export const ExportDocumentRequestType = makeL4RpcRequestType<
+  ExportDocumentParams,
+  ExportDocumentResult
+>('l4/exportDocument')
+
+export interface ExportPlanParams {
+  verDocId: { uri: string; version: number }
+}
+
+export interface ExportPlanModule {
+  /** Module URI — pass back as an `excludeModules` entry to drop it. */
+  uri: string
+  /** Human-readable module label (file name or section title). */
+  label: string
+  isMain: boolean
+  units: unknown[]
+}
+
+export interface ExportPlanResult {
+  mainModule: string
+  modules: ExportPlanModule[]
+}
+
+/** The import/rule tree + reachability that drives the deselect UI. */
+export const ExportPlanRequestType = makeL4RpcRequestType<
+  ExportPlanParams,
+  ExportPlanResult
+>('l4/exportPlan')

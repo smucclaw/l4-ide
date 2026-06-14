@@ -30,6 +30,7 @@ import L4.Cli.Ast (AstOptions, astCmd, astOptionsParser)
 import L4.Cli.Batch (BatchOptions, batchCmd, batchOptionsParser)
 import L4.Cli.Check (CheckOptions, checkCmd, checkOptionsParser)
 import L4.Cli.Format (FormatOptions, formatCmd, formatOptionsParser)
+import L4.Cli.Render (RenderOptions, renderCmd, renderOptionsParser)
 import L4.Cli.Run (RunOptions, runCmd, runOptionsParser)
 import L4.Cli.StateGraph (StateGraphOptions, stateGraphCmd, stateGraphOptionsParser)
 import L4.Cli.Trace (TraceOptions, traceCmd, traceOptionsParser)
@@ -46,6 +47,7 @@ data Command
   | CmdBatch      BatchOptions
   | CmdTrace      TraceOptions
   | CmdStateGraph StateGraphOptions
+  | CmdRender     RenderOptions
 
 commandParser :: Parser Command
 commandParser =
@@ -76,6 +78,9 @@ commandParser =
       <> command "state-graph"
            (info (CmdStateGraph <$> stateGraphOptionsParser)
              (progDesc "Extract regulative-rule state transition graphs as GraphViz DOT"))
+      <> command "render"
+           (info (CmdRender <$> renderOptionsParser)
+             (progDesc "Render an L4 file to a formatted document (html|text|json|plan)"))
 
 commandInfo :: ParserInfo Command
 commandInfo = info (helper <*> commandParser)
@@ -116,6 +121,7 @@ main = do
     CmdBatch      opts -> batchCmd      opts
     CmdTrace      opts -> traceCmd      opts
     CmdStateGraph opts -> stateGraphCmd opts
+    CmdRender     opts -> renderCmd     opts
 
 -- Silence unused-imports warning when we only import Options for types
 -- indirectly via re-exports.
