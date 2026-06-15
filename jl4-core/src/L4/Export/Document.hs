@@ -858,6 +858,13 @@ toClause e0 = case carameliseNode e0 of
   Regulative _ deon  -> deonticClause deon
   And{}              -> CAll (map toClause (flattenAnd e0))
   Or{}               -> CAny (map toClause (flattenOr e0))
+  -- A function applied to a single control-flow argument distributes over that
+  -- argument's branches: "the day before (CONSIDER … THEN x …)" lays out as a
+  -- case tree whose leaves are "the day before x" — a readable outline rather
+  -- than one run-on line that inlines the whole nested CONSIDER.
+  App ann n [arg]
+    | isControlFlowExpr (carameliseNode arg) ->
+        toClause (distributeIntoBranches (\leaf -> App ann n [leaf]) arg)
   e | Just f <- formulaText e -> CLeaf (normalizeWs f)
     | otherwise               -> CLeaf (condText e)
  where
@@ -867,6 +874,30 @@ toClause e0 = case carameliseNode e0 of
       CIf (acc <> [ (condText gc, toClause gf) | MkGuardedExpr _ gc gf <- gs ]) (Just (toClause o))
     _                     -> CIf acc (Just (toClause f))
   branchPair (MkBranch _ lhs body) = (branchLhsText lhs, toClause body)
+
+-- | Whether an expression is a branching construct (so it should lay out as a
+-- structured clause rather than inline prose).
+isControlFlowExpr :: Expr Resolved -> Bool
+isControlFlowExpr = \case
+  Consider{}   -> True
+  IfThenElse{} -> True
+  MultiWayIf{} -> True
+  _            -> False
+
+-- | Push a wrapper (e.g. an enclosing function application) down to the result
+-- leaves of a control-flow expression, preserving its branch structure. Sound
+-- because L4 is pure: @f (IF c THEN x ELSE y) = IF c THEN f x ELSE f y@.
+distributeIntoBranches :: (Expr Resolved -> Expr Resolved) -> Expr Resolved -> Expr Resolved
+distributeIntoBranches wrap e = case carameliseNode e of
+  Consider ann s brs ->
+    Consider ann s [ MkBranch a lhs (distributeIntoBranches wrap b) | MkBranch a lhs b <- brs ]
+  IfThenElse ann c t f ->
+    IfThenElse ann c (distributeIntoBranches wrap t) (distributeIntoBranches wrap f)
+  MultiWayIf ann gs o ->
+    MultiWayIf ann
+      [ MkGuardedExpr a gc (distributeIntoBranches wrap g) | MkGuardedExpr a gc g <- gs ]
+      (distributeIntoBranches wrap o)
+  leaf -> wrap leaf
 
 branchLhsText :: BranchLhs Resolved -> Text
 branchLhsText = \case
