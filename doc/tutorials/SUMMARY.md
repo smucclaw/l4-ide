@@ -25,6 +25,7 @@
 ## Natural Language
 
 - [Using Infix, Postfix, and Mixfix Functions](natural-language-functions/natural-language-functions.md)
+- [Optimising for Natural Language Generation with @nlg](natural-language-functions/optimising-natural-language-generation.md)
 
 ## LLM Integration
 

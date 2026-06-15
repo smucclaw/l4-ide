@@ -15,7 +15,8 @@ New to L4? Start here:
 
 Write functions that read like legal prose:
 
-- **[Infix, Postfix, and Mixfix Functions](natural-language-functions/natural-language-functions.md)**
+- **[Infix, Postfix, and Mixfix Functions](natural-language-functions/natural-language-functions.md)** - Call functions in natural word order
+- **[Optimising for Natural Language Document Generation with `@nlg`](natural-language-functions/optimising-natural-language-generation.md)** - Make the rendered prose read as naturally as possible, then refine it with Legalese AI
 
 **Audience:** All L4 users  
 **Prerequisites:** Basic function syntax

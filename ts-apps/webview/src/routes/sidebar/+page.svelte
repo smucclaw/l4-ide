@@ -1491,6 +1491,13 @@
           {:else}
             Select a valid L4 file to convert it into another format.
           {/if}
+          <button
+            class="learn-more"
+            onclick={() =>
+              onLearnMore(
+                'https://legalese.com/l4/tutorials/natural-language-functions/optimising-natural-language-generation.md'
+              )}>Learn more</button
+          >
         </p>
         <div class="form-group">
           <label class="form-label" for="render-format">Format</label>
@@ -2488,6 +2495,20 @@
     font-size: 12px;
     opacity: 0.8;
     line-height: 1.4;
+  }
+  .render-intro .learn-more {
+    background: none;
+    border: none;
+    padding: 0;
+    /* Extension primary action colour (crimson), matching the other
+       "Learn more" links and CTAs. */
+    color: #c8376a;
+    cursor: pointer;
+    font: inherit;
+  }
+  .render-intro .learn-more:hover {
+    color: #d94d7e;
+    text-decoration: underline;
   }
   .render-check {
     display: flex;
