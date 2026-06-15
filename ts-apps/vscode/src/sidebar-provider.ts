@@ -447,6 +447,9 @@ export function initializeSidebarMessenger(
     }
     try {
       const verDocId = { uri: doc.uri.toString(), version: doc.version }
+      // Default to opening the result; the Render tab opts out when it
+      // will refine the render through Legalese AI instead.
+      const openInEditor = params.openInEditor ?? true
 
       // Compute the rendered content + the IR title.
       let content: string
@@ -496,20 +499,24 @@ export function initializeSidebarMessenger(
         )
         savedPath = outUri.fsPath
 
-        // Open it in the active group (not a split).
-        if (params.format === 'html') {
-          showHtmlPreview(content, title ?? base)
-        } else {
-          const opened = await vscode.workspace.openTextDocument(outUri)
-          await vscode.window.showTextDocument(opened, {
-            viewColumn: vscode.ViewColumn.Active,
-            preview: false,
-          })
+        // Open it in the active group (not a split) — unless the caller
+        // asked us to skip it (Render tab handing off to Legalese AI
+        // refinement, where the deterministic output is intermediate).
+        if (openInEditor) {
+          if (params.format === 'html') {
+            showHtmlPreview(content, title ?? base)
+          } else {
+            const opened = await vscode.workspace.openTextDocument(outUri)
+            await vscode.window.showTextDocument(opened, {
+              viewColumn: vscode.ViewColumn.Active,
+              preview: false,
+            })
+          }
         }
-      } else if (params.format === 'html') {
+      } else if (openInEditor && params.format === 'html') {
         // Unsaved/remote doc: preview-only, no file written.
         showHtmlPreview(content, title ?? 'L4 Render')
-      } else {
+      } else if (openInEditor) {
         const language =
           params.format === 'akn'
             ? 'xml'

@@ -188,13 +188,13 @@ renderHtml cfg doc =
       Just h  ->
         let tag = "h" <> Text.pack (show (min 4 (depth + 1)))
         in "<" <> tag <> " id=\"" <> sectionAnchor sec <> "\" class=\"section\">"
-             <> esc h <> "</" <> tag <> ">"
+             <> esc h <> "</" <> tag <> ">\n"
 
   groupHtml g =
-    maybe "" (\l -> "<p class=\"group-label\">" <> esc l <> "</p>") g.groupLabel
-      <> "<ol class=\"clauses\">"
+    maybe "" (\l -> "<p class=\"group-label\">" <> esc l <> "</p>\n") g.groupLabel
+      <> "<ol class=\"clauses\">\n"
       <> Text.concat (map blockHtml g.groupBlocks)
-      <> "</ol>"
+      <> "</ol>\n"
 
   blockHtml b =
     let kindClass = case b.blockKind of
@@ -206,13 +206,13 @@ renderHtml cfg doc =
       RenderedInline ->
         "<li class=\"clause " <> kindClass <> "\"" <> anchor <> ">"
           <> termHtml b <> " " <> bodyHtml b.blockConnector b.blockBody
-          <> "</li>"
+          <> "</li>\n"
       RenderedReference forced ->
         "<li class=\"clause reference " <> kindClass <> "\"" <> anchor <> ">"
           <> "<span class=\"term\">" <> esc (capitalize b.blockHeading) <> "</span> — "
           <> "<em class=\"citation\">" <> esc (fromMaybe "referenced" b.blockCitation) <> "</em>"
           <> (if forced then " <span class=\"forced\">(retained — still required)</span>" else "")
-          <> "</li>"
+          <> "</li>\n"
 
   termHtml b =
     let inner = esc (capitalize b.blockHeading)
@@ -251,43 +251,45 @@ renderHtml cfg doc =
 
   whereHtml defs =
     " <span class=\"where-label\">where:</span>"
-      <> "<ol class=\"where-defs\">"
+      <> "\n<ol class=\"where-defs\">\n"
       <> Text.concat (map whereDefLi defs)
       <> "</ol>"
    where
     whereDefLi (h, c, cl) =
       "<li><span class=\"term\">" <> esc (capitalize h) <> "</span> "
-        <> bodyHtml c cl <> "</li>"
+        <> bodyHtml c cl <> "</li>\n"
 
   tableHtml cols rows =
-    "<table class=\"l4-table\"><thead><tr>"
+    "<table class=\"l4-table\">\n<thead><tr>"
       <> Text.concat (map (\c -> "<th>" <> esc c <> "</th>") cols)
-      <> "</tr></thead><tbody>"
+      <> "</tr></thead>\n<tbody>\n"
       <> Text.concat (map rowHtml rows)
-      <> "</tbody></table>"
+      <> "</tbody></table>\n"
    where
     rowHtml cells =
-      "<tr>" <> Text.concat (map (\c -> "<td>" <> clauseHtml c <> "</td>") cells) <> "</tr>"
+      "<tr>" <> Text.concat (map (\c -> "<td>" <> clauseHtml c <> "</td>") cells) <> "</tr>\n"
 
   treeHtml cs =
-    "<ol class=\"tree\">" <> Text.concat (map (\c -> "<li>" <> clauseHtml c <> "</li>") cs) <> "</ol>"
+    "\n<ol class=\"tree\">\n"
+      <> Text.concat (map (\c -> "<li>" <> clauseHtml c <> "</li>\n") cs)
+      <> "</ol>\n"
 
   ifHtml chain els =
-    "<ol class=\"tree\">"
+    "\n<ol class=\"tree\">\n"
       <> Text.concat (zipWith branchLi [0 ..] chain)
-      <> maybe "" (\e -> "<li>" <> kw "Otherwise" <> ": " <> clauseHtml e <> "</li>") els
-      <> "</ol>"
+      <> maybe "" (\e -> "<li>" <> kw "Otherwise" <> ": " <> clauseHtml e <> "</li>\n") els
+      <> "</ol>\n"
    where
     branchLi i (cond, then_) =
       "<li>" <> kw (if (i :: Int) == 0 then "If" else "Otherwise, if")
-        <> " <span class=\"cond\">" <> lk cond <> "</span>: " <> clauseHtml then_ <> "</li>"
+        <> " <span class=\"cond\">" <> lk cond <> "</span>: " <> clauseHtml then_ <> "</li>\n"
 
   casesHtml brs =
-    "<ol class=\"tree\">" <> Text.concat (map caseLi brs) <> "</ol>"
+    "\n<ol class=\"tree\">\n" <> Text.concat (map caseLi brs) <> "</ol>\n"
    where
     caseLi (pat, cl)
-      | pat == "otherwise" = "<li>" <> kw "Otherwise" <> ": " <> clauseHtml cl <> "</li>"
-      | otherwise = "<li>" <> kw "If it is" <> " <span class=\"cond\">" <> lk pat <> "</span>: " <> clauseHtml cl <> "</li>"
+      | pat == "otherwise" = "<li>" <> kw "Otherwise" <> ": " <> clauseHtml cl <> "</li>\n"
+      | otherwise = "<li>" <> kw "If it is" <> " <span class=\"cond\">" <> lk pat <> "</span>: " <> clauseHtml cl <> "</li>\n"
 
   deonticHtml party modal act due prov hence lest =
     let base = prose party <> " <strong>" <> esc modal <> "</strong> " <> prose act
@@ -297,16 +299,16 @@ renderHtml cfg doc =
     in case conseq of
       []          -> base <> "."
       [(lab, c)]  -> base <> ". " <> lab <> clauseHtml c <> "."
-      cs          -> base <> ":<ol class=\"tree\">"
-                       <> Text.concat (map (\(lab, c) -> "<li>" <> lab <> clauseHtml c <> "</li>") cs)
-                       <> "</ol>"
+      cs          -> base <> ":\n<ol class=\"tree\">\n"
+                       <> Text.concat (map (\(lab, c) -> "<li>" <> lab <> clauseHtml c <> "</li>\n") cs)
+                       <> "</ol>\n"
 
   fieldsHtml fs =
-    "<ol class=\"tree\">" <> Text.concat (map fieldLi fs) <> "</ol>"
+    "\n<ol class=\"tree\">\n" <> Text.concat (map fieldLi fs) <> "</ol>\n"
    where
     fieldLi (k, v) =
       "<li><span class=\"field\">" <> lk k <> "</span>"
-        <> (if Text.null v then "" else " — " <> prose v) <> "</li>"
+        <> (if Text.null v then "" else " — " <> prose v) <> "</li>\n"
 
   kw w = "<span class=\"kw\">" <> w <> "</span>"
   lk = proseHtml linkMap

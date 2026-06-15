@@ -29,6 +29,7 @@
     ShowNotification,
     RequestRenderPreview,
     GetSidebarImportedFiles,
+    AiChatPickAttachment,
     RequestRevealLocation,
     type WebviewFrontendIsReadyMessage,
     type ExportedFunctionInfo,
@@ -36,6 +37,7 @@
     type SidebarDeploymentInfo,
     type SidebarImportedFile,
     type RemoteFunctionSchema,
+    type AiChatAttachment,
   } from 'jl4-client-rpc'
   import type { WebviewApi } from 'vscode-webview'
   import ToolCard from '$lib/components/tool-card.svelte'
@@ -74,8 +76,29 @@
   let renderNumberClauses: boolean = $state(true)
   let renderToc: boolean = $state(false)
   let renderBusy: boolean = $state(false)
-  let renderError: string = $state('')
-  let renderSavedName: string = $state('')
+  // Legalese AI rendering: when on (and a Cloud session is valid), the
+  // deterministic render is refined through the legalese-compose-4
+  // pipeline using these formatting preferences / drafting policy.
+  // Preferences and the policy reference persist in localStorage.
+  const AI_PREFS_KEY = 'l4.render.ai.formatPrefs'
+  const AI_POLICY_KEY = 'l4.render.ai.draftingPolicy'
+  let renderUseAi: boolean = $state(false)
+  let renderFormatPrefs: string = $state('')
+  // The drafting-policy file as a ready-to-stage chat attachment (the
+  // picker returns this shape for both text and PDF).
+  let draftingPolicy: AiChatAttachment | null = $state(null)
+  // Hand-off to the AI chat panel: set after a render when the user
+  // asked to refine, consumed by AiChatPanel's refineRequest effect.
+  let renderRefineRequest: {
+    prompt: string
+    attachment: AiChatAttachment | null
+    files: Array<{ name: string; path: string }>
+    nonce: number
+  } | null = $state(null)
+  // A valid Legalese Cloud session — gates the AI rendering controls.
+  const cloudSessionValid: boolean = $derived(
+    connectionStatus.isLegaleseCloud && connectionStatus.connected
+  )
   // Imports checklist: the modules the active file pulls in, and the set
   // the user has deselected (excluded) from the render. Default: all
   // imports excluded — a URI present in `excludedModules` is left out.
@@ -124,11 +147,119 @@
     }
   })
 
+  // Restore persisted AI formatting preferences / drafting policy.
+  function loadAiPrefs() {
+    try {
+      renderFormatPrefs = localStorage.getItem(AI_PREFS_KEY) ?? ''
+      const raw = localStorage.getItem(AI_POLICY_KEY)
+      draftingPolicy = raw ? JSON.parse(raw) : null
+    } catch {
+      // localStorage unavailable / corrupt — start clean.
+    }
+  }
+
+  // Persist on every change (cheap; these are small strings).
+  $effect(() => {
+    try {
+      localStorage.setItem(AI_PREFS_KEY, renderFormatPrefs)
+      if (draftingPolicy) {
+        localStorage.setItem(AI_POLICY_KEY, JSON.stringify(draftingPolicy))
+      } else {
+        localStorage.removeItem(AI_POLICY_KEY)
+      }
+    } catch {
+      // ignore quota / availability errors
+    }
+  })
+
+  // Pick a drafting-policy document (text or PDF) via the extension's
+  // native file picker, reusing the AI chat attachment flow.
+  async function pickDraftingPolicy() {
+    if (!messenger) return
+    try {
+      const res = await messenger.sendRequest(
+        AiChatPickAttachment,
+        HOST_EXTENSION,
+        { accept: 'text-or-pdf' }
+      )
+      if (res.note) notify('info', res.note)
+      if (res.attachment) draftingPolicy = res.attachment
+    } catch (e) {
+      notify('error', e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  function clearDraftingPolicy() {
+    draftingPolicy = null
+  }
+
+  // file:// URI → filesystem path the AI agent's fs tools can read.
+  function fsPathFromUri(uri: string): string {
+    return decodeURIComponent(uri.replace(/^file:\/\//, ''))
+  }
+
+  function baseName(p: string): string {
+    return p.split('/').pop() ?? p
+  }
+
+  // Human label for the selected format, used in the refine prompt.
+  function formatLabel(fmt: string): string {
+    return fmt === 'akn'
+      ? 'Akoma Ntoso XML'
+      : fmt === 'text'
+        ? 'plain-text'
+        : 'HTML'
+  }
+
+  // The refinement prompt is deliberately short: the L4 source and the
+  // generated document ride along as `@`-mention chips (the agent reads
+  // them with its fs tools), so no paths are spelled out here.
+  function buildRefinePrompt(): string {
+    const fmt = formatLabel(renderFormat)
+    const lines = [
+      `Refine the formatting and wording of the generated ${fmt} document, using the L4 source only as context. Preserve the defined terms, rules, values and scope exactly — change presentation only, never the substance.`,
+    ]
+    if (renderFormatPrefs.trim()) {
+      lines.push(``, `Formatting preferences:`, renderFormatPrefs.trim())
+    }
+    if (draftingPolicy) {
+      lines.push(``, `Apply the attached drafting policy.`)
+    }
+    lines.push(``, `Save the result as a new copy next to the original.`)
+    return lines.join('\n')
+  }
+
+  // After a successful render with "Refine with Legalese AI" on, open a
+  // fresh AI chat conversation seeded with the refine prompt, the two
+  // documents as chips, and the policy attachment, then switch tabs so
+  // the agent starts immediately.
+  function startAiRefinement(generatedPath: string) {
+    if (!activeFileUri) return
+    const sourcePath = fsPathFromUri(activeFileUri)
+    renderRefineRequest = {
+      prompt: buildRefinePrompt(),
+      attachment: draftingPolicy,
+      files: [
+        { name: baseName(sourcePath), path: sourcePath },
+        { name: baseName(generatedPath), path: generatedPath },
+      ],
+      nonce: ++actionNonce,
+    }
+    activeTab = 'ai-chat'
+  }
+
   async function renderPreview() {
     if (!messenger) return
     renderBusy = true
-    renderError = ''
-    renderSavedName = ''
+    // When the render will be handed off to Legalese AI for refinement,
+    // skip popping the deterministic output open in an editor/browser
+    // tab — it's an intermediate artifact the agent rewrites, and the
+    // user only wants the standalone preview when refinement is OFF.
+    const refinable =
+      renderFormat === 'html' ||
+      renderFormat === 'text' ||
+      renderFormat === 'akn'
+    const willRefine = renderUseAi && cloudSessionValid && refinable
     try {
       const res = await messenger.sendRequest(
         RequestRenderPreview,
@@ -140,15 +271,34 @@
           numberClauses: renderNumberClauses,
           toc: renderToc,
           excludeModules: [...excludedModules],
+          openInEditor: !willRefine,
         }
       )
       if (!res.success) {
-        renderError = res.error ?? 'Render failed.'
-      } else if (res.savedPath) {
-        renderSavedName = res.savedPath.split('/').pop() ?? res.savedPath
+        notify('error', res.error ?? 'Render failed.')
+        return
+      }
+      const savedName = res.savedPath
+        ? (res.savedPath.split('/').pop() ?? res.savedPath)
+        : undefined
+      notify('info', savedName ? `Rendered ${savedName}` : 'Render complete.')
+
+      // Hand off to Legalese AI for refinement when requested. Needs a
+      // file on disk to point the agent at (and a structured format —
+      // the JSON/plan outputs aren't documents to redraft; `willRefine`
+      // already encodes the format/session checks).
+      if (willRefine) {
+        if (res.savedPath) {
+          startAiRefinement(res.savedPath)
+        } else {
+          notify(
+            'warning',
+            'Save the L4 file to disk to refine the render with Legalese AI.'
+          )
+        }
       }
     } catch (e) {
-      renderError = e instanceof Error ? e.message : String(e)
+      notify('error', e instanceof Error ? e.message : String(e))
     } finally {
       renderBusy = false
     }
@@ -1183,6 +1333,7 @@
   }
 
   onMount(() => {
+    loadAiPrefs()
     // eslint-disable-next-line no-undef
     const vsCodeApi: WebviewApi<null> = acquireVsCodeApi()
     messenger = new Messenger(vsCodeApi, { debugLog: true })
@@ -1324,6 +1475,7 @@
           {messenger}
           visible={activeTab === 'ai-chat'}
           {deploymentChatRequest}
+          refineRequest={renderRefineRequest}
         />
       </div>
       <div class="tab-pane" hidden={activeTab !== 'docs'}>
@@ -1334,9 +1486,11 @@
       </div>
       <div class="tab-pane render-pane" hidden={activeTab !== 'render'}>
         <p class="render-intro">
-          Render this L4 file as a formatted legal document. Definitions, rules
-          and decision logic are laid out deterministically; test fixtures and
-          unused imports are omitted.
+          {#if activeFileName}
+            Convert {activeFileName} into another format:
+          {:else}
+            Select a valid L4 file to convert it into another format.
+          {/if}
         </p>
         <div class="form-group">
           <label class="form-label" for="render-format">Format</label>
@@ -1345,62 +1499,188 @@
             class="form-input"
             bind:value={renderFormat}
           >
-            <option value="html">HTML preview</option>
+            <option value="html">HTML document</option>
             <option value="akn">Akoma Ntoso (XML)</option>
             <option value="text">Plain text</option>
             <option value="json">Document IR (JSON)</option>
             <option value="plan">Export plan (JSON)</option>
           </select>
         </div>
-        <label class="render-check">
-          <input type="checkbox" bind:checked={renderNumberSections} />
-          Number sections (§ 1, 1.1)
-        </label>
-        <label class="render-check">
-          <input type="checkbox" bind:checked={renderNumberClauses} />
-          Number clauses (1., 2.)
-        </label>
-        <label class="render-check">
-          <input type="checkbox" bind:checked={renderToc} />
-          Table of contents (HTML)
-        </label>
-        <label class="render-check">
-          <input type="checkbox" bind:checked={renderIncludeUnused} />
-          Include unused imported definitions
-        </label>
+        <div class="render-imports-title">Render Options</div>
+        <div class="render-imports">
+          <label class="render-check">
+            <span class="render-check-label">Number sections (§ 1, 1.1)</span>
+            <span
+              class="toggle"
+              class:on={renderNumberSections}
+              aria-hidden="true"
+            >
+              <span class="knob"></span>
+            </span>
+            <input
+              class="visually-hidden"
+              type="checkbox"
+              bind:checked={renderNumberSections}
+            />
+          </label>
+          <label class="render-check">
+            <span class="render-check-label">Number clauses (1., 2.)</span>
+            <span
+              class="toggle"
+              class:on={renderNumberClauses}
+              aria-hidden="true"
+            >
+              <span class="knob"></span>
+            </span>
+            <input
+              class="visually-hidden"
+              type="checkbox"
+              bind:checked={renderNumberClauses}
+            />
+          </label>
+          <label class="render-check">
+            <span class="render-check-label">Table of contents (HTML only)</span
+            >
+            <span class="toggle" class:on={renderToc} aria-hidden="true">
+              <span class="knob"></span>
+            </span>
+            <input
+              class="visually-hidden"
+              type="checkbox"
+              bind:checked={renderToc}
+            />
+          </label>
+        </div>
         {#if importedFiles.length > 0}
+          <div class="render-imports-title">Imported files</div>
+          <p class="render-imports-hint">
+            Select imported dependencies that should be included.
+          </p>
           <div class="render-imports">
-            <div class="render-imports-title">Imported files</div>
-            <p class="render-imports-hint">
-              Uncheck a file to leave its definitions out of the render.
-            </p>
             {#each importedFiles as file (file.uri)}
               <label class="render-check render-import-row">
+                <span class="render-check-label">{file.label}</span>
+                <span
+                  class="toggle"
+                  class:on={!excludedModules.has(file.uri)}
+                  aria-hidden="true"
+                >
+                  <span class="knob"></span>
+                </span>
                 <input
+                  class="visually-hidden"
                   type="checkbox"
                   checked={!excludedModules.has(file.uri)}
                   onchange={() => toggleModule(file.uri)}
                 />
-                {file.label}
               </label>
             {/each}
+            <label class="render-check render-check-last">
+              <span class="render-check-label"
+                >Include unused imported definitions</span
+              >
+              <span
+                class="toggle"
+                class:on={renderIncludeUnused}
+                aria-hidden="true"
+              >
+                <span class="knob"></span>
+              </span>
+              <input
+                class="visually-hidden"
+                type="checkbox"
+                bind:checked={renderIncludeUnused}
+              />
+            </label>
           </div>
         {:else if importsLoading}
+          <div class="render-imports-title">Imported files</div>
+          <p class="render-imports-hint">
+            Select imported dependencies that should be included.
+          </p>
           <div class="render-imports-empty">Loading imported files…</div>
+        {/if}
+        <div class="render-imports-title">Legalese AI</div>
+        {#if cloudSessionValid}
+          <div class="render-imports">
+            <label class="render-check">
+              <span class="render-check-label"
+                >Refine formatting using Legalese AI</span
+              >
+              <span class="toggle" class:on={renderUseAi} aria-hidden="true">
+                <span class="knob"></span>
+              </span>
+              <input
+                class="visually-hidden"
+                type="checkbox"
+                bind:checked={renderUseAi}
+              />
+            </label>
+            {#if renderUseAi}
+              <p class="render-imports-hint">
+                Describe your formatting preferences and/or load a drafting
+                policy.
+              </p>
+              <textarea
+                class="ai-prefs-input"
+                rows="8"
+                placeholder="Formatting preferences — e.g. “Use formal headings, spell out numbers, UK English, single-column layout.”"
+                bind:value={renderFormatPrefs}
+              ></textarea>
+              <div class="ai-policy-row">
+                {#if draftingPolicy}
+                  <span class="ai-policy-file" title={draftingPolicy.name}>
+                    {draftingPolicy.name}
+                  </span>
+                  <button
+                    class="ai-policy-btn"
+                    onclick={clearDraftingPolicy}
+                    title="Remove drafting policy">Remove</button
+                  >
+                {:else}
+                  <button class="ai-policy-btn" onclick={pickDraftingPolicy}>
+                    <svg
+                      class="ai-policy-icon"
+                      viewBox="0 0 16 16"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M12.5 7.5L7 13a3 3 0 0 1-4.2-4.2L8.8 2.8a2 2 0 0 1 2.8 2.8L5.8 11.4a1 1 0 0 1-1.4-1.4L9.2 5.2"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        fill="none"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      />
+                    </svg>
+                    Load existing drafting policy…
+                  </button>
+                {/if}
+              </div>
+            {/if}
+          </div>
+        {:else}
+          <div class="ai-upsell">
+            <div class="ai-upsell-title">Refine with Legalese AI</div>
+            <p class="ai-upsell-body">
+              Sign in with Legalese Cloud to re-draft this document to your
+              house style and drafting policy, in the selected format.
+            </p>
+            <button class="ai-upsell-btn" onclick={handleAction}
+              >Sign in with Legalese Cloud</button
+            >
+          </div>
         {/if}
         <button
           class="render-btn"
           onclick={renderPreview}
-          disabled={renderBusy}
+          disabled={renderBusy || !activeFileUri}
+          title={activeFileUri
+            ? undefined
+            : 'Select an L4 file (or a rendered document beside one) to enable rendering.'}
         >
-          {renderBusy ? 'Rendering…' : 'Generate preview'}
+          {renderBusy ? 'Rendering…' : 'Generate document'}
         </button>
-        {#if renderSavedName}
-          <div class="render-saved">Saved {renderSavedName}</div>
-        {/if}
-        {#if renderError}
-          <div class="form-error">{renderError}</div>
-        {/if}
       </div>
       {#if activeTab === 'preview'}
         <div class="preview-pane">
@@ -1918,10 +2198,11 @@
     display: flex;
     border-bottom: 1px solid var(--vscode-panel-border, #444);
     flex-shrink: 0;
+    padding: 0 18px;
+    gap: 12px;
   }
 
   .tab {
-    flex: 1;
     padding: 6px 2px;
     background: none;
     border: none;
@@ -2154,18 +2435,14 @@
     color: var(--vscode-foreground);
   }
 
-  .form-group {
-    margin-bottom: 10px;
-  }
-
   .form-label {
     display: block;
     font-size: 0.85em;
+    font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: var(--vscode-descriptionForeground);
     opacity: 0.7;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
   }
 
   .form-input {
@@ -2215,30 +2492,90 @@
   .render-check {
     display: flex;
     align-items: center;
-    gap: 6px;
+    justify-content: space-between;
+    gap: 8px;
     font-size: 12px;
     cursor: pointer;
+    padding: 2px 0;
   }
+  .render-check-label {
+    flex: 1;
+    min-width: 0;
+  }
+  .render-check-last {
+    margin-top: 6px;
+  }
+  /* Toggle switch — matches the Legalese AI settings panel. */
+  .toggle {
+    flex-shrink: 0;
+    position: relative;
+    width: 30px;
+    height: 18px;
+    border-radius: 9999px;
+    background: var(--vscode-input-background, rgba(128, 128, 128, 0.35));
+    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
+    transition:
+      background 120ms ease,
+      border-color 120ms ease;
+    cursor: pointer;
+  }
+  .toggle .knob {
+    position: absolute;
+    top: 1px;
+    left: 1px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--vscode-foreground);
+    opacity: 0.7;
+    transition:
+      transform 120ms ease,
+      opacity 120ms ease;
+  }
+  .toggle.on {
+    background: #c8376a;
+    border-color: #c8376a;
+  }
+  .toggle.on .knob {
+    transform: translateX(12px);
+    background: #fff;
+    opacity: 1;
+  }
+  .render-check:focus-within .toggle {
+    outline: 1px solid #c8376a;
+    outline-offset: 1px;
+  }
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  /* Matches the Integrate popover's install buttons. */
   .render-btn {
     margin-top: 4px;
-    padding: 6px 12px;
-    border: none;
-    border-radius: 3px;
-    background: var(--vscode-button-background);
-    color: var(--vscode-button-foreground);
+    padding: 8px 14px;
+    background: var(--vscode-button-secondaryBackground, transparent);
+    color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
+    border-radius: 4px;
     cursor: pointer;
-    font-size: 13px;
+    font-size: 0.95em;
   }
   .render-btn:hover:not(:disabled) {
-    background: var(--vscode-button-hoverBackground);
+    background: var(
+      --vscode-button-secondaryHoverBackground,
+      var(--vscode-list-hoverBackground)
+    );
   }
   .render-btn:disabled {
     opacity: 0.6;
     cursor: default;
-  }
-  .render-saved {
-    font-size: 12px;
-    opacity: 0.75;
   }
   .render-imports {
     display: flex;
@@ -2254,12 +2591,11 @@
     text-transform: uppercase;
     letter-spacing: 0.04em;
     opacity: 0.8;
+    margin-top: 8px;
   }
   .render-imports-hint {
-    margin: 0 0 2px;
     font-size: 11px;
     opacity: 0.7;
-    line-height: 1.4;
   }
   .render-import-row {
     word-break: break-word;
@@ -2267,6 +2603,100 @@
   .render-imports-empty {
     font-size: 12px;
     opacity: 0.7;
+  }
+  /* Legalese AI rendering controls. */
+  .ai-prefs-input {
+    width: 100%;
+    box-sizing: border-box;
+    resize: vertical;
+    min-height: 56px;
+    margin-top: 2px;
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-family: var(--vscode-font-family, sans-serif);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+  .ai-prefs-input::placeholder {
+    color: var(--vscode-input-placeholderForeground);
+  }
+  .ai-prefs-input:focus {
+    outline: none;
+    border-color: #c8376a;
+  }
+  .ai-policy-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+  }
+  .ai-policy-file {
+    flex: 1;
+    min-width: 0;
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ai-policy-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: var(--vscode-button-secondaryBackground, transparent);
+    color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+  }
+  .ai-policy-icon {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+  }
+  .ai-policy-btn:hover {
+    background: var(
+      --vscode-button-secondaryHoverBackground,
+      var(--vscode-list-hoverBackground)
+    );
+  }
+  .ai-upsell {
+    padding: 10px 12px;
+    border: 1px solid var(--vscode-panel-border, #444);
+    border-radius: 4px;
+    background: var(
+      --vscode-editorWidget-background,
+      var(--vscode-sideBar-background)
+    );
+  }
+  .ai-upsell-title {
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .ai-upsell-body {
+    margin: 6px 0 10px;
+    font-size: 11px;
+    opacity: 0.85;
+    line-height: 1.45;
+  }
+  .ai-upsell-btn {
+    padding: 6px 12px;
+    background: var(--vscode-button-secondaryBackground, transparent);
+    color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+  }
+  .ai-upsell-btn:hover {
+    background: var(
+      --vscode-button-secondaryHoverBackground,
+      var(--vscode-list-hoverBackground)
+    );
   }
 
   .existing-deployments {

@@ -176,6 +176,12 @@ export interface RenderPreviewParams {
   toc: boolean
   /** Module URIs the user deselected in the imports checklist. */
   excludeModules?: string[]
+  /** Whether to surface the rendered document in an editor/browser
+   *  tab. Defaults to true. The Render tab sets this to false when it
+   *  is about to hand the render off to Legalese AI for refinement —
+   *  the deterministic output is an intermediate artifact there, so
+   *  popping it open would just clutter the workspace. */
+  openInEditor?: boolean
 }
 
 /** An imported module the active file pulls in, for the Render-tab
