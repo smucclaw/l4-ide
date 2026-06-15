@@ -28,6 +28,7 @@
 - [LLM Integration](tutorials/llm-integration/llm-getting-started.md)
 - [Exporting Rules for Deployment](tutorials/deploying-rules/exporting-rules-for-deployment.md)
 - [Natural Language Functions](tutorials/natural-language-functions/natural-language-functions.md)
+- [Optimising for Natural Language Generation with @nlg](tutorials/natural-language-functions/optimising-natural-language-generation.md)
 
 ## Concepts
 
