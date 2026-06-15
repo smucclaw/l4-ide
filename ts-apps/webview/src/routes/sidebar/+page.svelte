@@ -2199,7 +2199,7 @@
     border-bottom: 1px solid var(--vscode-panel-border, #444);
     flex-shrink: 0;
     padding: 0 18px;
-    gap: 12px;
+    gap: 14px;
   }
 
   .tab {
