@@ -8,17 +8,15 @@
 
 IMPORT prelude
 
--- ============================================================================
--- Type Definitions
--- ============================================================================
+§ `LLM Integration`
+
+§§ `Type Definitions`
 
 DECLARE `Message` HAS
   `role`    IS A STRING
   `content` IS A STRING
 
--- ============================================================================
--- Helper: Create Message
--- ============================================================================
+§§ `Helper: Create Message`
 
 GIVEN role IS A STRING
       content IS A STRING
@@ -27,9 +25,7 @@ createMessage MEANS
     `role` IS role
     `content` IS content
 
--- ============================================================================
--- Anthropic Claude API
--- ============================================================================
+§§ `Anthropic Claude API`
 
 DECIDE anthropicEndpoint IS
   "https://api.anthropic.com/v1/messages"
@@ -61,9 +57,7 @@ DECIDE callAnthropic apiKey model prompt maxTokens IS
 DECIDE callClaude apiKey prompt IS
   callAnthropic apiKey "claude-sonnet-4-5-20250929" prompt 1000
 
--- ============================================================================
--- OpenAI API
--- ============================================================================
+§§ `OpenAI API`
 
 DECIDE openaiEndpoint IS
   "https://api.openai.com/v1/chat/completions"
@@ -91,9 +85,7 @@ DECIDE callOpenAI apiKey model prompt maxTokens IS
 DECIDE callGPT4 apiKey prompt IS
   callOpenAI apiKey "gpt-4" prompt 1000
 
--- ============================================================================
--- OpenRouter (Unified Gateway for 500+ Models)
--- ============================================================================
+§§ `OpenRouter (Unified Gateway for 500+ Models)`
 
 DECIDE openrouterEndpoint IS
   "https://openrouter.ai/api/v1/chat/completions"
@@ -119,9 +111,7 @@ DECIDE callOpenRouter apiKey model prompt maxTokens IS
     (buildOpenRouterHeaders apiKey)
     (buildOpenRouterBody model prompt maxTokens)
 
--- ============================================================================
--- Multi-Provider Fallback with BRANCH
--- ============================================================================
+§§ `Multi-Provider Fallback with BRANCH`
 
 -- Query with automatic provider fallback
 -- Tries: OpenRouter → OpenAI → Anthropic
@@ -171,17 +161,13 @@ DECIDE queryLLMWithDefaults prompt IS
       tryAnthropic prompt
   IN fromMaybe "ERROR: No LLM API keys configured" (firstJust attempts)
 
--- ============================================================================
--- Response Parsing Helpers
--- ============================================================================
+§§ `Response Parsing Helpers`
 
 -- Parse JSON response (returns EITHER STRING value)
 DECIDE parseResponse jsonString IS
   JSONDECODE jsonString
 
--- ============================================================================
--- Response Parsing (Future Work)
--- ============================================================================
+§§ `Response Parsing (Future Work)`
 
 -- TODO: Implement response parsing once list pattern matching syntax is clarified.
 -- Different providers have different response formats:
@@ -195,9 +181,7 @@ DECIDE parseResponse jsonString IS
 --   extractAnthropicContent :: JSON -> EITHER STRING String
 --   extractLLMResponse :: String -> String -> EITHER STRING String
 
--- ============================================================================
--- Common LLM Models (for OpenRouter)
--- ============================================================================
+§§ `Common LLM Models (for OpenRouter)`
 
 DECIDE claudeOpusModel IS "anthropic/claude-3-opus"
 DECIDE claudeSonnetModel IS "anthropic/claude-3.5-sonnet"
@@ -208,9 +192,7 @@ DECIDE llama3Model IS "meta-llama/llama-3.1-70b-instruct"
 DECIDE llama3FreeModel IS "meta-llama/llama-3.1-70b-instruct:free"
 DECIDE geminiProModel IS "google/gemini-pro"
 
--- ============================================================================
--- Usage Examples (commented out)
--- ============================================================================
+§§ `Usage Examples (commented out)`
 
 -- Example 1: Simple query with fallback
 -- DECIDE answer IS queryLLMWithDefaults "What is consideration in contract law?"

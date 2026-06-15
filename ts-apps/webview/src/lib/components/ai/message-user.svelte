@@ -41,7 +41,9 @@
           <span
             class="user-chip"
             role="listitem"
-            title={chip.kind === 'active-file' ? chip.path : chip.name}
+            title={chip.kind === 'active-file' || chip.kind === 'file'
+              ? chip.path
+              : chip.name}
           >
             <svg
               class="chip-icon"

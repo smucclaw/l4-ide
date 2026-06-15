@@ -67,6 +67,8 @@ import qualified LSP.L4.Inspector as Inspector
 import L4.EvaluateLazy (EvalConfig)
 import qualified L4.EvaluateLazy as EL
 import qualified L4.Export as Export
+import qualified L4.Export.Document as ExportDoc
+import qualified L4.Export.Render as ExportRender
 import qualified L4.FunctionSchema as FSchema
 
 data ReactorMessage
@@ -883,7 +885,90 @@ handlers evalConfig recorder =
                       , importedFiles = importUris
                       }
                 pure $ Right $ Aeson.toJSON response
+    , requestHandler (SMethod_CustomMethod (Proxy @Ladder.ExportDocumentMethodName)) $ \_ide params -> do
+        let parseParams :: Aeson.Value -> Maybe Ladder.ExportDocumentParams
+            parseParams v = case Aeson.fromJSON v of
+              Aeson.Success p -> Just p
+              _               -> Nothing
+        case parseParams params of
+          Nothing -> pure $ Left $ TResponseError
+            { _code = InR ErrorCodes_InvalidParams
+            , _message = "Failed to parse exportDocument params"
+            , _xdata = Nothing }
+          Just reqParams -> do
+            let nuri = toNormalizedUri reqParams.verDocId._uri
+            mTc <- liftIO $ runAction "l4/exportDocument" _ide $ use TypeCheck nuri
+            case mTc of
+              Nothing -> pure $ Left $ TResponseError
+                { _code = InR ErrorCodes_InvalidRequest
+                , _message = "No type check result available"
+                , _xdata = Nothing }
+              Just tcResult -> do
+                let -- Excluded imports are removed from the dependency list
+                    -- outright (not merely set to the 'Exclude' disposition,
+                    -- which only collapses a still-referenced module to
+                    -- "as defined in …" stubs). Dropping the module means its
+                    -- units are never extracted, so the main document's
+                    -- references to them render as plain prose names.
+                    excludedUris = Set.fromList
+                      [ toNormalizedUri (Uri u) | u <- reqParams.excludeModules ]
+                    keepModule (MkModule _ u _) = not (u `Set.member` excludedUris)
+                    deps = filter keepModule (drop 1 (flattenExportModules tcResult))
+                    ecfg = ExportDoc.defaultExportConfig
+                      { ExportDoc.dropUnused = not reqParams.includeUnused }
+                    rcfg = ExportRender.MkRenderConfig
+                             { ExportRender.numberSections = reqParams.numberSections
+                             , ExportRender.numberClauses = reqParams.numberClauses
+                             , ExportRender.toc = reqParams.toc }
+                    doc = ExportDoc.buildDocument ecfg tcResult.module' deps
+                    content = case reqParams.format of
+                      "text" -> ExportRender.renderText rcfg doc
+                      "akn"  -> ExportRender.renderAkn doc
+                      "json" -> ""
+                      _      -> ExportRender.renderHtml rcfg doc
+                pure $ Right $ Aeson.object
+                  [ "format"  Aeson..= reqParams.format
+                  , "content" Aeson..= content
+                  , "ir"      Aeson..= doc
+                  ]
+    , requestHandler (SMethod_CustomMethod (Proxy @Ladder.ExportPlanMethodName)) $ \_ide params -> do
+        let parseParams :: Aeson.Value -> Maybe Ladder.ExportPlanParams
+            parseParams v = case Aeson.fromJSON v of
+              Aeson.Success p -> Just p
+              _               -> Nothing
+        case parseParams params of
+          Nothing -> pure $ Left $ TResponseError
+            { _code = InR ErrorCodes_InvalidParams
+            , _message = "Failed to parse exportPlan params"
+            , _xdata = Nothing }
+          Just reqParams -> do
+            let nuri = toNormalizedUri reqParams.verDocId._uri
+            mTc <- liftIO $ runAction "l4/exportPlan" _ide $ use TypeCheck nuri
+            case mTc of
+              Nothing -> pure $ Left $ TResponseError
+                { _code = InR ErrorCodes_InvalidRequest
+                , _message = "No type check result available"
+                , _xdata = Nothing }
+              Just tcResult -> do
+                let deps = drop 1 (flattenExportModules tcResult)
+                    plan = ExportDoc.buildPlan ExportDoc.defaultExportConfig tcResult.module' deps
+                pure $ Right $ Aeson.toJSON plan
     ]
+
+-- | Flatten the transitive-import tree to each module exactly once (root
+-- first), deduping by module URI — the shape 'L4.Export.Document.buildDocument'
+-- expects.
+flattenExportModules :: TypeCheckResult -> [Module Resolved]
+flattenExportModules root = map (.module') (snd (go Set.empty root))
+ where
+  muri tc = case tc.module' of MkModule _ u _ -> u
+  go seen tc
+    | muri tc `Set.member` seen = (seen, [])
+    | otherwise =
+        let seen0 = Set.insert (muri tc) seen
+            (seenN, deps) =
+              List.foldl' (\(s, acc) d -> let (s', xs) = go s d in (s', acc <> xs)) (seen0, []) tc.dependencies
+        in (seenN, tc : deps)
 
 activeFileDiagnosticsInRange :: ShakeExtras -> NormalizedUri -> Range -> STM [FileDiagnostic]
 activeFileDiagnosticsInRange extras nfu rng = do

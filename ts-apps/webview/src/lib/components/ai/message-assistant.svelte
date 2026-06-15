@@ -697,6 +697,7 @@
     color: var(--vscode-foreground);
     font-family: var(--vscode-editor-font-family, monospace);
     font-size: 11px;
+    line-height: 14px;
     cursor: pointer;
     text-align: left;
   }

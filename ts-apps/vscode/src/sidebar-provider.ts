@@ -1,4 +1,5 @@
 import * as vscode from 'vscode'
+import * as path from 'node:path'
 import type { Messenger } from 'vscode-messenger'
 import type { WebviewTypeMessageParticipant } from 'vscode-messenger-common'
 import type { VSCodeL4LanguageClient } from './vscode-l4-language-client.js'
@@ -13,6 +14,10 @@ import {
 } from './notifications.js'
 import {
   GetExportedFunctionsRequestType,
+  ExportDocumentRequestType,
+  ExportPlanRequestType,
+  RequestRenderPreview,
+  GetSidebarImportedFiles,
   GetSidebarExportedFunctions,
   GetSidebarConnectionStatus,
   RequestSidebarLogin,
@@ -60,6 +65,101 @@ function getMcpPort(): number {
 export const sidebarWebviewFrontend: WebviewTypeMessageParticipant = {
   type: 'webview',
   webviewType: SIDEBAR_WEBVIEW_TYPE,
+}
+
+/** Reused webview panel for the rendered HTML document, so successive
+ *  previews update one panel rather than spawning a new one each time. */
+let renderPanel: vscode.WebviewPanel | undefined
+
+/** The L4 file most recently rendered. Lets "Generate preview" keep working
+ *  when the focused tab is the rendered output (e.g. the HTML webview) and so
+ *  has no sibling .l4 to derive the source from. */
+let lastRenderedL4: vscode.Uri | undefined
+
+const isL4Doc = (d: vscode.TextDocument): boolean =>
+  d.languageId === 'l4' || d.languageId === 'jl4'
+
+/** The file behind the active tab, even when it is a custom editor (PDF
+ *  viewer) rather than a text editor. Webview tabs have no associated uri. */
+function activeTabUri(): vscode.Uri | undefined {
+  const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input as
+    | { uri?: vscode.Uri }
+    | undefined
+  return input?.uri instanceof vscode.Uri ? input.uri : undefined
+}
+
+/** `foo.html` / `foo.xml` / `foo.pdf` → sibling `foo.l4` in the same folder. */
+function siblingL4(uri: vscode.Uri): vscode.Uri | undefined {
+  const ext = path.extname(uri.fsPath).toLowerCase()
+  if (ext === '.l4' || ext === '.jl4') return uri
+  const base = path.basename(uri.fsPath, path.extname(uri.fsPath))
+  return vscode.Uri.file(path.join(path.dirname(uri.fsPath), `${base}.l4`))
+}
+
+async function uriExists(uri: vscode.Uri): Promise<boolean> {
+  try {
+    await vscode.workspace.fs.stat(uri)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Resolve the L4 document to render: the active L4 editor, else a same-named
+ *  `.l4` sibling of the active (rendered) file, else the last-rendered L4. */
+async function resolveL4Document(): Promise<vscode.TextDocument | undefined> {
+  const active = vscode.window.activeTextEditor
+  if (active && isL4Doc(active.document)) {
+    lastRenderedL4 = active.document.uri
+    return active.document
+  }
+  const candidate = active?.document.uri ?? activeTabUri()
+  if (candidate && candidate.scheme === 'file') {
+    const sib = siblingL4(candidate)
+    if (sib && (await uriExists(sib))) {
+      lastRenderedL4 = sib
+      return vscode.workspace.openTextDocument(sib)
+    }
+  }
+  if (lastRenderedL4 && (await uriExists(lastRenderedL4))) {
+    return vscode.workspace.openTextDocument(lastRenderedL4)
+  }
+  return undefined
+}
+
+/** File extension for a render format. */
+function extForFormat(format: string): string {
+  switch (format) {
+    case 'akn':
+      return '.xml'
+    case 'text':
+      return '.txt'
+    case 'json':
+      return '.json'
+    case 'plan':
+      return '.plan.json'
+    default:
+      return '.html'
+  }
+}
+
+/** Render the rendered HTML in a (reused) webview panel in the active editor
+ *  group — not a split — so it sits alongside the source as a tab. */
+function showHtmlPreview(html: string, title: string): void {
+  if (!renderPanel) {
+    renderPanel = vscode.window.createWebviewPanel(
+      'l4.renderPreview',
+      title,
+      vscode.ViewColumn.Active,
+      { enableScripts: false, retainContextWhenHidden: true }
+    )
+    renderPanel.onDidDispose(() => {
+      renderPanel = undefined
+    })
+  }
+  renderPanel.title = title
+  renderPanel.webview.html = html
+  renderPanel.reveal(undefined, false)
 }
 
 export class SidebarProvider implements vscode.WebviewViewProvider {
@@ -311,6 +411,133 @@ export function initializeSidebarMessenger(
         `[sidebar] Error getting exported functions: ${err instanceof Error ? err.message : String(err)}`
       )
       return { functions: [] }
+    }
+  })
+
+  // Handle Render-tab imported-files request: resolve the active L4 doc and
+  // return the modules it imports (non-main), for the include/exclude checklist.
+  messenger.onRequest(GetSidebarImportedFiles, async () => {
+    const doc = await resolveL4Document()
+    if (!doc) return { files: [] }
+    try {
+      const verDocId = { uri: doc.uri.toString(), version: doc.version }
+      const plan = await client.sendRequest(ExportPlanRequestType, { verDocId })
+      const files = (plan?.modules ?? [])
+        .filter((m) => !m.isMain)
+        .map((m) => ({ uri: m.uri, label: m.label }))
+      return { files }
+    } catch (err) {
+      outputChannel.appendLine(
+        `[sidebar] Error getting imported files: ${err instanceof Error ? err.message : String(err)}`
+      )
+      return { files: [] }
+    }
+  })
+
+  // Handle Render-tab preview request: render the active L4 file via the LSP,
+  // write the result next to the .l4 file, and open it in the active editor
+  // group (HTML as a rendered webview; others as the saved file).
+  messenger.onRequest(RequestRenderPreview, async (params) => {
+    const doc = await resolveL4Document()
+    if (!doc) {
+      return {
+        success: false,
+        error: 'Open an L4 file (or a file beside one) to render.',
+      }
+    }
+    try {
+      const verDocId = { uri: doc.uri.toString(), version: doc.version }
+      // Default to opening the result; the Render tab opts out when it
+      // will refine the render through Legalese AI instead.
+      const openInEditor = params.openInEditor ?? true
+
+      // Compute the rendered content + the IR title.
+      let content: string
+      let title: string | undefined
+      if (params.format === 'plan') {
+        const plan = await client.sendRequest(ExportPlanRequestType, {
+          verDocId,
+        })
+        content = JSON.stringify(plan ?? {}, null, 2)
+      } else {
+        const res = await client.sendRequest(ExportDocumentRequestType, {
+          verDocId,
+          format: params.format,
+          includeUnused: params.includeUnused,
+          numberSections: params.numberSections,
+          numberClauses: params.numberClauses,
+          toc: params.toc,
+          excludeModules: params.excludeModules ?? [],
+        })
+        if (!res) {
+          return {
+            success: false,
+            error: 'No response from the language server.',
+          }
+        }
+        title =
+          res.ir && typeof res.ir === 'object'
+            ? (res.ir as { title?: string }).title
+            : undefined
+        content =
+          params.format === 'json'
+            ? JSON.stringify(res.ir ?? {}, null, 2)
+            : res.content
+      }
+
+      // Write the rendered file next to the .l4 (file-scheme docs only).
+      let savedPath: string | undefined
+      if (doc.uri.scheme === 'file') {
+        const dir = path.dirname(doc.uri.fsPath)
+        const base = path.basename(doc.uri.fsPath, path.extname(doc.uri.fsPath))
+        const outUri = vscode.Uri.file(
+          path.join(dir, base + extForFormat(params.format))
+        )
+        await vscode.workspace.fs.writeFile(
+          outUri,
+          new TextEncoder().encode(content)
+        )
+        savedPath = outUri.fsPath
+
+        // Open it in the active group (not a split) — unless the caller
+        // asked us to skip it (Render tab handing off to Legalese AI
+        // refinement, where the deterministic output is intermediate).
+        if (openInEditor) {
+          if (params.format === 'html') {
+            showHtmlPreview(content, title ?? base)
+          } else {
+            const opened = await vscode.workspace.openTextDocument(outUri)
+            await vscode.window.showTextDocument(opened, {
+              viewColumn: vscode.ViewColumn.Active,
+              preview: false,
+            })
+          }
+        }
+      } else if (openInEditor && params.format === 'html') {
+        // Unsaved/remote doc: preview-only, no file written.
+        showHtmlPreview(content, title ?? 'L4 Render')
+      } else if (openInEditor) {
+        const language =
+          params.format === 'akn'
+            ? 'xml'
+            : params.format === 'json' || params.format === 'plan'
+              ? 'json'
+              : 'plaintext'
+        const opened = await vscode.workspace.openTextDocument({
+          content,
+          language,
+        })
+        await vscode.window.showTextDocument(opened, {
+          viewColumn: vscode.ViewColumn.Active,
+          preview: false,
+        })
+      }
+
+      return { success: true, title, savedPath }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      outputChannel.appendLine(`[sidebar] Render failed: ${msg}`)
+      return { success: false, error: msg }
     }
   })
 

@@ -163,6 +163,62 @@ export const GetSidebarExportedFunctions: RequestType<
   method: 'getSidebarExportedFunctions',
 }
 
+/** Render tab asks the extension to render the active file and open a preview.
+ *  The extension resolves the active L4 document, calls the LSP
+ *  `l4/exportDocument`, and opens the result (HTML in a webview panel; AKN/text
+ *  in a new editor). */
+export interface RenderPreviewParams {
+  /** "html" (default) | "text" | "akn" */
+  format: string
+  includeUnused: boolean
+  numberSections: boolean
+  numberClauses: boolean
+  toc: boolean
+  /** Module URIs the user deselected in the imports checklist. */
+  excludeModules?: string[]
+  /** Whether to surface the rendered document in an editor/browser
+   *  tab. Defaults to true. The Render tab sets this to false when it
+   *  is about to hand the render off to Legalese AI for refinement —
+   *  the deterministic output is an intermediate artifact there, so
+   *  popping it open would just clutter the workspace. */
+  openInEditor?: boolean
+}
+
+/** An imported module the active file pulls in, for the Render-tab
+ *  include/exclude checklist. */
+export interface SidebarImportedFile {
+  /** Module URI — round-tripped as an `excludeModules` entry. */
+  uri: string
+  /** Display label (file name or section title). */
+  label: string
+}
+
+/** Render tab asks the extension for the active file's imported modules.
+ *  The extension resolves the active L4 document and calls the LSP
+ *  `l4/exportPlan`, returning the non-main modules. */
+export const GetSidebarImportedFiles: RequestType<
+  void,
+  { files: SidebarImportedFile[] }
+> = {
+  method: 'getSidebarImportedFiles',
+}
+
+export interface RenderPreviewResponse {
+  success: boolean
+  /** The document title, echoed for the sidebar status line. */
+  title?: string
+  /** Absolute path of the file written next to the .l4 (when on disk). */
+  savedPath?: string
+  error?: string
+}
+
+export const RequestRenderPreview: RequestType<
+  RenderPreviewParams,
+  RenderPreviewResponse
+> = {
+  method: 'requestRenderPreview',
+}
+
 /** Connection status response from extension to sidebar */
 export interface GetSidebarConnectionStatusResponse {
   serviceUrl: string

@@ -110,6 +110,8 @@ library
     L4.StateGraph
     L4.ExactPrint
     L4.Export
+    L4.Export.Document
+    L4.Export.Render
     L4.FunctionSchema
     L4.FindDefinition
     L4.FindReferences
