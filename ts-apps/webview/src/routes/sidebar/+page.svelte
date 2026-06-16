@@ -1487,9 +1487,9 @@
       <div class="tab-pane render-pane" hidden={activeTab !== 'render'}>
         <p class="render-intro">
           {#if activeFileName}
-            Convert {activeFileName} into another format:
+            Convert {activeFileName} into another format.
           {:else}
-            Select a valid L4 file to convert it into another format.
+            Open a valid L4 file to convert it into another format.
           {/if}
           <button
             class="learn-more"
