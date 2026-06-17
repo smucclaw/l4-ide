@@ -77,6 +77,9 @@ renderText cfg doc =
       RenderedInline -> case b.blockBody of
         CLeaf "" -> [lead <> b.blockConnector <> ".", ""]
         CLeaf t  -> [lead <> b.blockConnector <> " " <> sb t <> ".", ""]
+        CChain cl items -> (lead <> b.blockConnector <> " " <> cl <> ":")
+                             : map ("    " <>) (concatMap (\it -> bullet [sb it]) items)
+                             <> [""]
         body     -> (lead <> b.blockConnector <> ":")
                       : map ("    " <>) (clauseLines body)
                       <> [""]
@@ -89,6 +92,7 @@ renderText cfg doc =
     CAny cs    -> "any of the following is true:"  : concatMap (bullet . clauseLines) cs
     CIf chain els -> ifLines chain els
     CCases s brs  -> ("depending on " <> sb s <> ":") : concatMap caseLines brs
+    CChain lead items -> (lead <> ":") : concatMap (\it -> bullet [sb it]) items
     CDeontic p m a due prov h l -> deonLines p m a due prov h l
     CTable cols rows -> tableLines cols rows
     CWhere inner defs -> clauseLines inner <> ("where:" : concatMap whereDefLines defs)
@@ -227,6 +231,7 @@ renderHtml cfg doc =
     CAny cs  -> introAny conn <> treeHtml cs
     CIf chain els -> esc conn <> " as follows:" <> ifHtml chain els
     CCases s brs  -> esc conn <> ", depending on " <> prose s <> ":" <> casesHtml brs
+    CChain lead items -> esc conn <> " " <> esc lead <> ":" <> chainTreeHtml items
     CDeontic p m a due prov h l -> esc conn <> " " <> deonticHtml p m a due prov h l
     CTable cols rows -> esc conn <> ":" <> tableHtml cols rows
     CWhere inner defs -> bodyHtml conn inner <> whereHtml defs
@@ -245,6 +250,7 @@ renderHtml cfg doc =
     CAny cs  -> "any of the following is true:" <> treeHtml cs
     CIf chain els -> ifHtml chain els
     CCases s brs  -> "depending on " <> prose s <> ":" <> casesHtml brs
+    CChain lead items -> esc lead <> ":" <> chainTreeHtml items
     CDeontic p m a due prov h l -> deonticHtml p m a due prov h l
     CTable cols rows -> tableHtml cols rows
     CWhere inner defs -> clauseHtml inner <> whereHtml defs
@@ -272,6 +278,11 @@ renderHtml cfg doc =
   treeHtml cs =
     "\n<ol class=\"tree\">\n"
       <> Text.concat (map (\c -> "<li>" <> clauseHtml c <> "</li>\n") cs)
+      <> "</ol>\n"
+
+  chainTreeHtml items =
+    "\n<ol class=\"tree\">\n"
+      <> Text.concat (map (\t -> "<li>" <> prose t <> "</li>\n") items)
       <> "</ol>\n"
 
   ifHtml chain els =
@@ -373,6 +384,8 @@ renderAkn doc =
       CAny cs  -> p (xt b.blockConnector <> " any of the following is true:") <> listAkn cs
       CIf chain els -> p (xt b.blockConnector <> " as follows:") <> ifAkn chain els
       CCases s brs -> p (xt b.blockConnector <> ", depending on " <> xt s <> ":") <> casesAkn brs
+      CChain lead items -> p (xt b.blockConnector <> " " <> xt lead <> ":")
+                             <> blockList (map (item . p . xt) items)
       CDeontic pa m a due prov h l -> deonticAkn pa m a due prov h l
       CTable cols rows -> p (xt b.blockConnector <> ":") <> tableAkn cols rows
       CWhere inner defs -> bodyAkn b { blockBody = inner } <> whereAkn defs
@@ -384,6 +397,7 @@ renderAkn doc =
     CAny cs  -> p "any of the following is true:" <> listAkn cs
     CIf chain els -> ifAkn chain els
     CCases s brs  -> p ("depending on " <> xt s <> ":") <> casesAkn brs
+    CChain lead items -> p (xt lead <> ":") <> blockList (map (item . p . xt) items)
     CDeontic pa m a due prov h l -> deonticAkn pa m a due prov h l
     CTable cols rows -> tableAkn cols rows
     CWhere inner defs -> clauseAkn inner <> whereAkn defs
@@ -516,6 +530,7 @@ clauseSummary = \case
   CAny _         -> "any of several conditions"
   CIf _ _        -> "determined by conditions"
   CCases s _     -> "depending on " <> s
+  CChain lead items -> lead <> " " <> Text.pack (show (length items)) <> " terms"
   CDeontic p m a _ _ _ _ -> p <> " " <> m <> " " <> a
   CTable cols _  -> "a table of " <> Text.intercalate ", " cols
   CWhere body _  -> clauseSummary body
