@@ -101,6 +101,11 @@ data Clause
              (Maybe Text)                      -- ^ provided-that
              (Maybe Clause)                    -- ^ hence (on compliance)
              (Maybe Clause)                    -- ^ lest (on breach)
+  | CChain Text [Text]                         -- ^ a long arithmetic chain
+                                               --   (sum/product/…): a lead-in
+                                               --   ("the sum of the following")
+                                               --   and one pre-rendered line per
+                                               --   operand
   | CTable [Text] [[Clause]]                   -- ^ a list of same-typed records:
                                                --   column headings + rows of cells
   | CWhere Clause [(Text, Text, Clause)]       -- ^ a rule body, plus its local
@@ -702,6 +707,8 @@ decideRendering tysig body
       ("means", tableClause cols rows)
   | Just (ctor, fields) <- bodyAsRecordLiteral body =
       ("is a " <> ctor <> " with", CFields (map fieldPair fields))
+  | Just c <- arithChainClause body =
+      ("equals", c)
   | Just f <- formulaText body =
       ("equals", CLeaf (normalizeWs f))
   | otherwise =
@@ -865,8 +872,9 @@ toClause e0 = case carameliseNode e0 of
   App ann n [arg]
     | isControlFlowExpr (carameliseNode arg) ->
         toClause (distributeIntoBranches (\leaf -> App ann n [leaf]) arg)
-  e | Just f <- formulaText e -> CLeaf (normalizeWs f)
-    | otherwise               -> CLeaf (condText e)
+  e | Just c <- arithChainClause e -> c
+    | Just f <- formulaText e       -> CLeaf (normalizeWs f)
+    | otherwise                     -> CLeaf (condText e)
  where
   buildIf acc f = case carameliseNode f of
     IfThenElse _ c2 t2 f2 -> buildIf (acc <> [(condText c2, toClause t2)]) f2
@@ -1026,6 +1034,62 @@ leafText :: Expr Resolved -> Text
 leafText e = case formulaText (rewriteExpr e) of
   Just f  -> normalizeWs f
   Nothing -> inlineProse e
+
+-- | A top-level arithmetic chain (a sum/product/… whose operator repeats) with
+-- this many operands or more renders as a bulleted list rather than one long
+-- formula line.
+arithChainMinTerms :: Int
+arithChainMinTerms = 4
+
+-- | If an expression is a top-level additive (@+@/@−@) or multiplicative
+-- (@×@/@÷@) chain of at least 'arithChainMinTerms' operands, lay it out as a
+-- list: a lead-in plus one pre-rendered line per operand. A uniform chain (all
+-- @+@, or all @×@) gets a "the sum of" / "the product of" lead and plain lines;
+-- a mixed chain gets a neutral lead and an operator word ("plus", "minus",
+-- "times", "divided by") in front of each line after the first.
+arithChainClause :: Expr Resolved -> Maybe Clause
+arithChainClause e = case carameliseNode e of
+  Plus{}      -> chain (flattenChain additiveStep "+" e) "+" "the sum of the following" addWord
+  Minus{}     -> chain (flattenChain additiveStep "+" e) "+" "the sum of the following" addWord
+  Times{}     -> chain (flattenChain multStep "×" e) "×" "the product of the following" mulWord
+  DividedBy{} -> chain (flattenChain multStep "×" e) "×" "the product of the following" mulWord
+  _           -> Nothing
+ where
+  chain terms firstOp uniformLead word
+    | length terms < arithChainMinTerms = Nothing
+    | otherwise =
+        let uniform = all ((== firstOp) . fst) terms
+            lead    = if uniform then uniformLead else "the following"
+            line i (op, t)
+              | i == (0 :: Int) || uniform = leafText t
+              | otherwise                  = word op <> " " <> leafText t
+        in Just (CChain lead (zipWith line [0 ..] terms))
+  addWord o = if o == "-" then "minus" else "plus"
+  mulWord o = if o == "÷" then "divided by" else "times"
+
+-- | Walk the left spine of an operator chain into @(operator, operand)@ pairs,
+-- leftmost first (its operator is the chain's identity, "+" or "×"). Right
+-- operands are kept whole — only the same-precedence left spine is flattened, so
+-- the result is faithful regardless of nesting.
+flattenChain :: (Expr Resolved -> Maybe (Text, Expr Resolved, Expr Resolved))
+             -> Text -> Expr Resolved -> [(Text, Expr Resolved)]
+flattenChain step identityOp = go []
+ where
+  go acc e = case step (carameliseNode e) of
+    Just (op, a, b) -> go ((op, b) : acc) a
+    Nothing         -> (identityOp, e) : acc
+
+additiveStep :: Expr Resolved -> Maybe (Text, Expr Resolved, Expr Resolved)
+additiveStep = \case
+  Plus _ a b  -> Just ("+", a, b)
+  Minus _ a b -> Just ("-", a, b)
+  _           -> Nothing
+
+multStep :: Expr Resolved -> Maybe (Text, Expr Resolved, Expr Resolved)
+multStep = \case
+  Times _ a b     -> Just ("×", a, b)
+  DividedBy _ a b -> Just ("÷", a, b)
+  _               -> Nothing
 
 -- ----------------------------------------------------------------------------
 -- Formula mode (pure arithmetic -> symbols)
@@ -1419,6 +1483,8 @@ instance Aeson.ToJSON Clause where
       [ "$type" .= ("deontic" :: Text), "party" .= party, "modal" .= modal
       , "action" .= action, "deadline" .= due, "provided" .= provided
       , "hence" .= hence, "lest" .= lest ]
+    CChain lead items -> Aeson.object
+      [ "$type" .= ("chain" :: Text), "lead" .= lead, "items" .= items ]
     CTable cols rows -> Aeson.object
       [ "$type" .= ("table" :: Text), "columns" .= cols, "rows" .= rows ]
     CWhere body defs -> Aeson.object

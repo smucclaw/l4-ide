@@ -367,6 +367,23 @@
   // Deployments tab state
   let deployments: SidebarDeploymentInfo[] = $state([])
   let deploymentsLoading: boolean = $state(false)
+  // Free-text filter over deployment names (matched as you type).
+  let deploymentFilter: string = $state('')
+  // Sort order for the deployments list — case-insensitive by name.
+  type DeploymentSortMode = 'az' | 'za'
+  let deploymentSort: DeploymentSortMode = $state('az')
+  let filteredDeployments: SidebarDeploymentInfo[] = $derived.by(() => {
+    const query = deploymentFilter.trim().toLowerCase()
+    const list = query
+      ? deployments.filter((d) => d.deploymentId.toLowerCase().includes(query))
+      : deployments.slice()
+    list.sort((a, b) =>
+      a.deploymentId.localeCompare(b.deploymentId, undefined, {
+        sensitivity: 'base',
+      })
+    )
+    return deploymentSort === 'za' ? list.reverse() : list
+  })
   let undeployingId: string | null = $state(null)
   let downloadingId: string | null = $state(null)
   let openDeploymentMenuId: string | null = $state(null)
@@ -1869,162 +1886,197 @@
                 </p>
               </div>
             {:else}
-              <div class="deployments-list">
-                {#each deployments as dep (dep.deploymentId)}
-                  {@const canDownload =
-                    !!dep.hasFiles &&
-                    (dep.status === 'ready' || dep.status === 'pending')}
-                  {@const canUndeploy = true}
-                  {@const showMenu = canDownload || canUndeploy}
-                  <div
-                    class="deployment-group"
-                    class:collapsed={collapsedDeployments.has(dep.deploymentId)}
-                  >
-                    <div class="deployment-header">
-                      <button
-                        class="deployment-header-toggle"
-                        onclick={() =>
-                          toggleDeploymentCollapse(dep.deploymentId)}
-                        title={collapsedDeployments.has(dep.deploymentId)
-                          ? 'Expand deployment'
-                          : 'Collapse deployment'}
-                      >
-                        <span
-                          class="chevron"
-                          class:rotated={!collapsedDeployments.has(
-                            dep.deploymentId
-                          )}>&#9002;</span
-                        >
-                        <span class="deployment-id">{dep.deploymentId}</span>
-                        <span class="deployment-fn-count">
-                          {#if dep.error}
-                            Error
-                          {:else if dep.functions.length === 0 && compilingDeployments.has(dep.deploymentId)}
-                            Compiling...
-                          {:else if dep.functions.length === 0}
-                            Uncompiled
-                          {:else}
-                            {dep.functions.length} rule{dep.functions.length !==
-                            1
-                              ? 's'
-                              : ''}
-                          {/if}
-                        </span>
-                      </button>
-                      <div class="deployment-actions">
-                        {#if integrateMode === 'cloud'}
-                          <button
-                            class="deployment-text-btn"
-                            title="Chat with this deployment in Legalese AI"
-                            onclick={(e: MouseEvent) => {
-                              e.stopPropagation()
-                              useInChat(dep)
-                            }}
-                          >
-                            Chat
-                          </button>
-                        {/if}
+              <div class="deployment-filter-bar">
+                <div class="deployment-filter-field">
+                  <input
+                    class="deployment-filter-input"
+                    type="text"
+                    placeholder="Filter deployments..."
+                    bind:value={deploymentFilter}
+                  />
+                  {#if deploymentFilter}
+                    <button
+                      class="deployment-filter-clear"
+                      onclick={() => (deploymentFilter = '')}
+                      title="Clear filter"
+                      aria-label="Clear filter">&times;</button
+                    >
+                  {/if}
+                </div>
+                <select
+                  class="deployment-sort-select"
+                  bind:value={deploymentSort}
+                  title="Sort deployments"
+                  aria-label="Sort deployments"
+                >
+                  <option value="az">A → Z</option>
+                  <option value="za">Z → A</option>
+                </select>
+              </div>
+              {#if filteredDeployments.length === 0}
+                <div class="empty-state">
+                  <p class="hint">No deployments match "{deploymentFilter}".</p>
+                </div>
+              {:else}
+                <div class="deployments-list">
+                  {#each filteredDeployments as dep (dep.deploymentId)}
+                    {@const canDownload =
+                      !!dep.hasFiles &&
+                      (dep.status === 'ready' || dep.status === 'pending')}
+                    {@const canUndeploy = true}
+                    {@const showMenu = canDownload || canUndeploy}
+                    <div
+                      class="deployment-group"
+                      class:collapsed={collapsedDeployments.has(
+                        dep.deploymentId
+                      )}
+                    >
+                      <div class="deployment-header">
                         <button
-                          class="deployment-text-btn"
-                          title="Integration endpoints for this deployment"
-                          aria-haspopup="dialog"
-                          aria-expanded={integrateForId === dep.deploymentId}
-                          onclick={(e: MouseEvent) => {
-                            e.stopPropagation()
-                            toggleIntegrate(dep)
-                          }}
+                          class="deployment-header-toggle"
+                          onclick={() =>
+                            toggleDeploymentCollapse(dep.deploymentId)}
+                          title={collapsedDeployments.has(dep.deploymentId)
+                            ? 'Expand deployment'
+                            : 'Collapse deployment'}
                         >
-                          Integrate
+                          <span
+                            class="chevron"
+                            class:rotated={!collapsedDeployments.has(
+                              dep.deploymentId
+                            )}>&#9002;</span
+                          >
+                          <span class="deployment-id">{dep.deploymentId}</span>
+                          <span class="deployment-fn-count">
+                            {#if dep.error}
+                              Error
+                            {:else if dep.functions.length === 0 && compilingDeployments.has(dep.deploymentId)}
+                              Compiling...
+                            {:else if dep.functions.length === 0}
+                              Uncompiled
+                            {:else}
+                              {dep.functions.length} rule{dep.functions
+                                .length !== 1
+                                ? 's'
+                                : ''}
+                            {/if}
+                          </span>
                         </button>
-                        {#if showMenu}
-                          <div class="deployment-menu-wrapper">
+                        <div class="deployment-actions">
+                          {#if integrateMode === 'cloud'}
                             <button
-                              class="deployment-menu-btn"
-                              aria-label="Deployment actions"
-                              aria-haspopup="menu"
-                              aria-expanded={openDeploymentMenuId ===
-                                dep.deploymentId}
-                              title="Deployment actions"
+                              class="deployment-text-btn"
+                              title="Chat with this deployment in Legalese AI"
                               onclick={(e: MouseEvent) => {
                                 e.stopPropagation()
-                                toggleDeploymentMenu(dep.deploymentId)
+                                useInChat(dep)
                               }}
                             >
-                              {#if downloadingId === dep.deploymentId || undeployingId === dep.deploymentId}
-                                <span class="menu-spinner" aria-hidden="true"
-                                ></span>
-                              {:else}
-                                &#8943;
-                              {/if}
+                              Chat
                             </button>
-                            {#if openDeploymentMenuId === dep.deploymentId}
-                              <div
-                                class="dropdown-menu deployment-dropdown-menu"
+                          {/if}
+                          <button
+                            class="deployment-text-btn"
+                            title="Integration endpoints for this deployment"
+                            aria-haspopup="dialog"
+                            aria-expanded={integrateForId === dep.deploymentId}
+                            onclick={(e: MouseEvent) => {
+                              e.stopPropagation()
+                              toggleIntegrate(dep)
+                            }}
+                          >
+                            Integrate
+                          </button>
+                          {#if showMenu}
+                            <div class="deployment-menu-wrapper">
+                              <button
+                                class="deployment-menu-btn"
+                                aria-label="Deployment actions"
+                                aria-haspopup="menu"
+                                aria-expanded={openDeploymentMenuId ===
+                                  dep.deploymentId}
+                                title="Deployment actions"
+                                onclick={(e: MouseEvent) => {
+                                  e.stopPropagation()
+                                  toggleDeploymentMenu(dep.deploymentId)
+                                }}
                               >
-                                {#if canDownload}
-                                  <button
-                                    class="menu-item"
-                                    disabled={downloadingId ===
-                                      dep.deploymentId}
-                                    onclick={(e: MouseEvent) => {
-                                      e.stopPropagation()
-                                      requestDownload(dep)
-                                    }}
-                                  >
-                                    {downloadingId === dep.deploymentId
-                                      ? 'Downloading...'
-                                      : 'Download'}
-                                  </button>
+                                {#if downloadingId === dep.deploymentId || undeployingId === dep.deploymentId}
+                                  <span class="menu-spinner" aria-hidden="true"
+                                  ></span>
+                                {:else}
+                                  &#8943;
                                 {/if}
-                                {#if canUndeploy}
-                                  <button
-                                    class="menu-item menu-item-danger"
-                                    disabled={undeployingId ===
-                                      dep.deploymentId}
-                                    onclick={(e: MouseEvent) => {
-                                      e.stopPropagation()
-                                      closeDeploymentMenu()
-                                      requestUndeploy(dep)
-                                    }}
-                                  >
-                                    {undeployingId === dep.deploymentId
-                                      ? 'Removing...'
-                                      : 'Undeploy'}
-                                  </button>
-                                {/if}
-                              </div>
-                            {/if}
-                          </div>
-                        {/if}
-                      </div>
-                    </div>
-                    {#if !collapsedDeployments.has(dep.deploymentId)}
-                      {#if dep.error}
-                        <div class="deployment-error">
-                          <pre>{dep.error}</pre>
+                              </button>
+                              {#if openDeploymentMenuId === dep.deploymentId}
+                                <div
+                                  class="dropdown-menu deployment-dropdown-menu"
+                                >
+                                  {#if canDownload}
+                                    <button
+                                      class="menu-item"
+                                      disabled={downloadingId ===
+                                        dep.deploymentId}
+                                      onclick={(e: MouseEvent) => {
+                                        e.stopPropagation()
+                                        requestDownload(dep)
+                                      }}
+                                    >
+                                      {downloadingId === dep.deploymentId
+                                        ? 'Downloading...'
+                                        : 'Download'}
+                                    </button>
+                                  {/if}
+                                  {#if canUndeploy}
+                                    <button
+                                      class="menu-item menu-item-danger"
+                                      disabled={undeployingId ===
+                                        dep.deploymentId}
+                                      onclick={(e: MouseEvent) => {
+                                        e.stopPropagation()
+                                        closeDeploymentMenu()
+                                        requestUndeploy(dep)
+                                      }}
+                                    >
+                                      {undeployingId === dep.deploymentId
+                                        ? 'Removing...'
+                                        : 'Undeploy'}
+                                    </button>
+                                  {/if}
+                                </div>
+                              {/if}
+                            </div>
+                          {/if}
                         </div>
-                      {:else if compilingDeployments.has(dep.deploymentId)}
-                        <div class="deployment-empty">Compiling...</div>
-                      {:else if dep.functions.length > 0}
-                        <!-- Unkeyed: see note on the preview functions list;
+                      </div>
+                      {#if !collapsedDeployments.has(dep.deploymentId)}
+                        {#if dep.error}
+                          <div class="deployment-error">
+                            <pre>{dep.error}</pre>
+                          </div>
+                        {:else if compilingDeployments.has(dep.deploymentId)}
+                          <div class="deployment-empty">Compiling...</div>
+                        {:else if dep.functions.length > 0}
+                          <!-- Unkeyed: see note on the preview functions list;
                              func.name is not a safe key. -->
-                        {#each dep.functions as func}
-                          <ToolCard
-                            {func}
-                            expanded={isCardExpanded(
-                              dep.deploymentId + '/' + func.name
-                            )}
-                            onToggle={() =>
-                              toggleCard(dep.deploymentId + '/' + func.name)}
-                          />
-                        {/each}
-                      {:else}
-                        <div class="deployment-empty">No rules</div>
+                          {#each dep.functions as func}
+                            <ToolCard
+                              {func}
+                              expanded={isCardExpanded(
+                                dep.deploymentId + '/' + func.name
+                              )}
+                              onToggle={() =>
+                                toggleCard(dep.deploymentId + '/' + func.name)}
+                            />
+                          {/each}
+                        {:else}
+                          <div class="deployment-empty">No rules</div>
+                        {/if}
                       {/if}
-                    {/if}
-                  </div>
-                {/each}
-              </div>
+                    </div>
+                  {/each}
+                </div>
+              {/if}
             {/if}
           </div>
           {#if connectionStatus.connected}
@@ -2835,6 +2887,78 @@
 
   .deployment-info-note > :global(p + p) {
     margin-top: 6px;
+  }
+
+  .deployment-filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+
+  .deployment-filter-field {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .deployment-filter-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 5px 24px 5px 8px;
+    font-size: 0.92em;
+    background: var(--vscode-input-background, #3c3c3c);
+    color: var(--vscode-input-foreground, #ccc);
+    border: 1px solid var(--vscode-input-border, #555);
+    border-radius: 3px;
+    outline: none;
+  }
+
+  .deployment-filter-input:focus {
+    border-color: var(--vscode-foreground, #ccc);
+  }
+
+  .deployment-filter-clear {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: none;
+    border-radius: 3px;
+    background: none;
+    color: var(--vscode-descriptionForeground, #999);
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .deployment-filter-clear:hover {
+    color: var(--vscode-foreground, #ccc);
+    background: var(--vscode-toolbar-hoverBackground, rgba(255, 255, 255, 0.1));
+  }
+
+  .deployment-sort-select {
+    flex: none;
+    box-sizing: border-box;
+    padding: 4px 6px;
+    font-size: 0.92em;
+    line-height: normal;
+    background: var(--vscode-dropdown-background, #3c3c3c);
+    color: var(--vscode-dropdown-foreground, #ccc);
+    border: 1px solid var(--vscode-dropdown-border, #555);
+    border-radius: 3px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  .deployment-sort-select:focus {
+    border-color: var(--vscode-foreground, #ccc);
   }
 
   .deployments-list {
