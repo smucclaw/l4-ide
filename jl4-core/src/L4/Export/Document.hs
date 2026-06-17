@@ -609,17 +609,32 @@ childNumber parent i
 
 -- | Group into /Definitions/ (types, sorted define-before-use), /Assumptions/,
 -- then operative rules. Empty groups are dropped.
+--
+-- The operative-rules group is normally unlabelled — when it is the section's
+-- only material the section heading already frames it. But when it shares a
+-- section with labelled Definitions/Assumptions groups it would otherwise
+-- render as a second, header-less clause list whose numbering restarts at 1
+-- (two "1." items with nothing between them). In that case we give it a
+-- "Provisions" heading so each numbered list sits under its own label.
 groupByKind :: (Block -> Int) -> [Block] -> [DocGroup]
 groupByKind rankOf blocks =
-  [ MkDocGroup { groupLabel = lbl, groupBlocks = bs }
-  | (lbl, k, sortIt) <- [ (Just "Definitions", TypeUnit, True)
-                        , (Just "Assumptions", AssumptionUnit, False)
-                        , (Nothing, RuleUnit, False)
-                        ]
-  , let raw = filter (\b -> b.blockKind == k) blocks
-        bs  = if sortIt then List.sortOn rankOf raw else raw
-  , not (null bs)
-  ]
+  case groups of
+    (_ : _ : _) -> map labelRules groups
+    _           -> groups
+ where
+  groups =
+    [ MkDocGroup { groupLabel = lbl, groupBlocks = bs }
+    | (lbl, k, sortIt) <- [ (Just "Definitions", TypeUnit, True)
+                          , (Just "Assumptions", AssumptionUnit, False)
+                          , (Nothing, RuleUnit, False)
+                          ]
+    , let raw = filter (\b -> b.blockKind == k) blocks
+          bs  = if sortIt then List.sortOn rankOf raw else raw
+    , not (null bs)
+    ]
+  labelRules g = case g.groupLabel of
+    Nothing -> g { groupLabel = Just "Provisions" }
+    Just _  -> g
 
 pruneSection :: DocSection -> Maybe DocSection
 pruneSection s =

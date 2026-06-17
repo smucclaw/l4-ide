@@ -156,7 +156,11 @@ export function getWebviewContent(
   }
 
   const tokenCSS = tokenColorsToCSS(getTokenColors())
-  const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} https:; font-src ${webview.cspSource}; connect-src https://legalese.com;">`
+  // `frame-src 'self'` lets the Render tab embed the live preview in a
+  // `srcdoc` iframe (about:srcdoc inherits the webview origin). The inner
+  // document inherits this CSP, so allow inline styles / data: images that
+  // the rendered HTML may carry.
+  const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} https: data:; font-src ${webview.cspSource} data:; frame-src 'self'; connect-src https://legalese.com;">`
 
   const postprocessedWebviewHtml = html.replace(
     '<head>',

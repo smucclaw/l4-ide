@@ -32,7 +32,9 @@ const SCOPE_MAP: [keyof TokenColors, string[]][] = [
   // L4 directives (#EVAL, #ASSERT, …) are preprocessor markers — map to
   // the theme's meta.preprocessor color (blue in Default Dark Modern).
   ['directive', ['meta.preprocessor', 'keyword.other.directive']],
-  ['comment', ['comment.line', 'comment.block', 'comment']],
+  // NB: `comment` is intentionally NOT derived from the theme. Most themes
+  // colour comments green (e.g. #6a9955 in Default Dark Modern), but for L4
+  // we want a neutral grey, so we always use the default below.
   ['string', ['string.quoted', 'string']],
   ['number', ['constant.numeric', 'constant']],
   ['variable', ['variable.other', 'variable']],
@@ -46,7 +48,7 @@ const SCOPE_MAP: [keyof TokenColors, string[]][] = [
 const DARK_DEFAULTS: TokenColors = {
   keyword: '#c586c0',
   directive: '#569cd6',
-  comment: '#6a9955',
+  comment: '#8d949d',
   string: '#ce9178',
   number: '#b5cea8',
   variable: '#9cdcfe',
@@ -57,7 +59,7 @@ const DARK_DEFAULTS: TokenColors = {
 const LIGHT_DEFAULTS: TokenColors = {
   keyword: '#af00db',
   directive: '#0000ff',
-  comment: '#008000',
+  comment: '#8d949d',
   string: '#a31515',
   number: '#098658',
   variable: '#001080',

@@ -17,6 +17,8 @@ import {
   ExportDocumentRequestType,
   ExportPlanRequestType,
   RequestRenderPreview,
+  RequestRenderInline,
+  RequestRenderSave,
   GetSidebarImportedFiles,
   GetSidebarExportedFunctions,
   GetSidebarConnectionStatus,
@@ -140,6 +142,21 @@ function extForFormat(format: string): string {
       return '.plan.json'
     default:
       return '.html'
+  }
+}
+
+/** Save-dialog file-type filters for a render format. */
+function saveFiltersForFormat(format: string): Record<string, string[]> {
+  switch (format) {
+    case 'akn':
+      return { 'Akoma Ntoso XML': ['xml'], 'All files': ['*'] }
+    case 'text':
+      return { 'Plain text': ['txt'], 'All files': ['*'] }
+    case 'json':
+    case 'plan':
+      return { JSON: ['json'], 'All files': ['*'] }
+    default:
+      return { 'HTML document': ['html', 'htm'], 'All files': ['*'] }
   }
 }
 
@@ -537,6 +554,115 @@ export function initializeSidebarMessenger(
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       outputChannel.appendLine(`[sidebar] Render failed: ${msg}`)
+      return { success: false, error: msg }
+    }
+  })
+
+  // Render the active L4 document to a content string in the requested
+  // format via the LSP. Returns the rendered content and the IR title.
+  // Shared by the inline preview and the Save action. Throws on LSP failure.
+  async function renderToContent(
+    verDocId: { uri: string; version: number },
+    params: {
+      format: string
+      includeUnused: boolean
+      numberSections: boolean
+      numberClauses: boolean
+      toc: boolean
+      excludeModules?: string[]
+    }
+  ): Promise<{ content: string; title: string | undefined }> {
+    if (params.format === 'plan') {
+      const plan = await client.sendRequest(ExportPlanRequestType, { verDocId })
+      return { content: JSON.stringify(plan ?? {}, null, 2), title: undefined }
+    }
+    const res = await client.sendRequest(ExportDocumentRequestType, {
+      verDocId,
+      format: params.format,
+      includeUnused: params.includeUnused,
+      numberSections: params.numberSections,
+      numberClauses: params.numberClauses,
+      toc: params.toc,
+      excludeModules: params.excludeModules ?? [],
+    })
+    if (!res) throw new Error('No response from the language server.')
+    const title =
+      res.ir && typeof res.ir === 'object'
+        ? (res.ir as { title?: string }).title
+        : undefined
+    const content =
+      params.format === 'json'
+        ? JSON.stringify(res.ir ?? {}, null, 2)
+        : res.content
+    return { content, title }
+  }
+
+  // Handle Render-tab live inline preview: render the active file as HTML
+  // and return it to the webview to display in an iframe. Never writes to
+  // disk or opens a panel — reflects the in-memory (unsaved) buffer.
+  messenger.onRequest(RequestRenderInline, async (params) => {
+    const doc = await resolveL4Document()
+    if (!doc) {
+      return {
+        success: false,
+        error: 'Open an L4 file (or a file beside one) to render.',
+      }
+    }
+    try {
+      const verDocId = { uri: doc.uri.toString(), version: doc.version }
+      const { content, title } = await renderToContent(verDocId, {
+        format: 'html',
+        includeUnused: params.includeUnused,
+        numberSections: params.numberSections,
+        numberClauses: params.numberClauses,
+        toc: params.toc,
+        excludeModules: params.excludeModules ?? [],
+      })
+      return { success: true, html: content, title }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return { success: false, error: msg }
+    }
+  })
+
+  // Handle Render-tab Save action: render the active file in the chosen
+  // format, then prompt for a location with a native Save dialog and write
+  // the file there.
+  messenger.onRequest(RequestRenderSave, async (params) => {
+    const doc = await resolveL4Document()
+    if (!doc) {
+      return {
+        success: false,
+        error: 'Open an L4 file (or a file beside one) to render.',
+      }
+    }
+    try {
+      const verDocId = { uri: doc.uri.toString(), version: doc.version }
+      const { content } = await renderToContent(verDocId, params)
+
+      // Default the Save dialog next to the .l4 source (when on disk),
+      // with the format's natural extension and base name.
+      const ext = extForFormat(params.format)
+      let defaultUri: vscode.Uri | undefined
+      if (doc.uri.scheme === 'file') {
+        const dir = path.dirname(doc.uri.fsPath)
+        const base = path.basename(doc.uri.fsPath, path.extname(doc.uri.fsPath))
+        defaultUri = vscode.Uri.file(path.join(dir, base + ext))
+      }
+      const target = await vscode.window.showSaveDialog({
+        defaultUri,
+        filters: saveFiltersForFormat(params.format),
+      })
+      if (!target) return { success: false, canceled: true }
+
+      await vscode.workspace.fs.writeFile(
+        target,
+        new TextEncoder().encode(content)
+      )
+      return { success: true, savedPath: target.fsPath }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      outputChannel.appendLine(`[sidebar] Render save failed: ${msg}`)
       return { success: false, error: msg }
     }
   })

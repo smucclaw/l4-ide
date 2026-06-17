@@ -219,6 +219,67 @@ export const RequestRenderPreview: RequestType<
   method: 'requestRenderPreview',
 }
 
+/** Render tab asks the extension for a live in-tab HTML preview of the
+ *  active file. Unlike {@link RequestRenderPreview}, this never writes a
+ *  file to disk and never opens an editor/webview panel — the rendered
+ *  HTML is returned to the sidebar webview, which displays it inline in an
+ *  iframe (`srcdoc`). The render reflects the in-memory (unsaved) buffer,
+ *  so the preview tracks edits as the user types. */
+export interface RenderInlineParams {
+  numberSections: boolean
+  numberClauses: boolean
+  toc: boolean
+  includeUnused: boolean
+  /** Module URIs the user deselected in the imports tray. */
+  excludeModules?: string[]
+}
+
+export interface RenderInlineResponse {
+  success: boolean
+  /** Full HTML document, ready to drop into an iframe `srcdoc`. */
+  html?: string
+  /** The document title, echoed for the sidebar. */
+  title?: string
+  error?: string
+}
+
+export const RequestRenderInline: RequestType<
+  RenderInlineParams,
+  RenderInlineResponse
+> = {
+  method: 'requestRenderInline',
+}
+
+/** Render tab asks the extension to export the active file in a chosen
+ *  format and persist it to a user-chosen location. The extension renders
+ *  the content, shows a native Save dialog (defaulting next to the .l4
+ *  source with the format's extension), and writes the file there. */
+export interface RenderSaveParams {
+  /** "html" | "akn" | "text" | "json" | "plan" */
+  format: string
+  numberSections: boolean
+  numberClauses: boolean
+  toc: boolean
+  includeUnused: boolean
+  excludeModules?: string[]
+}
+
+export interface RenderSaveResponse {
+  success: boolean
+  /** Absolute path the user saved to (omitted when canceled). */
+  savedPath?: string
+  /** True when the user dismissed the Save dialog. */
+  canceled?: boolean
+  error?: string
+}
+
+export const RequestRenderSave: RequestType<
+  RenderSaveParams,
+  RenderSaveResponse
+> = {
+  method: 'requestRenderSave',
+}
+
 /** Connection status response from extension to sidebar */
 export interface GetSidebarConnectionStatusResponse {
   serviceUrl: string

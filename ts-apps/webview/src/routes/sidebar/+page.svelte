@@ -26,6 +26,8 @@
     GetSidebarUpdateStatus,
     ShowNotification,
     RequestRenderPreview,
+    RequestRenderInline,
+    RequestRenderSave,
     GetSidebarImportedFiles,
     AiChatPickAttachment,
     RequestRevealLocation,
@@ -68,19 +70,20 @@
   let menuOpen: boolean = $state(false)
 
   // Render tab state
-  let renderFormat: 'html' | 'akn' | 'text' | 'json' | 'plan' = $state('html')
   let renderIncludeUnused: boolean = $state(false)
   let renderNumberSections: boolean = $state(true)
   let renderNumberClauses: boolean = $state(true)
   let renderToc: boolean = $state(false)
   let renderBusy: boolean = $state(false)
-  // Legalese AI rendering: when on (and a Cloud session is valid), the
-  // deterministic render is refined through the legalese-compose-4
-  // pipeline using these formatting preferences / drafting policy.
-  // Preferences and the policy reference persist in localStorage.
+  // "Save & refine" flow: the deterministic render is refined through the
+  // legalese-compose-4 pipeline using these formatting preferences /
+  // drafting policy. The format below is what the refined document is saved
+  // as. Preferences and the policy reference persist in localStorage.
   const AI_PREFS_KEY = 'l4.render.ai.formatPrefs'
   const AI_POLICY_KEY = 'l4.render.ai.draftingPolicy'
-  let renderUseAi: boolean = $state(false)
+  // Document format for the "Save & refine" flow (document formats only —
+  // the JSON/plan exports aren't documents to redraft).
+  let renderRefineFormat: 'html' | 'akn' | 'text' = $state('html')
   let renderFormatPrefs: string = $state('')
   // The drafting-policy file as a ready-to-stage chat attachment (the
   // picker returns this shape for both text and PDF).
@@ -103,6 +106,140 @@
   let importedFiles: SidebarImportedFile[] = $state([])
   let excludedModules: Set<string> = $state(new Set())
   let importsLoading: boolean = $state(false)
+
+  // Live inline HTML preview: the rendered HTML for the iframe `srcdoc`,
+  // re-fetched (debounced) whenever the active file, its in-memory version
+  // (edits), or a render option changes. Never touches disk.
+  let renderHtml: string = $state('')
+  let renderInlineError: string = $state('')
+  let renderInlineBusy: boolean = $state(false)
+  let renderInlineTimer: ReturnType<typeof setTimeout> | null = null
+  // The preview iframe element + its last-known scroll position, so a live
+  // re-render (which replaces `srcdoc` and reloads the frame) can restore
+  // where the reader was rather than jumping to the top.
+  let renderFrameEl: HTMLIFrameElement | null = $state(null)
+  let renderScrollX = 0
+  let renderScrollY = 0
+
+  // On each (re)load of the preview: restore the saved scroll position,
+  // start tracking further scrolls, and intercept in-document link clicks.
+  // The frame is same-origin (sandbox allows it), so contentWindow /
+  // contentDocument are reachable.
+  function onRenderFrameLoad() {
+    const win = renderFrameEl?.contentWindow
+    const doc = renderFrameEl?.contentDocument
+    if (!win) return
+    win.scrollTo(renderScrollX, renderScrollY)
+    win.addEventListener(
+      'scroll',
+      () => {
+        renderScrollX = win.scrollX
+        renderScrollY = win.scrollY
+      },
+      { passive: true }
+    )
+    // Links in the rendered document are all in-document anchors. Inside a
+    // sandboxed `srcdoc` frame a fragment jump can't navigate (it reloads
+    // `about:srcdoc` as a blank page), so intercept every anchor click and
+    // keep it within the frame: scroll the `#…` target into view.
+    doc?.addEventListener('click', (ev) => {
+      const anchor = (ev.target as HTMLElement | null)?.closest?.('a')
+      if (!anchor) return
+      ev.preventDefault()
+      const href = anchor.getAttribute('href') ?? ''
+      if (!href.startsWith('#')) return
+      const id = decodeURIComponent(href.slice(1))
+      const targetEl =
+        doc.getElementById(id) ??
+        doc.querySelector(`[name="${CSS.escape(id)}"]`)
+      targetEl?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }
+  // The active file's in-memory version — bumped on every edit (via the
+  // active-file message), which drives the live re-render.
+  let activeFileVersion: number = $state(0)
+  // Floating-bar UI state: which popup/tray (if any) is open, and whether a
+  // Save is in flight.
+  let saveMenuOpen: boolean = $state(false)
+  let saveBusy: boolean = $state(false)
+  let refineTrayOpen: boolean = $state(false)
+  let importsTrayOpen: boolean = $state(false)
+  // Light/dark theme for the rendered iframe. The generated HTML is
+  // hardcoded light, so dark mode injects an override stylesheet. Defaults
+  // to VSCode's current theme (resolved in onMount), then user-overridable.
+  let renderDark: boolean = $state(false)
+
+  const RENDER_HELP_URL =
+    'https://legalese.com/l4/tutorials/natural-language-functions/optimising-natural-language-generation.md'
+
+  // The webview's editor background — the dark page matches it so the
+  // rendered document sits on the same surface as the empty-state and the
+  // surrounding editor. The srcdoc can't read the parent's CSS vars, so we
+  // resolve it to a literal at inject time.
+  function editorBg(): string {
+    try {
+      const v = getComputedStyle(document.documentElement)
+        .getPropertyValue('--vscode-editor-background')
+        .trim()
+      return v || '#181818'
+    } catch {
+      return '#181818'
+    }
+  }
+
+  // Dark-mode override for the rendered document. The exported HTML themes
+  // itself with `--ink`/`--muted` vars plus a few literal light backgrounds
+  // (jl4-core/src/L4/Export/Render.hs); these rules invert those for a dark
+  // page. Injected after the document's own <style>, so equal-specificity
+  // rules win by source order.
+  function darkOverrideCss(bg: string): string {
+    return `
+    :root { --ink:#e6e6e6; --muted:#9d9d9d; }
+    html { color-scheme: dark; }
+    body { background:${bg}; }
+    .l4-doc { background:${bg}; }
+    .forced { color:#e0726f; }
+    .cond { color:#c3c3c3; }
+    nav.toc { background:rgba(255,255,255,0.04); border-color:rgba(255,255,255,0.12); }
+    table.l4-table th, table.l4-table td { border-color:rgba(255,255,255,0.14); }
+    table.l4-table th { background:rgba(255,255,255,0.07); }
+    table.l4-table tbody tr:nth-child(even) { background:rgba(255,255,255,0.03); }
+    @media print { body, .l4-doc { background:#fff; } }
+  `
+  }
+
+  // True when VSCode is using a dark (or high-contrast dark) theme. In a
+  // webview, `prefers-color-scheme` tracks the editor theme.
+  function prefersDark(): boolean {
+    try {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches
+    } catch {
+      return false
+    }
+  }
+
+  // Splice the dark override into the rendered HTML's <head> (falling back
+  // to a prefix when there's no head).
+  function applyTheme(html: string): string {
+    if (!renderDark || !html) return html
+    const tag = `<style data-l4-dark>${darkOverrideCss(editorBg())}</style>`
+    return html.includes('</head>')
+      ? html.replace('</head>', `${tag}</head>`)
+      : tag + html
+  }
+
+  // The HTML actually fed to the iframe, themed per the toggle.
+  const displayHtml: string = $derived(applyTheme(renderHtml))
+
+  // Export formats offered by the Save dropdown. The live preview is always
+  // HTML; the format only chooses what the Save action persists.
+  const SAVE_FORMATS: Array<{ value: string; label: string }> = [
+    { value: 'html', label: 'HTML document' },
+    { value: 'akn', label: 'Akoma Ntoso (XML)' },
+    { value: 'text', label: 'Plain text' },
+    { value: 'json', label: 'Document IR (JSON)' },
+    { value: 'plan', label: 'Export plan (JSON)' },
+  ]
 
   async function fetchImportedFiles() {
     if (!messenger) return
@@ -213,7 +350,7 @@
   // generated document ride along as `@`-mention chips (the agent reads
   // them with its fs tools), so no paths are spelled out here.
   function buildRefinePrompt(): string {
-    const fmt = formatLabel(renderFormat)
+    const fmt = formatLabel(renderRefineFormat)
     const lines = [
       `Refine the formatting and wording of the generated ${fmt} document, using the L4 source only as context. Preserve the defined terms, rules, values and scope exactly — change presentation only, never the substance.`,
     ]
@@ -246,54 +383,150 @@
     activeTab = 'ai-chat'
   }
 
-  async function renderPreview() {
-    if (!messenger) return
-    renderBusy = true
-    // When the render will be handed off to Legalese AI for refinement,
-    // skip popping the deterministic output open in an editor/browser
-    // tab — it's an intermediate artifact the agent rewrites, and the
-    // user only wants the standalone preview when refinement is OFF.
-    const refinable =
-      renderFormat === 'html' ||
-      renderFormat === 'text' ||
-      renderFormat === 'akn'
-    const willRefine = renderUseAi && cloudSessionValid && refinable
+  // Fetch the live HTML render of the active file (reflecting the current
+  // toggles and in-memory edits) and drop it into the iframe. Never writes
+  // a file. Errors surface as an overlay rather than a toast — they're
+  // transient while the user is mid-edit.
+  async function refreshInlineRender() {
+    if (!messenger || !activeFileUri) {
+      renderHtml = ''
+      return
+    }
+    renderInlineBusy = true
     try {
       const res = await messenger.sendRequest(
-        RequestRenderPreview,
+        RequestRenderInline,
         HOST_EXTENSION,
         {
-          format: renderFormat,
           includeUnused: renderIncludeUnused,
           numberSections: renderNumberSections,
           numberClauses: renderNumberClauses,
           toc: renderToc,
           excludeModules: [...excludedModules],
-          openInEditor: !willRefine,
+        }
+      )
+      if (res.success) {
+        renderHtml = res.html ?? ''
+        renderInlineError = ''
+      } else {
+        renderInlineError = res.error ?? 'Render failed.'
+      }
+    } catch (e) {
+      renderInlineError = e instanceof Error ? e.message : String(e)
+    } finally {
+      renderInlineBusy = false
+    }
+  }
+
+  // Debounce live re-renders so rapid edits / toggle flips coalesce.
+  function scheduleInlineRender() {
+    if (renderInlineTimer) clearTimeout(renderInlineTimer)
+    renderInlineTimer = setTimeout(refreshInlineRender, 180)
+  }
+
+  // Re-render the preview whenever the active file, its version (edits), or
+  // any render option changes — while the Render tab is open.
+  $effect(() => {
+    // Read every dependency so Svelte re-runs this effect on their change.
+    const _deps = [
+      activeTab,
+      activeFileUri,
+      activeFileVersion,
+      renderNumberSections,
+      renderNumberClauses,
+      renderToc,
+      renderIncludeUnused,
+      excludedModules,
+    ]
+    void _deps
+    if (activeTab === 'render' && activeFileUri && messenger) {
+      scheduleInlineRender()
+    }
+  })
+
+  // Save the rendered document in the chosen format. The extension renders
+  // and shows a native Save dialog for the location.
+  async function saveAs(format: string) {
+    saveMenuOpen = false
+    if (!messenger || !activeFileUri || saveBusy) return
+    saveBusy = true
+    try {
+      const res = await messenger.sendRequest(
+        RequestRenderSave,
+        HOST_EXTENSION,
+        {
+          format,
+          includeUnused: renderIncludeUnused,
+          numberSections: renderNumberSections,
+          numberClauses: renderNumberClauses,
+          toc: renderToc,
+          excludeModules: [...excludedModules],
+        }
+      )
+      if (res.canceled) return
+      if (!res.success) {
+        notify('error', res.error ?? 'Save failed.')
+        return
+      }
+      const savedName = res.savedPath
+        ? (res.savedPath.split('/').pop() ?? res.savedPath)
+        : undefined
+      notify('info', savedName ? `Saved ${savedName}` : 'Saved.')
+    } catch (e) {
+      notify('error', e instanceof Error ? e.message : String(e))
+    } finally {
+      saveBusy = false
+    }
+  }
+
+  // Open/close the "Save & refine" tray (signed out shows the sign-in
+  // upsell inside it).
+  function toggleRefineTray() {
+    refineTrayOpen = !refineTrayOpen
+    if (refineTrayOpen) importsTrayOpen = false
+  }
+
+  function toggleImportsTray() {
+    importsTrayOpen = !importsTrayOpen
+    if (importsTrayOpen) refineTrayOpen = false
+  }
+
+  // Run "Save & refine": render the deterministic document (in the chosen
+  // format) to a file beside the source, then hand off to the AI chat panel
+  // seeded with the refine prompt and the two documents.
+  async function runRefine() {
+    if (!messenger || !activeFileUri) return
+    if (!cloudSessionValid) {
+      handleAction()
+      return
+    }
+    renderBusy = true
+    try {
+      const res = await messenger.sendRequest(
+        RequestRenderPreview,
+        HOST_EXTENSION,
+        {
+          format: renderRefineFormat,
+          includeUnused: renderIncludeUnused,
+          numberSections: renderNumberSections,
+          numberClauses: renderNumberClauses,
+          toc: renderToc,
+          excludeModules: [...excludedModules],
+          openInEditor: false,
         }
       )
       if (!res.success) {
         notify('error', res.error ?? 'Render failed.')
         return
       }
-      const savedName = res.savedPath
-        ? (res.savedPath.split('/').pop() ?? res.savedPath)
-        : undefined
-      notify('info', savedName ? `Rendered ${savedName}` : 'Render complete.')
-
-      // Hand off to Legalese AI for refinement when requested. Needs a
-      // file on disk to point the agent at (and a structured format —
-      // the JSON/plan outputs aren't documents to redraft; `willRefine`
-      // already encodes the format/session checks).
-      if (willRefine) {
-        if (res.savedPath) {
-          startAiRefinement(res.savedPath)
-        } else {
-          notify(
-            'warning',
-            'Save the L4 file to disk to refine the render with Legalese AI.'
-          )
-        }
+      if (res.savedPath) {
+        refineTrayOpen = false
+        startAiRefinement(res.savedPath)
+      } else {
+        notify(
+          'warning',
+          'Save the L4 file to disk to refine the render with Legalese AI.'
+        )
       }
     } catch (e) {
       notify('error', e instanceof Error ? e.message : String(e))
@@ -1335,6 +1568,8 @@
 
   onMount(() => {
     loadAiPrefs()
+    // Default the rendered-document theme to VSCode's current theme.
+    renderDark = prefersDark()
     // eslint-disable-next-line no-undef
     const vsCodeApi: WebviewApi<null> = acquireVsCodeApi()
     messenger = new Messenger(vsCodeApi, { debugLog: true })
@@ -1377,6 +1612,8 @@
         activeFileUri = ''
         activeFileName = ''
         functions = []
+        renderHtml = ''
+        renderInlineError = ''
         if (previewDebounceTimer) clearTimeout(previewDebounceTimer)
         if (deployView !== 'preview') deployView = 'preview'
         undeployConfirm = null
@@ -1385,7 +1622,14 @@
       if (msg?.type === 'l4-sidebar-active-file') {
         const uri = msg.uri as string
         const version = msg.version as number
+        // A genuine file switch starts the preview at the top; edits to the
+        // same file keep the reader's scroll position.
+        if (uri !== activeFileUri) {
+          renderScrollX = 0
+          renderScrollY = 0
+        }
         activeFileUri = uri
+        activeFileVersion = version
         activeFileName = displayFileName(uri)
         if (deployView !== 'preview') {
           deployView = 'preview'
@@ -1409,12 +1653,42 @@
     })
 
     document.addEventListener('click', (e) => {
-      if (menuOpen) {
-        const target = e.target as HTMLElement
-        if (!target.closest('.menu-wrapper')) {
-          menuOpen = false
-        }
+      const target = e.target as HTMLElement
+      if (menuOpen && !target.closest('.menu-wrapper')) {
+        menuOpen = false
       }
+      // Render-tab Save dropdown closes on any click outside its wrapper.
+      if (saveMenuOpen && !target.closest('.render-save-wrap')) {
+        saveMenuOpen = false
+      }
+      // Render-tab trays close on any click outside the tray itself and the
+      // button that owns it — so clicking another icon-bar button (a toggle,
+      // Save, help, …) dismisses the tray too. The owning toggle buttons
+      // manage their own open/close in their handlers.
+      if (
+        (refineTrayOpen || importsTrayOpen) &&
+        !target.closest('.render-tray') &&
+        !target.closest('.render-tray-toggle')
+      ) {
+        refineTrayOpen = false
+        importsTrayOpen = false
+      }
+    })
+
+    // Clicks inside the preview iframe land in a separate document, so the
+    // handler above never sees them — focus instead moves to the iframe and
+    // blurs this window. Treat that as an outside click and close the
+    // render menus/trays. (Native <select> popups keep focus on the
+    // <select>, so opening the format dropdown won't trip this.)
+    window.addEventListener('blur', () => {
+      if (!saveMenuOpen && !refineTrayOpen && !importsTrayOpen) return
+      setTimeout(() => {
+        if (document.activeElement?.tagName === 'IFRAME') {
+          saveMenuOpen = false
+          refineTrayOpen = false
+          importsTrayOpen = false
+        }
+      }, 0)
     })
   })
 </script>
@@ -1486,209 +1760,398 @@
         <InspectorPanel {messenger} {onLearnMore} />
       </div>
       <div class="tab-pane render-pane" hidden={activeTab !== 'render'}>
-        <p class="render-intro">
-          {#if activeFileName}
-            Convert {activeFileName} into another format.
+        <div class="render-stage">
+          <!-- Live preview: the active L4 file rendered to HTML, updated as
+               you type. Always HTML; the format only matters when saving. -->
+          {#if !activeFileUri}
+            <div class="render-empty">
+              <p>Open a valid L4 file to render it as a document.</p>
+            </div>
+          {:else if renderHtml}
+            <iframe
+              bind:this={renderFrameEl}
+              class="render-frame"
+              class:dark={renderDark}
+              title="Rendered document preview"
+              sandbox="allow-same-origin"
+              srcdoc={displayHtml}
+              onload={onRenderFrameLoad}
+            ></iframe>
+          {:else if renderInlineError}
+            <div class="render-empty render-empty-error">
+              <p>Couldn’t render this file.</p>
+              <pre class="render-error-text">{renderInlineError}</pre>
+            </div>
           {:else}
-            Open a valid L4 file to convert it into another format.
+            <div class="render-empty"><p>Rendering…</p></div>
           {/if}
-          <button
-            class="learn-more"
-            onclick={() =>
-              onLearnMore(
-                'https://legalese.com/l4/tutorials/natural-language-functions/optimising-natural-language-generation.md'
-              )}>Learn more</button
-          >
-        </p>
-        <div class="form-group">
-          <label class="form-label" for="render-format">Format</label>
-          <select
-            id="render-format"
-            class="form-input"
-            bind:value={renderFormat}
-          >
-            <option value="html">HTML document</option>
-            <option value="akn">Akoma Ntoso (XML)</option>
-            <option value="text">Plain text</option>
-            <option value="json">Document IR (JSON)</option>
-            <option value="plan">Export plan (JSON)</option>
-          </select>
-        </div>
-        <div class="render-imports-title">Render Options</div>
-        <div class="render-imports">
-          <label class="render-check">
-            <span class="render-check-label">Number sections (§ 1, 1.1)</span>
-            <span
-              class="toggle"
-              class:on={renderNumberSections}
-              aria-hidden="true"
-            >
-              <span class="knob"></span>
-            </span>
-            <input
-              class="visually-hidden"
-              type="checkbox"
-              bind:checked={renderNumberSections}
-            />
-          </label>
-          <label class="render-check">
-            <span class="render-check-label">Number clauses (1., 2.)</span>
-            <span
-              class="toggle"
-              class:on={renderNumberClauses}
-              aria-hidden="true"
-            >
-              <span class="knob"></span>
-            </span>
-            <input
-              class="visually-hidden"
-              type="checkbox"
-              bind:checked={renderNumberClauses}
-            />
-          </label>
-          <label class="render-check">
-            <span class="render-check-label">Table of contents (HTML only)</span
-            >
-            <span class="toggle" class:on={renderToc} aria-hidden="true">
-              <span class="knob"></span>
-            </span>
-            <input
-              class="visually-hidden"
-              type="checkbox"
-              bind:checked={renderToc}
-            />
-          </label>
-        </div>
-        {#if importedFiles.length > 0}
-          <div class="render-imports-title">Imported files</div>
-          <p class="render-imports-hint">
-            Select imported dependencies that should be included.
-          </p>
-          <div class="render-imports">
-            {#each importedFiles as file (file.uri)}
-              <label class="render-check render-import-row">
-                <span class="render-check-label">{file.label}</span>
-                <span
-                  class="toggle"
-                  class:on={!excludedModules.has(file.uri)}
-                  aria-hidden="true"
-                >
-                  <span class="knob"></span>
-                </span>
-                <input
-                  class="visually-hidden"
-                  type="checkbox"
-                  checked={!excludedModules.has(file.uri)}
-                  onchange={() => toggleModule(file.uri)}
-                />
-              </label>
-            {/each}
-            <label class="render-check render-check-last">
-              <span class="render-check-label"
-                >Include unused imported definitions</span
-              >
-              <span
-                class="toggle"
-                class:on={renderIncludeUnused}
-                aria-hidden="true"
-              >
-                <span class="knob"></span>
-              </span>
-              <input
-                class="visually-hidden"
-                type="checkbox"
-                bind:checked={renderIncludeUnused}
-              />
-            </label>
-          </div>
-        {:else if importsLoading}
-          <div class="render-imports-title">Imported files</div>
-          <p class="render-imports-hint">
-            Select imported dependencies that should be included.
-          </p>
-          <div class="render-imports-empty">Loading imported files…</div>
-        {/if}
-        <div class="render-imports-title">Legalese AI</div>
-        {#if cloudSessionValid}
-          <div class="render-imports">
-            <label class="render-check">
-              <span class="render-check-label"
-                >Refine formatting using Legalese AI</span
-              >
-              <span class="toggle" class:on={renderUseAi} aria-hidden="true">
-                <span class="knob"></span>
-              </span>
-              <input
-                class="visually-hidden"
-                type="checkbox"
-                bind:checked={renderUseAi}
-              />
-            </label>
-            {#if renderUseAi}
-              <p class="render-imports-hint">
-                Describe your formatting preferences and/or load a drafting
-                policy.
-              </p>
-              <textarea
-                class="ai-prefs-input"
-                rows="8"
-                placeholder="Formatting preferences — e.g. “Use formal headings, spell out numbers, UK English, single-column layout.”"
-                bind:value={renderFormatPrefs}
-              ></textarea>
-              <div class="ai-policy-row">
-                {#if draftingPolicy}
-                  <span class="ai-policy-file" title={draftingPolicy.name}>
-                    {draftingPolicy.name}
-                  </span>
+
+          {#if renderInlineBusy && renderHtml}
+            <div class="render-progress" aria-hidden="true">
+              <div class="render-progress-fill"></div>
+            </div>
+          {/if}
+
+          <!-- Refine tray — floats directly above the icon bar. -->
+          {#if refineTrayOpen}
+            <div class="render-tray refine-tray">
+              {#if cloudSessionValid}
+                <div class="render-tray-title">Refine with Legalese AI</div>
+                <p class="render-tray-hint">
+                  Describe your formatting preferences and/or load a drafting
+                  policy, then save and refine the document with Legalese AI.
+                </p>
+                <textarea
+                  class="ai-prefs-input"
+                  rows="5"
+                  placeholder="Formatting preferences — e.g. “Use formal headings, spell out numbers, UK English, single-column layout.”"
+                  bind:value={renderFormatPrefs}
+                ></textarea>
+                <div class="ai-policy-row">
+                  {#if draftingPolicy}
+                    <span class="ai-policy-file" title={draftingPolicy.name}>
+                      {draftingPolicy.name}
+                    </span>
+                    <button
+                      class="ai-policy-btn"
+                      onclick={clearDraftingPolicy}
+                      title="Remove drafting policy">Remove</button
+                    >
+                  {:else}
+                    <button class="ai-policy-btn" onclick={pickDraftingPolicy}>
+                      <svg
+                        class="ai-policy-icon"
+                        viewBox="0 0 16 16"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M12.5 7.5L7 13a3 3 0 0 1-4.2-4.2L8.8 2.8a2 2 0 0 1 2.8 2.8L5.8 11.4a1 1 0 0 1-1.4-1.4L9.2 5.2"
+                          stroke="currentColor"
+                          stroke-width="1.5"
+                          fill="none"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        />
+                      </svg>
+                      Load existing drafting policy…
+                    </button>
+                  {/if}
+                </div>
+                <div class="render-tray-actions">
+                  <label class="render-tray-format-label">
+                    <select
+                      class="render-tray-format"
+                      bind:value={renderRefineFormat}
+                    >
+                      <option value="html">HTML document</option>
+                      <option value="akn">Akoma Ntoso (XML)</option>
+                      <option value="text">Plain text</option>
+                    </select>
+                  </label>
                   <button
-                    class="ai-policy-btn"
-                    onclick={clearDraftingPolicy}
-                    title="Remove drafting policy">Remove</button
+                    class="render-tray-cta"
+                    onclick={runRefine}
+                    disabled={renderBusy || !activeFileUri}
                   >
-                {:else}
-                  <button class="ai-policy-btn" onclick={pickDraftingPolicy}>
-                    <svg
-                      class="ai-policy-icon"
-                      viewBox="0 0 16 16"
+                    {renderBusy ? 'Preparing…' : 'Save & refine →'}
+                  </button>
+                </div>
+              {:else}
+                <div class="render-tray-title">Refine with Legalese AI</div>
+                <p class="render-tray-hint">
+                  Sign in with Legalese Cloud to re-draft this document to your
+                  house style and drafting policy.
+                </p>
+                <button
+                  class="render-tray-cta render-tray-cta-end"
+                  onclick={handleAction}>Sign in with Legalese Cloud</button
+                >
+              {/if}
+            </div>
+          {/if}
+
+          <!-- Imports tray — choose which imported modules to include. -->
+          {#if importsTrayOpen}
+            <div class="render-tray imports-tray">
+              <div class="render-tray-title">Imported files</div>
+              {#if importedFiles.length > 0}
+                <p class="render-tray-hint">
+                  Select imported dependencies to include in the render.
+                </p>
+                <div class="render-tray-list">
+                  {#each importedFiles as file (file.uri)}
+                    <label class="render-check render-import-row">
+                      <span class="render-check-label">{file.label}</span>
+                      <span
+                        class="toggle"
+                        class:on={!excludedModules.has(file.uri)}
+                        aria-hidden="true"
+                      >
+                        <span class="knob"></span>
+                      </span>
+                      <input
+                        class="visually-hidden"
+                        type="checkbox"
+                        checked={!excludedModules.has(file.uri)}
+                        onchange={() => toggleModule(file.uri)}
+                      />
+                    </label>
+                  {/each}
+                  <label class="render-check render-check-last">
+                    <span class="render-check-label"
+                      >Include unused imported definitions</span
+                    >
+                    <span
+                      class="toggle"
+                      class:on={renderIncludeUnused}
                       aria-hidden="true"
                     >
-                      <path
-                        d="M12.5 7.5L7 13a3 3 0 0 1-4.2-4.2L8.8 2.8a2 2 0 0 1 2.8 2.8L5.8 11.4a1 1 0 0 1-1.4-1.4L9.2 5.2"
-                        stroke="currentColor"
-                        stroke-width="1.5"
-                        fill="none"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      />
-                    </svg>
-                    Load existing drafting policy…
-                  </button>
+                      <span class="knob"></span>
+                    </span>
+                    <input
+                      class="visually-hidden"
+                      type="checkbox"
+                      bind:checked={renderIncludeUnused}
+                    />
+                  </label>
+                </div>
+              {:else if importsLoading}
+                <div class="render-imports-empty">Loading imported files…</div>
+              {:else}
+                <div class="render-imports-empty">
+                  This file has no imported dependencies.
+                </div>
+              {/if}
+            </div>
+          {/if}
+
+          <!-- Floating icon bar — sits above the iframe at the bottom. -->
+          <div class="render-bar">
+            <div class="render-bar-group">
+              <!-- Save (with format dropdown above) -->
+              <div class="render-save-wrap">
+                <button
+                  class="render-bar-btn"
+                  onclick={() => (saveMenuOpen = !saveMenuOpen)}
+                  disabled={!activeFileUri || saveBusy}
+                  title="Save the rendered document"
+                >
+                  <svg
+                    class="render-icon"
+                    viewBox="0 0 16 16"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M3 2.5h7l3 3V13a.5.5 0 0 1-.5.5h-9A.5.5 0 0 1 3 13V2.5z M5 2.5v3.5h5V2.5 M5.5 13v-3.5h5V13"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.2"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                  <span>Save</span>
+                </button>
+                {#if saveMenuOpen}
+                  <div class="dropdown-menu render-save-menu">
+                    {#each SAVE_FORMATS as fmt (fmt.value)}
+                      <button
+                        class="menu-item"
+                        onclick={() => saveAs(fmt.value)}>{fmt.label}</button
+                      >
+                    {/each}
+                  </div>
                 {/if}
               </div>
-            {/if}
+
+              <!-- Save & refine (opens the refine tray) -->
+              <button
+                class="render-bar-btn render-tray-toggle"
+                onclick={toggleRefineTray}
+                title="Save & refine with Legalese AI"
+              >
+                <svg class="render-icon" viewBox="0 0 16 16" aria-hidden="true">
+                  <path
+                    d="M3 13l6.5-6.5 M11 3l.6 1.4L13 5l-1.4.6L11 7l-.6-1.4L9 5l1.4-.6L11 3z M4.5 6l.4.9.9.4-.9.4-.4.9-.4-.9L3.2 7.3l.9-.4.4-.9z"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+                <span>Save &amp; refine</span>
+                <svg
+                  class="render-chevron"
+                  class:flipped={refineTrayOpen}
+                  viewBox="0 0 10 10"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M2 6.5 L5 3 L8 6.5"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.4"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            <div class="render-bar-group">
+              <!-- Imports (opens tray) -->
+              <button
+                class="render-bar-btn render-tray-toggle"
+                class:on={importsTrayOpen}
+                onclick={toggleImportsTray}
+                title="Choose imports to include"
+              >
+                <svg class="render-icon" viewBox="0 0 16 16" aria-hidden="true">
+                  <path
+                    d="M4 1.5h5l3 3V14a.5.5 0 0 1-.5.5h-7A.5.5 0 0 1 4 14V1.5z M9 1.5v3h3"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.2"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+                <span>Imports</span>
+                <svg
+                  class="render-chevron"
+                  class:flipped={importsTrayOpen}
+                  viewBox="0 0 10 10"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M2 6.5 L5 3 L8 6.5"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.4"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </button>
+
+              <!-- Section numbers toggle -->
+              <button
+                class="render-icon-btn"
+                class:on={renderNumberSections}
+                onclick={() => (renderNumberSections = !renderNumberSections)}
+                aria-pressed={renderNumberSections}
+                title="Number sections (§ 1, 1.1)"
+              >
+                <span class="render-glyph">§</span>
+              </button>
+
+              <!-- Clause numbers toggle -->
+              <button
+                class="render-icon-btn"
+                class:on={renderNumberClauses}
+                onclick={() => (renderNumberClauses = !renderNumberClauses)}
+                aria-pressed={renderNumberClauses}
+                title="Number clauses (1., 2.)"
+              >
+                <svg class="render-icon" viewBox="0 0 16 16" aria-hidden="true">
+                  <text
+                    x="1.5"
+                    y="6.5"
+                    font-size="5"
+                    fill="currentColor"
+                    font-family="serif">1.</text
+                  >
+                  <text
+                    x="1.5"
+                    y="13"
+                    font-size="5"
+                    fill="currentColor"
+                    font-family="serif">2.</text
+                  >
+                  <path
+                    d="M6.5 4.5h8 M6.5 11h8"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.1"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              </button>
+
+              <!-- Table of contents toggle -->
+              <button
+                class="render-icon-btn"
+                class:on={renderToc}
+                onclick={() => (renderToc = !renderToc)}
+                aria-pressed={renderToc}
+                title="Table of contents"
+              >
+                <svg class="render-icon" viewBox="0 0 16 16" aria-hidden="true">
+                  <path
+                    d="M2.5 4h2 M2.5 8h2 M2.5 12h2 M6.5 4h7 M6.5 8h7 M6.5 12h7"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.2"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              </button>
+
+              <!-- Light/dark theme for the rendered document -->
+              <button
+                class="render-icon-btn"
+                onclick={() => (renderDark = !renderDark)}
+                aria-pressed={renderDark}
+                title={renderDark
+                  ? 'Rendered document: dark — switch to light'
+                  : 'Rendered document: light — switch to dark'}
+              >
+                {#if renderDark}
+                  <svg
+                    class="render-icon"
+                    viewBox="0 0 16 16"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M13 9.5A5 5 0 0 1 6.5 3a.4.4 0 0 0-.55-.5A5.5 5.5 0 1 0 13.5 9a.4.4 0 0 0-.5-.5z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                {:else}
+                  <svg
+                    class="render-icon"
+                    viewBox="0 0 16 16"
+                    aria-hidden="true"
+                  >
+                    <circle
+                      cx="8"
+                      cy="8"
+                      r="3"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.3"
+                    />
+                    <path
+                      d="M8 1.5v1.6 M8 12.9v1.6 M1.5 8h1.6 M12.9 8h1.6 M3.4 3.4l1.1 1.1 M11.5 11.5l1.1 1.1 M12.6 3.4l-1.1 1.1 M4.5 11.5l-1.1 1.1"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.3"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                {/if}
+              </button>
+
+              <!-- Help -->
+              <button
+                class="render-icon-btn render-help-btn"
+                onclick={() => onLearnMore(RENDER_HELP_URL)}
+                title="Learn more about rendering"
+              >
+                <span class="render-glyph">?</span>
+              </button>
+            </div>
           </div>
-        {:else}
-          <div class="ai-upsell">
-            <div class="ai-upsell-title">Refine with Legalese AI</div>
-            <p class="ai-upsell-body">
-              Sign in with Legalese Cloud to re-draft this document to your
-              house style and drafting policy, in the selected format.
-            </p>
-            <button class="ai-upsell-btn" onclick={handleAction}
-              >Sign in with Legalese Cloud</button
-            >
-          </div>
-        {/if}
-        <button
-          class="render-btn"
-          onclick={renderPreview}
-          disabled={renderBusy || !activeFileUri}
-          title={activeFileUri
-            ? undefined
-            : 'Select an L4 file (or a rendered document beside one) to enable rendering.'}
-        >
-          {renderBusy ? 'Rendering…' : 'Generate document'}
-        </button>
+        </div>
       </div>
       {#if activeTab === 'preview'}
         <div class="preview-pane">
@@ -2523,31 +2986,299 @@
     margin-top: 2px;
   }
 
+  /* The Render tab is a full-bleed preview surface: no padding, the
+     stage fills it and the iframe fills the stage. */
   .render-pane {
-    padding: 12px;
+    padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 10px;
   }
-  .render-intro {
-    margin: 0;
+  /* Positioning context for the iframe, the floating bar, and the trays. */
+  .render-stage {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    overflow: hidden;
+    background: var(--vscode-editor-background, #1e1e1e);
+    /* Size container so the floating bar can collapse its labelled buttons
+       to icon-only when the sidebar is too narrow to fit the text. */
+    container-type: inline-size;
+  }
+  .render-frame {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    border: none;
+    /* Match the iframe's own background to the document theme, so no white
+       sliver bleeds through below the page in dark mode. */
+    background: #fff;
+  }
+  .render-frame.dark {
+    background: var(--vscode-editor-background, #181818);
+  }
+  .render-empty {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 24px;
+    text-align: center;
     font-size: 12px;
-    opacity: 0.8;
+    opacity: 0.75;
+  }
+  .render-empty-error {
+    opacity: 0.9;
+  }
+  .render-error-text {
+    max-width: 100%;
+    max-height: 40%;
+    overflow: auto;
+    margin: 0;
+    padding: 8px 10px;
+    text-align: left;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 11px;
+    color: var(--vscode-errorForeground, #f14c4c);
+    background: var(
+      --vscode-textCodeBlock-background,
+      rgba(128, 128, 128, 0.1)
+    );
+    border-radius: 4px;
+  }
+  /* Thin progress line at the very top while a live re-render is running. */
+  .render-progress {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    overflow: hidden;
+    z-index: 5;
+  }
+  .render-progress-fill {
+    height: 100%;
+    width: 40%;
+    background: #c8376a;
+    animation: render-progress-slide 1s ease-in-out infinite;
+  }
+  @keyframes render-progress-slide {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(350%);
+    }
+  }
+
+  /* Floating icon bar — mirrors the chat input's bottom action bar but
+     shorter: a single row of icon buttons inset above the iframe. */
+  .render-bar {
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    z-index: 8;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px;
+    background: var(--vscode-input-background, #252526);
+    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
+    border-radius: 8px;
+  }
+  .render-bar-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+  }
+  /* Text+icon button (Save, Imports). */
+  .render-bar-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 28px;
+    padding: 0 8px;
+    background: transparent;
+    color: var(--vscode-foreground);
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.86em;
+    white-space: nowrap;
+    transition: background-color 0.1s ease-out;
+  }
+  .render-bar-btn:hover:not(:disabled),
+  .render-bar-btn.on {
+    background: rgba(128, 128, 128, 0.18);
+  }
+  .render-bar-btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+  /* Icon-only buttons (section/clause/TOC toggles, help). */
+  .render-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    background: transparent;
+    color: var(--vscode-foreground);
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.1s ease-out;
+  }
+  .render-icon-btn:hover {
+    background: rgba(128, 128, 128, 0.18);
+  }
+  /* Pressed/active toggle — light grey fill. */
+  .render-icon-btn.on {
+    background: rgba(128, 128, 128, 0.32);
+  }
+  .render-help-btn {
+    color: var(--vscode-descriptionForeground);
+  }
+  .render-icon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    display: block;
+  }
+  .render-glyph {
+    font-size: 14px;
+    line-height: 1;
+    font-weight: 600;
+  }
+  .render-chevron {
+    width: 9px;
+    height: 9px;
+    flex-shrink: 0;
+    color: var(--vscode-descriptionForeground);
+    transition: transform 0.12s ease;
+  }
+  .render-chevron.flipped {
+    transform: rotate(180deg);
+  }
+  /* When the bar is too narrow for the labels, drop just the text from the
+     labelled buttons (Save, Save & refine, Imports). The leading icon and
+     the dropdown/tray chevron stay; tooltips keep them discoverable. The
+     icon-only toggles are unaffected. */
+  @container (max-width: 440px) {
+    .render-bar-btn span {
+      display: none;
+    }
+    .render-bar-btn {
+      padding: 0 6px;
+    }
+  }
+  /* Save split wrapper — anchors the format dropdown above the button. */
+  .render-save-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  .render-save-menu {
+    left: 0;
+    bottom: calc(100% + 6px);
+    min-width: 180px;
+  }
+  /* Trays float above the bar (refine prompt, imports checklist). */
+  .render-tray {
+    position: absolute;
+    left: 21px;
+    right: 21px;
+    bottom: 53px;
+    z-index: 9;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 60%;
+    overflow-y: auto;
+    padding: 12px;
+    background: var(--vscode-input-background, #252526);
+    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+  .render-tray-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    opacity: 0.85;
+  }
+  .render-tray-hint {
+    margin: 0;
+    font-size: 11px;
+    opacity: 0.7;
     line-height: 1.4;
   }
-  .render-intro .learn-more {
-    background: none;
-    border: none;
-    padding: 0;
-    /* Extension primary action colour (crimson), matching the other
-       "Learn more" links and CTAs. */
-    color: #c8376a;
-    cursor: pointer;
-    font: inherit;
+  .render-tray-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
   }
-  .render-intro .learn-more:hover {
-    color: #d94d7e;
-    text-decoration: underline;
+  /* Bottom action row: format select on the left, CTA on the right. */
+  .render-tray-actions {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 2px;
+  }
+  .render-tray-format-label {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 11px;
+    opacity: 0.85;
+  }
+  .render-tray-format {
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground, var(--vscode-foreground));
+    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
+    border-radius: 4px;
+    padding: 4px 6px;
+    font-size: 12px;
+    min-width: 150px;
+  }
+  .render-tray-format:focus {
+    outline: none;
+    border-color: #c8376a;
+  }
+  /* Matches the deployment Integrate popover's install buttons. */
+  .render-tray-cta {
+    flex-shrink: 0;
+    padding: 8px 14px;
+    background: var(--vscode-button-secondaryBackground, transparent);
+    color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.95em;
+  }
+  .render-tray-cta:hover:not(:disabled) {
+    background: var(
+      --vscode-button-secondaryHoverBackground,
+      var(--vscode-list-hoverBackground)
+    );
+  }
+  .render-tray-cta:disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
+  /* Standalone CTA (e.g. sign-in) right-aligned like the actions-row CTA. */
+  .render-tray-cta-end {
+    align-self: flex-end;
   }
   .render-check {
     display: flex;
@@ -2616,47 +3347,6 @@
     white-space: nowrap;
     border: 0;
   }
-  /* Matches the Integrate popover's install buttons. */
-  .render-btn {
-    margin-top: 4px;
-    padding: 8px 14px;
-    background: var(--vscode-button-secondaryBackground, transparent);
-    color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
-    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.95em;
-  }
-  .render-btn:hover:not(:disabled) {
-    background: var(
-      --vscode-button-secondaryHoverBackground,
-      var(--vscode-list-hoverBackground)
-    );
-  }
-  .render-btn:disabled {
-    opacity: 0.6;
-    cursor: default;
-  }
-  .render-imports {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding: 8px 10px;
-    border: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
-    border-radius: 4px;
-  }
-  .render-imports-title {
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    opacity: 0.8;
-    margin-top: 8px;
-  }
-  .render-imports-hint {
-    font-size: 11px;
-    opacity: 0.7;
-  }
   .render-import-row {
     word-break: break-word;
   }
@@ -2691,7 +3381,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-top: 6px;
+    margin-top: 2px;
   }
   .ai-policy-file {
     flex: 1;
@@ -2719,40 +3409,6 @@
     flex-shrink: 0;
   }
   .ai-policy-btn:hover {
-    background: var(
-      --vscode-button-secondaryHoverBackground,
-      var(--vscode-list-hoverBackground)
-    );
-  }
-  .ai-upsell {
-    padding: 10px 12px;
-    border: 1px solid var(--vscode-panel-border, #444);
-    border-radius: 4px;
-    background: var(
-      --vscode-editorWidget-background,
-      var(--vscode-sideBar-background)
-    );
-  }
-  .ai-upsell-title {
-    font-size: 12px;
-    font-weight: 600;
-  }
-  .ai-upsell-body {
-    margin: 6px 0 10px;
-    font-size: 11px;
-    opacity: 0.85;
-    line-height: 1.45;
-  }
-  .ai-upsell-btn {
-    padding: 6px 12px;
-    background: var(--vscode-button-secondaryBackground, transparent);
-    color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
-    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.9em;
-  }
-  .ai-upsell-btn:hover {
     background: var(
       --vscode-button-secondaryHoverBackground,
       var(--vscode-list-hoverBackground)
