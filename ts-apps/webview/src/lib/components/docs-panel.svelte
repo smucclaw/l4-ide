@@ -330,9 +330,22 @@
   }
 
   function openDocsWebsite() {
-    messenger?.sendNotification(RequestOpenUrl, HOST_EXTENSION, {
-      url: DOCS_BASE,
-    })
+    // Map the in-panel markdown URL (…/l4/<path>.md[#anchor]) to the
+    // published page URL (…/l4/<slug>), mirroring legalese.github.io's
+    // routing (convertDocPathToSlug in src/lib/l4-docs.ts): drop the .md
+    // extension, drop README (directory index), drop the trailing slash,
+    // and keep any anchor.
+    const rest = currentUrl.startsWith(`${DOCS_BASE}/`)
+      ? currentUrl.slice(DOCS_BASE.length + 1)
+      : ''
+    const [docPath, anchor] = rest.split('#')
+    const slug = docPath
+      .replace(/\.md$/, '')
+      .replace(/(^|\/)README$/, '$1')
+      .replace(/\/$/, '')
+    const url =
+      DOCS_BASE + (slug ? `/${slug}` : '') + (anchor ? `#${anchor}` : '')
+    messenger?.sendNotification(RequestOpenUrl, HOST_EXTENSION, { url })
   }
 
   function goBack() {
