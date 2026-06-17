@@ -223,8 +223,46 @@ allUnits mainModule deps =
   let mods  = mainModule : deps
       canon = canonicalNames mods
       info  = nlgFnInfo mods
-  in map (substNlgInUnit info . fixMixfixHeading canon)
+      ctors = recordCtorFields mods
+  in map (substNlgInUnit info . mapUnitBody (normalizePositionalRecords ctors) . fixMixfixHeading canon)
        (extractUnits mainModule <> concatMap extractUnits deps)
+
+-- | Apply a transform to a unit's DECIDE body (a no-op for other units).
+mapUnitBody :: (Expr Resolved -> Expr Resolved) -> Unit -> Unit
+mapUnitBody f u = case u.uDecl of
+  UDecide (MkDecide a t af body) -> u { uDecl = UDecide (MkDecide a t af (f body)) }
+  _ -> u
+
+-- | The field-name references of each record, keyed by record name, so a
+-- positional construction (@Bullet "A" "B"@) can be matched up with its fields.
+-- Keyed by name, not 'Unique': a record's constructor occurrence and its
+-- declaring type name do not share a 'Unique'.
+recordCtorFields :: [Module Resolved] -> Map.Map Text [Resolved]
+recordCtorFields mods = Map.fromList
+  [ (resolvedText ctorName, [ n | MkTypedName _ n _ _ <- fields ])
+  | m <- mods
+  , Declare _ (MkDeclare _ _ (MkAppForm _ ctorName _ _) (RecordDecl _ _ fields)) <- topDeclsRec m
+  ]
+
+-- | All top-level declarations of a module, descending through @SECTION@s.
+topDeclsRec :: Module Resolved -> [TopDecl Resolved]
+topDeclsRec (MkModule _ _ sec) = go sec
+ where
+  go (MkSection _ _ _ ds) = concatMap (\d -> d : nested d) ds
+  nested = \case Section _ s -> go s; _ -> []
+
+-- | Rewrite a positional record construction (@App ctor [a, b]@) into the named
+-- form (@AppNamed ctor [field IS a, …]@), so the table and record renderers —
+-- which key off field names — recognise it the same as a @WITH@ literal.
+normalizePositionalRecords :: Map.Map Text [Resolved] -> Expr Resolved -> Expr Resolved
+normalizePositionalRecords ctorFields
+  | Map.null ctorFields = id
+  | otherwise = transformOf (gplate @(Expr Resolved)) $ \case
+      App ann ctor args
+        | Just fnames <- Map.lookup (resolvedText ctor) ctorFields
+        , length fnames == length args ->
+            AppNamed ann ctor [ MkNamedExpr ann f a | (f, a) <- zip fnames args ] Nothing
+      e -> e
 
 -- | For every function that carries an @\@nlg@ annotation: its authored
 -- sentence and its GIVEN parameter uniques (in order), so a call's positional
@@ -705,6 +743,8 @@ decideRendering tysig body
       ("provides that", deonticClause deon)
   | Just (cols, rows) <- bodyAsTable body =
       ("means", tableClause cols rows)
+  | Just items <- bodyAsValueList body =
+      ("means", CChain "a list of the following" items)
   | Just (ctor, fields) <- bodyAsRecordLiteral body =
       ("is a " <> ctor <> " with", CFields (map fieldPair fields))
   | Just c <- arithChainClause body =
@@ -825,6 +865,15 @@ bodyAsTable e = case carameliseNode e of
 
 tableClause :: [Text] -> [[Expr Resolved]] -> Clause
 tableClause cols rows = CTable cols [ map cellClause row | row <- rows ]
+
+-- | A literal list of more than three (non-record) values — e.g. strings,
+-- numbers, dates — renders as a bullet list rather than a comma-run sentence.
+-- Lists of records are handled by 'bodyAsTable' (checked first), and short
+-- lists stay inline.
+bodyAsValueList :: Expr Resolved -> Maybe [Text]
+bodyAsValueList e = case carameliseNode e of
+  List _ items | length items >= arithChainMinTerms -> Just (map leafText items)
+  _                                                  -> Nothing
 
 -- | Render a table cell: a nested list-of-records becomes its own (nested)
 -- table, a nested record a small field list, anything else a value — and a
