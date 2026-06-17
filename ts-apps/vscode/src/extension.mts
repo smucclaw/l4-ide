@@ -698,6 +698,16 @@ export async function activate(context: ExtensionContext) {
     })
   )
 
+  // Gear icon in the L4 sidebar title bar → this extension's settings.
+  context.subscriptions.push(
+    vscode.commands.registerCommand('l4.openExtensionSettings', () => {
+      vscode.commands.executeCommand(
+        'workbench.action.openSettings',
+        '@ext:legalese.l4-vscode'
+      )
+    })
+  )
+
   // Right-click → "Ask Legalese AI about this". Quotes the editor
   // selection (falls back to the whole file when nothing is
   // selected), reveals the sidebar, switches to the AI tab, and

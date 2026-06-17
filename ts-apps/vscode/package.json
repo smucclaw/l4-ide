@@ -165,6 +165,11 @@
         "command": "l4.renameIdentifier",
         "title": "Rename L4 identifier (across imports)",
         "category": "L4"
+      },
+      {
+        "command": "l4.openExtensionSettings",
+        "title": "L4: Extension Settings",
+        "icon": "$(gear)"
       }
     ],
     "menus": {
@@ -172,6 +177,13 @@
         {
           "command": "l4.openSidebar",
           "when": "resourceLangId == l4",
+          "group": "navigation"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "l4.openExtensionSettings",
+          "when": "view == l4.deployView",
           "group": "navigation"
         }
       ],

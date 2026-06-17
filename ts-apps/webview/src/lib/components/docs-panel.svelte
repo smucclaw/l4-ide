@@ -3,7 +3,7 @@
   import { marked, type Token } from 'marked'
   import type { Messenger } from 'vscode-messenger-webview'
   import { HOST_EXTENSION } from 'vscode-messenger-common'
-  import { RequestNewL4File } from 'jl4-client-rpc'
+  import { RequestNewL4File, RequestOpenUrl } from 'jl4-client-rpc'
   import { colorize } from '@repo/l4-highlight'
 
   let {
@@ -329,6 +329,12 @@
     // External links: let VSCode open them in the browser (default behavior)
   }
 
+  function openDocsWebsite() {
+    messenger?.sendNotification(RequestOpenUrl, HOST_EXTENSION, {
+      url: DOCS_BASE,
+    })
+  }
+
   function goBack() {
     if (history.length === 0) return
     const prev = history[history.length - 1]
@@ -420,6 +426,28 @@
         </div>
       {/if}
     </div>
+    <button
+      class="open-external-btn"
+      onclick={openDocsWebsite}
+      title="Open L4 Docs website in browser"
+      aria-label="Open L4 Docs website in browser"
+    >
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none"
+        ><path
+          d="M6.5 3H3.5C2.67 3 2 3.67 2 4.5v8C2 13.33 2.67 14 3.5 14h8c.83 0 1.5-.67 1.5-1.5V9.5"
+          stroke="currentColor"
+          stroke-width="1.3"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        /><path
+          d="M9.5 2.5H13.5V6.5M13 3L7.5 8.5"
+          stroke="currentColor"
+          stroke-width="1.3"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        /></svg
+      >
+    </button>
   </div>
 
   {#if loading}
@@ -473,6 +501,23 @@
 
   .home-btn:hover {
     color: var(--vscode-foreground);
+  }
+
+  .open-external-btn {
+    background: none;
+    border: 1px solid var(--vscode-input-border, #555);
+    border-radius: 3px;
+    color: var(--vscode-descriptionForeground);
+    cursor: pointer;
+    padding: 4px 6px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+  }
+
+  .open-external-btn:hover {
+    color: var(--vscode-foreground);
+    background: var(--vscode-list-hoverBackground, #2a2d2e);
   }
 
   .search-bar {

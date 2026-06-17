@@ -8,10 +8,8 @@
     GetSidebarConnectionStatus,
     RequestSidebarLogin,
     RequestSidebarLogout,
-    RequestOpenUrl,
     RequestOpenServiceUrl,
     RequestOpenConsole,
-    RequestOpenExtensionSettings,
     RequestAddL4ToolsToClaudeCode,
     RequestInstallDeploymentSkill,
     RequestInstallL4Cli,
@@ -1266,12 +1264,6 @@
     }
   }
 
-  function openDocumentation() {
-    messenger?.sendNotification(RequestOpenUrl, HOST_EXTENSION, {
-      url: 'https://legalese.com/l4',
-    })
-  }
-
   function openServiceUrl() {
     messenger?.sendNotification(
       RequestOpenServiceUrl,
@@ -1299,14 +1291,6 @@
   function signOut() {
     messenger?.sendNotification(
       RequestSidebarLogout,
-      HOST_EXTENSION,
-      undefined as never
-    )
-  }
-
-  function openExtensionSettings() {
-    messenger?.sendNotification(
-      RequestOpenExtensionSettings,
       HOST_EXTENSION,
       undefined as never
     )
@@ -1887,6 +1871,28 @@
               </div>
             {:else}
               <div class="deployment-filter-bar">
+                <button
+                  class="deployment-refresh-btn"
+                  onclick={() => fetchDeployments()}
+                  disabled={deploymentsLoading}
+                  title="Refresh deployments"
+                  aria-label="Refresh deployments"
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    class:spinning={deploymentsLoading}
+                    ><path
+                      d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2v3h-3"
+                      stroke="currentColor"
+                      stroke-width="1.3"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    /></svg
+                  >
+                </button>
                 <div class="deployment-filter-field">
                   <input
                     class="deployment-filter-input"
@@ -2147,16 +2153,6 @@
         </button>
         {#if menuOpen}
           <div class="dropdown-menu">
-            <button class="menu-item" onclick={menuAction(openDocumentation)}>
-              Open L4 Docs website
-            </button>
-            <div class="menu-separator"></div>
-            <button
-              class="menu-item"
-              onclick={menuAction(openExtensionSettings)}
-            >
-              Extension Settings
-            </button>
             <button class="menu-item" onclick={menuAction(installL4Cli)}>
               Install L4 CLI
             </button>
@@ -2173,15 +2169,6 @@
                   Visit {connectionStatus.serviceUrl}
                 </button>
               {/if}
-              <button
-                class="menu-item"
-                onclick={menuAction(() => {
-                  fetchDeployments()
-                  activeTab = 'deployments'
-                })}
-              >
-                Refresh Deployments
-              </button>
               {#if !connectionStatus.isLegaleseCloud}
                 <button class="menu-item" onclick={menuAction(disconnect)}>
                   Disconnect
@@ -2894,6 +2881,40 @@
     align-items: center;
     gap: 6px;
     margin-bottom: 12px;
+  }
+
+  .deployment-refresh-btn {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    padding: 4px 6px;
+    background: var(--vscode-input-background, #3c3c3c);
+    color: var(--vscode-descriptionForeground, #999);
+    border: 1px solid var(--vscode-input-border, #555);
+    border-radius: 3px;
+    cursor: pointer;
+  }
+
+  .deployment-refresh-btn:hover:not(:disabled) {
+    color: var(--vscode-foreground, #ccc);
+    background: var(--vscode-list-hoverBackground, #2a2d2e);
+  }
+
+  .deployment-refresh-btn:disabled {
+    cursor: default;
+    opacity: 0.7;
+  }
+
+  .deployment-refresh-btn svg.spinning {
+    animation: deployment-refresh-spin 0.8s linear infinite;
+  }
+
+  @keyframes deployment-refresh-spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .deployment-filter-field {
