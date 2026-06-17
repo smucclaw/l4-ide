@@ -4,11 +4,10 @@ L4 can render your rules back into formatted English prose — in the VS Code
 **Render** tab, or with `l4 render`. The renderer is **deterministic**: it walks
 your code and turns each construct into a sentence or an outline. That means the
 quality of the generated prose is mostly in your hands. Well-named, well-shaped
-rules read almost like a contract with no extra effort; awkward ones read like a
+rules read almost like professionally drafted legal writing with no extra effort; awkward ones read like a
 transcript of an algorithm.
 
-This tutorial shows how to get the best prose out of the renderer, using three
-levers in increasing order of power:
+This tutorial shows how to get transparent English prose out of the renderer, using three increasingly powerful levers:
 
 1. **Names** — backticked identifiers and parameter names.
 2. **Shape** — mixfix word order, control flow, section titles, and arithmetic.
@@ -39,9 +38,12 @@ clause it represents:
 -- Renders: "Monthly property tax means ..."
 `monthly property tax` MEANS ...
 
--- Cryptic: renders "Mpt means ..."
+-- Renders: "Mpt means ..."
 mpt MEANS ...
 ```
+
+> [!NOTE]
+> Beginner programmers are routinely and pointedly reminded to use the first form whenever they reach for the latter.
 
 ### Name parameters as nouns, not letters
 
@@ -58,8 +60,9 @@ GIVEN p IS A Person
       q IS A Person
 ```
 
-A record-typed parameter is even better: the renderer can refer to it by its
-type, so `GIVEN claim IS A `Payment Claim`` reads as "the payment claim".
+Sometimes existing legal writing will deliberately adopt this form: "A person (A) discriminates against another (B) if ..." (Equality Act 2010, s.13). In that situation the renderer will aim to obey the "legislative variable" style.
+
+If a parameter has a record type, the renderer promotes the type name into a noun phrase: ``GIVEN claim IS A `Payment Claim` `` renders as "the payment claim". This works cleanly only when one parameter has that type — two `Payment Claim` parameters would collide on the same phrase.
 
 ### Name record fields readably
 
@@ -82,11 +85,17 @@ Put the words and the argument holes where they belong in the sentence. (See the
 [mixfix tutorial](natural-language-functions.md) for the full mechanics.)
 
 ```l4
-GIVEN `the applicant` IS A Person, `the programme` IS A Programme
+GIVEN `the applicant` IS A Person
+      `the programme` IS A Programme
+      `application date` IS A DATE
 GIVETH A BOOLEAN
-`the applicant` `is eligible for` `the programme` MEANS ...
--- "alice is eligible for medicare"
+DECIDE `as at an` `application date` `the applicant` `is eligible for` `the programme` IF ...
+  
 ```
+
+In a conventional programming language, this would be a function taking three arguments: `eligibility(applicant, programme, date)`.
+
+In L4, it is also a function taking three arguments, but the arguments are intermingled across the function name for the sake of readability.
 
 ### End helper names in a preposition
 
