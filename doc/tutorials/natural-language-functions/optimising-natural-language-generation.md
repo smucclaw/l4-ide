@@ -90,7 +90,7 @@ GIVEN `the applicant` IS A Person
       `application date` IS A DATE
 GIVETH A BOOLEAN
 DECIDE `as at an` `application date` `the applicant` `is eligible for` `the programme` IF ...
-  
+
 ```
 
 In a conventional programming language, this would be a function taking three arguments: `eligibility(applicant, programme, date)`.
