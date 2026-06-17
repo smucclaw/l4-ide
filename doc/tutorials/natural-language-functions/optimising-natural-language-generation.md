@@ -42,7 +42,8 @@ clause it represents:
 mpt MEANS ...
 ```
 
-Beginner programmers are routinely and pointedly reminded to use the first form whenever they reach for the latter.
+> [!NOTE]
+> Beginner programmers are routinely and pointedly reminded to use the first form whenever they reach for the latter.
 
 ### Name parameters as nouns, not letters
 
@@ -84,11 +85,17 @@ Put the words and the argument holes where they belong in the sentence. (See the
 [mixfix tutorial](natural-language-functions.md) for the full mechanics.)
 
 ```l4
-GIVEN `the applicant` IS A Person, `the programme` IS A Programme
+GIVEN `the applicant` IS A Person
+      `the programme` IS A Programme
+      `application date` IS A DATE
 GIVETH A BOOLEAN
-`the applicant` `is eligible for` `the programme` MEANS ...
--- "alice is eligible for medicare"
+DECIDE `as at an` `application date` `the applicant` `is eligible for` `the programme` IF ...
+  
 ```
+
+In a conventional programming language, this would be a function taking three arguments: `eligibility(applicant, programme, date)`.
+
+In L4, it is also a function taking three arguments, but the arguments are intermingled across the function name for the sake of readability.
 
 ### End helper names in a preposition
 
