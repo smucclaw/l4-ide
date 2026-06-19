@@ -88,13 +88,13 @@ For the `nerdherd` org: `/plugin marketplace add https://skills.legalese.cloud/n
 
 ### Step 4 — Install a deployment
 
-Browse with `/plugin`, or install directly — each deployment is a plugin named `{org}-{deployment}` in the marketplace named `{org}`:
+Browse with `/plugin`, or install directly — each deployment is a plugin named `{deployment}` in the marketplace named `{org}` (the `@org` scope supplies the org, so the plugin name doesn't repeat it):
 
 ```
-/plugin install nerdherd-rent-rules@nerdherd
+/plugin install rent-rules@nerdherd
 ```
 
-> Plugin names are lowercased, with non-alphanumeric characters turned into hyphens. If unsure, open `/plugin` and copy the exact name. On install, Claude Code clones the gated `…/rent-rules.git` repo, supplying the token you stored in Step 1.
+> Plugin names are the deployment id, lowercased with non-alphanumeric characters turned into hyphens. If unsure, open `/plugin` and copy the exact name. On install, Claude Code clones the gated `…/rent-rules.git` repo, supplying the token you stored in Step 1.
 
 ### Step 5 — Let the agent find and use it
 
@@ -156,7 +156,7 @@ Two things to know:
 ## Notes
 
 - The catalog at `/{org}/marketplace.json` is **public** and lists every published deployment in the org (names + blurbs only — no rule logic). Anyone who knows the org slug can read it; the skill bodies and tool calls remain gated by your token.
-- Per-deployment names (`{org}-{deployment}`) mean multiple deployments coexist as separate skills + MCP servers, each scoped to its own ruleset.
+- A plugin installs as `{deployment}@{org}`. Its bundled MCP server and skill are org-qualified internally (`{org}-{deployment}`) so multiple orgs' deployments never collide once installed, each scoped to its own ruleset.
 - **Updates are manual in Claude Code.** Its _background_ auto-update doesn't use the git credential helper (it only authenticates against GitHub/GitLab/Bitbucket via their token env vars, which don't apply to `skills.legalese.cloud`). Run `/plugin marketplace update {org}` (and reinstall if a deployment changed) to pull the latest.
 - Prefer the [VS Code one-click install](./agent-plugin.md) for a single deployment when you're already in the extension; prefer this marketplace flow for a whole org's catalog or a single-token (or OAuth) setup across agents.
 - Cross-agent support for these standards is evolving quickly — the support table above reflects what was known when written; check your agent's current docs.
