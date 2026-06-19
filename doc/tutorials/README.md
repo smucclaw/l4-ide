@@ -28,6 +28,7 @@ Export your L4 rules as live REST API endpoints:
 - **[Exporting Rules for Deployment](deploying-rules/exporting-rules-for-deployment.md)** - Mark rules with `@export`, deploy from VS Code, and call them via REST or WebMCP
 - **[OpenAI- and Anthropic-Compatible AI APIs](legalese-cloud/openai-compatible-api.md)** - Chat with a deployment's rules from any OpenAI or Anthropic client (`legalese-comply-4`)
 - **[MCP Server](legalese-cloud/mcp-server.md)** - Expose deployed rules as Model Context Protocol tools
+- **[Publish Deployments to AI Agents (Marketplace)](legalese-cloud/agent-marketplace.md)** - Expose an org's deployments via Agent Skills + MCP, installable with one credential (Claude Code, Cursor, Copilot, …)
 - **[WebMCP Embed Script](legalese-cloud/webmcp-embed.md)** - One embed tag so your website serves its own rules
 - **[RESTful OpenAPI Specification](legalese-cloud/openapi-spec.md)** - Generate clients and call rules as plain REST
 
