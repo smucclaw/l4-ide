@@ -9,6 +9,15 @@ Expose an org's deployed rules to AI coding agents using **open standards** — 
 
 > **Credential:** anywhere this tutorial says "token", use your API key (`sk_…`). (An AuthKit JWT also works as a Bearer credential, but those are short-lived and expire — the API key is the long-lived one.) Prefer no stored secret at all? See [Alternative: OAuth instead of a stored token](#alternative-oauth-instead-of-a-stored-token).
 
+> **New: single gateway discovery (recommended).** The marketplace is now a **global, org-agnostic** manifest at `https://skills.legalese.cloud/marketplace.json` that lists **one** plugin — a discovery skill — instead of enumerating every deployment. Add it and install the gateway:
+>
+> ```
+> /plugin marketplace add https://skills.legalese.cloud/marketplace.json
+> /plugin install rules@legalese-cloud
+> ```
+>
+> The gateway skill then **searches** your account's rules and runs only the relevant one (progressive disclosure — it never loads the whole catalogue), with the org resolved from your credentials. That search/run flow is driven by the **`legalese` CLI** (the auth broker), which is in progress. The per-deployment instructions below remain valid for installing **one specific deployment** directly via its gated repo.
+
 ---
 
 ## The three standards involved
@@ -17,7 +26,7 @@ Your deployments are published through three layers, each an independent, increa
 
 | Layer       | What it is                                                                                     | Standard                                         | Where it's hosted                                                         |
 | ----------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------- |
-| **Catalog** | A manifest listing the org's installable deployments (name + blurb + pointer)                  | Plugin marketplace manifest (`marketplace.json`) | **public** `https://skills.legalese.cloud/{org}/marketplace.json`         |
+| **Catalog** | Global manifest listing one gateway discovery plugin (org resolved from auth, not the URL)     | Plugin marketplace manifest (`marketplace.json`) | **public** `https://skills.legalese.cloud/marketplace.json`               |
 | **Skill**   | A `SKILL.md` that tells the agent _when_ to use a deployment, plus its `.mcp.json` and schemas | [Agent Skills](https://agentskills.io)           | **gated** git repo `https://skills.legalese.cloud/{org}/{deployment}.git` |
 | **Tools**   | The actual callable decision functions                                                         | [MCP](https://modelcontextprotocol.io)           | **gated** `https://mcp.legalese.cloud/{org}/{deployment}`                 |
 
@@ -81,10 +90,10 @@ export LEGALESE_TOKEN=YOUR_TOKEN
 ### Step 3 — Add the marketplace
 
 ```
-/plugin marketplace add https://skills.legalese.cloud/{org}/marketplace.json
+/plugin marketplace add https://skills.legalese.cloud/marketplace.json
 ```
 
-For the `nerdherd` org: `/plugin marketplace add https://skills.legalese.cloud/nerdherd/marketplace.json`. Claude Code fetches the public manifest and lists the org's deployments as installable plugins.
+This global, org-agnostic manifest lists the single **gateway discovery** plugin (`rules@legalese-cloud`); see the banner at the top. (The previous per-org `…/{org}/marketplace.json` has been removed — org scope is now resolved from your credentials, not the URL.) To install **one specific deployment** directly instead of the gateway, point a marketplace.json you host at that deployment's gated repo (`https://skills.legalese.cloud/{org}/{deployment}.git`) — the gated repos described below still serve per-deployment skills.
 
 ### Step 4 — Install a deployment
 
