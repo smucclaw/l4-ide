@@ -1,73 +1,38 @@
-# Publish your deployments to AI agents (gateway discovery)
+# Use an org's deployed rules from an AI agent (MCP)
 
-Make an org's deployed rules available to an AI coding agent without dumping
-hundreds of tools into its context. The agent installs **one** discovery skill,
-then **searches** for the right rule and runs only that one — through the
-[**`legalese` CLI**](#step-1--install--authenticate-the-cli), which brokers auth
-so your credential never touches a command line.
-
-It's built on open standards — [Agent Skills](https://agentskills.io) for the
-skill and [MCP](https://modelcontextprotocol.io) / REST for execution —
-distributed through a Claude Code plugin marketplace.
+Make an org's deployed decision rules callable by an AI agent. The rules are
+served as **[MCP](https://modelcontextprotocol.io) tools** at `mcp.legalese.cloud`
+— the agent connects once (OAuth), finds the rule a question turns on, and calls
+it instead of reasoning the determination itself. A small **gateway skill**
+(distributed via a Claude Code marketplace) primes the model on _when_ to reach
+for the rules; the **`legalese` CLI** is an alternative for shells/CI.
 
 **Audience:** Anyone who wants an org's deployed rules usable from an AI agent
-**Prerequisites:** the `legalese` CLI (see Step 1) + a Legalese Cloud credential (`legalese login`, or an `sk_…` API key for CI); at least one deployment with a non-empty **Intended use** description ([Exporting Rules for Deployment](../deploying-rules/exporting-rules-for-deployment.md))
+**Prerequisites:** a Legalese Cloud org with deployed rules (each with an **Intended use** description, see [Exporting Rules for Deployment](../deploying-rules/exporting-rules-for-deployment.md)); an MCP-capable agent (Claude Code/Desktop, Cursor, …) or a shell for the CLI; a credential (sign in via OAuth, or an `sk_…` API key)
 **Time:** 5 minutes
-**Goal:** Install the gateway discovery skill and run a rule through it
+**Goal:** Connect an agent to the org's rules and have it answer from them
 
 ---
 
 ## How it works
 
-The marketplace is **global and org-agnostic**: `https://skills.legalese.cloud/marketplace.json` lists a **single gateway discovery plugin** (`rules@legalese-cloud`), not every deployment. Installing it gives the agent a small `SKILL.md` that teaches it to:
+`https://mcp.legalese.cloud/<org>` exposes the org's deployed rules as MCP tools (one per exported rule) plus search, behind OAuth (scopes `l4:rules` / `l4:read` / `l4:evaluate`). The agent connects once, discovers the relevant rule, and calls it — only the rules it uses enter context.
 
-1. **search** your account's rules — `legalese search "<topic>"`
-2. **run** only the relevant one — `legalese eval <deployment> <function> '<json>'`
+Optionally, the global marketplace `https://skills.legalese.cloud/marketplace.json` ships one **gateway skill** (`rules@legalese-cloud`) that tells the model when to use the rules and where the MCP server is — so it reaches for a deployed rule rather than guessing a determination.
 
-Org scope is resolved from your credentials, and only the matched rule's schema enters context (**progressive disclosure**) — so this scales to orgs with hundreds of deployments without flooding the model.
+## Step 1 — Connect the rules MCP server
 
-```
-marketplace.json (public)  ──▶  one gateway discovery skill (rules@legalese-cloud)
-        gateway SKILL.md    ──▶  legalese search   → find the rule        (gated)
-                            ──▶  legalese eval      → run it              (gated)
-   one `legalese login` (or LEGALESE_TOKEN) brokers auth for all of it
-```
-
-The full catalogue is never enumerated in public, and the agent never preloads a tool per deployment.
-
----
-
-## Step 1 — Install & authenticate the CLI
-
-The `legalese` CLI is the auth broker and execution surface.
+Point your agent at the org-wide endpoint (the client runs the OAuth flow on first use):
 
 ```sh
-npm install -g @legalese/cli      # early access — or build from the legalese-cli repo
+claude mcp add --transport http legalese-rules https://mcp.legalese.cloud/<org>
 ```
 
-Authenticate once. Interactive (browser OAuth, org resolved into the session):
+- Prefer an API key over OAuth? Add `--header "Authorization: Bearer sk_..."`.
+- Want a single ruleset only? Use the deployment endpoint `…/<org>/<deployment>`.
+- Any MCP client works — add the same URL in Cursor, Claude Desktop, etc.
 
-```sh
-legalese login nerdherd
-```
-
-Or, for CI / headless, use an org-scoped API key:
-
-```sh
-export LEGALESE_TOKEN=sk_your_key
-export LEGALESE_ORG=nerdherd
-```
-
-> **Early access:** `legalese login` needs the CLI's WorkOS OAuth client, which is being provisioned — until it lands, use `LEGALESE_TOKEN`. The CLI's auth-resolution order is `--token` → `LEGALESE_TOKEN` → stored session, so the same commands work either way.
-
-Verify:
-
-```sh
-legalese whoami
-legalese search "rent overdue"     # confirms discovery works against your org
-```
-
-## Step 2 — Add the marketplace & install the gateway
+## Step 2 (optional) — Add the gateway skill for _when to use_
 
 In Claude Code:
 
@@ -76,37 +41,40 @@ In Claude Code:
 /plugin install rules@legalese-cloud
 ```
 
-The gateway plugin carries no secrets (just the discovery skill), so the install needs **no credential**. The marketplace is named `legalese-cloud`; the plugin is `rules`.
+The gateway plugin carries no secrets, so this needs **no credential**. It nudges the model to consult the rules MCP and answer from a rule rather than reasoning the determination itself.
 
-## Step 3 — Let the agent use it
+## Step 3 — Use it
 
-Ask the agent something the rules cover. Guided by the gateway skill, it will:
+Ask something the rules cover. The agent lists the MCP tools, calls the matching rule, and answers from its decision (citing it). Only the rules it uses enter context — so this works whether the org has five deployments or five hundred.
+
+## Alternative — the `legalese` CLI (shell / CI)
+
+For shells or non-MCP environments, the CLI hits the same rules:
 
 ```sh
-legalese search "is the rent overdue"
-#   → matched: rent-rules → rentIsOverdue("…")
-legalese eval rent-rules rentIsOverdue '{"dueDate":"2026-01-01","today":"2026-06-19"}'
-#   → the authoritative decision
+npm install -g @legalese/cli            # early access; or build from the legalese-cli repo
+legalese login <org>                    # or: export LEGALESE_TOKEN=sk_… ; export LEGALESE_ORG=<org>
+legalese search "rent overdue"          # find a rule
+legalese eval <deployment> <function> '<json>'   # run it
 ```
 
-Only the matched rule's schema enters context, and the result is authoritative for what it covers — the agent should cite it rather than re-deriving the answer.
+> **Early access:** `legalese login` needs the CLI's WorkOS OAuth client (being provisioned) — until it lands, use `LEGALESE_TOKEN`.
 
 ---
 
 ## Which agents can use this
 
-The gateway skill + `legalese` CLI work in **any agent that can run a shell command**. The skill itself rides the [Agent Skills](https://agentskills.io) standard; execution is plain authenticated REST via the CLI (with MCP available for harnesses that prefer typed tools).
+Any **MCP-capable** agent can connect to the rules server (Step 1). The optional gateway **skill** ([Agent Skills](https://agentskills.io) standard) adds the _when-to-use_ priming where supported; the **CLI** covers shells / non-MCP environments.
 
-| Agent                       | Marketplace install (Claude Code) | Agent Skills (`SKILL.md`) | Runs the CLI |
-| --------------------------- | :-------------------------------: | :-----------------------: | :----------: |
-| **Claude Code**             |   ✅ `/plugin marketplace add`    |            ✅             |      ✅      |
-| Claude Desktop / claude.ai  |                 —                 |            ✅             |      ✅      |
-| GitHub Copilot (agent mode) |                 —                 |    ✅ (since Apr 2026)    |      ✅      |
-| Cursor                      |                 —                 |            ✅             |      ✅      |
-| OpenAI Codex CLI            |                 —                 |            ✅             |      ✅      |
-| Gemini CLI                  |                 —                 |            ✅             |      ✅      |
+| Agent                         | MCP server (Step 1) |  Gateway skill (`SKILL.md`)  | CLI |
+| ----------------------------- | :-----------------: | :--------------------------: | :-: |
+| **Claude Code**               |         ✅          | ✅ `/plugin marketplace add` | ✅  |
+| Claude Desktop / claude.ai    |         ✅          |              ✅              |  —  |
+| Cursor / Windsurf / Cline     |         ✅          |            varies            |  —  |
+| GitHub Copilot (agent mode)   |         ✅          |     ✅ (since Apr 2026)      | ✅  |
+| OpenAI Codex CLI / Gemini CLI |         ✅          |              ✅              | ✅  |
 
-For agents without the one-command marketplace install, drop the gateway `SKILL.md` where your agent reads skills (or just run the `legalese` CLI yourself). Cross-agent support is evolving — check your agent's current docs.
+MCP is the common surface; the skill and CLI are conveniences on top. Cross-agent support is evolving — check your agent's current docs.
 
 ---
 
