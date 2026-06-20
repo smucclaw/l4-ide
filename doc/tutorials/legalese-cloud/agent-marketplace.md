@@ -1,14 +1,9 @@
 # Use an org's deployed rules from an AI agent (MCP)
 
-Make an org's deployed decision rules callable by an AI agent. The rules are
-served as **[MCP](https://modelcontextprotocol.io) tools** at `mcp.legalese.cloud`
-— the agent connects once (OAuth), finds the rule a question turns on, and calls
-it instead of reasoning the determination itself. A small **gateway skill**
-(distributed via a Claude Code marketplace) primes the model on _when_ to reach
-for the rules; the **`legalese` CLI** is an alternative for shells/CI.
+Make an org's deployed decision rules usable by an AI agent, behind the org's permission barrier. The agent **discovers** the rule a question needs, then **runs** it — instead of reasoning the determination itself — over [MCP](https://modelcontextprotocol.io).
 
 **Audience:** Anyone who wants an org's deployed rules usable from an AI agent
-**Prerequisites:** a Legalese Cloud org with deployed rules (each with an **Intended use** description, see [Exporting Rules for Deployment](../deploying-rules/exporting-rules-for-deployment.md)); an MCP-capable agent (Claude Code/Desktop, Cursor, …) or a shell for the CLI; a credential (sign in via OAuth, or an `sk_…` API key)
+**Prerequisites:** a Legalese Cloud org with deployed rules (each with an **Intended use** description, see [Exporting Rules for Deployment](../deploying-rules/exporting-rules-for-deployment.md)); an MCP-capable agent (Claude Code/Desktop, Cursor, …) or a shell for the CLI; a credential (OAuth sign-in, or an `sk_…` API key)
 **Time:** 5 minutes
 **Goal:** Connect an agent to the org's rules and have it answer from them
 
@@ -16,49 +11,50 @@ for the rules; the **`legalese` CLI** is an alternative for shells/CI.
 
 ## How it works
 
-`https://mcp.legalese.cloud/<org>` exposes the org's deployed rules as MCP tools (one per exported rule) plus search, behind OAuth (scopes `l4:rules` / `l4:read` / `l4:evaluate`). The agent connects once, discovers the relevant rule, and calls it — only the rules it uses enter context.
+A small **discovery MCP** at `https://mcp.legalese.cloud` (no org in the URL — it's resolved from your sign-in) exposes a couple of tools: **search** the org's rules, and **get a function's schema**. Searching returns the matching **deployments** and, for each, the **per-deployment MCP endpoint** (`mcp.legalese.cloud/{org}/{deployment}`) where its rules live as typed tools.
 
-Optionally, the global marketplace `https://skills.legalese.cloud/marketplace.json` ships one **gateway skill** (`rules@legalese-cloud`) that tells the model when to use the rules and where the MCP server is — so it reaches for a deployed rule rather than guessing a determination.
+So the agent searches, then connects to the matched deployment to run the rule — only the rules it actually uses ever enter context, whether the org has five deployments or five hundred.
 
-## Step 1 — Connect the rules MCP server
-
-Point your agent at the org-wide endpoint (the client runs the OAuth flow on first use):
-
-```sh
-claude mcp add --transport http legalese-rules https://mcp.legalese.cloud/<org>
+```
+discovery MCP  (mcp.legalese.cloud)        search_rules → a deployment + its mcp endpoint
+       └─ per-deployment MCP (…/{org}/{deployment})   ← connect here; call its rule tools
 ```
 
-- Prefer an API key over OAuth? Add `--header "Authorization: Bearer sk_..."`.
-- Want a single ruleset only? Use the deployment endpoint `…/<org>/<deployment>`.
-- Any MCP client works — add the same URL in Cursor, Claude Desktop, etc.
+## Step 1 — Add the rules
 
-## Step 2 (optional) — Add the gateway skill for _when to use_
-
-In Claude Code:
+**Claude Code (one step):** install the gateway plugin — it bundles the discovery MCP (no token; OAuth on first use) plus a skill that primes the model on _when_ to use it:
 
 ```
 /plugin marketplace add https://skills.legalese.cloud/marketplace.json
 /plugin install rules@legalese-cloud
 ```
 
-The gateway plugin carries no secrets, so this needs **no credential**. It nudges the model to consult the rules MCP and answer from a rule rather than reasoning the determination itself.
+**Any MCP client:** add the discovery server directly (org resolved from auth — no slug in the URL):
 
-## Step 3 — Use it
+```sh
+claude mcp add --transport http legalese-rules https://mcp.legalese.cloud
+```
 
-Ask something the rules cover. The agent lists the MCP tools, calls the matching rule, and answers from its decision (citing it). Only the rules it uses enter context — so this works whether the org has five deployments or five hundred.
+OAuth runs on first use; for an API key instead, add `--header "Authorization: Bearer sk_..."`.
+
+## Step 2 — Use it
+
+Ask something the rules cover. The agent calls `search_rules` to find the deployment, then runs that deployment's rule — answering from the decision and citing it, rather than reasoning it out.
+
+> Connecting the matched deployment's MCP server is, in most harnesses, a user/config action: the agent surfaces the endpoint; you (or a harness with dynamic-add support) connect it. For a ruleset you use often, add `https://mcp.legalese.cloud/<org>/<deployment>` up front.
 
 ## Alternative — the `legalese` CLI (shell / CI)
 
-For shells or non-MCP environments, the CLI hits the same rules:
+In a shell or non-MCP environment, the CLI hits the same rules end to end:
 
 ```sh
-npm install -g @legalese/cli            # early access; or build from the legalese-cli repo
-legalese login <org>                    # or: export LEGALESE_TOKEN=sk_… ; export LEGALESE_ORG=<org>
-legalese search "rent overdue"          # find a rule
-legalese eval <deployment> <function> '<json>'   # run it
+curl -fsSL https://legalese.cloud/cli/install.sh | sh   # or: npm i -g @legalese/cli
+legalese login <org>                                    # or: export LEGALESE_TOKEN=sk_… ; export LEGALESE_ORG=<org>
+legalese search "rent overdue"                          # find a rule
+legalese eval <deployment> <function> '<json>'          # run it
 ```
 
-> **Early access:** `legalese login` needs the CLI's WorkOS OAuth client (being provisioned) — until it lands, use `LEGALESE_TOKEN`.
+> **Early access:** `legalese login` awaits the CLI's WorkOS OAuth client — until it lands, use `LEGALESE_TOKEN`.
 
 ---
 
@@ -97,7 +93,8 @@ The gateway is the default. But if you want a single, sharply-scoped skill for o
 
 ## Troubleshooting
 
-- **`not logged in`** — run `legalese login <org>`, or set `LEGALESE_TOKEN` (+ `LEGALESE_ORG`).
+- **Rules MCP won't connect** — the server URL is `https://mcp.legalese.cloud` (no org slug; the org is resolved from auth). Your harness runs OAuth on first use; or supply an `Authorization: Bearer sk_…` header.
+- **`not logged in`** (CLI) — run `legalese login <org>`, or set `LEGALESE_TOKEN` (+ `LEGALESE_ORG`).
 - **`legalese search` returns nothing** — broaden the query, or confirm the org has deployments with an **Intended use** description (those without one aren't searchable).
 - **`forbidden`** — your credential lacks the `l4:rules` permission, or it's scoped to a different org than `--org`/the session.
 - **`marketplace add` fails** — check that `https://skills.legalese.cloud/marketplace.json` loads in a browser (it's public).
@@ -105,6 +102,6 @@ The gateway is the default. But if you want a single, sharply-scoped skill for o
 
 ## Notes
 
-- The public catalog reveals **nothing** about your deployments — only the single gateway plugin. Deployment names, descriptions, and tools surface only through the authenticated `legalese search`.
+- The public catalog reveals **nothing** about your deployments — only the single gateway plugin. Deployment names, descriptions, and tools surface only behind auth, via the discovery MCP's `search_rules` (or `legalese search`).
 - **Org scope is resolved from auth**, not the URL. This is the seam for a future where one account spans its own org plus public rules shared from other orgs — discovery just widens; nothing in the public manifest changes.
 - The CLI spec (commands, token store, OAuth client) lives in the `jl4-auth-proxy` repo at `docs/legalese-cli.md`.
