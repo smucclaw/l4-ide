@@ -10,6 +10,7 @@
     label,
     title = '',
     up = false,
+    large = false,
     extra = [],
     onChoose,
   }: {
@@ -17,6 +18,9 @@
     title?: string
     /** Open the menu upward (for buttons near the bottom of the panel). */
     up?: boolean
+    /** Use the surrounding text size (font-size: inherit) instead of the
+     *  compact default — matches sibling links like "Learn more". */
+    large?: boolean
     /** Extra choices appended after a separator, e.g. download-zip. */
     extra?: ReadonlyArray<{ id: string; label: string }>
     onChoose: (id: Harness | string) => void
@@ -41,6 +45,7 @@
 <div class="hm-wrapper" bind:this={root}>
   <button
     class="hm-button"
+    class:large
     {title}
     aria-haspopup="menu"
     aria-expanded={open}
@@ -93,6 +98,11 @@
       --vscode-button-secondaryHoverBackground,
       var(--vscode-list-hoverBackground)
     );
+  }
+  /* Match the surrounding text size (e.g. the sibling "Learn more"
+     link, which uses font-size: inherit). */
+  .hm-button.large {
+    font-size: inherit;
   }
   /* Chrome matches the connection-status dropdown (.dropdown-menu in
      the sidebar) so both menus read as the same control. */

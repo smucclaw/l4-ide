@@ -2601,6 +2601,7 @@
                       label="Install Skills Marketplace"
                       title="Install the L4 Rules into an AI harness"
                       up
+                      large
                       onChoose={(id) => installMarketplace(id as Harness)}
                     />
                     <button
