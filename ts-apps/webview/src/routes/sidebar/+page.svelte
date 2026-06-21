@@ -2578,8 +2578,7 @@
               {#if connectionStatus.isLegaleseCloud}
                 <div class="marketplace-block">
                   <p class="marketplace-title">
-                    Add your deployments to Claude Code and other agents — add
-                    your skills marketplace:
+                    Add your deployments to Claude Code and other agents
                   </p>
                   <div class="marketplace-row">
                     <input
