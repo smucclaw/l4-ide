@@ -3,8 +3,6 @@
 Drop a single `<script>` tag into your website so visitors' AI assistants can evaluate your deployed rules directly in the browser, via [WebMCP](https://modelcontextprotocol.io).
 
 **Prerequisites:** A deployment ([Exporting Rules for Deployment](../deploying-rules/exporting-rules-for-deployment.md)) and the ability to edit your site's HTML
-**Time:** 5 minutes
-**Goal:** Embed the WebMCP loader and expose your rules to on-page assistants
 
 ---
 

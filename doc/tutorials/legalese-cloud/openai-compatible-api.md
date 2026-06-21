@@ -3,8 +3,6 @@
 Talk to a deployed set of L4 rules using either an OpenAI-compatible or an Anthropic-compatible client. Legalese Cloud serves each deployment behind both wire formats, backed by the same `legalese-comply-4` pipeline — a model pipeline tuned for fast, reliable rule evaluation. Use whichever SDK your stack already speaks.
 
 **Prerequisites:** A deployment on [Legalese Cloud](https://legalese.cloud) ([Exporting Rules for Deployment](../deploying-rules/exporting-rules-for-deployment.md))
-**Time:** 10 minutes
-**Goal:** Call your deployment's rules from the OpenAI SDK, the Anthropic SDK, or plain curl
 
 ---
 

@@ -2,9 +2,7 @@
 
 Create, run, and test a simple L4 program.
 
-**Prerequisites:** L4 tools installed (VS Code extension or CLI)  
-**Time:** 15 minutes  
-**Goal:** Create a working L4 file that defines a legal rule and tests it
+**Prerequisites:** L4 tools installed (VS Code extension or CLI)
 
 ---
 

@@ -2,11 +2,9 @@
 
 The **Legalese Skills Marketplace** makes your deployed decision rules discoverable and installable **agent skills** — `https://skills.legalese.cloud/marketplace.json`
 
-It wires up two things behind your sign-in — a **skill** that primes your AI agent of choice on _when_ to reach for your deployed rules, and the ** Legalese Rules MCP server** it calls to find and run them. Scope is resolved from auth, so nothing about your deployments is exposed in the public catalog.
+It wires up two things behind your sign-in — a **skill** that primes your AI agent of choice on _when_ to reach for your deployed rules, and the **Legalese Rules MCP server** it calls to find and run them. Scope is resolved from auth, so nothing about your deployments is exposed in the public catalog.
 
 **Prerequisites:** a Legalese Cloud account with your deployed rules (each with an **Intended use** description, see [Exporting Rules for Deployment](../deploying-rules/exporting-rules-for-deployment.md)); a supported harness (Claude Code/Desktop, VS Code, Cursor, Windsurf, Cline, …) or a shell for the CLI; a credential (OAuth sign-in, or an `sk_…` API key)
-**Time:** 5 minutes
-**Goal:** Install the marketplace into your harness and have the agent answer neurosymbolically from your rules
 
 ---
 

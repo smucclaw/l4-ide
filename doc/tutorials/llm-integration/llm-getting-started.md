@@ -2,9 +2,7 @@
 
 Set up and use Large Language Models with L4.
 
-**Prerequisites:** Basic L4 knowledge, API access to an LLM  
-**Time:** 15 minutes  
-**Goal:** Understand how to combine LLM capabilities with L4's formal reasoning
+**Prerequisites:** Basic L4 knowledge, API access to an LLM
 
 ---
 

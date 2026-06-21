@@ -2,9 +2,7 @@
 
 Frequently used L4 patterns with working examples.
 
-**Prerequisites:** Basic L4 knowledge  
-**Time:** 30 minutes (reference - use as needed)  
-**Goal:** Quick reference for common patterns
+**Prerequisites:** Basic L4 knowledge
 
 ---
 
