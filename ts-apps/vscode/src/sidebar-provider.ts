@@ -5,8 +5,8 @@ import type { WebviewTypeMessageParticipant } from 'vscode-messenger-common'
 import type { VSCodeL4LanguageClient } from './vscode-l4-language-client.js'
 import { type AuthManager, LEGALESE_CLOUD_DOMAIN } from './auth.js'
 import type { ServiceClient } from './service-client.js'
-import type { McpProxy } from './mcp-proxy.js'
 import { installDeploymentSkill } from './deployment-install.js'
+import { installMarketplaceToHarness } from './harness-config.js'
 import { getWebviewContent } from './webview-panel.js'
 import {
   showTimedInformationMessage,
@@ -37,7 +37,7 @@ import {
   RequestOpenServiceUrl,
   RequestOpenConsole,
   RequestOpenExtensionSettings,
-  RequestAddL4ToolsToClaudeCode,
+  RequestInstallMarketplace,
   RequestInstallDeploymentSkill,
   RequestInstallL4Cli,
   RequestCopySignInLink,
@@ -404,11 +404,9 @@ export function initializeSidebarMessenger(
   auth: AuthManager,
   serviceClient: ServiceClient,
   outputChannel: vscode.OutputChannel,
-  mcpProxy: McpProxy,
-  // VS Code's user-data path (the one containing `mcp.json`). Required
-  // by the deployment-skill install flow that writes per-deployment MCP
-  // entries for the VS Code Chat target. Derived from
-  // `context.globalStorageUri` by the caller.
+  // VS Code's user-data path (the one containing `mcp.json` + `globalStorage/`).
+  // Required by the install flows that write per-harness MCP entries. Derived
+  // from `context.globalStorageUri` by the caller.
   userDataPath: string | undefined,
   onInspectorSectionRemoved?: (directiveId: string) => void
 ) {
@@ -1084,9 +1082,24 @@ export function initializeSidebarMessenger(
     )
   })
 
-  // Add L4 Tools (MCP + writing-l4-rules skill) to Claude Code
-  messenger.onNotification(RequestAddL4ToolsToClaudeCode, async () => {
-    await mcpProxy.addL4ToolsToClaudeCode()
+  // Install the global gateway "skills marketplace" (the org-wide rules MCP,
+  // plus the rules@legalese-cloud plugin for Claude Code) into a harness.
+  messenger.onNotification(RequestInstallMarketplace, async ({ harness }) => {
+    outputChannel.appendLine(`[sidebar] Install marketplace → ${harness}`)
+    try {
+      await installMarketplaceToHarness(harness, {
+        userDataPath,
+        outputChannel,
+      })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      outputChannel.appendLine(
+        `[sidebar] Install marketplace → ${harness} failed: ${msg}`
+      )
+      void vscode.window.showErrorMessage(
+        `Could not install the L4 Rules: ${msg}`
+      )
+    }
   })
 
   // Install a per-deployment plugin bundle (SKILL.md + hosted MCP entry)

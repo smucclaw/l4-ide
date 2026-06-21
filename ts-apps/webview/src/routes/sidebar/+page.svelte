@@ -10,7 +10,7 @@
     RequestSidebarLogout,
     RequestOpenServiceUrl,
     RequestOpenConsole,
-    RequestAddL4ToolsToClaudeCode,
+    RequestInstallMarketplace,
     RequestInstallDeploymentSkill,
     RequestInstallL4Cli,
     RequestCopySignInLink,
@@ -38,8 +38,10 @@
     type SidebarImportedFile,
     type RemoteFunctionSchema,
     type AiChatAttachment,
+    type Harness,
   } from 'jl4-client-rpc'
   import type { WebviewApi } from 'vscode-webview'
+  import HarnessInstallMenu from '$lib/components/harness-install-menu.svelte'
   import ToolCard from '$lib/components/tool-card.svelte'
   import InspectorPanel from '$lib/components/inspector-panel.svelte'
   import DeploymentMetadata from '$lib/components/deployment-metadata.svelte'
@@ -1529,12 +1531,28 @@
     )
   }
 
-  function addL4ToolsToClaudeCode() {
-    messenger?.sendNotification(
-      RequestAddL4ToolsToClaudeCode,
-      HOST_EXTENSION,
-      undefined as never
-    )
+  // The global gateway "skills marketplace" — org-agnostic; org scope is
+  // resolved from the user's sign-in. Shown to copy + offered as a
+  // one-click install into each harness.
+  const MARKETPLACE_URL = 'https://skills.legalese.cloud/marketplace.json'
+  const MARKETPLACE_DOC =
+    'https://legalese.com/l4/tutorials/legalese-cloud/agent-marketplace.md'
+
+  function installMarketplace(harness: Harness) {
+    messenger?.sendNotification(RequestInstallMarketplace, HOST_EXTENSION, {
+      harness,
+    })
+  }
+
+  let marketplaceCopied = $state(false)
+  async function copyMarketplaceUrl() {
+    try {
+      await navigator.clipboard.writeText(MARKETPLACE_URL)
+      marketplaceCopied = true
+      setTimeout(() => (marketplaceCopied = false), 1200)
+    } catch {
+      // Webviews can restrict clipboard; the input stays selectable.
+    }
   }
 
   function installL4Cli() {
@@ -2551,16 +2569,49 @@
           {#if connectionStatus.connected}
             <aside class="deployment-info-note" role="note">
               <p>
-                Deployments are automatically available to Legalese AI, VS Code
-                Copilot, and any other MCP-speaking agents as MCP tools on this
-                computer on port {connectionStatus.mcpPort}.
-              </p>
-              <p>
-                They're also available as REST API's, online MCP server and
-                WebMCP tools {connectionStatus.isLegaleseCloud
+                Deployments are automatically available as MCP to Legalese AI
+                and as REST API's, online MCP and WebMCP server and
+                {connectionStatus.isLegaleseCloud
                   ? 'as well as OpenAI- and Anthropic-compatible AI endpoints on the Legalese Cloud'
                   : 'via the connected JL4 service'}.
               </p>
+              {#if connectionStatus.isLegaleseCloud}
+                <div class="marketplace-block">
+                  <p class="marketplace-title">
+                    Add your deployments to Claude Code and other agents — add
+                    your skills marketplace:
+                  </p>
+                  <div class="marketplace-row">
+                    <input
+                      class="marketplace-input"
+                      type="text"
+                      readonly
+                      value={MARKETPLACE_URL}
+                      onfocus={(e) => e.currentTarget.select()}
+                    />
+                    <button
+                      class="marketplace-copy"
+                      onclick={copyMarketplaceUrl}
+                      title={marketplaceCopied ? 'Copied' : 'Copy'}
+                      aria-label="Copy marketplace URL"
+                      >{marketplaceCopied ? '✓' : '⧉'}</button
+                    >
+                  </div>
+                  <div class="marketplace-actions">
+                    <HarnessInstallMenu
+                      label="Install Skills Marketplace"
+                      title="Install the L4 Rules into an AI harness"
+                      up
+                      onChoose={(id) => installMarketplace(id as Harness)}
+                    />
+                    <button
+                      class="learn-more"
+                      onclick={() => onLearnMore(MARKETPLACE_DOC)}
+                      >Learn more</button
+                    >
+                  </div>
+                </div>
+              {/if}
             </aside>
           {/if}
         </div>
@@ -2618,12 +2669,6 @@
           <div class="dropdown-menu">
             <button class="menu-item" onclick={menuAction(installL4Cli)}>
               Install L4 CLI
-            </button>
-            <button
-              class="menu-item"
-              onclick={menuAction(addL4ToolsToClaudeCode)}
-            >
-              Add L4 Tools to Claude Code
             </button>
             <div class="menu-separator"></div>
             {#if connectionStatus.connected}
@@ -3530,6 +3575,64 @@
 
   .deployment-info-note > :global(p + p) {
     margin-top: 6px;
+  }
+
+  .marketplace-block {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.2));
+  }
+  .marketplace-title {
+    margin: 0 0 8px;
+  }
+  .marketplace-row {
+    display: flex;
+    align-items: stretch;
+    gap: 6px;
+  }
+  .marketplace-input {
+    flex: 1;
+    min-width: 0;
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 1em;
+    padding: 6px 8px;
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-input-border, transparent);
+    border-radius: 4px;
+  }
+  .marketplace-copy {
+    flex-shrink: 0;
+    background: var(--vscode-button-secondaryBackground, transparent);
+    color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
+    border-radius: 4px;
+    cursor: pointer;
+    padding: 0 10px;
+  }
+  .marketplace-copy:hover {
+    background: var(
+      --vscode-button-secondaryHoverBackground,
+      var(--vscode-list-hoverBackground)
+    );
+  }
+  .marketplace-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .marketplace-actions .learn-more {
+    background: none;
+    border: none;
+    padding: 0;
+    color: #c8376a;
+    cursor: pointer;
+    font-size: inherit;
+  }
+  .marketplace-actions .learn-more:hover {
+    color: #d94d7e;
+    text-decoration: underline;
   }
 
   .deployment-filter-bar {

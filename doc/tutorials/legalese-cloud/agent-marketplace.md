@@ -25,23 +25,17 @@ discovery MCP  (mcp.legalese.cloud)        search_rules → a deployment + its m
 **Claude Code (one step):** install the gateway plugin — it bundles the discovery MCP (no token; OAuth on first use) plus a skill that primes the model on _when_ to use it:
 
 ```
-/plugin marketplace add https://skills.legalese.cloud/marketplace.git
+/plugin marketplace add https://skills.legalese.cloud/marketplace.json
 /plugin install rules@legalese-cloud
 ```
 
-(The clone-based `.git` URL is the most reliable add path. A flat
-`https://skills.legalese.cloud/marketplace.json` is also served as a fallback,
-but the direct-URL add mode is flakier across Claude Code versions. If
-`install` reports "not found in any marketplace," confirm `/plugin marketplace
-list` shows `legalese-cloud`.)
+(If `install` reports "not found in any marketplace," confirm `/plugin
+marketplace list` shows `legalese-cloud`. A git form,
+`https://skills.legalese.cloud/marketplace.git`, is also served — only needed
+as a fallback for the URL-based relative-path limitation, which this
+marketplace doesn't hit.)
 
-**Any MCP client:** add the discovery server directly (org resolved from auth — no slug in the URL):
-
-```sh
-claude mcp add --transport http legalese-rules https://mcp.legalese.cloud
-```
-
-OAuth runs on first use; for an API key instead, add `--header "Authorization: Bearer sk_..."`.
+**Other agents (Cursor, Windsurf, VS Code, Cline, …):** the easiest path is the L4 VS Code extension — open the **Deployments** tab and use **Install Skills Marketplace** to add the rules to the harness of your choice in one click. It registers the rules MCP server (`https://mcp.legalese.cloud`, org from auth) in that harness's own config.
 
 ## Step 2 — Use it
 
@@ -61,6 +55,16 @@ legalese eval <deployment> <function> '<json>'          # run it
 ```
 
 > **Early access:** `legalese login` awaits the CLI's WorkOS OAuth client — until it lands, use `LEGALESE_TOKEN`.
+
+## FYI — wire the MCP server directly (no plugin)
+
+If you'd rather configure the MCP server by hand, point any MCP client at the bare discovery endpoint (org resolved from auth — no slug in the URL):
+
+```sh
+claude mcp add --transport http legalese-rules https://mcp.legalese.cloud
+```
+
+OAuth runs on first use; for an API key instead, add `--header "Authorization: Bearer sk_..."`. For a single ruleset, use `https://mcp.legalese.cloud/<org>/<deployment>`.
 
 ---
 

@@ -5,6 +5,9 @@
   //   - cloud:       OpenAI v1, MCP, WebMCP embed, OpenAPI JSON
   //   - self-hosted: MCP, WebMCP embed, OpenAPI JSON (no OpenAI v1 —
   //                  a self-hosted jl4-service has no AI endpoint)
+  import type { Harness } from 'jl4-client-rpc'
+  import HarnessInstallMenu from './harness-install-menu.svelte'
+
   const DOCS_BASE = 'https://legalese.com/l4/tutorials'
   // Assembled from fragments so the embed-snippet's opening and
   // closing tags never appear as literal HTML script tokens anywhere
@@ -30,12 +33,12 @@
     host?: string
     onClose: () => void
     onLearnMore: (docUrl: string) => void
-    /** Cloud mode only: triggered by the install buttons. The host
-     *  wires this to the extension's `RequestInstallDeploymentSkill`
-     *  notification so the plugin bundle is downloaded from the
-     *  hosted `.plugin` endpoint and written into the chosen target's
-     *  config — or saved to disk for `download-zip`. */
-    onInstall?: (target: 'claude-code' | 'vscode-chat' | 'download-zip') => void
+    /** Cloud mode only: triggered by the install menu. The host wires
+     *  this to the extension's `RequestInstallDeploymentSkill`
+     *  notification so the plugin bundle is downloaded from the hosted
+     *  `.plugin` endpoint and written into the chosen harness's config —
+     *  or saved to disk for `download-zip`. */
+    onInstall?: (target: Harness | 'download-zip') => void
   } = $props()
 
   interface Section {
@@ -160,32 +163,18 @@
     <div class="dialog-body">
       {#if mode === 'cloud' && onInstall}
         <div class="section install-section">
-          <div class="section-label">Install as AI agent plugin</div>
+          <div class="section-label">Install as AI agent skill</div>
           <div class="install-row">
-            <button
-              class="install-btn"
-              onclick={() => onInstall?.('claude-code')}
-              title="Install the deployment's skill folder and MCP server into Claude Code"
-            >
-              Add to Claude Code
-            </button>
-            <button
-              class="install-btn"
-              onclick={() => onInstall?.('vscode-chat')}
-              title="Install the deployment's skill folder and MCP server into VS Code Chat"
-            >
-              Add to VS Code Chat
-            </button>
-            <button
-              class="install-icon-btn"
-              onclick={() => onInstall?.('download-zip')}
-              title="Download the plugin zip"
-              aria-label="Download the plugin zip">⤓</button
-            >
+            <HarnessInstallMenu
+              label="Install as Skill"
+              title="Install this deployment's skill + MCP server into an AI harness"
+              extra={[{ id: 'download-zip', label: 'Download plugin zip' }]}
+              onChoose={(id) => onInstall?.(id as Harness | 'download-zip')}
+            />
           </div>
           <div class="section-hint">
-            Bundles this deployment's SKILL.md and MCP tools as a plugin for
-            Claude Code or VS Code Chat and compatible.
+            Bundles this deployment's SKILL.md and MCP tools and installs them
+            into the agent you pick.
             <button
               class="learn-more"
               onclick={() =>
@@ -362,42 +351,6 @@
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
-  }
-
-  .install-btn {
-    flex: 1;
-    min-width: 140px;
-    padding: 8px 14px;
-    background: var(--vscode-button-secondaryBackground, transparent);
-    color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
-    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.95em;
-  }
-  .install-btn:hover {
-    background: var(
-      --vscode-button-secondaryHoverBackground,
-      var(--vscode-list-hoverBackground)
-    );
-  }
-
-  .install-icon-btn {
-    flex-shrink: 0;
-    padding: 0 12px;
-    background: var(--vscode-button-secondaryBackground, transparent);
-    color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
-    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 1.1em;
-    line-height: 1;
-  }
-  .install-icon-btn:hover {
-    background: var(
-      --vscode-button-secondaryHoverBackground,
-      var(--vscode-list-hoverBackground)
-    );
   }
 
   .section-hint code {

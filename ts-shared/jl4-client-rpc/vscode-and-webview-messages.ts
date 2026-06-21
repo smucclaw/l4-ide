@@ -490,24 +490,55 @@ export const RequestOpenExtensionSettings: NotificationType<void> = {
   method: 'requestOpenExtensionSettings',
 }
 
-/** Sidebar asks extension to add L4 tools (MCP server + skill) to Claude Code */
-export const RequestAddL4ToolsToClaudeCode: NotificationType<void> = {
-  method: 'requestAddL4ToolsToClaudeCode',
-}
+/**
+ * Local AI harnesses the extension can install the L4 Rules into. Each maps
+ * to a config-file writer on the extension side (Claude Code also supports
+ * the full plugin via its CLI). `download-zip` is a per-deployment-only
+ * pseudo-target handled separately.
+ */
+export type Harness =
+  | 'claude-code'
+  | 'vscode'
+  | 'cursor'
+  | 'windsurf'
+  | 'cline'
+  | 'claude-desktop'
+
+/** Display order + labels for the install dropdowns (rendered by the webview). */
+export const HARNESSES: ReadonlyArray<{ id: Harness; label: string }> = [
+  { id: 'claude-code', label: 'Claude Code' },
+  { id: 'vscode', label: 'VS Code (Copilot)' },
+  { id: 'cursor', label: 'Cursor' },
+  { id: 'windsurf', label: 'Windsurf' },
+  { id: 'cline', label: 'Cline' },
+  { id: 'claude-desktop', label: 'Claude Desktop' },
+]
 
 /**
- * Sidebar asks extension to install a specific deployment as a Claude Code
- * plugin or a VS Code Chat MCP server. The extension downloads the plugin
- * bundle from `mcp.legalese.cloud/{slug}/{deploymentId}/.skill` using the
- * user's session token, then writes the relevant config for the chosen
- * target (skill folder + ~/.claude.json for Claude Code; per-deployment
- * entry in VS Code's user-level mcp.json for VS Code Chat).
+ * Sidebar asks the extension to install the global gateway "skills
+ * marketplace" into a harness: the account-wide rules MCP server
+ * (`mcp.legalese.cloud`, org resolved from auth) — and, for Claude Code, the
+ * `rules@legalese-cloud` plugin (marketplace + skill) via its CLI when
+ * available. Org scope comes from the user's sign-in, so no token is baked in.
+ */
+export const RequestInstallMarketplace: NotificationType<{ harness: Harness }> =
+  {
+    method: 'requestInstallMarketplace',
+  }
+
+/**
+ * Sidebar asks the extension to install a specific deployment into a harness.
+ * The extension downloads the plugin bundle from
+ * `mcp.legalese.cloud/{slug}/{deploymentId}/.plugin` using the user's session
+ * token, writes the agent skill (where the harness reads one) and the
+ * per-deployment MCP server entry into that harness's config. `download-zip`
+ * saves the raw bundle instead.
  *
- * Cloud mode only — both targets reference the hosted MCP URL.
+ * Cloud mode only — every target references the hosted MCP URL.
  */
 export const RequestInstallDeploymentSkill: NotificationType<{
   deploymentId: string
-  target: 'claude-code' | 'vscode-chat' | 'download-zip'
+  target: Harness | 'download-zip'
 }> = {
   method: 'requestInstallDeploymentSkill',
 }
