@@ -54,7 +54,7 @@
     <span>{label}</span>
   </button>
   {#if open}
-    <div class="hm-menu {up ? 'up' : 'down'}" role="menu">
+    <div class="hm-menu {up ? 'up' : 'down'}" class:large role="menu">
       {#each HARNESSES as h (h.id)}
         <button class="hm-item" role="menuitem" onclick={() => choose(h.id)}
           >{h.label}</button
@@ -145,6 +145,11 @@
   .hm-item:hover {
     background: var(--vscode-menu-selectionBackground, #04395e);
     color: var(--vscode-menu-selectionForeground, #fff);
+  }
+  /* Large variant: dropdown items track the surrounding text size,
+     matching the larger trigger button. */
+  .hm-menu.large .hm-item {
+    font-size: inherit;
   }
 
   .hm-sep {
