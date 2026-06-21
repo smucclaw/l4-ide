@@ -1,28 +1,27 @@
-# Install an org's deployed rules as AI agent skills (Skills Marketplace)
+# Install your deployed rules as AI agent skills (Skills Marketplace)
 
-The **Skills Marketplace** turns an org's deployed decision rules into an installable **agent skill** — one entry that any supported AI harness can add in a single step. Once installed, the agent **discovers** the rule a question needs and **runs** it (behind the org's permission barrier) instead of reasoning the determination itself.
+The **Legalese Skills Marketplace** makes your deployed decision rules discoverable and installable **agent skills** — `https://skills.legalese.cloud/marketplace.json`
 
-The marketplace is the org-agnostic **gateway**: one public entry (`https://skills.legalese.cloud/marketplace.json`) that, on install, wires up two things behind your sign-in — a **skill** that primes the model on _when_ to reach for the org's rules, and the **rules MCP server** it calls to find and run them. Org scope is resolved from auth, so nothing about your deployments is exposed in the public catalog.
+It wires up two things behind your sign-in — a **skill** that primes your AI agent of choice on _when_ to reach for your deployed rules, and the ** Legalese Rules MCP server** it calls to find and run them. Scope is resolved from auth, so nothing about your deployments is exposed in the public catalog.
 
-**Audience:** Anyone who wants an org's deployed rules usable from an AI agent
-**Prerequisites:** a Legalese Cloud org with deployed rules (each with an **Intended use** description, see [Exporting Rules for Deployment](../deploying-rules/exporting-rules-for-deployment.md)); a supported harness (Claude Code/Desktop, VS Code, Cursor, Windsurf, Cline, …) or a shell for the CLI; a credential (OAuth sign-in, or an `sk_…` API key)
+**Prerequisites:** a Legalese Cloud account with your deployed rules (each with an **Intended use** description, see [Exporting Rules for Deployment](../deploying-rules/exporting-rules-for-deployment.md)); a supported harness (Claude Code/Desktop, VS Code, Cursor, Windsurf, Cline, …) or a shell for the CLI; a credential (OAuth sign-in, or an `sk_…` API key)
 **Time:** 5 minutes
-**Goal:** Install the marketplace into your harness and have the agent answer from the org's rules
+**Goal:** Install the marketplace into your harness and have the agent answer neurosymbolically from your rules
 
 ---
 
 ## What the marketplace enables
 
-Without it, connecting an agent to an org's rules means hand-wiring an MCP server per harness and hoping the model knows when to use it. The marketplace collapses that into one install that gives every harness the same capability:
+The marketplace allows your AI agent of choice to discover your deployed rules as skills.
 
-- **One source, many harnesses** — the same gateway entry installs into Claude Code, VS Code (Copilot), Cursor, Windsurf, Cline, and Claude Desktop.
-- **A skill, not just a server** — bundles `SKILL.md` ([Agent Skills](https://agentskills.io) standard) so the model knows _when_ a question should be answered from the org's rules, not only _how_ to call them.
-- **Scoped by sign-in, not URL** — the gateway URL carries no org slug; the org (and your permissions) come from auth. The public catalog reveals only the single gateway plugin — never your deployment names, descriptions, or tools.
-- **Scales to any number of rules** — only the rules the agent actually uses ever enter context, whether the org has five deployments or five hundred.
+- **Agent support** — Legalese skill marketplace supports Claude Code, VS Code (Copilot), Cursor, Windsurf, Cline, and Claude Desktop.
+- **Skill and tool calls (MCP)** — Every deployment is available as individual skill bundle `SKILL.md` ([Agent Skills](https://agentskills.io) standard) so the model knows _when_ a question should be answered from your rules and _how_ to call them.
+- **Rules are evaluated deterministically** — The skills allow your AI agent to evaluate your deployed rules and retrieve the programmed results with accuracy.
+- **Scoped by sign-in** — The marketplace is private and doesn't publicly reveal your deployments rules, names, descriptions and API's.
 
 ### How it works under the hood
 
-The skill calls a **discovery MCP** at `https://mcp.legalese.cloud` (no org in the URL — resolved from your sign-in) exposing two tools: **search** the org's rules, and **get a function's schema**. Searching returns the matching **deployments** and, for each, the **per-deployment MCP endpoint** (`mcp.legalese.cloud/{org}/{deployment}`) where its rules live as typed tools.
+The skill calls a **discovery MCP** at `https://mcp.legalese.cloud` (no org in the URL — resolved from your sign-in) exposing two tools: **search** your rules, and **get a function's schema**. Searching returns the matching **deployments** and, for each, the **per-deployment MCP endpoint** (`mcp.legalese.cloud/{org}/{deployment}`) where its rules live as typed tools.
 
 ```
 discovery MCP  (mcp.legalese.cloud)        search_rules → a deployment + its mcp endpoint
@@ -126,7 +125,7 @@ The gateway is the default. But if you want a single, sharply-scoped skill for o
 
 - **Rules MCP won't connect** — the server URL is `https://mcp.legalese.cloud` (no org slug; the org is resolved from auth). Your harness runs OAuth on first use; or supply an `Authorization: Bearer sk_…` header.
 - **`not logged in`** (CLI) — run `legalese login <org>`, or set `LEGALESE_TOKEN` (+ `LEGALESE_ORG`).
-- **`legalese search` returns nothing** — broaden the query, or confirm the org has deployments with an **Intended use** description (those without one aren't searchable).
+- **`legalese search` returns nothing** — broaden the query, or confirm you have deployments with an **Intended use** description (those without one aren't searchable).
 - **`forbidden`** — your credential lacks the `l4:rules` permission, or it's scoped to a different org than `--org`/the session.
 - **`marketplace add` fails** — check that `https://skills.legalese.cloud/marketplace.json` loads in a browser (it's public).
 - **Gateway install needs no token** — if `/plugin install rules@legalese-cloud` asks for git credentials, you're on an older per-deployment repo URL, not the gateway.

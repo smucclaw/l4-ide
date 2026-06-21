@@ -2,7 +2,6 @@
 
 Go from a natural-language policy or contract to draft L4 with Legalese AI.
 
-**Audience:** Legal engineers, policy drafters, contract authors
 **Prerequisites:** [Your First L4 File](../getting-started/first-l4-file.md), Legalese AI installed
 **Time:** 30 minutes
 **Goal:** Use Legalese AI to turn prose rules into type-checked L4

@@ -2,7 +2,6 @@
 
 Use LLMs to help encode legislation in L4.
 
-**Audience:** Legal engineers, legislative drafters  
 **Prerequisites:** [LLM Getting Started](llm-getting-started.md), intermediate L4 knowledge  
 **Time:** 30 minutes  
 **Goal:** Learn a workflow for LLM-assisted legislation encoding

@@ -2,7 +2,6 @@
 
 Expose a deployment's rules as [Model Context Protocol](https://modelcontextprotocol.io) tools so any MCP-enabled AI client can call them.
 
-**Audience:** Developers wiring deployed rules into Claude, an IDE agent, or a custom MCP host
 **Prerequisites:** A deployment ([Exporting Rules for Deployment](../deploying-rules/exporting-rules-for-deployment.md))
 **Time:** 10 minutes
 **Goal:** Connect an AI chat/MCP client to your deployment

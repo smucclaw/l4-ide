@@ -18,7 +18,6 @@ Write functions that read like legal prose:
 - **[Infix, Postfix, and Mixfix Functions](natural-language-functions/natural-language-functions.md)** - Call functions in natural word order
 - **[Optimising for Natural Language Document Generation with `@nlg`](natural-language-functions/optimising-natural-language-generation.md)** - Make the rendered prose read as naturally as possible, then refine it with Legalese AI
 
-**Audience:** All L4 users  
 **Prerequisites:** Basic function syntax
 
 ## Deployment and Legalese Cloud
@@ -32,7 +31,6 @@ Export your L4 rules as live REST API endpoints:
 - **[WebMCP Embed Script](legalese-cloud/webmcp-embed.md)** - One embed tag so your website serves its own rules
 - **[RESTful OpenAPI Specification](legalese-cloud/openapi-spec.md)** - Generate clients and call rules as plain REST
 
-**Audience:** L4 authors ready to share their rules
 **Prerequisites:** Basic L4 knowledge
 
 ## LLM Integration
@@ -43,7 +41,6 @@ Working with AI and language models in L4:
 - **[LLM Getting Started](llm-integration/llm-getting-started.md)** - Basics of LLM integration
 - **[Legislative Ingestion](llm-integration/legislative-ingestion.md)** - LLM-assisted encoding
 
-**Audience:** Developers, AI/ML practitioners  
 **Prerequisites:** Basic L4 knowledge
 
 ---
