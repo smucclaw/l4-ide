@@ -2569,7 +2569,7 @@
           {#if connectionStatus.connected}
             <aside class="deployment-info-note" role="note">
               <p>
-                Deployments are automatically available as MCP to Legalese AI
+                Deployments are automatically available to Legalese AI
                 and as REST API's, online MCP and WebMCP server and
                 {connectionStatus.isLegaleseCloud
                   ? 'as well as OpenAI- and Anthropic-compatible AI endpoints on the Legalese Cloud'
