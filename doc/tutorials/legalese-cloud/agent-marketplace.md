@@ -25,9 +25,15 @@ discovery MCP  (mcp.legalese.cloud)        search_rules → a deployment + its m
 **Claude Code (one step):** install the gateway plugin — it bundles the discovery MCP (no token; OAuth on first use) plus a skill that primes the model on _when_ to use it:
 
 ```
-/plugin marketplace add https://skills.legalese.cloud/marketplace.json
+/plugin marketplace add https://skills.legalese.cloud/marketplace.git
 /plugin install rules@legalese-cloud
 ```
+
+(The clone-based `.git` URL is the most reliable add path. A flat
+`https://skills.legalese.cloud/marketplace.json` is also served as a fallback,
+but the direct-URL add mode is flakier across Claude Code versions. If
+`install` reports "not found in any marketplace," confirm `/plugin marketplace
+list` shows `legalese-cloud`.)
 
 **Any MCP client:** add the discovery server directly (org resolved from auth — no slug in the URL):
 
