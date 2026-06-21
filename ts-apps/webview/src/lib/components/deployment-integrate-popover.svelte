@@ -168,9 +168,15 @@
             <HarnessInstallMenu
               label="Install as Skill"
               title="Install this deployment's skill + MCP server into an AI harness"
-              extra={[{ id: 'download-zip', label: 'Download plugin zip' }]}
-              onChoose={(id) => onInstall?.(id as Harness | 'download-zip')}
+              onChoose={(id) => onInstall?.(id as Harness)}
             />
+            <button
+              class="download-zip-btn"
+              onclick={() => onInstall?.('download-zip')}
+              title="Download this deployment's plugin bundle as a zip"
+            >
+              Download plugin zip
+            </button>
           </div>
           <div class="section-hint">
             Bundles this deployment's SKILL.md and MCP tools and installs them
@@ -351,6 +357,26 @@
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
+  }
+
+  /* Secondary button sitting next to the install dropdown — same chrome
+     and vertical metrics as HarnessInstallMenu's trigger. */
+  .download-zip-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 7px 14px;
+    background: var(--vscode-button-secondaryBackground, transparent);
+    color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+  }
+  .download-zip-btn:hover {
+    background: var(
+      --vscode-button-secondaryHoverBackground,
+      var(--vscode-list-hoverBackground)
+    );
   }
 
   .section-hint code {
