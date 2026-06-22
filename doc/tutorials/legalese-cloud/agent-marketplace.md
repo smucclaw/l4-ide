@@ -19,14 +19,19 @@ The marketplace allows your AI agent of choice to discover your deployed rules a
 
 ### How it works under the hood
 
-The skill calls a **discovery MCP** at `https://mcp.legalese.cloud` (no org in the URL — resolved from your sign-in) exposing two tools: **search** your rules, and **get a function's schema**. Searching returns the matching **deployments** and, for each, the **per-deployment MCP endpoint** (`mcp.legalese.cloud/{org}/{deployment}`) where its rules live as typed tools.
+The skill drives a single server — the **rules MCP** at `https://mcp.legalese.cloud` (no org in the URL — resolved from your sign-in). Everything happens through that one endpoint; there's no per-deployment server to wire up:
+
+- `search_rules` — find the deployment(s) a question needs (space-separated keywords, matched as OR).
+- `get_schema` — read a rule's input/output schema before calling it (includes the deployment version).
+- `evaluate` — run the rule and get the authoritative result (needs `l4:evaluate`).
+- `list_files` / `read_file` / `search_identifier` / `search_text` — browse the L4 source (needs `l4:read`).
 
 ```
-discovery MCP  (mcp.legalese.cloud)        search_rules → a deployment + its mcp endpoint
-       └─ per-deployment MCP (…/{org}/{deployment})   ← connect here; call its rule tools
+rules MCP (mcp.legalese.cloud)   search_rules → get_schema → evaluate
+                                 (org resolved from your sign-in)
 ```
 
-So the agent searches, then connects to the matched deployment to run the rule — answering from the decision and citing it, rather than reasoning it out.
+So the agent searches, reads the schema, and evaluates — all through the one MCP — answering from the decision and citing it, rather than reasoning it out.
 
 ---
 
@@ -66,9 +71,7 @@ OAuth runs on first use; for an API key instead, add `--header "Authorization: B
 
 ## Use it
 
-Ask something the rules cover. The agent calls `search_rules` to find the deployment, then runs that deployment's rule — answering from the decision and citing it, rather than reasoning it out.
-
-> Connecting the matched deployment's MCP server is, in most harnesses, a user/config action: the agent surfaces the endpoint; you (or a harness with dynamic-add support) connect it. For a ruleset you use often, add `https://mcp.legalese.cloud/<org>/<deployment>` up front.
+Ask something the rules cover. The agent calls `search_rules` to find the deployment, `get_schema` to shape the inputs, and `evaluate` to run it — all through the rules MCP — answering from the decision and citing it, rather than reasoning it out. No extra per-deployment server to connect.
 
 ## Alternative — the `legalese` CLI (shell / CI)
 
@@ -105,7 +108,7 @@ MCP is the common surface; the skill and CLI are conveniences on top. Cross-harn
 
 The gateway is the default. But if you want a single, sharply-scoped skill for one deployment (so the agent triggers on _that_ ruleset specifically), you can still install it on its own — the per-deployment artifacts are still served, just not listed in the global marketplace.
 
-- **VS Code:** the [one-click install](./agent-plugin.md) writes a single deployment's skill + MCP server (or use **Download plugin zip** in the deployment's **Integrate** dialog to grab the bundle).
+- **VS Code:** [Install a deployment as an AI agent plugin](./agent-plugin.md) — the one-click install writes a single deployment's skill + MCP server (or use **Download plugin zip** in the deployment's **Integrate** dialog to grab the bundle).
 - **A gated skill repo** lives at `https://skills.legalese.cloud/{org}/{deployment}.git` (HTTP Basic → your token as the password). Point a `marketplace.json` you host at it, or `git clone` it directly. Set the git credential once:
 
   ```sh
