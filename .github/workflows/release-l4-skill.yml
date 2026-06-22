@@ -22,15 +22,15 @@ jobs:
         with:
           fetch-depth: 0 # Get full history for versioning
 
-      - name: Get version from commits
+      - name: Get version
         id: version
         run: |
-          # Count commits to skill and plugin manifest directories for versioning
-          COMMIT_COUNT=$(git log --oneline -- .claude/skills/writing-l4-rules/ .claude-plugin/ skill/ l4/ | wc -l | tr -d ' ')
+          # Build number from the Actions run → 0.1.{build}
+          BUILD="${{ github.run_number }}"
           # Get short hash of latest commit touching plugin directories
           SHORT_SHA=$(git log -1 --format=%h -- .claude/skills/writing-l4-rules/ .claude-plugin/ skill/ l4/)
           # Create version string
-          VERSION="v0.1.${COMMIT_COUNT}"
+          VERSION="v0.1.${BUILD}"
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "tag=${VERSION}-${SHORT_SHA}" >> $GITHUB_OUTPUT
           echo "Release version will be: ${VERSION}-${SHORT_SHA}"
