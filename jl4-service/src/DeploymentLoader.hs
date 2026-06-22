@@ -26,6 +26,8 @@ import Data.Int (Int64)
 import Data.Maybe (fromMaybe)
 import qualified Data.Map.Strict as Map
 import Data.Text (Text)
+import qualified Data.Text as Text
+import qualified Version
 import GHC.Conc (setAllocationCounter, enableAllocationLimit)
 import GHC.IO.Exception (AllocationLimitExceeded (..))
 import System.Timeout (timeout)
@@ -73,10 +75,25 @@ loadAndRegister logger options registry store deployId = do
       -- are not derived from sources, so the compiler/CBOR rebuild can't
       -- reproduce them — restore them from the persisted StoredMetadata so the
       -- version (and the counters encoded in it) survives restarts.
-      let meta = meta0
+      --
+      -- Deployments that predate versioning have no stored deploymentVersion;
+      -- backfill them to {major}.0.0 on this (re)compile so they aren't left
+      -- blank until their next redeploy. The next redeploy then bumps RUNNING
+      -- from this baseline (→ {major}.0.1). The backfill is deterministic, so
+      -- it's stable across restarts even though it isn't written back to
+      -- metadata.json here.
+      let storedDepVersion = fromMaybe "" storedMeta.smDeploymentVersion
+          depVersion =
+            if Text.null storedDepVersion
+              then Text.pack (show Version.serviceMajor) <> ".0.0"
+              else storedDepVersion
+          svcVersion = case storedMeta.smServiceVersion of
+            Just v | not (Text.null v) -> v
+            _                          -> Version.serviceVersion
+          meta = meta0
             { metaDescription = storedMeta.smDescription
-            , metaServiceVersion = fromMaybe "" storedMeta.smServiceVersion
-            , metaDeploymentVersion = fromMaybe "" storedMeta.smDeploymentVersion
+            , metaServiceVersion = svcVersion
+            , metaDeploymentVersion = depVersion
             }
       atomically $ modifyTVar' registry $
         Map.insert (DeploymentId deployId) (DeploymentReady fns meta)
