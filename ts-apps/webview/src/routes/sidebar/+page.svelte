@@ -3066,6 +3066,12 @@
     margin-top: 2px;
   }
 
+  /* Keep a constant gap above "Or replace existing" so the spacing
+     doesn't get squeezed as the existing-deployments list grows. */
+  .deploy-form .form-group + .form-group {
+    margin-top: 16px;
+  }
+
   /* The Render tab is a full-bleed preview surface: no padding, the
      stage fills it and the iframe fills the stage. */
   .render-pane {
