@@ -220,6 +220,12 @@ jobs:
           MAJOR_MINOR=$(echo "$CURRENT" | sed 's/\.[^.]*$//')
           echo "JL4_SERVICE_VERSION=${MAJOR_MINOR}.${{ github.run_number }}" >> "$GITHUB_ENV"
           echo "jl4-service version: ${MAJOR_MINOR}.${{ github.run_number }}"
+          # The version is baked into Version.hs via a Template Haskell splice
+          # that reads JL4_SERVICE_VERSION at *compile* time. GHC won't re-run
+          # the splice if Version.o is up to date, so force a recompile by
+          # touching the source — this keeps the bake correct even if the build
+          # dir is ever cached (today it isn't).
+          touch jl4-service/src/Version.hs
 
       - name: Build jl4-lsp, l4, and jl4-service
         run: cabal build exe:jl4-lsp exe:l4 exe:jl4-service

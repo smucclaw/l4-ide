@@ -35,6 +35,27 @@ spec = describe "BundleStore" do
         loadedMeta.smVersion `shouldBe` "abc123"
         loadedMeta.smCreatedAt `shouldBe` "2025-01-01T00:00:00Z"
 
+      it "saveStoredMetadata overwrites only metadata.json, preserving sources" \store -> do
+        let sources = Map.singleton "main.l4" "DECIDE f IS TRUE"
+            meta0 = StoredMetadata
+              { smVersion = "v1"
+              , smCreatedAt = "2025-01-01T00:00:00Z"
+              , smDescription = Just "intended use"
+              , smServiceVersion = Nothing
+              , smDeploymentVersion = Nothing
+              }
+        saveBundle store "bf" sources meta0
+        -- Backfill the version fields without touching sources.
+        saveStoredMetadata store "bf" meta0
+          { smServiceVersion = Just "1.5.81"
+          , smDeploymentVersion = Just "1.0.0"
+          }
+        (loadedSources, loadedMeta) <- loadBundle store "bf"
+        loadedSources `shouldBe` sources -- untouched
+        loadedMeta.smServiceVersion `shouldBe` Just "1.5.81"
+        loadedMeta.smDeploymentVersion `shouldBe` Just "1.0.0"
+        loadedMeta.smDescription `shouldBe` Just "intended use"
+
       it "overwrites existing deployment atomically" \store -> do
         let sources1 = Map.singleton "main.l4" "DECIDE f IS TRUE"
             sources2 = Map.singleton "main.l4" "DECIDE f IS FALSE"

@@ -5,6 +5,7 @@ module BundleStore (
   initStore,
   cleanupStore,
   saveBundle,
+  saveStoredMetadata,
   loadBundle,
   listDeployments,
   deleteBundle,
@@ -147,6 +148,17 @@ saveBundle (BundleStore root) deployId sources meta = do
       renameDirectory tmpDir targetDir
     else
       renameDirectory tmpDir targetDir
+
+-- | Atomically overwrite just the @metadata.json@ of an existing deployment
+-- (sources + CBOR untouched). Used to persist late-computed fields — e.g. the
+-- backfilled deployment version — without rewriting the whole bundle.
+saveStoredMetadata :: BundleStore -> Text -> StoredMetadata -> IO ()
+saveStoredMetadata (BundleStore root) deployId meta = do
+  let targetDir = root </> Text.unpack deployId
+      metaFile = targetDir </> "metadata.json"
+      tmpFile = targetDir </> "metadata.json.tmp"
+  encodeFile tmpFile meta
+  renameFile tmpFile metaFile
 
 -- | Load sources and metadata from a stored deployment.
 loadBundle
