@@ -25,6 +25,14 @@ const PLUGIN_DESCRIPTION =
 /** Single top-level folder so extracting the zip yields one tidy directory. */
 const ROOT = 'legalese-cloud-rules'
 
+// The L4 authoring plugin lives in the public l4-ide repo — advertised here
+// alongside the rules gateway so one marketplace add surfaces both surfaces:
+// *write* L4, and *run* your deployed rules.
+const L4_AUTHORING_PLUGIN_NAME = 'l4-computational-law'
+const L4_AUTHORING_PLUGIN_DESCRIPTION =
+  'L4 programming language for computational law — encode contracts, ' +
+  'regulations, and policies as executable, testable, verifiable programs.'
+
 function marketplaceJson(): string {
   return (
     JSON.stringify(
@@ -37,6 +45,11 @@ function marketplaceJson(): string {
             description: PLUGIN_DESCRIPTION,
             // Relative source: the plugin lives at the repo/zip root.
             source: '.',
+          },
+          {
+            name: L4_AUTHORING_PLUGIN_NAME,
+            description: L4_AUTHORING_PLUGIN_DESCRIPTION,
+            source: { source: 'github', repo: 'legalese/l4-ide', path: '.' },
           },
         ],
       },
@@ -116,6 +129,13 @@ The plugin registers the account-wide rules MCP server
 (\`https://${DISCOVERY_MCP_HOST}\`, org resolved from your sign-in — no token is
 baked in; OAuth runs on first use) plus a skill that primes the model on _when_
 to use it.
+
+The same marketplace also advertises the **L4 authoring plugin** (from
+\`legalese/l4-ide\`) — expert guidance for writing L4:
+
+\`\`\`
+/plugin install ${L4_AUTHORING_PLUGIN_NAME}@${MARKETPLACE_NAME}
+\`\`\`
 
 ## Other harnesses
 
