@@ -11,6 +11,7 @@
     RequestOpenServiceUrl,
     RequestOpenConsole,
     RequestInstallMarketplace,
+    RequestDownloadMarketplaceSkill,
     RequestInstallDeploymentSkill,
     RequestInstallL4Cli,
     RequestCopySignInLink,
@@ -1533,8 +1534,9 @@
 
   // The global gateway "skills marketplace" — org-agnostic; org scope is
   // resolved from the user's sign-in. Shown to copy + offered as a
-  // one-click install into each harness.
-  const MARKETPLACE_URL = 'https://skills.legalese.cloud/marketplace.json'
+  // one-click install into each harness. The public GitHub repo is the form
+  // claude.ai accepts (it only adds marketplaces from a GitHub repo).
+  const MARKETPLACE_URL = 'https://github.com/legalese/cloud-rules'
   const MARKETPLACE_DOC =
     'https://legalese.com/l4/tutorials/legalese-cloud/agent-marketplace.md'
 
@@ -1542,6 +1544,16 @@
     messenger?.sendNotification(RequestInstallMarketplace, HOST_EXTENSION, {
       harness,
     })
+  }
+
+  // Save the gateway "skills marketplace" plugin (discovery skill + rules MCP)
+  // as a zip — the download counterpart of the Install dropdown.
+  function downloadMarketplaceSkill() {
+    messenger?.sendNotification(
+      RequestDownloadMarketplaceSkill,
+      HOST_EXTENSION,
+      undefined as never
+    )
   }
 
   let marketplaceCopied = $state(false)
@@ -2605,6 +2617,27 @@
                       onChoose={(id) => installMarketplace(id as Harness)}
                     />
                     <button
+                      class="marketplace-download"
+                      onclick={downloadMarketplaceSkill}
+                      title="Download the L4 Rules skill as a plugin zip"
+                      aria-label="Download plugin zip"
+                    >
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M8 2v8m0 0L5 7m3 3 3-3" />
+                        <path d="M3 13h10" />
+                      </svg>
+                    </button>
+                    <button
                       class="learn-more"
                       onclick={() => onLearnMore(MARKETPLACE_DOC)}
                       >Learn more</button
@@ -3621,6 +3654,25 @@
     align-items: center;
     gap: 10px;
     margin-top: 10px;
+  }
+  /* Icon-only secondary button next to the Install dropdown. */
+  .marketplace-download {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 7px 9px;
+    background: var(--vscode-button-secondaryBackground, transparent);
+    color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
+    border-radius: 4px;
+    cursor: pointer;
+    line-height: 0;
+  }
+  .marketplace-download:hover {
+    background: var(
+      --vscode-button-secondaryHoverBackground,
+      var(--vscode-list-hoverBackground)
+    );
   }
   .marketplace-actions .learn-more {
     background: none;

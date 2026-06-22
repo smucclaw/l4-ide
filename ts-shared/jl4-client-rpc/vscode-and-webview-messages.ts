@@ -527,6 +527,16 @@ export const RequestInstallMarketplace: NotificationType<{ harness: Harness }> =
   }
 
 /**
+ * Sidebar asks the extension to save the global gateway "skills marketplace"
+ * plugin (the org-agnostic discovery skill + account-wide rules MCP) as a zip
+ * on disk — the download counterpart of `RequestInstallMarketplace`. The
+ * extension templates the bundle locally (no network) and shows a Save dialog.
+ */
+export const RequestDownloadMarketplaceSkill: NotificationType<void> = {
+  method: 'requestDownloadMarketplaceSkill',
+}
+
+/**
  * Sidebar asks the extension to install a specific deployment into a harness.
  * The extension downloads the plugin bundle from
  * `mcp.legalese.cloud/{slug}/{deploymentId}/.plugin` using the user's session

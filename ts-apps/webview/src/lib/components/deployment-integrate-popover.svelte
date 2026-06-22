@@ -174,8 +174,22 @@
               class="download-zip-btn"
               onclick={() => onInstall?.('download-zip')}
               title="Download this deployment's plugin bundle as a zip"
+              aria-label="Download plugin zip"
             >
-              Download plugin zip
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M8 2v8m0 0L5 7m3 3 3-3" />
+                <path d="M3 13h10" />
+              </svg>
             </button>
           </div>
           <div class="section-hint">
@@ -359,18 +373,19 @@
     flex-wrap: wrap;
   }
 
-  /* Secondary button sitting next to the install dropdown — same chrome
-     and vertical metrics as HarnessInstallMenu's trigger. */
+  /* Icon-only secondary button sitting next to the install dropdown — same
+     chrome and height as HarnessInstallMenu's trigger, but square. */
   .download-zip-btn {
     display: inline-flex;
     align-items: center;
-    padding: 7px 14px;
+    justify-content: center;
+    padding: 7px 9px;
     background: var(--vscode-button-secondaryBackground, transparent);
     color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
     border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
     border-radius: 4px;
     cursor: pointer;
-    font-size: 0.9em;
+    line-height: 0;
   }
   .download-zip-btn:hover {
     background: var(

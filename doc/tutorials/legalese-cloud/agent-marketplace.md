@@ -38,20 +38,19 @@ The easiest path for **any** supported harness is the L4 VS Code extension: open
 
 It registers the rules MCP server (`https://mcp.legalese.cloud`, org from auth) directly in that harness's own config — and for Claude Code it installs the full plugin (marketplace + skill) via the Claude CLI when available. No token is baked in; OAuth runs on first use.
 
-### Claude Code (native plugin commands)
+### Claude Code & claude.ai (native plugin commands)
 
-If you'd rather drive Claude Code directly, add the marketplace and install the gateway plugin — it bundles the discovery MCP plus the when-to-use skill:
+If you'd rather drive Claude Code directly — or you're on claude.ai, which only adds marketplaces from a GitHub repo — add the marketplace from the public [`legalese/cloud-rules`](https://github.com/legalese/cloud-rules) repo and install the gateway plugin (it bundles the discovery MCP plus the when-to-use skill):
 
 ```
-/plugin marketplace add https://skills.legalese.cloud/marketplace.json
+/plugin marketplace add legalese/cloud-rules
 /plugin install rules@legalese-cloud
 ```
 
 (If `install` reports "not found in any marketplace," confirm `/plugin
-marketplace list` shows `legalese-cloud`. A git form,
-`https://skills.legalese.cloud/marketplace.git`, is also served — only needed
-as a fallback for the URL-based relative-path limitation, which this
-marketplace doesn't hit.)
+marketplace list` shows `legalese-cloud`. The hosted forms
+`https://skills.legalese.cloud/marketplace.json` and `…/marketplace.git` serve
+the same gateway plugin if you prefer a URL over the GitHub repo.)
 
 ### Any MCP client (manual wiring)
 
@@ -125,7 +124,7 @@ The gateway is the default. But if you want a single, sharply-scoped skill for o
 - **`not logged in`** (CLI) — run `legalese login <org>`, or set `LEGALESE_TOKEN` (+ `LEGALESE_ORG`).
 - **`legalese search` returns nothing** — broaden the query, or confirm you have deployments with an **Intended use** description (those without one aren't searchable).
 - **`forbidden`** — your credential lacks the `l4:rules` permission, or it's scoped to a different org than `--org`/the session.
-- **`marketplace add` fails** — check that `https://skills.legalese.cloud/marketplace.json` loads in a browser (it's public).
+- **`marketplace add` fails** — confirm the public repo [`github.com/legalese/cloud-rules`](https://github.com/legalese/cloud-rules) is reachable (or that the hosted `https://skills.legalese.cloud/marketplace.json` loads in a browser).
 - **Gateway install needs no token** — if `/plugin install rules@legalese-cloud` asks for git credentials, you're on an older per-deployment repo URL, not the gateway.
 
 ## Notes
