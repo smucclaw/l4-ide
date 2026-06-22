@@ -2315,7 +2315,8 @@
         <div class="deployments-tab-wrapper">
           <div
             class="deployments-tab-body"
-            class:with-info-note={connectionStatus.connected}
+            class:with-info-note={connectionStatus.connected &&
+              !undeployConfirm}
           >
             {#if undeployConfirm}
               <div class="breaking-warning">
@@ -2578,7 +2579,7 @@
               {/if}
             {/if}
           </div>
-          {#if connectionStatus.connected}
+          {#if connectionStatus.connected && !undeployConfirm}
             <aside class="deployment-info-note" role="note">
               <p>
                 Deployments are automatically available to Legalese AI and as
