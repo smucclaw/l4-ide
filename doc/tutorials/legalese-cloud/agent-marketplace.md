@@ -1,6 +1,6 @@
 # Install your deployed rules as AI agent skills (Skills Marketplace)
 
-The **Legalese Skills Marketplace** makes your deployed decision rules discoverable and installable **agent skills** — `https://skills.legalese.cloud/marketplace.json`
+The **Legalese Skills Marketplace** makes your deployed decision rules discoverable and installable **agent skills** — `https://github.com/legalese/cloud-rules`
 
 It wires up two things behind your sign-in — a **skill** that primes your AI agent of choice on _when_ to reach for your deployed rules, and the **Legalese Rules MCP server** it calls to find and run them. Scope is resolved from auth, so nothing about your deployments is exposed in the public catalog.
 
@@ -54,8 +54,7 @@ If you'd rather drive Claude Code directly — or you're on claude.ai, which onl
 
 (If `install` reports "not found in any marketplace," confirm `/plugin
 marketplace list` shows `legalese-cloud`. The hosted forms
-`https://skills.legalese.cloud/marketplace.json` and `…/marketplace.git` serve
-the same gateway plugin if you prefer a URL over the GitHub repo.)
+`https://skills.legalese.cloud/marketplace.json` and `…/marketplace.git` serve the same gateway plugin if you prefer a URL over the GitHub repo.)
 
 ### Any MCP client (manual wiring)
 
