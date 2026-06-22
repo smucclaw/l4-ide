@@ -2590,7 +2590,8 @@
               {#if connectionStatus.isLegaleseCloud}
                 <div class="marketplace-block">
                   <p class="marketplace-title">
-                    Add your deployments to Claude Code and other agents
+                    Add the Legalese Cloud Skill marketplace to dicover and run
+                    your deployments as AI skills and MCP.
                   </p>
                   <div class="marketplace-row">
                     <input
