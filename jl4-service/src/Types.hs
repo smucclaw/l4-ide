@@ -108,6 +108,16 @@ data DeploymentMetadata = DeploymentMetadata
   -- @GET /deployments/{id}@ metadata, and as MCP @initialize@ instructions.
   -- Set at deploy time (not derived from sources) and preserved across
   -- source-only redeploys.
+  , metaServiceVersion :: !Text
+  -- ^ The jl4-service build version (e.g. "1.5.79") this deployment was last
+  -- deployed with. Empty when unknown (e.g. metadata predating versioning).
+  , metaDeploymentVersion :: !Text
+  -- ^ Human-facing deployment version @MAJOR.BREAKING.RUNNING@ (e.g. "1.0.0"):
+  -- MAJOR = the service major; BREAKING = count of breaking interface changes
+  -- ever applied; RUNNING = monotonic count of applied deploys. Stored as a
+  -- single string — the BREAKING/RUNNING counters are parsed back out of it at
+  -- the next deploy and bumped (string-edited), so there are no separate
+  -- counter fields to keep in sync. Empty when unknown.
   }
   deriving stock (Show, Generic)
 
@@ -118,6 +128,10 @@ instance ToJSON DeploymentMetadata where
     ] <> (if null dm.metaFunctions then [] else ["functions" .= dm.metaFunctions])
       <> (if null dm.metaFiles then [] else ["files" .= dm.metaFiles])
       <> maybe [] (\d -> ["description" .= d]) dm.metaDescription
+      <> (if Text.null dm.metaServiceVersion then []
+            else ["serviceVersion" .= dm.metaServiceVersion])
+      <> (if Text.null dm.metaDeploymentVersion then []
+            else ["deploymentVersion" .= dm.metaDeploymentVersion])
 
 instance FromJSON DeploymentMetadata where
   parseJSON = Aeson.withObject "DeploymentMetadata" $ \o ->
@@ -127,6 +141,8 @@ instance FromJSON DeploymentMetadata where
       <*> (o .: "version"    <|> o .: "metaVersion")
       <*> (o .: "createdAt"  <|> o .: "metaCreatedAt")
       <*> (o .:? "description" <|> o .:? "metaDescription")
+      <*> o .:? "serviceVersion" .!= ""
+      <*> o .:? "deploymentVersion" .!= ""
 
 -- | Summary of a single exported function within a deployment.
 data FunctionSummary = FunctionSummary
@@ -614,6 +630,10 @@ data HealthResponse = HealthResponse
   , hrDeployments   :: !HealthDeploymentCounts
   , hrInstanceToken :: !(Maybe Text)
   -- ^ Opaque token for process identity verification by the auth proxy.
+  , hrVersion       :: !Text
+  -- ^ The jl4-service build version (e.g. "1.5.79"), baked in at compile time.
+  -- Lets the auth proxy report the running service version directly rather
+  -- than inferring it from the configured binary release URL.
   }
   deriving stock (Show, Generic)
 
@@ -622,6 +642,7 @@ instance ToJSON HealthResponse where
     Aeson.object $
       [ "status" .= hr.hrStatus
       , "deployments" .= hr.hrDeployments
+      , "version" .= hr.hrVersion
       ]
       <> maybe [] (\t -> ["instanceToken" .= t]) hr.hrInstanceToken
 
@@ -631,6 +652,7 @@ instance FromJSON HealthResponse where
       <$> o .: "status"
       <*> o .: "deployments"
       <*> o .:? "instanceToken"
+      <*> o .:? "version" .!= ""
 
 -- | Deployment counts in health response.
 data HealthDeploymentCounts = HealthDeploymentCounts

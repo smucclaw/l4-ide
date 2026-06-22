@@ -66,6 +66,7 @@ library
     Schema
     Shared
     Types
+    Version
     WebMCPPage
 
   build-depends:
@@ -105,6 +106,7 @@ library
     lsp-types,
     optics,
     optparse-applicative,
+    template-haskell,
     text,
     time,
     transformers,

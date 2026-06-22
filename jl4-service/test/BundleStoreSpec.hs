@@ -26,6 +26,8 @@ spec = describe "BundleStore" do
               { smVersion = "abc123"
               , smCreatedAt = "2025-01-01T00:00:00Z"
               , smDescription = Nothing
+              , smServiceVersion = Nothing
+              , smDeploymentVersion = Nothing
               }
         saveBundle store "test-deploy" sources meta
         (loadedSources, loadedMeta) <- loadBundle store "test-deploy"
@@ -36,8 +38,8 @@ spec = describe "BundleStore" do
       it "overwrites existing deployment atomically" \store -> do
         let sources1 = Map.singleton "main.l4" "DECIDE f IS TRUE"
             sources2 = Map.singleton "main.l4" "DECIDE f IS FALSE"
-            meta1 = StoredMetadata "v1" "2025-01-01T00:00:00Z" Nothing
-            meta2 = StoredMetadata "v2" "2025-01-02T00:00:00Z" Nothing
+            meta1 = StoredMetadata "v1" "2025-01-01T00:00:00Z" Nothing Nothing Nothing
+            meta2 = StoredMetadata "v2" "2025-01-02T00:00:00Z" Nothing Nothing Nothing
         saveBundle store "deploy-overwrite" sources1 meta1
         saveBundle store "deploy-overwrite" sources2 meta2
         (loadedSources, loadedMeta) <- loadBundle store "deploy-overwrite"
@@ -46,7 +48,7 @@ spec = describe "BundleStore" do
 
     describe "listDeployments" do
       it "lists saved deployments" \store -> do
-        let meta = StoredMetadata "v1" "2025-01-01T00:00:00Z" Nothing
+        let meta = StoredMetadata "v1" "2025-01-01T00:00:00Z" Nothing Nothing Nothing
         saveBundle store "deploy-a" (Map.singleton "a.l4" "DECIDE a IS TRUE") meta
         saveBundle store "deploy-b" (Map.singleton "b.l4" "DECIDE b IS TRUE") meta
         deployIds <- listDeployments store
@@ -60,7 +62,7 @@ spec = describe "BundleStore" do
 
     describe "deleteBundle" do
       it "removes a deployment from disk" \store -> do
-        let meta = StoredMetadata "v1" "2025-01-01T00:00:00Z" Nothing
+        let meta = StoredMetadata "v1" "2025-01-01T00:00:00Z" Nothing Nothing Nothing
         saveBundle store "to-delete" (Map.singleton "main.l4" "DECIDE f IS TRUE") meta
         ok <- deleteBundle store "to-delete"
         ok `shouldBe` True

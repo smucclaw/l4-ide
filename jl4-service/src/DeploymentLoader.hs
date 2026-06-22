@@ -23,6 +23,7 @@ import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Reader (asks, ask)
 import Data.Aeson (toJSON)
 import Data.Int (Int64)
+import Data.Maybe (fromMaybe)
 import qualified Data.Map.Strict as Map
 import Data.Text (Text)
 import GHC.Conc (setAllocationCounter, enableAllocationLimit)
@@ -68,10 +69,15 @@ loadAndRegister logger options registry store deployId = do
 
   case result of
     Right (fns, meta0) -> do
-      -- The operator-supplied description is not derived from sources, so
-      -- the compiler/CBOR rebuild can't reproduce it — restore it from the
-      -- persisted StoredMetadata.
-      let meta = meta0 { metaDescription = storedMeta.smDescription }
+      -- The operator-supplied description and the deploy-time version strings
+      -- are not derived from sources, so the compiler/CBOR rebuild can't
+      -- reproduce them — restore them from the persisted StoredMetadata so the
+      -- version (and the counters encoded in it) survives restarts.
+      let meta = meta0
+            { metaDescription = storedMeta.smDescription
+            , metaServiceVersion = fromMaybe "" storedMeta.smServiceVersion
+            , metaDeploymentVersion = fromMaybe "" storedMeta.smDeploymentVersion
+            }
       atomically $ modifyTVar' registry $
         Map.insert (DeploymentId deployId) (DeploymentReady fns meta)
       -- Cache the full metadata to disk so it survives restarts.

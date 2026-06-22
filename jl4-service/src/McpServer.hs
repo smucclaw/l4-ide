@@ -15,7 +15,7 @@ import qualified BundleStore
 import DeploymentLoader (tryCompileWithTimeout, CompilationResult (..))
 import FileBrowser (searchIdentifier, searchText, SearchMatch (..))
 import Logging (logInfo, logWarn)
-import Shared (collectMetadataEntries, sanitizeParameters, buildPropertyReverseMap, remapFnLiteralKeys, sanitizeFieldNamesInText)
+import Shared (collectMetadataEntries, collectDeploymentMetadata, sanitizeParameters, buildPropertyReverseMap, remapFnLiteralKeys, sanitizeFieldNamesInText)
 import Types
 
 import Control.Monad.IO.Class (liftIO)
@@ -259,12 +259,21 @@ buildToolList vis mScope = do
   fnTools <- if vis.showFunctions && vis.showEvaluate
     then do
       entries <- collectMetadataEntries mScope
-      let toolNames = buildToolNames entries
-      pure [ Aeson.object
+      -- Per the MCP spec, a tool's version belongs in `_meta` (custom
+      -- metadata), not inside `inputSchema`. Map each deployment to its
+      -- version so every function tool advertises the deployment version.
+      metas <- collectDeploymentMetadata mScope
+      let versionByDep = Map.fromList
+            [ (d, m.metaDeploymentVersion) | (d, m) <- metas ]
+          toolNames = buildToolNames entries
+      pure [ Aeson.object $
         [ "name" .= tn
         , "description" .= ("L4 Rule: " <> fn.fsDescription <> " [" <> deployId <> "/" <> fn.fsName <> "]")
         , "inputSchema" .= mcpToolSchema fn
         ]
+        <> case Map.lookup deployId versionByDep of
+             Just v | not (Text.null v) -> ["_meta" .= Aeson.object ["version" .= v]]
+             _                          -> []
         | (tn, deployId, fn) <- toolNames
         ]
     else pure []

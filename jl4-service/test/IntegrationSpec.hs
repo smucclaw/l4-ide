@@ -1561,6 +1561,8 @@ withPendingService' deployId sources act = do
         { BundleStore.smVersion = version
         , BundleStore.smCreatedAt = "2026-01-01T00:00:00Z"
         , BundleStore.smDescription = Nothing
+        , BundleStore.smServiceVersion = Nothing
+        , BundleStore.smDeploymentVersion = Nothing
         }
   BundleStore.saveBundle store deployId sourceMap storedMeta
 
@@ -1604,6 +1606,8 @@ withFailedService' deployId sources act = do
         { BundleStore.smVersion = version
         , BundleStore.smCreatedAt = "2026-01-01T00:00:00Z"
         , BundleStore.smDescription = Nothing
+        , BundleStore.smServiceVersion = Nothing
+        , BundleStore.smDeploymentVersion = Nothing
         }
   BundleStore.saveBundle store deployId sourceMap storedMeta
 

@@ -13,6 +13,7 @@ import Options (Options (..), buildOpts)
 import OpenApiDoc (buildOpenApiDoc)
 import Shared (collectDeploymentMetadata)
 import Types
+import qualified Version
 
 import Data.Aeson (toJSON, (.=))
 import qualified Data.Aeson as Aeson
@@ -280,6 +281,7 @@ healthHandler = do
         , hdFailed = nFailed
         }
     , hrInstanceToken = env.options.instanceToken
+    , hrVersion = Version.serviceVersion
     }
 
 -- | GET /.well-known/webmcp — discovery manifest for WebMCP crawlers.
