@@ -104,10 +104,15 @@ a contract or regulation outcome — find the matching rule and run it; don't
 reason the determination yourself, and if none matches, say so.
 
 This plugin registers the **rules MCP** (\`https://${DISCOVERY_MCP_HOST}\`; org
-resolved from your sign-in) — use it to find the rule a question needs. Run that
-rule via its deployment (\`https://${DISCOVERY_MCP_HOST}/<org>/<deployment>\`) or
-the \`legalese\` CLI (\`curl -fsSL https://legalese.cloud/cli/install.sh | sh\`).
-Cite the rule you used.
+resolved from your sign-in). Do everything through that one server — no
+per-deployment or per-org endpoint needed:
+
+- \`search_rules\` — find the rule(s) a question needs (space-separated keywords,
+  matched as OR).
+- \`get_schema\` — get a rule's input/output schema before you call it.
+- \`evaluate\` — run the rule and answer from the authoritative result.
+
+Cite the rule you ran.
 `
 }
 
