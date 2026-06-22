@@ -9,10 +9,6 @@ import { type AuthManager, LEGALESE_CLOUD_DOMAIN } from './auth.js'
 import type { ServiceClient } from './service-client.js'
 import { installDeploymentSkill } from './deployment-install.js'
 import { installMarketplaceToHarness } from './harness-config.js'
-import {
-  buildGatewayPluginFiles,
-  GATEWAY_ZIP_NAME,
-} from './marketplace-skill.js'
 import { getWebviewContent } from './webview-panel.js'
 import {
   showTimedInformationMessage,
@@ -1109,21 +1105,27 @@ export function initializeSidebarMessenger(
     }
   })
 
-  // Save the gateway "skills marketplace" plugin (discovery skill + rules MCP)
-  // as a zip — the download counterpart of the Install action. Templated
-  // locally, no network.
+  // Save the gateway "skills marketplace" plugin as a zip — the download
+  // counterpart of the Install action. The plugin's single source of truth is
+  // the public GitHub repo, so we fetch its archive rather than templating a
+  // local copy that could drift from the served / GitHub skill.
+  const MARKETPLACE_ZIP_URL =
+    'https://github.com/legalese/cloud-rules/archive/refs/heads/main.zip'
+  const MARKETPLACE_ZIP_NAME = 'cloud-rules.zip'
   messenger.onNotification(RequestDownloadMarketplaceSkill, async () => {
     outputChannel.appendLine('[sidebar] Download marketplace skill zip')
     try {
-      const zip = Buffer.from(createZip(buildGatewayPluginFiles()))
+      const res = await fetch(MARKETPLACE_ZIP_URL)
+      if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`)
+      const zip = Buffer.from(await res.arrayBuffer())
       const defaultUri = vscode.Uri.file(
-        path.join(os.homedir(), 'Downloads', GATEWAY_ZIP_NAME)
+        path.join(os.homedir(), 'Downloads', MARKETPLACE_ZIP_NAME)
       )
       const dest = await vscode.window.showSaveDialog({
         defaultUri,
         filters: { 'Zip Archive': ['zip'] },
         saveLabel: 'Save plugin',
-        title: `Save ${GATEWAY_ZIP_NAME}`,
+        title: `Save ${MARKETPLACE_ZIP_NAME}`,
       })
       if (!dest) return // cancelled
       fs.mkdirSync(path.dirname(dest.fsPath), { recursive: true })
@@ -1132,7 +1134,7 @@ export function initializeSidebarMessenger(
         `[sidebar] Saved ${zip.length}B marketplace skill zip to ${dest.fsPath}`
       )
       void vscode.window.showInformationMessage(
-        `Saved ${GATEWAY_ZIP_NAME} to ${dest.fsPath}.`,
+        `Saved ${MARKETPLACE_ZIP_NAME} to ${dest.fsPath}.`,
         'Okay'
       )
     } catch (err) {
@@ -1141,7 +1143,7 @@ export function initializeSidebarMessenger(
         `[sidebar] Download marketplace skill failed: ${msg}`
       )
       void vscode.window.showErrorMessage(
-        `Could not save the L4 Rules plugin zip: ${msg}`
+        `Could not download the L4 Rules plugin zip: ${msg}`
       )
     }
   })
