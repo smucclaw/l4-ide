@@ -24,7 +24,7 @@ import qualified L4.Viz.Ladder as Ladder
 import qualified L4.Viz.VizExpr as VizExpr
 import qualified L4.Decision.BooleanDecisionQuery as BDQ
 import qualified L4.Decision.QueryPlan as QP
-import L4.Decision.QueryPlan (CachedDecisionQuery(..), InputRef(..))
+import L4.Decision.QueryPlan (CachedDecisionQuery(..))
 
 #if defined(wasm32_HOST_ARCH)
 import GHC.Wasm.Prim (JSString(..), fromJSString, toJSString)

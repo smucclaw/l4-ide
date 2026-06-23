@@ -1,9 +1,9 @@
 {
   "name": "l4-vscode",
   "displayName": "L4 Rules-as-code",
-  "description": "Write, test, and deploy legal rules as executable code — with MCP for AI agents, WebMCP for browser AI, syntax highlighting, IntelliSense, ladder diagrams, and cloud deployment",
+  "description": "Write, test, and deploy legal rules as executable code — with a built-in Legalese AI chat, MCP for AI agents, WebMCP for browser AI, syntax highlighting, IntelliSense, ladder diagrams, and cloud deployment",
   "license": "Apache-2.0",
-  "version": "1.3.0",
+  "version": "1.6.0",
   "publisher": "legalese",
   "categories": [
     "Programming Languages",
@@ -42,10 +42,7 @@
     "url": "https://github.com/legalese/l4-ide",
     "directory": "ts-apps/vscode"
   },
-  "activationEvents": [
-    "onLanguage:l4",
-    "onView:l4.deployView"
-  ],
+  "activationEvents": [],
   "contributes": {
     "viewsContainers": {
       "secondarySidebar": [
@@ -107,7 +104,24 @@
             "scope": "machine-overridable",
             "type": "number",
             "default": 19415,
-            "markdownDescription": "Local port for the L4 MCP proxy server. AI tools (Claude Code, Copilot, Cursor) connect to this port to access L4 rules."
+            "markdownDescription": "Local port for the L4 MCP proxy server. Legalese AI (built in), Cursor, GitHub Copilot, and other MCP-speaking agents connect to this port to access L4 rules."
+          }
+        }
+      },
+      {
+        "title": "Legalese AI",
+        "properties": {
+          "legaleseAi.apiKey": {
+            "scope": "resource",
+            "type": "string",
+            "default": "",
+            "markdownDescription": "API key for authenticating with Legalese AI. When set, this key is used instead of your Legalese Cloud session."
+          },
+          "legaleseAi.localMode": {
+            "scope": "machine-overridable",
+            "type": "boolean",
+            "default": false,
+            "markdownDescription": "Run Legalese AI in local mode for development purposes."
           }
         }
       }
@@ -141,6 +155,21 @@
       {
         "command": "l4.installCli",
         "title": "L4: Install L4 CLI"
+      },
+      {
+        "command": "legaleseAi.askAboutSelection",
+        "title": "Ask Legalese AI about this",
+        "category": "Legalese AI"
+      },
+      {
+        "command": "l4.renameIdentifier",
+        "title": "Rename L4 identifier (across imports)",
+        "category": "L4"
+      },
+      {
+        "command": "l4.openExtensionSettings",
+        "title": "L4: Extension Settings",
+        "icon": "$(gear)"
       }
     ],
     "menus": {
@@ -150,12 +179,40 @@
           "when": "resourceLangId == l4",
           "group": "navigation"
         }
+      ],
+      "view/title": [
+        {
+          "command": "l4.openExtensionSettings",
+          "when": "view == l4.deployView",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "legaleseAi.askAboutSelection",
+          "when": "editorHasSelection",
+          "group": "1_legalese@1"
+        },
+        {
+          "command": "l4.renameIdentifier",
+          "when": "resourceLangId == l4",
+          "group": "1_modification@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "l4.renameIdentifier",
+          "when": "resourceLangId == l4"
+        }
       ]
     },
-    "mcpServerDefinitionProviders": [
+    "chatParticipants": [
       {
-        "id": "l4-tools",
-        "label": "L4 Tools"
+        "id": "l4.legalese",
+        "name": "legalese",
+        "fullName": "Legalese",
+        "description": "Computational law: encode, deploy, and reason about L4 rules.",
+        "isSticky": true
       }
     ]
   },

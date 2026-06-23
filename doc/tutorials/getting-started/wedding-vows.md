@@ -2,10 +2,7 @@
 
 A fun introduction to regulative rules using wedding vows.
 
-**Audience:** Anyone new to regulative rules  
-**Prerequisites:** Basic L4 knowledge  
-**Time:** 20 minutes  
-**Goal:** Understand MUST, MAY, SHANT, DO, HENCE, and LEST through a familiar example
+**Prerequisites:** Basic L4 knowledge
 
 ---
 

@@ -1,6 +1,6 @@
 # jl4-service
 
-Multi-tenant decision service for L4 rule bundles. Deploy L4 programs as persistent, namespaced REST APIs with zip-upload bundles, async compilation, and filesystem persistence.
+Multi-tenant decision service for L4 rule bundles. Deploy L4 programs as persistent, namespaced REST APIs with zip-upload bundles, async non-destructive deploys, backwards-compatibility-gated updates, and filesystem persistence.
 
 ## Features
 
@@ -46,11 +46,15 @@ cd jl4/experiments && zip -r /tmp/bundle.zip *.l4
 curl -X POST http://localhost:8080/deployments \
   -F "id=my-rules" \
   -F "sources=@/tmp/bundle.zip"
-# Returns 202 with status "compiling"
+# Returns 202 with {"id":"my-rules","status":"compiling","updateId":"<job>"}
 
-# Poll until ready
+# Poll the deploy/update job until it applies (or is rejected)
+curl http://localhost:8080/deployments/my-rules/updates/<job>
+# {"updateId":"<job>","deploymentId":"my-rules","status":"applied"}
+
+# The deployment itself is then ready
 curl http://localhost:8080/deployments/my-rules
-# Returns {"id":"my-rules","status":"ready",...}
+# {"id":"my-rules","status":"ready",...}
 ```
 
 If you omit the `id` field, a UUID is generated automatically.
@@ -80,15 +84,30 @@ Returns `{"status":"healthy","deployments":{"total":N,"ready":N,"pending":N,"com
 
 Manage deployment lifecycle.
 
-| Method   | Endpoint            | Description                                                         |
-| -------- | ------------------- | ------------------------------------------------------------------- |
-| `POST`   | `/deployments`      | Deploy a new bundle (multipart: `id` + `sources` zip)               |
-| `GET`    | `/deployments`      | List all deployments (`?functions=simple\|full\|none`, `?scope=id`) |
-| `GET`    | `/deployments/{id}` | Get deployment status (triggers compilation if pending)             |
-| `PUT`    | `/deployments/{id}` | Replace a deployment's bundle (old stays active until new compiles) |
-| `DELETE` | `/deployments/{id}` | Remove a deployment                                                 |
+| Method   | Endpoint                          | Description                                                                                           |
+| -------- | --------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `POST`   | `/deployments`                    | Create or overwrite a deployment (multipart: `id` + `sources` zip)                                    |
+| `GET`    | `/deployments`                    | List all deployments (`?functions=simple\|full\|none`, `?scope=id`)                                   |
+| `GET`    | `/deployments/{id}`               | Get the **live** deployment status (`?functions=simple\|full\|none`; triggers compilation if pending) |
+| `GET`    | `/deployments/{id}/updates/{job}` | Poll an async deploy/update job (see below)                                                           |
+| `PUT`    | `/deployments/{id}`               | Update an existing deployment, enforcing the backwards-compatibility gate                             |
+| `DELETE` | `/deployments/{id}`               | Remove a deployment                                                                                   |
 
-Deployment states: `pending` (lazy-load, not yet compiled), `compiling` (compilation in progress), `ready` (compiled and serving), `failed` (compilation error stored).
+Deployment states: `pending` (lazy-load, not yet compiled), `compiling` (compilation in progress), `ready` (compiled and serving), `failed` (compilation error stored). `GET /deployments/{id}` always reflects the **live** deployment only — an in-flight `POST`/`PUT` never changes it.
+
+#### Async deploy/update jobs
+
+`POST` and `PUT` are asynchronous and non-destructive. They return `202` with `{"status":"compiling","updateId":"<job>"}`; the work (compile + bounded time/memory, plus the compatibility check on `PUT`) runs in the background. The currently-live version keeps serving the whole time — nothing is persisted or swapped unless the new bundle compiles **and** (for `PUT`) is backwards-compatible. A brand-new `POST` id simply does not exist (`GET` 404s) until its job applies.
+
+Poll the returned job at `GET /deployments/{id}/updates/{job}`:
+
+| Status      | Meaning                                                            |
+| ----------- | ------------------------------------------------------------------ |
+| `compiling` | Still compiling / being compatibility-checked                      |
+| `applied`   | The new bundle is compiled, compatible, and now the live version   |
+| `rejected`  | Breaking change, compile failure, or timeout — `error` has details |
+
+`POST` is **ungated** (create/overwrite — it does not run the compatibility check). `PUT` enforces the **backwards-compatibility gate**: the new bundle's exported-function interface (every parameter name/type/required-ness and the return type, recursively) must stay compatible with what is currently deployed. Adding a new optional parameter or a new function is fine; renames, type changes, removed/newly-required parameters, narrowed input enums (and the mirror cases on the return value) are rejected. Terminal jobs are retained for 10 minutes, then pruned.
 
 **Optimistic compilation:** Evaluation and function listing on pending deployments trigger compilation with a 2-second optimistic timeout. If compilation finishes within 2 seconds, the result is returned inline (200). If not, the response is HTTP 202 with `{"status":"compiling","retryAfterMs":2000}` and a `Retry-After: 2` header — the client should retry after the delay. File browsing endpoints never require compilation.
 
@@ -285,7 +304,7 @@ Deployments are automatically [WebMCP](https://webmachinelearning.github.io/webm
 
 The `/deployments` endpoint serves cached metadata even for pending (lazy-loaded) deployments, so it works immediately after a restart without triggering compilation.
 
-Query parameters for `GET /deployments`:
+Query parameters for `GET /deployments` (and `GET /deployments/{id}`; `scope` is list-only):
 
 - `?functions=simple` — name, description, returnType per function (default)
 - `?functions=full` — include full parameter schemas in function details
@@ -432,7 +451,8 @@ jl4-service/
     Types.hs                -- Core domain types (DeploymentId, AppEnv, health, batch types)
     BundleStore.hs          -- Filesystem persistence (save/load/list/delete)
     Compiler.hs             -- Bundle compilation (typecheck + export discovery)
-    ControlPlane.hs         -- POST/GET/PUT/DELETE /deployments
+    Compatibility.hs        -- Recursive backwards-compatibility diff (PUT gate)
+    ControlPlane.hs         -- POST/GET/PUT/DELETE /deployments + async deploy/update jobs
     DataPlane.hs            -- /deployments/{id}/functions/... evaluation handlers + short routes
     DeploymentLoader.hs     -- Shared compilation logic (eager startup, lazy compile-on-access)
     ExplorerPage.hs         -- Landing page HTML (deployment explorer, API docs)

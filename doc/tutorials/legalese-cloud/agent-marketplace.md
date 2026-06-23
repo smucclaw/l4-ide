@@ -1,0 +1,136 @@
+# Install your deployed rules as AI agent skills (Skills Marketplace)
+
+The **Legalese Skills Marketplace** makes your deployed decision rules discoverable and installable **agent skills** — `https://github.com/legalese/cloud-rules`
+
+It wires up two things behind your sign-in — a **skill** that primes your AI agent of choice on _when_ to reach for your deployed rules, and the **Legalese Rules MCP server** it calls to find and run them. Scope is resolved from auth, so nothing about your deployments is exposed in the public catalog.
+
+**Prerequisites:** a Legalese Cloud account with your deployed rules (each with an **Intended use** description, see [Exporting Rules for Deployment](../deploying-rules/exporting-rules-for-deployment.md)); a supported harness (Claude Code/Desktop, VS Code, Cursor, Windsurf, Cline, …) or a shell for the CLI; a credential (OAuth sign-in, or an `sk_…` API key)
+
+---
+
+## What the marketplace enables
+
+The marketplace allows your AI agent of choice to discover your deployed rules as skills.
+
+- **Agent support** — Legalese skill marketplace supports Claude Code, VS Code (Copilot), Cursor, Windsurf, Cline, and Claude Desktop.
+- **Skill and tool calls (MCP)** — Every deployment is available as individual skill bundle `SKILL.md` ([Agent Skills](https://agentskills.io) standard) so the model knows _when_ a question should be answered from your rules and _how_ to call them.
+- **Rules are evaluated deterministically** — The skills allow your AI agent to evaluate your deployed rules and retrieve the programmed results with accuracy.
+- **Scoped by sign-in** — The marketplace is private and doesn't publicly reveal your deployments rules, names, descriptions and API's.
+
+### How it works under the hood
+
+The skill drives a single server — the **rules MCP** at `https://mcp.legalese.cloud` (no org in the URL — resolved from your sign-in). Everything happens through that one endpoint; there's no per-deployment server to wire up:
+
+- `search_rules` — find the deployment(s) a question needs (space-separated keywords, matched as OR).
+- `get_schema` — read a rule's input/output schema before calling it (includes the deployment version).
+- `evaluate` — run the rule and get the authoritative result (needs `l4:evaluate`).
+- `list_files` / `read_file` / `search_identifier` / `search_text` — browse the L4 source (needs `l4:read`).
+
+```
+rules MCP (mcp.legalese.cloud)   search_rules → get_schema → evaluate
+                                 (org resolved from your sign-in)
+```
+
+So the agent searches, reads the schema, and evaluates — all through the one MCP — answering from the decision and citing it, rather than reasoning it out.
+
+---
+
+## Install across harnesses
+
+### The L4 VS Code extension (one click, any harness)
+
+The easiest path for **any** supported harness is the L4 VS Code extension: open the **Deployments** tab and use **Install Skills Marketplace**, then pick your harness from the dropdown (Claude Code, VS Code/Copilot, Cursor, Windsurf, Cline, Claude Desktop).
+
+It registers the rules MCP server (`https://mcp.legalese.cloud`, org from auth) directly in that harness's own config — and for Claude Code it installs the full plugin (marketplace + skill) via the Claude CLI when available. No token is baked in; OAuth runs on first use.
+
+### Claude Code & claude.ai (native plugin commands)
+
+If you'd rather drive Claude Code directly — or you're on claude.ai, which only adds marketplaces from a GitHub repo — add the marketplace from the public [`legalese/cloud-rules`](https://github.com/legalese/cloud-rules) repo and install the gateway plugin (it bundles the discovery MCP plus the when-to-use skill):
+
+```
+/plugin marketplace add legalese/cloud-rules
+/plugin install rules@legalese-cloud
+```
+
+(If `install` reports "not found in any marketplace," confirm `/plugin
+marketplace list` shows `legalese-cloud`. The hosted forms
+`https://skills.legalese.cloud/marketplace.json` and `…/marketplace.git` serve the same gateway plugin if you prefer a URL over the GitHub repo.)
+
+### Any MCP client (manual wiring)
+
+To configure the rules server by hand, point any MCP client at the bare discovery endpoint (org resolved from auth — no slug in the URL):
+
+```sh
+claude mcp add --transport http legalese-rules https://mcp.legalese.cloud
+```
+
+OAuth runs on first use; for an API key instead, add `--header "Authorization: Bearer sk_..."`. For a single ruleset, use `https://mcp.legalese.cloud/<org>/<deployment>`. This gives you the rules server without the when-to-use skill.
+
+---
+
+## Use it
+
+Ask something the rules cover. The agent calls `search_rules` to find the deployment, `get_schema` to shape the inputs, and `evaluate` to run it — all through the rules MCP — answering from the decision and citing it, rather than reasoning it out. No extra per-deployment server to connect.
+
+## Alternative — the `legalese` CLI (shell / CI)
+
+In a shell or non-MCP environment, the CLI hits the same rules end to end:
+
+```sh
+curl -fsSL https://legalese.cloud/cli/install.sh | sh   # or: npm i -g @legalese/cli
+legalese login <org>                                    # or: export LEGALESE_TOKEN=sk_… ; export LEGALESE_ORG=<org>
+legalese search "rent overdue"                          # find a rule
+legalese eval <deployment> <function> '<json>'          # run it
+```
+
+> **Early access:** `legalese login` awaits the CLI's WorkOS OAuth client — until it lands, use `LEGALESE_TOKEN`.
+
+---
+
+## Which harnesses can use this
+
+The marketplace installs the **rules MCP server** everywhere; the bundled **skill** adds _when-to-use_ priming where the harness supports skills; the **CLI** covers shells / non-MCP environments. The VS Code extension's **Install Skills Marketplace** automates the wiring for every harness in this table.
+
+| Harness                       | Rules MCP server | One-click (VS Code ext) |  Gateway skill (`SKILL.md`)  | CLI |
+| ----------------------------- | :--------------: | :---------------------: | :--------------------------: | :-: |
+| **Claude Code**               |        ✅        |           ✅            | ✅ `/plugin marketplace add` | ✅  |
+| Claude Desktop / claude.ai    |        ✅        |           ✅            |              ✅              |  —  |
+| VS Code (Copilot)             |        ✅        |           ✅            |            varies            | ✅  |
+| Cursor / Windsurf / Cline     |        ✅        |           ✅            |            varies            |  —  |
+| OpenAI Codex CLI / Gemini CLI |        ✅        |            —            |              ✅              | ✅  |
+
+MCP is the common surface; the skill and CLI are conveniences on top. Cross-harness support is evolving — check your harness's current docs.
+
+---
+
+## Advanced: install one specific deployment directly
+
+The gateway is the default. But if you want a single, sharply-scoped skill for one deployment (so the agent triggers on _that_ ruleset specifically), you can still install it on its own — the per-deployment artifacts are still served, just not listed in the global marketplace.
+
+- **VS Code:** [Install a deployment as an AI agent plugin](./agent-plugin.md) — the one-click install writes a single deployment's skill + MCP server (or use **Download plugin zip** in the deployment's **Integrate** dialog to grab the bundle).
+- **A gated skill repo** lives at `https://skills.legalese.cloud/{org}/{deployment}.git` (HTTP Basic → your token as the password). Point a `marketplace.json` you host at it, or `git clone` it directly. Set the git credential once:
+
+  ```sh
+  printf 'protocol=https\nhost=skills.legalese.cloud\nusername=x\npassword=YOUR_TOKEN\n' | git credential approve
+  ```
+
+  Or let the CLI broker it: `git config --global credential.https://skills.legalese.cloud.helper "legalese git-credential"`.
+
+- **Call the tools over MCP** instead of the CLI by registering the deployment's MCP server (`https://mcp.legalese.cloud/{org}/{deployment}`) — see [MCP Server](./mcp-server.md). Use a `Bearer ${LEGALESE_TOKEN}` header, or omit it for the OAuth flow.
+
+---
+
+## Troubleshooting
+
+- **Rules MCP won't connect** — the server URL is `https://mcp.legalese.cloud` (no org slug; the org is resolved from auth). Your harness runs OAuth on first use; or supply an `Authorization: Bearer sk_…` header.
+- **`not logged in`** (CLI) — run `legalese login <org>`, or set `LEGALESE_TOKEN` (+ `LEGALESE_ORG`).
+- **`legalese search` returns nothing** — broaden the query, or confirm you have deployments with an **Intended use** description (those without one aren't searchable).
+- **`forbidden`** — your credential lacks the `l4:rules` permission, or it's scoped to a different org than `--org`/the session.
+- **`marketplace add` fails** — confirm the public repo [`github.com/legalese/cloud-rules`](https://github.com/legalese/cloud-rules) is reachable (or that the hosted `https://skills.legalese.cloud/marketplace.json` loads in a browser).
+- **Gateway install needs no token** — if `/plugin install rules@legalese-cloud` asks for git credentials, you're on an older per-deployment repo URL, not the gateway.
+
+## Notes
+
+- The public catalog reveals **nothing** about your deployments — only the single gateway plugin. Deployment names, descriptions, and tools surface only behind auth, via the discovery MCP's `search_rules` (or `legalese search`).
+- **Org scope is resolved from auth**, not the URL. This is the seam for a future where one account spans its own org plus public rules shared from other orgs — discovery just widens; nothing in the public manifest changes.
+- The CLI spec (commands, token store, OAuth client) lives in the `jl4-auth-proxy` repo at `docs/legalese-cli.md`.

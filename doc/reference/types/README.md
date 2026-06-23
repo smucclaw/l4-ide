@@ -24,6 +24,7 @@ Numeric values including integers and rationals.
 
 - Integers: `42`, `-17`, `0`
 - Rationals: `3.14`, `-0.5`, `2.718`, `5.4%`
+- Underscores between digits are accepted as thousand separators and stripped from the value: `100_000` is `100000`, `1_000_000.50_5` is `1000000.505`. A literal must start with a digit and must not end with an underscore.
 - Arbitrary precision arithmetic
 - **Examples:** Age calculations, financial amounts, quantities, percentages
 

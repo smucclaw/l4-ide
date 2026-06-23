@@ -134,15 +134,15 @@ jobs:
         id: build-cache
         with:
           path: dist-newstyle
-          key: ${{ runner.os }}-ghc-${{ steps.setup.outputs.ghc-version }}-dist-${{ hashFiles('**/*.hs', '**/*.cabal') }}
+          key: pr-checks-${{ runner.os }}-ghc-${{ steps.setup.outputs.ghc-version }}-dist-${{ hashFiles('**/*.hs', '**/*.cabal') }}
           restore-keys: |
-            ${{ runner.os }}-ghc-${{ steps.setup.outputs.ghc-version }}-dist-
+            pr-checks-${{ runner.os }}-ghc-${{ steps.setup.outputs.ghc-version }}-dist-
 
       - name: Restore cached dependencies
         uses: actions/cache/restore@v5
         id: deps-cache
         env:
-          key: ${{ runner.os }}-ghc-${{ steps.setup.outputs.ghc-version }}-cabal-${{ steps.setup.outputs.cabal-version }}
+          key: pr-checks-${{ runner.os }}-ghc-${{ steps.setup.outputs.ghc-version }}-cabal-${{ steps.setup.outputs.cabal-version }}
         with:
           path: ${{ steps.setup.outputs.cabal-store }}
           key: ${{ env.key }}-plan-${{ hashFiles('**/*.cabal', 'cabal.project') }}
@@ -151,7 +151,7 @@ jobs:
       - name: Configure the build
         run: |
           cabal update
-          cabal configure --enable-tests --enable-benchmarks --disable-documentation
+          cabal configure --enable-tests --disable-documentation
           cabal build all --dry-run
 
       - name: Install dependencies

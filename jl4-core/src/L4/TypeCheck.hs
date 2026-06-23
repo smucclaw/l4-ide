@@ -788,8 +788,17 @@ inferTypeDecl rappForm (EnumDecl ann conDecls) = do
   pure (td rconDecls, concat extends)
 inferTypeDecl rappForm (RecordDecl ann _mcon tns) = do
   -- we currently do not allow the user to specify their own constructor name
-  -- a record declaration is just a special case of an enum declaration
-  (MkConDecl _ mrcon rtns, extend) <- inferConDecl rappForm (MkConDecl ann (clearSourceAnno $ getOriginal (view appFormHead rappForm)) tns)
+  -- a record declaration is just a special case of an enum declaration.
+  --
+  -- We KEEP the source anno on the synthesized constructor Name so the
+  -- constructor's defining occurrence shares a 'SrcRange' with the type's.
+  -- Without this, 'buildReferenceMapping' would drop the constructor Def
+  -- (rangeOf returns Nothing for a cleared anno) and a cursor on
+  -- @DECLARE Foo HAS …@ would only find the *type*-position uses
+  -- (@IS A Foo@, @GIVETH A Foo@) — never the constructor-position uses
+  -- (@Foo WITH …@). Sharing the range lets both uniques surface at the
+  -- same interval and a rename can reach every site at once.
+  (MkConDecl _ mrcon rtns, extend) <- inferConDecl rappForm (MkConDecl ann (getOriginal (view appFormHead rappForm)) tns)
   let
     td = RecordDecl ann (Just mrcon) rtns
   pure (td, extend)

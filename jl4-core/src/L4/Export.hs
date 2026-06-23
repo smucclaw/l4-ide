@@ -393,6 +393,13 @@ hasTypeInferenceVars = \case
 -- Example: `temperature + 0` forces `temperature :: NUMBER`
 -- The OutOfScopeError for `temperature` will have type NUMBER, which we
 -- can extract as an implicit ASSUME.
+--
+-- Function-typed errors are dropped: they're produced by overload-resolution
+-- branches exploring prelude names like `min`/`max` (the Check monad's
+-- 'Alternative' runs both branches of `choose <|> ambiguousTerm` and
+-- concatenates errors, so failing branches leak), and function values can't
+-- be supplied as JSON inputs anyway, so admitting them as implicit assumes
+-- would only pollute every export's parameter schema.
 extractImplicitAssumeParams
   :: [CheckErrorWithContext]
   -> [(Text, Type' Resolved)]
@@ -400,7 +407,11 @@ extractImplicitAssumeParams errors =
   [ (nameToText name, ty)
   | MkCheckErrorWithContext{kind = OutOfScopeError name ty} <- errors
   , not (hasTypeInferenceVars ty)
+  , not (isFunctionType ty)
   ]
+  where
+    isFunctionType Fun{} = True
+    isFunctionType _ = False
 
 -- | Validate that no @export-decorated DECIDE has a function-typed input —
 -- either a GIVEN parameter, or a module-level ASSUME the body calls.

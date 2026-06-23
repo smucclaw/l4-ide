@@ -3,6 +3,8 @@
 module Types (
   DeploymentId (..),
   DeploymentState (..),
+  UpdateJob (..),
+  UpdateJobStatus (..),
   DeploymentMetadata (..),
   FunctionSummary (..),
   FileEntry (..),
@@ -23,6 +25,10 @@ module Types (
   -- * Health
   HealthResponse (..),
   HealthDeploymentCounts (..),
+  -- * MCP Tasks extension
+  TaskId (..),
+  TaskStatus (..),
+  TaskState (..),
   -- * Environment
   AppEnv (..),
   AppM,
@@ -30,10 +36,11 @@ module Types (
 
 import Backend.Api (EvalBackend, FnLiteral, RunFunction, EvaluatorError, ResponseWithReason, GraphVizResponse, responseTag)
 import Backend.DecisionQueryPlan (CachedDecisionQuery)
-import L4.FunctionSchema (Parameters)
+import L4.FunctionSchema (Parameters, Parameter)
 import Backend.Jl4 (CompiledModule, ModuleContext)
 import BundleStore (BundleStore)
 import Control.Applicative ((<|>))
+import Control.Concurrent.Async (Async)
 import Control.Concurrent.STM (TVar)
 import Control.Monad.Trans.Reader (ReaderT)
 import Data.Aeson as Aeson
@@ -68,6 +75,25 @@ data DeploymentState
   | DeploymentFailed !Text
   -- ^ Compilation failed; the error message is stored.
 
+-- | An asynchronous deploy/update job (POST or PUT). Tracked as its own
+-- resource, distinct from the deployment it targets, so polling a job
+-- never alters what @GET \/deployments\/{id}@ reports about the live
+-- deployment. The live (old) version keeps serving until a job applies.
+data UpdateJob = UpdateJob
+  { ujDeploymentId :: !Text
+  , ujStatus       :: !UpdateJobStatus
+  , ujUpdatedAt    :: !UTCTime
+  -- ^ Last transition time; used to retention-prune terminal jobs.
+  }
+
+data UpdateJobStatus
+  = JobCompiling
+  -- ^ Bundle is compiling / being compatibility-checked.
+  | JobApplied
+  -- ^ The new bundle is compiled, compatible, and now the live version.
+  | JobRejected !Text
+  -- ^ Rejected: breaking change, compile failure, or timeout (reason).
+
 -- | Metadata persisted alongside a deployment bundle.
 data DeploymentMetadata = DeploymentMetadata
   { metaFunctions :: ![FunctionSummary]
@@ -76,6 +102,22 @@ data DeploymentMetadata = DeploymentMetadata
   , metaVersion   :: !Text
   -- ^ SHA-256 hex digest of all source contents (sorted by path).
   , metaCreatedAt :: !UTCTime
+  , metaDescription :: !(Maybe Text)
+  -- ^ Operator-supplied "Intended use" describing what this
+  -- deployment is for. Surfaced as OpenAPI @info.description@, in the
+  -- @GET /deployments/{id}@ metadata, and as MCP @initialize@ instructions.
+  -- Set at deploy time (not derived from sources) and preserved across
+  -- source-only redeploys.
+  , metaServiceVersion :: !Text
+  -- ^ The jl4-service build version (e.g. "1.5.79") this deployment was last
+  -- deployed with. Empty when unknown (e.g. metadata predating versioning).
+  , metaDeploymentVersion :: !Text
+  -- ^ Human-facing deployment version @MAJOR.BREAKING.RUNNING@ (e.g. "1.0.0"):
+  -- MAJOR = the service major; BREAKING = count of breaking interface changes
+  -- ever applied; RUNNING = monotonic count of applied deploys. Stored as a
+  -- single string — the BREAKING/RUNNING counters are parsed back out of it at
+  -- the next deploy and bumped (string-edited), so there are no separate
+  -- counter fields to keep in sync. Empty when unknown.
   }
   deriving stock (Show, Generic)
 
@@ -85,6 +127,11 @@ instance ToJSON DeploymentMetadata where
     , "createdAt" .= dm.metaCreatedAt
     ] <> (if null dm.metaFunctions then [] else ["functions" .= dm.metaFunctions])
       <> (if null dm.metaFiles then [] else ["files" .= dm.metaFiles])
+      <> maybe [] (\d -> ["description" .= d]) dm.metaDescription
+      <> (if Text.null dm.metaServiceVersion then []
+            else ["serviceVersion" .= dm.metaServiceVersion])
+      <> (if Text.null dm.metaDeploymentVersion then []
+            else ["deploymentVersion" .= dm.metaDeploymentVersion])
 
 instance FromJSON DeploymentMetadata where
   parseJSON = Aeson.withObject "DeploymentMetadata" $ \o ->
@@ -93,6 +140,9 @@ instance FromJSON DeploymentMetadata where
       <*> (o .:? "files" .!= [] <|> o .:? "metaFiles" .!= [])
       <*> (o .: "version"    <|> o .: "metaVersion")
       <*> (o .: "createdAt"  <|> o .: "metaCreatedAt")
+      <*> (o .:? "description" <|> o .:? "metaDescription")
+      <*> o .:? "serviceVersion" .!= ""
+      <*> o .:? "deploymentVersion" .!= ""
 
 -- | Summary of a single exported function within a deployment.
 data FunctionSummary = FunctionSummary
@@ -101,6 +151,12 @@ data FunctionSummary = FunctionSummary
   , fsParameters  :: !Parameters
   , fsReturnType  :: !Text
   -- ^ Display name of the return type (e.g. "BOOLEAN", "NUMBER", "DEONTIC").
+  , fsReturnSchema :: !(Maybe Parameter)
+  -- ^ Structured JSON Schema of the return type, with x-l4-type annotations
+  -- on each record/enum node. Computed at compile time and persisted in the
+  -- metadata cache so read endpoints (incl. the per-function schema and
+  -- proxy-side EFS rendering) can be served without recompiling. 'Nothing'
+  -- only when the return type has no structured schema.
   , fsSection     :: !(Maybe Text)
   -- ^ L4 section header (§§) this function belongs to.
   , fsIsDeontic   :: !Bool
@@ -112,24 +168,39 @@ data FunctionSummary = FunctionSummary
   deriving stock (Show, Generic)
 
 instance ToJSON FunctionSummary where
-  toJSON fs = Aeson.object
+  toJSON fs = Aeson.object $
     [ "name"        .= fs.fsName
     , "description" .= fs.fsDescription
     , "parameters"  .= fs.fsParameters
     , "returnType"  .= fs.fsReturnType
     , "section"     .= fs.fsSection
-    ]
+    , "isDeontic"   .= fs.fsIsDeontic
+    ] <> maybe [] (\rs -> ["returnSchema" .= rs]) fs.fsReturnSchema
 
 instance FromJSON FunctionSummary where
-  parseJSON = Aeson.withObject "FunctionSummary" $ \o ->
-    FunctionSummary
-      <$> (o .: "name"        <|> o .: "fsName")
-      <*> (o .: "description" <|> o .: "fsDescription")
-      <*> (o .: "parameters"  <|> o .: "fsParameters")
-      <*> (o .: "returnType"  <|> o .: "fsReturnType")
-      <*> (o .:? "section"    <|> o .:? "fsSection")
-      <*> pure False  -- isDeontic: internal only, not in JSON
-      <*> (o .:? "sourceFile" <|> o .:? "fsSourceFile")
+  parseJSON = Aeson.withObject "FunctionSummary" $ \o -> do
+    name         <- o .: "name"        <|> o .: "fsName"
+    description  <- o .: "description" <|> o .: "fsDescription"
+    parameters   <- o .: "parameters"  <|> o .: "fsParameters"
+    returnType   <- o .: "returnType"  <|> o .: "fsReturnType"
+    returnSchema <- o .:? "returnSchema"
+    section      <- o .:? "section"    <|> o .:? "fsSection"
+    -- isDeontic is now persisted in the metadata cache. For caches written
+    -- before this field existed, fall back to deriving it from the return
+    -- type (the same signal McpServer uses) so older deployments are still
+    -- correct without waiting for a recompile.
+    isDeontic    <- o .:? "isDeontic" .!= ("DEONTIC" `Text.isPrefixOf` returnType)
+    sourceFile   <- o .:? "sourceFile" <|> o .:? "fsSourceFile"
+    pure FunctionSummary
+      { fsName         = name
+      , fsDescription  = description
+      , fsParameters   = parameters
+      , fsReturnType   = returnType
+      , fsReturnSchema = returnSchema
+      , fsSection      = section
+      , fsIsDeontic    = isDeontic
+      , fsSourceFile   = sourceFile
+      }
 
 -- | A source file entry within a deployment.
 data FileEntry = FileEntry
@@ -219,6 +290,10 @@ data Function = Function
   -- ^ Type name for the action parameter of a DEONTIC function (e.g. "Contract Action")
   , returnType            :: !Text
   -- ^ Display name of the return type (e.g. "BOOLEAN", "NUMBER", "DEONTIC").
+  , returnSchema          :: !(Maybe Parameter)
+  -- ^ Structured JSON Schema of the return type, with x-l4-type annotations
+  -- on each record/enum node. In-memory only — used by the function-schema
+  -- endpoint so chat clients can render results back into L4 syntax.
   , isDeontic             :: !Bool
   -- ^ Whether this function returns a DEONTIC (needs startTime + events params).
   }
@@ -237,7 +312,8 @@ instance ToJSON Function where
             , "returnType" .= fn.returnType
             ] <>
             maybe [] (\pt -> ["deonticPartyType" .= pt]) fn.deonticPartyType <>
-            maybe [] (\at -> ["deonticActionType" .= at]) fn.deonticActionType)
+            maybe [] (\at -> ["deonticActionType" .= at]) fn.deonticActionType <>
+            maybe [] (\rs -> ["returnSchema" .= rs]) fn.returnSchema)
       ]
 
 instance FromJSON Function where
@@ -258,6 +334,7 @@ instance FromJSON Function where
             <*> p .:? "deonticPartyType"
             <*> p .:? "deonticActionType"
             <*> p .:? "returnType" .!= "unknown"
+            <*> p .:? "returnSchema"
             <*> p .:? "isDeontic" .!= False
       )
       props
@@ -478,13 +555,66 @@ instance ToJSON BatchResponse where
       , "summary" .= br.summary
       ]
 
+-- ----------------------------------------------------------------------------
+-- MCP Tasks extension types (2026-07-28 RC)
+-- ----------------------------------------------------------------------------
+
+-- | Opaque identifier for an MCP task.
+newtype TaskId = TaskId { unTaskId :: Text }
+  deriving newtype (Eq, Ord, Show, FromJSON, ToJSON)
+
+-- | Status of an MCP task in its lifecycle.
+data TaskStatus
+  = TaskPending    -- ^ Not yet running (e.g. waiting for compilation to finish).
+  | TaskWorking    -- ^ Active work (evaluation in progress).
+  | TaskCompleted  -- ^ Finished successfully; 'tsResult' carries the @tools/call@ result.
+  | TaskFailed     -- ^ Terminal error; 'tsError' carries the message.
+  | TaskCancelled  -- ^ Cancelled by the client via @tasks/cancel@.
+  deriving stock (Eq, Show)
+
+instance ToJSON TaskStatus where
+  toJSON = Aeson.String . taskStatusText
+
+taskStatusText :: TaskStatus -> Text
+taskStatusText = \case
+  TaskPending -> "pending"
+  TaskWorking -> "working"
+  TaskCompleted -> "completed"
+  TaskFailed -> "failed"
+  TaskCancelled -> "cancelled"
+
+-- | Runtime state for an MCP task. The 'tsAsync' handle is retained so
+-- @tasks/cancel@ can abort in-flight work. Tasks past 'tsTtlSeconds' from
+-- 'tsCreatedAt' are reaped by a background sweeper.
+data TaskState = TaskState
+  { tsStatus     :: !TaskStatus
+  , tsResult     :: !(Maybe Aeson.Value)
+  -- ^ The eventual MCP @tools/call@ result content (already structured
+  -- as @{ content: [...], isError? }@). 'Just' iff status is 'TaskCompleted'.
+  , tsError      :: !(Maybe Text)
+  , tsCreatedAt  :: !UTCTime
+  , tsTtlSeconds :: !Int
+  , tsAsync      :: !(Maybe (Async ()))
+  }
+
 -- | Shared application environment threaded through all handlers.
 data AppEnv = MkAppEnv
   { deploymentRegistry :: TVar (Map DeploymentId DeploymentState)
+  , updateJobs         :: TVar (Map Text UpdateJob)
+  -- ^ Async deploy/update jobs, keyed by a freshly-minted job id and
+  -- polled via @GET \/deployments\/{id}\/updates\/{updateId}@. Separate
+  -- from 'deploymentRegistry': a job's progress/failure never changes
+  -- what the live deployment reports.
   , bundleStore        :: BundleStore
   , serverName         :: Maybe Text
   , logger             :: Logger
   , options            :: Options.Options
+  , mcpTasks           :: TVar (Map TaskId TaskState)
+  -- ^ MCP @tools/call@ tasks (2026-07-28 Tasks extension). Keyed by an
+  -- opaque task id. Lifetime is per-process; tasks tied to a deployment
+  -- naturally pin to whichever instance has that deployment loaded
+  -- because the auth proxy already routes deployment-scoped MCP traffic
+  -- with affinity.
   }
 
 -- | The handler monad for all Servant routes.
@@ -500,6 +630,10 @@ data HealthResponse = HealthResponse
   , hrDeployments   :: !HealthDeploymentCounts
   , hrInstanceToken :: !(Maybe Text)
   -- ^ Opaque token for process identity verification by the auth proxy.
+  , hrVersion       :: !Text
+  -- ^ The jl4-service build version (e.g. "1.5.79"), baked in at compile time.
+  -- Lets the auth proxy report the running service version directly rather
+  -- than inferring it from the configured binary release URL.
   }
   deriving stock (Show, Generic)
 
@@ -508,6 +642,7 @@ instance ToJSON HealthResponse where
     Aeson.object $
       [ "status" .= hr.hrStatus
       , "deployments" .= hr.hrDeployments
+      , "version" .= hr.hrVersion
       ]
       <> maybe [] (\t -> ["instanceToken" .= t]) hr.hrInstanceToken
 
@@ -517,6 +652,7 @@ instance FromJSON HealthResponse where
       <$> o .: "status"
       <*> o .: "deployments"
       <*> o .:? "instanceToken"
+      <*> o .:? "version" .!= ""
 
 -- | Deployment counts in health response.
 data HealthDeploymentCounts = HealthDeploymentCounts

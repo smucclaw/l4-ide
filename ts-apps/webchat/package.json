@@ -1,0 +1,45 @@
+{
+  "name": "webchat",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "svelte-kit sync && vite dev",
+    "build": "npm run clean && svelte-kit sync && vite build",
+    "preview": "vite preview",
+    "prepare": "svelte-kit sync || echo ''",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+    "format": "prettier --write . --ignore-path ../../.prettierignore",
+    "lint": "eslint --max-warnings=0 .",
+    "clean": "git clean -fdx build .svelte-kit || echo 'git not available'"
+  },
+  "prettier": "@repo/prettier-config",
+  "devDependencies": {
+    "@repo/eslint-config": "*",
+    "@repo/prettier-config": "*",
+    "@sveltejs/adapter-static": "^3.0.8",
+    "@sveltejs/kit": "^2.16.0",
+    "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "@tailwindcss/vite": "^4.0.6",
+    "eslint": "^9.16.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.4.1",
+    "prettier-plugin-svelte": "^3.3.3",
+    "svelte": "^5.25.0",
+    "svelte-check": "^4.0.0",
+    "tailwindcss": "^4.0.6",
+    "typescript": "^5.0.0",
+    "typescript-eslint": "^8.16.0",
+    "vite": "^6.0.0"
+  },
+  "dependencies": {
+    "@repo/l4-highlight": "*",
+    "jl4-client-rpc": "*",
+    "katex": "^0.16.45",
+    "marked-katex-extension": "^5.1.8",
+    "runed": "^0.23.3",
+    "vscode-messenger-common": "^0.5.1",
+    "vscode-messenger-webview": "^0.5.1"
+  }
+}

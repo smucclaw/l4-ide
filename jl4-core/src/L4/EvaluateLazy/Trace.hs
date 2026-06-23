@@ -7,8 +7,9 @@ import qualified Base.Map as Map
 import qualified Base.Text as Text
 import L4.Syntax
 import L4.Evaluate.ValueLazy
-import L4.EvaluateLazy.Machine (EvalException(..), InternalEvalException(..), UserEvalException(..), prettyEvalException)
+import L4.EvaluateLazy.Exceptions (EvalException(..), InternalEvalException(..), UserEvalException(..), prettyEvalException)
 import L4.Print
+import L4.TypeCheck.Environment.TH (builtinUri)
 import L4.Utils.RevList
 
 import Prettyprinter
@@ -248,7 +249,7 @@ printEvalTrace :: forall ann. Int -> EvalTrace -> Doc ann
 printEvalTrace lvl = \ case
   Trace _ [] v ->
     pre lvl <> "•" <> " " <> printExceptionOrNF v
-  Trace mlabel (esubs : otheresubs) v ->
+  Trace _mlabel (esubs : otheresubs) v ->
     let
       proc :: Doc ann -> Doc ann -> Doc ann -> [Doc ann]
       proc firstd followd x =
@@ -266,12 +267,18 @@ printEvalTrace lvl = \ case
       otheresubsd = proc' "├" "│" <$> otheresubs
       vd          = proc "└" " " (printExceptionOrNF v)
     in
+      -- The 'vcat' already renders the whole node: the first child step with a
+      -- '┌' connector, every other step with '├', and the result with '└'. An
+      -- earlier version also re-rendered 'otheresubs' via a tail recursion here,
+      -- which duplicated every sibling subtree once per position -- O(n^2) per
+      -- node and effectively exponential down a deep recursion (a single date
+      -- literal expanded into hundreds of megabytes of text). Rendering each
+      -- step exactly once keeps this linear in the trace size.
       vcat
         (   esubsd
          <> concat otheresubsd
          <> vd
         )
-      <> printEvalTrace lvl (Trace mlabel otheresubs v)
   where
     pre :: Int -> Doc ann
     pre i = pretty (replicate i '│')
@@ -393,25 +400,82 @@ collectTraceLabels = foldl' go Map.empty
     go acc (AllocPre name ref) = Map.insert ref.address name acc
     go acc _ = acc
 
--- | Implements step 4 of Note [Lazy evaluation tracing]
+-- | Maximum number of trace nodes 'buildEvalTrace' will materialise.
+--
+-- Trace post-processing inlines shared sub-traces at every reference site, so an
+-- expression that is cheap to *evaluate* (e.g. a single date literal, which
+-- desugars through the recursive @daydate@ library) can still expand into a
+-- trace with hundreds of thousands of nodes. Such a trace freezes the editor
+-- when it is pretty-printed, serialised to JSON and rendered in the webview. We
+-- therefore bound the materialised tree and mark the remainder as truncated.
+maxTraceNodes :: Int
+maxTraceNodes = 10000
+
+-- | The value shown in place of a sub-trace we deliberately did not materialise
+-- because 'maxTraceNodes' was exceeded. Kept distinct so 'simplifyEvalTrace'
+-- can recognise and preserve the marker instead of stripping it as a trivial
+-- successful leaf.
+traceTruncatedMessage :: Text
+traceTruncatedMessage = "… trace truncated (exceeded maximum display size)"
+
+truncatedTrace :: Maybe Resolved -> EvalTrace
+truncatedTrace label = Trace label [] (Right (MkNF (ValString traceTruncatedMessage)))
+
+-- | Implements step 4 of Note [Lazy evaluation tracing].
+--
+-- Threads a node budget ('maxTraceNodes') through the construction so that
+-- pathological inputs cannot produce an unbounded tree; once the budget is
+-- spent we stop walking and insert a 'truncatedTrace' marker.
 buildEvalTrace :: Map Address Resolved -> Map (Maybe Address) (Either WHNF EvalPreTrace) -> Maybe Resolved -> EvalPreTrace -> EvalTrace
-buildEvalTrace labels m label (PreTrace esubs w) =
-  Trace label (second (fmap (buildEvalTrace labels m Nothing)) <$> esubs) (second (nfFromTrace m) w)
-buildEvalTrace labels m label (PrePlaceholder a) =
-  let label' =
-        case label of
-          Just existing -> Just existing
-          Nothing -> Map.lookup a labels
-  in case Map.lookup (Just a) m of
-       Nothing -> Trace label' [] (Right Omitted)
-       Just (Left whnf) -> Trace label' [] (Right (nfFromTrace m whnf))
-       Just (Right preTrace) -> buildEvalTrace labels m label' preTrace
+buildEvalTrace labels m label0 pt0 = evalState (go label0 pt0) maxTraceNodes
+  where
+    go :: Maybe Resolved -> EvalPreTrace -> State Int EvalTrace
+    go label (PreTrace esubs w) = do
+      budget <- get
+      if budget <= 0
+        then pure (truncatedTrace label)
+        else do
+          put (budget - 1)
+          esubs' <- goEsubs esubs
+          pure (Trace label esubs' (second (nfFromTrace m) w))
+    go label (PrePlaceholder a) =
+      let label' =
+            case label of
+              Just existing -> Just existing
+              Nothing -> Map.lookup a labels
+      in case Map.lookup (Just a) m of
+           Nothing -> pure (Trace label' [] (Right Omitted))
+           Just (Left whnf) -> pure (Trace label' [] (Right (nfFromTrace m whnf)))
+           Just (Right preTrace) -> go label' preTrace
+
+    -- Walk a node's children, abandoning the rest (with a single marker) as soon
+    -- as the budget runs out, so we never even traverse a pathological subtree.
+    goEsubs :: [(Expr Resolved, [EvalPreTrace])] -> State Int [(Expr Resolved, [EvalTrace])]
+    goEsubs [] = pure []
+    goEsubs ((e, subs) : rest) = do
+      budget <- get
+      if budget <= 0
+        then pure [(e, [truncatedTrace Nothing])]
+        else do
+          subs' <- goSubs subs
+          rest' <- goEsubs rest
+          pure ((e, subs') : rest')
+
+    goSubs :: [EvalPreTrace] -> State Int [EvalTrace]
+    goSubs [] = pure []
+    goSubs (x : xs) = do
+      budget <- get
+      if budget <= 0
+        then pure [truncatedTrace Nothing]
+        else (:) <$> go Nothing x <*> goSubs xs
 
 -- | Implements step 5 of Note [Lazy evaluation tracing]
 simplifyEvalTrace :: EvalTrace -> EvalTrace
 simplifyEvalTrace (Trace lbl children v) = Trace lbl (second (concatMap go) <$> children) v
   where
     go :: EvalTrace -> [EvalTrace]
+    go t@(Trace _ [] (Right (MkNF (ValString s))))
+      | s == traceTruncatedMessage         = [t]   -- always keep truncation markers
     go (Trace _ [] (Right _))              = []   -- eliminate trivial successful trace nodes
     go (Trace _ [(Lit _ _, [])] (Right _)) = []   -- eliminate trivial literal evaluations
     go (Trace _ [(Var _ n, [])] (Right (MkNF (ValConstructor n' []))))
@@ -428,13 +492,17 @@ simplifyEvalTrace (Trace lbl children v) = Trace lbl (second (concatMap go) <$> 
       | isInternalName n                 = []   -- eliminate internal function applications
     go t                                 = [simplifyEvalTrace t]
 
-    -- Heuristically declare functions to be internal that start with double underscores.
-    -- TODO: we could be more systematic about this.
+    -- Declare a function to be internal if it is a primitive builtin (every
+    -- builtin shares the synthetic 'builtinUri' module, so this catches the whole
+    -- family -- FLOOR, TIMES, DATE_FROM_DMY, DATE_SERIAL, ... -- without naming
+    -- them individually), or, heuristically, if its name starts with double
+    -- underscores (e.g. the '__PLUS__' operator overloads).
     isInternalName :: Resolved -> Bool
     isInternalName r =
-      case rawName (getOriginal r) of
-        NormalName n -> Text.take 2 n == "__"
-        _            -> False
+         (getUnique r).moduleUri == builtinUri
+      || case rawName (getOriginal r) of
+           NormalName n -> Text.take 2 n == "__"
+           _            -> False
 
 -- | Helper function that turns a WHNF into an NF, but not by actively evaluating,
 -- but by looking up the values in the heap of traces.

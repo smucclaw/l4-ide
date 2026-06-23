@@ -1,6 +1,7 @@
-# Using Infix, Postfix, and Mixfix Functions
+# Using Infix, Postfix, and Mixfix functions
 
-This tutorial shows how to define and call functions that read like natural language. L4's **mixfix operators** let you write code that mirrors the structure of legal prose.
+This tutorial shows how to define and call functions that read like natural language. A function is the equivalent of a rule in L4.
+L4's **mixfix operators** let you write code that mirrors the structure of legal prose.
 
 ## Overview
 
@@ -25,7 +26,7 @@ L4 supports multiple calling patterns that read more naturally:
 - Basic understanding of L4 functions (see [Your First L4 File](../getting-started/first-l4-file.md))
 - Familiarity with GIVEN and MEANS keywords (see [MEANS](../../reference/functions/MEANS.md))
 
-## Infix Functions
+## Infix functions
 
 An **infix** function takes two arguments with the function name between them.
 
@@ -37,7 +38,7 @@ a `plus` b MEANS a + b
 
 Notice the pattern: `param `keyword` param`. The parameters `a` and `b` come from the GIVEN clause. The backticked `` `plus` `` becomes the function name.
 
-### Calling Infix Functions
+### Calling Infix functions
 
 You can call infix functions in two ways:
 
@@ -64,7 +65,7 @@ person `is eligible for` program MEANS TRUE
 #EVAL "Alice" `is eligible for` "Medicare"
 ```
 
-## Postfix Functions
+## Postfix functions
 
 A **postfix** function takes one argument that appears before the function name.
 
@@ -76,7 +77,7 @@ GIVETH A NUMBER
 amount `percent` MEANS amount / 100
 ```
 
-### Calling Postfix Functions
+### Calling Postfix functions
 
 ```l4
 -- Postfix style
@@ -101,7 +102,7 @@ n squared MEANS n * n
 #EVAL 5 `squared`
 ```
 
-## Mixfix Functions (Ternary and Beyond)
+## Mixfix functions (Ternary and Beyond)
 
 **Mixfix** functions have keywords interspersed with multiple arguments. They can have any number of parameters.
 
@@ -161,7 +162,7 @@ This is useful for complex expressions with long keywords.
 
 ## Practical Examples
 
-### Legal Eligibility Rules
+### Legal Eligibility functions
 
 ```l4
 DECLARE Person HAS
@@ -272,6 +273,6 @@ See the full working example:
 
 ## Related Documentation
 
-- **[DECIDE](../../reference/functions/DECIDE.md)** - Function declaration keyword
-- **[MEANS](../../reference/functions/MEANS.md)** - Function body keyword
+- **[DECIDE](../../reference/functions/DECIDE.md)** - function declaration keyword
+- **[MEANS](../../reference/functions/MEANS.md)** - function body keyword
 - **[GIVEN](../../reference/functions/GIVEN.md)** - Parameter declaration

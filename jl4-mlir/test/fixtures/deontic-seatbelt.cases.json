@@ -1,0 +1,31 @@
+{
+  "Seatbelt-Requirement": [
+    {
+      "arguments": {
+        "car": { "number of wheels": 4 },
+        "driver": { "name": "Alice" }
+      },
+      "startTime": 0,
+      "events": [
+        { "party": { "name": "Alice" }, "action": "wear seatbelt", "at": 1 },
+        { "party": { "name": "Alice" }, "action": "drive", "at": 2 }
+      ]
+    },
+    {
+      "arguments": {
+        "car": { "number of wheels": 4 },
+        "driver": { "name": "Alice" }
+      },
+      "startTime": 0,
+      "events": [{ "party": { "name": "Alice" }, "action": "drive", "at": 1 }]
+    },
+    {
+      "arguments": {
+        "car": { "number of wheels": 3 },
+        "driver": { "name": "Bob" }
+      },
+      "startTime": 0,
+      "events": [{ "party": { "name": "Bob" }, "action": "drive", "at": 1 }]
+    }
+  ]
+}

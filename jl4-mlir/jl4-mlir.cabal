@@ -10,7 +10,7 @@ description:
 
 license: Apache-2.0
 author: CCLAW
-maintainer: smucclaw@gmail.com
+maintainer: legalese@gmail.com
 category: Language, Compiler
 build-type: Simple
 tested-with: GHC==9.10.2

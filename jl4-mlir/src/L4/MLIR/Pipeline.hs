@@ -29,12 +29,14 @@ module L4.MLIR.Pipeline
 
 import L4.MLIR.IR (MLIRModule(..))
 import L4.MLIR.Emit (renderMLIR)
-import L4.MLIR.Lower (lowerProgramWithInfo, dedupAndSynthExterns)
+import L4.MLIR.Lower (lowerProgramWithDiagnostics, dedupAndSynthExterns)
 import L4.MLIR.Runtime.Builtins (builtinDeclarations)
-import L4.MLIR.Schema (WasmBundle, bundleExports, writeBundleFile)
+import L4.MLIR.Schema (WasmBundle, bundleExports, applyDiagnostics, writeBundleFile)
 
 import L4.Syntax (Module, Resolved)
 import L4.TypeCheck.Types (InfoMap)
+
+import Data.Map.Strict (Map)
 
 import qualified LSP.Core.Shake as Shake
 import qualified LSP.L4.Rules as Rules
@@ -119,14 +121,18 @@ compileToPipeline config filepath = do
     Right (tc, deps) -> do
       let mainModule = tc.module'
           depModules = map (.module') deps
-          mlirMod = lowerModuleWithDepsInfo tc.infoMap mainModule depModules
+          (mlirMod, lowerDiags) = lowerModuleWithDepsInfoDiag tc.infoMap mainModule depModules
           baseName = maybe (takeBaseName filepath) id config.outputName
           -- Build the function schema bundle — this is what the `run`
           -- subcommand (and any external caller, including jl4-service)
-          -- reads to marshal JSON arguments into WASM calls.
-          schemaBundle = bundleExports
+          -- reads to marshal JSON arguments into WASM calls. Functions the
+          -- lowering flagged as unsupported are marked @supported: false@
+          -- so callers route them to a fallback evaluator.
+          schemaBundle = applyDiagnostics lowerDiags $ bundleExports
             (Text.pack (baseName <> ".wasm"))
             (computeVersion filepath)  -- placeholder — real one in Compiler.hs
+            tc.infoMap
+            tc.entityInfo
             mainModule
             depModules
 
@@ -179,13 +185,22 @@ computeVersion _ = "0.1.0"
 -- not re-emitted.
 lowerModuleWithDepsInfo :: InfoMap -> Module Resolved -> [Module Resolved] -> MLIRModule
 lowerModuleWithDepsInfo info mainMod deps =
-  let baseMlir = lowerProgramWithInfo info mainMod deps
+  fst (lowerModuleWithDepsInfoDiag info mainMod deps)
+
+-- | Like 'lowerModuleWithDepsInfo' but also returns per-function lowering
+-- diagnostics (sanitized WASM symbol → unsupported-construct reasons),
+-- which the pipeline threads into the schema. The builtins + dedup
+-- post-pass doesn't touch diagnostics, so they pass through unchanged.
+lowerModuleWithDepsInfoDiag
+  :: InfoMap -> Module Resolved -> [Module Resolved] -> (MLIRModule, Map Text [Text])
+lowerModuleWithDepsInfoDiag info mainMod deps =
+  let (baseMlir, diags) = lowerProgramWithDiagnostics info mainMod deps
       builtins = builtinDeclarations
       -- Dedup + synth-externs happens *after* the builtins are
       -- prepended, so the post-pass sees every declaration in the
       -- final module when deciding which names are already resolved.
       merged = dedupAndSynthExterns (builtins ++ baseMlir.moduleOps)
-  in baseMlir { moduleOps = merged }
+  in (baseMlir { moduleOps = merged }, diags)
 
 -- | Compile directly to MLIR IR (no file output).
 compileToMLIR :: FilePath -> IO (Either [Text] MLIRModule)

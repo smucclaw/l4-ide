@@ -13,6 +13,7 @@ module L4.MLIR.Lower
   ( lowerModule
   , lowerProgram
   , lowerProgramWithInfo
+  , lowerProgramWithDiagnostics
   , dedupAndSynthExterns
   ) where
 
@@ -38,15 +39,17 @@ import L4.Syntax
   , Info(..)
   , rawName, rawNameToText, getActual
   )
-import L4.Annotation (HasSrcRange, rangeOf)
+import L4.Annotation (HasSrcRange, emptyAnno, rangeOf)
 import L4.Parser.SrcSpan (SrcRange(..))
 import L4.TypeCheck.Types (InfoMap)
 import qualified L4.Utils.IntervalMap as IV
 
-import Control.Monad (forM_, forM, unless)
+import Control.Monad (forM_, forM, unless, when)
 import Control.Monad.State.Strict
+import Data.List (zip4)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
+import Data.Ratio (numerator, denominator)
 import qualified Data.Set as Set
 import qualified Data.Text as Text
 
@@ -59,6 +62,15 @@ data LowerState = LowerState
   , nextBlock  :: !BlockId
   , bindings   :: Map Text Value    -- L4 name → SSA value
   , bindingTypes :: Map Text MLIRType  -- L4 name → MLIR type
+  , bindingL4Types :: Map Text (Type' Resolved)
+    -- L4 name → original L4 'Type''. Populated alongside 'bindingTypes'
+    -- by 'lowerDecide' (for function params) and 'lowerLocalDecl' (for
+    -- WHERE/LET locals). Used by 'isNumberExpr' so a @Var@ reference
+    -- to a NUMBER-typed param inside a @<fn>$trace@ body routes its
+    -- comparison through @__l4_rat_cmp@ instead of falling through to
+    -- the raw f64 bit-pattern path — which would otherwise compare the
+    -- rational-handle indices as f64, almost always producing the
+    -- wrong truth value.
   , listElemTypes :: Map Text MLIRType -- L4 name → list element type (for LIST OF T)
   , typeEnv    :: TypeEnv           -- Record/enum layouts
   , currentOps :: [Operation]       -- Ops accumulated in current block (reversed)
@@ -86,6 +98,54 @@ data LowerState = LowerState
     -- Non-exported DECIDEs aren't in this map, so they fall back to
     -- the original extern-based ASSUME model.
   , exportAssumeArgs :: Map Text [(Resolved, Type' Resolved)]
+    -- | The function currently being lowered, as its sanitized WASM
+    -- symbol name (matching 'Schema.wasmSymbol'). Set by 'lowerDecide'
+    -- so 'markUnsupported' can attribute a diagnostic to the right
+    -- export. 'Nothing' outside any function body.
+  , currentFunction :: Maybe Text
+    -- | Per-function diagnostics: sanitized WASM symbol name → reasons
+    -- the function cannot be faithfully compiled (e.g. it contains a
+    -- regulative/deontic/IO construct the backend doesn't support). The
+    -- pipeline threads these into the schema so flagged functions are
+    -- marked @supported: false@ and routed to a fallback evaluator
+    -- instead of silently returning FALSE. Empty ⇒ everything lowered
+    -- cleanly.
+  , diagnostics :: Map Text [Text]
+    -- | M5 slice 2C — true while we're lowering the body of a `<fn>$trace`
+    -- clone. When set, 'lowerExpr' brackets each traceable subexpression
+    -- with @__l4_trace_enter(id)@ / @__l4_trace_exit(box, kind)@ using
+    -- 'traceNodeMap' to look up the compile-time-assigned node ID.
+    -- False during the untraced `<fn>` pass so the fast path stays
+    -- untouched.
+  , tracing :: !Bool
+    -- | Per-traceable-subexpression metadata in the function currently
+    -- being lowered. Same shape jl4-service's @simplifyEvalTrace@ would
+    -- preserve. Built once per function by 'Schema.collectTraceNodes' and
+    -- consumed by 'lowerExpr' through 'rangeOf'.
+  , traceNodeMap :: !(Map Schema.TraceRangeKey (Int, Int))
+    -- | Node ID of the innermost @__l4_trace_enter@ that hasn't been
+    -- matched by a @__l4_trace_exit@ yet. When the 'lowerExpr' wrapper
+    -- sees an inner expression whose rangeMap lookup returns this same
+    -- id, it skips the duplicate enter/exit — needed because the parser
+    -- sometimes gives @NOT P@ and the inner @P@ the same 'SrcRange', so
+    -- both wrappers would otherwise emit a second nested frame on top
+    -- of the same trace node.
+  , openTraceNode :: !(Maybe Int)
+    -- | M5 slice 4D (call-site translation) — sanitized function name
+    -- ⟶ ordered list of its parameter source names (e.g.
+    -- @"annual_interest_rate"@ ⟶ @["profile"]@). At each function call
+    -- in trace mode, the App-case helper uses this to pair each
+    -- compound static-path arg with the callee's parameter name and
+    -- emit a @__l4_trace_push_arg_path(callee-param, caller-path)@
+    -- call before the wasm call (and a @_pop_@ after), so the
+    -- helper's marker paths (@\"profile.bankruptcy history\"@) rewrite
+    -- to the caller's view (@\"req.applicant.bankruptcy history\"@).
+  , funcParams :: !(Map Text [Text])
+    -- | Names of DECIDEs currently being lowered (the enclosing chain).
+    -- A zero-arg WHERE/LET binding whose body free-vars intersect this
+    -- set is potentially mutually recursive — eager evaluation would
+    -- loop, so 'lowerLocalDecl' lambda-lifts it instead.
+  , pendingDecide :: !(Set.Set Text)
   }
 
 type LowerM a = State LowerState a
@@ -96,6 +156,7 @@ initState info = LowerState
   , nextBlock = 0
   , bindings = Map.empty
   , bindingTypes = Map.empty
+  , bindingL4Types = Map.empty
   , listElemTypes = Map.empty
   , typeEnv = emptyTypeEnv
   , currentOps = []
@@ -108,6 +169,13 @@ initState info = LowerState
   , sourceTypeMap = info
   , localCaptures = Map.empty
   , exportAssumeArgs = Map.empty
+  , currentFunction = Nothing
+  , diagnostics = Map.empty
+  , tracing = False
+  , traceNodeMap = Map.empty
+  , openTraceNode = Nothing
+  , funcParams = Map.empty
+  , pendingDecide = Set.empty
   }
 
 -- | Look up the ground-truth type for an expression using the typechecker's
@@ -170,6 +238,23 @@ runtimeCall name es = do
   let tys = replicate (length vs) l4NumberType
   emitVal $ \vid -> funcCall [vid] name vs tys [l4NumberType]
 
+-- | Apply a prelude helper with a lowered L4 body by routing through
+-- 'callL4', so the trace pass picks the @\<name\>$trace@ variant
+-- instead of jumping into the runtime fast path. Returns its result
+-- as an f64 (the uniform ABI), which the caller then unboxes / uses
+-- as a NUMBER handle as appropriate.
+callPreludeL4 :: Text -> [Expr Resolved] -> LowerM Value
+callPreludeL4 funcN args = do
+  sigs <- gets (.funcSigs)
+  let retTy = case Map.lookup funcN sigs of
+        Just (_, r) -> r
+        Nothing     -> l4NumberType
+  argPairs <- forM args $ \arg -> do
+    ty <- inferExprTypeM arg
+    v  <- lowerExpr arg ty
+    pure (v, ty)
+  callL4 funcN argPairs retTy
+
 callL4 :: Text -> [(Value, MLIRType)] -> MLIRType -> LowerM Value
 callL4 callee args retTy = do
   -- Internal callers of @export functions don't supply the ASSUME-derived
@@ -183,9 +268,31 @@ callL4 callee args retTy = do
   -- Emit the call with uniform f64 signature.
   let nArgs = length fullArgs
       sigArgs = replicate nArgs l4Value
+  -- M5 slice 4A — when we're lowering inside `<fn>$trace`, route nested
+  -- L4 calls to the callee's `$trace` variant so the recursive trace
+  -- tree exists in `tracePool` too. The untraced `<fn>` pass leaves
+  -- 'tracing' false and continues to call the fast `callee` symbol.
+  tracingNow <- gets (.tracing)
+  let actualCallee = if tracingNow then callee <> "$trace" else callee
+  boxedResult <- emitVal $ \vid ->
+    funcCall [vid] actualCallee boxed sigArgs [l4Value]
+  -- Unbox the return to the expected native type.
+  unboxABI retTy boxedResult
+
+-- | Same as 'callL4' but never routes through @<callee>$trace@ — even
+-- when tracing is enabled. Used by 0-arg @App@ in trace mode so the
+-- helper's body events stay out of the parent's trace pool (jl4-core
+-- treats a bare Var lookup as a single leaf with the helper's already-
+-- evaluated value; we mirror that by force-tracing the call site and
+-- calling the regular function inside).
+callL4Direct :: Text -> [(Value, MLIRType)] -> MLIRType -> LowerM Value
+callL4Direct callee args retTy = do
+  fullArgs <- appendAssumeExternArgs callee args
+  boxed <- forM fullArgs $ \(v, t) -> boxABI t v
+  let nArgs = length fullArgs
+      sigArgs = replicate nArgs l4Value
   boxedResult <- emitVal $ \vid ->
     funcCall [vid] callee boxed sigArgs [l4Value]
-  -- Unbox the return to the expected native type.
   unboxABI retTy boxedResult
 
 -- | For callees that were registered with extra ASSUME-derived parameters
@@ -257,11 +364,13 @@ withScope :: LowerM a -> LowerM a
 withScope action = do
   savedBindings <- gets (.bindings)
   savedTypes <- gets (.bindingTypes)
+  savedL4Types <- gets (.bindingL4Types)
   savedListTys <- gets (.listElemTypes)
   result <- action
   modify' $ \s -> s
     { bindings = savedBindings
     , bindingTypes = savedTypes
+    , bindingL4Types = savedL4Types
     , listElemTypes = savedListTys
     }
   pure result
@@ -292,6 +401,25 @@ internString str = do
         }
       pure name
 
+-- | Record that the function currently being lowered contains a
+-- construct the MLIR backend cannot faithfully compile, then emit a
+-- uniform-ABI FALSE (0.0) so the IR stays well-formed.
+--
+-- This is the difference between *silent* and *loud* degradation: the
+-- old behaviour emitted 0.0 with no record, so a deployment containing
+-- (say) a deontic rule compiled "successfully" and returned a wrong
+-- FALSE answer. Now the enclosing function is flagged (keyed by its
+-- sanitized WASM symbol, matching 'Schema.wasmSymbol') and the pipeline
+-- marks the schema export @supported: false@ so the proxy routes it to
+-- a fallback evaluator. See FEATURE-PARITY-PLAN.md (M1a).
+markUnsupported :: Text -> LowerM Value
+markUnsupported reason = do
+  mfn <- gets (.currentFunction)
+  forM_ mfn $ \fn ->
+    modify' $ \s ->
+      s { diagnostics = Map.insertWith (\new old -> old ++ new) fn [reason] s.diagnostics }
+  emitVal $ \vid -> arithConstantFloat vid 0.0
+
 -- ---------------------------------------------------------------------------
 -- Module lowering
 -- ---------------------------------------------------------------------------
@@ -317,6 +445,19 @@ lowerProgram = lowerProgramWithInfo IV.empty
 -- 'TypeCheckResult' should pass its @infoMap@ field here.
 lowerProgramWithInfo :: InfoMap -> Module Resolved -> [Module Resolved] -> MLIRModule
 lowerProgramWithInfo info mainMod deps =
+  fst (lowerProgramWithDiagnostics info mainMod deps)
+
+-- | Like 'lowerProgramWithInfo' but also returns the per-function
+-- lowering diagnostics — a map from sanitized WASM symbol name to the
+-- reasons that function cannot be faithfully compiled (unsupported
+-- regulative/IO/lambda constructs). An empty map means every function
+-- lowered cleanly. The pipeline threads these into the schema so the
+-- proxy can mark exports @supported: false@ and route them to a
+-- fallback evaluator instead of trusting a WASM module that would
+-- silently return FALSE.
+lowerProgramWithDiagnostics
+  :: InfoMap -> Module Resolved -> [Module Resolved] -> (MLIRModule, Map Text [Text])
+lowerProgramWithDiagnostics info mainMod deps =
   let mainNames = collectLocalNames mainMod
       exportArgs = collectExportAssumeArgs mainMod
       initial = (initState info) { exportAssumeArgs = exportArgs }
@@ -325,7 +466,7 @@ lowerProgramWithInfo info mainMod deps =
         lowerModuleDecls mainMod
         ) initial
       rawOps = reverse finalState.globals ++ reverse finalState.functions
-  in MLIRModule { moduleOps = rawOps }
+  in (MLIRModule { moduleOps = rawOps }, finalState.diagnostics)
 
 -- | For every @\@export@-decorated DECIDE in the main module, collect the
 -- ASSUME declarations it references. These get promoted to function-level
@@ -777,6 +918,62 @@ lowerDeclare (MkDeclare _ _ appForm typeDecl) = do
 -- Function/decision lowering
 -- ---------------------------------------------------------------------------
 
+-- | M5 slice 2B: kind byte the runtime uses to render the trace's
+-- @Result: …@ line. Constants must match @renderTraceResult@ in
+-- @runtime/jl4-runtime.mjs@. The discriminator is the *L4 semantic* type
+-- of the value, not its MLIR wire type — every kind is f64 on the wire.
+traceResultKindForRetType :: TypeSig Resolved -> Int
+traceResultKindForRetType (MkTypeSig _ _ (Just (MkGivethSig _ ty))) = traceResultKindForL4Type ty
+traceResultKindForRetType _ = 3
+
+traceResultKindForL4Type :: Type' Resolved -> Int
+traceResultKindForL4Type t = case t of
+  TyApp _ n _
+    | resolvedName n `elem` ["NUMBER", "number"]   -> 0
+    | resolvedName n `elem` ["BOOLEAN", "boolean"] -> 1
+    | resolvedName n `elem` ["STRING", "string"]   -> 2
+  _ -> 3
+
+-- | Emit @__l4_trace_enter(nodeId)@ — a void runtime call. The lowering
+-- passes nodeId as a plain @arith.constant@ f64 value (not a bit-cast),
+-- and the runtime reads it back with @Number(nodeIdF)@.
+emitTraceEnter :: Int -> LowerM ()
+emitTraceEnter nodeId = do
+  nodeVal <- emitVal $ \vid -> arithConstantFloat vid (fromIntegral nodeId)
+  emit $ funcCall [] "__l4_trace_enter" [nodeVal] [l4NumberType] []
+
+-- | Emit @__l4_trace_exit(resultBox, kind)@. The result box is the f64
+-- the function would have returned; the runtime renders it according to
+-- the kind byte (matches @traceResultKindForL4Type@).
+emitTraceExit :: Value -> Int -> LowerM ()
+emitTraceExit resultVal kind = do
+  kindVal <- emitVal $ \vid -> arithConstantFloat vid (fromIntegral kind)
+  emit $ funcCall [] "__l4_trace_exit" [resultVal, kindVal] [l4NumberType, l4NumberType] []
+
+-- | M5 slice 4D — emit @__l4_trace_push_arg_path(paramName, callerPath)@
+-- before a call. Kept as a dead-code helper (no current callers after
+-- slice 4E switched mark_forced to value-pointer identity, which makes
+-- path translation unnecessary) so the runtime ABI surface stays
+-- discoverable in one place.
+_emitTracePushArgPath :: Text -> Text -> LowerM ()
+_emitTracePushArgPath paramName callerPath = do
+  paramGlobal <- internString paramName
+  pathGlobal  <- internString callerPath
+  paramPtr <- emitVal $ \vid -> mkOp [vid] "llvm.mlir.addressof" []
+    [NamedAttribute "global_name" (FlatSymbolRefAttr paramGlobal)]
+    [PointerType] []
+  pathPtr  <- emitVal $ \vid -> mkOp [vid] "llvm.mlir.addressof" []
+    [NamedAttribute "global_name" (FlatSymbolRefAttr pathGlobal)]
+    [PointerType] []
+  paramPtrF <- ptrToF64 paramPtr
+  pathPtrF  <- ptrToF64 pathPtr
+  emit $ funcCall [] "__l4_trace_push_arg_path" [paramPtrF, pathPtrF]
+    [l4NumberType, l4NumberType] []
+
+_emitTracePopArgPaths :: LowerM ()
+_emitTracePopArgPaths =
+  emit $ funcCall [] "__l4_trace_pop_arg_paths" [] [] []
+
 lowerDecide :: Decide Resolved -> LowerM ()
 lowerDecide (MkDecide _ typeSig appForm body) = do
   env <- gets (.typeEnv)
@@ -784,6 +981,26 @@ lowerDecide (MkDecide _ typeSig appForm body) = do
       givenParams = appFormParams appForm
       (givenArgTypes, sigRetType) = sigToTypesEnv env typeSig
       listElemTys = listElementsFromSig env typeSig
+      -- M5 slice 2B: kind byte we'll pass to `__l4_trace_exit` in the
+      -- instrumented `<fn>$trace` clone; derived from the GIVETH type so
+      -- the runtime knows whether the result f64 is a rational handle, a
+      -- raw boolean, a string pointer, or "other".
+      traceKind = traceResultKindForRetType typeSig
+  -- M5 slice 4D (call-site translation) — register the source param
+  -- names for this function so callers can pair caller-static-paths
+  -- with the right helper-param name.
+  modify' $ \s -> s
+    { funcParams = Map.insert funcName (map resolvedName givenParams) s.funcParams }
+  -- Attribute any unsupported-construct diagnostics raised while lowering
+  -- this body to this function. Saved/restored so a WHERE/LET helper that
+  -- recurses through 'lowerDecide' doesn't leak its name back to us.
+  oldCurrentFn <- gets (.currentFunction)
+  oldPending <- gets (.pendingDecide)
+  let rawDecideName = resolvedName (appFormHead' appForm)
+  modify' $ \s -> s
+    { currentFunction = Just funcName
+    , pendingDecide = Set.insert rawDecideName oldPending
+    }
   -- If this DECIDE is @export-decorated and references ASSUMEs, those
   -- ASSUMEs become additional ABI parameters (see 'collectExportAssumeArgs').
   -- They're appended after the GIVEN params so existing call sites for
@@ -814,14 +1031,32 @@ lowerDecide (MkDecide _ typeSig appForm body) = do
   -- type the body expects and bind the L4 name to the unboxed value.
   boxedArgIds <- forM params $ \_ -> fresh
 
+  let paramL4Tys =
+        [ case oParam of
+            MkOptionallyTypedName _ _ (Just ty) -> Just ty
+            _ -> Nothing
+        | oParam <- givenSigParams typeSig
+        ]
+      -- Pad to match @params@'s length (which may include extra
+      -- ASSUME-derived params we don't have explicit L4 types for).
+      paddedL4Tys = paramL4Tys ++ replicate (length params - length paramL4Tys) Nothing
   withScope $ do
     -- Collect the ops that unbox each boxed arg into its native form.
     (nativeArgs, unboxOps) <- collectOps $
-      forM (zip3 params boxedArgIds argTypes) $ \(paramName, boxedId, paramTy) -> do
+      forM (zip4 params boxedArgIds argTypes paddedL4Tys) $ \(paramName, boxedId, paramTy, mL4Ty) -> do
         let name = resolvedName paramName
             boxedVal = SSAValue boxedId
         nativeVal <- unboxABI paramTy boxedVal
         bindTy name nativeVal paramTy
+        -- M5 — record the L4 source type so 'isNumberExpr' can route
+        -- comparisons on @Var@ references to NUMBER-typed params
+        -- through @__l4_rat_cmp@. Without this, the body's @x AT
+        -- LEAST y@ compares rational-pool indices as raw f64 and
+        -- almost always returns FALSE.
+        case mL4Ty of
+          Just l4Ty -> modify' $ \s -> s
+            { bindingL4Types = Map.insert name l4Ty s.bindingL4Types }
+          Nothing -> pure ()
         pure (name, nativeVal, paramTy)
 
     -- Bind list element types where known
@@ -849,6 +1084,153 @@ lowerDecide (MkDecide _ typeSig appForm body) = do
           region
 
     modify' $ \s -> s { functions = funcOp : s.functions }
+
+  -- M5 slice 2C — emit `<funcName>$trace`, a structurally identical clone
+  -- with per-subexpression trace instrumentation. Each traceable
+  -- subexpression (per 'Schema.collectTraceNodes') gets bracketed by
+  -- @__l4_trace_enter(nodeId)@ / @__l4_trace_exit(box, kind)@ via the
+  -- 'lowerExpr' wrapper, which consults 'traceNodeMap' to find the
+  -- compile-time-assigned ID. The metadata in the schema's
+  -- @traceMeta.nodes@ array shares this ID space.
+  traceEntryBlock <- freshBlockId
+  traceBoxedArgIds <- forM params $ \_ -> fresh
+  -- Walk the body once to assign node IDs + collect per-range metadata,
+  -- mirroring the schema's walk (deterministic ⇒ IDs agree).
+  info <- gets (.sourceTypeMap)
+  -- The lowering only needs the rangeMap (to drive enter/exit
+  -- emission); the schema side builds the per-node metadata with
+  -- the real declares map. Passing 'Map.empty' here keeps the walk
+  -- deterministic (same IDs) without duplicating the declare
+  -- threading into LowerState — proj metadata in nodes themselves
+  -- comes from the schema-side walk.
+  -- M5 — same param-type map the schema's 'buildTraceMetaFromDecide'
+  -- builds. The two walks must agree on every node's kind because the
+  -- runtime indexes 'traceMeta.nodes' by 'tnId' for text but reads the
+  -- kind byte from this rangeMap at trace_exit emission time. If we
+  -- passed @Map.empty@ here (as the original M5 slice did), a Var
+  -- like @x@ in @max@'s body would be classified kind=3 (compound),
+  -- and the runtime would render its boxed NUMBER as a raw f64 even
+  -- though the schema correctly tagged it kind=0.
+  let bodyParamTypeMap = Map.fromList
+        [ (resolvedName p, ty)
+        | (p, Just ty) <- zip params paddedL4Tys
+        ]
+      bodyUnannotatedParams = Set.fromList
+        [ resolvedName p
+        | (p, Nothing) <- zip params paddedL4Tys
+        ]
+      -- 'collectTraceNodes' optionally takes a function-name → return-type
+      -- map for App-call kind classification (see Schema). The lowering
+      -- doesn't have that map handy at this point (it's built per-bundle
+      -- in 'bundleExports'); we pass 'Map.empty', which only affects
+      -- result-kind defaults for inter-function calls — the schema's
+      -- own walk has the full map, and the runtime reads kinds from
+      -- the schema's 'traceMeta.nodes' for its rendering. The wasm
+      -- side reads kinds via the lowering's @rangeMap@ at emit time,
+      -- so any classification mismatch here surfaces as a wrong kind
+      -- byte to @__l4_trace_exit@ — but only for kinds the schema's
+      -- syntactic dispatch already covered (Plus/Geq/Var-via-paramType
+      -- already match between both walks because the syntactic path
+      -- doesn't consult either Map).
+      (bodyTraceNodes, rangeMap) = Schema.collectTraceNodes info Map.empty bodyParamTypeMap Map.empty bodyUnannotatedParams Set.empty body
+      -- M5 slice 4A — the fn-value node's ID is allocated by the
+      -- schema's 'buildTraceMeta' as @length bodyNodes@. The lowering
+      -- computes the same number so the runtime metadata and the
+      -- emitted code agree.
+      fnValueNodeId = length bodyTraceNodes
+  withScope $ do
+    (nativeArgs, unboxOpsT) <- collectOps $
+      forM (zip4 params traceBoxedArgIds argTypes paddedL4Tys) $ \(paramName, boxedId, paramTy, mL4Ty) -> do
+        let name = resolvedName paramName
+            boxedVal = SSAValue boxedId
+        nativeVal <- unboxABI paramTy boxedVal
+        bindTy name nativeVal paramTy
+        -- See the non-trace pass for why this matters: a Var in trace
+        -- mode hits @lowerCmp@'s @isNumberExpr@ check, and without an
+        -- L4 type recorded here the check fails for prelude helpers
+        -- (whose param types are absent from the main module's
+        -- 'InfoMap').
+        case mL4Ty of
+          Just l4Ty -> modify' $ \s -> s
+            { bindingL4Types = Map.insert name l4Ty s.bindingL4Types }
+          Nothing -> pure ()
+        pure (name, nativeVal, paramTy)
+    forM_ (zip nativeArgs listElemTys) $ \((name, _, _), mElemTy) -> do
+      case mElemTy of
+        Just elemTy -> bindListElem name elemTy
+        Nothing -> pure ()
+    -- Flip on tracing for the duration of this body lowering. The
+    -- per-call wrapper inside 'lowerExpr' picks it up and brackets
+    -- each traceable subexpression. Saved/restored around the call so
+    -- nested WHERE/LET helpers (which call lowerDecide recursively)
+    -- get their own tracing state.
+    oldTracing <- gets (.tracing)
+    oldMap     <- gets (.traceNodeMap)
+    modify' $ \s -> s { tracing = True, traceNodeMap = rangeMap }
+    -- M5 slice 4A — bracket the body with a function-context marker so
+    -- the runtime knows whose `traceMeta.nodes` to resolve node IDs
+    -- against. Inside the brackets:
+    --   1. emit the fn-value frame (renders as `Result: <function>`);
+    --   2. lower the body normally (the wrapper instruments each
+    --      traceable sub-expression);
+    --   3. emit the matching `exit_fn`.
+    -- The fn-name is interned in the wasm's string pool once per
+    -- function, so the call is cheap.
+    -- Intern @<funcName>__<postClosureArity>@ so the runtime's
+    -- @fnStack@ key matches the schema's @helperTraceMeta@ key
+    -- shape ('Schema.bundleExports' uses the same always-mangle
+    -- convention). Without this, two prelude WHERE helpers that
+    -- share a sanitized name (e.g. @go@ in @foldr@ vs @go@ in
+    -- @count@) would push the bare "go" onto @fnStack@ and the
+    -- runtime would resolve all of them against whichever schema
+    -- entry won the source-order race.
+    let symKey = funcName <> "__" <> Text.pack (show (length params))
+    fnSymGlobal <- internString symKey
+    (_, fnSetupOps) <- collectOps $ do
+      symPtr <- emitVal $ \vid -> mkOp [vid] "llvm.mlir.addressof" []
+        [NamedAttribute "global_name" (FlatSymbolRefAttr fnSymGlobal)]
+        [PointerType] []
+      symPtrF <- ptrToF64 symPtr
+      emit $ funcCall [] "__l4_trace_enter_fn" [symPtrF] [l4NumberType] []
+      emitTraceEnter fnValueNodeId
+      -- The "fn value" payload is conceptually `<function>`; we pass a
+      -- zero box and kind=4 (= "<function>") so the runtime renders
+      -- @Result: \<function\>@ regardless of the raw bits.
+      zeroF <- emitVal $ \vid -> arithConstantFloat vid 0.0
+      kindF <- emitVal $ \vid -> arithConstantFloat vid 4.0
+      emit $ funcCall [] "__l4_trace_exit" [zeroF, kindF] [l4NumberType, l4NumberType] []
+    (resultValT, bodyOpsT)  <- collectOps $ lowerExpr body retType
+    (boxedResultT, boxOpsT) <- collectOps $ boxABI retType resultValT
+    (_, fnTeardownOps) <- collectOps $
+      emit $ funcCall [] "__l4_trace_exit_fn" [] [] []
+    modify' $ \s -> s { tracing = oldTracing, traceNodeMap = oldMap }
+    -- 'traceKind' here is the function's overall return-type kind. It
+    -- coincides with the body root's per-node kind (which the wrapper
+    -- already used inside 'lowerExpr'), so no additional outer exit is
+    -- needed — the root frame is the tree's root.
+    let retOpT = funcReturn [boxedResultT] [l4Value]
+        traceBlock = Block
+          { blockId = traceEntryBlock
+          , blockArgs = [(vid, l4Value) | vid <- traceBoxedArgIds]
+          , blockOps = unboxOpsT ++ fnSetupOps ++ bodyOpsT ++ boxOpsT ++ fnTeardownOps ++ [retOpT]
+          }
+        traceRegion = Region [traceBlock]
+        traceFuncOp = funcFunc (funcName <> "$trace")
+          [(vid, l4Value) | vid <- traceBoxedArgIds]
+          [l4Value]
+          traceRegion
+    modify' $ \s -> s { functions = traceFuncOp : s.functions }
+
+  modify' $ \s -> s
+    { currentFunction = oldCurrentFn
+    , pendingDecide = oldPending
+    }
+  -- 'traceKind' was used by the slice-2B body-root instrumentation;
+  -- in slice 2C the per-node 'lowerExpr' wrapper carries the kind from
+  -- 'traceNodeMap'. Keep the binding referenced so it remains live
+  -- without re-introducing a warning when slice 2D may need it again.
+  _ <- pure traceKind
+  pure ()
 
 -- | Extract argument types and return type from a type signature.
 sigToTypesEnv :: TypeEnv -> TypeSig Resolved -> ([MLIRType], MLIRType)
@@ -1019,8 +1401,71 @@ inferExprType _ = l4NumberType
 -- ---------------------------------------------------------------------------
 
 -- | Lower an L4 expression, producing an SSA value of the expected type.
+-- | M5 slice 2C — top-level 'lowerExpr' wrapper. In tracing mode, looks
+-- up the expression's compile-time-assigned trace node ID (via
+-- 'traceNodeMap', keyed by source range) and brackets the lowered body
+-- with @__l4_trace_enter(id)@ / @__l4_trace_exit(box, kind)@. The
+-- untraced @<fn>@ pass leaves 'tracing' false, so the fast path stays
+-- exactly the same wasm it did before slice 2C.
+--
+-- The 'traceable' check in @collectTraceNodes@ is the single source of
+-- truth for which expressions get a node — if @traceNodeMap@ has no
+-- entry for an expression's range, we just lower it without bracketing.
 lowerExpr :: Expr Resolved -> MLIRType -> LowerM Value
-lowerExpr expr expectedTy = case expr of
+lowerExpr expr expectedTy = do
+  tracingNow <- gets (.tracing)
+  if not tracingNow
+    then lowerExprCases expr expectedTy
+    else do
+      rmap <- gets (.traceNodeMap)
+      let mEntry = case rangeOf expr of
+            Just rng -> Map.lookup (rng, Schema.exprDisambiguator expr) rmap
+            Nothing  -> Nothing
+      case mEntry of
+        Just (nodeId, kind) -> do
+          -- Skip the wrapper when the same node is already open — see
+          -- 'openTraceNode' on 'LowerState'. The parser sometimes
+          -- collapses a unary operator and its inner expression into
+          -- a shared 'SrcRange'; Schema's 'rangeMap' keeps the outer
+          -- entry, so 'lowerExpr' on the inner returns the same id
+          -- and would emit a duplicate frame on top of the outer's.
+          alreadyOpen <- gets (.openTraceNode)
+          if alreadyOpen == Just nodeId
+            then lowerExprCases expr expectedTy
+            else do
+              modify' $ \s -> s { openTraceNode = Just nodeId }
+              emitTraceEnter nodeId
+              result <- lowerExprCases expr expectedTy
+              -- For a force-traced @Var@ (App with no args) that resolves to
+              -- a local-binding, refine the schema's best-guess kind using
+              -- the binding's MLIR type. The schema can't always classify a
+              -- @Var@ inside a helper whose 'TypeSig' has un-annotated
+              -- params (e.g. prelude's @go acc l MEANS …@ in @count@) and
+              -- defaults to kind 3, which would make the runtime read the
+              -- NUMBER's f64 bits as a raw pointer. The runtime uses the
+              -- emitted kind here as an override when the schema's kind is
+              -- the default 3.
+              actualKind <- case (kind, expr) of
+                (3, App _ n []) -> do
+                  let nm = resolvedName n
+                  mMlirTy <- gets (Map.lookup nm . (.bindingTypes))
+                  pure $ case mMlirTy of
+                    Just ty
+                      | ty == l4NumberType -> 0
+                      | ty == l4BoolType   -> 1
+                      | ty == l4StringType -> 2
+                    _ -> kind
+                _ -> pure kind
+              emitTraceExit result actualKind
+              modify' $ \s -> s { openTraceNode = alreadyOpen }
+              pure result
+        Nothing ->
+          lowerExprCases expr expectedTy
+
+-- | The actual per-shape lowering. Was 'lowerExpr' before slice 2C
+-- factored the trace bracketing out into the wrapper above.
+lowerExprCases :: Expr Resolved -> MLIRType -> LowerM Value
+lowerExprCases expr expectedTy = case expr of
   -- Literals
   Lit _ lit -> lowerLit lit expectedTy
 
@@ -1059,12 +1504,35 @@ lowerExpr expr expectedTy = case expr of
             -- Enum tag: a plain number under the uniform f64 ABI
             Just tag -> emitVal $ \vid -> arithConstantFloat vid (fromIntegral tag)
             Nothing -> do
+              -- Lambda-lifted zero-arg WHERE/LET binding — prepend the
+              -- captured outer-scope values as the call's leading args,
+              -- mirroring the multi-arg App case below.
+              captures <- gets (.localCaptures)
               sigs <- gets (.funcSigs)
               let retTy = case Map.lookup funcN sigs of
                     Just (_, r) -> r
                     Nothing     -> expectedTy
-              -- Nullary call through the uniform f64 ABI.
-              callL4 funcN [] retTy
+              case Map.lookup funcN captures of
+                Just capturedNames -> do
+                  capturedVals <- forM capturedNames $ \cn -> do
+                    mV <- lookupVar cn
+                    case mV of
+                      Just v -> pure v
+                      Nothing -> emitNumberLiteral 0
+                  let capturePairs = [(v, l4NumberType) | v <- capturedVals]
+                  callL4 funcN capturePairs retTy
+                Nothing -> do
+                  -- Nullary call through the uniform f64 ABI. In trace mode,
+                  -- skip the @$trace@ dispatch so the helper's body events
+                  -- don't pollute the parent's trace pool — jl4-core renders
+                  -- a bare Var lookup as a single leaf. The leaf itself is
+                  -- emitted by the parent's force-trace wrapper (e.g. the
+                  -- CONSIDER branch-body @App _ _ []@ case in 'Schema'
+                  -- 'foldBranches').
+                  tracingNow <- gets (.tracing)
+                  if tracingNow
+                    then callL4Direct funcN [] retTy
+                    else callL4 funcN [] retTy
 
   -- Function application
   App _ n args -> do
@@ -1082,7 +1550,10 @@ lowerExpr expr expectedTy = case expr of
           mV <- lookupVar cn
           case mV of
             Just v -> pure v
-            Nothing -> emitVal $ \vid -> arithConstantFloat vid 0.0
+            -- Unreachable in well-typed L4 (capture is resolved at
+            -- lambda-lift time). Emit a NUMBER-zero handle rather than a
+            -- raw f64 0.0 so a NUMBER consumer doesn't alias pool handle 0.
+            Nothing -> emitNumberLiteral 0
         userArgPairs <- forM args $ \arg -> do
           ty <- inferExprTypeM arg
           v  <- lowerExpr arg ty
@@ -1101,18 +1572,21 @@ lowerExpr expr expectedTy = case expr of
           Nothing ->
            -- Prelude intrinsics and runtime calls.
            case (rawName_, args) of
-            ("__PLUS__", [a, b])    -> lowerBinop arithAddf a b l4NumberType
-            ("__MINUS__", [a, b])   -> lowerBinop arithSubf a b l4NumberType
-            ("__TIMES__", [a, b])   -> lowerBinop arithMulf a b l4NumberType
-            ("__DIVIDE__", [a, b])  -> lowerBinop arithDivf a b l4NumberType
-            ("__MODULO__", [a, b])  -> lowerBinop arithRemf a b l4NumberType
+            ("__PLUS__", [a, b])    -> lowerRatBinop "__l4_rat_add" a b
+            ("__MINUS__", [a, b])   -> lowerRatBinop "__l4_rat_sub" a b
+            ("__TIMES__", [a, b])   -> lowerRatBinop "__l4_rat_mul" a b
+            ("__DIVIDE__", [a, b])  -> lowerRatBinop "__l4_rat_div" a b
+            ("__MODULO__", [a, b])  -> lowerRatBinop "__l4_rat_mod" a b
             ("__GEQ__", [a, b])     -> lowerCmp OGE a b
             ("__LEQ__", [a, b])     -> lowerCmp OLE a b
             ("__GT__", [a, b])      -> lowerCmp OGT a b
             ("__LT__", [a, b])      -> lowerCmp OLT a b
             ("__EQUALS__", [a, b])  -> lowerCmp OEQ a b
-            ("__AND__", [a, b])     -> lowerBoolop arithAndi a b
-            ("__OR__", [a, b])      -> lowerBoolop arithOri a b
+            -- M5 slice 4D: short-circuit so __l4_mark_forced markers
+            -- in the rhs only fire when lhs actually demands it,
+            -- matching jl4-core's lazy AND/OR evaluation.
+            ("__AND__", [a, b])     -> lowerAndShortCircuit a b
+            ("__OR__", [a, b])      -> lowerOrShortCircuit  a b
             ("__NOT__", [a])        -> do
               innerF64 <- lowerExpr a l4NumberType
               innerI1 <- unboxBoolI1 innerF64
@@ -1123,20 +1597,36 @@ lowerExpr expr expectedTy = case expr of
               hdVal <- lowerExpr hd l4NumberType
               tlVal <- lowerExpr tl l4NumberType
               lowerListConsTy l4NumberType hdVal tlVal
-            ("min", [a, b])   -> do
-              aVal <- lowerExpr a l4NumberType
-              bVal <- lowerExpr b l4NumberType
-              emitVal $ \vid -> funcCall [vid] "__l4_min"
-                [aVal, bVal] [l4NumberType, l4NumberType] [l4NumberType]
-            ("max", [a, b])   -> do
-              aVal <- lowerExpr a l4NumberType
-              bVal <- lowerExpr b l4NumberType
-              emitVal $ \vid -> funcCall [vid] "__l4_max"
-                [aVal, bVal] [l4NumberType, l4NumberType] [l4NumberType]
-            ("count", [a])    -> do
-              aVal <- lowerExpr a l4NumberType
-              emitVal $ \vid -> funcCall [vid] "__l4_list_count"
-                [aVal] [l4NumberType] [l4NumberType]
+            -- Prelude helpers with a lowered L4 body. In trace mode we
+            -- skip the runtime-call fast path so the call routes through
+            -- `callL4` (line 232) and hits @<name>$trace@ — otherwise
+            -- the trace tree would be missing the helper's body subtree.
+            ("min", args'@[a, b]) -> do
+              tracingNow <- gets (.tracing)
+              if tracingNow
+                then callPreludeL4 funcN args'
+                else do
+                  aVal <- lowerExpr a l4NumberType
+                  bVal <- lowerExpr b l4NumberType
+                  emitVal $ \vid -> funcCall [vid] "__l4_min"
+                    [aVal, bVal] [l4NumberType, l4NumberType] [l4NumberType]
+            ("max", args'@[a, b]) -> do
+              tracingNow <- gets (.tracing)
+              if tracingNow
+                then callPreludeL4 funcN args'
+                else do
+                  aVal <- lowerExpr a l4NumberType
+                  bVal <- lowerExpr b l4NumberType
+                  emitVal $ \vid -> funcCall [vid] "__l4_max"
+                    [aVal, bVal] [l4NumberType, l4NumberType] [l4NumberType]
+            ("count", args'@[a]) -> do
+              tracingNow <- gets (.tracing)
+              if tracingNow
+                then callPreludeL4 funcN args'
+                else do
+                  aVal <- lowerExpr a l4NumberType
+                  emitVal $ \vid -> funcCall [vid] "__l4_list_count"
+                    [aVal] [l4NumberType] [l4NumberType]
             ("JUST", [inner]) -> do
               innerVal <- lowerExpr inner l4NumberType
               mb <- allocSlots 2
@@ -1210,6 +1700,10 @@ lowerExpr expr expectedTy = case expr of
             ("JSONENCODE",  [v_])              -> runtimeCall "__l4_json_encode"  [v_]
             ("JSONDECODE",  [s_])              -> runtimeCall "__l4_json_decode"  [s_]
             -- General function application: uniform f64 ABI via callL4.
+            -- M5 slice 4E: no per-call path translation needed — the
+            -- mark_forced ABI uses value-pointer identity so a
+            -- helper's Proj on its local param hits the same JS
+            -- object the caller marshaled.
             _ -> do
               sigs <- gets (.funcSigs)
               let retTy = case Map.lookup funcN sigs of
@@ -1224,12 +1718,12 @@ lowerExpr expr expectedTy = case expr of
   -- Named application (WITH syntax for record construction)
   AppNamed _ n namedArgs _ -> lowerRecordConstruction n namedArgs expectedTy
 
-  -- Arithmetic
-  Plus _ lhs rhs -> lowerBinop arithAddf lhs rhs l4NumberType
-  Minus _ lhs rhs -> lowerBinop arithSubf lhs rhs l4NumberType
-  Times _ lhs rhs -> lowerBinop arithMulf lhs rhs l4NumberType
-  DividedBy _ lhs rhs -> lowerBinop arithDivf lhs rhs l4NumberType
-  Modulo _ lhs rhs -> lowerBinop arithRemf lhs rhs l4NumberType
+  -- Arithmetic — all routed through the exact-rational runtime.
+  Plus _ lhs rhs -> lowerRatBinop "__l4_rat_add" lhs rhs
+  Minus _ lhs rhs -> lowerRatBinop "__l4_rat_sub" lhs rhs
+  Times _ lhs rhs -> lowerRatBinop "__l4_rat_mul" lhs rhs
+  DividedBy _ lhs rhs -> lowerRatBinop "__l4_rat_div" lhs rhs
+  Modulo _ lhs rhs -> lowerRatBinop "__l4_rat_mod" lhs rhs
 
   -- Comparisons
   Equals _ lhs rhs -> lowerCmp OEQ lhs rhs
@@ -1239,8 +1733,10 @@ lowerExpr expr expectedTy = case expr of
   Geq _ lhs rhs -> lowerCmp OGE lhs rhs
 
   -- Boolean logic
-  And _ lhs rhs -> lowerBoolop arithAndi lhs rhs
-  Or _ lhs rhs -> lowerBoolop arithOri lhs rhs
+  -- M5 slice 4D: short-circuit so __l4_mark_forced markers in the rhs
+  -- only fire when lhs demands it (jl4-core's lazy AND/OR).
+  And _ lhs rhs -> lowerAndShortCircuit lhs rhs
+  Or  _ lhs rhs -> lowerOrShortCircuit  lhs rhs
   Not _ inner -> do
     innerF64 <- lowerExpr inner l4NumberType
     innerI1 <- unboxBoolI1 innerF64
@@ -1294,11 +1790,11 @@ lowerExpr expr expectedTy = case expr of
     forM_ locals (lowerLocalDecl LocalScopeLetIn)
     lowerExpr body expectedTy
 
-  -- Percent (x% = x / 100)
+  -- Percent (x% = x / 100) — exact rational division.
   Percent _ inner -> do
     val <- lowerExpr inner l4NumberType
-    hundred <- emitVal $ \vid -> arithConstantFloat vid 100.0
-    emitVal $ \vid -> arithDivf vid val hundred
+    hundred <- emitNumberLiteral 100
+    emitRatBinop "__l4_rat_div" val hundred
 
   -- List literal
   List _ elems -> lowerListLiteral elems expectedTy
@@ -1332,14 +1828,22 @@ lowerExpr expr expectedTy = case expr of
     InertCtxOr   -> emitVal $ \vid -> arithConstantFloat vid 0.0
     InertCtxNone -> emitVal $ \vid -> arithConstantFloat vid 1.0
 
-  -- Regulative / side-effectful / IO constructs aren't compiled — they
-  -- return a uniform-ABI FALSE (0.0).
+  -- M6: 'Regulative' / 'Breach' compile to a placeholder body (0.0).
+  -- The runtime detects deontic functions via @schema.isDeontic@ and
+  -- routes them to a JS-side interpreter that walks the
+  -- @deonticContract@ tree against the request's @events@ stream —
+  -- the wasm body is never invoked, so the placeholder is harmless.
+  -- (Event-replay loop intentionally lives in JS so a future
+  -- log-stream sink can resume from a checkpointed intermediate
+  -- state without re-instantiating wasm.)
   Regulative{} -> emitVal $ \vid -> arithConstantFloat vid 0.0
-  Event{}      -> emitVal $ \vid -> arithConstantFloat vid 0.0
-  Fetch{}      -> emitVal $ \vid -> arithConstantFloat vid 0.0
-  Post{}       -> emitVal $ \vid -> arithConstantFloat vid 0.0
-  Env{}        -> emitVal $ \vid -> arithConstantFloat vid 0.0
   Breach{}     -> emitVal $ \vid -> arithConstantFloat vid 0.0
+  -- Event / IO constructs still aren't supported — they don't have a
+  -- runtime interpretation in the schema yet.
+  Event{}      -> markUnsupported "EVENT construct not supported by the WASM backend"
+  Fetch{}      -> markUnsupported "FETCH (IO) not supported by the WASM backend"
+  Post{}       -> markUnsupported "POST (IO) not supported by the WASM backend"
+  Env{}        -> markUnsupported "ENV not supported by the WASM backend"
 
   -- Exponent
   Exponent _ base exp_ -> do
@@ -1351,10 +1855,42 @@ lowerExpr expr expectedTy = case expr of
   RAnd _ lhs rhs -> lowerBoolop arithAndi lhs rhs
   ROr _ lhs rhs -> lowerBoolop arithOri lhs rhs
 
+-- | Emit a NUMBER literal as an exact rational handle (M4 slice 2b). The
+-- L4 typechecker hands us a 'Rational', which we serialise to its canonical
+-- @"<num>/<den>"@ text, intern in the string pool, then route through
+-- @__l4_rat_parse@. This preserves the literal's full arbitrary precision
+-- (no @fromRational :: Double@ truncation) and lets the runtime build the
+-- exact BigInt rational. Used by 'lowerLit (NumericLit ...)' and the
+-- internal-constant call sites (Percent, etc.).
+emitNumberLiteral :: Rational -> LowerM Value
+emitNumberLiteral r = do
+  let txt = Text.pack (show (numerator r) <> "/" <> show (denominator r))
+  globalName <- internString txt
+  ptr <- emitVal $ \vid -> mkOp [vid] "llvm.mlir.addressof" []
+    [NamedAttribute "global_name" (FlatSymbolRefAttr globalName)]
+    [PointerType] []
+  ptrF64 <- ptrToF64 ptr
+  emitVal $ \vid -> funcCall [vid] "__l4_rat_parse"
+    [ptrF64] [l4NumberType] [l4NumberType]
+
+-- | Emit a binary rational op (@__l4_rat_add@ / @_sub@ / @_mul@ / @_div@ /
+-- @_mod@). Both operands and the result are rational handles.
+emitRatBinop :: Text -> Value -> Value -> LowerM Value
+emitRatBinop fn a b =
+  emitVal $ \vid -> funcCall [vid] fn [a, b]
+    [l4NumberType, l4NumberType] [l4NumberType]
+
+-- | Lower a binary arithmetic op on NUMBER. Both subexpressions are NUMBERs,
+-- so they resolve to rational handles, and the result is also a handle.
+lowerRatBinop :: Text -> Expr Resolved -> Expr Resolved -> LowerM Value
+lowerRatBinop fn lhs rhs = do
+  lhsVal <- lowerExpr lhs l4NumberType
+  rhsVal <- lowerExpr rhs l4NumberType
+  emitRatBinop fn lhsVal rhsVal
+
 -- | Lower a literal.
 lowerLit :: Lit -> MLIRType -> LowerM Value
-lowerLit (NumericLit _ r) _ =
-  emitVal $ \vid -> arithConstantFloat vid (fromRational r)
+lowerLit (NumericLit _ r) _ = emitNumberLiteral r
 lowerLit (StringLit _ s) _ = do
   -- Intern the string, take its address (@!llvm.ptr@), then box to f64
   -- so it can live as a uniform-ABI SSA value.
@@ -1364,26 +1900,145 @@ lowerLit (StringLit _ s) _ = do
     [PointerType] []
   ptrToF64 ptr
 
--- | Lower a binary arithmetic operation.
-lowerBinop :: (ValueId -> Value -> Value -> Operation) -> Expr Resolved -> Expr Resolved -> MLIRType -> LowerM Value
-lowerBinop mkBinop lhs rhs ty = do
-  lhsVal <- lowerExpr lhs ty
-  rhsVal <- lowerExpr rhs ty
-  emitVal $ \vid -> mkBinop vid lhsVal rhsVal
+-- | Test whether an expression's L4 type is @NUMBER@ — i.e. its SSA value is
+-- a rational handle. Uses the typechecker's 'InfoMap' first; falls back to
+-- syntactic shape recognition (arithmetic ops, numeric literals, percent)
+-- so the dispatch still works even if 'typeOfExpr' can't find an exact
+-- range match for the node (which happens for some compound expressions).
+isNumberExpr :: Expr Resolved -> LowerM Bool
+isNumberExpr e = do
+  mt <- typeOfExpr e
+  case mt of
+    Just t  -> pure $ isNumberType t
+    Nothing -> case e of
+      -- A bare @Var@ reference (App with no args) — look the name up
+      -- in 'bindingL4Types' to get its source-level type. This matters
+      -- inside prelude bodies (max/min/count/…), where the param's
+      -- type is absent from the main module's 'InfoMap'. Without it,
+      -- 'isNumberExprShape' returns False for Var and 'lowerCmp'
+      -- falls through to direct @arith.cmpf@ on the f64 bit-pattern
+      -- — almost always producing the wrong truth value when the
+      -- operands are rational-pool handles.
+      App _ n [] -> do
+        let name = resolvedName n
+        mL4Ty <- gets (Map.lookup name . (.bindingL4Types))
+        case mL4Ty of
+          Just t  -> pure $ isNumberType t
+          Nothing -> pure $ isNumberExprShape e
+      _ -> pure $ isNumberExprShape e
 
--- | Lower a comparison. Native @arith.cmpf@ produces @i1@; we
--- immediately @uitofp@ back to @f64@ so the returned SSA value
--- conforms to the uniform f64 ABI (0.0 = false, 1.0 = true).
+-- | Syntactic-shape NUMBER recognition. Conservative — only returns True
+-- when the shape /must/ produce a NUMBER. Used as a fallback when the
+-- typechecker's 'InfoMap' is missing or imprecise for a given node.
+isNumberExprShape :: Expr Resolved -> Bool
+isNumberExprShape = \case
+  Lit _ (NumericLit _ _) -> True
+  Plus{}      -> True
+  Minus{}     -> True
+  Times{}     -> True
+  DividedBy{} -> True
+  Modulo{}    -> True
+  Percent{}   -> True
+  Exponent{}  -> True
+  App _ n _ -> case resolvedName n of
+    "__PLUS__"    -> True
+    "__MINUS__"   -> True
+    "__TIMES__"   -> True
+    "__DIVIDE__"  -> True
+    "__MODULO__"  -> True
+    _             -> False
+  _ -> False
+
+-- | Test whether an expression's L4 type is @STRING@. Used to dispatch
+-- @EQUALS@ on strings through @__l4_str_eq@ (content equality) instead of
+-- the legacy 'arith.cmpf' on the pointer bit-pattern (which only happened to
+-- agree for string-pool-interned-equal literals — see jl4-core's
+-- 'BinOpEquals' on @ValString@).
+isStringExpr :: Expr Resolved -> LowerM Bool
+isStringExpr e = do
+  mt <- typeOfExpr e
+  pure $ case mt of
+    Just t -> isStringType t
+    Nothing -> False
+
+isNumberType :: Type' Resolved -> Bool
+isNumberType t = case t of
+  TyApp _ n _ -> nameMatches n ["NUMBER", "number"]
+  _ -> False
+
+isStringType :: Type' Resolved -> Bool
+isStringType t = case t of
+  TyApp _ n _ -> nameMatches n ["STRING", "string"]
+  _ -> False
+
+nameMatches :: Resolved -> [Text] -> Bool
+nameMatches r names = resolvedName r `elem` names
+
+-- | Lower a comparison. Dispatches on the operand's L4 type:
+--
+--   * NUMBER → @__l4_rat_cmp@ returning -1.0\/0.0\/1.0 (f64-ABI); compare
+--     against 0.0 with @arith.cmpf@ to get the @i1@ truth value with the
+--     same predicate the source used.
+--   * STRING ==\/!= → @__l4_str_eq@ returning 0.0\/1.0 (f64-ABI); compare
+--     against 1.0 (or 0.0, for !=) to get @i1@.
+--   * Everything else (BOOLEAN, enum tag, DATE\/TIME serial, pointers) →
+--     legacy @arith.cmpf@ on the raw f64 bit-pattern (same as before).
+--
+-- The native @i1@ result is then lifted to the uniform-ABI f64 truth value
+-- (0.0 = false, 1.0 = true) via 'boxBoolI1'.
 lowerCmp :: CmpfPredicate -> Expr Resolved -> Expr Resolved -> LowerM Value
 lowerCmp pred_ lhs rhs = do
-  lhsVal <- lowerExpr lhs l4NumberType
-  rhsVal <- lowerExpr rhs l4NumberType
-  i1Val <- emitVal $ \vid -> arithCmpf vid pred_ lhsVal rhsVal
-  boxBoolI1 i1Val
+  numLhs <- isNumberExpr lhs
+  numRhs <- isNumberExpr rhs
+  if numLhs || numRhs
+    then do
+      lhsVal <- lowerExpr lhs l4NumberType
+      rhsVal <- lowerExpr rhs l4NumberType
+      cmpF <- emitVal $ \vid -> funcCall [vid] "__l4_rat_cmp"
+        [lhsVal, rhsVal] [l4NumberType, l4NumberType] [l4NumberType]
+      zero <- emitVal $ \vid -> arithConstantFloat vid 0.0
+      i1Val <- emitVal $ \vid -> arithCmpf vid pred_ cmpF zero
+      boxBoolI1 i1Val
+    else case pred_ of
+      OEQ -> dispatchEqualsByType lhs rhs False
+      ONE -> dispatchEqualsByType lhs rhs True
+      _   -> do
+        lhsVal <- lowerExpr lhs l4NumberType
+        rhsVal <- lowerExpr rhs l4NumberType
+        i1Val <- emitVal $ \vid -> arithCmpf vid pred_ lhsVal rhsVal
+        boxBoolI1 i1Val
+
+-- | EQUALS \/ NOT EQUALS dispatch when neither side is NUMBER. STRING goes
+-- through @__l4_str_eq@ (content equality); everything else falls back to
+-- bit-pattern equality on the raw f64 (correct for BOOLEAN\/enum\/DATE\/TIME,
+-- approximate for pointer-typed values — a long-standing limitation
+-- inherited from the pre-2b lowering).
+dispatchEqualsByType :: Expr Resolved -> Expr Resolved -> Bool -> LowerM Value
+dispatchEqualsByType lhs rhs invert = do
+  strLhs <- isStringExpr lhs
+  strRhs <- isStringExpr rhs
+  if strLhs || strRhs
+    then do
+      lhsVal <- lowerExpr lhs l4NumberType
+      rhsVal <- lowerExpr rhs l4NumberType
+      eqF <- emitVal $ \vid -> funcCall [vid] "__l4_str_eq"
+        [lhsVal, rhsVal] [l4NumberType, l4NumberType] [l4NumberType]
+      -- Compare the 0.0\/1.0 truth against 1.0 (for ==) or 0.0 (for !=).
+      cmpAgainst <- emitVal $ \vid ->
+        arithConstantFloat vid (if invert then 0.0 else 1.0)
+      i1Val <- emitVal $ \vid -> arithCmpf vid OEQ eqF cmpAgainst
+      boxBoolI1 i1Val
+    else do
+      lhsVal <- lowerExpr lhs l4NumberType
+      rhsVal <- lowerExpr rhs l4NumberType
+      i1Val <- emitVal $ \vid -> arithCmpf vid (if invert then ONE else OEQ) lhsVal rhsVal
+      boxBoolI1 i1Val
 
 -- | Lower a boolean binary operation. Operands arrive as f64 (encoded
 -- as 0.0 / 1.0). We unbox each to @i1@, run the native op, then box
 -- the @i1@ result back to f64.
+-- | Lower an eager boolean op (arith.andi / arith.ori) — historical
+-- entry point; kept for non-AND/OR call sites (RAnd, ROr, etc.).
 lowerBoolop :: (ValueId -> Value -> Value -> Operation) -> Expr Resolved -> Expr Resolved -> LowerM Value
 lowerBoolop mkBoolop lhs rhs = do
   lhsF64 <- lowerExpr lhs l4NumberType
@@ -1392,6 +2047,42 @@ lowerBoolop mkBoolop lhs rhs = do
   rhsI1 <- unboxBoolI1 rhsF64
   resultI1 <- emitVal $ \vid -> mkBoolop vid lhsI1 rhsI1
   boxBoolI1 resultI1
+
+-- | M5 slice 4D — short-circuit AND. Evaluates @lhs@ first; only
+-- evaluates @rhs@ when @lhs@ is true. Wraps @rhs@ in an scf.if then-
+-- region so its lowered ops (including any @__l4_mark_forced@ markers
+-- from nested @Proj@s) execute only on the live branch — bringing
+-- the runtime's `forcedFields` set in line with jl4-core's lazy
+-- evaluation.
+lowerAndShortCircuit :: Expr Resolved -> Expr Resolved -> LowerM Value
+lowerAndShortCircuit lhs rhs = do
+  lhsF64 <- lowerExpr lhs l4NumberType
+  lhsI1  <- unboxBoolI1 lhsF64
+  -- Then branch: evaluate rhs and yield its f64-boxed bool.
+  (rhsF64, rhsOps) <- collectOps $ lowerExpr rhs l4NumberType
+  -- Else branch: yield a fresh f64-boxed FALSE (no rhs eval).
+  (falseF64, elseOps) <- collectOps $ do
+    f <- emitVal $ \vid -> arithConstantBool vid False
+    boxBoolI1 f
+  let thenBlock = Block 0 [] (rhsOps  ++ [scfYield [rhsF64]   [l4NumberType]])
+      elseBlock = Block 0 [] (elseOps ++ [scfYield [falseF64] [l4NumberType]])
+  emitVal $ \vid -> scfIf [vid] lhsI1 (Region [thenBlock]) (Region [elseBlock]) [l4NumberType]
+
+-- | M5 slice 4D — short-circuit OR. Mirror of 'lowerAndShortCircuit'
+-- with TRUE for the else-branch fallback.
+lowerOrShortCircuit :: Expr Resolved -> Expr Resolved -> LowerM Value
+lowerOrShortCircuit lhs rhs = do
+  lhsF64 <- lowerExpr lhs l4NumberType
+  lhsI1  <- unboxBoolI1 lhsF64
+  -- Then branch: yield a fresh f64-boxed TRUE (no rhs eval).
+  (trueF64, thenOps) <- collectOps $ do
+    t <- emitVal $ \vid -> arithConstantBool vid True
+    boxBoolI1 t
+  -- Else branch: evaluate rhs.
+  (rhsF64, rhsOps) <- collectOps $ lowerExpr rhs l4NumberType
+  let thenBlock = Block 0 [] (thenOps ++ [scfYield [trueF64] [l4NumberType]])
+      elseBlock = Block 0 [] (rhsOps  ++ [scfYield [rhsF64]  [l4NumberType]])
+  emitVal $ \vid -> scfIf [vid] lhsI1 (Region [thenBlock]) (Region [elseBlock]) [l4NumberType]
 
 -- | Promote an @i1@ SSA value to @f64@ (0.0 / 1.0).
 boxBoolI1 :: Value -> LowerM Value
@@ -1413,8 +2104,15 @@ lowerConsider scrutinee branches _expectedTy = do
 
 -- | Lower CONSIDER branches. The scrutinee is f64; all branch results
 -- are f64 (uniform ABI), so the synthesised @scf.if@ yields f64.
+--
+-- The no-branch fallthrough used to emit @arith.constant 0.0 : f64@, which
+-- under the rational-handle ABI would alias the very first rational the
+-- pool ever allocated (handle index 0). Emit a fresh NUMBER-zero handle
+-- instead, so the value is safe to consume as a NUMBER. The cost is one
+-- @__l4_rat_parse \"0\/1\"@ per branch-exhausted CONSIDER, which is
+-- unreachable in well-typed L4 anyway.
 lowerBranches :: Value -> [Branch Resolved] -> LowerM Value
-lowerBranches _ [] = emitVal $ \vid -> arithConstantFloat vid 0.0
+lowerBranches _ [] = emitNumberLiteral 0
 lowerBranches _scrutVal [MkBranch _ (Otherwise _) body] =
   lowerExpr body l4NumberType
 lowerBranches scrutVal [MkBranch _ (When _ pat) body] = withScope $ do
@@ -1491,8 +2189,13 @@ testPatternTy = go
         Just tag -> enumTagCmpF64 scrutF64 tag
         Nothing  -> trueI1
     go scrutF64 _ (PatLit _ (NumericLit _ r)) = do
-      lit <- emitVal $ \vid -> arithConstantFloat vid (fromRational r)
-      emitVal $ \vid -> arithCmpf vid OEQ scrutF64 lit
+      -- The scrutinee is a NUMBER handle; compare for equality via
+      -- @__l4_rat_cmp@ against the literal's handle.
+      lit <- emitNumberLiteral r
+      cmpF <- emitVal $ \vid -> funcCall [vid] "__l4_rat_cmp"
+        [scrutF64, lit] [l4NumberType, l4NumberType] [l4NumberType]
+      zero <- emitVal $ \vid -> arithConstantFloat vid 0.0
+      emitVal $ \vid -> arithCmpf vid OEQ cmpF zero
     go _ _ (PatLit _ (StringLit _ _)) = trueI1
     go scrutF64 _ (PatCons _ _ _) = do
       -- List is non-null: scrutinee != 0.0
@@ -1640,7 +2343,28 @@ lowerProjection record field _expectedTy = do
   let fieldName = resolvedName field
       (_, fieldIdx) = findFieldInEnv fieldName env
   recordVal <- lowerExpr record l4NumberType
+  -- M5 slice 4E — when emitting `<fn>$trace`, mark this field
+  -- forced. The marker carries the record's wasm pointer (recordVal
+  -- itself, f64-boxed) so the runtime resolves it back to the
+  -- exact JS object the marshaler registered — no path strings, no
+  -- helper-call translation needed.
+  tracingNow <- gets (.tracing)
+  when tracingNow $ emitMarkForcedValue recordVal fieldName
   loadSlot recordVal fieldIdx
+
+-- | Emit @__l4_mark_forced(recordValue, fieldNamePtr)@. The
+-- @recordValue@ is the f64-boxed wasm pointer of the record being
+-- projected into; the runtime looks it up in `valueByPtr` to find
+-- the originating JS object and attaches `.__forced.add(field)`.
+emitMarkForcedValue :: Value -> Text -> LowerM ()
+emitMarkForcedValue recordVal fieldTxt = do
+  fieldGlobal <- internString fieldTxt
+  fieldPtr <- emitVal $ \vid -> mkOp [vid] "llvm.mlir.addressof" []
+    [NamedAttribute "global_name" (FlatSymbolRefAttr fieldGlobal)]
+    [PointerType] []
+  fieldPtrF <- ptrToF64 fieldPtr
+  emit $ funcCall [] "__l4_mark_forced" [recordVal, fieldPtrF]
+    [l4NumberType, l4NumberType] []
 
 -- | Find which record contains a field and return the struct type + index.
 -- Falls back to an anonymous single-field struct if the field can't be
@@ -1701,15 +2425,78 @@ data LocalScope = LocalScopeWhere | LocalScopeLetIn
   deriving (Eq, Show)
 
 lowerLocalDecl :: LocalScope -> LocalDecl Resolved -> LowerM ()
-lowerLocalDecl _scope (LocalDecide _anno (MkDecide dAnno ts appForm body)) = do
+lowerLocalDecl _scope (LocalDecide _anno decide@(MkDecide dAnno ts appForm body)) = do
   let name = resolvedName (appFormHead' appForm)
       params = appFormParams appForm
+  -- Detect zero-arg WHERE/LET bindings whose body recursively reaches
+  -- back into something that calls this binding (directly or via the
+  -- enclosing function). Eager evaluation of such a binding would
+  -- compile a non-terminating call chain — IF/ELSE never gets to short-
+  -- circuit because the binding body runs at scope entry. We lambda-
+  -- lift these to a zero-arg helper with closure-converted captures so
+  -- the body only fires at use sites that the surrounding control flow
+  -- actually demands.
+  --
+  -- "Self-referential" here means either the binding refers to itself
+  -- or it calls a function whose definition is still being lowered
+  -- (i.e. it's in 'pendingDecide' — the enclosing DECIDE chain).
+  pendingNames <- gets (.pendingDecide)
+  let bodyFree = freeVarsOfExpr body Set.empty
+      isSelfRef = name `Set.member` bodyFree
+      isMutualRec = any (`Set.member` bodyFree) pendingNames
+      shouldLift = isSelfRef || isMutualRec
   case params of
+    [] | shouldLift -> do
+      let funcN = sanitizeName name
+      knownTopLevels <- gets (Set.fromList . Map.keys . (.funcSigs))
+      currentBindings <- gets (Map.keysSet . (.bindings))
+      l4TyMap <- gets (.bindingL4Types)
+      let freeInBody = freeVarsOfExpr body
+            (knownTopLevels <> Set.singleton name)
+          captured = [v | v <- Set.toList freeInBody, v `Set.member` currentBindings]
+          headRes = appFormHead' appForm
+          mkParam c = MkOptionallyTypedName emptyAnno
+                        (renameResolved c headRes)
+                        (Map.lookup c l4TyMap)
+          extraParams = case givenSigParams ts of
+            (template:_) -> [synthParam c template | c <- captured]
+            -- Zero-arg WHERE/LET bindings have no GIVEN clause, so we
+            -- can't clone an existing param as the template. Synthesise
+            -- one per capture using the outer-scope L4 type we recorded
+            -- in 'bindingL4Types' (falls back to untyped, which
+            -- 'lowerDecide' coerces to the uniform f64 ABI).
+            []           -> [mkParam c | c <- captured]
+          newAppForm = extendAppFormWith captured appForm
+          newTs = extendTypeSigWith extraParams ts
+      modify' $ \s -> s
+        { localCaptures = Map.insert funcN captured s.localCaptures
+        }
+      lowerDecide (MkDecide dAnno newTs newAppForm body)
     [] -> do
       -- Zero-arg binding — evaluate once and bind the value.
+      -- M5 — in trace mode, wrap the rhs evaluation with a
+      -- binding-wrapper trace node so the resulting Reasoning matches
+      -- jl4-core's @labelExample (Just resolved)@ output. The wrapper
+      -- node was allocated by 'Schema.collectTraceNodes' keyed off
+      -- the Decide's range; we look it up here and bracket
+      -- @lowerExpr body@ with @__l4_trace_enter(id)@ /
+      -- @__l4_trace_exit(value, kind)@.
       bodyTy <- inferExprTypeM body
-      val <- lowerExpr body bodyTy
-      bindTy name val bodyTy
+      tracingNow <- gets (.tracing)
+      tnMap <- gets (.traceNodeMap)
+      let mWrapperEntry = case rangeOf decide of
+            Just rng -> Map.lookup (rng, Nothing) tnMap
+            Nothing  -> Nothing
+      case (tracingNow, mWrapperEntry) of
+        (True, Just (wrapperId, wrapperKind)) -> do
+          emitTraceEnter wrapperId
+          val <- lowerExpr body bodyTy
+          boxedVal <- boxABI bodyTy val
+          emitTraceExit boxedVal wrapperKind
+          bindTy name val bodyTy
+        _ -> do
+          val <- lowerExpr body bodyTy
+          bindTy name val bodyTy
     _ -> do
       let funcN = sanitizeName name
           paramSet = Set.fromList (map resolvedName params)
@@ -1741,7 +2528,12 @@ freeVarsOfExpr expr0 bound0 = go bound0 expr0
         in if nm `Set.member` bound
              then Set.empty
              else Set.singleton nm
-      App _ _ args -> Set.unions (map (go bound) args)
+      App _ n args ->
+        let nm = resolvedName n
+            self = if nm `Set.member` bound
+                     then Set.empty
+                     else Set.singleton nm
+        in Set.unions (self : map (go bound) args)
       AppNamed _ _ named _ ->
         Set.unions [go bound e | MkNamedExpr _ _ e <- named]
       And _ a b        -> Set.union (go bound a) (go bound b)
@@ -1838,10 +2630,10 @@ extendTypeSigWith extras (MkTypeSig ann (MkGivenSig gAnn ps) mGiv) =
 
 -- | Lower a lambda expression.
 lowerLambda :: GivenSig Resolved -> Expr Resolved -> MLIRType -> LowerM Value
-lowerLambda (MkGivenSig _ _params) _body _expectedTy = do
-  -- For now, lambdas that appear in L4 are rare and typically get
-  -- inlined by the evaluator. Emit as a local function.
-  emitVal $ \vid -> arithConstantFloat vid 0.0  -- placeholder
+lowerLambda (MkGivenSig _ _params) _body _expectedTy =
+  -- Lambdas aren't lowered yet (higher-order support is incomplete). Flag
+  -- the enclosing function instead of silently emitting FALSE.
+  markUnsupported "lambda / higher-order function not supported by the WASM backend"
 
 -- | Lower a multi-way if (BRANCH ... WHEN guard THEN expr).
 lowerMultiWayIf :: [GuardedExpr Resolved] -> Expr Resolved -> MLIRType -> LowerM Value
