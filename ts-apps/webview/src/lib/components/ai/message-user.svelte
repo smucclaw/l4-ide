@@ -7,18 +7,29 @@
     chips,
     shouldStick = false,
     userIndex = -1,
+    pending = false,
   }: {
     content: string
     chips?: UserTurnChip[]
     shouldStick?: boolean
     userIndex?: number
+    /** True for a user bubble that's still queued in the extension's
+     *  inject pipeline (the extension has not yet echoed
+     *  `queue-consumed` for it). Renders the bubble at reduced
+     *  opacity so the user can see it landed but isn't part of the
+     *  active model request yet, and excludes it from the
+     *  scroll-sticky header set (the data-pending attribute below
+     *  is read by message-list's offset collector). */
+    pending?: boolean
   } = $props()
 </script>
 
 <div
   class="user-row user-message-wrapper"
   class:sticky={shouldStick}
+  class:pending
   data-user-index={userIndex}
+  data-pending={pending ? 'true' : 'false'}
 >
   <div class="user-bubble">
     {#if chips && chips.length > 0}
@@ -30,7 +41,9 @@
           <span
             class="user-chip"
             role="listitem"
-            title={chip.kind === 'active-file' ? chip.path : chip.name}
+            title={chip.kind === 'active-file' || chip.kind === 'file'
+              ? chip.path
+              : chip.name}
           >
             <svg
               class="chip-icon"
@@ -53,6 +66,17 @@
               {/if}
             </svg>
             <span class="chip-name">{chip.name}</span>
+            {#if chip.kind === 'active-file' && chip.selectionStartLine !== undefined && chip.selectionEndLine !== undefined}
+              <!-- Show the 1-based inclusive line range the chip was
+                   advertising at send time (e.g. `:1-33`). The model
+                   sees the same range in `<editor-context>`. -->
+              <span class="chip-range">
+                :{chip.selectionStartLine}{chip.selectionEndLine !==
+                chip.selectionStartLine
+                  ? `-${chip.selectionEndLine}`
+                  : ''}
+              </span>
+            {/if}
           </span>
         {/each}
       </div>
@@ -78,6 +102,16 @@
     top: 0px;
     z-index: 10;
   }
+  /* Pending injection — the extension hasn't yet echoed
+     consumption of this submit. Reads as "queued" rather than
+     "sent": dim the bubble + chips so the user can see it landed
+     but understand it isn't part of the active model request yet.
+     Snaps back to full opacity once `onQueueConsumed` clears the
+     pending flag in the store. */
+  .user-row.pending .user-bubble {
+    opacity: 0.55;
+    transition: opacity 0.15s ease-out;
+  }
   .user-bubble {
     position: relative;
     flex: 1;
@@ -89,6 +123,14 @@
     margin-right: -10px;
     box-shadow: 0 0 16px 2px
       var(--vscode-input-background, rgba(127, 127, 127, 0.12));
+  }
+  /* Cap a non-sticky user bubble at half the chat's visible height
+     (`cqh` resolves against the `.message-list` size container) and let
+     it scroll internally rather than dominating the whole chat. The
+     sticky variant has its own 3-line cap below, so we exclude it. */
+  .user-row:not(.sticky) .user-bubble {
+    max-height: 50cqh;
+    overflow-y: auto;
   }
   .user-text {
     margin: 0;
@@ -128,6 +170,11 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .chip-range {
+    flex-shrink: 0;
+    opacity: 0.75;
+    font-variant-numeric: tabular-nums;
   }
   /* When the user bubble is stuck to the top of the scroll area, cap
      it at ~3 lines so a long prompt doesn't occlude the assistant

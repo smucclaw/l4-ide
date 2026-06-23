@@ -26,6 +26,7 @@ import qualified L4.Decision.QueryPlan as QP
 import qualified LSP.L4.Viz.VizExpr as VizExpr
 import Servant
 import Servant.OpenApi
+import qualified Version
 
 type ServerName = Text
 
@@ -35,7 +36,7 @@ serverOpenApi serverName =
   annotateGraphVizParams $
     toOpenApi (Proxy :: Proxy Api)
       & info . title .~ "JL4 Multi-Tenant Decision Service API"
-      & info . version .~ "1.0"
+      & info . version .~ Version.serviceVersion
       & info . description ?~ "Multi-tenant API for deploying and evaluating JL4 functions"
       & servers .~ Maybe.maybeToList ((\sName -> Server sName mempty mempty) <$> serverName)
  where
@@ -129,6 +130,7 @@ instance ToSchema FunctionSummary where
     textRef <- declareSchemaRef (Proxy @Text)
     mTextRef <- declareSchemaRef (Proxy @(Maybe Text))
     paramsRef <- declareSchemaRef (Proxy @Parameters)
+    mParamRef <- declareSchemaRef (Proxy @(Maybe Parameter))
     pure $
       NamedSchema (Just "FunctionSummary") $
         mempty
@@ -138,6 +140,7 @@ instance ToSchema FunctionSummary where
                , ("description", textRef)
                , ("parameters", paramsRef)
                , ("returnType", textRef)
+               , ("returnSchema", mParamRef)
                , ("section", mTextRef)
                ]
           & required .~ ["name", "description", "parameters", "returnType"]
@@ -163,6 +166,7 @@ instance ToSchema Function where
     textRef <- declareSchemaRef (Proxy @Text)
     parametersRef <- declareSchemaRef (Proxy @Parameters)
     evalBackendsRef <- declareSchemaRef (Proxy @[EvalBackend])
+    mParamRef <- declareSchemaRef (Proxy @(Maybe Parameter))
     pure $
       NamedSchema (Just "Function") $
         mempty
@@ -180,6 +184,7 @@ instance ToSchema Function where
                            , ("description", textRef)
                            , ("supportedBackends", evalBackendsRef)
                            , ("parameters", parametersRef)
+                           , ("returnSchema", mParamRef)
                            ]
                  )
                ]
@@ -223,6 +228,7 @@ instance ToSchema Parameter where
                , ("properties", nestedPropsSchema)
                , ("propertyOrder", mTextListSchema)
                , ("items", itemsSchema)
+               , ("x-l4-type", mTextSchema)
                ]
           & required .~ ["type"]
           & example

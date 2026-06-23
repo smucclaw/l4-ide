@@ -13,6 +13,7 @@ import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Map.Strict as Map
 import L4.FunctionSchema (Parameters (..))
+import qualified Version
 
 -- | Build a valid OpenAPI 3.0 document from deployment metadata.
 --
@@ -30,13 +31,29 @@ buildOpenApiDoc mServerName vis deployments =
   Aeson.object $
     [ "openapi" .= ("3.0.0" :: Text)
     , "info" .= Aeson.object
-        [ "title" .= ("L4 Deployments" :: Text)
-        , "version" .= ("1.0.0" :: Text)
-        ]
+        ( [ "title" .= ("L4 Deployments" :: Text)
+          -- For a single-deployment document, advertise that deployment's
+          -- version (MAJOR.BREAKING.RUNNING) as the canonical OpenAPI
+          -- info.version. Org-wide documents span many deployments, so they
+          -- fall back to the jl4-service build version.
+          , "version" .= infoVersion
+          ]
+          -- Surface the operator-supplied "Intended use" as
+          -- the standard OpenAPI info.description when the document is
+          -- scoped to a single deployment.
+          <> case deployments of
+               [(_, dm)] -> maybe [] (\d -> ["description" .= d]) dm.metaDescription
+               _         -> []
+        )
     , "paths" .= buildPaths vis deployments
     ]
     <> maybe [] (\s -> ["servers" .= [Aeson.object ["url" .= s]]]) mServerName
     <> ["components" .= buildComponents]
+  where
+    infoVersion :: Text
+    infoVersion = case deployments of
+      [(_, dm)] | not (Text.null dm.metaDeploymentVersion) -> dm.metaDeploymentVersion
+      _ -> Version.serviceVersion
 
 -- | Build the paths object from deployment metadata.
 buildPaths :: Visibility -> [(Text, DeploymentMetadata)] -> Aeson.Value
@@ -362,12 +379,17 @@ batchRequestSchema fn =
     ]
 
 -- | Recursively strip non-OpenAPI-compliant fields from parameter schemas.
--- Removes "alias" and "propertyOrder" which are L4-specific extensions.
+-- Removes "alias", "propertyOrder", and "x-l4-type" which are L4-specific
+-- extensions. The latter is consumed by the function-schema endpoint
+-- (`GET /deployments/{id}/functions/{fn}`) for chat-side rendering and is
+-- not part of the OpenAPI surface.
 stripNonOpenApiFields :: Aeson.Value -> Aeson.Value
 stripNonOpenApiFields (Aeson.Object obj) =
   Aeson.Object $ Aeson.KeyMap.map stripNonOpenApiFields
                $ Aeson.KeyMap.delete "alias"
-               $ Aeson.KeyMap.delete "propertyOrder" obj
+               $ Aeson.KeyMap.delete "propertyOrder"
+               $ Aeson.KeyMap.delete "x-l4-type"
+               $ Aeson.KeyMap.delete "x-sanitized-name" obj
 stripNonOpenApiFields (Aeson.Array arr) =
   Aeson.Array $ fmap stripNonOpenApiFields arr
 stripNonOpenApiFields v = v

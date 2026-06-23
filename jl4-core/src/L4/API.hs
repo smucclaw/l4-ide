@@ -287,8 +287,23 @@ l4EvalDirective source line col directiveType =
         Nothing ->
           pure $ encodeJson $ Aeson.object
             [ "error" .= ("No directive result found at the given position" :: Text) ]
-        Just (EL.MkEvalDirectiveResult _range res _mtrace) ->
-          pure $ encodeJson $ Aeson.object
+        Just (EL.MkEvalDirectiveResult mRange res _mtrace) ->
+          -- `range` mirrors the LSP-server shape: 1-indexed SrcPos
+          -- objects {line, column}. The WASM eval path never lacks
+          -- a range in practice (we matched on it above), but we
+          -- guard with a zero range to keep the contract total.
+          let rangeJson = case mRange of
+                Just (MkSrcRange (MkSrcPos sl sc) (MkSrcPos el ec) _ _) ->
+                  Aeson.object
+                    [ "start" .= Aeson.object ["line" .= sl, "column" .= sc]
+                    , "end"   .= Aeson.object ["line" .= el, "column" .= ec]
+                    ]
+                Nothing ->
+                  Aeson.object
+                    [ "start" .= Aeson.object ["line" .= line, "column" .= col]
+                    , "end"   .= Aeson.object ["line" .= line, "column" .= col]
+                    ]
+          in pure $ encodeJson $ Aeson.object
             [ "directiveType" .= directiveType
             , "prettyText" .= prettyEvalResult conFields res
             , "success" .= case res of
@@ -298,6 +313,7 @@ l4EvalDirective source line col directiveType =
                 EL.Assertion b -> Aeson.toJSON b
                 EL.Reduction (Left _) -> Aeson.Null
                 EL.Reduction (Right nf) -> Aeson.toJSON (prettyLayoutNF conFields nf)
+            , "range" .= rangeJson
             ]
 
 -- | Evaluate a list of resolved imports and combine their environments.

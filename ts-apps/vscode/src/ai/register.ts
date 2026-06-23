@@ -10,26 +10,34 @@ import {
   AiChatAskUser,
   AiChatDone,
   AiChatError,
+  AiChatInject,
   AiChatPickAttachment,
   AiChatPreviewAttachment,
+  AiChatQueueConsumed,
   AiChatStart,
   AiChatStarted,
   AiChatTextDelta,
   AiChatThinkingDelta,
   AiChatToolActivity,
   AiChatToolCall,
+  AiChatTurnSpawn,
   AiConversationDelete,
   AiConversationList,
   AiConversationLoad,
   AiConversationNew,
   AiFileOpen,
   AiFileOpenDiff,
+  AiGetActiveFileSelection,
   AiMentionSearch,
   AiPermissionsGet,
   AiPermissionsSet,
+  AiPreferencesGet,
+  AiPreferencesSet,
+  AiToolRenderMeta,
   AiUsageSubscribe,
   AiUsageUnsubscribe,
   AiUsageUpdate,
+  GenerateSidebarIntendedUse,
   WebviewFrontendIsReadyNotification,
   type AiChatAttachment,
   type AiMentionCandidate,
@@ -40,9 +48,14 @@ import * as nodePath from 'path'
 import * as os from 'os'
 import { promises as fsPromises } from 'fs'
 import type { AuthManager } from '../auth.js'
+import { isLocalMode } from './ai-proxy-client.js'
+import type { AiProxyClient } from './ai-proxy-client.js'
+import type { ServiceClient } from '../service-client.js'
 import type { ChatService, ChatServiceEvent } from './chat-service.js'
 import type { ConversationStore } from './conversation-store.js'
 import type { AiLogger } from './logger.js'
+import { MCP_L4_RULES_PREFIX } from './mcp-client.js'
+import type { McpToolClient } from './mcp-client.js'
 import {
   categoryForTool,
   getPermission,
@@ -73,6 +86,9 @@ export function registerAiChatHandlers(deps: {
   auth: AuthManager
   service: ChatService
   store: ConversationStore
+  /** Stateless one-shot LLM calls (summize). Used here to draft the
+   *  deployment "Intended use" text from the exported function schemas. */
+  proxy: AiProxyClient
   logger: AiLogger
   /** Map of pending approval promises keyed by callId. Populated by
    * the tool dispatcher; drained by the webview's approve/deny message. */
@@ -104,6 +120,13 @@ export function registerAiChatHandlers(deps: {
    *  here and flush on the next visible-transition so the UI catches
    *  up to the live conversation state. */
   visibility: WebviewVisibilityAdapter
+  /** MCP client — used by the chat-side render-meta lookup to resolve
+   *  a sanitized tool name back to its `(deployId, fnName)` pair. */
+  mcp: McpToolClient
+  /** REST client for jl4-service — used to fetch the function-schema
+   *  endpoint (`/deployments/{id}/functions/{fn}`) for chat tool-call
+   *  rendering. */
+  serviceClient: ServiceClient
 }): vscode.Disposable {
   const {
     messenger,
@@ -111,6 +134,7 @@ export function registerAiChatHandlers(deps: {
     auth,
     service,
     store,
+    proxy,
     logger,
     approvalPending,
     askUserPending,
@@ -118,6 +142,8 @@ export function registerAiChatHandlers(deps: {
     askUserChannel,
     dispatcher,
     visibility,
+    mcp,
+    serviceClient,
   } = deps
   logger.info(
     'registerAiChatHandlers: installing handlers on sidebar messenger'
@@ -137,6 +163,19 @@ export function registerAiChatHandlers(deps: {
     { name: string; argsJson: string; conversationId: string }
   >()
 
+  /** Per-conversation set of "tool activity has fired this turn".
+   *  Used to suppress `thinking-delta` events that arrive AFTER tool
+   *  activity in non-local mode — production OpenRouter presets emit
+   *  reasoning blocks between every tool round, which clutters the
+   *  chat log without adding insight (the model has already chosen
+   *  its next move by the time the user reads the reasoning). Local
+   *  mode keeps every reasoning block since that's what dev mode is
+   *  for: inspecting the model end-to-end. Reset on `started`,
+   *  `done`, or `error` so the next turn starts clean. Tool-activity
+   *  dedupe in the webview store remains intact because suppressed
+   *  thinking blocks never reach it. */
+  const seenToolActivity = new Set<string>()
+
   // ── Forward chat service events to the webview as typed notifications.
   //
   // `sendNow` does the actual postMessage. When the webview is
@@ -150,8 +189,10 @@ export function registerAiChatHandlers(deps: {
   const sendNow = (event: ChatServiceEvent): void => {
     switch (event.kind) {
       case 'started':
+        seenToolActivity.delete(event.conversationId)
         messenger.sendNotification(AiChatStarted, frontend, {
           conversationId: event.conversationId,
+          turnId: event.turnId,
           model: event.model,
         })
         break
@@ -167,12 +208,22 @@ export function registerAiChatHandlers(deps: {
         // into one `thinking` block that renders as a
         // collapsed-by-default "Thinking…" toggle in
         // message-assistant.svelte.
+        //
+        // Suppress when we've already seen tool activity this turn
+        // and we're talking to the prod proxy — keeps the chat log
+        // focused on actions taken instead of running commentary
+        // between tool rounds. Local mode (dev) bypasses the gate so
+        // operators can inspect every reasoning chunk end-to-end.
+        if (seenToolActivity.has(event.conversationId) && !isLocalMode()) {
+          break
+        }
         messenger.sendNotification(AiChatThinkingDelta, frontend, {
           conversationId: event.conversationId,
           text: event.text,
         })
         break
       case 'done':
+        seenToolActivity.delete(event.conversationId)
         messenger.sendNotification(AiChatDone, frontend, {
           conversationId: event.conversationId,
           finishReason: event.finishReason,
@@ -180,6 +231,7 @@ export function registerAiChatHandlers(deps: {
         })
         break
       case 'error':
+        seenToolActivity.delete(event.conversationId)
         messenger.sendNotification(AiChatError, frontend, {
           conversationId: event.conversationId,
           message: event.message,
@@ -190,19 +242,23 @@ export function registerAiChatHandlers(deps: {
         logger.debug(
           `tool_activity ${event.status} ${event.tool}: ${event.message}`
         )
+        seenToolActivity.add(event.conversationId)
         messenger.sendNotification(AiChatToolActivity, frontend, {
           conversationId: event.conversationId,
           tool: event.tool,
           status: event.status,
+          label: event.label,
           message: event.message,
+          input: event.input,
+          output: event.output,
+          ruleId: event.ruleId,
+          deploymentId: event.deploymentId,
+          error: event.error,
+          sources: event.sources,
         })
         break
       case 'tool-call':
-        callArgs.set(event.callId, {
-          name: event.name,
-          argsJson: event.argsJson,
-          conversationId: event.conversationId,
-        })
+        seenToolActivity.add(event.conversationId)
         messenger.sendNotification(AiChatToolCall, frontend, {
           conversationId: event.conversationId,
           callId: event.callId,
@@ -211,12 +267,43 @@ export function registerAiChatHandlers(deps: {
           status: event.status,
           result: event.result,
           errorMessage: event.error,
+          ruleFnName: event.ruleFnName,
+          deploymentId: event.deploymentId,
+        })
+        break
+      case 'turn-spawn':
+        // A queued user message spawned a follow-up sub-turn under
+        // the same conversation. Reset per-turn flags so the next
+        // sub-turn's reasoning blocks aren't pre-suppressed by the
+        // prior one's tool activity.
+        seenToolActivity.delete(event.conversationId)
+        messenger.sendNotification(AiChatTurnSpawn, frontend, {
+          conversationId: event.conversationId,
+          subTurnId: event.subTurnId,
+        })
+        break
+      case 'queue-consumed':
+        messenger.sendNotification(AiChatQueueConsumed, frontend, {
+          conversationId: event.conversationId,
+          injectionIds: event.injectionIds,
         })
         break
     }
   }
   const buffer = new ChatEventBuffer(logger)
   const emit = (event: ChatServiceEvent): void => {
+    // Populate callArgs eagerly — BEFORE the visibility branch — so
+    // the dispatcher's later notifyStatus events (which read this map
+    // to resolve conversationId / name / argsJson for AiChatToolCall)
+    // never see an empty map even when the SSE event itself is sitting
+    // in the visibility buffer waiting to be flushed.
+    if (event.kind === 'tool-call') {
+      callArgs.set(event.callId, {
+        name: event.name,
+        argsJson: event.argsJson,
+        conversationId: event.conversationId,
+      })
+    }
     if (!visibility.isVisible()) {
       buffer.push(event)
       return
@@ -258,15 +345,23 @@ export function registerAiChatHandlers(deps: {
   }
 
   toolStatusChannel.emit = (callId, status, detail) => {
+    // Route through the same buffered emitter the chat-service uses
+    // so dispatcher-side status updates (running → done / error) are
+    // visibility-aware. Going direct via messenger.sendNotification
+    // here causes the failure update to drop silently when the
+    // webview is hidden, leaving the row stuck on its initial
+    // "running" state once the webview becomes visible again — the
+    // pulsating-dot-never-flips-to-expandable bug.
     const meta = callArgs.get(callId)
-    messenger.sendNotification(AiChatToolCall, frontend, {
+    emit({
+      kind: 'tool-call',
       conversationId: meta?.conversationId ?? '',
       callId,
       name: meta?.name ?? '',
       argsJson: meta?.argsJson ?? '{}',
       status,
       result: detail?.result,
-      errorMessage: detail?.error,
+      error: detail?.error,
     })
   }
 
@@ -327,6 +422,21 @@ export function registerAiChatHandlers(deps: {
     denyAllPendingApprovals('abort')
     skipAllPendingQuestions('abort')
     service.abort(turnId)
+  })
+
+  // Mid-turn user message: append to the in-flight turn's queue.
+  // The chat-service routes it as either follow-up role:user after a
+  // tool round, or as the seed for a fresh sub-turn once the model
+  // finishes naturally — see ChatService.start() for the routing
+  // logic. The user bubble is already on screen (the webview
+  // pushed it at send-time for instant feedback); this notification
+  // just tells the extension where to plug the text into the model
+  // request.
+  messenger.onNotification(AiChatInject, (params) => {
+    logger.info(
+      `chat/inject received (turn=${params?.turnId ?? '?'}, conv=${params?.conversationId ?? '?'}, textLen=${params?.text?.length ?? 0})`
+    )
+    service.inject(params)
   })
 
   // Webview posts the user's answer to a meta__ask_user question.
@@ -435,6 +545,35 @@ export function registerAiChatHandlers(deps: {
     return { ok: localOk }
   })
 
+  // Draft the deployment "Intended use" text from the exported function
+  // schemas. AI-gated like the chat tab: without a usable Legalese Cloud
+  // session (or AI api key) we surface a sign-in nudge here rather than
+  // round-tripping a failure the webview would have to translate.
+  messenger.onRequest(GenerateSidebarIntendedUse, async ({ functions }) => {
+    if (!auth.isAiUsable()) {
+      void vscode.window.showInformationMessage(
+        'Sign in with Legalese Cloud to use this feature'
+      )
+      return { notSignedIn: true as const }
+    }
+    try {
+      const text = await proxy.describeIntendedUse(
+        JSON.stringify(functions, null, 2)
+      )
+      if (!text) {
+        return {
+          error: 'Could not generate a description. Please try again.',
+        }
+      }
+      return { text }
+    } catch (err) {
+      logger.warn(
+        `describeIntendedUse failed: ${err instanceof Error ? err.message : String(err)}`
+      )
+      return { error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
   messenger.onNotification(AiConversationNew, () => {
     // No-op in extension today — the webview owns "new conversation"
     // state. Reserved for future server-side cleanup hooks.
@@ -445,8 +584,8 @@ export function registerAiChatHandlers(deps: {
     'fs.create',
     'fs.edit',
     'fs.delete',
-    'lsp.evaluate',
     'l4.evaluate',
+    'l4.refactor',
     'mcp.l4Rules',
     'meta.askUser',
   ]
@@ -456,8 +595,8 @@ export function registerAiChatHandlers(deps: {
       'fs.create': 'always',
       'fs.edit': 'always',
       'fs.delete': 'always',
-      'lsp.evaluate': 'always',
       'l4.evaluate': 'always',
+      'l4.refactor': 'always',
       'mcp.l4Rules': 'always',
       'meta.askUser': 'always',
     }
@@ -479,6 +618,37 @@ export function registerAiChatHandlers(deps: {
     )
   })
 
+  // VSCode config keys for each chat-panel preference. New entries:
+  // add a key here, a field in the AiPreferences interface, and a
+  // default in the webview's AiPrefs store.
+  const PREF_KEYS = {
+    showReasoning: 'legaleseAi.showReasoning',
+    methodology: 'legaleseAi.methodology',
+  } as const
+  messenger.onRequest(AiPreferencesGet, () => {
+    const cfg = vscode.workspace.getConfiguration()
+    return {
+      values: {
+        showReasoning: cfg.get<boolean>(PREF_KEYS.showReasoning) === true,
+        methodology: cfg.get<string>(PREF_KEYS.methodology) ?? '',
+      },
+    }
+  })
+  messenger.onNotification(AiPreferencesSet, ({ values }) => {
+    const cfg = vscode.workspace.getConfiguration()
+    for (const [key, value] of Object.entries(values)) {
+      const settingKey = PREF_KEYS[key as keyof typeof PREF_KEYS]
+      if (!settingKey) continue
+      void cfg
+        .update(settingKey, value, vscode.ConfigurationTarget.Global)
+        .then(undefined, (err) =>
+          logger.warn(
+            `prefs/set: ${settingKey}=${String(value)} failed: ${err instanceof Error ? err.message : String(err)}`
+          )
+        )
+    }
+  })
+
   messenger.onRequest(AiChatPickAttachment, async ({ accept }) => {
     return handlePickAttachment(accept)
   })
@@ -493,6 +663,104 @@ export function registerAiChatHandlers(deps: {
           `attachment/preview failed: ${err instanceof Error ? err.message : String(err)}`
         )
       }
+    }
+  )
+
+  // Function-schema cache for chat tool-call rendering. The chat
+  // expand panel asks for the schema of a rule's inputs/outputs so it
+  // can render JSON args back into L4 syntax. We hit
+  // `/deployments/{id}/functions/{fn}` once per deployment version
+  // and cache the result; the deploymentVersion changes whenever the
+  // user re-deploys the same id, so the cache invalidates naturally.
+  type RenderMeta = {
+    parameters: import('jl4-client-rpc').FunctionParameter
+    returnSchema?: import('jl4-client-rpc').FunctionParameter
+  }
+  const renderMetaCache = new Map<
+    string,
+    { version: string; meta: RenderMeta }
+  >()
+  // In-flight dedup so N concurrent rows for the same rule collapse to
+  // one upstream `getDeploymentStatus` + `getFunctionSchema` pair. All
+  // callers await the same promise and resolve together.
+  type RenderMetaResult =
+    | {
+        kind: 'meta'
+        parameters: RenderMeta['parameters']
+        returnSchema?: RenderMeta['returnSchema']
+      }
+    | { kind: 'unavailable' }
+  const renderMetaInFlight = new Map<string, Promise<RenderMetaResult>>()
+  // Fetch + cache one function's schema, keyed by (deployId, fnName)
+  // and invalidated on redeploy via the deployment version SHA. Shared
+  // by both the MCP-target path and the direct deployment path.
+  async function resolveRenderMeta(
+    deployId: string,
+    fnName: string,
+    logLabel: string
+  ): Promise<RenderMetaResult> {
+    const cacheKey = `${deployId}/${fnName}`
+    const existing = renderMetaInFlight.get(cacheKey)
+    if (existing) return existing
+    const work = (async (): Promise<RenderMetaResult> => {
+      try {
+        const status = await serviceClient.getDeploymentStatus(deployId)
+        const version =
+          (status.metadata as { version?: string } | undefined)?.version ?? ''
+        const cached = renderMetaCache.get(cacheKey)
+        if (cached && cached.version === version) {
+          return { kind: 'meta' as const, ...cached.meta }
+        }
+        const summary = (await serviceClient.getFunctionSchema(
+          deployId,
+          fnName
+        )) as {
+          parameters?: import('jl4-client-rpc').FunctionParameter
+          returnSchema?: import('jl4-client-rpc').FunctionParameter
+        }
+        if (!summary.parameters) return { kind: 'unavailable' as const }
+        const meta: RenderMeta = {
+          parameters: summary.parameters,
+          returnSchema: summary.returnSchema,
+        }
+        renderMetaCache.set(cacheKey, { version, meta })
+        return { kind: 'meta' as const, ...meta }
+      } catch (err) {
+        logger.warn(
+          `aiToolRenderMeta(${logLabel}) failed: ${err instanceof Error ? err.message : String(err)}`
+        )
+        return { kind: 'unavailable' as const }
+      }
+    })()
+    renderMetaInFlight.set(cacheKey, work)
+    try {
+      return await work
+    } finally {
+      renderMetaInFlight.delete(cacheKey)
+    }
+  }
+
+  messenger.onRequest(
+    AiToolRenderMeta,
+    async ({ toolName, deploymentId, fnName }) => {
+      if (!toolName.startsWith(MCP_L4_RULES_PREFIX)) {
+        return { kind: 'unavailable' as const }
+      }
+      // Server-side rule activities (deployment passthrough chats)
+      // hand us the deployment + L4 function name directly. Resolve
+      // from there — the IDE's MCP target map is keyed by sanitized
+      // names and need not even cover the cloud deployment the chat
+      // is bound to.
+      if (deploymentId && fnName) {
+        return resolveRenderMeta(deploymentId, fnName, toolName)
+      }
+      // Client-side rule calls: reverse the sanitized tool name to a
+      // (deployId, fnName) via the MCP target map. Make sure
+      // listTools() has populated it (cheap when warm, ≤3s).
+      await mcp.listTools().catch(() => undefined)
+      const target = mcp.getToolTarget(toolName)
+      if (!target) return { kind: 'unavailable' as const }
+      return resolveRenderMeta(target.deployId, target.fnName, toolName)
     }
   )
 
@@ -573,30 +841,38 @@ export function registerAiChatHandlers(deps: {
     )
   }
 
-  // Push auth status whenever the AuthManager fires; the webview uses
-  // this to enable/disable the input. The "signed in" criterion is
-  // deliberately broad: any connected auth context (Legalese Cloud
-  // session or a configured sk_* API key) can talk to ai.legalese.cloud.
-  const pushAuthStatus = (state: { connected: boolean }): void => {
+  // Push auth status whenever something that affects AI credentials
+  // changes. The "signed in" criterion is deliberately narrow: only a
+  // verified Legalese Cloud session OR a configured `legaleseAi.apiKey`
+  // counts. A self-hosted jl4-service connection does NOT imply Legalese
+  // AI access, so we don't unlock the AI tab just because the deploy
+  // panel happens to be connected to localhost.
+  const pushAuthStatus = (): void => {
     messenger.sendNotification(AiAuthStatus, frontend, {
-      signedIn: state.connected,
+      signedIn: auth.isAiUsable(),
     })
   }
-  void auth.getConnectionState().then(pushAuthStatus)
-  const authSub = auth.onDidChange((state) => pushAuthStatus(state))
+  // Kick off a connection-state verify so cloudUserId gets populated
+  // (or cleared) before we push, but don't gate the push on `connected`.
+  void auth.getConnectionState().then(() => pushAuthStatus())
+  const authSub = auth.onDidChange(() => pushAuthStatus())
+  const aiKeyConfigSub = vscode.workspace.onDidChangeConfiguration((e) => {
+    if (e.affectsConfiguration('legaleseAi.apiKey')) pushAuthStatus()
+  })
 
-  // Push the currently-active editor file so the chat-input can render
-  // the "include this file" chip. Pushed on every change, plus once at
-  // registration so the chip appears immediately when the AI tab opens.
-  const pushActiveFile = (editor: vscode.TextEditor | undefined): void => {
+  // Identify the active editor file for the chat-input's "include
+  // this file" chip: workspace-relative path, basename, workspace
+  // membership. Pushed on tab / visible-editor changes.
+  const activeFileIdentity = (
+    editor: vscode.TextEditor | undefined
+  ): {
+    uri: string | null
+    name: string | null
+    path: string | null
+    inWorkspace: boolean
+  } => {
     if (!editor) {
-      messenger.sendNotification(AiActiveFile, frontend, {
-        uri: null,
-        name: null,
-        path: null,
-        inWorkspace: false,
-      })
-      return
+      return { uri: null, name: null, path: null, inWorkspace: false }
     }
     const uri = editor.document.uri
     const folder = vscode.workspace.getWorkspaceFolder(uri)
@@ -604,17 +880,50 @@ export function registerAiChatHandlers(deps: {
     const relOrAbs = inWorkspace
       ? vscode.workspace.asRelativePath(uri, false)
       : uri.fsPath
-    messenger.sendNotification(AiActiveFile, frontend, {
+    return {
       uri: uri.toString(),
       name: nodePath.basename(uri.fsPath),
       path: relOrAbs,
       inWorkspace,
-    })
+    }
+  }
+  const pushActiveFile = (editor: vscode.TextEditor | undefined): void => {
+    messenger.sendNotification(
+      AiActiveFile,
+      frontend,
+      activeFileIdentity(editor)
+    )
   }
   pushActiveFile(vscode.window.activeTextEditor)
   const activeFileSub = vscode.window.onDidChangeActiveTextEditor((e) =>
     pushActiveFile(e)
   )
+  // Belt-and-suspenders: onDidChangeActiveTextEditor is meant to fire
+  // with undefined when the last editor closes, but in practice the
+  // chip sometimes lingers. Re-sync on any visible-editor change so
+  // the chip clears as soon as the tab is gone.
+  const visibleFileSub = vscode.window.onDidChangeVisibleTextEditors(() =>
+    pushActiveFile(vscode.window.activeTextEditor)
+  )
+  // Note: we deliberately do NOT subscribe to onDidChangeTextEditorSelection.
+  // It would fire on every cursor move (10–30 events/sec while typing) just
+  // to keep the webview's cached `activeFile.selection` warm. Instead the
+  // chat input fires a one-shot AiGetActiveFileSelection request at submit
+  // time (handler below) — the webview gets the freshest range exactly when
+  // it needs it, with zero polling between submits.
+
+  messenger.onRequest(AiGetActiveFileSelection, async () => {
+    const editor = vscode.window.activeTextEditor
+    const base = activeFileIdentity(editor)
+    if (!editor || editor.selection.isEmpty) return base
+    return {
+      ...base,
+      selection: {
+        startLine: editor.selection.start.line + 1,
+        endLine: editor.selection.end.line + 1,
+      },
+    }
+  })
 
   // Resend the initial snapshot (active file + auth status) on every
   // webview-ready signal. The first push above runs at extension
@@ -637,7 +946,9 @@ export function registerAiChatHandlers(deps: {
     dispose(): void {
       if (usageTimer) clearInterval(usageTimer)
       authSub.dispose()
+      aiKeyConfigSub.dispose()
       activeFileSub.dispose()
+      visibleFileSub.dispose()
       schemeReg.dispose()
       visibilitySub.dispose()
       buffer.drop()
@@ -976,9 +1287,12 @@ async function deleteServerConversation(
   logger: AiLogger
 ): Promise<void> {
   try {
-    const { AI_ENDPOINT } = await import('./ai-proxy-client.js')
-    const headers = await auth.getAuthHeaders()
-    const res = await fetch(`${AI_ENDPOINT}/v1/conversations/${id}`, {
+    const { getAiEndpoint, isLocalMode } = await import('./ai-proxy-client.js')
+    const headers = await auth.getAiAuthHeaders()
+    if (!headers.Authorization && isLocalMode()) {
+      headers.Authorization = 'Bearer dev-local'
+    }
+    const res = await fetch(`${getAiEndpoint()}/v1/conversations/${id}`, {
       method: 'DELETE',
       headers,
     })
@@ -1040,10 +1354,13 @@ async function fetchUsage(
   blockOnOverage: boolean
 } | null> {
   try {
-    const headers = await auth.getAuthHeaders()
+    const headers = await auth.getAiAuthHeaders()
+    const { getAiEndpoint, isLocalMode } = await import('./ai-proxy-client.js')
+    if (!headers.Authorization && isLocalMode()) {
+      headers.Authorization = 'Bearer dev-local'
+    }
     if (!headers.Authorization) return null
-    const { AI_ENDPOINT } = await import('./ai-proxy-client.js')
-    const res = await fetch(`${AI_ENDPOINT}/v1/usage`, {
+    const res = await fetch(`${getAiEndpoint()}/v1/usage`, {
       method: 'GET',
       headers,
       signal: AbortSignal.timeout(8000),

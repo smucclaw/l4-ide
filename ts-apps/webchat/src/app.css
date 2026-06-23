@@ -1,0 +1,147 @@
+@import 'tailwindcss';
+
+/*
+ * The AI chat components are a carbon copy of the VSCode extension webview and
+ * reference `--vscode-*` theme variables throughout. In the extension these are
+ * injected by VSCode. Here we provide a standalone web theme that maps the same
+ * variable names to a light/dark palette, so the components render unchanged.
+ *
+ * Brand crimson: #c8376a (primary), #d94d7e (hover), #6e1636 (stop/dark).
+ */
+
+:root {
+  color-scheme: light;
+
+  /* Brand */
+  --brand: #c8376a;
+  --brand-hover: #d94d7e;
+  --brand-dark: #6e1636;
+
+  /* App chrome */
+  --chat-bg: #ffffff;
+  --sidebar-bg: #f3f3f4; /* slightly lighter gray than the chat */
+  --sidebar-border: #e4e4e7;
+
+  /* VSCode-compatible variables consumed by the copied components */
+  --vscode-foreground: #1f1f23;
+  --vscode-descriptionForeground: #6b6b73;
+  --vscode-focusBorder: #c8376a;
+  --vscode-widget-border: #e4e4e7;
+  --vscode-input-background: #ffffff;
+  --vscode-input-foreground: #1f1f23;
+  --vscode-input-border: #d4d4d8;
+  --vscode-editor-background: #ffffff;
+  --vscode-editor-foreground: #1f1f23;
+  --vscode-sideBar-background: #f3f3f4;
+  --vscode-button-background: #c8376a;
+  --vscode-button-foreground: #ffffff;
+  --vscode-button-hoverBackground: #d94d7e;
+  --vscode-textLink-foreground: #c8376a;
+  --vscode-errorForeground: #d11149;
+  --vscode-list-hoverBackground: #ececef;
+  --vscode-list-activeSelectionBackground: #e3e3e7;
+  --vscode-toolbar-hoverBackground: #ececef;
+  --vscode-font-family: -apple-system, BlinkMacSystemFont, 'Segoe WPC',
+    'Segoe UI', system-ui, 'Ubuntu', 'Droid Sans', sans-serif;
+
+  /* L4 syntax-highlight token palette — consumed by the `tok-*` spans the
+     `colorize()` helper emits in rule tool-call cards (and inline code).
+     Light-theme values here; the dark media query below swaps in the
+     VS Code dark-default tones the IDE webview uses. */
+  --l4-tok-keyword: #0033b3;
+  --l4-tok-directive: #9b2393;
+  --l4-tok-comment: #6e7781;
+  --l4-tok-string: #a31515;
+  --l4-tok-number: #098658;
+  --l4-tok-operator: #5c6370;
+  --l4-tok-variable: #001080;
+  --l4-tok-identifier: #267f99;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --chat-bg: #1e1e22;
+    --sidebar-bg: #181819;
+    --sidebar-border: #2c2c30;
+
+    --vscode-foreground: #e6e6e9;
+    --vscode-descriptionForeground: #9a9aa3;
+    --vscode-widget-border: #2c2c30;
+    --vscode-input-background: #26262b;
+    --vscode-input-foreground: #e6e6e9;
+    --vscode-input-border: #3a3a40;
+    --vscode-editor-background: #181819;
+    --vscode-editor-foreground: #e6e6e9;
+    --vscode-sideBar-background: #181819;
+    --vscode-list-hoverBackground: #26262b;
+    --vscode-list-activeSelectionBackground: #2f2f35;
+    --vscode-toolbar-hoverBackground: #26262b;
+
+    /* VS Code dark-default L4 token tones (match the IDE inspector). */
+    --l4-tok-keyword: #569cd6;
+    --l4-tok-directive: #c586c0;
+    --l4-tok-comment: #8d949d;
+    --l4-tok-string: #ce9178;
+    --l4-tok-number: #b5cea8;
+    --l4-tok-operator: #d4d4d4;
+    --l4-tok-variable: #9cdcfe;
+    --l4-tok-identifier: #4ec9b0;
+  }
+}
+
+/* L4 colorize token classes. Emitted by `colorize()` via `{@html}` (rule
+   tool-call INPUT/OUTPUT cards), so they live here as global rules rather
+   than scoped inside any single component. The cross-mapping of
+   tok-variable→--l4-tok-operator and tok-operator→--l4-tok-variable
+   mirrors the IDE webview's inspector panel exactly. */
+.tok-keyword {
+  color: var(--l4-tok-keyword);
+}
+.tok-directive {
+  color: var(--l4-tok-directive);
+  font-weight: 600;
+}
+.tok-comment {
+  color: var(--l4-tok-comment);
+}
+.tok-string {
+  color: var(--l4-tok-string);
+}
+.tok-variable {
+  color: var(--l4-tok-operator);
+}
+.tok-number {
+  color: var(--l4-tok-number);
+}
+.tok-operator {
+  color: var(--l4-tok-variable);
+}
+.tok-identifier {
+  color: var(--l4-tok-identifier);
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* SvelteKit body wrapper. `display: contents` makes the div transparent to
+   layout so the app root participates directly in the body box. Lives here
+   (an external, self-hosted stylesheet) rather than as an inline
+   `style=""` attribute so the CSP `style-src` can stay strict — no
+   'unsafe-inline'. */
+.app-shell {
+  display: contents;
+}
+
+body {
+  font-family: var(--vscode-font-family);
+  color: var(--vscode-foreground);
+  background: var(--chat-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}

@@ -250,7 +250,7 @@ resolveArgs fe args = do
           (_, Just _) -> Left "events is only valid for DEONTIC functions"
           _ -> Right $ ResolvedArgs positional Nothing Nothing
   where
-    missingParam _ = Parameter "object" Nothing Nothing [] "" Nothing Nothing Nothing Nothing
+    missingParam _ = Parameter "object" Nothing Nothing [] "" Nothing Nothing Nothing Nothing Nothing
 
 -- ---------------------------------------------------------------------------
 -- Name remapping (matches jl4-service/src/Shared.hs)

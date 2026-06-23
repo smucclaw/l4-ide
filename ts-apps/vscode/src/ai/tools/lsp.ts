@@ -1,50 +1,23 @@
 import * as vscode from 'vscode'
-import { resolveFileUri } from './fs.js'
 
 /**
- * LSP-backed diagnostics tool. Reads the current diagnostics VSCode has
- * for the target file (populated by jl4-lsp's publishDiagnostics), so
- * the model can verify a write passed type-check without a separate
- * compiler invocation. The LSP keeps diagnostics up-to-date per open
- * document; we open the document first to make sure it's loaded.
+ * LSP-backed diagnostics helper. Reads the current diagnostics VSCode
+ * has for the target file (populated by jl4-lsp's publishDiagnostics).
+ * Used by `l4__evaluate` (gates evaluation on a clean type-check) and
+ * by the fs-tool auto-append after edits.
  */
-
-export interface LspDiagnosticsArgs {
-  path: string
-}
 
 type DiagSeverity = 'error' | 'warning' | 'info' | 'hint'
 
 const DIAGNOSTIC_SETTLE_MS = 400
 
-export async function lspDiagnostics(
-  args: LspDiagnosticsArgs
-): Promise<string> {
-  if (!args.path) throw new Error('lsp__diagnostics: `path` is required')
-  const uri = resolveFileUri(args.path)
-  if (!uri) {
-    throw new Error(
-      `lsp__diagnostics: cannot resolve path ${args.path}. Only files inside a loaded workspace folder are supported.`
-    )
-  }
-  try {
-    return await fetchL4Diagnostics(uri)
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    throw new Error(`lsp__diagnostics: failed to open ${args.path}: ${msg}`)
-  }
-}
-
 /**
- * Shared diagnostics fetcher. Returns a compact, glanceable text
- * block — one header line with counts, then one line per diagnostic
- * (`severity line:col — message [source:code]`). Consumed verbatim
- * by both the explicit `lsp__diagnostics` tool and the fs-tool
- * auto-append, so the model sees the same shape no matter how the
- * diagnostics were surfaced. Format keeps all fields the old JSON
- * exposed (line, column, severity, message, source, code) — nothing
- * is hidden, it's just ~5× fewer tokens than the pretty-printed JSON
- * for the same payload.
+ * Compact, glanceable diagnostics text block — one header line with
+ * counts, then one line per diagnostic
+ * (`severity line:col — message [source:code]`). Format keeps all
+ * fields the old JSON exposed (line, column, severity, message,
+ * source, code) — nothing is hidden, it's just ~5× fewer tokens than
+ * the pretty-printed JSON for the same payload.
  */
 export async function fetchL4Diagnostics(uri: vscode.Uri): Promise<string> {
   // Opening a document triggers the LSP to parse + type-check it. If
@@ -65,9 +38,8 @@ export async function fetchL4Diagnostics(uri: vscode.Uri): Promise<string> {
       u.fsPath.toLowerCase() === uri.fsPath.toLowerCase()
   )
   const filtered = match?.[1] ?? []
-  const rel = vscode.workspace.asRelativePath(uri, false)
   if (filtered.length === 0) {
-    return `--- L4 diagnostics for ${rel}: clean ---`
+    return `--- L4 diagnostics: clean ---`
   }
   const counts = {
     error: filtered.filter(
@@ -92,11 +64,10 @@ export async function fetchL4Diagnostics(uri: vscode.Uri): Promise<string> {
   ]
     .filter(Boolean)
     .join(', ')
-  const header = `--- L4 diagnostics for ${rel}: ${filtered.length} issue${filtered.length === 1 ? '' : 's'} (${summary}) ---`
+  const header = `--- L4 diagnostics: ${filtered.length} issue${filtered.length === 1 ? '' : 's'} (${summary}) ---`
   const lines = filtered.map((d) => {
     const sev = severityName(d.severity)
     const line = d.range.start.line + 1
-    const col = d.range.start.character + 1
     const source = d.source ?? ''
     const code =
       d.code === undefined
@@ -108,7 +79,7 @@ export async function fetchL4Diagnostics(uri: vscode.Uri): Promise<string> {
     // avoid trailing brackets on diagnostics that carry neither.
     const tag =
       source || code ? ` [${[source, code].filter(Boolean).join(':')}]` : ''
-    return `  ${sev} ${line}:${col} — ${d.message}${tag}`
+    return `${sev} ${line} → ${d.message}${tag}`
   })
   return `${header}\n${lines.join('\n')}`
 }

@@ -1501,19 +1501,54 @@ rawLit = try decimalLit <|> intLit <|> stringLit
 
 list :: Parser (Expr Name)
 list = do
-  current <- Lexer.indentLevel
+  threshold <- listItemThreshold TKList
   attachAnno $
     List emptyAnno
       <$  annoLexeme (spacedKeyword_ TKList)
-      <*> annoHole (lsepBy (const (indentedExpr current)) (spacedSymbol_ TComma))
+      <*> annoHole (lsepBy (const (indentedExpr threshold)) (spacedSymbol_ TComma))
 
 concatExpr :: Parser (Expr Name)
 concatExpr = do
-  current <- Lexer.indentLevel
+  threshold <- listItemThreshold TKConcat
   attachAnno $
     Concat emptyAnno
       <$  annoLexeme (spacedKeyword_ TKConcat)
-      <*> annoHole (lsepBy (const (indentedExpr current)) (spacedSymbol_ TComma))
+      <*> annoHole (lsepBy (const (indentedExpr threshold)) (spacedSymbol_ TComma))
+
+-- | Pick the indent threshold for items inside a `LIST …` / `CONCAT …`
+-- block based on whether the first item sits on the same line as the
+-- keyword.
+--
+--   Same line  (`LIST 1, 2, 3`): keep the keyword's own column as the
+--     threshold so items must be deeper than the keyword (matches the
+--     historical behaviour, including how WHERE clauses bubble up to
+--     the surrounding expression rather than being absorbed by the
+--     last item).
+--
+--   Next line  (`LIST\n  1, 2, 3`): the first item is to the LEFT of
+--     the keyword's column. Lower the threshold to one column below
+--     the first item so the item itself still passes `indentedExpr`'s
+--     `> p` check, but anything outdented further (including a
+--     trailing WHERE) still bubbles out.
+--
+-- Implementation lookahead-only — the keyword and the first item are
+-- not consumed here; the caller does that via the usual lexeme
+-- machinery.
+listItemThreshold :: TKeywords -> Parser Pos
+listItemThreshold tk = do
+  keywordCol <- Lexer.indentLevel
+  keywordLine <- currentLine
+  -- Peek past the keyword + its trailing whitespace to inspect the
+  -- first non-blank token's position. We do this without consuming
+  -- input by wrapping in `lookAhead`.
+  lookAhead $ do
+    _ <- plainToken (TKeywords tk)
+    _ <- spaces
+    firstItemLine <- currentLine
+    firstItemCol <- Lexer.indentLevel
+    pure $ if firstItemLine == keywordLine
+             then keywordCol
+             else mkPos (max 1 (unPos firstItemCol - 1))
 
 intLit :: Parser Lit
 intLit =

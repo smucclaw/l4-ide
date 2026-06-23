@@ -1,47 +1,113 @@
 <script lang="ts">
   import { onDestroy } from 'svelte'
   import type { Messenger } from 'vscode-messenger-webview'
+  import { HOST_EXTENSION } from 'vscode-messenger-common'
   import {
     AiActiveFile,
     AiAuthStatus,
     AiChatAskUser,
     AiChatDone,
     AiChatError,
+    AiChatQueueConsumed,
     AiChatSeedDraft,
     AiChatStarted,
     AiChatTextDelta,
     AiChatThinkingDelta,
     AiChatToolActivity,
     AiChatToolCall,
+    AiChatTurnSpawn,
     AiUsageUpdate,
-    type GetSidebarConnectionStatusResponse,
+    RequestOpenUrl,
+    RequestSidebarLogin,
+    type AiChatAttachment,
   } from 'jl4-client-rpc'
   import { createAiChatStore } from '$lib/stores/ai-chat.svelte'
+  import { aiPrefs } from '$lib/stores/ai-prefs.svelte'
   import MessageList from './message-list.svelte'
   import ChatInput from './chat-input.svelte'
   import EmptyState from './empty-state.svelte'
   import ConversationHistory from './conversation-history.svelte'
   import SettingsPanel from './settings-panel.svelte'
+  import DeploymentBanner from './deployment-banner.svelte'
+  import CloudUpsell from '../cloud-upsell.svelte'
 
   let {
     messenger,
-    connectionStatus,
     visible,
+    deploymentChatRequest = null,
+    refineRequest = null,
   }: {
     messenger: InstanceType<typeof Messenger> | null
-    connectionStatus: GetSidebarConnectionStatusResponse
     visible: boolean
+    /** Set by the sidebar when the user clicks "Use in chat" on a
+     *  deployment. The `nonce` makes repeat clicks (same deployment)
+     *  re-trigger the effect. */
+    deploymentChatRequest?: {
+      deploymentId: string
+      apiBaseUrl: string
+      /** The deployment's "Intended use" metadata, surfaced in the
+       *  empty-state of the fresh deployment chat. */
+      intendedUse?: string
+      nonce: number
+    } | null
+    /** Set by the Render tab's "Refine with Legalese AI" flow after a
+     *  deterministic render: starts a fresh conversation seeded with a
+     *  prompt, the L4 source + generated file surfaced as `@`-mention
+     *  chips, and (optionally) the drafting-policy file attached, then
+     *  submits it. The `nonce` makes repeat refinements re-trigger the
+     *  effect. */
+    refineRequest?: {
+      prompt: string
+      attachment: AiChatAttachment | null
+      /** Files to reference — shown as chips and passed as file
+       *  mentions so the agent can read them via its fs tools. */
+      files: Array<{ name: string; path: string }>
+      nonce: number
+    } | null
   } = $props()
 
   const store = createAiChatStore(() => messenger)
+  aiPrefs.init(() => messenger)
 
-  // Seed the signed-in flag from the existing sidebar connection status
-  // so the unauth CTA isn't shown while the auth-status notification is
-  // still in flight. The AiAuthStatus notification overrides this as
-  // soon as it arrives.
+  // Honour a "Use in chat" request from the Deployment tab. Tracking
+  // the nonce (not deep-equality) lets the user re-enter the same
+  // deployment after closing the banner.
+  let lastDeploymentNonce = -1
   $effect(() => {
-    store.onAuthStatus({ signedIn: connectionStatus.connected })
+    const req = deploymentChatRequest
+    if (!req || req.nonce === lastDeploymentNonce) return
+    lastDeploymentNonce = req.nonce
+    store.startDeploymentChat(req.deploymentId, req.apiBaseUrl, req.intendedUse)
   })
+
+  // Honour a "Refine with Legalese AI" request from the Render tab:
+  // open a fresh conversation, attach the drafting policy (if any), and
+  // submit the seeded prompt so the agent starts reading the files and
+  // reworking the document right away. The active-file chip is forced
+  // off — the prompt names both files explicitly, so the editor's
+  // current file would just be redundant (often duplicate) context.
+  let lastRefineNonce = -1
+  $effect(() => {
+    const req = refineRequest
+    if (!req || req.nonce === lastRefineNonce) return
+    lastRefineNonce = req.nonce
+    store.newConversation()
+    store.setIncludeActiveFile(false)
+    if (req.attachment) store.attachExternal(req.attachment)
+    // File mentions carry the paths to the model (via the extension's
+    // <mention-context>); fileChips render them as chips on the bubble.
+    const mentions = req.files.map((f) => ({
+      kind: 'file' as const,
+      label: f.path,
+    }))
+    void store.send(req.prompt, mentions, { fileChips: req.files })
+  })
+
+  // The jl4-service connection is independent of Legalese AI
+  // credentials (a self-hosted service does NOT imply AI access).
+  // The store defaults `signedIn` to false; the extension fires
+  // AiAuthStatus on register so the correct value arrives before the
+  // user has a chance to interact.
 
   let historyOpen = $state(false)
   let settingsOpen = $state(false)
@@ -58,6 +124,8 @@
     m.onNotification(AiChatError, (p) => store.onError(p))
     m.onNotification(AiChatToolCall, (p) => store.onToolCall(p))
     m.onNotification(AiChatToolActivity, (p) => store.onToolActivity(p))
+    m.onNotification(AiChatTurnSpawn, (p) => store.onTurnSpawn(p))
+    m.onNotification(AiChatQueueConsumed, (p) => store.onQueueConsumed(p))
     m.onNotification(AiUsageUpdate, (p) => store.onUsageUpdate(p))
     m.onNotification(AiAuthStatus, (p) => store.onAuthStatus(p))
     m.onNotification(AiActiveFile, (p) => store.onActiveFile(p))
@@ -130,17 +198,26 @@
     settingsOpen = true
   }
 
+  function signIn(): void {
+    messenger?.sendNotification(
+      RequestSidebarLogin,
+      HOST_EXTENSION,
+      undefined as never
+    )
+  }
+
   // Retry asks the server to run another turn against the existing
   // conversation state — no duplicated user message. The user's
   // original prompt is already persisted on disk from the aborted
   // attempt (ai-proxy saves the conversation on create, before the
   // stream starts), so the model has everything it needs to produce
-  // a fresh response. Drop the errored assistant bubble first so the
-  // new stream has a clean place to land.
+  // a fresh response. The store's continueTurn() handles both the
+  // happy path (server-assigned conversationId exists → ask the proxy
+  // to run another pass against stored history) and the
+  // first-turn-error fallback (no id yet → re-send the last user
+  // message as a fresh request). It also drops the trailing errored
+  // assistant bubble itself, so this handler is just a passthrough.
   function onRetry(): void {
-    const conv = store.current
-    if (!conv || !conv.id) return
-    conv.turns = conv.turns.filter((t) => !t.error)
     store.continueTurn()
   }
 
@@ -151,23 +228,28 @@
 
 <div class="ai-panel">
   {#if showUnauth}
-    <!-- Mirrors the Deployments tab empty-state (same element shape,
-         class names and hint text styling) so the two tabs read the
-         same when signed-out. Consistency beats cleverness here. -->
-    <div class="empty-state">
-      <p class="hint">
-        Sign in with Legalese Cloud to start composing rules with AI.
-      </p>
-    </div>
+    <!-- Mirrors the Deployments tab signed-out state — both render the
+         shared Legalese Cloud promo so the two tabs read the same. -->
+    <CloudUpsell context="ai" onSignIn={signIn} />
   {:else}
     {#if showEmptyState}
-      <EmptyState onSeed={onSeedSelect} />
+      <EmptyState
+        onSeed={onSeedSelect}
+        deployment={store.deploymentBinding
+          ? {
+              deploymentId: store.deploymentBinding.deploymentId,
+              intendedUse: store.deploymentBinding.intendedUse ?? '',
+            }
+          : null}
+      />
     {:else if showChat && store.current}
       <MessageList
         turns={store.current.turns}
         streaming={store.current.streaming}
+        pipelineActive={store.pipelineActive}
         pendingApproval={store.pendingApproval}
         pendingQuestion={store.pendingQuestion}
+        {messenger}
         {onRetry}
         onApproveTool={(callId, decision) =>
           store.approveTool(callId, decision)}
@@ -192,6 +274,22 @@
       <SettingsPanel {store} onClose={() => (settingsOpen = false)} />
     {/if}
 
+    {#if store.deploymentBinding}
+      <DeploymentBanner
+        deploymentId={store.deploymentBinding.deploymentId}
+        onOpenInBrowser={() => {
+          // apiBaseUrl is always https://ai.legalese.cloud/{org}/{dep};
+          // the public chat UI is the same path on the chat. subdomain.
+          const url = store.deploymentBinding!.apiBaseUrl.replace(
+            'https://ai.legalese.cloud',
+            'https://chat.legalese.cloud'
+          )
+          messenger?.sendNotification(RequestOpenUrl, HOST_EXTENSION, { url })
+        }}
+        onClose={() => store.newConversation()}
+      />
+    {/if}
+
     <ChatInput
       {store}
       onNewConversation={() => store.newConversation()}
@@ -210,29 +308,5 @@
     height: 100%;
     min-height: 0;
     box-sizing: border-box;
-  }
-
-  /* Mirror the Deployments tab's empty-state styling verbatim so the
-     two tabs look identical when the user is signed out. Height is
-     fixed at 40vh (matching the Deployments tab) so the hint line
-     sits at ~20vh from the top instead of centered across the full
-     panel height — that vertical anchor is what makes the two tabs
-     feel interchangeable at a glance. Kept as an AI-tab-local copy
-     because Svelte CSS is component-scoped; extracting to a global
-     sheet would drag in every page's `.empty-state` at once. */
-  .empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 40vh;
-    text-align: center;
-    color: var(--vscode-descriptionForeground);
-  }
-
-  .empty-state .hint {
-    font-size: 0.95em;
-    line-height: 1.2;
-    max-width: 200px;
   }
 </style>

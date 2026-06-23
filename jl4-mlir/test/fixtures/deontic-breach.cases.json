@@ -1,0 +1,14 @@
+{
+  "repayment-contract": [
+    {
+      "arguments": {},
+      "startTime": 0,
+      "events": [{ "party": "the borrower", "action": "repay loan", "at": 100 }]
+    },
+    {
+      "arguments": {},
+      "startTime": 0,
+      "events": [{ "party": "the borrower", "action": "repay loan", "at": 5 }]
+    }
+  ]
+}

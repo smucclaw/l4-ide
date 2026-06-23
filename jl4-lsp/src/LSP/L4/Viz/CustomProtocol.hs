@@ -8,7 +8,7 @@
 module LSP.L4.Viz.CustomProtocol where
 
 import qualified Base.Text as T
-import Data.Aeson (FromJSON(..), ToJSON(..), object, (.:), (.=), withObject)
+import Data.Aeson (FromJSON(..), ToJSON(..), object, (.:), (.:?), (.!=), (.=), withObject)
 import Data.Map (Map)
 import GHC.Generics (Generic)
 import Data.Proxy (Proxy(..))
@@ -83,6 +83,58 @@ data QueryPlanRequestParams = QueryPlanRequestParams
   deriving anyclass (FromJSON, ToJSON)
 
 ------------------------------------------------------
+-- l4/exportDocument and l4/exportPlan Request Params
+------------------------------------------------------
+
+-- | Params for the deterministic document export. All fields except
+-- @verDocId@ are optional and default sensibly.
+data ExportDocumentParams = ExportDocumentParams
+  { verDocId       :: LSP.VersionedTextDocumentIdentifier
+  , format         :: T.Text   -- ^ "html" (default) | "text" | "akn" | "json"
+  , includeUnused  :: Bool     -- ^ render unreachable imported material too
+  , numberSections :: Bool
+  , numberClauses  :: Bool
+  , toc            :: Bool     -- ^ prepend a table of contents (HTML)
+  , excludeModules :: [T.Text] -- ^ module URIs to exclude (deselected imports)
+  }
+  deriving stock (Eq, Show, Generic)
+
+instance ToJSON ExportDocumentParams where
+  toJSON p = object
+    [ "verDocId" .= p.verDocId
+    , "format" .= p.format
+    , "includeUnused" .= p.includeUnused
+    , "numberSections" .= p.numberSections
+    , "numberClauses" .= p.numberClauses
+    , "toc" .= p.toc
+    , "excludeModules" .= p.excludeModules
+    ]
+
+instance FromJSON ExportDocumentParams where
+  parseJSON = withObject "ExportDocumentParams" $ \o ->
+    ExportDocumentParams
+      <$> o .:  "verDocId"
+      <*> o .:? "format"         .!= "html"
+      <*> o .:? "includeUnused"  .!= False
+      <*> o .:? "numberSections" .!= False
+      <*> o .:? "numberClauses"  .!= False
+      <*> o .:? "toc"            .!= False
+      <*> o .:? "excludeModules" .!= []
+
+-- | Params for the export plan (imports/rules tree + reachability).
+newtype ExportPlanParams = ExportPlanParams
+  { verDocId :: LSP.VersionedTextDocumentIdentifier
+  }
+  deriving stock (Eq, Show, Generic)
+
+instance ToJSON ExportPlanParams where
+  toJSON p = object ["verDocId" .= p.verDocId]
+
+instance FromJSON ExportPlanParams where
+  parseJSON = withObject "ExportPlanParams" $ \o ->
+    ExportPlanParams <$> o .: "verDocId"
+
+------------------------------------------------------
 --  Custom methods for LSP
 ------------------------------------------------------
 
@@ -95,6 +147,12 @@ type InlineExprsMethodName = "l4/inlineExprs"
 type QueryPlanMethodName :: Symbol
 type QueryPlanMethodName = "l4/queryPlan"
 
+type ExportDocumentMethodName :: Symbol
+type ExportDocumentMethodName = "l4/exportDocument"
+
+type ExportPlanMethodName :: Symbol
+type ExportPlanMethodName = "l4/exportPlan"
+
 ------------------------------------------------------
 --  CustomMethod typeclass
 ------------------------------------------------------
@@ -106,6 +164,8 @@ class KnownSymbol a => CustomMethod (a :: Symbol) where
 instance CustomMethod EvalAppMethodName
 instance CustomMethod InlineExprsMethodName
 instance CustomMethod QueryPlanMethodName
+instance CustomMethod ExportDocumentMethodName
+instance CustomMethod ExportPlanMethodName
 
 ------------------------------------------------------
 --  LadderRequestParams typeclass

@@ -17,7 +17,7 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
     function: {
       name: 'fs__read_file',
       description:
-        'Read a file or list a directory, one line per entry. Response prefixed with `[<path> <start>-<end>/<total>]` (or `[<path> pattern="…" matches=N chunks=K/M]` with `pattern`); a trailing `, next startLine=<n>` marks more available. Hard cap 100 lines / 4000 chars per call. Directories: `name/` for subdirs, directories first. `.git`, `node_modules`, `.DS_Store` hidden.',
+        'Read a file or list a directory, one line per entry. Response prefixed with `[<path> <start>-<end>/<total>]` (or `[<path> keywords="…" matches=N chunks=K/M]` with `search_keywords`); when `<end> < <total>` more lines remain — call again with `startLine=<end>+1`. Hard cap 500 lines / 4000 chars per call. Directories: `name/` for subdirs, directories first. `.git`, `node_modules`, `.DS_Store` hidden.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -29,12 +29,12 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
           startLine: { type: 'number', description: '1-based, default 1.' },
           endLine: {
             type: 'number',
-            description: '1-based inclusive, default startLine+99.',
+            description: '1-based inclusive, default startLine+499.',
           },
-          pattern: {
+          search_keywords: {
             type: 'string',
             description:
-              'Case-insensitive regex; literal-substring fallback. For files, matches carry 2 lines of context (hits prefixed `>>>`, context `   `, chunks joined `---`). For directories, matching entries only.',
+              'One or more keywords separated by whitespace; a line is a hit if it matches ANY of them (OR). Each keyword is a case-insensitive regex with literal-substring fallback. For files, matches carry 2 lines of context (hits prefixed `>>>`, context `   `, chunks joined `---`). For directories, the tree is walked recursively and file CONTENTS are grepped — results emitted as `<path>:<lineno>: <text>` rows.',
           },
         },
         required: ['path'],
@@ -46,18 +46,14 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
     function: {
       name: 'fs__create_file',
       description:
-        'Fails if the file already exists — use fs__edit_file to modify an existing file.',
+        'Create a file seeded with a single line `// new file content` (for `.html`/`.htm` files: a minimal blank-white HTML skeleton whose body reads `New document in progress ...`, opened in the built-in browser preview instead of a source tab). Fails if the file already exists. To fill it, follow up with fs__edit_file calls: the first replaces the seed line (or, for HTML, the `New document in progress ...` placeholder) with the initial content; further calls add more sections incrementally. Do NOT try to write the whole file in one giant edit — split into smaller chunks (see fs__edit_file).',
       parameters: {
         type: 'object',
         additionalProperties: false,
         properties: {
           path: { type: 'string', description: 'Workspace path.' },
-          content: {
-            type: 'string',
-            description: 'Full UTF-8 contents. Pass "" for an empty file.',
-          },
         },
-        required: ['path', 'content'],
+        required: ['path'],
       },
     },
   },
@@ -66,7 +62,7 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
     function: {
       name: 'fs__edit_file',
       description:
-        'String-anchored find/replace. Without `startLine`, `old` must appear in the file EXACTLY ONCE — include surrounding context lines if the natural snippet repeats. With `startLine`, the first occurrence after that line is taken.',
+        'String-anchored find/replace. Without `startLine`, `old` must appear in the file EXACTLY ONCE — include surrounding context lines if the natural snippet repeats. With `startLine`, the first occurrence after that line is taken. **`old` must be a non-empty anchor; whole-file replacement is not supported.** For a freshly-created file, anchor the first edit on the seed line `// new file content`, then add more content via further fs__edit_file calls. **Prefer smaller edits — tens of lines per call.** A single edit with a huge `new` payload risks the model hitting max_tokens mid-stream, leaving the file untouched; multiple smaller edits sidestep that entirely.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -75,7 +71,7 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
           old: {
             type: 'string',
             description:
-              'Exact text to replace. Must be unique in the file unless `startLine` is set.',
+              'Exact non-empty text to replace. Must be unique in the file unless `startLine` is set. Empty string is rejected — split big rewrites into multiple smaller fs__edit_file calls.',
           },
           new: {
             type: 'string',
@@ -111,16 +107,36 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
   {
     type: 'function',
     function: {
-      name: 'lsp__diagnostics',
+      name: 'l4__refactor',
       description:
-        "Fetch the L4 language server's current diagnostics for a file. Call after every fs__edit_file / fs__create_file to verify the file still type-checks. Returns `{ total, counts, diagnostics[{ line, column, severity, message, source, code }] }` with 1-indexed positions; empty `diagnostics[]` = clean.",
+        "Apply a structured L4 refactor. The `action` discriminator selects the operation; more actions will be added over time. Today: `rename` substitutes an identifier across the file AND every file that IMPORTs it (driven by the LSP's references provider, so the file must currently type-check — use l4__evaluate first if unsure). Preserves backtick quoting per-occurrence: a source `\\`old name\\`` becomes `\\`new name\\``; if the new name contains spaces or punctuation it's wrapped in backticks everywhere automatically. Pass identifier names WITHOUT surrounding backticks. Prefer this tool over hand-rolling cross-file find/replace via fs__edit_file.",
       parameters: {
         type: 'object',
         additionalProperties: false,
         properties: {
-          path: { type: 'string', description: 'Workspace path.' },
+          action: {
+            type: 'string',
+            enum: ['rename'],
+            description:
+              'Which refactor to apply. Supported: `rename` — substitute an identifier across the file and every importer. Reserved for future actions (extract, inline, …); pass exactly one of the listed enum values.',
+          },
+          path: {
+            type: 'string',
+            description:
+              'Workspace path of any L4 file the action anchors on. For `rename`, this is a file containing the identifier (usually where it is DEFINED); the rename then propagates through all importers.',
+          },
+          oldName: {
+            type: 'string',
+            description:
+              "Required when action='rename'. Current identifier (no surrounding backticks). Must appear in the source of `path`.",
+          },
+          newName: {
+            type: 'string',
+            description:
+              "Required when action='rename'. New identifier (no surrounding backticks). May contain spaces/punctuation — backticks are added automatically where required.",
+          },
         },
-        required: ['path'],
+        required: ['action', 'path'],
       },
     },
   },
@@ -129,7 +145,7 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
     function: {
       name: 'l4__evaluate',
       description:
-        "Returns the L4 server's latest results for every `#EVAL` / `#CHECK` / `#TRACE` directive in the file: `{ path, count, results[{ directiveId, line, success, value }] }`. Runs lsp diagnostics first internally.",
+        'Type-check and run `#EVAL`/`#CHECK`/`#TRACE`. Returns errors if not clean, else directive results.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -137,8 +153,13 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
           path: { type: 'string', description: 'Workspace path.' },
           timeoutMs: {
             type: 'number',
+            description: 'Max compile wait ms (default 6000, cap 15000).',
+          },
+          mode: {
+            type: 'string',
+            enum: ['changed', 'full'],
             description:
-              'Max ms to wait for a fresh compile before returning empty. Default 6000, max 15000.',
+              '`full` (default) prints every directive value. `changed` prints only directives added or whose value changed since the last l4__evaluate call; collapses to a single count line when nothing moved.',
           },
         },
         required: ['path'],
@@ -166,6 +187,26 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
           },
         },
         required: ['question'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'meta__post_status_update',
+      description:
+        'Stream a brief progress update to the user mid-turn. The text renders inline as plain assistant prose (not as a tool-call card). Use during long multi-step tasks (doc lookups, validation loops, multi-file drafting) Keep it under ~120 characters, present tense, no markdown headings. Do not repeat same status, and do not duplicate final answer.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          text: {
+            type: 'string',
+            description:
+              'Short user-facing status sentence. Plain prose. Will be appended to the assistant message as if written it inline.',
+          },
+        },
+        required: ['text'],
       },
     },
   },

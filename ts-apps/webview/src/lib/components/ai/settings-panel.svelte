@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import type { AiPermissionCategory, AiPermissionValue } from 'jl4-client-rpc'
   import type { AiChatStore } from '$lib/stores/ai-chat.svelte'
+  import { aiPrefs } from '$lib/stores/ai-prefs.svelte'
 
   let {
     store,
@@ -41,14 +42,14 @@
       hint: 'Send a file in your workspace to trash',
     },
     {
-      id: 'lsp.evaluate',
+      id: 'l4.evaluate',
       label: 'Run L4 diagnostics',
-      hint: 'Check L4 files for validity (LSP)',
+      hint: 'Check L4 files for validity and run directives via LSP (#EVAL, #ASSERT, #TRACE, ...)',
     },
     {
-      id: 'l4.evaluate',
-      label: 'Evaluate L4 directives',
-      hint: 'Evaluate the results of #EVAL, #TRACE, ...',
+      id: 'l4.refactor',
+      label: 'Refactor L4 code',
+      hint: 'Apply structured L4 refactors (rename across imports; more actions to come)',
     },
     {
       id: 'mcp.l4Rules',
@@ -86,6 +87,52 @@
       <button class="close" onclick={onClose} aria-label="Close">✕</button>
     </div>
     <div class="panel-body">
+      <section>
+        <div class="section-title">Preferences</div>
+        <label class="pref-row">
+          <div class="pref-name">
+            <div>Show model reasoning in chat</div>
+            <div class="pref-hint">
+              Display the assistant's chain-of-thought "Thinking" blocks
+              alongside its replies.
+            </div>
+          </div>
+          <span
+            class="toggle"
+            class:on={aiPrefs.showReasoning}
+            aria-hidden="true"
+          >
+            <span class="knob"></span>
+          </span>
+          <input
+            class="visually-hidden"
+            type="checkbox"
+            checked={aiPrefs.showReasoning}
+            onchange={(e) =>
+              aiPrefs.setShowReasoning((e.target as HTMLInputElement).checked)}
+          />
+        </label>
+
+        <div class="pref-stack">
+          <div class="pref-name">
+            <div>Methodology</div>
+            <div class="pref-hint">
+              Used as guidance when encoding natural language rules in L4.
+            </div>
+          </div>
+          <textarea
+            class="methodology-input"
+            rows="4"
+            placeholder="Describe how Legalese AI should think about the encoding of natural language rules"
+            value={aiPrefs.methodology}
+            oninput={(e) =>
+              (aiPrefs.methodology = (e.target as HTMLTextAreaElement).value)}
+            onchange={(e) =>
+              aiPrefs.setMethodology((e.target as HTMLTextAreaElement).value)}
+          ></textarea>
+        </div>
+      </section>
+
       <section>
         <div class="section-title">Permissions</div>
         <div class="section-help">
@@ -239,6 +286,107 @@
     padding: 3px 6px;
     font-size: 12px;
     min-width: 84px;
+  }
+  .pref-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .pref-row:hover {
+    background: rgba(128, 128, 128, 0.08);
+  }
+  .pref-name {
+    display: flex;
+    flex-direction: column;
+    font-size: 12px;
+    color: var(--vscode-foreground);
+  }
+  .pref-hint {
+    font-size: 10px;
+    color: var(--vscode-descriptionForeground);
+    margin-top: 6px;
+  }
+  .pref-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 6px 8px;
+  }
+  .methodology-input {
+    width: 100%;
+    box-sizing: border-box;
+    resize: vertical;
+    min-height: 64px;
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-family: var(--vscode-font-family, sans-serif);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+  .methodology-input::placeholder {
+    color: var(--vscode-input-placeholderForeground);
+  }
+  .methodology-input:focus {
+    outline: 1px solid #c8376a;
+    outline-offset: 0;
+    border-color: #c8376a;
+  }
+  .toggle {
+    flex-shrink: 0;
+    position: relative;
+    width: 30px;
+    height: 18px;
+    border-radius: 9999px;
+    background: var(--vscode-input-background, rgba(128, 128, 128, 0.35));
+    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
+    transition:
+      background 120ms ease,
+      border-color 120ms ease;
+    cursor: pointer;
+  }
+  .toggle .knob {
+    position: absolute;
+    top: 1px;
+    left: 1px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--vscode-foreground);
+    opacity: 0.7;
+    transition:
+      transform 120ms ease,
+      opacity 120ms ease;
+  }
+  .toggle.on {
+    background: #c8376a;
+    border-color: #c8376a;
+  }
+  .toggle.on .knob {
+    transform: translateX(12px);
+    background: #fff;
+    opacity: 1;
+  }
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .pref-row:focus-within .toggle {
+    outline: 1px solid #c8376a;
+    outline-offset: 1px;
   }
   .loading {
     font-size: 12px;

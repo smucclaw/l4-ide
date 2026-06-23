@@ -1,6 +1,7 @@
 import type { AiChatMessage } from 'jl4-client-rpc'
 import type { AuthManager } from '../auth.js'
 import type { AiLogger } from './logger.js'
+import { buildCurrentTimeBlock } from './editor-context.js'
 
 /**
  * Client-declared tool definition in the OpenAI function-tool shape the
@@ -33,6 +34,14 @@ export interface AiProxyChatRequest {
    *  to work (the server falls back to a UUID when absent, but
    *  the client can't reconstruct that id). */
   turnId?: string
+  /** Deployment-scoped base URL override
+   *  (`https://ai.legalese.cloud/{orgSlug}/{deploymentId}`). When set,
+   *  `stream()` / `reattach()` POST/GET against this instead of
+   *  `getAiEndpoint()`. The deployment endpoint is the same ai-proxy
+   *  stack, path-scoped, so the SSE `metadata` frame and turn-reattach
+   *  protocol work identically. Local-mode is ignored when this is
+   *  set (a deployment chat always needs real cloud auth). */
+  apiBaseUrl?: string
 }
 
 /** Event union emitted by {@link streamChatCompletions} while parsing SSE. */
@@ -49,7 +58,30 @@ export type AiProxyStreamEvent =
       kind: 'tool-activity'
       tool: string
       status: 'running' | 'done' | 'error'
+      /** Bold action prefix the webview shows in front of `message`.
+       *  Stamped by the proxy so the client doesn't need a per-tool
+       *  name → label mapping. May be absent on older proxy events;
+       *  the webview falls back to a sane default in that case. */
+      label?: string
       message: string
+      /** Verbatim model-supplied arguments. Present only for L4 Rule
+       *  activities (the proxy emits the structured payload only when
+       *  `kind === "rule"`); the webview uses this to render an L4
+       *  Rule card identical to a client-side tool-call. */
+      input?: unknown
+      /** Verbatim tool result (set on `done`). L4 Rule activities only. */
+      output?: unknown
+      /** Deployed L4 function name when the activity wraps a rule. */
+      ruleId?: string
+      /** Deployment the rule lives in, when scoped. */
+      deploymentId?: string
+      /** Error detail when status is `error`. */
+      error?: string
+      /** URL citations carried by a synthetic `web_search` activity —
+       *  the proxy aggregates `source` parts from the upstream model's
+       *  provider-native web search and emits them on the terminal
+       *  `done` event. Absent on every other activity. */
+      sources?: Array<{ url: string; title?: string }>
     }
   | {
       kind: 'tool-call'
@@ -65,16 +97,83 @@ export type AiProxyStreamEvent =
   | { kind: 'error'; message: string; code?: string }
 
 /**
- * ai-proxy URL. Hardcoded to the production endpoint. The
- * `LEGALESE_AI_ENDPOINT` env var is an undocumented escape hatch for
- * developers running a local proxy — set it in the shell that launches
- * VSCode (`LEGALESE_AI_ENDPOINT=http://localhost:3333 code .`). Not
- * exposed as a user-facing setting because end users should never need
- * to pick a different server.
+ * Mutable resume cursor shared with {@link parseSse}. Tracks the SSE
+ * `id:` of the last frame fully delivered to the consumer so a
+ * reattach after a mid-stream transport drop can ask the proxy to
+ * replay strictly *after* it — no duplicate deltas. 0 = nothing
+ * consumed yet (full replay on reattach).
  */
-export const AI_ENDPOINT = (
+export interface SseCursor {
+  lastEventId: number
+}
+
+/** Bounded reattach policy for {@link AiProxyClient.streamResilient}.
+ *  A handful of quick retries covers laptop-lid / Wi-Fi-roam / ALB
+ *  RST blips without spinning forever on a genuinely dead route. */
+const MAX_REATTACHES = 5
+const REATTACH_BACKOFF_MS = [500, 1000, 2000, 4000, 8000]
+
+/** Abortable sleep — rejects immediately if the signal trips so a
+ *  user "stop" during backoff doesn't wait out the timer. */
+function delay(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) return reject(new DOMException('Aborted', 'AbortError'))
+    const t = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+    const onAbort = (): void => {
+      clearTimeout(t)
+      reject(new DOMException('Aborted', 'AbortError'))
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+  })
+}
+
+/**
+ * Production ai-proxy URL. The `LEGALESE_AI_ENDPOINT` env var stays as
+ * an undocumented escape hatch for developers running on a non-default
+ * port. End users flip the `legaleseAi.localMode` setting instead —
+ * see `getAiEndpoint` below.
+ */
+const PROD_AI_ENDPOINT = (
   process.env.LEGALESE_AI_ENDPOINT ?? 'https://ai.legalese.cloud'
 ).replace(/\/$/, '')
+
+/** Local ai-proxy URL used when `legaleseAi.localMode` is enabled. */
+const LOCAL_AI_ENDPOINT = 'http://127.0.0.1:3000'
+
+/**
+ * True when the user has flipped `legaleseAi.localMode` on. Read fresh
+ * each request so toggling the setting takes effect without a reload.
+ */
+export function isLocalMode(): boolean {
+  try {
+    // Lazy import: this module is also pulled into non-extension
+    // contexts (tests) where `vscode` isn't on the runtime path.
+    // Falling back to false there is the right default.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const vscode = require('vscode') as typeof import('vscode')
+    return (
+      vscode.workspace
+        .getConfiguration()
+        .get<boolean>('legaleseAi.localMode') === true
+    )
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Resolve the active ai-proxy base URL. Re-evaluated per call so the
+ * setting toggle applies immediately to subsequent requests.
+ */
+export function getAiEndpoint(): string {
+  return isLocalMode() ? LOCAL_AI_ENDPOINT : PROD_AI_ENDPOINT
+}
+
+/** Back-compat: callers that want a snapshot of the production URL. */
+export const AI_ENDPOINT = PROD_AI_ENDPOINT
 
 export interface AiProxyClientOptions {
   auth: AuthManager
@@ -92,11 +191,21 @@ export class AiProxyClient {
    */
   async *stream(
     request: AiProxyChatRequest,
-    abortSignal: AbortSignal
+    abortSignal: AbortSignal,
+    cursor?: SseCursor
   ): AsyncGenerator<AiProxyStreamEvent> {
-    const url = `${AI_ENDPOINT}/v1/chat/completions`
-    const headers = await this.opts.auth.getAuthHeaders()
-    const hasAuth = !!headers.Authorization
+    const endpoint = request.apiBaseUrl ?? getAiEndpoint()
+    const local = request.apiBaseUrl ? false : isLocalMode()
+    const url = `${endpoint}/v1/chat/completions`
+    const headers = await this.opts.auth.getAiAuthHeaders()
+    let hasAuth = !!headers.Authorization
+    if (!hasAuth && local) {
+      // Local proxy in dev mode ignores Authorization but still
+      // requires the header to exist. Stamp a synthetic value so the
+      // request goes through without forcing a real sign-in.
+      headers.Authorization = 'Bearer dev-local'
+      hasAuth = true
+    }
     this.opts.logger.info(
       `POST ${url} (conversationId=${request.conversationId ?? '<new>'}, auth=${hasAuth ? 'bearer' : 'none'})`
     )
@@ -110,6 +219,14 @@ export class AiProxyClient {
         401
       )
     }
+    // Inline the current-time tag into the trailing user message
+    // (non-mutating clone) so the proxy sees wall-clock context on
+    // every turn. The local conversation store keeps the user's
+    // original text — what the chat bubble shows on reload — while
+    // the wire payload carries the timestamp. role:"system" wouldn't
+    // work here because the proxy's extractDelta filters system
+    // messages out of follow-up-turn deltas.
+    const wireMessages = withCurrentTimeOnLastUser(request.messages)
     const res = await fetch(url, {
       method: 'POST',
       headers: {
@@ -117,7 +234,11 @@ export class AiProxyClient {
         'Content-Type': 'application/json',
         Accept: 'text/event-stream',
       },
-      body: JSON.stringify({ ...request, stream: true }),
+      body: JSON.stringify({
+        ...request,
+        messages: wireMessages,
+        stream: true,
+      }),
       signal: abortSignal,
     })
     this.opts.logger.info(
@@ -134,22 +255,33 @@ export class AiProxyClient {
       const code = extractErrorCode(body) ?? httpStatusToCode(res.status)
       throw new AiProxyError(message, code, res.status)
     }
-    yield* parseSse(res.body, this.opts.logger)
+    yield* parseSse(res.body, this.opts.logger, cursor)
   }
 
   /**
    * GET /v1/chat/turns/{turnId}/stream. Rebinds to an existing
    * server-side turn after a client disconnect and replays + tails
-   * the SSE buffer. Throws AiProxyError on 404 (turn unknown or
+   * the SSE buffer. `sinceId` (the last fully-consumed SSE id) is
+   * sent as `Last-Event-ID` so the proxy replays strictly after it —
+   * no duplicate deltas. Throws AiProxyError on 404 (turn unknown or
    * reaped) so the caller can fall back to a fresh request.
    * Same SSE parse path as `stream()`.
    */
   async *reattach(
     turnId: string,
-    abortSignal: AbortSignal
+    abortSignal: AbortSignal,
+    cursor?: SseCursor,
+    apiBaseUrl?: string
   ): AsyncGenerator<AiProxyStreamEvent> {
-    const url = `${AI_ENDPOINT}/v1/chat/turns/${encodeURIComponent(turnId)}/stream`
-    const headers = await this.opts.auth.getAuthHeaders()
+    const endpoint = apiBaseUrl ?? getAiEndpoint()
+    const sinceId = cursor?.lastEventId ?? 0
+    const url =
+      `${endpoint}/v1/chat/turns/${encodeURIComponent(turnId)}/stream` +
+      (sinceId > 0 ? `?since=${sinceId}` : '')
+    const headers = await this.opts.auth.getAiAuthHeaders()
+    if (!headers.Authorization && !apiBaseUrl && isLocalMode()) {
+      headers.Authorization = 'Bearer dev-local'
+    }
     if (!headers.Authorization) {
       throw new AiProxyError(
         'No Legalese Cloud session found. Sign in from the sidebar to use AI chat.',
@@ -157,10 +289,16 @@ export class AiProxyClient {
         401
       )
     }
-    this.opts.logger.info(`GET ${url} (reattach)`)
+    this.opts.logger.info(`GET ${url} (reattach, since=${sinceId})`)
     const res = await fetch(url, {
       method: 'GET',
-      headers: { ...headers, Accept: 'text/event-stream' },
+      headers: {
+        ...headers,
+        Accept: 'text/event-stream',
+        // Standard SSE resume header; the proxy also accepts the
+        // `?since=` query above for belt-and-braces.
+        ...(sinceId > 0 ? { 'Last-Event-ID': String(sinceId) } : {}),
+      },
       signal: abortSignal,
     })
     this.opts.logger.info(`reattach response ${res.status} ${res.statusText}`)
@@ -178,7 +316,71 @@ export class AiProxyClient {
       const code = extractErrorCode(body) ?? httpStatusToCode(res.status)
       throw new AiProxyError(message, code, res.status)
     }
-    yield* parseSse(res.body, this.opts.logger)
+    yield* parseSse(res.body, this.opts.logger, cursor)
+  }
+
+  /**
+   * `stream()` with automatic reattach across transient transport
+   * drops (Wi-Fi roam, laptop lid, ALB RST during a long
+   * think/tool-execute gap). The proxy keeps running the turn and
+   * buffers every frame; on a network-level failure we GET the
+   * reattach endpoint with the resume cursor and keep yielding into
+   * the *same* consumer, so the caller sees one continuous event
+   * stream and never has to re-run the turn.
+   *
+   * NOT retried: user abort, and `AiProxyError` (a real HTTP/protocol
+   * outcome — 4xx/5xx, or the proxy's typed mid-stream `error` event
+   * which is yielded, not thrown). Those are terminal by design;
+   * replaying the buffer would just hit the same wall.
+   */
+  async *streamResilient(
+    request: AiProxyChatRequest,
+    abortSignal: AbortSignal,
+    turnId: string
+  ): AsyncGenerator<AiProxyStreamEvent> {
+    const cursor: SseCursor = { lastEventId: 0 }
+    let gen = this.stream(request, abortSignal, cursor)
+    let reattaches = 0
+    for (;;) {
+      try {
+        yield* gen
+        return
+      } catch (err) {
+        if (abortSignal.aborted) throw err
+        if (err instanceof AiProxyError) throw err
+        if (reattaches >= MAX_REATTACHES) {
+          this.opts.logger.warn(
+            `stream interrupted and reattach budget exhausted (${reattaches}); surfacing error`
+          )
+          throw err
+        }
+        const backoff =
+          REATTACH_BACKOFF_MS[
+            Math.min(reattaches, REATTACH_BACKOFF_MS.length - 1)
+          ]
+        reattaches++
+        this.opts.logger.warn(
+          `stream interrupted (${err instanceof Error ? err.message : String(err)}); ` +
+            `reattach ${reattaches}/${MAX_REATTACHES} after ${backoff}ms (since=${cursor.lastEventId})`
+        )
+        try {
+          await delay(backoff, abortSignal)
+        } catch {
+          throw err // aborted during backoff
+        }
+        try {
+          gen = this.reattach(turnId, abortSignal, cursor, request.apiBaseUrl)
+        } catch (re) {
+          // 404 (turn reaped / wrong task) or auth — can't resume;
+          // surface the ORIGINAL transport error so the UI shows a
+          // retry affordance rather than a confusing "not found".
+          this.opts.logger.warn(
+            `reattach failed (${re instanceof Error ? re.message : String(re)}); surfacing original error`
+          )
+          throw err
+        }
+      }
+    }
   }
 
   /**
@@ -187,8 +389,11 @@ export class AiProxyClient {
    * conversation files on the server.
    */
   async summarizeTitle(firstUserMessage: string): Promise<string | null> {
-    const url = `${AI_ENDPOINT}/v1/chat/completions`
-    const headers = await this.opts.auth.getAuthHeaders()
+    const url = `${getAiEndpoint()}/v1/chat/completions`
+    const headers = await this.opts.auth.getAiAuthHeaders()
+    if (!headers.Authorization && isLocalMode()) {
+      headers.Authorization = 'Bearer dev-local'
+    }
     const body = {
       model: 'legalese-summize-4',
       messages: [
@@ -226,6 +431,79 @@ export class AiProxyClient {
       return null
     }
   }
+
+  /**
+   * One-shot "intended use" description for a set of about-to-be-deployed
+   * functions, using the same stateless summize pipeline as
+   * {@link summarizeTitle} (no conversationId, so no junk conversation
+   * files server-side). Returns null on any failure — the caller
+   * surfaces a friendly message.
+   */
+  async describeIntendedUse(functionsJson: string): Promise<string | null> {
+    const url = `${getAiEndpoint()}/v1/chat/completions`
+    const headers = await this.opts.auth.getAiAuthHeaders()
+    if (!headers.Authorization && isLocalMode()) {
+      headers.Authorization = 'Bearer dev-local'
+    }
+    const body = {
+      model: 'legalese-summize-4',
+      messages: [
+        {
+          role: 'system' as const,
+          content:
+            `You write the "Intended use" blurb for a deployment of L4 ` +
+            `legal rules. You are given the JSON schemas of the ` +
+            `deployed rules purely as evidence of the subject matter — ` +
+            `they are rules, never "functions", and the schema itself ` +
+            `is an implementation detail the reader does not care ` +
+            `about.\n\n` +
+            `Describe WHY someone would deploy these rules and WHEN ` +
+            `they apply: the real-world legal or business situation ` +
+            `they govern, who relies on them, and the circumstances or ` +
+            `decisions in which they come into play. Do NOT explain ` +
+            `what the rules compute, how they work, their inputs or ` +
+            `outputs, or list them one by one. Think "what this is for", ` +
+            `not "what this does".\n\n` +
+            `Write 2-4 plain-English sentences for a legal or business ` +
+            `operator, not a programmer. Stay under 1500 characters ` +
+            `total. No markdown, no preamble — respond with the blurb ` +
+            `text only.`,
+        },
+        {
+          role: 'user' as const,
+          content: `Deployed rule schemas:\n\n${functionsJson.slice(0, 12000)}`,
+        },
+      ],
+    }
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json',
+          Accept: 'text/event-stream',
+        },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok || !res.body) return null
+      let text = ''
+      for await (const ev of parseSse(res.body)) {
+        if (ev.kind === 'text-delta') text += ev.text
+        if (ev.kind === 'done') break
+      }
+      text = text.trim()
+      // Mirror the server-side cap (`maxDescriptionLength` in
+      // jl4-service/src/ControlPlane.hs) and the textarea's maxlength so
+      // the drafted text is never longer than the field can hold.
+      if (text.length > 1500) text = text.slice(0, 1500)
+      return text.length > 0 ? text : null
+    } catch (err) {
+      this.opts.logger.warn(
+        `Intended-use generation failed: ${err instanceof Error ? err.message : String(err)}`
+      )
+      return null
+    }
+  }
 }
 
 /**
@@ -251,6 +529,40 @@ function httpStatusToCode(status: number): string {
   if (status === 429) return 'rate_limited'
   if (status >= 500) return 'upstream_error'
   return 'request_failed'
+}
+
+/**
+ * Return a NEW messages array with the {@link buildCurrentTimeBlock}
+ * prepended to the trailing `role:"user"` message's content. Pure —
+ * the input array and its messages aren't mutated, so the caller's
+ * local-store copy stays clean of wire-only metadata. When there's no
+ * user message in the body (tool-result follow-ups, `continueTurn`)
+ * the original array is returned unchanged.
+ */
+function withCurrentTimeOnLastUser(messages: AiChatMessage[]): AiChatMessage[] {
+  let lastUserIdx = -1
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i]!.role === 'user') {
+      lastUserIdx = i
+      break
+    }
+  }
+  if (lastUserIdx < 0) return messages
+  const timeBlock = buildCurrentTimeBlock()
+  const original = messages[lastUserIdx]!
+  const content = original.content
+  let augmented: AiChatMessage['content']
+  if (typeof content === 'string') {
+    augmented = `${timeBlock}\n\n${content}`
+  } else if (Array.isArray(content)) {
+    augmented = [{ type: 'text', text: timeBlock }, ...content]
+  } else {
+    // null content + role:"user" is degenerate; leave it alone.
+    return messages
+  }
+  const next = messages.slice()
+  next[lastUserIdx] = { ...original, content: augmented }
+  return next
 }
 
 function extractErrorMessage(body: string): string | undefined {
@@ -283,7 +595,8 @@ function extractErrorCode(body: string): string | undefined {
  */
 async function* parseSse(
   body: ReadableStream<Uint8Array>,
-  logger?: AiLogger
+  logger?: AiLogger,
+  cursor?: SseCursor
 ): AsyncGenerator<AiProxyStreamEvent> {
   const reader = body.getReader()
   const decoder = new TextDecoder('utf-8')
@@ -313,32 +626,47 @@ async function* parseSse(
       if (!frame) continue
       totalFrames++
       yield* interpretFrame(frame, logger)
+      // Advance the resume cursor only AFTER the consumer has pulled
+      // every event this frame produced — so a reattach asks the
+      // proxy to replay strictly after the last frame we fully
+      // handled, never re-delivering a partially-applied one.
+      if (cursor && frame.id !== undefined) cursor.lastEventId = frame.id
     }
   }
   if (buffer.trim().length > 0) {
     const frame = parseFrame(buffer)
-    if (frame) yield* interpretFrame(frame, logger)
+    if (frame) {
+      yield* interpretFrame(frame, logger)
+      if (cursor && frame.id !== undefined) cursor.lastEventId = frame.id
+    }
   }
 }
 
 interface SseFrame {
   event?: string
   data: string
+  /** SSE `id:` field — monotonic per-turn sequence the proxy stamps
+   *  on every event/data frame. Absent on keepalive comments. */
+  id?: number
 }
 
 function parseFrame(raw: string): SseFrame | null {
   const lines = raw.split('\n')
   let event: string | undefined
+  let id: number | undefined
   const dataLines: string[] = []
   for (const line of lines) {
     if (line.startsWith('event:')) {
       event = line.slice('event:'.length).trim()
     } else if (line.startsWith('data:')) {
       dataLines.push(line.slice('data:'.length).trimStart())
+    } else if (line.startsWith('id:')) {
+      const n = Number.parseInt(line.slice('id:'.length).trim(), 10)
+      if (Number.isFinite(n)) id = n
     }
   }
   if (dataLines.length === 0) return null
-  return { event, data: dataLines.join('\n') }
+  return { event, data: dataLines.join('\n'), id }
 }
 
 function* interpretFrame(
@@ -408,7 +736,14 @@ function* interpretFrame(
         activities?: Array<{
           tool: string
           status: 'running' | 'done' | 'error'
+          label?: string
           message: string
+          input?: unknown
+          output?: unknown
+          ruleId?: string
+          deploymentId?: string
+          error?: string
+          sources?: Array<{ url: string; title?: string }>
         }>
       }
       for (const a of payload.activities ?? []) {
@@ -416,7 +751,14 @@ function* interpretFrame(
           kind: 'tool-activity',
           tool: a.tool,
           status: a.status,
+          label: a.label,
           message: a.message,
+          input: a.input,
+          output: a.output,
+          ruleId: a.ruleId,
+          deploymentId: a.deploymentId,
+          error: a.error,
+          sources: a.sources,
         }
       }
     } catch {

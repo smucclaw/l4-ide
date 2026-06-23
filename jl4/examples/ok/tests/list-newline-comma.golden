@@ -1,0 +1,11 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+list-newline-comma.l4:16:1-14:
+  LIST 1, 2, 3
+list-newline-comma.l4:17:1-36:
+  assertion satisfied
+list-newline-comma.l4:19:1-14:
+  LIST "alpha", "beta", "gamma"
+list-newline-comma.l4:20:1-53:
+  assertion satisfied

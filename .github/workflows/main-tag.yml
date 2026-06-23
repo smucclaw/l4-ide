@@ -1,8 +1,10 @@
 name: Main Branch Tag
 
+# Manual-only: this release/tag pipeline no longer runs automatically when a PR
+# merges into main. Trigger it from the Actions tab (Run workflow) when you
+# actually want to cut a build/tag.
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 # Only run one release build at a time
 concurrency:
@@ -205,6 +207,25 @@ jobs:
         with:
           path: ${{ steps.setup.outputs.cabal-store }}
           key: ${{ steps.cache.outputs.cache-primary-key }}
+
+      # Bake the build version (1.5.<run_number>, matching the VS Code
+      # extension version + the l4-ide-build-<run_number> tag) into the
+      # jl4-service binary via the JL4_SERVICE_VERSION env var, which the
+      # Version module captures with a Template Haskell splice at compile time.
+      # The project is built fresh each run (only the cabal store is cached),
+      # so the splice never goes stale.
+      - name: Compute jl4-service version
+        run: |
+          CURRENT=$(grep -m1 '"version"' ts-apps/vscode/package.json | sed -E 's/.*"version" *: *"([^"]+)".*/\1/')
+          MAJOR_MINOR=$(echo "$CURRENT" | sed 's/\.[^.]*$//')
+          echo "JL4_SERVICE_VERSION=${MAJOR_MINOR}.${{ github.run_number }}" >> "$GITHUB_ENV"
+          echo "jl4-service version: ${MAJOR_MINOR}.${{ github.run_number }}"
+          # The version is baked into Version.hs via a Template Haskell splice
+          # that reads JL4_SERVICE_VERSION at *compile* time. GHC won't re-run
+          # the splice if Version.o is up to date, so force a recompile by
+          # touching the source — this keeps the bake correct even if the build
+          # dir is ever cached (today it isn't).
+          touch jl4-service/src/Version.hs
 
       - name: Build jl4-lsp, l4, and jl4-service
         run: cabal build exe:jl4-lsp exe:l4 exe:jl4-service
@@ -460,7 +481,7 @@ jobs:
         run: npm run build
 
       - name: Download LSP + l4 binaries
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: ${{ matrix.artifact }}
           path: ts-apps/vscode/bin/${{ matrix.target }}
@@ -489,17 +510,15 @@ jobs:
           retention-days: 90
 
   # ============================================
-  # Package all-platforms extension
+  # Package cross-platform extension (macOS + Windows)
   # ============================================
 
-  package-vscode-all-platforms:
-    name: Package VSCode Extension - All Platforms
+  package-vscode-cross-platform:
+    name: Package VSCode Extension - Cross Platform
     runs-on: ubuntu-latest
     needs:
       - build-lsp-macos-arm64
       - build-lsp-windows
-      - build-lsp-linux-x64
-      - build-lsp-linux-arm64
     steps:
       - uses: actions/checkout@v5
 
@@ -525,10 +544,10 @@ jobs:
       - name: Build TypeScript monorepo
         run: npm run build
 
-      - name: Download all LSP binaries
-        uses: actions/download-artifact@v5
+      - name: Download macOS + Windows LSP binaries
+        uses: actions/download-artifact@v8
         with:
-          pattern: jl4-lsp-*
+          pattern: jl4-lsp-{darwin-arm64,win32-x64}
           path: ts-apps/vscode/bin
 
       - name: Organize binaries into correct structure
@@ -536,26 +555,22 @@ jobs:
           cd ts-apps/vscode/bin
           mv jl4-lsp-darwin-arm64 darwin-arm64
           mv jl4-lsp-win32-x64 win32-x64
-          mv jl4-lsp-linux-x64 linux-x64
-          mv jl4-lsp-linux-arm64 linux-arm64
           chmod +x darwin-arm64/jl4-lsp darwin-arm64/l4
-          chmod +x linux-x64/jl4-lsp    linux-x64/l4
-          chmod +x linux-arm64/jl4-lsp  linux-arm64/l4
 
       - name: Copy L4 libraries
         run: |
           mkdir -p ts-apps/vscode/libraries
           cp jl4-core/libraries/*.l4 ts-apps/vscode/libraries/
 
-      - name: Package all-platforms extension
+      - name: Package cross-platform extension
         working-directory: ts-apps/vscode
         run: |
-          npx vsce package --no-dependencies -o l4-vscode-all-platforms-${{ env.PACKAGE_VERSION }}.vsix
+          npx vsce package --no-dependencies -o l4-vscode-cross-platform-${{ env.PACKAGE_VERSION }}.vsix
 
       - name: Upload VSIX artifact
         uses: actions/upload-artifact@v6
         with:
-          name: l4-vscode-all-platforms-${{ env.PACKAGE_VERSION }}
+          name: l4-vscode-cross-platform-${{ env.PACKAGE_VERSION }}
           path: ts-apps/vscode/*.vsix
           retention-days: 90
 
@@ -612,7 +627,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - package-vscode-extension
-      - package-vscode-all-platforms
+      - package-vscode-cross-platform
       - package-vscode-universal
       - build-wasm
     steps:
@@ -621,7 +636,7 @@ jobs:
           fetch-depth: 0
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
 
@@ -678,7 +693,7 @@ jobs:
           Built: ${{ steps.build-date.outputs.datetime }}
 
           Artifacts included:
-          - VSCode extensions (platform-specific, all-platforms, universal)
+          - VSCode extensions (platform-specific, cross-platform, universal)
           - WASM binaries (jl4-core.wasm, jl4-core.mjs)
           - jl4-service binary (linux-x64) with SHA256"
           git push origin "${{ steps.tag-name.outputs.tag }}"
@@ -702,7 +717,7 @@ jobs:
             | `win32-x64` | Windows x64 |
             | `linux-x64` | Linux x64 |
             | `linux-arm64` | Linux ARM64 |
-            | `all-platforms` | Single VSIX with all platform binaries |
+            | `cross-platform` | Single VSIX with macOS + Windows binaries |
             | `universal` | No bundled binary (requires jl4-lsp on PATH) |
 
             ### jl4-service (Decision Service)
@@ -747,7 +762,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - package-vscode-extension
-      - package-vscode-all-platforms
+      - package-vscode-cross-platform
       - package-vscode-universal
       - build-wasm
       - create-tag
@@ -765,7 +780,7 @@ jobs:
           echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| VSCode Extensions | ${{ needs.package-vscode-extension.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| All Platforms | ${{ needs.package-vscode-all-platforms.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Cross Platform | ${{ needs.package-vscode-cross-platform.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Universal | ${{ needs.package-vscode-universal.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| WASM Build | ${{ needs.build-wasm.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Git Tag | ${{ needs.create-tag.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY

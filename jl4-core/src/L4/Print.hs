@@ -108,6 +108,56 @@ instance LayoutPrinterWithName a => LayoutPrinter (Type' a) where
         <+> printWithLayout ty
     InfVar _ raw uniq -> printWithLayout raw <> pretty uniq
 
+-- | Render a type for user-facing display. Residual inference variables carry a
+-- global, edit-order-dependent id (e.g. @res184@, @A3@) — the 'InfVar' instance
+-- above prints @prefix <> uniq@. Left raw, that makes hover and the deployed
+-- schema's @returnType@ non-deterministic across compiles, which trips the
+-- deploy breaking-change check. Here we normalise every inference variable to a
+-- stable type-variable name (@a@, @b@, @c@, …) by order of first appearance.
+-- The plain 'prettyLayout' instance keeps the raw id, which is what we want for
+-- internal debugging.
+prettyTypeForDisplay :: Type' Resolved -> Text
+prettyTypeForDisplay ty = docText (goDisplayTy naming ty)
+  where
+    naming = Map.fromList (zip (collectInfVarUniques ty) displayTypeVarNames)
+
+-- | Distinct inference-variable uniques, in order of first appearance.
+collectInfVarUniques :: Type' Resolved -> [Int]
+collectInfVarUniques = ordNub . go
+  where
+    ordNub = foldr (\x xs -> x : filter (/= x) xs) []
+    go = \ case
+      Type _          -> []
+      TyApp _ _ ps     -> concatMap go ps
+      Fun _ args ty'   -> concatMap (go . ontType) args <> go ty'
+      Forall _ _ ty'   -> go ty'
+      InfVar _ _ uniq  -> [uniq]
+    ontType (MkOptionallyNamedType _ _ t) = t
+
+-- | a, b, …, z, a1, b1, … — an unbounded, stable supply of display names.
+displayTypeVarNames :: [Text]
+displayTypeVarNames =
+  [ Text.singleton c | c <- ['a' .. 'z'] ]
+  <> [ Text.singleton c <> Text.pack (show n) | n <- [(1 :: Int) ..], c <- ['a' .. 'z'] ]
+
+-- | Mirror of the 'Type'' layout instance, but emit the normalised name for
+-- each inference variable (falling back to a hole when, defensively, a uniq is
+-- somehow missing from the map).
+goDisplayTy :: Map Int Text -> Type' Resolved -> Doc ann
+goDisplayTy m = \ case
+  Type _ -> "TYPE"
+  TyApp _ n ps -> printWithLayout n <> case ps of
+    [] -> mempty
+    params@(_ : _) -> space <> "OF" <+> hsep (punctuate comma (fmap (goDisplayTy m) params))
+  Fun _ args ty' ->
+    "FUNCTION FROM" <+> hsep (punctuate (space <> "AND") (fmap (goDisplayTy m . ontType) args))
+      <+> "TO" <+> goDisplayTy m ty'
+  Forall _ vals ty' ->
+    "FOR ALL" <+> hsep (punctuate (space <> "AND") (fmap printWithLayout vals)) <+> goDisplayTy m ty'
+  InfVar _ _ uniq -> pretty (Map.findWithDefault "_" uniq m)
+  where
+    ontType (MkOptionallyNamedType _ _ t) = t
+
 -- We currently have no syntax for actual names occurring here
 instance LayoutPrinterWithName a => LayoutPrinter (OptionallyNamedType a) where
   printWithLayout = \ case

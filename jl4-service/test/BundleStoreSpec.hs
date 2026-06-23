@@ -25,6 +25,9 @@ spec = describe "BundleStore" do
             meta = StoredMetadata
               { smVersion = "abc123"
               , smCreatedAt = "2025-01-01T00:00:00Z"
+              , smDescription = Nothing
+              , smServiceVersion = Nothing
+              , smDeploymentVersion = Nothing
               }
         saveBundle store "test-deploy" sources meta
         (loadedSources, loadedMeta) <- loadBundle store "test-deploy"
@@ -32,11 +35,32 @@ spec = describe "BundleStore" do
         loadedMeta.smVersion `shouldBe` "abc123"
         loadedMeta.smCreatedAt `shouldBe` "2025-01-01T00:00:00Z"
 
+      it "saveStoredMetadata overwrites only metadata.json, preserving sources" \store -> do
+        let sources = Map.singleton "main.l4" "DECIDE f IS TRUE"
+            meta0 = StoredMetadata
+              { smVersion = "v1"
+              , smCreatedAt = "2025-01-01T00:00:00Z"
+              , smDescription = Just "intended use"
+              , smServiceVersion = Nothing
+              , smDeploymentVersion = Nothing
+              }
+        saveBundle store "bf" sources meta0
+        -- Backfill the version fields without touching sources.
+        saveStoredMetadata store "bf" meta0
+          { smServiceVersion = Just "1.5.81"
+          , smDeploymentVersion = Just "1.0.0"
+          }
+        (loadedSources, loadedMeta) <- loadBundle store "bf"
+        loadedSources `shouldBe` sources -- untouched
+        loadedMeta.smServiceVersion `shouldBe` Just "1.5.81"
+        loadedMeta.smDeploymentVersion `shouldBe` Just "1.0.0"
+        loadedMeta.smDescription `shouldBe` Just "intended use"
+
       it "overwrites existing deployment atomically" \store -> do
         let sources1 = Map.singleton "main.l4" "DECIDE f IS TRUE"
             sources2 = Map.singleton "main.l4" "DECIDE f IS FALSE"
-            meta1 = StoredMetadata "v1" "2025-01-01T00:00:00Z"
-            meta2 = StoredMetadata "v2" "2025-01-02T00:00:00Z"
+            meta1 = StoredMetadata "v1" "2025-01-01T00:00:00Z" Nothing Nothing Nothing
+            meta2 = StoredMetadata "v2" "2025-01-02T00:00:00Z" Nothing Nothing Nothing
         saveBundle store "deploy-overwrite" sources1 meta1
         saveBundle store "deploy-overwrite" sources2 meta2
         (loadedSources, loadedMeta) <- loadBundle store "deploy-overwrite"
@@ -45,7 +69,7 @@ spec = describe "BundleStore" do
 
     describe "listDeployments" do
       it "lists saved deployments" \store -> do
-        let meta = StoredMetadata "v1" "2025-01-01T00:00:00Z"
+        let meta = StoredMetadata "v1" "2025-01-01T00:00:00Z" Nothing Nothing Nothing
         saveBundle store "deploy-a" (Map.singleton "a.l4" "DECIDE a IS TRUE") meta
         saveBundle store "deploy-b" (Map.singleton "b.l4" "DECIDE b IS TRUE") meta
         deployIds <- listDeployments store
@@ -59,7 +83,7 @@ spec = describe "BundleStore" do
 
     describe "deleteBundle" do
       it "removes a deployment from disk" \store -> do
-        let meta = StoredMetadata "v1" "2025-01-01T00:00:00Z"
+        let meta = StoredMetadata "v1" "2025-01-01T00:00:00Z" Nothing Nothing Nothing
         saveBundle store "to-delete" (Map.singleton "main.l4" "DECIDE f IS TRUE") meta
         ok <- deleteBundle store "to-delete"
         ok `shouldBe` True

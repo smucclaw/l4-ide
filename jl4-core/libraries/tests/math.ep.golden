@@ -4,8 +4,17 @@ IMPORT prelude
 -- Extend this file as additional OPM numeric functions (Ln, Log, etc.)
 -- become required by downstream translators such as opm2l4.
 
+§ `Math`
+
+§§ `Constants`
+
 DECLARE EULER IS A NUMBER
 EULER MEANS 2.718281828459045
+
+DECLARE TAN_EPSILON IS A NUMBER
+TAN_EPSILON MEANS 0.000000001
+
+§§ `Exponential & Logarithmic`
 
 GIVEN x IS A NUMBER
 GIVETH A NUMBER
@@ -21,18 +30,19 @@ GIVETH A MAYBE NUMBER
 log10 x MEANS
   IF x AT MOST 0 THEN NOTHING ELSE JUST (LOG10 x)
 
+§§ `Roots & Absolute Value`
+
 GIVEN x IS A NUMBER
 GIVETH A MAYBE NUMBER
-sqrt x MEANS
-  IF x LESS THAN 0 THEN NOTHING ELSE JUST (SQRT x)
-
-DECLARE TAN_EPSILON IS A NUMBER
-TAN_EPSILON MEANS 0.000000001
+sqrt x @nlg the square root of %x%
+  MEANS IF x LESS THAN 0 THEN NOTHING ELSE JUST (SQRT x)
 
 GIVEN value IS A NUMBER
 GIVETH A NUMBER
-absNumber value MEANS
-  IF value LESS THAN 0 THEN 0 MINUS value ELSE value
+absNumber value @nlg the absolute value of %value%
+  MEANS IF value LESS THAN 0 THEN 0 MINUS value ELSE value
+
+§§ `Trigonometry`
 
 GIVEN x IS A NUMBER
 GIVETH A MAYBE NUMBER

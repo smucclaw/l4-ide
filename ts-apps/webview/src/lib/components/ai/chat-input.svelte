@@ -61,7 +61,10 @@
    * non-token char dismisses the popup.
    */
   function detectMention(): void {
-    if (!textarea) {
+    // A deployment-bound chat is a plain passthrough to the
+    // deployment's model — it has no IDE tools to resolve `@` file/
+    // symbol mentions, so the feature is disabled entirely there.
+    if (!textarea || store.deploymentBinding) {
       mentionState = null
       return
     }
@@ -296,7 +299,9 @@
     onkeydown={onKeydown}
     placeholder={store.pendingQuestion
       ? 'Answer the question above…'
-      : 'Ask anything about your rules or L4…'}
+      : store.deploymentBinding
+        ? 'Ask anything about your rules…'
+        : 'Ask anything about your rules or L4…'}
     rows="1"
     {disabled}
   ></textarea>
@@ -311,12 +316,18 @@
         title="New conversation"
         aria-label="New conversation"
       >
-        <svg viewBox="0 0 16 16" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path
-            d="M8 3v10M3 8h10"
+            d="M10 4V4C8.13623 4 7.20435 4 6.46927 4.30448C5.48915 4.71046 4.71046 5.48915 4.30448 6.46927C4 7.20435 4 8.13623 4 10V13.6C4 15.8402 4 16.9603 4.43597 17.816C4.81947 18.5686 5.43139 19.1805 6.18404 19.564C7.03968 20 8.15979 20 10.4 20H14C15.8638 20 16.7956 20 17.5307 19.6955C18.5108 19.2895 19.2895 18.5108 19.6955 17.5307C20 16.7956 20 15.8638 20 14V14"
             stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
+            stroke-width="2"
+            stroke-linecap="square"
+          />
+          <path
+            d="M12.4393 14.5607L19.5 7.5C20.3284 6.67157 20.3284 5.32843 19.5 4.5C18.6716 3.67157 17.3284 3.67157 16.5 4.5L9.43934 11.5607C9.15804 11.842 9 12.2235 9 12.6213V15H11.3787C11.7765 15 12.158 14.842 12.4393 14.5607Z"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="square"
           />
         </svg>
       </button>
@@ -372,7 +383,10 @@
       </button>
     </div>
     <div class="right-actions">
-      {#if store.activeFile.name}
+      <!-- No active-file context chip in a deployment-bound chat:
+           it's a passthrough to the deployment's model, which can't
+           read IDE files. -->
+      {#if store.activeFile.name && !store.deploymentBinding}
         <button
           type="button"
           class="active-file-btn"
@@ -436,12 +450,15 @@
           />
         </svg>
       </button>
-      {#if isStreaming && !(store.pendingQuestion && text.trim())}
-        <!-- Stop button: visible while the turn is streaming UNLESS
-             the model is paused on a meta__ask_user question and the
-             user has typed something — in that case the button flips
-             to a Send so a single Enter submits the answer rather
-             than forcing the user to hunt for a separate affordance. -->
+      {#if isStreaming && !text.trim()}
+        <!-- Stop button: visible while the turn is streaming AND the
+             input is empty. Once the user types anything, the button
+             flips to Send so a single click queues a follow-up
+             (which the store routes through AiChatInject — folded
+             into the next tool round or seeded into a fresh
+             sub-turn). Same behaviour applies when the model is
+             paused on a meta__ask_user question: typed text turns
+             the button into Send so a single Enter answers. -->
         <button
           class="submit-btn stop"
           onclick={abort}

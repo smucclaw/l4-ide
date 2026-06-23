@@ -1,194 +1,60 @@
-# L4 Rules-as-code Language Support and Tools
+# L4 — Rules as Code, in VS Code
 
-Language support for L4 rules-as-code with a built-in Legalese AI chat, MCP for AI agents like Claude Code and Copilot, WebMCP for browser AI, syntax highlighting, IntelliSense, CLI, decision graph visualizations, result inspection, and Legalese Cloud deployment.
+**Write, test, and deploy contracts and legal rules as executable code.**
 
-Documentation: https://legalese.com/l4
+The L4 extension turns VS Code into a workbench for computational law. Encode contracts, regulations, and policy logic as typed, API calls, AI skills and MCPs — backed by a built-in Legalese AI coding assistant, live ladder-diagram visualisations of decision logic, and one-click deployment to Legalese Cloud.
 
-## Features
+[**Documentation →**](https://legalese.com/l4) &nbsp;·&nbsp; [Foundation Course](https://legalese.com/l4/courses/foundation) &nbsp;·&nbsp; [Legalese Cloud](https://legalese.cloud)
 
-- **Legalese AI**: Built-in chat tab for composing and iterating on L4 rules with an assistant that knows L4 and can drive the fs / LSP / MCP tool set directly.
-- **MCP Server (Model Context Protocol)**: Expose deployed L4 rules as tools that any AI agent can discover and call
-  - Built-in MCP proxy server registers automatically with VS Code
-  - Legalese AI (in-editor) and any MCP-speaking agent (Cursor, Copilot, Claude Code, third parties) can discover and invoke your L4 functions as structured tools
-  - Scoped access — expose all rules org-wide or restrict to specific deployments
-  - Authenticated via Legalese Cloud or API key for self-hosted setups
-- **WebMCP — Browser AI Integration**: Let browser-based AI agents call your L4 rules from any web page
-  - Embed a single `<script>` tag to register L4 functions with `navigator.modelContext`
-  - Browser AI agents discover and call your rules without a backend integration
-  - Configurable scope, tool registration mode, and authentication via data attributes
-- **Cloud Deploy**: Deploy L4 rules as REST APIs from the sidebar
-  - Deploy Preview tab shows exported functions with parameter schemas
-  - Breaking change detection when updating existing deployments
-  - Deployments tab lists active deployments with full function metadata
-  - Supports Legalese Cloud (browser login) and self-hosted jl4-service (API key)
-- **Syntax Highlighting**: Full support for L4 syntax with proper color coding
-- **Language Server Protocol (LSP)**: Advanced language features including:
-  - IntelliSense and autocompletion
-  - Error detection and diagnostics
-  - Code navigation
-  - Symbol search
-- **Ladder Diagram Visualization**: Interactive decision graph of L4 rules as ladder diagrams
-  - Real-time updates as you edit your code
-  - Visual representation of logical relationships
-  - Interactive exploration of rule structures
-- **Result Inspector**: Live evaluation results for `#EVAL`, `#EVALTRACE`, `#CHECK`, and `#ASSERT` directives
-  - Click "Track result" above a directive to add it to the inspector
-  - Results update automatically as you edit your code
-  - Collapsible sections grouped by file
-  - Syntax-highlighted output
+---
 
-## What is L4?
+## Why L4?
 
-L4 is a domain-specific language designed for expressing legal logic and rules in a formal, computable way. It allows legal professionals and developers to:
+Legal text is full of conditions, exceptions, and cross-references. L4 lets you encode that logic as code a computer — or a contract counterparty — can actually execute, with the rigour of a typed functional language and the readability of a structured legal clause.
 
-- Write legal rules in a structured, unambiguous format
-- Visualize complex legal logic through ladder diagrams
-- Validate legal reasoning through formal methods
-- Deploy rules as REST APIs for integration with other systems
-- Expose rules to AI agents via MCP and browser AI via WebMCP
+This extension is the fastest way to write L4 rules, see what they decide, and ship them as APIs your team and your AI agents can call.
 
-## Getting Started
+## What you get
 
-1. **Install the Extension**: Install this extension from the VS Code marketplace
-2. **Open an L4 File**: Create or open a file with the `.l4` extension
-3. **Configure the Language Server**: The extension requires the `jl4-lsp` language server
+### Legalese AI, in the sidebar
 
-## Using the Sidebar
+A built-in chat that knows L4 inside and out. Describe a clause, paste a statute, or ask for a refactor — Legalese AI drafts, validates, and deploys rules with you, driving the filesystem, language server, and MCP tools directly.
 
-The L4 sidebar is accessible via the L4 icon in the activity bar. It has three tabs:
+### See your decisions, not just your code
 
-### Result Inspector
+Click _Show decision graph_ above any rule and open an interactive ladder diagram that updates as you type. Spot logic errors, walk a stakeholder through an outcome, or just make sense of your own rules at a glance.
 
-- Open an L4 file with `#EVAL`, `#CHECK`, or `#ASSERT` directives
-- Click "Track result" in the CodeLens above a directive
-- The sidebar switches to the Result Inspector tab and shows the evaluation result
-- Results update live as you edit code
+### Live result inspector
 
-### Deploy Preview
+Annotate rules with `#EVAL`, `#EVALTRACE`, `#CHECK`, `#TRACE`, or `#ASSERT` and watch results update live as you edit. Click _Track result_ in the codelens to pin it to the Inspector tab — no re-running, no extra terminal.
 
-- Shows exported functions from the active L4 file with their parameter schemas, types, and descriptions
-- Updates automatically as you edit
-- Click "Deploy" to start the deployment flow
+### One-click cloud deploy
 
-### Deployments
+Mark a function with `@export`, then deploy from the sidebar. Every deployment becomes a REST API with OpenAPI spec, and an AI skill or MCP tool — automatically. Breaking-change detection warns you before you ship an incompatible update.
 
-- Lists active deployments with their functions (sourced from the service's OpenAPI spec)
-- Expand a deployment to see its function schemas
-- Undeploy with confirmation
+### Your rules, called by any AI agent
 
-## Using the L4 Decision Graph
+Deployed rules show up as MCP tools that Claude, Cursor, Copilot, and other agents can discover and call. Drop one `<script>` tag onto a webpage and browser-based AI agents can use them too. ([MCP & WebMCP tutorials →](https://legalese.com/l4/tutorials))
 
-1. Open an L4 file containing rules
-2. Look for the "Show decision graph" codelens above L4 rules with boolean returns
-3. Click on the codelens to open the ladder diagram visualization
-4. The diagram will update automatically as you edit your code
+### Rich language support
 
-## MCP — AI Agent Integration
+Syntax highlighting, IntelliSense, error diagnostics, go-to-definition, symbol search, hover docs — everything you expect from a modern language extension, powered by the bundled `jl4-lsp` language server.
 
-Once you deploy L4 rules, they are automatically available as MCP tools that AI agents can discover and call.
+### Docs in the sidebar
 
-### Local MCP Proxy (VS Code)
+Browse and search the L4 docs without leaving the editor. _Copy into new file_ drops example snippets straight into your project.
 
-The extension starts a local MCP proxy server automatically. Legalese AI (built in), along with any external MCP-speaking agent (Cursor, GitHub Copilot, Claude Code, third-party clients), can connect to it to discover and invoke your deployed L4 functions.
+---
 
-The proxy registers with VS Code's built-in MCP system. The default port is `19415` (configurable via `jl4.mcpPort`). The "Add L4 Tools to Claude Code" dropdown action in the sidebar wires the same MCP endpoint plus the writing-l4-rules skill into a local Claude Code installation on demand.
+## Get started
 
-### Remote MCP Endpoints
+1. **Install** the extension from the VS Code Marketplace.
+2. **Open** a file with the `.l4` extension — the language server starts automatically on platform builds.
+3. **Hit the L4 icon** in the activity bar and ask Legalese AI to draft your first rule.
 
-Deployed rules are also accessible via MCP endpoints on the service:
+New to L4? Start with the [Foundation Course](https://legalese.com/l4/courses/foundation) or the [Getting Started tutorial](https://legalese.com/l4/tutorials).
 
-- `POST /.mcp` — all deployments (org-wide)
-- `POST /{deployment-id}/.mcp` — scoped to one deployment
-- `GET /.well-known/mcp` — MCP discovery metadata
-
-Example MCP client config (e.g. for Claude Desktop):
-
-```json
-{
-  "mcpServers": {
-    "l4-rules": {
-      "url": "https://your-service/.mcp",
-      "headers": {
-        "Authorization": "Bearer sk_..."
-      }
-    }
-  }
-}
-```
-
-## WebMCP — Browser AI Integration
-
-WebMCP lets browser-based AI agents (like Claude on the web) discover and call your L4 rules directly from any web page.
-
-Add this script tag to your page:
-
-```html
-<script src="https://your-service/.webmcp/embed.js"></script>
-```
-
-The script registers your L4 functions with the browser's `navigator.modelContext` API. Browser AI agents can then see and call them as tools.
-
-### Configuration
-
-Use data attributes to customize behavior:
-
-```html
-<script
-  src="https://your-service/.webmcp/embed.js"
-  data-scope="insurance-premium/*,safe-valuation/effective-sale-price"
-  data-tools="auto"
-  data-api-key="sk_..."
-></script>
-```
-
-| Attribute      | Description                                                                                       |
-| -------------- | ------------------------------------------------------------------------------------------------- |
-| `data-scope`   | Filter by deployment/function (e.g. `deploy/*` for all functions, `deploy/fn` for a specific one) |
-| `data-tools`   | Registration mode: `auto` (default), `discovery`, `direct`, or `all`                              |
-| `data-api-key` | API key for authenticated access                                                                  |
-
-## Cloud Deploy Setup
-
-### Legalese Cloud
-
-No configuration needed. Click "Sign in with Legalese Cloud" in the sidebar footer to authenticate via browser.
-
-Legalese Cloud is a service provided by Legalese Pte. Ltd.
-More info at https://legalese.cloud
-
-### Self-hosted jl4-service
-
-Configure the service URL and API key in VS Code settings:
-
-```json
-{
-  "jl4.serviceUrl": "http://localhost:8080",
-  "jl4.serviceApiKey": "sk_..."
-}
-```
-
-## L4 CLI
-
-The extension ships with the `l4` command-line tool for running L4 files, checking rules, and other workflows outside the editor.
-
-### Installing
-
-Run **L4: Install L4 CLI** from the command palette, or accept the prompt the first time you open an L4 project. This installs the bundled `l4` binary onto your PATH:
-
-- **macOS / Linux**: symlinks the binary into `~/.local/bin/l4`. If `~/.local/bin` isn't on your PATH, the extension shows the `export PATH="$HOME/.local/bin:$PATH"` snippet to add to your `~/.zshrc` or `~/.bashrc`.
-- **Windows**: copies the exe into `%LOCALAPPDATA%\Programs\l4\l4.exe` and appends that directory to your user PATH via `setx`. Restart open terminals for the change to take effect.
-
-The installer is safe to re-run — each invocation refreshes the symlink or file, so upgrades propagate when you update the extension.
-
-### Requirements
-
-The CLI is bundled only in platform-specific builds of the extension (macOS ARM64/x64, Linux x64, Windows x64). If you installed the universal build, install `l4` manually via `cabal install exe:l4 --overwrite-policy=always`.
-
-### Usage
-
-Once installed, run `l4 --help` in a new terminal to see available subcommands.
-
-## Example L4 Code
+## A taste of L4
 
 ```l4
 DECLARE Person
@@ -207,30 +73,145 @@ DECIDE `can vote` p IF
   AND p's country = "UK"
 ```
 
-## Requirements
+The [Syntax reference](https://legalese.com/l4/reference/syntax) has the full language tour.
+
+## Learn more
+
+- [**L4 Documentation**](https://legalese.com/l4) — courses, tutorials, language reference
+- [Foundation Course](https://legalese.com/l4/courses/foundation) and [Advanced Course](https://legalese.com/l4/courses/advanced)
+- [Reference: Syntax](https://legalese.com/l4/reference/syntax), [Types](https://legalese.com/l4/reference/types), [Functions](https://legalese.com/l4/reference/functions), [Regulative rules](https://legalese.com/l4/reference/regulative), [Built-ins](https://legalese.com/l4/reference/builtins)
+- [Legalese Cloud](https://legalese.cloud) — managed deployment for L4 rules
+
+---
+
+<details>
+<summary><strong>Technical reference</strong> — sidebar tabs, MCP, WebMCP, CLI, settings</summary>
+
+### Sidebar tabs
+
+The L4 sidebar (L4 icon in the activity bar) has five tabs:
+
+- **Legalese AI** — in-editor chat for composing and iterating on L4 rules. The assistant can drive the filesystem, LSP, and MCP tools directly.
+- **Docs** — searchable L4 documentation. _Copy into new file_ buttons paste examples into new L4 files.
+- **Inspector** — live evaluation results for `#EVAL`, `#EVALTRACE`, `#CHECK`, `#TRACE`, and `#ASSERT` directives. Click _Track result_ above a directive to add it.
+- **Deploy** — exported functions from the active file with their parameter schemas; click _Deploy_ to ship.
+- **Deployments** — active deployments with their function schemas ; undeploy with confirmation.
+
+### Decision graph
+
+Open an L4 file with boolean rules, look for the _Show decision graph_ codelens above each rule, and click it to open the live ladder-diagram visualisation.
+
+### MCP — AI agent integration
+
+The extension starts a local MCP proxy server automatically and registers it with VS Code's built-in MCP system (default port `19415`, configurable via `jl4.mcpPort`). Legalese AI and any external MCP-speaking agent (Cursor, GitHub Copilot, Claude Code, third-party clients) can discover and invoke your deployed L4 functions through it.
+
+The _Add L4 Tools to Claude Code_ dropdown action in the sidebar wires the same MCP endpoint plus the `writing-l4-rules` skill into a local Claude Code installation on demand.
+
+Deployed rules are also accessible via MCP endpoints on the service:
+
+- `POST /.mcp` — all deployments (org-wide)
+- `POST /{deployment-id}/.mcp` — scoped to one deployment
+- `GET /.well-known/mcp` — MCP discovery metadata
+
+Example MCP client config:
+
+```json
+{
+  "mcpServers": {
+    "l4-rules": {
+      "url": "https://your-service/.mcp",
+      "headers": {
+        "Authorization": "Bearer sk_..."
+      }
+    }
+  }
+}
+```
+
+### WebMCP — browser AI integration
+
+Add this script tag to your page:
+
+```html
+<script src="https://your-service/.webmcp/embed.js"></script>
+```
+
+The script registers your L4 functions with the browser's `navigator.modelContext` API so browser AI agents can call them as tools. Customise via data attributes:
+
+```html
+<script
+  src="https://your-service/.webmcp/embed.js"
+  data-scope="insurance-premium/*,safe-valuation/effective-sale-price"
+  data-tools="auto"
+  data-api-key="sk_..."
+></script>
+```
+
+| Attribute      | Description                                                                                       |
+| -------------- | ------------------------------------------------------------------------------------------------- |
+| `data-scope`   | Filter by deployment/function (e.g. `deploy/*` for all functions, `deploy/fn` for a specific one) |
+| `data-tools`   | Comma-separated tool categories: `auto` (default), `rules`, `rule-tools`, `file-tools`, or `all`  |
+| `data-api-key` | API key for authenticated access                                                                  |
+
+`data-tools` categories:
+
+- `rules` — one tool per exported rule (direct evaluation)
+- `rule-tools` — `search_rules`, `get_rule_schema`, `evaluate_rule` (discovery)
+- `file-tools` — `list_files`, `read_file`, `search_identifier`, `search_text`
+- `auto` (default) — `rules` if ≤10 functions, otherwise `rule-tools`
+- `all` — `rules` + `rule-tools` + `file-tools`
+
+### Cloud Deploy setup
+
+**Legalese Cloud:** no configuration needed. Click _Sign in with Legalese Cloud_ in the sidebar footer to authenticate via browser. (Service provided by Legalese Pte. Ltd. — see [legalese.cloud](https://legalese.cloud).)
+
+**Self-hosted jl4-service:** configure the service URL and API key in VS Code settings:
+
+```json
+{
+  "jl4.serviceUrl": "http://localhost:8080",
+  "jl4.serviceApiKey": "sk_..."
+}
+```
+
+### L4 CLI
+
+The extension ships with the `l4` command-line tool for running L4 files, checking rules, and other workflows outside the editor.
+
+Run **L4: Install L4 CLI** from the command palette, or accept the prompt the first time you open an L4 project. This installs the bundled `l4` binary onto your PATH:
+
+- **macOS / Linux**: symlinks the binary into `~/.local/bin/l4`. If `~/.local/bin` isn't on your PATH, the extension shows the `export PATH="$HOME/.local/bin:$PATH"` snippet to add to your `~/.zshrc` or `~/.bashrc`.
+- **Windows**: copies the exe into `%LOCALAPPDATA%\Programs\l4\l4.exe` and appends that directory to your user PATH via `setx`. Restart open terminals for the change to take effect.
+
+The installer is safe to re-run — each invocation refreshes the symlink or file, so upgrades propagate when you update the extension. The CLI is bundled only in platform-specific builds (macOS ARM64/x64, Linux x64, Windows x64). On the universal build, install manually with `cabal install exe:l4 --overwrite-policy=always`.
+
+Run `l4 --help` for available subcommands.
+
+### Requirements
 
 - VS Code 1.94.0 or higher
-- `jl4-lsp` language server (see setup instructions above)
+- `jl4-lsp` language server (bundled in platform-specific builds)
 
-## Configuration
+### Configuration
 
-- `jl4.serverExecutablePath`: Path to the jl4-lsp executable
-- `jl4.trace.server`: Enable server communication tracing (off/messages/verbose)
-- `jl4.serviceUrl`: URL of the jl4-service for deploying rules (leave empty for Legalese Cloud)
-- `jl4.serviceApiKey`: API key for authenticating with a self-hosted jl4-service
-- `jl4.mcpPort`: Port for the local MCP proxy server (default: 19415)
+| Setting                    | Purpose                                                                        |
+| -------------------------- | ------------------------------------------------------------------------------ |
+| `jl4.serverExecutablePath` | Path to the jl4-lsp executable                                                 |
+| `jl4.trace.server`         | Enable server communication tracing (`off`/`messages`/`verbose`)               |
+| `jl4.serviceUrl`           | URL of the jl4-service for deploying rules (leave empty for Legalese Cloud)    |
+| `jl4.serviceApiKey`        | API key for authenticating with a self-hosted jl4-service                      |
+| `jl4.mcpPort`              | Port for the local MCP proxy server (default: `19415`)                         |
+| `legaleseAi.apiKey`        | API key for Legalese AI (used instead of your Legalese Cloud session when set) |
 
-### Custom Language Server Setup
+### Custom language server setup
 
-**Platform-specific versions (recommended):** If you installed a platform-specific version of the extension (e.g., for macOS ARM64, Windows x64, etc.), the `jl4-lsp` language server is bundled and ready to use—no additional setup required!
-
-**Universal version:** If you installed the universal extension, or if the bundled binary is not available for your platform, install the language server:
+Platform-specific extension builds (macOS ARM64, Windows x64, etc.) bundle `jl4-lsp` and need no setup. On the universal build, install the language server manually:
 
 ```bash
 cabal install exe:jl4-lsp --overwrite-policy=always
 ```
 
-Alternatively, specify the path manually in VS Code settings:
+Or specify the path manually:
 
 ```json
 {
@@ -238,6 +219,10 @@ Alternatively, specify the path manually in VS Code settings:
 }
 ```
 
+</details>
+
+---
+
 ## License
 
-Apache 2.0 - See license file for details.
+Apache 2.0 — see license file for details.

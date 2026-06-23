@@ -3,23 +3,42 @@
   import ErrorBubble from './error-bubble.svelte'
   // import CopyButton from './copy-button.svelte'
   import ToolCallRow from './tool-call-row.svelte'
-  import type { AssistantBlock } from '$lib/stores/ai-chat.svelte'
+  import type {
+    AssistantBlock,
+    RenderedToolActivity,
+    RenderedToolCall,
+  } from '$lib/stores/ai-chat.svelte'
+  import { aiPrefs } from '$lib/stores/ai-prefs.svelte'
+
+  import type { Messenger } from 'vscode-messenger-webview'
 
   let {
     content,
     streaming,
+    pipelineActive = false,
     error,
     blocks,
     usage,
+    messenger,
     onRetry,
     onOpenFile,
     onOpenFileDiff,
   }: {
     content: string
     streaming: boolean
+    /** True until every queued user message has been folded into the
+     *  pipeline. Suppresses the per-turn usage badge and the "Files
+     *  changed" review card so they don't render mid-pipeline (when
+     *  this turn is "done" but more processing is still queued).
+     *  Defaults to false so untouched callers keep the prior
+     *  behaviour of showing the cards as soon as the turn settles. */
+    pipelineActive?: boolean
     error?: { message: string; code?: string }
     blocks?: AssistantBlock[]
     usage?: { promptTokens: number; completionTokens: number }
+    /** Webview→extension messenger; threaded into ToolCallRow so the
+     *  tool-call card can fetch L4 render-meta on demand. */
+    messenger: InstanceType<typeof Messenger> | null
     onRetry?: () => void
     onOpenFile: (callId: string) => void
     onOpenFileDiff: (callId: string) => void
@@ -45,6 +64,84 @@
     if (b.kind === 'tool-activity') return `ta:${b.activity.tool}:${i}`
     if (b.kind === 'thinking') return `th:${i}`
     return `tx:${i}`
+  }
+
+  // Project an L4-rule tool-activity (the proxy ran a deployed rule
+  // server-side) onto the SAME shape a client-side rule tool-call
+  // uses, so it flows through the exact same <ToolCallRow> render
+  // path — one source of truth for the INPUT/OUTPUT card, the L4
+  // colorize, the auto-expand-on-done, the pulsating dot. The only
+  // difference between the two is the trigger (server activity event
+  // vs client tool-call event); the pixels are identical.
+  //
+  // `name` is rebuilt as `l4-rules__<fn>` so ToolCallRow's existing
+  // rule detection (`isRuleCall`) lights up unchanged. `evaluate_rule`
+  // wraps the real args under `arguments` alongside deployment/
+  // function_name routing fields — unwrap that envelope so the card
+  // shows just the rule's inputs, identical to a direct rule call.
+  // The server-side rule activity carries the *raw MCP CallToolResult*
+  // as `output` (`{ content: [{ type: 'text', text: '<json>' }] }`),
+  // because the ai-proxy forwards the JSON-RPC `result` verbatim. A
+  // client-side rule tool-call, by contrast, has already been flattened
+  // to just the joined text by the IDE's mcp-client. ToolCallRow's
+  // INPUT/OUTPUT extraction (`extractRuleResultValue` / `returnL4`)
+  // expects that flattened string — it digs for `.contents.result.value`
+  // directly. So mirror the client-side flatten here: pull the text
+  // parts out of the MCP envelope and join them exactly the way
+  // mcp-client.ts does. Anything that isn't the MCP shape (e.g. an
+  // `{ error, message }` envelope from a failed call) falls through to
+  // the plain JSON stringify so the row still shows something.
+  function normalizeActivityResult(output: unknown): string | undefined {
+    if (output === undefined) return undefined
+    if (
+      output &&
+      typeof output === 'object' &&
+      Array.isArray((output as { content?: unknown }).content)
+    ) {
+      const parts = (
+        output as { content: Array<{ type?: string; text?: string }> }
+      ).content
+      const text = parts
+        .map((c) =>
+          c.type === 'text' && typeof c.text === 'string'
+            ? c.text
+            : JSON.stringify(c)
+        )
+        .join('\n')
+      if (text.length > 0) return text
+    }
+    return JSON.stringify(output)
+  }
+
+  function ruleCallFor(a: RenderedToolActivity): RenderedToolCall {
+    let argsObj: unknown = a.input
+    if (a.input && typeof a.input === 'object') {
+      const inp = a.input as Record<string, unknown>
+      if ('function_name' in inp || 'deployment' in inp) {
+        const inner =
+          inp.arguments && typeof inp.arguments === 'object'
+            ? (inp.arguments as Record<string, unknown>)
+            : {}
+        argsObj =
+          inp.startTime !== undefined || inp.events !== undefined
+            ? { arguments: inner, startTime: inp.startTime, events: inp.events }
+            : inner
+      }
+    }
+    return {
+      callId: `ta:${a.ruleKey ?? a.tool}`,
+      name: `l4-rules__${a.ruleId ?? a.tool}`,
+      argsJson: JSON.stringify(argsObj ?? {}),
+      status: a.status,
+      result: normalizeActivityResult(a.output),
+      error: a.error,
+      // Carry the deployment + L4 function name so the render-meta
+      // lookup can fetch the schema directly (the IDE's MCP target
+      // map need not cover the cloud deployment a passthrough chat
+      // is bound to).
+      ...(a.deploymentId ? { deploymentId: a.deploymentId } : {}),
+      ...(a.ruleId ? { ruleFnName: a.ruleId } : {}),
+    }
   }
 
   // Per-block expanded state for thinking blocks, keyed by `i`. Stays
@@ -158,10 +255,45 @@
     rows.sort((a, b) => a.order - b.order)
     return rows.map(({ path, action, callId }) => ({ path, action, callId }))
   })
+
+  // Turn-end review card: web-search citations the upstream provider
+  // attached to this turn (via Anthropic's native `web_search` tool,
+  // surfaced as `source` parts by the AI SDK and aggregated by the
+  // proxy into the `sources` field of a synthetic `web_search`
+  // activity). Deduped by URL across all activity blocks in case a
+  // single turn fired the search more than once.
+  type Source = { url: string; title?: string }
+  const sources = $derived.by<Source[]>(() => {
+    if (!blocks) return []
+    const byUrl = new Map<string, Source>()
+    for (const b of blocks) {
+      if (b.kind !== 'tool-activity') continue
+      if (b.activity.tool !== 'web_search') continue
+      const list = b.activity.sources
+      if (!Array.isArray(list)) continue
+      for (const s of list) {
+        if (!s || typeof s.url !== 'string' || s.url.length === 0) continue
+        if (byUrl.has(s.url)) continue
+        byUrl.set(s.url, { url: s.url, title: s.title })
+      }
+    }
+    return [...byUrl.values()]
+  })
+
+  // Try to read the domain from a URL for the cite chip's secondary
+  // label. Falls back to the URL itself if parsing fails (e.g.
+  // schemeless or malformed input we received over the wire).
+  function hostnameOf(url: string): string {
+    try {
+      return new URL(url).hostname.replace(/^www\./, '')
+    } catch {
+      return url
+    }
+  }
 </script>
 
 <div class="assistant-row">
-  <div class="assistant-bubble">
+  <div class="assistant-bubble" class:is-streaming={streaming}>
     {#if blocks && blocks.length > 0}
       {#each blocks as block, i (blockKey(block, i))}
         {#if block.kind === 'text'}
@@ -172,14 +304,16 @@
         {:else if block.kind === 'tool-call'}
           <ToolCallRow
             call={block.call}
+            {messenger}
             {onOpenFile}
             onOpenDiff={onOpenFileDiff}
           />
-        {:else if block.kind === 'thinking'}
+        {:else if block.kind === 'thinking' && aiPrefs.showReasoning}
           <!-- Collapsed-by-default reasoning block. Chevron flips when
                toggled; expanded body renders as italic gray text with
                preserved whitespace so chain-of-thought indentation
-               stays intact. -->
+               stays intact. Hidden entirely when the Preferences toggle
+               is off. -->
           <div class="thinking">
             <button
               type="button"
@@ -198,19 +332,54 @@
               <div class="thinking-body">{block.text}</div>
             {/if}
           </div>
+        {:else if block.kind === 'tool-activity' && block.activity.ruleKey}
+          <!-- L4-rule activity: the proxy evaluated a deployed rule
+               server-side. Render it through the SAME ToolCallRow as
+               a client-side rule call so the pulsating row, the
+               auto-expanding INPUT/OUTPUT card and the L4 colorize
+               are pixel-identical — the only difference is which
+               event triggered it. -->
+          <ToolCallRow
+            call={ruleCallFor(block.activity)}
+            {messenger}
+            {onOpenFile}
+            onOpenDiff={onOpenFileDiff}
+          />
+        {:else if block.kind === 'tool-activity' && block.activity.tool === 'web_search'}
+          <!-- Web-search activities carry the URL citations the
+               upstream model's native search produced. We don't render
+               them inline — they're surfaced in the turn's review card
+               below ("Sources:" section). Rendering a row here would
+               also split the assistant text stream into two text
+               blocks at the moment this block was pushed, breaking
+               any markdown element whose tokens straddle the citation
+               (most visibly tables and fenced code). -->
         {:else if block.kind === 'tool-activity'}
-          <!-- Server-side activity keeps the crimson dot up front (no
-               expand chevron — nothing to expand on read-only backend
-               events) + bold label + monospace message. No right-side
-               status; the dot and message together are enough. -->
+          <!-- Plain status activity (e.g. doc search, compaction,
+               deployment browsing): bold action label + monospace
+               message + pulsating-then-frozen dot. The label is
+               stamped on the event by the proxy ("L4 Deployments",
+               "Compacting...", "Legalesing...") — no per-tool name
+               mapping lives here, so adding a new server-emitted
+               activity type doesn't require a webview change. Older
+               proxy builds may omit it; fall back to "Activity" so
+               the row still renders.
+
+               The dot pulses iff this row is the trailing element
+               in the assistant bubble — driven by `:last-child` in
+               the <style> below. As soon as another block is
+               appended after it, the row falls out of `:last-child`
+               and the dot freezes solid. Errored rows opt out via
+               the `is-error` class. -->
+          {@const actionLabel = block.activity.label ?? 'Activity'}
           <div
-            class="tool-call"
+            class="tool-call tool-activity-row"
             class:is-error={block.activity.status === 'error'}
           >
             <div class="tool-row">
               <span class="dot" aria-hidden="true"></span>
-              <span class="action">Legalesing...</span>
-              {#if block.activity.message !== 'Legalesing...'}
+              <span class="action">{actionLabel}</span>
+              {#if block.activity.message && block.activity.message !== actionLabel}
                 <span class="target plain">{block.activity.message}</span>
               {/if}
             </div>
@@ -226,43 +395,75 @@
       </div>
     {/if} -->
 
-    {#if !streaming && fileChanges.length > 0}
-      <div
-        class="review-card"
-        role="group"
-        aria-label="Files changed this turn"
-      >
-        <div class="review-header">
-          <span class="review-title"
-            >Files changed this turn ({fileChanges.length})</span
+    {#if !streaming && !pipelineActive && (fileChanges.length > 0 || sources.length > 0)}
+      <div class="review-card" role="group" aria-label="Turn review">
+        {#if fileChanges.length > 0}
+          <div class="review-header">
+            <span class="review-title"
+              >Files changed this turn ({fileChanges.length})</span
+            >
+          </div>
+          <ul class="review-list">
+            {#each fileChanges as change (change.callId)}
+              <li class="review-row">
+                <span class="review-action review-action-{change.action}"
+                  >{change.action}</span
+                >
+                <button
+                  type="button"
+                  class="review-path"
+                  onclick={() =>
+                    change.action === 'edited'
+                      ? onOpenFileDiff(change.callId)
+                      : onOpenFile(change.callId)}
+                  title={change.action === 'edited'
+                    ? 'Open applied diff'
+                    : 'Open file'}>{change.path}</button
+                >
+              </li>
+            {/each}
+          </ul>
+        {/if}
+        {#if sources.length > 0}
+          <!-- Sources sub-section. Cites the URLs the upstream provider
+               actually consulted via its native web_search tool — the
+               evidence chain for whatever the assistant just wrote.
+               Spacing above mirrors the gap between the file-changes
+               header and list when both are present, so the two
+               sections read as parallel rows of the same card. -->
+          <div
+            class="review-header"
+            class:review-header-stacked={fileChanges.length > 0}
           >
-        </div>
-        <ul class="review-list">
-          {#each fileChanges as change (change.callId)}
-            <li class="review-row">
-              <span class="review-action review-action-{change.action}"
-                >{change.action}</span
-              >
-              <button
-                type="button"
-                class="review-path"
-                onclick={() =>
-                  change.action === 'edited'
-                    ? onOpenFileDiff(change.callId)
-                    : onOpenFile(change.callId)}
-                title={change.action === 'edited'
-                  ? 'Open applied diff'
-                  : 'Open file'}>{change.path}</button
-              >
-            </li>
-          {/each}
-        </ul>
+            <span class="review-title">Sources ({sources.length})</span>
+          </div>
+          <ul class="review-list">
+            {#each sources as source (source.url)}
+              <li class="review-row review-row-source">
+                <a
+                  class="review-source"
+                  href={source.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={source.url}
+                >
+                  <span class="review-source-title"
+                    >{source.title ?? source.url}</span
+                  >
+                  <span class="review-source-host"
+                    >{hostnameOf(source.url)}</span
+                  >
+                </a>
+              </li>
+            {/each}
+          </ul>
+        {/if}
       </div>
     {/if}
     {#if error}
       <ErrorBubble message={error.message} code={error.code} {onRetry} />
     {/if}
-    {#if !streaming && !error && usage}
+    {#if !streaming && !pipelineActive && !error && usage}
       <!-- Per-turn token footer. Kept quiet (small, grey, dotted
            separator) so it reads as metadata rather than content.
            Prompt tokens come first because they dominate the cost
@@ -319,6 +520,62 @@
     padding: 0.2em;
     border-radius: 0.2em;
     top: -0.15em;
+  }
+  /* Errored rows paint the dot in the VSCode error red — same
+     signal client-side tool-call rows use on their chevron
+     (`status-error → --vscode-errorForeground`). Lets the message
+     itself stay state-neutral (no "(failed)" suffix from the
+     server); failure is read off the dot alone. */
+  .tool-activity-row.is-error .dot {
+    background: var(--vscode-errorForeground, #d7263d);
+  }
+  /* Pulsate the activity dot on the trailing row only, AND only
+     while the turn is still streaming. Three independent gates,
+     all expressed in CSS:
+       1. `:last-child`  — once another block lands AFTER this row
+          (text, tool-call, another activity), it stops being last
+          and the dot freezes. "No new info from the model yet" is
+          encoded as DOM position, no JS bookkeeping.
+       2. `:not(.is-error)` — errored rows opt out so the failure
+          reads visually.
+       3. `.assistant-bubble.is-streaming` — once the turn settles
+          (server `done`, user Stop, new turn supersedes this one),
+          the bubble loses `is-streaming` and every dot under it
+          freezes. No status mutation needed — activity rows aren't
+          really "errored" just because the user stopped the run. */
+  .assistant-bubble.is-streaming
+    .tool-activity-row:last-child:not(.is-error)
+    .dot {
+    animation: tool-activity-dot-pulse 1.1s ease-in-out infinite;
+  }
+  @keyframes tool-activity-dot-pulse {
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.45;
+      transform: scale(0.78);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .assistant-bubble.is-streaming
+      .tool-activity-row:last-child:not(.is-error)
+      .dot {
+      animation-duration: 1.6s;
+    }
+    @keyframes tool-activity-dot-pulse {
+      0%,
+      100% {
+        opacity: 1;
+        transform: none;
+      }
+      50% {
+        opacity: 0.5;
+        transform: none;
+      }
+    }
   }
   .action {
     color: var(--vscode-foreground);
@@ -440,11 +697,48 @@
     color: var(--vscode-foreground);
     font-family: var(--vscode-editor-font-family, monospace);
     font-size: 11px;
+    line-height: 14px;
     cursor: pointer;
     text-align: left;
   }
   .review-path:hover {
     text-decoration: underline;
+  }
+  /* Sources sub-header — when stacked under the files list, give it
+     a little breathing room so the two sections read as separate
+     rows of the same card rather than one continuous list. */
+  .review-header-stacked {
+    margin-top: 10px;
+  }
+  .review-row-source {
+    align-items: center;
+  }
+  .review-source {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    color: var(--vscode-textLink-foreground, var(--vscode-foreground));
+    text-decoration: none;
+    font-size: 11px;
+    /* Keep long URLs/titles from forcing the card to scroll horizontally
+       — the chip ellipsises instead. */
+    max-width: 100%;
+    overflow: hidden;
+  }
+  .review-source:hover .review-source-title {
+    text-decoration: underline;
+  }
+  .review-source-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .review-source-host {
+    color: var(--vscode-descriptionForeground);
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 10px;
+    opacity: 0.8;
+    flex-shrink: 0;
   }
   /* Token badge — ambient "I/O budget used" line at the bottom of
      a finished assistant bubble. Small, grey, trailing space above

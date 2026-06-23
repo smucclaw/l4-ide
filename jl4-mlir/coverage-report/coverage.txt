@@ -1,0 +1,19 @@
+L4 -> MLIR/WASM compile-coverage sweep (M2)
+
+Total files: 438
+
+Outcomes:
+  clean              35
+  has-unsupported    2
+  no-exports         349
+  typecheck-fail     51
+  lower-fail         1
+
+Typecheck failure classes:
+  parse-error        22
+  other              17
+  type-mismatch      11
+  ambiguous          2
+
+Unsupported-construct reasons (function count):
+     2  REGULATIVE (deontic) construct not supported by the WASM backend
