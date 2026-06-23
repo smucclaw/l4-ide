@@ -2,10 +2,7 @@
 
 Every deployment publishes an OpenAPI (Swagger) JSON document so third-party systems can generate clients and call your rules as a plain REST API.
 
-**Audience:** Developers integrating deployed rules into existing systems
 **Prerequisites:** A deployment ([Exporting Rules for Deployment](../deploying-rules/exporting-rules-for-deployment.md))
-**Time:** 10 minutes
-**Goal:** Fetch the OpenAPI spec and call a rule deterministically over REST
 
 ---
 

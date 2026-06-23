@@ -525,7 +525,6 @@ export async function activate(context: ExtensionContext) {
     auth,
     serviceClient,
     outputChannel,
-    mcpProxy,
     userDataPath,
     (directiveId) => openInspectorSections.delete(directiveId)
   )
@@ -698,6 +697,16 @@ export async function activate(context: ExtensionContext) {
     })
   )
 
+  // Gear icon in the L4 sidebar title bar → this extension's settings.
+  context.subscriptions.push(
+    vscode.commands.registerCommand('l4.openExtensionSettings', () => {
+      vscode.commands.executeCommand(
+        'workbench.action.openSettings',
+        '@ext:legalese.l4-vscode'
+      )
+    })
+  )
+
   // Right-click → "Ask Legalese AI about this". Quotes the editor
   // selection (falls back to the whole file when nothing is
   // selected), reveals the sidebar, switches to the AI tab, and
@@ -744,16 +753,43 @@ export async function activate(context: ExtensionContext) {
     })
   )
 
-  // Push active L4 file to sidebar when editor changes
-  function notifySidebarActiveFile(editor: vscode.TextEditor | undefined) {
-    if (editor && editor.document.languageId === 'l4') {
-      sidebarProvider.notifyActiveFile(
-        editor.document.uri.toString(),
-        editor.document.version
-      )
-    } else {
-      sidebarProvider.clearActiveFile()
+  // Push active L4 file to sidebar when editor changes. A rendered
+  // output file (html/xml/json/txt) that sits next to a same-named
+  // `.l4` source still has a render target, so we resolve it to that
+  // sibling — this keeps the Render tab usable while the user is
+  // looking at the generated document, and keeps `activeFileUri` an L4
+  // uri for every other consumer (deploy, exported functions, …).
+  const RENDER_OUTPUT_EXTS = new Set(['.html', '.htm', '.xml', '.json', '.txt'])
+  async function notifySidebarActiveFile(
+    editor: vscode.TextEditor | undefined
+  ) {
+    const doc = editor?.document
+    if (doc && doc.languageId === 'l4') {
+      sidebarProvider.notifyActiveFile(doc.uri.toString(), doc.version)
+      return
     }
+    if (doc && doc.uri.scheme === 'file') {
+      const ext = path.extname(doc.uri.fsPath).toLowerCase()
+      if (RENDER_OUTPUT_EXTS.has(ext)) {
+        const base = path.basename(doc.uri.fsPath, ext)
+        const sibling = vscode.Uri.file(
+          path.join(path.dirname(doc.uri.fsPath), base + '.l4')
+        )
+        if (fs.existsSync(sibling.fsPath)) {
+          try {
+            const sibDoc = await vscode.workspace.openTextDocument(sibling)
+            sidebarProvider.notifyActiveFile(
+              sibDoc.uri.toString(),
+              sibDoc.version
+            )
+            return
+          } catch {
+            // Fall through to clear on any open failure.
+          }
+        }
+      }
+    }
+    sidebarProvider.clearActiveFile()
   }
 
   // When the sidebar webview first loads, send the current active file

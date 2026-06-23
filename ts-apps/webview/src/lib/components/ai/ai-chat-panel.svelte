@@ -19,6 +19,7 @@
     AiUsageUpdate,
     RequestOpenUrl,
     RequestSidebarLogin,
+    type AiChatAttachment,
   } from 'jl4-client-rpc'
   import { createAiChatStore } from '$lib/stores/ai-chat.svelte'
   import { aiPrefs } from '$lib/stores/ai-prefs.svelte'
@@ -34,6 +35,7 @@
     messenger,
     visible,
     deploymentChatRequest = null,
+    refineRequest = null,
   }: {
     messenger: InstanceType<typeof Messenger> | null
     visible: boolean
@@ -46,6 +48,20 @@
       /** The deployment's "Intended use" metadata, surfaced in the
        *  empty-state of the fresh deployment chat. */
       intendedUse?: string
+      nonce: number
+    } | null
+    /** Set by the Render tab's "Refine with Legalese AI" flow after a
+     *  deterministic render: starts a fresh conversation seeded with a
+     *  prompt, the L4 source + generated file surfaced as `@`-mention
+     *  chips, and (optionally) the drafting-policy file attached, then
+     *  submits it. The `nonce` makes repeat refinements re-trigger the
+     *  effect. */
+    refineRequest?: {
+      prompt: string
+      attachment: AiChatAttachment | null
+      /** Files to reference — shown as chips and passed as file
+       *  mentions so the agent can read them via its fs tools. */
+      files: Array<{ name: string; path: string }>
       nonce: number
     } | null
   } = $props()
@@ -62,6 +78,29 @@
     if (!req || req.nonce === lastDeploymentNonce) return
     lastDeploymentNonce = req.nonce
     store.startDeploymentChat(req.deploymentId, req.apiBaseUrl, req.intendedUse)
+  })
+
+  // Honour a "Refine with Legalese AI" request from the Render tab:
+  // open a fresh conversation, attach the drafting policy (if any), and
+  // submit the seeded prompt so the agent starts reading the files and
+  // reworking the document right away. The active-file chip is forced
+  // off — the prompt names both files explicitly, so the editor's
+  // current file would just be redundant (often duplicate) context.
+  let lastRefineNonce = -1
+  $effect(() => {
+    const req = refineRequest
+    if (!req || req.nonce === lastRefineNonce) return
+    lastRefineNonce = req.nonce
+    store.newConversation()
+    store.setIncludeActiveFile(false)
+    if (req.attachment) store.attachExternal(req.attachment)
+    // File mentions carry the paths to the model (via the extension's
+    // <mention-context>); fileChips render them as chips on the bubble.
+    const mentions = req.files.map((f) => ({
+      kind: 'file' as const,
+      label: f.path,
+    }))
+    void store.send(req.prompt, mentions, { fileChips: req.files })
   })
 
   // The jl4-service connection is independent of Legalese AI

@@ -1,11 +1,14 @@
 import * as vscode from 'vscode'
+import * as fs from 'node:fs'
+import * as os from 'node:os'
+import * as path from 'node:path'
 import type { Messenger } from 'vscode-messenger'
 import type { WebviewTypeMessageParticipant } from 'vscode-messenger-common'
 import type { VSCodeL4LanguageClient } from './vscode-l4-language-client.js'
 import { type AuthManager, LEGALESE_CLOUD_DOMAIN } from './auth.js'
 import type { ServiceClient } from './service-client.js'
-import type { McpProxy } from './mcp-proxy.js'
 import { installDeploymentSkill } from './deployment-install.js'
+import { installMarketplaceToHarness } from './harness-config.js'
 import { getWebviewContent } from './webview-panel.js'
 import {
   showTimedInformationMessage,
@@ -13,6 +16,12 @@ import {
 } from './notifications.js'
 import {
   GetExportedFunctionsRequestType,
+  ExportDocumentRequestType,
+  ExportPlanRequestType,
+  RequestRenderPreview,
+  RequestRenderInline,
+  RequestRenderSave,
+  GetSidebarImportedFiles,
   GetSidebarExportedFunctions,
   GetSidebarConnectionStatus,
   RequestSidebarLogin,
@@ -30,7 +39,8 @@ import {
   RequestOpenServiceUrl,
   RequestOpenConsole,
   RequestOpenExtensionSettings,
-  RequestAddL4ToolsToClaudeCode,
+  RequestInstallMarketplace,
+  RequestDownloadMarketplaceSkill,
   RequestInstallDeploymentSkill,
   RequestInstallL4Cli,
   RequestCopySignInLink,
@@ -60,6 +70,116 @@ function getMcpPort(): number {
 export const sidebarWebviewFrontend: WebviewTypeMessageParticipant = {
   type: 'webview',
   webviewType: SIDEBAR_WEBVIEW_TYPE,
+}
+
+/** Reused webview panel for the rendered HTML document, so successive
+ *  previews update one panel rather than spawning a new one each time. */
+let renderPanel: vscode.WebviewPanel | undefined
+
+/** The L4 file most recently rendered. Lets "Generate preview" keep working
+ *  when the focused tab is the rendered output (e.g. the HTML webview) and so
+ *  has no sibling .l4 to derive the source from. */
+let lastRenderedL4: vscode.Uri | undefined
+
+const isL4Doc = (d: vscode.TextDocument): boolean =>
+  d.languageId === 'l4' || d.languageId === 'jl4'
+
+/** The file behind the active tab, even when it is a custom editor (PDF
+ *  viewer) rather than a text editor. Webview tabs have no associated uri. */
+function activeTabUri(): vscode.Uri | undefined {
+  const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input as
+    | { uri?: vscode.Uri }
+    | undefined
+  return input?.uri instanceof vscode.Uri ? input.uri : undefined
+}
+
+/** `foo.html` / `foo.xml` / `foo.pdf` → sibling `foo.l4` in the same folder. */
+function siblingL4(uri: vscode.Uri): vscode.Uri | undefined {
+  const ext = path.extname(uri.fsPath).toLowerCase()
+  if (ext === '.l4' || ext === '.jl4') return uri
+  const base = path.basename(uri.fsPath, path.extname(uri.fsPath))
+  return vscode.Uri.file(path.join(path.dirname(uri.fsPath), `${base}.l4`))
+}
+
+async function uriExists(uri: vscode.Uri): Promise<boolean> {
+  try {
+    await vscode.workspace.fs.stat(uri)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Resolve the L4 document to render: the active L4 editor, else a same-named
+ *  `.l4` sibling of the active (rendered) file, else the last-rendered L4. */
+async function resolveL4Document(): Promise<vscode.TextDocument | undefined> {
+  const active = vscode.window.activeTextEditor
+  if (active && isL4Doc(active.document)) {
+    lastRenderedL4 = active.document.uri
+    return active.document
+  }
+  const candidate = active?.document.uri ?? activeTabUri()
+  if (candidate && candidate.scheme === 'file') {
+    const sib = siblingL4(candidate)
+    if (sib && (await uriExists(sib))) {
+      lastRenderedL4 = sib
+      return vscode.workspace.openTextDocument(sib)
+    }
+  }
+  if (lastRenderedL4 && (await uriExists(lastRenderedL4))) {
+    return vscode.workspace.openTextDocument(lastRenderedL4)
+  }
+  return undefined
+}
+
+/** File extension for a render format. */
+function extForFormat(format: string): string {
+  switch (format) {
+    case 'akn':
+      return '.xml'
+    case 'text':
+      return '.txt'
+    case 'json':
+      return '.json'
+    case 'plan':
+      return '.plan.json'
+    default:
+      return '.html'
+  }
+}
+
+/** Save-dialog file-type filters for a render format. */
+function saveFiltersForFormat(format: string): Record<string, string[]> {
+  switch (format) {
+    case 'akn':
+      return { 'Akoma Ntoso XML': ['xml'], 'All files': ['*'] }
+    case 'text':
+      return { 'Plain text': ['txt'], 'All files': ['*'] }
+    case 'json':
+    case 'plan':
+      return { JSON: ['json'], 'All files': ['*'] }
+    default:
+      return { 'HTML document': ['html', 'htm'], 'All files': ['*'] }
+  }
+}
+
+/** Render the rendered HTML in a (reused) webview panel in the active editor
+ *  group — not a split — so it sits alongside the source as a tab. */
+function showHtmlPreview(html: string, title: string): void {
+  if (!renderPanel) {
+    renderPanel = vscode.window.createWebviewPanel(
+      'l4.renderPreview',
+      title,
+      vscode.ViewColumn.Active,
+      { enableScripts: false, retainContextWhenHidden: true }
+    )
+    renderPanel.onDidDispose(() => {
+      renderPanel = undefined
+    })
+  }
+  renderPanel.title = title
+  renderPanel.webview.html = html
+  renderPanel.reveal(undefined, false)
 }
 
 export class SidebarProvider implements vscode.WebviewViewProvider {
@@ -287,11 +407,9 @@ export function initializeSidebarMessenger(
   auth: AuthManager,
   serviceClient: ServiceClient,
   outputChannel: vscode.OutputChannel,
-  mcpProxy: McpProxy,
-  // VS Code's user-data path (the one containing `mcp.json`). Required
-  // by the deployment-skill install flow that writes per-deployment MCP
-  // entries for the VS Code Chat target. Derived from
-  // `context.globalStorageUri` by the caller.
+  // VS Code's user-data path (the one containing `mcp.json` + `globalStorage/`).
+  // Required by the install flows that write per-harness MCP entries. Derived
+  // from `context.globalStorageUri` by the caller.
   userDataPath: string | undefined,
   onInspectorSectionRemoved?: (directiveId: string) => void
 ) {
@@ -311,6 +429,242 @@ export function initializeSidebarMessenger(
         `[sidebar] Error getting exported functions: ${err instanceof Error ? err.message : String(err)}`
       )
       return { functions: [] }
+    }
+  })
+
+  // Handle Render-tab imported-files request: resolve the active L4 doc and
+  // return the modules it imports (non-main), for the include/exclude checklist.
+  messenger.onRequest(GetSidebarImportedFiles, async () => {
+    const doc = await resolveL4Document()
+    if (!doc) return { files: [] }
+    try {
+      const verDocId = { uri: doc.uri.toString(), version: doc.version }
+      const plan = await client.sendRequest(ExportPlanRequestType, { verDocId })
+      const files = (plan?.modules ?? [])
+        .filter((m) => !m.isMain)
+        .map((m) => ({ uri: m.uri, label: m.label }))
+      return { files }
+    } catch (err) {
+      outputChannel.appendLine(
+        `[sidebar] Error getting imported files: ${err instanceof Error ? err.message : String(err)}`
+      )
+      return { files: [] }
+    }
+  })
+
+  // Handle Render-tab preview request: render the active L4 file via the LSP,
+  // write the result next to the .l4 file, and open it in the active editor
+  // group (HTML as a rendered webview; others as the saved file).
+  messenger.onRequest(RequestRenderPreview, async (params) => {
+    const doc = await resolveL4Document()
+    if (!doc) {
+      return {
+        success: false,
+        error: 'Open an L4 file (or a file beside one) to render.',
+      }
+    }
+    try {
+      const verDocId = { uri: doc.uri.toString(), version: doc.version }
+      // Default to opening the result; the Render tab opts out when it
+      // will refine the render through Legalese AI instead.
+      const openInEditor = params.openInEditor ?? true
+
+      // Compute the rendered content + the IR title.
+      let content: string
+      let title: string | undefined
+      if (params.format === 'plan') {
+        const plan = await client.sendRequest(ExportPlanRequestType, {
+          verDocId,
+        })
+        content = JSON.stringify(plan ?? {}, null, 2)
+      } else {
+        const res = await client.sendRequest(ExportDocumentRequestType, {
+          verDocId,
+          format: params.format,
+          includeUnused: params.includeUnused,
+          numberSections: params.numberSections,
+          numberClauses: params.numberClauses,
+          toc: params.toc,
+          excludeModules: params.excludeModules ?? [],
+        })
+        if (!res) {
+          return {
+            success: false,
+            error: 'No response from the language server.',
+          }
+        }
+        title =
+          res.ir && typeof res.ir === 'object'
+            ? (res.ir as { title?: string }).title
+            : undefined
+        content =
+          params.format === 'json'
+            ? JSON.stringify(res.ir ?? {}, null, 2)
+            : res.content
+      }
+
+      // Write the rendered file next to the .l4 (file-scheme docs only).
+      let savedPath: string | undefined
+      if (doc.uri.scheme === 'file') {
+        const dir = path.dirname(doc.uri.fsPath)
+        const base = path.basename(doc.uri.fsPath, path.extname(doc.uri.fsPath))
+        const outUri = vscode.Uri.file(
+          path.join(dir, base + extForFormat(params.format))
+        )
+        await vscode.workspace.fs.writeFile(
+          outUri,
+          new TextEncoder().encode(content)
+        )
+        savedPath = outUri.fsPath
+
+        // Open it in the active group (not a split) — unless the caller
+        // asked us to skip it (Render tab handing off to Legalese AI
+        // refinement, where the deterministic output is intermediate).
+        if (openInEditor) {
+          if (params.format === 'html') {
+            showHtmlPreview(content, title ?? base)
+          } else {
+            const opened = await vscode.workspace.openTextDocument(outUri)
+            await vscode.window.showTextDocument(opened, {
+              viewColumn: vscode.ViewColumn.Active,
+              preview: false,
+            })
+          }
+        }
+      } else if (openInEditor && params.format === 'html') {
+        // Unsaved/remote doc: preview-only, no file written.
+        showHtmlPreview(content, title ?? 'L4 Render')
+      } else if (openInEditor) {
+        const language =
+          params.format === 'akn'
+            ? 'xml'
+            : params.format === 'json' || params.format === 'plan'
+              ? 'json'
+              : 'plaintext'
+        const opened = await vscode.workspace.openTextDocument({
+          content,
+          language,
+        })
+        await vscode.window.showTextDocument(opened, {
+          viewColumn: vscode.ViewColumn.Active,
+          preview: false,
+        })
+      }
+
+      return { success: true, title, savedPath }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      outputChannel.appendLine(`[sidebar] Render failed: ${msg}`)
+      return { success: false, error: msg }
+    }
+  })
+
+  // Render the active L4 document to a content string in the requested
+  // format via the LSP. Returns the rendered content and the IR title.
+  // Shared by the inline preview and the Save action. Throws on LSP failure.
+  async function renderToContent(
+    verDocId: { uri: string; version: number },
+    params: {
+      format: string
+      includeUnused: boolean
+      numberSections: boolean
+      numberClauses: boolean
+      toc: boolean
+      excludeModules?: string[]
+    }
+  ): Promise<{ content: string; title: string | undefined }> {
+    if (params.format === 'plan') {
+      const plan = await client.sendRequest(ExportPlanRequestType, { verDocId })
+      return { content: JSON.stringify(plan ?? {}, null, 2), title: undefined }
+    }
+    const res = await client.sendRequest(ExportDocumentRequestType, {
+      verDocId,
+      format: params.format,
+      includeUnused: params.includeUnused,
+      numberSections: params.numberSections,
+      numberClauses: params.numberClauses,
+      toc: params.toc,
+      excludeModules: params.excludeModules ?? [],
+    })
+    if (!res) throw new Error('No response from the language server.')
+    const title =
+      res.ir && typeof res.ir === 'object'
+        ? (res.ir as { title?: string }).title
+        : undefined
+    const content =
+      params.format === 'json'
+        ? JSON.stringify(res.ir ?? {}, null, 2)
+        : res.content
+    return { content, title }
+  }
+
+  // Handle Render-tab live inline preview: render the active file as HTML
+  // and return it to the webview to display in an iframe. Never writes to
+  // disk or opens a panel — reflects the in-memory (unsaved) buffer.
+  messenger.onRequest(RequestRenderInline, async (params) => {
+    const doc = await resolveL4Document()
+    if (!doc) {
+      return {
+        success: false,
+        error: 'Open an L4 file (or a file beside one) to render.',
+      }
+    }
+    try {
+      const verDocId = { uri: doc.uri.toString(), version: doc.version }
+      const { content, title } = await renderToContent(verDocId, {
+        format: 'html',
+        includeUnused: params.includeUnused,
+        numberSections: params.numberSections,
+        numberClauses: params.numberClauses,
+        toc: params.toc,
+        excludeModules: params.excludeModules ?? [],
+      })
+      return { success: true, html: content, title }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return { success: false, error: msg }
+    }
+  })
+
+  // Handle Render-tab Save action: render the active file in the chosen
+  // format, then prompt for a location with a native Save dialog and write
+  // the file there.
+  messenger.onRequest(RequestRenderSave, async (params) => {
+    const doc = await resolveL4Document()
+    if (!doc) {
+      return {
+        success: false,
+        error: 'Open an L4 file (or a file beside one) to render.',
+      }
+    }
+    try {
+      const verDocId = { uri: doc.uri.toString(), version: doc.version }
+      const { content } = await renderToContent(verDocId, params)
+
+      // Default the Save dialog next to the .l4 source (when on disk),
+      // with the format's natural extension and base name.
+      const ext = extForFormat(params.format)
+      let defaultUri: vscode.Uri | undefined
+      if (doc.uri.scheme === 'file') {
+        const dir = path.dirname(doc.uri.fsPath)
+        const base = path.basename(doc.uri.fsPath, path.extname(doc.uri.fsPath))
+        defaultUri = vscode.Uri.file(path.join(dir, base + ext))
+      }
+      const target = await vscode.window.showSaveDialog({
+        defaultUri,
+        filters: saveFiltersForFormat(params.format),
+      })
+      if (!target) return { success: false, canceled: true }
+
+      await vscode.workspace.fs.writeFile(
+        target,
+        new TextEncoder().encode(content)
+      )
+      return { success: true, savedPath: target.fsPath }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      outputChannel.appendLine(`[sidebar] Render save failed: ${msg}`)
+      return { success: false, error: msg }
     }
   })
 
@@ -731,9 +1085,67 @@ export function initializeSidebarMessenger(
     )
   })
 
-  // Add L4 Tools (MCP + writing-l4-rules skill) to Claude Code
-  messenger.onNotification(RequestAddL4ToolsToClaudeCode, async () => {
-    await mcpProxy.addL4ToolsToClaudeCode()
+  // Install the global gateway "skills marketplace" (the org-wide rules MCP,
+  // plus the rules@legalese-cloud plugin for Claude Code) into a harness.
+  messenger.onNotification(RequestInstallMarketplace, async ({ harness }) => {
+    outputChannel.appendLine(`[sidebar] Install marketplace → ${harness}`)
+    try {
+      await installMarketplaceToHarness(harness, {
+        userDataPath,
+        outputChannel,
+      })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      outputChannel.appendLine(
+        `[sidebar] Install marketplace → ${harness} failed: ${msg}`
+      )
+      void vscode.window.showErrorMessage(
+        `Could not install the L4 Rules: ${msg}`
+      )
+    }
+  })
+
+  // Save the gateway "skills marketplace" plugin as a zip — the download
+  // counterpart of the Install action. The plugin's single source of truth is
+  // the public GitHub repo, so we fetch its archive rather than templating a
+  // local copy that could drift from the served / GitHub skill.
+  const MARKETPLACE_ZIP_URL =
+    'https://github.com/legalese/cloud-rules/archive/refs/heads/main.zip'
+  const MARKETPLACE_ZIP_NAME = 'cloud-rules.zip'
+  messenger.onNotification(RequestDownloadMarketplaceSkill, async () => {
+    outputChannel.appendLine('[sidebar] Download marketplace skill zip')
+    try {
+      const res = await fetch(MARKETPLACE_ZIP_URL)
+      if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`)
+      const zip = Buffer.from(await res.arrayBuffer())
+      const defaultUri = vscode.Uri.file(
+        path.join(os.homedir(), 'Downloads', MARKETPLACE_ZIP_NAME)
+      )
+      const dest = await vscode.window.showSaveDialog({
+        defaultUri,
+        filters: { 'Zip Archive': ['zip'] },
+        saveLabel: 'Save plugin',
+        title: `Save ${MARKETPLACE_ZIP_NAME}`,
+      })
+      if (!dest) return // cancelled
+      fs.mkdirSync(path.dirname(dest.fsPath), { recursive: true })
+      fs.writeFileSync(dest.fsPath, zip)
+      outputChannel.appendLine(
+        `[sidebar] Saved ${zip.length}B marketplace skill zip to ${dest.fsPath}`
+      )
+      void vscode.window.showInformationMessage(
+        `Saved ${MARKETPLACE_ZIP_NAME} to ${dest.fsPath}.`,
+        'Okay'
+      )
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      outputChannel.appendLine(
+        `[sidebar] Download marketplace skill failed: ${msg}`
+      )
+      void vscode.window.showErrorMessage(
+        `Could not download the L4 Rules plugin zip: ${msg}`
+      )
+    }
   })
 
   // Install a per-deployment plugin bundle (SKILL.md + hosted MCP entry)

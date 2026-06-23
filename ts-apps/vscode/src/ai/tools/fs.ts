@@ -565,7 +565,112 @@ export interface FsCreateArgs {
  * needs a non-empty `old` snippet to anchor on; without the seed a
  * brand-new (empty) file would have nothing to find.
  */
-export const FS_CREATE_FILE_SEED = '// new file content\n'
+export const FS_CREATE_FILE_SEED = '// new file in progress ...\n'
+
+/**
+ * Placeholder copy dropped into the body of a freshly-created HTML
+ * file. Doubles as the unique anchor the first follow-up
+ * `fs__edit_file` call replaces with real markup.
+ */
+export const FS_CREATE_HTML_SEED = `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>New document</title>
+    <style>
+      body {
+        background-color: white;
+        font-family: serif;
+        font-size: 1rem;
+        color: black;
+        margin: 2rem;
+      }
+    </style>
+  </head>
+  <body>New document in progress ...</body>
+</html>
+`
+
+/** True for files we render in the built-in browser preview rather
+ *  than opening as a source text tab. */
+function isHtmlPath(fsPath: string): boolean {
+  const ext = path.extname(fsPath).toLowerCase()
+  return ext === '.html' || ext === '.htm'
+}
+
+// A single reused webview panel acts as the "built-in browser" for
+// AI-created HTML files. Reused across creates so a new document
+// replaces the previous preview instead of stacking tabs. The
+// save-watcher keeps the rendered page in sync as follow-up
+// `fs__edit_file` calls build the document up (each one saves the
+// buffer, firing onDidSaveTextDocument).
+let htmlPreviewPanel: vscode.WebviewPanel | undefined
+let htmlPreviewUri: vscode.Uri | undefined
+let htmlPreviewWatcher: vscode.Disposable | undefined
+
+/**
+ * Open (or refocus) the built-in browser preview on an HTML file and
+ * point it at `uri`. Renders the file's current contents in a webview
+ * panel beside the chat, and live-refreshes whenever that file is
+ * saved so the user watches the document take shape.
+ */
+async function openHtmlPreview(uri: vscode.Uri): Promise<void> {
+  const title = `Preview: ${path.basename(uri.fsPath)}`
+  if (!htmlPreviewPanel) {
+    htmlPreviewPanel = vscode.window.createWebviewPanel(
+      'l4.htmlPreview',
+      title,
+      // Beside the chat, without stealing focus from the conversation.
+      { viewColumn: vscode.ViewColumn.Active, preserveFocus: true },
+      {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+        localResourceRoots:
+          vscode.workspace.workspaceFolders?.map((f) => f.uri) ?? [],
+      }
+    )
+    htmlPreviewPanel.onDidDispose(() => {
+      htmlPreviewPanel = undefined
+      htmlPreviewUri = undefined
+      htmlPreviewWatcher?.dispose()
+      htmlPreviewWatcher = undefined
+    })
+    // Manual saves (Cmd+S) also refresh — the edit tool path refreshes
+    // explicitly via refreshHtmlPreviewIfShowing, but this keeps the
+    // preview honest for any other writer too.
+    htmlPreviewWatcher = vscode.workspace.onDidSaveTextDocument((doc) =>
+      refreshHtmlPreviewIfShowing(doc.uri)
+    )
+  }
+  htmlPreviewUri = uri
+  htmlPreviewPanel.title = title
+  htmlPreviewPanel.webview.html = await readFileText(uri)
+  htmlPreviewPanel.reveal(vscode.ViewColumn.Active, true)
+}
+
+/** Read a workspace file as UTF-8 text. */
+async function readFileText(uri: vscode.Uri): Promise<string> {
+  const bytes = await vscode.workspace.fs.readFile(uri)
+  return Buffer.from(bytes).toString('utf8')
+}
+
+/**
+ * Reload the built-in browser preview from disk when it is currently
+ * showing `uri`. No-op when the preview panel is closed or pointed at a
+ * different file — so an edit to an HTML file that happens to have a
+ * live preview tab open refreshes it, and an edit to any other file
+ * does nothing.
+ */
+async function refreshHtmlPreviewIfShowing(uri: vscode.Uri): Promise<void> {
+  if (
+    htmlPreviewPanel &&
+    htmlPreviewUri &&
+    uri.toString() === htmlPreviewUri.toString()
+  ) {
+    htmlPreviewPanel.webview.html = await readFileText(uri)
+  }
+}
 
 /**
  * Create a file seeded with FS_CREATE_FILE_SEED. The model fills it
@@ -591,10 +696,15 @@ export async function fsCreateFile(args: FsCreateArgs): Promise<string> {
   // file via its normal didOpen path (otherwise a silent Node write
   // doesn't get didChange/didOpen events, and l4__evaluate can
   // return stale results for a freshly-created file).
+  // HTML files get a full (plain-white) document skeleton so the
+  // built-in browser preview renders a real page from the start;
+  // everything else gets the one-line code seed.
+  const isHtml = isHtmlPath(r.fsPath)
+  const seed = isHtml ? FS_CREATE_HTML_SEED : FS_CREATE_FILE_SEED
   await fs.mkdir(path.dirname(r.fsPath), { recursive: true })
   const edit = new vscode.WorkspaceEdit()
   edit.createFile(r.uri, { overwrite: false })
-  edit.insert(r.uri, new vscode.Position(0, 0), FS_CREATE_FILE_SEED)
+  edit.insert(r.uri, new vscode.Position(0, 0), seed)
   const ok = await vscode.workspace.applyEdit(edit)
   if (!ok) {
     throw new Error(
@@ -605,19 +715,28 @@ export async function fsCreateFile(args: FsCreateArgs): Promise<string> {
   // own fs__read_file / fs.readFile) see the new content immediately.
   const doc = await vscode.workspace.openTextDocument(r.uri)
   if (doc.isDirty) await doc.save()
-  // Surface the new file as a visible tab so the user sees what the
-  // model just created without having to expand the tool-call row and
-  // click. `preserveFocus: true` keeps the cursor wherever the user
-  // was — usually the chat input — instead of stealing focus into the
-  // editor mid-conversation.
-  await vscode.window.showTextDocument(doc, {
-    preview: false,
-    preserveFocus: true,
-  })
+  if (isHtml) {
+    // Open the rendered page in the built-in browser preview rather
+    // than a source tab — and live-refresh it as follow-up edits land.
+    await openHtmlPreview(r.uri)
+  } else {
+    // Surface the new file as a visible tab so the user sees what the
+    // model just created without having to expand the tool-call row and
+    // click. `preserveFocus: true` keeps the cursor wherever the user
+    // was — usually the chat input — instead of stealing focus into the
+    // editor mid-conversation.
+    await vscode.window.showTextDocument(doc, {
+      preview: false,
+      preserveFocus: true,
+    })
+  }
   // Skip the appendL4Diagnostics tail — a freshly-created file has no
   // real content to type-check, and the Edit tool the model uses next
   // will run diagnostics naturally.
-  return `Created ${r.relative} (seeded with "${FS_CREATE_FILE_SEED.trimEnd()}").`
+  const anchor = isHtml
+    ? '\n```html\n' + FS_CREATE_HTML_SEED + '\n```'
+    : '"' + FS_CREATE_FILE_SEED.trimEnd() + '"'
+  return `Created ${r.relative} - seeded with ${anchor}`
 }
 
 export interface FsEditArgs {
@@ -775,6 +894,9 @@ export async function fsEditFile(args: FsEditArgs): Promise<string> {
     )
   }
   if (doc.isDirty) await doc.save()
+  // If this file is an HTML doc currently shown in the built-in browser
+  // preview, reload the rendered page so it tracks the edit.
+  if (isHtmlPath(r.fsPath)) await refreshHtmlPreviewIfShowing(r.uri)
   // `[<path> <start>-<end>]` prefix carries the post-edit line range
   // so the chat row can render it as a muted "Lines 23-45" suffix
   // (matches fs__read_file's surfacing). No `/total` segment here —

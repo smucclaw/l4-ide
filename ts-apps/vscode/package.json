@@ -3,7 +3,7 @@
   "displayName": "L4 Rules-as-code",
   "description": "Write, test, and deploy legal rules as executable code — with a built-in Legalese AI chat, MCP for AI agents, WebMCP for browser AI, syntax highlighting, IntelliSense, ladder diagrams, and cloud deployment",
   "license": "Apache-2.0",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "publisher": "legalese",
   "categories": [
     "Programming Languages",
@@ -165,6 +165,11 @@
         "command": "l4.renameIdentifier",
         "title": "Rename L4 identifier (across imports)",
         "category": "L4"
+      },
+      {
+        "command": "l4.openExtensionSettings",
+        "title": "L4: Extension Settings",
+        "icon": "$(gear)"
       }
     ],
     "menus": {
@@ -172,6 +177,13 @@
         {
           "command": "l4.openSidebar",
           "when": "resourceLangId == l4",
+          "group": "navigation"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "l4.openExtensionSettings",
+          "when": "view == l4.deployView",
           "group": "navigation"
         }
       ],

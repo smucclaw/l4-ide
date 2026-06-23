@@ -10,6 +10,7 @@ import Backend.Api
 import qualified BundleStore
 import BundleStore (initStore)
 import Compiler (compileBundle, computeVersion)
+import qualified Version
 import ControlPlane (DeploymentStatusResponse (..))
 import Logging (newLogger)
 import Options (Options (..))
@@ -409,6 +410,40 @@ spec = describe "integration" do
         getReq <- parseRequest (baseUrl <> "/deployments/to-delete")
         getResp <- httpLbs getReq mgr
         statusCode' getResp `shouldBe` 404
+
+    it "stamps the deployment version and bumps RUNNING on redeploy" do
+      withEmptyService \baseUrl mgr -> do
+        let major = Text.pack (show Version.serviceMajor)
+            -- Read deploymentVersion off GET /deployments/{id}?functions=full.
+            getVersion did = do
+              req <- parseRequest
+                (baseUrl <> "/deployments/" <> did <> "?functions=full")
+              resp <- httpLbs req mgr
+              statusCode' resp `shouldBe` 200
+              case Aeson.decode (responseBody resp) :: Maybe DeploymentStatusResponse of
+                Just s | Just m <- s.dsMetadata -> pure m.metaDeploymentVersion
+                _ -> expectationFailure "no metadata" >> pure ""
+
+        -- First deploy → {major}.0.0
+        postReq <- buildMultipartRequest (baseUrl <> "/deployments") "ver-test"
+          (createZipBundle [("qualifies.l4", qualifiesJL4)])
+        _ <- httpLbs postReq mgr
+        pollUntilReady baseUrl mgr "ver-test" 60
+        getVersion "ver-test" `shouldReturn` (major <> ".0.0")
+
+        -- Redeploy the same id with different (compatible) source → RUNNING
+        -- bumps, BREAKING unchanged → {major}.0.1. The old version is already
+        -- "ready", so poll the version itself rather than readiness (which
+        -- would return immediately on the stale deployment).
+        let awaitVersion expected n = do
+              v <- getVersion "ver-test"
+              if v == expected || n <= (0 :: Int)
+                then v `shouldBe` expected
+                else threadDelay 200_000 >> awaitVersion expected (n - 1)
+        reReq <- buildMultipartRequest (baseUrl <> "/deployments") "ver-test"
+          (createZipBundle [("qualifies.l4", qualifiesJL4 <> "\n-- v2\n")])
+        _ <- httpLbs reReq mgr
+        awaitVersion (major <> ".0.1") 50
 
   describe "query-plan" do
     it "returns a query plan with no bindings" do
@@ -1561,6 +1596,8 @@ withPendingService' deployId sources act = do
         { BundleStore.smVersion = version
         , BundleStore.smCreatedAt = "2026-01-01T00:00:00Z"
         , BundleStore.smDescription = Nothing
+        , BundleStore.smServiceVersion = Nothing
+        , BundleStore.smDeploymentVersion = Nothing
         }
   BundleStore.saveBundle store deployId sourceMap storedMeta
 
@@ -1604,6 +1641,8 @@ withFailedService' deployId sources act = do
         { BundleStore.smVersion = version
         , BundleStore.smCreatedAt = "2026-01-01T00:00:00Z"
         , BundleStore.smDescription = Nothing
+        , BundleStore.smServiceVersion = Nothing
+        , BundleStore.smDeploymentVersion = Nothing
         }
   BundleStore.saveBundle store deployId sourceMap storedMeta
 

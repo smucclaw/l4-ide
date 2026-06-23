@@ -82,7 +82,7 @@ spec = describe "CBOR serialisation" do
                 -- (we can't compare directly since Anno_ is stripped,
                 -- but we can rebuild functions from it)
                 rebuildResult <- buildFromCborBundle logger "test" [decoded] sources
-                  (StoredMetadata (computeVersion sources) "2025-01-01T00:00:00Z" Nothing)
+                  (StoredMetadata (computeVersion sources) "2025-01-01T00:00:00Z" Nothing Nothing Nothing)
                 case rebuildResult of
                   Left rebuildErr -> expectationFailure ("Rebuild from decoded CBOR failed: " <> Text.unpack rebuildErr)
                   Right (fns, _meta') -> do
@@ -94,7 +94,7 @@ spec = describe "CBOR serialisation" do
       logger <- newLogger False
       withTempStore $ \store -> do
         let sources = Map.singleton "qualifies.l4" qualifiesJL4
-            meta = StoredMetadata "v1" "2025-01-01T00:00:00Z" Nothing
+            meta = StoredMetadata "v1" "2025-01-01T00:00:00Z" Nothing Nothing Nothing
         saveBundle store "cbor-test" sources meta
 
         result <- compileBundle logger "test" sources
@@ -116,7 +116,7 @@ spec = describe "CBOR serialisation" do
       logger <- newLogger False
       withTempStore $ \store -> do
         let sources = Map.singleton "qualifies.l4" qualifiesJL4
-            meta = StoredMetadata "v1" "2025-01-01T00:00:00Z" Nothing
+            meta = StoredMetadata "v1" "2025-01-01T00:00:00Z" Nothing Nothing Nothing
         saveBundle store "corrupt-test" sources meta
 
         -- Write garbage to bundle.cbor
@@ -131,7 +131,7 @@ spec = describe "CBOR serialisation" do
       logger <- newLogger False
       withTempStore $ \store -> do
         let sources = Map.singleton "qualifies.l4" qualifiesJL4
-            meta = StoredMetadata "v1" "2025-01-01T00:00:00Z" Nothing
+            meta = StoredMetadata "v1" "2025-01-01T00:00:00Z" Nothing Nothing Nothing
         saveBundle store "overwrite-test" sources meta
 
         result <- compileBundle logger "test" sources
@@ -154,7 +154,7 @@ spec = describe "CBOR serialisation" do
         Left err -> expectationFailure ("Compilation failed: " <> Text.unpack err)
         Right (compiledFns, _meta, bundles) -> do
           -- Rebuild from CBOR
-          let storedMeta = StoredMetadata (computeVersion sources) "2025-01-01T00:00:00Z" Nothing
+          let storedMeta = StoredMetadata (computeVersion sources) "2025-01-01T00:00:00Z" Nothing Nothing Nothing
           rebuildResult <- buildFromCborBundle logger "test" bundles sources storedMeta
           let rebuiltFns = case rebuildResult of Right (fns, _) -> fns; Left _ -> Map.empty
 
@@ -218,7 +218,7 @@ spec = describe "CBOR serialisation" do
       let sources = Map.singleton "qualifies.l4" qualifiesJL4
           deployId' = "restart-sim"
       withTempStore $ \store -> do
-        let meta = StoredMetadata (computeVersion sources) "2025-01-01T00:00:00Z" Nothing
+        let meta = StoredMetadata (computeVersion sources) "2025-01-01T00:00:00Z" Nothing Nothing Nothing
         saveBundle store deployId' sources meta
 
         -- Step 1: Compile from source (initial deployment)
@@ -268,7 +268,7 @@ spec = describe "CBOR serialisation" do
       let sources = Map.singleton "qualifies.l4" qualifiesJL4
           deployId' = "delete-cbor"
       withTempStore $ \store -> do
-        let meta = StoredMetadata (computeVersion sources) "2025-01-01T00:00:00Z" Nothing
+        let meta = StoredMetadata (computeVersion sources) "2025-01-01T00:00:00Z" Nothing Nothing Nothing
         saveBundle store deployId' sources meta
 
         result <- compileBundle logger "test" sources
@@ -350,7 +350,7 @@ withCborRebuiltService deployId sources act = do
     Right r -> pure r
 
   -- Serialize and deserialize (simulating restart)
-  let storedMeta = StoredMetadata (computeVersion sources) "2025-01-01T00:00:00Z" Nothing
+  let storedMeta = StoredMetadata (computeVersion sources) "2025-01-01T00:00:00Z" Nothing Nothing Nothing
   rebuiltFns <- do
     -- Encode to CBOR bytes, then decode back (as a list)
     let encoded = serialise bundles

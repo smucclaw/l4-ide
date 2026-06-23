@@ -5,6 +5,7 @@ module BundleStore (
   initStore,
   cleanupStore,
   saveBundle,
+  saveStoredMetadata,
   loadBundle,
   listDeployments,
   deleteBundle,
@@ -59,6 +60,14 @@ data StoredMetadata = StoredMetadata
   -- ^ Operator-supplied deployment description ("Intended use").
   -- Optional for backward compatibility: metadata.json written before this
   -- field existed decodes with 'Nothing'.
+  , smServiceVersion    :: !(Maybe Text)
+  -- ^ jl4-service build version this deployment was last deployed with.
+  , smDeploymentVersion :: !(Maybe Text)
+  -- ^ Computed @MAJOR.BREAKING.RUNNING@ deployment version, stored as a single
+  -- string. The BREAKING/RUNNING counters are parsed back out of it (and
+  -- bumped) at the next deploy, so no separate counter fields are persisted.
+  -- Both are optional for backward compatibility: metadata.json written before
+  -- deployment versioning decodes them as 'Nothing'.
   }
   deriving stock (Show, Generic)
   deriving anyclass (FromJSON, ToJSON)
@@ -139,6 +148,17 @@ saveBundle (BundleStore root) deployId sources meta = do
       renameDirectory tmpDir targetDir
     else
       renameDirectory tmpDir targetDir
+
+-- | Atomically overwrite just the @metadata.json@ of an existing deployment
+-- (sources + CBOR untouched). Used to persist late-computed fields — e.g. the
+-- backfilled deployment version — without rewriting the whole bundle.
+saveStoredMetadata :: BundleStore -> Text -> StoredMetadata -> IO ()
+saveStoredMetadata (BundleStore root) deployId meta = do
+  let targetDir = root </> Text.unpack deployId
+      metaFile = targetDir </> "metadata.json"
+      tmpFile = targetDir </> "metadata.json.tmp"
+  encodeFile tmpFile meta
+  renameFile tmpFile metaFile
 
 -- | Load sources and metadata from a stored deployment.
 loadBundle

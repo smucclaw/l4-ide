@@ -46,7 +46,7 @@ export const BUILTIN_TOOLS: AiProxyTool[] = [
     function: {
       name: 'fs__create_file',
       description:
-        'Create a file seeded with a single line `// new file content`. Fails if the file already exists. To fill it, follow up with fs__edit_file calls: the first replaces the seed line with the initial content; further calls add more sections incrementally. Do NOT try to write the whole file in one giant edit — split into smaller chunks (see fs__edit_file).',
+        'Create a file seeded with a single line `// new file content` (for `.html`/`.htm` files: a minimal blank-white HTML skeleton whose body reads `New document in progress ...`, opened in the built-in browser preview instead of a source tab). Fails if the file already exists. To fill it, follow up with fs__edit_file calls: the first replaces the seed line (or, for HTML, the `New document in progress ...` placeholder) with the initial content; further calls add more sections incrementally. Do NOT try to write the whole file in one giant edit — split into smaller chunks (see fs__edit_file).',
       parameters: {
         type: 'object',
         additionalProperties: false,

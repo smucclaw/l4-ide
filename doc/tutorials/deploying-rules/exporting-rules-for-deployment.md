@@ -2,10 +2,7 @@
 
 Turn your L4 rules into live REST API endpoints on [Legalese Cloud](https://legalese.cloud) that applications and AI agents can call.
 
-**Audience:** L4 authors ready to share their rules with the world
 **Prerequisites:** Basic L4 knowledge ([Your First L4 File](../getting-started/first-l4-file.md))
-**Time:** 20 minutes
-**Goal:** Mark rules for export, deploy them from VS Code to Legalese Cloud, and call them via the REST API
 
 ---
 

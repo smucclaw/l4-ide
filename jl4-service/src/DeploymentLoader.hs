@@ -22,9 +22,13 @@ import Control.Exception (SomeException, catch, displayException)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Reader (asks, ask)
 import Data.Aeson (toJSON)
+import Control.Monad (when)
 import Data.Int (Int64)
+import Data.Maybe (fromMaybe)
 import qualified Data.Map.Strict as Map
 import Data.Text (Text)
+import qualified Data.Text as Text
+import qualified Version
 import GHC.Conc (setAllocationCounter, enableAllocationLimit)
 import GHC.IO.Exception (AllocationLimitExceeded (..))
 import System.Timeout (timeout)
@@ -68,12 +72,47 @@ loadAndRegister logger options registry store deployId = do
 
   case result of
     Right (fns, meta0) -> do
-      -- The operator-supplied description is not derived from sources, so
-      -- the compiler/CBOR rebuild can't reproduce it — restore it from the
-      -- persisted StoredMetadata.
-      let meta = meta0 { metaDescription = storedMeta.smDescription }
+      -- The operator-supplied description and the deploy-time version strings
+      -- are not derived from sources, so the compiler/CBOR rebuild can't
+      -- reproduce them — restore them from the persisted StoredMetadata so the
+      -- version (and the counters encoded in it) survives restarts.
+      --
+      -- Deployments that predate versioning have no stored deploymentVersion;
+      -- backfill them to {major}.0.0 on this (re)compile so they aren't left
+      -- blank until their next redeploy. The next redeploy then bumps RUNNING
+      -- from this baseline (→ {major}.0.1). We persist the backfill to
+      -- metadata.json below so it freezes — it won't recompute (or re-major) on
+      -- a later restart under a different service major.
+      let storedDepVersion = fromMaybe "" storedMeta.smDeploymentVersion
+          backfilled = Text.null storedDepVersion
+          depVersion =
+            if backfilled
+              then Text.pack (show Version.serviceMajor) <> ".0.0"
+              else storedDepVersion
+          svcVersion = case storedMeta.smServiceVersion of
+            Just v | not (Text.null v) -> v
+            _                          -> Version.serviceVersion
+          meta = meta0
+            { metaDescription = storedMeta.smDescription
+            , metaServiceVersion = svcVersion
+            , metaDeploymentVersion = depVersion
+            }
       atomically $ modifyTVar' registry $
         Map.insert (DeploymentId deployId) (DeploymentReady fns meta)
+      -- Persist the backfilled version to metadata.json (once), so it's frozen
+      -- across restarts. Non-fatal: a write failure just means it re-backfills
+      -- (deterministically) next time.
+      when backfilled $
+        BundleStore.saveStoredMetadata store deployId
+          storedMeta
+            { BundleStore.smServiceVersion = Just svcVersion
+            , BundleStore.smDeploymentVersion = Just depVersion
+            }
+          `catch` \(e :: SomeException) ->
+            logWarn logger "Failed to persist backfilled version (non-fatal)"
+              [ ("deploymentId", toJSON deployId)
+              , ("error", toJSON (displayException e))
+              ]
       -- Cache the full metadata to disk so it survives restarts.
       -- This is optional — a write failure must not fail the deployment.
       BundleStore.saveMetadataCache store deployId (Shared.encodeMetadataCache meta)

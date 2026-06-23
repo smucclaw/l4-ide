@@ -13,6 +13,7 @@ import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Map.Strict as Map
 import L4.FunctionSchema (Parameters (..))
+import qualified Version
 
 -- | Build a valid OpenAPI 3.0 document from deployment metadata.
 --
@@ -31,7 +32,11 @@ buildOpenApiDoc mServerName vis deployments =
     [ "openapi" .= ("3.0.0" :: Text)
     , "info" .= Aeson.object
         ( [ "title" .= ("L4 Deployments" :: Text)
-          , "version" .= ("1.0.0" :: Text)
+          -- For a single-deployment document, advertise that deployment's
+          -- version (MAJOR.BREAKING.RUNNING) as the canonical OpenAPI
+          -- info.version. Org-wide documents span many deployments, so they
+          -- fall back to the jl4-service build version.
+          , "version" .= infoVersion
           ]
           -- Surface the operator-supplied "Intended use" as
           -- the standard OpenAPI info.description when the document is
@@ -44,6 +49,11 @@ buildOpenApiDoc mServerName vis deployments =
     ]
     <> maybe [] (\s -> ["servers" .= [Aeson.object ["url" .= s]]]) mServerName
     <> ["components" .= buildComponents]
+  where
+    infoVersion :: Text
+    infoVersion = case deployments of
+      [(_, dm)] | not (Text.null dm.metaDeploymentVersion) -> dm.metaDeploymentVersion
+      _ -> Version.serviceVersion
 
 -- | Build the paths object from deployment metadata.
 buildPaths :: Visibility -> [(Text, DeploymentMetadata)] -> Aeson.Value

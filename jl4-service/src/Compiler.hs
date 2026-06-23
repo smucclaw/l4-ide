@@ -105,9 +105,12 @@ compileBundle logger deployId sources = do
                 , metaVersion = version
                 , metaCreatedAt = now
                 -- compileBundle has no access to the operator-supplied
-                -- description; callers inject it from the multipart field
-                -- (deploy) or persisted StoredMetadata (restart).
+                -- description or the deploy-time version counters; callers
+                -- inject them from the multipart field (deploy) or persisted
+                -- StoredMetadata (restart).
                 , metaDescription = Nothing
+                , metaServiceVersion = ""
+                , metaDeploymentVersion = ""
                 }
 
           unless (null allFunctions) $
@@ -358,6 +361,10 @@ buildFromCborBundle logger deployId bundles sources storedMeta = do
             , metaVersion = version
             , metaCreatedAt = now
             , metaDescription = storedMeta.smDescription
+            -- Version strings are restored from StoredMetadata by the
+            -- caller (DeploymentLoader); default to "" here.
+            , metaServiceVersion = ""
+            , metaDeploymentVersion = ""
             }
 
       logInfo logger "Rebuilt functions from CBOR cache"

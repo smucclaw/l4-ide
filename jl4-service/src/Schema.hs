@@ -26,6 +26,7 @@ import qualified L4.Decision.QueryPlan as QP
 import qualified LSP.L4.Viz.VizExpr as VizExpr
 import Servant
 import Servant.OpenApi
+import qualified Version
 
 type ServerName = Text
 
@@ -35,7 +36,7 @@ serverOpenApi serverName =
   annotateGraphVizParams $
     toOpenApi (Proxy :: Proxy Api)
       & info . title .~ "JL4 Multi-Tenant Decision Service API"
-      & info . version .~ "1.0"
+      & info . version .~ Version.serviceVersion
       & info . description ?~ "Multi-tenant API for deploying and evaluating JL4 functions"
       & servers .~ Maybe.maybeToList ((\sName -> Server sName mempty mempty) <$> serverName)
  where

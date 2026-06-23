@@ -109,6 +109,9 @@ export type UserTurnChip =
       selectionStartLine?: number
       selectionEndLine?: number
     }
+  // A referenced workspace file (an `@`-mention surfaced as a chip),
+  // e.g. the Render tab's L4 source + generated document.
+  | { kind: 'file'; name: string; path: string }
 
 export type AssistantBlock =
   | { kind: 'text'; text: string }
@@ -612,7 +615,8 @@ export function createAiChatStore(
 
   async function send(
     text: string,
-    mentions: AiChatStartParams['mentions'] = []
+    mentions: AiChatStartParams['mentions'] = [],
+    opts: { fileChips?: Array<{ name: string; path: string }> } = {}
   ): Promise<void> {
     const m = getMessenger()
     if (!m || !text.trim()) return
@@ -657,6 +661,12 @@ export function createAiChatStore(
     const turnChips: UserTurnChip[] = []
     for (const att of stagedAttachments) {
       turnChips.push({ kind: att.kind, name: att.name })
+    }
+    // Referenced-file chips (e.g. the Render tab's source + generated
+    // document). The matching `@`-mentions carry the paths to the model;
+    // these chips are the human-visible echo of them.
+    for (const fc of opts.fileChips ?? []) {
+      turnChips.push({ kind: 'file', name: fc.name, path: fc.path })
     }
     if (chipName && chipPath) {
       turnChips.push({
@@ -1725,6 +1735,13 @@ export function createAiChatStore(
     return pendingDraft
   }
 
+  /** Stage an attachment the caller already assembled (e.g. the Render
+   *  tab's saved drafting-policy file), rather than going through the
+   *  native picker. Mirrors what {@link pickAttachment} does on success. */
+  function attachExternal(att: AiChatAttachment): void {
+    stagedAttachments = [...stagedAttachments, att]
+  }
+
   async function getPermissions(): Promise<
     Record<AiPermissionCategory, AiPermissionValue>
   > {
@@ -1903,6 +1920,7 @@ export function createAiChatStore(
     setDraft,
     seedDraft,
     getDraft,
+    attachExternal,
     get draftSeedVersion() {
       return draftSeedVersion
     },
@@ -1973,7 +1991,8 @@ export type AiChatStore = {
   ) => void
   send: (
     text: string,
-    mentions?: AiChatStartParams['mentions']
+    mentions?: AiChatStartParams['mentions'],
+    opts?: { fileChips?: Array<{ name: string; path: string }> }
   ) => Promise<void>
   continueTurn: () => void
   abort: () => void
@@ -1982,6 +2001,7 @@ export type AiChatStore = {
   setDraft: (text: string) => void
   seedDraft: (text: string) => void
   getDraft: () => string
+  attachExternal: (att: AiChatAttachment) => void
   readonly draftSeedVersion: number
   searchMentions: (query: string) => Promise<AiMentionCandidate[]>
   approveTool: (

@@ -1,3 +1,7 @@
+§ `Prelude`
+
+§§ `Basic Functions`
+
 GIVEN
   a IS A TYPE
   x IS AN a
@@ -12,11 +16,14 @@ GIVEN
 GIVETH AN a
 const x y MEANS x
 
+§§ `Lists — Queries & Folds`
+
 GIVEN
   a    IS A TYPE
   list IS A LIST OF a
 GIVETH A BOOLEAN
-null list MEANS
+null list @nlg %list% is empty
+  MEANS
   CONSIDER list
   WHEN EMPTY            THEN TRUE
   WHEN x FOLLOWED BY xs THEN FALSE
@@ -28,7 +35,8 @@ GIVEN
   nil  IS AN r
   list IS A LIST OF a
 GIVETH AN r
-foldr cons nil list MEANS go list
+foldr cons nil list @nlg the items of %list% combined from the right with %cons%, starting from %nil%
+  MEANS go list
   WHERE
     go l MEANS CONSIDER l
       WHEN EMPTY            THEN nil
@@ -41,18 +49,22 @@ GIVEN
   ini  IS AN r
   list IS A LIST OF a
 GIVETH AN r
-foldl op ini list MEANS go ini list
+foldl op ini list @nlg the items of %list% combined from the left with %op%, starting from %ini%
+  MEANS go ini list
   WHERE
     go acc l MEANS CONSIDER l
       WHEN EMPTY            THEN acc
       WHEN x FOLLOWED BY xs THEN go OF op acc x, xs
+
+§§ `Lists — Construction`
 
 GIVEN
   a     IS A TYPE
   list1 IS A LIST OF a
   list2 IS A LIST OF a
 GIVETH A LIST OF a
-append list1 list2 MEANS
+append list1 list2 @nlg %list1% followed by %list2%
+  MEANS
   CONSIDER list1
   WHEN EMPTY            THEN list2
   WHEN x FOLLOWED BY xs THEN x FOLLOWED BY append xs list2
@@ -67,10 +79,13 @@ GIVEN
   a     IS A TYPE
   lists IS A LIST OF LIST OF a
 GIVETH A LIST OF a
-concat lists MEANS
+concat lists @nlg all the lists in %lists% joined together
+  MEANS
   CONSIDER lists
   WHEN EMPTY              THEN EMPTY
   WHEN xs FOLLOWED BY xss THEN append xs (concat xss)
+
+§§ `Lists — Transformation`
 
 GIVEN
   a       IS A TYPE
@@ -78,7 +93,8 @@ GIVEN
   f       IS A FUNCTION FROM a TO b
   list    IS A LIST OF a
 GIVETH A LIST OF b
-map f list MEANS
+map f list @nlg %f% applied to each item of %list%
+  MEANS
   CONSIDER list
   WHEN EMPTY            THEN EMPTY
   WHEN x FOLLOWED BY xs THEN f x FOLLOWED BY map f xs
@@ -88,7 +104,8 @@ GIVEN
   f       IS A FUNCTION FROM a TO BOOLEAN
   list    IS A LIST OF a
 GIVETH A LIST OF a
-filter f list MEANS
+filter f list @nlg the items of %list% for which %f% holds
+  MEANS
   CONSIDER list
   WHEN EMPTY            THEN EMPTY
   WHEN x FOLLOWED BY xs THEN
@@ -99,8 +116,8 @@ filter f list MEANS
 GIVEN a    IS A TYPE
       list IS A LIST OF a
 GIVETH A NUMBER
-count list MEANS
-  go 0 list
+count list @nlg the number of items in %list%
+  MEANS go 0 list
   WHERE
     go acc l MEANS
       CONSIDER l
@@ -112,7 +129,8 @@ GIVEN
   list IS A LIST OF a
   i    IS A NUMBER
 GIVETH AN a
-at list i MEANS
+at list i @nlg item number %i% of %list%
+  MEANS
   CONSIDER list
   WHEN x FOLLOWED BY xs THEN
     IF i <= 0
@@ -123,7 +141,8 @@ GIVEN
   a    IS A TYPE
   list IS A LIST OF a
 GIVETH A LIST OF a
-reverse list MEANS go EMPTY list
+reverse list @nlg %list% in reverse order
+  MEANS go EMPTY list
   WHERE
     go acc l MEANS
       CONSIDER l
@@ -135,7 +154,8 @@ GIVEN
   n    IS A NUMBER
   x    IS AN a
 GIVETH A LIST OF a
-replicate n x MEANS
+replicate n x @nlg a list of %n% copies of %x%
+  MEANS
   IF n <= 0
     THEN EMPTY
     ELSE x FOLLOWED BY replicate (n - 1) x
@@ -145,7 +165,8 @@ GIVEN
   n    IS A NUMBER
   list IS A LIST OF a
 GIVETH A LIST OF a
-take n list MEANS
+take n list @nlg the first %n% items of %list%
+  MEANS
   IF n <= 0
     THEN EMPTY
     ELSE CONSIDER list
@@ -157,7 +178,8 @@ GIVEN
   n    IS A NUMBER
   list IS A LIST OF a
 GIVETH A LIST OF a
-drop n list MEANS
+drop n list @nlg %list% without its first %n% items
+  MEANS
   IF n <= 0
     THEN list
     ELSE CONSIDER list
@@ -169,7 +191,8 @@ GIVEN
   f    IS A FUNCTION FROM a TO BOOLEAN
   list IS A LIST OF a
 GIVETH A LIST OF a
-takeWhile f list MEANS
+takeWhile f list @nlg the leading items of %list% for which %f% holds
+  MEANS
   CONSIDER list
   WHEN EMPTY            THEN EMPTY
   WHEN x FOLLOWED BY xs THEN
@@ -182,7 +205,8 @@ GIVEN
   f    IS A FUNCTION FROM a TO BOOLEAN
   list IS A LIST OF a
 GIVETH A LIST OF a
-dropWhile f list MEANS
+dropWhile f list @nlg %list% with the leading items satisfying %f% removed
+  MEANS
   CONSIDER list
   WHEN EMPTY            THEN EMPTY
   WHEN x FOLLOWED BY xs THEN
@@ -190,10 +214,13 @@ dropWhile f list MEANS
       THEN dropWhile f xs
       ELSE list
 
+§§ `Lists — Boolean Reductions`
+
 GIVEN
   list    IS A LIST OF BOOLEAN
 GIVETH A BOOLEAN
-and list MEANS
+and list @nlg every item of %list% is true
+  MEANS
   CONSIDER list
   WHEN EMPTY            THEN TRUE
   WHEN x FOLLOWED BY xs THEN x AND and xs
@@ -201,7 +228,8 @@ and list MEANS
 GIVEN
   list    IS A LIST OF BOOLEAN
 GIVETH A BOOLEAN
-or list MEANS
+or list @nlg at least one item of %list% is true
+  MEANS
   CONSIDER list
   WHEN EMPTY            THEN FALSE
   WHEN x FOLLOWED BY xs THEN x OR or xs
@@ -211,7 +239,8 @@ GIVEN
   f    IS A FUNCTION FROM a TO BOOLEAN
   list IS A LIST OF a
 GIVETH A BOOLEAN
-all f list MEANS
+all f list @nlg %f% holds for every item of %list%
+  MEANS
   CONSIDER list
   WHEN EMPTY            THEN TRUE
   WHEN x FOLLOWED BY xs THEN f x AND all f xs
@@ -221,15 +250,19 @@ GIVEN
   f    IS A FUNCTION FROM a TO BOOLEAN
   list IS A LIST OF a
 GIVETH A BOOLEAN
-any f list MEANS
+any f list @nlg %f% holds for at least one item of %list%
+  MEANS
   CONSIDER list
   WHEN EMPTY            THEN FALSE
   WHEN x FOLLOWED BY xs THEN f x OR any f xs
 
+§§ `Numeric Aggregates`
+
 GIVEN
   list    IS A LIST OF NUMBER
 GIVETH A NUMBER
-sum list MEANS go 0 list
+sum list @nlg the sum of %list%
+  MEANS go 0 list
   WHERE
     go acc l MEANS
       CONSIDER l
@@ -239,40 +272,48 @@ sum list MEANS go 0 list
 GIVEN
   list    IS A LIST OF NUMBER
 GIVETH A NUMBER
-product list MEANS go 1 list
+product list @nlg the product of %list%
+  MEANS go 1 list
   WHERE
     go acc l MEANS
       CONSIDER l
       WHEN EMPTY THEN acc
       WHEN x FOLLOWED BY xs THEN go (acc * x) xs
 
-GIVEN
-  x IS A NUMBER
-GIVETH A BOOLEAN
-even x MEANS x MODULO 2 EQUALS 0
+§§ `Numeric Comparisons`
 
 GIVEN
   x IS A NUMBER
 GIVETH A BOOLEAN
-odd x MEANS x MODULO 2 EQUALS 1
+even x @nlg %x% is even
+  MEANS x MODULO 2 EQUALS 0
+
+GIVEN
+  x IS A NUMBER
+GIVETH A BOOLEAN
+odd x @nlg %x% is odd
+  MEANS x MODULO 2 EQUALS 1
 
 GIVEN
   x IS A NUMBER
   y IS A NUMBER
 GIVETH A NUMBER
-max x y MEANS IF x >= y THEN x ELSE y
+max x y @nlg the greater of %x% and %y%
+  MEANS IF x >= y THEN x ELSE y
 
 GIVEN
   x IS A NUMBER
   y IS A NUMBER
 GIVETH A NUMBER
-min x y MEANS IF x <= y THEN x ELSE y
+min x y @nlg the lesser of %x% and %y%
+  MEANS IF x <= y THEN x ELSE y
 
 GIVEN
   x    IS A NUMBER
   list IS A LIST OF NUMBER
 GIVETH A NUMBER
-maximum1 x list MEANS
+maximum1 x list @nlg the largest of %x% and the values in %list%
+  MEANS
   CONSIDER list
   WHEN EMPTY THEN x
   WHEN y FOLLOWED BY ys THEN maximum1 (max x y) ys
@@ -281,7 +322,8 @@ GIVEN
   x    IS A NUMBER
   list IS A LIST OF NUMBER
 GIVETH A NUMBER
-minimum1 x list MEANS
+minimum1 x list @nlg the smallest of %x% and the values in %list%
+  MEANS
   CONSIDER list
   WHEN EMPTY THEN x
   WHEN y FOLLOWED BY ys THEN minimum1 (min x y) ys
@@ -289,21 +331,24 @@ minimum1 x list MEANS
 GIVEN
   list IS A LIST OF NUMBER
 GIVETH A NUMBER
-maximum list MEANS
+maximum list @nlg the largest value in %list%
+  MEANS
   CONSIDER list
   WHEN x FOLLOWED BY xs THEN maximum1 x xs
 
 GIVEN
   list IS A LIST OF NUMBER
 GIVETH A NUMBER
-minimum list MEANS
+minimum list @nlg the smallest value in %list%
+  MEANS
   CONSIDER list
   WHEN x FOLLOWED BY xs THEN minimum1 x xs
 
 GIVEN
   list IS A LIST OF MAYBE NUMBER
 GIVETH A MAYBE NUMBER
-minimum list MEANS
+minimum list @nlg the smallest value in %list%
+  MEANS
   CONSIDER list
   WHEN x FOLLOWED BY xs THEN minimum1 x xs
 
@@ -311,7 +356,8 @@ GIVEN
   x    IS A MAYBE NUMBER
   list IS A LIST OF MAYBE NUMBER
 GIVETH A MAYBE NUMBER
-minimum1 x list MEANS
+minimum1 x list @nlg the smallest of %x% and the values in %list%
+  MEANS
   CONSIDER list
   WHEN EMPTY THEN x
   WHEN y FOLLOWED BY ys THEN minimum1 (min x y) ys
@@ -320,12 +366,14 @@ GIVEN
   x IS A MAYBE NUMBER
   y IS A MAYBE NUMBER
 GIVETH A MAYBE NUMBER
-min x y MEANS IF x <= y THEN x ELSE y
+min x y @nlg the lesser of %x% and %y%
+  MEANS IF x <= y THEN x ELSE y
 
 GIVEN
   list IS A LIST OF MAYBE NUMBER
 GIVETH A MAYBE NUMBER
-maximum list MEANS
+maximum list @nlg the largest value in %list%
+  MEANS
   CONSIDER list
   WHEN x FOLLOWED BY xs THEN minimum1 x xs
 
@@ -333,7 +381,8 @@ GIVEN
   x    IS A MAYBE NUMBER
   list IS A LIST OF MAYBE NUMBER
 GIVETH A MAYBE NUMBER
-maximum1 x list MEANS
+maximum1 x list @nlg the largest of %x% and the values in %list%
+  MEANS
   CONSIDER list
   WHEN EMPTY THEN x
   WHEN y FOLLOWED BY ys THEN maximum1 (min x y) ys
@@ -342,14 +391,18 @@ GIVEN
   x IS A MAYBE NUMBER
   y IS A MAYBE NUMBER
 GIVETH A MAYBE NUMBER
-max x y MEANS IF x >= y THEN x ELSE y
+max x y @nlg the greater of %x% and %y%
+  MEANS IF x >= y THEN x ELSE y
 
+
+§§ `Ranges, Sorting & Search`
 
 GIVEN
   low    IS A NUMBER
   high   IS A NUMBER
 GIVETH A LIST OF NUMBER
-range low high MEANS
+range low high @nlg the whole numbers from %low% to %high%
+  MEANS
   IF low > high
     THEN EMPTY
     ELSE low FOLLOWED BY range (low + 1) high
@@ -360,7 +413,8 @@ GIVEN
   x    IS AN a
   list IS A LIST OF a
 GIVETH A LIST OF a
-insertBy cmp x list MEANS
+insertBy cmp x list @nlg %list% with %x% inserted in order according to %cmp%
+  MEANS
   CONSIDER list
   WHEN EMPTY            THEN LIST x
   WHEN y FOLLOWED BY ys THEN
@@ -373,7 +427,8 @@ GIVEN
   cmp  IS A FUNCTION FROM a AND a TO BOOLEAN
   list IS A LIST OF a
 GIVETH A LIST OF a
-sortBy cmp list MEANS
+sortBy cmp list @nlg %list% sorted according to %cmp%
+  MEANS
   CONSIDER list
   WHEN EMPTY            THEN EMPTY
   WHEN x FOLLOWED BY xs THEN insertBy cmp x (sortBy cmp xs)
@@ -381,7 +436,8 @@ sortBy cmp list MEANS
 GIVEN
   list IS A LIST OF NUMBER
 GIVETH A LIST OF NUMBER
-sort list MEANS
+sort list @nlg %list% sorted into ascending order
+  MEANS
   sortBy (GIVEN x, y YIELD x <= y) list
 
 GIVEN
@@ -389,17 +445,20 @@ GIVEN
   x    IS AN a
   list IS A LIST OF a
 GIVETH A BOOLEAN
-elem x list MEANS
-  CONSIDER list
+elem x list @nlg %x% is one of %list%
+  MEANS CONSIDER list
   WHEN EMPTY THEN FALSE
   WHEN y FOLLOWED BY ys THEN x EQUALS y OR elem x ys
+
+§§ `Optional Values (Maybe)`
 
 GIVEN
   a       IS A TYPE
   default IS AN a
   x       IS A MAYBE a
 GIVETH AN a
-fromMaybe default x MEANS
+fromMaybe default x @nlg %x% if it is present, otherwise %default%
+  MEANS
   CONSIDER x
   WHEN NOTHING THEN default
   WHEN JUST x  THEN x
@@ -421,7 +480,8 @@ GIVEN
   x       IS A MAYBE a
   y       IS A MAYBE a
 GIVETH A MAYBE a
-orElse x y MEANS
+orElse x y @nlg %x% if it is present, otherwise %y%
+  MEANS
   CONSIDER x
   WHEN NOTHING THEN y
   WHEN JUST x  THEN JUST x
@@ -430,7 +490,8 @@ GIVEN
   a    IS A TYPE
   list IS A LIST OF MAYBE a
 GIVETH A MAYBE a
-asum list MEANS
+asum list @nlg the first present value in %list%
+  MEANS
   CONSIDER list
   WHEN EMPTY THEN NOTHING
   WHEN x FOLLOWED BY xs THEN
@@ -442,7 +503,8 @@ GIVEN
   a    IS A TYPE
   list IS A LIST OF MAYBE a
 GIVETH A MAYBE a
-firstJust list MEANS asum list
+firstJust list @nlg the first present value in %list%
+  MEANS asum list
 
 GIVEN
   a       IS A TYPE
@@ -466,7 +528,8 @@ GIVEN
   a IS A TYPE
   x IS A MAYBE a
 GIVETH A BOOLEAN
-isNothing x MEANS
+isNothing x @nlg %x% is absent
+  MEANS
   CONSIDER x
   WHEN NOTHING THEN TRUE
   WHEN JUST y  THEN FALSE
@@ -475,7 +538,8 @@ GIVEN
   a IS A TYPE
   x IS A MAYBE a
 GIVETH A BOOLEAN
-isJust x MEANS
+isJust x @nlg %x% is present
+  MEANS
   CONSIDER x
   WHEN NOTHING THEN FALSE
   WHEN JUST y  THEN TRUE
@@ -486,7 +550,8 @@ GIVEN
   f    IS A FUNCTION FROM a TO MAYBE b
   list IS A LIST OF a
 GIVETH A LIST OF b
-mapMaybe f list MEANS
+mapMaybe f list @nlg %f% applied to each item of %list%, keeping only the present results
+  MEANS
   CONSIDER list
   WHEN EMPTY            THEN EMPTY
   WHEN x FOLLOWED BY xs THEN
@@ -498,13 +563,16 @@ GIVEN
   a    IS A TYPE
   list IS A LIST OF MAYBE a
 GIVETH A LIST OF a
-catMaybes list MEANS
+catMaybes list @nlg the present values in %list%
+  MEANS
   CONSIDER list
   WHEN EMPTY            THEN EMPTY
   WHEN x FOLLOWED BY xs THEN
     CONSIDER x
     WHEN NOTHING THEN catMaybes xs
     WHEN JUST y  THEN y FOLLOWED BY catMaybes xs
+
+§§ `Pairs`
 
 DECLARE PAIR OF a, b
   HAS fst IS AN a
@@ -534,6 +602,8 @@ pmap f p MEANS
 
 
 
+§§ `List & Either Utilities`
+
 GIVEN
   a    IS A TYPE
   b    IS A TYPE
@@ -541,7 +611,8 @@ GIVEN
   f    IS A FUNCTION FROM b TO c
   list IS A LIST OF PAIR OF a, b
 GIVETH A LIST OF PAIR OF a, c
-fmap f list MEANS
+fmap f list @nlg %f% applied to each item of %list%
+  MEANS
   CONSIDER list
   WHEN EMPTY                       THEN EMPTY
   WHEN PAIR OF k, v FOLLOWED BY xs THEN
@@ -554,7 +625,8 @@ GIVEN
   key  IS AN a
   list IS A LIST OF PAIR OF a, b
 GIVETH A MAYBE b
-lookup key list MEANS
+lookup key list @nlg the value associated with %key% in %list%
+  MEANS
   CONSIDER list
   WHEN EMPTY                       THEN NOTHING
   WHEN PAIR OF k, v FOLLOWED BY xs THEN
@@ -569,7 +641,8 @@ GIVEN a IS A TYPE
       list1 IS A LIST OF a
       list2 IS A LIST OF b
 GIVETH A LIST OF c
-zipWith op list1 list2 MEANS
+zipWith op list1 list2 @nlg %list1% and %list2% combined item by item with %op%
+  MEANS
   CONSIDER list1
     WHEN EMPTY THEN EMPTY
     WHEN x FOLLOWED BY xs THEN
@@ -582,7 +655,8 @@ GIVEN a IS A TYPE
       list1 IS A LIST OF a
       list2 IS A LIST OF b
 GIVETH A LIST OF PAIR a b
-zip list1 list2 MEANS
+zip list1 list2 @nlg %list1% and %list2% paired up item by item
+  MEANS
   zipWith PAIR list1 list2
 
 -- EITHER type is now a builtin (like MAYBE)
@@ -605,7 +679,8 @@ GIVEN
   f IS A FUNCTION FROM a TO BOOLEAN
   list IS A LIST OF a
 GIVETH A PAIR OF A LIST a, A LIST a
-partition f list MEANS
+partition f list @nlg %list% split into the items for which %f% holds and the rest
+  MEANS
   CONSIDER list
   WHEN EMPTY            THEN PAIR EMPTY EMPTY
   WHEN x FOLLOWED BY xs THEN
@@ -621,7 +696,8 @@ GIVEN
   x IS AN a
   list IS A LIST OF a
 GIVETH A LIST OF a
-deleteBy op x list MEANS go list
+deleteBy op x list @nlg %list% with the first item matching %x% by %op% removed
+  MEANS go list
   WHERE
     go l MEANS
       CONSIDER l
@@ -636,7 +712,8 @@ GIVEN
   op IS A FUNCTION FROM a AND a TO BOOLEAN
   list IS A LIST OF a
 GIVETH A LIST OF a
-nubBy op list MEANS go list
+nubBy op list @nlg %list% with duplicates (compared by %op%) removed
+  MEANS go list
   WHERE
     go l MEANS
       CONSIDER l
@@ -648,14 +725,16 @@ GIVEN
   x IS AN a
   list IS A LIST OF a
 GIVETH A LIST OF a
-delete x list MEANS
+delete x list @nlg %list% with the first occurrence of %x% removed
+  MEANS
   deleteBy (GIVEN y, z YIELD y EQUALS z) x list
 
 GIVEN
   a IS A TYPE
   list IS A LIST OF a
 GIVETH A LIST OF a
-nub list MEANS
+nub list @nlg %list% with duplicate items removed
+  MEANS
   nubBy (GIVEN x, y YIELD x EQUALS y) list
 
 -- polymorphic placeholder
@@ -663,6 +742,8 @@ GIVEN
   a IS A TYPE
 GIVETH AN a
 ASSUME TBD
+
+§§ `Comparison Operators`
 
 -- Comparison of nullable numbers
 GIVEN a IS A MAYBE NUMBER
@@ -704,6 +785,8 @@ GIVETH A BOOLEAN
         WHEN JUST x THEN CONSIDER b
             WHEN NOTHING THEN FALSE
             WHEN JUST y THEN (x GREATER THAN y)
+
+§§ `Dictionaries`
 
 -- a simple implementation of a Dictionary type
 GIVEN k IS A TYPE

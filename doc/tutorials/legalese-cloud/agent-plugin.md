@@ -2,10 +2,7 @@
 
 Bundle a deployment's rules into a Claude Code / VS Code Chat plugin so an agent can both **read the rules' "Intended use"** (a SKILL.md the model matches by description) and **call the rules as MCP tools**.
 
-**Audience:** Anyone who wants a deployed ruleset to be discoverable + callable from inside an AI coding agent
 **Prerequisites:** A deployment with a non-empty **Intended use** description ([Exporting Rules for Deployment](../deploying-rules/exporting-rules-for-deployment.md))
-**Time:** 1 minutes
-**Goal:** One-click install the deployment so the agent knows when to use it
 
 ---
 

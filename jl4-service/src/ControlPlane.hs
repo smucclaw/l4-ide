@@ -11,12 +11,16 @@ module ControlPlane (
   putDeploymentHandler,
   getUpdateStatusHandler,
   deleteDeploymentHandler,
+  -- Version helpers (exported for testing)
+  nextDeploymentVersion,
+  parseVersionCounts,
 ) where
 
 import qualified BundleStore
 import L4.FunctionSchema (Parameters (..))
 import Compatibility (FnIface, ifaceFromFunction, ifaceFromSummary, detectBreakingChanges)
 import Compiler (compileBundle, computeVersion)
+import qualified Version
 import DeploymentLoader (triggerCompilationIfPending)
 import Logging (logInfo, logWarn)
 import Options (Options (..))
@@ -39,6 +43,7 @@ import qualified Data.Map.Strict as Map
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text.Encoding
+import qualified Data.Text.Read as Text.Read
 import Data.Maybe (fromMaybe)
 import Data.Time (UTCTime, diffUTCTime, getCurrentTime)
 import Data.UUID.V4 (nextRandom)
@@ -176,6 +181,10 @@ postDeploymentHandler multipart = do
             { BundleStore.smVersion = version
             , BundleStore.smCreatedAt = Text.pack (show now)
             , BundleStore.smDescription = mDesc
+            -- Version strings are computed + stamped in by runDeployJob,
+            -- which can see the previously-deployed metadata.
+            , BundleStore.smServiceVersion = Nothing
+            , BundleStore.smDeploymentVersion = Nothing
             }
       jobId <- liftIO $ newJob env deployId
       _ <- liftIO $ async $
@@ -318,6 +327,8 @@ putDeploymentHandler deployIdText multipart = do
         { BundleStore.smVersion = version
         , BundleStore.smCreatedAt = Text.pack (show now)
         , BundleStore.smDescription = mDesc
+        , BundleStore.smServiceVersion = Nothing
+        , BundleStore.smDeploymentVersion = Nothing
         }
   jobId <- liftIO $ newJob env deployId
   _ <- liftIO $ async $
@@ -437,8 +448,44 @@ runDeployJob env deployId jobId sourceMap storedMeta mDesc mGate = do
           reject $ "Update rejected — it would break existing integrations: "
                      <> Text.intercalate "; " breaking
         [] -> do
-          let meta = meta0 { metaDescription = mDesc }
-          BundleStore.saveBundle env.bundleStore deployId.unDeploymentId sourceMap storedMeta
+          -- Compute the deployment version from the previously-deployed
+          -- metadata (read live from the registry — the old deployment keeps
+          -- serving until we swap below). RUNNING bumps on every applied
+          -- deploy; BREAKING bumps when this deploy's interface is breaking vs
+          -- the previous one (only reachable via the ungated POST/overwrite
+          -- path, since gated PUTs reject breaking changes above). First deploy
+          -- → {major}.0.0. Counters never reset and are restored from
+          -- StoredMetadata across restarts.
+          reg <- readTVarIO env.deploymentRegistry
+          let mPrevMeta = case Map.lookup deployId reg of
+                Just (DeploymentReady _ m)        -> Just m
+                Just (DeploymentPending (Just m)) -> Just m
+                _                                 -> Nothing
+              -- Bump the BREAKING/RUNNING components by string-editing the
+              -- previous deployment version (no separate counter fields are
+              -- stored). RUNNING +1 on every applied deploy; BREAKING +1 when
+              -- this deploy is breaking vs the previous interface (only
+              -- reachable via the ungated POST/overwrite path — gated PUTs
+              -- reject breaking changes above). First deploy → {major}.0.0.
+              isBreaking = case mPrevMeta of
+                Nothing -> False
+                Just pm -> not (null (detectBreakingChanges
+                  (map ifaceFromSummary pm.metaFunctions) newIfaces))
+              svcVersion = Version.serviceVersion
+              depVersion = nextDeploymentVersion
+                Version.serviceMajor
+                (fmap (.metaDeploymentVersion) mPrevMeta)
+                isBreaking
+              meta = meta0
+                { metaDescription = mDesc
+                , metaServiceVersion = svcVersion
+                , metaDeploymentVersion = depVersion
+                }
+              storedMeta' = storedMeta
+                { BundleStore.smServiceVersion = Just svcVersion
+                , BundleStore.smDeploymentVersion = Just depVersion
+                }
+          BundleStore.saveBundle env.bundleStore deployId.unDeploymentId sourceMap storedMeta'
           BundleStore.saveBundleCbor env.bundleStore deployId.unDeploymentId bundles
           BundleStore.saveMetadataCache env.bundleStore deployId.unDeploymentId (encodeMetadataCache meta)
             `catch` \(e :: SomeException) ->
@@ -457,6 +504,35 @@ runDeployJob env deployId jobId sourceMap storedMeta mDesc mGate = do
 -- ----------------------------------------------------------------------------
 -- Helpers
 -- ----------------------------------------------------------------------------
+
+-- | Parse the BREAKING and RUNNING components out of a
+-- @MAJOR.BREAKING.RUNNING@ deployment-version string. Returns @(0, 0)@ for an
+-- empty/malformed string (e.g. a first deploy, or metadata predating
+-- versioning), so the caller can bump from a clean baseline.
+parseVersionCounts :: Text -> (Int, Int)
+parseVersionCounts v = case Text.splitOn "." v of
+  (_ : b : r : _) -> (readInt b, readInt r)
+  _               -> (0, 0)
+ where
+  readInt t = case Text.Read.decimal t of
+    Right (n, _) -> n
+    Left _       -> 0
+
+-- | Compute the next @MAJOR.BREAKING.RUNNING@ deployment version by
+-- string-editing the previous one. The previous BREAKING/RUNNING counters are
+-- parsed out of @mPrev@ (the previously-deployed version string, 'Nothing' on
+-- the first deploy). RUNNING bumps on every applied deploy; BREAKING bumps when
+-- @isBreaking@. MAJOR always reflects the current service major, so a service
+-- major bump is picked up without resetting the counters. First deploy →
+-- @{major}.0.0@.
+nextDeploymentVersion :: Int -> Maybe Text -> Bool -> Text
+nextDeploymentVersion major mPrev isBreaking =
+  let (breaking, running) = case mPrev of
+        Nothing   -> (0, 0)
+        Just prev ->
+          let (b, r) = parseVersionCounts prev
+          in (b + (if isBreaking then 1 else 0), r + 1)
+  in Text.intercalate "." (map (Text.pack . show) [major, breaking, running])
 
 -- | Convert DeploymentState to a response.
 -- In non-debug mode, error details are hidden.

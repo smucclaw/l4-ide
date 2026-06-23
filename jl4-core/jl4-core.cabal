@@ -103,12 +103,15 @@ library
     L4.EvaluateLazy
     L4.EvaluateLazy.Machine
     L4.EvaluateLazy.ContractFrame
+    L4.EvaluateLazy.Exceptions
     L4.EvaluateLazy.GraphViz2
     L4.EvaluateLazy.GraphVizOptions
     L4.EvaluateLazy.Trace
     L4.StateGraph
     L4.ExactPrint
     L4.Export
+    L4.Export.Document
+    L4.Export.Render
     L4.FunctionSchema
     L4.FindDefinition
     L4.FindReferences

@@ -19,12 +19,14 @@
 - [OpenAI- and Anthropic-Compatible AI APIs](legalese-cloud/openai-compatible-api.md)
 - [MCP Server](legalese-cloud/mcp-server.md)
 - [Install as Agent Plugin](legalese-cloud/agent-plugin.md)
+- [Use Deployed Rules from an AI Agent (MCP)](legalese-cloud/agent-marketplace.md)
 - [WebMCP Embed Script](legalese-cloud/webmcp-embed.md)
 - [RESTful OpenAPI Specification](legalese-cloud/openapi-spec.md)
 
 ## Natural Language
 
 - [Using Infix, Postfix, and Mixfix Functions](natural-language-functions/natural-language-functions.md)
+- [Optimising for Natural Language Generation with @nlg](natural-language-functions/optimising-natural-language-generation.md)
 
 ## LLM Integration
 

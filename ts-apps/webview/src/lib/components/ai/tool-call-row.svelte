@@ -456,10 +456,11 @@
       <span class="dot pulsating" aria-hidden="true"></span>
       <span class="action">{label}</span>
       {#if view.target}
-        <span class="target plain">{view.target}</span>
-      {/if}
-      {#if readLineSuffix}
-        <span class="read-range">({readLineSuffix})</span>
+        <span class="target plain"
+          >{view.target}{#if readLineSuffix}<span class="read-range"
+              >({readLineSuffix})</span
+            >{/if}</span
+        >
       {/if}
     {:else}
       <!-- Leading chevron acts as the expand handle. Same glyph
@@ -509,14 +510,18 @@
               ? 'Click to open applied diff'
               : 'Click to open the file'}
             onclick={onTargetClick}
-            onkeydown={onTargetKeydown}>{view.target}</button
+            onkeydown={onTargetKeydown}
+            >{view.target}{#if readLineSuffix}<span class="read-range"
+                >({readLineSuffix})</span
+              >{/if}</button
           >
         {:else}
-          <span class="target plain">{view.target}</span>
+          <span class="target plain"
+            >{view.target}{#if readLineSuffix}<span class="read-range"
+                >({readLineSuffix})</span
+              >{/if}</span
+          >
         {/if}
-      {/if}
-      {#if readLineSuffix}
-        <span class="read-range">({readLineSuffix})</span>
       {/if}
     {/if}
   </div>
@@ -645,6 +650,9 @@
     font-family: var(--vscode-editor-font-family, monospace);
     font-size: 0.92em;
     text-decoration: none;
+    /* Slightly looser than the default to give the filename (and any
+       wrapped lines) a touch more breathing room — ~1px over normal. */
+    line-height: 14px;
   }
   .target-btn {
     background: transparent;
@@ -659,9 +667,15 @@
      filename stays the visual anchor and the range reads as
      metadata. */
   .read-range {
+    /* inline-block so the parent .target-btn's hover underline does not
+       propagate across the range (text-decoration doesn't cross into an
+       atomic inline box) — only the filename gets underlined on hover. */
+    display: inline-block;
+    margin-left: 4px;
     color: var(--vscode-descriptionForeground);
     font-family: var(--vscode-editor-font-family, monospace);
     font-size: 0.85em;
+    text-decoration: none;
   }
   .target-btn:hover {
     text-decoration: underline;
