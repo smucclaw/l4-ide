@@ -1635,6 +1635,13 @@ export function createAiChatStore(
       for (const k of Object.keys(pendingQuestionConvByCallId))
         delete pendingQuestionConvByCallId[k]
       void refreshHistory()
+      // The usage tracker is per-user too. Clear it on the auth flip so
+      // the previous account's token count doesn't linger under the new
+      // identity until the next usage poll (up to 30s away). The poll
+      // repopulates it with the new user's real figures.
+      usedToday = 0
+      dailyLimit = 0
+      blockOnOverage = false
     }
   }
 
