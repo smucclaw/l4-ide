@@ -199,7 +199,21 @@ function formatObject(
   const props = schema?.properties
   // No L4 type info on a multi-field object → fall back to JSON. L4
   // has no anonymous-record syntax, so inventing one would mislead.
-  if (!typeName || !props) return JSON.stringify(value, null, 2)
+  if (!typeName) return JSON.stringify(value, null, 2)
+
+  // Type name known but no field schema. This happens for recursive
+  // types (e.g. a `Person` whose `children` is a LIST OF `Person`):
+  // the server cuts the schema expansion at the recursion point to keep
+  // it finite, leaving only `x-l4-type`. Render the fields straight from
+  // the value's own keys, in insertion order — we can't recover declared
+  // order, sanitised→original key names, or per-field schemas here, but
+  // emitting `TypeName WITH …` still beats a raw JSON blob.
+  if (!props) {
+    const fields = Object.keys(value).map(
+      (k) => `${quoteIdent(k)} IS ${formatNode(value[k], undefined, depth + 1)}`
+    )
+    return emitRecord(typeName, fields, depth)
+  }
 
   // Field rendering follows the schema's declared order, then any
   // out-of-band keys append. Each child schema carries its
@@ -225,12 +239,21 @@ function formatObject(
       `${quoteIdent(originalKey)} IS ${formatNode(value[k], fieldSchema, depth + 1)}`
     )
   }
-  if (fields.length === 0) return quoteIdent(typeName)
+  return emitRecord(typeName, fields, depth)
+}
 
-  // Field lines: each `field IS …` sits at this record's depth+1
-  // indent. Multi-line field values (nested records / arrays) carry
-  // their own absolute depth-driven indents already, so we only
-  // prefix the bullet (first line) — subsequent lines stand alone.
+/**
+ * Assemble a record's `TypeName WITH` block from pre-rendered
+ * `field IS …` lines. An empty field list collapses to the bare type
+ * name (a nullary constructor / fieldless record).
+ *
+ * Field lines sit at this record's depth+1 indent. Multi-line field
+ * values (nested records / arrays) carry their own absolute
+ * depth-driven indents already, so we only prefix the bullet (first
+ * line) — subsequent lines stand alone.
+ */
+function emitRecord(typeName: string, fields: string[], depth: number): string {
+  if (fields.length === 0) return quoteIdent(typeName)
   const indent = '  '.repeat(depth + 1)
   return `${quoteIdent(typeName)} WITH\n${fields.map((f) => indent + f).join('\n')}`
 }

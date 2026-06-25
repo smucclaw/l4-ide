@@ -191,7 +191,11 @@ typeToParameter declares visited ty =
   declareToParameter :: Text -> Declare Resolved -> Parameter
   declareToParameter typeName (MkDeclare declAnn _ _ typeDecl)
     | typeName `Set.member` visited =
-        emptyParam "object"
+        -- Recursive type (e.g. a record whose field is a LIST OF itself):
+        -- we must stop expanding to keep the schema finite, but we still
+        -- carry the L4 type name so chat clients can render the value as
+        -- `TypeName WITH …` rather than raw JSON.
+        (emptyParam "object") { parameterL4Type = Just typeName }
     | otherwise =
         case typeDecl of
           RecordDecl _ _ fields ->
