@@ -1211,6 +1211,25 @@ resultTypeHeadUnique = \ case
   TyApp _ r _  -> Just (getUnique r)
   _            -> Nothing
 
+-- | Type-check a @CONSIDER@ and run the pattern-match analysis
+-- (missing branches, redundant branches) over its arms.
+--
+-- The analysis is skipped wholesale in two situations:
+--
+-- * the scrutinee has a primitive type (NUMBER, STRING, DATE) — such types
+--   have infinitely many literal values, so a constructor-based analysis is
+--   meaningless for them;
+--
+-- * any arm contains a literal ('PatLit') or expression ('PatExpr') pattern
+--   anywhere, including nested inside constructor patterns (@WHEN JUST 5@,
+--   @WHEN EXACTLY red@, @WHEN 0 FOLLOWED BY ys@). These desugar to ZERO
+--   guards, i.e. the guard model treats them as irrefutable match-alls, which
+--   is wrong in both directions: a genuinely refutable literal arm would make
+--   later arms look redundant (a blocking false positive on valid code), and
+--   a partial literal match would be certified exhaustive (a false negative
+--   that crashes at eval). Until the guard model learns opaque refutable
+--   guards (see the design doc's deferred items), such CONSIDERs carry no
+--   exhaustiveness or redundancy guarantee.
 checkConsider :: ExpectationContext -> Anno -> Expr Name -> [Branch Name] -> Type' Resolved -> Check (Expr Resolved)
 checkConsider ec ann e branches t = do
   (re, te) <- inferExpr e
@@ -1222,19 +1241,34 @@ checkConsider ec ann e branches t = do
   let redundant = redundantBranches $ annotateRefinement bs
       missing = nubBy ((==) `on` fmap getUnique) $ expandToPattern scrutVar $ normalizeRefinement $ uncoverRefinement bs
 
-  -- Skip pattern analysis warnings for primitive types (NUMBER, STRING, DATE)
-  -- because the analysis is designed for algebraic data types with known constructors.
-  -- Primitive types have infinitely many values (literals) that can't be enumerated.
   -- We need to apply the current substitution to resolve any inference variables.
   resolvedTe <- applySubst te
   let isPrimitiveScrutinee = isPrimitiveType resolvedTe
+      hasOpaquePatterns = any branchHasOpaquePattern rbranches
 
-  unless (null missing || isPrimitiveScrutinee) do
+  -- NOTE: 'hasOpaquePatterns' and 'isPrimitiveScrutinee' come first so that
+  -- the (lazy) analysis above is never forced when we bail out anyway.
+  unless (hasOpaquePatterns || isPrimitiveScrutinee || null missing) do
     addWarning $ PatternMatchesMissing missing
-  unless (null redundant || isPrimitiveScrutinee) do
+  unless (hasOpaquePatterns || isPrimitiveScrutinee || null redundant) do
     addWarning $ PatternMatchRedundant redundant
 
   pure (Consider ann re rbranches)
+
+-- | Does this branch contain a pattern the guard model cannot reason about?
+-- See the haddock on 'checkConsider'.
+branchHasOpaquePattern :: Branch Resolved -> Bool
+branchHasOpaquePattern (MkBranch _ lhs _) = case lhs of
+  When _ p     -> patternHasOpaque p
+  Otherwise {} -> False
+  where
+    patternHasOpaque :: Pattern Resolved -> Bool
+    patternHasOpaque = \ case
+      PatLit {}       -> True
+      PatExpr {}      -> True
+      PatVar {}       -> False
+      PatApp _ _ ps   -> any patternHasOpaque ps
+      PatCons _ p1 p2 -> patternHasOpaque p1 || patternHasOpaque p2
 
 inferExpr :: Expr Name -> Check (Expr Resolved, Type' Resolved)
 inferExpr g = softprune $ errorContext (WhileCheckingExpression g) do
