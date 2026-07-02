@@ -1781,10 +1781,21 @@ desugarBranches scrut nebs = do
   -- NOTE: if there's no scrutinee, we create a new variable that is then putas the scrutinee.
   -- So: WHEN Foo Bar THEN expr essentially becomes WHEN Foo bar THEN CONSIDER bar WHEN Bar THEN expr
 
+  -- NOTE: the 'VarEnv' recycles the fresh payload variables allocated for a
+  -- constructor occurrence, so that the SAME scrutinee position matched
+  -- against the same constructor in DIFFERENT branches shares variables —
+  -- 'uncoverRefinement' reasons across branches through that sharing. The
+  -- map must be keyed by (scrutinized variable, constructor), not by the
+  -- constructor alone: with constructor-only keying, a second occurrence of
+  -- the same constructor at a *sibling* position within one branch (e.g.
+  -- @WHEN W (JUST x) (JUST y)@) would reuse the first position's variables,
+  -- producing bogus cross-position equalities (false redundancy warnings)
+  -- and even self-referential constraints (@v = JUST v@) that send
+  -- 'expandToPattern' into an infinite loop.
   desugarPat :: Resolved -> Pattern Resolved -> StateT VarEnv Check [Guard Info Resolved]
   desugarPat scrut' = \ case
     PatApp ((.extra.resolvedInfo) -> Just info) c ps ->
-      Map.lookup (getUnique c) <$> get >>= \ case
+      Map.lookup (getUnique scrut', getUnique c) <$> get >>= \ case
         Just existingVars -> do
           pats <- getAp $ flip foldMap (zip existingVars ps) \(var, p) -> Ap do
             desugarPat var p
@@ -1797,12 +1808,12 @@ desugarBranches scrut nebs = do
             guards <- desugarPat n p
             pure ([n], guards)
 
-          modify' (Map.insert (getUnique c) vs)
+          modify' (Map.insert (getUnique scrut', getUnique c) vs)
           pure (MkGuard info scrut' c vs : pats)
 
     -- NOTE: this second case is very similar to the one for PatApp, because Cons in general is basically a PatApp
     PatCons ((.extra.resolvedInfo) -> Just info) ph pt ->
-      Map.lookup consUnique <$> get >>= \ case
+      Map.lookup (getUnique scrut', consUnique) <$> get >>= \ case
         Just [nh, nt] -> do
           ph' <- desugarPat nh ph
           pt' <- desugarPat nt pt
@@ -1813,7 +1824,7 @@ desugarBranches scrut nebs = do
           nt <- lift newPatName
           ph' <- desugarPat nh ph
           pt' <- desugarPat nt pt
-          modify' (Map.insert consUnique [nh, nt])
+          modify' (Map.insert (getUnique scrut', consUnique) [nh, nt])
           pure (MkGuard info scrut' consRef [nh, nt] : ph' <> pt')
 
     PatVar _ _ -> pure []
@@ -1821,7 +1832,9 @@ desugarBranches scrut nebs = do
     PatLit _ _ -> pure []
     _ -> error "fatal internal error: expected type information but didn't get any"
 
-type VarEnv = Map Unique [Resolved]
+-- | Recycled payload variables, keyed by (scrutinized variable, constructor).
+-- See the NOTE on 'desugarPat' for why both components are required.
+type VarEnv = Map (Unique, Unique) [Resolved]
 
 -- | replace 'Info' with the names of the constructors that the type has
 concretizeInfo :: Map Unique [n] ->  PatTree n -> PatTree' [n] n
@@ -1954,7 +1967,7 @@ data ConsistentSet n
 expandToPattern :: Resolved -> Nabla Resolved -> [BranchLhs Resolved]
 expandToPattern scrut = \ case
   Bottom -> []
-  n@Consistent {} -> map patternToBranch (go scrut n)
+  n@Consistent {} -> map patternToBranch (go Set.empty scrut n)
  where
   patternToBranch pat
     | PatVar _ var <- pat, var `sameResolved` underscoreRef
@@ -1971,12 +1984,22 @@ expandToPattern scrut = \ case
 
   delByUnq = deleteBy sameResolved
 
-  go :: Resolved -> Nabla Resolved -> [Pattern Resolved]
-  go scrutVar nabla = go' cnstrs
+  -- INVARIANT: a variable can never legitimately occur in its own payload —
+  -- 'desugarPat' allocates fresh payload variables per (scrutinee, ctor)
+  -- position. The @seen@ set is an occurs-check backstop: should a future
+  -- constraint-generation bug ever produce a self-referential 'IsEq' again
+  -- (as the constructor-only 'VarEnv' keying once did), the expansion
+  -- degrades that position to @_@ instead of diverging (which would hang
+  -- the type-checker, and with it the IDE, on every keystroke).
+  go :: Set Unique -> Resolved -> Nabla Resolved -> [Pattern Resolved]
+  go seen scrutVar nabla
+    | getUnique scrutVar `Set.member` seen = [PatVar emptyAnno underscoreRef]
+    | otherwise = go' cnstrs
    where
+    seen' = Set.insert (getUnique scrutVar) seen
     cnstrs = toConsistentSet $ lookupConstraints scrutVar nabla
     go' = \ case
-      EqCon c ns more -> map (PatApp emptyAnno c) (traverse (`go` nabla) ns) <> go' more
+      EqCon c ns more -> map (PatApp emptyAnno c) (traverse (\n' -> go seen' n' nabla) ns) <> go' more
       -- TODO: add underscores here, instead of []
       NotEqCons _ns ncs -> map (\n' -> PatApp emptyAnno n' [] ) ncs
       NoInfo -> [PatVar emptyAnno underscoreRef]

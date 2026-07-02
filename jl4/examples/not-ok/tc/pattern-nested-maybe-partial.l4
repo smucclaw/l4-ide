@@ -1,0 +1,14 @@
+-- Regression test: a genuinely partial match on a MAYBE nested inside a
+-- record constructor must be flagged non-exhaustive at type-check time
+-- (WHEN V NOTHING is not covered) — and, crucially, the missing-branch
+-- expansion must TERMINATE. Nested-pattern shapes like this used to hang
+-- the type-checker via self-referential constraints (see the VarEnv note on
+-- `desugarPat`); this fixture doubles as the termination regression.
+DECLARE V
+  HAS a IS A MAYBE OF NUMBER
+
+GIVEN v IS A V
+GIVETH A NUMBER
+f v MEANS
+  CONSIDER v
+  WHEN V (JUST p) THEN p
