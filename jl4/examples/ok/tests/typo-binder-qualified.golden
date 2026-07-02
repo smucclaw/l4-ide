@@ -1,0 +1,18 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+typo-binder-qualified.l4:12:8-17:
+  I found a problem while checking the definition of `f`:
+    This CONSIDER branch binds a new variable
+    
+      `foo.green`
+    
+    which matches every remaining case. But its name is very close to
+    
+      `green`
+    
+    a constructor of the type being matched that no other branch covers.
+    If you meant the constructor, fix the spelling; if you meant a
+    catch-all, consider OTHERWISE or a name unlike any constructor.
+typo-binder-qualified.l4:14:1-12:
+  1

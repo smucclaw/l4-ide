@@ -1,0 +1,14 @@
+-- Typo-binder hint: a dotted pattern name that resolves to no constructor
+-- also silently binds; the hint compares the LAST segment (`green`) against
+-- the uncovered constructors, so qualification does not defeat it.
+DECLARE Color IS ONE OF red, green, blue
+
+GIVEN c IS A Color
+GIVETH A NUMBER
+f c MEANS
+  CONSIDER c
+  WHEN red THEN 1
+  WHEN blue THEN 3
+  WHEN foo.green THEN 2
+
+#EVAL f red

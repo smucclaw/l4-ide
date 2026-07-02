@@ -99,9 +99,11 @@ checkErrorToDiagnostic err = SimpleDiagnostic
   where
     severity (MkCheckErrorWithContext e _) =
       case e of
-        CheckInfo {}    -> SInfo
-        CheckWarning {} -> SWarn
-        _               -> SError
+        CheckInfo {}                -> SInfo
+        CheckWarning {}             -> SWarn
+        -- a hint, never blocking; keep in sync with L4.TypeCheck.severity
+        SuspiciousBinderPattern {}  -> SInfo
+        _                           -> SError
 
 -- | Convert a parse error to a platform-agnostic diagnostic.
 -- Note: Parse errors have a SrcSpan (no URI) rather than a full SrcRange.

@@ -98,6 +98,13 @@ data CheckError =
     -- ^ An @export-decorated DECIDE has a function-typed input (GIVEN or
     -- referenced ASSUME). Arguments: exported-function name, offending
     -- parameter/assume name.
+  | SuspiciousBinderPattern Resolved Resolved
+    -- ^ A CONSIDER branch pattern is a fresh binder (matching everything)
+    -- whose name closely resembles a constructor of the scrutinee's type
+    -- that no other branch covers — very likely a misspelled constructor.
+    -- Severity 'SInfo': a hint, never blocking (legitimate catch-all names
+    -- can trip the distance check). Arguments: the binder, the resembled
+    -- constructor.
   deriving stock (Eq, Generic, Show)
   deriving anyclass NFData
 
@@ -198,6 +205,7 @@ instance HasSrcRange CheckError where
   rangeOf (InconsistentNameInSignature n _) = rangeOf n
   rangeOf (InconsistentNameInAppForm n _)   = rangeOf n
   rangeOf (CheckInfo _ mr)                  = mr
+  rangeOf (SuspiciousBinderPattern b _)     = rangeOf b
   rangeOf _                                 = Nothing
 
 -- | A token in a mixfix pattern, representing either a keyword (part of the function name)

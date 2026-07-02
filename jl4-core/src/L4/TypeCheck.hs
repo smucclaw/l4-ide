@@ -1299,7 +1299,101 @@ checkConsider ec ann e branches t = do
   unless (hasOpaquePatterns || isPrimitiveScrutinee || null redundant) do
     addWarning $ PatternMatchRedundant redundant
 
+  hintSuspiciousBinders cl resolvedTe rbranches
+
   pure (Consider ann re rbranches)
+
+-- | Emit an 'SInfo'-severity hint for each top-level CONSIDER arm whose
+-- pattern is a fresh binder (matching everything) with a name suspiciously
+-- close to a constructor of the scrutinee's type that no other arm covers —
+-- the tell-tale shape of a misspelled constructor, which the resolver
+-- silently turns into a catch-all binder ('inferPattern''s @orElse@
+-- fallback). Trailing typo binders are otherwise invisible: the match is
+-- exhaustive (so no missing warning) and nothing follows it (so no
+-- redundancy warning), yet the program's meaning has changed.
+--
+-- \"Suspiciously close\" means case-insensitively equal (any length; an
+-- exact-case match would have resolved as the constructor), or exactly one
+-- Damerau-Levenshtein edit apart with both names at least 4 characters
+-- (guards against short-name coincidences). The residual false positive —
+-- a legitimate catch-all like @rest@ over a type with a constructor
+-- @rent@ — is accepted because the hint never blocks: it renders at
+-- 'SInfo' severity in both severity functions.
+hintSuspiciousBinders :: Map Unique [Resolved] -> Type' Resolved -> [Branch Resolved] -> Check ()
+hintSuspiciousBinders cl scrutTy rbranches =
+  for_ rbranches \ case
+    MkBranch _ (When _ (PatVar _ binder)) _ ->
+      case find (suspiciouslyClose (lastNameSegment (getName binder))) uncovered of
+        Just ctor -> addError (SuspiciousBinderPattern binder ctor)
+        Nothing   -> pure ()
+    _ -> pure ()
+  where
+    scrutCtors = case scrutTy of
+      TyApp _ r _ -> Map.findWithDefault [] (getUnique r) cl
+      _           -> []
+
+    coveredCtorUniques = Set.fromList
+      [ u
+      | MkBranch _ (When _ p) _ <- rbranches
+      , u <- case p of
+          PatApp _ c _ -> [getUnique c]
+          PatCons {}   -> [consUnique]
+          _            -> []
+      ]
+
+    uncovered =
+      filter (\c -> getUnique c `Set.notMember` coveredCtorUniques) scrutCtors
+
+    suspiciouslyClose binderName ctor =
+      let ctorName = lastNameSegment (getName ctor)
+          lb = Text.toLower binderName
+          lc = Text.toLower ctorName
+      in lb == lc
+         || ( min (Text.length binderName) (Text.length ctorName) >= 4
+              && exactlyOneEditApart lb lc )
+
+-- | The last segment of a name — for a qualified name (@foo.green@), the
+-- part after the final dot, so a qualified typo still resembles the bare
+-- constructor.
+lastNameSegment :: Name -> Text
+lastNameSegment n = case rawName n of
+  NormalName t      -> t
+  QualifiedName _ t -> t
+  PreDef t          -> t
+
+-- | Is @b@ exactly ONE Damerau-Levenshtein edit (insertion, deletion,
+-- substitution, or adjacent transposition) away from @a@? Equal strings are
+-- zero edits apart, i.e. 'False'. Direct comparison instead of a full
+-- distance matrix: we only ever need the @== 1@ predicate.
+exactlyOneEditApart :: Text -> Text -> Bool
+exactlyOneEditApart a b = case compare la lb of
+  EQ -> oneSubstitution || oneAdjacentTransposition
+  LT -> lb - la == 1 && oneInsertion a b
+  GT -> la - lb == 1 && oneInsertion b a
+  where
+    la = Text.length a
+    lb = Text.length b
+
+    mismatches = [ i | (i, (x, y)) <- zip [0 :: Int ..] (Text.zip a b), x /= y ]
+
+    oneSubstitution = length mismatches == 1
+
+    oneAdjacentTransposition = case mismatches of
+      [i, j] -> j == i + 1
+             && Text.index a i == Text.index b j
+             && Text.index a j == Text.index b i
+      _      -> False
+
+    -- @longer@ is @shorter@ with exactly one extra character somewhere
+    oneInsertion shorter longer = go (Text.unpack shorter) (Text.unpack longer) False
+      where
+        go [] []             skipped = skipped
+        go [] [_]            _       = True
+        go (x : xs) (y : ys) skipped
+          | x == y    = go xs ys skipped
+          | skipped   = False
+          | otherwise = go (x : xs) ys True
+        go _ _ _ = False
 
 -- | Does this branch contain a pattern the guard model cannot reason about?
 -- See the haddock on 'checkConsider'.
@@ -3243,9 +3337,11 @@ surroundWithCsn before after a =
 severity :: CheckErrorWithContext -> Severity
 severity (MkCheckErrorWithContext e _) =
   case e of
-    CheckInfo {}    -> SInfo
-    CheckWarning {} -> SWarn
-    _               -> SError
+    CheckInfo {}                -> SInfo
+    CheckWarning {}             -> SWarn
+    -- a hint, never blocking; keep in sync with L4.Diagnostic's copy
+    SuspiciousBinderPattern {}  -> SInfo
+    _                           -> SError
 
 prettyCheckErrorWithContext :: CheckErrorWithContext -> [Text]
 prettyCheckErrorWithContext (MkCheckErrorWithContext e ctx) =
@@ -3267,6 +3363,19 @@ prettyCheckErrorContext (WhileCheckingPattern _p ctx)    e = prettyCheckErrorCon
 prettyCheckErrorContext (WhileCheckingType _t ctx)       e = prettyCheckErrorContext ctx e
 
 prettyCheckError :: CheckError -> [Text]
+prettyCheckError (SuspiciousBinderPattern binder ctor)     =
+  [ "This CONSIDER branch binds a new variable"
+  , ""
+  , "  " <> quotedName (getName binder)
+  , ""
+  , "which matches every remaining case. But its name is very close to"
+  , ""
+  , "  " <> quotedName (getName ctor)
+  , ""
+  , "a constructor of the type being matched that no other branch covers."
+  , "If you meant the constructor, fix the spelling; if you meant a"
+  , "catch-all, consider OTHERWISE or a name unlike any constructor."
+  ]
 prettyCheckError (OutOfScopeError n t)                     =
   [ "I could not find a definition for the identifier"
   , ""
