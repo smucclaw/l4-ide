@@ -1,0 +1,13 @@
+-- Rendering test: a missing constructor nested inside another constructor
+-- pattern must be parenthesized to stay pasteable: `WHEN wa (JUST `_`) THEN`,
+-- not the ill-formed `WHEN wa JUST `_` THEN` the generic printer produces.
+DECLARE W IS ONE OF
+  wa HAS m IS A MAYBE NUMBER
+  wb
+
+GIVEN w IS A W
+GIVETH A NUMBER
+f w MEANS
+  CONSIDER w
+  WHEN wa NOTHING THEN 0
+  WHEN wb THEN 1

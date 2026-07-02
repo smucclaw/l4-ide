@@ -1,0 +1,13 @@
+-- Rendering test: a missing constructor WITH arguments must be suggested in
+-- pasteable form, padded with one underscore wildcard per argument — here
+-- `WHEN square `_` THEN`, not the bare (ill-typed) `WHEN square THEN` the
+-- old renderer produced.
+DECLARE Shape IS ONE OF
+  circle HAS r IS A NUMBER
+  square HAS s IS A NUMBER
+
+GIVEN sh IS A Shape
+GIVETH A NUMBER
+area sh MEANS
+  CONSIDER sh
+  WHEN circle r THEN r * r * 3

@@ -1211,6 +1211,21 @@ resultTypeHeadUnique = \ case
   TyApp _ r _  -> Just (getUnique r)
   _            -> Nothing
 
+-- | The number of argument (selector) positions of a constructor, per its
+-- 'entityInfo' entry. Used to pad synthesized missing-branch suggestions
+-- with one underscore wildcard per argument, so the rendered branch is
+-- valid, pasteable L4 (a bare non-nullary constructor would be a type
+-- error). Yields 0 for anything that is not a known constructor.
+constructorArity :: EntityInfo -> Resolved -> Int
+constructorArity ei r = case Map.lookup (getUnique r) ei of
+  Just (_, KnownTerm ty Constructor) -> countArgs ty
+  _ -> 0
+  where
+    countArgs = \ case
+      Forall _ _ t -> countArgs t
+      Fun _ args t -> length args + countArgs t
+      _            -> 0
+
 -- | Type-check a @CONSIDER@ and run the pattern-match analysis
 -- (missing branches, redundant branches) over its arms.
 --
@@ -1234,12 +1249,13 @@ checkConsider :: ExpectationContext -> Anno -> Expr Name -> [Branch Name] -> Typ
 checkConsider ec ann e branches t = do
   (re, te) <- inferExpr e
   rbranches <- traverse (checkBranch ec re te t) branches
-  cl <- asks (constructorsInScopeFromEntityInfo . (.entityInfo))
+  ei <- asks (.entityInfo)
+  let cl = constructorsInScopeFromEntityInfo ei
   (scrutVar, pt) <- desugarBranches re rbranches
   let bs = concretizeInfo cl pt
 
   let redundant = redundantBranches $ annotateRefinement bs
-      missing = nubBy ((==) `on` fmap getUnique) $ expandToPattern scrutVar $ normalizeRefinement $ uncoverRefinement bs
+      missing = nubBy ((==) `on` fmap getUnique) $ expandToPattern (constructorArity ei) scrutVar $ normalizeRefinement $ uncoverRefinement bs
 
   -- We need to apply the current substitution to resolve any inference variables.
   resolvedTe <- applySubst te
@@ -2001,8 +2017,8 @@ data ConsistentSet n
   | NotEqCons [n] [n]
   | NoInfo
 
-expandToPattern :: Resolved -> Nabla Resolved -> [BranchLhs Resolved]
-expandToPattern scrut = \ case
+expandToPattern :: (Resolved -> Int) -> Resolved -> Nabla Resolved -> [BranchLhs Resolved]
+expandToPattern ctorArity scrut = \ case
   Bottom -> []
   n@Consistent {} -> map patternToBranch (go Set.empty scrut n)
  where
@@ -2037,8 +2053,10 @@ expandToPattern scrut = \ case
     cnstrs = toConsistentSet $ lookupConstraints scrutVar nabla
     go' = \ case
       EqCon c ns more -> map (PatApp emptyAnno c) (traverse (\n' -> go seen' n' nabla) ns) <> go' more
-      -- TODO: add underscores here, instead of []
-      NotEqCons _ns ncs -> map (\n' -> PatApp emptyAnno n' [] ) ncs
+      -- pad each suggested constructor with one underscore wildcard per
+      -- argument position, so the rendered missing branch is valid L4 the
+      -- user can paste (a bare non-nullary constructor would not be)
+      NotEqCons _ns ncs -> map (\n' -> PatApp emptyAnno n' (replicate (ctorArity n') (PatVar emptyAnno underscoreRef))) ncs
       NoInfo -> [PatVar emptyAnno underscoreRef]
 
 sameResolved :: Resolved -> Resolved -> Bool
@@ -3417,8 +3435,31 @@ prettyCheckWarning = \ case
     [ "The following branches still need to be considered:"
     , "" ]
     <>
-    map (("  " <>) . prettyLayout) b
+    map (("  " <>) . prettyMissingBranchLhs) b
     <> [ "" ]
+
+-- | Render a synthesized missing branch as valid, pasteable L4. The generic
+-- layout printer is not suitable here: it does not parenthesize nested
+-- non-nullary constructor patterns (@wa JUST `_`@ instead of
+-- @wa (JUST `_`)@), and it prints cons patterns by the internal constructor
+-- name instead of the FOLLOWED BY surface syntax.
+prettyMissingBranchLhs :: BranchLhs Resolved -> Text
+prettyMissingBranchLhs = \ case
+  When _ p    -> "WHEN " <> go False p <> " THEN"
+  o@Otherwise {} -> prettyLayout o
+  where
+    go :: Bool -> Pattern Resolved -> Text
+    go _ p@PatVar {} = prettyLayout p
+    go _ p@(PatApp _ _ []) = prettyLayout p
+    go nested (PatApp a c ps) =
+      parensIf nested (prettyLayout (PatApp a c []) <> " " <> Text.unwords (map (go True) ps))
+    go nested (PatCons _ ph pt) =
+      parensIf nested (go True ph <> " FOLLOWED BY " <> go True pt)
+    -- literal and expression patterns are never synthesized as missing
+    -- branches; fall back to the generic printer just in case
+    go _ p = prettyLayout p
+
+    parensIf b txt = if b then "(" <> txt <> ")" else txt
 
 
 -- | Forms a plural when needed.
