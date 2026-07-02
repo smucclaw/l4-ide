@@ -380,7 +380,7 @@ maximum list @nlg the largest value in %list%
   MEANS
   CONSIDER list
   WHEN EMPTY THEN NOTHING
-  WHEN x FOLLOWED BY xs THEN minimum1 x xs
+  WHEN x FOLLOWED BY xs THEN maximum1 x xs
 
 GIVEN
   x    IS A MAYBE NUMBER
@@ -390,7 +390,7 @@ maximum1 x list @nlg the largest of %x% and the values in %list%
   MEANS
   CONSIDER list
   WHEN EMPTY THEN x
-  WHEN y FOLLOWED BY ys THEN maximum1 (min x y) ys
+  WHEN y FOLLOWED BY ys THEN maximum1 (max x y) ys
 
 GIVEN
   x IS A MAYBE NUMBER

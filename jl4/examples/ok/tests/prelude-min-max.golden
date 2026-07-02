@@ -1,0 +1,11 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+prelude-min-max.l4:7:1-29:
+  3
+prelude-min-max.l4:8:1-29:
+  1
+prelude-min-max.l4:9:1-50:
+  JUST OF 3
+prelude-min-max.l4:10:1-50:
+  JUST OF 1
