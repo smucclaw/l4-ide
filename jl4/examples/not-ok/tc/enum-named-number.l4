@@ -1,0 +1,13 @@
+-- Regression test: a USER-declared enum that happens to be called NUMBER is
+-- an ordinary sum type and must be exhaustiveness-checked. The analysis
+-- skip for primitive scrutinees used to compare type NAMES, so this match —
+-- whose scrutinee type is reached purely via constructor inference; the
+-- name NUMBER is never even written in an annotation — silently escaped
+-- checking. The skip now compares builtin Uniques, so the missing `two`
+-- branch must be flagged.
+DECLARE NUMBER IS ONE OF one, two
+
+GIVETH A STRING
+f MEANS
+  CONSIDER one
+  WHEN one THEN "one"

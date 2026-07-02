@@ -1627,13 +1627,16 @@ isPrimitiveType :: Type' Resolved -> Bool
 isPrimitiveType ty = case ty of
   InfVar{} -> False  -- Unknown type, don't skip analysis
   TyApp _ tyRef [] ->
-    let t = nameToText (getName tyRef)
-    -- NUMBER and STRING have infinitely many literal values
-    -- DATE also has many values that can't be enumerated.
+    -- NUMBER and STRING have infinitely many literal values; DATE likewise.
+    -- Compare by Unique, not by name text: a USER-declared enum that merely
+    -- happens to be called NUMBER/STRING/DATE is a perfectly ordinary sum
+    -- type and must still be analysed (under the old name-based check, a
+    -- partial match over such an enum silently skipped exhaustiveness
+    -- checking whenever the type was reached via inference).
     -- BOOLEAN is deliberately NOT skipped: its TRUE/FALSE constructors are
     -- enumerable from 'entityInfo' (see 'constructorsInScopeFromEntityInfo'), so
     -- exhaustiveness analysis works correctly for it and catches a missing branch.
-    in t `elem` ["NUMBER", "STRING", "DATE"]
+    getUnique tyRef `elem` [numberUnique, stringUnique, dateUnique]
   _ -> False
 
 inferEvent :: Event Name -> Check (Event Resolved, Type' Resolved)
