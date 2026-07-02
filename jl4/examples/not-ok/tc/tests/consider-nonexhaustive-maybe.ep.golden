@@ -1,0 +1,10 @@
+-- Regression test: exhaustiveness checking over the builtin MAYBE type.
+-- NOTHING/JUST live in `entityInfo` as `KnownTerm _ Constructor` (a complete
+-- set), so — like BOOLEAN and unlike LIST, whose `cons` is not a plain
+-- constructor — MAYBE is exhaustiveness-checked. This match omits NOTHING and
+-- must be flagged at type-check time rather than crashing at eval.
+GIVEN m IS A MAYBE NUMBER
+GIVETH A NUMBER
+`unwrap` MEANS
+  CONSIDER m
+    WHEN JUST x THEN x

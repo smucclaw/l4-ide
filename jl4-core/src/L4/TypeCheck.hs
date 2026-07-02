@@ -259,6 +259,13 @@ withDeclares rdecls =
     go (MkDeclChecked (Left  a) cis) = Left  . (, MkDeclChecked a cis) <$> rangeOf a
     go (MkDeclChecked (Right a) cis) = Right . (, MkDeclChecked a cis) <$> rangeOf a
   in
+    -- These are frame-local, by-'SrcRange' lookup maps: they are read only by
+    -- 'lookupDeclareCheckedByAnno'/'lookupAssumeCheckedByAnno' to find the
+    -- declaration being checked right now, which always lives in the current
+    -- frame, so replacing (not accumulating) on scope entry is correct.
+    -- Exhaustiveness checking's "every constructor in scope" query does NOT read
+    -- these — it reads 'entityInfo' (see 'constructorsInScopeFromEntityInfo'),
+    -- which is cumulative across scopes and imports and includes builtins.
     extendKnownMany topDeclares . local \s -> s
       { declareDeclarations = Map.fromList rdeclares
       , assumeDeclarations = Map.fromList rassumes
@@ -1136,22 +1143,81 @@ checkAction MkAction {anno, modal, action, provided = mprovided} actionT = do
       checkExpr ExpectRegulativeProvidedContext provided boolean
   pure (MkAction {anno, modal, action = pat, provided}, bounds)
 
-buildConstructorLookup :: [DeclChecked (Declare Resolved)] -> Map Unique [Resolved]
-buildConstructorLookup = foldMap \decl ->
-  let MkDeclare _ _ (MkAppForm _ tr _ _) td = decl.payload
-   in Map.singleton (getUnique tr) case td of
-    RecordDecl _ mc _ -> [fromMaybe tr mc] -- if the constructor name is 'Nothing', that means it's identical to the type name
-    EnumDecl _ cds -> map (\(MkConDecl _ n _) -> n) cds
-    SynonymDecl _ _ -> [] -- TODO: how to look up synonyms?
+-- | Build the exhaustiveness oracle: a map from a type's 'Unique' to the list
+-- of its data constructors.
+--
+-- This is sourced from 'entityInfo' rather than the frame-local
+-- 'declareDeclarations' map, because 'entityInfo' is the cumulative,
+-- cross-module-unioned, builtin-inclusive table of everything in scope. Sourcing
+-- the oracle from here is what lets 'checkConsider' see the constructors of:
+--
+--   * enums imported from another module ('declareDeclarations' is reset to
+--     'Map.empty' at the import boundary, but 'entityInfo' is unioned there);
+--   * enums @DECLARE@d in an enclosing @WHERE@/@LET@ block ('declareDeclarations'
+--     is replaced per scope, but 'entityInfo' is only ever extended); and
+--   * builtin sum types such as @BOOLEAN@ (whose @TRUE@/@FALSE@ live in
+--     'entityInfo' as @'KnownTerm' _ 'Constructor'@ and were never in
+--     'declareDeclarations' at all).
+--
+-- Each constructor is reconstructed as its definition 'Resolved' (@'Def' u name@)
+-- straight from the 'entityInfo' entry — same 'Unique', same 'Name' the checker
+-- assigned — so the output has exactly the same shape and keying
+-- (type-head 'Unique' -> ['Resolved']) that the previous declares-based lookup
+-- produced, leaving 'concretizeInfo' and its analysis unchanged.
+--
+-- @'Map.fromListWith' ('flip' ('<>'))@ over the 'Unique'-ordered entity map keeps
+-- each type's constructors in ascending-'Unique' (i.e. declaration) order, so the
+-- rendered missing/redundant sets are deterministic.
+constructorsInScopeFromEntityInfo :: EntityInfo -> Map Unique [Resolved]
+constructorsInScopeFromEntityInfo ei =
+  Map.withoutKeys
+    ( Map.fromListWith (flip (<>))
+        [ (tyUnique, [Def ctorUnq ctorNm])
+        | (ctorUnq, (ctorNm, KnownTerm ctorTy Constructor)) <- Map.toList ei
+        , Just tyUnique <- [resultTypeHeadUnique ctorTy]
+        ]
+    )
+    builtinNonExhaustiveTypeUniques
+
+-- | Builtin sum types over which we deliberately do NOT perform exhaustiveness
+-- checking. There are two distinct reasons a type is here, and they matter for
+-- whoever lifts an exclusion next:
+--
+--   * INCOMPLETE scanned set — the type has data constructors that are not tagged
+--     @'KnownTerm' _ 'Constructor'@ in 'entityInfo', so a scan cannot see them and
+--     checking against the partial set would MIS-REPORT (both false positives and
+--     false negatives). These cannot be lifted without first making the set
+--     complete: @LIST@ (its @cons@ is tagged 'Computable', so the scan yields only
+--     @EMPTY@) and the regulative types @CONTRACT@/@EVENT@ (their deontic operators
+--     are not all plain constructors and are matched partially by the core).
+--
+-- @MAYBE@ and @EITHER@ have COMPLETE, all-'Constructor' sets
+-- (@nothing@/@just@, @left@/@right@) and ARE checked. @BOOLEAN@ likewise
+-- (@TRUE@/@FALSE@): its set is complete and a missing branch is almost always a
+-- real bug. See specs/todo/consider-exhaustiveness-builtin-containers.md for the
+-- plan to also cover @LIST@ (re-tag @cons@) and the regulative types.
+builtinNonExhaustiveTypeUniques :: Set Unique
+builtinNonExhaustiveTypeUniques =
+  Set.fromList [listUnique, contractUnique, eventUnique]
+
+-- | The 'Unique' of the head of a constructor's result type: strip any leading
+-- 'Forall' (type parameters) and 'Fun' (constructor arguments), then take the
+-- head of the resulting type application. 'Nothing' for a type with no
+-- constructor-bearing head (should not occur for a well-formed constructor).
+resultTypeHeadUnique :: Type' Resolved -> Maybe Unique
+resultTypeHeadUnique = \ case
+  Forall _ _ t -> resultTypeHeadUnique t
+  Fun _ _ t    -> resultTypeHeadUnique t
+  TyApp _ r _  -> Just (getUnique r)
+  _            -> Nothing
 
 checkConsider :: ExpectationContext -> Anno -> Expr Name -> [Branch Name] -> Type' Resolved -> Check (Expr Resolved)
 checkConsider ec ann e branches t = do
   (re, te) <- inferExpr e
   rbranches <- traverse (checkBranch ec re te t) branches
-  resolvedDecls <- asks (Map.elems . (.declareDeclarations))
+  cl <- asks (constructorsInScopeFromEntityInfo . (.entityInfo))
   (scrutVar, pt) <- desugarBranches re rbranches
-  let cl = buildConstructorLookup resolvedDecls
-      bs = concretizeInfo cl pt
+  let bs = concretizeInfo cl pt
 
   let redundant = redundantBranches $ annotateRefinement bs
       missing = nubBy ((==) `on` fmap getUnique) $ expandToPattern scrutVar $ normalizeRefinement $ uncoverRefinement bs
@@ -1529,8 +1595,10 @@ isPrimitiveType ty = case ty of
   TyApp _ tyRef [] ->
     let t = nameToText (getName tyRef)
     -- NUMBER and STRING have infinitely many literal values
-    -- DATE also has many values that can't be enumerated
-    -- BOOLEAN has only TRUE/FALSE so analysis works correctly for it
+    -- DATE also has many values that can't be enumerated.
+    -- BOOLEAN is deliberately NOT skipped: its TRUE/FALSE constructors are
+    -- enumerable from 'entityInfo' (see 'constructorsInScopeFromEntityInfo'), so
+    -- exhaustiveness analysis works correctly for it and catches a missing branch.
     in t `elem` ["NUMBER", "STRING", "DATE"]
   _ -> False
 
