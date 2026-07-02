@@ -363,6 +363,11 @@ data CheckEnv =
     -- ^ Map from record type RawName to set of computed field RawNames.
     -- Used to produce better error messages when a user tries to supply
     -- a computed field in a record constructor.
+    , inPartialDecide      :: !Bool
+    -- ^ Are we checking the body of a definition its author decorated
+    -- @\@partial@ (deliberately not defined for all inputs)? If so, the
+    -- non-exhaustive-CONSIDER warning is suppressed; redundancy warnings
+    -- stay active. Set via 'local' in @inferDecide@.
     , errorContext         :: !CheckErrorContext
     , sectionStack         :: ![NonEmpty Text]
     }
@@ -409,6 +414,7 @@ unionImportedCheckEnv accEnv depEnvironment depEntityInfo depMixfixRegistry =
     , assumeDeclarations = Map.empty
     , mixfixRegistry = unionMixfixRegistry accEnv.mixfixRegistry depMixfixRegistry
     , computedFields = Map.empty
+    , inPartialDecide = False
     , errorContext = None
     , sectionStack = []
     }
@@ -952,6 +958,7 @@ extendEnv cis env =
     , assumeDeclarations = e.assumeDeclarations
     , mixfixRegistry = e.mixfixRegistry
     , computedFields = e.computedFields
+    , inPartialDecide = e.inPartialDecide
     , sectionStack = e.sectionStack
     }
     where

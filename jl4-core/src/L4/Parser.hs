@@ -112,6 +112,7 @@ descP = do
   e <- hidden $ spacedTokenWs (\ case
     TAnnotations (TDesc t) -> Just t
     TAnnotations (TExport t) -> Just (" export" <> t)
+    TAnnotations (TPartial t) -> Just (" partial" <> t)
     _ -> Nothing
     )
     "Description annotation"

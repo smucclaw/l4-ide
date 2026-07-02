@@ -133,6 +133,7 @@ mkInitialCheckEnv moduleUri environment entityInfo =
     , assumeDeclarations = Map.empty
     , mixfixRegistry = emptyMixfixRegistry
     , computedFields = Map.empty
+    , inPartialDecide = False
     , moduleUri
     , sectionStack = []
     }
@@ -213,9 +214,11 @@ withExtraMixfix :: MixfixRegistry -> Check a -> Check a
 withExtraMixfix mixfixAdds =
   local (updateMixfix mixfixAdds)
   where
+    -- positional match: 'mixfixRegistry' is a duplicated field name, so a
+    -- record update here would be ambiguous under DuplicateRecordFields
     updateMixfix :: MixfixRegistry -> CheckEnv -> CheckEnv
-    updateMixfix adds (MkCheckEnv a b c d e f g reg cf h i) =
-      MkCheckEnv a b c d e f g (unionMixfixRegistry adds reg) cf h i
+    updateMixfix adds (MkCheckEnv a b c d e f g reg cf p h i) =
+      MkCheckEnv a b c d e f g (unionMixfixRegistry adds reg) cf p h i
 
 dedupCheckInfos :: [CheckInfo] -> [CheckInfo]
 dedupCheckInfos = go Set.empty []
@@ -521,9 +524,14 @@ inferProgram (MkModule ann uri section) = do
 -- TODO: This is more complicated due to potential polymorphism.
 --
 inferDecide :: Decide Name -> Check (Decide Resolved, [CheckInfo])
-inferDecide (MkDecide ann _tysig appForm expr) = do
+inferDecide dec@(MkDecide ann _tysig appForm expr) = do
   errorContext (WhileCheckingDecide (getName appForm)) do
-    lookupFunTypeSigByAnno ann >>= \ dHead -> do
+    -- An @partial-decorated definition is declared deliberately partial by
+    -- its author (not defined for all inputs; evaluation fails outside the
+    -- domain), so the non-exhaustive-CONSIDER warning is silenced for its
+    -- whole body, WHERE-bound helpers included. Redundancy warnings stay
+    -- active. See 'L4.Export.isPartialDecide' / 'DescFlags'.
+    withPartialFlag $ lookupFunTypeSigByAnno ann >>= \ dHead -> do
         decide <- extendKnownMany dHead.arguments $ do
           rexpr <- checkExpr (ExpectDecideSignatureContext (rangeOf dHead.resultType)) expr dHead.resultType
           -- See Note [Adding type information to all binders]
@@ -533,6 +541,11 @@ inferDecide (MkDecide ann _tysig appForm expr) = do
             <*> pure rexpr
             >>= nlgDecide
         pure (decide, [dHead.name])
+  where
+    withPartialFlag :: Check a -> Check a
+    withPartialFlag
+      | Export.isPartialDecide dec = local (\env -> env { inPartialDecide = True })
+      | otherwise                  = id
 
 -- | We allow the following cases:
 --
@@ -1259,12 +1272,15 @@ checkConsider ec ann e branches t = do
 
   -- We need to apply the current substitution to resolve any inference variables.
   resolvedTe <- applySubst te
+  inPartial <- asks (.inPartialDecide)
   let isPrimitiveScrutinee = isPrimitiveType resolvedTe
       hasOpaquePatterns = any branchHasOpaquePattern rbranches
 
   -- NOTE: 'hasOpaquePatterns' and 'isPrimitiveScrutinee' come first so that
   -- the (lazy) analysis above is never forced when we bail out anyway.
-  unless (hasOpaquePatterns || isPrimitiveScrutinee || null missing) do
+  -- Inside an @partial-decorated definition only the MISSING-branch warning
+  -- is silenced; redundancy is a bug regardless of intended partiality.
+  unless (hasOpaquePatterns || isPrimitiveScrutinee || inPartial || null missing) do
     addWarning $ PatternMatchesMissing missing
   unless (hasOpaquePatterns || isPrimitiveScrutinee || null redundant) do
     addWarning $ PatternMatchRedundant redundant
