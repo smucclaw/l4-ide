@@ -1181,37 +1181,51 @@ checkAction MkAction {anno, modal, action, provided = mprovided} actionT = do
 -- @'Map.fromListWith' ('flip' ('<>'))@ over the 'Unique'-ordered entity map keeps
 -- each type's constructors in ascending-'Unique' (i.e. declaration) order, so the
 -- rendered missing/redundant sets are deterministic.
+--
+-- @LIST@ gets its complete constructor pair @[EMPTY, cons]@ INJECTED rather
+-- than scanned: @cons@ is (rightly) tagged 'Computable' in 'entityInfo' —
+-- prelude applies it in expression position — so the scan alone would yield
+-- the partial set @[EMPTY]@ and mis-report. The injection is sound because
+-- the guard model already speaks cons natively: 'desugarBranches' desugars
+-- every @FOLLOWED BY@ pattern to a guard carrying 'consRef'/'consUnique',
+-- and all downstream consumers compare oracle entries by 'getUnique' (and
+-- render by 'getName') only.
 constructorsInScopeFromEntityInfo :: EntityInfo -> Map Unique [Resolved]
 constructorsInScopeFromEntityInfo ei =
-  Map.withoutKeys
-    ( Map.fromListWith (flip (<>))
-        [ (tyUnique, [Def ctorUnq ctorNm])
-        | (ctorUnq, (ctorNm, KnownTerm ctorTy Constructor)) <- Map.toList ei
-        , Just tyUnique <- [resultTypeHeadUnique ctorTy]
-        ]
-    )
-    builtinNonExhaustiveTypeUniques
+  Map.insert listUnique [emptyRef, consRef] $
+    Map.withoutKeys
+      ( Map.fromListWith (flip (<>))
+          [ (tyUnique, [Def ctorUnq ctorNm])
+          | (ctorUnq, (ctorNm, KnownTerm ctorTy Constructor)) <- Map.toList ei
+          , Just tyUnique <- [resultTypeHeadUnique ctorTy]
+          ]
+      )
+      builtinNonExhaustiveTypeUniques
 
 -- | Builtin sum types over which we deliberately do NOT perform exhaustiveness
--- checking. There are two distinct reasons a type is here, and they matter for
--- whoever lifts an exclusion next:
+-- checking:
 --
---   * INCOMPLETE scanned set — the type has data constructors that are not tagged
---     @'KnownTerm' _ 'Constructor'@ in 'entityInfo', so a scan cannot see them and
---     checking against the partial set would MIS-REPORT (both false positives and
---     false negatives). These cannot be lifted without first making the set
---     complete: @LIST@ (its @cons@ is tagged 'Computable', so the scan yields only
---     @EMPTY@) and the regulative types @CONTRACT@/@EVENT@ (their deontic operators
---     are not all plain constructors and are matched partially by the core).
+--   * @CONTRACT@ — PERMANENT by design: the regulative\/deontic values form an
+--     open sum. Only @FULFILLED@ has a pattern form; the obligation\/operator
+--     values have none, and the regulative core matches contract values
+--     partially on purpose. ANY oracle set here would be unsound in both
+--     directions (flag load-bearing partial matches as incomplete, certify
+--     unmatchable cases as covered).
+--
+--   * @EVENT@ — its scanned set (just the event constructor) is actually
+--     complete, so checking WOULD be sound; it stays excluded only because the
+--     type name @EVENT@ is shadowed by its own term constructor in
+--     'initialEnvironment' (the @NormalName "EVENT"@ key is claimed twice and
+--     the term wins), making event-typed annotations unwritable in practice.
+--     Lift this exclusion in the same change that fixes that shadowing.
 --
 -- @MAYBE@ and @EITHER@ have COMPLETE, all-'Constructor' sets
 -- (@nothing@/@just@, @left@/@right@) and ARE checked. @BOOLEAN@ likewise
--- (@TRUE@/@FALSE@): its set is complete and a missing branch is almost always a
--- real bug. See specs/todo/consider-exhaustiveness-builtin-containers.md for the
--- plan to also cover @LIST@ (re-tag @cons@) and the regulative types.
+-- (@TRUE@/@FALSE@). @LIST@ is checked via the injected pair — see
+-- 'constructorsInScopeFromEntityInfo'.
 builtinNonExhaustiveTypeUniques :: Set Unique
 builtinNonExhaustiveTypeUniques =
-  Set.fromList [listUnique, contractUnique, eventUnique]
+  Set.fromList [contractUnique, eventUnique]
 
 -- | The 'Unique' of the head of a constructor's result type: strip any leading
 -- 'Forall' (type parameters) and 'Fun' (constructor arguments), then take the
@@ -2068,12 +2082,26 @@ expandToPattern ctorArity scrut = \ case
     seen' = Set.insert (getUnique scrutVar) seen
     cnstrs = toConsistentSet $ lookupConstraints scrutVar nabla
     go' = \ case
-      EqCon c ns more -> map (PatApp emptyAnno c) (traverse (\n' -> go seen' n' nabla) ns) <> go' more
+      EqCon c ns more -> map (mkSuggestedPattern c) (traverse (\n' -> go seen' n' nabla) ns) <> go' more
       -- pad each suggested constructor with one underscore wildcard per
       -- argument position, so the rendered missing branch is valid L4 the
       -- user can paste (a bare non-nullary constructor would not be)
-      NotEqCons _ns ncs -> map (\n' -> PatApp emptyAnno n' (replicate (ctorArity n') (PatVar emptyAnno underscoreRef))) ncs
+      NotEqCons _ns ncs -> map (\n' -> mkSuggestedPattern n' (replicate (ctorArity n') (PatVar emptyAnno underscoreRef))) ncs
       NoInfo -> [PatVar emptyAnno underscoreRef]
+
+  -- The builtin cons constructor must be suggested in its surface form,
+  -- a 'PatCons' (rendered @… FOLLOWED BY …@) — never as an application of
+  -- the internal cons name. Its arity is intrinsically 2 (and NOT derivable
+  -- via 'constructorArity', since @cons@ is tagged 'Computable', not
+  -- 'Constructor'), hence the underscore fallback when the argument
+  -- patterns were not supplied.
+  mkSuggestedPattern :: Resolved -> [Pattern Resolved] -> Pattern Resolved
+  mkSuggestedPattern c args
+    | getUnique c == consUnique = case args of
+        [ph, pt'] -> PatCons emptyAnno ph pt'
+        _         -> PatCons emptyAnno wild wild
+    | otherwise = PatApp emptyAnno c args
+    where wild = PatVar emptyAnno underscoreRef
 
 sameResolved :: Resolved -> Resolved -> Bool
 sameResolved = (==) `on` getUnique
