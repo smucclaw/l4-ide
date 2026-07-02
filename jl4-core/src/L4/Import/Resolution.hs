@@ -355,10 +355,12 @@ combineResolvedImports uri imports =
       -> (TypeCheck.CheckState, TypeCheck.CheckEnv)
     combineOne (accState, accEnv) ri =
       let r = ri.riTypeChecked
-          -- IMPORTANT: Apply the substitution to entityInfo to resolve type variables.
-          -- Without this, types like 'r25' would leak instead of being resolved to
-          -- their actual types (e.g., NUMBER). This matches what the native LSP does
-          -- in LSP.L4.Rules when combining TypeCheckResult dependencies.
+          -- IMPORTANT: Apply the substitution to entityInfo to resolve type variables
+          -- BEFORE merging ('unionImportedCheckEnv' requires zonked input). Without
+          -- this, types like 'r25' would leak instead of being resolved to their
+          -- actual types (e.g., NUMBER). This matches what the native LSP does in
+          -- LSP.L4.Rules when combining TypeCheckResult dependencies (there the
+          -- entityInfo is already zonked when stored into the TypeCheckResult).
           resolvedEntityInfo = applyFinalSubstitution r.substitution ri.riUri r.entityInfo
       in ( TypeCheck.MkCheckState
              { TypeCheck.substitution = r.substitution
@@ -368,19 +370,7 @@ combineResolvedImports uri imports =
              , TypeCheck.scopeMap = IV.empty
              , TypeCheck.descMap = IV.empty
              }
-         , TypeCheck.MkCheckEnv
-             { TypeCheck.moduleUri = accEnv.moduleUri
-             , TypeCheck.environment = Map.unionWith List.union accEnv.environment r.environment
-             , TypeCheck.entityInfo = Map.unionWith (\t1 t2 -> if t1 == t2 then t1 else t1) accEnv.entityInfo resolvedEntityInfo
-             , TypeCheck.functionTypeSigs = Map.empty
-             , TypeCheck.declTypeSigs = Map.empty
-             , TypeCheck.declareDeclarations = Map.empty
-             , TypeCheck.assumeDeclarations = Map.empty
-             , TypeCheck.mixfixRegistry = TypeCheck.unionMixfixRegistry accEnv.mixfixRegistry r.mixfixRegistry
-             , TypeCheck.computedFields = Map.empty
-             , TypeCheck.errorContext = TypeCheck.None
-             , TypeCheck.sectionStack = []
-             }
+         , TypeCheck.unionImportedCheckEnv accEnv r.environment resolvedEntityInfo r.mixfixRegistry
          )
 
 -- | Update a module's import declarations with resolved URIs.

@@ -18,6 +18,7 @@ import L4.Mixfix (MixfixInfo(..))
 import qualified Base.Set as Set
 
 import Control.Applicative
+import qualified Data.List as List
 import qualified Data.Map.Strict as Map
 import qualified Generics.SOP as SOP
 import Optics.Core (gplate, traverseOf, (%), (?~))
@@ -367,6 +368,50 @@ data CheckEnv =
     }
   deriving stock (Eq, Generic, Show)
   deriving anyclass (NFData)
+
+-- | Extend a module's accumulated 'CheckEnv' with the public surface of one
+-- imported (already type-checked) module. This is THE import-boundary merge:
+-- both the batch import resolution (@L4.Import.Resolution@) and the LSP
+-- build rule (@LSP.L4.Rules@) go through it, so their semantics cannot
+-- drift apart again. (They once did: one site silently left-biased
+-- conflicting 'entityInfo' entries, the other @assert@ed equality — an
+-- assert GHC compiles out at @-O@, so the two sites merely LOOKED
+-- different. The by-equality variant also paid a deep structural 'Eq' per
+-- colliding key, and collisions are the norm: every dependency's
+-- 'entityInfo' embeds the builtins and its own transitive imports.)
+--
+-- Colliding 'entityInfo' keys are unioned left-biased. This is safe
+-- because a 'Unique' embeds its defining module and each module is
+-- type-checked once per session, so a key arriving via two import paths
+-- (builtins, diamond dependencies) always carries identical copies of the
+-- same entry.
+--
+-- Precondition: the imported 'EntityInfo' has already been zonked (had its
+-- module's final substitution applied), so no inference variables leak
+-- across the boundary.
+--
+-- The by-'SrcRange' frame-local maps ('functionTypeSigs', 'declTypeSigs',
+-- 'declareDeclarations', 'assumeDeclarations') are deliberately reset:
+-- their readers only ever look up syntax nodes of the module currently
+-- being checked. 'computedFields' is reset too because it is keyed by
+-- 'RawName' and unioning it across modules could conflate same-named
+-- record types; the cost is error-message quality only (see the notes in
+-- the exhaustiveness design doc).
+unionImportedCheckEnv :: CheckEnv -> Environment -> EntityInfo -> MixfixRegistry -> CheckEnv
+unionImportedCheckEnv accEnv depEnvironment depEntityInfo depMixfixRegistry =
+  MkCheckEnv
+    { moduleUri = accEnv.moduleUri
+    , environment = Map.unionWith List.union accEnv.environment depEnvironment
+    , entityInfo = Map.union accEnv.entityInfo depEntityInfo
+    , functionTypeSigs = Map.empty
+    , declTypeSigs = Map.empty
+    , declareDeclarations = Map.empty
+    , assumeDeclarations = Map.empty
+    , mixfixRegistry = unionMixfixRegistry accEnv.mixfixRegistry depMixfixRegistry
+    , computedFields = Map.empty
+    , errorContext = None
+    , sectionStack = []
+    }
 
 newtype SectionNames =
   MkSectionNames

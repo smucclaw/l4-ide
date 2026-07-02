@@ -49,7 +49,6 @@ import System.Directory
 import System.Environment (getExecutablePath, lookupEnv)
 import qualified L4.API.EmbeddedLibraries as EmbeddedLibraries
 import qualified L4.Utils.IntervalMap as IV
-import UnliftIO
 
 type instance RuleResult GetLexTokens = ([PosToken], Text)
 data GetLexTokens = GetLexTokens
@@ -531,24 +530,11 @@ jl4Rules evalConfig rootDirectory recorder = do
           , scopeMap = IV.empty
           , descMap = IV.empty
           }
+        -- NOTE: tcRes.entityInfo is already zonked (the final substitution is
+        -- applied when the TypeCheckResult is built below), as
+        -- 'unionImportedCheckEnv' requires.
         unionCheckEnv cEnv tcRes =
-          TypeCheck.MkCheckEnv
-            -- NOTE: the environments behave more like sets than like lists, that's why we need to union them
-            { environment = Map.unionWith List.union cEnv.environment tcRes.environment
-            -- NOTE: we assume that if we have a mapping from a specific unique then it must have come from the
-            -- same module. That means that the rhs of it should be identical.
-            , entityInfo = Map.unionWith (\t1 t2 -> assert (t1 == t2) t1) cEnv.entityInfo tcRes.entityInfo
-            , errorContext = cEnv.errorContext
-            , moduleUri = cEnv.moduleUri
-            , functionTypeSigs = Map.empty -- we can omit environments that are only used internally
-            , declTypeSigs = Map.empty
-            , declareDeclarations = Map.empty
-            , assumeDeclarations = Map.empty
-            , mixfixRegistry = TypeCheck.unionMixfixRegistry cEnv.mixfixRegistry tcRes.mixfixRegistry
-            -- ^ Merge mixfix registries from imported modules so cross-module mixfix calls work
-            , computedFields = Map.empty
-            , sectionStack = []
-            }
+          TypeCheck.unionImportedCheckEnv cEnv tcRes.environment tcRes.entityInfo tcRes.mixfixRegistry
         -- NOTE: we don't want to leak the inference variables from the substitution
         initCheckState = set #substitution Map.empty $ foldl' unionCheckStates TypeCheck.initialCheckState dependencies
         initCheckEnv = foldl' unionCheckEnv (TypeCheck.initialCheckEnv uri) dependencies
