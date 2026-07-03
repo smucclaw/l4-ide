@@ -79,7 +79,7 @@ data TAnnotations
   | TNlgPrefix    -- ^ "@nlg"
   | TDesc         !Text -- ^ "@desc"
   | TExport       !Text -- ^ "@export"
-  | TPartial      !Text -- ^ "@partial"
+  | TNonexhaustive      !Text -- ^ "@nonexhaustive"
   deriving stock (Eq, Generic, Ord, Show)
   deriving anyclass (ToExpr, NFData)
 
@@ -396,8 +396,8 @@ descAnnotation = fst <$> lineAnno "@desc"
 exportAnnotation :: Lexer Text
 exportAnnotation = fst <$> lineAnno "@export"
 
-partialAnnotation :: Lexer Text
-partialAnnotation = fst <$> lineAnno "@partial"
+nonexhaustiveAnnotation :: Lexer Text
+nonexhaustiveAnnotation = fst <$> lineAnno "@nonexhaustive"
 
 nlgString :: Lexer Text
 nlgString =
@@ -543,7 +543,7 @@ annotationsPayload = asum
   , TRefMap       <$> refMapAnnotation
   , TDesc         <$> descAnnotation
   , TExport       <$> exportAnnotation
-  , TPartial      <$> partialAnnotation
+  , TNonexhaustive      <$> nonexhaustiveAnnotation
   , uncurry TNlg  <$> nlgAnnotation
   , uncurry TRef  <$> refAnnotation
   ]
@@ -1029,7 +1029,7 @@ displayTokenType = \case
     TNlgPrefix        -> "@nlg"
     TDesc t           -> "@desc" <> t
     TExport t         -> "@export" <> t
-    TPartial t        -> "@partial" <> t
+    TNonexhaustive t        -> "@nonexhaustive" <> t
   TIdentifiers i -> case i of
     TGenitive         -> "'s"
     TIdentifier t     -> t

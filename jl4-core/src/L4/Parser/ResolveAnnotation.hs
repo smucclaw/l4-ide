@@ -720,13 +720,13 @@ pickLeadingDesc matches =
     Just d  -> Just d
     Nothing -> lastMaybe matches
 
--- | True if a Desc's text begins with the @export, @default or @partial
+-- | True if a Desc's text begins with the @export, @default or @nonexhaustive
 -- keyword, mirroring how 'L4.Export.parseDescText' consumes the leading
 -- tokens.
 descIsExportMarked :: Desc -> Bool
 descIsExportMarked d =
   let token = Text.toLower (Text.takeWhile (not . isSpace) (Text.stripStart (getDesc d)))
-  in token == "export" || token == "default" || token == "partial"
+  in token == "export" || token == "default" || token == "nonexhaustive"
 
 addDescWarning :: DescWarning -> State DescS ()
 addDescWarning w = modify' $ \s -> s{descWarnings = w : s.descWarnings}

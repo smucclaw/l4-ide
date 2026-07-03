@@ -207,7 +207,7 @@ severity (MkCheckErrorWithContext e _) =
 -- a mere exhaustiveness warning inside one branch of a type-directed
 -- disambiguation knocks out the correct candidate and resolution collapses
 -- into spurious ambiguity or out-of-scope errors — and silencing the warning
--- (e.g. via @partial) would change what a name resolves to.
+-- (e.g. via @nonexhaustive) would change what a name resolves to.
 --
 -- The walk stops at the first fatal diagnostic, so rejected candidates cost
 -- no more than under the old structural test whenever their first
@@ -400,9 +400,9 @@ data CheckEnv =
     -- ^ Map from record type RawName to set of computed field RawNames.
     -- Used to produce better error messages when a user tries to supply
     -- a computed field in a record constructor.
-    , inPartialDecide      :: !Bool
+    , inNonexhaustiveDecide      :: !Bool
     -- ^ Are we checking the body of a definition its author decorated
-    -- @\@partial@ (deliberately not defined for all inputs)? If so, the
+    -- @\@nonexhaustive@ (deliberately not defined for all inputs)? If so, the
     -- non-exhaustive-CONSIDER warning is suppressed; redundancy warnings
     -- stay active. Set via 'local' in @inferDecide@.
     , errorContext         :: !CheckErrorContext
@@ -451,7 +451,7 @@ unionImportedCheckEnv accEnv depEnvironment depEntityInfo depMixfixRegistry =
     , assumeDeclarations = Map.empty
     , mixfixRegistry = unionMixfixRegistry accEnv.mixfixRegistry depMixfixRegistry
     , computedFields = Map.empty
-    , inPartialDecide = False
+    , inNonexhaustiveDecide = False
     , errorContext = None
     , sectionStack = []
     }
@@ -992,7 +992,7 @@ extendEnv cis env =
     , assumeDeclarations = e.assumeDeclarations
     , mixfixRegistry = e.mixfixRegistry
     , computedFields = e.computedFields
-    , inPartialDecide = e.inPartialDecide
+    , inNonexhaustiveDecide = e.inNonexhaustiveDecide
     , sectionStack = e.sectionStack
     }
     where

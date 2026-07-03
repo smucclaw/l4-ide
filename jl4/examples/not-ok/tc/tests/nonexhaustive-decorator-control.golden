@@ -1,7 +1,7 @@
 Parsing successful
 Typechecking successful
 Info | updateFileDiagnostics published different from new diagnostics - file diagnostics:
-File: partial-decorator-control.l4
+File: nonexhaustive-decorator-control.l4
   Hidden: no
   Range: 7:3-8:21
   Source: check

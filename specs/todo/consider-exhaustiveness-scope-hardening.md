@@ -87,7 +87,7 @@ live engine bugs that jumped the queue:
 5. **T1c** — missing-arm suggestions are now pasteable L4: arity-padded
    underscores (``WHEN square `_` THEN``), nested parens
    (``WHEN wa (JUST `_`) THEN``), via a dedicated renderer.
-6. **P1 `@partial`** — author-declared partiality (rides the @export desc
+6. **P1 `@nonexhaustive`** — author-declared partiality (rides the @export desc
    channel end-to-end); suppresses missing-branch warnings only, per Decide.
 7. **T2a LIST** — enabled by injecting `listUnique -> [EMPTY, cons]` into the
    oracle (no consInfo re-tag); prelude/loop remediation per
@@ -121,7 +121,7 @@ fixed):**
     residual-set propagation with give-up caps.
 12. **Decide printer round-trips descs** — `l4 batch` re-serializes the
     module via `prettyLayout`, which dropped desc annotations, stripping
-    `@partial` from generated wrappers and failing every batch row of an
+    `@nonexhaustive` from generated wrappers and failing every batch row of an
     `@export partial` function. The printer now re-emits a canonical
     `@desc` line.
 
@@ -169,7 +169,7 @@ fixed):**
   `consider-exhaustiveness-builtin-containers.md`; blocks the (otherwise
   sound) EVENT exhaustiveness enablement. **Issue to file.**
 - Smaller notes: `isStringCoercible` still matches by type NAME (same
-  pattern T1b fixed; harmless today); combining `@export` and `@partial` as
+  pattern T1b fixed; harmless today); combining `@export` and `@nonexhaustive` as
   two separate annotation LINES picks one winner (the desc channel keeps a
   single leading desc) — combine on one line (`@export partial`) instead;
   local dev: `~/.local/share/jl4/libraries` SHADOWS the repo's libraries in

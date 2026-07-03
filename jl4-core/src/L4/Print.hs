@@ -268,9 +268,9 @@ instance LayoutPrinterWithName a => LayoutPrinter (Decide a) where
     MkDecide ann tySig appForm expr ->
       vcat $
         -- Re-emit the desc annotation: its leading keywords carry the
-        -- @export/@partial flags, so a printed module must round-trip it.
+        -- @export/@nonexhaustive flags, so a printed module must round-trip it.
         -- 'l4 batch' re-typechecks the printed source; dropping the desc
-        -- here used to strip @partial from the generated wrapper module,
+        -- here used to strip @nonexhaustive from the generated wrapper module,
         -- resurrecting the suppressed missing-branch warning and failing
         -- every batch row of a deliberately-partial exported function.
         [ "@desc" <+> pretty (Text.strip (getDesc d))

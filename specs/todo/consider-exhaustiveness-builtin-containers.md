@@ -32,7 +32,7 @@ red-team reviews):
 - **P5 — make remediable sites total**: prelude `minimum`/`maximum` over
   `LIST OF MAYBE NUMBER` gained `WHEN EMPTY THEN NOTHING`; `loop.l4`'s `tail`
   gained `WHEN EMPTY THEN EMPTY`.
-- **P1 — `@partial` decorator** for the genuinely head-partial trio (`at`,
+- **P1 — `@nonexhaustive` decorator** for the genuinely head-partial trio (`at`,
   `maximum`/`minimum` over `NUMBER`): author-declared partiality suppresses
   the missing-branch warning for that definition only (redundancy stays on);
   runtime crash-on-EMPTY semantics unchanged.

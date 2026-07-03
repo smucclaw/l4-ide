@@ -134,7 +134,7 @@ mkInitialCheckEnv moduleUri environment entityInfo =
     , assumeDeclarations = Map.empty
     , mixfixRegistry = emptyMixfixRegistry
     , computedFields = Map.empty
-    , inPartialDecide = False
+    , inNonexhaustiveDecide = False
     , moduleUri
     , sectionStack = []
     }
@@ -527,12 +527,12 @@ inferProgram (MkModule ann uri section) = do
 inferDecide :: Decide Name -> Check (Decide Resolved, [CheckInfo])
 inferDecide dec@(MkDecide ann _tysig appForm expr) = do
   errorContext (WhileCheckingDecide (getName appForm)) do
-    -- An @partial-decorated definition is declared deliberately partial by
+    -- An @nonexhaustive-decorated definition is declared deliberately partial by
     -- its author (not defined for all inputs; evaluation fails outside the
     -- domain), so the non-exhaustive-CONSIDER warning is silenced for its
     -- whole body, WHERE-bound helpers included. Redundancy warnings stay
-    -- active. See 'L4.Export.isPartialDecide' / 'DescFlags'.
-    withPartialFlag $ lookupFunTypeSigByAnno ann >>= \ dHead -> do
+    -- active. See 'L4.Export.isNonexhaustiveDecide' / 'DescFlags'.
+    withNonexhaustiveFlag $ lookupFunTypeSigByAnno ann >>= \ dHead -> do
         decide <- extendKnownMany dHead.arguments $ do
           rexpr <- checkExpr (ExpectDecideSignatureContext (rangeOf dHead.resultType)) expr dHead.resultType
           -- See Note [Adding type information to all binders]
@@ -543,9 +543,9 @@ inferDecide dec@(MkDecide ann _tysig appForm expr) = do
             >>= nlgDecide
         pure (decide, [dHead.name])
   where
-    withPartialFlag :: Check a -> Check a
-    withPartialFlag
-      | Export.isPartialDecide dec = local (\env -> env { inPartialDecide = True })
+    withNonexhaustiveFlag :: Check a -> Check a
+    withNonexhaustiveFlag
+      | Export.isNonexhaustiveDecide dec = local (\env -> env { inNonexhaustiveDecide = True })
       | otherwise                  = id
 
 -- | We allow the following cases:
@@ -1288,15 +1288,15 @@ checkConsider ec ann e branches t = do
 
   -- We need to apply the current substitution to resolve any inference variables.
   resolvedTe <- applySubst te
-  inPartial <- asks (.inPartialDecide)
+  inNonexhaustive <- asks (.inNonexhaustiveDecide)
   let isPrimitiveScrutinee = isPrimitiveType resolvedTe
       hasOpaquePatterns = any branchHasOpaquePattern rbranches
 
   -- NOTE: 'hasOpaquePatterns' and 'isPrimitiveScrutinee' come first so that
   -- the (lazy) analysis above is never forced when we bail out anyway.
-  -- Inside an @partial-decorated definition only the MISSING-branch warning
+  -- Inside an @nonexhaustive-decorated definition only the MISSING-branch warning
   -- is silenced; redundancy is a bug regardless of intended partiality.
-  unless (hasOpaquePatterns || isPrimitiveScrutinee || inPartial || null missing) do
+  unless (hasOpaquePatterns || isPrimitiveScrutinee || inNonexhaustive || null missing) do
     addWarning $ PatternMatchesMissing missing
   unless (hasOpaquePatterns || isPrimitiveScrutinee || null redundant) do
     addWarning $ PatternMatchRedundant redundant
