@@ -188,6 +188,35 @@ data CheckErrorContext =
 data Severity = SWarn | SError | SInfo
   deriving stock (Eq, Show)
 
+-- | THE canonical severity mapping for checker diagnostics — the one place
+-- that decides what blocks ('SError'), what warns ('SWarn'), and what is
+-- informational only ('SInfo'). Candidate viability during type-directed
+-- disambiguation ('viableCandidate', used by 'prune'\/'orElse'\/'softprune')
+-- and the diagnostic renderers all key off this single definition.
+severity :: CheckErrorWithContext -> Severity
+severity (MkCheckErrorWithContext e _) =
+  case e of
+    CheckInfo {}               -> SInfo
+    CheckWarning {}            -> SWarn
+    SuspiciousBinderPattern {} -> SInfo
+    _                          -> SError
+
+-- | Is this candidate still viable? Only 'SError'-severity diagnostics fail
+-- a candidate. Warnings and hints attached along the way must NOT influence
+-- name resolution: with a purely structural test (any diagnostic = failure),
+-- a mere exhaustiveness warning inside one branch of a type-directed
+-- disambiguation knocks out the correct candidate and resolution collapses
+-- into spurious ambiguity or out-of-scope errors — and silencing the warning
+-- (e.g. via @partial) would change what a name resolves to.
+--
+-- The walk stops at the first fatal diagnostic, so rejected candidates cost
+-- no more than under the old structural test whenever their first
+-- diagnostic is already fatal (the common case).
+viableCandidate :: With CheckErrorWithContext a -> Bool
+viableCandidate = \ case
+  Plain _  -> True
+  With e w -> severity e /= SError && viableCandidate w
+
 instance HasSrcRange CheckErrorWithContext where
   rangeOf (MkCheckErrorWithContext e ctx) = rangeOf e <|> rangeOf ctx
 
@@ -839,11 +868,8 @@ orElse m1 m2 = do
   MkCheck $ \ e s ->
     let
       candidates = runCheck m1 e s
-
-      isSuccess (Plain _, _)  = True
-      isSuccess (With _ _, _) = False
     in
-      case filter isSuccess candidates of
+      case filter (viableCandidate . fst) candidates of
         [] -> runCheck m2 e s
         xs -> xs
 
@@ -863,34 +889,31 @@ prune m = do
       candidates :: [(With CheckErrorWithContext a, CheckState)]
       candidates = runCheck m s env
 
-      proc []                    = [] -- should never occur
-      proc [a]                   = [a]
-      proc ((Plain a, s')  : cs) = procPlain (Plain a, s') cs
-      proc ((With e x, s') : cs) = procWith (With e x, s') cs
+      proc []       = [] -- should never occur
+      proc [a]      = [a]
+      proc (a : cs)
+        | viableCandidate (fst a) = procViable a cs
+        | otherwise               = procFailed a cs
 
-      -- We have a success, we don't want a second one
-      procPlain a []                   = [a]
-      procPlain a ((With _ _, _) : cs) = procPlain a cs
-      procPlain a cs
-        | plain = [first (With (MkCheckErrorWithContext InternalAmbiguityError ctx)) a]
-        -- NOTE: in the case of ambiguity errors, the ambiguity error will always occurs as
-        -- the last element in the list
-        | otherwise = [last cs]
-        where
-          plain = allPlain $ map fst cs
+      -- We have a (possibly warning-carrying) success, we don't want a second one
+      procViable a []       = [a]
+      procViable a (c : cs)
+        | viableCandidate (fst c) =
+            if all (viableCandidate . fst) cs
+              then [first (With (MkCheckErrorWithContext InternalAmbiguityError ctx)) a]
+              -- NOTE: in the case of ambiguity errors, the ambiguity error will always occur as
+              -- the last element in the list
+              else [last (c : cs)]
+        | otherwise = procViable a cs
 
       -- We have a failure, we're still looking for a success, and prefer the last failure
-      procWith a []                    = [a]
-      procWith _ ((Plain a, s')  : cs) = procPlain (Plain a, s') cs
-      procWith _ ((With e x, s') : cs) = procWith (With e x, s') cs
+      procFailed a []       = [a]
+      procFailed _ (c : cs)
+        | viableCandidate (fst c) = procViable c cs
+        | otherwise               = procFailed c cs
 
     in
       proc candidates
-
-allPlain :: [With e a] -> Bool
-allPlain = all \case
-  Plain{} -> True
-  With {} -> False
 
 -- | Prune to one result if there's a clearly best one at this point,
 -- but don't force it.
@@ -902,20 +925,23 @@ softprune m = do
       candidates :: [(With CheckErrorWithContext a, CheckState)]
       candidates = runCheck m s env
 
-      proc []                    = [] -- should never occur
-      proc [a]                   = [a]
-      proc ((Plain a, s')  : cs) = procPlain (Plain a, s') cs
-      proc ((With e x, s') : cs) = procWith (With e x, s') cs
+      proc []       = [] -- should never occur
+      proc [a]      = [a]
+      proc (a : cs)
+        | viableCandidate (fst a) = procViable a cs
+        | otherwise               = procFailed a cs
 
       -- We have a success, we don't want a second one
-      procPlain a []                    = [a]
-      procPlain _ ((Plain _, _)  : _cs) = candidates
-      procPlain a ((With _ _, _) :  cs) = procPlain a cs
+      procViable a []       = [a]
+      procViable a (c : cs)
+        | viableCandidate (fst c) = candidates
+        | otherwise               = procViable a cs
 
       -- We have a failure, we're still looking for a success, and prefer the last failure
-      procWith a []                     = [a]
-      procWith _ ((Plain a, s')  : cs)  = procPlain (Plain a, s') cs
-      procWith _ ((With e x, s') : cs)  = procWith (With e x, s') cs
+      procFailed a []       = [a]
+      procFailed _ (c : cs)
+        | viableCandidate (fst c) = procViable c cs
+        | otherwise               = procFailed c cs
 
     in
       proc candidates

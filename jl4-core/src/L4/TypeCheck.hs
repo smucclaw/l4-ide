@@ -13,7 +13,8 @@ module L4.TypeCheck
   , isQuantifier
   , prettyCheckError
   , prettyCheckErrorWithContext
-  , severity
+  -- 'severity' is re-exported via @module X@ (it lives in
+  -- L4.TypeCheck.Types now, next to candidate viability)
   )
   where
 
@@ -3334,14 +3335,9 @@ surroundWithCsn before after a =
 -- Typecheck Utils
 -- ----------------------------------------------------------------------------
 
-severity :: CheckErrorWithContext -> Severity
-severity (MkCheckErrorWithContext e _) =
-  case e of
-    CheckInfo {}                -> SInfo
-    CheckWarning {}             -> SWarn
-    -- a hint, never blocking; keep in sync with L4.Diagnostic's copy
-    SuspiciousBinderPattern {}  -> SInfo
-    _                           -> SError
+-- NOTE: 'severity' now lives in L4.TypeCheck.Types (single canonical
+-- mapping, shared with candidate viability and the diagnostic renderers)
+-- and is re-exported from here.
 
 prettyCheckErrorWithContext :: CheckErrorWithContext -> [Text]
 prettyCheckErrorWithContext (MkCheckErrorWithContext e ctx) =
