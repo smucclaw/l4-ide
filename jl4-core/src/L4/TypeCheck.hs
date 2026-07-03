@@ -1282,8 +1282,9 @@ checkConsider ec ann e branches t = do
   (scrutVar, pt) <- desugarBranches re rbranches
   let bs = concretizeInfo cl pt
 
-  let redundant = redundantBranches $ annotateRefinement bs
-      missing = nubBy ((==) `on` fmap getUnique) $ expandToPattern (constructorArity ei) scrutVar $ normalizeRefinement $ uncoverRefinement bs
+  let analysis  = analyzePatternMatch (constructorArity ei) scrutVar bs
+      missing   = maybe [] (.missingArms) analysis
+      redundant = maybe [] (.redundantArms) analysis
 
   -- We need to apply the current substitution to resolve any inference variables.
   resolvedTe <- applySubst te
@@ -2027,13 +2028,6 @@ concretizeInfo cmap = \case
      -> PatAnd (MkGuard cs b n ns) (concretizeInfo cmap t)
    _ -> PatAnd (MkGuard [] b n ns) (concretizeInfo cmap t)
 
-data Refinement n
-  = RefineConj (Refinement n) (Constr n)
-  | RefineDisj (Refinement n) (Refinement n)
-  | RefineTop
-  | RefineBottom
-  deriving stock (Eq, Show, Generic, Functor)
-
 -- a constraint
 data Constr n
   = IsEq n n [n]
@@ -2049,59 +2043,10 @@ data Constr n
   -- - the other constructors of the type that this constraint is about
   deriving stock (Eq, Ord, Show, Generic, Functor, Foldable)
 
--- this is suposed to generate the "unconvered" set, i.e. the
--- values that are not covered by the pattern tree
-uncoverRefinement :: PatTree' [n] n -> Refinement n
-uncoverRefinement = uncoverRefinementWith RefineTop
-
-uncoverRefinementWith :: Refinement n -> PatTree' [n] n -> Refinement n
-uncoverRefinementWith tau = \case
-  PatLeaf _e -> RefineBottom
-  PatOr t1 t2 -> uncoverRefinementWith (uncoverRefinementWith tau t1) t2
-  PatAnd (MkGuard cs b n ns) t -> (tau `RefineConj` IsNotEq b n ns cs) `RefineDisj`
-    uncoverRefinementWith (tau `RefineConj` IsEq b n ns) t
-  PatNoBranches -> tau
-
-data AnnBranch n
-  = AnnLeaf (Refinement n) (Branch n)
-  | AnnEmpty
-  deriving stock (Eq, Show, Generic)
-
-redundantBranches :: [AnnBranch Resolved] -> [Branch Resolved]
-redundantBranches = mapMaybe \case
-  AnnLeaf r b | not (isConsistent r) -> Just b
-  _ -> Nothing
- where
-  isConsistent :: Refinement Resolved -> Bool
-  isConsistent = go [] where
-    go seen = \ case
-      RefineConj r c -> go (c : seen) r && all (isConsistentWith c) seen
-      RefineDisj r1 r2 -> go seen r1 || go seen r2
-      RefineTop -> True
-      RefineBottom -> False
-
--- this is supposed to generate the patterns that *are* matched
-annotateRefinement :: PatTree' [n] n -> [AnnBranch n]
-annotateRefinement = go RefineTop
- where
-  go tau = \case
-    PatLeaf e -> [AnnLeaf tau e]
-    PatOr t1 t2 -> go tau t1 <> go (uncoverRefinementWith tau t1) t2
-    PatAnd (MkGuard _i b n ns) t -> go (tau `RefineConj` IsEq b n ns) t
-    PatNoBranches -> [AnnEmpty]
-
 data Nabla n
  = Bottom
  | Consistent !(Set (Constr n))
  deriving stock (Foldable)
-
-instance Ord n => Semigroup (Nabla n) where
-  Bottom <> s = s
-  s <> Bottom = s
-  Consistent s1 <> Consistent s2 = Consistent $ s1 `Set.union` s2
-
-instance Ord n => Monoid (Nabla n) where
-  mempty = Bottom
 
 lookupConstraints :: Eq n => n -> Nabla n -> [Constr n]
 lookupConstraints n = \ case
@@ -2113,23 +2058,16 @@ constraintName = \ case
   IsEq n _ _ -> n
   IsNotEq n _ _ _ -> n
 
-normalizeRefinement :: Refinement Resolved -> Nabla Resolved
-normalizeRefinement = go (Consistent mempty)
- where
-  go nabla = \ case
-   RefineConj r c -> go (addConsistentConstraint nabla c) r
-   RefineDisj r1 r2 -> go nabla r1 <> go nabla r2
-   RefineTop -> nabla
-   RefineBottom -> Bottom
-
-  addConsistentConstraint :: Nabla Resolved -> Constr Resolved -> Nabla Resolved
-  addConsistentConstraint nabla c = case lookupConstraints (constraintName c) nabla of
-    [] -> insertConstraint c nabla
-    cs -> if all (c `isConsistentWith`) cs then insertConstraint c nabla else nabla
-
-  insertConstraint c = \ case
-    Bottom -> Consistent (Set.singleton c)
-    Consistent s -> Consistent (Set.insert c s)
+-- | Add one constraint to a consistent constraint set; 'Nothing' if it
+-- contradicts a constraint already present (the refined value space is
+-- empty, so the candidate 'Nabla' dies).
+addConstraint :: Constr Resolved -> Nabla Resolved -> Maybe (Nabla Resolved)
+addConstraint _ Bottom = Nothing
+addConstraint c nabla@(Consistent s)
+  | c `Set.member` s = Just nabla
+  | all (c `isConsistentWith`) (lookupConstraints (constraintName c) nabla) =
+      Just (Consistent (Set.insert c s))
+  | otherwise = Nothing
 
 isConsistentWith :: Constr Resolved -> Constr Resolved -> Bool
 IsEq n1 c1 _ `isConsistentWith` IsEq n2 c2 _ | n1 `sameResolved` n2 = c1 `sameResolved` c2
@@ -2137,8 +2075,125 @@ IsNotEq n1 c1 _ _ `isConsistentWith` IsEq n2 c2 _ | n1 `sameResolved` n2 = not $
 IsEq n1 c1 _ `isConsistentWith` IsNotEq n2 c2 _ _ | n1 `sameResolved` n2 = not $ c1 `sameResolved` c2
 _ `isConsistentWith` _ = True
 
+-- | The result of the pattern-match analysis of one CONSIDER.
+data PatternMatchAnalysis = MkPatternMatchAnalysis
+  { missingArms   :: [BranchLhs Resolved]
+    -- ^ synthesized suggestions for the uncovered cases (empty = exhaustive,
+    -- or the suggestion cap was exceeded — see 'maxMissingSuggestions')
+  , redundantArms :: [Branch Resolved]
+    -- ^ arms that can never match (their guards contradict every value
+    -- still uncovered when they are reached)
+  }
+
+-- | Give up the whole analysis when the uncovered set exceeds this many
+-- alternatives. The uncovered set grows by at most (guards per branch) per
+-- branch before consistency pruning, so realistic matches stay tiny; only
+-- pathological shapes (dozens of many-field record arms) approach this, and
+-- for them "no warning" beats hanging the checker — and the IDE with it.
+maxUncoveredNablas :: Int
+maxUncoveredNablas = 128
+
+-- | Stop enumerating missing-branch SUGGESTIONS beyond this many. One
+-- uncovered alternative can still denote a cartesian product of
+-- constructor choices across independent positions; past this bound we
+-- suppress the missing-branch warning (the redundancy results stay) rather
+-- than print pages of arms.
+maxMissingSuggestions :: Int
+maxMissingSuggestions = 64
+
+-- | Sequential coverage analysis, one branch at a time — the classic
+-- residual-set ("Lower Your Guards") shape:
+--
+--   * @uncovered@ is a DISJUNCTION of consistent constraint sets
+--     ('Nabla's) describing every value not matched by the branches seen so
+--     far; it starts as the unconstrained set (everything).
+--   * A branch whose guard conjunction is inconsistent with EVERY current
+--     'Nabla' covers nothing new: redundant. (Guard-less arms — OTHERWISE
+--     and bare binders — are deliberately exempt, preserving the
+--     long-standing behaviour that a defensive trailing catch-all is not
+--     flagged; they still consume the remaining value space.)
+--   * Splitting a 'Nabla' against a branch with guards @g1..gk@ yields the
+--     standard residue: @nabla ∧ ¬g1@, @nabla ∧ g1 ∧ ¬g2@, …; inconsistent
+--     conjunctions die immediately.
+--
+-- Keeping the disjunction as an explicit SET of independent nablas (instead
+-- of one refinement TREE walked per query, or one unioned constraint set)
+-- is what makes this both correct and fast: the predecessor tree walk was
+-- exponential in the branch count for multi-guard arms — a total, idiomatic
+-- 16-branch match over a record of four MAYBEs hung the checker — and the
+-- unioned-set variant conflated independent disjuncts, silently
+-- under-reporting missing arms. Each nabla is expanded to suggestions
+-- separately.
+--
+-- Returns 'Nothing' when the analysis gives up: unexpected tree shape, or
+-- the 'maxUncoveredNablas' cap tripped. No warning is better than a wrong
+-- one or a hang.
+analyzePatternMatch
+  :: (Resolved -> Int)
+  -> Resolved
+  -> PatTree' [Resolved] Resolved
+  -> Maybe PatternMatchAnalysis
+analyzePatternMatch ctorArity scrut tree = do
+  branches <- flattenPatTree tree
+  (uncovered, redundant) <- foldM analyzeBranch ([Consistent Set.empty], []) branches
+  let suggestions =
+        nubOrdOn (fmap getUnique) $
+          concatMap (expandToPattern ctorArity scrut) uncovered
+      capped = length (take (maxMissingSuggestions + 1) suggestions) > maxMissingSuggestions
+  pure MkPatternMatchAnalysis
+    { missingArms   = if capped then [] else suggestions
+    , redundantArms = reverse redundant
+    }
+  where
+    analyzeBranch (uncovered, redundant) (guards, b) =
+      let coversSomething =
+            any (\nab -> isJust (foldM (flip addConstraint) nab (map guardEq guards))) uncovered
+          redundant'
+            | not coversSomething, not (null guards) = b : redundant
+            | otherwise = redundant
+          uncovered' =
+            nubOrdOn nablaKey (concatMap (splitByGuards guards) uncovered)
+      in if length (take (maxUncoveredNablas + 1) uncovered') > maxUncoveredNablas
+           then Nothing
+           else Just (uncovered', redundant')
+
+    -- the residue of one nabla against one branch's guard conjunction
+    splitByGuards guards nabla = go nabla guards
+      where
+        go _ [] = []
+        go nab (g : gs) =
+          maybeToList (addConstraint (guardNeq g) nab)
+          <> case addConstraint (guardEq g) nab of
+               Nothing   -> [] -- prefix already impossible: no deeper residue
+               Just nab' -> go nab' gs
+
+    guardEq  (MkGuard _cs b n ns) = IsEq b n ns
+    guardNeq (MkGuard cs b n ns)  = IsNotEq b n ns cs
+
+    nablaKey = \ case
+      Bottom       -> Nothing
+      Consistent s -> Just (Set.map (fmap getUnique) s)
+
+-- | Decompose the desugared pattern tree back into its per-branch guard
+-- chains. 'desugarBranches' only ever builds a right-nested 'PatOr' of
+-- @foldr PatAnd (PatLeaf b)@ chains, but stay total: any other shape means
+-- the analysis quietly stands down ('Nothing').
+flattenPatTree :: PatTree' i n -> Maybe [([Guard i n], Branch n)]
+flattenPatTree = \ case
+  PatOr t1 t2   -> (<>) <$> flattenPatTree t1 <*> flattenPatTree t2
+  PatNoBranches -> Just []
+  t             -> (: []) <$> chain [] t
+  where
+    chain acc = \ case
+      PatAnd g t -> chain (g : acc) t
+      PatLeaf b  -> Just (reverse acc, b)
+      _          -> Nothing
+
+-- | What a consistent 'Nabla' says about ONE variable: pinned to a
+-- constructor ('EqCon'), excluded from some constructors ('NotEqCons'
+-- carrying the remaining candidates), or unconstrained ('NoInfo').
 data ConsistentSet n
-  = EqCon n [n] (ConsistentSet n)
+  = EqCon n [n]
   | NotEqCons [n] [n]
   | NoInfo
 
@@ -2152,13 +2207,22 @@ expandToPattern ctorArity scrut = \ case
     = Otherwise emptyAnno
     | otherwise = When emptyAnno pat
 
+  -- An 'IsEq' PINS the variable: it dominates and subsumes any
+  -- accompanying 'IsNotEq' constraints (a consistent set can hold e.g.
+  -- {x = C1, x /= C2}; the inequality carries no extra information once
+  -- the equality is known — treating it as an alternative used to append
+  -- spurious wildcard/other-constructor suggestions).
   toConsistentSet :: [Constr Resolved] -> ConsistentSet Resolved
-  toConsistentSet [] = NoInfo
-  toConsistentSet (IsEq _ c ns : rest) = EqCon c ns (toConsistentSet rest)
-  toConsistentSet (IsNotEq _ c ns cs : rest) = case toConsistentSet rest of
-    NotEqCons _ ncs -> NotEqCons ns (delByUnq c ncs)
-    NoInfo -> NotEqCons ns (delByUnq c cs)
-    e@EqCon {} -> e
+  toConsistentSet cs' = case [ (c, ns) | IsEq _ c ns <- cs' ] of
+    (c, ns) : _ -> EqCon c ns
+    []          -> goNeq cs'
+    where
+      goNeq [] = NoInfo
+      goNeq (IsNotEq _ c ns cs : rest) = case goNeq rest of
+        NotEqCons _ ncs -> NotEqCons ns (delByUnq c ncs)
+        NoInfo          -> NotEqCons ns (delByUnq c cs)
+        e@EqCon {}      -> e
+      goNeq (IsEq {} : rest) = goNeq rest
 
   delByUnq = deleteBy sameResolved
 
@@ -2177,7 +2241,7 @@ expandToPattern ctorArity scrut = \ case
     seen' = Set.insert (getUnique scrutVar) seen
     cnstrs = toConsistentSet $ lookupConstraints scrutVar nabla
     go' = \ case
-      EqCon c ns more -> map (mkSuggestedPattern c) (traverse (\n' -> go seen' n' nabla) ns) <> go' more
+      EqCon c ns -> map (mkSuggestedPattern c) (traverse (\n' -> go seen' n' nabla) ns)
       -- pad each suggested constructor with one underscore wildcard per
       -- argument position, so the rendered missing branch is valid L4 the
       -- user can paste (a bare non-nullary constructor would not be)

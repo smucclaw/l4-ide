@@ -122,15 +122,18 @@ live engine bugs that jumped the queue:
   genuinely-partial literal matches and could eventually subsume the
   primitive-type skip. Needs design care in the redundancy contradiction
   checker.
-- **T3f (NEW) disjunction-lossy `normalizeRefinement`** — `Nabla`'s Semigroup
-  UNIONS the constraint sets of uncovered DISJUNCTS into one set, an
-  approximation that (a) under-enumerates missing arms on multi-field
-  records (a two-BOOLEAN record match of `V TRUE TRUE` reports two of the
-  three uncovered combinations) and (b) fully under-DETECTS some multi-branch
-  nested misses (fixture `ok/pattern-nested-partial-undetected.l4` pins the
-  silent case and doubles as the termination tripwire). The real fix is a
-  proper Lower-Your-Guards residual-set representation — same design bucket
-  as T3e.
+- **T3f (NEW → FIXED post-verification)** — the original refinement-tree
+  analysis was BOTH exponential (a total, idiomatic 16-branch match over a
+  record of four MAYBEs hung the checker and the IDE; found by the
+  verification workflow) and lossy (`Nabla`'s Semigroup unioned uncovered
+  disjuncts, under-detecting multi-branch nested misses and
+  under-enumerating multi-field ones). Replaced wholesale by
+  `analyzePatternMatch`: sequential per-branch residual-set propagation
+  (the classic LYG shape) with documented give-up caps
+  (`maxUncoveredNablas`, `maxMissingSuggestions`). Detection is now
+  complete for constructor patterns, suggestions are minimal wildcard
+  covers, and the former silent case graduated to
+  `not-ok/tc/pattern-nested-multibranch-partial.l4`.
 - **Diamond-import environment starvation (NEW, out of scope)** — in
   `resolveImports` (Resolution.hs ~179-242), when A imports B and C and both
   import D, C is type-checked with an EMPTY dependency environment (D was
