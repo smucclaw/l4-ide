@@ -101,6 +101,30 @@ live engine bugs that jumped the queue:
    (the misspelled-constructor-becomes-binder hole; trailing typo binders are
    invisible to both warnings).
 
+**Post-verification fixes (a second adversarial workflow attacked the built
+branch with ~60 probes; core semantics survived — no false positives/
+negatives beyond the accepted residuals — but it found 4 must-fixes, all
+fixed):**
+
+10. **Candidate viability** — warnings rode the error channel and the
+    purely structural `prune`/`orElse` viability test failed any candidate
+    with a diagnostic, so an exhaustiveness warning inside one branch of a
+    type-directed disambiguation collapsed resolution into spurious
+    "multiple definitions" errors (a compile regression once LIST checking
+    turned on). Candidates are now judged by severity (`viableCandidate`);
+    `severity` moved to `L4.TypeCheck.Types` as the single canonical
+    mapping (the `L4.Diagnostic` duplicate is gone).
+11. **Analysis rewrite** (see T3f below) — the refinement-tree analysis was
+    exponential in branch count (a total 16-branch match over a 4-MAYBE
+    record hung the checker/IDE) and its missing-arm enumeration took
+    cartesian products (6^8 suggestions). Replaced by sequential
+    residual-set propagation with give-up caps.
+12. **Decide printer round-trips descs** — `l4 batch` re-serializes the
+    module via `prettyLayout`, which dropped desc annotations, stripping
+    `@partial` from generated wrappers and failing every batch row of an
+    `@export partial` function. The printer now re-emits a canonical
+    `@desc` line.
+
 **Still deferred, with reasons:**
 
 - **T3b `computedFields` cross-module** — keyed by `RawName`, so a naive
