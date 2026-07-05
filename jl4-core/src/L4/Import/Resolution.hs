@@ -166,21 +166,29 @@ data ImportResolutionError
 -- 4. Type-checks imports in dependency order
 -- 5. Returns all resolved imports (including transitive)
 --
--- Cycle detection prevents infinite loops. We track two sets:
+-- Cycle detection prevents infinite loops. We track two collections:
 -- - @inProgress@: modules currently being resolved (detecting these = cycle)
--- - @resolved@: modules already fully resolved (can skip these)
+-- - @resolved@: modules already fully resolved, keyed to their resolved records
+--
+-- The @resolved@ map holds the actual 'ResolvedImport' records (not just names)
+-- so that when a module is re-encountered we can hand back its already-computed,
+-- fully-type-checked record. This matters for /diamond/ imports: in
+-- @A -> {B, C} -> D@, once B has resolved D, C must still receive D's exported
+-- environment. Returning @[]@ here (the old, name-set behaviour) type-checked C
+-- against an empty dependency environment, silently degrading the types and
+-- entities of the second sibling that A then consumed. See issue #904.
 resolveImports
   :: forall m. Monad m
   => ModuleLookup m                      -- ^ How to find module sources
   -> Set.Set Text                        -- ^ Modules currently being resolved (for cycle detection)
-  -> Set.Set Text                        -- ^ Modules already fully resolved (to skip)
+  -> Map.Map Text ResolvedImport         -- ^ Modules already fully resolved, keyed to their records
   -> [Text]                              -- ^ Import names to resolve
   -> m (Either ImportResolutionError [ResolvedImport])
 resolveImports _lookup _inProgress _resolved [] = pure $ Right []
 resolveImports lookupModule inProgress resolved (modName : rest)
-  -- Already resolved - skip it
-  | modName `Set.member` resolved =
-      resolveImports lookupModule inProgress resolved rest
+  -- Already resolved - reuse its record so *siblings* inherit its environment
+  | Just cached <- Map.lookup modName resolved =
+      (fmap . fmap) (cached :) $ resolveImports lookupModule inProgress resolved rest
   -- Currently being resolved - cycle detected!
   | modName `Set.member` inProgress = 
       pure $ Left $ CyclicImport $ toList inProgress <> [modName]
@@ -223,10 +231,12 @@ resolveImports lookupModule inProgress resolved (modName : rest)
                         , riTypeChecked = tcResult
                         }
                   
-                  -- This module is now fully resolved
-                  -- Collect all resolved module names from transitive imports
-                  let transitiveNames = Set.fromList $ map (\ri -> ri.riModuleName) transitiveResolved
-                      newResolved = Set.insert modName $ Set.union resolved transitiveNames
+                  -- This module is now fully resolved.
+                  -- Register this module and everything its subtree resolved,
+                  -- keyed to their records, so that later siblings inherit the
+                  -- records (not just the names) via the already-resolved branch.
+                  let transitiveCache = Map.fromList [ (ri.riModuleName, ri) | ri <- transitiveResolved ]
+                      newResolved = Map.insert modName thisResolved (Map.union resolved transitiveCache)
                   
                   -- Continue with remaining imports (back to original inProgress)
                   restResult <- resolveImports lookupModule inProgress newResolved rest
@@ -288,7 +298,7 @@ typecheckWithDependencies lookupModule uri source = do
       -- Extract and resolve imports
       let importNames = extractImportNames parsed
       
-      importResult <- resolveImports lookupModule Set.empty Set.empty importNames
+      importResult <- resolveImports lookupModule Set.empty Map.empty importNames
       
       case importResult of
         Left (ModuleNotFound modName searched) ->
