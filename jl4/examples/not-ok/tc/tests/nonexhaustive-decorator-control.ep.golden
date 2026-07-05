@@ -1,0 +1,8 @@
+-- Control fixture for the @nonexhaustive decorator: this is ok/nonexhaustive-decorator.l4
+-- WITHOUT the decorator, so the non-exhaustive CONSIDER in `unwrap` (missing
+-- WHEN NOTHING) must fail the typecheck.
+GIVEN m IS A MAYBE NUMBER
+GIVETH A NUMBER
+unwrap m MEANS
+  CONSIDER m
+  WHEN JUST x THEN x

@@ -18,6 +18,7 @@ import L4.Mixfix (MixfixInfo(..))
 import qualified Base.Set as Set
 
 import Control.Applicative
+import qualified Data.List as List
 import qualified Data.Map.Strict as Map
 import qualified Generics.SOP as SOP
 import Optics.Core (gplate, traverseOf, (%), (?~))
@@ -97,6 +98,13 @@ data CheckError =
     -- ^ An @export-decorated DECIDE has a function-typed input (GIVEN or
     -- referenced ASSUME). Arguments: exported-function name, offending
     -- parameter/assume name.
+  | SuspiciousBinderPattern Resolved Resolved
+    -- ^ A CONSIDER branch pattern is a fresh binder (matching everything)
+    -- whose name closely resembles a constructor of the scrutinee's type
+    -- that no other branch covers — very likely a misspelled constructor.
+    -- Severity 'SInfo': a hint, never blocking (legitimate catch-all names
+    -- can trip the distance check). Arguments: the binder, the resembled
+    -- constructor.
   deriving stock (Eq, Generic, Show)
   deriving anyclass NFData
 
@@ -180,6 +188,35 @@ data CheckErrorContext =
 data Severity = SWarn | SError | SInfo
   deriving stock (Eq, Show)
 
+-- | THE canonical severity mapping for checker diagnostics — the one place
+-- that decides what blocks ('SError'), what warns ('SWarn'), and what is
+-- informational only ('SInfo'). Candidate viability during type-directed
+-- disambiguation ('viableCandidate', used by 'prune'\/'orElse'\/'softprune')
+-- and the diagnostic renderers all key off this single definition.
+severity :: CheckErrorWithContext -> Severity
+severity (MkCheckErrorWithContext e _) =
+  case e of
+    CheckInfo {}               -> SInfo
+    CheckWarning {}            -> SWarn
+    SuspiciousBinderPattern {} -> SInfo
+    _                          -> SError
+
+-- | Is this candidate still viable? Only 'SError'-severity diagnostics fail
+-- a candidate. Warnings and hints attached along the way must NOT influence
+-- name resolution: with a purely structural test (any diagnostic = failure),
+-- a mere exhaustiveness warning inside one branch of a type-directed
+-- disambiguation knocks out the correct candidate and resolution collapses
+-- into spurious ambiguity or out-of-scope errors — and silencing the warning
+-- (e.g. via @nonexhaustive) would change what a name resolves to.
+--
+-- The walk stops at the first fatal diagnostic, so rejected candidates cost
+-- no more than under the old structural test whenever their first
+-- diagnostic is already fatal (the common case).
+viableCandidate :: With CheckErrorWithContext a -> Bool
+viableCandidate = \ case
+  Plain _  -> True
+  With e w -> severity e /= SError && viableCandidate w
+
 instance HasSrcRange CheckErrorWithContext where
   rangeOf (MkCheckErrorWithContext e ctx) = rangeOf e <|> rangeOf ctx
 
@@ -197,6 +234,7 @@ instance HasSrcRange CheckError where
   rangeOf (InconsistentNameInSignature n _) = rangeOf n
   rangeOf (InconsistentNameInAppForm n _)   = rangeOf n
   rangeOf (CheckInfo _ mr)                  = mr
+  rangeOf (SuspiciousBinderPattern b _)     = rangeOf b
   rangeOf _                                 = Nothing
 
 -- | A token in a mixfix pattern, representing either a keyword (part of the function name)
@@ -362,11 +400,61 @@ data CheckEnv =
     -- ^ Map from record type RawName to set of computed field RawNames.
     -- Used to produce better error messages when a user tries to supply
     -- a computed field in a record constructor.
+    , inNonexhaustiveDecide      :: !Bool
+    -- ^ Are we checking the body of a definition its author decorated
+    -- @\@nonexhaustive@ (deliberately not defined for all inputs)? If so, the
+    -- non-exhaustive-CONSIDER warning is suppressed; redundancy warnings
+    -- stay active. Set via 'local' in @inferDecide@.
     , errorContext         :: !CheckErrorContext
     , sectionStack         :: ![NonEmpty Text]
     }
   deriving stock (Eq, Generic, Show)
   deriving anyclass (NFData)
+
+-- | Extend a module's accumulated 'CheckEnv' with the public surface of one
+-- imported (already type-checked) module. This is THE import-boundary merge:
+-- both the batch import resolution (@L4.Import.Resolution@) and the LSP
+-- build rule (@LSP.L4.Rules@) go through it, so their semantics cannot
+-- drift apart again. (They once did: one site silently left-biased
+-- conflicting 'entityInfo' entries, the other @assert@ed equality — an
+-- assert GHC compiles out at @-O@, so the two sites merely LOOKED
+-- different. The by-equality variant also paid a deep structural 'Eq' per
+-- colliding key, and collisions are the norm: every dependency's
+-- 'entityInfo' embeds the builtins and its own transitive imports.)
+--
+-- Colliding 'entityInfo' keys are unioned left-biased. This is safe
+-- because a 'Unique' embeds its defining module and each module is
+-- type-checked once per session, so a key arriving via two import paths
+-- (builtins, diamond dependencies) always carries identical copies of the
+-- same entry.
+--
+-- Precondition: the imported 'EntityInfo' has already been zonked (had its
+-- module's final substitution applied), so no inference variables leak
+-- across the boundary.
+--
+-- The by-'SrcRange' frame-local maps ('functionTypeSigs', 'declTypeSigs',
+-- 'declareDeclarations', 'assumeDeclarations') are deliberately reset:
+-- their readers only ever look up syntax nodes of the module currently
+-- being checked. 'computedFields' is reset too because it is keyed by
+-- 'RawName' and unioning it across modules could conflate same-named
+-- record types; the cost is error-message quality only (see the notes in
+-- the exhaustiveness design doc).
+unionImportedCheckEnv :: CheckEnv -> Environment -> EntityInfo -> MixfixRegistry -> CheckEnv
+unionImportedCheckEnv accEnv depEnvironment depEntityInfo depMixfixRegistry =
+  MkCheckEnv
+    { moduleUri = accEnv.moduleUri
+    , environment = Map.unionWith List.union accEnv.environment depEnvironment
+    , entityInfo = Map.union accEnv.entityInfo depEntityInfo
+    , functionTypeSigs = Map.empty
+    , declTypeSigs = Map.empty
+    , declareDeclarations = Map.empty
+    , assumeDeclarations = Map.empty
+    , mixfixRegistry = unionMixfixRegistry accEnv.mixfixRegistry depMixfixRegistry
+    , computedFields = Map.empty
+    , inNonexhaustiveDecide = False
+    , errorContext = None
+    , sectionStack = []
+    }
 
 newtype SectionNames =
   MkSectionNames
@@ -780,11 +868,8 @@ orElse m1 m2 = do
   MkCheck $ \ e s ->
     let
       candidates = runCheck m1 e s
-
-      isSuccess (Plain _, _)  = True
-      isSuccess (With _ _, _) = False
     in
-      case filter isSuccess candidates of
+      case filter (viableCandidate . fst) candidates of
         [] -> runCheck m2 e s
         xs -> xs
 
@@ -804,34 +889,31 @@ prune m = do
       candidates :: [(With CheckErrorWithContext a, CheckState)]
       candidates = runCheck m s env
 
-      proc []                    = [] -- should never occur
-      proc [a]                   = [a]
-      proc ((Plain a, s')  : cs) = procPlain (Plain a, s') cs
-      proc ((With e x, s') : cs) = procWith (With e x, s') cs
+      proc []       = [] -- should never occur
+      proc [a]      = [a]
+      proc (a : cs)
+        | viableCandidate (fst a) = procViable a cs
+        | otherwise               = procFailed a cs
 
-      -- We have a success, we don't want a second one
-      procPlain a []                   = [a]
-      procPlain a ((With _ _, _) : cs) = procPlain a cs
-      procPlain a cs
-        | plain = [first (With (MkCheckErrorWithContext InternalAmbiguityError ctx)) a]
-        -- NOTE: in the case of ambiguity errors, the ambiguity error will always occurs as
-        -- the last element in the list
-        | otherwise = [last cs]
-        where
-          plain = allPlain $ map fst cs
+      -- We have a (possibly warning-carrying) success, we don't want a second one
+      procViable a []       = [a]
+      procViable a (c : cs)
+        | viableCandidate (fst c) =
+            if all (viableCandidate . fst) cs
+              then [first (With (MkCheckErrorWithContext InternalAmbiguityError ctx)) a]
+              -- NOTE: in the case of ambiguity errors, the ambiguity error will always occur as
+              -- the last element in the list
+              else [last (c : cs)]
+        | otherwise = procViable a cs
 
       -- We have a failure, we're still looking for a success, and prefer the last failure
-      procWith a []                    = [a]
-      procWith _ ((Plain a, s')  : cs) = procPlain (Plain a, s') cs
-      procWith _ ((With e x, s') : cs) = procWith (With e x, s') cs
+      procFailed a []       = [a]
+      procFailed _ (c : cs)
+        | viableCandidate (fst c) = procViable c cs
+        | otherwise               = procFailed c cs
 
     in
       proc candidates
-
-allPlain :: [With e a] -> Bool
-allPlain = all \case
-  Plain{} -> True
-  With {} -> False
 
 -- | Prune to one result if there's a clearly best one at this point,
 -- but don't force it.
@@ -843,20 +925,23 @@ softprune m = do
       candidates :: [(With CheckErrorWithContext a, CheckState)]
       candidates = runCheck m s env
 
-      proc []                    = [] -- should never occur
-      proc [a]                   = [a]
-      proc ((Plain a, s')  : cs) = procPlain (Plain a, s') cs
-      proc ((With e x, s') : cs) = procWith (With e x, s') cs
+      proc []       = [] -- should never occur
+      proc [a]      = [a]
+      proc (a : cs)
+        | viableCandidate (fst a) = procViable a cs
+        | otherwise               = procFailed a cs
 
       -- We have a success, we don't want a second one
-      procPlain a []                    = [a]
-      procPlain _ ((Plain _, _)  : _cs) = candidates
-      procPlain a ((With _ _, _) :  cs) = procPlain a cs
+      procViable a []       = [a]
+      procViable a (c : cs)
+        | viableCandidate (fst c) = candidates
+        | otherwise               = procViable a cs
 
       -- We have a failure, we're still looking for a success, and prefer the last failure
-      procWith a []                     = [a]
-      procWith _ ((Plain a, s')  : cs)  = procPlain (Plain a, s') cs
-      procWith _ ((With e x, s') : cs)  = procWith (With e x, s') cs
+      procFailed a []       = [a]
+      procFailed _ (c : cs)
+        | viableCandidate (fst c) = procViable c cs
+        | otherwise               = procFailed c cs
 
     in
       proc candidates
@@ -907,6 +992,7 @@ extendEnv cis env =
     , assumeDeclarations = e.assumeDeclarations
     , mixfixRegistry = e.mixfixRegistry
     , computedFields = e.computedFields
+    , inNonexhaustiveDecide = e.inNonexhaustiveDecide
     , sectionStack = e.sectionStack
     }
     where

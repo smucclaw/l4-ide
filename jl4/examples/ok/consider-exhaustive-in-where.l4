@@ -1,0 +1,21 @@
+DECLARE Region IS ONE OF
+    central
+    suburban
+    rural
+
+-- Companion to not-ok/tc/consider-nonexhaustive-in-where.l4: a CONSIDER
+-- nested inside a WHERE block that covers every constructor of the
+-- enclosing `DECLARE ... IS ONE OF` must type-check and evaluate cleanly.
+-- This guards against the exhaustiveness fix over-firing on complete matches.
+GIVEN region IS A Region
+`tax rate` MEANS
+    result
+    WHERE
+        result MEANS
+            CONSIDER region
+              WHEN central  THEN 6
+              WHEN suburban THEN 4
+              WHEN rural    THEN 2
+
+#EVAL `tax rate` OF central
+#EVAL `tax rate` OF rural

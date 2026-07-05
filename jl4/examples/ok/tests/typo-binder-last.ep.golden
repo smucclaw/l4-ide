@@ -1,0 +1,18 @@
+-- Typo-binder hint: `gren` in the LAST arm is a fresh binder (the resolver
+-- silently falls back when a pattern name is no known constructor), so the
+-- match is exhaustive and nothing follows it — invisible to both the
+-- missing and redundancy warnings, yet `f green` now returns 2 by
+-- accident of arm order rather than by matching a constructor. The
+-- SInfo-severity hint (captured in this fixture's golden) points at the
+-- resemblance to the uncovered constructor `green`. Never blocking.
+DECLARE Color IS ONE OF red, green, blue
+
+GIVEN c IS A Color
+GIVETH A NUMBER
+f c MEANS
+  CONSIDER c
+  WHEN red THEN 1
+  WHEN blue THEN 3
+  WHEN gren THEN 2
+
+#EVAL f green

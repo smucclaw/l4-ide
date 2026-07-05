@@ -1,0 +1,8 @@
+-- LIST exhaustiveness: a match handling only EMPTY must be flagged, and the
+-- missing cons case must be suggested in surface syntax —
+-- `WHEN `_` FOLLOWED BY `_` THEN` — not as the internal cons constructor.
+GIVEN xs IS A LIST OF NUMBER
+GIVETH A NUMBER
+count xs MEANS
+  CONSIDER xs
+  WHEN EMPTY THEN 0

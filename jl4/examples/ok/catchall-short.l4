@@ -1,0 +1,13 @@
+-- NO-FIRE control for the typo-binder hint: single-letter catch-alls are
+-- below the length floor for the edit-distance tier and match nothing
+-- case-insensitively — no hint, clean check.
+DECLARE Grade IS ONE OF a, b, c
+
+GIVEN g IS A Grade
+GIVETH A NUMBER
+f g MEANS
+  CONSIDER g
+  WHEN a THEN 1
+  WHEN x THEN 0
+
+#EVAL f b

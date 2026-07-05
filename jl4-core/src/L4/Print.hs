@@ -15,6 +15,7 @@ import qualified Data.Time.Zones as TZ
 import qualified Data.Time.Zones.All as TZAll
 import qualified Data.Text.Encoding as TE
 import Control.Exception (SomeException, catch)
+import qualified Optics
 import System.IO.Unsafe (unsafePerformIO)
 import Prettyprinter
 import Prettyprinter.Render.Text
@@ -264,8 +265,18 @@ instance LayoutPrinterWithName a => LayoutPrinter (Assume a) where
 
 instance LayoutPrinterWithName a => LayoutPrinter (Decide a) where
   printWithLayout = \ case
-    MkDecide _ tySig appForm expr ->
-      vcat
+    MkDecide ann tySig appForm expr ->
+      vcat $
+        -- Re-emit the desc annotation: its leading keywords carry the
+        -- @export/@nonexhaustive flags, so a printed module must round-trip it.
+        -- 'l4 batch' re-typechecks the printed source; dropping the desc
+        -- here used to strip @nonexhaustive from the generated wrapper module,
+        -- resurrecting the suppressed missing-branch warning and failing
+        -- every batch row of a deliberately-partial exported function.
+        [ "@desc" <+> pretty (Text.strip (getDesc d))
+        | Just d <- [Optics.view annDesc ann]
+        ]
+        <>
         [ printWithLayout tySig
         , "DECIDE" <+> printWithLayout appForm <+> "IS"
         , indent 2 (printWithLayout expr)

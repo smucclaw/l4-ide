@@ -27,6 +27,7 @@ zipWith op list1 list2 MEANS
 
 tail list MEANS
   CONSIDER list
+  WHEN EMPTY THEN EMPTY
   WHEN x FOLLOWED BY xs THEN xs
 
 nats MEANS 0 FOLLOWED BY zipWith (GIVEN x, y YIELD x + y) ones nats
