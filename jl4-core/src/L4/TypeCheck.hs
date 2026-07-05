@@ -1213,12 +1213,12 @@ constructorsInScopeFromEntityInfo ei =
 --     directions (flag load-bearing partial matches as incomplete, certify
 --     unmatchable cases as covered).
 --
---   * @EVENT@ — its scanned set (just the event constructor) is actually
---     complete, so checking WOULD be sound; it stays excluded only because the
---     type name @EVENT@ is shadowed by its own term constructor in
---     'initialEnvironment' (the @NormalName "EVENT"@ key is claimed twice and
---     the term wins), making event-typed annotations unwritable in practice.
---     Lift this exclusion in the same change that fixes that shadowing.
+-- @EVENT@ USED to be excluded here too, but only because the type name @EVENT@
+-- was shadowed by its own term constructor in 'initialEnvironment', making
+-- event-typed annotations unwritable. Now that the shadowing is fixed (both
+-- uniques share the one key), @EVENT@ is checked like any other sum type: its
+-- scanned set is the sole @event@ constructor (@WAIT UNTIL@ is 'Computable' and
+-- delegates to it), which is COMPLETE, so the check is sound. See issue #905.
 --
 -- @MAYBE@ and @EITHER@ have COMPLETE, all-'Constructor' sets
 -- (@nothing@/@just@, @left@/@right@) and ARE checked. @BOOLEAN@ likewise
@@ -1226,7 +1226,7 @@ constructorsInScopeFromEntityInfo ei =
 -- 'constructorsInScopeFromEntityInfo'.
 builtinNonExhaustiveTypeUniques :: Set Unique
 builtinNonExhaustiveTypeUniques =
-  Set.fromList [contractUnique, eventUnique]
+  Set.fromList [contractUnique]
 
 -- | The 'Unique' of the head of a constructor's result type: strip any leading
 -- 'Forall' (type parameters) and 'Fun' (constructor arguments), then take the

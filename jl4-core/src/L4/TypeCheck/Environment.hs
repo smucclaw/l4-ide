@@ -913,8 +913,14 @@ initialEnvironment =
     , (rawName rightName,        [rightUnique       ])
     , (rawName contractName,     [contractUnique    ])
     , (NormalName "PROVISION",   [contractUnique    ])  -- Deprecated alias for DEONTIC
-    , (rawName eventName,        [eventUnique       ])
-    , (rawName eventCName,       [eventCUnique      ])
+    -- EVENT puns the type and its sole constructor: the un-renamed "event"
+    -- builtin surfaces (uppercased) as "EVENT", the same surface name that
+    -- "eventC" is renamed to. Both uniques must therefore share the one key --
+    -- as two separate entries the Map.fromList silently dropped the type, so
+    -- `GIVEN e IS AN EVENT ...` was unresolvable (issue #905). Listing both is
+    -- safe: resolveType keeps only the type, term/constructor resolution keeps
+    -- only the constructor.
+    , (rawName eventName,        [eventUnique, eventCUnique])
     , (rawName evalContractName, [evalContractUnique])
     , (rawName fulfilName,       [fulfilUnique      ])
     , (rawName isIntegerName,    [isIntegerUnique ])
