@@ -915,7 +915,10 @@ handlers evalConfig recorder =
                     keepModule (MkModule _ u _) = not (u `Set.member` excludedUris)
                     deps = filter keepModule (drop 1 (flattenExportModules tcResult))
                     ecfg = ExportDoc.defaultExportConfig
-                      { ExportDoc.dropUnused = not reqParams.includeUnused }
+                      { ExportDoc.dropUnused = not reqParams.includeUnused
+                      , ExportDoc.mixfixHeadings =
+                          ExportDoc.mixfixHeadingsFromRegistry tcResult.mixfixRegistry
+                      }
                     rcfg = ExportRender.MkRenderConfig
                              { ExportRender.numberSections = reqParams.numberSections
                              , ExportRender.numberClauses = reqParams.numberClauses

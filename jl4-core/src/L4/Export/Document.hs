@@ -30,6 +30,7 @@ module L4.Export.Document
   , ExportConfig (..)
   , Disposition (..)
   , defaultExportConfig
+  , mixfixHeadingsFromRegistry
     -- * Entry points
   , buildDocument
   , buildPlan
@@ -41,7 +42,7 @@ import Control.Applicative ((<|>))
 import qualified Base.Text as Text
 import Data.Aeson ((.=))
 import qualified Data.Aeson as Aeson
-import Data.Char (isLower, isUpper, toUpper)
+import Data.Char (isLower, isUpper, toLower, toUpper)
 import qualified Data.List as List
 import Data.List.Split (chunksOf)
 import qualified Data.Map.Strict as Map
@@ -51,8 +52,10 @@ import Optics (gplate, (%), (^.))
 
 import L4.Desugar (carameliseNode)
 import L4.Export (isExportedDecide)
+import L4.Mixfix (MixfixInfo (..), MixfixPatternToken (..))
 import L4.Nlg (simpleLinearizer)
 import L4.Syntax
+import L4.TypeCheck.Types (CheckInfo (..), FunTypeSig (..), MixfixRegistry (..))
 import L4.Utils.Ratio (prettyRatio)
 
 -- ----------------------------------------------------------------------------
@@ -66,6 +69,11 @@ data ExportConfig = MkExportConfig
   { dropUnused         :: !Bool
   , moduleDispositions :: !(Map.Map NormalizedUri Disposition)
   , unitDispositions   :: !(Map.Map Unique Disposition)
+  , mixfixHeadings     :: !(Map.Map Unique Text)
+    -- ^ Precomputed prose headings for mixfix functions, keyed by the
+    -- function's 'Unique'. Name resolution discards the mixfix pattern, so
+    -- these are derived from the typechecker's 'MixfixRegistry' (via
+    -- 'mixfixHeadingsFromRegistry') and threaded in by the caller.
   }
   deriving stock (Show, Generic)
 
@@ -74,6 +82,7 @@ defaultExportConfig = MkExportConfig
   { dropUnused         = True
   , moduleDispositions = Map.empty
   , unitDispositions   = Map.empty
+  , mixfixHeadings     = Map.empty
   }
 
 -- ----------------------------------------------------------------------------
@@ -218,13 +227,12 @@ extractUnits (MkModule _ _ section) = goSection section
 
 -- | All renderable units across the open module and its dependencies, with
 -- mixfix headings fixed up and @\@nlg@ calls expanded.
-allUnits :: Module Resolved -> [Module Resolved] -> [Unit]
-allUnits mainModule deps =
+allUnits :: Map.Map Unique Text -> Module Resolved -> [Module Resolved] -> [Unit]
+allUnits headings mainModule deps =
   let mods  = mainModule : deps
-      canon = canonicalNames mods
       info  = nlgFnInfo mods
       ctors = recordCtorFields mods
-  in map (substNlgInUnit info . mapUnitBody (normalizePositionalRecords ctors) . fixMixfixHeading canon)
+  in map (substNlgInUnit info . mapUnitBody (normalizePositionalRecords ctors) . fixMixfixHeading headings)
        (extractUnits mainModule <> concatMap extractUnits deps)
 
 -- | Apply a transform to a unit's DECIDE body (a no-op for other units).
@@ -334,51 +342,60 @@ renderNlgWith argMap = \case
     Just a  -> simpleLinearizer a
     Nothing -> resolvedText r
 
--- | Map a mixfix function's 'Unique' to its canonical name (the one with @_@
--- holes). The defining occurrence keeps only the first keyword, but every
--- /referring/ occurrence carries the full canonical name, so we harvest it from
--- the use sites.
-canonicalNames :: [Module Resolved] -> Map.Map Unique Text
-canonicalNames mods = Map.fromList
-  [ (getUnique r, nm)
-  | m <- mods, r <- toList m, isRef r
-  , let nm = nameToText (getActual r), Text.elem '_' nm
-  ]
- where
-  isRef Ref{} = True
-  isRef _     = False
-
--- | Give a mixfix definition a readable heading by interleaving its GIVEN
--- parameter names back into the canonical pattern (@"the prepared form of _ at
--- order _"@ + params @the window@/@the order@ → @"the prepared form of the
--- window at order the order"@).
+-- | Replace a mixfix function's heading with its precomputed prose form
+-- (e.g. "a Person buyer may trade with a Person seller"). The map is keyed by
+-- the function's 'Unique'; non-mixfix and absent units are left untouched.
 fixMixfixHeading :: Map.Map Unique Text -> Unit -> Unit
-fixMixfixHeading canon u = case u.uDecl of
-  UDecide (MkDecide _ tysig _ _)
-    | Just pat <- Map.lookup u.uPrimary canon
-    , Just h <- interleaveHoles pat (givenParamTexts tysig) ->
-        u { uHeading = h }
-  _ -> u
+fixMixfixHeading headings u = case Map.lookup u.uPrimary headings of
+  Just h  -> u { uHeading = h }
+  Nothing -> u
 
-givenParamTexts :: TypeSig Resolved -> [Text]
-givenParamTexts (MkTypeSig _ (MkGivenSig _ names) _) =
-  [ resolvedText r | MkOptionallyTypedName _ r _ <- names ]
+-- | Build the prose headings for every mixfix function in a typechecked
+-- 'MixfixRegistry', keyed by the function's 'Unique'. Name resolution discards
+-- the mixfix pattern from the AST the renderer sees, but the registry retains
+-- it (alongside the checked 'TypeSig'), so each parameter slot can be rendered
+-- as "a \<Type\> \<name\>" interleaved with the keyword segments — in the order
+-- the author wrote them. Works for functions that are never referenced.
+mixfixHeadingsFromRegistry :: MixfixRegistry -> Map.Map Unique Text
+mixfixHeadingsFromRegistry reg = Map.fromList
+  [ (getUnique nm, heading)
+  | fts <- concat (Map.elems reg.byCanonicalName)
+  , Just info <- [fts.mixfixInfo]
+  , let heading = mixfixHeadingText fts.rtysig info
+  , nm <- fts.name.names
+  ]
 
--- | Fill the @_@ holes of a space-separated pattern with the given texts.
-interleaveHoles :: Text -> [Text] -> Maybe Text
-interleaveHoles pat fillers =
-  let toks  = Text.words pat
-      holes = length (filter (== "_") toks)
-  in if holes >= 1 && holes == length fillers
-       then Just (Text.unwords (go toks fillers))
-       else Nothing
+-- | Interleave a mixfix pattern's keyword segments with its parameter slots,
+-- each slot rendered as "a \<Type\> \<name\>" using the GIVEN type.
+mixfixHeadingText :: TypeSig Resolved -> MixfixInfo -> Text
+mixfixHeadingText tysig info =
+  let types = paramTypeMap tysig
+      tok (MixfixKeyword kw) = rawNameToText kw
+      tok (MixfixParam p)    =
+        let pn = rawNameToText p
+        in paramPhrase pn (Map.findWithDefault Nothing pn types)
+  in normalizeWs (Text.unwords (map tok info.pattern))
+
+-- | Each GIVEN parameter's name to its (optional) declared type.
+paramTypeMap :: TypeSig Resolved -> Map.Map Text (Maybe (Type' Resolved))
+paramTypeMap (MkTypeSig _ (MkGivenSig _ names) _) =
+  Map.fromList [ (resolvedText r, mty) | MkOptionallyTypedName _ r mty <- names ]
+
+-- | "a Person buyer" / "an Order item" — article + type + parameter name.
+-- Falls back to the bare parameter name when no type is available.
+paramPhrase :: Text -> Maybe (Type' Resolved) -> Text
+paramPhrase pname mty = case mty >>= typeDisplay of
+  Just ty -> article ty <> " " <> ty <> " " <> cleanParam pname
+  Nothing -> cleanParam pname
  where
-  go [] _ = []
-  go (t : ts) fs
-    | t == "_" = case fs of
-        (f : rest) -> f : go ts rest
-        []         -> t : go ts fs
-    | otherwise = t : go ts fs
+  typeDisplay ty = case userTypeName ty of
+    Just t  -> Just (spaceCamel t)
+    Nothing -> case ty of
+      TyApp _ n _ -> Just (nameToText (getActual n))   -- builtin, e.g. NUMBER
+      _           -> Nothing
+  article ty = case Text.uncons ty of
+    Just (c, _) | toLower c `elem` ['a', 'e', 'i', 'o', 'u'] -> "an"
+    _                                                        -> "a"
 
 decideApp :: Decide Resolved -> Resolved
 decideApp (MkDecide _ _ (MkAppForm _ n _ _) _) = n
@@ -470,7 +487,7 @@ buildDocument cfg mainModule deps =
  where
   (title, bodySection) = documentTitleAndBody mainModule
   mainUri = moduleUri' mainModule
-  units   = allUnits mainModule deps
+  units   = allUnits cfg.mixfixHeadings mainModule deps
   graph   = buildGraph mainUri units
   reach   = reachableUnits graph
   ranks   = rankByBlockId graph
@@ -757,7 +774,8 @@ decideRendering tysig body
   | Regulative _ deon <- body =
       ("provides that", deonticClause deon)
   | Just (cols, rows) <- bodyAsTable body =
-      ("means", tableClause cols rows)
+      ( maybe "means" ("means the following list of " <>) (listElemTypeName body)
+      , tableClause cols rows )
   | Just items <- bodyAsValueList body =
       ("means", CChain "a list of the following" items)
   | Just (ctor, fields) <- bodyAsRecordLiteral body =
@@ -861,6 +879,16 @@ bodyAsRecordLiteral :: Expr Resolved -> Maybe (Text, [NamedExpr Resolved])
 bodyAsRecordLiteral = \case
   AppNamed _ ctor nes _ -> Just (resolvedText ctor, nes)
   _                     -> Nothing
+
+-- | The element type name of a @LIST@ of record literals — the constructor of
+-- its first element (the rows share columns, so the type is uniform). Used to
+-- caption a record-list table as "… the following list of <Type>".
+listElemTypeName :: Expr Resolved -> Maybe Text
+listElemTypeName e = case carameliseNode e of
+  List _ (item : _) -> case carameliseNode item of
+    AppNamed _ ctor _ _ -> Just (resolvedText ctor)
+    _                   -> Nothing
+  _ -> Nothing
 
 -- | A @LIST@ of record literals that all share the same field columns: the
 -- column headings and the per-row field-value expressions. Renders as a table.
@@ -1373,7 +1401,7 @@ buildPlan cfg mainModule deps =
     }
  where
   mainUri = moduleUri' mainModule
-  units   = allUnits mainModule deps
+  units   = allUnits cfg.mixfixHeadings mainModule deps
   graph   = buildGraph mainUri units
   reach   = reachableUnits graph
   indexed = Map.toList graph.ugUnits

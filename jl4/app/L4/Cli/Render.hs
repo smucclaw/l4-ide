@@ -124,7 +124,10 @@ renderCmd opts = do
       -- Surface any diagnostics on stderr, but still render: a document is
       -- useful even when the file has non-fatal issues.
       putDiagnostics errs
-      let cfg = defaultExportConfig { dropUnused = not opts.renderIncludeUnused }
+      let cfg = defaultExportConfig
+                  { dropUnused = not opts.renderIncludeUnused
+                  , mixfixHeadings = mixfixHeadingsFromRegistry tc.mixfixRegistry
+                  }
           rcfg = MkRenderConfig
                    { numberSections = opts.renderNumberSections
                    , numberClauses  = opts.renderNumberClauses
