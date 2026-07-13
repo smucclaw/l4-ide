@@ -1,4 +1,4 @@
-# DONE: exhaustiveness checking for `CONSIDER` over *imported* enums
+# DONE: exhaustiveness checking for `CONSIDER` over _imported_ enums
 
 ## Status
 
@@ -17,6 +17,7 @@ flagged:
 -- region.l4 (or any library, e.g. `time`'s `Meridiem Indicator`)
 DECLARE Region IS ONE OF central; suburban; rural
 ```
+
 ```
 -- main.l4
 IMPORT region

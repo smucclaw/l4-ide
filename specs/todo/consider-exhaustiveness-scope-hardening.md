@@ -189,9 +189,9 @@ follow-up. Retained for the record.
 `CONSIDER` exhaustiveness checking silently no-ops in two places — inside a
 `WHERE`/`LET` block, and over an enum imported from another module. Both are the
 same defect: the type-checker's exhaustiveness analysis reads
-`declareDeclarations` with `Map.elems` (it wants *every enum in scope*), but that
+`declareDeclarations` with `Map.elems` (it wants _every enum in scope_), but that
 field is maintained as a **current-frame** map (replaced on entering a scope,
-reset to empty at the import boundary) because its *other* reader only ever looks
+reset to empty at the import boundary) because its _other_ reader only ever looks
 up the current frame by `SrcRange`. One field, two readers, incompatible
 invariants, and nothing forces them to stay reconciled.
 
@@ -205,16 +205,16 @@ special case.
 
 `CheckEnv` (`jl4-core/src/L4/TypeCheck/Types.hs`) carries four frame-local maps:
 
-| field | reader(s) | reader contract |
-|---|---|---|
-| `functionTypeSigs` | `lookupFunTypeSigByAnno` | by `SrcRange`, current frame only |
-| `declTypeSigs`     | `lookupDeclTypeSigByAnno` | by `SrcRange`, current frame only |
-| `assumeDeclarations` | `lookupAssumeCheckedByAnno` | by `SrcRange`, current frame only |
+| field                 | reader(s)                                            | reader contract                                  |
+| --------------------- | ---------------------------------------------------- | ------------------------------------------------ |
+| `functionTypeSigs`    | `lookupFunTypeSigByAnno`                             | by `SrcRange`, current frame only                |
+| `declTypeSigs`        | `lookupDeclTypeSigByAnno`                            | by `SrcRange`, current frame only                |
+| `assumeDeclarations`  | `lookupAssumeCheckedByAnno`                          | by `SrcRange`, current frame only                |
 | `declareDeclarations` | `lookupDeclareCheckedByAnno` **and** `checkConsider` | by `SrcRange` **and** `Map.elems` (all in scope) |
 
 The first three are read in exactly one way — a `SrcRange` lookup for the thing
 being checked right now, which always lives in the current frame. For them,
-"replace the map on entering a scope, reset it at the import boundary" is *correct*
+"replace the map on entering a scope, reset it at the import boundary" is _correct_
 and efficient.
 
 `declareDeclarations` grew a second reader when exhaustiveness analysis was added
@@ -226,7 +226,7 @@ resolvedDecls <- asks (Map.elems . (.declareDeclarations))
 let cl = buildConstructorLookup resolvedDecls        -- Map Unique [Resolved]
 ```
 
-`buildConstructorLookup` needs the constructor set of the *scrutinee's* type,
+`buildConstructorLookup` needs the constructor set of the _scrutinee's_ type,
 which may be declared in an enclosing block or an imported module — i.e. it needs
 "all enums in scope," not "this frame's declares." But the field's writers were
 never revisited:
@@ -341,7 +341,7 @@ carries the small `Map Unique [Resolved]`, not the heavy declares map.
    through the Shake cache for a job that needs only type→constructors, and still
    overloads one field with two contracts.
 3. **Rebuild the lookup from `entityInfo`** (already merged across imports). No new
-   field, but hacky: `KnownType`'s `[Resolved]` is the type's *parameters*, not its
+   field, but hacky: `KnownType`'s `[Resolved]` is the type's _parameters_, not its
    constructors; constructors are separate `KnownTerm _ Constructor` entries that
    would have to be scanned and grouped by result-type `Unique`, disambiguating
    record vs enum constructors. Fragile and implicit.
@@ -369,7 +369,7 @@ reverse-engineering it.
   `not-ok/tc/consider-nonexhaustive-in-where.l4`).
 - Add a multi-module pair: importer with a non-exhaustive `CONSIDER` over an
   imported enum → must be flagged; exhaustive variant → must pass and evaluate.
-- Add a nested `WHERE` inside a module that *also* imports an enum, matching over
+- Add a nested `WHERE` inside a module that _also_ imports an enum, matching over
   the imported type, to exercise both accumulation paths at once.
 - Regression: confirm Shake early-cutoff still invalidates the importer when the
   imported enum gains/loses a constructor (the new `TypeCheckResult` field must be
@@ -381,6 +381,6 @@ reverse-engineering it.
 Low–moderate. The `CheckEnv` change is mechanical. The only real surface is the new
 `TypeCheckResult` field and its `NFData`/cache behaviour; the mitigation is that it
 is a small, strict, monoidal map, and the early-cutoff test above pins the
-invalidation behaviour. Behaviour change is strictly *more* diagnostics (previously
+invalidation behaviour. Behaviour change is strictly _more_ diagnostics (previously
 missed non-exhaustive matches now reported); the full golden suite bounds the blast
 radius, as it did for the interim fix (887/0).

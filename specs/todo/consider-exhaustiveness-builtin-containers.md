@@ -3,7 +3,7 @@
 ## Status
 
 - **LIST: DONE** (commit `feat(typecheck): LIST exhaustiveness checking, via
-  oracle injection` on `mengwong/consider-exhaustiveness`).
+oracle injection` on `mengwong/consider-exhaustiveness`).
 - **CONTRACT: permanently excluded, by design** (documented at the exclusion
   site).
 - **EVENT: sound to enable, blocked by an unrelated name-shadowing bug**
