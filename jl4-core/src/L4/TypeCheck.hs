@@ -13,8 +13,7 @@ module L4.TypeCheck
   , isQuantifier
   , prettyCheckError
   , prettyCheckErrorWithContext
-  -- 'severity' is re-exported via @module X@ (it lives in
-  -- L4.TypeCheck.Types now, next to candidate viability)
+  , severity
   )
   where
 
@@ -134,7 +133,6 @@ mkInitialCheckEnv moduleUri environment entityInfo =
     , assumeDeclarations = Map.empty
     , mixfixRegistry = emptyMixfixRegistry
     , computedFields = Map.empty
-    , inNonexhaustiveDecide = False
     , moduleUri
     , sectionStack = []
     }
@@ -215,11 +213,9 @@ withExtraMixfix :: MixfixRegistry -> Check a -> Check a
 withExtraMixfix mixfixAdds =
   local (updateMixfix mixfixAdds)
   where
-    -- positional match: 'mixfixRegistry' is a duplicated field name, so a
-    -- record update here would be ambiguous under DuplicateRecordFields
     updateMixfix :: MixfixRegistry -> CheckEnv -> CheckEnv
-    updateMixfix adds (MkCheckEnv a b c d e f g reg cf p h i) =
-      MkCheckEnv a b c d e f g (unionMixfixRegistry adds reg) cf p h i
+    updateMixfix adds (MkCheckEnv a b c d e f g reg cf h i) =
+      MkCheckEnv a b c d e f g (unionMixfixRegistry adds reg) cf h i
 
 dedupCheckInfos :: [CheckInfo] -> [CheckInfo]
 dedupCheckInfos = go Set.empty []
@@ -263,13 +259,6 @@ withDeclares rdecls =
     go (MkDeclChecked (Left  a) cis) = Left  . (, MkDeclChecked a cis) <$> rangeOf a
     go (MkDeclChecked (Right a) cis) = Right . (, MkDeclChecked a cis) <$> rangeOf a
   in
-    -- These are frame-local, by-'SrcRange' lookup maps: they are read only by
-    -- 'lookupDeclareCheckedByAnno'/'lookupAssumeCheckedByAnno' to find the
-    -- declaration being checked right now, which always lives in the current
-    -- frame, so replacing (not accumulating) on scope entry is correct.
-    -- Exhaustiveness checking's "every constructor in scope" query does NOT read
-    -- these — it reads 'entityInfo' (see 'constructorsInScopeFromEntityInfo'),
-    -- which is cumulative across scopes and imports and includes builtins.
     extendKnownMany topDeclares . local \s -> s
       { declareDeclarations = Map.fromList rdeclares
       , assumeDeclarations = Map.fromList rassumes
@@ -525,14 +514,9 @@ inferProgram (MkModule ann uri section) = do
 -- TODO: This is more complicated due to potential polymorphism.
 --
 inferDecide :: Decide Name -> Check (Decide Resolved, [CheckInfo])
-inferDecide dec@(MkDecide ann _tysig appForm expr) = do
+inferDecide (MkDecide ann _tysig appForm expr) = do
   errorContext (WhileCheckingDecide (getName appForm)) do
-    -- An @nonexhaustive-decorated definition is declared deliberately partial by
-    -- its author (not defined for all inputs; evaluation fails outside the
-    -- domain), so the non-exhaustive-CONSIDER warning is silenced for its
-    -- whole body, WHERE-bound helpers included. Redundancy warnings stay
-    -- active. See 'L4.Export.isNonexhaustiveDecide' / 'DescFlags'.
-    withNonexhaustiveFlag $ lookupFunTypeSigByAnno ann >>= \ dHead -> do
+    lookupFunTypeSigByAnno ann >>= \ dHead -> do
         decide <- extendKnownMany dHead.arguments $ do
           rexpr <- checkExpr (ExpectDecideSignatureContext (rangeOf dHead.resultType)) expr dHead.resultType
           -- See Note [Adding type information to all binders]
@@ -542,11 +526,6 @@ inferDecide dec@(MkDecide ann _tysig appForm expr) = do
             <*> pure rexpr
             >>= nlgDecide
         pure (decide, [dHead.name])
-  where
-    withNonexhaustiveFlag :: Check a -> Check a
-    withNonexhaustiveFlag
-      | Export.isNonexhaustiveDecide dec = local (\env -> env { inNonexhaustiveDecide = True })
-      | otherwise                  = id
 
 -- | We allow the following cases:
 --
@@ -1157,260 +1136,39 @@ checkAction MkAction {anno, modal, action, provided = mprovided} actionT = do
       checkExpr ExpectRegulativeProvidedContext provided boolean
   pure (MkAction {anno, modal, action = pat, provided}, bounds)
 
--- | Build the exhaustiveness oracle: a map from a type's 'Unique' to the list
--- of its data constructors.
---
--- This is sourced from 'entityInfo' rather than the frame-local
--- 'declareDeclarations' map, because 'entityInfo' is the cumulative,
--- cross-module-unioned, builtin-inclusive table of everything in scope. Sourcing
--- the oracle from here is what lets 'checkConsider' see the constructors of:
---
---   * enums imported from another module ('declareDeclarations' is reset to
---     'Map.empty' at the import boundary, but 'entityInfo' is unioned there);
---   * enums @DECLARE@d in an enclosing @WHERE@/@LET@ block ('declareDeclarations'
---     is replaced per scope, but 'entityInfo' is only ever extended); and
---   * builtin sum types such as @BOOLEAN@ (whose @TRUE@/@FALSE@ live in
---     'entityInfo' as @'KnownTerm' _ 'Constructor'@ and were never in
---     'declareDeclarations' at all).
---
--- Each constructor is reconstructed as its definition 'Resolved' (@'Def' u name@)
--- straight from the 'entityInfo' entry — same 'Unique', same 'Name' the checker
--- assigned — so the output has exactly the same shape and keying
--- (type-head 'Unique' -> ['Resolved']) that the previous declares-based lookup
--- produced, leaving 'concretizeInfo' and its analysis unchanged.
---
--- @'Map.fromListWith' ('flip' ('<>'))@ over the 'Unique'-ordered entity map keeps
--- each type's constructors in ascending-'Unique' (i.e. declaration) order, so the
--- rendered missing/redundant sets are deterministic.
---
--- @LIST@ gets its complete constructor pair @[EMPTY, cons]@ INJECTED rather
--- than scanned: @cons@ is (rightly) tagged 'Computable' in 'entityInfo' —
--- prelude applies it in expression position — so the scan alone would yield
--- the partial set @[EMPTY]@ and mis-report. The injection is sound because
--- the guard model already speaks cons natively: 'desugarBranches' desugars
--- every @FOLLOWED BY@ pattern to a guard carrying 'consRef'/'consUnique',
--- and all downstream consumers compare oracle entries by 'getUnique' (and
--- render by 'getName') only.
-constructorsInScopeFromEntityInfo :: EntityInfo -> Map Unique [Resolved]
-constructorsInScopeFromEntityInfo ei =
-  Map.insert listUnique [emptyRef, consRef] $
-    Map.withoutKeys
-      ( Map.fromListWith (flip (<>))
-          [ (tyUnique, [Def ctorUnq ctorNm])
-          | (ctorUnq, (ctorNm, KnownTerm ctorTy Constructor)) <- Map.toList ei
-          , Just tyUnique <- [resultTypeHeadUnique ctorTy]
-          ]
-      )
-      builtinNonExhaustiveTypeUniques
+buildConstructorLookup :: [DeclChecked (Declare Resolved)] -> Map Unique [Resolved]
+buildConstructorLookup = foldMap \decl ->
+  let MkDeclare _ _ (MkAppForm _ tr _ _) td = decl.payload
+   in Map.singleton (getUnique tr) case td of
+    RecordDecl _ mc _ -> [fromMaybe tr mc] -- if the constructor name is 'Nothing', that means it's identical to the type name
+    EnumDecl _ cds -> map (\(MkConDecl _ n _) -> n) cds
+    SynonymDecl _ _ -> [] -- TODO: how to look up synonyms?
 
--- | Builtin sum types over which we deliberately do NOT perform exhaustiveness
--- checking:
---
---   * @CONTRACT@ — PERMANENT by design: the regulative\/deontic values form an
---     open sum. Only @FULFILLED@ has a pattern form; the obligation\/operator
---     values have none, and the regulative core matches contract values
---     partially on purpose. ANY oracle set here would be unsound in both
---     directions (flag load-bearing partial matches as incomplete, certify
---     unmatchable cases as covered).
---
--- @EVENT@ USED to be excluded here too, but only because the type name @EVENT@
--- was shadowed by its own term constructor in 'initialEnvironment', making
--- event-typed annotations unwritable. Now that the shadowing is fixed (both
--- uniques share the one key), @EVENT@ is checked like any other sum type: its
--- scanned set is the sole @event@ constructor (@WAIT UNTIL@ is 'Computable' and
--- delegates to it), which is COMPLETE, so the check is sound. See issue #905.
---
--- @MAYBE@ and @EITHER@ have COMPLETE, all-'Constructor' sets
--- (@nothing@/@just@, @left@/@right@) and ARE checked. @BOOLEAN@ likewise
--- (@TRUE@/@FALSE@). @LIST@ is checked via the injected pair — see
--- 'constructorsInScopeFromEntityInfo'.
-builtinNonExhaustiveTypeUniques :: Set Unique
-builtinNonExhaustiveTypeUniques =
-  Set.fromList [contractUnique]
-
--- | The 'Unique' of the head of a constructor's result type: strip any leading
--- 'Forall' (type parameters) and 'Fun' (constructor arguments), then take the
--- head of the resulting type application. 'Nothing' for a type with no
--- constructor-bearing head (should not occur for a well-formed constructor).
-resultTypeHeadUnique :: Type' Resolved -> Maybe Unique
-resultTypeHeadUnique = \ case
-  Forall _ _ t -> resultTypeHeadUnique t
-  Fun _ _ t    -> resultTypeHeadUnique t
-  TyApp _ r _  -> Just (getUnique r)
-  _            -> Nothing
-
--- | The number of argument (selector) positions of a constructor, per its
--- 'entityInfo' entry. Used to pad synthesized missing-branch suggestions
--- with one underscore wildcard per argument, so the rendered branch is
--- valid, pasteable L4 (a bare non-nullary constructor would be a type
--- error). Yields 0 for anything that is not a known constructor.
-constructorArity :: EntityInfo -> Resolved -> Int
-constructorArity ei r = case Map.lookup (getUnique r) ei of
-  Just (_, KnownTerm ty Constructor) -> countArgs ty
-  _ -> 0
-  where
-    countArgs = \ case
-      Forall _ _ t -> countArgs t
-      Fun _ args t -> length args + countArgs t
-      _            -> 0
-
--- | Type-check a @CONSIDER@ and run the pattern-match analysis
--- (missing branches, redundant branches) over its arms.
---
--- The analysis is skipped wholesale in two situations:
---
--- * the scrutinee has a primitive type (NUMBER, STRING, DATE) — such types
---   have infinitely many literal values, so a constructor-based analysis is
---   meaningless for them;
---
--- * any arm contains a literal ('PatLit') or expression ('PatExpr') pattern
---   anywhere, including nested inside constructor patterns (@WHEN JUST 5@,
---   @WHEN EXACTLY red@, @WHEN 0 FOLLOWED BY ys@). These desugar to ZERO
---   guards, i.e. the guard model treats them as irrefutable match-alls, which
---   is wrong in both directions: a genuinely refutable literal arm would make
---   later arms look redundant (a blocking false positive on valid code), and
---   a partial literal match would be certified exhaustive (a false negative
---   that crashes at eval). Until the guard model learns opaque refutable
---   guards (see the design doc's deferred items), such CONSIDERs carry no
---   exhaustiveness or redundancy guarantee.
 checkConsider :: ExpectationContext -> Anno -> Expr Name -> [Branch Name] -> Type' Resolved -> Check (Expr Resolved)
 checkConsider ec ann e branches t = do
   (re, te) <- inferExpr e
   rbranches <- traverse (checkBranch ec re te t) branches
-  ei <- asks (.entityInfo)
-  let cl = constructorsInScopeFromEntityInfo ei
+  resolvedDecls <- asks (Map.elems . (.declareDeclarations))
   (scrutVar, pt) <- desugarBranches re rbranches
-  let bs = concretizeInfo cl pt
+  let cl = buildConstructorLookup resolvedDecls
+      bs = concretizeInfo cl pt
 
-  let analysis  = analyzePatternMatch (constructorArity ei) scrutVar bs
-      missing   = maybe [] (.missingArms) analysis
-      redundant = maybe [] (.redundantArms) analysis
+  let redundant = redundantBranches $ annotateRefinement bs
+      missing = nubBy ((==) `on` fmap getUnique) $ expandToPattern scrutVar $ normalizeRefinement $ uncoverRefinement bs
 
+  -- Skip pattern analysis warnings for primitive types (NUMBER, STRING, DATE)
+  -- because the analysis is designed for algebraic data types with known constructors.
+  -- Primitive types have infinitely many values (literals) that can't be enumerated.
   -- We need to apply the current substitution to resolve any inference variables.
   resolvedTe <- applySubst te
-  inNonexhaustive <- asks (.inNonexhaustiveDecide)
   let isPrimitiveScrutinee = isPrimitiveType resolvedTe
-      hasOpaquePatterns = any branchHasOpaquePattern rbranches
 
-  -- NOTE: 'hasOpaquePatterns' and 'isPrimitiveScrutinee' come first so that
-  -- the (lazy) analysis above is never forced when we bail out anyway.
-  -- Inside an @nonexhaustive-decorated definition only the MISSING-branch warning
-  -- is silenced; redundancy is a bug regardless of intended partiality.
-  unless (hasOpaquePatterns || isPrimitiveScrutinee || inNonexhaustive || null missing) do
+  unless (null missing || isPrimitiveScrutinee) do
     addWarning $ PatternMatchesMissing missing
-  unless (hasOpaquePatterns || isPrimitiveScrutinee || null redundant) do
+  unless (null redundant || isPrimitiveScrutinee) do
     addWarning $ PatternMatchRedundant redundant
 
-  hintSuspiciousBinders cl resolvedTe rbranches
-
   pure (Consider ann re rbranches)
-
--- | Emit an 'SInfo'-severity hint for each top-level CONSIDER arm whose
--- pattern is a fresh binder (matching everything) with a name suspiciously
--- close to a constructor of the scrutinee's type that no other arm covers —
--- the tell-tale shape of a misspelled constructor, which the resolver
--- silently turns into a catch-all binder ('inferPattern''s @orElse@
--- fallback). Trailing typo binders are otherwise invisible: the match is
--- exhaustive (so no missing warning) and nothing follows it (so no
--- redundancy warning), yet the program's meaning has changed.
---
--- \"Suspiciously close\" means case-insensitively equal (any length; an
--- exact-case match would have resolved as the constructor), or exactly one
--- Damerau-Levenshtein edit apart with both names at least 4 characters
--- (guards against short-name coincidences). The residual false positive —
--- a legitimate catch-all like @rest@ over a type with a constructor
--- @rent@ — is accepted because the hint never blocks: it renders at
--- 'SInfo' severity in both severity functions.
-hintSuspiciousBinders :: Map Unique [Resolved] -> Type' Resolved -> [Branch Resolved] -> Check ()
-hintSuspiciousBinders cl scrutTy rbranches =
-  for_ rbranches \ case
-    MkBranch _ (When _ (PatVar _ binder)) _ ->
-      case find (suspiciouslyClose (lastNameSegment (getName binder))) uncovered of
-        Just ctor -> addError (SuspiciousBinderPattern binder ctor)
-        Nothing   -> pure ()
-    _ -> pure ()
-  where
-    scrutCtors = case scrutTy of
-      TyApp _ r _ -> Map.findWithDefault [] (getUnique r) cl
-      _           -> []
-
-    coveredCtorUniques = Set.fromList
-      [ u
-      | MkBranch _ (When _ p) _ <- rbranches
-      , u <- case p of
-          PatApp _ c _ -> [getUnique c]
-          PatCons {}   -> [consUnique]
-          _            -> []
-      ]
-
-    uncovered =
-      filter (\c -> getUnique c `Set.notMember` coveredCtorUniques) scrutCtors
-
-    suspiciouslyClose binderName ctor =
-      let ctorName = lastNameSegment (getName ctor)
-          lb = Text.toLower binderName
-          lc = Text.toLower ctorName
-      in lb == lc
-         || ( min (Text.length binderName) (Text.length ctorName) >= 4
-              && exactlyOneEditApart lb lc )
-
--- | The last segment of a name — for a qualified name (@foo.green@), the
--- part after the final dot, so a qualified typo still resembles the bare
--- constructor.
-lastNameSegment :: Name -> Text
-lastNameSegment n = case rawName n of
-  NormalName t      -> t
-  QualifiedName _ t -> t
-  PreDef t          -> t
-
--- | Is @b@ exactly ONE Damerau-Levenshtein edit (insertion, deletion,
--- substitution, or adjacent transposition) away from @a@? Equal strings are
--- zero edits apart, i.e. 'False'. Direct comparison instead of a full
--- distance matrix: we only ever need the @== 1@ predicate.
-exactlyOneEditApart :: Text -> Text -> Bool
-exactlyOneEditApart a b = case compare la lb of
-  EQ -> oneSubstitution || oneAdjacentTransposition
-  LT -> lb - la == 1 && oneInsertion a b
-  GT -> la - lb == 1 && oneInsertion b a
-  where
-    la = Text.length a
-    lb = Text.length b
-
-    mismatches = [ i | (i, (x, y)) <- zip [0 :: Int ..] (Text.zip a b), x /= y ]
-
-    oneSubstitution = length mismatches == 1
-
-    oneAdjacentTransposition = case mismatches of
-      [i, j] -> j == i + 1
-             && Text.index a i == Text.index b j
-             && Text.index a j == Text.index b i
-      _      -> False
-
-    -- @longer@ is @shorter@ with exactly one extra character somewhere
-    oneInsertion shorter longer = go (Text.unpack shorter) (Text.unpack longer) False
-      where
-        go [] []             skipped = skipped
-        go [] [_]            _       = True
-        go (x : xs) (y : ys) skipped
-          | x == y    = go xs ys skipped
-          | skipped   = False
-          | otherwise = go (x : xs) ys True
-        go _ _ _ = False
-
--- | Does this branch contain a pattern the guard model cannot reason about?
--- See the haddock on 'checkConsider'.
-branchHasOpaquePattern :: Branch Resolved -> Bool
-branchHasOpaquePattern (MkBranch _ lhs _) = case lhs of
-  When _ p     -> patternHasOpaque p
-  Otherwise {} -> False
-  where
-    patternHasOpaque :: Pattern Resolved -> Bool
-    patternHasOpaque = \ case
-      PatLit {}       -> True
-      PatExpr {}      -> True
-      PatVar {}       -> False
-      PatApp _ _ ps   -> any patternHasOpaque ps
-      PatCons _ p1 p2 -> patternHasOpaque p1 || patternHasOpaque p2
 
 inferExpr :: Expr Name -> Check (Expr Resolved, Type' Resolved)
 inferExpr g = softprune $ errorContext (WhileCheckingExpression g) do
@@ -1769,16 +1527,11 @@ isPrimitiveType :: Type' Resolved -> Bool
 isPrimitiveType ty = case ty of
   InfVar{} -> False  -- Unknown type, don't skip analysis
   TyApp _ tyRef [] ->
-    -- NUMBER and STRING have infinitely many literal values; DATE likewise.
-    -- Compare by Unique, not by name text: a USER-declared enum that merely
-    -- happens to be called NUMBER/STRING/DATE is a perfectly ordinary sum
-    -- type and must still be analysed (under the old name-based check, a
-    -- partial match over such an enum silently skipped exhaustiveness
-    -- checking whenever the type was reached via inference).
-    -- BOOLEAN is deliberately NOT skipped: its TRUE/FALSE constructors are
-    -- enumerable from 'entityInfo' (see 'constructorsInScopeFromEntityInfo'), so
-    -- exhaustiveness analysis works correctly for it and catches a missing branch.
-    getUnique tyRef `elem` [numberUnique, stringUnique, dateUnique]
+    let t = nameToText (getName tyRef)
+    -- NUMBER and STRING have infinitely many literal values
+    -- DATE also has many values that can't be enumerated
+    -- BOOLEAN has only TRUE/FALSE so analysis works correctly for it
+    in t `elem` ["NUMBER", "STRING", "DATE"]
   _ -> False
 
 inferEvent :: Event Name -> Check (Event Resolved, Type' Resolved)
@@ -1960,21 +1713,10 @@ desugarBranches scrut nebs = do
   -- NOTE: if there's no scrutinee, we create a new variable that is then putas the scrutinee.
   -- So: WHEN Foo Bar THEN expr essentially becomes WHEN Foo bar THEN CONSIDER bar WHEN Bar THEN expr
 
-  -- NOTE: the 'VarEnv' recycles the fresh payload variables allocated for a
-  -- constructor occurrence, so that the SAME scrutinee position matched
-  -- against the same constructor in DIFFERENT branches shares variables —
-  -- 'uncoverRefinement' reasons across branches through that sharing. The
-  -- map must be keyed by (scrutinized variable, constructor), not by the
-  -- constructor alone: with constructor-only keying, a second occurrence of
-  -- the same constructor at a *sibling* position within one branch (e.g.
-  -- @WHEN W (JUST x) (JUST y)@) would reuse the first position's variables,
-  -- producing bogus cross-position equalities (false redundancy warnings)
-  -- and even self-referential constraints (@v = JUST v@) that send
-  -- 'expandToPattern' into an infinite loop.
   desugarPat :: Resolved -> Pattern Resolved -> StateT VarEnv Check [Guard Info Resolved]
   desugarPat scrut' = \ case
     PatApp ((.extra.resolvedInfo) -> Just info) c ps ->
-      Map.lookup (getUnique scrut', getUnique c) <$> get >>= \ case
+      Map.lookup (getUnique c) <$> get >>= \ case
         Just existingVars -> do
           pats <- getAp $ flip foldMap (zip existingVars ps) \(var, p) -> Ap do
             desugarPat var p
@@ -1987,12 +1729,12 @@ desugarBranches scrut nebs = do
             guards <- desugarPat n p
             pure ([n], guards)
 
-          modify' (Map.insert (getUnique scrut', getUnique c) vs)
+          modify' (Map.insert (getUnique c) vs)
           pure (MkGuard info scrut' c vs : pats)
 
     -- NOTE: this second case is very similar to the one for PatApp, because Cons in general is basically a PatApp
     PatCons ((.extra.resolvedInfo) -> Just info) ph pt ->
-      Map.lookup (getUnique scrut', consUnique) <$> get >>= \ case
+      Map.lookup consUnique <$> get >>= \ case
         Just [nh, nt] -> do
           ph' <- desugarPat nh ph
           pt' <- desugarPat nt pt
@@ -2003,7 +1745,7 @@ desugarBranches scrut nebs = do
           nt <- lift newPatName
           ph' <- desugarPat nh ph
           pt' <- desugarPat nt pt
-          modify' (Map.insert (getUnique scrut', consUnique) [nh, nt])
+          modify' (Map.insert consUnique [nh, nt])
           pure (MkGuard info scrut' consRef [nh, nt] : ph' <> pt')
 
     PatVar _ _ -> pure []
@@ -2011,9 +1753,7 @@ desugarBranches scrut nebs = do
     PatLit _ _ -> pure []
     _ -> error "fatal internal error: expected type information but didn't get any"
 
--- | Recycled payload variables, keyed by (scrutinized variable, constructor).
--- See the NOTE on 'desugarPat' for why both components are required.
-type VarEnv = Map (Unique, Unique) [Resolved]
+type VarEnv = Map Unique [Resolved]
 
 -- | replace 'Info' with the names of the constructors that the type has
 concretizeInfo :: Map Unique [n] ->  PatTree n -> PatTree' [n] n
@@ -2027,6 +1767,13 @@ concretizeInfo cmap = \case
      , Just cs <- Map.lookup (getUnique r) cmap
      -> PatAnd (MkGuard cs b n ns) (concretizeInfo cmap t)
    _ -> PatAnd (MkGuard [] b n ns) (concretizeInfo cmap t)
+
+data Refinement n
+  = RefineConj (Refinement n) (Constr n)
+  | RefineDisj (Refinement n) (Refinement n)
+  | RefineTop
+  | RefineBottom
+  deriving stock (Eq, Show, Generic, Functor)
 
 -- a constraint
 data Constr n
@@ -2043,10 +1790,59 @@ data Constr n
   -- - the other constructors of the type that this constraint is about
   deriving stock (Eq, Ord, Show, Generic, Functor, Foldable)
 
+-- this is suposed to generate the "unconvered" set, i.e. the
+-- values that are not covered by the pattern tree
+uncoverRefinement :: PatTree' [n] n -> Refinement n
+uncoverRefinement = uncoverRefinementWith RefineTop
+
+uncoverRefinementWith :: Refinement n -> PatTree' [n] n -> Refinement n
+uncoverRefinementWith tau = \case
+  PatLeaf _e -> RefineBottom
+  PatOr t1 t2 -> uncoverRefinementWith (uncoverRefinementWith tau t1) t2
+  PatAnd (MkGuard cs b n ns) t -> (tau `RefineConj` IsNotEq b n ns cs) `RefineDisj`
+    uncoverRefinementWith (tau `RefineConj` IsEq b n ns) t
+  PatNoBranches -> tau
+
+data AnnBranch n
+  = AnnLeaf (Refinement n) (Branch n)
+  | AnnEmpty
+  deriving stock (Eq, Show, Generic)
+
+redundantBranches :: [AnnBranch Resolved] -> [Branch Resolved]
+redundantBranches = mapMaybe \case
+  AnnLeaf r b | not (isConsistent r) -> Just b
+  _ -> Nothing
+ where
+  isConsistent :: Refinement Resolved -> Bool
+  isConsistent = go [] where
+    go seen = \ case
+      RefineConj r c -> go (c : seen) r && all (isConsistentWith c) seen
+      RefineDisj r1 r2 -> go seen r1 || go seen r2
+      RefineTop -> True
+      RefineBottom -> False
+
+-- this is supposed to generate the patterns that *are* matched
+annotateRefinement :: PatTree' [n] n -> [AnnBranch n]
+annotateRefinement = go RefineTop
+ where
+  go tau = \case
+    PatLeaf e -> [AnnLeaf tau e]
+    PatOr t1 t2 -> go tau t1 <> go (uncoverRefinementWith tau t1) t2
+    PatAnd (MkGuard _i b n ns) t -> go (tau `RefineConj` IsEq b n ns) t
+    PatNoBranches -> [AnnEmpty]
+
 data Nabla n
  = Bottom
  | Consistent !(Set (Constr n))
  deriving stock (Foldable)
+
+instance Ord n => Semigroup (Nabla n) where
+  Bottom <> s = s
+  s <> Bottom = s
+  Consistent s1 <> Consistent s2 = Consistent $ s1 `Set.union` s2
+
+instance Ord n => Monoid (Nabla n) where
+  mempty = Bottom
 
 lookupConstraints :: Eq n => n -> Nabla n -> [Constr n]
 lookupConstraints n = \ case
@@ -2058,16 +1854,23 @@ constraintName = \ case
   IsEq n _ _ -> n
   IsNotEq n _ _ _ -> n
 
--- | Add one constraint to a consistent constraint set; 'Nothing' if it
--- contradicts a constraint already present (the refined value space is
--- empty, so the candidate 'Nabla' dies).
-addConstraint :: Constr Resolved -> Nabla Resolved -> Maybe (Nabla Resolved)
-addConstraint _ Bottom = Nothing
-addConstraint c nabla@(Consistent s)
-  | c `Set.member` s = Just nabla
-  | all (c `isConsistentWith`) (lookupConstraints (constraintName c) nabla) =
-      Just (Consistent (Set.insert c s))
-  | otherwise = Nothing
+normalizeRefinement :: Refinement Resolved -> Nabla Resolved
+normalizeRefinement = go (Consistent mempty)
+ where
+  go nabla = \ case
+   RefineConj r c -> go (addConsistentConstraint nabla c) r
+   RefineDisj r1 r2 -> go nabla r1 <> go nabla r2
+   RefineTop -> nabla
+   RefineBottom -> Bottom
+
+  addConsistentConstraint :: Nabla Resolved -> Constr Resolved -> Nabla Resolved
+  addConsistentConstraint nabla c = case lookupConstraints (constraintName c) nabla of
+    [] -> insertConstraint c nabla
+    cs -> if all (c `isConsistentWith`) cs then insertConstraint c nabla else nabla
+
+  insertConstraint c = \ case
+    Bottom -> Consistent (Set.singleton c)
+    Consistent s -> Consistent (Set.insert c s)
 
 isConsistentWith :: Constr Resolved -> Constr Resolved -> Bool
 IsEq n1 c1 _ `isConsistentWith` IsEq n2 c2 _ | n1 `sameResolved` n2 = c1 `sameResolved` c2
@@ -2075,192 +1878,40 @@ IsNotEq n1 c1 _ _ `isConsistentWith` IsEq n2 c2 _ | n1 `sameResolved` n2 = not $
 IsEq n1 c1 _ `isConsistentWith` IsNotEq n2 c2 _ _ | n1 `sameResolved` n2 = not $ c1 `sameResolved` c2
 _ `isConsistentWith` _ = True
 
--- | The result of the pattern-match analysis of one CONSIDER.
-data PatternMatchAnalysis = MkPatternMatchAnalysis
-  { missingArms   :: [BranchLhs Resolved]
-    -- ^ synthesized suggestions for the uncovered cases (empty = exhaustive,
-    -- or the suggestion cap was exceeded — see 'maxMissingSuggestions')
-  , redundantArms :: [Branch Resolved]
-    -- ^ arms that can never match (their guards contradict every value
-    -- still uncovered when they are reached)
-  }
-
--- | Give up the whole analysis when the uncovered set exceeds this many
--- alternatives. The uncovered set grows by at most (guards per branch) per
--- branch before consistency pruning, so realistic matches stay tiny; only
--- pathological shapes (dozens of many-field record arms) approach this, and
--- for them "no warning" beats hanging the checker — and the IDE with it.
-maxUncoveredNablas :: Int
-maxUncoveredNablas = 128
-
--- | Stop enumerating missing-branch SUGGESTIONS beyond this many. One
--- uncovered alternative can still denote a cartesian product of
--- constructor choices across independent positions; past this bound we
--- suppress the missing-branch warning (the redundancy results stay) rather
--- than print pages of arms.
-maxMissingSuggestions :: Int
-maxMissingSuggestions = 64
-
--- | Sequential coverage analysis, one branch at a time — the classic
--- residual-set ("Lower Your Guards") shape:
---
---   * @uncovered@ is a DISJUNCTION of consistent constraint sets
---     ('Nabla's) describing every value not matched by the branches seen so
---     far; it starts as the unconstrained set (everything).
---   * A branch whose guard conjunction is inconsistent with EVERY current
---     'Nabla' covers nothing new: redundant. (Guard-less arms — OTHERWISE
---     and bare binders — are deliberately exempt, preserving the
---     long-standing behaviour that a defensive trailing catch-all is not
---     flagged; they still consume the remaining value space.)
---   * Splitting a 'Nabla' against a branch with guards @g1..gk@ yields the
---     standard residue: @nabla ∧ ¬g1@, @nabla ∧ g1 ∧ ¬g2@, …; inconsistent
---     conjunctions die immediately.
---
--- Keeping the disjunction as an explicit SET of independent nablas (instead
--- of one refinement TREE walked per query, or one unioned constraint set)
--- is what makes this both correct and fast: the predecessor tree walk was
--- exponential in the branch count for multi-guard arms — a total, idiomatic
--- 16-branch match over a record of four MAYBEs hung the checker — and the
--- unioned-set variant conflated independent disjuncts, silently
--- under-reporting missing arms. Each nabla is expanded to suggestions
--- separately.
---
--- Returns 'Nothing' when the analysis gives up: unexpected tree shape, or
--- the 'maxUncoveredNablas' cap tripped. No warning is better than a wrong
--- one or a hang.
-analyzePatternMatch
-  :: (Resolved -> Int)
-  -> Resolved
-  -> PatTree' [Resolved] Resolved
-  -> Maybe PatternMatchAnalysis
-analyzePatternMatch ctorArity scrut tree = do
-  branches <- flattenPatTree tree
-  (uncovered, redundant) <- foldM analyzeBranch ([Consistent Set.empty], []) branches
-  let suggestions =
-        nubOrdOn (fmap getUnique) $
-          concatMap (expandToPattern ctorArity scrut) uncovered
-      capped = length (take (maxMissingSuggestions + 1) suggestions) > maxMissingSuggestions
-  pure MkPatternMatchAnalysis
-    { missingArms   = if capped then [] else suggestions
-    , redundantArms = reverse redundant
-    }
-  where
-    analyzeBranch (uncovered, redundant) (guards, b) =
-      let coversSomething =
-            any (\nab -> isJust (foldM (flip addConstraint) nab (map guardEq guards))) uncovered
-          redundant'
-            | not coversSomething, not (null guards) = b : redundant
-            | otherwise = redundant
-          uncovered' =
-            nubOrdOn nablaKey (concatMap (splitByGuards guards) uncovered)
-      in if length (take (maxUncoveredNablas + 1) uncovered') > maxUncoveredNablas
-           then Nothing
-           else Just (uncovered', redundant')
-
-    -- the residue of one nabla against one branch's guard conjunction
-    splitByGuards guards nabla = go nabla guards
-      where
-        go _ [] = []
-        go nab (g : gs) =
-          maybeToList (addConstraint (guardNeq g) nab)
-          <> case addConstraint (guardEq g) nab of
-               Nothing   -> [] -- prefix already impossible: no deeper residue
-               Just nab' -> go nab' gs
-
-    guardEq  (MkGuard _cs b n ns) = IsEq b n ns
-    guardNeq (MkGuard cs b n ns)  = IsNotEq b n ns cs
-
-    nablaKey = \ case
-      Bottom       -> Nothing
-      Consistent s -> Just (Set.map (fmap getUnique) s)
-
--- | Decompose the desugared pattern tree back into its per-branch guard
--- chains. 'desugarBranches' only ever builds a right-nested 'PatOr' of
--- @foldr PatAnd (PatLeaf b)@ chains, but stay total: any other shape means
--- the analysis quietly stands down ('Nothing').
-flattenPatTree :: PatTree' i n -> Maybe [([Guard i n], Branch n)]
-flattenPatTree = \ case
-  PatOr t1 t2   -> (<>) <$> flattenPatTree t1 <*> flattenPatTree t2
-  PatNoBranches -> Just []
-  t             -> (: []) <$> chain [] t
-  where
-    chain acc = \ case
-      PatAnd g t -> chain (g : acc) t
-      PatLeaf b  -> Just (reverse acc, b)
-      _          -> Nothing
-
--- | What a consistent 'Nabla' says about ONE variable: pinned to a
--- constructor ('EqCon'), excluded from some constructors ('NotEqCons'
--- carrying the remaining candidates), or unconstrained ('NoInfo').
 data ConsistentSet n
-  = EqCon n [n]
+  = EqCon n [n] (ConsistentSet n)
   | NotEqCons [n] [n]
   | NoInfo
 
-expandToPattern :: (Resolved -> Int) -> Resolved -> Nabla Resolved -> [BranchLhs Resolved]
-expandToPattern ctorArity scrut = \ case
+expandToPattern :: Resolved -> Nabla Resolved -> [BranchLhs Resolved]
+expandToPattern scrut = \ case
   Bottom -> []
-  n@Consistent {} -> map patternToBranch (go Set.empty scrut n)
+  n@Consistent {} -> map patternToBranch (go scrut n)
  where
   patternToBranch pat
     | PatVar _ var <- pat, var `sameResolved` underscoreRef
     = Otherwise emptyAnno
     | otherwise = When emptyAnno pat
 
-  -- An 'IsEq' PINS the variable: it dominates and subsumes any
-  -- accompanying 'IsNotEq' constraints (a consistent set can hold e.g.
-  -- {x = C1, x /= C2}; the inequality carries no extra information once
-  -- the equality is known — treating it as an alternative used to append
-  -- spurious wildcard/other-constructor suggestions).
   toConsistentSet :: [Constr Resolved] -> ConsistentSet Resolved
-  toConsistentSet cs' = case [ (c, ns) | IsEq _ c ns <- cs' ] of
-    (c, ns) : _ -> EqCon c ns
-    []          -> goNeq cs'
-    where
-      goNeq [] = NoInfo
-      goNeq (IsNotEq _ c ns cs : rest) = case goNeq rest of
-        NotEqCons _ ncs -> NotEqCons ns (delByUnq c ncs)
-        NoInfo          -> NotEqCons ns (delByUnq c cs)
-        e@EqCon {}      -> e
-      goNeq (IsEq {} : rest) = goNeq rest
+  toConsistentSet [] = NoInfo
+  toConsistentSet (IsEq _ c ns : rest) = EqCon c ns (toConsistentSet rest)
+  toConsistentSet (IsNotEq _ c ns cs : rest) = case toConsistentSet rest of
+    NotEqCons _ ncs -> NotEqCons ns (delByUnq c ncs)
+    NoInfo -> NotEqCons ns (delByUnq c cs)
+    e@EqCon {} -> e
 
   delByUnq = deleteBy sameResolved
 
-  -- INVARIANT: a variable can never legitimately occur in its own payload —
-  -- 'desugarPat' allocates fresh payload variables per (scrutinee, ctor)
-  -- position. The @seen@ set is an occurs-check backstop: should a future
-  -- constraint-generation bug ever produce a self-referential 'IsEq' again
-  -- (as the constructor-only 'VarEnv' keying once did), the expansion
-  -- degrades that position to @_@ instead of diverging (which would hang
-  -- the type-checker, and with it the IDE, on every keystroke).
-  go :: Set Unique -> Resolved -> Nabla Resolved -> [Pattern Resolved]
-  go seen scrutVar nabla
-    | getUnique scrutVar `Set.member` seen = [PatVar emptyAnno underscoreRef]
-    | otherwise = go' cnstrs
+  go :: Resolved -> Nabla Resolved -> [Pattern Resolved]
+  go scrutVar nabla = go' cnstrs
    where
-    seen' = Set.insert (getUnique scrutVar) seen
     cnstrs = toConsistentSet $ lookupConstraints scrutVar nabla
     go' = \ case
-      EqCon c ns -> map (mkSuggestedPattern c) (traverse (\n' -> go seen' n' nabla) ns)
-      -- pad each suggested constructor with one underscore wildcard per
-      -- argument position, so the rendered missing branch is valid L4 the
-      -- user can paste (a bare non-nullary constructor would not be)
-      NotEqCons _ns ncs -> map (\n' -> mkSuggestedPattern n' (replicate (ctorArity n') (PatVar emptyAnno underscoreRef))) ncs
+      EqCon c ns more -> map (PatApp emptyAnno c) (traverse (`go` nabla) ns) <> go' more
+      -- TODO: add underscores here, instead of []
+      NotEqCons _ns ncs -> map (\n' -> PatApp emptyAnno n' [] ) ncs
       NoInfo -> [PatVar emptyAnno underscoreRef]
-
-  -- The builtin cons constructor must be suggested in its surface form,
-  -- a 'PatCons' (rendered @… FOLLOWED BY …@) — never as an application of
-  -- the internal cons name. Its arity is intrinsically 2 (and NOT derivable
-  -- via 'constructorArity', since @cons@ is tagged 'Computable', not
-  -- 'Constructor'), hence the underscore fallback when the argument
-  -- patterns were not supplied.
-  mkSuggestedPattern :: Resolved -> [Pattern Resolved] -> Pattern Resolved
-  mkSuggestedPattern c args
-    | getUnique c == consUnique = case args of
-        [ph, pt'] -> PatCons emptyAnno ph pt'
-        _         -> PatCons emptyAnno wild wild
-    | otherwise = PatApp emptyAnno c args
-    where wild = PatVar emptyAnno underscoreRef
 
 sameResolved :: Resolved -> Resolved -> Bool
 sameResolved = (==) `on` getUnique
@@ -3399,9 +3050,12 @@ surroundWithCsn before after a =
 -- Typecheck Utils
 -- ----------------------------------------------------------------------------
 
--- NOTE: 'severity' now lives in L4.TypeCheck.Types (single canonical
--- mapping, shared with candidate viability and the diagnostic renderers)
--- and is re-exported from here.
+severity :: CheckErrorWithContext -> Severity
+severity (MkCheckErrorWithContext e _) =
+  case e of
+    CheckInfo {}    -> SInfo
+    CheckWarning {} -> SWarn
+    _               -> SError
 
 prettyCheckErrorWithContext :: CheckErrorWithContext -> [Text]
 prettyCheckErrorWithContext (MkCheckErrorWithContext e ctx) =
@@ -3423,19 +3077,6 @@ prettyCheckErrorContext (WhileCheckingPattern _p ctx)    e = prettyCheckErrorCon
 prettyCheckErrorContext (WhileCheckingType _t ctx)       e = prettyCheckErrorContext ctx e
 
 prettyCheckError :: CheckError -> [Text]
-prettyCheckError (SuspiciousBinderPattern binder ctor)     =
-  [ "This CONSIDER branch binds a new variable"
-  , ""
-  , "  " <> quotedName (getName binder)
-  , ""
-  , "which matches every remaining case. But its name is very close to"
-  , ""
-  , "  " <> quotedName (getName ctor)
-  , ""
-  , "a constructor of the type being matched that no other branch covers."
-  , "If you meant the constructor, fix the spelling; if you meant a"
-  , "catch-all, consider OTHERWISE or a name unlike any constructor."
-  ]
 prettyCheckError (OutOfScopeError n t)                     =
   [ "I could not find a definition for the identifier"
   , ""
@@ -3648,31 +3289,8 @@ prettyCheckWarning = \ case
     [ "The following branches still need to be considered:"
     , "" ]
     <>
-    map (("  " <>) . prettyMissingBranchLhs) b
+    map (("  " <>) . prettyLayout) b
     <> [ "" ]
-
--- | Render a synthesized missing branch as valid, pasteable L4. The generic
--- layout printer is not suitable here: it does not parenthesize nested
--- non-nullary constructor patterns (@wa JUST `_`@ instead of
--- @wa (JUST `_`)@), and it prints cons patterns by the internal constructor
--- name instead of the FOLLOWED BY surface syntax.
-prettyMissingBranchLhs :: BranchLhs Resolved -> Text
-prettyMissingBranchLhs = \ case
-  When _ p    -> "WHEN " <> go False p <> " THEN"
-  o@Otherwise {} -> prettyLayout o
-  where
-    go :: Bool -> Pattern Resolved -> Text
-    go _ p@PatVar {} = prettyLayout p
-    go _ p@(PatApp _ _ []) = prettyLayout p
-    go nested (PatApp a c ps) =
-      parensIf nested (prettyLayout (PatApp a c []) <> " " <> Text.unwords (map (go True) ps))
-    go nested (PatCons _ ph pt) =
-      parensIf nested (go True ph <> " FOLLOWED BY " <> go True pt)
-    -- literal and expression patterns are never synthesized as missing
-    -- branches; fall back to the generic printer just in case
-    go _ p = prettyLayout p
-
-    parensIf b txt = if b then "(" <> txt <> ")" else txt
 
 
 -- | Forms a plural when needed.

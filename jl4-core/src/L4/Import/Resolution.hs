@@ -166,29 +166,21 @@ data ImportResolutionError
 -- 4. Type-checks imports in dependency order
 -- 5. Returns all resolved imports (including transitive)
 --
--- Cycle detection prevents infinite loops. We track two collections:
+-- Cycle detection prevents infinite loops. We track two sets:
 -- - @inProgress@: modules currently being resolved (detecting these = cycle)
--- - @resolved@: modules already fully resolved, keyed to their resolved records
---
--- The @resolved@ map holds the actual 'ResolvedImport' records (not just names)
--- so that when a module is re-encountered we can hand back its already-computed,
--- fully-type-checked record. This matters for /diamond/ imports: in
--- @A -> {B, C} -> D@, once B has resolved D, C must still receive D's exported
--- environment. Returning @[]@ here (the old, name-set behaviour) type-checked C
--- against an empty dependency environment, silently degrading the types and
--- entities of the second sibling that A then consumed. See issue #904.
+-- - @resolved@: modules already fully resolved (can skip these)
 resolveImports
   :: forall m. Monad m
   => ModuleLookup m                      -- ^ How to find module sources
   -> Set.Set Text                        -- ^ Modules currently being resolved (for cycle detection)
-  -> Map.Map Text ResolvedImport         -- ^ Modules already fully resolved, keyed to their records
+  -> Set.Set Text                        -- ^ Modules already fully resolved (to skip)
   -> [Text]                              -- ^ Import names to resolve
   -> m (Either ImportResolutionError [ResolvedImport])
 resolveImports _lookup _inProgress _resolved [] = pure $ Right []
 resolveImports lookupModule inProgress resolved (modName : rest)
-  -- Already resolved - reuse its record so *siblings* inherit its environment
-  | Just cached <- Map.lookup modName resolved =
-      (fmap . fmap) (cached :) $ resolveImports lookupModule inProgress resolved rest
+  -- Already resolved - skip it
+  | modName `Set.member` resolved =
+      resolveImports lookupModule inProgress resolved rest
   -- Currently being resolved - cycle detected!
   | modName `Set.member` inProgress = 
       pure $ Left $ CyclicImport $ toList inProgress <> [modName]
@@ -231,12 +223,10 @@ resolveImports lookupModule inProgress resolved (modName : rest)
                         , riTypeChecked = tcResult
                         }
                   
-                  -- This module is now fully resolved.
-                  -- Register this module and everything its subtree resolved,
-                  -- keyed to their records, so that later siblings inherit the
-                  -- records (not just the names) via the already-resolved branch.
-                  let transitiveCache = Map.fromList [ (ri.riModuleName, ri) | ri <- transitiveResolved ]
-                      newResolved = Map.insert modName thisResolved (Map.union resolved transitiveCache)
+                  -- This module is now fully resolved
+                  -- Collect all resolved module names from transitive imports
+                  let transitiveNames = Set.fromList $ map (\ri -> ri.riModuleName) transitiveResolved
+                      newResolved = Set.insert modName $ Set.union resolved transitiveNames
                   
                   -- Continue with remaining imports (back to original inProgress)
                   restResult <- resolveImports lookupModule inProgress newResolved rest
@@ -298,7 +288,7 @@ typecheckWithDependencies lookupModule uri source = do
       -- Extract and resolve imports
       let importNames = extractImportNames parsed
       
-      importResult <- resolveImports lookupModule Set.empty Map.empty importNames
+      importResult <- resolveImports lookupModule Set.empty Set.empty importNames
       
       case importResult of
         Left (ModuleNotFound modName searched) ->
@@ -365,12 +355,10 @@ combineResolvedImports uri imports =
       -> (TypeCheck.CheckState, TypeCheck.CheckEnv)
     combineOne (accState, accEnv) ri =
       let r = ri.riTypeChecked
-          -- IMPORTANT: Apply the substitution to entityInfo to resolve type variables
-          -- BEFORE merging ('unionImportedCheckEnv' requires zonked input). Without
-          -- this, types like 'r25' would leak instead of being resolved to their
-          -- actual types (e.g., NUMBER). This matches what the native LSP does in
-          -- LSP.L4.Rules when combining TypeCheckResult dependencies (there the
-          -- entityInfo is already zonked when stored into the TypeCheckResult).
+          -- IMPORTANT: Apply the substitution to entityInfo to resolve type variables.
+          -- Without this, types like 'r25' would leak instead of being resolved to
+          -- their actual types (e.g., NUMBER). This matches what the native LSP does
+          -- in LSP.L4.Rules when combining TypeCheckResult dependencies.
           resolvedEntityInfo = applyFinalSubstitution r.substitution ri.riUri r.entityInfo
       in ( TypeCheck.MkCheckState
              { TypeCheck.substitution = r.substitution
@@ -380,7 +368,19 @@ combineResolvedImports uri imports =
              , TypeCheck.scopeMap = IV.empty
              , TypeCheck.descMap = IV.empty
              }
-         , TypeCheck.unionImportedCheckEnv accEnv r.environment resolvedEntityInfo r.mixfixRegistry
+         , TypeCheck.MkCheckEnv
+             { TypeCheck.moduleUri = accEnv.moduleUri
+             , TypeCheck.environment = Map.unionWith List.union accEnv.environment r.environment
+             , TypeCheck.entityInfo = Map.unionWith (\t1 t2 -> if t1 == t2 then t1 else t1) accEnv.entityInfo resolvedEntityInfo
+             , TypeCheck.functionTypeSigs = Map.empty
+             , TypeCheck.declTypeSigs = Map.empty
+             , TypeCheck.declareDeclarations = Map.empty
+             , TypeCheck.assumeDeclarations = Map.empty
+             , TypeCheck.mixfixRegistry = TypeCheck.unionMixfixRegistry accEnv.mixfixRegistry r.mixfixRegistry
+             , TypeCheck.computedFields = Map.empty
+             , TypeCheck.errorContext = TypeCheck.None
+             , TypeCheck.sectionStack = []
+             }
          )
 
 -- | Update a module's import declarations with resolved URIs.

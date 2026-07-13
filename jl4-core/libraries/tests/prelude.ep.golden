@@ -124,7 +124,6 @@ count list @nlg the number of items in %list%
         WHEN EMPTY THEN acc
         WHEN x FOLLOWED BY xs THEN go (acc + 1) xs
 
-@nonexhaustive
 GIVEN
   a    IS A TYPE
   list IS A LIST OF a
@@ -329,7 +328,6 @@ minimum1 x list @nlg the smallest of %x% and the values in %list%
   WHEN EMPTY THEN x
   WHEN y FOLLOWED BY ys THEN minimum1 (min x y) ys
 
-@nonexhaustive
 GIVEN
   list IS A LIST OF NUMBER
 GIVETH A NUMBER
@@ -338,7 +336,6 @@ maximum list @nlg the largest value in %list%
   CONSIDER list
   WHEN x FOLLOWED BY xs THEN maximum1 x xs
 
-@nonexhaustive
 GIVEN
   list IS A LIST OF NUMBER
 GIVETH A NUMBER
@@ -353,7 +350,6 @@ GIVETH A MAYBE NUMBER
 minimum list @nlg the smallest value in %list%
   MEANS
   CONSIDER list
-  WHEN EMPTY THEN NOTHING
   WHEN x FOLLOWED BY xs THEN minimum1 x xs
 
 GIVEN
@@ -379,8 +375,7 @@ GIVETH A MAYBE NUMBER
 maximum list @nlg the largest value in %list%
   MEANS
   CONSIDER list
-  WHEN EMPTY THEN NOTHING
-  WHEN x FOLLOWED BY xs THEN maximum1 x xs
+  WHEN x FOLLOWED BY xs THEN minimum1 x xs
 
 GIVEN
   x    IS A MAYBE NUMBER
@@ -390,7 +385,7 @@ maximum1 x list @nlg the largest of %x% and the values in %list%
   MEANS
   CONSIDER list
   WHEN EMPTY THEN x
-  WHEN y FOLLOWED BY ys THEN maximum1 (max x y) ys
+  WHEN y FOLLOWED BY ys THEN maximum1 (min x y) ys
 
 GIVEN
   x IS A MAYBE NUMBER

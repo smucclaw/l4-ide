@@ -17,7 +17,6 @@ module L4.Export (
   hasTypeInferenceVars,
   validateExportInputs,
   isExportedDecide,
-  isNonexhaustiveDecide,
 ) where
 
 import Base
@@ -66,11 +65,6 @@ data ExportedParam = ExportedParam
 data DescFlags = DescFlags
   { isDefault :: !Bool
   , isExport :: !Bool
-  , isNonexhaustive :: !Bool
-  -- ^ @\@nonexhaustive@: the author declares this definition deliberately partial
-  -- (not defined for all inputs; evaluation fails outside its domain), which
-  -- silences the non-exhaustive-CONSIDER warning for its body. Redundancy
-  -- warnings stay active.
   }
   deriving stock (Eq, Show)
 
@@ -95,7 +89,6 @@ parseDescText txt =
     DescFlags
       { isDefault = False
       , isExport = False
-      , isNonexhaustive = False
       }
 
   consumeKeywords t flagsAcc =
@@ -115,8 +108,6 @@ parseDescText txt =
                 }
           "export" ->
             consumeKeywords restStripped flagsAcc{isExport = True}
-          "nonexhaustive" ->
-            consumeKeywords restStripped flagsAcc{isNonexhaustive = True}
           _ -> (flagsAcc, current)
 
 getExportedFunctions :: Module Resolved -> [ExportedFunction]
@@ -447,15 +438,6 @@ isExportedDecide :: Decide Resolved -> Bool
 isExportedDecide decide =
   case getAnno decide ^. annDesc of
     Just desc -> (parseDescText (getDesc desc)).flags.isExport
-    Nothing   -> False
-
--- | Was this definition marked @\@nonexhaustive@ by its author? See 'DescFlags'.
--- Polymorphic in the pass so the type checker can consult it before
--- resolution.
-isNonexhaustiveDecide :: Decide n -> Bool
-isNonexhaustiveDecide decide =
-  case getAnno decide ^. annDesc of
-    Just desc -> (parseDescText (getDesc desc)).flags.isNonexhaustive
     Nothing   -> False
 
 -- | Like 'assumesFromModule' but WITHOUT the function-type filter —

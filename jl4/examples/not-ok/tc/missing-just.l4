@@ -1,8 +1,0 @@
--- Rendering test: a missing builtin constructor WITH an argument must be
--- suggested in pasteable form: `WHEN JUST `_` THEN`, not the bare
--- (ill-typed) `WHEN JUST THEN`.
-GIVEN m IS A MAYBE NUMBER
-GIVETH A NUMBER
-f m MEANS
-  CONSIDER m
-  WHEN NOTHING THEN 0

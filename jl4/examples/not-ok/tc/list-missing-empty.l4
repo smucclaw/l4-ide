@@ -1,9 +1,0 @@
--- LIST exhaustiveness: a match handling only the cons case must be flagged
--- at type-check time (`WHEN EMPTY THEN` is not covered). Before LIST was
--- admitted to the exhaustiveness oracle this typechecked clean and crashed
--- at eval on EMPTY with "has no corresponding pattern".
-GIVEN xs IS A LIST OF NUMBER
-GIVETH A NUMBER
-first xs MEANS
-  CONSIDER xs
-  WHEN x FOLLOWED BY rest THEN x

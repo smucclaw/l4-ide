@@ -1,9 +1,0 @@
-Parsing successful
-Typechecking successful
-Evaluation successful
-list-nested-cons-exhaustive.l4:14:1-28:
-  TRUE
-list-nested-cons-exhaustive.l4:15:1-25:
-  FALSE
-list-nested-cons-exhaustive.l4:16:1-19:
-  TRUE

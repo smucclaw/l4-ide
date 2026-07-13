@@ -1,7 +1,0 @@
-Parsing successful
-Typechecking successful
-Evaluation successful
-nonexhaustive-decorator.l4:23:1-23:
-  42
-nonexhaustive-decorator.l4:24:1-21:
-  0
