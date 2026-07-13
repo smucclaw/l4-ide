@@ -965,6 +965,7 @@ export type AiPermissionCategory =
   | 'l4.evaluate'
   | 'l4.refactor'
   | 'mcp.l4Rules'
+  | 'mcp.vscode'
   | 'meta.askUser'
 
 export type AiPermissionValue = 'never' | 'ask' | 'always'
@@ -984,6 +985,105 @@ export const AiPermissionsSet: NotificationType<{
   value: AiPermissionValue
 }> = {
   method: 'aiPermissionsSet',
+}
+
+/** One tool of an MCP server, with its own enable toggle. */
+export interface AiMcpToolInfo {
+  name: string
+  description?: string
+  enabled: boolean
+}
+
+/** One MCP server as shown in the sidebar's "MCP servers" settings
+ *  section. */
+export interface AiMcpServerInfo {
+  /** Stable id for toggles/actions (mcp.json key, or a derived id for
+   *  servers discovered only via their live tools). */
+  id: string
+  name: string
+  /** Where the server comes from: the user-level mcp.json, a workspace
+   *  `.vscode/mcp.json`, or discovered from live tools only. The
+   *  extension's own built-in L4 server is never listed — it is
+   *  governed by the `mcp.l4Rules` permission instead. */
+  source: 'user' | 'workspace' | 'discovered'
+  /** `http` / `sse` / `stdio` when known. */
+  transport?: string
+  /** URL or command line, for display. */
+  detail?: string
+  enabled: boolean
+  /** Connection state of the extension's own client. `external` means
+   *  the extension can't connect itself (stdio command / server owned
+   *  by another extension) and tools come from VS Code instead. */
+  status: 'connected' | 'connecting' | 'error' | 'stopped' | 'external'
+  /** Human-readable connection failure, when status === 'error'. */
+  error?: string
+  tools: AiMcpToolInfo[]
+}
+
+/** Webview asks for the current MCP server list. `allEnabled` is the
+ *  master switch shown atop the list when several servers exist. */
+export const AiMcpServersGet: RequestType<
+  void,
+  { servers: AiMcpServerInfo[]; allEnabled: boolean }
+> = {
+  method: 'aiMcpServersGet',
+}
+
+/** Webview flips the master switch: off hides every MCP server's
+ *  tools from Legalese AI and drops the connections; on reconnects
+ *  the enabled servers. */
+export const AiMcpAllSetEnabled: NotificationType<{ enabled: boolean }> = {
+  method: 'aiMcpAllSetEnabled',
+}
+
+/** Webview toggles one MCP server on/off for Legalese AI. Persisted in
+ *  VSCode configuration under `legaleseAi.mcp.disabledServers`. */
+export const AiMcpServerSetEnabled: NotificationType<{
+  id: string
+  enabled: boolean
+}> = {
+  method: 'aiMcpServerSetEnabled',
+}
+
+/** Webview runs a state action on one server (three-dot menu):
+ *  start/refresh reconnects the extension's client, stop drops it,
+ *  remove deletes the entry from the user-level mcp.json. */
+export const AiMcpServerAction: RequestType<
+  { id: string; action: 'start' | 'stop' | 'refresh' | 'remove' },
+  { ok: boolean; error?: string }
+> = {
+  method: 'aiMcpServerAction',
+}
+
+/** Webview toggles a single tool of a server on/off for Legalese AI.
+ *  Persisted under `legaleseAi.mcp.disabledTools`. */
+export const AiMcpToolSetEnabled: NotificationType<{
+  serverId: string
+  toolName: string
+  enabled: boolean
+}> = {
+  method: 'aiMcpToolSetEnabled',
+}
+
+/** Webview adds a new MCP server. The extension writes it to VS Code's
+ *  user-level `mcp.json`, making it a real VS Code MCP server (VS Code
+ *  prompts the user to trust/start it). Returns `ok: false` with a
+ *  human-readable `error` on validation or write failure. */
+export const AiMcpServerAdd: RequestType<
+  {
+    name: string
+    transport: 'http' | 'sse' | 'stdio'
+    /** For http/sse servers. */
+    url?: string
+    /** For stdio servers: full command line. */
+    command?: string
+    /** Optional bearer token for http/sse servers, stored as an
+     *  `Authorization: Bearer …` header on the mcp.json entry. */
+    bearerToken?: string
+  },
+  { ok: boolean; error?: string }
+> = {
+  method: 'aiMcpServerAdd',
 }
 
 /** Chat-panel UI preferences. Persisted on the extension side via

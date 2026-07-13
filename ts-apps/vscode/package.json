@@ -122,6 +122,137 @@
             "type": "boolean",
             "default": false,
             "markdownDescription": "Run Legalese AI in local mode for development purposes."
+          },
+          "legaleseAi.showReasoning": {
+            "type": "boolean",
+            "default": false,
+            "description": "Show the model's reasoning (\"Thinking\" blocks) in the Legalese AI chat."
+          },
+          "legaleseAi.methodology": {
+            "type": "string",
+            "default": "",
+            "description": "Guidance the Legalese AI follows when encoding natural language rules in L4."
+          },
+          "legaleseAi.mcp.disabledServers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "description": "MCP servers switched off for Legalese AI (by mcp.json key)."
+          },
+          "legaleseAi.mcp.disabledTools": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "description": "Individual MCP tools switched off for Legalese AI, as server::tool."
+          },
+          "legaleseAi.permissions.readFiles": {
+            "type": "string",
+            "enum": [
+              "never",
+              "ask",
+              "always"
+            ],
+            "default": "always",
+            "description": "Legalese AI permission: read files and folders in the workspace."
+          },
+          "legaleseAi.permissions.createFiles": {
+            "type": "string",
+            "enum": [
+              "never",
+              "ask",
+              "always"
+            ],
+            "default": "always",
+            "description": "Legalese AI permission: create new files in the workspace."
+          },
+          "legaleseAi.permissions.editFiles": {
+            "type": "string",
+            "enum": [
+              "never",
+              "ask",
+              "always"
+            ],
+            "default": "always",
+            "description": "Legalese AI permission: edit files in the workspace."
+          },
+          "legaleseAi.permissions.deleteFiles": {
+            "type": "string",
+            "enum": [
+              "never",
+              "ask",
+              "always"
+            ],
+            "default": "ask",
+            "description": "Legalese AI permission: delete (trash) files in the workspace."
+          },
+          "legaleseAi.permissions.evaluateL4": {
+            "type": "string",
+            "enum": [
+              "never",
+              "ask",
+              "always"
+            ],
+            "default": "always",
+            "description": "Legalese AI permission: run L4 diagnostics and directives via the LSP."
+          },
+          "legaleseAi.permissions.refactorL4": {
+            "type": "string",
+            "enum": [
+              "never",
+              "ask",
+              "always"
+            ],
+            "default": "always",
+            "description": "Legalese AI permission: apply structured L4 refactors."
+          },
+          "legaleseAi.permissions.runDeployedRules": {
+            "type": "string",
+            "enum": [
+              "never",
+              "ask",
+              "always"
+            ],
+            "default": "always",
+            "description": "Legalese AI permission: browse and evaluate deployed L4 rules on Legalese Cloud."
+          },
+          "legaleseAi.permissions.vscodeMcp": {
+            "type": "string",
+            "enum": [
+              "never",
+              "ask",
+              "always"
+            ],
+            "default": "always",
+            "description": "Legalese AI permission: call tools from the user's MCP servers. Which servers/tools are reachable at all is controlled by the toggles in the sidebar's MCP servers section."
+          },
+          "legaleseAi.mcp.enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Master switch: expose the user's MCP servers to Legalese AI at all."
+          },
+          "legaleseAi.permissions.askUser": {
+            "type": "string",
+            "enum": [
+              "never",
+              "ask",
+              "always"
+            ],
+            "default": "always",
+            "description": "Legalese AI permission: pause the chat to ask you clarifying questions."
+          },
+          "legaleseAi.permissions.statusUpdate": {
+            "type": "string",
+            "enum": [
+              "never",
+              "ask",
+              "always"
+            ],
+            "default": "always",
+            "description": "Legalese AI permission: post short status updates into the chat."
           }
         }
       }

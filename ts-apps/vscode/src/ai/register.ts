@@ -28,6 +28,12 @@ import {
   AiFileOpen,
   AiFileOpenDiff,
   AiGetActiveFileSelection,
+  AiMcpAllSetEnabled,
+  AiMcpServerAction,
+  AiMcpServerAdd,
+  AiMcpServerSetEnabled,
+  AiMcpServersGet,
+  AiMcpToolSetEnabled,
   AiMentionSearch,
   AiPermissionsGet,
   AiPermissionsSet,
@@ -56,6 +62,7 @@ import type { ConversationStore } from './conversation-store.js'
 import type { AiLogger } from './logger.js'
 import { MCP_L4_RULES_PREFIX } from './mcp-client.js'
 import type { McpToolClient } from './mcp-client.js'
+import type { VsCodeMcpTools } from './vscode-mcp.js'
 import {
   categoryForTool,
   getPermission,
@@ -93,6 +100,10 @@ export function registerAiChatHandlers(deps: {
   /** Map of pending approval promises keyed by callId. Populated by
    * the tool dispatcher; drained by the webview's approve/deny message. */
   approvalPending: Map<string, (decision: 'allow' | 'deny') => void>
+  /** Decisions clicked before the dispatcher registered a resolver
+   *  (the buttons appear while the stream is still running). Written
+   *  here, consumed by the dispatcher's requestApproval. */
+  earlyToolDecisions: Map<string, 'allow' | 'deny'>
   /** Map of pending meta__ask_user promises keyed by callId. Resolves
    * with the user's answer (empty string = skipped). */
   askUserPending: Map<string, (answer: string) => void>
@@ -123,6 +134,9 @@ export function registerAiChatHandlers(deps: {
   /** MCP client — used by the chat-side render-meta lookup to resolve
    *  a sanitized tool name back to its `(deployId, fnName)` pair. */
   mcp: McpToolClient
+  /** VS Code MCP servers — backs the sidebar's "MCP servers" settings
+   *  section (list / toggle / add). */
+  vsMcp: VsCodeMcpTools
   /** REST client for jl4-service — used to fetch the function-schema
    *  endpoint (`/deployments/{id}/functions/{fn}`) for chat tool-call
    *  rendering. */
@@ -137,12 +151,14 @@ export function registerAiChatHandlers(deps: {
     proxy,
     logger,
     approvalPending,
+    earlyToolDecisions,
     askUserPending,
     toolStatusChannel,
     askUserChannel,
     dispatcher,
     visibility,
     mcp,
+    vsMcp,
     serviceClient,
   } = deps
   logger.info(
@@ -369,6 +385,11 @@ export function registerAiChatHandlers(deps: {
    *  stop/new-message: the user's implicit "no" to any tool request
    *  still on screen. Safe to call when the map is empty. */
   const denyAllPendingApprovals = (reason: string): void => {
+    // Also drop any not-yet-consumed early decisions: the turn they
+    // belonged to is being torn down, and a stale "allow" must not
+    // leak into a future call that happens to reuse nothing but is
+    // still keyed in this map.
+    earlyToolDecisions.clear()
     if (approvalPending.size === 0) return
     logger.info(
       `denying ${approvalPending.size} pending approval(s) (${reason})`
@@ -457,12 +478,11 @@ export function registerAiChatHandlers(deps: {
   // `always` so subsequent calls in the same category run unattended.
   messenger.onNotification(AiChatApproveTool, ({ callId, decision }) => {
     logger.info(`tool/approve received (call=${callId}, decision=${decision})`)
-    const resolver = approvalPending.get(callId)
-    approvalPending.delete(callId)
-    if (!resolver) {
-      logger.warn(`tool/approve: no pending approval for ${callId}`)
-      return
-    }
+    // Persist the "always" bump FIRST — before the resolver lookup —
+    // so it takes effect even when the click lands before the
+    // dispatcher registered its resolver. callArgs is populated when
+    // the tool-call frame streams in, so meta is available by the time
+    // any button exists to click.
     if (decision === 'alwaysAllow') {
       const meta = callArgs.get(callId)
       if (meta) {
@@ -474,11 +494,24 @@ export function registerAiChatHandlers(deps: {
             )
           )
         }
+      } else {
+        logger.warn(`tool/approve: no callArgs meta for ${callId}`)
       }
-      resolver('allow')
-    } else {
-      resolver(decision)
     }
+    const resolved: 'allow' | 'deny' = decision === 'deny' ? 'deny' : 'allow'
+    const resolver = approvalPending.get(callId)
+    if (!resolver) {
+      // The webview shows the buttons as soon as the tool-call frame
+      // streams in, but the dispatcher registers its resolver only
+      // when it dispatches that call (after the stream ends, and
+      // sequentially per call). Stash the decision so requestApproval
+      // can consume it instead of prompting into the void.
+      earlyToolDecisions.set(callId, resolved)
+      logger.info(`tool/approve: stashed early decision for ${callId}`)
+      return
+    }
+    approvalPending.delete(callId)
+    resolver(resolved)
   })
 
   // Plain open — for fs__read_file and fs__create_file. Shows the
@@ -587,6 +620,7 @@ export function registerAiChatHandlers(deps: {
     'l4.evaluate',
     'l4.refactor',
     'mcp.l4Rules',
+    'mcp.vscode',
     'meta.askUser',
   ]
   messenger.onRequest(AiPermissionsGet, async () => {
@@ -598,6 +632,7 @@ export function registerAiChatHandlers(deps: {
       'l4.evaluate': 'always',
       'l4.refactor': 'always',
       'mcp.l4Rules': 'always',
+      'mcp.vscode': 'ask',
       'meta.askUser': 'always',
     }
     for (const cat of ALL_PERMISSION_CATEGORIES) {
@@ -616,6 +651,70 @@ export function registerAiChatHandlers(deps: {
         `permissions/set: ${category}=${value} failed: ${err instanceof Error ? err.message : String(err)}`
       )
     )
+  })
+
+  // ── MCP servers (sidebar settings section) ──────────────────────
+  messenger.onRequest(AiMcpServersGet, async () => {
+    try {
+      return { servers: vsMcp.listServers(), allEnabled: vsMcp.allEnabled() }
+    } catch (err) {
+      logger.warn(
+        `mcp-servers/get failed: ${err instanceof Error ? err.message : String(err)}`
+      )
+      return { servers: [], allEnabled: true }
+    }
+  })
+  messenger.onNotification(AiMcpAllSetEnabled, ({ enabled }) => {
+    void vsMcp
+      .setAllEnabled(enabled)
+      .catch((err) =>
+        logger.warn(
+          `mcp-servers/setAllEnabled: ${enabled} failed: ${err instanceof Error ? err.message : String(err)}`
+        )
+      )
+  })
+  messenger.onNotification(AiMcpServerSetEnabled, ({ id, enabled }) => {
+    void vsMcp
+      .setEnabled(id, enabled)
+      .catch((err) =>
+        logger.warn(
+          `mcp-servers/setEnabled: ${id}=${enabled} failed: ${err instanceof Error ? err.message : String(err)}`
+        )
+      )
+  })
+  messenger.onRequest(AiMcpServerAction, async ({ id, action }) => {
+    try {
+      return await vsMcp.runAction(id, action)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      logger.warn(`mcp-servers/action ${action} ${id} failed: ${msg}`)
+      return { ok: false, error: msg }
+    }
+  })
+  messenger.onNotification(
+    AiMcpToolSetEnabled,
+    ({ serverId, toolName, enabled }) => {
+      void vsMcp
+        .setToolEnabled(serverId, toolName, enabled)
+        .catch((err) =>
+          logger.warn(
+            `mcp-servers/setToolEnabled: ${serverId}/${toolName}=${enabled} failed: ${err instanceof Error ? err.message : String(err)}`
+          )
+        )
+    }
+  )
+  messenger.onRequest(AiMcpServerAdd, async (input) => {
+    try {
+      const res = await vsMcp.addServer(input)
+      if (res.ok) {
+        logger.info(`mcp-servers/add: added "${input.name}"`)
+      }
+      return res
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      logger.warn(`mcp-servers/add failed: ${msg}`)
+      return { ok: false, error: msg }
+    }
   })
 
   // VSCode config keys for each chat-panel preference. New entries:

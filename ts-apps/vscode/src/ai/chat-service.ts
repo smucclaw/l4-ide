@@ -21,6 +21,7 @@ import { BUILTIN_TOOLS } from './tool-registry.js'
 import type { ToolDispatcher } from './tool-dispatcher.js'
 import { categoryForTool, getPermission } from './permissions.js'
 import type { McpToolClient } from './mcp-client.js'
+import type { VsCodeMcpTools } from './vscode-mcp.js'
 
 /**
  * Events the chat service emits while running a turn. The sidebar
@@ -154,6 +155,10 @@ export interface ChatServiceOptions {
   logger: AiLogger
   dispatcher: ToolDispatcher
   mcp: McpToolClient
+  /** Tools from the user's VS Code-registered MCP servers (toggleable
+   *  per server in the sidebar settings). Advertised alongside the
+   *  built-ins and l4-rules tools; executed via vscode.lm.invokeTool. */
+  vsMcp: VsCodeMcpTools
   /** Extension version string (e.g. "1.4.0"). Injected into the
    *  first-turn `<session-context>` system message and stamped on
    *  locally-persisted conversations so support can correlate
@@ -793,7 +798,13 @@ export class ChatService {
           )
           return []
         })
-    const tools = deploymentMode ? [] : [...BUILTIN_TOOLS, ...mcpTools]
+    // VS Code MCP servers the user enabled in the sidebar settings.
+    // Snapshot per iteration so a server started/stopped mid-turn is
+    // picked up on the next round.
+    const vsMcpTools = deploymentMode ? [] : this.opts.vsMcp.listTools()
+    const tools = deploymentMode
+      ? []
+      : [...BUILTIN_TOOLS, ...mcpTools, ...vsMcpTools]
 
     for await (const ev of this.opts.proxy.streamResilient(
       {

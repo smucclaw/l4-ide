@@ -14,12 +14,19 @@ import {
   AiFileOpen,
   AiFileOpenDiff,
   AiGetActiveFileSelection,
+  AiMcpAllSetEnabled,
+  AiMcpServerAction,
+  AiMcpServerAdd,
+  AiMcpServerSetEnabled,
+  AiMcpServersGet,
+  AiMcpToolSetEnabled,
   AiMentionSearch,
   AiPermissionsGet,
   AiPermissionsSet,
   AiUsageSubscribe,
   AiUsageUnsubscribe,
   type AiChatAttachment,
+  type AiMcpServerInfo,
   type AiConversation,
   type AiConversationSummary,
   type AiChatMessage,
@@ -1761,6 +1768,7 @@ export function createAiChatStore(
       'l4.evaluate': 'always',
       'l4.refactor': 'always',
       'mcp.l4Rules': 'always',
+      'mcp.vscode': 'ask',
       'meta.askUser': 'always',
     } as Record<AiPermissionCategory, AiPermissionValue>
     if (!m) return empty
@@ -1782,6 +1790,84 @@ export function createAiChatStore(
   ): void {
     const m = getMessenger()
     m?.sendNotification(AiPermissionsSet, HOST_EXTENSION, { category, value })
+  }
+
+  async function getMcpServers(): Promise<{
+    servers: AiMcpServerInfo[]
+    allEnabled: boolean
+  }> {
+    const m = getMessenger()
+    if (!m) return { servers: [], allEnabled: true }
+    try {
+      return await m.sendRequest(
+        AiMcpServersGet,
+        HOST_EXTENSION,
+        undefined as never
+      )
+    } catch {
+      return { servers: [], allEnabled: true }
+    }
+  }
+
+  function setMcpAllEnabled(enabled: boolean): void {
+    const m = getMessenger()
+    m?.sendNotification(AiMcpAllSetEnabled, HOST_EXTENSION, { enabled })
+  }
+
+  function setMcpServerEnabled(id: string, enabled: boolean): void {
+    const m = getMessenger()
+    m?.sendNotification(AiMcpServerSetEnabled, HOST_EXTENSION, { id, enabled })
+  }
+
+  async function mcpServerAction(
+    id: string,
+    action: 'start' | 'stop' | 'refresh' | 'remove'
+  ): Promise<{ ok: boolean; error?: string }> {
+    const m = getMessenger()
+    if (!m) return { ok: false, error: 'Not connected to the extension.' }
+    try {
+      return await m.sendRequest(AiMcpServerAction, HOST_EXTENSION, {
+        id,
+        action,
+      })
+    } catch (err) {
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      }
+    }
+  }
+
+  function setMcpToolEnabled(
+    serverId: string,
+    toolName: string,
+    enabled: boolean
+  ): void {
+    const m = getMessenger()
+    m?.sendNotification(AiMcpToolSetEnabled, HOST_EXTENSION, {
+      serverId,
+      toolName,
+      enabled,
+    })
+  }
+
+  async function addMcpServer(input: {
+    name: string
+    transport: 'http' | 'sse' | 'stdio'
+    url?: string
+    command?: string
+    bearerToken?: string
+  }): Promise<{ ok: boolean; error?: string }> {
+    const m = getMessenger()
+    if (!m) return { ok: false, error: 'Not connected to the extension.' }
+    try {
+      return await m.sendRequest(AiMcpServerAdd, HOST_EXTENSION, input)
+    } catch (err) {
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      }
+    }
   }
 
   /** Pop the extension's native file picker for an attachment. Returns
@@ -1913,6 +1999,12 @@ export function createAiChatStore(
     answerQuestion,
     getPermissions,
     setPermission,
+    getMcpServers,
+    setMcpServerEnabled,
+    setMcpAllEnabled,
+    mcpServerAction,
+    setMcpToolEnabled,
+    addMcpServer,
     // Actions.
     refreshHistory,
     loadConversation,
@@ -1987,6 +2079,28 @@ export type AiChatStore = {
     category: AiPermissionCategory,
     value: AiPermissionValue
   ) => void
+  getMcpServers: () => Promise<{
+    servers: AiMcpServerInfo[]
+    allEnabled: boolean
+  }>
+  setMcpServerEnabled: (id: string, enabled: boolean) => void
+  setMcpAllEnabled: (enabled: boolean) => void
+  mcpServerAction: (
+    id: string,
+    action: 'start' | 'stop' | 'refresh' | 'remove'
+  ) => Promise<{ ok: boolean; error?: string }>
+  setMcpToolEnabled: (
+    serverId: string,
+    toolName: string,
+    enabled: boolean
+  ) => void
+  addMcpServer: (input: {
+    name: string
+    transport: 'http' | 'sse' | 'stdio'
+    url?: string
+    command?: string
+    bearerToken?: string
+  }) => Promise<{ ok: boolean; error?: string }>
   refreshHistory: () => Promise<void>
   loadConversation: (id: string) => Promise<void>
   deleteConversation: (id: string) => Promise<void>

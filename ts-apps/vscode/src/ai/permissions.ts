@@ -23,6 +23,7 @@ export type PermissionCategory =
   | 'l4.evaluate'
   | 'l4.refactor'
   | 'mcp.l4Rules'
+  | 'mcp.vscode'
   | 'meta.askUser'
   | 'meta.statusUpdate'
 
@@ -34,6 +35,7 @@ const CATEGORY_SETTING: Record<PermissionCategory, string> = {
   'l4.evaluate': 'legaleseAi.permissions.evaluateL4',
   'l4.refactor': 'legaleseAi.permissions.refactorL4',
   'mcp.l4Rules': 'legaleseAi.permissions.runDeployedRules',
+  'mcp.vscode': 'legaleseAi.permissions.vscodeMcp',
   'meta.askUser': 'legaleseAi.permissions.askUser',
   'meta.statusUpdate': 'legaleseAi.permissions.statusUpdate',
 }
@@ -52,6 +54,12 @@ const DEFAULTS: Record<PermissionCategory, PermissionValue> = {
   // want a confirmation per refactor.
   'l4.refactor': 'always',
   'mcp.l4Rules': 'always',
+  // Which MCP servers/tools the model can reach is governed by the
+  // per-server and per-tool toggles in the sidebar's MCP section, so
+  // calls to what survived those toggles run unattended. The category
+  // still exists (settable to ask/never via VS Code settings) for
+  // users who want call-time confirmation on top.
+  'mcp.vscode': 'always',
   // `meta__ask_user` has no side effects — it IS the user prompt.
   'meta.askUser': 'always',
   // `meta__post_status_update` only writes a line of prose into the
@@ -94,5 +102,6 @@ export function categoryForTool(toolName: string): PermissionCategory | null {
   if (toolName === 'meta__ask_user') return 'meta.askUser'
   if (toolName === 'meta__post_status_update') return 'meta.statusUpdate'
   if (toolName.startsWith('l4-rules__')) return 'mcp.l4Rules'
+  if (toolName.startsWith('vsmcp__')) return 'mcp.vscode'
   return null
 }

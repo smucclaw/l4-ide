@@ -12,6 +12,7 @@ import { l4Evaluate } from './tools/l4-evaluate.js'
 import { l4Refactor, type L4RefactorArgs } from './tools/refactor.js'
 import { metaAskUser, type AskUserAdapter } from './tools/ask-user.js'
 import { MCP_L4_RULES_PREFIX, type McpToolClient } from './mcp-client.js'
+import { VSCODE_MCP_PREFIX, type VsCodeMcpTools } from './vscode-mcp.js'
 import {
   categoryForTool,
   getPermission,
@@ -53,6 +54,9 @@ export interface ToolDispatcherOptions {
     detail?: { result?: string; error?: string }
   ) => void
   mcp: McpToolClient
+  /** Tools from the user's VS Code-registered MCP servers, executed
+   *  via `vscode.lm.invokeTool`. */
+  vsMcp: VsCodeMcpTools
   /** Invoked when the model calls `meta__ask_user`. Resolves with the
    *  user's free-text answer, or '' if they skipped. */
   askUser: AskUserAdapter
@@ -201,6 +205,9 @@ export class ToolDispatcher {
   ): Promise<string> {
     if (name.startsWith(MCP_L4_RULES_PREFIX)) {
       return this.opts.mcp.callTool(name, argsJson)
+    }
+    if (name.startsWith(VSCODE_MCP_PREFIX)) {
+      return this.opts.vsMcp.callTool(name, argsJson)
     }
     switch (name) {
       case 'fs__read_file':

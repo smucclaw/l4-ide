@@ -51,6 +51,7 @@ import { registerAiChatHandlers } from './ai/register.js'
 import { recordDirectiveResults } from './ai/tools/l4-evaluate.js'
 import { commandRenameIdentifier } from './ai/tools/refactor.js'
 import { McpToolClient } from './ai/mcp-client.js'
+import { VsCodeMcpTools } from './ai/vscode-mcp.js'
 
 /***********************************************
      decode for RenderAsLadderInfo
@@ -556,6 +557,14 @@ export async function activate(context: ExtensionContext) {
     string,
     (decision: 'allow' | 'deny') => void
   >()
+  // Decisions the user made BEFORE the dispatcher asked for them. The
+  // webview shows Allow/Deny buttons as soon as the tool-call frame
+  // streams in, but the dispatcher only registers its resolver when it
+  // actually dispatches that call (after the stream ends, and
+  // sequentially per call) — clicks in that window used to be dropped,
+  // forcing the user to click repeatedly. Stashed here instead and
+  // consumed by requestApproval below.
+  const earlyToolDecisions = new Map<string, 'allow' | 'deny'>()
   const askUserPending = new Map<string, (answer: string) => void>()
   // The dispatcher emits tool status updates through this channel; the
   // sidebar's registerAiChatHandlers replaces the stub `emit` with one
@@ -577,10 +586,29 @@ export async function activate(context: ExtensionContext) {
     ask: () => undefined,
   }
   const aiMcpClient = new McpToolClient(mcpProxy, aiLogger)
+  // MCP servers from VS Code's mcp.json (user + workspace). The
+  // extension holds its own connections to http/sse servers — enabled
+  // ones auto-connect once a usable Legalese AI session exists, their
+  // tools are funneled into the chat tool list, and calls go straight
+  // to the server with the configured headers.
+  const vsMcpTools = new VsCodeMcpTools(userDataPath, aiLogger, () =>
+    auth.isAiUsable()
+  )
   // Bust the MCP tool cache when the connection state flips: a newly
   // connected jl4-service might expose a different set of deployed
   // rules than we had cached from the disconnected fallback path.
-  context.subscriptions.push(auth.onDidChange(() => aiMcpClient.invalidate()))
+  // Auth changes also (re)connect the user's enabled MCP servers —
+  // this is what makes "toggled-on servers start on login" work.
+  context.subscriptions.push(
+    auth.onDidChange(() => {
+      aiMcpClient.invalidate()
+      void vsMcpTools.autoStart()
+    })
+  )
+  // Boot-time pass: connects immediately when a persisted session (or
+  // API key) is already usable; otherwise the auth listener above
+  // picks it up after login.
+  void vsMcpTools.autoStart()
 
   // Register the `@legalese` chat participant. Tool discovery happens
   // inside the participant via `vscode.lm.tools` + BUILTIN_TOOLS, so no
@@ -593,17 +621,25 @@ export async function activate(context: ExtensionContext) {
       proxy: aiProxy,
       logger: aiLogger,
       iconPath: vscode.Uri.joinPath(context.extensionUri, 'static', 'icon.png'),
+      vsMcp: vsMcpTools,
     })
   )
   const dispatcher = new ToolDispatcher({
     logger: aiLogger,
-    requestApproval: async (call) =>
-      new Promise<'allow' | 'deny'>((resolve) => {
+    requestApproval: async (call) => {
+      const early = earlyToolDecisions.get(call.callId)
+      if (early) {
+        earlyToolDecisions.delete(call.callId)
+        return early
+      }
+      return new Promise<'allow' | 'deny'>((resolve) => {
         approvalPending.set(call.callId, resolve)
-      }),
+      })
+    },
     notifyStatus: (callId, status, detail) =>
       toolStatusChannel.emit(callId, status, detail),
     mcp: aiMcpClient,
+    vsMcp: vsMcpTools,
     askUser: (callId, question, choices) =>
       new Promise<string>((resolve) => {
         askUserPending.set(callId, resolve)
@@ -624,6 +660,7 @@ export async function activate(context: ExtensionContext) {
     logger: aiLogger,
     dispatcher,
     mcp: aiMcpClient,
+    vsMcp: vsMcpTools,
     extensionVersion,
   })
 
@@ -650,12 +687,14 @@ export async function activate(context: ExtensionContext) {
       proxy: aiProxy,
       logger: aiLogger,
       approvalPending,
+      earlyToolDecisions,
       askUserPending,
       toolStatusChannel,
       askUserChannel,
       dispatcher,
       visibility: sidebarProvider,
       mcp: aiMcpClient,
+      vsMcp: vsMcpTools,
       serviceClient,
     })
   )

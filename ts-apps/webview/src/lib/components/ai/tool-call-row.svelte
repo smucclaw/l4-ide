@@ -166,6 +166,17 @@
         click: null,
       }
     }
+    if (name.startsWith('vsmcp__')) {
+      // Tools funneled from the user's VS Code MCP servers. The wire
+      // name is `vsmcp__<server>_<tool>` (sanitized); showing the part
+      // after the prefix is the most recognizable form we have here.
+      return {
+        running: 'MCP',
+        settled: 'MCP',
+        target: name.slice('vsmcp__'.length),
+        click: null,
+      }
+    }
     return { running: name, settled: name, target: null, click: null }
   }
 
