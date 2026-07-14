@@ -1066,9 +1066,11 @@ export const AiMcpToolSetEnabled: NotificationType<{
 }
 
 /** Webview adds a new MCP server. The extension writes it to VS Code's
- *  user-level `mcp.json`, making it a real VS Code MCP server (VS Code
- *  prompts the user to trust/start it). Returns `ok: false` with a
- *  human-readable `error` on validation or write failure. */
+ *  user-level `mcp.json`, making it a real VS Code MCP server. Returns
+ *  `ok: false` with a human-readable `error` on validation or write
+ *  failure; a name collision additionally sets `exists: true` so the
+ *  UI can offer to replace the entry (confirmed resubmit carries
+ *  `overwrite: true`). */
 export const AiMcpServerAdd: RequestType<
   {
     name: string
@@ -1080,8 +1082,10 @@ export const AiMcpServerAdd: RequestType<
     /** Optional bearer token for http/sse servers, stored as an
      *  `Authorization: Bearer …` header on the mcp.json entry. */
     bearerToken?: string
+    /** Replace an existing same-name entry (user confirmed). */
+    overwrite?: boolean
   },
-  { ok: boolean; error?: string }
+  { ok: boolean; error?: string; exists?: boolean }
 > = {
   method: 'aiMcpServerAdd',
 }

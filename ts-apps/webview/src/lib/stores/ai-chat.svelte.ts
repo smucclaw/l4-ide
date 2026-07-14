@@ -1857,7 +1857,8 @@ export function createAiChatStore(
     url?: string
     command?: string
     bearerToken?: string
-  }): Promise<{ ok: boolean; error?: string }> {
+    overwrite?: boolean
+  }): Promise<{ ok: boolean; error?: string; exists?: boolean }> {
     const m = getMessenger()
     if (!m) return { ok: false, error: 'Not connected to the extension.' }
     try {
@@ -2100,7 +2101,8 @@ export type AiChatStore = {
     url?: string
     command?: string
     bearerToken?: string
-  }) => Promise<{ ok: boolean; error?: string }>
+    overwrite?: boolean
+  }) => Promise<{ ok: boolean; error?: string; exists?: boolean }>
   refreshHistory: () => Promise<void>
   loadConversation: (id: string) => Promise<void>
   deleteConversation: (id: string) => Promise<void>

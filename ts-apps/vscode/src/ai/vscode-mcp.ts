@@ -109,6 +109,9 @@ export interface AddServerInput {
   /** Optional bearer token for http/sse servers — stored as an
    *  `Authorization: Bearer …` header on the mcp.json entry. */
   bearerToken?: string
+  /** Replace an existing entry with the same name instead of failing.
+   *  Set by the UI after the user confirmed the override. */
+  overwrite?: boolean
 }
 
 export type McpServerAction = 'start' | 'stop' | 'refresh' | 'remove'
@@ -549,10 +552,14 @@ export class VsCodeMcpTools {
    * Add a server to the user-level `mcp.json` and (for http/sse)
    * connect it immediately. VS Code picks the entry up from the file
    * for its own features independently.
+   *
+   * A name collision returns `exists: true` (not just an error) so
+   * the settings UI can offer to replace the existing entry; the
+   * confirmed resubmit carries `overwrite: true`.
    */
   async addServer(
     input: AddServerInput
-  ): Promise<{ ok: boolean; error?: string }> {
+  ): Promise<{ ok: boolean; error?: string; exists?: boolean }> {
     const name = input.name.trim()
     if (!name) return { ok: false, error: 'Server name is required.' }
     if (BUILTIN_SERVER_KEYS.has(name)) {
@@ -580,16 +587,33 @@ export class VsCodeMcpTools {
       }
     }
 
+    let replaced = false
+    let collision = false
     const written = this.mutateUserMcpJson((servers) => {
       if (servers[name]) {
-        return `A server named "${name}" already exists.`
+        if (!input.overwrite) {
+          collision = true
+          return `A server named "${name}" already exists.`
+        }
+        replaced = true
       }
       servers[name] = entry
       return null
     })
-    if (!written.ok) return written
+    if (!written.ok) {
+      // Flag the collision distinctly from parse/write failures so the
+      // UI can turn it into a "Replace?" confirmation, not a dead end.
+      return { ...written, ...(collision ? { exists: true } : {}) }
+    }
 
-    this.logger.info(`vscode-mcp: added server "${name}"`)
+    if (replaced) {
+      // Drop the old connection — it may point at a different URL or
+      // carry stale headers.
+      this.connections.delete(name)
+      this.logger.info(`vscode-mcp: replaced server "${name}"`)
+    } else {
+      this.logger.info(`vscode-mcp: added server "${name}"`)
+    }
     if (isDirectlyConnectable(entry) && this.isAiUsable()) {
       // Connect eagerly so the settings row shows real tools right away.
       return this.start(name)

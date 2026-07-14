@@ -32,6 +32,10 @@
   let addBearerToken = $state('')
   let addError = $state<string | null>(null)
   let addBusy = $state(false)
+  /** Set when the submitted name collides with an existing server —
+   *  the primary button becomes "Replace server" and the resubmit
+   *  carries overwrite: true. Cleared when the name changes. */
+  let addOverwritePending = $state(false)
   let addedNote = $state<string | null>(null)
   /** Server ids whose tool list is expanded. */
   let expandedIds = $state<Record<string, boolean>>({})
@@ -137,15 +141,22 @@
                 ? { bearerToken: addBearerToken.trim() }
                 : {}),
             }),
+        ...(addOverwritePending ? { overwrite: true } : {}),
       })
       if (!res.ok) {
-        addError = res.error ?? 'Could not add the server.'
+        if (res.exists) {
+          addOverwritePending = true
+          addError = `${res.error ?? 'A server with this name already exists.'} Click "Replace server" to override it.`
+        } else {
+          addError = res.error ?? 'Could not add the server.'
+        }
         return
       }
       addName = ''
       addUrl = ''
       addCommand = ''
       addBearerToken = ''
+      addOverwritePending = false
       addedNote =
         addTransport === 'stdio'
           ? "Command server added to VS Code's mcp.json — VS Code manages " +
@@ -465,6 +476,12 @@
                 type="text"
                 placeholder="Name (e.g. github)"
                 bind:value={addName}
+                oninput={() => {
+                  // A different name is a fresh add — drop the pending
+                  // replace confirmation so it can't silently override
+                  // some other existing server.
+                  addOverwritePending = false
+                }}
               />
               <select class="perm-select" bind:value={addTransport}>
                 <option value="http">HTTP</option>
@@ -502,13 +519,18 @@
                   disabled={addBusy}
                   onclick={() => void submitAddServer()}
                 >
-                  {addBusy ? 'Adding…' : 'Add server'}
+                  {addBusy
+                    ? 'Adding…'
+                    : addOverwritePending
+                      ? 'Replace server'
+                      : 'Add server'}
                 </button>
                 <button
                   class="mcp-btn"
                   onclick={() => {
                     showAddForm = false
                     addError = null
+                    addOverwritePending = false
                   }}
                 >
                   Cancel
