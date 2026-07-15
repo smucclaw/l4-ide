@@ -31,6 +31,7 @@ import {
   AiMcpAllSetEnabled,
   AiMcpServerAction,
   AiMcpServerAdd,
+  AiMcpServerImport,
   AiMcpServerSetEnabled,
   AiMcpServersGet,
   AiMcpToolSetEnabled,
@@ -656,12 +657,25 @@ export function registerAiChatHandlers(deps: {
   // ── MCP servers (sidebar settings section) ──────────────────────
   messenger.onRequest(AiMcpServersGet, async () => {
     try {
-      return { servers: vsMcp.listServers(), allEnabled: vsMcp.allEnabled() }
+      return {
+        servers: vsMcp.listServers(),
+        candidates: vsMcp.listCandidates(),
+        allEnabled: vsMcp.allEnabled(),
+      }
     } catch (err) {
       logger.warn(
         `mcp-servers/get failed: ${err instanceof Error ? err.message : String(err)}`
       )
-      return { servers: [], allEnabled: true }
+      return { servers: [], candidates: [], allEnabled: true }
+    }
+  })
+  messenger.onRequest(AiMcpServerImport, async ({ id }) => {
+    try {
+      return await vsMcp.importCandidate(id)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      logger.warn(`mcp-servers/import ${id} failed: ${msg}`)
+      return { ok: false, error: msg }
     }
   })
   messenger.onNotification(AiMcpAllSetEnabled, ({ enabled }) => {

@@ -12,7 +12,6 @@ import {
 } from './ai/tools/fs.js'
 import { l4Evaluate } from './ai/tools/l4-evaluate.js'
 import { categoryForTool, getPermission } from './ai/permissions.js'
-import type { VsCodeMcpTools } from './ai/vscode-mcp.js'
 import type { AiChatMessage } from 'jl4-client-rpc'
 
 /**
@@ -54,10 +53,6 @@ export function registerChatParticipant(deps: {
   proxy: AiProxyClient
   logger: AiLogger
   iconPath: vscode.Uri
-  /** Sidebar MCP-server toggles. Tools from a server the user switched
-   *  off in the Legalese AI settings are excluded here too, so both
-   *  chat surfaces agree on which MCP servers are in play. */
-  vsMcp?: VsCodeMcpTools
 }): vscode.Disposable {
   const handler: vscode.ChatRequestHandler = async (
     request,
@@ -87,7 +82,7 @@ export function registerChatParticipant(deps: {
     // Build the unified tool list once per user turn. `vscode.lm.tools`
     // is read once (a snapshot — new tools registered mid-turn won't be
     // visible to the model until the next user message).
-    const { tools, lmByWireName } = collectTools(deps.vsMcp)
+    const { tools, lmByWireName } = collectTools()
 
     const abort = new AbortController()
     const cancelSub = token.onCancellationRequested(() => abort.abort())
@@ -253,15 +248,13 @@ const BUILTIN_TOOL_NAMES: ReadonlySet<string> = new Set(
  * `vscode.lm.invokeTool` can be called with the registered name when
  * the model picks one.
  */
-function collectTools(vsMcp?: VsCodeMcpTools): {
+function collectTools(): {
   tools: AiProxyTool[]
   lmByWireName: Map<string, vscode.LanguageModelToolInformation>
 } {
   const lmByWireName = new Map<string, vscode.LanguageModelToolInformation>()
   const out: AiProxyTool[] = [...BUILTIN_TOOLS]
   for (const t of vscode.lm.tools) {
-    // Honor the per-server MCP toggles from the sidebar settings.
-    if (vsMcp?.isLmToolDisabled(t.name)) continue
     const wireName = sanitizeToolName(t.name)
     // Guard against an lm tool colliding with a built-in name (unlikely
     // but possible if some other extension registers `fs__read_file`).

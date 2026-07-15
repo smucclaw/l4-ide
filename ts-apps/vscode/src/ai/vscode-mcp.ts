@@ -1,36 +1,37 @@
 import * as fs from 'node:fs'
+import * as os from 'node:os'
 import * as path from 'node:path'
+import { spawn, type ChildProcess } from 'node:child_process'
 import * as vscode from 'vscode'
 import type { AiLogger } from './logger.js'
 import type { AiProxyTool } from './ai-proxy-client.js'
+import type { McpOAuthManager } from './mcp-oauth.js'
 
 /**
  * MCP servers for the Legalese AI sidebar.
  *
- * The extension maintains its OWN connections to the http/sse servers
- * configured in VS Code's `mcp.json` (user + workspace level), instead
- * of piggybacking on VS Code's MCP lifecycle:
+ * The extension keeps its OWN server list (in globalState) and runs
+ * every enabled server itself — http/sse over fetch, stdio via a
+ * spawned child process, and OAuth-protected servers through our own
+ * authorization client ({@link McpOAuthManager}). We never control or
+ * depend on VS Code's MCP runtime.
  *
- *  - Enabled servers auto-connect as soon as a usable Legalese AI
- *    session exists (login or extension boot) — no "start it in
- *    VS Code first" dance, and no dependence on VS Code's internal
- *    server naming (which follows the server's self-reported name and
- *    caused duplicate rows when it differed from the config key).
- *  - The per-server toggle starts/stops our connection; a per-tool
- *    deny-list refines which of a connected server's tools are
- *    advertised to the model.
- *  - Tool calls go straight to the server over JSON-RPC with the
- *    configured headers (e.g. an `Authorization: Bearer …` the user
- *    provided when adding the server).
+ * VS Code's `mcp.json` (user + workspace) is only an import catalog:
+ * its servers are listed, toggled off, below our own. Turning one on
+ * for the first time copies its config into our list — from then on
+ * it's ours (connection, toggles, removal), and it disappears from the
+ * catalog. Removing a server removes it from OUR list only; the
+ * mcp.json entry is untouched.
  *
- * Servers we cannot connect to ourselves (stdio commands, or servers
- * another extension registered with VS Code) still surface through
- * `vscode.lm.tools` and execute via `vscode.lm.invokeTool`; live tool
- * groups that duplicate one of our direct connections are folded away.
+ * Lifecycle: enabled servers auto-connect once a usable Legalese AI
+ * session exists (boot or login). Interactive actions (toggle-on,
+ * menu Start, import) may kick off a browser sign-in for OAuth
+ * servers; background auto-connects never do — they surface a
+ * "sign-in required" state instead.
  *
- * The built-in "L4 Rules" proxy is excluded everywhere — its tools
- * already reach the model via the `l4-rules__` path and it has its own
- * permission row.
+ * The built-in "L4 Rules" proxy is excluded from the catalog — its
+ * tools already reach the model via the `l4-rules__` path and it has
+ * its own permission row.
  */
 
 /** Wire-name prefix for MCP tools advertised to the ai-proxy,
@@ -38,47 +39,30 @@ import type { AiProxyTool } from './ai-proxy-client.js'
  *  the dispatcher and the permission gate key off it. */
 export const VSCODE_MCP_PREFIX = 'vsmcp__'
 
-/** Master switch: expose the user's MCP servers to Legalese AI at all.
- *  Shown as an "All MCP servers" toggle atop the settings list when
- *  more than one server exists. */
+/** Master switch: expose MCP servers to Legalese AI at all. */
 const MCP_ENABLED_SETTING = 'legaleseAi.mcp.enabled'
 
-/** Servers the user switched off for Legalese AI (deny-list so new
- *  servers default to available; calls stay permission-gated). */
+/** Servers the user switched off (deny-list so new servers default to
+ *  available; calls stay permission-gated). */
 const DISABLED_SERVERS_SETTING = 'legaleseAi.mcp.disabledServers'
 
 /** Individual tools the user switched off, as `serverId::toolName`. */
 const DISABLED_TOOLS_SETTING = 'legaleseAi.mcp.disabledTools'
 
-/** mcp.json keys owned by our own local proxy (see McpProxy). */
-const BUILTIN_SERVER_KEYS = new Set(['L4 Rules', 'l4-rules', 'l4-tools'])
+/** globalState key holding OUR server list. */
+const OWN_SERVERS_MEMENTO_KEY = 'legaleseAi.mcp.ownServers'
 
-/**
- * Names the built-in L4 server may appear under in `vscode.lm.tools`
- * prefixes. VS Code derives the tool prefix from the server's
- * SELF-REPORTED name (`serverInfo.name` from `initialize`), not from
- * the mcp.json key — the jl4-service reports "L4 Tools", so its tools
- * arrive as `mcp_l4_tools_*` even though the config key is "L4 Rules".
- * The bare `l4` alias deliberately also swallows any other
- * unconfigured l4-prefixed group rather than risk advertising our own
- * deployed rules to the model twice.
- */
-const BUILTIN_NAME_ALIASES = [
-  'L4 Rules',
-  'L4 Tools',
-  'l4-rules',
-  'l4-tools',
-  'l4',
-]
+/** mcp.json keys owned by our own local L4 proxy (see McpProxy). */
+const BUILTIN_SERVER_KEYS = new Set(['L4 Rules', 'l4-rules', 'l4-tools'])
 
 export type McpServerStatus =
   | 'connected'
   | 'connecting'
   | 'error'
   | 'stopped'
-  /** Not connectable by us (stdio command / other-extension server) —
-   *  its tools come and go with VS Code's own MCP lifecycle. */
-  | 'external'
+  /** OAuth server without stored tokens — needs an interactive
+   *  sign-in (menu → Start). */
+  | 'unauthorized'
 
 export interface VsCodeMcpToolInfo {
   name: string
@@ -89,7 +73,6 @@ export interface VsCodeMcpToolInfo {
 export interface VsCodeMcpServerInfo {
   id: string
   name: string
-  source: 'user' | 'workspace' | 'discovered'
   transport?: string
   /** URL or command line — whatever identifies the server to a human. */
   detail?: string
@@ -100,6 +83,14 @@ export interface VsCodeMcpServerInfo {
   tools: VsCodeMcpToolInfo[]
 }
 
+/** One mcp.json server offered for import (toggled off, not ours yet). */
+export interface VsCodeMcpCandidateInfo {
+  id: string
+  name: string
+  transport?: string
+  detail?: string
+}
+
 export interface AddServerInput {
   name: string
   transport: 'http' | 'sse' | 'stdio'
@@ -107,7 +98,7 @@ export interface AddServerInput {
   /** For stdio servers: full command line, split on whitespace. */
   command?: string
   /** Optional bearer token for http/sse servers — stored as an
-   *  `Authorization: Bearer …` header on the mcp.json entry. */
+   *  `Authorization: Bearer …` header on the entry. */
   bearerToken?: string
   /** Replace an existing entry with the same name instead of failing.
    *  Set by the UI after the user confirmed the override. */
@@ -116,19 +107,15 @@ export interface AddServerInput {
 
 export type McpServerAction = 'start' | 'stop' | 'refresh' | 'remove'
 
-interface McpJsonServerEntry {
+/** Server config entry — same shape as VS Code's mcp.json entries so
+ *  imports are verbatim copies. */
+interface McpServerEntry {
   type?: string
   url?: string
   command?: string
   args?: string[]
   headers?: Record<string, string>
   [key: string]: unknown
-}
-
-interface ConfiguredServer {
-  key: string
-  source: 'user' | 'workspace' | 'builtin'
-  entry: McpJsonServerEntry
 }
 
 interface McpToolDef {
@@ -138,44 +125,70 @@ interface McpToolDef {
 }
 
 interface Connection {
-  status: 'connected' | 'connecting' | 'error' | 'stopped'
+  status: McpServerStatus
   error?: string
   tools: McpToolDef[]
   /** `Mcp-Session-Id` echoed back per the streamable-HTTP spec. */
   sessionId?: string
+  /** OAuth access token in use (absent for static-header servers). */
+  bearer?: string
+  stdio?: StdioClient
 }
 
 /** JSON-RPC id counter, unique per process. */
 let rpcIdCounter = 1
 
+class HttpStatusError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly wwwAuthenticate?: string
+  ) {
+    super(message)
+  }
+}
+
 export class VsCodeMcpTools {
-  /** Direct-connection state per configured server key. */
   private connections = new Map<string, Connection>()
-  /** wire name → how to execute it. Rebuilt on every listTools(). */
-  private wireMap = new Map<
-    string,
-    | { via: 'direct'; serverId: string; toolName: string }
-    | { via: 'lm'; lmName: string }
-  >()
+  /** wire name → (server, tool). Rebuilt on every listTools(). */
+  private wireMap = new Map<string, { serverId: string; toolName: string }>()
 
   constructor(
-    /** VS Code per-user data dir containing `mcp.json` (same value
-     *  McpProxy uses). Undefined when it couldn't be derived. */
+    /** VS Code per-user data dir containing `mcp.json` — the import
+     *  catalog. Undefined when it couldn't be derived. */
     private readonly userDataPath: string | undefined,
     private readonly logger: AiLogger,
     /** Gate for auto-connecting: true when the user has a usable
      *  Legalese AI session (Cloud login or API key). */
-    private readonly isAiUsable: () => boolean
+    private readonly isAiUsable: () => boolean,
+    /** Extension globalState — holds our server list. */
+    private readonly memento: vscode.Memento,
+    /** OAuth client for protected servers. */
+    private readonly oauth?: McpOAuthManager
   ) {}
 
-  // ── Lifecycle ─────────────────────────────────────────────────────
+  dispose(): void {
+    for (const id of [...this.connections.keys()]) this.stop(id)
+  }
 
-  /**
-   * Connect every enabled http/sse server that isn't already connected.
-   * Called on activation and whenever auth state changes; no-op until
-   * a usable Legalese AI session exists.
-   */
-  /** Master switch state. */
+  // ── Our server list ───────────────────────────────────────────────
+
+  private ownServers(): Record<string, McpServerEntry> {
+    return (
+      this.memento.get<Record<string, McpServerEntry>>(
+        OWN_SERVERS_MEMENTO_KEY
+      ) ?? {}
+    )
+  }
+
+  private async saveOwnServers(
+    next: Record<string, McpServerEntry>
+  ): Promise<void> {
+    await this.memento.update(OWN_SERVERS_MEMENTO_KEY, next)
+  }
+
+  // ── Master switch ─────────────────────────────────────────────────
+
   allEnabled(): boolean {
     return (
       vscode.workspace.getConfiguration().get<boolean>(MCP_ENABLED_SETTING) !==
@@ -196,64 +209,50 @@ export class VsCodeMcpTools {
     }
   }
 
+  // ── Lifecycle ─────────────────────────────────────────────────────
+
+  /**
+   * Connect every enabled server that isn't already connected. Called
+   * on activation and whenever auth state changes; never triggers an
+   * interactive OAuth sign-in.
+   */
   async autoStart(): Promise<void> {
     if (!this.isAiUsable()) return
     if (!this.allEnabled()) return
     const disabled = getDisabledServers()
     const jobs: Promise<unknown>[] = []
-    for (const server of this.readConfiguredServers()) {
-      if (server.source === 'builtin') continue
-      if (disabled.has(server.key)) continue
-      if (!isDirectlyConnectable(server.entry)) continue
-      const current = this.connections.get(server.key)
+    for (const name of Object.keys(this.ownServers())) {
+      if (disabled.has(name)) continue
+      const current = this.connections.get(name)
       if (current?.status === 'connected' || current?.status === 'connecting')
         continue
-      jobs.push(this.start(server.key))
+      jobs.push(this.start(name, { interactive: false }))
     }
     await Promise.allSettled(jobs)
   }
 
-  /** Connect one server (initialize + tools/list). */
-  async start(id: string): Promise<{ ok: boolean; error?: string }> {
-    const server = this.readConfiguredServers().find((s) => s.key === id)
-    if (!server) return { ok: false, error: `Unknown server: ${id}` }
-    if (!isDirectlyConnectable(server.entry)) {
-      return {
-        ok: false,
-        error: 'Command (stdio) servers are managed by VS Code.',
-      }
-    }
-    const url = server.entry.url as string
+  /**
+   * Connect one of our servers. `interactive` allows a browser OAuth
+   * sign-in when the server demands it; background starts report
+   * `unauthorized` instead.
+   */
+  async start(
+    id: string,
+    opts: { interactive: boolean }
+  ): Promise<{ ok: boolean; error?: string }> {
+    const entry = this.ownServers()[id]
+    if (!entry) return { ok: false, error: `Unknown server: ${id}` }
+    this.stopStdio(id)
     const conn: Connection = { status: 'connecting', tools: [] }
     this.connections.set(id, conn)
     try {
-      const init = await this.rpc<{ protocolVersion?: string }>(
-        url,
-        server.entry.headers,
-        conn,
-        'initialize',
-        {
-          protocolVersion: '2025-03-26',
-          capabilities: { tools: {} },
-          clientInfo: { name: 'legalese-ai-chat', version: '1.5.0' },
-        }
-      )
-      void init
-      void this.rpc(
-        url,
-        server.entry.headers,
-        conn,
-        'notifications/initialized',
-        {}
-      ).catch(() => undefined)
-      const listed = await this.rpc<{ tools?: McpToolDef[] }>(
-        url,
-        server.entry.headers,
-        conn,
-        'tools/list',
-        {}
-      )
-      conn.tools = listed?.tools ?? []
+      if (isHttpEntry(entry)) {
+        await this.connectHttp(id, entry, conn, opts.interactive)
+      } else if (typeof entry.command === 'string') {
+        await this.connectStdio(id, entry, conn)
+      } else {
+        throw new Error('Entry has neither a url nor a command.')
+      }
       conn.status = 'connected'
       conn.error = undefined
       this.logger.info(
@@ -261,17 +260,29 @@ export class VsCodeMcpTools {
       )
       return { ok: true }
     } catch (err) {
+      if (err instanceof SignInRequired) {
+        conn.status = 'unauthorized'
+        conn.error =
+          'Sign-in required — choose Start in the server menu to authorize.'
+        return { ok: false, error: conn.error }
+      }
       const msg = err instanceof Error ? err.message : String(err)
       conn.status = 'error'
       conn.error = msg
       conn.tools = []
+      this.stopStdio(id)
       this.logger.warn(`vscode-mcp: connect "${id}" failed: ${msg}`)
       return { ok: false, error: msg }
     }
   }
 
   stop(id: string): void {
+    this.stopStdio(id)
     this.connections.set(id, { status: 'stopped', tools: [] })
+  }
+
+  private stopStdio(id: string): void {
+    this.connections.get(id)?.stdio?.kill()
   }
 
   /** Dispatch a three-dot-menu action from the settings UI. */
@@ -282,7 +293,7 @@ export class VsCodeMcpTools {
     switch (action) {
       case 'start':
       case 'refresh':
-        return this.start(id)
+        return this.start(id, { interactive: true })
       case 'stop':
         this.stop(id)
         return { ok: true }
@@ -291,10 +302,146 @@ export class VsCodeMcpTools {
     }
   }
 
+  // ── HTTP transport (with OAuth) ───────────────────────────────────
+
+  private async connectHttp(
+    id: string,
+    entry: McpServerEntry,
+    conn: Connection,
+    interactive: boolean
+  ): Promise<void> {
+    const url = entry.url as string
+    const hasStaticAuth = Boolean(entry.headers?.['Authorization'])
+    if (!hasStaticAuth && this.oauth) {
+      conn.bearer = (await this.oauth.getAccessToken(url)) ?? undefined
+    }
+    try {
+      await this.httpHandshake(url, entry, conn)
+      return
+    } catch (err) {
+      const unauthorized =
+        err instanceof HttpStatusError &&
+        (err.status === 401 || err.status === 403)
+      if (!unauthorized || hasStaticAuth || !this.oauth) throw err
+      if (!interactive) throw new SignInRequired()
+      // Interactive path: run the full browser authorization, then
+      // retry the handshake once with the fresh token.
+      conn.bearer = await this.oauth.authorize(url, err.wwwAuthenticate)
+      conn.sessionId = undefined
+      await this.httpHandshake(url, entry, conn)
+    }
+  }
+
+  private async httpHandshake(
+    url: string,
+    entry: McpServerEntry,
+    conn: Connection
+  ): Promise<void> {
+    await this.rpc(url, entry, conn, 'initialize', {
+      protocolVersion: '2025-03-26',
+      capabilities: { tools: {} },
+      clientInfo: { name: 'legalese-ai-chat', version: '1.6.0' },
+    })
+    void this.rpc(url, entry, conn, 'notifications/initialized', {}).catch(
+      () => undefined
+    )
+    const listed = await this.rpc<{ tools?: McpToolDef[] }>(
+      url,
+      entry,
+      conn,
+      'tools/list',
+      {}
+    )
+    conn.tools = listed?.tools ?? []
+  }
+
+  private async rpc<T>(
+    url: string,
+    entry: McpServerEntry,
+    conn: Connection,
+    method: string,
+    params: Record<string, unknown>
+  ): Promise<T | null> {
+    const id = rpcIdCounter++
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+        ...(conn.sessionId ? { 'Mcp-Session-Id': conn.sessionId } : {}),
+        ...(conn.bearer ? { Authorization: `Bearer ${conn.bearer}` } : {}),
+        ...(entry.headers ?? {}),
+      },
+      body: JSON.stringify({ jsonrpc: '2.0', id, method, params }),
+      signal: AbortSignal.timeout(20_000),
+    })
+    const sessionId = res.headers.get('Mcp-Session-Id')
+    if (sessionId) conn.sessionId = sessionId
+    if (!res.ok) {
+      const preview = await res.text().catch(() => '')
+      throw new HttpStatusError(
+        `${method} returned HTTP ${res.status}${preview ? `: ${preview.slice(0, 200)}` : ''}`,
+        res.status,
+        res.headers.get('WWW-Authenticate') ?? undefined
+      )
+    }
+    const contentType = res.headers.get('Content-Type') ?? ''
+    const text = await res.text()
+    if (!text) return null
+    const raw = contentType.includes('text/event-stream')
+      ? extractSseJson(text, id)
+      : text
+    if (!raw) return null
+    const payload = JSON.parse(raw) as {
+      result?: T
+      error?: { code?: number; message?: string }
+    }
+    if (payload.error) {
+      throw new Error(payload.error.message ?? `${method} failed`)
+    }
+    return payload.result ?? null
+  }
+
+  // ── stdio transport ───────────────────────────────────────────────
+
+  private async connectStdio(
+    id: string,
+    entry: McpServerEntry,
+    conn: Connection
+  ): Promise<void> {
+    const client = new StdioClient(
+      entry.command as string,
+      Array.isArray(entry.args) ? entry.args.map(String) : [],
+      this.logger,
+      (reason) => {
+        // Unexpected exit while we considered it connected.
+        const current = this.connections.get(id)
+        if (current === conn && conn.status === 'connected') {
+          conn.status = 'error'
+          conn.error = reason
+          conn.tools = []
+        }
+      }
+    )
+    conn.stdio = client
+    client.start()
+    await client.request('initialize', {
+      protocolVersion: '2025-03-26',
+      capabilities: { tools: {} },
+      clientInfo: { name: 'legalese-ai-chat', version: '1.6.0' },
+    })
+    client.notify('notifications/initialized', {})
+    const listed = await client.request<{ tools?: McpToolDef[] }>(
+      'tools/list',
+      {}
+    )
+    conn.tools = listed?.tools ?? []
+  }
+
   // ── Enablement ────────────────────────────────────────────────────
 
-  /** Toggle a server for Legalese AI. Enabling connects it right away
-   *  (when auth allows); disabling drops the connection. */
+  /** Toggle a server. Enabling connects it right away (interactive —
+   *  the user just asked for it); disabling drops the connection. */
   async setEnabled(id: string, enabled: boolean): Promise<void> {
     const disabled = getDisabledServers()
     if (enabled) disabled.delete(id)
@@ -307,7 +454,7 @@ export class VsCodeMcpTools {
         vscode.ConfigurationTarget.Global
       )
     if (enabled) {
-      if (this.isAiUsable()) void this.start(id)
+      if (this.isAiUsable()) void this.start(id, { interactive: true })
     } else {
       this.stop(id)
     }
@@ -331,92 +478,99 @@ export class VsCodeMcpTools {
       )
   }
 
-  // ── Server list for the settings UI ───────────────────────────────
+  // ── Listing for the settings UI ───────────────────────────────────
 
   listServers(): VsCodeMcpServerInfo[] {
-    const configured = this.readConfiguredServers()
     const disabledServers = getDisabledServers()
     const disabledTools = getDisabledTools()
-    const lmGroups = this.groupLmToolsByServer(configured)
-
-    const toolInfo = (
-      serverId: string,
-      name: string,
-      description?: string
-    ): VsCodeMcpToolInfo => ({
-      name,
-      description,
-      enabled: !disabledTools.has(toolKey(serverId, name)),
-    })
-
     const out: VsCodeMcpServerInfo[] = []
-    for (const server of configured) {
-      if (server.source === 'builtin') continue
-      const direct = isDirectlyConnectable(server.entry)
-      const conn = this.connections.get(server.key)
-      let status: McpServerStatus
-      let tools: VsCodeMcpToolInfo[]
-      if (direct) {
-        status = conn?.status ?? 'stopped'
-        tools = (conn?.tools ?? []).map((t) =>
-          toolInfo(server.key, t.name, t.description)
-        )
-      } else {
-        status = 'external'
-        tools = (lmGroups.get(server.key) ?? []).map((t) =>
-          toolInfo(server.key, t.displayName, t.description)
-        )
-      }
+    for (const [name, entry] of Object.entries(this.ownServers())) {
+      const conn = this.connections.get(name)
       out.push({
-        id: server.key,
-        name: server.key,
-        source: server.source,
-        transport: server.entry.type,
-        detail: describeEntry(server.entry),
-        enabled: !disabledServers.has(server.key),
-        status,
+        id: name,
+        name,
+        transport: entry.type ?? (entry.command ? 'stdio' : 'http'),
+        detail: describeEntry(entry),
+        enabled: !disabledServers.has(name),
+        status: conn?.status ?? 'stopped',
         error: conn?.error,
-        tools,
-      })
-    }
-
-    // Live lm.tools groups with no config entry (servers registered by
-    // other extensions). Skip groups that duplicate one of our direct
-    // connections — VS Code names servers after their self-reported
-    // name, which need not match the mcp.json key, so key matching
-    // alone can't catch these.
-    for (const [id, tools] of lmGroups) {
-      if (configured.some((s) => s.key === id)) continue
-      if (this.isDuplicateOfDirectConnection(tools)) continue
-      out.push({
-        id,
-        name: id.replace(/^discovered:/, ''),
-        source: 'discovered',
-        enabled: !disabledServers.has(id),
-        status: 'external',
-        tools: tools.map((t) => toolInfo(id, t.displayName, t.description)),
+        tools: (conn?.tools ?? []).map((t) => ({
+          name: t.name,
+          description: t.description,
+          enabled: !disabledTools.has(toolKey(name, t.name)),
+        })),
       })
     }
     return out
   }
 
+  /**
+   * mcp.json servers not (yet) in our list — the import catalog shown
+   * below our own servers. A candidate disappears once a same-named or
+   * same-target server exists in our list.
+   */
+  listCandidates(): VsCodeMcpCandidateInfo[] {
+    const own = this.ownServers()
+    const ownTargets = new Set(
+      Object.values(own)
+        .map((e) => e.url ?? e.command)
+        .filter(Boolean)
+    )
+    const out: VsCodeMcpCandidateInfo[] = []
+    for (const [key, entry] of Object.entries(this.readVsCodeMcpJson())) {
+      if (BUILTIN_SERVER_KEYS.has(key)) continue
+      if (own[key]) continue
+      const target = entry.url ?? entry.command
+      if (target && ownTargets.has(target)) continue
+      out.push({
+        id: key,
+        name: key,
+        transport: entry.type ?? (entry.command ? 'stdio' : 'http'),
+        detail: describeEntry(entry),
+      })
+    }
+    return out
+  }
+
+  /** Copy an mcp.json server into our list and start it. The original
+   *  entry is left untouched — from here on we run our own copy. */
+  async importCandidate(id: string): Promise<{ ok: boolean; error?: string }> {
+    const entry = this.readVsCodeMcpJson()[id]
+    if (!entry) return { ok: false, error: `Unknown server: ${id}` }
+    if (BUILTIN_SERVER_KEYS.has(id)) {
+      return { ok: false, error: 'The built-in L4 server is always wired.' }
+    }
+    const own = this.ownServers()
+    if (!own[id]) {
+      await this.saveOwnServers({ ...own, [id]: entry })
+      this.logger.info(`vscode-mcp: imported "${id}" from VS Code mcp.json`)
+    }
+    // The import gesture is an explicit enable.
+    const disabled = getDisabledServers()
+    if (disabled.has(id)) {
+      disabled.delete(id)
+      await vscode.workspace
+        .getConfiguration()
+        .update(
+          DISABLED_SERVERS_SETTING,
+          [...disabled].sort(),
+          vscode.ConfigurationTarget.Global
+        )
+    }
+    if (!this.isAiUsable()) return { ok: true }
+    return this.start(id, { interactive: true })
+  }
+
   // ── Tool funnel for the chat loop ─────────────────────────────────
 
-  /**
-   * Advertise the enabled servers' enabled tools in OpenAI
-   * function-tool shape. Direct connections win; lm-sourced tools are
-   * added only for servers we can't connect to ourselves, with
-   * duplicates of direct connections folded away.
-   */
+  /** Advertise the enabled servers' enabled tools in OpenAI
+   *  function-tool shape. */
   listTools(): AiProxyTool[] {
     this.wireMap.clear()
     if (!this.allEnabled()) return []
-    const configured = this.readConfiguredServers()
     const disabledServers = getDisabledServers()
     const disabledTools = getDisabledTools()
     const out: AiProxyTool[] = []
-
-    // Direct connections first.
     for (const [serverId, conn] of this.connections) {
       if (conn.status !== 'connected') continue
       if (disabledServers.has(serverId)) continue
@@ -424,11 +578,7 @@ export class VsCodeMcpTools {
         if (disabledTools.has(toolKey(serverId, t.name))) continue
         const wireName = directWireName(serverId, t.name)
         if (this.wireMap.has(wireName)) continue
-        this.wireMap.set(wireName, {
-          via: 'direct',
-          serverId,
-          toolName: t.name,
-        })
+        this.wireMap.set(wireName, { serverId, toolName: t.name })
         out.push({
           type: 'function',
           function: {
@@ -439,45 +589,10 @@ export class VsCodeMcpTools {
         })
       }
     }
-
-    // lm.tools for external servers (stdio / other extensions).
-    const lmGroups = this.groupLmToolsByServer(configured)
-    for (const [groupId, tools] of lmGroups) {
-      if (disabledServers.has(groupId)) continue
-      // Direct connections already cover this server.
-      const cfg = configured.find((s) => s.key === groupId)
-      if (cfg && isDirectlyConnectable(cfg.entry)) continue
-      if (this.isDuplicateOfDirectConnection(tools)) continue
-      for (const t of tools) {
-        if (disabledTools.has(toolKey(groupId, t.displayName))) continue
-        const wireName = lmWireName(t.lmName)
-        if (this.wireMap.has(wireName)) continue
-        this.wireMap.set(wireName, { via: 'lm', lmName: t.lmName })
-        out.push({
-          type: 'function',
-          function: {
-            name: wireName,
-            description: t.description || `MCP tool ${t.lmName}`,
-            parameters: shapeParameters(t.inputSchema),
-          },
-        })
-      }
-    }
     return out
   }
 
-  /** True when the lm tool belongs to a server the user disabled (or
-   *  to the built-in L4 server). Used by the @legalese chat participant
-   *  so the sidebar toggles apply there too. */
-  isLmToolDisabled(lmToolName: string): boolean {
-    if (!lmToolName.startsWith('mcp_')) return false
-    const owner = serverForLmTool(lmToolName, this.readConfiguredServers())
-    if (owner.builtin) return false // participant may still use it via VS Code
-    if (!this.allEnabled()) return true
-    return getDisabledServers().has(owner.id)
-  }
-
-  /** Execute a `vsmcp__…` call. */
+  /** Execute a `vsmcp__…` call against the owning connection. */
   async callTool(wireName: string, argsJson: string): Promise<string> {
     if (!wireName.startsWith(VSCODE_MCP_PREFIX)) {
       throw new Error(
@@ -509,34 +624,56 @@ export class VsCodeMcpTools {
         ? (parsed as Record<string, unknown>)
         : { value: parsed }
 
-    if (target.via === 'lm') {
-      const result = await vscode.lm.invokeTool(target.lmName, {
-        input: args,
-        toolInvocationToken: undefined,
-      })
-      const parts: string[] = []
-      for (const p of result.content) {
-        if (p instanceof vscode.LanguageModelTextPart) parts.push(p.value)
-      }
-      return parts.join('\n') || 'ok'
-    }
-
-    const server = this.readConfiguredServers().find(
-      (s) => s.key === (target as { serverId: string }).serverId
-    )
-    const conn = this.connections.get(target.serverId)
-    if (!server || !server.entry.url || conn?.status !== 'connected') {
+    const { serverId, toolName } = target
+    const entry = this.ownServers()[serverId]
+    const conn = this.connections.get(serverId)
+    if (!entry || conn?.status !== 'connected') {
       throw new Error(
-        `MCP server ${target.serverId} is not connected — toggle it on in the Legalese AI settings.`
+        `MCP server ${serverId} is not connected — toggle it on in the Legalese AI settings.`
       )
     }
-    const res = await this.rpc<{
+
+    let res: {
       content?: Array<{ type: string; text?: string }>
       isError?: boolean
-    }>(server.entry.url, server.entry.headers, conn, 'tools/call', {
-      name: target.toolName,
-      arguments: args,
-    })
+    } | null
+    if (conn.stdio) {
+      res = await conn.stdio.request('tools/call', {
+        name: toolName,
+        arguments: args,
+      })
+    } else {
+      const url = entry.url as string
+      try {
+        res = await this.rpc(url, entry, conn, 'tools/call', {
+          name: toolName,
+          arguments: args,
+        })
+      } catch (err) {
+        // Token may have expired mid-session: refresh silently once.
+        if (
+          err instanceof HttpStatusError &&
+          err.status === 401 &&
+          conn.bearer &&
+          this.oauth
+        ) {
+          const fresh = await this.oauth.getAccessToken(url)
+          if (!fresh) {
+            conn.status = 'unauthorized'
+            throw new Error(
+              `Sign-in to ${serverId} expired — restart it from the Legalese AI settings.`
+            )
+          }
+          conn.bearer = fresh
+          res = await this.rpc(url, entry, conn, 'tools/call', {
+            name: toolName,
+            arguments: args,
+          })
+        } else {
+          throw err
+        }
+      }
+    }
     const text = (res?.content ?? [])
       .map((c) => (c.type === 'text' && c.text ? c.text : JSON.stringify(c)))
       .join('\n')
@@ -546,16 +683,12 @@ export class VsCodeMcpTools {
     return text || JSON.stringify(res ?? {})
   }
 
-  // ── mcp.json management ───────────────────────────────────────────
+  // ── Add / remove ──────────────────────────────────────────────────
 
   /**
-   * Add a server to the user-level `mcp.json` and (for http/sse)
-   * connect it immediately. VS Code picks the entry up from the file
-   * for its own features independently.
-   *
-   * A name collision returns `exists: true` (not just an error) so
-   * the settings UI can offer to replace the existing entry; the
-   * confirmed resubmit carries `overwrite: true`.
+   * Add a server to OUR list and connect it. A name collision returns
+   * `exists: true` so the settings UI can offer to replace the entry
+   * (confirmed resubmit carries `overwrite: true`).
    */
   async addServer(
     input: AddServerInput
@@ -568,7 +701,7 @@ export class VsCodeMcpTools {
         error: `"${name}" is reserved for the built-in L4 server.`,
       }
     }
-    let entry: McpJsonServerEntry
+    let entry: McpServerEntry
     if (input.transport === 'stdio') {
       const parts = (input.command ?? '').trim().split(/\s+/).filter(Boolean)
       if (parts.length === 0) {
@@ -587,238 +720,214 @@ export class VsCodeMcpTools {
       }
     }
 
-    let replaced = false
-    let collision = false
-    const written = this.mutateUserMcpJson((servers) => {
-      if (servers[name]) {
-        if (!input.overwrite) {
-          collision = true
-          return `A server named "${name}" already exists.`
-        }
-        replaced = true
+    const own = this.ownServers()
+    if (own[name] && !input.overwrite) {
+      return {
+        ok: false,
+        exists: true,
+        error: `A server named "${name}" already exists.`,
       }
-      servers[name] = entry
-      return null
-    })
-    if (!written.ok) {
-      // Flag the collision distinctly from parse/write failures so the
-      // UI can turn it into a "Replace?" confirmation, not a dead end.
-      return { ...written, ...(collision ? { exists: true } : {}) }
     }
+    const replacing = Boolean(own[name])
+    if (replacing) this.stop(name)
+    await this.saveOwnServers({ ...own, [name]: entry })
+    this.logger.info(
+      `vscode-mcp: ${replacing ? 'replaced' : 'added'} server "${name}"`
+    )
+    if (!this.isAiUsable()) return { ok: true }
+    return this.start(name, { interactive: true })
+  }
 
-    if (replaced) {
-      // Drop the old connection — it may point at a different URL or
-      // carry stale headers.
-      this.connections.delete(name)
-      this.logger.info(`vscode-mcp: replaced server "${name}"`)
-    } else {
-      this.logger.info(`vscode-mcp: added server "${name}"`)
+  /** Remove a server from OUR list (mcp.json is never touched) and
+   *  forget any OAuth tokens we hold for it. */
+  private removeServer(id: string): { ok: boolean; error?: string } {
+    const own = this.ownServers()
+    const entry = own[id]
+    if (!entry) return { ok: false, error: `Unknown server: ${id}` }
+    this.stop(id)
+    this.connections.delete(id)
+    const next = { ...own }
+    delete next[id]
+    void this.saveOwnServers(next)
+    if (isHttpEntry(entry) && this.oauth) {
+      void this.oauth.clearAuth(entry.url as string)
     }
-    if (isDirectlyConnectable(entry) && this.isAiUsable()) {
-      // Connect eagerly so the settings row shows real tools right away.
-      return this.start(name)
-    }
+    this.logger.info(`vscode-mcp: removed server "${id}"`)
     return { ok: true }
   }
 
-  private removeServer(id: string): { ok: boolean; error?: string } {
-    const server = this.readConfiguredServers().find((s) => s.key === id)
-    if (!server) return { ok: false, error: `Unknown server: ${id}` }
-    if (server.source !== 'user') {
-      return {
-        ok: false,
-        error:
-          server.source === 'builtin'
-            ? 'The built-in L4 server cannot be removed.'
-            : 'Workspace servers live in .vscode/mcp.json — edit that file directly.',
-      }
-    }
-    const res = this.mutateUserMcpJson((servers) => {
-      if (!servers[id]) return `"${id}" is not in the user mcp.json.`
-      delete servers[id]
-      return null
-    })
-    if (res.ok) {
-      this.connections.delete(id)
-      this.logger.info(`vscode-mcp: removed server "${id}"`)
-    }
-    return res
-  }
+  // ── VS Code mcp.json (import catalog only) ────────────────────────
 
-  /** Read-modify-write the user mcp.json's `servers` object. The
-   *  mutator returns an error string to abort, or null to commit. */
-  private mutateUserMcpJson(
-    mutate: (servers: Record<string, McpJsonServerEntry>) => string | null
-  ): { ok: boolean; error?: string } {
-    if (!this.userDataPath) {
-      return { ok: false, error: 'Could not locate the VS Code user mcp.json.' }
-    }
-    const mcpJsonPath = path.join(this.userDataPath, 'mcp.json')
-    let config: { servers?: Record<string, McpJsonServerEntry> } = {}
-    try {
-      const raw = fs.readFileSync(mcpJsonPath, 'utf-8')
-      if (raw.trim()) config = JSON.parse(raw)
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
-        // Same posture as McpProxy.updateVSCodeMcpJson: never risk
-        // clobbering a JSONC file we can't faithfully parse.
-        return {
-          ok: false,
-          error: `Could not parse ${mcpJsonPath} — if it contains comments, edit it manually.`,
-        }
-      }
-    }
-    if (!config || typeof config !== 'object') config = {}
-    if (!config.servers || typeof config.servers !== 'object')
-      config.servers = {}
-    const abort = mutate(config.servers)
-    if (abort) return { ok: false, error: abort }
-    try {
-      fs.mkdirSync(path.dirname(mcpJsonPath), { recursive: true })
-      fs.writeFileSync(mcpJsonPath, JSON.stringify(config, null, 2) + '\n')
-      return { ok: true }
-    } catch (err) {
-      return {
-        ok: false,
-        error: `Failed to write mcp.json: ${err instanceof Error ? err.message : String(err)}`,
-      }
-    }
-  }
-
-  private readConfiguredServers(): ConfiguredServer[] {
-    const out: ConfiguredServer[] = []
-    const seen = new Set<string>()
-    const addFrom = (filePath: string, source: 'user' | 'workspace'): void => {
-      const servers = readMcpJsonServers(filePath, this.logger)
-      for (const [key, entry] of Object.entries(servers)) {
-        if (seen.has(key)) continue
-        seen.add(key)
-        out.push({
-          key,
-          source: BUILTIN_SERVER_KEYS.has(key) ? 'builtin' : source,
-          entry,
-        })
+  private readVsCodeMcpJson(): Record<string, McpServerEntry> {
+    const out: Record<string, McpServerEntry> = {}
+    const addFrom = (filePath: string): void => {
+      for (const [key, entry] of Object.entries(
+        readMcpJsonServers(filePath, this.logger)
+      )) {
+        if (!(key in out)) out[key] = entry
       }
     }
     if (this.userDataPath) {
-      addFrom(path.join(this.userDataPath, 'mcp.json'), 'user')
+      addFrom(path.join(this.userDataPath, 'mcp.json'))
     }
     for (const folder of vscode.workspace.workspaceFolders ?? []) {
-      addFrom(path.join(folder.uri.fsPath, '.vscode', 'mcp.json'), 'workspace')
+      addFrom(path.join(folder.uri.fsPath, '.vscode', 'mcp.json'))
     }
     return out
   }
+}
 
-  // ── lm.tools handling (external servers only) ─────────────────────
-
-  /** Group live `mcp_*` lm tools by owning server id. Built-in tools
-   *  are excluded — they never surface as a listable server. */
-  private groupLmToolsByServer(configured: ConfiguredServer[]): Map<
-    string,
-    Array<{
-      lmName: string
-      displayName: string
-      description?: string
-      inputSchema?: Record<string, unknown>
-    }>
-  > {
-    const groups = new Map<
-      string,
-      Array<{
-        lmName: string
-        displayName: string
-        description?: string
-        inputSchema?: Record<string, unknown>
-      }>
-    >()
-    for (const t of vscode.lm.tools) {
-      if (!t.name.startsWith('mcp_')) continue
-      const owner = serverForLmTool(t.name, configured)
-      if (owner.builtin) continue
-      const list = groups.get(owner.id) ?? []
-      list.push({
-        lmName: t.name,
-        displayName: displayToolName(t.name, owner.id),
-        description: t.description,
-        inputSchema: t.inputSchema as Record<string, unknown> | undefined,
-      })
-      groups.set(owner.id, list)
-    }
-    return groups
+/** Thrown internally when a background connect hits an OAuth wall. */
+class SignInRequired extends Error {
+  constructor() {
+    super('Sign-in required')
   }
+}
 
-  /**
-   * A live lm group is a duplicate of one of our direct connections
-   * when every one of its tools carries a connected server's tool name
-   * as a suffix. Content-based, so it works no matter what name VS Code
-   * generated for the server.
-   */
-  private isDuplicateOfDirectConnection(
-    tools: Array<{ lmName: string }>
-  ): boolean {
-    if (tools.length === 0) return false
-    for (const conn of this.connections.values()) {
-      if (conn.status !== 'connected' || conn.tools.length === 0) continue
-      const names = conn.tools.map((t) => sanitizeToolName(t.name))
-      const allMatch = tools.every((t) => {
-        const rest = t.lmName.slice('mcp_'.length)
-        return names.some((n) => rest === n || rest.endsWith(`_${n}`))
-      })
-      if (allMatch) return true
+// ── stdio client ──────────────────────────────────────────────────────
+
+/**
+ * Minimal MCP stdio transport: newline-delimited JSON-RPC over a
+ * spawned child process's stdin/stdout. stderr is logged.
+ */
+class StdioClient {
+  private proc: ChildProcess | null = null
+  private buffer = ''
+  private pending = new Map<
+    number,
+    {
+      resolve: (v: unknown) => void
+      reject: (e: Error) => void
+      timer: NodeJS.Timeout
     }
-    return false
-  }
+  >()
 
-  // ── JSON-RPC over (streamable) HTTP ───────────────────────────────
+  constructor(
+    private readonly command: string,
+    private readonly args: string[],
+    private readonly logger: AiLogger,
+    private readonly onUnexpectedExit: (reason: string) => void
+  ) {}
 
-  private async rpc<T>(
-    url: string,
-    headers: Record<string, string> | undefined,
-    conn: Connection,
-    method: string,
-    params: Record<string, unknown>
-  ): Promise<T | null> {
-    const id = rpcIdCounter++
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json, text/event-stream',
-        ...(conn.sessionId ? { 'Mcp-Session-Id': conn.sessionId } : {}),
-        ...(headers ?? {}),
-      },
-      body: JSON.stringify({ jsonrpc: '2.0', id, method, params }),
-      signal: AbortSignal.timeout(20_000),
+  start(): void {
+    const cwd =
+      vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? os.homedir()
+    this.proc = spawn(this.command, this.args, {
+      cwd,
+      env: process.env,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      // Through a shell so PATH-resolved commands (`npx`, `uvx`, …)
+      // behave the way they do in the user's terminal, incl. Windows.
+      shell: true,
     })
-    const sessionId = res.headers.get('Mcp-Session-Id')
-    if (sessionId) conn.sessionId = sessionId
-    if (!res.ok) {
-      const preview = await res.text().catch(() => '')
-      throw new Error(
-        `${method} returned HTTP ${res.status}${preview ? `: ${preview.slice(0, 200)}` : ''}`
-      )
+    this.proc.stdout?.setEncoding('utf-8')
+    this.proc.stdout?.on('data', (chunk: string) => this.onData(chunk))
+    this.proc.stderr?.setEncoding('utf-8')
+    this.proc.stderr?.on('data', (chunk: string) => {
+      const line = chunk.trim()
+      if (line) this.logger.info(`mcp-stdio[${this.command}]: ${line}`)
+    })
+    this.proc.on('exit', (code) => {
+      const reason = `Server process exited (code ${code ?? 'unknown'}).`
+      for (const [, p] of this.pending) {
+        clearTimeout(p.timer)
+        p.reject(new Error(reason))
+      }
+      this.pending.clear()
+      this.onUnexpectedExit(reason)
+    })
+    this.proc.on('error', (err) => {
+      const reason = `Failed to launch "${this.command}": ${err.message}`
+      for (const [, p] of this.pending) {
+        clearTimeout(p.timer)
+        p.reject(new Error(reason))
+      }
+      this.pending.clear()
+      this.onUnexpectedExit(reason)
+    })
+  }
+
+  async request<T>(
+    method: string,
+    params: Record<string, unknown>,
+    timeoutMs = 30_000
+  ): Promise<T | null> {
+    if (!this.proc?.stdin?.writable) {
+      throw new Error('Server process is not running.')
     }
-    const contentType = res.headers.get('Content-Type') ?? ''
-    const text = await res.text()
-    if (!text) return null
-    const raw = contentType.includes('text/event-stream')
-      ? extractSseJson(text, id)
-      : text
-    if (!raw) return null
-    const payload = JSON.parse(raw) as {
-      result?: T
-      error?: { code?: number; message?: string }
+    const id = rpcIdCounter++
+    const payload =
+      JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n'
+    return new Promise<T | null>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pending.delete(id)
+        reject(new Error(`${method} timed out after ${timeoutMs / 1000}s`))
+      }, timeoutMs)
+      this.pending.set(id, {
+        resolve: resolve as (v: unknown) => void,
+        reject,
+        timer,
+      })
+      this.proc!.stdin!.write(payload)
+    })
+  }
+
+  notify(method: string, params: Record<string, unknown>): void {
+    if (!this.proc?.stdin?.writable) return
+    this.proc.stdin.write(
+      JSON.stringify({ jsonrpc: '2.0', method, params }) + '\n'
+    )
+  }
+
+  kill(): void {
+    if (!this.proc) return
+    try {
+      this.proc.removeAllListeners('exit')
+      this.proc.kill()
+    } catch {
+      // already gone
     }
-    if (payload.error) {
-      throw new Error(payload.error.message ?? `${method} failed`)
+    this.proc = null
+    for (const [, p] of this.pending) {
+      clearTimeout(p.timer)
+      p.reject(new Error('Server stopped.'))
     }
-    return payload.result ?? null
+    this.pending.clear()
+  }
+
+  private onData(chunk: string): void {
+    this.buffer += chunk
+    let idx: number
+    while ((idx = this.buffer.indexOf('\n')) >= 0) {
+      const line = this.buffer.slice(0, idx).trim()
+      this.buffer = this.buffer.slice(idx + 1)
+      if (!line) continue
+      try {
+        const msg = JSON.parse(line) as {
+          id?: number
+          result?: unknown
+          error?: { message?: string }
+        }
+        if (typeof msg.id !== 'number') continue // server notification
+        const p = this.pending.get(msg.id)
+        if (!p) continue
+        this.pending.delete(msg.id)
+        clearTimeout(p.timer)
+        if (msg.error) {
+          p.reject(new Error(msg.error.message ?? 'MCP request failed'))
+        } else {
+          p.resolve(msg.result ?? null)
+        }
+      } catch {
+        // Non-JSON noise on stdout (some servers print banners) — skip.
+      }
+    }
   }
 }
 
 // ── helpers ───────────────────────────────────────────────────────────
 
-function isDirectlyConnectable(entry: McpJsonServerEntry): boolean {
+function isHttpEntry(entry: McpServerEntry): boolean {
   return (
     typeof entry.url === 'string' &&
     (entry.type === 'http' || entry.type === 'sse' || entry.type === undefined)
@@ -847,7 +956,7 @@ function readStringSetSetting(setting: string): Set<string> {
 function readMcpJsonServers(
   filePath: string,
   logger: AiLogger
-): Record<string, McpJsonServerEntry> {
+): Record<string, McpServerEntry> {
   let raw: string
   try {
     raw = fs.readFileSync(filePath, 'utf-8')
@@ -857,7 +966,7 @@ function readMcpJsonServers(
   if (!raw.trim()) return {}
   try {
     const parsed = JSON.parse(raw) as {
-      servers?: Record<string, McpJsonServerEntry>
+      servers?: Record<string, McpServerEntry>
     }
     if (parsed && typeof parsed === 'object' && parsed.servers) {
       return parsed.servers
@@ -872,7 +981,7 @@ function readMcpJsonServers(
   return {}
 }
 
-function describeEntry(entry: McpJsonServerEntry): string | undefined {
+function describeEntry(entry: McpServerEntry): string | undefined {
   if (typeof entry.url === 'string') return entry.url
   if (typeof entry.command === 'string') {
     return [
@@ -902,94 +1011,17 @@ function extractSseJson(body: string, id: number): string | null {
   return last
 }
 
-/**
- * Replicate VS Code's MCP tool-prefix slug (verbatim from the workbench
- * bundle's prefix generator): lowercase, collapse runs of characters
- * outside `[a-z0-9_.-]` to `_`, truncate to 13 chars. When two servers
- * produce the same slug VS Code appends a numeric disambiguator —
- * hence the `\d*` allowance in {@link slugPrefixLength}.
- */
-function vscodeMcpSlug(name: string): string {
-  return name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_.-]+/g, '_')
-    .slice(0, 13)
-}
-
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-/** Length of the `<slug><n>_` prefix of `rest` that `serverName` owns,
- *  or 0 when it doesn't match. `rest` is the lm tool name minus its
- *  leading `mcp_`, lowercased. */
-function slugPrefixLength(rest: string, serverName: string): number {
-  const slug = vscodeMcpSlug(serverName)
-  if (!slug) return 0
-  const m = rest.match(new RegExp(`^${escapeRegExp(slug)}\\d*_`))
-  if (m) return m[0].length
-  if (slug.length >= 4) {
-    const m2 = rest.match(
-      new RegExp(`^${escapeRegExp(slug.slice(0, slug.length - 1))}\\d+_`)
-    )
-    if (m2) return m2[0].length
-  }
-  return 0
-}
-
-function serverForLmTool(
-  lmToolName: string,
-  configured: ConfiguredServer[]
-): { id: string; builtin: boolean } {
-  const rest = lmToolName.slice('mcp_'.length).toLowerCase()
-  let best: { id: string; builtin: boolean; len: number } | null = null
-  for (const server of configured) {
-    const len = slugPrefixLength(rest, server.key)
-    if (len && (!best || len > best.len)) {
-      best = { id: server.key, builtin: server.source === 'builtin', len }
-    }
-  }
-  for (const alias of BUILTIN_NAME_ALIASES) {
-    const len = slugPrefixLength(rest, alias)
-    if (len && (!best || len > best.len)) {
-      best = { id: alias, builtin: true, len }
-    }
-  }
-  if (best) return { id: best.id, builtin: best.builtin }
-  const firstSegment = rest.split('_', 1)[0] || rest
-  return { id: `discovered:${firstSegment}`, builtin: false }
-}
-
-/** Strip `mcp_<serverSlug>_` from a tool name for display, best-effort. */
-function displayToolName(lmToolName: string, ownerId: string): string {
-  const rest = lmToolName.slice('mcp_'.length)
-  const len = slugPrefixLength(
-    rest.toLowerCase(),
-    ownerId.replace(/^discovered:/, '')
-  )
-  return len ? rest.slice(len) : rest
-}
-
 /** OpenAI function names allow `[a-zA-Z0-9_-]{1,64}`. */
 function sanitizeToolName(s: string): string {
   return s.replace(/[^a-zA-Z0-9_-]/g, '_')
 }
 
-/** Wire name for a directly-connected server's tool. Uniqueness comes
- *  from the wireMap dedupe; the name only needs to be stable. */
+/** Wire name for a server's tool. Uniqueness comes from the wireMap
+ *  dedupe; the name only needs to be stable. */
 function directWireName(serverId: string, toolName: string): string {
   const server = sanitizeToolName(serverId).slice(0, 16)
   const tool = sanitizeToolName(toolName).slice(0, 40)
   return `${VSCODE_MCP_PREFIX}${server}_${tool}`.slice(0, 64)
-}
-
-/** Wire name for an lm-sourced tool: drop the redundant `mcp_`. */
-function lmWireName(lmToolName: string): string {
-  const trimmed = lmToolName.startsWith('mcp_')
-    ? lmToolName.slice('mcp_'.length)
-    : lmToolName
-  return `${VSCODE_MCP_PREFIX}${sanitizeToolName(trimmed)}`.slice(0, 64)
 }
 
 /** OpenAI function tools require `parameters.type === 'object'`; some

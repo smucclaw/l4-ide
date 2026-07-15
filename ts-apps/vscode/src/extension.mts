@@ -52,6 +52,7 @@ import { recordDirectiveResults } from './ai/tools/l4-evaluate.js'
 import { commandRenameIdentifier } from './ai/tools/refactor.js'
 import { McpToolClient } from './ai/mcp-client.js'
 import { VsCodeMcpTools } from './ai/vscode-mcp.js'
+import { McpOAuthManager } from './ai/mcp-oauth.js'
 
 /***********************************************
      decode for RenderAsLadderInfo
@@ -481,10 +482,20 @@ export async function activate(context: ExtensionContext) {
   context.subscriptions.push(mcpProxy)
   mcpProxy.start()
 
-  // Register URI handler for legalese.cloud login callback
+  // Register the extension's single URI handler. `/mcp-oauth` routes
+  // to the MCP OAuth client (created further down — late-bound ref);
+  // everything else is the legalese.cloud login callback.
+  const mcpOAuthRef: { handleCallback: (uri: vscode.Uri) => boolean } = {
+    handleCallback: () => false,
+  }
   context.subscriptions.push(
     vscode.window.registerUriHandler({
-      handleUri: (uri: vscode.Uri) => auth.handleAuthCallback(uri),
+      handleUri: (uri: vscode.Uri) => {
+        if (uri.path === '/mcp-oauth' && mcpOAuthRef.handleCallback(uri)) {
+          return
+        }
+        void auth.handleAuthCallback(uri)
+      },
     })
   )
   context.subscriptions.push(auth)
@@ -586,14 +597,26 @@ export async function activate(context: ExtensionContext) {
     ask: () => undefined,
   }
   const aiMcpClient = new McpToolClient(mcpProxy, aiLogger)
-  // MCP servers from VS Code's mcp.json (user + workspace). The
-  // extension holds its own connections to http/sse servers — enabled
-  // ones auto-connect once a usable Legalese AI session exists, their
-  // tools are funneled into the chat tool list, and calls go straight
-  // to the server with the configured headers.
-  const vsMcpTools = new VsCodeMcpTools(userDataPath, aiLogger, () =>
-    auth.isAiUsable()
+  // OAuth client for protected MCP servers: discovery, dynamic client
+  // registration, PKCE browser flow (redirect through the extension's
+  // URI handler above), token storage in SecretStorage.
+  const mcpOAuth = new McpOAuthManager(
+    context.secrets,
+    aiLogger,
+    `${vscode.env.uriScheme}://${context.extension.id.toLowerCase()}/mcp-oauth`
   )
+  mcpOAuthRef.handleCallback = (uri) => mcpOAuth.handleCallback(uri)
+  // The extension's own MCP server list (globalState). Every enabled
+  // server runs on our own client (http/sse/stdio + OAuth); VS Code's
+  // mcp.json is only an import catalog surfaced in the settings UI.
+  const vsMcpTools = new VsCodeMcpTools(
+    userDataPath,
+    aiLogger,
+    () => auth.isAiUsable(),
+    context.globalState,
+    mcpOAuth
+  )
+  context.subscriptions.push(vsMcpTools)
   // Bust the MCP tool cache when the connection state flips: a newly
   // connected jl4-service might expose a different set of deployed
   // rules than we had cached from the disconnected fallback path.
@@ -621,7 +644,6 @@ export async function activate(context: ExtensionContext) {
       proxy: aiProxy,
       logger: aiLogger,
       iconPath: vscode.Uri.joinPath(context.extensionUri, 'static', 'icon.png'),
-      vsMcp: vsMcpTools,
     })
   )
   const dispatcher = new ToolDispatcher({
