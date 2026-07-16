@@ -418,6 +418,7 @@ Phase: Check
 21:17-18 SemanticTokenTypes_TypeParameter
 21:18-19 SemanticTokenTypes_Operator
 21:20-21 SemanticTokenTypes_TypeParameter
+21:9-13 SemanticTokenTypes_Class
 22:3-6 SemanticTokenTypes_Keyword
 22:7-10 SemanticTokenTypes_Variable
 22:11-13 SemanticTokenTypes_Keyword
@@ -438,6 +439,7 @@ Phase: Check
 26:14-18 SemanticTokenTypes_Keyword
 27:1-8 SemanticTokenTypes_Keyword
 27:9-14 SemanticTokenTypes_Type
+27:9-14 SemanticTokenTypes_Class
 28:3-6 SemanticTokenTypes_Keyword
 28:7-10 SemanticTokenTypes_Variable
 28:11-13 SemanticTokenTypes_Keyword
@@ -460,6 +462,7 @@ Phase: Check
 33:9-14 SemanticTokenTypes_Type
 33:15-16 SemanticTokenTypes_TypeParameter
 33:17-18 SemanticTokenTypes_TypeParameter
+33:9-14 SemanticTokenTypes_Class
 34:3-6 SemanticTokenTypes_Keyword
 34:7-10 SemanticTokenTypes_Variable
 34:11-13 SemanticTokenTypes_Keyword
@@ -483,6 +486,7 @@ Phase: Check
 38:9-14 SemanticTokenTypes_Type
 38:15-16 SemanticTokenTypes_TypeParameter
 38:17-18 SemanticTokenTypes_TypeParameter
+38:9-14 SemanticTokenTypes_Class
 38:19-22 SemanticTokenTypes_Keyword
 38:23-26 SemanticTokenTypes_Variable
 38:27-29 SemanticTokenTypes_Keyword

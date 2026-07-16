@@ -29,8 +29,10 @@ import qualified LSP.L4.Rules as Rules
 import Optics ((^.), (%))
 
 import Language.LSP.Protocol.Types (normalizedFilePathToUri, toNormalizedFilePath)
-import System.FilePath ((<.>))
+import System.FilePath ((<.>), takeFileName)
 import qualified Data.Map.Strict as StrictMap
+import qualified Data.Set as Set
+import qualified L4.API.EmbeddedLibraries as EmbeddedLibraries
 
 import Backend.Api
 import Backend.CodeGen (generateEvalWrapper, generateDeonticEvalWrapper, GeneratedCode(..))
@@ -152,6 +154,25 @@ typecheckAndEvalBundle moduleContext evalFiles = do
   fixedNow <- Eval.readFixedNowEnv
   evalConfig <- Eval.resolveEvalConfig fixedNow apiDefaultPolicy
 
+  -- Core libraries (prelude, …) to register as stable virtual files, unless the
+  -- deployment ships its own copy of the same name (which then shadows the
+  -- embedded one). Registering them up front means `IMPORT prelude` resolves via
+  -- the VFS, instead of the resolver's on-demand `addVirtualFile` embedded
+  -- fallback (LSP.L4.Rules). That fallback mutates the VFS mid-rule and — under
+  -- -O, in the multi-pass compileBundle/eval path — yields an unstable/duplicate
+  -- prelude module and spurious overload ambiguity (e.g. `count xs >= n` →
+  -- "ambiguous __GEQ__"). Verified: the same source is rejected via the embedded
+  -- fallback and accepted when the library is a real virtual file. The libraries
+  -- stay *dependencies* (NOT added to `allUris`), so they are never serialized or
+  -- surfaced as deployment files — only resolved when imported.
+  let bundleBasenames = Set.fromList (map takeFileName (StrictMap.keys moduleContext))
+      embeddedLibFiles =
+        [ (libName, content)
+        | (name, content) <- StrictMap.toList EmbeddedLibraries.embeddedLibraries
+        , let libName = Text.unpack name <.> "l4"
+        , not (libName `Set.member` bundleBasenames)
+        ]
+
   -- Use the first file's directory as the session root (arbitrary but required)
   let allFiles = StrictMap.toList moduleContext
   case allFiles of
@@ -166,7 +187,12 @@ typecheckAndEvalBundle moduleContext evalFiles = do
           _ <- Shake.addVirtualFile nfp content
           pure (path, nfp, normalizedFilePathToUri nfp)
 
-        -- Typecheck ALL files in one batch — Shake shares import resolution
+        -- Register embedded core libraries as stable virtual files (dependencies
+        -- only — deliberately NOT added to allUris, see note above).
+        forM_ embeddedLibFiles $ \(libName, content) ->
+          void $ Shake.addVirtualFile (toNormalizedFilePath ("./" <> libName)) content
+
+        -- Typecheck ALL bundle files in one batch — Shake shares import resolution
         let allUris = [uri | (_, _, uri) <- fileNfps]
         tcResults <- Shake.uses Rules.TypeCheck allUris
 

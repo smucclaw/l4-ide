@@ -1,10 +1,7 @@
 import * as vscode from 'vscode'
+import { createHash } from 'crypto'
 
-export type ConnectionStatus =
-  | 'connected'
-  | 'not-configured'
-  | 'connecting'
-  | 'error'
+type ConnectionStatus = 'connected' | 'not-configured' | 'connecting' | 'error'
 
 export interface ConnectionState {
   status: ConnectionStatus
@@ -47,6 +44,11 @@ export class AuthManager {
   private verifyGen = 0
   private manuallyDisconnected = false
   private cloudOrgSlug: string | undefined
+  // Stable per-user identifier pulled from /auth/session. Used to scope
+  // on-disk state (e.g. conversation history) per signed-in user so
+  // logging out and back in as someone else yields a different view.
+  // Undefined in self-hosted mode (API-key-only) and when signed out.
+  private cloudUserId: string | undefined
   private readonly disposables: vscode.Disposable[] = []
 
   constructor(
@@ -64,6 +66,7 @@ export class AuthManager {
           )
           await this.secrets.delete(SECRET_KEY_SESSION)
           this.cloudOrgSlug = undefined
+          this.cloudUserId = undefined
           this.manuallyDisconnected = false
           this.invalidate()
           await this.verifyConnection()
@@ -81,6 +84,13 @@ export class AuthManager {
   private getApiKeyFromSettings(): string {
     return (
       vscode.workspace.getConfiguration('jl4').get<string>('serviceApiKey') ??
+      ''
+    )
+  }
+
+  private getAiApiKeyFromSettings(): string {
+    return (
+      vscode.workspace.getConfiguration('legaleseAi').get<string>('apiKey') ??
       ''
     )
   }
@@ -108,15 +118,107 @@ export class AuthManager {
   }
 
   /**
-   * The effective service URL.
-   * If serviceUrl is configured in settings, use that.
-   * If in Legalese Cloud mode with an org slug, derive from the slug.
+   * Auth headers for the Legalese AI proxy.
+   * Prefers `legaleseAi.apiKey` when set; otherwise falls back to the
+   * shared flow (jl4 service API key, then browser-login session).
+   * Keeping this distinct from `getAuthHeaders` lets users mix a
+   * self-hosted jl4 service (with `jl4.serviceApiKey`) and a separate
+   * Legalese AI key — neither setting clobbers the other.
+   */
+  async getAiAuthHeaders(): Promise<Record<string, string>> {
+    const aiKey = this.getAiApiKeyFromSettings()
+    if (aiKey) return { Authorization: `Bearer ${aiKey}` }
+    return this.getAuthHeaders()
+  }
+
+  /**
+   * Whether the Legalese AI surface (chat tab, ask-about-selection)
+   * has credentials it can use. True when EITHER:
+   *  - `legaleseAi.apiKey` is set, OR
+   *  - the user has a verified Legalese Cloud session (cloudUserId is
+   *    populated only after a successful GET /auth/session round-trip,
+   *    so this rules out stale/forged tokens).
+   *
+   * Deliberately independent of the jl4-service connection: a
+   * self-hosted jl4 service does NOT imply Legalese AI access.
+   */
+  isAiUsable(): boolean {
+    if (this.getAiApiKeyFromSettings()) return true
+    return this.cloudUserId !== undefined
+  }
+
+  /**
+   * The effective service URL — the org subdomain in cloud mode, or the
+   * user-configured URL in self-hosted mode.
+   *
+   * Used for ALB-level endpoints that don't fit the consolidated api host:
+   * the `/health` connectivity ping and any UI surface that wants to show
+   * the user where their data lives. Dataplane traffic (deployments / files /
+   * functions / evaluation) should go through 'getApiBaseUrl' instead.
    */
   getEffectiveServiceUrl(): string {
     const configured = this.getServiceUrl()
     if (configured) return configured
     if (this.cloudOrgSlug) {
       return `https://${this.cloudOrgSlug}.${LEGALESE_CLOUD_DOMAIN}`
+    }
+    return ''
+  }
+
+  /**
+   * Base URL for dataplane requests (deployments / files / functions /
+   * openapi / evaluation / updates polling). In cloud mode this resolves to
+   * the consolidated api host with the org slug as the path prefix
+   * (`https://api.legalese.cloud/{slug}`), so a single host serves every
+   * tenant. In self-hosted mode it's the configured `jl4.serviceUrl` and
+   * paths stay in their canonical `/deployments/...` form.
+   *
+   * Callers must combine this with the api-host path scheme when in cloud
+   * mode (see 'isApiHostMode'); the path translation isn't done here so
+   * different callers can keep using canonical paths in self-hosted mode.
+   */
+  getApiBaseUrl(): string {
+    const configured = this.getServiceUrl()
+    if (configured) return configured
+    if (this.cloudOrgSlug) {
+      return `https://api.${LEGALESE_CLOUD_DOMAIN}/${this.cloudOrgSlug}`
+    }
+    return ''
+  }
+
+  /**
+   * Whether dataplane requests should be sent in the api-host path scheme
+   * (`/{id}/fn/{fn}` etc.) instead of the canonical jl4-service scheme
+   * (`/deployments/{id}/functions/{fn}`). True iff the user is on Legalese
+   * Cloud and has no explicit `jl4.serviceUrl` override.
+   */
+  isApiHostMode(): boolean {
+    return !this.getServiceUrl() && this.cloudOrgSlug !== undefined
+  }
+
+  /**
+   * The verified Legalese Cloud organization slug, or undefined when
+   * not signed in to a cloud session (e.g. self-hosted jl4-service, or
+   * API-key-only). Populated by the GET /auth/session round-trip in
+   * the auth callback / `initialize()`. The Deployment tab's "Use in
+   * chat" / "Integrate" affordances use this to build deployment-scoped
+   * URLs (`ai.legalese.cloud/{orgSlug}/{deploymentId}`, etc.).
+   */
+  getCloudOrgSlug(): string | undefined {
+    return this.cloudOrgSlug
+  }
+
+  /**
+   * The effective MCP endpoint URL. Distinct from the service URL because
+   * Legalese Cloud serves MCP from a dedicated origin (`mcp.legalese.cloud`)
+   * with the org slug as the path, while self-hosted jl4-service exposes
+   * MCP at `/.mcp` on the service URL.
+   */
+  getEffectiveMcpUrl(): string {
+    const configured = this.getServiceUrl()
+    if (configured) return `${configured.replace(/\/$/, '')}/.mcp`
+    if (this.cloudOrgSlug) {
+      return `https://mcp.${LEGALESE_CLOUD_DOMAIN}/${this.cloudOrgSlug}`
     }
     return ''
   }
@@ -138,9 +240,53 @@ export class AuthManager {
   async logout(): Promise<void> {
     await this.secrets.delete(SECRET_KEY_SESSION)
     this.cloudOrgSlug = undefined
+    this.cloudUserId = undefined
     this.manuallyDisconnected = true
     this.invalidate()
     await this.verifyConnection()
+  }
+
+  /**
+   * Stable identifier for the signed-in Legalese Cloud user, if any.
+   * Undefined in self-hosted / api-key-only / signed-out modes. For
+   * scoping on-disk state, prefer `getUserStorageKey()` which also
+   * covers the api-key case.
+   */
+  getUserId(): string | undefined {
+    return this.cloudUserId
+  }
+
+  /**
+   * Filesystem-safe identity key for scoping local state (conversation
+   * history, per-user caches). Mirrors the ai-proxy's `creatorId` so
+   * the local layout matches the server: each api key gets its own
+   * silo, each WorkOS user gets theirs. Returns `undefined` when no
+   * credential is available — callers should treat that as "no
+   * history" rather than collapsing into a shared bucket.
+   *
+   * Order matches outbound auth precedence (`getAiAuthHeaders`):
+   * api key wins over session when both are configured.
+   */
+  getUserStorageKey(): string | undefined {
+    const aiKey = this.getAiApiKeyFromSettings()
+    if (aiKey) {
+      // Hash so the secret never lands on disk. 16 hex chars = 64 bits,
+      // collision-resistant for the small number of keys a single user
+      // might rotate through.
+      const digest = createHash('sha256')
+        .update(aiKey)
+        .digest('hex')
+        .slice(0, 16)
+      return `apikey-${digest}`
+    }
+    const id = this.cloudUserId
+    if (!id) return undefined
+    // Keep only characters we know are safe across macOS/Win/Linux
+    // filesystems. A WorkOS user id (`user_01H...`) already satisfies
+    // this, but the guard means any future identity shape can't inject
+    // a path separator.
+    const safe = id.replace(/[^a-zA-Z0-9_-]/g, '_')
+    return safe.length > 0 ? safe : undefined
   }
 
   /**
@@ -198,11 +344,18 @@ export class AuthManager {
       if (resp.ok) {
         const session = (await resp.json()) as {
           organization?: { slug: string; name: string }
+          user?: { id?: string; email?: string }
         }
         if (session.organization) {
           this.cloudOrgSlug = session.organization.slug
           this.outputChannel.appendLine(
             `[auth] Resolved org: ${session.organization.name} (${session.organization.slug})`
+          )
+        }
+        if (session.user?.id) {
+          this.cloudUserId = session.user.id
+          this.outputChannel.appendLine(
+            `[auth] Signed in as ${session.user.email ?? session.user.id}`
           )
         }
       }
@@ -338,11 +491,18 @@ export class AuthManager {
           if (resp.ok) {
             const session = (await resp.json()) as {
               organization?: { slug: string; name: string }
+              user?: { id?: string; email?: string }
             }
             if (session.organization) {
               this.cloudOrgSlug = session.organization.slug
               this.outputChannel.appendLine(
                 `[auth] Restored org: ${session.organization.name} (${session.organization.slug})`
+              )
+            }
+            if (session.user?.id) {
+              this.cloudUserId = session.user.id
+              this.outputChannel.appendLine(
+                `[auth] Restored user: ${session.user.email ?? session.user.id}`
               )
             }
           } else if (resp.status === 401 || resp.status === 403) {

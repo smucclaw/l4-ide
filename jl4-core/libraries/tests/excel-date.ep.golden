@@ -40,15 +40,18 @@ GIVETH AN EITHER STRING NUMBER
 
 GIVEN date IS A DATE
 GIVETH A NUMBER
-day date MEANS DATE_DAY date
+day date @nlg the day of %date%
+  MEANS DATE_DAY date
 
 GIVEN date IS A DATE
 GIVETH A NUMBER
-month date MEANS DATE_MONTH date
+month date @nlg the month of %date%
+  MEANS DATE_MONTH date
 
 GIVEN date IS A DATE
 GIVETH A NUMBER
-year date MEANS DATE_YEAR date
+year date @nlg the year of %date%
+  MEANS DATE_YEAR date
 
 GIVEN date IS A DATE
 GIVETH A NUMBER
@@ -120,8 +123,8 @@ ExcelTimeValue text MEANS
 GIVEN endDate   IS A DATE
       startDate IS A DATE
 GIVETH A NUMBER
-ExcelDays endDate startDate MEANS
-    Day endDate MINUS Day startDate
+ExcelDays endDate startDate @nlg the number of days from %startDate% to %endDate%
+  MEANS Day endDate MINUS Day startDate
 
 GIVEN endSerial   IS A NUMBER
       startSerial IS A NUMBER

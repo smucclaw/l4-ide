@@ -353,9 +353,10 @@ async function installWindows(
  *   - l4 is already on PATH (nothing to do), or
  *   - the user previously chose "Never" (respect the dismissal).
  *
- * Called from the startup flow after the Claude Code prompt has been
- * handled (or skipped). Opt-in: does nothing if the bundled binary
- * isn't available for this platform.
+ * Called from the startup flow as the only implicit opt-in prompt the
+ * extension shows — the previous Claude Code auto-add flow has been
+ * removed. Opt-in: does nothing if the bundled binary isn't available
+ * for this platform.
  */
 export async function maybeOfferInstallL4Cli(
   context: vscode.ExtensionContext,

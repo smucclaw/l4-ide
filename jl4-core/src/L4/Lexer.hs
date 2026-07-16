@@ -465,12 +465,24 @@ integerLiteral =
 decimal :: Lexer (Text, Integer)
 decimal = decimal_ <?> "integer"
 
+-- | Parse a non-empty run of decimal digits. Underscores are accepted
+-- between digits as visual thousand-separators (e.g. @100_000@) and are
+-- stripped before computing the numeric value. A leading digit is
+-- required and the run must not end with an underscore.
 decimal_ :: Lexer (Text, Integer)
-decimal_ = (\ s -> (s, mkNum s)) <$> takeWhile1P (Just "digit") isDigit
+decimal_ = do
+  d0   <- satisfy isDigit
+  rest <- takeWhileP (Just "digit") (\c -> isDigit c || c == '_')
+  let s = Text.cons d0 rest
+  -- Disallow trailing underscores. `d0` is already a digit, so the
+  -- start of the run is fine; only the tail needs guarding.
+  when (Text.last s == '_') empty
+  pure (s, mkNum s)
   where
     mkNum :: Text -> Integer
     mkNum = foldl' step 0 . chunkToTokens (Proxy :: Proxy Text)
-    step a c = a * 10 + fromIntegral (digitToInt c)
+    step a '_' = a
+    step a c   = a * 10 + fromIntegral (digitToInt c)
 
 rationalLiteral :: Lexer (Text, Rational)
 rationalLiteral =
@@ -492,12 +504,20 @@ float_ = do
 dotDecimal_ :: Integer -> Lexer (Integer, Int, Text)
 dotDecimal_ c' = do
   void (satisfy (== '.'))
+  -- Same shape as 'decimal_': accept @_@ between digits as a visual
+  -- separator and strip them from the fold so the exponent stays in sync.
+  d0   <- satisfy isDigit
+  rest <- takeWhileP (Just "digit") (\c -> isDigit c || c == '_')
+  let s = Text.cons d0 rest
+  when (Text.last s == '_') empty
   let mkNum = foldl' step (c', 0) . chunkToTokens (Proxy :: Proxy Text)
-      step (a, e') c =
+      step (a, e') '_' = (a, e')
+      step (a, e') c   =
           ( (a * 10 + fromIntegral (digitToInt c))
           , (e' - 1)
           )
-  (\ s -> let (c, e) = mkNum s in (c, e, s)) <$> takeWhile1P (Just "digit") isDigit
+  let (c, e) = mkNum s
+  pure (c, e, s)
 {-# INLINE dotDecimal_ #-}
 
 literalPayload :: Lexer TLiterals

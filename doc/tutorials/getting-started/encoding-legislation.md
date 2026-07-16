@@ -2,10 +2,7 @@
 
 Turn a legal provision into L4 code.
 
-**Audience:** Legal professionals, legal engineers  
-**Prerequisites:** Basic L4 knowledge ([Your First L4 File](first-l4-file.md))  
-**Time:** 30 minutes  
-**Goal:** Encode a real legal provision as executable L4 rules
+**Prerequisites:** Basic L4 knowledge ([Your First L4 File](first-l4-file.md))
 
 ---
 

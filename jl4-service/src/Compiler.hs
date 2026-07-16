@@ -12,7 +12,8 @@ import Backend.Api (EvalBackend (..), FunctionDeclaration (..))
 import Shared (validateNoSanitizationCollisions)
 import Backend.CodeGen (isDeonticType)
 import L4.FunctionSchema (Parameters (..), Parameter (..), typeToParameter, declaresFromModule)
-import L4.TypeCheck.Types (CheckErrorWithContext (..), CheckError (..))
+import L4.TypeCheck.Types (CheckErrorWithContext (..), CheckError (..), Severity (..))
+import L4.TypeCheck (prettyCheckErrorWithContext, severity)
 import BundleStore (SerializedBundle (..), StoredMetadata (..))
 import Types
 import Control.Monad (forM, unless)
@@ -32,6 +33,7 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text.Encoding
 import Data.Time (getCurrentTime)
 import L4.Export (ExportedFunction (..), ExportedParam (..), getExportedFunctions, enrichReturnTypes, extractImplicitAssumeParams)
+import L4.Print (prettyTypeForDisplay)
 import L4.Syntax (Resolved, Declare(..), Type'(..), RawName(..), getActual, rawName, rawNameToText)
 import Logging (Logger, logInfo, logWarn)
 import qualified LSP.L4.Rules as Rules
@@ -82,13 +84,19 @@ compileBundle logger deployId sources = do
           allBundles = concatMap (either (const []) snd . snd) results
           errors = [err | (_, Left err) <- results]
 
-      if null allFunctions && not (null errors)
+      -- Any file that failed to compile (typecheck errors, unsupported
+      -- @export inputs, …) fails the whole deploy. Previously this only
+      -- rejected when NO file produced functions, so a bundle with one broken
+      -- file and one good file would deploy the good half and silently drop
+      -- the error — and a single broken file would deploy a garbage schema
+      -- built from unresolved inference variables.
+      if not (null errors)
         then pure $ Left $ Text.intercalate "\n" errors
         else do
           let fnMap = Map.fromList [(fn.fnImpl.name, fn) | fn <- allFunctions]
 
           now <- getCurrentTime
-          let summaries = [FunctionSummary { fsName = fn.fnImpl.name, fsDescription = fn.fnImpl.description, fsParameters = fn.fnImpl.parameters, fsReturnType = fn.fnImpl.returnType, fsSection = Nothing, fsIsDeontic = fn.fnImpl.isDeontic, fsSourceFile = Just (Text.pack fp) } | (fp, fn) <- allFunctionsWithFile]
+          let summaries = [FunctionSummary { fsName = fn.fnImpl.name, fsDescription = fn.fnImpl.description, fsParameters = fn.fnImpl.parameters, fsReturnType = fn.fnImpl.returnType, fsReturnSchema = fn.fnImpl.returnSchema, fsSection = Nothing, fsIsDeontic = fn.fnImpl.isDeontic, fsSourceFile = Just (Text.pack fp) } | (fp, fn) <- allFunctionsWithFile]
               version = computeVersion sources
               fileEntries = buildFileEntries deployId sources summaries
               meta = DeploymentMetadata
@@ -96,6 +104,13 @@ compileBundle logger deployId sources = do
                 , metaFiles = fileEntries
                 , metaVersion = version
                 , metaCreatedAt = now
+                -- compileBundle has no access to the operator-supplied
+                -- description or the deploy-time version counters; callers
+                -- inject them from the multipart field (deploy) or persisted
+                -- StoredMetadata (restart).
+                , metaDescription = Nothing
+                , metaServiceVersion = ""
+                , metaDeploymentVersion = ""
                 }
 
           unless (null allFunctions) $
@@ -128,6 +143,21 @@ processTypecheckedFile logger deployId filepath content moduleContext
               <> resolvedText fnName <> ")"
           | MkCheckErrorWithContext{kind = ExportFunctionTypeInput fnName paramName} <- tcErrors
           ]
+        -- Genuine type errors that must block the deploy. We deliberately
+        -- tolerate OutOfScopeError: it's repurposed by extractImplicitAssumeParams
+        -- to derive implicit ASSUME parameters, so a clean model with implicit
+        -- ASSUMEs legitimately carries those. Anything else at SError severity
+        -- (e.g. AmbiguousTermError, IncorrectArgsNumberApp) means the module
+        -- didn't typecheck — compiling it anyway yields a garbage schema with
+        -- unresolved inference variables (e.g. a return type of "res184"), which
+        -- then trips the breaking-change check with a baffling message instead
+        -- of surfacing the real error.
+        blockingErrs =
+          [ Text.intercalate " " (prettyCheckErrorWithContext e)
+          | e@MkCheckErrorWithContext{kind} <- tcErrors
+          , severity e == SError
+          , not (isOutOfScope kind)
+          ]
     if not (null exportFnTypeErrs)
       then do
         logWarn logger "Deploy rejected: @export function has FUNCTION-typed input"
@@ -136,6 +166,14 @@ processTypecheckedFile logger deployId filepath content moduleContext
           , ("errors", toJSON exportFnTypeErrs)
           ]
         pure (filepath, Left (Text.intercalate "; " exportFnTypeErrs))
+      else if not (null blockingErrs)
+      then do
+        logWarn logger "Deploy rejected: module has type errors"
+          [ ("deploymentId", toJSON deployId)
+          , ("file", toJSON filepath)
+          , ("errors", toJSON blockingErrs)
+          ]
+        pure (filepath, Left (Text.intercalate "\n" blockingErrs))
       else if null exports
       then pure (filepath, Right ([], []))
       else do
@@ -314,7 +352,7 @@ buildFromCborBundle logger deployId bundles sources storedMeta = do
       let fnMap = Map.fromList [(fn.fnImpl.name, fn) | fn <- allFns]
 
       now <- getCurrentTime
-      let summaries = [FunctionSummary { fsName = fn.fnImpl.name, fsDescription = fn.fnImpl.description, fsParameters = fn.fnImpl.parameters, fsReturnType = fn.fnImpl.returnType, fsSection = Nothing, fsIsDeontic = fn.fnImpl.isDeontic, fsSourceFile = Just (Text.pack fp) } | (fp, fn) <- allFnsWithFile]
+      let summaries = [FunctionSummary { fsName = fn.fnImpl.name, fsDescription = fn.fnImpl.description, fsParameters = fn.fnImpl.parameters, fsReturnType = fn.fnImpl.returnType, fsReturnSchema = fn.fnImpl.returnSchema, fsSection = Nothing, fsIsDeontic = fn.fnImpl.isDeontic, fsSourceFile = Just (Text.pack fp) } | (fp, fn) <- allFnsWithFile]
           version = storedMeta.smVersion
           fileEntries = buildFileEntries deployId sources summaries
           meta = DeploymentMetadata
@@ -322,6 +360,11 @@ buildFromCborBundle logger deployId bundles sources storedMeta = do
             , metaFiles = fileEntries
             , metaVersion = version
             , metaCreatedAt = now
+            , metaDescription = storedMeta.smDescription
+            -- Version strings are restored from StoredMetadata by the
+            -- caller (DeploymentLoader); default to "" here.
+            , metaServiceVersion = ""
+            , metaDeploymentVersion = ""
             }
 
       logInfo logger "Rebuilt functions from CBOR cache"
@@ -359,13 +402,13 @@ exportToFunction declares implicitParams export =
           ( (typeToParameter declares Set.empty partyTy) { parameterDescription = "The party performing the action" }
           , (typeToParameter declares Set.empty actionTy) { parameterDescription = "The action performed" }
           )
-        _ -> ( Parameter "object" Nothing Nothing [] "The party performing the action" Nothing Nothing Nothing Nothing
-             , Parameter "object" Nothing Nothing [] "The action performed" Nothing Nothing Nothing Nothing
+        _ -> ( Parameter "object" Nothing Nothing [] "The party performing the action" Nothing Nothing Nothing Nothing Nothing
+             , Parameter "object" Nothing Nothing [] "The action performed" Nothing Nothing Nothing Nothing Nothing
              )
       finalParams = if isDeontic
         then mergedParams
           { parameterMap = mergedParams.parameterMap <> Map.fromList
-              [ ("startTime", Parameter "number" Nothing Nothing [] "Start time for contract simulation" Nothing Nothing Nothing Nothing)
+              [ ("startTime", Parameter "number" Nothing Nothing [] "Start time for contract simulation" Nothing Nothing Nothing Nothing Nothing)
               , ("events", Parameter
                   { parameterType = "array"
                   , parameterAlias = Nothing
@@ -383,18 +426,26 @@ exportToFunction declares implicitParams export =
                       , parameterProperties = Just $ Map.fromList
                           [ ("party", partyParam)
                           , ("action", actionParam)
-                          , ("at", Parameter "number" Nothing Nothing [] "Timestamp" Nothing Nothing Nothing Nothing)
+                          , ("at", Parameter "number" Nothing Nothing [] "Timestamp" Nothing Nothing Nothing Nothing Nothing)
                           ]
                       , parameterPropertyOrder = Just ["party", "action", "at"]
                       , parameterItems = Nothing
                       , parameterRequired = Just ["party", "action", "at"]
+                      , parameterL4Type = Nothing
                       }
                   , parameterRequired = Nothing
+                  , parameterL4Type = Nothing
                   })
               ]
           , required = mergedParams.required <> ["startTime", "events"]
           }
         else mergedParams
+      -- Structured return schema (with x-l4-type annotations on record/enum nodes).
+      -- For DEONTIC functions the surface return shape is the simulation envelope,
+      -- not the user's record type, so we leave the structured schema unset there.
+      mReturnSchema = case export.exportReturnType of
+        Just retTy | not isDeontic -> Just (typeToParameter declares Set.empty retTy)
+        _ -> Nothing
   in Function
     { name = export.exportName
     , description =
@@ -405,6 +456,7 @@ exportToFunction declares implicitParams export =
     , deonticPartyType = mPartyType
     , deonticActionType = mActionType
     , returnType = returnTypeDisplay export.exportReturnType
+    , returnSchema = mReturnSchema
     , isDeontic = isDeontic
     }
 
@@ -420,7 +472,7 @@ parametersFromExport declares params =
 paramToParameter :: Map Text (Declare Resolved) -> ExportedParam -> Parameter
 paramToParameter declares param =
   let p0 = maybe
-              (Parameter "object" Nothing Nothing [] "" Nothing Nothing Nothing Nothing)
+              (Parameter "object" Nothing Nothing [] "" Nothing Nothing Nothing Nothing Nothing)
               (typeToParameter declares Set.empty)
               param.paramType
   in p0
@@ -461,6 +513,13 @@ extractDeonticTypeNames _ = Nothing
 resolvedText :: Resolved -> Text
 resolvedText = rawNameToText . rawName . getActual
 
+-- | OutOfScopeError is not a deploy-blocking error: it's how the type checker
+-- reports references the compiler turns into implicit ASSUME parameters (see
+-- 'extractImplicitAssumeParams'). Every other SError-severity kind is genuine.
+isOutOfScope :: CheckError -> Bool
+isOutOfScope OutOfScopeError{} = True
+isOutOfScope _                 = False
+
 -- | Collect all DECLARE entries from a TypeCheckResult and its transitive imports.
 collectAllDeclares :: Rules.TypeCheckResult -> Map Text (Declare Resolved)
 collectAllDeclares tc =
@@ -468,20 +527,17 @@ collectAllDeclares tc =
     <> foldMap collectAllDeclares tc.dependencies
 
 -- | Display the return type of an exported function as a user-facing string.
+-- Delegates to 'prettyTypeForDisplay' so the rendering matches exactly what the
+-- LSP reports for the same type (the deploy-sidebar diff compares the two
+-- strings) AND so residual inference variables render as stable type-variable
+-- names rather than edit-order-dependent ids like @res184@. The previous
+-- bespoke renderer collapsed @DEONTIC P A@ to just @"DEONTIC"@ and dropped the
+-- @OF@ keyword for other parameterized types (e.g. @LIST NUMBER@ instead of
+-- @LIST OF NUMBER@), causing spurious "return type changed" warnings on every
+-- redeploy.
 returnTypeDisplay :: Maybe (Type' Resolved) -> Text
 returnTypeDisplay Nothing = "unknown"
-returnTypeDisplay (Just ty)
-  | isDeonticType ty = "DEONTIC"
-  | otherwise = case ty of
-      TyApp _ n args ->
-        let nameText = Text.toUpper (rawNameToText (rawName (getActual n)))
-         in if null args
-              then nameText
-              else nameText <> " " <> Text.intercalate " " (map (returnTypeDisplay . Just) args)
-      Type _ -> "TYPE"
-      Fun{} -> "FUNCTION"
-      Forall _ _ inner -> returnTypeDisplay (Just inner)
-      InfVar{} -> "unknown"
+returnTypeDisplay (Just ty) = prettyTypeForDisplay ty
 
 -- | Compute SHA-256 version from sorted source contents.
 computeVersion :: Map FilePath Text -> Text

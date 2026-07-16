@@ -1,9 +1,9 @@
 {
   "name": "l4-vscode",
   "displayName": "L4 Rules-as-code",
-  "description": "Write, test, and deploy legal rules as executable code — with MCP for AI agents, WebMCP for browser AI, syntax highlighting, IntelliSense, ladder diagrams, and cloud deployment",
+  "description": "Write, test, and deploy legal rules as executable code — with a built-in Legalese AI chat, MCP for AI agents, WebMCP for browser AI, syntax highlighting, IntelliSense, ladder diagrams, and cloud deployment",
   "license": "Apache-2.0",
-  "version": "1.3.0",
+  "version": "1.6.0",
   "publisher": "legalese",
   "categories": [
     "Programming Languages",
@@ -35,17 +35,14 @@
     ]
   },
   "engines": {
-    "vscode": "^1.94.0"
+    "vscode": "^1.95.0"
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/legalese/l4-ide",
     "directory": "ts-apps/vscode"
   },
-  "activationEvents": [
-    "onLanguage:l4",
-    "onView:l4.deployView"
-  ],
+  "activationEvents": [],
   "contributes": {
     "viewsContainers": {
       "secondarySidebar": [
@@ -107,7 +104,155 @@
             "scope": "machine-overridable",
             "type": "number",
             "default": 19415,
-            "markdownDescription": "Local port for the L4 MCP proxy server. AI tools (Claude Code, Copilot, Cursor) connect to this port to access L4 rules."
+            "markdownDescription": "Local port for the L4 MCP proxy server. Legalese AI (built in), Cursor, GitHub Copilot, and other MCP-speaking agents connect to this port to access L4 rules."
+          }
+        }
+      },
+      {
+        "title": "Legalese AI",
+        "properties": {
+          "legaleseAi.apiKey": {
+            "scope": "resource",
+            "type": "string",
+            "default": "",
+            "markdownDescription": "API key for authenticating with Legalese AI. When set, this key is used instead of your Legalese Cloud session."
+          },
+          "legaleseAi.localMode": {
+            "scope": "machine-overridable",
+            "type": "boolean",
+            "default": false,
+            "markdownDescription": "Run Legalese AI in local mode for development purposes."
+          },
+          "legaleseAi.showReasoning": {
+            "type": "boolean",
+            "default": false,
+            "description": "Show the model's reasoning (\"Thinking\" blocks) in the Legalese AI chat."
+          },
+          "legaleseAi.methodology": {
+            "type": "string",
+            "default": "",
+            "description": "Guidance the Legalese AI follows when encoding natural language rules in L4."
+          },
+          "legaleseAi.mcp.disabledServers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "description": "MCP servers switched off for Legalese AI (by mcp.json key)."
+          },
+          "legaleseAi.mcp.disabledTools": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "description": "Individual MCP tools switched off for Legalese AI, as server::tool."
+          },
+          "legaleseAi.permissions.readFiles": {
+            "type": "string",
+            "enum": [
+              "never",
+              "ask",
+              "always"
+            ],
+            "default": "always",
+            "description": "Legalese AI permission: read files and folders in the workspace."
+          },
+          "legaleseAi.permissions.createFiles": {
+            "type": "string",
+            "enum": [
+              "never",
+              "ask",
+              "always"
+            ],
+            "default": "always",
+            "description": "Legalese AI permission: create new files in the workspace."
+          },
+          "legaleseAi.permissions.editFiles": {
+            "type": "string",
+            "enum": [
+              "never",
+              "ask",
+              "always"
+            ],
+            "default": "always",
+            "description": "Legalese AI permission: edit files in the workspace."
+          },
+          "legaleseAi.permissions.deleteFiles": {
+            "type": "string",
+            "enum": [
+              "never",
+              "ask",
+              "always"
+            ],
+            "default": "ask",
+            "description": "Legalese AI permission: delete (trash) files in the workspace."
+          },
+          "legaleseAi.permissions.evaluateL4": {
+            "type": "string",
+            "enum": [
+              "never",
+              "ask",
+              "always"
+            ],
+            "default": "always",
+            "description": "Legalese AI permission: run L4 diagnostics and directives via the LSP."
+          },
+          "legaleseAi.permissions.refactorL4": {
+            "type": "string",
+            "enum": [
+              "never",
+              "ask",
+              "always"
+            ],
+            "default": "always",
+            "description": "Legalese AI permission: apply structured L4 refactors."
+          },
+          "legaleseAi.permissions.runDeployedRules": {
+            "type": "string",
+            "enum": [
+              "never",
+              "ask",
+              "always"
+            ],
+            "default": "always",
+            "description": "Legalese AI permission: browse and evaluate deployed L4 rules on Legalese Cloud."
+          },
+          "legaleseAi.permissions.vscodeMcp": {
+            "type": "string",
+            "enum": [
+              "never",
+              "ask",
+              "always"
+            ],
+            "default": "always",
+            "description": "Legalese AI permission: call tools from the user's MCP servers. Which servers/tools are reachable at all is controlled by the toggles in the sidebar's MCP servers section."
+          },
+          "legaleseAi.mcp.enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Master switch: expose the user's MCP servers to Legalese AI at all."
+          },
+          "legaleseAi.permissions.askUser": {
+            "type": "string",
+            "enum": [
+              "never",
+              "ask",
+              "always"
+            ],
+            "default": "always",
+            "description": "Legalese AI permission: pause the chat to ask you clarifying questions."
+          },
+          "legaleseAi.permissions.statusUpdate": {
+            "type": "string",
+            "enum": [
+              "never",
+              "ask",
+              "always"
+            ],
+            "default": "always",
+            "description": "Legalese AI permission: post short status updates into the chat."
           }
         }
       }
@@ -141,6 +286,21 @@
       {
         "command": "l4.installCli",
         "title": "L4: Install L4 CLI"
+      },
+      {
+        "command": "legaleseAi.askAboutSelection",
+        "title": "Ask Legalese AI about this",
+        "category": "Legalese AI"
+      },
+      {
+        "command": "l4.renameIdentifier",
+        "title": "Rename L4 identifier (across imports)",
+        "category": "L4"
+      },
+      {
+        "command": "l4.openExtensionSettings",
+        "title": "L4: Extension Settings",
+        "icon": "$(gear)"
       }
     ],
     "menus": {
@@ -150,12 +310,81 @@
           "when": "resourceLangId == l4",
           "group": "navigation"
         }
+      ],
+      "view/title": [
+        {
+          "command": "l4.openExtensionSettings",
+          "when": "view == l4.deployView",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "legaleseAi.askAboutSelection",
+          "when": "editorHasSelection",
+          "group": "1_legalese@1"
+        },
+        {
+          "command": "l4.renameIdentifier",
+          "when": "resourceLangId == l4",
+          "group": "1_modification@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "l4.renameIdentifier",
+          "when": "resourceLangId == l4"
+        }
       ]
     },
+    "chatParticipants": [
+      {
+        "id": "l4.legalese",
+        "name": "legalese",
+        "fullName": "Legalese",
+        "description": "Computational law: encode, deploy, and reason about L4 rules.",
+        "isSticky": true
+      }
+    ],
     "mcpServerDefinitionProviders": [
       {
-        "id": "l4-tools",
-        "label": "L4 Tools"
+        "id": "l4.mcp-servers",
+        "label": "L4 Rules"
+      }
+    ],
+    "languageModelTools": [
+      {
+        "name": "l4_evaluate",
+        "displayName": "Evaluate L4",
+        "toolReferenceName": "l4Evaluate",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(law)",
+        "userDescription": "Type-check an L4 file and report the results of its #EVAL / #CHECK / #ASSERT / #TRACE directives.",
+        "modelDescription": "Evaluate an L4 (rules-as-code) file via the jl4 language server. Returns the latest results of every directive in the file (#EVAL, #EVALTRACE, #CHECK, #TRACE, #ASSERT). If the file has type errors, returns the compiler diagnostics instead — fix those first, then call again. Use this after creating or editing any .l4 file to verify the rules behave as intended.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Path to the .l4 file, relative to the workspace root (absolute paths inside the workspace also work)."
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "full",
+                "changed"
+              ],
+              "description": "\"full\" (default) reports every directive; \"changed\" reports only directives added or whose value changed since the last call."
+            },
+            "timeoutMs": {
+              "type": "number",
+              "description": "How long to wait (ms) for the language server to finish compiling if no results are cached yet. Default 6000, max 15000."
+            }
+          },
+          "required": [
+            "path"
+          ]
+        }
       }
     ]
   },
@@ -177,7 +406,7 @@
     "@types/fs-extra": "^11.0.4",
     "@types/minimatch": "^5.1.2",
     "@types/node": "^24.0.0",
-    "@types/vscode": "^1.94.0",
+    "@types/vscode": "^1.95.0",
     "@typescript-eslint/eslint-plugin": "^8.18.0",
     "@typescript-eslint/parser": "^8.18.0",
     "@vscode/test-cli": "^0.0.12",

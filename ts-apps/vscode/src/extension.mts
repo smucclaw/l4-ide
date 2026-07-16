@@ -14,7 +14,8 @@ import type { PanelConfig } from './webview-panel.js'
 import { PanelManager } from './webview-panel.js'
 
 import { VSCodeL4LanguageClient } from './vscode-l4-language-client.js'
-import { McpProxy } from './mcp-proxy.js'
+import { McpProxy, registerL4McpServerDefinitionProvider } from './mcp-proxy.js'
+import { registerLanguageModelTools } from './lm-tools.js'
 import { installL4Cli, maybeOfferInstallL4Cli } from './install-cli.js'
 
 import { RenderAsLadderInfo, VersionedDocId } from '@repo/viz-expr'
@@ -41,6 +42,18 @@ import {
 } from './sidebar-provider.js'
 import { AuthManager } from './auth.js'
 import { ServiceClient } from './service-client.js'
+import { AiLogger } from './ai/logger.js'
+import { AiProxyClient } from './ai/ai-proxy-client.js'
+import { registerChatParticipant } from './chat-participant.js'
+import { ConversationStore } from './ai/conversation-store.js'
+import { ChatService } from './ai/chat-service.js'
+import { ToolDispatcher } from './ai/tool-dispatcher.js'
+import { registerAiChatHandlers } from './ai/register.js'
+import { recordDirectiveResults } from './ai/tools/l4-evaluate.js'
+import { commandRenameIdentifier } from './ai/tools/refactor.js'
+import { McpToolClient } from './ai/mcp-client.js'
+import { VsCodeMcpTools } from './ai/vscode-mcp.js'
+import { McpOAuthManager } from './ai/mcp-oauth.js'
 
 /***********************************************
      decode for RenderAsLadderInfo
@@ -63,7 +76,7 @@ const code2ProtocolConverter = createCodeConverter()
 const PANEL_CONFIG: PanelConfig = {
   viewType: 'l4Viz',
   title: 'L4 Decision Graph',
-  position: vscode.ViewColumn.Beside,
+  position: 'below',
 }
 
 const vizWebviewFrontend: WebviewTypeMessageParticipant = {
@@ -253,8 +266,27 @@ export async function activate(context: ExtensionContext) {
   // Value: info needed to re-request the result from the LSP
   const openInspectorSections = new Map<
     string,
-    { uri: string; srcPos: SrcPos; directiveType: string; lineContent: string }
+    { uri: string; srcPos: SrcPos; directiveType: string; body: string }
   >()
+
+  // Slice the directive body — the inclusive [start.line .. end.line]
+  // source-line range, joined by '\n' — out of `doc`. Falls back to an
+  // empty string when the document isn't available. Both `SrcPos`es
+  // are 1-indexed; `document.lineAt` is 0-indexed.
+  const sliceBody = (
+    doc: vscode.TextDocument | undefined,
+    range: DirectiveResult['range']
+  ): string => {
+    if (!doc) return ''
+    const start = Math.max(1, range.start.line)
+    const end = Math.min(doc.lineCount, range.end.line)
+    if (end < start) return ''
+    const lines: string[] = []
+    for (let ln = start; ln <= end; ln++) {
+      lines.push(doc.lineAt(ln - 1).text)
+    }
+    return lines.join('\n')
+  }
 
   const clientOptions: LanguageClientOptions = {
     documentSelector: [{ scheme: 'file', language: langId, pattern: '**/*' }],
@@ -299,7 +331,7 @@ export async function activate(context: ExtensionContext) {
           const ladderInfo: RenderAsLadderInfo = decode(responseFromLangServer)
           lastVizArgs = args
 
-          panelManager.render(context, editor.document.uri)
+          await panelManager.render(context, editor.document.uri)
           webviewMessenger.registerWebviewPanel(panelManager.getPanel())
           await panelManager.getWebviewFrontendIsReadyPromise()
 
@@ -375,15 +407,20 @@ export async function activate(context: ExtensionContext) {
 
           const directiveId = `${verDocId.uri}:${srcPos.line}:${srcPos.column}`
           const editor = vscode.window.activeTextEditor
-          const lineContent =
-            editor?.document.lineAt(srcPos.line - 1).text ?? ''
+          // `body` is the directive's full source span — the inclusive
+          // [range.start.line .. range.end.line] slice joined by '\n'.
+          // The server now returns the directive's `range` on every
+          // DirectiveResult, so a multi-line directive surfaces with
+          // its full body for inspector matching + later diff.
+          const directiveResult = result as DirectiveResult
+          const body = sliceBody(editor?.document, directiveResult.range)
 
           // Track the section so it receives live updates when the file changes
           openInspectorSections.set(directiveId, {
             uri: verDocId.uri,
             srcPos,
             directiveType,
-            lineContent,
+            body,
           })
 
           // Reveal the sidebar, wait for it to be ready, then switch to inspector
@@ -398,8 +435,8 @@ export async function activate(context: ExtensionContext) {
             {
               directiveId,
               srcPos,
-              result: result as DirectiveResult,
-              lineContent,
+              result: directiveResult,
+              body,
             }
           )
 
@@ -428,20 +465,53 @@ export async function activate(context: ExtensionContext) {
   const auth = new AuthManager(context.secrets, outputChannel)
   const serviceClient = new ServiceClient(auth)
 
-  // Start local MCP proxy — always running, returns empty tools when disconnected
+  // Start local MCP proxy — always running, returns empty tools when disconnected.
+  // `context.globalStorageUri` is `<userDataDir>/globalStorage/<publisher>.<ext>`,
+  // so its grandparent is the user data dir that holds `mcp.json`.
+  const userDataPath = path.dirname(
+    path.dirname(context.globalStorageUri.fsPath)
+  )
   const mcpProxy = new McpProxy(
     auth,
     outputChannel,
-    context.globalState,
-    context.extensionUri.fsPath
+    // globalState slot kept for call-site compatibility; no persistent
+    // Claude-setup flag is stored any more.
+    undefined,
+    context.extensionUri.fsPath,
+    userDataPath
   )
   context.subscriptions.push(mcpProxy)
+  // Announce the proxy via the MCP provider API where available (real
+  // VS Code >= 1.101); on other hosts start() falls back to writing the
+  // user-level mcp.json. Registration order doesn't matter: the
+  // provider returns [] until the port is bound, and start() fires the
+  // change event that makes the editor re-query.
+  const mcpProviderRegistration = registerL4McpServerDefinitionProvider(
+    mcpProxy,
+    outputChannel
+  )
+  if (mcpProviderRegistration) {
+    context.subscriptions.push(mcpProviderRegistration)
+  }
   mcpProxy.start()
 
-  // Register URI handler for legalese.cloud login callback
+  // L4 tools for Copilot agent mode (and any other vscode.lm client).
+  context.subscriptions.push(registerLanguageModelTools(outputChannel))
+
+  // Register the extension's single URI handler. `/mcp-oauth` routes
+  // to the MCP OAuth client (created further down — late-bound ref);
+  // everything else is the legalese.cloud login callback.
+  const mcpOAuthRef: { handleCallback: (uri: vscode.Uri) => boolean } = {
+    handleCallback: () => false,
+  }
   context.subscriptions.push(
     vscode.window.registerUriHandler({
-      handleUri: (uri: vscode.Uri) => auth.handleAuthCallback(uri),
+      handleUri: (uri: vscode.Uri) => {
+        if (uri.path === '/mcp-oauth' && mcpOAuthRef.handleCallback(uri)) {
+          return
+        }
+        void auth.handleAuthCallback(uri)
+      },
     })
   )
   context.subscriptions.push(auth)
@@ -453,24 +523,23 @@ export async function activate(context: ExtensionContext) {
     })
   )
 
-  // Startup offer flow:
-  //
-  //   1. If ~/.claude.json exists AND the user hasn't previously
-  //      declined Claude Code setup, offer "Add L4 Tools to Claude Code?".
-  //      Accepting co-installs the l4 CLI silently because the
-  //      writing-l4-rules skill invokes it.
-  //
-  //   2. If the user declined in (1), or ~/.claude.json is missing, or
-  //      Claude Code is already fully configured but l4 isn't on PATH,
-  //      fall through to the separate "Install L4 CLI?" prompt.
-  //
-  // Runs in the background so activation isn't blocked.
+  // Cross-file rename: anchor on the identifier under the cursor,
+  // ask the user for a new name, then drive the LSP references
+  // provider to substitute every occurrence (including in importing
+  // files). Exposed in the editor context menu and command palette
+  // for L4 files — see package.json `commands` / `menus` entries.
+  context.subscriptions.push(
+    vscode.commands.registerCommand('l4.renameIdentifier', async () => {
+      await commandRenameIdentifier()
+    })
+  )
+
+  // Startup offer flow: only the L4 CLI prompt. The Legalese AI
+  // integration (MCP + writing-l4-rules skill) is now opt-in via the
+  // sidebar dropdown — no implicit startup modal that nudges the user
+  // toward another tool.
   void (async () => {
-    const outcome = await mcpProxy.offerClaudeCodeSetup()
-    outputChannel.appendLine(`[startup] Claude Code setup outcome: ${outcome}`)
-    if (outcome !== 'accepted-co-installed') {
-      await maybeOfferInstallL4Cli(context, outputChannel)
-    }
+    await maybeOfferInstallL4Cli(context, outputChannel)
   })()
 
   // Auto-connect on startup (runs in background, doesn't block activation)
@@ -484,22 +553,218 @@ export async function activate(context: ExtensionContext) {
     auth,
     serviceClient,
     outputChannel,
-    mcpProxy,
+    userDataPath,
     (directiveId) => openInspectorSections.delete(directiveId)
   )
 
+  // Legalese AI services — independent from the jl4 service URL flow.
+  // The proxy endpoint is hardcoded (see ai-proxy-client.ts) and only
+  // overridable via the LEGALESE_AI_ENDPOINT env var for local dev.
+  const aiLogger = new AiLogger()
+  context.subscriptions.push(aiLogger)
+  const aiProxy = new AiProxyClient({ auth, logger: aiLogger })
+
+  // `l4.login` is the stable command id the `@legalese` chat participant
+  // hands to `stream.button` when the user isn't signed in. The sidebar
+  // calls `auth.login()` directly via its own messenger, so before now
+  // there was no need for a command form.
+  context.subscriptions.push(
+    vscode.commands.registerCommand('l4.login', () => auth.login())
+  )
+
+  const aiStore = new ConversationStore(context, aiLogger, () =>
+    auth.getUserStorageKey()
+  )
+  // The tool dispatcher needs a handle on the messenger + service to
+  // request approval and emit status updates, so we register with
+  // setter-injection after construction: the dispatcher takes a
+  // callback pair, both of which get filled in below by the
+  // registerAiChatHandlers pipeline.
+  const approvalPending = new Map<
+    string,
+    (decision: 'allow' | 'deny') => void
+  >()
+  // Decisions the user made BEFORE the dispatcher asked for them. The
+  // webview shows Allow/Deny buttons as soon as the tool-call frame
+  // streams in, but the dispatcher only registers its resolver when it
+  // actually dispatches that call (after the stream ends, and
+  // sequentially per call) — clicks in that window used to be dropped,
+  // forcing the user to click repeatedly. Stashed here instead and
+  // consumed by requestApproval below.
+  const earlyToolDecisions = new Map<string, 'allow' | 'deny'>()
+  const askUserPending = new Map<string, (answer: string) => void>()
+  // The dispatcher emits tool status updates through this channel; the
+  // sidebar's registerAiChatHandlers replaces the stub `emit` with one
+  // that forwards to the webview via the shared messenger.
+  const toolStatusChannel: {
+    emit: (
+      callId: string,
+      status: 'pending-approval' | 'running' | 'done' | 'error',
+      detail?: { result?: string; error?: string }
+    ) => void
+  } = {
+    emit: () => undefined,
+  }
+  // Channel the dispatcher uses to push a meta__ask_user question to
+  // the webview. register.ts fills this in once the messenger exists.
+  const askUserChannel: {
+    ask: (callId: string, question: string, choices?: string[]) => void
+  } = {
+    ask: () => undefined,
+  }
+  const aiMcpClient = new McpToolClient(mcpProxy, aiLogger)
+  // OAuth client for protected MCP servers: discovery, dynamic client
+  // registration, PKCE browser flow (redirect through the extension's
+  // URI handler above), token storage in SecretStorage.
+  const mcpOAuth = new McpOAuthManager(
+    context.secrets,
+    aiLogger,
+    `${vscode.env.uriScheme}://${context.extension.id.toLowerCase()}/mcp-oauth`
+  )
+  mcpOAuthRef.handleCallback = (uri) => mcpOAuth.handleCallback(uri)
+  // The extension's own MCP server list (globalState). Every enabled
+  // server runs on our own client (http/sse/stdio + OAuth); VS Code's
+  // mcp.json is only an import catalog surfaced in the settings UI.
+  const vsMcpTools = new VsCodeMcpTools(
+    userDataPath,
+    aiLogger,
+    () => auth.isAiUsable(),
+    context.globalState,
+    mcpOAuth
+  )
+  context.subscriptions.push(vsMcpTools)
+  // Bust the MCP tool cache when the connection state flips: a newly
+  // connected jl4-service might expose a different set of deployed
+  // rules than we had cached from the disconnected fallback path.
+  // Auth changes also (re)connect the user's enabled MCP servers —
+  // this is what makes "toggled-on servers start on login" work.
+  context.subscriptions.push(
+    auth.onDidChange(() => {
+      aiMcpClient.invalidate()
+      void vsMcpTools.autoStart()
+    })
+  )
+  // Boot-time pass: connects immediately when a persisted session (or
+  // API key) is already usable; otherwise the auth listener above
+  // picks it up after login.
+  void vsMcpTools.autoStart()
+
+  // Register the `@legalese` chat participant. Tool discovery happens
+  // inside the participant via `vscode.lm.tools` + BUILTIN_TOOLS, so no
+  // explicit MCP client is wired through here — VS Code's MCP layer
+  // surfaces the L4 Rules server (registered in mcp.json) alongside
+  // any other tools the user has installed.
+  context.subscriptions.push(
+    registerChatParticipant({
+      auth,
+      proxy: aiProxy,
+      logger: aiLogger,
+      iconPath: vscode.Uri.joinPath(context.extensionUri, 'static', 'icon.png'),
+    })
+  )
+  const dispatcher = new ToolDispatcher({
+    logger: aiLogger,
+    requestApproval: async (call) => {
+      const early = earlyToolDecisions.get(call.callId)
+      if (early) {
+        earlyToolDecisions.delete(call.callId)
+        return early
+      }
+      return new Promise<'allow' | 'deny'>((resolve) => {
+        approvalPending.set(call.callId, resolve)
+      })
+    },
+    notifyStatus: (callId, status, detail) =>
+      toolStatusChannel.emit(callId, status, detail),
+    mcp: aiMcpClient,
+    vsMcp: vsMcpTools,
+    askUser: (callId, question, choices) =>
+      new Promise<string>((resolve) => {
+        askUserPending.set(callId, resolve)
+        askUserChannel.ask(callId, question, choices)
+      }),
+  })
+  // Pulled from the extension's own packageJSON so a bumped release
+  // (and users running older pre-release builds) are both stamped
+  // correctly into the initial conversation context.
+  const extensionVersion =
+    (context.extension?.packageJSON as { version?: string } | undefined)
+      ?.version ?? 'unknown'
+  const chatService = new ChatService({
+    auth,
+    client,
+    store: aiStore,
+    proxy: aiProxy,
+    logger: aiLogger,
+    dispatcher,
+    mcp: aiMcpClient,
+    vsMcp: vsMcpTools,
+    extensionVersion,
+  })
+
+  // Instantiate the sidebar provider BEFORE wiring AI chat handlers
+  // so the handlers can subscribe to its visibility event and buffer
+  // chat events while the webview is hidden. The provider itself
+  // doesn't need the webview resolved to answer isVisible() — it
+  // returns false pre-resolve, which is the right default (queue
+  // until the view paints).
   const sidebarProvider = new SidebarProvider(
     context,
     sidebarMessenger,
     auth,
     outputChannel
   )
+
+  context.subscriptions.push(
+    registerAiChatHandlers({
+      messenger: sidebarMessenger,
+      frontend: sidebarWebviewFrontend,
+      auth,
+      service: chatService,
+      store: aiStore,
+      proxy: aiProxy,
+      logger: aiLogger,
+      approvalPending,
+      earlyToolDecisions,
+      askUserPending,
+      toolStatusChannel,
+      askUserChannel,
+      dispatcher,
+      visibility: sidebarProvider,
+      mcp: aiMcpClient,
+      vsMcp: vsMcpTools,
+      serviceClient,
+    })
+  )
+
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(
       SIDEBAR_WEBVIEW_TYPE,
       sidebarProvider,
       { webviewOptions: { retainContextWhenHidden: true } }
     )
+  )
+
+  // When the user changes the MCP port in Settings, rebind the proxy
+  // on the new port and refresh the sidebar so the displayed port
+  // matches. The MCP server is bound at startup and stays put
+  // otherwise — without this listener, a setting change wouldn't
+  // take effect until the extension is reloaded.
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration(async (e) => {
+      if (!e.affectsConfiguration('jl4.mcpPort')) return
+      outputChannel.appendLine(
+        '[extension] jl4.mcpPort changed — restarting MCP proxy'
+      )
+      try {
+        await mcpProxy.restart()
+      } catch (err) {
+        outputChannel.appendLine(
+          `[extension] MCP proxy restart failed: ${err instanceof Error ? err.message : String(err)}`
+        )
+      }
+      await sidebarProvider.refreshConnectionStatus()
+    })
   )
 
   // Register command to open/focus the L4 sidebar from the editor title bar
@@ -509,6 +774,55 @@ export async function activate(context: ExtensionContext) {
     })
   )
 
+  // Gear icon in the L4 sidebar title bar → this extension's settings.
+  context.subscriptions.push(
+    vscode.commands.registerCommand('l4.openExtensionSettings', () => {
+      vscode.commands.executeCommand(
+        'workbench.action.openSettings',
+        '@ext:legalese.l4-vscode'
+      )
+    })
+  )
+
+  // Right-click → "Ask Legalese AI about this". Quotes the editor
+  // selection (falls back to the whole file when nothing is
+  // selected), reveals the sidebar, switches to the AI tab, and
+  // seeds the chat draft so the user can type their question on the
+  // next line.
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'legaleseAi.askAboutSelection',
+      async () => {
+        const editor = vscode.window.activeTextEditor
+        if (!editor) {
+          vscode.window.showInformationMessage(
+            'Open a file first, then select the text you want to ask about.'
+          )
+          return
+        }
+        const sel = editor.selection
+        const body = sel.isEmpty
+          ? editor.document.getText()
+          : editor.document.getText(sel)
+        const rel = vscode.workspace.asRelativePath(editor.document.uri, false)
+        const lang = editor.document.languageId || ''
+        const range = sel.isEmpty
+          ? ''
+          : ` (lines ${sel.start.line + 1}–${sel.end.line + 1})`
+        const draft = `About \`${rel}\`${range}:\n\n\`\`\`${lang}\n${body}\n\`\`\`\n\n`
+        await sidebarProvider.revealSidebar()
+        await sidebarProvider.waitUntilReady()
+        sidebarProvider.switchToTab('ai-chat')
+        const { AiChatSeedDraft } = await import('jl4-client-rpc')
+        sidebarMessenger.sendNotification(
+          AiChatSeedDraft,
+          sidebarWebviewFrontend,
+          { text: draft }
+        )
+      }
+    )
+  )
+
   // Refresh sidebar token colors on theme change (alongside panels)
   context.subscriptions.push(
     vscode.window.onDidChangeActiveColorTheme(() => {
@@ -516,16 +830,43 @@ export async function activate(context: ExtensionContext) {
     })
   )
 
-  // Push active L4 file to sidebar when editor changes
-  function notifySidebarActiveFile(editor: vscode.TextEditor | undefined) {
-    if (editor && editor.document.languageId === 'l4') {
-      sidebarProvider.notifyActiveFile(
-        editor.document.uri.toString(),
-        editor.document.version
-      )
-    } else {
-      sidebarProvider.clearActiveFile()
+  // Push active L4 file to sidebar when editor changes. A rendered
+  // output file (html/xml/json/txt) that sits next to a same-named
+  // `.l4` source still has a render target, so we resolve it to that
+  // sibling — this keeps the Render tab usable while the user is
+  // looking at the generated document, and keeps `activeFileUri` an L4
+  // uri for every other consumer (deploy, exported functions, …).
+  const RENDER_OUTPUT_EXTS = new Set(['.html', '.htm', '.xml', '.json', '.txt'])
+  async function notifySidebarActiveFile(
+    editor: vscode.TextEditor | undefined
+  ) {
+    const doc = editor?.document
+    if (doc && doc.languageId === 'l4') {
+      sidebarProvider.notifyActiveFile(doc.uri.toString(), doc.version)
+      return
     }
+    if (doc && doc.uri.scheme === 'file') {
+      const ext = path.extname(doc.uri.fsPath).toLowerCase()
+      if (RENDER_OUTPUT_EXTS.has(ext)) {
+        const base = path.basename(doc.uri.fsPath, ext)
+        const sibling = vscode.Uri.file(
+          path.join(path.dirname(doc.uri.fsPath), base + '.l4')
+        )
+        if (fs.existsSync(sibling.fsPath)) {
+          try {
+            const sibDoc = await vscode.workspace.openTextDocument(sibling)
+            sidebarProvider.notifyActiveFile(
+              sibDoc.uri.toString(),
+              sibDoc.version
+            )
+            return
+          } catch {
+            // Fall through to clear on any open failure.
+          }
+        }
+      }
+    }
+    sidebarProvider.clearActiveFile()
   }
 
   // When the sidebar webview first loads, send the current active file
@@ -565,9 +906,13 @@ export async function activate(context: ExtensionContext) {
           directiveId: string
           prettyText: string
           success: boolean | null
-          lineContent: string
+          body: string
         }>
       }) => {
+        // Mirror the results into the AI tool's cache so a later
+        // l4__evaluate call can surface them without a second compile.
+        recordDirectiveResults(params.uri, params.results)
+
         // Refresh sidebar — the LSP just finished compiling this file,
         // so exported functions may have changed
         const editor = vscode.window.activeTextEditor

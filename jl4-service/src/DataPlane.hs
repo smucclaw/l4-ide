@@ -17,7 +17,7 @@ import DeploymentLoader (tryCompileWithTimeout, CompilationResult (..))
 import Servant.Multipart
 import Backend.DecisionQueryPlan (CachedDecisionQuery, buildDecisionQueryCacheFromCompiled, queryPlan, QueryPlanResponse)
 import L4.FunctionSchema (Parameter, Parameters(..))
-import Shared (buildPropertyReverseMap, remapArguments, sanitizePropertyName)
+import Shared (AnnotatedFunctionSummary (..), buildPropertyReverseMap, remapArguments, sanitizePropertyName)
 import Backend.Jl4 (CompiledModule (..), evaluateWithCompiledDeontic)
 import qualified L4.StateGraph as StateGraph
 import Compiler (toDecl)
@@ -62,7 +62,7 @@ type ShortRoutes =
 
 type ShortDeploymentRoutes =
        -- GET /{id} → deployment status
-       Get '[JSON] DeploymentStatusResponse
+       QueryParam "functions" Text :> Get '[JSON] DeploymentStatusResponse
        -- PUT /{id} → replace deployment
   :<|> MultipartForm Mem (MultipartData Mem) :> Verb 'PUT 202 '[JSON] DeploymentStatusResponse
        -- DELETE /{id} → remove deployment
@@ -86,7 +86,7 @@ type DeploymentRoutes =
 type EvalResponse a = Headers '[Header "X-Eval-Alloc-Bytes" Int64] a
 
 type FunctionRoutes =
-       Get '[JSON] FunctionSummary
+       Get '[JSON] AnnotatedFunctionSummary
   :<|> "evaluation" :> Header "X-L4-Trace" Text :> QueryParam "trace" TraceLevel :> QueryParam "graphviz" Bool :> ReqBody '[JSON] FnArguments :> Post '[JSON] (EvalResponse SimpleResponse)
   :<|> "evaluation" :> "batch" :> Header "X-L4-Trace" Text :> QueryParam "trace" TraceLevel :> QueryParam "graphviz" Bool :> ReqBody '[JSON] BatchRequest :> Post '[JSON] (EvalResponse BatchResponse)
   :<|> "query-plan" :> ReqBody '[JSON] FnArguments :> Post '[JSON] QueryPlanResponse
@@ -188,7 +188,7 @@ listFunctionsHandler deployId = do
   pure [SimpleFunction fn.fnImpl.name fn.fnImpl.description | fn <- Map.elems fns]
 
 -- | GET /deployments/{id}/functions/{fn}
-getFunctionHandler :: DeploymentId -> Text -> AppM FunctionSummary
+getFunctionHandler :: DeploymentId -> Text -> AppM AnnotatedFunctionSummary
 getFunctionHandler deployId fnName = do
   logger <- asks (.logger)
   liftIO $ logInfo logger "Function retrieved"
@@ -202,11 +202,12 @@ getFunctionHandler deployId fnName = do
   let sourceFile = case [fs.fsSourceFile | fs <- meta.metaFunctions, fs.fsName == fn.name] of
         (sf:_) -> sf
         [] -> Nothing
-  pure FunctionSummary
+  pure $ AnnotatedFunctionSummary FunctionSummary
     { fsName = fn.name
     , fsDescription = fn.description
     , fsParameters = fn.parameters
     , fsReturnType = fn.returnType
+    , fsReturnSchema = fn.returnSchema
     , fsSection = Nothing
     , fsIsDeontic = fn.isDeontic
     , fsSourceFile = sourceFile

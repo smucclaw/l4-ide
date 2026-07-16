@@ -12,7 +12,8 @@ import { getTokenColors, tokenColorsToCSS } from './theme-colors.js'
 export interface PanelConfig {
   viewType: string
   title: string
-  position: vscode.ViewColumn
+  /** `'below'` opens the panel in an editor group below the active one (horizontal split). */
+  position: vscode.ViewColumn | 'below'
   /** Subpath within the webview static dir. Defaults to root. */
   htmlSubpath?: string
   /** Callback when the panel is disposed */
@@ -51,18 +52,31 @@ export class PanelManager {
     return this.frontendIsReadyPromise
   }
 
-  initialize(context: vscode.ExtensionContext, ownUri: Uri) {
+  async initialize(context: vscode.ExtensionContext, ownUri: Uri) {
     if (!this.#panel) {
+      let viewColumn: vscode.ViewColumn
+      if (this.config.position === 'below') {
+        // There is no ViewColumn for 'below', so make the group ourselves.
+        // newGroupBelow focuses the new (empty) group; the panel then opens there.
+        await vscode.commands.executeCommand('workbench.action.newGroupBelow')
+        viewColumn = vscode.ViewColumn.Active
+      } else {
+        viewColumn = this.config.position
+      }
       this.#panel = vscode.window.createWebviewPanel(
         this.config.viewType,
         // TODO: The title can be `<title prefix> <filename>`
         this.config.title,
-        { viewColumn: this.config.position, preserveFocus: true },
+        { viewColumn, preserveFocus: true },
         {
           enableScripts: true,
           retainContextWhenHidden: true,
         }
       )
+      if (this.config.position === 'below') {
+        // Return focus to the editor the user was working in.
+        await vscode.commands.executeCommand('workbench.action.focusAboveGroup')
+      }
       this.#panel.webview.html = getWebviewContent(
         context,
         this.#panel.webview,
@@ -90,12 +104,12 @@ export class PanelManager {
    * If the panel has already been created, reveal it;
    * make it if not.
    */
-  render(context: vscode.ExtensionContext, ownUri: Uri) {
+  async render(context: vscode.ExtensionContext, ownUri: Uri) {
     if (this.#panel) {
-      this.#panel.reveal(this.config.position, /* preserveFocus */ true)
+      // Passing no column keeps the panel in whatever group it lives in.
+      this.#panel.reveal(undefined, /* preserveFocus */ true)
     } else {
-      this.initialize(context, ownUri)
-      // this.#panel.reveal(this.config.position)
+      await this.initialize(context, ownUri)
     }
   }
 
@@ -156,7 +170,11 @@ export function getWebviewContent(
   }
 
   const tokenCSS = tokenColorsToCSS(getTokenColors())
-  const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} https:; font-src ${webview.cspSource}; connect-src https://legalese.com;">`
+  // `frame-src 'self'` lets the Render tab embed the live preview in a
+  // `srcdoc` iframe (about:srcdoc inherits the webview origin). The inner
+  // document inherits this CSP, so allow inline styles / data: images that
+  // the rendered HTML may carry.
+  const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} https: data:; font-src ${webview.cspSource} data:; frame-src 'self'; connect-src https://legalese.com;">`
 
   const postprocessedWebviewHtml = html.replace(
     '<head>',

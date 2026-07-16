@@ -417,6 +417,17 @@ export class WasmLspHandler {
             prettyText: match.message,
             success: null,
             structuredValue: null,
+            // 1-indexed SrcPos shape (line, column) — matches the LSP-server response.
+            range: {
+              start: {
+                line: match.range.start.line + 1,
+                column: match.range.start.character + 1,
+              },
+              end: {
+                line: match.range.end.line + 1,
+                column: match.range.end.character + 1,
+              },
+            },
           }
         }
       }
@@ -440,6 +451,16 @@ export class WasmLspHandler {
           prettyText: match.result,
           success: match.success,
           structuredValue: null, // populated later when type-aware rendering is built
+          range: {
+            start: {
+              line: match.range!.start.line + 1,
+              column: match.range!.start.character + 1,
+            },
+            end: {
+              line: match.range!.end.line + 1,
+              column: match.range!.end.character + 1,
+            },
+          },
         }
       }
     }
@@ -727,8 +748,15 @@ export class WasmLspHandler {
 
           // Notify the client so open inspector sections update in real-time.
           // directiveId matches the convention used by the inspector panel: "${line}:${col}" (1-indexed).
+          // `body` carries the directive's full source span (start..end line
+          // slice joined by '\n'); render sites truncate to one line for headers.
           const lines = content.split('\n')
-          const getLine = (line1: number) => lines[line1 - 1] ?? ''
+          const getLines = (line1Start: number, line1End: number) => {
+            const s = Math.max(1, line1Start)
+            const e = Math.min(lines.length, line1End)
+            if (s > e) return ''
+            return lines.slice(s - 1, e).join('\n')
+          }
 
           const evalUpdates = evalResult.results
             .filter((r) => r.range != null)
@@ -736,14 +764,14 @@ export class WasmLspHandler {
               directiveId: `${r.range!.start.line + 1}:${r.range!.start.character + 1}`,
               prettyText: r.result,
               success: r.success as boolean | null,
-              lineContent: getLine(r.range!.start.line + 1),
+              body: getLines(r.range!.start.line + 1, r.range!.end.line + 1),
             }))
 
           const checkUpdates = checkInfos.map((d) => ({
             directiveId: `${d.range.start.line + 1}:${d.range.start.character + 1}`,
             prettyText: d.message,
             success: null as boolean | null,
-            lineContent: getLine(d.range.start.line + 1),
+            body: getLines(d.range.start.line + 1, d.range.end.line + 1),
           }))
 
           const allUpdates = [...evalUpdates, ...checkUpdates]

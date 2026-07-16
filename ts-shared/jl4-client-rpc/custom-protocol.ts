@@ -149,6 +149,11 @@ export interface DirectiveResult {
   prettyText: string
   success: boolean | null
   structuredValue: unknown | null
+  /** The directive's source range. `end` lets callers slice the
+   *  full directive body out of the document — a single-line
+   *  directive has `start.line === end.line`. Both `SrcPos`es are
+   *  1-indexed (line, column). */
+  range: { start: SrcPos; end: SrcPos }
 }
 
 /**
@@ -173,6 +178,18 @@ export interface FunctionParameter {
   propertyOrder?: string[]
   items?: FunctionParameter
   required?: string[]
+  /** L4 user-declared type name (record/enum) when this node came
+   *  from a DECLARE. Drives chat-side rendering of JSON values into
+   *  L4 syntax (e.g. `Person WITH name IS …`). */
+  'x-l4-type'?: string
+  /** Sanitised form of this property's key in its parent's
+   *  `properties` object — matches the LLM-facing name in the MCP
+   *  inputSchema. Set by jl4-service at the function-schema
+   *  endpoint when the sanitised form differs from the original
+   *  key. Lets chat clients map LLM tool-call payloads (which use
+   *  the sanitised keys) back to the schema's original L4 names
+   *  without re-implementing the server's sanitisation. */
+  'x-sanitized-name'?: string
 }
 
 export interface FunctionParameters {
@@ -188,6 +205,10 @@ export interface ExportedFunctionInfo {
   returnType: string
   isDeontic: boolean
   parameters: FunctionParameters
+  /** Structured schema of the return value (absent for DEONTIC functions).
+   *  Mirrors jl4-service's per-function `returnSchema`, enabling a
+   *  recursive return-value compatibility diff at deploy time. */
+  returnSchema?: FunctionParameter
   srcLine?: number
 }
 
@@ -207,3 +228,58 @@ export const GetExportedFunctionsRequestType = makeL4RpcRequestType<
   GetExportedFunctionsParams,
   GetExportedFunctionsResponse
 >('l4/getExportedFunctions')
+
+// ---------------------------------------------------------------------------
+// l4/exportDocument — deterministic L4 → formatted document
+// ---------------------------------------------------------------------------
+
+export interface ExportDocumentParams {
+  verDocId: { uri: string; version: number }
+  /** "html" (default) | "text" | "akn" | "json" */
+  format?: string
+  /** Render imported definitions/rules not referenced by this document. */
+  includeUnused?: boolean
+  numberSections?: boolean
+  numberClauses?: boolean
+  /** Prepend a linked table of contents (HTML). */
+  toc?: boolean
+  /** Module URIs to exclude from the render (deselected imports). */
+  excludeModules?: string[]
+}
+
+export interface ExportDocumentResult {
+  format: string
+  /** The rendered document in the requested format (empty for "json"). */
+  content: string
+  /** The structured document IR (always present). */
+  ir: unknown
+}
+
+export const ExportDocumentRequestType = makeL4RpcRequestType<
+  ExportDocumentParams,
+  ExportDocumentResult
+>('l4/exportDocument')
+
+export interface ExportPlanParams {
+  verDocId: { uri: string; version: number }
+}
+
+export interface ExportPlanModule {
+  /** Module URI — pass back as an `excludeModules` entry to drop it. */
+  uri: string
+  /** Human-readable module label (file name or section title). */
+  label: string
+  isMain: boolean
+  units: unknown[]
+}
+
+export interface ExportPlanResult {
+  mainModule: string
+  modules: ExportPlanModule[]
+}
+
+/** The import/rule tree + reachability that drives the deselect UI. */
+export const ExportPlanRequestType = makeL4RpcRequestType<
+  ExportPlanParams,
+  ExportPlanResult
+>('l4/exportPlan')

@@ -27,6 +27,7 @@ import qualified Data.Aeson.Text as Aeson
 import qualified Data.List as List
 import qualified Data.Map as Map
 import qualified Data.Maybe as Maybe
+import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Base.Text as Text
 import qualified Data.Text.Lazy as LazyText
@@ -66,6 +67,8 @@ import qualified LSP.L4.Inspector as Inspector
 import L4.EvaluateLazy (EvalConfig)
 import qualified L4.EvaluateLazy as EL
 import qualified L4.Export as Export
+import qualified L4.Export.Document as ExportDoc
+import qualified L4.Export.Render as ExportRender
 import qualified L4.FunctionSchema as FSchema
 
 data ReactorMessage
@@ -180,25 +183,31 @@ scheduleDirectiveResultsNotification ide doc nuri = do
     case mEvalResults of
       Nothing -> pure ()
       Just evalResults -> do
-        let getLineContent lineNo = case mRope of
+        -- `body` carries the directive's full source span (the inclusive
+        -- [startLine, endLine] slice joined by '\n'), so multi-line
+        -- directives stay distinguishable. Render sites truncate to one
+        -- line when a header is wanted.
+        let getLines startLine endLine = case mRope of
               Nothing   -> ""
               Just rope ->
                 let ls = Text.lines (Rope.toText rope)
-                in if lineNo > 0 && lineNo <= length ls
-                   then ls !! (lineNo - 1)
+                    s  = max 1 startLine
+                    e  = min (length ls) endLine
+                in if s <= e
+                   then Text.intercalate "\n" (take (e - s + 1) (drop (s - 1) ls))
                    else ""
             conFields    = maybe mempty (extractConstructorFieldNames . (.entityInfo)) mTcResult
-            evalUpdates  = Maybe.mapMaybe (Inspector.evalDirectiveToUpdateItem conFields getLineContent) evalResults
+            evalUpdates  = Maybe.mapMaybe (Inspector.evalDirectiveToUpdateItem conFields getLines) evalResults
             checkUpdates =
               [ Inspector.DirectiveUpdateItem
-                  { directiveId = Text.pack (show lineNo) <> ":" <> Text.pack (show colNo)
+                  { directiveId = Text.pack (show startLine) <> ":" <> Text.pack (show colNo)
                   , prettyText  = Text.intercalate "\n" (prettyCheckErrorWithContext info)
                   , success     = Just True
-                  , lineContent = getLineContent lineNo
+                  , body        = getLines startLine endLine
                   }
               | Just tcResult <- [mTcResult]
               , info <- tcResult.infos
-              , Just (MkSrcRange (MkSrcPos lineNo colNo) _ _ _) <- [rangeOf info]
+              , Just (MkSrcRange (MkSrcPos startLine colNo) (MkSrcPos endLine _) _ _) <- [rangeOf info]
               ]
         LSP.runLspT env $
           sendNotification
@@ -448,7 +457,7 @@ handlers evalConfig recorder =
           revDeps <- use_ GetReverseDependencies nuri
           mconcat <$> uses_ GetReferences (nuri : revDeps)
 
-        let locs = map (\range -> Location (fromNormalizedUri range.moduleUri) (srcRangeToLspRange (Just range))) $ lookupReference pos refs
+        let locs = map (\range -> Location (fromNormalizedUri range.moduleUri) (srcRangeToLspRange (Just range))) $ lookupReference nuri pos refs
         pure (Right (InL locs))
     , requestHandler SMethod_TextDocumentDocumentSymbol $ \ide params -> do
         let uri = params ^. J.textDocument . J.uri
@@ -764,9 +773,14 @@ handlers evalConfig recorder =
                     matchesPos (EL.MkEvalDirectiveResult rng _ _) = fmap (.start) rng == Just targetPos
                     matchingResult = List.find matchesPos results
                 case matchingResult of
-                  Just evalRes ->
+                  Just evalRes@(EL.MkEvalDirectiveResult (Just rng) _ _) ->
                     pure $ Right $ Aeson.toJSON $
-                      Inspector.evalDirectiveToResult conFields reqParams.directiveType evalRes
+                      Inspector.evalDirectiveToResult conFields reqParams.directiveType rng evalRes
+                  Just _ -> pure $ Left $ TResponseError
+                    { _code = InR ErrorCodes_InvalidRequest
+                    , _message = "Directive result at the given position has no source range"
+                    , _xdata = Nothing
+                    }
                   Nothing | reqParams.directiveType == "#CHECK" -> do
                     -- #CHECK results come from the type checker (CheckInfo), not the evaluator.
                     -- Look for a CheckInfo item on the same line as the target position.
@@ -787,13 +801,20 @@ handlers evalConfig recorder =
                             , _message = "No #CHECK result found at the given position"
                             , _xdata = Nothing
                             }
-                          Just info ->
-                            pure $ Right $ Aeson.toJSON $ Inspector.DirectiveResult
-                              { directiveType = "#CHECK"
-                              , prettyText = Text.intercalate "\n" (prettyCheckErrorWithContext info)
-                              , success = Just True
-                              , structuredValue = Nothing
+                          Just info -> case rangeOf info of
+                            Nothing -> pure $ Left $ TResponseError
+                              { _code = InR ErrorCodes_InvalidRequest
+                              , _message = "#CHECK result at the given position has no source range"
+                              , _xdata = Nothing
                               }
+                            Just rng ->
+                              pure $ Right $ Aeson.toJSON $ Inspector.DirectiveResult
+                                { directiveType = "#CHECK"
+                                , prettyText = Text.intercalate "\n" (prettyCheckErrorWithContext info)
+                                , success = Just True
+                                , structuredValue = Nothing
+                                , range = rng
+                                }
                   Nothing -> pure $ Left $ TResponseError
                     { _code = InR ErrorCodes_InvalidRequest
                     , _message = "No directive result found at the given position"
@@ -825,30 +846,132 @@ handlers evalConfig recorder =
                 , _xdata = Nothing
                 }
               Just tcResult -> do
-                let -- Collect all declares from a module and its transitive imports
-                    collectAllDeclares tc =
-                      FSchema.declaresFromModule tc.module'
-                        <> foldMap collectAllDeclares tc.dependencies
-                    -- Collect exports from this module and all transitive imports
-                    collectExports declares tc =
-                      let exps = Export.enrichReturnTypes tc.entityInfo
-                               $ Export.getExportedFunctions tc.module'
-                          here = map (Inspector.exportedFunctionToSummary declares) exps
-                          imported = concatMap (collectExports declares) tc.dependencies
-                      in here <> imported
-                    allDeclares = collectAllDeclares tcResult
-                    summaries = collectExports allDeclares tcResult
-                    -- Collect transitive import URIs from the dependency tree
-                    collectImportUris tc = case tc.module' of
-                      MkModule _ depUri _ ->
-                        fromNormalizedUri depUri : concatMap collectImportUris tc.dependencies
-                    importUris = map getUri $ concatMap collectImportUris tcResult.dependencies
+                let -- `tc.dependencies` is the transitive-import *tree*, so a
+                    -- module reachable via more than one path (a diamond import
+                    -- graph: here safe-obligations → safe-governance → safe-core,
+                    -- with safe-core also pulled in elsewhere) is otherwise
+                    -- walked once per path, duplicating its declares, exports
+                    -- and import URIs. Flatten the tree to each module exactly
+                    -- once, deduping by module URI — NOT by function name: L4
+                    -- permits distinct functions to share a name, so name-based
+                    -- dedup would wrongly collapse two different exports.
+                    moduleUri tc = case tc.module' of MkModule _ u _ -> u
+                    -- Pre-order walk (root first, then deps in import order),
+                    -- skipping any module URI already visited.
+                    flatten seen tc
+                      | moduleUri tc `Set.member` seen = (seen, [])
+                      | otherwise =
+                          let seen0 = Set.insert (moduleUri tc) seen
+                              visitDep (s, acc) d =
+                                let (s', xs) = flatten s d in (s', acc <> xs)
+                              (seenN, deps) =
+                                List.foldl' visitDep (seen0, []) tc.dependencies
+                          in (seenN, tc : deps)
+                    uniqueTcs = snd (flatten Set.empty tcResult)
+                    allDeclares =
+                      foldMap (FSchema.declaresFromModule . (.module')) uniqueTcs
+                    summaries =
+                      concatMap
+                        (\tc -> map (Inspector.exportedFunctionToSummary allDeclares)
+                                  ( Export.enrichReturnTypes tc.entityInfo
+                                  $ Export.getExportedFunctions tc.module' ))
+                        uniqueTcs
+                    -- importUris excludes the root module (head of uniqueTcs).
+                    importUris =
+                      map (getUri . fromNormalizedUri . moduleUri)
+                        (drop 1 uniqueTcs)
                     response = Inspector.GetExportedFunctionsResponse
                       { functions = summaries
                       , importedFiles = importUris
                       }
                 pure $ Right $ Aeson.toJSON response
+    , requestHandler (SMethod_CustomMethod (Proxy @Ladder.ExportDocumentMethodName)) $ \_ide params -> do
+        let parseParams :: Aeson.Value -> Maybe Ladder.ExportDocumentParams
+            parseParams v = case Aeson.fromJSON v of
+              Aeson.Success p -> Just p
+              _               -> Nothing
+        case parseParams params of
+          Nothing -> pure $ Left $ TResponseError
+            { _code = InR ErrorCodes_InvalidParams
+            , _message = "Failed to parse exportDocument params"
+            , _xdata = Nothing }
+          Just reqParams -> do
+            let nuri = toNormalizedUri reqParams.verDocId._uri
+            mTc <- liftIO $ runAction "l4/exportDocument" _ide $ use TypeCheck nuri
+            case mTc of
+              Nothing -> pure $ Left $ TResponseError
+                { _code = InR ErrorCodes_InvalidRequest
+                , _message = "No type check result available"
+                , _xdata = Nothing }
+              Just tcResult -> do
+                let -- Excluded imports are removed from the dependency list
+                    -- outright (not merely set to the 'Exclude' disposition,
+                    -- which only collapses a still-referenced module to
+                    -- "as defined in …" stubs). Dropping the module means its
+                    -- units are never extracted, so the main document's
+                    -- references to them render as plain prose names.
+                    excludedUris = Set.fromList
+                      [ toNormalizedUri (Uri u) | u <- reqParams.excludeModules ]
+                    keepModule (MkModule _ u _) = not (u `Set.member` excludedUris)
+                    deps = filter keepModule (drop 1 (flattenExportModules tcResult))
+                    ecfg = ExportDoc.defaultExportConfig
+                      { ExportDoc.dropUnused = not reqParams.includeUnused
+                      , ExportDoc.mixfixHeadings =
+                          ExportDoc.mixfixHeadingsFromRegistry tcResult.mixfixRegistry
+                      }
+                    rcfg = ExportRender.MkRenderConfig
+                             { ExportRender.numberSections = reqParams.numberSections
+                             , ExportRender.numberClauses = reqParams.numberClauses
+                             , ExportRender.toc = reqParams.toc }
+                    doc = ExportDoc.buildDocument ecfg tcResult.module' deps
+                    content = case reqParams.format of
+                      "text" -> ExportRender.renderText rcfg doc
+                      "akn"  -> ExportRender.renderAkn doc
+                      "json" -> ""
+                      _      -> ExportRender.renderHtml rcfg doc
+                pure $ Right $ Aeson.object
+                  [ "format"  Aeson..= reqParams.format
+                  , "content" Aeson..= content
+                  , "ir"      Aeson..= doc
+                  ]
+    , requestHandler (SMethod_CustomMethod (Proxy @Ladder.ExportPlanMethodName)) $ \_ide params -> do
+        let parseParams :: Aeson.Value -> Maybe Ladder.ExportPlanParams
+            parseParams v = case Aeson.fromJSON v of
+              Aeson.Success p -> Just p
+              _               -> Nothing
+        case parseParams params of
+          Nothing -> pure $ Left $ TResponseError
+            { _code = InR ErrorCodes_InvalidParams
+            , _message = "Failed to parse exportPlan params"
+            , _xdata = Nothing }
+          Just reqParams -> do
+            let nuri = toNormalizedUri reqParams.verDocId._uri
+            mTc <- liftIO $ runAction "l4/exportPlan" _ide $ use TypeCheck nuri
+            case mTc of
+              Nothing -> pure $ Left $ TResponseError
+                { _code = InR ErrorCodes_InvalidRequest
+                , _message = "No type check result available"
+                , _xdata = Nothing }
+              Just tcResult -> do
+                let deps = drop 1 (flattenExportModules tcResult)
+                    plan = ExportDoc.buildPlan ExportDoc.defaultExportConfig tcResult.module' deps
+                pure $ Right $ Aeson.toJSON plan
     ]
+
+-- | Flatten the transitive-import tree to each module exactly once (root
+-- first), deduping by module URI — the shape 'L4.Export.Document.buildDocument'
+-- expects.
+flattenExportModules :: TypeCheckResult -> [Module Resolved]
+flattenExportModules root = map (.module') (snd (go Set.empty root))
+ where
+  muri tc = case tc.module' of MkModule _ u _ -> u
+  go seen tc
+    | muri tc `Set.member` seen = (seen, [])
+    | otherwise =
+        let seen0 = Set.insert (muri tc) seen
+            (seenN, deps) =
+              List.foldl' (\(s, acc) d -> let (s', xs) = go s d in (s', acc <> xs)) (seen0, []) tc.dependencies
+        in (seenN, tc : deps)
 
 activeFileDiagnosticsInRange :: ShakeExtras -> NormalizedUri -> Range -> STM [FileDiagnostic]
 activeFileDiagnosticsInRange extras nfu rng = do

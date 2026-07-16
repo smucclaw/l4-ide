@@ -1,0 +1,2303 @@
+{
+  "totalFiles": 438,
+  "buckets": {
+    "clean": 35,
+    "no-exports": 349,
+    "has-unsupported": 2,
+    "typecheck-fail": 51,
+    "lower-fail": 1
+  },
+  "typecheckErrorClasses": {
+    "parse-error": 22,
+    "other": 17,
+    "type-mismatch": 11,
+    "ambiguous": 2
+  },
+  "unsupportedReasonHistogram": {
+    "REGULATIVE (deontic) construct not supported by the WASM backend": 2
+  },
+  "unsupportedFunctionsByReason": {
+    "REGULATIVE (deontic) construct not supported by the WASM backend": [
+      "jl4/examples/legal/ceo-performance-award.l4::Eligible-Service-Requirement",
+      "ts-apps/jl4-web/src/generated/ceo-performance-award.l4::Eligible-Service-Requirement"
+    ]
+  },
+  "perFile": [
+    {
+      "file": ".claude/skills/writing-l4-rules/assets/example-parking.l4",
+      "outcome": "clean",
+      "functions": 1
+    },
+    {
+      "file": "doc/courses/advanced/module-a1-regulatory-examples.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/courses/advanced/module-a2-cross-cutting-examples.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/courses/advanced/module-a3-contracts-examples.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/courses/foundation/charity-obligation.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/courses/foundation/eligibility-rule.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/courses/foundation/hello.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/courses/foundation/module-1-examples.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/courses/foundation/module-2-examples.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/courses/foundation/module-3-examples.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/courses/foundation/module-4-examples.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/courses/foundation/module-5-examples.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/courses/foundation/module-6-examples.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/courses/foundation/sale-contract.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/courses/foundation/type-declaration.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/builtins/http-json-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/control-flow/consider-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/control-flow/if-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/functions/aka-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/functions/decide-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/functions/given-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/functions/giveth-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/functions/let-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/functions/means-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/functions/where-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/functions/yield-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/libraries/currency-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/libraries/datetime-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/libraries/daydate-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/libraries/import-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/libraries/legal-persons-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/libraries/math-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/libraries/prelude-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/libraries/time-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/libraries/timezone-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/operators/and-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/operators/arithmetic/arithmetic-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/operators/associativity-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/operators/asyndetic-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/operators/comparisons/comparisons-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/operators/implies-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/operators/not-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/operators/or-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/operators/precedence-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/operators/textual-vs-symbolic-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/operators/unless-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/regulative/because-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/regulative/deontic-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/regulative/may-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/regulative/must-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/regulative/party-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/regulative/shant-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/syntax/annotation-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/syntax/comment-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/syntax/directive-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/syntax/ditto-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/syntax/genitive-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/syntax/identifier-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/syntax/layout-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/syntax/section-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/types/a-an-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/types/assume-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/types/coercion-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/types/computed-fields-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/types/declare-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/types/either-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/types/enum-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/types/for-all-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/types/function-type-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/types/list-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/types/maybe-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/types/polymorphic-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/types/record-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/reference/types/type-inference-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/tutorials/deploying-rules/insurance-premium.l4",
+      "outcome": "clean",
+      "functions": 2
+    },
+    {
+      "file": "doc/tutorials/getting-started/eligibility-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/tutorials/getting-started/wedding-vows-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "doc/tutorials/natural-language-functions/natural-language-example.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4-core/libraries/actus-core.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4-core/libraries/actus-daycount.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4-core/libraries/actus-events.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4-core/libraries/actus-schedule.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4-core/libraries/actus-state.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4-core/libraries/actus-terms.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4-core/libraries/actus.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4-core/libraries/currency.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4-core/libraries/date-compat.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4-core/libraries/datetime.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4-core/libraries/daydate.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4-core/libraries/excel-date.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4-core/libraries/holdings.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4-core/libraries/jurisdiction.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4-core/libraries/legal-persons.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4-core/libraries/llm.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4-core/libraries/math.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4-core/libraries/prelude.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4-core/libraries/time.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4-core/libraries/timezone.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4-mlir/test/fixtures/datetime-probe.l4",
+      "outcome": "clean",
+      "functions": 6
+    },
+    {
+      "file": "jl4-mlir/test/fixtures/intrinsics-probe.l4",
+      "outcome": "clean",
+      "functions": 7
+    },
+    {
+      "file": "jl4-mlir/test/fixtures/test.l4",
+      "outcome": "clean",
+      "functions": 12
+    },
+    {
+      "file": "jl4/examples/advanced/legislative-ingestion.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/advanced/llm-judgment-calls.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/experiments/excel-date/datedif.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/experiments/excel-date/days360-yearfrac.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/experiments/excel-date/monthmath.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/experiments/excel-date/serials.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/experiments/excel-date/workdays.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/implicit-assume-test.l4",
+      "outcome": "clean",
+      "functions": 2
+    },
+    {
+      "file": "jl4/examples/legal/anti-social.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/legal/british-citizen-act.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/legal/ceo-performance-award.l4",
+      "outcome": "has-unsupported",
+      "functions": 1,
+      "unsupported": {
+        "Eligible-Service-Requirement": "REGULATIVE (deontic) construct not supported by the WASM backend"
+      }
+    },
+    {
+      "file": "jl4/examples/legal/directive-showcase.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/legal/imaginary-alcohol-act.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/legal/ny-environmental-7.3.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/legal/promissory-note.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/legal/tests/imaginary-alcohol-act.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/lsp/hover/desc-hover.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/lsp/semantic-tokens/annotations.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/lsp/semantic-tokens/assume.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/lsp/semantic-tokens/backtick-means.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/lsp/semantic-tokens/comments.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/lsp/semantic-tokens/decide.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/lsp/semantic-tokens/declare.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/lsp/semantic-tokens/directives.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "parse-error",
+      "error": [
+        "    expecting %, &&, (, *, +, -, .., ..., /, ;, <, <=, =, =>, >, >=, ABOVE, AND, AT, BELOW, DIVIDED, EQUALS, FOLLOWED, Float Literal, GREATER, IMPLIES, LESS, MINUS, MODULO, Numeric Literal, OF, OR, PLUS, RAND, ROR, String Literal, TIMES, UNLESS, end of input, identifier, infix identifier, mixfix keyword, space token, or ||"
+      ]
+    },
+    {
+      "file": "jl4/examples/lsp/semantic-tokens/ditto.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/lsp/semantic-tokens/expr.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/lsp/semantic-tokens/sections.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/not-ok/empty.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "other",
+      "error": ["  Typecheck completed with errors"]
+    },
+    {
+      "file": "jl4/examples/not-ok/export-after-giveth.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/not-ok/export-before-decide.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/not-ok/export-between-given-giveth.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/not-ok/nlg/nlg_ambiguous1.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/not-ok/nlg/nlg_section1.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/not-ok/tc/computed-fields-cycle.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "other",
+      "error": ["  Typecheck completed with errors"]
+    },
+    {
+      "file": "jl4/examples/not-ok/tc/computed-fields-long-cycle.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "other",
+      "error": ["  Typecheck completed with errors"]
+    },
+    {
+      "file": "jl4/examples/not-ok/tc/computed-fields-override.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "type-mismatch",
+      "error": ["  Typecheck completed with errors"]
+    },
+    {
+      "file": "jl4/examples/not-ok/tc/computed-fields-self-cycle.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "type-mismatch",
+      "error": ["  Typecheck completed with errors"]
+    },
+    {
+      "file": "jl4/examples/not-ok/tc/computed-fields-type-mismatch.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "other",
+      "error": ["  Typecheck completed with errors"]
+    },
+    {
+      "file": "jl4/examples/not-ok/tc/datetime-type-errors.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "type-mismatch",
+      "error": ["  Typecheck completed with errors"]
+    },
+    {
+      "file": "jl4/examples/not-ok/tc/error-directive-ambiguity.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "other",
+      "error": ["  Typecheck completed with errors"]
+    },
+    {
+      "file": "jl4/examples/not-ok/tc/error-unify-test.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "other",
+      "error": ["  Typecheck completed with errors"]
+    },
+    {
+      "file": "jl4/examples/not-ok/tc/mixfix-wrong-keyword.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "type-mismatch",
+      "error": ["  Typecheck completed with errors"]
+    },
+    {
+      "file": "jl4/examples/not-ok/tc/overloaded-ambiguous.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "ambiguous",
+      "error": ["  Typecheck completed with errors"]
+    },
+    {
+      "file": "jl4/examples/not-ok/tc/parse-error1.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "parse-error",
+      "error": ["    expecting %, ELSE, or space token"]
+    },
+    {
+      "file": "jl4/examples/not-ok/tc/parse-error2.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "parse-error",
+      "error": [
+        "    expecting FUNCTION, LIST, TYPE, identifier, or space token"
+      ]
+    },
+    {
+      "file": "jl4/examples/not-ok/tc/parse-error3.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "parse-error",
+      "error": [
+        "    expecting FUNCTION, LIST, TYPE, identifier, or space token"
+      ]
+    },
+    {
+      "file": "jl4/examples/not-ok/tc/parse-error4.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "parse-error",
+      "error": ["    expecting AKA, IF, IS, OF, identifier, or space token"]
+    },
+    {
+      "file": "jl4/examples/not-ok/tc/percent.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "type-mismatch",
+      "error": ["  Typecheck completed with errors"]
+    },
+    {
+      "file": "jl4/examples/not-ok/tc/postfix-in-let-block.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "type-mismatch",
+      "error": ["  Typecheck completed with errors"]
+    },
+    {
+      "file": "jl4/examples/not-ok/tc/scombinator-fragment.l4",
+      "outcome": "lower-fail",
+      "errorClass": "other",
+      "error": ["    incorrect indentation (got 1, should be greater than 3)"]
+    },
+    {
+      "file": "jl4/examples/not-ok/tc/sing.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "type-mismatch",
+      "error": ["  Typecheck completed with errors"]
+    },
+    {
+      "file": "jl4/examples/not-ok/tc/tdnr-ambiguous.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "ambiguous",
+      "error": ["  Typecheck completed with errors"]
+    },
+    {
+      "file": "jl4/examples/not-ok/tc/time-type-errors.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "type-mismatch",
+      "error": ["  Typecheck completed with errors"]
+    },
+    {
+      "file": "jl4/examples/ok/actus-library-test.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/ai-simple.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/aka.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/ambiguous-sections.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/and-or-depth-warning.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/and-or-precedence.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/and-or-simple-test.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/anthropic-api-types.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/appform.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/as-string.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/assert.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/assume-as-given.l4",
+      "outcome": "clean",
+      "functions": 4
+    },
+    {
+      "file": "jl4/examples/ok/assumes.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/bar.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/baz.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/bidirectional-jsondecode-basic.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/comments.1.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/comments.2.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/comments.3.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/comparisons.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/computed-fields-extra.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/computed-fields.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/concat.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/consider-primitives.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/consider-simple.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/consider.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/constant.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/contract.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/contracts.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/cross-section-ref.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/currency-tests.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/datatypes.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/dates.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/datetime-tests.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/desc-extended.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/desc.l4",
+      "outcome": "clean",
+      "functions": 1
+    },
+    {
+      "file": "jl4/examples/ok/directive.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/ditto.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/elem.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/env.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/eval.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/excel-date-tests.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/excel-date/datedif.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/excel-date/days360-yearfrac.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/excel-date/monthmath.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/excel-date/serials.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/excel-date/workdays.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/export-explicit-default.l4",
+      "outcome": "clean",
+      "functions": 2
+    },
+    {
+      "file": "jl4/examples/ok/export-no-explicit-default.l4",
+      "outcome": "clean",
+      "functions": 2
+    },
+    {
+      "file": "jl4/examples/ok/expr1.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/factorial.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/fetch.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/fib.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/float.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/fold.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/foo.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/forward.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/identity.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/ifthenelse.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/inference.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/json-encode-comprehensive.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/json-encode-list-of-records.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/json-roundtrip-basic.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/jsondecode-dates.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/jsondecode.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/jsonencode-enums.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/jsonencode-lists.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/jsonencode-primitives.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/jsonencode-records.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/jurisdiction-tests.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/lazytrace-exception.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/lazytrace.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/lazytrace2.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/legal-persons-tests.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/let-in-basic.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/let-in-context.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/let-in-functions.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/let-in-inline.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/let-in-lazy.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/let-in-mutual-recursion.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/let-in-nesting.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/let-in-polymorphic.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/let-inline-record-construction.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/list-newline-comma.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/list-vertical-block.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/list-vertical-in-let-block.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/list-vertical-in-let-inline.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/literal.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/localdecls.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/logic.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/loop.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/means.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/misc.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/mixfix-basic.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/mixfix-cross-module-binary-call.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/mixfix-cross-module-binary-def.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/mixfix-cross-module-postfix-call.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/mixfix-cross-module-postfix-def.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/mixfix-cross-module-ternary-call.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/mixfix-cross-module-ternary-def.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/mixfix-garden-path.l4",
+      "outcome": "clean",
+      "functions": 1
+    },
+    {
+      "file": "jl4/examples/ok/mixfix-multiline.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/mixfix-over.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/mixfix-with-variables.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/namedapp.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/nested-patterns.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/nested-sections.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/nested-where-local-postfix.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/nested-where-shadowed-infix.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/nested-where-shadowed-multiword-mixfix.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/nlg_decide0.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/nlg_decide1.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/nlg_decide2.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/nlg_decide3.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/nlg_declare1.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/nlg_declare2.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/nlg_lin0.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/nlg_lin1.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/nlg_lin2.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/nlg_ref_parse.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/nlg_section2.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/not-of.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/operators-issue336-1.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/operators-issue336-2.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/operators.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/overloaded.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/paragraph.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/parens.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/parse-funapp.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/percent.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/polymorphism.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/post-json-integration.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/post.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/postfix-with-variables.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/prefix-not-mixfix.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/prohibition.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/projections.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/qualified.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/quoted-sections.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/qux.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/range.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/record.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/ref.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/replicate.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/reverse.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/reverseaux.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/rodentsAndVermin.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/scombinator.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/sections.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/sections2.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/selectors.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/signatures.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/singscope.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/sort.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/string-primitives.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/tbd.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/tdnr.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/temporal-acceptance.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/test.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/time-tests.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/timezone-tests.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/type-coercion.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/type.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/typecheck.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/typesynonms.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/unless-keyword.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/examples/ok/xor.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/Singapore-Data-Protection-Act.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "other",
+      "error": ["  Typecheck completed with errors"]
+    },
+    {
+      "file": "jl4/experiments/actors.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/base-money.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/britishcitizen.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "parse-error",
+      "error": ["    expecting operator char"]
+    },
+    {
+      "file": "jl4/experiments/britishcitizen2.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/britishcitizen3.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/britishcitizen4.l4",
+      "outcome": "clean",
+      "functions": 1
+    },
+    {
+      "file": "jl4/experiments/britishcitizen5.l4",
+      "outcome": "clean",
+      "functions": 1
+    },
+    {
+      "file": "jl4/experiments/carInsurance.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/cheating-420.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/classic/britishcitizen5.l4",
+      "outcome": "clean",
+      "functions": 1
+    },
+    {
+      "file": "jl4/experiments/classic/compute_qualifies.l4",
+      "outcome": "clean",
+      "functions": 1
+    },
+    {
+      "file": "jl4/experiments/classic/parking.l4",
+      "outcome": "clean",
+      "functions": 1
+    },
+    {
+      "file": "jl4/experiments/classic/the_answer.l4",
+      "outcome": "clean",
+      "functions": 1
+    },
+    {
+      "file": "jl4/experiments/classic/vermin_and_rodent.l4",
+      "outcome": "clean",
+      "functions": 1
+    },
+    {
+      "file": "jl4/experiments/computed-fields-age.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/computed-fields-basic.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/computed-fields-chain.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/computed-fields-cycle.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "other",
+      "error": ["  Typecheck completed with errors"]
+    },
+    {
+      "file": "jl4/experiments/computed-fields-external-of.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/computed-fields-external.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/computed-fields-legal.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/computed-fields-nested.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/computed-fields-override.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "type-mismatch",
+      "error": ["  Typecheck completed with errors"]
+    },
+    {
+      "file": "jl4/experiments/computed-fields-where-let.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/cubed-postfix.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/deontic-may.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "parse-error",
+      "error": ["    expecting AKA, MEANS, or space token"]
+    },
+    {
+      "file": "jl4/experiments/dogs.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "other",
+      "error": ["  Typecheck completed with errors"]
+    },
+    {
+      "file": "jl4/experiments/environmental-quality-review-act-7.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "type-mismatch",
+      "error": ["  Typecheck completed with errors"]
+    },
+    {
+      "file": "jl4/experiments/fetch-uuid.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/jerseyAlcohol.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "parse-error",
+      "error": [
+        "    expecting \"'s\", \"--\", \"..\", \"...\", \"/*\", \"//\", \"<<\", \">>\", \"@desc\", \"@export\", \"@ref-map\", \"@ref-src\", \"{-\", '\"', '#', '%', '(', ')', ',', '-', '.', ':', ';', '[', ']', '^', '`', '{', '}', '\u00a7', Natural Language Generation Annotation, Reference Annotation, end of input, float, integer, operator char, or whitespace"
+      ]
+    },
+    {
+      "file": "jl4/experiments/jerseyCharities-genesis.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "parse-error",
+      "error": [
+        "    expecting %, &&, (, *, +, ,, -, .., ..., /, ;, <, <=, =, =>, >, >=, ABOVE, AND, AT, BELOW, DIVIDED, EQUALS, EXACTLY, FOLLOWED, Float Literal, GREATER, HENCE, IMPLIES, LESS, LEST, MINUS, MODULO, Numeric Literal, OF, OR, PLUS, PROVIDED, RAND, ROR, String Literal, TIMES, UNLESS, WHERE, WITHIN, end of input, identifier, infix identifier, mixfix keyword, space token, or ||"
+      ]
+    },
+    {
+      "file": "jl4/experiments/jerseyCharities-types.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/jerseyCharities.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/jerseyCharities2-annual-returns.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "parse-error",
+      "error": [
+        "    expecting (, AT, BRANCH, BREACH, CONCAT, CONSIDER, ENV, FETCH, Float Literal, GIVEN, IF, LET, LIST, NOT, Numeric Literal, PARTY, POST, String Literal, identifier, or space token"
+      ]
+    },
+    {
+      "file": "jl4/experiments/jerseyCharities2-tests.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "parse-error",
+      "error": ["  Typecheck completed with errors"]
+    },
+    {
+      "file": "jl4/experiments/jerseyCharities2.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "parse-error",
+      "error": [
+        "    expecting (, ), EXACTLY, FOLLOWED, Float Literal, Numeric Literal, OF, String Literal, identifier, or space token"
+      ]
+    },
+    {
+      "file": "jl4/experiments/json-encode-anthropic.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/json-encode-comprehensive.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/json-encode-nested.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/json-encode-nested2.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/json-encode-record3.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/json-encode-simple.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/json-roundtrip.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "other",
+      "error": ["  Typecheck completed with errors"]
+    },
+    {
+      "file": "jl4/experiments/json-test-minimal.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/looping-with-recursion.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/macma.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/macma2.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "other",
+      "error": ["  Typecheck completed with errors"]
+    },
+    {
+      "file": "jl4/experiments/macma3.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "other",
+      "error": ["  Typecheck completed with errors"]
+    },
+    {
+      "file": "jl4/experiments/misleadingPriceLists.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "parse-error",
+      "error": [
+        "    expecting ,, ASSUME, DECIDE, DECLARE, GIVES, GIVETH, OF, identifier, or space token"
+      ]
+    },
+    {
+      "file": "jl4/experiments/mixfix-cross-module-postfix-call.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/mixfix-cross-module-postfix-def.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/mixfix-cross-module-ternary-def.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/mixfix.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/multiline-strings.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/order-invariance.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/parking.l4",
+      "outcome": "clean",
+      "functions": 1
+    },
+    {
+      "file": "jl4/experiments/patterns_and_idioms.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/post-with-json.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/promissory-note-amount.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/promissory-note-list.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "parse-error",
+      "error": [
+        "    expecting (, ), EXACTLY, FOLLOWED, Float Literal, Numeric Literal, OF, String Literal, identifier, or space token"
+      ]
+    },
+    {
+      "file": "jl4/experiments/promissory-note-tracking.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "parse-error",
+      "error": [
+        "    expecting (, ), EXACTLY, FOLLOWED, Float Literal, Numeric Literal, OF, String Literal, identifier, or space token"
+      ]
+    },
+    {
+      "file": "jl4/experiments/purchase.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "parse-error",
+      "error": ["    expecting operator char"]
+    },
+    {
+      "file": "jl4/experiments/query-planner-tests/01-simple-and.l4",
+      "outcome": "clean",
+      "functions": 1
+    },
+    {
+      "file": "jl4/experiments/query-planner-tests/01-simple-not.l4",
+      "outcome": "clean",
+      "functions": 1
+    },
+    {
+      "file": "jl4/experiments/query-planner-tests/01-simple-or.l4",
+      "outcome": "clean",
+      "functions": 1
+    },
+    {
+      "file": "jl4/experiments/query-planner-tests/01-three-vars.l4",
+      "outcome": "clean",
+      "functions": 1
+    },
+    {
+      "file": "jl4/experiments/query-planner-tests/02-and-short-circuit.l4",
+      "outcome": "clean",
+      "functions": 1
+    },
+    {
+      "file": "jl4/experiments/query-planner-tests/02-or-short-circuit.l4",
+      "outcome": "clean",
+      "functions": 1
+    },
+    {
+      "file": "jl4/experiments/query-planner-tests/03-dont-care-branch.l4",
+      "outcome": "clean",
+      "functions": 1
+    },
+    {
+      "file": "jl4/experiments/query-planner-tests/03-dont-care-simple.l4",
+      "outcome": "clean",
+      "functions": 1
+    },
+    {
+      "file": "jl4/experiments/query-planner-tests/04-alcohol-purchase.l4",
+      "outcome": "clean",
+      "functions": 1
+    },
+    {
+      "file": "jl4/experiments/query-planner-tests/04-nested-and-or.l4",
+      "outcome": "clean",
+      "functions": 1
+    },
+    {
+      "file": "jl4/experiments/query-planner-tests/05-nested-parent-assertion.l4",
+      "outcome": "clean",
+      "functions": 1
+    },
+    {
+      "file": "jl4/experiments/query-planner-tests/05-parent-node-assertion.l4",
+      "outcome": "clean",
+      "functions": 1
+    },
+    {
+      "file": "jl4/experiments/query-planner-tests/06-reactive-relevance.l4",
+      "outcome": "clean",
+      "functions": 1
+    },
+    {
+      "file": "jl4/experiments/query-planner-tests/test-spaces-in-identifiers.l4",
+      "outcome": "clean",
+      "functions": 1
+    },
+    {
+      "file": "jl4/experiments/regulative-powers.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "parse-error",
+      "error": ["    expecting AKA, MEANS, identifier, or space token"]
+    },
+    {
+      "file": "jl4/experiments/restaurant1.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "parse-error",
+      "error": [
+        "    expecting (, ), EXACTLY, FOLLOWED, Float Literal, Numeric Literal, OF, String Literal, identifier, or space token"
+      ]
+    },
+    {
+      "file": "jl4/experiments/restaurant2.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "parse-error",
+      "error": ["    expecting %, ;, LEST, WHERE, end of input, or space token"]
+    },
+    {
+      "file": "jl4/experiments/safe-post-new.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/safe-post-tests.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "type-mismatch",
+      "error": ["  Typecheck completed with errors"]
+    },
+    {
+      "file": "jl4/experiments/safe-post.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/seatbelt.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "parse-error",
+      "error": [
+        "    expecting %, &&, *, +, -, .., ..., /, ;, <, <=, =, =>, >, >=, ABOVE, AND, AT, BELOW, DIVIDED, EQUALS, FOLLOWED, GREATER, HENCE, IMPLIES, LESS, LEST, MINUS, MODULO, OR, PLUS, RAND, ROR, TIMES, UNLESS, WHERE, WITHIN, end of input, space token, or ||"
+      ]
+    },
+    {
+      "file": "jl4/experiments/simple-playground.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/term-expansion.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/test-anthropic-api-response.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "other",
+      "error": ["  Typecheck completed with errors"]
+    },
+    {
+      "file": "jl4/experiments/test-json-roundtrip-nested.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "other",
+      "error": ["  Typecheck completed with errors"]
+    },
+    {
+      "file": "jl4/experiments/test-jsondecode-nested.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "other",
+      "error": ["  Typecheck completed with errors"]
+    },
+    {
+      "file": "jl4/experiments/test-nested-jsonencode.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/test-post-headers.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/test-post.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/thailand-cosmetics/anthropicClient.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/thailand-cosmetics/orchestrator.l4",
+      "outcome": "clean",
+      "functions": 1
+    },
+    {
+      "file": "jl4/experiments/thailand-cosmetics/prelude.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/thailand-cosmetics/promptLibrary.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/wedding.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/experiments/zenzizenzic.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/ok/inert/asyndetic-disjunction.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/ok/inert/basic.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/ok/inert/cheating-415.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/ok/inert/context-aware.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/ok/inert/nested-context.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/ok/inert/simple.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "parse-error",
+      "error": [
+        "    expecting (, AT, BRANCH, BREACH, CONCAT, CONSIDER, ENV, FETCH, Float Literal, GIVEN, IF, LET, LIST, NOT, Numeric Literal, PARTY, POST, String Literal, identifier, or space token"
+      ]
+    },
+    {
+      "file": "jl4/tests-cli/fixtures/clean.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/tests-cli/fixtures/eval.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "jl4/tests-cli/fixtures/garbage.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "parse-error",
+      "error": [
+        "    expecting \"'s\", \"--\", \"..\", \"...\", \"/*\", \"//\", \"<<\", \">>\", \"@desc\", \"@export\", \"@ref-map\", \"@ref-src\", \"{-\", '\"', '#', '%', '(', ')', ',', '-', '.', ':', ';', '[', ']', '^', '`', '{', '}', '\u00a7', Natural Language Generation Annotation, Reference Annotation, end of input, float, integer, operator char, or whitespace"
+      ]
+    },
+    {
+      "file": "jl4/tests-cli/fixtures/typecheck-error.l4",
+      "outcome": "typecheck-fail",
+      "errorClass": "other",
+      "error": ["  Typecheck completed with errors"]
+    },
+    {
+      "file": "ts-apps/jl4-web/src/generated/anti-social.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "ts-apps/jl4-web/src/generated/british-citizen-act.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "ts-apps/jl4-web/src/generated/ceo-performance-award.l4",
+      "outcome": "has-unsupported",
+      "functions": 1,
+      "unsupported": {
+        "Eligible-Service-Requirement": "REGULATIVE (deontic) construct not supported by the WASM backend"
+      }
+    },
+    {
+      "file": "ts-apps/jl4-web/src/generated/directive-showcase.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "ts-apps/jl4-web/src/generated/empty.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "ts-apps/jl4-web/src/generated/imaginary-alcohol-act.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "ts-apps/jl4-web/src/generated/ny-environmental-7.3.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "ts-apps/jl4-web/src/generated/promissory-note.l4",
+      "outcome": "no-exports",
+      "functions": 0
+    },
+    {
+      "file": "ts-apps/vscode/static/skills/writing-l4-rules/assets/example-parking.l4",
+      "outcome": "clean",
+      "functions": 1
+    }
+  ]
+}

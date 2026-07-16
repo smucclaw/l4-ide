@@ -6,19 +6,23 @@ import qualified BundleStore
 import ControlPlane (ControlPlaneApi, controlPlaneHandler)
 import DataPlane (DataPlaneApi, dataPlaneHandler, ShortRoutes, shortRoutesHandler)
 import FileBrowser (FileBrowseApi, fileBrowseHandler)
-import McpServer (mcpHandler)
+import McpServer (mcpHandler, reapExpiredTasks, supportedProtocolVersions, defaultProtocolVersion, tasksExtensionKey)
 import DeploymentLoader (loadAndRegister)
 import Logging (Logger, logInfo, logDebug, logError, newLogger)
 import Options (Options (..), buildOpts)
 import OpenApiDoc (buildOpenApiDoc)
 import Shared (collectDeploymentMetadata)
 import Types
+import qualified Version
 
 import Data.Aeson (toJSON, (.=))
 import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.Key as Aeson.Key
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text.Encoding
+import Control.Concurrent (forkIO, threadDelay)
+import Control.Monad (forever)
 import Control.Concurrent.Async (mapConcurrently_)
 import Control.Concurrent.STM (TVar, atomically, modifyTVar', newTVarIO, readTVarIO)
 import Control.Exception (SomeException, finally, displayException)
@@ -106,10 +110,18 @@ defaultMain = do
   store <- BundleStore.initStore storePath
   BundleStore.cleanupStore logger store
   registry <- newTVarIO Map.empty
+  pendingUpd <- newTVarIO Map.empty
+  tasksReg <- newTVarIO Map.empty
   let effectiveServerName = case options.serverName of
         Just s  -> Just s
         Nothing -> Just ("http://localhost:" <> Text.pack (show options.port))
-      env = MkAppEnv registry store effectiveServerName logger options
+      env = MkAppEnv registry pendingUpd store effectiveServerName logger options tasksReg
+
+  -- Fork a background sweeper that drops MCP tasks past their TTL.
+  -- 30s tick is fine: tasks are 1h TTL by default.
+  _ <- forkIO $ forever $ do
+    threadDelay (30 * 1000 * 1000)
+    reapExpiredTasks tasksReg
 
   -- Scan existing deployments and register them
   deployIds <- BundleStore.listDeployments store
@@ -221,7 +233,7 @@ app env req sendResp = do
       -- Override serverName with X-L4-Origin header if present (set by auth proxy).
       -- This allows the OpenAPI spec to reflect the org's external URL.
       reqEnv = case lookup "X-L4-Origin" (requestHeaders req) of
-        Just origin -> MkAppEnv env.deploymentRegistry env.bundleStore (Just (Text.Encoding.decodeUtf8 origin)) env.logger env.options
+        Just origin -> MkAppEnv env.deploymentRegistry env.updateJobs env.bundleStore (Just (Text.Encoding.decodeUtf8 origin)) env.logger env.options env.mcpTasks
         Nothing     -> env
   serve (Proxy @ServiceApi) (serverT reqEnv vis) req sendResp
 
@@ -269,6 +281,7 @@ healthHandler = do
         , hdFailed = nFailed
         }
     , hrInstanceToken = env.options.instanceToken
+    , hrVersion = Version.serviceVersion
     }
 
 -- | GET /.well-known/webmcp — discovery manifest for WebMCP crawlers.
@@ -310,6 +323,9 @@ webmcpHandler = do
 
 -- | GET /.well-known/mcp — MCP discovery endpoint.
 -- Returns server metadata, capabilities, and endpoint information per MCP spec.
+-- Advertises the 2026-07-28 spec by default and lists every wire version
+-- we accept so HTTP-only discovery (no live connection) is sufficient for
+-- a client to pick the right protocolVersion before sending requests.
 mcpDiscoveryHandler :: ServerT McpDiscoveryApi AppM
 mcpDiscoveryHandler = do
   env <- ask
@@ -317,9 +333,14 @@ mcpDiscoveryHandler = do
   pure $ Aeson.object
     [ "name" .= ("L4 Rules Engine" :: Text)
     , "version" .= ("1.0.0" :: Text)
-    , "protocol_version" .= ("2025-03-26" :: Text)
+    , "protocol_version" .= defaultProtocolVersion
+    , "supported_protocol_versions" .= supportedProtocolVersions
     , "capabilities" .= Aeson.object
         [ "tools" .= Aeson.object []
+        , "extensions" .= Aeson.object
+            [ Aeson.Key.fromText tasksExtensionKey .= Aeson.object [] ]
+        , "experimental" .= Aeson.object
+            [ "ext-tasks" .= Aeson.object [] ]
         ]
     , "endpoints" .= Aeson.object
         [ "mcp" .= ("/.mcp" :: Text)
@@ -331,8 +352,13 @@ mcpDiscoveryHandler = do
 mcpManifestHandler :: ServerT McpManifestApi AppM
 mcpManifestHandler = do
   pure $ Aeson.object
-    [ "version" .= ("2025-03-26" :: Text)
-    , "capabilities" .= Aeson.object [ "tools" .= True ]
+    [ "version" .= defaultProtocolVersion
+    , "supported_versions" .= supportedProtocolVersions
+    , "capabilities" .= Aeson.object
+        [ "tools" .= True
+        , "extensions" .= Aeson.object
+            [ Aeson.Key.fromText tasksExtensionKey .= Aeson.object [] ]
+        ]
     , "endpoints" .= Aeson.object [ "mcp" .= ("/.mcp" :: Text) ]
     ]
 

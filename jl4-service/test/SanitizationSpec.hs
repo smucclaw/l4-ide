@@ -30,8 +30,8 @@ spec = describe "Sanitization" $ do
     it "preserves existing hyphens" $
       sanitizePropertyName "Non-Profit type" `shouldBe` "Non-Profit-type"
 
-    it "preserves dots and underscores" $
-      sanitizePropertyName "Loss or Damage.caused by insects" `shouldBe` "Loss-or-Damage.caused-by-insects"
+    it "remaps dots to hyphens (Anthropic property regex disallows '.')" $
+      sanitizePropertyName "Loss or Damage.caused by insects" `shouldBe` "Loss-or-Damage-caused-by-insects"
 
     it "returns _unnamed for empty result" $
       sanitizePropertyName "``" `shouldBe` "_unnamed"
@@ -51,7 +51,7 @@ spec = describe "Sanitization" $ do
     it "truncated names match Anthropic's property key regex" $ do
       let longName = "the person has an unspent conviction for providing misleading information"
           result = sanitizePropertyName longName
-      result `shouldSatisfy` Text.all (\c -> c `elem` ("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-" :: String))
+      result `shouldSatisfy` Text.all (\c -> c `elem` ("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-" :: String))
       Text.length result `shouldSatisfy` (\n -> n >= 1 && n <= 60)
 
   describe "sanitizePropertyNames (dedup)" $ do
@@ -285,5 +285,5 @@ spec = describe "Sanitization" $ do
 
 -- | Helper to create a simple Parameter with no nested properties.
 simpleParam :: Text -> Parameter
-simpleParam ty = Parameter ty Nothing Nothing [] "" Nothing Nothing Nothing Nothing
+simpleParam ty = Parameter ty Nothing Nothing [] "" Nothing Nothing Nothing Nothing Nothing
 

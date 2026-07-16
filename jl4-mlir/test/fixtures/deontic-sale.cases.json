@@ -1,0 +1,20 @@
+{
+  "the-sale-contract": [
+    {
+      "arguments": {},
+      "startTime": 0,
+      "events": [
+        { "party": "the seller", "action": "deliver the goods", "at": 5 },
+        { "party": "the buyer", "action": "pay the invoice", "at": 20 }
+      ]
+    },
+    { "arguments": {}, "startTime": 0, "events": [] },
+    {
+      "arguments": {},
+      "startTime": 0,
+      "events": [
+        { "party": "the seller", "action": "deliver the goods", "at": 5 }
+      ]
+    }
+  ]
+}
