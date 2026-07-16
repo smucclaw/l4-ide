@@ -12,6 +12,7 @@ import {
 } from './ai/tools/fs.js'
 import { l4Evaluate } from './ai/tools/l4-evaluate.js'
 import { categoryForTool, getPermission } from './ai/permissions.js'
+import { LM_TOOL_NAMES } from './lm-tools.js'
 import type { AiChatMessage } from 'jl4-client-rpc'
 
 /**
@@ -255,6 +256,11 @@ function collectTools(): {
   const lmByWireName = new Map<string, vscode.LanguageModelToolInformation>()
   const out: AiProxyTool[] = [...BUILTIN_TOOLS]
   for (const t of vscode.lm.tools) {
+    // Skip the lm tools we register ourselves (see lm-tools.ts): the
+    // participant already ships the same capability as a built-in
+    // (`l4__evaluate`), and offering both shapes to the model wastes
+    // context and splits its call patterns.
+    if (LM_TOOL_NAMES.has(t.name)) continue
     const wireName = sanitizeToolName(t.name)
     // Guard against an lm tool colliding with a built-in name (unlikely
     // but possible if some other extension registers `fs__read_file`).

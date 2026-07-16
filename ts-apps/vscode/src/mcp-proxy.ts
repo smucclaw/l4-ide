@@ -11,9 +11,16 @@ import { installL4Cli } from './install-cli.js'
  * Local MCP proxy server.
  *
  * Starts on extension activation and stays running for the lifetime of
- * the extension. Writes itself into VS Code's user-level `mcp.json` so
- * Copilot Chat (and any other MCP-aware client) discovers it across all
- * workspaces.
+ * the extension. Announced to the editor in one of two ways:
+ *
+ *   - On hosts with the MCP server definition provider API (stable
+ *     since VS Code 1.101): via
+ *     {@link registerL4McpServerDefinitionProvider}, so the server gets
+ *     proper lifecycle handling (no user-file edits, port changes
+ *     propagate through the change event). Any entry we wrote to
+ *     `mcp.json` in earlier versions is cleaned up.
+ *   - On older hosts and forks without the API (e.g. Cursor): by
+ *     writing itself into the user-level `mcp.json`, as before.
  *
  * When connected to a jl4-service, forwards MCP JSON-RPC requests with
  * the user's credentials. When disconnected or unauthenticated, returns
@@ -25,6 +32,12 @@ export class McpProxy implements vscode.Disposable {
   private outputChannel: vscode.OutputChannel
   private extensionPath: string | undefined
   private userDataPath: string | undefined
+
+  private readonly didChangeLocalUrl = new vscode.EventEmitter<void>()
+  /** Fires whenever {@link getLocalUrl} changes (bind, rebind on a new
+   *  port, shutdown). Wired into the MCP server definition provider's
+   *  `onDidChangeMcpServerDefinitions` so the editor re-queries us. */
+  readonly onDidChangeLocalUrl = this.didChangeLocalUrl.event
 
   constructor(
     private readonly auth: AuthManager,
@@ -84,10 +97,20 @@ export class McpProxy implements vscode.Disposable {
     // If Claude Code already has l4-rules configured, update the port
     this.updateClaudeCodePort()
 
-    // Register (or refresh) ourselves in VS Code's user-level mcp.json
-    // so the server is reachable across all workspaces. VS Code watches
-    // this file and prompts the user to trust the server on first sight.
-    this.updateVSCodeMcpJson()
+    if (getMcpProviderApi()) {
+      // The definition provider announces us — remove any entry a
+      // previous extension version wrote to mcp.json so the server
+      // doesn't show up twice.
+      this.cleanupVSCodeMcpJson()
+    } else {
+      // No provider API on this host — register (or refresh) ourselves
+      // in the user-level mcp.json so the server is reachable across
+      // all workspaces. VS Code watches this file and prompts the user
+      // to trust the server on first sight.
+      this.updateVSCodeMcpJson()
+    }
+
+    this.didChangeLocalUrl.fire()
   }
 
   /** The local MCP endpoint URL, or undefined if not running. */
@@ -352,9 +375,10 @@ export class McpProxy implements vscode.Disposable {
   /**
    * Write (or refresh) our entry in VS Code's user-level `mcp.json` so
    * the MCP server is available globally across all workspaces. Creates
-   * the file if missing. Called on every {@link start} so the URL stays
-   * in sync if `jl4.mcpPort` changes (a port change triggers a restart,
-   * which re-runs this).
+   * the file if missing. Fallback for hosts without the MCP server
+   * definition provider API; called on every {@link start} there so the
+   * URL stays in sync if `jl4.mcpPort` changes (a port change triggers
+   * a restart, which re-runs this).
    *
    * Note: `mcp.json` is JSONC (supports comments). We parse with plain
    * JSON; if the user has added comments we leave the file alone and
@@ -439,6 +463,61 @@ export class McpProxy implements vscode.Disposable {
     } catch (err) {
       this.outputChannel.appendLine(
         `[mcp-proxy] Failed to write ${mcpJsonPath}: ${err instanceof Error ? err.message : String(err)}`
+      )
+    }
+  }
+
+  /**
+   * Remove any entry a previous extension version wrote to the
+   * user-level `mcp.json`. Only entries under our known keys whose URL
+   * is a localhost `/mcp` endpoint are deleted — anything else is
+   * user-owned and left alone. Runs on hosts where the definition
+   * provider API announces the server instead.
+   */
+  private cleanupVSCodeMcpJson(): void {
+    if (!this.userDataPath) return
+
+    const mcpJsonPath = path.join(this.userDataPath, 'mcp.json')
+    let raw: string
+    try {
+      raw = fs.readFileSync(mcpJsonPath, 'utf-8')
+    } catch {
+      return // no file, nothing to clean up
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let config: any
+    try {
+      config = JSON.parse(raw)
+    } catch {
+      return // JSONC / hand-edited — leave alone rather than corrupt
+    }
+    if (!config?.servers || typeof config.servers !== 'object') return
+
+    // Any port counts — the entry may have been written under an old
+    // `jl4.mcpPort` value.
+    const oursUrl = /^http:\/\/127\.0\.0\.1:\d+\/mcp$/
+    let removed = false
+    for (const key of [
+      McpProxy.VSCODE_MCP_KEY,
+      ...McpProxy.VSCODE_MCP_LEGACY_KEYS,
+    ]) {
+      const entry = config.servers[key]
+      if (entry && typeof entry.url === 'string' && oursUrl.test(entry.url)) {
+        delete config.servers[key]
+        removed = true
+      }
+    }
+    if (!removed) return
+
+    try {
+      fs.writeFileSync(mcpJsonPath, JSON.stringify(config, null, 2) + '\n')
+      this.outputChannel.appendLine(
+        `[mcp-proxy] Removed legacy entry from ${mcpJsonPath} (now announced via the MCP provider API)`
+      )
+    } catch (err) {
+      this.outputChannel.appendLine(
+        `[mcp-proxy] Failed to clean up ${mcpJsonPath}: ${err instanceof Error ? err.message : String(err)}`
       )
     }
   }
@@ -578,6 +657,7 @@ export class McpProxy implements vscode.Disposable {
       this.server = null
       this.port = 0
       this.outputChannel.appendLine('[mcp-proxy] Stopped')
+      this.didChangeLocalUrl.fire()
     }
   }
 
@@ -596,5 +676,99 @@ export class McpProxy implements vscode.Disposable {
     // Fire-and-forget on dispose — VS Code doesn't await disposables
     // and a hanging close() shouldn't block shutdown.
     void this.stop()
+    this.didChangeLocalUrl.dispose()
   }
+}
+
+/*
+ * MCP server definition provider (VS Code >= 1.101).
+ *
+ * Our pinned @types/vscode (^1.95, matching the engines floor we keep
+ * for fork compatibility) predates this API, so the shapes below are
+ * minimal structural stand-ins and everything is feature-detected at
+ * runtime. Once the engines floor moves past 1.101 these can be
+ * replaced with the real `vscode.*` types.
+ */
+
+interface McpHttpServerDefinitionLike {
+  readonly label: string
+  readonly uri: vscode.Uri
+}
+
+type McpHttpServerDefinitionCtor = new (
+  label: string,
+  uri: vscode.Uri,
+  headers?: Record<string, string>,
+  version?: string
+) => McpHttpServerDefinitionLike
+
+interface McpServerDefinitionProviderLike {
+  onDidChangeMcpServerDefinitions?: vscode.Event<void>
+  provideMcpServerDefinitions(
+    token: vscode.CancellationToken
+  ): vscode.ProviderResult<McpHttpServerDefinitionLike[]>
+}
+
+interface McpProviderApi {
+  register: (
+    id: string,
+    provider: McpServerDefinitionProviderLike
+  ) => vscode.Disposable
+  HttpDefinition: McpHttpServerDefinitionCtor
+}
+
+function getMcpProviderApi(): McpProviderApi | undefined {
+  const lm = vscode.lm as
+    | (typeof vscode.lm & {
+        registerMcpServerDefinitionProvider?: McpProviderApi['register']
+      })
+    | undefined
+  const ctor = (vscode as unknown as Record<string, unknown>)
+    .McpHttpServerDefinition as McpHttpServerDefinitionCtor | undefined
+  if (
+    typeof lm?.registerMcpServerDefinitionProvider !== 'function' ||
+    typeof ctor !== 'function'
+  ) {
+    return undefined
+  }
+  return {
+    register: lm.registerMcpServerDefinitionProvider.bind(lm),
+    HttpDefinition: ctor,
+  }
+}
+
+/** Must match the `contributes.mcpServerDefinitionProviders` id in
+ *  package.json — VS Code refuses the registration otherwise. */
+const MCP_PROVIDER_ID = 'l4.mcp-servers'
+
+/**
+ * Announce the proxy to the editor through the MCP server definition
+ * provider API, so Copilot agent mode (and the MCP Servers UI) picks it
+ * up with proper lifecycle handling instead of a hand-written mcp.json
+ * entry. Returns undefined on hosts without the API — the proxy's
+ * mcp.json fallback covers those.
+ */
+export function registerL4McpServerDefinitionProvider(
+  proxy: McpProxy,
+  outputChannel: vscode.OutputChannel
+): vscode.Disposable | undefined {
+  const api = getMcpProviderApi()
+  if (!api) {
+    outputChannel.appendLine(
+      '[mcp-proxy] MCP provider API unavailable on this host — using mcp.json fallback'
+    )
+    return undefined
+  }
+  const disposable = api.register(MCP_PROVIDER_ID, {
+    onDidChangeMcpServerDefinitions: proxy.onDidChangeLocalUrl,
+    provideMcpServerDefinitions: () => {
+      const url = proxy.getLocalUrl()
+      if (!url) return []
+      return [new api.HttpDefinition('L4 Rules', vscode.Uri.parse(url))]
+    },
+  })
+  outputChannel.appendLine(
+    `[mcp-proxy] Registered MCP server definition provider (${MCP_PROVIDER_ID})`
+  )
+  return disposable
 }

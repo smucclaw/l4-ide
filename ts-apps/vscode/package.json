@@ -35,7 +35,7 @@
     ]
   },
   "engines": {
-    "vscode": "^1.94.0"
+    "vscode": "^1.95.0"
   },
   "repository": {
     "type": "git",
@@ -345,6 +345,47 @@
         "description": "Computational law: encode, deploy, and reason about L4 rules.",
         "isSticky": true
       }
+    ],
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "l4.mcp-servers",
+        "label": "L4 Rules"
+      }
+    ],
+    "languageModelTools": [
+      {
+        "name": "l4_evaluate",
+        "displayName": "Evaluate L4",
+        "toolReferenceName": "l4Evaluate",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(law)",
+        "userDescription": "Type-check an L4 file and report the results of its #EVAL / #CHECK / #ASSERT / #TRACE directives.",
+        "modelDescription": "Evaluate an L4 (rules-as-code) file via the jl4 language server. Returns the latest results of every directive in the file (#EVAL, #EVALTRACE, #CHECK, #TRACE, #ASSERT). If the file has type errors, returns the compiler diagnostics instead — fix those first, then call again. Use this after creating or editing any .l4 file to verify the rules behave as intended.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Path to the .l4 file, relative to the workspace root (absolute paths inside the workspace also work)."
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "full",
+                "changed"
+              ],
+              "description": "\"full\" (default) reports every directive; \"changed\" reports only directives added or whose value changed since the last call."
+            },
+            "timeoutMs": {
+              "type": "number",
+              "description": "How long to wait (ms) for the language server to finish compiling if no results are cached yet. Default 6000, max 15000."
+            }
+          },
+          "required": [
+            "path"
+          ]
+        }
+      }
     ]
   },
   "prettier": "@repo/prettier-config",
@@ -365,7 +406,7 @@
     "@types/fs-extra": "^11.0.4",
     "@types/minimatch": "^5.1.2",
     "@types/node": "^24.0.0",
-    "@types/vscode": "^1.94.0",
+    "@types/vscode": "^1.95.0",
     "@typescript-eslint/eslint-plugin": "^8.18.0",
     "@typescript-eslint/parser": "^8.18.0",
     "@vscode/test-cli": "^0.0.12",

@@ -14,7 +14,8 @@ import type { PanelConfig } from './webview-panel.js'
 import { PanelManager } from './webview-panel.js'
 
 import { VSCodeL4LanguageClient } from './vscode-l4-language-client.js'
-import { McpProxy } from './mcp-proxy.js'
+import { McpProxy, registerL4McpServerDefinitionProvider } from './mcp-proxy.js'
+import { registerLanguageModelTools } from './lm-tools.js'
 import { installL4Cli, maybeOfferInstallL4Cli } from './install-cli.js'
 
 import { RenderAsLadderInfo, VersionedDocId } from '@repo/viz-expr'
@@ -480,7 +481,22 @@ export async function activate(context: ExtensionContext) {
     userDataPath
   )
   context.subscriptions.push(mcpProxy)
+  // Announce the proxy via the MCP provider API where available (real
+  // VS Code >= 1.101); on other hosts start() falls back to writing the
+  // user-level mcp.json. Registration order doesn't matter: the
+  // provider returns [] until the port is bound, and start() fires the
+  // change event that makes the editor re-query.
+  const mcpProviderRegistration = registerL4McpServerDefinitionProvider(
+    mcpProxy,
+    outputChannel
+  )
+  if (mcpProviderRegistration) {
+    context.subscriptions.push(mcpProviderRegistration)
+  }
   mcpProxy.start()
+
+  // L4 tools for Copilot agent mode (and any other vscode.lm client).
+  context.subscriptions.push(registerLanguageModelTools(outputChannel))
 
   // Register the extension's single URI handler. `/mcp-oauth` routes
   // to the MCP OAuth client (created further down — late-bound ref);
