@@ -76,7 +76,7 @@ const code2ProtocolConverter = createCodeConverter()
 const PANEL_CONFIG: PanelConfig = {
   viewType: 'l4Viz',
   title: 'L4 Decision Graph',
-  position: vscode.ViewColumn.Beside,
+  position: 'below',
 }
 
 const vizWebviewFrontend: WebviewTypeMessageParticipant = {
@@ -331,7 +331,7 @@ export async function activate(context: ExtensionContext) {
           const ladderInfo: RenderAsLadderInfo = decode(responseFromLangServer)
           lastVizArgs = args
 
-          panelManager.render(context, editor.document.uri)
+          await panelManager.render(context, editor.document.uri)
           webviewMessenger.registerWebviewPanel(panelManager.getPanel())
           await panelManager.getWebviewFrontendIsReadyPromise()
 
